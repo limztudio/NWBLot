@@ -87,8 +87,6 @@ void SetHdr10Metadata(const VolkDeviceTable& deviceDispatch, const VkDevice devi
 
     VkHdrMetadataEXT metadata = {};
     metadata.sType = VK_STRUCTURE_TYPE_HDR_METADATA_EXT;
-    // Rec.2020 primaries and D65 white point.
-    // These values describe the HDR10 presentation contract: PQ-encoded content mastered for a 1,000-nit peak.
     metadata.displayPrimaryRed = s_Hdr10DisplayPrimaryRed;
     metadata.displayPrimaryGreen = s_Hdr10DisplayPrimaryGreen;
     metadata.displayPrimaryBlue = s_Hdr10DisplayPrimaryBlue;

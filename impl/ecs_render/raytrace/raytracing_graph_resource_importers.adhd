@@ -77,7 +77,6 @@ Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateI
         const auto meshSoftwareBvhParentBuildStates = this.m_meshSystem.collectSoftwareBvhParentBuildStates();
         if(!meshSoftwareBvhParentBuildStates.has_value())
             return MakeUnexpected(Failure());
-        // Sort keys, sort payload, and visit counter follow the parent build states.
         const usize reserveCapacity = importPolicy.computeBuildStateReserveCapacity(meshSoftwareBvhParentBuildStates.value().size());
         result.buildStateResources.reserve(reserveCapacity);
         softwareBvhBuildStateBuffers.reserve(reserveCapacity);
@@ -105,7 +104,6 @@ Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateI
 Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare(in RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources){
     const TraceGeometryImportPolicy importPolicy();
 
-    // Preflight froze the mesh tables; import each buffer once and fan out IDs.
     if(!this.m_raytracingSystem.freezePreparedShadowTraceGeometryBuffers()){
         warning("RendererSystem: could not retain preflighted shadow-trace geometry buffers");
         return MakeUnexpected(Failure());
@@ -132,7 +130,6 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
         if(importPolicy.hasSoftwareRole(preparedBuffer.roles))
             result.softwareTraceGeometry.push_back(resource);
     }
-    // Trace dispatchers select textures via frozen material context; reuse typed preflight import when owned.
     const auto traceMaterialSampledTextureResources = ImportMaterialSampledTextureResources(preparedTraceMaterialSampledTextures, "Prepared Trace Material Sampled Texture", this.m_graph);
     if(!traceMaterialSampledTextureResources.has_value()){
         switch(traceMaterialSampledTextureResources.error()){

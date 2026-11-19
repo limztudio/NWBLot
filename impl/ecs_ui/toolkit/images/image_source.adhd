@@ -11,7 +11,6 @@
 
 type SharedImageSource = Shared<ImageSource>;
 
-// Only the factory's synchronous copy receives the validated texture.
 class ImageSourceFactory{
     private Optional<in Texture> m_texture;
 

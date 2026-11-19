@@ -182,7 +182,6 @@ void RendererRayTracingSystem::clearShadowVisibility(mut CommandList commandList
     if(!targets.shadowVisibility.valid())
         return;
 
-    // White transmittance is the all-lit fallback.
     commandList.setTextureState(targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, ResourceStates::CopyDest);
     commandList.commitBarriers();
     commandList.clearTextureFloat(targets.shadowVisibility.deref(), s_ShadowVisibilitySubresources, Color(s_ShadowVisibilityAllLitChannel, s_ShadowVisibilityAllLitChannel, s_ShadowVisibilityAllLitChannel, s_ShadowVisibilityAllLitChannel));
@@ -231,7 +230,6 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     if(!splitSoftTransparentFold)
         timing.emplace(this.m_graphics.gpuTiming(), s_TimingScopeShadowVisibility, this.m_graphics.getDevice(), commandList);
 
-    // Subsequent visibility passes read/write this UAV in place.
     commandList.setEnableUavBarriersForTexture(targets.shadowVisibility.get(), true);
 
 
@@ -240,10 +238,8 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     const u32 fullGroupsX = fullGrid.groupsX;
     const u32 fullGroupsY = fullGrid.groupsY;
 
-    // Skip the fallback after a soft transparent fold.
     b8 softTransparentRan = false;
 
-    // Soft upsample overwrites the opaque prepass.
     const b8 softWillRun = IsSoftShadowActive(this.m_rayTracingState.softShadow.m_softShadowReady, this.m_rayTracingState.softShadow.m_softShadowSlotMask);
     if(!softWillRun){
         commandList.setTextureState(targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
@@ -257,21 +253,17 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
     }
 
-    // The transparent pass reads and multiplies the opaque mask in place.
     commandList.setTextureState(targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
     commandList.commitBarriers();
 
-    // Soft opaque resolve replaces the full-resolution mask.
     if(softWillRun){
         const ShadowDispatchGrid2D softGrid = ResolveSoftShadowDispatchGrid(targets.width, targets.height, targets.shadowReceiverFactor, groupSize);
         const u32 softGroupsX = softGrid.groupsX;
         const u32 softGroupsY = softGrid.groupsY;
 
-        // Advance the primary producer's jitter sequence once.
         const u32 frameIndex = this.m_rayTracingState.softShadow.m_softShadowFrameIndex++;
         producedFrameIndex = frameIndex;
 
-        // Resolve reads the soft trace and geometry scratch in place.
         this.enableSoftShadowResolveBarriers(commandList, targets);
 
         commandList.setTextureState(targets.shadowSoftHalfA.get(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
@@ -307,11 +299,8 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             }
         }
 
-        // The split resolver declares this same-UAV dependency, so its graph prologue owns the trace fence.
-        // Unsplit soft resolve phases retain their internal UAV fence.
         this.dispatchPrimarySoftShadowResolve(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, splitOpaqueSoftResolve, splitSoftTransparentFold, graphOwnsOpaqueTemporalMergeEntryStates);
         if(splitSoftTransparentFold){
-            // The transparent tail records later, so preserve the normal route's one-shot traversal diagnostic first.
             this.reportSoftwareShadowTraversal(targets);
             return producedFrameIndex;
         }
@@ -384,7 +373,6 @@ void RendererRayTracingSystem::enableSoftShadowResolveBarriers(mut CommandList c
     commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfA.get(), true);
     commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfB.get(), true);
     commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
-    // Temporal merge writes history before later reads.
     if(this.m_rayTracingState.softShadow.m_softShadowTemporalReady){
         commandList.setEnableUavBarriersForTexture(targets.shadowHistA.get(), true);
         commandList.setEnableUavBarriersForTexture(targets.shadowHistB.get(), true);
@@ -404,7 +392,6 @@ void RendererRayTracingSystem::dispatchPrimarySoftShadowResolve(
     in b8 splitSoftTransparentFold,
     in b8 graphOwnsOpaqueTemporalMergeEntryStates
 ){
-    // Split resolve declares the trace fence; the direct route retains its UAV fence.
     if(!splitOpaqueSoftResolve){
         commandList.setTextureState(targets.shadowSoftHalfA.get(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
         commandList.commitBarriers();

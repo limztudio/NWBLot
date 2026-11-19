@@ -26,9 +26,6 @@ class SoftwareSceneRefitGraphTasks{
     public RefitGraphTaskId refit = RefitGraphTaskId();
 }
 
-
-
-// Freeze adaptive software-shadow compaction before graph compilation so its append-counter clear is a graph primitive.
 class PreparedShadowMaterialContextUploads{
     public PreparedGraphUploadId instanceMaterial = PreparedGraphUploadId(0u, s_PreparedGraphInvalidIndex);
     public PreparedGraphUploadId instance = PreparedGraphUploadId(0u, s_PreparedGraphInvalidIndex);

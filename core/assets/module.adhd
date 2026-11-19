@@ -29,7 +29,6 @@ extern class IAsset{
 extern class IAssetCodec{
     Name assetType()const;
     [cpp_flags(unwind)] Expected<UniquePtr<IAsset>> deserialize(in cpp_ref Name path, in Span<u8> bytes, mut GlobalAllocator arena)const;
-    // The C++ cook build provides the serialization virtual.
     [cpp_flags(unwind)] b8 serialize(in IAsset asset, mut AssetByteBuffer bytes)const;
 };
 

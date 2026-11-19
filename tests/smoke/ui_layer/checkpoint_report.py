@@ -1,4 +1,3 @@
-"""Publish accepted UI capture checkpoints and retain failed-stage evidence."""
 from __future__ import annotations
 
 import time
@@ -9,7 +8,6 @@ LIT_STAGE = "stage"
 LIT_CAPTURE = "capture"
 LIT_NATIVE_WINDOW = "native_window"
 
-# Shared displayed-state gate timing for every UI fixture driver.
 CHECKPOINT_SETTLE_SECONDS = 0.25
 CHECKPOINT_STAGE_TIMEOUT_SECONDS = 10.0
 CHECKPOINT_POLL_SECONDS = 0.1

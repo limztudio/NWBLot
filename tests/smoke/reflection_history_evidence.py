@@ -1,5 +1,3 @@
-"""Parse and validate completed reflection history evidence."""
-
 import re
 
 from window_capture_smoke import SmokeFailure
@@ -105,4 +103,3 @@ class ReflectionHistoryEvidence:
             if not any(sample[LIT_COUNT] == spec.samples and sample[LIT_GRAPHICS_FRAME] < source for sample in history):
                 raise SmokeFailure("capture requested convergence without prior completed cap evidence")
         return {"captured_graphics_frame": source, "covering_completed_history": captured, "completed_samples": len(history), "history": history}
-

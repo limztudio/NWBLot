@@ -75,14 +75,12 @@ namespace DeviceExtensionRequestAction{
     };
 };
 
-// A disabled RT policy rejects required RT extensions instead of silently weakening either request.
 [[nodiscard]] constexpr DeviceExtensionRequestAction::Enum ResolveDeviceExtensionRequest(const HardwareRayTracingPolicy::Enum policy, const AStringView extensionName, const b8 required)noexcept{
     if(!IsValidHardwareRayTracingPolicy(policy))
         return DeviceExtensionRequestAction::Reject;
     if(policy == HardwareRayTracingPolicy::Automatic)
         return DeviceExtensionRequestAction::Enable;
 
-    // Generic dependency extensions remain available to non-RT callers that request them explicitly.
     for(const DeviceExtensionEntry& entry : s_RayTracingDeviceExtensions){
         if(entry.feature != DeviceExtensionFeature::None && extensionName == entry.name)
             return required ? DeviceExtensionRequestAction::Reject : DeviceExtensionRequestAction::Omit;

@@ -1,4 +1,3 @@
-"""Pixel acceptance and exact direct/replay comparison for standalone UI raster command IR."""
 from __future__ import annotations
 
 import hashlib

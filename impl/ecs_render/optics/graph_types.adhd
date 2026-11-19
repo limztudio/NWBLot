@@ -23,7 +23,6 @@ const Name s_RenderNameRenderRaytraceOpticalBoundsFinalize = "render.raytrace.op
 
 class RayTracingOpticalSceneSnapshot{
     public OpticalBufferHandle buffer = OpticalBufferHandle();
-    // Present only for runtime bounds: this remains the immutable CPU metadata upload destination.
     public OpticalBufferHandle uploadBuffer = OpticalBufferHandle();
     public OpticalFinalizeHandle finalize = OpticalFinalizeHandle();
     public OpticalUploadHandle upload = OpticalUploadHandle();

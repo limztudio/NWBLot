@@ -104,22 +104,16 @@ struct GpuTaskQueueAssignment{
     GpuTaskQueueAssignmentModifier::Mask modifiers = GpuTaskQueueAssignmentModifier::None;
 };
 
-// Explicit compatible merges are available under each packetization policy.
-// Frontier-safe packetization preserves those requests unless a task already in the preceding packet enables a consumer on another physical queue.
 namespace GpuTaskGraphPacketizationPolicy{
     enum Enum : u8{
         ExplicitMerge,
         FrontierSafe,
-        // Opt-in compiler scoring merges a cheap immediate same-queue successor only when the preceding packet has no cross-queue consumer frontier.
-        // Scored successors must share the preceding packet's nonempty merge domain.
         FrontierScored,
 
         Count,
     };
 };
 
-// Relative work cost for one physical queue.
-// Scheduler pressure snapshots and compile-local assignment totals use the same units as task cost hints.
 struct GpuTaskQueueLoad{
     GpuPhysicalQueueId queue;
     u64 estimatedCost = 0u;
@@ -127,11 +121,8 @@ struct GpuTaskQueueLoad{
 
 struct GpuTaskGraphQueueAssignmentOptions{
     const GpuTaskTimingHistorySnapshot* timingHistory = nullptr;
-    // Scheduler pressure sampled just before compile. Same units as cost hints; moves only movable routes.
     const GpuTaskQueueLoad* queueLoads = nullptr;
     usize queueLoadCount = 0u;
-    // Scalar policy is copied into one compile request so concurrent runtime policy changes cannot mutate an in-progress queue assignment.
-    // The history stays an immutable snapshot owned by its producer.
     GpuTaskTimingFeedbackPolicy timingFeedbackPolicy;
     u64 timingFrameIndex = 0u;
 
@@ -143,8 +134,6 @@ public:
     void setTimingHistory(const GpuTaskTimingHistorySnapshot&&) = delete;
 };
 
-// Optional timing-envelope anchors for one normal-execution packet (both omitted = off; partial = invalid).
-// Endpoints in compiler order, resolved before frontier recovery; merged neighbours share scope.
 struct GpuTaskGraphPacketTimingEnvelopeOptions{
     GpuTaskId firstTask;
     GpuTaskId lastTask;
@@ -158,7 +147,6 @@ struct GpuTaskGraphCompileOptions{
     GpuTaskGraphQueueAssignmentOptions queueAssignmentOptions;
     GpuTaskGraphPacketTimingEnvelopeOptions packetTimingEnvelope;
     f64 declarationSeconds = 0.0;
-    // Caller declare/build wall time (finite nonneg kept, else zero). Recording needs payload + thunk; only metadata tooling opts out.
     GpuTaskGraphPacketizationPolicy::Enum packetizationPolicy = GpuTaskGraphPacketizationPolicy::ExplicitMerge;
     b8 allowMetadataOnlyTasks = false;
 };
@@ -207,15 +195,12 @@ public:
     [[nodiscard]] b8 valid()const noexcept{ return m_valid; }
     [[nodiscard]] b8 validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept;
     [[nodiscard]] const GpuTaskGraphAnalysisDiagnostic& diagnostic()const noexcept{ return m_diagnostic; }
-    // Raw pairs keep direct declarations and hazard reasons for diagnostics, transitively redundant edges included.
     [[nodiscard]] const GraphicsVector<GpuTaskDependencyEdge>& edges()const noexcept{ return m_edges; }
-    // Scheduling uses the stable transitive reduction, so redundant raw edges add no crossings, frontiers, or waits.
     [[nodiscard]] const GraphicsVector<GpuTaskDependencyEdge>& schedulingEdges()const noexcept{
         return m_schedulingEdges;
     }
     [[nodiscard]] GpuTaskGraphSchedulingTaskIndexView schedulingConsumers(const GpuTaskId& producer)const noexcept;
     [[nodiscard]] GpuTaskGraphSchedulingTaskIndexView schedulingProducers(const GpuTaskId& consumer)const noexcept;
-    // Every resource reason remains available even when it shares one scheduling edge with an explicit dependency.
     [[nodiscard]] const GraphicsVector<GpuTaskDependencyEdge>& inferredEdges()const noexcept{ return m_inferredEdges; }
 
     [[nodiscard]] const GraphicsVector<GpuTaskExternalDependencyEdge>& externalDependencies()const noexcept{
@@ -265,7 +250,6 @@ private:
     b8 m_valid = false;
 };
 
-// Queue assignment is a separate immutable compile result. Graph core never creates a command list or submits work.
 class GpuTaskGraphQueueAssignments final : NoCopy{
     friend class GpuTaskGraphCompiler;
 
@@ -294,7 +278,6 @@ public:
 
 private:
     GraphicsVector<GpuTaskQueueAssignment> m_assignments;
-    // Dense declaration-task index to topological m_assignments offset.
     GraphicsVector<u32> m_assignmentIndicesByTask;
     GpuTaskQueueAssignmentDiagnostic m_diagnostic;
     u64 m_generation = 0u;

@@ -40,7 +40,6 @@ OptionalDeviceFeatureSet OptionalDeviceFeaturePolicy::MakeRequested()noexcept{
     features.fragmentShadingRate.primitiveFragmentShadingRate = VK_TRUE;
     features.fragmentShadingRate.attachmentFragmentShadingRate = VK_TRUE;
 
-    // Descriptor-buffer feature support is mandatory.
     features.descriptorBuffer.descriptorBuffer = VK_TRUE;
 
     features.deviceFault.deviceFault = VK_TRUE;

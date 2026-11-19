@@ -35,7 +35,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The map pass initializes every admitted light/pixel. Any unavailable sample requests this complete SW estimate.
 [numthreads(NWB_LIGHT_SPACE_GROUP_SIZE, NWB_LIGHT_SPACE_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint2 pixel = dispatchThreadID.xy;

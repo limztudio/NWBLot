@@ -98,20 +98,16 @@ b8 GpuPersistentResourceStateCache::replaceResourceSubset(
             reset();
             return false;
         }
-        // A prior unwound call may have left partial handles here.
         m_spareTextures.clear();
         m_spareBuffers.clear();
         RetainSelectedHandles(selection, textures, buffers, m_spareTextures, m_spareBuffers);
 
-        // Finish every allocation and retain new live handles before filtering the accepted snapshot.
-        // Self-filtering only shrinks its existing state arrays; after its input checks, compaction and these same-arena swaps cannot fail.
         if(!m_states.buildResourceSubset(m_states, selection)){
             reset();
             return false;
         }
         m_textures.swap(m_spareTextures);
         m_buffers.swap(m_spareBuffers);
-        // Release the displaced handles now but keep their capacity.
         m_spareTextures.clear();
         m_spareBuffers.clear();
         return true;
@@ -152,7 +148,6 @@ b8 GpuPersistentResourceStateCache::buildMergedResourceSubset(
         if(!sourceCandidate.m_states.buildResourceSubset(source, selection))
             return false;
 
-        // Source can be the previous contents of outCandidate. Capture it completely before resetting that owner.
         outCandidate.reset();
         if(m_states.valid()){
             retainedStates.emplace(m_arena);
@@ -160,8 +155,6 @@ b8 GpuPersistentResourceStateCache::buildMergedResourceSubset(
                 return false;
         }
     }
-    // The selected typed handles stay in sourceCandidate through fan-in.
-    // Release the temporary selection before fan-in reuses the scratch arena, so repeats reclaim in LIFO order.
     if(retainedStates){
         const Array<const CommandListResourceStateHandoff*, 1> branches = {{ &sourceCandidate.m_states }};
         if(!outCandidate.m_states.buildFanIn(*retainedStates, branches.data(), branches.size(), scratchArena))

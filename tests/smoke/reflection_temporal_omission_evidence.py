@@ -1,5 +1,3 @@
-"""Validate temporal omission timing and hardware capability evidence."""
-
 from dataclasses import asdict
 from pathlib import Path
 
@@ -38,7 +36,6 @@ class ReflectionTemporalOmissionEvidence:
 
     @staticmethod
     def validate_recording_evidence(trial, history_samples, symbols=None):
-        """Reparse retained evidence and reject cap-one work even outside the measured window."""
         if history_samples not in CAPS or trial[LIT_VARIANT] != asdict(VARIANT):
             raise benchmark.SmokeFailure("unexpected temporal omission proof configuration")
         timing = Path(trial["artifacts"]) / "gpu_timing.txt"
@@ -52,7 +49,6 @@ class ReflectionTemporalOmissionEvidence:
             raise benchmark.SmokeFailure("raw timing reports differ from the retained trial summary")
         ReflectionGpuCoverage.validate_coverage(retained, VARIANT, trial[LIT_REPORTS], 100, trial["mip_count"], history_samples)
         frames = retained[benchmark.FRAME][LIT_GPU_SAMPLES]
-        # Require common control and presentation timing ranges alongside reflection kernels.
         for scope in benchmark.OBSERVED_CONTROLS:
             if abs(retained[scope][LIT_GPU_SAMPLES] - frames) > max(2, frames * .02):
                 raise benchmark.SmokeFailure("control scope coverage differs from completed GPU frames: " + scope)

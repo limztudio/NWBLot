@@ -242,7 +242,6 @@ class ListState : NoCopy{
         return this.m_placement;
     }
 
-    // Explicit application changes start a new input lifetime even when the value is unchanged.
     public void select(in u64 key){
         this.m_inputGeneration = AllocateServiceIdentity();
         this.m_selected = key;

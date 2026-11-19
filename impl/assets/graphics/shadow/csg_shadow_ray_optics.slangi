@@ -59,7 +59,6 @@ bool nwbCsgShadowRayBoundaryOptics(const uint contextSlot, const uint materialSl
     return all(isfinite(float3(absorption))) && isfinite(float(transmission));
 }
 
-// Open surfaces retain the ordinary endpoint, interface and pairing rules with the CSG collector's bounded capacity.
 struct NwbCsgShadowOpenOptics{
     float3 absorptionCoeff;
     half interfaceTransmittance;

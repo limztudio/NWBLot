@@ -75,7 +75,6 @@ inline void CloseFileDescriptor(int& fd)noexcept{
         return;
 }
 
-// ErrorCondition retains native POSIX errno without allocation or category initialization in crash-handler callers.
 [[nodiscard]] inline Expected<u64, ErrorCondition> MonotonicMilliseconds()noexcept{
     timespec time = {};
     if(::clock_gettime(CLOCK_MONOTONIC, &time) != 0)

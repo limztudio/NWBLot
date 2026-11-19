@@ -1,6 +1,3 @@
-"""Verify that the listener belongs to the launched logserver."""
-
-
 import socket
 import time
 

@@ -1,6 +1,3 @@
-"""Window-capture launch environment: runtime argument mapping, sibling executables, Lavapipe selection, and application-capture environment preparation."""
-
-
 import argparse
 import math
 import os

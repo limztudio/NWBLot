@@ -33,7 +33,6 @@ private:
     struct Offer{
         WaylandClipboardService& service;
         void* handle = nullptr;
-        // Zero is unsupported; positive ranks select the static MIME table in reverse order.
         u8 rank = 0u;
         ClipboardChannel::Enum channel = ClipboardChannel::Clipboard;
         Timer created = TimerNow();

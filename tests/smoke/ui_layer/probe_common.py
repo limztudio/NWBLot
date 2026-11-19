@@ -1,4 +1,3 @@
-"""Shared accepted-frame metadata and logical rectangle operations for UI probes."""
 from __future__ import annotations
 
 import math

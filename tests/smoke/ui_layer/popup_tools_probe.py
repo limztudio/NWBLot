@@ -1,4 +1,3 @@
-"""Compare tooltip/menu snapshots, marker pixels, clipping, and atlas interiors."""
 from __future__ import annotations
 
 import re
@@ -30,8 +29,6 @@ MARKER_TOLERANCE = 5
 
 def snapshot_from_logs(text):
     return snapshot_from_patterns(text, STATE, DISPLAY, SKIN, GEOMETRY, FIELDS, RECTANGLES, fixture="popup tools")
-
-
 
 
 def tooltip_ink_coverage(observed, background, foreground):
@@ -96,7 +93,6 @@ def observe_popup_tools(frame, snapshot, expected, *, extent=None, skin="default
             color = (38, 80, 123) if snapshot["cursor"] == snapshot["list_selected"] else ((49, 100, 63) if skin == LIT_ALTERNATE else (45, 60, 80))
             probe("context_cursor_row", (rx + rw - 20.0, ry + rh / 2.0), color, 8)
     sx, sy, sw, sh = snapshot[LIT_RECTANGLES]["sentinel"]
-    # Check the edit background only when no menu or tooltip overlaps it.
     if not snapshot[LIT_OPEN] and sw > 32.0 and sh > 12.0:
         probe("outside_edit_focus_skin", (sx + sw - 16.0, sy + sh - 6.0), (18, 26, 37) if snapshot["sentinel_focused"] else (15, 20, 28), 8)
     model_matches = snapshot["skin"] == skin and all(snapshot[name] == int(value) for name, value in expected.items())

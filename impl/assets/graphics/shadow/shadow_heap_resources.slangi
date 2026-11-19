@@ -9,9 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared heap aliases for shadow producers, denoise, temporal merge. Globals; typed views per shader only.
-
-
 #include "../bindless/bindless_heap.slangi"
 #include "../deferred/bindless_resources.slangi"
 #include "../raytrace/material_context_slots.slangi"
@@ -20,7 +17,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Receiver geometry stores validity as 0 or 1 in its w lane; taps above this value are valid.
 #define NWB_SHADOW_GEOMETRY_VALID_THRESHOLD 0.5h
 
 
@@ -28,7 +24,7 @@
 
 
 #pragma warning(push)
-#pragma warning(disable: 39001) // Deliberate typed view of the global StorageBuffer descriptor table.
+#pragma warning(disable: 39001)
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<uint, Std430DataLayout> g_NwbHeapShadowWritableUintBuffers[];
 #pragma warning(pop)
 

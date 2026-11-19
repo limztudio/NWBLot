@@ -384,7 +384,6 @@ struct StaticAssertion{
 
 
 struct TranslationUnit{
-    // Substituted type views borrow these stable strings for the unit's lifetime.
     List<MString, MetaArena> substitutedConstantTexts;
     MStringView namespaceWrapper;
     MStringView cppNamespace;

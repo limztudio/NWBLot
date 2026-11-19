@@ -43,11 +43,6 @@ UiEditClipboardResult MakeAppliedUiEditClipboardResult(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The OS owns transfer and native selection.
-// This controller owns copied request fences, never a model pointer.
-// Cancel before any local edit/selection change, focus loss, owner removal or model replacement.
-// Drain before host edits.
-// End native text input before a drain that may apply cut/paste, and restart it with the resulting surrounding text.
 [modular]
 class UiEditClipboardController : NoCopy{
     private mut IClipboardService m_service;

@@ -399,7 +399,6 @@ b8 RendererDeferredSystem::createDeferredBindlessFrameResources(mut DeferredFram
         .setIsConstantBuffer(true)
         .setDebugName(s_DeferredBindlessSlotsBufferName)
         .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
-        // Selector spans packets; retain descriptor-visible state at every native close.
         .enableAutomaticStateTracking(ResourceStates::ConstantBuffer)
     ;
     const Expected<BufferHandle> slotsBufferResult = this.m_graphics.createBuffer(slotsBufferDesc);
@@ -411,8 +410,6 @@ b8 RendererDeferredSystem::createDeferredBindlessFrameResources(mut DeferredFram
     }
     bindless.slotsBuffer = slotsBufferResult.value();
 
-    // The indirection payload is itself heap-addressable.
-    // Every consumer takes this one slot in push constants, not a local selector; the heap stays the binding surface.
     if(!TryAdoptDescriptor(RegisterConstantBuffer(heap, bindless.slotsBuffer), bindless.slotsBufferDescriptor)){
         LogDeferredBindlessSlotBufferRegisterFailed();
         this.resetDeferredBindlessFrameResources(targets);

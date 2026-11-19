@@ -1,4 +1,3 @@
-"""Slider fixture commands use the shared positioned Win32/X11 input path."""
 from __future__ import annotations
 
 import ctypes
@@ -75,7 +74,6 @@ class SliderNativeInput(GuardedNativeInput):
         return observation
 
     def command(self, name):
-        """Send an application-owned policy or external-value command."""
         if name not in COMMAND_KEYS:
             raise ValueError(f"unknown slider fixture command '{name}'")
         self.record("command_before", name=name)

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Shared GPU-timing sidecar parsing for A/B harnesses."""
 
 from __future__ import annotations
 
@@ -17,7 +16,6 @@ from window_capture_smoke import SmokeFailure
 LIT_UTF_8 = "utf-8"
 LIT_REPLACE = "replace"
 NAME_SYMBOLS_HEADER = "nwb_namesym_v1"
-# Require more than this many positive intervals to qualify timing.
 MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS = 10
 MINIMUM_NAME_SYMBOL_FIELDS = 3
 UINT32_LIMIT = 1 << 32
@@ -87,7 +85,6 @@ def parse_timing_file(path: Path, symbols: Mapping[str, str], start_byte_offset:
         if not raw_line.strip():
             continue
         if current is None:
-            # Start at the next complete interval after a byte offset.
             if start_byte_offset:
                 continue
             raise SmokeFailure(f"GPU timing row precedes its interval in {path}: {raw_line}")

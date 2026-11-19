@@ -1,5 +1,3 @@
-"""Strict compiler statistics input and successful-frame join."""
-
 import json
 import math
 
@@ -145,7 +143,6 @@ class CompilerStatisticsRows:
 
     @staticmethod
     def analyze_rows(compiler_rows, gather_rows, workload):
-        # This is the owning production parser, including its CPU/GPU/settings/complete-result gates.
         validated_gather = GatherMeasurement.summarize_rows(gather_rows, workload, "timing")
         captures = CompilerStatisticsRows.validate_compiler_rows(compiler_rows)
         measured = [row for row in gather_rows if row.get(LIT_TYPE) == "cpu"]

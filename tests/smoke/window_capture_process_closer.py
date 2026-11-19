@@ -1,5 +1,3 @@
-"""Request graceful exit for native capture windows."""
-
 import ctypes
 from pathlib import Path
 import subprocess
@@ -16,7 +14,6 @@ WINDOWS_ENUM_CALLBACK = getattr(ctypes, "WINFUNCTYPE", ctypes.CFUNCTYPE)(ctypes.
 class WindowProcessCloser:
     @staticmethod
     def request_windows_graceful_exit(pid):
-        # Send WM_CLOSE so normal shutdown writes Name sidecars.
         user32 = create_windows_user32()
         wm_close = WM_CLOSE_MESSAGE
         targets = []
@@ -36,7 +33,6 @@ class WindowProcessCloser:
 
     @staticmethod
     def request_linux_graceful_exit(window_handle):
-        # Run the helper separately so missing X11 libraries cannot prevent fallback termination.
         if window_handle is None:
             return False
 

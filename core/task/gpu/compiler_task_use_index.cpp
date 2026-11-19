@@ -37,7 +37,6 @@ b8 TaskResourceUseIndex::build(const GpuTaskGraphTaskView& task){
     if(!task.id.valid() || task.id.generation != m_graphGeneration || task.resourceUseCount > m_useCapacity || (task.resourceUseCount != 0u && !task.resourceUses))
         return false;
 
-    // Reset only resources used by the preceding task; large graphs with small tasks do not clear a graph-wide table.
     for(const usize resourceIndex : m_touchedResources)
         m_firstUses[resourceIndex] = Limit<usize>::s_Max;
     m_touchedResources.clear();

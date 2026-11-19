@@ -105,7 +105,6 @@ class InteractionRun:
         return round(x * self.scale_x), round(y * self.scale_y)
 
     def checkpoint(self, name, count, enabled, *, extent=None):
-        # Unchanged-state gates also wait beyond the native event batch, catching delayed activation/replay.
         time.sleep(CHECKPOINT_SETTLE_SECONDS)
         path = self.args.output_directory / f"{len(self.stages):02d}_{name}.bmp"
         stage_deadline = min(self.deadline, time.monotonic() + CHECKPOINT_STAGE_TIMEOUT_SECONDS)
@@ -133,7 +132,7 @@ class InteractionRun:
 
     def execute(self):
         self.checkpoint("initial", 0, True)
-        time.sleep(HIT_LAYOUT_SETTLE_SECONDS)  # Let the host publish the matching successfully presented initial hit layout.
+        time.sleep(HIT_LAYOUT_SETTLE_SECONDS)
         self.native.button(True, *self.point(*BUTTON_POINT))
         self.checkpoint("pointer_press_has_no_submit", 0, True)
         self.native.tap(LIT_ESCAPE)

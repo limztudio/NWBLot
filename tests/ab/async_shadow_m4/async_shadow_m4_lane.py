@@ -14,7 +14,7 @@ MAX_DEVICE_GENERATION = 65535
 
 
 class DedicatedComputeUnavailable(SmokeSkip):
-    """The async binary requested a lane, but the adapter routed it through Graphics."""
+    pass
 
 
 @dataclass(frozen=True)

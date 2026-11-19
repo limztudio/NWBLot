@@ -8,9 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// CRLF becomes one space.
-// Other line breaks and tabs become spaces; NUL and other ASCII controls are rejected.
-// UTF8 and normalized byte length are checked before allocation.
 Expected<String, EditTextStatus> NormalizeSingleLineText(in StringView source, in usize maxBytes){
     String candidate;
     const Expected<usize, EditTextStatus> status = NormalizeSingleLineTextInto(source, maxBytes, candidate);
@@ -19,7 +16,6 @@ Expected<String, EditTextStatus> NormalizeSingleLineText(in StringView source, i
     return candidate;
 }
 
-// CRLF/CR/NEL/LS/PS become LF, and each tab becomes one space.
 Expected<String, EditTextStatus> NormalizeMultilineText(in StringView source, in usize maxBytes){
     String candidate;
     const Expected<usize, EditTextStatus> status = NormalizeMultilineTextInto(source, maxBytes, candidate);

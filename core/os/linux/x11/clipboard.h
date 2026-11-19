@@ -21,7 +21,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The display is borrowed until destruction. Its owning event loop forwards events before window dispatch.
 [[nodiscard]] Expected<GlobalUniquePtr<IClipboardService>> CreateX11ClipboardService(Alloc::GlobalArena& arena, _XDisplay& display);
 [[nodiscard]] b8 DispatchX11ClipboardEvent(IClipboardService& service, const _XEvent& event);
 

@@ -72,7 +72,6 @@ def capture(args, variant):
         command += [LIT_REJECT_LOG_MESSAGE, LIT_REFLECTION_RESOLVE_HARDWARE]
     command += [LIT_EXPECT_LOG_MESSAGE, "CausticSphereSmokeProject: camera refraction " + (LIT_DISABLED if variant == LIT_REFRACTION_DISABLED else "enabled")]
     if variant == LIT_REFRACTION_DISABLED or args.software_ray_tracing:
-        # Disabled transmission and no-RT devices both use screen-space glass reflection.
         command += [LIT_EXPECT_LOG_MESSAGE, "AVBOIT refraction resolve: screen-space", LIT_REJECT_LOG_MESSAGE, "AVBOIT refraction resolve: hardware"]
     else:
         command += [LIT_EXPECT_LOG_MESSAGE, "AVBOIT refraction resolve:"]

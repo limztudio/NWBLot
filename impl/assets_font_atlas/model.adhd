@@ -18,7 +18,6 @@ class FontAtlasGroup{
     public u32 channelCount = s_FontAtlasMaxChannelCount;
 }
 
-// Exact source positioning tables preserve GPOS classes, script/language selection and lookup order without expansion.
 class FontAtlasPositioningTable{
     public Sha256Digest sha256 = Sha256Digest();
     public Vector<u8> bytes;

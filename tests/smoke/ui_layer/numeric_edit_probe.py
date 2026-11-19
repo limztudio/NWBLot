@@ -1,4 +1,3 @@
-"""Compare exact numeric values, drafts, accepted geometry, and all GPU markers."""
 from __future__ import annotations
 
 import math
@@ -84,7 +83,6 @@ def snapshot_from_logs(text):
 
 
 def ink_coverage(observed, background, foreground):
-    # Check antialiased glyph coverage along the expected color ray.
     actual, backdrop = linear_channels(observed), linear_channels(background)
     direction = tuple(target - base for target, base in zip(foreground, backdrop))
     denominator = sum(component * component for component in direction)

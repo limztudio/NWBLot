@@ -96,7 +96,6 @@ void VerifyGpuCmdIr_RejectsForeignGraphAndPlanGenerationsWithoutChangingCaptured
     clearTexture.subresources = TextureSubresourceSet(0u, 1u, 0u, 1u);
     clearTexture.valueType = GpuClearTextureTaskValueType::Float;
     clearTexture.floatValue = Color(0.25f, 0.5f, 0.75f, 1.0f);
-    // The stream omits aspect flags ignored by native color-clear lowering.
     clearTexture.clearDepth = true;
     clearTexture.clearStencil = true;
     ASSERT_TRUE(capture.captureClearTexture(task, packet, queue, destination, clearTexture));
@@ -186,7 +185,6 @@ void VerifyGpuCmdIr_RollbackPreservesExactMixedRecordPrefixAtRecordBoundaries(){
     EXPECT_EQ(capture.recordCount(), 2u);
     EXPECT_EQ(capture.graphGeneration(), task.generation);
     ASSERT_EQ(rolledBackBytes.size(), expectedPrefix.size());
-    // Rollback rewrites the header count/payload; the two surviving records stay an exact byte prefix of the capture.
     EXPECT_TRUE(BinaryByteViewsEqual(
         SubBinaryByteView(rolledBackBytes, s_GpuCmdIrStreamHeaderBytes, expectedPrefix.size() - s_GpuCmdIrStreamHeaderBytes),
         SubBinaryByteView(MakeGraphicsByteView(expectedPrefix), s_GpuCmdIrStreamHeaderBytes, expectedPrefix.size() - s_GpuCmdIrStreamHeaderBytes)
@@ -272,7 +270,6 @@ void VerifyGpuCmdIr_DrawWithoutHeapBindingRejectsWholePacket(){
     EXPECT_EQ(accepted.error, GpuCommandIrReplayError::None);
     EXPECT_TRUE(accepted.streamValidation.valid());
 
-    // Converting INT32_MAX to f32 rounds up beyond the scissor range.
     Array<b8, 2> boolCases = Array<b8, 2>();
     boolCases[0u] = false;
     boolCases[1u] = true;
@@ -751,12 +748,10 @@ void VerifyGpuCmdIr_PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeLoweri
     ASSERT_TRUE(capture.captureCopyBuffer(secondTask, secondPacket, queue, source, 0u, destination, 0u, 4u));
     ASSERT_EQ(capture.recordCount(), 2u);
     const GpuCommandIrReplayResult validContext = PreflightGpuCommandIrPacket(capture.commandBytes(), declarations, compiledPlan, packet);
-    // Metadata-only imports never lower. Preflight already set stream, graph, packet, queue, order, kinds, uses.
     EXPECT_EQ(validContext.error, GpuCommandIrReplayError::MissingBackendResource);
     EXPECT_TRUE(validContext.streamValidation.valid());
     EXPECT_EQ(validContext.recordIndex, 0u);
 
-    // Selecting the second packet skips the unlowerable first packet.
     const GpuCommandIrReplayResult secondPacketContext = PreflightGpuCommandIrPacket(capture.commandBytes(), declarations, compiledPlan, secondPacket);
     EXPECT_EQ(secondPacketContext.error, GpuCommandIrReplayError::MissingBackendResource);
     EXPECT_TRUE(secondPacketContext.streamValidation.valid());

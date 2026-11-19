@@ -11,7 +11,6 @@ nwb_declare_executable(nwb_fbx_to_nwb)
 nwb_target_adhd_sources(nwb_fbx_to_nwb NAMESPACE "NWB::FbxToNwb" SOURCES "${CMAKE_CURRENT_LIST_DIR}/main.adhd")
 target_link_libraries(nwb_fbx_to_nwb PUBLIC nwb_utilities_global PRIVATE nwb_fbx_to_nwb_lib nwb_logclient)
 
-# Read shared generated headers from their owning target.
 target_include_directories(nwb_fbx_to_nwb BEFORE PRIVATE "$<TARGET_PROPERTY:nwb_fbx_to_nwb_lib,INTERFACE_INCLUDE_DIRECTORIES>")
 
 nwb_target_console_entry(nwb_fbx_to_nwb "utilities/fbx_to_nwb/main.adhd.h" "NWB::FbxToNwb::RunConsole" "fbx_to_nwb" "NWB::FbxToNwb::s_FbxToNwbEntryFailure")

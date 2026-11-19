@@ -11,7 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Always-active terminal leaf for invariants no FOUNDATION_FATAL_ASSERT reports; FOUNDATION_ASSERT is empty in opt/fin.
 [[noreturn]] inline void TerminateInvariant()noexcept{
     std::abort();
 }

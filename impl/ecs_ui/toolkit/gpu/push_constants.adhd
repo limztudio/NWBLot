@@ -10,7 +10,6 @@
 
 const usize s_GpuTargetSlotCount = 3u;
 const usize s_GpuFrameCount = 4u;
-// Raster uses outside the page lists: color target, skin atlas, vertex buffer, and index buffer.
 const usize s_GpuRasterFixedResourceUses = 4u;
 const usize s_GpuRasterDependencyCapacity = 3u;
 const usize s_GpuInitialVertexCapacity = 4096u;
@@ -119,7 +118,6 @@ class GpuOutputPushConstants{
     public u32 presentationMode = 0u;
 }
 
-// Call-scoped calculation scratch shared by native commands and command IR; never retained or uploaded.
 class GpuRasterGeometry{
     public GpuRasterGeometry(){
         this.pixelScale = f32x4(0.0f, 0.0f, 0.0f, 0.0f);

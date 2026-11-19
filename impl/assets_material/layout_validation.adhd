@@ -34,7 +34,6 @@ b8 ValidateMaterialResourceReferences(in Span<MaterialTypedLayoutBlock> blocks, 
             if(!IsMaterialLayoutResourceFieldType(field.fieldType))
                 continue;
 
-            // Descriptor slots are resolved during material preparation; instance overrides cannot replace them.
             if(block.blockClass != MaterialBlockClass::MaterialConstant)
                 return false;
             if(field.offset > 0xFFFFFFFFu - constantByteBegin)
@@ -79,7 +78,6 @@ b8 ValidateMaterialResourceReferences(in Span<MaterialTypedLayoutBlock> blocks, 
         }
     }
 
-    // Each record maps to one resource field. Dup rejects above also block stray numeric/mutable refs.
     return resourceFieldCount == resourceReferences.size();
 }
 

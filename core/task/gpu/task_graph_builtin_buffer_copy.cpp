@@ -92,7 +92,6 @@ Expected<GpuTaskId> GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, con
         for(const GpuTaskResourceUse& existing : resourceUses){
             if(existing.resource != resource)
                 continue;
-            // Keep command sequencing explicit when a batch reads and writes the same imported allocation.
             if(existing.requiredState != state || existing.access != access)
                 return false;
             if(existing.range.bufferRange.contains(range))

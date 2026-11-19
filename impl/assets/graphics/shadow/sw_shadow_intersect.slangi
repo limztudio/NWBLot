@@ -9,11 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Binding-free slab ray/AABB helpers and watertight Woop ray/triangle intersection math.
-
-
 #define NWB_SW_SHADOW_AABB_PADDING 1e-4
-// Finite miss sentinel for nwbSwShadowRayAabbEntryT that sorts after any valid entry distance without inf/NaN hazards.
 #define NWB_SW_SHADOW_AABB_MISS 1.0e30
 
 #include "../bvh/ray_intersect.slangi"
@@ -26,18 +22,15 @@ bool nwbSwShadowRayAabb(const float3 origin, const float3 invDir, const float tM
     return nwbBvhRayAabb(origin, invDir, tMin, tMax, boxMin, boxMax, NWB_SW_SHADOW_AABB_PADDING);
 }
 
-// Returns the slab entry distance in [tMin, tMax], or NWB_SW_SHADOW_AABB_MISS on miss.
 float nwbSwShadowRayAabbEntryT(const float3 origin, const float3 invDir, const float tMin, const float tMax, const float3 boxMin, const float3 boxMax){
     float tEntry;
     return nwbBvhRayAabbT(origin, invDir, tMin, tMax, boxMin, boxMax, NWB_SW_SHADOW_AABB_PADDING, tEntry) ? tEntry : NWB_SW_SHADOW_AABB_MISS;
 }
 
-// Reciprocal ray direction with zero components nudged to avoid inf * 0 = NaN when the origin lies on a box face.
 float3 nwbSwShadowSafeInvDir(const float3 direction){
     return nwbBvhSafeInvDir(direction);
 }
 
-// Ray/triangle hit result: ray parameter t and barycentric weights (u, v) for v1 and v2 (with w = 1 - u - v for v0).
 struct NwbSwShadowTriangleHit{
     bool hit;
     float t;
@@ -46,7 +39,6 @@ struct NwbSwShadowTriangleHit{
     float w;
 };
 
-// Watertight two-sided ray/triangle intersection (Woop/Benthin/Wald 2013) with a single hit per shared edge.
 NwbSwShadowTriangleHit nwbSwShadowRayTriangle(const float3 origin, const float3 direction, const float tMin, const float tMax, const float3 v0, const float3 v1, const float3 v2){
     NwbSwShadowTriangleHit result;
     result.hit = false;
@@ -55,7 +47,6 @@ NwbSwShadowTriangleHit nwbSwShadowRayTriangle(const float3 origin, const float3 
     result.v = 0.0;
     result.w = 0.0;
 
-    // Dominant axis as kz avoids a near-zero shear divisor; kx/ky keep winding sign when dir[kz] < 0.
     const float3 absDir = abs(direction);
     int kz = (absDir.x >= absDir.y) ? ((absDir.x >= absDir.z) ? 0 : 2) : ((absDir.y >= absDir.z) ? 1 : 2);
     int kx = (kz + 1 == 3) ? 0 : (kz + 1);
@@ -67,12 +58,10 @@ NwbSwShadowTriangleHit nwbSwShadowRayTriangle(const float3 origin, const float3 
         ky = swap;
     }
 
-    // Shear/scale constants aligning the ray with +kz.
     const float shearX = direction[kx] / dirKz;
     const float shearY = direction[ky] / dirKz;
     const float shearZ = 1.0 / dirKz;
 
-    // Vertices relative to the ray origin, then sheared into ray space (x,y for the edge tests).
     const float3 relA = v0 - origin;
     const float3 relB = v1 - origin;
     const float3 relC = v2 - origin;
@@ -83,12 +72,10 @@ NwbSwShadowTriangleHit nwbSwShadowRayTriangle(const float3 origin, const float3 
     const float cx = relC[kx] - shearX * relC[kz];
     const float cy = relC[ky] - shearY * relC[kz];
 
-    // Scaled barycentrics from the three edge functions (u->v0, v->v1, w->v2 weight).
     float u = cx * by - cy * bx;
     float v = ax * cy - ay * cx;
     float w = bx * ay - by * ax;
 
-    // Two-sided test: reject only when edge functions have mixed signs so shared edges resolve without gaps.
     if((u < 0.0 || v < 0.0 || w < 0.0) && (u > 0.0 || v > 0.0 || w > 0.0))
         return result;
 
@@ -96,7 +83,6 @@ NwbSwShadowTriangleHit nwbSwShadowRayTriangle(const float3 origin, const float3 
     if(det == 0.0)
         return result;
 
-    // Interpolate the sheared z to the hit distance, sign-correct against det so the (tMin,tMax) test holds for either triangle facing without a divide.
     const float az = shearZ * relA[kz];
     const float bz = shearZ * relB[kz];
     const float cz = shearZ * relC[kz];
@@ -110,9 +96,9 @@ NwbSwShadowTriangleHit nwbSwShadowRayTriangle(const float3 origin, const float3 
     const float invDet = 1.0 / det;
     result.hit = true;
     result.t = tScaled * invDet;
-    result.u = v * invDet; // MT convention: u weights v1
-    result.v = w * invDet; // v weights v2
-    result.w = u * invDet; // w weights v0
+    result.u = v * invDet;
+    result.v = w * invDet;
+    result.w = u * invDet;
     return result;
 }
 

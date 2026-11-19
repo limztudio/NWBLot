@@ -27,8 +27,6 @@ namespace GpuTaskGraphBuiltinDetail{
         return true;
     if(resourceDesc.initialState == ResourceStates::Unknown || uploadFinalState != resourceDesc.initialState || (externalFinalState != ResourceStates::Unknown && externalFinalState != resourceDesc.initialState))
         return false;
-    // A texture upload is a first write.
-    // Its recorder writes CopyDest then publishes finalState, so explicit Unknown import is safe for a fresh image.
     return graphInitialState == ResourceStates::Unknown || graphInitialState == resourceDesc.initialState;
 }
 

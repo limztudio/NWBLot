@@ -3,7 +3,6 @@ if(NWB_OBFUSCATE_STRING_LITERALS)
     set_target_properties(nwb_string_literal_runtime PROPERTIES CXX_COMPILER_LAUNCHER "" POSITION_INDEPENDENT_CODE ON)
     target_include_directories(nwb_string_literal_runtime PRIVATE "${PROJECT_SOURCE_DIR}")
     nwb_apply_codegen(nwb_string_literal_runtime)
-    # Only scalar aliases are used; header-injected CRT/iterator directives must not constrain vendor images.
     if(NWB_COMPILER_FRONTEND_MSVC)
         target_compile_options(nwb_string_literal_runtime PRIVATE /clang:-fno-autolink)
     else()
@@ -55,4 +54,3 @@ target_sources(global_foundation PRIVATE
     "${PROJECT_SOURCE_DIR}/global/unicode/*.ipp"
     "${PROJECT_SOURCE_DIR}/global/unicode/*.ixx"
 )
-

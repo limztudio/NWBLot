@@ -47,7 +47,6 @@ public:
     void unregisterContributor(IFrameGraphContributor& contributor)noexcept;
     void clear()noexcept;
 
-    // Changes made by a callback affect the next record; removed contributors are skipped in the current record.
     [[nodiscard]] b8 record(CaptureSession& session);
 
 

@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Stages exchange linear radiance; exposure applies at presentation.
 const f32 s_PresentationDefaultShoulder = 0.65f;
 const u32 s_DeferredInvalidHeapSlot = 0xffffffffu;
 const u32 s_DeferredPresentationSdr = 0u;

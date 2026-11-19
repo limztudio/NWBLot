@@ -75,7 +75,6 @@ class ShadowMaterialSampledTextureCollector : NoCopy{
         PendingShadowTextureReset reset(this.m_pending);
         if(!AppendPreparedMaterialSurfaceSampledTextures(material, resources, this.m_pending))
             return false;
-        // Check names in order so a rejected texture preserves the published prefix.
         for(in TextureHandle texture : this.m_pendingTextures){
             if(!texture.valid() || texture.deref().getCreationDescription().name == s_NameNone)
                 return false;
@@ -89,9 +88,6 @@ class ShadowMaterialSampledTextureCollector : NoCopy{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The material table, instance stream, and typed bytes share indices and offsets, so preflight freezes them against one storage generation.
-// A fresh context retains all three ABI-coupled byte streams until Shadow Preparation accepts.
-// Accepted software-cache reuse retains only the same immutable storage identity, counts, and hash.
 [modular]
 class PreparedShadowMaterialContext : NoCopy{
     private Vector<u8> m_instanceMaterialBytes;
@@ -149,7 +145,6 @@ class PreparedShadowMaterialContext : NoCopy{
     }
 
     public Expected<PreparedShadowMaterialContextUploads> retainUploads(in RendererRayTracingState state, mut GpuTaskGraph graph)const;
-    // Publishes the accepted route hash; false when no fresh upload was pending.
     public b8 publishAcceptedUpload(mut RendererRayTracingState state)const{
         return ShadowMaterialContextPolicy().publishAcceptedUpload(
             this.m_ready,
@@ -175,7 +170,6 @@ class PreparedShadowMaterialContext : NoCopy{
     public b8 softwareSnapshotCovers(in usize sceneInstanceCount)const{
         return ShadowMaterialContextPolicy().softwareSnapshotCovers(this.m_ready, this.m_route, this.m_instanceMaterialCount, this.m_instanceCount, sceneInstanceCount);
     }
-    // A fresh upload stays valid; cache reuse still needs the accepted software hash over the same scene instances.
     public b8 softwareSnapshotAccepted(in RendererRayTracingState state)const{
         return ShadowMaterialContextPolicy().softwareSnapshotAccepted(
             this.m_uploadRequired,

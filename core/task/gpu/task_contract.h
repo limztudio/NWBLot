@@ -26,7 +26,6 @@ namespace GpuGraphTaskContract{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Member tasks use the same graph-owned payload and optional lifecycle thunks as static task contracts.
 template<typename PayloadT>
 struct MemberTask{
     using Payload = PayloadT;
@@ -61,8 +60,6 @@ concept DiscardedApi = requires{
     static_cast<void (*)(typename TaskT::Payload&)>(&TaskT::Discarded);
 };
 
-// Payload-dependent contracts are evaluated once at declaration, before immutable graph compilation.
-// They describe commands and external timeline requirements, independently of physical placement.
 template<typename TaskT>
 [[nodiscard]] GpuTaskCommandRequirements CommandRequirements(const typename TaskT::Payload& payload)noexcept([]()noexcept{
     if constexpr(requires{ static_cast<GpuTaskCommandRequirements (*)(const typename TaskT::Payload&)>(&TaskT::CommandRequirements); })

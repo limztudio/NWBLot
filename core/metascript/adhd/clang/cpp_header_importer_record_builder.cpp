@@ -588,7 +588,6 @@ void ImporterContext::extractClass(CXCursor classCursor){
     for(const CXCursor baseRec : traits.publicBaseRecords)
         importClassMethodsFromCursor(baseRec, *cls, true);
 
-    // Keep backwards-compatible alias when configured headers are imported.
     if(const MStringView compatAliasName = CppImporterSemantics::FindCompatTypeAlias(cppExportName); !compatAliasName.empty() && findExistingDeclForMerge(m_classByExportName, m_classByName, compatAliasName, {}) == nullptr){
         if(m_aliasByName.find(compatAliasName) == m_aliasByName.end()){
             TypeAliasDecl* compatAlias = AllocateAstNode<TypeAliasDecl>(m_arena);

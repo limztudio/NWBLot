@@ -36,7 +36,6 @@ struct NwbRefractionPushConstants{
 };
 [[vk::push_constant]] NwbRefractionPushConstants g_NwbRefractionPush;
 
-// Prefix of the renderer's mesh view CB. The omitted frustum planes are never read by this pass.
 struct NwbRefractionView{
     row_major float4x4 worldToClip;
     row_major float4x4 clipToWorld;
@@ -57,9 +56,6 @@ struct NwbRefractionView{
 #define NWB_REFRACTION_DENSE_GRID 0
 #endif
 
-// Separate cooked kernels keep dense mapping independent of compact queue control flow.
-// One indirect workgroup resolves one 8x8 tile at full pixel resolution.
-// A second dispatch dimension covers target generations with more than 65535 tiles.
 bool nwbRefractionResolvePixel(const uint3 groupId, const uint3 groupThreadId, out uint2 pixel){
     pixel = uint2(0u);
 #if NWB_REFRACTION_DENSE_GRID
@@ -86,11 +82,8 @@ static const half NWB_REFRACTION_FRONT_TRANSMITTANCE_MIN = 1e-4h;
 static const half NWB_REFRACTION_TINT_MIN = 1e-4h;
 static const half NWB_REFRACTION_IOR_MAX = 4.0h;
 static const float NWB_REFRACTION_BIAS_DISTANCE_SCALE = 1e-5;
-// Association tolerances grow with the entry bias.
 static const float NWB_REFRACTION_BIAS_TOLERANCE_SCALE = 8.0;
-// A refracted direction with a smaller squared length is a total-internal-reflection miss.
 static const float NWB_REFRACTION_DIRECTION_LENGTH_SQUARED_MIN = 0.5;
-// Screen continuation marches a fixed number of quadratically spaced steps up to the capped distance.
 static const uint NWB_REFRACTION_SCREEN_STEP_COUNT = 24u;
 static const float NWB_REFRACTION_SCREEN_MAX_DISTANCE_BIAS_SCALE = 32.0;
 static const float NWB_REFRACTION_SCREEN_STEP_TOLERANCE_SCALE = 1.5;
@@ -129,10 +122,8 @@ half3 nwbRefractionOpaqueBackground(const uint2 pixel){
 half3 nwbRefractionCompositeBehindBackground(const int3 texel, const half3 opaque, const half behindExtinction){
     const half3 behind = half3(nwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.y).Load(texel).rgb);
     const half frontExtinction = half(nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.z).Load(texel).r);
-    // Transmittances are (0, 1) bounded factors, so half arithmetic is sufficient here.
     const half frontTransmittance = exp(-min(frontExtinction, half(NWB_AVBOIT_EXTINCTION_SATURATION)));
     const half backTransmittance = exp(-min(behindExtinction, half(NWB_AVBOIT_EXTINCTION_SATURATION)));
-    // Weights hold prefix transmittance ahead of the primary. Undo it here; compositor applies it once.
     return behind / max(frontTransmittance, half(NWB_REFRACTION_FRONT_TRANSMITTANCE_MIN)) + opaque * backTransmittance;
 }
 
@@ -144,13 +135,11 @@ half nwbRefractionFresnelTransmissionFromR0(const half r0, const half cosine){
 }
 
 half nwbRefractionFresnelTransmission(const half ior, const half cosine){
-    // Schlick reflectance is a (0, 1) bounded factor, so half arithmetic is sufficient here.
     const half ratio = (ior - half(1.0h)) / (ior + half(1.0h));
     return nwbRefractionFresnelTransmissionFromR0(ratio * ratio, cosine);
 }
 
 half3 nwbRefractionAttenuation(const half3 tint, const float thickness, const half ior, const half entryCosine, const half exitCosine){
-    // Tint/Beer attenuation plus two bounded Fresnel transmissions stay in (0, 1]; half color math is sufficient.
     const half ratio = (ior - half(1.0h)) / (ior + half(1.0h));
     const half r0 = ratio * ratio;
     const half fresnel = nwbRefractionFresnelTransmissionFromR0(r0, entryCosine) * nwbRefractionFresnelTransmissionFromR0(r0, exitCosine);
@@ -158,7 +147,6 @@ half3 nwbRefractionAttenuation(const half3 tint, const float thickness, const ha
 }
 
 half3 nwbRefractionFallbackAttenuation(const half3 tint, const half ior, const half cosine){
-    // Unit-thickness fallback attenuation simplifies exp(log(tint) * 1.0) to clamped tint and squares one Fresnel evaluation.
     const half fresnel = nwbRefractionFresnelTransmission(ior, cosine);
     return clamp(tint, half3(NWB_REFRACTION_TINT_MIN), half3(1.0h)) * (fresnel * fresnel);
 }
@@ -171,7 +159,6 @@ struct NwbRefractionEntry{
     float3 incident;
     float3 normal;
     half3 tint;
-    // IOR (clamped 1..4) and entry cosine (saturate-bounded (0,1)) feed only the bounded Fresnel/attenuation factors.
     half ior;
     half cosine;
     float bias;
@@ -201,7 +188,6 @@ bool nwbRefractionLoadEntry(const uint2 pixel, out NwbRefractionEntry entry){
     entry.tint = saturate(tint);
     entry.cosine = half(saturate(abs(incidentDotNormal)));
     entry.bias = max(NWB_REFRACTION_MIN_DISTANCE, entry.cameraDistance * NWB_REFRACTION_BIAS_DISTANCE_SCALE);
-    // Coverage is intentionally not an optical mask: perfectly clear glass may author zero AVBOIT opacity.
     return true;
 }
 
@@ -213,7 +199,6 @@ half3 nwbRefractionBackgroundForEntry(const uint2 pixel, const NwbRefractionEntr
     const half behindExtinction = half(nwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.z).Load(texel).r);
     if(behindExtinction <= half(0.0h))
         return opaque;
-    // Displaced pixels outside this primary silhouette reuse only the opaque cache so foreground transparent layers are not pulled behind glass.
     if(requireMatchingPrimary){
         if(nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.x).Load(texel).r >= 1.0)
             return opaque;
@@ -223,7 +208,6 @@ half3 nwbRefractionBackgroundForEntry(const uint2 pixel, const NwbRefractionEntr
     return nwbRefractionCompositeBehindBackground(texel, opaque, behindExtinction);
 }
 
-// Single-boundary screen-space continuation; falls back to straight-through when the depth crossing is far from the ray or offscreen.
 bool nwbRefractionScreenBackgroundPixel(const NwbRefractionEntry entry, const float3 direction, out uint2 outSamplePixel){
     outSamplePixel = uint2(0u, 0u);
     uint2 sourcePixel;

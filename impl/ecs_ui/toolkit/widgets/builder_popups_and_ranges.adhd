@@ -233,7 +233,6 @@ b8 Builder::synchronizePopup(){
 }
 
 b8 Builder::finishPopupFamily(){
-    // Visibility is resolved without calling application sources before any deferred subtree paint.
     this.m_scopeFrame.m_popupVisible = this.popupFrameVisible(this.m_scopeFrame);
     if(!this.m_scopeFrame.m_popupVisible)
         this.m_context.discardPopupScope(this.m_scopeFrame.m_popupToken);
@@ -279,14 +278,12 @@ b8 Builder::paintPopupFamily(mut BuilderScopeFrame frame){
 }
 
 b8 Builder::validatePopupFamily(){
-    // A child callback can change an already painted parent, or a later sibling can change an ended child.
     for(usize index = 0u; index <= this.m_popupFrameCount; ++index){
         mut BuilderScopeFrame frame = this.popupFrameAt(index);
         this.m_scope = Optional<mut BuilderScopeFrame>(frame);
         if(frame.m_popupVisible && (!this.popupFrameVisible(frame) || !this.validateDeferredSources()))
             return false;
     }
-    // This pass calls no source code. Every model and ancestor lifetime is still borrowed until it completes.
     for(usize index = 0u; index <= this.m_popupFrameCount; ++index){
         mut BuilderScopeFrame frame = this.popupFrameAt(index);
         this.m_scope = Optional<mut BuilderScopeFrame>(frame);
@@ -365,7 +362,6 @@ RadioGroupResult Builder::radioGroup(in StringView stableKey, in borrow IListDat
     frame.m_options = options;
     frame.m_style = this.m_radioGroupStyle;
     frame.m_widgetStyle = this.m_style;
-    // Reject options and style before invoking application callbacks or changing reconciliation state.
     const auto metrics = MeasureRadioGroup(0u, Point(), options, frame.m_style);
     if(!metrics.has_value()){
         this.m_context.fail();
@@ -391,7 +387,6 @@ RadioGroupResult Builder::radioGroup(in StringView stableKey, in borrow IListDat
         result.valid = false;
         return result;
     }
-    // Source callbacks can close or reopen an ancestor before reconciliation or copied input commits.
     if(!this.synchronizePopup()){
         result.valid = true;
         return result;
@@ -443,7 +438,6 @@ RadioGroupResult Builder::radioGroup(in StringView stableKey, in borrow IListDat
 }
 
 b8 Builder::radioGroupMatches(in RadioGroupFrame frame)const{
-    // Repeat the stamp fence to catch a one-shot metadata mutation from the final count callback.
     for(u32 pass = 0u; pass < s_RadioGroupStampFencePassCount; ++pass){
         if(
             !this.radioGroupStateMatches(frame)
@@ -465,7 +459,6 @@ b8 Builder::prepareRadioGroup(mut RadioGroupFrame frame){
         if(!this.radioGroupStateMatches(frame))
             return false;
         const StringView text = frame.m_source.text(index);
-        // Do not call any further source method until the temporary label has been shaped and copied.
         if(!this.radioGroupStateMatches(frame))
             return false;
         auto label = this.m_text.layout(this.textShapeRequest(text, frame.m_widgetStyle.fontSize));
@@ -552,7 +545,6 @@ b8 Builder::paintRadioGroup(in BuilderItem item, in LayoutBox box){
     }
     if(!this.radioGroupMatches(frame))
         return false;
-    // Diagnostics describe prepared placement; input still uses the last published owned hit targets.
     frame.m_state.m_placement = placement.value();
     return true;
 }
@@ -573,7 +565,6 @@ b8 Builder::slider(in StringView stableKey, mut SliderState state, in SliderOpti
     const auto widget = this.m_context.declare(stableKey, WidgetKind::Slider);
     if(!widget.has_value() || !this.m_context.claimState(widget.value(), state.instanceGeneration()))
         return false;
-    // Attempt diagnostics retire immediately; invalid policy leaves semantic state and accepted geometry untouched.
     state.m_result = SliderResult();
     SliderFrame frame(state);
     frame.m_options = options;
@@ -660,7 +651,6 @@ b8 Builder::paintSlider(in BuilderItem item, in LayoutBox box){
     const b8 interactive = IsSliderPlacementInteractive(frame.m_options, placement.value());
     mut InputRouter input = this.m_context.input();
     const b8 previouslyFocused = input.focus() == item.state.id;
-    // Prospective geometry and policy fence the displayed lifetime before any copied intention changes the value.
     input.fenceControl(item.state.id, item.state.declarationGeneration, frame.m_token);
     if(!interactive)
         input.invalidateTarget(item.state.id);

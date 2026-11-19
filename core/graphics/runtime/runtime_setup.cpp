@@ -112,13 +112,10 @@ b8 ValidateBufferSetupUpload(const GraphicsStandaloneService::BufferSetupDesc& d
         );
         return false;
     }
-    // CommandList staging and graph-owned upload tasks both lower to VkBufferCopy.
-    // Fail before creating a list or packet: the API cannot report success for a region Vulkan rejects.
     if((desc.destOffsetBytes & (sizeof(u32) - 1u)) != 0u || (desc.dataSize & (sizeof(u32) - 1u)) != 0u){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsRuntime: failed to set up buffer '{}': upload offset and size must be 4-byte aligned"), ConvertString(desc.bufferDesc.debugName.resolvedText()));
         return false;
     }
-    // A retained buffer needs a concrete state; Unknown restores at close with no graph-visible contract for the next consumer.
     if(desc.bufferDesc.keepInitialState && desc.bufferDesc.initialState == ResourceStates::Unknown){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("GraphicsRuntime: failed to set up buffer '{}': keep-initial-state uploads require a concrete initial state"), ConvertString(desc.bufferDesc.debugName.resolvedText()));
         return false;

@@ -40,7 +40,6 @@ static const half3 NWB_DEFERRED_REFLECTION_DEBUG_FALLBACK_COLOR = half3(1.0h, 0.
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Composite stays linear RGBA16F on Compute. The Graphics present pass handles the swapchain boundary, so no surface images.
 [numthreads(NWB_DEFERRED_COMPOSITE_GROUP_SIZE, NWB_DEFERRED_COMPOSITE_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     uint width;
@@ -51,7 +50,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(pixel.x >= width || pixel.y >= height)
         return;
 
-    // Every input is full-resolution point-sampled. Direct mip-0 loads need no derivatives or extensions.
     const int3 texel = int3(pixel, 0);
     half3 compositeColor = half3(0.0h);
     half frontTransmittance = half(1.0h);
@@ -60,12 +58,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     bool hasRefraction = false;
     bool hasTransmitted = false;
     if(g_NwbDeferredCompositePushConstants.refractionResources != 0u){
-        // Current capture depth is the validity contract for sparsely written resolve tiles.
-        // Empty tiles retain ordinary AVBOIT composition and never consume old or uninitialized radiance.
         const float refractionDepth = nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots0.x).Load(texel).r;
         if(refractionDepth < 1.0){
             hasRefraction = true;
-            // Front-layer color and its (0, 1) bounded extinction/transmittance factor are LDR color math, matching the half composite path.
             const half frontExtinction = half(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots1.z).Load(texel).r);
             if(frontExtinction > half(0.0h)){
                 frontColor = half3(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots1.y).Load(texel).rgb);

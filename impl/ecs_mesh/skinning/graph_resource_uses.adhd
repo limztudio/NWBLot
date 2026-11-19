@@ -53,7 +53,6 @@ class SkinningResourceUseEntry{
 
 type SkinningResourceUseIndex = HashMap<SkinningResourceKey, SkinningResourceUseInfo>;
 
-// Keep one plan on the stack. Index larger sets by the full resource identity.
 class SkinningResourceUseCollector<const usize Capacity>{
     private Array<SkinningResourceUseEntry, Capacity> m_inline;
     private Optional<SkinningResourceUseIndex> m_index;

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Dispatch a CoolStuff launcher to one of its runnable applications."""
 
 from __future__ import annotations
 

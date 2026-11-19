@@ -752,7 +752,6 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
             const TypeLayoutAnalyzer layoutAnalyzer(m_symbols);
             const b8 requiresMemberInit = !m_symbols.isSelfDefaultedType(field->type->name, m_activeOwnerClass);
             const ClassDecl* fieldClass = m_symbols.findClass(baseFieldType);
-            // Asset assignment preserves the destination virtual path. Construct the named asset directly.
             const b8 constructsAsset = isDirectCtorCall && fieldClass && !fieldClass->assetTypeName.empty();
             if(field->usesClassArena && !requiresMemberInit && !constructsAsset && (!isDirectCtorCall || layoutAnalyzer.isTypeAssignable(*field->type, false)))
                 continue;

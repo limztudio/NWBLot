@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// GI comparison material: diffuse only, so black occluders stay black and white receivers reveal colored bounce.
 static const half NWB_SMOKE_GI_DIFFUSE_TONEMAP_KNEE = 0.65h;
 
 

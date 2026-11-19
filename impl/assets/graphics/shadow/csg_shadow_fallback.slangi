@@ -37,7 +37,6 @@ uint nwbMeshFrameViewHeapSlot(){ return 0u; }
 #define NWB_CSG_RAY_RETAINED_POSE 1
 #include "../common/math.slangi"
 
-// Capture reuse retains receiver/cutter poses. Query unchanged local geometry through its current TLAS transform, preserving t.
 bool nwbCsgRayPrepareHardwareRay(const uint contextSlot, const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, out float3 queryOrigin, out float3 queryDirection){
     const NwbSwBvhInstance retained = nwbCsgRayLoadInstance(contextSlot, instanceIndex);
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(g_NwbSwShadowMaterialContextSlots.sceneSlots.z)[instanceIndex];
@@ -186,7 +185,6 @@ uint nwbCsgShadowRayInstanceOptics(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Invalid/unsupported geometry remains conservative; valid cavity rays trace the retained solid and its union walls.
 half3 nwbCsgShadowRayVisibility(const float3 origin, const float3 direction, const float minimum, const float maximum){
     if(!nwbCsgShadowEnabled())
         return half3(1.0h);

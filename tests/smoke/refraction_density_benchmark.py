@@ -36,7 +36,6 @@ DEFAULT_EXTENTS = ("960x720", "1600x900")
 DENSITIES = (0, 1, 10, 50, 100)
 ROUTES = ("screen", "hardware")
 SCHEDULING_STRATEGIES = ("full-frame", "tiled")
-# Compiled C++ sources that define the refraction density fixture.
 FIXTURE_SOURCE_FILES = ("tests/smoke/refraction_scenes_and_runtime.adhd", "tests/smoke/avboit_timing_render_pass.adhd")
 LEGACY_FIXTURE_SOURCE_FILES = ("tests/smoke/refraction_project.cpp", "tests/smoke/avboit_timing_render_pass.cpp")
 
@@ -111,7 +110,6 @@ def prepare_target_extent(backend, handle, process, cell, read_log, timeout):
 
 
 def retain_target_reports(reports, startup_headers, warmup_intervals, minimum_warmup_frames, minimum_warmup_seconds=0, report_durations=None):
-    # Discard headers present at target confirmation because the last report is still unsealed.
     relative, retained = GpuTimingEvidence().retain_after_warmup(reports[startup_headers:], warmup_intervals, minimum_warmup_frames)
     start = startup_headers + relative
     if minimum_warmup_seconds:
@@ -126,7 +124,6 @@ def retain_target_reports(reports, startup_headers, warmup_intervals, minimum_wa
 
 
 def startup_report_boundary(text):
-    # Require one extra sealed header in case the file was read mid-write.
     return len(list(HEADER.finditer(text))) + 1
 
 
@@ -141,7 +138,6 @@ def validate_log(text, cell):
 
 
 def wall_frames(log, sidecar, workload, start, stop, stall_threshold_ms):
-    # Reuse the shared FpsProbe window alignment and consistency parser.
     normalized = log.replace("RefractionSmokeProject: fps ", "ReflectionSmokeProject: fps ")
     try:
         result = RendererWallFrameEvidence.summarize_wall_frames(normalized, sidecar, replace(workload, reflection_policy=True), [start, stop])

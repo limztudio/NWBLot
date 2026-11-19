@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One liveness query owns identities and flags; no state survives the prune.
 class RuntimeMeshRequestSet : NoCopy{
     private usize m_expectedRequestCount;
     private Array<RuntimeMeshRequestEntry, s_RuntimeMeshRequestInlineCapacity> m_inlineEntries;

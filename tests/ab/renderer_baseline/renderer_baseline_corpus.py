@@ -1,6 +1,3 @@
-"""Renderer-baseline reference corpus: frozen-environment identity, reference manifests, and corpus loading and verification."""
-
-
 from __future__ import annotations
 
 import argparse

@@ -102,7 +102,6 @@ namespace GpuTaskGraphCompilerDetail{
         if(packetReachabilityWordCount > Limit<usize>::s_Max / sizeof(u64) || packetReachabilityWordCount > packetReachability.max_size())
             return false;
         packetReachability.resize(packetReachabilityWordCount, 0u);
-        // Earlier consumers may already contain terminal edges accepted without the dense closure.
         for(usize packetIndex = 0u; packetIndex <= currentConsumerIndex; ++packetIndex){
             const GpuSubmissionPacket& packet = compiledPlan.packets[packetIndex];
             for(u32 dependencyIndex = 0u; dependencyIndex < packet.dependencyCount; ++dependencyIndex){
@@ -208,15 +207,12 @@ namespace GpuTaskGraphCompilerDetail{
             }
         }
 
-        // Each state-synchronization consumer group is ordered nearest-producer first.
-        // If a path already joins an older producer into this packet, skip the redundant direct edge but keep canonical order.
         while(resourceStateDependencyIndex < resourceStateDependencies.size() && resourceStateDependencies[resourceStateDependencyIndex].consumer == consumerPacketID){
             const GpuSubmissionPacketId producerPacketID = resourceStateDependencies[resourceStateDependencyIndex].producer;
             ++resourceStateDependencyIndex;
             if(packetDependencyConsumerMarkers[producerPacketID.index] == consumerPacketID.index)
                 continue;
             if(packetReachabilityWordsPerPacket == 0u && (consumerDependsOnNonRoot || compiledPlan.packets[producerPacketID.index].dependencyCount != 0u)){
-                // Root producers cannot form an indirect path; allocate closure only when that stops holding.
                 if(!initializePacketReachability(consumerPacketIndex))
                     return false;
             }
@@ -239,8 +235,6 @@ namespace GpuTaskGraphCompilerDetail{
     if(resourceStateDependencyIndex != resourceStateDependencies.size())
         return false;
 
-    // Packet dependencies are already constrained to earlier compiler-order packets and remain the authoritative GPU submission order.
-    // Recording needs only prior packets exporting a seed-used snapshot; the longest such chain is the frontier depth.
     for(usize packetIndex = 0u; packetIndex < compiledPlan.packets.size(); ++packetIndex){
         GpuSubmissionPacket& packet = compiledPlan.packets[packetIndex];
         for(u32 dependencyIndex = 0u; dependencyIndex < packet.dependencyCount; ++dependencyIndex){

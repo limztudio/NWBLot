@@ -80,7 +80,6 @@ class ShadowVisibilityStateLifecycleContext{
         if(this.returnTextures.empty() || this.scratchTextures.empty() || this.scratchBuffers.empty() || !finalState.has_value())
             return false;
 
-        // An inactive route retains its live allocation and accepted native state until that route runs again.
         const b8 scratchStateReady = this.renderer.m_shadowComputePersistentState.buildMergedResourceSubset(
             finalState.value(),
             this.scratchTextures,

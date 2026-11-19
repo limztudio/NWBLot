@@ -9,15 +9,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// SW photon producer (no-HWRT fallback); one thread per photon.
-
-// 64 photons per group.
 #define NWB_CAUSTIC_SW_GROUP_SIZE 64
 
-// Reuses SW shadow geometry.
 #include "../shadow/sw_binding_slots.h"
 
-// Scene stack overflow uses the complete instance list. Mesh LBVH depth is bounded by its Morton key and primitive-index bit prefixes.
 #define NWB_CAUSTIC_SW_SCENE_STACK_SIZE 16
 #define NWB_CAUSTIC_SW_MESH_STACK_SIZE 64
 

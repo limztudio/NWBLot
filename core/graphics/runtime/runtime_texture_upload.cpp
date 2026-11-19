@@ -112,8 +112,6 @@ inline constexpr AStringView s_UploadTextureBatchMarkerLabel = "Texture Upload B
         }
         totalByteCount += region.dataSize;
     }
-    // Retained subresources publish their state only after this batch is accepted.
-    // A partial fresh upload leaves the texture mixed, so later unspecified typed imports resolve to Unknown until every subresource is known.
     return totalByteCount;
 }
 
@@ -237,8 +235,6 @@ b8 GraphicsStandaloneService::uploadTextureBatch(const TextureUploadBatchDesc& d
     const ResourceStates::Mask graphInitialState = desc.hasPhysicalInitialState ? desc.physicalInitialState : textureDesc.initialState;
     const CommandQueue::Enum consumerQueue = __hidden_graphics_texture_upload::ResolveTextureUploadBatchConsumerQueue(device, desc.queue, *totalByteCount, textureDesc);
     GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting = GraphicsModuleDetail::SetupUploadGraph::ResolveSameClassRouting(device, consumerQueue, *totalByteCount);
-    // Existing batch destinations cannot be recreated with a wider sharing contract.
-    // Cross-family producer needs the texture already created for that queue class; same-family offload keeps exclusive sharing.
     if(sameClassRouting.crossesQueueFamily && !ResourceQueueSharing::IncludesQueueClass(textureDesc.queueSharing, consumerQueue))
         sameClassRouting = {};
     QueueSubmissionToken uploadToken;

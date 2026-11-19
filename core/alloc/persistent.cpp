@@ -452,7 +452,6 @@ Expected<PersistentArena::Allocation> PersistentArena::allocateLocked(const usiz
 void PersistentArena::deallocateBlockLocked(NotNull<void*> blockPointer)noexcept{
     auto& block = *static_cast<__hidden_persistent::Block*>(blockPointer.get());
     block.requestedBytes = 0u;
-    // Keep exact blocks for reuse; coalesce only when a request needs it.
     block.isFree = true;
     __hidden_persistent::InsertFreeBlock(m_freeHead, block);
 }

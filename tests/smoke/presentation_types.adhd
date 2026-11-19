@@ -64,7 +64,6 @@ const Name s_PresentationTimingNameFramePreamble = "graphics.frame_preamble";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Track frame intervals and count idle stalls of 50ms or more once per gap.
 class PresentationPacingSample{
     public f64 wallMsPerPresentation;
 

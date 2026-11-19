@@ -35,9 +35,6 @@ inline constexpr u32 s_MinFrameTimingPacketCount = 2u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A standalone graph owns no renderer finalization packet.
-// Predeclare this no-op Graphics tail so a later rejection can join every accepted physical queue before this call returns.
-// The plain variant covers graphs without frame timing, so no task carries a nullable pointer with a silent no-op guard.
 struct StandaloneTaskGraphRecoveryTask{
     inline static constexpr GpuTaskCommandRequirements s_CommandRequirements{ GpuQueueCapability::None, true };
 
@@ -116,7 +113,6 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
 
     auto& device = graphics.getDevice();
 
-    // Every view and scratch owner below ends before this lease resets the workspace for the next submission.
     const StandaloneGraphWorkspacePool::Lease lease(workspaces);
     StandaloneGraphWorkspace* const workspace = lease.workspace();
     if(!workspace)
@@ -220,7 +216,6 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
     if(recoveryPacketPlan.queue != graphicsQueue || recoveryPacketPlan.dependencyCount != 0u || recoveryPacketPlan.externalDependencyCount != 0u || !recoveryPacketPlan.joinsAcceptedQueueFrontier)
         return MakeUnexpected(Failure{});
 
-    // Setup and timing callers preserve their established serial behavior. The public standalone graph boundary supplies the Graphics worker pool.
     GpuTaskGraphNormalExecutionDesc normalExecution;
     normalExecution.readyFrontierScheduler = readyFrontierScheduler;
     const b8 graphAccepted = scheduler.executeGraph(normalExecution, scratchArena, graph, compiledGraph, recordedGraph, transaction, timingRecorder);

@@ -35,7 +35,6 @@ b8 Queue::DescriptorSubmission::prepare(CommandList* const* ppCmd, const usize n
         }
     }
 
-    // Global hierarchy: queue -> descriptor heap -> descriptor-buffer lifecycle.
     if(m_submissionDescriptorHeap)
         m_descriptorHeapLock = UniqueLock<Futex>(m_submissionDescriptorHeap->m_mutex);
     if(requiresDescriptorBufferLifecycle && m_descriptorBufferManager)

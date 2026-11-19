@@ -224,8 +224,6 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
 
             const auto producerQueue = m_physicalQueues[token.physicalQueueIndex];
 
-
-            // Queue order already covers same-queue dependencies.
             if(token.matchesPhysicalQueue(executionQueue.index, executionQueue.deviceGeneration))
                 continue;
 
@@ -246,7 +244,6 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
     SubmissionWorkspace submissionWorkspace(*this, *queue);
     submissionWorkspace.prepare(commandLists, numCommandLists, graphSubmissionAuthorized);
 
-    // Hook runs after waits validate; its signal stays submission-local.
     Queue::SubmissionSignal hookSignal = {};
     const Queue::SubmissionSignal* localSignals = nullptr;
     usize localSignalCount = 0u;

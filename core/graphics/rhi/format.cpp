@@ -197,8 +197,6 @@ Expected<TextureUploadAspectLayout> GetTextureUploadAspectLayout(const FormatInf
     layout.blockWidth = GetFormatBlockWidth(formatInfo);
     layout.blockHeight = GetFormatBlockHeight(formatInfo);
     layout.bytesPerBlock = formatInfo.bytesPerBlock;
-    // Depth/stencil image aspects are copied from independent CPU planes.
-    // D24S8/D32S8 both use a 32-bit depth plane and an 8-bit stencil plane even though their opaque whole-image allocation sizes differ.
     if(*resolvedAspect == TextureUploadAspect::Depth && formatInfo.hasStencil)
         layout.bytesPerBlock = sizeof(u32);
     else if(*resolvedAspect == TextureUploadAspect::Stencil)
@@ -247,8 +245,6 @@ Expected<usize> ComputeTextureUploadByteSize(const TextureDesc& textureDesc, con
     if(effectiveDepthPitch < packedSlicePitch || (effectiveDepthPitch % effectiveRowPitch) != 0u)
         return MakeUnexpected(Failure{});
 
-    // The native texture-copy contract uses 32-bit texel pitch fields in CommandList::writeTexture.
-    // Validate them at declaration time so an accepted graph upload cannot lower to a native no-op after the command list rejects it.
     const u64 bufferRowBlocks = effectiveRowPitch / aspectLayout->bytesPerBlock;
     const u64 bufferImageBlocks = effectiveDepthPitch / effectiveRowPitch;
     if(

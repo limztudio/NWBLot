@@ -1,5 +1,3 @@
-"""Offline checks for frame-lagged lighting acquisition and evidence."""
-
 import math
 import tempfile
 from pathlib import Path

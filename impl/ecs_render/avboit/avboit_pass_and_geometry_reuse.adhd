@@ -116,7 +116,6 @@ void DispatchAvboitCompute(
 
     ComputeState computeState;
     computeState.setPipeline(pipeline);
-    // Low set is push-only; work resources use heap slots.
     commandList.setComputeState(computeState);
     heap.bindCompute(commandList, pipeline);
 
@@ -169,11 +168,9 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
     }
     intervalTiming.emplace(this.m_graphics.gpuTiming(), s_TimingScopeTransparentCsgIntervals, this.m_graphics.getDevice(), commandList);
 
-    // The native step only consumes graph-owned data; never rebuild it.
     const b8 drawBuffersReady = frameBindings.frameReady(instanceCount, materialTypedByteCount);
     const b8 receiverSurfaceDrawResourcesReady = this.m_materialSystem.drawRecorder().materialPassDrawResourcesReady(receiverSurfaceDrawItems, frameBindings);
     if(!drawBuffersReady || !receiverSurfaceDrawResourcesReady){
-        // Preserve the short interval; drop the unfinished reservation.
         if(!FinishSplitGpuTimingMarker(intervalTiming))
             return;
         intervalTiming.value().finishTiming(commandList);
@@ -198,10 +195,8 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
     csgReceiverSurfaceDrawContext.setFramebuffer(targets.framebuffer).setCsgResources(csgResources);
     this.m_materialSystem.drawRecorder().renderMaterialPassDrawItems(csgReceiverSurfaceDrawContext, receiverSurfaceDrawItems);
 
-    // Span and Combine are separate graph tasks; the aggregate endpoint remains open.
     if(!FinishSplitGpuTimingMarker(intervalTiming))
         return;
-    // Close the raster pass even when the span dispatch moved out.
     commandList.endRenderPass();
 }
 
@@ -318,7 +313,6 @@ b8 DrawInputsMatch(in MaterialPassDrawItem left, in MaterialPassDrawItem right){
         || !leftMesh.sourceBuffers.sameBuffers(rightMesh.sourceBuffers)
     )
         return false;
-    // The four eligible AVBOIT passes derive equal generation flags from the retained freshness/two-sided/cull inputs.
     for(usize index = 0u; index < leftMesh.geometryHeapHandles.size(); ++index){
         if(leftMesh.geometryHeapHandles[index] != rightMesh.geometryHeapHandles[index])
             return false;

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Dispatch an A/B test launcher to one of its runnable validation workflows."""
 
 from __future__ import annotations
 

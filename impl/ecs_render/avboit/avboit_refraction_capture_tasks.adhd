@@ -521,7 +521,6 @@ Expected<GpuTaskId> DeclareAvboitRefractionCapture(
         return true;
     };
 
-    // Emulated draws keep a generator/raster pair so outputs outlive their draw.
     for(usize setIndex = 0u; setIndex < LengthOf(drawSets); ++setIndex){
         in MaterialPassDrawItemsView items = drawSets[setIndex];
         const b8 csg = setIndex != 0u;

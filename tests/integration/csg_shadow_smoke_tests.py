@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Exercise the image oracle with missing cuts, thickness, overlap and stale-view failures."""
 
 from pathlib import Path
 import sys
@@ -69,7 +68,6 @@ class CsgShadowImageTests(unittest.TestCase):
         for x, y in region_pixels(region, self.width, self.height, 0.3 if arm == LIT_CAMERA_SHIFT else 0.0):
             frames[arm][2][y][x] = value
 
-
     def test_unchanged_caster_shadow_cannot_pass_as_cut(self):
         frames = self.frames()
         self.assertTrue(compare_frames(frames))
@@ -130,7 +128,6 @@ class CsgShadowImageTests(unittest.TestCase):
         self.assertEqual(environment[LIT_NWB_CSG_SHADOW_LIGHT_SOURCE], "hard")
         self.assertNotIn(LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F, environment)
 
-
     def test_capture_requires_post_motion_settle_interval(self):
         arguments = [LIT_EXECUTABLE, LIT_TEST_EXE, LIT_WORKING_DIRECTORY, ".", LIT_OUTPUT_DIRECTORY, ".", LIT_ROUTE, LIT_SOFTWARE]
         with self.assertRaises(SystemExit):
@@ -159,11 +156,9 @@ class CsgAnalyticShadowImageTests(unittest.TestCase):
             frames[arm] = self.width, self.height, rows
         return frames
 
-
     def test_cutter_union_clips_and_counts_overlap_once(self):
         self.assertAlmostEqual(CsgShadowGeometry.clipped_union_length([(-6.8, -5.7), (-6.3, -5.2)]), 1.6)
         self.assertEqual(CsgShadowGeometry.clipped_union_length([(-9.0, -8.0), (-7.5, -6.5), (-6.75, -6.5), (-5.5, -4.0)]), 1.0)
-
 
     def test_missing_curvature_axis_length_or_union_cannot_pass(self):
         self.assertTrue(compare_analytic_frames(self.frames()))

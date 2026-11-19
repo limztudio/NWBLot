@@ -21,8 +21,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One absolute device-timestamp range proven comparable across submissions.
-// Ranges keep device generation and tick period, so consumers reject stale data before converting to seconds.
 struct GpuComparableTimestampRange{
     u64 beginTicks = 0u;
     u64 endTicks = 0u;
@@ -36,9 +34,6 @@ public:
     }
 };
 
-// Ranges must share one calibrated logical-device epoch and exact tick period.
-// Comparable disjoint ranges return zero overlap.
-// Integer intersection preserves precision beyond f64's exact range.
 [[nodiscard]] Expected<u64> TryComputeGpuTimestampOverlap(const GpuComparableTimestampRange& first, const GpuComparableTimestampRange& second)noexcept;
 
 
@@ -47,22 +42,16 @@ public:
 
 struct GpuQueuePacketEnvelopeMetrics{
     GpuPhysicalQueueId physicalQueue;
-    // Positive holes between accepted packet envelopes on this queue. Leading and trailing idle are unknowable.
     u64 internalIdleTicks = 0u;
 };
 
 struct GpuPacketEnvelopeMetrics{
     f64 secondsPerTick = 0.0;
-    // Union length for which at least two distinct physical queues have accepted packet work in flight.
     u64 queueOverlapTicks = 0u;
 };
 
 using GpuQueuePacketEnvelopeMetricsVector = Vector<GpuQueuePacketEnvelopeMetrics, Alloc::ScratchArena>;
 
-// Aggregates half-open packet envelopes in raw ticks (same device generation + tick period).
-// Same-queue unioned before gap/concurrency measure.
-// False resets outputs; caller allocator kept, scratch is temporary.
-// Never dereferences packet data; the caller keeps the span storage live through the call.
 [[nodiscard]] Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(Span<const GpuComparableTimestampRange> packetEnvelopes, Alloc::ScratchArena& scratchArena, GpuQueuePacketEnvelopeMetricsVector& outQueueMetrics);
 
 

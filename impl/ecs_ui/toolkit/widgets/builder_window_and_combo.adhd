@@ -85,7 +85,6 @@ b8 Builder::beginWindow(in StringView stableKey, in StringView title, mut Window
         this.m_context.fail();
         return false;
     }
-    // Keys beginning with @window. belong to the window's internal chrome.
     const auto titleState = this.m_context.declare(s_WindowChromeTitleKey, WidgetKind::Window);
     const auto collapseState = this.m_context.declare(s_WindowChromeCollapseKey, WidgetKind::Button);
     const auto resizeState = this.m_context.declare(s_WindowChromeResizeKey, WidgetKind::Window);
@@ -381,7 +380,6 @@ ComboResult Builder::declareCombo(
         this.m_context.fail();
         return ComboResult();
     }
-    // Text is shaped before another source callback can invalidate a temporary row label.
     StringView label = options.placeholder;
     if(selected)
         label = source.text(index.value());

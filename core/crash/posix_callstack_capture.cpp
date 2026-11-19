@@ -84,10 +84,6 @@ using __hidden_posix_callstack_capture::CaptureFramePointerCallstack;
 
 
 #if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
-// backtrace() unwinds via .eh_frame without frame pointers; warmed up at install so the crash-time call stays allocation-free.
-// Pre-2.35 glibc may take the loader lock (dl_iterate_phdr); newer glibc uses lock-free __dl_find_object.
-// When the trigger IP is known, capture starts there (robust to inlining); otherwise only that IP is emitted.
-// Returns false when nothing unwound so the caller falls back to the frame-pointer walk.
 b8 PosixCallstackCapture::CaptureEhFrame(CrashDetail::CrashDumpRequestOptions& options, const u64 alignmentInstructionPointer)noexcept{
     Array<void*, CrashDetail::s_MaxCallstackFrames> unwoundAddresses;
     const int unwoundFrameCount = backtrace(unwoundAddresses.data(), static_cast<int>(CrashDetail::s_MaxCallstackFrames));
@@ -128,7 +124,6 @@ void PosixCallstackCapture::CaptureCurrent(CrashDetail::CrashDumpRequestOptions&
 #if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
     const u64 alignmentInstructionPointer = outOptions.triggerInstructionPointer != 0u ? outOptions.triggerInstructionPointer : outOptions.instructionPointer;
     if(CaptureEhFrame(outOptions, alignmentInstructionPointer)){
-        // backtrace already trimmed crash-handler-internal frames, so the downstream skip must not drop user frames.
         outOptions.callstackFramesToSkip = 0u;
         return;
     }
@@ -158,7 +153,6 @@ static void CaptureSignalContext(CrashDetail::CrashDumpRequestOptions& options, 
 #endif
 
 #if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
-    // backtrace() crosses the signal trampoline into the interrupted frame, so the fault IP aligns the trace even in frame-pointer-omitting final builds.
     if(PosixCallstackCapture::CaptureEhFrame(options, options.instructionPointer))
         return;
 #endif
@@ -192,7 +186,6 @@ void PosixCallstackCapture::SignalHandler(const int signalNumber, siginfo_t* sig
 [[noreturn]] void PosixCallstackCapture::Terminate()noexcept{
     CrashDetail::CrashDumpRequestOptions options;
 #if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
-    // std::terminate runs in a normal thread context, so unwind a callstack directly instead of relying on the follow-up SIGABRT to carry it.
     if(!CaptureEhFrame(options, 0u))
         options.callstackFrameCount = 0u;
 #endif

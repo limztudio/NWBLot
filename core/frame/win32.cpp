@@ -218,7 +218,6 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         if(uMsg == WM_PAINT){
             PAINTSTRUCT ps;
             if(BeginPaint(hwnd, &ps)){
-                // EndPaint is a command whose SDK return is always nonzero.
                 EndPaint(hwnd, &ps);
             }
             else{
@@ -263,7 +262,6 @@ b8 Frame::init(){
         wc.lpfnWndProc = FrameDetail::WinProc;
         wc.hInstance = frameData.instance();
         wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-        // WNDCLASSEX encodes system color brushes as COLOR_* + 1.
         wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
         wc.lpszClassName = FrameDetail::s_ClassName.data();
     }

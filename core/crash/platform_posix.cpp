@@ -43,7 +43,6 @@ namespace __hidden_crash_posix{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// CrashRequest is fixed-size and large; keep the alternate stack comfortably above the request snapshot size.
 inline constexpr usize s_SignalStackSize = 256u * 1024u;
 inline constexpr int s_AndroidEmergencyFileMode = 0644;
 inline constexpr int s_FirstNonStdioFileDescriptor = STDERR_FILENO + 1;
@@ -64,7 +63,6 @@ alignas(MaxAlign) static Array<u8, s_SignalStackSize> g_SignalStack = {};
     descriptor = -1;
     if(owned < 0)
         return {};
-    // Linux/Android release the descriptor even on EINTR: retrying could close a reused descriptor.
     if(close(owned) != 0)
         return MakeUnexpected(NativeFailure(CrashDetail::PlatformOperation::CloseDescriptor, errno));
     return {};
@@ -296,8 +294,6 @@ void CaptureManualDumpContext([[maybe_unused]] CrashDumpRequestOptions& outOptio
 }
 
 CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, [[maybe_unused]] const u32 waitMilliseconds)noexcept{
-    // Re-entrancy guard + writer serialization, matching Win32: a fault inside the transport bails, and one faulting thread owns the channel.
-    // Async-safe (atomic CAS, no Futex).
     static thread_local b8 s_InTransport = false;
     if(s_InTransport)
         return CrashDumpTransportStatus::Failed;

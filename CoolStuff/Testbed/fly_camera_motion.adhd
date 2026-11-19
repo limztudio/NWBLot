@@ -237,7 +237,6 @@ class FlyCameraInput{
     }
 
     public void pointerCaptureLost(){
-        // Keep motion from an already completed gesture.
         if(!this.m_mouseLookActive)
             return;
         this.m_mouseLookActive = false;

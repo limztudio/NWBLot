@@ -61,7 +61,6 @@ const u64 s_SmokeMaxSoftwareShadowBudgetMiB = s_SmokeMaxU32Setting / s_SmokeByte
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Scene defaults are applied before explicit smoke environment overrides.
 class SmokeRenderQualitySettings{
     public CausticQualitySettings caustic = CausticQualitySettings();
     public SurfelGiQualitySettings surfelGi = SurfelGiQualitySettings();

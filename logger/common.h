@@ -40,7 +40,6 @@ inline constexpr i32 s_LocalTimeMonthBase = 1;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Log server endpoint options shared by log clients and the server.
 namespace ArgCommand{
     enum Enum : u8{
         LogAddress,
@@ -208,7 +207,6 @@ private:
             const Timer currentTime = TimerNow();
             const f32 elapsedSeconds = DurationInSeconds<f32>(currentTime, self.m_lastUpdateTime);
             if(elapsedSeconds < UpdateIntervalSeconds){
-                // Sleep until the next update deadline; the cadence bounds message and shutdown latency.
                 const f32 remainingSeconds = VectorGetX(VectorSubtract(VectorReplicate(UpdateIntervalSeconds), VectorReplicate(elapsedSeconds)));
                 static constexpr f32 s_MillisecondsPerSecondF = 1000.0f;
                 static constexpr u32 s_MinSleepMilliseconds = 1u;

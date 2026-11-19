@@ -11,8 +11,6 @@
 
 #include "surfel_binding_slots.h"
 
-
-// Scalar policy for the GPU candidate walk and numerical tests. A cell may hold several surfaces.
 bool nwbSurfelSpawnCoversCandidate(const bool sameCell, const float normalAlignment, const float distanceSquared, const float planeDistance, const float radius, const float normalBias){
     const float supportRadius = radius * NWB_SURFEL_SPAWN_SUPPORT_SCALE;
     return sameCell && normalAlignment >= NWB_SURFEL_SPAWN_NORMAL_GATE && distanceSquared <= supportRadius * supportRadius && planeDistance <= normalBias;

@@ -30,7 +30,6 @@
 
 #define g_NwbCsgIntervalSampleState nwbHeapCsgIntervalSampleState(g_NwbCsgClipContextSlots.intervalSampleState)
 
-// Receiver-surface, material, AVBOIT, and cap-fill sampling share the mesh-view selector in their interval state.
 #define NWB_MESH_VIEW_BUFFER_HEAP_SLOT (g_NwbCsgIntervalSampleState.resourceSlots.x)
 #include "../mesh/bindless_heap_mesh.slangi"
 
@@ -39,17 +38,14 @@
 #include "../mesh/view_ray.slangi"
 
 #if NWB_CSG_RECEIVER_EVENTS_WRITABLE
-// Event layout: .x = receiverIndex, .y = faceSign, .z = asuint(linear depth), .w = unused; the CSG context selects both event images.
 #define g_NwbCsgReceiverEventData (nwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgPeelSlots.w))
 #define g_NwbCsgReceiverEventCount (nwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgSpanSlots.x))
 #endif
 
 #if NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED
-// Cap-fill/sample reads share StorageImage entries with the combine producer, preserving typed Load/GetDimensions access.
 #define g_NwbCsgRemovedIntervalDepth (nwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgSpanSlots.w))
 #define g_NwbCsgRemovedIntervalCapNormal (nwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgRemovedSlots.x))
 #define g_NwbCsgRemovedIntervalData (nwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgRemovedSlots.y))
-// Count layout: .x = removed-interval count, .y = flags.
 #define g_NwbCsgRemovedIntervalCount (nwbHeapStorageImage2DArrayUint2(g_NwbCsgBindlessResources.csgRemovedSlots.z))
 #endif
 
@@ -82,7 +78,6 @@ void nwbCsgMarkReceiverSurfaceEvent(const float4 rasterPosition, const float3 wo
 
     uint eventIndex;
     InterlockedAdd(g_NwbCsgReceiverEventCount[uint3(pixel, 0u)], 1u, eventIndex);
-    // Overflow derives downstream from (count > layerCount); the count keeps incrementing, so no flag needed.
     if(eventIndex >= layerCount)
         return;
 
@@ -179,7 +174,6 @@ bool nwbCsgReceiverIntervalPixelDiscard(const float4 rasterPosition, const uint 
 
     const uint2 pixel = uint2(pixelInt);
     const float receiverLinearDepth = length(worldPosition - g_NwbMeshCameraPosition.xyz);
-    // Use only world-scaled tolerance. Screen-space fwidth goes unstable at rims/grazing, pulsing the band per frame.
     const float linearDepthTolerance = abs(worldDistanceTolerance) * NWB_CSG_RECEIVER_INTERVAL_LINEAR_DEPTH_TOLERANCE_SCALE;
     if(nwbCsgReceiverRemovedIntervalPixelDiscardAtPixel(pixel, receiverIndex, receiverLinearDepth, linearDepthTolerance))
         return true;
@@ -225,7 +219,6 @@ NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCap(const float4 rasterPositio
     result.depth = sample.depth;
     if(!sample.visible || !isfinite(sample.linearDepth) || sample.linearDepth <= 0.0)
         return result;
-    // Keep projected depth for raster ordering; the retained radial distance reconstructs the physical wall without D32 loss.
     result.worldPosition = nwbMeshViewRadialPosition(pixel, sample.pixel, nwbCsgIntervalSampleFrameExtent(), sample.linearDepth);
     if(!all(isfinite(result.worldPosition)))
         return result;

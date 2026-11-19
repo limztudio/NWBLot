@@ -63,7 +63,6 @@ inline constexpr u8 s_SlashDigitValue = 63u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Canonical RFC 4648 alphabet and padding only; size admission never allocates.
 [[nodiscard]] inline Expected<usize> Base64DecodedSize(const AStringView source, const usize maxBytes)noexcept{
     if(source.size() % Base64Detail::s_QuartetCharCount != 0u)
         return MakeUnexpected(Failure{});
@@ -97,7 +96,6 @@ inline constexpr u8 s_SlashDigitValue = 63u;
     return byteCount;
 }
 
-// The returned candidate owns its bytes; borrowed input may alias a caller-owned destination.
 template<typename ByteContainer>
 [[nodiscard]] inline Expected<ByteContainer> DecodeBase64(const AStringView source, const typename ByteContainer::allocator_type& allocator, const usize maxBytes)noexcept(
     noexcept(ByteContainer(allocator)) && noexcept(static_cast<b8>(DeclVal<const usize&>() > DeclVal<ByteContainer&>().max_size()))

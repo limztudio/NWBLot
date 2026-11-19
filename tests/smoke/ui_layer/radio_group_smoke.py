@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Qualify one-host radio selection, keyed input lifetime and skin pixels."""
+
 from __future__ import annotations
 
 import json

@@ -1,4 +1,3 @@
-"""Read window fixture metadata and check geometry/model pixels in real captures."""
 from __future__ import annotations
 
 import math
@@ -28,7 +27,6 @@ TITLE_ANCHOR = (0.70, 0.02, 0.35)
 CONTENT_ANCHOR = (0.02, 0.30, 0.75)
 TOLERANCE = 4
 SKIN_TOLERANCE = 8
-# Authored sRGB centers are independent of the fixture generator and application marker colors.
 SKIN_COLORS = { "default": {"title": (34, 47, 64), "body": (27, 34, 44), "title_height": 40.0}, "alternate": {"title": (142, 92, 28), "body": (45, 72, 38), "title_height": 36.0}, }
 SKIN = re.compile(r"UiWindowSmoke: skin=(default|alternate)")
 

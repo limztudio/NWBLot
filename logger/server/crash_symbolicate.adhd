@@ -283,7 +283,6 @@ static void AppendAndroidTombstoneSummary(const CrashScratchPath& packageDirecto
     AppendParsedAndroidTombstoneReport(tombstonePresent, AStringView(tombstone), outReport);
 }
 
-// Expected decode failures retain the ingest report; unexpected exceptions remain terminal.
 static void AppendRadeonGpuDetectiveSummary(const CrashScratchPath& packageDirectory, Core::Alloc::ScratchArena& arena, CrashReportText& outReport){
     const CrashScratchPath rgdCapture = packageDirectory / CrashNames::s_GpuDetectiveCaptureFileName;
     const auto regularCapture = IsRegularFile(rgdCapture);
@@ -315,7 +314,6 @@ static void AppendRadeonGpuDetectiveSummary(const CrashScratchPath& packageDirec
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Expected SDK failures retain the ingest report; unexpected exceptions remain terminal.
 #if defined(NWB_WITH_AFTERMATH)
 struct AftermathLoadFailure{
     AStringView operation;
@@ -444,7 +442,6 @@ static void AppendAftermathGpuDumpSummary(const CrashScratchPath& packageDirecto
         }
     }
 
-    // jsonSize includes the terminator; omit it and cap shader/warp text to the report budget.
     AppendBoundedAftermathJson(AStringView(json), jsonSize, outReport);
 #endif
 }

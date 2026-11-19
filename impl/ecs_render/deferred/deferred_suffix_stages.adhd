@@ -163,7 +163,6 @@ Expected<DeferredGraphSuffixResult> DeferredGraphSuffixBuilder::declare(
         .setDependencies(compositeDependencies)
         .setResourceUses(compositeResourceUses)
     ;
-    // Composite may share its compatible serial predecessor while retaining all graph-owned joins.
     const auto compositeTaskResult = this.m_deferredSystem.declareDeferredCompositeTask(this.m_graph, compositeDesc, inputs.reflectionCompositeInputs, inputs.targets, compositeTimingTicket);
     if(!compositeTaskResult.has_value()){
         result.compositeTask = GpuTaskId();
@@ -232,7 +231,6 @@ Expected<DeferredGraphSuffixResult> DeferredGraphSuffixBuilder::declare(
     }
     result.presentTask = presentTaskResult.value();
 
-    // UI/overlay declares before diagnostic tails so timing follows the final contributor.
     result.overlayRequired = this.m_presentationContributor.has_value() && this.m_presentationContributor.value().hasTaskGraphPresentationWork();
     if(result.overlayRequired){
         const auto overlayTaskResult = this.m_presentationContributor.value().declareTaskGraphPresentation(this.m_graph, presentationFrame, backbuffer, result.presentTask);

@@ -110,7 +110,6 @@ void PreparedSceneTlasBuild::confirm(mut RendererRayTracingState state){
     if(!this.m_ready)
         return;
 
-    // This follows the accepted persistent-state handoff. Later imports use that binding, not a fresh Common.
     RayTracingBuildPolicy().publishConfirmedSceneTlasBuild(this.storageMatches(state), this.m_static, this.m_staticSceneHash, state.sceneBvh.m_tlasStaticSceneHash, state.sceneBvh.m_tlasStaticSceneHashValid, state.sceneBvh.m_tlasBackingFresh);
     this.clear();
 }
@@ -226,7 +225,6 @@ b8 RecordPreparedMeshBlasBuild(in PreparedMeshBlasBuild build, in b8 meshBlasGeo
     if(build.performRefit)
         buildFlags |= RayTracingAccelStructBuildFlags::PerformUpdate;
 
-    // Mixed geometry input ownership establishes these states locally; fully declared inputs use the packet prologue.
     if(!meshBlasGeometryBuildInputStatesGraphOwned){
         commandList.setBufferState(build.positionBuffer.deref(), ResourceStates::AccelStructBuildInput);
         commandList.setBufferState(build.triangleIndexBuffer.deref(), ResourceStates::AccelStructBuildInput);
@@ -280,7 +278,6 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
         this.m_blasLedgerUploadedBytes = uploadedBytes;
         RayTracingDiagnostics().meshBlasFirstBuild(build.firstBuild, build.meshName, build.runtimeMesh, build.vertexCount, build.indexCount);
     }
-    // A replacement after recording never joins the accepted cache. Force a future TLAS rebuild, not a retired hash.
     RayTracingBuildPolicy().finalizeConfirmedMeshBlasBuilds(
         allPlansCurrent,
         this.m_blasLedgerStaticSkipped,
@@ -326,7 +323,6 @@ b8 RendererRayTracingSystem::capturePreparedMeshBlasBuilds(){
     MeshRayTracingResourceSnapshotVector meshes;
     this.m_meshSystem.collectRayTracingResourceSnapshots(meshes);
     for(in MeshRayTracingResourceSnapshot meshResources : meshes){
-        // Reuse only accepted, unchanged object-space geometry, including off-screen mesh resources.
         if(!MeshAccelerationStatePolicy().requiresBlasUpdate(meshResources.blasBuildPending, meshResources.blasBuildAccepted, meshResources.runtimeMesh, meshResources.runtimeGeometryContentRevision, meshResources.blasGeometryContentRevision)){
             if(!meshResources.runtimeMesh)
                 ++this.m_blasLedgerStaticSkipped;

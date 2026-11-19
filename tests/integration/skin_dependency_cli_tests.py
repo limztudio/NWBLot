@@ -1,4 +1,3 @@
-"""Qualify UI skin, scene, subsystem, and feature dependency closure through the asset pipeline tools."""
 from __future__ import annotations
 
 import argparse

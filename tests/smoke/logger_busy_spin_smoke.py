@@ -57,7 +57,6 @@ def retain_and_validate_process_output(capture, output_directory):
 
 
 def post_log_message(port, message):
-    # Current Windows log transport: packed Timer{}, u8 EssentialInfo, and null-terminated UTF-16 text.
     payload = struct.pack("<qB", 0, 1) + (message + "\0").encode("utf-16-le")
     connection = http.client.HTTPConnection("127.0.0.1", port, timeout=LIT_HTTP_TIMEOUT_SECONDS)
     try:

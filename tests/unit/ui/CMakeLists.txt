@@ -12,7 +12,6 @@ nwb_target_adhd_sources(nwb_ui_tests NAMESPACE "__hidden_ui_glyph_sdf_tests" SOU
     "${CMAKE_CURRENT_LIST_DIR}/suite.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/ui_*.adhd"
 )
-# These tests observe hardware rounding modes and exception flags.
 target_sources(nwb_ui_tests PRIVATE glyph_shader_host.cpp)
 set_source_files_properties(
     "${CMAKE_BINARY_DIR}/adhd_gen/nwb_ui_tests/tests/unit/ui/ui_paint_and_overlay_cases.adhd.cpp"

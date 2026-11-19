@@ -1,5 +1,3 @@
-"""Plan a balanced refraction workload profiling campaign."""
-
 from collections import Counter
 from datetime import datetime, timezone
 import itertools

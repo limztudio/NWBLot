@@ -65,7 +65,6 @@ public:
 private:
     RayTracingPipelineDesc m_desc;
     VkPipeline m_pipeline = VK_NULL_HANDLE;
-    // vkGetRayTracingShaderGroupHandlesKHR returns tightly packed handles; SBT records add alignment later.
     Vector<u8, Alloc::GlobalArena> m_shaderGroupHandles;
     GraphicsVector<ShaderTableGroupMetadata> m_shaderGroups;
 

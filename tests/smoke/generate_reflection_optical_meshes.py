@@ -46,7 +46,6 @@ def overlapping_boxes():
 
 
 def dense_boxes():
-    # Central rays cross eighteen distinct boundaries from nine separated closed components.
     mesh = Mesh()
     for center_z in (0., -2., -4., -6., -8., -10., -12., -14., -16.):
         append_box(mesh, center_z - .5, center_z + .5)
@@ -54,7 +53,6 @@ def dense_boxes():
 
 
 def closed_box_with_open_tail():
-    # Place an open surface behind the opaque chart to test range-clipped classification.
     mesh = Mesh()
     append_box(mesh, -.5, .5)
     mesh.positions = [(x / 24., y / 18., z) for x, y, z in mesh.positions]
@@ -69,7 +67,6 @@ def closed_box_with_open_tail():
 
 
 def refraction_crossing_overflow():
-    # Sixty-six distinct closed crossings exceed the shared collector capacity of sixty-four.
     mesh = Mesh()
     for component in range(33):
         append_box(mesh, float(component), float(component) + .5)
@@ -78,7 +75,6 @@ def refraction_crossing_overflow():
 
 def grouped_gap_boxes(first_gap, second_gap):
     assert 0. < first_gap < second_gap
-    # The near-coincident exit/entries take winding 1 -> 0 -> 1 -> 2 despite their positive net winding delta.
     mesh = Mesh()
     append_box(mesh, 0., 1.)
     append_box(mesh, -1., -first_gap)
@@ -87,7 +83,6 @@ def grouped_gap_boxes(first_gap, second_gap):
 
 
 def grouped_entry_boxes(second_gap):
-    # A bounded cutter may replace the final entry of a changed-membership group while leaving the preceding thin solid intact.
     mesh = Mesh()
     append_box(mesh, 0., 2e-6)
     append_box(mesh, -1., -second_gap)

@@ -216,9 +216,6 @@ void BuildSchedulingEdges(
     candidates.reserve(maximumConsumerCount);
     pending.reserve(taskCount);
 
-    // Visit direct consumers in topological order.
-    // A consumer already reached through an earlier one is redundant.
-    // Each descendant is visited at most once per producer, while retained edges still leave in raw diagnostic order.
     for(u32 producerIndex = 0u; producerIndex < taskCount; ++producerIndex){
         const usize firstEdge = adjacency.offsets[producerIndex];
         const usize edgeEnd = adjacency.offsets[producerIndex + 1u];
@@ -267,7 +264,6 @@ void BuildSchedulingEdges(
                         if(firstUnreachedCandidate == candidates.size())
                             break;
                     }
-                    // Mark the last target, but no path at or beyond it can reach another direct consumer.
                     if(descendantRank < lastConsumerRank)
                         pending.push_back(descendantIndex);
                 }
@@ -303,7 +299,6 @@ void BuildSchedulingTaskAdjacency(
     outOutgoingOffsets.resize(taskCount + 1u, 0u);
     outIncomingOffsets.resize(taskCount + 1u, 0u);
     for(const GpuTaskDependencyEdge& edge : schedulingEdges){
-        // Scheduling edges are a subset of current-graph raw edges after a successful topological sort, so they are bounded and acyclic.
         FOUNDATION_ASSERT(
             edge.producer.valid()
             && edge.consumer.valid()

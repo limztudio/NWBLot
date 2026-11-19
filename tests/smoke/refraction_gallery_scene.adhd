@@ -36,7 +36,6 @@ const SmokeMaterialRef s_RefractionGalleryOpticalVolumeMaterial = "project/smoke
 const SmokeMaterialRef s_RefractionGalleryPreviewMaterial = "project/smoke/refraction/materials/gallery_preview";
 const SmokeMaterialRef s_RefractionGalleryOpaqueMaterial = "project/smoke/refraction/materials/opaque";
 const SmokeMaterialRef s_RefractionGalleryTransparentMaterial = "project/smoke/refraction/materials/transparent";
-// The slab tint and its unit transmission use the same color.
 const f32x4 s_RefractionGalleryOpticalTransmission = f32x4(0.45f, 0.8f, 0.95f, 0.0f);
 
 
@@ -226,7 +225,6 @@ class RefractionGalleryBuilder{
 
         const Name group = s_SmokeNameSmokeRefractionCsgOptics;
         AddStaticCsgMeshReceiver(entity, group, false, true, this.m_world);
-        // The middle slab has no camera-facing receiver triangle: both its entry and exit are generated walls.
         u32 cutterCount = 1u;
         if(middle)
             cutterCount = 2u;
@@ -253,7 +251,6 @@ class RefractionGalleryBuilder{
         const VectorSingle slabTint = VectorSingle(transmissionVec.x, transmissionVec.y, transmissionVec.z, alpha);
 
         if(caseName != s_RefractionGalleryCaseIdentityReference){
-            // Raster clips this distinct entry, while its ray distance stays inside the primary hardware association band.
             SmokeMaterialRef foreignMaterial = s_RefractionGalleryOpticalVolumeMaterial;
             NameTextAscii foreignInterface = NameTextAscii(s_RefractionGalleryOpticalInterface);
             if(this.m_preview){
@@ -278,7 +275,6 @@ class RefractionGalleryBuilder{
                 return false;
         }
 
-        // Reusing an actual ECS slot exercises generation bits beyond float32's exact integer range.
         if(!RecycleSmokeEntityGenerations(32u, this.m_world))
             return false;
 
@@ -344,7 +340,6 @@ class RefractionGalleryBuilder{
         );
         if(!entity.valid())
             return false;
-        // The first half IOR above air still has a three-unit Beer path, even with negligible bending.
         if(!this.applyOpticalParameters(entity, s_RefractionNearAirIor, VectorSingle(0.55f, 0.8f, 1.0f, 0.0f)))
             return false;
         if(!csg)
@@ -378,7 +373,6 @@ class RefractionGalleryBuilder{
 
     public void backdrop(){
         if(this.m_preview){
-            // Translucent, nonrefractive geometry preview makes nested/overlapping surfaces visible.
             this.panel(
                 s_RefractionGalleryOpaqueMaterial,
                 VectorSingle(0.075f, 0.085f, 0.11f, 1.0f),
@@ -404,7 +398,6 @@ class RefractionGalleryBuilder{
                 s_RefractionGalleryBackdropHalfHeight
             );
         }
-        // A second direction and colored depth markers make ray displacement legible.
         for(u32 row = 0u; row < 9u; ++row){
             this.panel(
                 s_RefractionGalleryOpaqueMaterial,
@@ -428,7 +421,6 @@ class RefractionGalleryBuilder{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Optional gallery cases use the same renderer and readback path as the original regression fixture.
 b8 CreateRefractionGalleryScene(in StringView caseName, in b8 geometryPreview, mut World world){
     const EntityID camera = CreateSmokeCamera(s_RefractionGalleryCenterHeight, s_RefractionGalleryCameraDistance, 0.0f, world);
     const EntityID light = CreateSmokeDirectionalLight(0.6f, 0.4f, 0.0f, VectorSingle(1.0f, 1.0f, 1.0f, 1.0f), 1.0f, false, world);
@@ -439,7 +431,6 @@ b8 CreateRefractionGalleryScene(in StringView caseName, in b8 geometryPreview, m
         || caseName == s_RefractionGalleryCaseIdentitySameIor
         || caseName == s_RefractionGalleryCaseIdentityDifferentIor;
     const f32 verticalFov = s_RefractionPi * (40.0f / 180.0f);
-    // Tighter framing exposes overlap artifacts while preserving the same camera for every variant.
     if(!SetSmokeCameraVerticalFov(camera, verticalFov, world))
         return false;
     if(useIdentityNearPlane && !SetSmokeCameraNearPlane(camera, s_RefractionGalleryIdentityNearPlane, world))

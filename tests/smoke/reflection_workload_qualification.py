@@ -1,4 +1,3 @@
-"""Validate long-miss qualification against the timed workload."""
 import json
 import math
 
@@ -27,7 +26,6 @@ LIT_UTF_8 = "utf-8"
 class ReflectionWorkloadQualification:
     @staticmethod
     def validate_long_miss_qualification(args, executable_identity):
-        """Accept the semantic runner's evidence only for this exact build and stationary workload."""
         if args.family != LIT_FEEDBACK_LONG_MISS:
             return None
         if not args.qualification:
@@ -78,4 +76,3 @@ class ReflectionWorkloadQualification:
             if not isinstance(value, (float, int)) or not math.isfinite(value) or not math.isclose(value, actual, rel_tol=1e-9):
                 raise SmokeFailure("costly-miss qualification aggregate ratios contradict its work totals")
         return {LIT_PATH: str(args.qualification), **file_identity(args.qualification), LIT_METRICS: qualified, LIT_BUILD_IDENTITY: build, "settings_match": True, LIT_SCOPE: "separate diagnostics-on workload qualification; no GPU timing or speed claim"}
-

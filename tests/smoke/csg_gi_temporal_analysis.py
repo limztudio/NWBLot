@@ -1,5 +1,3 @@
-"""Analyze temporal CSG captures and apply their evidence gates."""
-
 import hashlib
 import statistics
 from array import array
@@ -89,7 +87,6 @@ class CsgTemporalAnalysis:
     @staticmethod
     def decode_diagnostic(rgb, view):
         display_linear = [value / 255 / 12.92 if value / 255 <= .04045 else ((value / 255 + .055) / 1.055) ** 2.4 for value in rgb]
-        # The fixture preserves the renderer's exposure=1, Reinhard shoulder=0.65 presentation defaults.
         if any(value >= 1 for value in display_linear):
             raise SmokeFailure("diagnostic color cannot invert saturated Reinhard presentation")
         encoded = [.65 * value / (1 - value) for value in display_linear]
@@ -111,7 +108,6 @@ class CsgTemporalAnalysis:
         if animated == "0":
             region_bounds.update(STATIC_EXTERIOR_REGIONS)
         else:
-            # The static ceiling band crosses real pitched ceiling/wall edges during motion.
             region_bounds.pop("box_upper_band")
             region_bounds.update(ANIMATED_INTERIOR_REGIONS)
         regions = {name: [] for name in region_bounds}
@@ -201,7 +197,3 @@ class CsgTemporalAnalysis:
             LIT_ROUTE: LIT_SOFTWARE if LIT_LOADER_HARDWARE_RAY_TRACING_DISABLED_B in log else LIT_NATURAL, LIT_LAGGED_LIGHTING: LIT_RENDERERSYSTEM_FRAME_LAGGED_ASYNC_LIGH in log,
             "pose_contract": ("Static initial phase; unchanged camera and light." if animated == "0" else "Front-facing triangle-wave time min(frame%240,240-frame%240)*.3/120; unchanged camera and light."
                 if bounded_motion else "Unidentified archived animated pose; equal-pose comparison omitted.")}
-
-
-
-

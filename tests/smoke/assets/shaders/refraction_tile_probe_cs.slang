@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The test shares the production push ABI; the material-context selector carries its private visit buffer.
 #define g_NwbRefractionProbeVisits g_NwbHeapStorageBuffers[g_NwbRefractionPush.materialContextSlotsHeapSlot]
 
 

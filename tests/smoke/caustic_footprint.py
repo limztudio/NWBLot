@@ -1,5 +1,3 @@
-"""Visible receiver footprint analysis for caustic qualification."""
-
 import math
 
 from window_capture_outcome import SmokeFailure
@@ -31,7 +29,6 @@ class CausticFootprint:
         self.presets = presets
 
     def receiver_pixels(self, width, height, distance):
-        """Pinhole ray/plane test excludes a conservative enclosing sphere and ground edges."""
         tangent = math.tan(math.radians(self.policy[LIT_VERTICAL_FOV_DEGREES]) * .5)
         for y in range(height // 2, height):
             dy = (1 - 2 * (y + .5) / height) * tangent
@@ -46,7 +43,6 @@ class CausticFootprint:
                 dx = (2 * (x + .5) / width - 1) * tangent * width / height
                 if not self.policy[LIT_GROUND_X][0] + margin < dx * plane_t < self.policy[LIT_GROUND_X][1] - margin:
                     continue
-                # Quadratic roots parameterize unnormalized ray direction.
                 a = dx * dx + dy * dy + 1
                 exclusion_radius = self.policy[LIT_SPHERE_RADIUS] + self.policy[LIT_SPHERE_EXCLUSION_MARGIN]
                 discriminant = distance * distance - a * (distance * distance - exclusion_radius ** 2)
@@ -83,4 +79,3 @@ class CausticFootprint:
         if sparse[LIT_POSITIVE_PIXELS] > populated[LIT_POSITIVE_PIXELS] * self.policy[LIT_MAXIMUM_SPARSE_PIXEL_RATIO] \
             or sparse[LIT_POSITIVE_TILES] > populated[LIT_POSITIVE_TILES] * self.policy[LIT_MAXIMUM_SPARSE_TILE_RATIO]:
             raise SmokeFailure("camera pair did not qualify distinct populated/sparse visible footprints")
-

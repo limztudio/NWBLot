@@ -38,7 +38,6 @@ requires IsSame_V<decltype(FindNamedScope<Id>(DeclVal<Span<const BorrowedScopePo
     return reinterpret_cast<usize>(FindNamedScope<Id>(records, id));
 }
 
-// The registry must distinguish direct conversion from conversion through its const record.
 struct ThrowingScopeName{
     explicit operator Name()& noexcept{ return s_NameNone; }
     operator const Name&()const&{ throw failure; }

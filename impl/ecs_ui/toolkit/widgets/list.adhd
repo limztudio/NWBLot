@@ -9,16 +9,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Keys are nonzero and unique within an instance. Lookups must avoid scanning the complete dataset per frame.
 interface IListDataSource{
     u64 instanceGeneration()const;
     u64 revision()const;
     u64 rowCount()const;
     u64 key(in u64 index)const;
     Expected<u64> indexOf(in u64 key)const;
-    // Inclusive search from start in the requested direction. Failure means no enabled row remains.
     Expected<u64> findEnabled(in u64 start, in b8 reverse)const;
-    // Text may be temporary until the next source call. The list shapes or copies it first.
     StringView text(in u64 index)const;
     b8 enabled(in u64 index)const;
 }

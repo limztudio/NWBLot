@@ -1,4 +1,3 @@
-"""Exercise the .nwb/.font authoring pair through both metadata cook importers."""
 import argparse
 import hashlib
 import json
@@ -121,7 +120,6 @@ class FontBuilderCli(unittest.TestCase):
             self.assertEqual(set(declared), (set(decoded) - {LIT_ID, LIT_DRAWABLE, LIT_PLANE_RIGHT, LIT_PLANE_BOTTOM}) if decoded[LIT_DRAWABLE] else {LIT_ADVANCE_UNITS})
             for origin, extent, end in ((LIT_PLANE_LEFT, LIT_WIDTH, LIT_PLANE_RIGHT), (LIT_PLANE_TOP, LIT_HEIGHT, LIT_PLANE_BOTTOM)):
                 size = struct.unpack(LIT_FLOAT32_LITTLE_ENDIAN, struct.pack(LIT_FLOAT32_LITTLE_ENDIAN, decoded[extent] * units_per_pixel))[0]
-                # Fused and separate multiply-add roundings keep the same bitmap plane.
                 expected = (struct.pack(LIT_FLOAT32_LITTLE_ENDIAN, decoded[origin] + size), struct.pack(LIT_FLOAT32_LITTLE_ENDIAN, decoded[origin] + decoded[extent] * units_per_pixel))
                 self.assertIn(struct.pack(LIT_FLOAT32_LITTLE_ENDIAN, decoded[end]), expected)
             for key in declared:

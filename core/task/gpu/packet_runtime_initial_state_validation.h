@@ -18,7 +18,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Checks immutable state agreement and buffer bounds; native readiness, texture bounds and ownership stay in preflight.
 class GpuInitialStateHandoffValidation final : NoCopy{
 private:
     using StateIndex = Vector<usize, Alloc::ScratchArena>;

@@ -73,13 +73,8 @@ private:
         u32 epoch = 0u;
         CommandQueue::Enum queueClass = CommandQueue::kCount;
         QueryState::Enum state = QueryState::Available;
-        // A recovery endpoint finishes an accepted begin after a later packet rejects. It retires on the device timeline but publishes no frame sample.
         b8 publishSample = true;
-        // Set while a frame-preamble command list contains a reset for this pool.
-        // It becomes deviceReady only after that command list has been submitted successfully.
         b8 frameResetRecorded = false;
-        // False until this pool has been reset on the DEVICE timeline by recordFrameReset() at a frame open.
-        // Recording takes only pools declared during preparation; positions with no native reset need a pool past recordFrameReset().
         b8 deviceReady = false;
         b8 retirementNotificationPending = false;
     };

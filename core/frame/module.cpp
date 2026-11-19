@@ -61,7 +61,6 @@ Frame::Frame(void* inst, u16 width, u16 height, const CpuTaskSchedulerConfig& cp
 }
 
 Frame::~Frame()noexcept(false){
-    // Teardown can invoke throwing callbacks; during unwind quiesce only, keep the original exception.
     if(UncaughtExceptionCount() > 0){
         m_cpuTasks.drain();
         m_textInput.reset();
@@ -236,7 +235,6 @@ b8 Frame::updateFrame(f32 delta){
         return false;
     }
 
-    // Callback interval ended before graphics; delay recording until the frame will publish.
     if(recordProjectUpdateTiming)
         cpuTiming.recordSample(m_projectUpdateTimingScope, projectUpdateSeconds, sampleFrameIndex);
 

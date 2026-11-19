@@ -20,7 +20,6 @@ struct NwbCsgReceiverSurfaceEvent{
     uint faceSign;
 };
 
-// The heap-selected CSG context resolves event reads and span writes from the shared StorageImage table.
 #define g_NwbCsgReceiverEventData (nwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgPeelSlots.w))
 #define g_NwbCsgReceiverEventCount (nwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgSpanSlots.x))
 #define g_NwbCsgReceiverSpanData (nwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgSpanSlots.y))
@@ -40,7 +39,6 @@ uint2 nwbCsgReceiverSpanBuildFrameExtent(){
 
 uint nwbCsgReceiverSpanBuildLoadEventCount(const uint2 pixel, const uint eventLayerCount, inout uint inOutFlags){
     const uint eventCount = g_NwbCsgReceiverEventCount.Load(int3(int2(pixel), 0));
-    // The emit pass counts past the layer budget, so a raw over-budget count is the overflow condition.
     if(eventCount > eventLayerCount)
         inOutFlags |= NWB_CSG_RECEIVER_SPAN_EVENT_OVERFLOW_FLAG;
 
@@ -87,7 +85,6 @@ void nwbCsgReceiverSpanBuildWriteSpan(const uint2 pixel, const uint spanLayerCou
 }
 
 void nwbCsgReceiverSpanBuildPairEvents(const uint2 pixel, const uint spanLayerCount, __constref uint3 events[NWB_CSG_RECEIVER_EVENT_LAYER_COUNT], const uint eventCount, inout uint inOutSpanCount, inout uint inOutFlags){
-    // Each receiver has an independent winding walk; nested shells merge only within that receiver.
     uint winding = 0u;
     float spanEnterDepth = 0.0;
     uint spanReceiverIndex = 0u;
@@ -137,7 +134,6 @@ bool nwbCsgReceiverSpanBuildPairSingleReceiver(const uint2 pixel, const uint spa
     if(first.receiverIndex != second.receiverIndex || first.faceSign > NWB_CSG_RECEIVER_EVENT_FACE_FRONT || second.faceSign > NWB_CSG_RECEIVER_EVENT_FACE_FRONT)
         return false;
 
-    // A closed receiver's two events need no local array or sort, regardless of raster arrival order.
     if(first.faceSign == second.faceSign){
         inOutFlags |= NWB_CSG_RECEIVER_SPAN_AMBIGUOUS_FLAG;
         return true;
@@ -178,7 +174,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     }
 
-    // Preserve all receiver/face bits and FP32 depth bits without aggregate-array copies.
     uint3 events[NWB_CSG_RECEIVER_EVENT_LAYER_COUNT];
     [loop]
     for(uint eventIndex = 0u; eventIndex < eventCount; ++eventIndex)

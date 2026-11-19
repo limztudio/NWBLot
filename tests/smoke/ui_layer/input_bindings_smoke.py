@@ -35,14 +35,12 @@ class InputBindingsRun(EditRun):
 
     def physical_text_key(self, name, character, *, repeat=False, settle=True):
         if self.native.windows:
-            # Match each WM_CHAR to its producing scan code, including when another key is already queued.
             user32 = self.backend.user32
             virtual_key = KEYS[name]
             scan_code = int(user32.MapVirtualKeyW(virtual_key, 0))
             if not scan_code or not 0 <= ord(character) <= 0xFFFF:
                 raise SmokeFailure("configured input smoke needs one ordinary native key and UTF16 unit")
             flags = 1 | (scan_code << 16)
-            # Synchronous key delivery bypasses TranslateMessage, so only the explicit WM_CHAR commits text.
             user32.SendMessageW(self.handle, 0x0100, virtual_key, flags | ((1 << 30) if repeat else 0))
             user32.SendMessageW(self.handle, 0x0101, virtual_key, flags | (1 << 30) | (1 << 31))
             self.native._post(0x0102, ord(character), flags)
@@ -63,7 +61,6 @@ class InputBindingsRun(EditRun):
             user32.SendMessageW(self.handle, 0x0100, virtual_key, flags)
         for virtual_key, flags, _ in keys:
             user32.SendMessageW(self.handle, 0x0101, virtual_key, flags | (1 << 30) | (1 << 31))
-        # Both policies survive release and remain separate before either queued character is delivered.
         for _, flags, character in keys:
             self.native._post(0x0102, ord(character), flags)
         time.sleep(QUEUED_TEXT_SETTLE_SECONDS)

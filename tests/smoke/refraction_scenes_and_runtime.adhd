@@ -121,7 +121,6 @@ Expected<NotNullUniquePtr<World>> CreateRefractionSmokeWorld(mut ProjectRuntimeC
         return MakeUnexpected(Failure());
     mut NotNullUniquePtr<World> world = created.value();
     AddSmokeRenderSystems(SmokeWorldRef(world), context);
-    // Isolate transmission by disabling reflection.
     ReflectionSettings reflection = ReflectionSettings();
     reflection.traceMode = ReflectionTraceMode::Disabled;
     const b8 reflectionApplied = SmokeRendererSystemRef(SmokeWorldRef(world)).setReflectionSettings(reflection);
@@ -297,7 +296,6 @@ EntityID CreateRefractionScenePanel(
         world
     );
     [essential] assert(entity.valid(), "RefractionSmokeProject: panel creation failed");
-    // Rotate the XZ plane to face the camera along -Z.
     const VectorSingle rotation = QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_RefractionHalfPi, 0.0f, 0.0f, 0.0f));
     const b8 rotated = SetSmokeEntityRotation(entity, rotation, world);
     [essential] assert(rotated, "RefractionSmokeProject: panel rotation failed");
@@ -367,7 +365,6 @@ Expected<EntityID> CreateRefractionDensityScene(in u32 percent, mut World world,
     if(!light.valid())
         return MakeUnexpected(Failure());
 
-    // Shared opaque backdrop that occludes the behind-wall slab.
     const f32 backdropDepth = s_RefractionDensityBackdropDepth;
     const f32 backdropHalfHeight = tangent * (6.0f + backdropDepth);
     const f32 backdropHalfWidth = backdropHalfHeight * aspect;
@@ -395,7 +392,6 @@ Expected<EntityID> CreateRefractionDensityScene(in u32 percent, mut World world,
         );
     }
 
-    // Full coverage extends past the viewport while empty coverage hides the refractor behind the wall.
     f32 frontDepthValue = 0.0f;
     if(percent == 0u)
         frontDepthValue = 4.0f;
@@ -546,7 +542,6 @@ class RefractionSmokeProjectImpl : IProjectEntryCallbacks{
         }
 
         const EntityID camera = CreateSmokeCamera(1.4f, 6.0f, 0.0f, SmokeWorldRef(this.m_world));
-        // Include a light so shared shadow and TLAS preparation runs.
         const EntityID light = CreateSmokeDirectionalLight(
             0.6f,
             0.4f,
@@ -568,7 +563,6 @@ class RefractionSmokeProjectImpl : IProjectEntryCallbacks{
         const b8 defaultSceneOk = camera.valid() && glassEntity.valid() && light.valid();
         [essential] assert(defaultSceneOk, "RefractionSmokeProject: camera/glass/light creation failed");
 
-        // Unlit opaque stripes provide a static background for measuring refraction displacement.
         u32 stripeCount = 20u;
         f32 stripeStart = -2.85f;
         if(this.m_lifecycleEnabled){
@@ -588,7 +582,6 @@ class RefractionSmokeProjectImpl : IProjectEntryCallbacks{
                 SmokeWorldRef(this.m_world)
             );
         }
-        // Place the red strip in front of the glass and the blue strip behind it.
         CreateRefractionScenePanel(
             s_RefractionSceneTransparentMaterial,
             VectorSingle(1.0f, 0.025f, 0.025f, 0.75f),
@@ -724,7 +717,6 @@ class RefractionSmokeProjectImpl : IProjectEntryCallbacks{
             const ProjectFrameClientSize extent = GetProjectFrameClientSize();
             options.requiredWidth = extent.width;
             options.requiredHeight = extent.height;
-            // The density harness confirms the exact client/framebuffer extent and readback, then closes normally.
             options.quitWhenReady = false;
         }
         if(this.m_queryDiagnostics.enabled()){

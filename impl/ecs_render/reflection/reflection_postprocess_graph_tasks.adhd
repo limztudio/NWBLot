@@ -164,7 +164,6 @@ class ReflectionTemporalTask{
             return true;
         const b8 ready = this.hardwareEnabled && this.hardwarePreparationReady;
         const ReflectionHistoryOutcome outcome = ResolveReflectionHistoryOutcome(this.snapshot.history, ready);
-        // An accepted task still publishes the bank when tracing already produced it.
         if(ShouldSkipReflectionTemporalDispatch(outcome.reused, this.snapshot.history.settings.temporalMaxSamples))
             return true;
         const ReflectionTemporalPushConstants parameters = MakeReflectionTemporalPushConstants(

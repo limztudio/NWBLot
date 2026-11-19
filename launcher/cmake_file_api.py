@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""CMake File API query and target metadata access."""
 
 from __future__ import annotations
 
@@ -17,8 +16,6 @@ from launcher.constants import (CACHE_FILE_MODE, CACHE_FILE_ENCODING, FILE_API_A
 
 
 class CmakeFileApi:
-    """Read CMake target metadata and manage the codemodel query."""
-
     @staticmethod
     def file_api_query_path(build_dir: Path) -> Path:
         return build_dir / FILE_API_DIR_CMAKE / FILE_API_DIR_API / FILE_API_DIR_V1 / FILE_API_DIR_QUERY / FILE_API_CODEMODEL
@@ -94,4 +91,3 @@ class CmakeFileApi:
             return CMakeTargetInfo(name=target.get(FILE_API_NAME_KEY, target_name), target_type=target.get(FILE_API_TYPE_KEY, EMPTY_STRING), artifacts=tuple(artifacts),)
 
         return None
-

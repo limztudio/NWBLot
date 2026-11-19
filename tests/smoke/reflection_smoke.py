@@ -114,7 +114,6 @@ def capture(args, case, mode, budget=DEFAULT_RAY_BUDGET):
         command += [LIT_EXPECT_LOG_MESSAGE, "AVBOIT refraction resolve:"]
     command.extend("--application-arg=" + argument for argument in args.application_arg)
     print(f"Capturing {case}/{mode} budget={budget} ({args.frames} presentation frames)...", flush=True)
-    # The child owns app/logserver cleanup: leave time for startup, graceful exit, kill fallback, and log drain.
     result = subprocess.run(command, env=capture_environment(case, mode, budget), check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
     if result.returncode == SKIP_EXIT_CODE:
         return None

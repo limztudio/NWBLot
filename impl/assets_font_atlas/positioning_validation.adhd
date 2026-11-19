@@ -137,7 +137,6 @@ class FontAtlasTableValidator{
                     return false;
             return true;
         }
-        // Non-pair positioning is retained opaque after bounded format/root admission; runtime executes the source font.
         if(type >= s_FontAtlasGposCursiveLookupType && type <= s_FontAtlasGposMarkMarkLookupType)
             return format == 1u && this.m_reader.u16At(offset + s_FontAtlasPosCoverageOffset) != 0u && this.m_reader.coverage(offset + this.m_reader.u16At(offset + s_FontAtlasPosCoverageOffset)).has_value();
         return (type == s_FontAtlasGposContextLookupType || type == s_FontAtlasGposChainedContextLookupType) && format >= 1u && format <= s_FontAtlasContextMaxFormat;

@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shadow visibility and surfel irradiance clear on either a graphics or a compute queue.
 class FloatTextureClearGraphTask{
     private GpuGraphResourceId m_destination;
     private TextureSubresourceSet m_subresources;

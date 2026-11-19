@@ -178,7 +178,6 @@ template<typename CharT = char, typename ArenaT, typename PathT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The result borrows nativeText or convertedText.
 template<typename ArenaT>
 [[nodiscard]] inline AStringView GenericNativeTextView(const TStringView nativeText, AString<ArenaT>& convertedText){
 #if !defined(FOUNDATION_PLATFORM_WINDOWS) && !defined(FOUNDATION_UNICODE)

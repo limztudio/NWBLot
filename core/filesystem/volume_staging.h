@@ -40,7 +40,6 @@ private:
 
 
 public:
-    // The path and backing text must outlive this guard.
     template<typename ArenaT>
     StagedDirectoryCleanupGuard(const ::Path<ArenaT>& directoryPath, const AStringView operationName, const AStringView label = s_StageDirectoryLabel)noexcept
         : m_directoryPath(&directoryPath)
@@ -67,7 +66,6 @@ private:
     b8 m_active = true;
 };
 
-// A synchronous no-throw owner publication occurs after all segment moves, before fallible cleanup observers.
 struct VolumePublicationObserver{
     void* context = nullptr;
     void(*commit)(void*)noexcept = nullptr;

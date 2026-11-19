@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Owns cut boundary loop collection, deterministic ordering, and fan fills with one cap orientation rule, so preview and commit caps always agree.
 Expected<u32, CsgDeformViabilityReason> ApplyCsgDeformCutStep(
     in CsgDeformShape shape,
     in f32 boundaryEpsilon,

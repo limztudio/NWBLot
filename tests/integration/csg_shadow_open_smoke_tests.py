@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Reject black overflow stand-ins, pairing loss, stale clipping and broad warning allowances."""
 
 from pathlib import Path
 import sys

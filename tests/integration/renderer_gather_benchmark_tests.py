@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Analyzer and temporary-directory generator contracts; these tests never launch a renderer."""
 
 import copy
 import io
@@ -237,7 +236,6 @@ class RendererGatherBenchmarkAnalysisTests(unittest.TestCase):
     def test_balanced_comparison_rejects_partial_trial_matrix(self):
         with self.assertRaisesRegex(bench.SmokeFailure, "all balanced"):
             GatherComparison.compare([], [[LIT_BASELINE, LIT_CANDIDATE]] * 8, LIT_TIMING)
-
 
     def test_gpu_control_drift_blocks_cpu_benefit_claim(self):
         trials, orders = balanced_trials()

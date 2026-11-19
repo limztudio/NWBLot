@@ -116,7 +116,6 @@ static void DecodeStringLiteralPool(const usize begin, const usize end)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Link this object first in each image; Mach-O runs constructors in object order.
 #if defined(__APPLE__)
 extern "C" __attribute__((constructor, used, visibility("hidden"))) void GlbInitializeStringLiteralPool()noexcept{
 #elif defined(__ELF__)

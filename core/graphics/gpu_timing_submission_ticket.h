@@ -23,9 +23,6 @@ class GpuTimingRecorder;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One ticket owns timestamp queries for one complete queue submission (scope endpoints may span primaries).
-// Abort/reject releases slots; success retains until collect().
-// Ticket must outlive all scopes under it.
 class GpuTimingSubmissionTicket final : NoCopy{
     friend class GpuGraphSubmissionTransaction;
     friend class GpuRecordedGraph;
@@ -92,12 +89,8 @@ public:
 
 
 public:
-    // Checks every command list still owns a ready buffer, submits them in order, and resolves every scope under this ticket.
-    // A partial split submission is rejected before reaching Vulkan so a cross-list timing scope can never be left waiting for a missing endpoint.
-    // A rejected submission discards its query reservations; an accepted submission produces its completion token.
     [[nodiscard]] Expected<QueueSubmissionToken> submit(Device& device, CommandList* const* commandLists, usize commandListCount, CommandQueue::Enum executionQueue = CommandQueue::Graphics, const QueueSubmissionDesc& submitDesc = {});
     [[nodiscard]] Expected<QueueSubmissionToken> submit(Device& device, CommandList* const* commandLists, usize commandListCount, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc);
-    // Explicitly releases all timing scopes when a caller elects not to submit its recorded command lists.
     void discard();
 
 
@@ -105,9 +98,6 @@ private:
     template<class ExecutionQueue>
     [[nodiscard]] FOUNDATION_INLINE Expected<QueueSubmissionToken> submitToQueue(Device& device, Span<CommandList* const> commandLists, const ExecutionQueue& executionQueue, const QueueSubmissionDesc& submitDesc);
 
-    // Rejects incomplete batches before they can partially submit a split timing scope.
-    // Invalid command-list input releases reservations.
-    // Successful prep blocks recording and competing submission until the caller resolves or rolls back before the device.
     [[nodiscard]] b8 prepareSubmission(Span<CommandList* const> commandLists, Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens);
     [[nodiscard]] b8 prepareSubmissionAfterCommandListValidation(Span<CommandList* const> commandLists, Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens);
     [[nodiscard]] b8 prepareSubmissionState(Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens);

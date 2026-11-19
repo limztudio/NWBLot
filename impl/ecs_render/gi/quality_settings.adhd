@@ -48,9 +48,7 @@ const Name s_SurfelGraphInitializeFreeListClear = "render.surfel_gi.initialize_f
 const Name s_SurfelGraphInitializeLifecycle = "render.surfel_gi.initialize_lifecycle";
 const Name s_SurfelGraphSnapshotCopy = "render.surfel_gi.snapshot_copy";
 
-// Offset trace and gather points to avoid self-intersection.
 const f32 s_SurfelNormalBias = 0.05f;
-// Delayed counter readback avoids stalling on the asynchronous copy.
 const u32 s_SurfelCountLogInterval = 120u;
 const u32 s_SurfelCountLogDelay = 3u;
 const Color s_SurfelIrradianceClearColor = Color(0.f, 0.f, 0.f, 0.f);
@@ -95,16 +93,14 @@ class SurfelGiResolveSize{
     public u32 height = 0u;
 }
 
-// CPU/shader ABI mirror for surfel constants.
 [serialize]
 class NwbSurfelConstantsGpu{
-    public f32x4 hashPoolFrameDivisor(0.0f, 0.0f, 0.0f, 0.0f);    // x = hash cell count, y = pool capacity, z = frame index, w = update divisor
-    public f32x4 cellSizeRadiusBiasAccum(0.0f, 0.0f, 0.0f, 0.0f); // x = hash cell size, y = default radius, z = normal bias, w = accumulation cap
-    public f32x4 ageRaysTileScreen(0.0f, 0.0f, 0.0f, 0.0f);       // x = max age, y = maximum rays/surfel, z = spawn tile (px), w = screen width
-    public f32x4 screenHeightPad(0.0f, 0.0f, 0.0f, 0.0f);         // x = screen height, y = resolve factor, zw = pad
+    public f32x4 hashPoolFrameDivisor(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 cellSizeRadiusBiasAccum(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 ageRaysTileScreen(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 screenHeightPad(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-// Heap-only selector ABI shared by every surfel GI pass.
 [serialize]
 class SurfelHeapPushConstants{
     public u32 constantsHeapSlot = 0u;
@@ -161,7 +157,6 @@ SurfelGiResolveSize MakeSurfelGiResolveSize(in u32 width, in u32 height, in u32 
 }
 
 NwbSurfelConstantsGpu BuildSurfelFrameConstants(in b8 surfelSeeded, in u32 surfelHashCellCount, in u32 surfelPoolCapacity, in u32 surfelFrameIndex, in u32 width, in u32 height, in u32 surfelResolveFactor){
-    // First frame traces every surfel; later frames use round-robin updates.
     u32 updateDivisor = 1u;
     if(surfelSeeded)
         updateDivisor = Max(s_SurfelUpdateDivisor, 1u);

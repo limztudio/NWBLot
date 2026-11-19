@@ -1,5 +1,3 @@
-"""Inspect and validate captured process output."""
-
 import os
 
 from window_capture_outcome import SmokeFailure

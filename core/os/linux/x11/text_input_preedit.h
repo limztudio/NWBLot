@@ -17,7 +17,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// XIM draw offsets count Unicode characters, while the public OS events expose UTF-8 byte offsets.
 class X11PreeditBuffer final : private NoCopy{
 public:
     static constexpr usize s_MaxBytes = 64u * 1024u;

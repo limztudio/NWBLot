@@ -119,7 +119,6 @@ class MeshAccelerationStatePolicy{
             , cast<u64>(expectedPrimitiveIndexCount)
         );
         outBlasBuildPending = rtSupported;
-        // Keep software geometry pending until a software preparation route accepts its build.
         outSwBvhBuildPending = swShadow || rtSupported;
     }
 };

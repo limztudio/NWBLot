@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Glyph coverage modulates every premultiplied color component exactly once.
 float4 nwbUiGlyphCoverageColor(float4 premultipliedColor, float coverage){
     return premultipliedColor * coverage;
 }

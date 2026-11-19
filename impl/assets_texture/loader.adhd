@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Owns UASTC slice layout plus LDR/HDR mip decode feeding texture uploads.
 class TextureDecodedMipUpload{
     public Vector<u8> bytes;
     public usize rowPitch = 0u;
@@ -71,11 +70,9 @@ Expected<TextureDecodedMipUpload> TextureMipDecoder::decode(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Owns a texture asset's device-local image and global sampled-image heap entry; release before Graphics teardown.
 class TextureGpuResource : NoCopy{
     public TextureHandle texture;
     public GpuDescriptorHandle sampledImageHeapHandle = GpuDescriptorHandleInvalid();
-    // Authoritative completion of the static upload, imported by later graph consumers.
     public QueueSubmissionToken readinessToken = QueueSubmissionToken();
     public Format format = Format::UNKNOWN;
 
@@ -238,7 +235,6 @@ b8 CreateTextureGpuResource(in Texture textureAsset, in Name debugName, in Strin
         error("{}: texture resource is partially initialized; release it before recreating", ownerName);
         return false;
     }
-    // Texture::loadBinary already validated the cooked payload; keep a debug-only invariant here.
     assert(textureAsset.validatePayload());
 
     mut Device device = graphics.getDevice();
@@ -257,7 +253,6 @@ b8 CreateTextureGpuResource(in Texture textureAsset, in Name debugName, in Strin
     const Name imageName = ResolveTextureUploadDebugName(debugName, textureAsset.virtualPath());
     const TextureDimension textureDimension = ToCoreTextureDimension(textureAsset.dimension());
     const GpuDescriptorClass descriptorClass = ToSampledImageDescriptorClass(textureAsset.dimension());
-    // Texture::loadBinary already validated the cooked dimension; keep a debug-only invariant here.
     assert(textureDimension != TextureDimension::Unknown && descriptorClass != GpuDescriptorClass::Count);
 
     TextureDesc textureDesc = TextureDesc();
@@ -268,7 +263,6 @@ b8 CreateTextureGpuResource(in Texture textureAsset, in Name debugName, in Strin
     textureDesc.setDimension(textureDimension);
     textureDesc.setInitialState(ResourceStates::ShaderResource);
     textureDesc.setKeepInitialState(true);
-    // Declare Transfer, Compute, and Graphics transports so graph-owned uploads can route static textures across all three queues.
     textureDesc.setQueueSharing(ResourceQueueSharing::GraphicsAsyncComputeAndTransfer);
     textureDesc.setName(imageName);
     if(textureAsset.dimension() == TexturePayloadDimension::TextureCube)
@@ -283,7 +277,6 @@ b8 CreateTextureGpuResource(in Texture textureAsset, in Name debugName, in Strin
     }
     TextureHandle texture = textureResult.value();
 
-    // Resolve descriptor failures before accepting the upload; publish the whole resource before releasing this lease.
     const Expected<GpuDescriptorHandle> sampledImageHandleResult = heap.allocate(descriptorClass);
     if(!sampledImageHandleResult.has_value()){
         error("{}: failed to allocate a bindless sampled-image slot for texture '{}'", ownerName, imageName.resolvedText());
@@ -317,7 +310,6 @@ b8 CreateTextureGpuResource(in Texture textureAsset, in Name debugName, in Strin
     return true;
 }
 
-// Loads a cooked Texture asset through the normal asset manager, then delegates to CreateTextureGpuResource().
 b8 LoadTextureGpuResource(in AssetRef<Texture> textureAsset, in Name debugName, in StringView ownerName, mut GraphicsRuntime graphics, in AssetManager assetManager, mut TextureGpuResource outResource){
     if(!CheckAssetLoaderEnter(textureAsset, outResource, ownerName))
         return outResource.valid();
@@ -331,7 +323,6 @@ b8 LoadTextureGpuResource(in AssetRef<Texture> textureAsset, in Name debugName, 
     return CreateTextureGpuResource(loadedAsset.value().deref(), debugName, ownerName, graphics, outResource);
 }
 
-// Frees the global descriptor first, then releases the owner's TextureHandle. Safe to call on an empty resource.
 void ReleaseTextureGpuResource(mut GraphicsRuntime graphics, mut TextureGpuResource inOutResource){
     if(inOutResource.sampledImageHeapHandle.valid()){
         mut GpuDescriptorHeap heap = graphics.getDevice().getDescriptorHeap();

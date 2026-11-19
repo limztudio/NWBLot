@@ -16,7 +16,6 @@ class InputBindings : NoCopy{
         this.restoreDefaults();
     }
 
-    // Replacement is atomic, accepts an empty profile, and rejects overlapping chords for the same physical key.
     public b8 set(in Span<InputKeyBinding> bindings){
         Vector<InputKeyBinding> candidate;
         if(!TryBuildInputKeyBindingProfile(bindings, candidate))
@@ -36,7 +35,6 @@ class InputBindings : NoCopy{
         return ResolveInputKeyBinding(this.m_bindings, key, modifiers, IsValidInputKeyCode(key), s_InputBindingModifierMask, s_InputLockModifierMask, s_InputModifierShift);
     }
 
-    // Borrowed observations remain valid until a successful profile replacement or default restoration.
     public Span<InputKeyBinding> bindings()const{
         return this.m_bindings;
     }

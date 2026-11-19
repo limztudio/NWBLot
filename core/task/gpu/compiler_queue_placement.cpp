@@ -85,7 +85,6 @@ using namespace GpuTaskGraphCompilerDetail;
             const GpuTaskGraphResourceView resource = graph.resourceAt(use.resource.index);
             if(resource.type == GpuGraphResourceType::HazardDomain || (!resource.initialOwnerQueue.valid() && resource.initialOwnerHandoffSourceCount == 0u))
                 continue;
-            // Analysis rejects an unknown required state on every non-HazardDomain use.
             FOUNDATION_ASSERT(use.requiredState != ResourceStates::Unknown);
 
             const auto plannedRange = ResolveResourceRangeForPlanning(graph, resource, use.range);
@@ -222,7 +221,6 @@ namespace GpuTaskGraphCompilerDetail{
             const GpuPhysicalQueueInfo* combinedWitness = nullptr;
             if(AccumulateExactQueueConstraint(singleton.initialOwnershipQueue, combined.initialOwnershipQueue)){
                 FOUNDATION_ASSERT(legalityWitness);
-                // The witness already admits preceding members; only the appended task can invalidate it.
                 if((!combined.initialOwnershipQueue.valid() || combined.initialOwnershipQueue == legalityWitness->id) && IsLegalQueueAssignmentCandidate(graph, topology, task, *legalityWitness))
                     combinedWitness = legalityWitness;
                 else
@@ -284,8 +282,6 @@ namespace GpuTaskGraphCompilerDetail{
     if(group.assignmentCount == 1u)
         return score;
 
-    // A shared packet can overlap another task only when every member is independent of that task.
-    // Per-member sums would reward work that waits at the same packet's entrance for a different member.
     u64 overlap = 0u;
     if(allTasksAllowOverlap && analysis.schedulingEdges().empty()){
         const u64 assignedQueueCost = scoringData.assignedQueueLoad(candidate.id);

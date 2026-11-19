@@ -37,7 +37,6 @@ class MeshSystem : IRuntimeMeshRegistry{
         return mesh.mesh;
     }
 
-    // Distinguish non-rendering owners from temporarily unavailable meshes.
     public Expected<RenderableMeshDesc, RenderableMeshResolution> resolveRenderableMeshStatus(in EntityID entity)const{
         RenderableMeshDesc mesh;
 

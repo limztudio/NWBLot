@@ -44,7 +44,6 @@ b8 GeometryBaseline(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2, 
     const VectorDouble relativeB1 = VectorDoubleSubtract(second1, first0);
     const VectorDouble relativeB2 = VectorDoubleSubtract(second2, first0);
     auto differenceRoundoff = lambda[](in VectorDouble point, in VectorDouble origin, in VectorDouble difference) -> VectorDouble{
-        // TwoDiff recovers the subtraction residual without expanding the allowance with a large common translation.
         const VectorDouble virtualOrigin = VectorDoubleSubtract(point, difference);
         const VectorDouble virtualPoint = VectorDoubleAdd(difference, virtualOrigin);
         return VectorDoubleAdd(VectorDoubleSubtract(point, virtualPoint), VectorDoubleSubtract(virtualOrigin, origin));
@@ -61,7 +60,6 @@ b8 GeometryBaseline(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2, 
     const VectorDouble edgeB1 = VectorDoubleSubtract(second2, second1);
     const VectorDouble edgeB2 = VectorDoubleSubtract(second0, second2);
     auto crossAxis = lambda[](in VectorDouble first, in VectorDouble second) -> VectorDouble{
-        // Separate products make parallel directions produce a zero axis instead of an explicit-FMA residual.
         const VectorDouble positive = VectorDoubleMultiply(first.yzxw, second.zxyw);
         const VectorDouble negative = VectorDoubleMultiply(first.zxyw, second.yzxw);
         return VectorDoubleSubtract(positive, negative);
@@ -72,7 +70,6 @@ b8 GeometryBaseline(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2, 
             const VectorDouble projection = BaselineDot3(relative, axis);
             const VectorDouble magnitude = BaselineDot3(VectorDoubleAbs(relative), absoluteAxis);
             const VectorDouble coordinateError = BaselineDot3(VectorDoubleAbs(roundoff), absoluteAxis);
-            // Eight epsilons bound cancellation and endpoint rounding across three products and two sums.
             const VectorDouble allowance = VectorDoubleMultiplyAddExpression(VectorDoubleAdd(magnitude, coordinateError), VectorDoubleReplicate(0x1p-49), coordinateError);
             return VectorDoubleSelect(VectorDoubleSubtract(projection, allowance), VectorDoubleAdd(projection, allowance), VectorDouble(u64x4(0u, u64.max, 0u, 0u)));
         };
@@ -93,7 +90,6 @@ b8 GeometryBaseline(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2, 
         return false;
 
     if(VectorDouble3Equal(normalA, zero) && VectorDouble3Equal(normalB, zero)){
-        // Closed degenerate triangles retain their point/segment hulls, including collinear endpoint contact.
         VectorDouble directionA = edgeA0;
         if(VectorDouble3Equal(edgeA0, zero))
             directionA = edgeA1;
@@ -110,7 +106,6 @@ b8 GeometryBaseline(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2, 
     }
 
     auto edgeSeparated = lambda[in edgeB0, in edgeB1, in edgeB2, in crossAxis, in separated, in normalA, in normalB](in VectorDouble edge) -> b8{
-        // In-plane edge normals are necessary when the triangles are coplanar or one hull is degenerate.
         return separated(crossAxis(edge, normalA)) || separated(crossAxis(edge, normalB)) || separated(crossAxis(edge, edgeB0)) || separated(crossAxis(edge, edgeB1)) || separated(crossAxis(edge, edgeB2));
     };
     if(edgeSeparated(edgeA0) || edgeSeparated(edgeA1) || edgeSeparated(edgeA2))
@@ -687,7 +682,6 @@ StringView GeometryWorkloadName(in u32 kind){
 
 void FillTrianglePairs(in u32 kind, mut Span<TrianglePair> pairs){
     for(usize index = 0u; index < pairs.size(); ++index){
-        // Multiply by -0.25 to match the negated product bits.
         const f64 step = cast<f64>(index);
         const f64 tx = step * 0.25;
         const f64 ty = step * -0.25;

@@ -15,7 +15,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Registration may race snapshots; keep sync and duplicate handling here.
 template<typename ValueT, typename ArenaT>
 class AutoRegistrationQueue final : NoCopy{
 public:

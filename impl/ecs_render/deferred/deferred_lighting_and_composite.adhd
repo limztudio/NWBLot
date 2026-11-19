@@ -117,7 +117,6 @@ b8 RendererDeferredSystem::createDeferredLightingResources(){
     if(!EnsureDeferredBuffer(lightBufferDesc, "RendererSystem: failed to create scene light buffer", this.m_graphics, this.m_deferredState.m_lightBuffer))
         return false;
 
-    // Local layout carries the heap slot plus the swap-chain mode.
     if(!EnsurePushConstantBindingLayout(device, sizeof(DeferredLightingPushConstants), ShaderTypeMask::Compute, this.m_deferredState.m_lightingBindingLayout)){
         error("RendererSystem: failed to create deferred lighting binding layout");
         return false;
@@ -128,7 +127,6 @@ b8 RendererDeferredSystem::createDeferredLightingResources(){
         return false;
     }
 
-    // Shading is material-driven via the generated BXDF dispatch.
     if(!this.m_shaderSystem.loadShader<ComputeShader, DeferredSubsystem>(lambda[](in DeferredSubsystem s) -> AssetRef<ComputeShader>{ return s.lightingCs; }, s_ShaderArchiveDefaultVariant, s_DeferredLightingShaderDebugName, this.m_deferredState.m_lightingComputeShader))
         return false;
 
@@ -159,8 +157,6 @@ b8 RendererDeferredSystem::renderDeferredLighting(mut CommandList commandList, m
     GpuDescriptorHandle resourceSlots = targets.bindless.slotsBufferDescriptor;
     if(useLaggedLightingHistory)
         resourceSlots = targets.laggedLightingHistory.slotsBufferDescriptor;
-
-    // Boundary transitions are graph-owned; this thunk holds upload + dispatch.
 
     GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeDeferredLighting, this.m_graphics.getDevice(), commandList);
 
@@ -260,8 +256,6 @@ b8 RendererDeferredSystem::createDeferredPresentPipeline(mut Framebuffer present
 b8 RendererDeferredSystem::renderDeferredComposite(mut CommandList commandList, mut DeferredFrameTargets targets, in ReflectionCompositeInputs reflectionInputs){
     assert(this.m_deferredState.m_compositeComputePipeline.valid());
 
-    // Boundary states are graph-owned; this thunk holds only composite commands.
-
     GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeDeferredComposite, this.m_graphics.getDevice(), commandList);
 
     ComputeState computeState;
@@ -289,11 +283,8 @@ b8 RendererDeferredSystem::renderDeferredPresent(mut CommandList commandList, mu
         && this.m_deferredState.m_presentPipeline.deref().getFramebufferInfo() == FramebufferInfo(presentationFramebuffer.getFramebufferInfo())
     );
 
-    // Graph owns the composite transition and the acquired texture's render-target state.
-
     GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeDeferredPresent, this.m_graphics.getDevice(), commandList);
 
-    // Discard avoids a tile restore; STORE keeps the image for UI and present.
     RenderPassParameters renderPassParameters;
     renderPassParameters.colorAttachmentActions[0u].loadAction = RenderPassLoadAction::Discard;
     renderPassParameters.colorAttachmentActions[0u].storeAction = RenderPassStoreAction::Store;

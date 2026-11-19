@@ -120,29 +120,23 @@ class MeshResources{
     public RuntimeMeshBuffers buffers;
     public CsgReceiverCpuBounds csgLocalBounds;
     public Name meshName = s_NameNone;
-    // Unified generated geometry: expanded vertices or compact vertices followed by u32 indices.
     public BufferHandle emulationVertexBuffer;
     public ObjectGeometryCacheState objectGeometryCache;
     public BufferHandle triangleIndexBuffer;
-    // CPU topology is copied once at admission; its primitive order matches triangleIndexBuffer.
     public Vector<u32> solidTriangleWords;
     public BufferHandle runtimeLocalBoundsBuffer;
     public BufferHandle runtimeMeshletLocalBoundsBuffer;
-    public BufferHandle attributeBuffer;     // RT-only flat per-triangle-corner trace attributes; null when ray tracing is unsupported
+    public BufferHandle attributeBuffer;
     public RayTracingAccelStructHandle blas;
     public GpuDescriptorHandle runtimeMeshletLocalBoundsHeapHandle = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle runtimeLocalBoundsHeapHandle = GpuDescriptorHandleInvalid();
-    // The typed vertex and raw index UAV views share this fourth mesh push-lane selector.
     public GpuDescriptorHandle emulationVertexHeapHandle = GpuDescriptorHandleInvalid();
-    // One heap handle per ABI slot; retired before runtime meshes are replaced.
     public Array<GpuDescriptorHandle, s_MeshInstanceGeometrySlotCount> geometryHeapHandles;
-    // SW-BVH streams stay separate; triangle index is the reconstructed RT stream.
     public GpuDescriptorHandle swBvhPositionHeapHandle;
     public GpuDescriptorHandle swBvhTriangleIndexHeapHandle;
     public b8 swBvhBuildAccepted = false;
-    public BufferHandle swBvhNodeBuffer;     // per-mesh software LBVH nodes (no-hardware-RT shadow fallback)
-    public BufferHandle swBvhParentBuffer;   // per-mesh software LBVH parent links (persist across refits)
-    // Build and traversal share these descriptors; build via push constants.
+    public BufferHandle swBvhNodeBuffer;
+    public BufferHandle swBvhParentBuffer;
     public GpuDescriptorHandle swBvhNodeHeapHandle;
     public GpuDescriptorHandle swBvhParentHeapHandle;
     public u32 emulationIndexByteOffset = 0u;
@@ -158,10 +152,9 @@ class MeshResources{
     public b8 dynamicMeshletBoundsFresh = false;
     public b8 dynamicMeshletConesFresh = false;
     public b8 blasBuildPending = false;
-    // New backing starts in Common until a build or accepted handoff publishes state.
     public b8 blasBackingFresh = false;
-    public b8 swBvhBuildPending = false;     // static mesh awaiting its one-time software BVH build
-    public b8 swBvhTopologyBuilt = false;    // a full software BVH build initialized the persistent topology
+    public b8 swBvhBuildPending = false;
+    public b8 swBvhTopologyBuilt = false;
     public b8 blasBuildAccepted = false;
 
 
@@ -174,7 +167,6 @@ b8 AcceptObjectGeometryCacheWrite(mut MeshResources mesh, in RuntimeMeshBuffers 
     mut ObjectGeometryCacheState cache = mesh.objectGeometryCache;
     if(!expected.valid() || cache.buffer != expected.buffer)
         return false;
-    // Accepted writes establish the retained buffer state even if current source content already moved on.
     return MeshGeometryBufferPolicy().acceptObjectCacheContent(
         cache.decoderPipeline == expected.decoderPipeline,
         cache.heapHandle == expected.heapHandle,
@@ -254,7 +246,6 @@ class MeshBlasGraphState{
     }
 }
 
-// Cross-domain view of accel resources; only RendererMeshSystem publishes changes.
 class MeshRayTracingResourceSnapshot{
     public Span<u32> solidTriangleWords;
     public CsgReceiverCpuBounds csgLocalBounds;
@@ -263,7 +254,6 @@ class MeshRayTracingResourceSnapshot{
     public BufferHandle triangleIndexBuffer;
     public BufferHandle attributeBuffer;
     public BufferHandle runtimeLocalBoundsBuffer;
-    // Complete accepted runtime tuple, or zero meshlets for the whole-caster path.
     public BufferHandle meshletDescBuffer;
     public BufferHandle meshletLocalBoundsBuffer;
     public BufferHandle swBvhNodeBuffer;

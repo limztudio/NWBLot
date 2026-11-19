@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The temporal control retains identical direct lighting while omitting the displayed GI contribution.
 half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
     surface.indirectIrradiance = half3(0.0h);
     return nwbSmokeLambertShadeSurface(surface, pixel);

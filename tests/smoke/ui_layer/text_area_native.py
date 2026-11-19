@@ -1,8 +1,3 @@
-"""Native multiline input and reads of the actual Win32/X11 clipboard.
-
-Posted Win32 characters bypass live IME. The X11 path uses the existing ASCII
-key transport and UTF8_STRING clipboard reader; neither path claims Wayland.
-"""
 from __future__ import annotations
 
 import ctypes
@@ -18,16 +13,13 @@ from window_capture_x11_input import LinuxXEvent
 
 LIT_DOWN = "Down"
 
-# Bound each posted focus-click phase and poll native capture ownership.
 FOCUS_CLICK_TIMEOUT_SECONDS = 2.0
 CAPTURE_POLL_SECONDS = 0.01
 
 
 class TextAreaNativeInput(NumericEditNativeInput):
     def focus_click(self, x, y, *, deadline):
-        """Keep the physical cursor at the caret until posted release retires."""
         if not self.windows:
-            # XSendEvent preserves release/motion order without moving the physical cursor.
             self.click(x, y)
             return
         click_deadline = min(deadline, time.monotonic() + FOCUS_CLICK_TIMEOUT_SECONDS)
@@ -52,14 +44,12 @@ class TextAreaNativeInput(NumericEditNativeInput):
             time.sleep(min(CAPTURE_POLL_SECONDS, remaining))
 
     def text_down_text(self, first, last):
-        """Preserve native event order without an intermediate display wait."""
         self.text(first, settle=False)
         self.key(LIT_DOWN, True)
         self.key(LIT_DOWN, False)
         self.text(last, settle=False)
 
     def wheel_x(self, steps, x, y):
-        """Positive steps scroll right; positions are physical client coordinates."""
         if not math.isfinite(steps) or steps != int(steps) or abs(steps) > 200:
             raise ValueError("native horizontal wheel steps must be an integer between -200 and 200")
         self.pointer(x, y)

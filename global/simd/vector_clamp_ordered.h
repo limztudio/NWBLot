@@ -11,7 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Bit selection preserves the original payload when neither ordered bound is crossed, including denormal inputs under DAZ.
 [[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleClampOrdered(const SIMDVectorDouble value, const SIMDVectorDouble minimum, const SIMDVectorDouble maximum)noexcept{
     return VectorDoubleSelect(VectorDoubleSelect(value, maximum, VectorDoubleGreater(value, maximum)), minimum, VectorDoubleLess(value, minimum));
 }

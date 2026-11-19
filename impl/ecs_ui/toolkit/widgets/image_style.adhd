@@ -14,7 +14,6 @@ type ImageFrame = ImageFrameRecord<SharedImageSource>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Content dimensions use atlas reference density for named regions and logical texel extent for engine sources.
 class ImageOptions{
     public LayoutSize width = LayoutSize(LayoutSizePolicy::Content, 0.0f);
     public LayoutSize height = LayoutSize(LayoutSizePolicy::Content, 0.0f);
@@ -32,7 +31,6 @@ class ImagePlacement{
 
 class ImageFrameRecord<TImage>{
     public Name region;
-    // Null selects the atlas-region path; engine frames own the immutable source through deferred paint.
     public TImage source;
     public ImageOptions options;
     public ImageMetrics metrics;
@@ -42,7 +40,6 @@ class ImageFrameRecord<TImage>{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Natural atlas extent uses reference density and logical minima; region padding does not inset images.
 Expected<ImageMetrics> MeasureImage(in ImageOptions options, in UiSkinRegion region, in f32 density){
     ImageMetrics outMetrics;
     if(!IsValidLayoutSize(options.width) || !IsValidLayoutSize(options.height) || !IsValidUiColor(options.tint) || !IsFinite(density) || density <= 0.0f)
@@ -60,17 +57,14 @@ Expected<ImageMetrics> MeasureImage(in ImageOptions options, in UiSkinRegion reg
     return outMetrics;
 }
 
-// Engine images use one logical unit per texel without atlas density, slices or control padding.
 Expected<ImageMetrics> MeasureImage(in ImageOptions options, in ImageSource source){
     if(!IsValidLayoutSize(options.width) || !IsValidLayoutSize(options.height) || !IsValidUiColor(options.tint))
         return MakeUnexpected(Failure());
-    // The immutable source factory admitted its complete static 2D payload before this per-frame measurement.
     ImageMetrics metrics;
     metrics.contentSize = Point(cast<f32>(source.texture().width()), cast<f32>(source.texture().height()));
     return metrics;
 }
 
-// Empty visibility remains a valid placement.
 Expected<ImagePlacement> PlaceImage(in Rect bounds, in Rect clip){
     ImagePlacement outPlacement;
     if(!IsBoundedUiRect(bounds) || !IsBoundedUiRect(clip))

@@ -128,7 +128,6 @@ class ReflectionCsgDispatchPushConstants{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Precompute two Sobol dimensions per frame; scrambling stays in the shader.
 ReflectionSampleBase ComputeReflectionSampleBase(in u32 sampleIndex){
     const u64 sample = ComputeSobol2U32(sampleIndex);
     ReflectionSampleBase base;

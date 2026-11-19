@@ -96,7 +96,6 @@ TextInputAdmission::Enum QueuedTextInputService::admitEvent(
     else if(kind == TextInputEventKind::Commit && text.empty())
         return TextInputAdmission::Accepted;
 
-    // Only consecutive preedit updates may coalesce; a commit or deletion is an ordering barrier.
     const b8 replace = kind == TextInputEventKind::Preedit && !m_events.empty() && m_events.back().kind == TextInputEventKind::Preedit;
     const usize oldBytes = replace ? m_events.back().text.size() : 0u;
     if((!replace && m_events.size() >= s_TextInputMaxEvents) || text.size() > s_TextInputMaxQueuedTextBytes - (m_queuedTextBytes - oldBytes)){

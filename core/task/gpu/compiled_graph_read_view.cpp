@@ -60,7 +60,6 @@ b8 GpuCompiledGraph::ReadView::validFor(const GpuTaskGraphDeclarationReadView& g
     if(!m_graph || !graph.valid())
         return false;
 
-    // An admitted plan is published and frozen, so its own sizes and present endpoint stay in step.
     FOUNDATION_ASSERT(m_graph->m_tasks.size() == m_graph->m_graphTaskCount && m_graph->m_compiledTaskIndexByTask.size() == m_graph->m_graphTaskCount && m_graph->m_packetTasks.size() == m_graph->m_graphTaskCount);
     FOUNDATION_ASSERT((m_graph->m_graphTaskCount == 0u) == m_graph->m_packets.empty() && m_graph->m_packets.size() <= m_graph->m_graphTaskCount);
     FOUNDATION_ASSERT(!m_graph->m_hasPresentEndpoint || (m_graph->m_presentEndpoint.valid() && m_graph->m_presentEndpoint.producer.generation == m_graph->m_generation && m_graph->m_presentEndpoint.backBuffer.generation == m_graph->m_generation));

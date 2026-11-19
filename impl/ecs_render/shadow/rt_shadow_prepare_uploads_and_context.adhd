@@ -140,7 +140,6 @@ b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(in ShadowPr
         uploadScheduling.allowPacketMerge = true;
         GpuTaskDesc uploadDesc;
         uploadDesc.setIdentity(s_ShadowDeferredBindlessSlotsUpload).setMarkerLabel("Deferred Bindless Slots Upload").setScheduling(uploadScheduling);
-        // Selector persists across packet closes; upload publishes ConstantBuffer.
         GpuUploadBufferTaskDesc deferredBindlessSlotsUploadTaskResultUpload;
         deferredBindlessSlotsUploadTaskResultUpload.source = bindlessSlotsBlob;
         deferredBindlessSlotsUploadTaskResultUpload.destination = inputs.currentBindlessSlots;
@@ -155,7 +154,6 @@ b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(in ShadowPr
         chain.tasks.bindlessSlots = deferredBindlessSlotsUploadTaskResult.value();
     }
 
-    // Trace buffers finalized by preflight; retain slots before compile.
     const auto rayTraceMaterialContextSlots = this.m_raytracingSystem.snapshotRayTraceMaterialContextSlots();
     if(!rayTraceMaterialContextSlots.has_value()){
         warning("RendererSystem: could not snapshot ray-trace material-context selector");
@@ -196,10 +194,8 @@ b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(in ShadowPr
         .setIdentity(s_ShadowRaytraceMaterialContextSlotsUpload)
         .setMarkerLabel("Ray-Trace Material Context Slots Upload")
         .setScheduling(materialContextUploadScheduling)
-        // Old CSG rays read this persistent selector as well as their retained context buffer.
         .setExternalDependencies(csgReadCompletions)
     ;
-    // Selector buffers publish Common; Shadow Preparation owns the next transition.
     if(chain.currentBindlessSlotsGraphOwned)
         materialContextUploadDesc.setDependency(chain.tasks.bindlessSlots);
     GpuUploadBufferTaskDesc rayTraceMaterialContextSlotsUploadTaskResultUpload;

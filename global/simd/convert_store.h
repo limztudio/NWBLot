@@ -430,7 +430,6 @@ FOUNDATION_INLINE void FOUNDATION_SIMD_CALL StreamDouble(SIMDMatrixDouble src, D
 }
 
 FOUNDATION_INLINE void FOUNDATION_SIMD_CALL StreamDouble(SIMDMatrixDouble src, Double33& dst)noexcept{
-    // Pack the nine logical components into aligned chunks without touching the trailing padding.
 #if defined(FOUNDATION_HAS_NEON64)
     const float64x2_t highFirst = vzip1q_f64(SIMDVectorDoubleDetail::GetHigh(src.v[0]), SIMDVectorDoubleDetail::GetLow(src.v[1]));
     const float64x2_t lowSecond = vextq_f64(SIMDVectorDoubleDetail::GetLow(src.v[1]), SIMDVectorDoubleDetail::GetHigh(src.v[1]), 1);

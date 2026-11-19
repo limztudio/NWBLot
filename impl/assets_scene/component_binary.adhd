@@ -63,16 +63,16 @@ const f32 s_SceneDegreesToRadians = s_PI / 180.0f;
 const f32 s_SceneMinQuaternionLengthSq = 0.000001f;
 const f32 s_TransformRotationUnitLengthSquaredTolerance = 0.001f;
 
-const u32 s_ProjectMagic = 0x50524A31u; // PRJ1
+const u32 s_ProjectMagic = 0x50524A31u;
 const u32 s_ProjectVersion = 1u;
 
-const u32 s_ComponentMagic = 0x434D5031u; // CMP1
+const u32 s_ComponentMagic = 0x434D5031u;
 const u32 s_ComponentVersion = 1u;
 
-const u32 s_EntityMagic = 0x454E5431u; // ENT1
+const u32 s_EntityMagic = 0x454E5431u;
 const u32 s_EntityVersion = 1u;
 
-const u32 s_SceneMagic = 0x53434E31u; // SCN1
+const u32 s_SceneMagic = 0x53434E31u;
 const u32 s_SceneVersion = 1u;
 
 

@@ -29,7 +29,6 @@ Expected<EditBoxPlacement> TryComputeEditBoxViewportPlacement(
     const f32 top = viewport.y;
     const f32 overhangX = Max(0.0f, (visualBounds.x + visualBounds.width) - logicalSize.x);
     const f32 maximumScroll = Max(0.0f, (visualBounds.width + caretWidth) - placement.content.width);
-    // Scroll offsets start at the visual envelope; reveal its overhang with the logical caret at either text edge.
     const f32 caretEndX = ((caretRect.x - visualBounds.x) + caretWidth) + overhangX;
     if(!IsFinite(maximumScroll) || !IsFinite(caretEndX))
         return MakeUnexpected(Failure());

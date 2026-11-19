@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise searchable combo query editing, stable selection, and cached result navigation."""
+
 from __future__ import annotations
 
 import json
@@ -42,7 +42,6 @@ class SearchComboRun(KeyedRun):
     def query_expectation(self, value, anchor=None, caret=None):
         length = len(value.encode(LIT_UTF_8))
         self.expected.update({"query_bytes": length, "query_hash": text_hash(value) & 0xFFFFFF, "query_anchor": length if anchor is None else anchor, "query_caret": length if caret is None else caret})
-
 
     def write_report(self, passed):
         report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "input_path": "Win32 posted keys/pointer/positioned WM_MOUSEWHEEL messages"

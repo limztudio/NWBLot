@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Flat per-corner attribute buffer from meshlet streams.
 Expected<Vector<AttribGpu>> BuildMeshletTriangleAttributes(
     in Span<MeshletDesc> meshlets,
     in Span<MeshletLocalVertexRef> localVertexRefs,

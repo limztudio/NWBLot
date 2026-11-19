@@ -45,7 +45,6 @@ namespace __hidden_aftermath{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Aftermath dumps asynchronously after device-lost; poll bounded so hung drivers cannot wedge.
 inline constexpr u32 s_PollIntervalMilliseconds = 50u;
 inline constexpr u32 s_MaxWaitMilliseconds = 5000u;
 
@@ -58,8 +57,6 @@ static Alloc::GlobalArena& DumpArena(){
     return s_Arena;
 }
 
-
-// Process-global Aftermath state: runtime, entry points, and the device-lost dump.
 struct State{
     SharedLibrary library;
     PFN_GFSDK_Aftermath_EnableGpuCrashDumps enable = nullptr;
@@ -87,7 +84,6 @@ static State& GetState(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Crash dump callback is free-threaded; copy the dump for the device-lost thread.
 static void GFSDK_AFTERMATH_CALL OnGpuCrashDump(const void* pGpuCrashDump, const uint32_t gpuCrashDumpSize, [[maybe_unused]] void* pUserData){
     if(!pGpuCrashDump || gpuCrashDumpSize == 0u)
         return;
@@ -99,7 +95,6 @@ static void GFSDK_AFTERMATH_CALL OnGpuCrashDump(const void* pGpuCrashDump, const
     state.dumpReady = true;
 }
 
-// Crash dump description callback (free-threaded). Adds application identity to the dump for triage.
 static void GFSDK_AFTERMATH_CALL OnCrashDumpDescription(PFN_GFSDK_Aftermath_AddGpuCrashDumpDescription addValue, [[maybe_unused]] void* pUserData){
     addValue(static_cast<uint32_t>(GFSDK_Aftermath_GpuCrashDumpDescriptionKey_ApplicationName), s_AppName.data());
 }
@@ -128,7 +123,7 @@ b8 Initialize(){
 
     State& state = GetState();
     if(state.active)
-        return true; // process-global: only enable once.
+        return true;
 
     Alloc::GlobalArena& arena = DumpArena();
     const auto opened = state.library.open(arena, Crash::s_AftermathRuntimeName);
@@ -214,7 +209,6 @@ GpuCrashDumpView WaitForCrashDump(){
     if(!state.active)
         return view;
 
-    // Poll until Finished/failed; keep polling so older drivers still deliver.
     u32 waited = 0u;
     for(;;){
         GFSDK_Aftermath_CrashDump_Status status = GFSDK_Aftermath_CrashDump_Status_Unknown;

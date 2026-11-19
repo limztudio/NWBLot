@@ -1,4 +1,3 @@
-"""Safely stop matching Linux processes using pidfds."""
 import math
 import os
 import select
@@ -87,4 +86,3 @@ class LinuxProcessStopper:
         finally:
             for _pid, handle in handles:
                 os.close(handle)
-

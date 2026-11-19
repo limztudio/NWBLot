@@ -124,13 +124,11 @@ void VerifyFanIn(in usize uniqueDependencyCount, in usize repetitionCount){
         tasks.push_back(dependency);
     }
 
-    // An odd stride permutes the power-of-two task counts, separating repeated edges by a full pass.
     for(usize repeat = 0u; repeat < repetitionCount; ++repeat){
         for(usize index = 0u; index < uniqueDependencyCount; ++index){
             dependencies.push_back(tasks[(index * 4051u + repeat) % uniqueDependencyCount]);
         }
     }
-    // Retired generations and default handles add no pending prerequisite after node storage is reused.
     dependencies.push_back(completed);
     dependencies.push_back(CpuTaskHandle());
 

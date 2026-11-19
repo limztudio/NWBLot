@@ -219,7 +219,6 @@ FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixRotationRollPitchYaw(f32
 
 
 FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixAffineTransformation(SIMDVectorSingle scaling, SIMDVectorSingle rotationOrigin, SIMDVectorSingle rotationQuaternion, SIMDVectorSingle translation)noexcept{
-    // T(translation) * T(origin) * R * T(-origin) * S folds to a rotation-scaled basis and one translation column.
     const SIMDVectorSingle origin = VectorSelect(VectorZero(), rotationOrigin, s_SIMDSelect1110);
     const SIMDMatrix rotation = MatrixRotationQuaternion(rotationQuaternion);
     const SIMDVectorSingle translationColumn = VectorAdd(translation, VectorSubtract(origin, Vector3TransformNormal(origin, rotation)));
@@ -233,7 +232,6 @@ FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixAffineTransformation(SIM
 }
 
 FOUNDATION_INLINE SIMDMatrixDouble FOUNDATION_SIMD_CALL MatrixDoubleAffineTransformation(SIMDVectorDouble scaling, SIMDVectorDouble rotationOrigin, SIMDVectorDouble rotationQuaternion, SIMDVectorDouble translation)noexcept{
-    // T(translation) * T(origin) * R * T(-origin) * S folds to a rotation-scaled basis and one translation column.
     const SIMDVectorDouble origin = VectorDoubleSelect(VectorDoubleZero(), rotationOrigin, s_DoubleSIMDSelect1110);
     const SIMDMatrixDouble rotation = MatrixDoubleRotationQuaternion(rotationQuaternion);
     const SIMDVectorDouble translationColumn = VectorDoubleAdd(translation, VectorDoubleSubtract(origin, VectorDouble3TransformNormal(origin, rotation)));

@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const u32 s_MaterialBinaryMagic = 0x4D544C41u; // MTLA
+const u32 s_MaterialBinaryMagic = 0x4D544C41u;
 const usize s_MaterialShaderEntryBytes = 65u;
 const u8 s_MaterialPixelShaderStageValue = 4u;
 const u8 s_MaterialMeshShaderStageValue = 7u;
@@ -109,8 +109,6 @@ enum<u32> MaterialLayoutFieldType{
     f32x2,
     f32x3,
     f32x4,
-    // Resource fields occupy one patched uint heap slot in the typed-byte payload.
-    // They intentionally live after the contiguous numeric range so a resource can never be mistaken for an authored uint parameter.
     SampledImage2D = 37u,
     Sampler
 }
@@ -155,9 +153,6 @@ class MaterialTypedLayoutField{
     public u32x4u defaultValue;
 }
 
-// A cooked material separates resource identity from its numeric/default payload.
-// `constantByteOffset` is the slot word the renderer patches after resolving the descriptor handle.
-// Exactly one typed reference is valid.
 [reflect]
 class MaterialResourceReference{
     public Name blockName = s_NameNone;
@@ -185,7 +180,6 @@ class MaterialTypedLayoutFieldBinary{
     public u32x4u defaultValue;
 }
 
-// Deserialization initializes the typed asset reference; runtime patches its resolved heap slot at constantByteOffset.
 [serialize]
 class MaterialResourceReferenceBinary{
     public NameHash blockNameHash;

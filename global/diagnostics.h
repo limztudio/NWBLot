@@ -26,7 +26,6 @@ using WFormatString = std::wformat_string<T...>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Text is borrowed during synchronous capture; callbacks must copy it before retaining it.
 struct DiagnosticEventRecord{
     StringView event = {};
     StringView category = {};

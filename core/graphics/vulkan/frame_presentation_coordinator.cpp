@@ -227,7 +227,6 @@ b8 FramePresentationCoordinator::cancelFramePresentationSignalDeferred(const Que
     if(!frameAcquired || presentationSemaphore == VK_NULL_HANDLE || presentationSwapChainIndex >= m_context.m_presentSemaphores.size() || m_context.m_presentSemaphores[presentationSwapChainIndex] != presentationSemaphore)
         return false;
 
-    // Retiring blocks new presentation claims while queue locks join in canonical order.
     m_framePresentationSignalState = FramePresentationSignalState::Retiring;
     m_context.m_swapChainLifecycle.m_swapChainLifecycleState = SwapChainLifecycleState::RetiringPresentation;
     presentationLock.unlock();

@@ -165,7 +165,6 @@ b8 SoftwareBvhBuilder::ensureBvhSortPipeline(){
         return false;
     }
 
-    // Push-only layout; sort resources use the global heap.
     if(!EnsurePushConstantBindingLayout(device, size_of<BvhSortPushConstants>(), ShaderTypeMask::Compute, this.m_state.m_bvhSortBindingLayout)){
         error("RendererSystem: failed to create BVH sort binding layout");
         this.m_state.m_bvhSortPipelineFailed = true;
@@ -256,7 +255,6 @@ b8 SoftwareBvhBuilder::bvhBitonicSort(mut CommandList commandList, in u32 elemen
     mut Buffer keysBuffer = this.m_state.m_bvhSortKeysBuffer.deref();
     mut Buffer payloadBuffer = this.m_state.m_bvhSortPayloadBuffer.deref();
 
-    // Sort scratch fits the max mesh. Fence only this dispatch's padded lanes, sentinels included.
     const BufferRange sortRange(0u, cast<u64>(paddedCount) * size_of<u32>());
     commandList.setEnableUavBarriersForBuffer(keysBuffer, true);
     commandList.setEnableUavBarriersForBuffer(payloadBuffer, true);
@@ -293,7 +291,6 @@ b8 SoftwareBvhBuilder::ensureBvhBuildPipeline(){
         return false;
     }
 
-    // Push-only layout; build resources use the global heap.
     if(!EnsurePushConstantBindingLayout(device, size_of<BvhBuildPushConstants>(), ShaderTypeMask::Compute, this.m_state.m_bvhBuildBindingLayout)){
         error("RendererSystem: failed to create BVH build binding layout");
         this.m_state.m_bvhBuildPipelineFailed = true;
@@ -339,7 +336,6 @@ b8 SoftwareBvhBuilder::ensureBvhVisitCounterBuffer(in usize primitiveCount){
 
     const usize capacity = NextGrowingCapacity(this.m_state.m_bvhBuildCapacity, primitiveCount, s_BvhBuildInitialCapacity);
 
-    // Shared visit-counter scratch is safe because mesh builds are serialized.
     BufferDesc counterBufferDesc;
     counterBufferDesc.setByteSize(cast<u64>(size_of<u32>() * capacity)).setStructStride(size_of<u32>()).setCanHaveUAVs(true)
         .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(s_RenderNameBvhVisitCounter)).enableAutomaticStateTracking(ResourceStates::Common);
@@ -365,7 +361,6 @@ b8 SoftwareBvhBuilder::ensureBvhVisitCounterBuffer(in usize primitiveCount){
 
 [cpp_unwind]
 b8 SoftwareBvhBuilder::ensureSceneBvhBuffers(in u32 instanceCount, mut RayTraceMaterialResources materials){
-    // Binary scene BVH keeps CPU topology; runtime scenes refit its bounds from live mesh roots.
     const usize requiredNodes = ComputeBinaryBvhNodeCount(cast<usize>(instanceCount));
     if(!this.m_state.m_sceneBvhNodeBuffer.valid() || this.m_state.m_sceneBvhNodeCapacity < requiredNodes){
         const usize capacity = NextGrowingCapacity(this.m_state.m_sceneBvhNodeCapacity, requiredNodes, ComputeBinaryBvhNodeCount(s_SceneBvhInitialInstanceCapacity));
@@ -379,7 +374,6 @@ b8 SoftwareBvhBuilder::ensureSceneBvhBuffers(in u32 instanceCount, mut RayTraceM
             return false;
         }
         BufferHandle nodeBuffer = nodeBufferResult.value();
-        // Register the new view before replacing ownership to keep the old pair retryable.
         if(!materials.replaceRayTraceMaterialContextHeapHandle(nodeBuffer.deref(), this.m_state.m_sceneBvhNodeHeapHandle))
             return false;
         this.m_state.m_sceneBvhNodeBuffer = nodeBuffer;
@@ -427,7 +421,6 @@ b8 SoftwareBvhBuilder::createMeshBvhStorage(in usize primitiveCount, mut BufferH
         return false;
     }
 
-    // Per-mesh binary LBVH needs 2N-1 persistent nodes.
     const usize nodeCount = ComputeBinaryBvhNodeCount(primitiveCount);
 
     BufferDesc nodeBufferDesc;
@@ -473,7 +466,6 @@ b8 SoftwareBvhBuilder::ensureMeshSwBvhResources(in u32 primitiveCount, mut Buffe
         return false;
     if(!this.ensureBvhBuildPipeline())
         return false;
-    // Allocate shared sort/counter scratch at the maximum supported mesh size.
     if(!this.ensureBvhSortBuffers(s_BvhMaxPrimitivesPerMesh))
         return false;
     if(!this.ensureBvhVisitCounterBuffer(s_BvhMaxPrimitivesPerMesh))
@@ -526,7 +518,6 @@ b8 SoftwareBvhBuilder::buildMeshSwBvhPrepared(
     DispatchBvhBuildKernel(commandList, heap, pushConstants, this.m_state.m_bvhMortonPipeline.deref(), dispatchPlan.mortonGroups);
     CommitBvhBuildBarrier(commandList, keysBuffer, payloadBuffer, meshNodeBuffer, meshParentBuffer, visitCounterBuffer);
 
-    // Attribute sorting to the mesh rebuild at its call site.
     {
         GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeSwBvhSort, this.m_graphics.getDevice(), commandList);
 

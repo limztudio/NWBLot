@@ -17,7 +17,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Xlib retains its IC after calling client preedit callbacks; native retirement waits for the outer native call.
 class X11TextInputDispatchFence final : private NoCopy{
 public:
     void enter()noexcept{ ++m_depth; }

@@ -17,7 +17,6 @@ NWB_METASCRIPT_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Checks operand types, zero divisors and size or integer overflow before a binary or assignment operator runs.
 class OperationValidator final{
 public:
     static constexpr AStringView s_IntegerOverflowText = "integer overflow";

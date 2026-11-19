@@ -10,7 +10,6 @@
 
 
 #include "material_typed_constants.h"
-// Typed-load families unpack half values; pull in the math helpers directly so this header stands alone.
 #include <common/math.slangi>
 
 
@@ -38,7 +37,6 @@ typedef vector<ushort, 4> ushort4;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Storage block bases (storageByteOffset) are 4-byte word-aligned; field byteOffsets carry any subword lane.
 uint nwbMaterialLoadRawUIntAtBase(const uint storageByteOffset, const uint byteOffset){
     const uint wordIndex = (storageByteOffset >> NWB_MATERIAL_TYPED_WORD_BYTE_SHIFT) + (byteOffset >> NWB_MATERIAL_TYPED_WORD_BYTE_SHIFT);
     const uint byteShift = (byteOffset & NWB_MATERIAL_TYPED_BYTE_LANE_MASK) * NWB_MATERIAL_TYPED_BYTE_BITS;

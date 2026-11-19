@@ -1,4 +1,3 @@
-"""Shared capture gates and process lifetime for passive image smoke fixtures."""
 from __future__ import annotations
 
 import platform
@@ -125,4 +124,3 @@ def run_passive_image(args, *, fixture, display_marker, driver_type, log_name, l
     driver.write_report(True)
     print(f"{label}: {len(driver.stages)} matching native/GPU gates with {args.skin} atlas", flush=True)
     return 0
-

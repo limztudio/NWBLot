@@ -1,5 +1,3 @@
-"""Completed refraction query diagnostics and conservation evidence."""
-
 import re
 
 from refraction_density_image_evidence import RefractionDensityImageEvidence

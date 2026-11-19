@@ -1178,7 +1178,6 @@ void VerifyCsgShadowSnapshot_BoundedCaptureReuseAllowsOnlyTransformLagAndRefresh
         for(u32 frame = 0u; frame < 7u; ++frame){
             const f32 x = cast<f32>(frame) * 0.25f;
             SuiteBeginLightSpaceCsgGather(state, context, 1u, true);
-            // Move only lane X.
             SuiteSetCutterTranslation(context, cutterEntity, x, 0.0f, 0.0f);
             SuiteUpdateInstancePitchAndX(x, instances[0u]);
             SuiteAppendTranslatedXCsgReceiver(state, receiver, x, mesh);

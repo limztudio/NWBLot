@@ -223,7 +223,6 @@ Expected<RayTracingAccelStructHandle> Device::createAccelStruct(const RayTracing
     BufferDesc bufferDesc;
     bufferDesc.byteSize = accelStructSize;
     bufferDesc.isAccelStructStorage = true;
-    // Identify the backing allocation with its acceleration structure.
     bufferDesc.debugName = desc.debugName;
     bufferDesc.isVirtual = desc.isVirtual;
     bufferDesc.queueSharing = desc.queueSharing;

@@ -15,7 +15,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Clip and cap-fill paths share heap selectors for persistent CSG, material, mesh, deferred, and interval inputs.
 struct NwbCsgClipContextSlots{
     uint receiverRanges;
     uint cutters;
@@ -26,7 +25,6 @@ struct NwbCsgClipContextSlots{
     uint2 padding;
 };
 
-// Typed view of the global UniformBuffer table. The slot rides existing push data; no local cbuffer.
 #pragma warning(push)
 #pragma warning(disable: 39001)
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbCsgClipContextSlots, Std140DataLayout> g_NwbHeapCsgClipContextSlots[];

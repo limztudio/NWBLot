@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Binned-SAH BVH over indices[lo, hi); node 0 is root. Splits on the min SAH boundary, median on coincident centroids.
 u32 BuildSceneBvhNode(
     in u32 lo,
     in u32 hi,
@@ -30,7 +29,6 @@ u32 BuildSceneBvhNode(
     const SceneBvhSahSplit split = SelectSceneBvhSahSplit(lo, hi, primitiveBounds, instanceLeafCost, indices);
     u32 mid = lo;
     if(split.valid){
-        // Partition the index slice by the winning axis/bin boundary, matching the binning that produced bestCost.
         for(u32 i = lo; i < hi; ++i){
             const u32 instance = indices[cast<usize>(i)];
             if(ComputeSceneBvhSahBinIndex(primitiveBounds[cast<usize>(instance)], split) < split.bin){

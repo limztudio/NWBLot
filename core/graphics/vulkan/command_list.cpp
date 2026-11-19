@@ -300,8 +300,6 @@ void CommandList::closeInternal(CommandListResourceStateHandoff* finalStates){
         return;
     }
 
-    // An ownership release has no useful consumer without the state handoff that names its destination and final layout.
-    // Refuse to record an orphaned release rather than leaving an exclusive resource owned by another family while later code has no way to acquire it.
     if(!finalStates && (!m_textureOwnershipReleaseDestinations.empty() || !m_bufferOwnershipReleaseDestinations.empty())){
         rejectCommandRecording(s_CloseCommandListOperation, FOUNDATION_TEXT("ownership release requires a final resource-state handoff"));
         discardInvalidCommandBuffer();

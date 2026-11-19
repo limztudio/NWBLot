@@ -52,7 +52,6 @@ namespace Feature{
     };
 };
 
-// One opaque binary semaphore signal from a submission-local hook. Only the owning Device decodes it.
 struct QueueSubmissionNativeSignal{
     Object semaphore = Object(u64{0u});
     u64 value = 0u;
@@ -62,10 +61,8 @@ public:
     [[nodiscard]] constexpr b8 valid()const noexcept{ return semaphore.integer != 0u; }
 };
 
-// Prepares a submission-local binary signal atomically; exceptions unwind to the application boundary.
 using QueueSubmissionPreSubmitCallback = Expected<QueueSubmissionNativeSignal>(*) (void* context, u64 identity, const GpuPhysicalQueueId& executionQueue);
 
-// Called once after hook preparation with the accepted token (or invalid on rejection). No throw, no Device drain.
 using QueueSubmissionResolvedCallback = b8(*) (void* context, u64 identity, const QueueSubmissionToken& submissionToken)noexcept;
 
 struct QueueSubmissionPreSubmitHook{
@@ -93,12 +90,10 @@ public:
     [[nodiscard]] constexpr b8 valid()const noexcept{ return invoke != nullptr && resolved != nullptr; }
 };
 
-// Cross-queue deps. Same-queue tokens collapse to queue order. Caller owns the token array until submit returns.
 struct QueueSubmissionDesc{
     const QueueSubmissionToken* waitTokens = nullptr;
     usize waitTokenCount = 0;
     QueueSubmissionPreSubmitHook preSubmitHook;
-    // Recovery may need an exact queue submission even after earlier work consumed every wait.
     b8 forceNativeSubmission = false;
 
 
@@ -121,7 +116,6 @@ public:
     }
 };
 
-// Accepted submission and its emitted dependency waits, after redundant waits are eliminated.
 struct QueueSubmissionReceipt{
     QueueSubmissionToken token;
     usize timelineWaitCount = 0u;
@@ -132,18 +126,10 @@ struct WaveLaneCountRange{
 };
 
 struct CommandListParameters{
-    // Type of the queue that this command list is to be executed on.
-    // Dedicated Compute and Transfer queues expose only the command subsets their Vulkan families support.
     CommandQueue::Enum queueType = CommandQueue::Graphics;
-    // Device resolves queueType to its primary queue unless an exact queue is set. Packets set it directly.
     GpuPhysicalQueueId physicalQueue;
-    // Worker zero is the ordinary serial/direct lease.
-    // Ready-frontier recording pairs a nonzero scheduler domain with its local worker index so pools cannot alias one arena shard.
-    // Manual nonzero worker indices may leave the domain at zero when the caller deliberately owns that namespace.
     u64 recordingWorkerDomain = 0u;
     u32 recordingWorkerIndex = 0u;
-    // NOTE: u32 kept last; append new fields above the domain pair. queueType stays first (reset in setQueueType).
-
 
 public:
     constexpr CommandListParameters& setQueueType(CommandQueue::Enum value)noexcept{
@@ -168,7 +154,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Represents a sequence of GPU operations submitted through a backend queue.
 typedef GraphicsBackend::Handle<CommandList> CommandListHandle;
 
 
@@ -212,7 +197,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Windowed swap-chain encoding. HDR10 is 10-bit Rec.2020/PQ; scene color stays linear RGBA16F until present.
 namespace SwapChainOutputMode{
     static constexpr u8 s_SwapChainOutputModeSDRBase = 0;
     enum Enum : u8{
@@ -231,35 +215,24 @@ struct DeviceCreationParameters{
     u32 maxFramesInFlight = s_MaxFramesInFlight;
     i32 adapterIndex = -1;
     Format::Enum swapChainFormat = Format::RGBA8_UNORM_SRGB;
-    // Low-level devices retain their conservative default; GraphicsRuntime selects Automatic unless overridden.
     HardwareRayTracingPolicy::Enum hardwareRayTracingPolicy = HardwareRayTracingPolicy::Disabled;
     b8 enableDebugRuntime = false;
     b8 headlessDevice = false;
     b8 enableGpuCrashDiagnostics = true;
-    // Without HDR10 on this surface, keep the requested SDR format instead of failing creation.
     b8 enableHDR10Output = false;
-    // Presentation-image readback. Unsupported surfaces keep a presentable swap chain with swapChainReadbackAvailable=false.
     b8 enableSwapChainReadback = false;
-    // Native mesh shaders are optional. Windows ARM64 defaults to compute emulation: extension advertisement alone does not qualify mesh output.
 #if defined(_WIN32) && (defined(__aarch64__) || defined(_M_ARM64))
     b8 enableNativeMeshShaders = false;
 #else
     b8 enableNativeMeshShaders = true;
 #endif
-    // Best-effort async Compute offload. Combined Graphics+Compute hardware aliases the roles unless a dedicated offload family exists.
     b8 enableAsyncComputeLane = true;
-    // Optional transfer transport. Only a distinct transfer-only Vulkan family becomes CommandQueue::Transfer.
     b8 enableTransferQueue = true;
-    // Opt-in same-class transports.
-    // Extra queues from each active primary family plus one alternate family per class when cross-family routing is on.
-    // Graph tasks must allow same-class routing before ordinary work leaves the primary transport.
     b8 enableSameClassMultiQueue = false;
-    // Auxiliary same-class transport from another compatible family. Tasks opt in before the compiler routes across it.
     b8 enableCrossFamilySameClassQueueRouting = false;
 
     GraphicsVector<GraphicsString> requiredBackendDeviceExtensions;
     GraphicsVector<GraphicsString> optionalBackendDeviceExtensions;
-    // VK_EXT_debug_utils uses signed IDs; keep the suppression list in that native form.
     GraphicsVector<i32> ignoredValidationMessageIds;
 
     GpuDescriptorHeapAbi bindlessHeapAbi;

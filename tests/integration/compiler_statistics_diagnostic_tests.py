@@ -1,5 +1,3 @@
-"""Synthetic JSONL identity/output contracts; no renderer, compiler or GPU execution."""
-
 import contextlib
 import hashlib
 import io
@@ -233,7 +231,7 @@ class CompilerStatisticsDiagnosticTests(unittest.TestCase):
 
     def test_missing_measured_source_is_rejected_even_with_valid_raw_sequence(self):
         values = compiler_rows()
-        del values[101]  # source100 is measured; repair sequence/footer only, never the missing source.
+        del values[101]
         for sequence, row in enumerate(values[1:-1]):
             row[LIT_SEQUENCE] = sequence
         values[-1].update(attempts=383, stored=383)

@@ -287,7 +287,6 @@ Expected<RayTracingPipelineHandle> Device::createRayTracingPipeline(const RayTra
     for(usize groupIndex = 0u; groupIndex < pso->m_shaderGroups.size(); ++groupIndex)
         FOUNDATION_ASSERT(pso->m_shaderGroups[groupIndex].groupIndex == groupIndex);
 
-    // Group storage is final; retained descriptions borrow owned export text after all vector growth is complete.
     for(usize shaderIndex = 0u; shaderIndex < pso->m_desc.shaders.size(); ++shaderIndex){
         auto& shaderDesc = pso->m_desc.shaders[shaderIndex];
         shaderDesc.exportName = shaderDesc.exportName.empty() ? AStringView{} : AStringView(pso->m_shaderGroups[shaderIndex].exportName);

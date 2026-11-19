@@ -41,7 +41,6 @@ b8 CreateSamplerGpuResource(in Sampler samplerAsset, in Name debugName, in Strin
         error("{}: sampler resource is partially initialized; release it before recreating", ownerName);
         return false;
     }
-    // Sampler::loadBinary already validated the cooked description; keep a debug-only invariant here.
     assert(samplerAsset.validatePayload());
 
     mut Device device = graphics.getDevice();

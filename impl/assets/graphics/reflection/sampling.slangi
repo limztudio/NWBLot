@@ -15,27 +15,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// lowbias32 integer hash.
 static const uint NWB_REFLECTION_SAMPLING_HASH_OUTER_SHIFT = 16u;
 static const uint NWB_REFLECTION_SAMPLING_HASH_MIDDLE_SHIFT = 15u;
 static const uint NWB_REFLECTION_SAMPLING_HASH_FIRST_MULTIPLIER = 0x7feb352du;
 static const uint NWB_REFLECTION_SAMPLING_HASH_SECOND_MULTIPLIER = 0x846ca68bu;
-// Golden-ratio constant that decorrelates the second sample dimension and the blue rounding stream.
 static const uint NWB_REFLECTION_SAMPLING_GOLDEN_RATIO_SEED = 0x9e3779b9u;
-// The sample keeps the top 23 hash bits and scales them by 2^-23.
 static const uint NWB_REFLECTION_SAMPLING_UNIT_DROPPED_BITS = 9u;
 static const float NWB_REFLECTION_SAMPLING_UNIT_SCALE = 0.00000011920928955078125;
-// Below this alpha the GGX lobe is treated as the delta interface.
 static const float NWB_REFLECTION_GGX_ALPHA_MIN = 1e-18;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A fixed pixel/dimension digital scramble preserves the progressive Sobol elementary intervals.
-// The accepted sample index remains separate from this seed and the bounded history length.
-// No texture or subgroup is needed.
-// Reference: https://pbr-book.org/4ed/Sampling_and_Reconstruction/Sobol_Samplers
 uint nwbReflectionSamplingHash(uint value){
     value = (value ^ (value >> NWB_REFLECTION_SAMPLING_HASH_OUTER_SHIFT)) * NWB_REFLECTION_SAMPLING_HASH_FIRST_MULTIPLIER;
     value = (value ^ (value >> NWB_REFLECTION_SAMPLING_HASH_MIDDLE_SHIFT)) * NWB_REFLECTION_SAMPLING_HASH_SECOND_MULTIPLIER;
@@ -44,15 +36,12 @@ uint nwbReflectionSamplingHash(uint value){
 
 float2 nwbReflectionSample2D(const uint2 pixel, const uint2 sampleBase, const uint seed){
     const uint pixelSeed = nwbReflectionSamplingHash(pixel.x ^ nwbReflectionSamplingHash(pixel.y ^ seed));
-    // Preparation computes this Sobol pair once on the CPU. Classify and HW share it; no queue-order or loop issues.
     const uint first = sampleBase.x ^ nwbReflectionSamplingHash(pixelSeed);
     const uint second = sampleBase.y ^ nwbReflectionSamplingHash(pixelSeed ^ NWB_REFLECTION_SAMPLING_GOLDEN_RATIO_SEED);
-    // A 23-bit midpoint is exactly representable in float and strictly inside (0, 1), including the final bin.
     return (float2(first >> NWB_REFLECTION_SAMPLING_UNIT_DROPPED_BITS, second >> NWB_REFLECTION_SAMPLING_UNIT_DROPPED_BITS) + 0.5) * NWB_REFLECTION_SAMPLING_UNIT_SCALE;
 }
 
 half3 nwbReflectionSchlick(const half3 f0, const half viewHalfCosine){
-    // The Schlick factor is a (0, 1) bounded color multiplier, so half arithmetic is sufficient here.
     const half complement = half(1.0h) - saturate(viewHalfCosine);
     const half square = complement * complement;
     const half3 fresnel = (half3(1.0h) - f0) * square * square * complement;
@@ -63,16 +52,11 @@ half3 nwbReflectionSchlick(const half3 f0, const half viewHalfCosine){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Isotropic visible-GGX sampling and the correlated Smith single-scattering estimator.
-// Sampling H from the VNDF cancels D and the reflection Jacobian: throughput = F(V,H) * G2(V,L) / G1(V).
-// This factor is bounded by one; bright incident radiance can still have variance, so no arbitrary radiance clamp is applied.
-// Reference: https://jcgt.org/published/0007/04/01/paper.pdf (Appendices A and B).
 void nwbReflectionSampleGgx(const float3 normal, const float3 viewDirection, const half3 f0, const half roughness, const float2 random, out float3 direction, out half3 throughput){
     direction = reflect(-viewDirection, normal);
     const half viewCosine = half(saturate(dot(normal, viewDirection)));
     throughput = nwbReflectionSchlick(f0, viewCosine);
     const float alpha = float(roughness) * float(roughness);
-    // Preserve the delta interface at zero roughness. The additional limit only prevents FP32 alpha^2 underflow.
     if(alpha < NWB_REFLECTION_GGX_ALPHA_MIN)
         return;
 
@@ -101,7 +85,6 @@ void nwbReflectionSampleGgx(const float3 normal, const float3 viewDirection, con
     direction = reflect(-viewDirection, halfVector);
     const float lightCosine = dot(normal, direction);
     if(lightCosine <= 0.0){
-        // Valid zero Monte Carlo sample, not missing. Resampling above the horizon biases the integral and would hit the interior.
         throughput = half3(0.0h);
         return;
     }

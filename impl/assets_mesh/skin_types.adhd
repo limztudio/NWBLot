@@ -8,9 +8,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Joint/weight pairs per influence record. Keeps CPU and GPU forms in lockstep.
 const u32 s_SkinInfluenceJointCount = 4u;
-const u32 s_SkinBinaryMagic = 0x534B4E31u; // SKN1
+const u32 s_SkinBinaryMagic = 0x534B4E31u;
 const f32 s_SkinValidationEpsilon = 0.000001f;
 const f32 s_SkinWeightSumEpsilon = 0.001f;
 

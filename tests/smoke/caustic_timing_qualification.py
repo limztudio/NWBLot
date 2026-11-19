@@ -100,7 +100,6 @@ def validate_report(path, identity):
         or report.get("footprint_analysis") != file_identity(Path(__file__).with_name("caustic_footprint.py")) \
         or report.get("workload_analysis") != file_identity(Path(__file__).with_name("caustic_workload.py")):
         raise SmokeFailure("qualification producer, footprint or workload analysis or framebuffer launcher changed")
-    # Commands belong to the qualified arm's physical source tree, even when the other arm replays them.
     source = identity.get("source", {})
     manifest = source.get("manifest")
     if not isinstance(manifest, str):
@@ -171,7 +170,6 @@ def main(argv=None):
     for name, value in vars(args).copy().items():
         if isinstance(value, Path):
             setattr(args, name, value.resolve())
-    # Delayed import avoids the runner/qualification module cycle and reuses its exact frozen-arm contract.
     import renderer_ab_benchmark as benchmark
     arm = benchmark.Arm("qualification", args.executable, args.runtime, args.source_manifest)
     output = args.output_directory

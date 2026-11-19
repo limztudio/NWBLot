@@ -46,7 +46,6 @@ private:
     VkShaderModule m_shaderModule = VK_NULL_HANDLE;
 
     Vector<u32, Alloc::GlobalArena> m_spirvWords;
-    // Points into immutable m_spirvWords, including a validated null byte immediately after the view.
     AStringView m_entryPointName;
 
     Vector<VkSpecializationMapEntry, Alloc::GlobalArena> m_specializationEntries;
@@ -60,7 +59,6 @@ private:
 
 
 struct ShaderLibraryKey{
-    // Stored keys borrow the resolved entry name from the Shader retained by the map value.
     AStringView entryName;
     ShaderType::Mask shaderType = ShaderType::None;
 };

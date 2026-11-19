@@ -56,9 +56,6 @@ class GpuTaskGraph final : NoCopy{
 public:
     using DeclarationReadView = GpuTaskGraphDeclarationReadView;
 
-
-    // Declare owner after every object borrowed by task payloads. It retires CPU payloads after sync recording joins.
-    // Reset the graph before another execution; every declaration/read/packet claim must finish before this scope ends.
     class PayloadLifetimeScope final : NoCopy{
     public:
         explicit PayloadLifetimeScope(GpuTaskGraph& graph)noexcept
@@ -261,29 +258,23 @@ public:
 
 
 public:
-    // Metadata-only tasks support analysis. Tasks run through scheduler recording need a payload thunk via the templated overload.
     [[nodiscard]] Expected<GpuTaskId> addTask(const GpuTaskDesc& desc, const GpuTaskCommandRequirements& commands = {});
-    // The first isolated primary-Graphics task gates later normal roots without ordering independent branches.
     [[nodiscard]] b8 setNormalExecutionPrelude(const GpuTaskId& task);
 
-    // Adds a buffer copy. The helper derives requirements and uses from its regions and retains the buffers. Caller passes no uses.
     [[nodiscard]] Expected<GpuTaskId> addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopyBufferTaskDesc& copyDesc);
 
     [[nodiscard]] Expected<GpuTaskId> addCopyBufferRegions(const GpuTaskDesc& desc, const Span<const GpuCopyBufferTaskRegion> regions){
         return addCopyBufferTask(desc, { .regions = regions.data(), .regionCount = regions.size() });
     }
 
-    // Adds a texture copy. The helper derives requirements and uses from its regions and retains the textures. Caller passes no uses.
     [[nodiscard]] Expected<GpuTaskId> addCopyTextureTask(const GpuTaskDesc& desc, const GpuCopyTextureTaskDesc& copyDesc);
 
     [[nodiscard]] Expected<GpuTaskId> addCopyTextureRegions(const GpuTaskDesc& desc, const Span<const GpuCopyTextureTaskRegion> regions, QueueSubmissionToken& acceptedToken){
         return addCopyTextureTask(desc, { .regions = regions.data(), .regionCount = regions.size(), .acceptedToken = &acceptedToken });
     }
 
-    // Adds a texture resolve. The helper derives Graphics requirements and uses, retaining the textures. Caller passes no uses.
     [[nodiscard]] Expected<GpuTaskId> addResolveTextureTask(const GpuTaskDesc& desc, const GpuResolveTextureTaskDesc& resolveDesc);
 
-    // Copies caller bytes into graph-owned storage aligned to `alignment`, a nonzero power of two.
     [[nodiscard]] Expected<GpuUploadBlobId> copyUploadData(const void* data, usize byteSize, usize alignment = alignof(u8));
 
     [[nodiscard]] Expected<GpuUploadBlobId> copyAlignedUploadBytes(const BinaryByteView bytes, const usize alignment){
@@ -303,31 +294,24 @@ public:
         return copyUploadElements<T>({ &value, 1u });
     }
 
-    // The caller may hold serialized bytes whose required upload alignment comes from the GPU element type.
     template<typename AlignmentT>
     [[nodiscard]] Expected<GpuUploadBlobId> copyUploadBytes(Span<const u8> bytes){
         return copyUploadData(bytes.data(), bytes.size(), alignof(AlignmentT));
     }
 
-    // Adds graph-owned buffer/texture uploads.
-    // Ordered uses expose the native CopyDest write and optional final transition; preflight and later packets observe the complete state contract.
     [[nodiscard]] Expected<GpuTaskId> addUploadBufferTask(const GpuTaskDesc& desc, const GpuUploadBufferTaskDesc& uploadDesc);
     [[nodiscard]] Expected<GpuTaskId> addUploadTextureTask(const GpuTaskDesc& desc, const GpuUploadTextureTaskDesc& uploadDesc);
 
-    // Adds a native uint-buffer clear. The helper retains the buffer and derives Transfer requirements and its CopyDest write.
     [[nodiscard]] Expected<GpuTaskId> addClearBufferTask(const GpuTaskDesc& desc, const GpuClearBufferTaskDesc& clearDesc);
 
-    // Adds a texture clear. The helper retains the texture and derives its CopyDest write and requirements.
     [[nodiscard]] Expected<GpuTaskId> addClearTextureTask(const GpuTaskDesc& desc, const GpuClearTextureTaskDesc& clearDesc);
 
-    // Adds a rectangular uint texture clear. The helper retains the texture and derives its subresource CopyDest write.
     [[nodiscard]] Expected<GpuTaskId> addClearTextureRectUIntTask(const GpuTaskDesc& desc, const GpuClearTextureRectUIntTaskDesc& clearDesc);
 
     template<typename TaskT>
     [[nodiscard]] Expected<GpuTaskId> addTask(const GpuTaskDesc& desc, typename TaskT::Payload&& payload){
         using Payload = typename TaskT::Payload;
         return declareTaskWithPayload<TaskT>(desc, [&](){
-            // Retained container storage must survive the caller's declaration scratch arena.
             if constexpr(::LeadingArenaConstructible<Payload> && IsConstructible_V<Payload, GraphicsArena&, Payload&&>)
                 return NewArenaObject<Payload>(m_arena, m_arena, Move(payload));
             else
@@ -341,7 +325,6 @@ public:
             if constexpr(::LeadingArenaConstructible<Payload> && IsConstructible_V<Payload, GraphicsArena&, Payload&&>)
                 return NewArenaObject<Payload>(m_arena, m_arena, factory());
             else{
-                // Direct initialization lets the graph own nonmovable payloads.
                 struct Source{
                     Factory& factory;
                     operator Payload()&& noexcept(noexcept(factory())){ return factory(); }
@@ -356,7 +339,6 @@ public:
         return addTask<GpuGraphTaskContract::MemberTask<Payload>>(desc, Move(payload));
     }
 
-    // Takes a populated payload after acquiring the same mutation scope as an inline payload.
     template<typename Payload>
     [[nodiscard]] Expected<GpuTaskId> addPreparedPayloadTask(const GpuTaskDesc& desc, Payload& payload) requires (!IsConst_V<Payload>){
         return addPayloadTask(desc, Move(payload));
@@ -385,29 +367,21 @@ public:
         return task;
     }
 
-    // This form covers abstract resources and conservative bindless hazard domains during the metadata-only phase.
-    // Tasks that will be recorded later must use a typed import overload so the graph retains the resource.
     [[nodiscard]] Expected<GpuGraphResourceId> importResource(const GpuGraphResourceDesc& desc);
     [[nodiscard]] Expected<GpuGraphResourceId> importTexture(const TextureHandle& texture, const GpuGraphResourceDesc& desc);
     [[nodiscard]] Expected<GpuGraphResourceId> importBuffer(const BufferHandle& buffer, const GpuGraphResourceDesc& desc);
     [[nodiscard]] Expected<GpuGraphResourceId> importAccelStruct(const RayTracingAccelStructHandle& accelStruct, const GpuGraphResourceDesc& desc);
     [[nodiscard]] Expected<GpuGraphResourceId> importHazardDomain(const GpuGraphResourceDesc& desc);
-    // One exact resource range gets one version ID; repeating a descriptor makes a new ID on purpose.
     [[nodiscard]] Expected<GpuGraphResourceVersionId> declareResourceVersion(const GpuGraphResourceVersionDesc& desc){
         return appendResourceVersion(desc);
     }
-    // Stores an immutable resource collection. Set declarations expand to members at task creation.
     [[nodiscard]] Expected<GpuGraphResourceSetId> importResourceSet(const GpuGraphResourceSetDesc& desc);
-    // Pipeline IDs are graph-local side-table entries. Metadata-only entries support analysis and capture setup.
     [[nodiscard]] Expected<GpuGraphPipelineId> importPipeline(const GpuGraphPipelineDesc& desc);
     [[nodiscard]] Expected<GpuGraphPipelineId> importGraphicsPipeline(const GraphicsPipelineHandle& pipeline, const GpuGraphPipelineDesc& desc);
     [[nodiscard]] Expected<GpuGraphPipelineId> importComputePipeline(const ComputePipelineHandle& pipeline, const GpuGraphPipelineDesc& desc);
     [[nodiscard]] Expected<GpuExternalCompletionId> importExternalCompletion(const GpuExternalCompletionDesc& desc);
-    // One graph publishes one present endpoint. The compiler checks backbuffer, single-sink contract, deps, and routing.
     [[nodiscard]] b8 declarePresentEndpoint(const GpuPresentEndpoint& endpoint);
 
-    // Reset is externally serialized against *starting* native recording/submission entrypoints.
-    // A bound partial attempt and every transient packet claim refuse teardown; callers must resolve the owner before retrying.
     [[nodiscard]] b8 tryReset();
     void reset();
 
@@ -447,8 +421,6 @@ private:
 
 
     [[nodiscard]] u64 recordingAttemptGeneration()const noexcept;
-    // Starts or validates one native-recording attempt for the compiler-owned packet.
-    // A retry can begin only after every task from the previous attempt was discarded; accepted-frontier recovery remains in that same attempt.
     [[nodiscard]] b8 beginRecordingAttempt(const GpuCompiledGraph& compiledGraph, GpuSubmissionPacketId packet, const DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, GpuRecordingAttemptScope& outAttempt)const noexcept;
     void cancelRecordingAttempt(GpuRecordingAttemptScope& attempt)const noexcept;
     void completeRecordingPreparation(GpuRecordingAttemptScope& attempt)const noexcept;
@@ -462,28 +434,20 @@ private:
 
 
 private:
-    // Caller holds m_lifecycleMutex; preparation, submission binding and task-state checks remain path-specific.
     [[nodiscard]] b8 matchesPacketAttemptWithinLock(const GpuCompiledGraph& compiledGraph, const u64 planGeneration, const u64 recordingAttemptGeneration)const noexcept{
         return !m_teardownInProgress && m_activeCompiledGraph == &compiledGraph && m_activeRecordingPlanGeneration == planGeneration && m_activeRecordingAttemptGeneration == recordingAttemptGeneration;
     }
 
     [[nodiscard]] Expected<void, RecordTaskFailure> recordTask(const GpuTaskId& taskID, CommandList& commandList, const GpuTaskRecordContext& context, const GpuPacketRecordingLease& lease)const;
 
-    // Caller owns teardown/binding validation, lease reset, and claim release; task mutation holds the lifecycle lock.
     void discardPacketTasksWithinLock(Span<const GpuTaskId> tasks, u64 notificationGeneration = 0u)const noexcept;
 
-    // Claim packet tasks before recording. One artifact per packet per attempt; the lease names the recorder.
     [[nodiscard]] b8 beginPacketRecording(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, u64 recordingAttemptGeneration, GpuPacketRecordingLease& outLease)const noexcept;
-    // A claimed packet becomes submission-eligible only after all its thunks complete.
     [[nodiscard]] b8 completePacketRecording(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketRecordingLease& lease)const noexcept;
-    // Transfers a failed recorder's exact claim without invoking user code or changing task lifecycle on its worker.
     [[nodiscard]] b8 deferPacketRecordingAbort(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketRecordingLease& lease, GpuPacketRecordingAbort& outAbort)const noexcept;
-    // Invokes typed discard callbacks and finalizes one transferred abort. Callers choose the serial drain order.
     [[nodiscard]] b8 completePacketRecordingAbort(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuPacketRecordingAbort& abort)const;
-    // Exception unwind consumes exact recording capabilities without invoking extensible discard observers.
     [[nodiscard]] b8 abandonPacketRecordingWithoutCallbacks(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketRecordingLease& lease)const noexcept;
     [[nodiscard]] b8 abandonPacketRecordingAbortWithoutCallbacks(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuPacketRecordingAbort& abort)const noexcept;
-    // Ordinary cleanup cannot discard a Recording packet: a retry must not re-arm payload while the original recorder owns it.
     void abortPacketRecording(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketRecordingLease& lease)const;
     [[nodiscard]] b8 packetReadyForSubmission(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, u64 recordingAttemptGeneration)const noexcept;
 
@@ -502,11 +466,7 @@ private:
     void completePacketSubmissionAcceptance(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketSubmissionLease& lease)const noexcept;
     void abortPacketSubmission(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketSubmissionLease& lease)const;
     [[nodiscard]] b8 abandonPacketSubmissionWithoutCallbacks(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketSubmissionLease& lease)const noexcept;
-    // Atomically discards one non-recording packet.
-    // A packet with an in-flight Recording claim is left intact so transaction cancellation cannot race native recording or reopen the graph.
     [[nodiscard]] b8 discardUnacceptedPacket(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const;
-    // Unexpected observer failure must resolve the graph-owned attempt without invoking another callback while the original exception is active.
-    // Payload destruction remains owned by normal graph teardown.
     [[nodiscard]] b8 abandonUnacceptedPacketWithoutCallbacks(
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
@@ -517,7 +477,6 @@ private:
 
 
 private:
-    // Lowers a compiler-owned packet-boundary barrier through the existing state tracker. Task thunks own only barriers internal to their sequence.
     [[nodiscard]] b8 applyCompiledBarrier(
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
@@ -526,7 +485,6 @@ private:
         const GpuCompiledBarrier& barrier,
         CommandList& commandList
     )const;
-    // Seeds retained states after barriers lower, keeping packet handoffs when the required state already matches.
     [[nodiscard]] b8 seedTaskRetainedResourceStates(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPacketRecordingAccess& recordingAccess, const GpuTaskId& taskID, CommandList& commandList)const;
 
 

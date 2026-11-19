@@ -320,7 +320,6 @@ void VerifyCrash_LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers(){
     const Path packageDirectory = PackageDirectory(group, s_PendingDirectoryName, crashIdText);
     ExpectDirectoryReady(packageDirectory, s_PackageReadyTimeoutMS);
     ExpectIsRegularFile(packageDirectory / s_CallstackFileName, true);
-    // Frame #1 proves unwinding walked past the leaf frame without frame pointers.
     EXPECT_TRUE(TextFileContains(packageDirectory / s_CallstackFileName, "#1 0x"));
     UninstallCrashHandler();
     RemoveTestArtifacts(group);
@@ -405,7 +404,6 @@ void VerifyCrash_LinuxSignalHandlerWritesCrashPackage(){
         ExpectDirectoryReady(packageDirectory, missingPackageReadyTimeoutMs);
         ExpectIsRegularFile(packageDirectory / s_ManifestFileName, true);
         ExpectIsRegularFile(packageDirectory / s_CallstackFileName, true);
-        // The faulting callstack must reach past the leaf frame without frame pointers.
         EXPECT_TRUE(TextFileContains(packageDirectory / s_CallstackFileName, "#1 0x"));
         ExpectIsRegularFile(packageDirectory / s_ProcMapsFileName, true);
         EXPECT_TRUE(TextFileContains(packageDirectory / s_ManifestFileName, "\"reason_kind\": \"signal\""));

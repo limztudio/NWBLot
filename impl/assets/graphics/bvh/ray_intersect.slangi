@@ -21,7 +21,6 @@ static const float NWB_BVH_RAY_DIRECTION_EPSILON = 1e-8;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// CSG needs every crossing, including grazing shared edges and arbitrarily small nonzero direction lanes.
 bool nwbBvhRayConservativeAabb(const float3 origin, const float3 direction, const float minimum, const float maximum, const float3 boxMin, const float3 boxMax, out float entry){
     entry = minimum;
     float farDistance = maximum;
@@ -50,7 +49,6 @@ bool nwbBvhRayConservativeAabb(const float3 origin, const float3 direction, cons
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared ray/AABB helpers for SW BVH consumers. Keep reciprocal directions finite: inf * zero-slab would NaN.
 float3 nwbBvhSafeInvDir(const float3 direction){
     const float epsilon = NWB_BVH_RAY_DIRECTION_EPSILON;
     const float3 safe = float3(
@@ -81,8 +79,6 @@ bool nwbBvhRayAabbT(const float3 origin, const float3 invDir, const float tMin, 
     return nwbBvhRayAabbInterval(origin, invDir, tMin, tMax, boxMin, boxMax, padding, tEntry);
 }
 
-// Descend into the nearer child and defer the farther one; false means both miss.
-// Callers own stack pushes because mesh and scene capacities differ.
 bool nwbBvhPickNearChild(
     const float3 origin,
     const float3 invDir,

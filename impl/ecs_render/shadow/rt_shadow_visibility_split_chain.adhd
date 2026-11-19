@@ -145,7 +145,6 @@ b8 SoftShadowSplitResourceUseBuilder::build(in SoftShadowSplitResourceInputs inp
     const GpuGraphResourceId shadowTypedMaterials = shadowTypedMaterialsResult.value();
     const GpuGraphResourceId shadowInstances = shadowInstancesResult.value();
 
-    // The opaque callback has no temporal/coarse access. Keep its writes apart so a fresh target never reads as synthetic-first.
     uses.opaque.reserve(ResolveShadowTraceGeometryReserveCount(s_SoftShadowOpaqueResourceUseCapacity, route.traceGeometryStatesGraphOwned, inputs.traceGeometryResources.size()));
     uses.opaque.push_back(ReadUse(inputs.worldPosition));
     uses.opaque.push_back(ReadUse(inputs.normal));
@@ -153,7 +152,6 @@ b8 SoftShadowSplitResourceUseBuilder::build(in SoftShadowSplitResourceInputs inp
     uses.opaque.push_back(ReadUse(inputs.currentBindlessSlots, ResourceStates::ConstantBuffer));
     uses.opaque.push_back(WriteUse(inputs.shadowVisibility, ResourceStates::UnorderedAccess));
     uses.opaque.push_back(ReadUse(inputs.sceneGeometryDomain));
-    // The map/fallback pair reads only values it has written inside this task; fresh graph entry stays write-only.
     uses.opaque.push_back(WriteUse(shadowSoftHalfA, ResourceStates::UnorderedAccess));
     uses.opaque.push_back(WriteUse(shadowSoftGeometry, ResourceStates::UnorderedAccess));
     uses.opaque.push_back(ReadUse(inputs.sceneShading, ResourceStates::ConstantBuffer));
@@ -186,13 +184,11 @@ b8 SoftShadowSplitResourceUseBuilder::build(in SoftShadowSplitResourceInputs inp
     }
 
     uses.opaqueFirstWaveletCount = 0u;
-    // The compiler lowers the trace from UAV to the sampled state merge/wavelet needs. First wavelet publishes half-B.
     uses.opaqueFirstWavelet[uses.opaqueFirstWaveletCount++] = ReadUse(shadowSoftHalfA, ResourceStates::ShaderResource);
     if(!route.combinedSoftWavelet)
         uses.opaqueFirstWavelet[uses.opaqueFirstWaveletCount++] = WriteUse(shadowSoftHalfB, ResourceStates::UnorderedAccess);
     uses.opaqueFirstWavelet[uses.opaqueFirstWaveletCount++] = ReadUse(shadowSoftGeometry, ResourceStates::ShaderResource);
     if(route.graphOwnsOpaqueTemporalMergeEntryStates){
-        // The frozen selector permits exact selected input/output declarations for the opaque temporal merge.
         const GpuGraphResourceId opaqueHistoryIn = SelectSoftShadowGraphResource(opaqueHistoryFrontIsA, opaqueHistoryA, opaqueHistoryB);
         const GpuGraphResourceId opaqueMomentsIn = SelectSoftShadowGraphResource(opaqueHistoryFrontIsA, opaqueMomentsA, opaqueMomentsB);
         const GpuGraphResourceId opaqueHistoryOut = SelectSoftShadowGraphResource(opaqueHistoryFrontIsA, opaqueHistoryB, opaqueHistoryA);
@@ -209,7 +205,6 @@ b8 SoftShadowSplitResourceUseBuilder::build(in SoftShadowSplitResourceInputs inp
 
     uses.opaqueResolveCount = 0u;
     if(!route.combinedSoftUpsample){
-        // One-wavelet resolve samples only first-wavelet half-B. Keep a conservative ping-pong declaration if passes grow.
         if(s_ShadowWaveletResolvePassCount == 1u)
             uses.opaqueResolve[uses.opaqueResolveCount++] = ReadUse(shadowSoftHalfB, ResourceStates::ShaderResource);
         else{
@@ -266,7 +261,6 @@ b8 SoftShadowSplitResourceUseBuilder::build(in SoftShadowSplitResourceInputs inp
     uses.transparentTemporalMergeCount = 0u;
     uses.transparentFirstWaveletCount = 0u;
     if(uses.graphOwnsTransparentTemporalMergeEntryStates){
-        // Selection freezes at compile. The merge samples the front pair and publishes the opposite; wavelets sample graph-owned.
         uses.transparentTemporalMerge[uses.transparentTemporalMergeCount++] = ReadUse(transparentSoftHalf, ResourceStates::ShaderResource);
         uses.transparentTemporalMerge[uses.transparentTemporalMergeCount++] = ReadUse(shadowSoftGeometry, ResourceStates::ShaderResource);
         uses.transparentTemporalMerge[uses.transparentTemporalMergeCount++] = ReadUse(inputs.worldPosition, ResourceStates::ShaderResource);
@@ -292,13 +286,11 @@ b8 SoftShadowSplitResourceUseBuilder::build(in SoftShadowSplitResourceInputs inp
         uses.transparentFirstWavelet[uses.transparentFirstWaveletCount++] = WriteUse(shadowSoftHalfA, ResourceStates::UnorderedAccess);
         uses.transparentFirstWavelet[uses.transparentFirstWaveletCount++] = ReadUse(shadowSoftGeometry, ResourceStates::ShaderResource);
     }else{
-        // Inactive temporal frames keep their existing trace-to-wavelet route and do not acquire stale-history declarations or a no-op merge callback.
         uses.transparentFirstWavelet[uses.transparentFirstWaveletCount++] = ReadUse(transparentSoftHalf, ResourceStates::ShaderResource);
         uses.transparentFirstWavelet[uses.transparentFirstWaveletCount++] = WriteUse(shadowSoftHalfA, ResourceStates::UnorderedAccess);
         uses.transparentFirstWavelet[uses.transparentFirstWaveletCount++] = ReadUse(shadowSoftGeometry, ResourceStates::ShaderResource);
     }
     if(route.combinedSoftWavelet){
-        // Both temporal merges publish their selected output pair before the fused wavelet reads either pair.
         uses.transparentFirstWavelet[uses.transparentFirstWaveletCount++] = ReadUse(SelectSoftShadowGraphResource(opaqueHistoryFrontIsA, opaqueHistoryB, opaqueHistoryA), ResourceStates::ShaderResource);
         uses.transparentFirstWavelet[uses.transparentFirstWaveletCount++] = ReadUse(SelectSoftShadowGraphResource(opaqueHistoryFrontIsA, opaqueMomentsB, opaqueMomentsA), ResourceStates::ShaderResource);
         uses.transparentFirstWavelet[uses.transparentFirstWaveletCount++] = WriteUse(shadowSoftHalfB, ResourceStates::UnorderedAccess);
@@ -306,7 +298,6 @@ b8 SoftShadowSplitResourceUseBuilder::build(in SoftShadowSplitResourceInputs inp
     uses.transparentFoldCount = 0u;
     if(route.combinedSoftUpsample)
         uses.transparentFold[uses.transparentFoldCount++] = ReadUse(shadowSoftHalfB, ResourceStates::ShaderResource);
-    // One RGB wavelet samples only half-A before multiplying visibility. Keep a ping-pong declaration if passes grow.
     if(s_ShadowWaveletTransparentResolvePassCount == 1u)
         uses.transparentFold[uses.transparentFoldCount++] = ReadUse(shadowSoftHalfA, ResourceStates::ShaderResource);
     else{
@@ -629,7 +620,6 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
         .setDependencies(foldDependencies)
         .setResourceUses(Span<GpuTaskResourceUse>(uses.transparentFold).first(uses.transparentFoldCount))
     ;
-    // The terminal fold owns effect completion, so lighting, recovery and acceptance observe fully folded visibility.
     const auto foldTaskResult = this.m_raytracingSystem.declareShadowTransparentSoftFoldTask(
         this.m_graph, foldDesc, inputs.deferredLightingResources, inputs.opaqueProduced, inputs.opaqueFrameIndex,
         route.combinedSoftUpsample, inputs.targets, inputs.timingTicket, inputs.asyncTiming, inputs.shadowVisibilityTiming,

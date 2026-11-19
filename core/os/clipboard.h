@@ -83,15 +83,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Construct, request, pump, poll, cancel and destroy on the owning OS/event thread.
-// There are no client callbacks.
-// Requests own copied UTF-8 bytes; completions own their text in the caller's arena.
-// Poll consumes a completed token.
-// Text excludes embedded NUL.
-// Native Windows writes use CRLF and reads normalize CRLF to LF.
-// Cancel invalidates pending or completed delivery, but cannot undo a write already performed by pump().
-// Destroy cancels all undelivered work.
-// Tokens never reference client objects and stale/foreign tokens are rejected.
 interface IClipboardService : private NoCopy{
 public:
     virtual ~IClipboardService()noexcept = default;
@@ -104,15 +95,9 @@ public:
     [[nodiscard]] virtual Expected<ClipboardRequestToken, ClipboardAdmission::Enum> requestWriteText(ClipboardChannel::Enum channel, AStringView text) = 0;
     [[nodiscard]] virtual ClipboardPollResult::Enum poll(ClipboardRequestToken token, ClipboardCompletion& completion) = 0;
     [[nodiscard]] virtual b8 cancel(ClipboardRequestToken token) = 0;
-    // Starts admitted operations in order and advances native transfers without waiting for another client.
-    // A pending native operation preserves FIFO order; cancellation releases it.
-    // Recursive pumps return false.
     [[nodiscard]] virtual b8 pump() = 0;
 };
 
-// The native window is borrowed until service destruction.
-// Windows requires a live owner HWND for writes; nullptr selects an explicitly unsupported service.
-// Linux native factories live in the X11/Wayland OS domains.
 [[nodiscard]] Expected<GlobalUniquePtr<IClipboardService>> CreateClipboardService(Alloc::GlobalArena& arena, void* nativeWindowHandle);
 
 

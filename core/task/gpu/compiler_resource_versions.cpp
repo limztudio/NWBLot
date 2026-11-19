@@ -381,7 +381,6 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
     for(const GpuTaskDependencyEdge& edge : outEdges)
         semanticEdges.push_back(edge);
 
-    // Retain consumer task order and distinct writer task order without rediscovering them for every version.
     Vector<usize, Alloc::ScratchArena> consumerOffsets(graph.resourceVersionCount() + 1u, 0u, scratchArena);
     Vector<usize, Alloc::ScratchArena> writerOffsets(graph.resourceCount() + 1u, 0u, scratchArena);
     Vector<u32, Alloc::ScratchArena> lastWriterTasks(graph.resourceCount(), Limit<u32>::s_Max, scratchArena);
@@ -394,7 +393,6 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
         }
         for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
             const GpuTaskResourceUse& use = task.resourceUses[useIndex];
-            // Analysis admits every resource use before building version edges.
             FOUNDATION_ASSERT(graph.validResource(use.resource));
             if(!IsWriteAccess(use.access) || lastWriterTasks[use.resource.index] == task.id.index)
                 continue;
@@ -436,8 +434,6 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
         }
     }
 
-    // Imported roots precede every graph task, so their consumers must finish before any other overlapping writer.
-    // These constraints are unconditional and participate in produced-version reachability regardless of version declaration order.
     for(usize versionIndex = 0u; versionIndex < graph.resourceVersionCount(); ++versionIndex){
         const GpuTaskGraphResourceVersionView version = graph.resourceVersionAt(versionIndex);
         if(version.origin != GpuGraphResourceVersionOrigin::ImportedRoot)
@@ -467,8 +463,6 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
     FrozenResourceVersionReachability semanticReachability(scratchArena);
     b8 semanticReachabilityBuilt = false;
 
-    // Overlapping pre-producer writers need a proven semantic/imported order; else consumers precede the writer.
-    // Never feed these constraints back: declaration order must not imply intent.
     for(usize versionIndex = 0u; versionIndex < graph.resourceVersionCount(); ++versionIndex){
         const GpuTaskGraphResourceVersionView version = graph.resourceVersionAt(versionIndex);
         if(version.origin != GpuGraphResourceVersionOrigin::TaskProduced)

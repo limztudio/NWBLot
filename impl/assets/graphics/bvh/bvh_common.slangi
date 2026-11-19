@@ -15,10 +15,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Binary LBVH node (2N-1 nodes for N prims; 0 = root).
-// Leaf: NWB_BVH_LEAF_FLAG + prim index/count in children.
-// Decode rightChild via nwbBvhNodeRightChildIndex() (transparent-subtree tag).
-// 32 bytes / 2 float4 lanes.
 struct NwbBvhNode{
     float3 aabbMin;
     uint leftChild;
@@ -26,7 +22,6 @@ struct NwbBvhNode{
     uint rightChild;
 };
 
-// Constants for LBVH kernels (Morton, topology, fit). Bounds quantize centroids into Morton codes.
 struct NwbBvhBuildPushConstants{
     uint primitiveCount;
     uint internalCount;
@@ -49,7 +44,6 @@ struct NwbBvhBuildPushConstants{
 static const uint NWB_BVH_KEY_BIT_COUNT = 32u;
 static const uint NWB_BVH_KEY_HIGHEST_BIT = 31u;
 
-// Karras Morton expansion: each multiply copies the bits up by the shift, and the mask keeps one copy.
 static const uint NWB_BVH_MORTON_EXPAND_MULTIPLY_16 = 0x00010001u;
 static const uint NWB_BVH_MORTON_EXPAND_MASK_16 = 0xFF0000FFu;
 static const uint NWB_BVH_MORTON_EXPAND_MULTIPLY_8 = 0x00000101u;
@@ -74,7 +68,6 @@ uint nwbBvhLeafPrimitive(const NwbBvhNode node){
     return node.leftChild & ~NWB_BVH_LEAF_FLAG;
 }
 
-// Keep the invalid sentinel; strip the CPU transparent tag from valid right links. Also the per-mesh identity decode.
 uint nwbBvhNodeRightChildIndex(const NwbBvhNode node){
     return node.rightChild == NWB_BVH_INVALID ? NWB_BVH_INVALID : (node.rightChild & NWB_BVH_CHILD_INDEX_MASK);
 }
@@ -83,14 +76,12 @@ bool nwbBvhNodeContainsTransparentOccluder(const NwbBvhNode node){
     return (node.rightChild & NWB_BVH_TRANSPARENT_SUBTREE_FLAG) != 0u;
 }
 
-// Count leading zero bits (0..32); firstbithigh returns -1 for zero, which this maps to 32.
 uint nwbBvhClz(const uint value){
     if(value == 0u)
         return NWB_BVH_KEY_BIT_COUNT;
     return NWB_BVH_KEY_HIGHEST_BIT - (uint)firstbithigh(value);
 }
 
-// Spread the low 10 bits of value so they occupy every third bit (Karras Morton expansion).
 uint nwbBvhExpandBits10(uint value){
     value = (value * NWB_BVH_MORTON_EXPAND_MULTIPLY_16) & NWB_BVH_MORTON_EXPAND_MASK_16;
     value = (value * NWB_BVH_MORTON_EXPAND_MULTIPLY_8) & NWB_BVH_MORTON_EXPAND_MASK_8;
@@ -99,7 +90,6 @@ uint nwbBvhExpandBits10(uint value){
     return value;
 }
 
-// 30-bit Morton code (10 bits/axis) of a point already normalized into [0, 1]^3.
 uint nwbBvhMorton3D(const float3 normalizedPosition){
     const float3 scaled = clamp(normalizedPosition * NWB_BVH_MORTON_AXIS_CELL_COUNT, 0.0, NWB_BVH_MORTON_AXIS_CELL_MAX);
     const uint x = nwbBvhExpandBits10((uint)scaled.x);

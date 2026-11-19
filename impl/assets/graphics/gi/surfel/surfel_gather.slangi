@@ -9,16 +9,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-pixel surfel gather: bias outward, walk the capped neighbourhood, weight by normal * falloff * confidence.
-
-
 #include "surfel_heap_resources.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Resolve reads the immutable live field through its dispatch-uniform heap slots.
 #define g_NwbSceneSurfelParams g_NwbHeapSurfelConstantBuffers[g_NwbSurfelHeapPushConstants.constantsHeapSlot]
 #define NWB_SURFEL_GATHER_FIELD_POOL g_NwbHeapSurfelReadOnlyPools[g_NwbSurfelHeapPushConstants.poolHeapSlot]
 #define NWB_SURFEL_GATHER_FIELD_CELL_HEAD g_NwbHeapSurfelReadOnlyUintBuffers[g_NwbSurfelHeapPushConstants.cellHeadHeapSlot]
@@ -36,7 +32,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Gathers normalized irradiance and a continuous coverage weight for the screen-space ambient blend.
 bool nwbSurfelGather(const float3 worldPosition, const float3 normal, out half3 outIrradiance, out half outCoverage){
     return nwbSurfelGatherField(worldPosition, normal, 0u, outIrradiance, outCoverage);
 }

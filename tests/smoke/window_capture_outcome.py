@@ -1,6 +1,3 @@
-"""Smoke outcome signalling shared by the window-capture harness and its scripts: skip and failure exceptions plus stderr status lines."""
-
-
 import sys
 
 

@@ -1,6 +1,3 @@
-"""Fake process APIs and argument builders shared by the repository launcher test modules."""
-
-
 LIT_WAIT = "wait"
 LIT_TERMINATE = "terminate"
 LIT_KILL = "kill"

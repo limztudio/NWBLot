@@ -1,5 +1,3 @@
-"""Analytic scene geometry for the optical reference."""
-
 from dataclasses import dataclass
 from functools import lru_cache
 import json
@@ -66,7 +64,6 @@ class Boundary:
     def contains(self, point):
         if self.planes:
             return all(dot(normal, point) < distance - 1e-7 for normal, distance in self.planes)
-        # Reference rays start outside the torus behind the camera.
         return False
 
     def intersect(self, origin, direction):
@@ -128,7 +125,6 @@ class ReflectionOpticalScene:
         def rows(field):
             text = re.search(r"asset\." + field + r"\s*=\s*(\[.*?\]);", source, re.S).group(1)
             return json.loads(re.sub(r",\s*]", "]", text))
-        # Apply scale 2 and X rotation -pi/2 while preserving triangle normals.
         positions = [(2 * x, 1.4 + 2 * z, -9.5 - 2 * y) for x, y, z in rows("positions")]
         references = rows("vertex_refs")
         triangles = []
@@ -155,7 +151,6 @@ class ReflectionOpticalScene:
             outer = ReflectionOpticalScene.box("outer", -3, 14, 1.5, CLEAR)
             return (outer, ReflectionOpticalScene.box("inner", -3, 10, 1.33, CLEAR, xy_scale=0.7)) if case.endswith(LIT_NESTED) else (outer,)
         if case in ("optical_same_mesh", "optical_disconnected"):
-            # Treat re-entry into a disconnected component of the same instance as a new interval.
             return (ReflectionOpticalScene.box("front", -8, 0.5), ReflectionOpticalScene.box("back", -10, 0.5))
         if case == "optical_union_single":
             return (ReflectionOpticalScene.box(LIT_SINGLE, -9, 0.8),)
@@ -175,4 +170,3 @@ class ReflectionOpticalScene:
             count = 5 if case == LIT_OPTICAL_OVERFLOW else 3 if case == LIT_OPTICAL_NESTED3 else 2
             return tuple(ReflectionOpticalScene.box(str(index), -9, 4 - 0.6 * index if count == 5 else 3 / (1 << index), 1.5 if index == 0 else 1.33 if index == 1 else 1.1 + 0.02 * (index - 2), TINTED if index == 0 else WARM, xy_scale=1.0 - 0.1 * index) for index in range(count))
         return (ReflectionOpticalScene.box(LIT_SINGLE, -9, 2, transmission=CLEAR if case == "optical_clear" else TINTED, mode=LIT_UNSPECIFIED if case == "optical_unspecified" else LIT_NESTED, yaw=0.2 if case == "optical_tilted" else 0.0),)
-

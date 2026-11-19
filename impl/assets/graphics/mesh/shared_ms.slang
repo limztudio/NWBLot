@@ -6,7 +6,6 @@
 #define NWB_MESH_EMULATION_INDEXED_OUTPUT (!NWB_CSG_ENABLED)
 #endif
 
-// Shared geometry stages need no material interface; surface hooks apply typed material color per pixel.
 #include "mesh/authoring.slangi"
 
 

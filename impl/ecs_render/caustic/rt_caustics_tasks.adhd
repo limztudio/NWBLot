@@ -75,7 +75,6 @@ Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(in H
     ;
     if(inputs.materialContextSlots.valid())
         hardwarePhotonResourceUses.push_back(ReadUse(inputs.materialContextSlots, ResourceStates::ConstantBuffer));
-    // Candidate normal and seam checks read the frozen position and index streams.
     for(in GpuGraphResourceId resource : inputs.hardwareTraceGeometryResources){
         if(!resource.valid()){
             warning("RendererSystem: invalid prepared hardware-caustics geometry resource");
@@ -129,7 +128,6 @@ Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(in H
     hardwareCausticsScheduling.forceSubmissionBoundary = false;
     hardwareCausticsScheduling.allowPacketMerge = true;
     hardwareCausticsScheduling.mergeWithPrevious = true;
-    // Keep photon/geometry/resolve stages in one Hardware Caustics timing chain.
     hardwareCausticsScheduling.allowMergeAcrossConsumerFrontier = true;
     ConfigureComputeEffectRoutingHint(true, hardwareCausticsScheduling);
 
@@ -212,7 +210,6 @@ class CausticAccumulatorDecayGraphTask{
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        // Match the producer's no-work behavior: keep the dep, but skip dispatch unless the producer would run.
         if(!this.shadowVisibilityPrepared)
             return true;
         b8 hasWork = false;
@@ -223,7 +220,6 @@ class CausticAccumulatorDecayGraphTask{
         if(!hasWork)
             return true;
 
-        // A rejected record may retry before discard. Release the incomplete reservation before the retry's interval.
         DiscardGpuTimingMeasure(this.causticPhotonTiming);
         GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
         this.causticPhotonTiming.emplace(this.graphics.gpuTiming(), s_TimingScopeCausticPhotons, this.graphics.getDevice(), commandList);
@@ -286,7 +282,6 @@ class CausticProducerGraphTask{
             return false;
 
         GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
-        // Typed clears and warm decay precede photons; acceptance publishes their CPU lifecycle.
         if(this.shadowVisibilityPrepared){
             b8 causticsDispatched = false;
             if(this.hardware)
@@ -355,7 +350,6 @@ class CausticGeometryDownsampleGraphTask{
         GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
         this.causticResolveTiming.emplace(this.graphics.gpuTiming(), s_TimingScopeCausticResolve, this.graphics.getDevice(), commandList);
         this.raytracingSystem.dispatchCausticGeometryDownsample(commandList, this.targets);
-        // The next callback ends timestamps on this same list. Close this nested marker before the recorder advances.
         return FinishSplitGpuTimingMarker(this.causticResolveTiming);
     }
 
@@ -425,7 +419,6 @@ class CausticResolveGraphTask{
     }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        // No-producer contract: the graph-owned irradiance clear wins, no resolve dispatch when the producer never recorded.
         if(!this.causticProducerDispatched){
             DiscardGpuTimingMeasure(this.causticResolveTiming);
             return true;

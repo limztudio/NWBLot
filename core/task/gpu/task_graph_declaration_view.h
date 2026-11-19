@@ -43,7 +43,6 @@ struct GpuTaskGraphTaskView{
     usize dependencyCount = 0u;
     const GpuExternalCompletionId* externalDependencies = nullptr;
     usize externalDependencyCount = 0u;
-    // Declaration-supplied sources point to immutable graph-owned snapshots.
     const GpuTaskExternalStateSource* externalStateSources = nullptr;
     usize externalStateSourceCount = 0u;
     const GpuTaskResourceUse* resourceUses = nullptr;
@@ -85,7 +84,6 @@ struct GpuTaskGraphTaskView{
     }
 };
 
-// Immutable view of an externally released resource range, copied at declaration so producer storage may retire.
 struct GpuTaskGraphInitialOwnerHandoffSourceView{
     GpuTaskResourceRange range;
     GpuPhysicalQueueId sourceQueue;
@@ -99,11 +97,9 @@ struct GpuTaskGraphResourceView{
     GpuGraphResourceId id;
     Name identity = s_NameNone;
     AStringView markerLabel;
-    // Each first-use range must be covered by one source naming its exact physical consumer queue.
     const GpuTaskGraphInitialOwnerHandoffSourceView* initialOwnerHandoffSources = nullptr;
     usize initialOwnerHandoffSourceCount = 0u;
     GpuExternalCompletionId initialAvailabilityCompletion;
-    // Typed imports copy the backend's admission facts. Metadata-only resources have no snapshot.
     ResourceQueueAdmissionSnapshot queueAdmission;
     ResourceStates::Mask initialState = ResourceStates::Unknown;
     ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
@@ -157,7 +153,6 @@ struct GpuTaskGraphExternalCompletionView{
     QueueSubmissionToken token;
 };
 
-// Graph-declared present completion: backbuffer retained in Unknown/Present, exported to Present only.
 struct GpuPresentEndpoint{
     GpuTaskId producer;
     GpuGraphResourceId backBuffer;
@@ -176,7 +171,6 @@ struct GpuTaskGraphTelemetryOptions{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Lexical proof that declaration storage cannot reset or mutate. Compiler/tooling callers wait for a view first.
 class GpuTaskGraphDeclarationReadView final : NoCopy{
     friend class GpuCompiledGraph::ReadView;
     friend class GpuTaskGraph;
@@ -220,7 +214,6 @@ public:
     [[nodiscard]] usize uploadBlobCount()const noexcept;
     [[nodiscard]] usize pipelineCount()const noexcept;
     [[nodiscard]] usize externalCompletionCount()const noexcept;
-    // Borrowed declaration storage remains valid only while this named lvalue view stays alive.
     [[nodiscard]] GpuTaskGraphTaskView taskAt(usize index)const & noexcept;
     [[nodiscard]] GpuTaskGraphTaskView taskAt(usize index)const && = delete;
     [[nodiscard]] GpuTaskGraphResourceView resourceAt(usize index)const & noexcept;

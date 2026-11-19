@@ -150,7 +150,6 @@ class SurfelGiCounterReadbackBuilder : NoCopy{
     public void declare(in RayTracingSurfelPersistentResourceSnapshot rayTracingSurfelResources, in GpuTaskId surfelTask, in GpuTaskId timingEndTask, mut GpuTaskId outTask);
 }
 
-// Declares the surfel GI phase tasks; every payload borrows the ray-tracing system and the frame targets until the packet accepts.
 [modular]
 class SurfelGiTaskBuilder : NoCopy{
     private mut RendererRayTracingSystem m_system;
@@ -203,7 +202,6 @@ class SurfelGiTaskBuilder : NoCopy{
         mut GpuTimingSubmissionTicket timingTicket,
         mut Optional<GpuTimingMeasure> asyncTiming
     );
-    // Records the phases the split route left over; only the resolve-owning route brackets the shared async range.
     public Expected<GpuTaskId> declareTerminalTask(
         in GpuTaskDesc desc,
         in DeferredLightingGraphResources deferredLightingResources,
@@ -235,9 +233,7 @@ class SurfelGiPipelineSet : NoCopy{
     public b8 ensureSurfelAgeFreePipeline();
     public b8 ensureSurfelHashBuildPipeline();
     public b8 ensureSurfelTracePipeline();
-    // Hardware surfel trace uses inline RayQuery over the TLAS.
     public b8 ensureSurfelTraceHwPipeline();
-    // Resolve keeps the writable surfel pool off deferred lighting.
     public b8 ensureSurfelResolvePipeline();
     public b8 ensureSurfelUpsamplePipeline();
     public b8 ensureSurfelTraceBuildArgsPipeline();

@@ -638,7 +638,6 @@ void VerifyUiTextAreaScrollTests_AutomaticRevealSurvivesIdleViewportShrinkWithou
     ASSERT_GE(placement.content.height, placement.caret.height);
     EXPECT_GE(placement.caret.x, placement.content.x);
     EXPECT_GE(placement.caret.y, placement.content.y);
-    // Lanes are caret right, caret bottom, content right, content bottom.
     const VectorSingle ends = VectorSingle(placement.caret.x, placement.caret.y, placement.content.x, placement.content.y) + VectorSingle(placement.caret.width, placement.caret.height, placement.content.width, placement.content.height);
     const VectorSingle limits = ends + VectorSingle(0.001f, 0.001f, 0.001f, 0.001f);
     EXPECT_LE(ends.x, limits.z);
@@ -659,7 +658,6 @@ void VerifyUiTextAreaScrollTests_ExplicitOverscrollClampsToBothContentExtents(mu
     EXPECT_GT(self.m_state.scroll().y, 0.0f);
     EXPECT_LT(self.m_state.scroll().x, 10000.0f);
     EXPECT_LT(self.m_state.scroll().y, 10000.0f);
-    // Lanes are caret right, caret bottom, content right, content bottom.
     const VectorSingle ends = VectorSingle(placement.caret.x, placement.caret.y, placement.content.x, placement.content.y) + VectorSingle(placement.caret.width, placement.caret.height, placement.content.width, placement.content.height);
     EXPECT_NEAR(ends.x, ends.z, 0.001f);
     EXPECT_NEAR(ends.y, ends.w, 0.001f);

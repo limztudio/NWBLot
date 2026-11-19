@@ -214,7 +214,6 @@ b8 CommandList::recordAndValidateCommandCapability(const GpuQueueCapability::Mas
     if(!publicCommandStateAccessible())
         return false;
 #if defined(NWB_DEBUG)
-    // Diagnostics must record the attempted operation even when its physical queue rejects it.
     if(m_taskCapabilityTracking){
         m_taskCapabilitiesUsed = static_cast<GpuQueueCapability::Mask>(static_cast<u8>(m_taskCapabilitiesUsed) | static_cast<u8>(requiredCapabilities));
     }

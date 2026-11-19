@@ -44,7 +44,6 @@ b8 IsValidPaintSdfGlyphRequest(in u32 channel, in u32 channelCount, in Rect uv){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The caller's arena must outlive the snapshot and every consumer of it.
 [move_only, friend(PaintBuilder, DrawSnapshotFaultFixture)]
 class DrawSnapshot{
     private u64 m_generation = 0u;
@@ -80,7 +79,6 @@ class PaintBuilder : NoCopy{
     private b8 m_commandsOrdered = true;
     private b8 m_recording = false;
 
-    // The loaded skin owns the validated descriptor captured for this frame.
     [cpp_unwind]
     public void begin(in DisplayMetrics metrics, in u64 generation, in u64 skinGeneration, in AssetRef<UiSkin> skinRef, in UiSkin skin){
         this.m_snapshot.m_skinBinding = MakePaintSkinBinding<UiSkin, Texture>(skinRef, skin.texture(), skinGeneration, skin.atlasWidth(), skin.atlasHeight(), skin.referenceDensity());
@@ -104,7 +102,6 @@ class PaintBuilder : NoCopy{
     public void pushClip(in Rect clip){ PushPaintClip(this.m_recording, clip, this.m_clips); }
     public b8 popClip(){ return PopPaintClip(this.m_recording, this.m_overlayDepth, this.m_overlays, this.m_clips); }
 
-    // A balanced overlay restores its parent clip and layer.
     [cpp_unwind]
     public b8 beginOverlay(in u32 layer){
         return BeginPaintOverlay(this.m_recording, layer, this.m_snapshot.m_displayMetrics, this.m_overlays, this.m_overlayDepth, this.m_layer, this.m_clips);

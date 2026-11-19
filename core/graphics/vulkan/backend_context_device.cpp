@@ -120,7 +120,6 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
 
     const b8 diagnosticsConfigExtensionEnabled = isDeviceExtensionEnabled(VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME);
     const b8 aftermathRequested = m_deviceParams.enableGpuCrashDiagnostics && physicalDeviceProperties.vendorID == s_NvidiaVendorId;
-    // Configure process-global NVIDIA Aftermath before device creation.
     const b8 aftermathActive = aftermathRequested && Aftermath::Initialize();
     if(aftermathRequested && !aftermathActive)
         NWB_LOGGER_INFO(FOUNDATION_TEXT("Vulkan: NVIDIA Aftermath GPU crash dumps unavailable; using vendor-neutral GPU diagnostics only."));
@@ -260,9 +259,6 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     m_rayTracingSpheresSupported = isDeviceExtensionEnabled(VK_NV_RAY_TRACING_LINEAR_SWEPT_SPHERES_EXTENSION_NAME) && requestedOptionalFeatures.rayTracingLinearSweptSpheres.spheres == VK_TRUE;
     m_rayTracingLinearSweptSpheresSupported = isDeviceExtensionEnabled(VK_NV_RAY_TRACING_LINEAR_SWEPT_SPHERES_EXTENSION_NAME) && requestedOptionalFeatures.rayTracingLinearSweptSpheres.linearSweptSpheres == VK_TRUE;
 
-    // Same-class routing may use every additional queue exposed by each active primary family.
-    // The separate cross-family policy may additionally expose one distinct compatible family for each enabled queue class.
-    // Count families after device pick, before vkCreateDevice, so no bad index lands in the Device registry.
     uint32_t physicalQueueFamilyCount = 0u;
     m_instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(m_vulkanPhysicalDevice, &physicalQueueFamilyCount, nullptr);
     Vector<VkQueueFamilyProperties, Alloc::ScratchArena> physicalQueueFamilies(physicalQueueFamilyCount, scratchArena);
@@ -329,7 +325,6 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     pNext = nullptr;
     Array<b8, s_OptionalDeviceFeatureCount> enabledOptionalFeatures = {};
     for(const auto& [_, feature] : m_enabledExtensions.device){
-        // ASTC HDR is owned by VkPhysicalDeviceVulkan13Features after promotion into Vulkan 1.3.
         if(apiSupportsVulkan13 && feature == DeviceExtensionFeature::TextureCompressionAstcHdr)
             continue;
         VulkanDetail::OptionalDeviceFeaturePolicy::AppendFeature(feature, pNext, requestedOptionalFeatures, enabledOptionalFeatures);
@@ -352,7 +347,6 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     else if(maintenance4Enabled && maintenance4Features.maintenance4 == VK_TRUE)
         VulkanDetail::AppendFeatureStruct(pNext, maintenance4Features);
 
-    // Aftermath configuration must outlive vkCreateDevice.
     VkPhysicalDeviceDiagnosticsConfigFeaturesNV diagnosticsConfigFeatures = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceDiagnosticsConfigFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DIAGNOSTICS_CONFIG_FEATURES_NV);
     VkDeviceDiagnosticsConfigCreateInfoNV diagnosticsConfigCreateInfo = VulkanDetail::MakeVkStruct<VkDeviceDiagnosticsConfigCreateInfoNV>(VK_STRUCTURE_TYPE_DEVICE_DIAGNOSTICS_CONFIG_CREATE_INFO_NV);
     if(aftermathActive && diagnosticsConfigExtensionEnabled){
@@ -405,7 +399,6 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     vulkan12features.bufferDeviceAddress = supportedVulkan12Features.bufferDeviceAddress;
     vulkan12features.shaderSubgroupExtendedTypes = supportedVulkan12Features.shaderSubgroupExtendedTypes;
     vulkan12features.scalarBlockLayout = supportedVulkan12Features.scalarBlockLayout;
-    // Host-side timer-query resets require hostQueryReset.
     vulkan12features.hostQueryReset = supportedVulkan12Features.hostQueryReset;
     if(isDeviceExtensionEnabled(VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME))
         vulkan12features.samplerFilterMinmax = supportedVulkan12Features.samplerFilterMinmax;

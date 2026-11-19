@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Immutable launcher data models (settings, targets, sessions)."""
 
 from __future__ import annotations
 

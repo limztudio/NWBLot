@@ -161,7 +161,6 @@ public:
 
 
 public:
-    // Binary identity access never records or resolves symbol text, including cooker builds.
     [[nodiscard]] constexpr const NameHash& identityHash()const noexcept{ return m_hash; }
 
     [[nodiscard]] constexpr const NameHash& hash()const{
@@ -171,7 +170,6 @@ public:
         return m_hash;
     }
 
-    // In opt/fin, the view remains valid until its rotating thread-local symbol buffer is reused.
     [[nodiscard]] AStringView resolvedText()const{
 #if defined(FOUNDATION_BUILD_SYMBOLS)
         recordStoredSymbolText();
@@ -210,7 +208,6 @@ public:
 #endif
     }
 
-    // Non-resolving text for labels/breadcrumbs: readable name in dbg, else hash hex.
     [[nodiscard]] AStringView logText()const noexcept{
 #if defined(FOUNDATION_DEBUG) || defined(FOUNDATION_BUILD_SYMBOLS)
         return AStringView(m_debugName.data());

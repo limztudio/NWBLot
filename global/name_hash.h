@@ -179,7 +179,6 @@ class NameText{
 
 
 public:
-    // Only constant evaluation can admit a bounded text value to the infallible constructor path.
     consteval NameText(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>)
         : m_text(text)
     {

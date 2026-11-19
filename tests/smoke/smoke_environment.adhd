@@ -33,7 +33,6 @@ Expected<f32> ReadSmokeEnvironmentF32(in StringView variableName){
     return ParseF32(StringView(text.value()));
 }
 
-// Truthy env reader for on/off flags: absent/empty/"0" -> false, anything else -> true.
 b8 ReadSmokeEnvironmentFlag(in StringView variableName){
     const Expected<String> text = ReadSmokeEnvironmentString(variableName);
     if(!text.has_value())

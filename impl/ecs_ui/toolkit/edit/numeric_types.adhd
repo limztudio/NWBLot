@@ -74,7 +74,6 @@ NumericParseStatus ToNumericParseStatus(in u8 status){
     return NumericParseStatus::Invalid;
 }
 
-// ASCII edge whitespace is ignored; incomplete and malformed drafts retain their classification.
 Expected<i64, NumericParseStatus> ParseIntegerDraft(in StringView text){
     const StringView trimmed = TrimView(text);
     const NumericParseStatus status = ToNumericParseStatus(ClassifyIntegerGrammar(trimmed));

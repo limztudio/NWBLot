@@ -112,7 +112,6 @@ void InitializeDataset(in u64 initialSeed, mut Dataset dataset){
     const VectorDouble step = VectorDouble(0x1p-10, 0x1p-10, 0x1p-10, 0x1p-10);
     const VectorDouble offset = VectorDouble(-4.0, -4.0, -4.0, -4.0);
     for(usize index = 0u; index < s_DataCount; ++index){
-        // Keep the seed draw order: left and right per lane, then the angle.
         Array<f64, 4> leftSteps;
         Array<f64, 4> rightSteps;
         for(usize lane = 0u; lane < 4u; ++lane){
@@ -143,7 +142,6 @@ b8 EqualObservation(in Observation lhs, in Observation rhs){
     return lhs.flags == rhs.flags && lhs.error == rhs.error;
 }
 
-// The references use the same floating-point environment as the candidates.
 VectorDouble BaselineDot2(in VectorDouble lhs, in VectorDouble rhs){
     const VectorDouble mask = VectorDouble(u64x4(u64.max, u64.max, 0u, 0u));
     const VectorDouble product = VectorDoubleMultiply(VectorDoubleAndInt(lhs, mask), VectorDoubleAndInt(rhs, mask));

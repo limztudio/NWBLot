@@ -1,6 +1,3 @@
-"""Shared image-region and background pixel measurements."""
-
-
 class ImageRegions:
     @staticmethod
     def estimate_background_rgb(rows_rgb, width, height):
@@ -21,7 +18,6 @@ class ImageRegions:
 
         return tuple(sorted(channel)[len(samples) // 2] for channel in zip(*samples))
 
-
     @staticmethod
     def normalized_region(width, height, x0, y0, x1, y1):
         start_x = min(max(int(width * x0), 0), width)
@@ -30,18 +26,15 @@ class ImageRegions:
         end_y = min(max(int(height * y1), start_y), height)
         return start_x, start_y, end_x, end_y
 
-
     @staticmethod
     def region_pixel_count(region):
         start_x, start_y, end_x, end_y = region
         return max(end_x - start_x, 0) * max(end_y - start_y, 0)
 
-
     @staticmethod
     def count_foreground_pixels(rows_rgb, width, height, background, x0, y0, x1, y1):
         region = ImageRegions.normalized_region(width, height, x0, y0, x1, y1)
         return ImageRegions.count_foreground_pixels_in_region(rows_rgb, background, region)
-
 
     @staticmethod
     def count_foreground_pixels_in_region(rows_rgb, background, region, pixel_predicate=None):
@@ -58,7 +51,6 @@ class ImageRegions:
 
         return count
 
-
     @staticmethod
     def count_background_like_pixels(rows_rgb, background, region):
         start_x, start_y, end_x, end_y = region
@@ -72,5 +64,3 @@ class ImageRegions:
                     count += 1
 
         return count
-
-

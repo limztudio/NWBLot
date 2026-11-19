@@ -15,7 +15,6 @@
 
 class RtSceneBvhState{
     public usize m_tlasMaxInstances = 0u;
-    // Runtime meshes invalidate static-scene reuse because their BVHs can update in place.
     public u64 m_tlasStaticSceneHash = 0u;
     public u64 m_sceneSwBvhStaticSceneHash = 0u;
     public usize m_bvhSortCapacity = 0u;
@@ -37,32 +36,25 @@ class RtSceneBvhState{
     public ShaderHandle m_bvhFitShader;
     public ComputePipelineHandle m_bvhFitPipeline;
     public BufferHandle m_bvhVisitCounterBuffer;
-    public BufferHandle m_sceneBvhNodeBuffer;  // CPU-built binned-SAH scene/instance BVH (TLAS-analog), uploaded when inputs change
-    public BufferHandle m_sceneInstanceBuffer; // per-instance world->object transform + reserved ABI word + BVH leaf cost
+    public BufferHandle m_sceneBvhNodeBuffer;
+    public BufferHandle m_sceneInstanceBuffer;
     public BufferHandle m_rayTraceMaterialContextSlotsBuffer;
-    // Current CSG ray geometry is independent of retained light-space capture generations.
     public BufferHandle m_csgTraceContextBuffer;
 
-    // Replacement TLASs get fresh handles so recorded work retains the old generation.
     public GpuDescriptorHandle m_csgTraceContextHeapHandle = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle m_tlasHeapHandle = GpuDescriptorHandleInvalid();
     public u32 m_tlasInstanceCount = 0u;
     public u32 m_sceneBvhInstanceCount = 0u;
-    // Capacity replacement gives sort buffers fresh heap generations.
     public GpuDescriptorHandle m_bvhSortKeysHeapHandle = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle m_bvhSortPayloadHeapHandle = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle m_bvhVisitCounterHeapHandle = GpuDescriptorHandleInvalid();
-    // Global StorageBuffer heap views selected by the common trace-context slot cbuffer for SW shadow, GI, and caustics.
     public GpuDescriptorHandle m_sceneBvhNodeHeapHandle = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle m_sceneInstanceHeapHandle = GpuDescriptorHandleInvalid();
-    // One context-slot descriptor shared by all ray-tracing effects.
     public GpuDescriptorHandle m_rayTraceMaterialContextSlotsHeapHandle = GpuDescriptorHandleInvalid();
 
     public b8 m_tlasStaticSceneHashValid = false;
     public b8 m_sceneSwBvhStaticSceneHashValid = false;
-    // A new backing generation stays Common until accepted Shadow Preparation publishes its final state.
     public b8 m_tlasBackingFresh = false;
-    // The selected tracing backend prepares transparency only when the scene requires it.
     public b8 m_sceneHasTransparentOccluder = false;
     public b8 m_capabilityLogged = false;
     public b8 m_bvhSortPipelineFailed = false;
@@ -129,7 +121,6 @@ class RendererRayTracingState : NoCopy{
     public void invalidateResources(){
         this.m_hardwareTransparentShadow = HardwareTransparentShadowState();
         this.m_refraction.invalidateResources();
-        // Scene TLAS is GPU state released on teardown; per-mesh BLAS lives on the mesh cache.
         this.sceneBvh.m_tlas.reset();
         this.sceneBvh.m_tlasBackingFresh = false;
         this.sceneBvh.m_tlasHeapHandle = GpuDescriptorHandleInvalid();
@@ -225,7 +216,6 @@ class RendererRayTracingState : NoCopy{
         this.shadow.m_swShadowMeshPositionHandles.clear();
         this.shadow.m_swShadowMeshIndexHandles.clear();
         this.shadow.m_swShadowMeshAttributeHandles.clear();
-        // Drop pinned handle caches so teardown leaves no dangling handles.
         this.shadow.m_hwMeshHeapHandleCache.clear();
         this.shadow.m_swMeshHeapHandleCache.clear();
         this.shadow.m_softwareTransparentSampling = SoftwareTransparentSamplingState();
@@ -277,9 +267,7 @@ class RendererRayTracingState : NoCopy{
         this.caustics.m_causticAccumulatorDecayShader.reset();
         this.caustics.m_causticAccumulatorDecayPipeline.reset();
         this.caustics.m_causticAccumulatorDecayPipelineFailed = false;
-        // Accumulator target is recreated on invalidation; re-seed the EMA.
         this.caustics.m_causticAccumulatorInitialized = false;
-        // Surfel buffers live on this state; resize keeps convergence, invalidate re-seeds.
         this.surfelGi.m_surfelHeapBindingLayout.reset();
         this.surfelGi.m_surfelSpawnShader.reset();
         this.surfelGi.m_surfelSpawnPipeline.reset();

@@ -84,7 +84,6 @@ public:
 
 
     public:
-        // Needs a non-end iterator. The view borrows the source path; mutating or destroying it invalidates the view.
         [[nodiscard]] native_string_view nativeComponent()const noexcept{
             FOUNDATION_ASSERT(m_path != nullptr && !m_atEnd);
             return native_string_view(m_path->m_text.data() + m_begin, m_end - m_begin);

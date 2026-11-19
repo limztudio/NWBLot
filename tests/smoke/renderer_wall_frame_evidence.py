@@ -1,5 +1,3 @@
-"""Validate paired wall-frame and GPU timing windows."""
-
 import math
 import re
 

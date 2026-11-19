@@ -11,7 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Model and viewport remain lent through the enclosing scope; public intents retire even identical prior loans.
 class TextAreaState : NoCopy{
     public EditBoxState m_visual;
     public EditNavigationState m_navigation;
@@ -49,7 +48,6 @@ class TextAreaState : NoCopy{
         return this.m_visual.focused;
     }
 
-    // Explicit scrolling suppresses caret reveal until a later accepted text, selection or ownership intent.
     public b8 scrollTo(in Point scroll){
         if(!IsValidUiExtent(scroll))
             return false;

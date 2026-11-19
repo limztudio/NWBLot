@@ -15,9 +15,7 @@
 
 const usize s_NwbRtInstanceMaterialGpuByteSize = 36u;
 const usize s_NwbBvhNodeGpuByteSize = 32u;
-// Limit skinned BLAS refits before rebuilding topology.
 const u32 s_BlasMaxRefitsBeforeRebuild = 8u;
-// Scale rebuild cadence by mesh size, clamped to preserve quality.
 const u32 s_BlasMinRefitsBeforeRebuild = 4u;
 const u32 s_BlasMaxRefitsBeforeRebuildCap = 64u;
 const u32 s_BlasRefitBudgetLog2ExponentStep = 3u;
@@ -26,7 +24,6 @@ const u32 s_BvhSortModeLocalTile = 0u;
 const u32 s_BvhSortModeGlobal = 1u;
 const u32 s_BvhSortModeGlobalTail = 2u;
 const usize s_BvhBuildInitialCapacity = 1024u;
-// Maximum per-mesh software BVH size; oversized meshes are skipped.
 const u32 s_BvhMaxPrimitivesPerMesh = 262144u;
 const u32 s_BvhBuildModeFull = 0u;
 const u32 s_BvhBuildModeRefit = 1u;
@@ -36,7 +33,6 @@ const u32 s_BvhSortGroupSize = 256u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shader-mirrored flags: transparent selects transmittance; refractive selects caustics.
 flag<u32> RtInstanceMaterialFlag{
     None = 0u,
     Transparent,
@@ -45,16 +41,13 @@ flag<u32> RtInstanceMaterialFlag{
     RefractionEntryCertified
 }
 
-// Shader-mirrored BVH child encoding.
 flag<u32> BvhNodeIndex{
     LeafFlag = 0x80000000u,
-    // Reuses LeafFlag in rightChild to mark transparent subtrees.
     TransparentSubtreeFlag = 0x80000000u,
     ChildIndexMask = 0x7fffffffu,
     Invalid = 0xffffffffu
 }
 
-// Heap-slot indirection for the ray-tracing material context.
 [serialize]
 class RayTraceMaterialContextSlots{
     public u32 sceneBvhNodes = 0u;
@@ -68,7 +61,6 @@ class RayTraceMaterialContextSlots{
     public u32 csgContext = 4294967295u;
 }
 
-// CPU mirror of trace material ABI; HW and SW share instance IDs.
 [serialize]
 class NwbRtInstanceMaterialGpu{
     public u32 surfaceDispatchId = s_RtInvalidSlot;
@@ -76,21 +68,18 @@ class NwbRtInstanceMaterialGpu{
     public u32 shadingModelId = 0u;
     public u32 materialConstantByteOffset = 0u;
     public u32 meshInstanceIndex = 0u;
-    // Global-heap geometry slots; nodeSlot is software-only.
     public u32 indexSlot = s_RtInvalidSlot;
     public u32 attributeSlot = s_RtInvalidSlot;
     public u32 positionSlot = s_RtInvalidSlot;
     public u32 nodeSlot = s_RtInvalidSlot;
 }
 
-// CPU mirror of the shader BVH node.
 [serialize]
 class NwbBvhNodeGpu{
     public f32x3_u32 aabbMinLeftChild(0.0f, 0.0f, 0.0f, 0u);
     public f32x3_u32 aabbMaxRightChild(0.0f, 0.0f, 0.0f, 0u);
 }
 
-// CPU mirror of the software scene-BVH instance ABI.
 [serialize]
 class SceneSwBvhInstanceGpu{
     public f32x3x4 worldToObject(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
@@ -107,7 +96,6 @@ class SoftwareSceneRefitInstanceGpu{
     public Array<u32, 3u> reserved;
 }
 
-// CPU mirror of NwbBvhBitonicSortPushConstants.
 [serialize]
 class BvhSortPushConstants{
     public u32 elementCount = 0u;
@@ -126,7 +114,6 @@ class SoftwareSceneRefitPushConstants{
     public u32 instanceCount = 0u;
 }
 
-// CPU mirror of NwbBvhBuildPushConstants.
 [serialize]
 class BvhBuildPushConstants{
     public u32 primitiveCount = 0u;
@@ -147,7 +134,6 @@ class BvhBuildPushConstants{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Cube-root-scaled refit budget.
 u32 AdaptiveRefitsBeforeRebuild(in u32 primitiveCount){
     u32 log2Val = 0u;
     u32 n = primitiveCount;

@@ -11,7 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shadow Visibility freezes its route policy before the coordinator declares topology. Handles stay in snapshots below.
 class RayTracingShadowVisibilityGraphPlanSnapshot{
     public LightSpaceShadowSnapshot lightSpace = LightSpaceShadowSnapshot();
     public GraphOwnedAdaptiveShadowPlan adaptivePlan;
@@ -31,7 +30,6 @@ class RayTracingShadowVisibilityGraphPlanSnapshot{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One packet may advance several temporal domains at once. Keep exact CPU mirrors so each rejected stage rolls back only itself.
 class RayTracingFrameCpuStateSnapshot{
     public QueueSubmissionToken surfelCountReadbackSubmissionToken;
 
@@ -49,7 +47,6 @@ class RayTracingFrameCpuStateSnapshot{
     public b8 surfelSeeded = false;
 }
 
-// Shadow Preparation keeps TLAS, software-BVH scratch, adaptive-shadow scratch across packets. Coordinator gets handles only.
 class RayTracingShadowPreparationResourceSnapshot{
     public RayTracingAccelStructHandle sceneTlas;
     public BufferHandle sceneTlasBackingBuffer;
@@ -61,8 +58,6 @@ class RayTracingShadowPreparationResourceSnapshot{
     public BufferHandle swShadowIndirectArgsBuffer;
 }
 
-// Graph declaration freezes the descriptor-visible effects resources and route decisions selected by preflight.
-// Keeping this read-only snapshot separate from CPU rollback state prevents the coordinator from mutating caches.
 class RayTracingDeferredGraphResourceSnapshot{
     public BufferHandle materialContextSlotsBuffer;
     public BufferHandle csgTraceContextBuffer;
@@ -85,7 +80,6 @@ class RayTracingDeferredGraphResourceSnapshot{
     public b8 surfelSplitGraphPipelinesReady = false;
 }
 
-// Surfel resources outlive resizable targets. The accepted readback token shares its generation with the counter/readback pair.
 class RayTracingSurfelPersistentResourceSnapshot{
     public BufferHandle constantsBuffer;
     public BufferHandle poolBuffer;
@@ -100,7 +94,6 @@ class RayTracingSurfelPersistentResourceSnapshot{
     public QueueSubmissionToken countReadbackSubmissionToken;
 }
 
-// Prepared once before compilation. Recording consumes retained handles only, so HW failure cannot switch sets after declare.
 class RayTracingRefractionGraphResources{
     public RefractionStatisticsReadbackSnapshot statistics = RefractionStatisticsReadbackSnapshot();
     public ComputePipelineHandle pipeline;

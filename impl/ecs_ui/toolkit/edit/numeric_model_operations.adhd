@@ -21,7 +21,6 @@ EditLimits MakeNumericDraftLimits(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Both numeric models retain the accepted spelling independently from the user's current draft.
 class NumericEditDraft : NoCopy{
     private EditModel m_model;
     private String m_accepted;

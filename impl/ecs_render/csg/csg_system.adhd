@@ -70,10 +70,8 @@ class RendererCsgSystem : NoCopy{
     public b8 createCsgIntervalSampleStateBuffer();
     public b8 reserveCsgReceiverRangeBufferCapacity(in usize rangeCount);
     public b8 reserveCsgCutterBufferCapacity(in usize cutterCount);
-    // Preparation owns CSG buffer growth; draw paths consume after prepass.
     public b8 prepareCsgFrameResources(in usize receiverRangeCount, in usize cutterCount);
     public CsgGraphResourceSnapshot csgGraphResourceSnapshot(in b8 retainRefractionCapPipeline)const;
-    // Capture frozen CSG uniform bytes as immutable blobs before native recording.
     public Expected<CsgClipContextSlots> prepareCsgClipContextSlotData(
         in DeferredFrameTargets targets,
         in CsgFrameGpuDataView csgFrameData,

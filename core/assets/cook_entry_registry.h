@@ -114,7 +114,6 @@ namespace CookEntryRegistryDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Resolves a cook entry's virtualPath to a Name; strings hash on demand.
 [[nodiscard]] constexpr Expected<Optional<Name>, NameTextError::Enum> ToCookEntryName(const Name& virtualPath)noexcept{
     if(!virtualPath)
         return Optional<Name>{};
@@ -318,7 +317,6 @@ public:
 
 
 public:
-    // The asset label's backing text must outlive this registry.
     template<typename EntryT, typename AssetT, typename CodecT>
     b8 registerType(
         const Name& assetType,

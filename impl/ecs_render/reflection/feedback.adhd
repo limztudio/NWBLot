@@ -95,7 +95,6 @@ class ReflectionFeedbackState : NoCopy{
             return false;
         this.m_reservedSequence = 0u;
         if(!IsValidAcceptedReflectionFeedbackToken(token, this.m_deviceGeneration, this.m_acceptedToken)){
-            // Accepted work blocks discard-based overwrite proof.
             this.m_quarantined = true;
             return false;
         }

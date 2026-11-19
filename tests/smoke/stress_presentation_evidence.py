@@ -1,5 +1,3 @@
-"""Validation of accepted stress presentation measurements."""
-
 import math
 import re
 
@@ -119,6 +117,5 @@ class PresentationEvidence:
             "requested_measurement_seconds": 30, "clock": "steady", "count": "accepted_native_present", LIT_WORKLOAD: workload, "pacing": pacing_summary, LIT_OPTICAL_REFLECTION: ReflectionDiagnostics(lines, reflection_diagnostics, SHUTDOWN).parse()}
 
     def parse_measurement(self, log_text):
-        """Replay the complete raw measurement log without requiring a process launch."""
         parsed = self.parse_runtime_log(log_text, 0)
         return parsed[LIT_MEASUREMENT] | {LIT_INTERVALS: parsed[LIT_INTERVALS]}

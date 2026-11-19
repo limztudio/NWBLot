@@ -1,6 +1,3 @@
-"""Linux X11 window-capture backend: Xlib structures, window lookup and raising, XGetImage readback, and synthetic input."""
-
-
 import ctypes
 import time
 from window_capture_outcome import SmokeSkip, SmokeFailure, write_status  # noqa: E402
@@ -297,7 +294,6 @@ class LinuxX11Capture:
         return result
 
     def capture_client_window(self, window, output_path):
-        # X11 application drawables already contain only client pixels.
         return self.capture_window(window, output_path)
 
     def capture_prepared_raw_client_window(self, window, output_path):

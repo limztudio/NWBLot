@@ -37,7 +37,6 @@ NWB_PERF_BEGIN
 
 class TimingSink;
 
-// Call on the TimingSink owner thread. Consume only the initial pending snapshot; disabled sinks discard samples.
 void CollectCpuTaskProfile(CpuTaskScheduler& scheduler, TimingSink& timing);
 
 

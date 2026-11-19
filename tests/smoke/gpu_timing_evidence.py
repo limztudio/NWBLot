@@ -1,5 +1,3 @@
-"""Parse and summarize sealed GPU timing publication intervals."""
-
 from dataclasses import dataclass
 import math
 from pathlib import Path
@@ -30,7 +28,6 @@ class GpuTimingEvidence:
         self.frame = frame
 
     def parse_intervals(self, text, finalized=False):
-        """Only a following header seals a live report; the current tail may be partial."""
         text = text.replace("\r\n", "\n")
         headers = list(HEADER.finditer(text))
         result = []
@@ -77,7 +74,6 @@ class GpuTimingEvidence:
         return sum(self.frame in report and report[self.frame].total_ms > 0.0 for report in reports)
 
     def retain_after_warmup(self, reports, warmup_intervals, minimum_warmup_frames=0):
-        """Feedback warms up by completed GPU observations, not a presumed wall-clock frame rate."""
         start = min(warmup_intervals, len(reports))
         completed = sum(report[self.frame].gpu_samples for report in reports[:start] if self.frame in report)
         while start < len(reports) and completed < minimum_warmup_frames:

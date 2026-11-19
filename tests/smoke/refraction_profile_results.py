@@ -1,5 +1,3 @@
-"""Summarize refraction workload results across complete planned trials."""
-
 import statistics
 
 import refraction_density_benchmark as density

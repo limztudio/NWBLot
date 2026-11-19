@@ -24,7 +24,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Opaque and glass casters under directional, point, and spot soft shadows.
 const SmokeModelRef s_SoftShadowModel = "project/characters/body/model";
 const SmokeMaterialRef s_SoftShadowOpaqueMaterial = "project/smoke/transparent_multi/materials/ground";
 const SmokeMaterialRef s_SoftShadowTransparentMaterial = "project/smoke/transparent_multi/materials/shared";
@@ -78,7 +77,6 @@ class SoftShadowScene{
             light.enableCaustics = false;
         }
 
-        // Timing materials omit stochastic surfel GI while keeping direct shadows.
         SmokeMaterialRef opaqueMaterial = s_SoftShadowOpaqueMaterial;
         SmokeMaterialRef transparentMaterial = s_SoftShadowTransparentMaterial;
         if(timingEnabled){
@@ -95,7 +93,6 @@ class SoftShadowScene{
             world
         );
 
-        // The opaque caster provides the contact-hardening reference.
         const SmokeTintedModelEntityResult characterModel = CreateTintedModelEntity(
             s_SoftShadowModel,
             opaqueMaterial,
@@ -109,12 +106,10 @@ class SoftShadowScene{
         if(!characterModel.tintApplied)
             error("SoftShadowTestSmokeProject: failed to set character tint");
 
-        // The glass caster must preserve tint while its penumbra widens with receiver distance.
         const SmokeTintedModelEntityResult glassModel = CreateTintedModelEntity(
             s_SoftShadowModel,
             transparentMaterial,
             s_SmokeSurfaceMaterialInterface,
-            // Glass caster tint and density for Beer-Lambert shadow absorption.
             VectorSet(0.20f, 0.55f, 0.12f, 0.6f),
             VectorSet(-0.6f, 0.0f, -1.1f, 0.0f),
             VectorSet(1.0f, 1.0f, 1.0f, 0.0f),
@@ -162,7 +157,6 @@ class SoftShadowScene{
     private EntityID m_groundEntity = s_InvalidEntityId;
 }
 
-// Directional light angular radius in radians.
 f32 ConfiguredAngularRadius(){
     const Expected<f32> parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_ANGLE");
     if(!parsed.has_value())
@@ -172,7 +166,6 @@ f32 ConfiguredAngularRadius(){
     return 0.0f;
 }
 
-// Point and spot source radius in world units.
 f32 ConfiguredSourceRadius(){
     const Expected<f32> parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS");
     if(!parsed.has_value())
@@ -208,7 +201,6 @@ class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
             if(!this.m_timingRenderPass.start())
                 return false;
         }
-        // Register arrow yaw scrubbing at the front of the input chain.
         this.m_context.input.addHandlerToBack(this.m_arrowYawInput);
 
         this.m_angularRadius = ConfiguredAngularRadius();
@@ -251,7 +243,6 @@ class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
         this.m_fpsProbe.recordFrame(safeDelta);
         if(this.m_timingEnabled)
             this.m_gpuPassTimingProbe.recordFrame(safeDelta, this.m_context.gpuTimingView());
-        // Yaw priority: fixed override, manual scrub, then automatic spin.
         this.m_yaw.update(safeDelta, this.m_frozenYaw, this.m_frozenYaw >= 0.0f, this.m_arrowYawInput, s_SoftShadowManualYawSpeed, s_SoftShadowSpinSpeed, s_SoftShadowMaxSpinDelta);
         this.updateWindowTitle();
         this.m_scene.spinCasters(SmokeWorldRef(this.m_world), this.m_yaw.yaw());

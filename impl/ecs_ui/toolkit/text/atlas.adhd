@@ -92,7 +92,6 @@ class AtlasPage{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Coverage updates occupy unused padded rectangles. Publishing copies a page after its batch.
 class GlyphAtlas : NoCopy{
     private SharedPool m_pool = SharedPool();
     private Vector<AtlasGlyph> m_glyphs;

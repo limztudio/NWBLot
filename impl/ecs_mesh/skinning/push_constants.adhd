@@ -100,7 +100,6 @@ enum<u8> RuntimeStorageDescriptorSlot{
     kCount
 }
 
-// Mirrors bindless resources: five uint4 lanes; handles are StorageBuffer registrations.
 [serialize, reflect]
 class MeshSkinningBindlessResourceSlots{
     public b8 operator==(in MeshSkinningBindlessResourceSlots rhs)const{
@@ -156,7 +155,6 @@ class MeshSkinningPushConstants{
     public u32 skinCount = 0u;
     public u32 jointCount = 0u;
     public u32 skinningMode = cast<u32>(SkeletonSkinningMode::LinearBlend);
-    // UniformBuffer heap slot for MeshSkinningBindlessResourceSlots.
     public u32 bindlessResourceSlots = 0u;
 }
 

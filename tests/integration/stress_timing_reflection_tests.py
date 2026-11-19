@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-"""Stress reflection diagnostic and quality replay; never launch a renderer."""
-
 
 from pathlib import Path
 import sys

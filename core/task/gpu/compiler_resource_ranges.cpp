@@ -32,8 +32,6 @@ namespace GpuTaskGraphCompilerDetail{
     return access == GpuTaskResourceAccess::Write || access == GpuTaskResourceAccess::ReadWrite;
 }
 
-// Typed imports keep the Texture descriptor, so planning uses the same finite subresource extent as recording.
-// Metadata-only texture declarations intentionally remain symbolic: their dimensions are not known until a later backend import.
 [[nodiscard]] Expected<GpuTaskResourceRange> ResolveTextureRangeForPlanning(const Texture* const texture, const GpuTaskResourceRange& range)noexcept{
     GpuTaskResourceRange result = range;
     if(!texture)
@@ -99,7 +97,6 @@ namespace GpuTaskGraphCompilerDetail{
             || !RangeContains(resource, (*plannedSourceRange), range)
         )
             continue;
-        // One first-use fragment must have one exact external owner and one matching completion token.
         if(result)
             return nullptr;
         result = &source;
@@ -111,8 +108,6 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Textures use mip/array rectangles; buffers use byte intervals with a single fixed secondary row.
-// The shared partition preserves every independently produced fragment, including symbolic tails in metadata-only graphs.
 [[nodiscard]] static Expected<IntegerRectBounds> IntegerRectBoundsFrom(const GpuGraphResourceType::Enum resourceType, const GpuTaskResourceRange& range)noexcept{
     if(resourceType == GpuGraphResourceType::Buffer){
         if(!range.bufferRange.hasExtent())
@@ -154,7 +149,6 @@ namespace GpuTaskGraphCompilerDetail{
     return GpuTaskResourceRange{ .textureSubresources = TextureSubresourceSet{ static_cast<MipLevel>(bounds.xBegin), static_cast<MipLevel>(mipCount), static_cast<ArraySlice>(bounds.yBegin), static_cast<ArraySlice>(arrayCount), }, };
 }
 
-// One task owns transitions between its own declared subresources. Later ranges may add untouched cells needing a boundary source or initial state.
 [[nodiscard]] b8 CollectResourceFirstUseRangesWithinTask(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphTaskView& task,
@@ -224,8 +218,6 @@ namespace GpuTaskGraphCompilerDetail{
     return true;
 }
 
-// Both collectors discover contiguous state runs newest-to-oldest, followed only by uncovered initial-state fragments.
-// Reverse the runs, retaining forward discovery order within each run and the initial-state suffix.
 static void AppendResourceStateFragmentsInStateOrder(const Span<const TrackedResourceStateFragment> discovered, Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& outFragments){
     outFragments.clear();
     outFragments.reserve(discovered.size());
@@ -251,8 +243,6 @@ static void AppendResourceStateFragmentsInStateOrder(const Span<const TrackedRes
         outFragments.push_back(discovered[fragmentIndex]);
 }
 
-// Walk newest-to-oldest and consume only still-uncovered portions of the requested ranges.
-// A selected state owns exactly the terminal cells it produced; remaining cells keep their declared graph initial state.
 [[nodiscard]] b8 CollectLatestResourceStateFragments(
     const Span<const TrackedCompiledResourceState> trackedStates,
     const TrackedResourceStateHistory& history,
@@ -327,8 +317,6 @@ static void AppendResourceStateFragmentsInStateOrder(const Span<const TrackedRes
     return true;
 }
 
-// Terminal exports have no single requested range. Subtract later declared states from each earlier range, keeping only its surviving portions.
-// This uses the same symbolic interval/rectangle partition as inter-task consumer fan-in.
 [[nodiscard]] b8 CollectTerminalResourceStateFragments(
     const Span<const TrackedCompiledResourceState> trackedStates,
     const TrackedResourceStateHistory& history,

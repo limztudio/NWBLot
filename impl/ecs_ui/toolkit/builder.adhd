@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Transient declarations shape text, arrange each scope, then publish paint and hit targets in order.
 [modular, friend(ListLayoutPreparer)]
 class Builder : NoCopy{
     private mut Context m_context;
@@ -92,19 +91,14 @@ class Builder : NoCopy{
     [cpp_unwind]
     public b8 endPanel();
 
-    // Returns content visibility.
-    // A collapsed window still opens a scope and requires endWindow().
-    // The borrowed WindowState must remain alive through that matching endWindow().
     [cpp_unwind]
     public b8 beginWindow(in StringView stableKey, in StringView title, mut WindowState state){ return this.beginWindow(stableKey, title, state, WindowOptions()); }
     [cpp_unwind]
     public b8 beginWindow(in StringView stableKey, in StringView title, mut WindowState state, in WindowOptions options);
 
-    // Returns content visibility.
     [cpp_unwind]
     public b8 endWindow();
 
-    // Popups begin after a balanced panel/window or within another popup. Only a visible begin requires endPopup().
     [cpp_unwind]
     public b8 beginPopup(in StringView stableKey, mut PopupState state){ return this.beginPopup(stableKey, state, PopupOptions()); }
     [cpp_unwind]
@@ -130,7 +124,6 @@ class Builder : NoCopy{
     [cpp_unwind]
     public b8 label(in StringView stableKey, in StringView text, in WidgetOptions options){ return this.addItem(stableKey, text, WidgetKind::Label, options).has_value(); }
 
-    // Return one action at most per declaration. Disabled controls discard stale activation and remain pointer barriers.
     [cpp_unwind]
     public b8 button(in StringView stableKey, in StringView text){ return this.button(stableKey, text, WidgetOptions()); }
     [cpp_unwind]
@@ -146,49 +139,39 @@ class Builder : NoCopy{
     [cpp_unwind]
     public b8 selectable(in StringView stableKey, in StringView text, in b8 selected, in WidgetOptions options);
 
-    // Borrowed through the matching endPanel/endWindow/endPopup; explicit state/source changes must wait until that scope ends.
-    // Only visible rows are borrowed and shaped; stable keys must be unique and lookup/search efficient.
     [cpp_unwind]
     public ListResult virtualList(in StringView stableKey, in borrow IListDataSource source, mut ListState state){ return this.virtualList(stableKey, source, state, ListOptions()); }
     [cpp_unwind]
     public ListResult virtualList(in StringView stableKey, in borrow IListDataSource source, mut ListState state, in ListOptions options);
 
-    // The complete bounded group borrows source/state through the enclosing scope or outermost popup end.
     [cpp_unwind]
     public RadioGroupResult radioGroup(in StringView stableKey, in borrow IListDataSource source, mut RadioGroupState state){ return this.radioGroup(stableKey, source, state, RadioGroupOptions()); }
     [cpp_unwind]
     public RadioGroupResult radioGroup(in StringView stableKey, in borrow IListDataSource source, mut RadioGroupState state, in RadioGroupOptions options);
 
-    // Values and results become available after the successful enclosing scope or outermost popup end.
     [cpp_unwind]
     public b8 slider(in StringView stableKey, mut SliderState state){ return this.slider(stableKey, state, SliderOptions()); }
     [cpp_unwind]
     public b8 slider(in StringView stableKey, mut SliderState state, in SliderOptions options);
 
-    // A passive declaration copies its finite fraction and resolved skin style.
     [cpp_unwind]
     public b8 progress(in StringView stableKey, in f64 fraction){ return this.progress(stableKey, fraction, ProgressOptions()); }
     [cpp_unwind]
     public b8 progress(in StringView stableKey, in f64 fraction, in ProgressOptions options);
 
-    // Copies an authored skin region and its sizing/tint policy; default dimensions use its natural extent.
     [cpp_unwind]
     public b8 image(in StringView stableKey, in Name regionName){ return this.image(stableKey, regionName, ImageOptions()); }
     [cpp_unwind]
     public b8 image(in StringView stableKey, in Name regionName, in ImageOptions options);
 
-    // Copies an authored skin region and its sizing/tint policy; default dimensions use its natural extent.
     [cpp_unwind]
     public b8 image(in StringView stableKey, in SharedImageSource source){ return this.image(stableKey, source, ImageOptions()); }
     [cpp_unwind]
     public b8 image(in StringView stableKey, in SharedImageSource source, in ImageOptions options);
 
-    // Image and texture-image declarations share one frame publisher.
     [cpp_unwind]
     public b8 publishImageFrame(in WidgetState widget, mut ImageFrame frame);
 
-    // Fields and popups borrow state/source through the enclosing panel/window or outermost popup end.
-    // Internal popup/list scopes reserve declaration order and emit after their containing layout.
     [cpp_unwind]
     public ComboResult comboBox(in StringView stableKey, in borrow IListDataSource source, mut ComboState state){ return this.comboBox(stableKey, source, state, ComboOptions()); }
     [cpp_unwind]
@@ -199,7 +182,6 @@ class Builder : NoCopy{
     [cpp_unwind]
     public SearchComboResult searchComboBox(in StringView stableKey, mut ISearchableListDataSource source, mut SearchComboState state, in SearchComboOptions options);
 
-    // Attach to a preceding item in this same container. Models are borrowed until the enclosing scope ends.
     [cpp_unwind]
     public b8 tooltip(in StringView stableKey, in StringView anchorKey, in StringView text, mut TooltipState state){ return this.tooltip(stableKey, anchorKey, text, state, TooltipOptions()); }
     [cpp_unwind]
@@ -220,13 +202,11 @@ class Builder : NoCopy{
     [cpp_unwind]
     public EditBoxResult editBox(in StringView stableKey, mut EditModel model, mut EditBoxState state, in EditBoxOptions options){ return this.declareEditBox(stableKey, options, model, state); }
 
-    // Multiline model and viewport remain lent through the enclosing scope or outermost popup end.
     [cpp_unwind]
     public EditBoxResult textArea(in StringView stableKey, mut EditModel model, mut TextAreaState state){ return this.textArea(stableKey, model, state, TextAreaOptions()); }
     [cpp_unwind]
     public EditBoxResult textArea(in StringView stableKey, mut EditModel model, mut TextAreaState state, in TextAreaOptions options);
 
-    // Numeric model and editor state remain lent through the enclosing scope or outermost user popup end.
     [cpp_unwind]
     public NumericEditBoxResult integerEdit(in StringView stableKey, mut IntegerEditModel model, mut EditBoxState state){ return this.integerEdit(stableKey, model, state, IntegerEditOptions()); }
     [cpp_unwind]
@@ -241,14 +221,12 @@ class Builder : NoCopy{
 
     public void reset();
 
-    // Observe accepted input without retaining target pointers across frame publication.
     public in InputRouter input()const{ return this.m_context.input(); }
 
     public b8 failed()const{ return this.m_context.failed(); }
 
     public void setSkin(in borrow UiSkin skin);
 
-    // One explicit left-to-right script/language policy applies to every widget declaration and its deferred paint.
     [cpp_unwind]
     public b8 setTextShaping(in u32 scriptTag, in StringView language);
 
@@ -316,7 +294,6 @@ class Builder : NoCopy{
             this.m_pointerBusy = busy;
     }
 
-    // Valid while a window scope is open, including a collapsed window.
     public in WindowMetrics windowMetrics()const{ return this.m_scope.value().m_window.metrics; }
 
     private b8 declarationBlocked()const{ return this.m_finalizing || this.m_declaring; }
@@ -457,7 +434,6 @@ class Builder : NoCopy{
     [cpp_unwind]
     private b8 paintImage(in BuilderItem item, in LayoutBox box);
 
-    // Image and progress paints share one clip-pop plus hit-target tail.
     [cpp_unwind]
     private b8 finishClipPaint(in BuilderItem item, in Rect bounds, in Rect clip, in b8 painted);
 
@@ -468,8 +444,6 @@ class Builder : NoCopy{
 
     private void publishSliderResults(in b8 valid);
 
-    // Fields and popups borrow state/source through the enclosing panel/window or outermost popup end.
-    // Internal popup/list scopes reserve declaration order and emit after their containing layout.
     [cpp_unwind]
     private ComboResult declareCombo(
         in StringView stableKey,

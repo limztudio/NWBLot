@@ -108,7 +108,6 @@ TextGlyphIntersection IntersectTextCoverageInk(
     f64 outlineAllowance = 0.0;
     if(!coverageKnown)
         outlineAllowance = fontSizeF64 / cast<f64>(unitsPerEm);
-    // Native outline bounds include their design-unit allowance; keep raster rounding and physical-pixel snapping conservative.
     const f64 rasterMarginScalar = ((Max(1.0, correctionScalar) / s_TextFixedPointScaleF64) + (s_TextRasterMarginPixels / rasterScale)) + outlineAllowance;
     const VectorDouble margin = VectorDouble(rasterMarginScalar) + (VectorDouble(s_TextHalfPixel) / VectorDouble(cast<f64>(pixelScale.x), cast<f64>(pixelScale.y), cast<f64>(pixelScale.x), cast<f64>(pixelScale.y)));
     const VectorDouble inkOrigin(cast<f64>(ink.x), cast<f64>(ink.y), cast<f64>(ink.x), cast<f64>(ink.y));

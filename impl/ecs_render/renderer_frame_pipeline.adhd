@@ -55,13 +55,9 @@ class RendererFramePipeline : NoCopy{
     private mut AssetManager m_assetManager;
     private RendererShaderPathResolveCallback m_shaderPathResolver;
     private CsgShapeRegistry m_csgShapeRegistry;
-    // A successful graphics tick can skip renderer execution while telemetry still captures.
-    // Keep the exact source frame separate from graph generations so retained prior-frame runtime statistics never look current.
     private u64 m_frameGraphSourceFrameIndex = u64.max;
-    // Storage must outlive appendFrameGraph(); FrameGraphBuilder keeps labels by view until capture is encoded.
     private String m_frameGraphRendererLabel;
     private ShadowPrepareGraphCoordinator m_shadowPrepareGraph;
-    // Lagged-history selector upload. Merges into Deferred Lighting's packet, which already owns history acceptance and the prior-frame wait.
     private GpuTaskId m_deferredLaggedLightingHistorySlotsUploadTask;
     private GpuTaskId m_deferredFrameTimingBeginTask;
     private GraphicsPrefixGraphCoordinator m_graphicsPrefixGraph;
@@ -70,21 +66,14 @@ class RendererFramePipeline : NoCopy{
     private SurfelGiGraphCoordinator m_surfelGiGraph;
     private GpuTaskId m_deferredLightingTask;
     private GpuTaskId m_deferredCompositeTask;
-    // Optional final overlay appended by a registered presentation contributor.
-    // The deferred scene output remains separately named because lagged-history copies may begin from it while the overlay finishes on Graphics.
     private GpuTaskId m_deferredPresentationOverlayTask;
     private GpuTaskId m_deferredPresentTask;
-    // Terminal Graphics task: records the frame-timing endpoint and owns the swap-chain signal after Present and any contributor.
     private GpuTaskId m_deferredFrameTimingEndTask;
     private GpuTaskId m_deferredLaggedLightingHistoryTask;
-    // Recovery stays unrecorded until a later packet rejects. Its submission join waits for every latest accepted non-Graphics queue.
     private GpuTaskId m_deferredFrameRecoveryTask;
-    // Imported only while the preceding frame's diagnostic Transfer readback remains in flight.
     private GpuExternalCompletionId m_deferredSurfelGiCounterReadbackCompletion;
-    // Distinct completions even for the same history-copy token: Lighting waits for readable history, producers wait until the copy stops reading.
     private GpuExternalCompletionId m_deferredLightingHistoryReadReadyCompletion;
     private GpuExternalCompletionId m_deferredLightingHistoryWriterDrainCompletion;
-    // A partially accepted frame with an unsubmittable recovery packet is not recoverable. End this device generation and rebuild resources.
     private b8 m_frameRenderRecoveryFailed = false;
     private b8 m_deferredFrameRecoveryArmed = false;
     private b8 m_deferredFrameRecoveryRetiresTiming = false;
@@ -107,21 +96,13 @@ class RendererFramePipeline : NoCopy{
     private u64 m_laggedLightingReportGeneration = 0u;
     private RendererRayTracingState m_rayTracingState;
     private CsgFrameState m_preparedCsgFrameState;
-    // Shadow scratch/history keeps accepted packet state across frames on either compiler route.
     private GpuPersistentResourceStateCache m_shadowComputePersistentState;
     private GpuPersistentResourceStateCache m_shadowVisibilityReturnState;
-    // TLAS/BLAS, software-BVH build storage, and trace geometry change inside Shadow Preparation. Keep only live generations.
     private GpuPersistentResourceStateCache m_shadowPreparePersistentState;
-    // Software caustics retain their temporal scratch on either compiler-selected route.
-    // Hardware dispatch-rays caustics retain their temporal accumulator only after the Graphics hardware-caustics packet accepts.
     private GpuPersistentResourceStateCache m_causticsComputePersistentState;
     private GpuPersistentResourceStateCache m_hardwareCausticAccumulatorPersistentState;
-    // Keep only the accepted cross-queue return state for Graphics lighting back to a Compute-routed caustics packet.
     private GpuPersistentResourceStateCache m_causticIrradianceReturnState;
-    // Surfel GI retains its field and history on either route; resolved irradiance is consumed directly or snapshotted for lagged lighting.
     private GpuPersistentResourceStateCache m_surfelGiComputePersistentState;
-    // The counter can continue into a late Transfer readback, so retain the accepted tail state and its typed backing separately.
-    // The next Surfel-GI packet imports this cache through its first-use declaration.
     private GpuPersistentResourceStateCache m_surfelGiCounterPersistentState;
     private GpuPersistentResourceStateCache m_surfelIrradianceReturnState;
     private b8 m_laggedLightingCurrentFrameAcceptancePending = false;
@@ -140,13 +121,9 @@ class RendererFramePipeline : NoCopy{
     private ReflectionSettings m_reflectionSettings;
     private RayTracingRefractionGraphResources m_preparedRefractionResources;
     private QueueSubmissionToken m_laggedLightingHistorySubmissionToken;
-    // Newest incomplete accepted same-generation Transfer tail guards live producer writes while declaration resets the history-read token.
     private QueueSubmissionToken m_laggedLightingHistoryWriterDrainToken;
-    // Target creation bumps this identity per generation, so a recycled slot cannot make recreated history look accepted.
     private u64 m_laggedLightingHistoryGeneration = 0u;
     private u64 m_laggedLightingHistoryWriterDrainGeneration = 0u;
-    // The root composes this aggregate from Deferred, AVBOIT, CSG, and RayTracing resources.
-    // Keep its storage before the domain systems so their service objects are destroyed before the shared frame-resource generation.
     private DeferredFrameTargets m_frameTargets;
 
     private RendererShaderSystem m_shaderSystem;
@@ -158,14 +135,10 @@ class RendererFramePipeline : NoCopy{
     private RendererAvboitSystem m_avboitSystem;
     private RendererRayTracingSystem m_raytracingSystem;
 
-    // Declare every callback owner before graph storage so reverse destruction keeps graph storage alive during teardown and unwinding.
     private RendererTaskTimingFeedback m_deferredTaskTimingFeedback;
-    // All renderer stages, presentation, optional history copies, and recovery share one packet graph.
     private GpuTaskGraph m_deferredLightingTaskGraph;
     private GpuTaskGraphAnalysis m_deferredLightingTaskGraphAnalysis;
     private GpuTaskGraphQueueAssignments m_deferredLightingTaskGraphQueueAssignments;
-    // Accepted-route history survives ordinary per-frame graph resets so telemetry can distinguish first, unchanged, and changed assignments.
-    // Device/resource invalidation clears the tracker with the artifacts it describes.
     private GpuTaskGraphQueueAssignmentTelemetryTracker m_deferredLightingTaskGraphQueueAssignmentTelemetry;
     private GpuCompiledGraph m_deferredLightingCompiledGraph;
     private GpuRecordedGraph m_deferredLightingRecordedGraph;
@@ -239,7 +212,6 @@ class RendererFramePipeline : NoCopy{
         return this.m_activeSceneSubsystems.has_value() && this.m_activeSceneSubsystems.value().hasSubsystem<CsgSubsystem>();
     }
 
-    // Trades one frame of effect latency for overlap; off by default, self-bootstraps on toggle.
     public void setRefractionEnabled(in b8 enabled){ this.m_refractionEnabled = enabled; }
 
     public void setRefractionDiagnosticsEnabled(in b8 enabled){ this.m_raytracingSystem.refraction().setRefractionDiagnosticsEnabled(enabled); }
@@ -272,7 +244,6 @@ class RendererFramePipeline : NoCopy{
 
     public void setFrameLaggedAsyncLightingEnabled(in b8 enabled);
 
-    // Telemetry for current deferred graph artifacts. Valid until the next graph/recording/transaction reset.
     public GpuTaskGraphRuntimeStatistics deferredTaskGraphRuntimeStatistics()const;
 
     [cpp_unwind]
@@ -300,7 +271,6 @@ class RendererFramePipeline : NoCopy{
 
     private void resetSharedDeferredFrameTaskState();
 
-    // Accepted cross-frame state survives ordinary recording attempts. Reset only when the target/resource generation changes.
     private void resetTargetGenerationStateHandoffs();
 
     private void resetInvalidatedResourceStateHandoffs();

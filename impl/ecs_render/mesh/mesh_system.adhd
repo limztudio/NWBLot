@@ -96,13 +96,11 @@ class RendererMeshSystem : NoCopy{
         outBuffers.reserve(this.m_meshState.m_meshes.size() * s_RetainedAccelerationBuffersPerMesh);
         for(in auto entry : this.m_meshState.m_meshes){
             in MeshResources mesh = entry.second;
-            // Retain every live BLAS source and backing buffer across preparation packets.
             if(mesh.blas.valid()){
                 outBuffers.push_back(mesh.buffers.positionBuffer);
                 outBuffers.push_back(mesh.triangleIndexBuffer);
                 outBuffers.push_back(mesh.blas.deref().getBackingBufferHandle());
             }
-            // Preserve mesh-local software buffers across tracing-backend changes.
             outBuffers.push_back(mesh.swBvhNodeBuffer);
             outBuffers.push_back(mesh.swBvhParentBuffer);
         }
@@ -116,7 +114,6 @@ class RendererMeshSystem : NoCopy{
             in MeshResources mesh = entry.second;
             if(!mesh.blas.valid())
                 continue;
-            // This predicate consumes only build/revision state; the graph output below retains the BLAS.
             const b8 nativeBuildsBlas = MeshAccelerationStatePolicy().requiresBlasUpdate(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision);
             outStates.push_back(MeshBlasGraphState(mesh.meshName, mesh.blas, mesh.blasBackingFresh, nativeBuildsBlas));
         }

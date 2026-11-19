@@ -581,7 +581,6 @@ void VerifyAssetsGraphics_ConcreteShaderAdmissionRejectsWrongStageAndPreservesLo
     TestValueSlot<ComputeShaderAsset> computeStorage;
     mut ComputeShaderAsset compute = computeStorage.constructIn(testArena, computePath);
     ASSERT_TRUE(pixel.loadBinary(pixelBinary));
-    // A five-byte entry point puts SPIR-V at an unaligned payload offset.
     ASSERT_TRUE(compute.loadBinary(computeBinary));
     const usize pixelBytesAddr = TestDataAddress(pixel.bytecode());
     const usize computeBytesAddr = TestDataAddress(compute.bytecode());

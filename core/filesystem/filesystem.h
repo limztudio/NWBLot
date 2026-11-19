@@ -36,7 +36,6 @@ namespace FileSeekOrigin{
     };
 };
 
-// A cursor owns no backend resources. It is invalid after its filesystem is unmounted or destroyed.
 struct FileCursor{
     const IFilesystem* filesystem = nullptr;
     Name virtualPath;
@@ -47,24 +46,19 @@ struct FileCursor{
 interface IFilesystem{
 public:
     IFilesystem()noexcept = default;
-    // Commit pending writes through checked flush/unmount calls before destruction; destruction only releases resources.
     virtual ~IFilesystem()noexcept = default;
 
 
 public:
-    // A volume is one logical namespace; custom backends may ignore sizing hints.
     virtual b8 mount(const VolumeMountDesc& desc) = 0;
-    // Writable backends must persist pending writes before unmount.
     virtual b8 unmount() = 0;
     [[nodiscard]] virtual b8 mounted()const = 0;
     [[nodiscard]] virtual b8 writable()const = 0;
 
 
 public:
-    // Successful reads may stop at EOF and return the number of bytes copied.
     [[nodiscard]] virtual Expected<usize> readFile(const Name& virtualPath, u64 offset, void* data, usize bytes)const = 0;
     virtual b8 seekFile(FileCursor& cursor, i64 offset, FileSeekOrigin::Enum origin)const = 0;
-    // Writes replace the complete file and copy the supplied bytes before returning.
     virtual b8 writeFile(const Name& virtualPath, const void* data, usize bytes) = 0;
     virtual b8 writeFileDeferred(const Name& virtualPath, const void* data, usize bytes) = 0;
     virtual b8 flush() = 0;

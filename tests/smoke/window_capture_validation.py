@@ -1,6 +1,3 @@
-"""Window-capture result validation: image oracles per smoke mode and required, rejected, and skip log messages."""
-
-
 from window_capture_outcome import SmokeFailure  # noqa: E402
 from window_capture_logs import collect_log_delta, full_log_scope  # noqa: E402
 
@@ -50,7 +47,6 @@ def validate_transparent_csg_result(result, pose):
 def validate_texture_smoke_result(result):
     analysis = result.texture_smoke
     min_pixels = max(220, (result.width * result.height) // 4000)
-    # Require red bounce coverage across the receiver shadow region.
     min_receiver_red_pixels = max(256, analysis.receiver_pixel_count // 4)
     missing = []
     if analysis.red_pixels < min_pixels:

@@ -49,7 +49,6 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Finish the syntax walk first, so malformed later bytes still report InvalidStream before this semantic error.
 [[nodiscard]] static GpuCommandIrReplayResult SemanticFailure(GpuCommandIrStreamReader& reader, const GpuCommandIrReplayError::Enum error, const u64 recordIndex = Limit<u64>::s_Max)noexcept{
     while(reader.next()){}
     const GpuCommandIrStreamValidationResult& streamValidation = reader.validation();
@@ -95,7 +94,6 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     while(taskOrder < packetView.plan->taskCount && packetView.tasks[taskOrder] != record.task)
         ++taskOrder;
     if(taskOrder == packetView.plan->taskCount){
-        // Only a rejected backward record needs the earlier prefix to preserve its specific diagnostic.
         for(u32 taskIndex = 0u; taskIndex < searchBegin; ++taskIndex){
             if(packetView.tasks[taskIndex] == record.task)
                 return GpuCommandIrReplayError::TaskOrderMismatch;
@@ -125,7 +123,6 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     const GpuCompiledGraph::ReadView& compiledGraph,
     const GpuSubmissionPacketId packet
 )noexcept{
-    // One reader walk admits syntax and packet semantics; a syntax failure anywhere in the stream wins over a semantic failure.
     GpuCommandIrStreamReader reader(bytes);
     if(reader.validation().failed())
         return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::InvalidStream, reader.validation(), reader.validation().recordIndex);
@@ -160,7 +157,6 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 
         const b8 raster = GpuCommandIrDetail::IsRasterOpcode(decoded.opcode);
         const GpuSubmissionPacketId recordPacket = raster ? decoded.raster.packet : decoded.builtin.packet;
-        // The packet is a self-contained scope; other packets only pass the reader's syntax checks.
         if(recordPacket != packet){
             ++recordIndex;
             continue;

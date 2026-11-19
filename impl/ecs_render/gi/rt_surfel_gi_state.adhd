@@ -51,7 +51,6 @@ static_assert(s_ShaderSurfelRaysPerSurfel >= s_ShaderSurfelGuideBinCount);
 
 
 class RtSurfelGiState{
-    // Device-lifetime, heap-only one-bounce surfel GI stays outside resizable frame targets.
     public BindingLayoutHandle m_surfelHeapBindingLayout;
     public ShaderHandle m_surfelSpawnShader;
     public ComputePipelineHandle m_surfelSpawnPipeline;
@@ -63,34 +62,27 @@ class RtSurfelGiState{
     public ComputePipelineHandle m_surfelTracePipeline;
     public ShaderHandle m_surfelTraceCsgShader;
     public ComputePipelineHandle m_surfelTraceCsgPipeline;
-    // Compute gather avoids frames-in-flight pool races with deferred lighting.
     public ShaderHandle m_surfelResolveShader;
     public ComputePipelineHandle m_surfelResolvePipeline;
-    // Surface-gated upsample from half-resolution irradiance.
     public ShaderHandle m_surfelUpsampleShader;
     public ComputePipelineHandle m_surfelUpsamplePipeline;
     public ShaderHandle m_surfelTraceBuildArgsShader;
     public ComputePipelineHandle m_surfelTraceBuildArgsPipeline;
-    // HW trace uses the TLAS instead of the SW BVH.
     public ShaderHandle m_surfelTraceHwShader;
     public ComputePipelineHandle m_surfelTraceHwPipeline;
     public ShaderHandle m_surfelTraceCsgHwShader;
     public ComputePipelineHandle m_surfelTraceCsgHwPipeline;
-    // Device-lifetime pool, hash heads, and counters; initialized once.
     public BufferHandle m_surfelPoolBuffer;
     public BufferHandle m_surfelGuidePoolBuffer;
     public BufferHandle m_surfelCellHeadBuffer;
     public BufferHandle m_surfelCounterBuffer;
     public BufferHandle m_surfelTraceIndirectArgsBuffer;
     public BufferHandle m_surfelFreeListBuffer;
-    // Previous-frame field prevents read/write feedback during tracing.
     public BufferHandle m_surfelPoolSnapshotBuffer;
     public BufferHandle m_surfelCellHeadSnapshotBuffer;
-    // Async-safe counter readback. The graph-owned copy task publishes this only after its packet accepts.
     public BufferHandle m_surfelCounterReadback;
     public BufferHandle m_surfelConstants;
 
-    // Descriptor generations retire before their backing buffers.
     public GpuDescriptorHandle m_surfelConstantsHeapHandle = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle m_surfelPoolHeapHandle = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle m_surfelGuidePoolHeapHandle = GpuDescriptorHandleInvalid();
@@ -106,7 +98,6 @@ class RtSurfelGiState{
     public u32 m_surfelTraceGeometryFailureFlags = 0u;
     public u32 m_surfelPoolCapacity = s_ShaderSurfelPoolCapacity;
     public u32 m_surfelHashCellCount = s_ShaderSurfelHashCellCount;
-    // Ray-rotation and age counter.
     public u32 m_surfelFrameIndex = 0u;
 
     public b8 m_surfelTraceHwPipelineFailed = false;
@@ -123,9 +114,7 @@ class RtSurfelGiState{
     public b8 m_surfelAgeFreePipelineFailed = false;
     public b8 m_surfelSpawnPipelineFailed = false;
     public b8 m_surfelEnabled = false;
-    // First trace uses all surfels; later traces use the update divisor.
     public b8 m_surfelSeeded = false;
-    // Retries graph-owned resource clears after a rejected packet.
     public b8 m_surfelResourcesNeedClear = false;
     public b8 m_surfelResourcesClearPending = false;
 }

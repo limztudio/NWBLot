@@ -337,7 +337,6 @@ template<typename StatisticsT>
 
     const FrameGraphPhysicalQueueSubmissionRuntimeStatistics& submission = statistics.submission;
     const FrameGraphSubmissionRuntimeStatistics& ownerSubmission = ownerStatistics.submission;
-    // Acceptance and per-queue snapshots order packets differently, so float sums may differ by 1 ULP; counts stay exact.
     return
         submission.acceptedPacketCount <= ownerSubmission.acceptedPacketCount
         && submission.acceptedTaskCount <= ownerSubmission.acceptedTaskCount
@@ -372,8 +371,6 @@ template<typename StatisticsT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Default-context copies retain the complete original validation order and compiler FP lowering.
-// Exceptional values and non-native targets use these boundaries before packed comparisons.
 [[nodiscard]] FOUNDATION_NOINLINE static b8 ScalarIsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statistics)noexcept{
     if(!__hidden_frame_graph_statistics_validators::RuntimeStatisticsCountsAreValid(statistics))
         return false;
@@ -450,7 +447,6 @@ template<typename StatisticsT>
 }
 
 b8 IsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statistics)noexcept{
-    // The Windows standard library may under-align arrays of vector types.
     alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, __hidden_frame_graph_statistics_validators::s_RuntimePackedDurationCount> durations = {
         VectorDoubleSet(statistics.compile.declarationSeconds, statistics.compile.analysisSeconds, statistics.compile.validationSeconds, statistics.compile.dependencyAnalysisSeconds),
         VectorDoubleSet(statistics.compile.hazardAnalysisSeconds, statistics.compile.topologicalOrderSeconds, statistics.compile.queueAssignmentSeconds, statistics.compile.planningSeconds),

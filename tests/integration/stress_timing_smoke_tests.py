@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-"""Strict presentation measurement replay and acquisition failure retention; never launch a renderer."""
-
 
 import json
 from pathlib import Path
@@ -200,7 +198,6 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 smoke.parse_args(self.argv + [LIT_SOFTWARE_SHADOW_CAPTURE_CADENCE, name])
 
-
     def test_reference_launch_explicitly_overrides_direct_stress_performance_defaults(self):
         args = smoke.parse_args(self.argv + [LIT_SHADOW_RECEIVER_RESOLUTION, LIT_HALF, LIT_SURFEL_GI_RESOLVE_RESOLUTION, LIT_HALF])
         inherited = { LIT_NWB_SHADOW_RECEIVER_RESOLUTION: LIT_QUARTER, LIT_NWB_SURFEL_GI_RESOLVE_RESOLUTION: LIT_QUARTER, LIT_NWB_CAUSTIC_PHOTON_GRID_DIVISOR: "4", LIT_NWB_SHADOW_TRANSPARENT_SAMPLING: "temporal_one",
@@ -332,7 +329,6 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
             patch.object(smoke.RendererWorkloadLogPolicy, LIT_DEVICE_MATERIAL_SIGNATURE, return_value={}):
             return smoke.acquire(args, self.output)
 
-
     def test_acquisition_rejects_smaller_budget_when_256_mib_was_requested_and_preserves_log(self):
         args = smoke.parse_args(self.argv + [LIT_SOFTWARE_SHADOW_BUDGET_MIB, LIT_N_256])
         text = shadow_record(budget_bytes=128 * 1024 * 1024) + "\n" + valid_log()
@@ -342,8 +338,6 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
 
 
 class StressWorkloadTests(unittest.TestCase):
-
-
     def test_requested_profile_and_actual_spawn_counts_must_match(self):
         for observed, requested in ((5, 10), (10, 5), (10, 0), (10, 11)):
             with self.subTest(observed=observed, requested=requested), self.assertRaises(smoke.SmokeFailure):

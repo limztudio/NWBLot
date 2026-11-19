@@ -12,7 +12,6 @@
 
 type PaintVector<T> = Vector<T>;
 
-// Share of free space placed before an item to center it, or the midpoint of an extent.
 const f32 s_RectCenterFraction = 0.5f;
 const f64 s_RectCenterFractionF64 = 0.5;
 const f32 s_UiMaxFloat = 3.40282346638528859812e+38f;
@@ -63,7 +62,6 @@ class Insets{
     public f32 bottom = 0.0f;
 }
 
-// Input colors use linear RGB and straight alpha; frozen vertices use premultiplied alpha.
 class Color{
     public f32 r = 1.0f;
     public f32 g = 1.0f;
@@ -92,13 +90,11 @@ class DrawCommand{
     public u32 glyphPageIndex = 0xffffffffu;
     public u32 sdfPageIndex = 0xffffffffu;
     public u32 sdfChannel = 0u;
-    // Base paint is layer zero; higher layers render later without changing owned index or image bindings.
     public u32 layer = 0u;
     public u32 textureImageIndex = 0xffffffffu;
     public PaintMaterial material = PaintMaterial::Solid;
 }
 
-// Typed references identify assets; this copy captures atlas metadata, not loaded/GPU resource ownership.
 class SkinBindingRecord<TUiSkin, TTexture>{
     public AssetRef<TUiSkin> skin;
     public AssetRef<TTexture> texture;

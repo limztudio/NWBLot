@@ -42,7 +42,6 @@ void StateTracker::rollbackRecordingAttempt()noexcept{
     if(!m_recordingAttemptActive)
         return;
 
-    // Journaling precedes the throwing insertion, so a missing key is the valid unwind state for an unpublished entry.
     for(const auto texture : m_attemptPermanentTextures){
         const auto found = m_permanentTextureStates.find(texture);
         if(found != m_permanentTextureStates.end())
@@ -178,8 +177,6 @@ void StateTracker::appendKeepInitialStateBarriers(TrackedCommandBuffer& commandB
                 entry.state = desc.initialState;
             }
         }
-        // The retained resource flag describes the entire allocation.
-        // Restoring a partial native import must not claim that bytes whose state was never known have also reached the initial state.
         if(buffer.isRetainedStateKnown() || hasExplicitBufferState(&buffer))
             commandBuffer.m_resourceReferences.appendBufferStateCommit(buffer);
     }

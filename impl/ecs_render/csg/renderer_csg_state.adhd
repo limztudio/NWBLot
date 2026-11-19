@@ -10,7 +10,6 @@
 
 
 class RendererCsgState : NoCopy{
-    // CSG layouts are push-only; resources use the global heap.
     public BindingLayoutHandle m_clipBindingLayout = BindingLayoutHandle();
     public BindingLayoutHandle m_intervalPeelBindingLayout = BindingLayoutHandle();
     public BindingLayoutHandle m_receiverSpanBuildBindingLayout = BindingLayoutHandle();

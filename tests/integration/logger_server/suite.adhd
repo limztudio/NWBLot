@@ -534,7 +534,6 @@ void VerifyLoggerServerCrash_WindowsCrashPackageDecodesGpuDetectiveCaptureInProc
 
     String archive = "";
     BeginArchiveWithManifest("gpu-detective-test", s_Windows, s_Crash, s_WindowsExceptionCategory, 0xC0000005u, ManifestEventField::Include, ManifestTriggerFields(), archive);
-    // Malformed RGD input must report decode failure without aborting crash ingest.
     AppendArchiveFile(s_GpuDetectiveCaptureFileName, "not a valid radeon gpu detective capture\n", archive);
 
     const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive));
@@ -542,7 +541,6 @@ void VerifyLoggerServerCrash_WindowsCrashPackageDecodesGpuDetectiveCaptureInProc
 
     String report = "";
     ASSERT_TRUE(ReadServerSymbolicationText(group, stem, report));
-    // The decoder always emits the section header before reporting invalid input.
     EXPECT_TRUE(Contains(StringView(report), "[gpu_detective]"));
     EXPECT_TRUE(Contains(StringView(report), "status=decode_failed"));
 

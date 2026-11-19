@@ -27,10 +27,6 @@ b8 GpuAcceptedQueueFrontierValidator::Validate(const GpuTaskGraph::DeclarationRe
         if(!task.scheduling.joinsAcceptedQueueFrontier)
             continue;
 
-        // Late recovery/finalization joins the latest accepted queue tokens at submission time.
-        // It must not inherit a graph prerequisite whose rejection could make the join unavailable.
-        // Scheduling edges are a reduced subset of these raw edges, so rejecting every raw incoming edge also covers inferred HazardDomain prerequisites.
-        // An empty reduced incoming row proves that the raw graph has no prerequisite either.
         if(incomingOffsets[task.id.index] != incomingOffsets[task.id.index + 1u]){
             for(const GpuTaskDependencyEdge& edge : edges){
                 if(edge.consumer == task.id){

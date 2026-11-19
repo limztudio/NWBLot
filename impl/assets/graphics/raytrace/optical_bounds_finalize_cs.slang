@@ -92,7 +92,6 @@ uint nwbOpticalFixedBits(const int value, const int exponent){
     return sign | (uint(resultExponent + NWB_OPTICAL_BOUNDS_EXPONENT_BIAS) << NWB_OPTICAL_BOUNDS_MANTISSA_BITS) | (significand & NWB_OPTICAL_BOUNDS_FRACTION_MASK);
 }
 
-// Four 24-bit significand products, represented by low/high 32-bit words.
 void nwbOpticalMantissaProducts(const uint4 a, const uint4 b, out uint4 low, out uint4 high){
     const uint4 aLow = a & 0xfffu;
     const uint4 bLow = b & 0xfffu;

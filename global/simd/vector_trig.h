@@ -70,7 +70,6 @@ FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL SinReplicated(SIMDVector
     return VectorDoubleReplicate(Sin(VectorDoubleGetX(value)));
 }
 
-// Uniform consumers evaluate each binary64 primitive once before broadcasting its result.
 FOUNDATION_INLINE void FOUNDATION_SIMD_CALL SinCosReplicated(SIMDVectorDouble& outSin, SIMDVectorDouble& outCos, SIMDVectorDouble value)noexcept{
     outSin = VectorDoubleReplicate(Sin(VectorDoubleGetX(value)));
     outCos = VectorDoubleReplicate(Cos(VectorDoubleGetX(value)));

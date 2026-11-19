@@ -1,4 +1,3 @@
-"""Project and validate the captured CSG global-illumination image evidence."""
 import math
 import statistics
 
@@ -33,7 +32,6 @@ EXPECTED_EXTENT = (1280, 900)
 class CsgGiImageEvidence:
     @staticmethod
     def project_point(x, y, z):
-        # Static camera at x=0, y=1.3, z=-5.5 with a 60-degree vertical FOV.
         scale = EXPECTED_EXTENT[1] / (2.0 * math.tan(math.pi / 6.0) * (z + 5.5))
         return round(EXPECTED_EXTENT[0] * 0.5 + x * scale - 0.5), round(EXPECTED_EXTENT[1] * 0.5 - (y - 1.3) * scale - 0.5)
 
@@ -50,7 +48,6 @@ class CsgGiImageEvidence:
             rgb = [tuple(rows[y][x][channel] for x, y in sorted(pixels)) for channel in range(3)]
             means = [statistics.fmean(channel) for channel in rgb]
             metrics[name] = { LIT_SAMPLES: len(pixels), LIT_MEAN_RGB: means, "median_rgb": [statistics.median(channel) for channel in rgb], LIT_BLUE_EXCESS: means[2] - means[0], LIT_GREEN_EXCESS: means[1] - means[0], }
-        # Interior grids catch missing passage/cap columns that a central mean can hide behind bright surviving pixels.
         for name, z, first_x, channel, minimum in ((LIT_VISIBLE_PASSAGE, 1.0, -1.8, 2, 15.0), (LIT_VISIBLE_CAP, 0.4, 1.05, 1, 25.0)):
             pixels = {CsgGiImageEvidence.project_point(first_x + ix * 0.1, 0.85 + iy * 0.1125, z) for iy in range(9) for ix in range(9)}
             signals = [statistics.fmean(rows[y + dy][x + dx][channel] - rows[y + dy][x + dx][0] for dy in range(-1, 2) for dx in range(-1, 2)) for x, y in sorted(pixels)]
@@ -74,7 +71,6 @@ class CsgGiImageEvidence:
                 raise SmokeFailure(f"ordinary reference has insufficient {region} GI signal: {expected:.3f}")
             if expected - uncut[region][signal] < minimum:
                 raise SmokeFailure(f"uncut control does not distinguish {region} from the ordinary reference")
-            # Compare converged regional color energy across different instance orders.
             tolerance = max(10.0, expected * 0.30)
             if abs(cut[region][signal] - expected) > tolerance:
                 raise SmokeFailure(f"CSG {region} differs from ordinary carved geometry: " f"reference={expected:.3f}, cut={cut[region][signal]:.3f}, tolerance={tolerance:.3f}")
@@ -122,4 +118,3 @@ class CsgGiImageEvidence:
         expected_green = reference[LIT_MIXED_PASSAGE][LIT_MEAN_RGB][1]
         if cut[LIT_MIXED_PASSAGE][LIT_MEAN_RGB][1] - expected_green > max(8.0, expected_green * 0.30):
             raise SmokeFailure("the removed green open surface contributes false GI in the mixed-mesh passage")
-

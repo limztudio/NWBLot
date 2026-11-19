@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise nested plain popups and parent-local combo/search/context overlays."""
+
 from __future__ import annotations
 
 import json

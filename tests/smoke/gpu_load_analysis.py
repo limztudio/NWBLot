@@ -1,5 +1,3 @@
-"""Analyze GPU engine load and retained publication windows."""
-
 import math
 import re
 import statistics
@@ -13,7 +11,6 @@ VALID_STATUSES = (0, 1)
 class GpuLoadAnalysis:
     @staticmethod
     def reduce_instances(items, fixture_pid):
-        """Keep per-engine sums separate; engines execute concurrently."""
         engines, invalid, unmatched = {}, [], []
         for item in items:
             name, status, value = item["instance"], item["status"], item.get("value")
@@ -39,7 +36,6 @@ class GpuLoadAnalysis:
             raise SmokeFailure("telemetry lacks retained publication-header observations")
         if any(not math.isfinite(value) or value <= 0 for value in durations[start:stop]):
             raise SmokeFailure("telemetry retained publication durations must be finite and positive")
-        # Log headers arrive after their publication interval.
         return observations[start] - durations[start], observations[stop - 1]
 
     @staticmethod

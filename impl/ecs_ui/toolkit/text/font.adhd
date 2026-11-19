@@ -295,12 +295,10 @@ void ReportUiFontCloseError(in StringView message){
 type SharedFontFace = Shared<FontFace>;
 type PlacedGlyph = PlacedGlyphRecord<SharedFontFace>;
 
-// Shaping and rasterization mutate the native font handles on their owning UI thread.
 [ordered]
 class FontFace : NoCopy{
     private AssetRef<Font> m_identity = AssetRef<Font>();
     private u64 m_generation = 0u;
-    // The native faces borrow these bytes for their full lifetime.
     private Vector<u8> m_sourceBytes;
     private UiFreeTypeFace m_freeType = UiFreeTypeFace();
     private HarfBuzzFont m_hbFont = HarfBuzzFont();
@@ -390,7 +388,6 @@ class FontFace : NoCopy{
     }
 }
 
-// Allocation failure is separate from a face rejected by the font SDK.
 [cpp_unwind]
 Expected<SharedFontFace> MakeFontFace(in SharedPool pool, in FontSource source){
     Expected<SharedFontFace> face = pool.make<FontFace>();

@@ -370,7 +370,6 @@ int MainLogic(NWB::Core::Alloc::ScratchArena& scratchArena, const LoaderOptions&
 
 template<typename CharT>
 int EntryPoint(const isize argc, CharT** argv, void* inst){
-    // Capture early startup failures; configure uploads after CLI and logger setup.
     const usize crashArenaReserveSize = CrashArena::StructureAlignedSize(s_CrashArenaPayloadSize);
     CrashArena crashArena(s_CrashReportingArena, crashArenaReserveSize);
     const b8 crashReportingInstalled = InstallCrashReporting(crashArena);

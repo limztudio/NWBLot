@@ -209,7 +209,6 @@ EditBoxResult UiEditBoxHost::editBorrowed(in WidgetState widget, in EditBoxOptio
             inputMethod = event.kind == UiEditBoxEventKind::Native;
         }
     }
-    // Earlier edit intentions cancel transfers before a completion can mutate their original selection.
     if(this.m_clipboard.pending() && this.m_clipboardOwner == owner){
         if(!result.focused){
             if(!this.m_clipboard.cancel())
@@ -448,7 +447,6 @@ b8 UiEditBoxHost::applyAction(in EditBoxOptions options, in EditAction action, m
         navigation.value().state.reset();
     MergeUiEditActionToResult(action, result);
     if(action != EditAction::Submit || model.externalRevision() != externalRevision){
-        // Copied commits still apply at their ordered position; surrounding deletion cannot address this retired session.
         if(this.m_session.owner() == entry.owner && !this.m_session.cancel())
             TerminateInvariant();
     }

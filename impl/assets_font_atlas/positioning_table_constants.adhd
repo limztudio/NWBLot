@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Byte offsets and sizes below follow the big-endian OpenType kern, GPOS and GDEF table layouts.
 const u32 s_FontAtlasValidationWorkBudget = 1048576u;
 
 const u32 s_FontAtlasOtU16Bytes = 2u;
@@ -20,7 +19,6 @@ const u32 s_FontAtlasOtRangeRecordBytes = 6u;
 const u32 s_FontAtlasOtRangeRecordEndOffset = 2u;
 const u32 s_FontAtlasOtRangeRecordValueOffset = 4u;
 const u32 s_FontAtlasOtTagRecordBytes = 6u;
-// List count plus the first record's tag lands on that record's Offset16.
 const u32 s_FontAtlasOtTagListFirstOffsetField = 6u;
 
 const u32 s_FontAtlasKernHeaderBytes = 4u;
@@ -28,7 +26,6 @@ const u32 s_FontAtlasKernTableCountOffset = 2u;
 const u32 s_FontAtlasKernMaxTableCount = 65535u;
 const u32 s_FontAtlasKernSubtableHeaderBytes = 6u;
 const u32 s_FontAtlasKernSubtableLengthOffset = 2u;
-// Coverage sits at the same offset in the Microsoft and Apple subtable headers.
 const u32 s_FontAtlasKernSubtableCoverageOffset = 4u;
 const u32 s_FontAtlasKernFormatShift = 8u;
 const u32 s_FontAtlasKernPairListHeaderBytes = 8u;
@@ -104,7 +101,6 @@ const u32 s_FontAtlasLangSysFeatureCountOffset = 4u;
 const u32 s_FontAtlasLangSysNoRequiredFeature = 65535u;
 const u32 s_FontAtlasScriptHeaderBytes = 4u;
 const u32 s_FontAtlasScriptLangSysCountOffset = 2u;
-// Script header plus the first LangSysRecord tag lands on that record's Offset16.
 const u32 s_FontAtlasScriptFirstLangSysOffsetField = 8u;
 const u32 s_FontAtlasFeatureHeaderBytes = 4u;
 const u32 s_FontAtlasFeatureLookupCountOffset = 2u;

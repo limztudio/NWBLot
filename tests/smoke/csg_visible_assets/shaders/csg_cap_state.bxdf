@@ -23,7 +23,6 @@ half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
     const uint rawCount = nwbHeapStorageImage2DArrayUint2(slots.z).Load(int3(pixel, 0)).x;
     const NwbCsgRemovedCapSample cap = nwbCsgSampleNearestRemovedCap(samplePixel, uint4(0u, 0u, width, height), slots, NWB_CSG_INVALID_RECEIVER_INDEX);
     const float depth = nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.w).Load(int3(pixel, 0)).r;
-    // RGB separates interval production, radius-one cap selection, and completed G-buffer depth ownership.
     return half3(rawCount > 0u ? 1.0h : 0.0h, cap.visible ? 1.0h : 0.0h, cap.visible && cap.depth == depth ? 1.0h : 0.0h);
 #else
     return half3(0.0h);

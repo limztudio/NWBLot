@@ -100,7 +100,6 @@ void CpuTaskScheduler::validateWaitLocked(const TaskHandle handle, const CpuTask
         if(&current->scheduler == this)
             visit(current->task);
     }
-    // Dependent tasks and structured parents cannot complete until the current execution finishes.
     for(usize cursor = 0u; cursor < m_searchStack.size(); ++cursor){
         const u32 index = m_searchStack[cursor];
         const TaskNode& node = m_nodes[index];

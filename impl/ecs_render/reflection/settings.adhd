@@ -13,25 +13,20 @@ class ReflectionSettings{
     public u32 temporalMaxSamples = s_ReflectionDefaultTemporalMaxSamples;
     public u32 samplingSeed = 0u;
     public u32 spatialRadius = s_ReflectionDefaultSpatialRadius;
-    // Reflected-path distance in world units, not camera-to-receiver distance.
     public f32 maxRayDistance = s_ReflectionDefaultMaxRayDistance;
     public f32 distanceFadeStart = s_ReflectionDefaultDistanceFadeStart;
     public f32 roughnessCutoff = s_ReflectionDefaultRoughnessCutoff;
     public u32 maxHardwareRaysPerFrame = s_ReflectionDefaultMaxHardwareRaysPerFrame;
-    // Scene queries per admitted path, including optional initial-medium discovery.
     public u32 maxOpticalQueries = s_ReflectionDefaultMaxOpticalQueries;
     public u32 screenMaxSteps = s_ReflectionDefaultScreenMaxSteps;
-    // Surface uncertainty, confidence, and edge-fade width.
     public f32 screenThickness = s_ReflectionDefaultScreenThickness;
     public f32 screenConfidenceThreshold = s_ReflectionDefaultScreenConfidenceThreshold;
     public f32 screenEdgeFade = s_ReflectionDefaultScreenEdgeFade;
-    // Linear HDR radiance for ordinary exterior misses.
     public f32x3u environmentTop = s_ReflectionDefaultEnvironmentTop;
     public f32x3u environmentBottom = s_ReflectionDefaultEnvironmentBottom;
     public ReflectionTraceMode traceMode = ReflectionTraceMode::Hybrid;
     public ReflectionDebugView debugView = ReflectionDebugView::None;
     public b8 diagnosticsEnabled = false;
-    // Lets stable smooth Hybrid tiles bypass proven screen misses. Off until measured.
     public b8 screenFeedbackEnabled = false;
     public b8 temporalEnabled = true;
     public b8 spatialFilterEnabled = true;
@@ -125,7 +120,6 @@ b8 SameReflectionTraceSettings(in ReflectionSettings first, in ReflectionSetting
     ;
 }
 
-// Settings are an external boundary; reject invalid values early.
 b8 ValidateReflectionSettings(in ReflectionSettings settings){
     const u32 maxTemporalSamples = 256u;
     const u32 maxSpatialRadius = 3u;
@@ -179,7 +173,6 @@ b8 ValidateReflectionSettings(in ReflectionSettings settings){
 }
 
 b8 SameReflectionEstimatorSettings(in ReflectionSettings first, in ReflectionSettings second){
-    // Diagnostics/filter leave the temporal estimator unchanged.
     return first.temporalEnabled == second.temporalEnabled && first.temporalMaxSamples == second.temporalMaxSamples && SameReflectionTraceSettings(first, second);
 }
 

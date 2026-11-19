@@ -87,7 +87,6 @@ void GpuTaskGraphAnalysis::reset()noexcept{
 }
 
 b8 GpuTaskGraphAnalysis::validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept{
-    // A successful analyze() publishes complete topology and scheduling adjacency before setting m_valid.
     FOUNDATION_ASSERT(
         !m_valid
         || (
@@ -177,7 +176,6 @@ b8 GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph,
         outAnalysis.m_diagnostic.resourceVersion = resourceVersion;
         return false;
     };
-    // Graph storage admits resource and completion identities and resource types before publication.
 #if defined(NWB_DEBUG)
     for(usize resourceIndex = 0u; resourceIndex < graph.resourceCount(); ++resourceIndex){
         const GpuTaskGraphResourceView resource = graph.resourceAt(resourceIndex);
@@ -200,7 +198,6 @@ b8 GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph,
                 return fail(GpuTaskGraphAnalysisStatus::InvalidExternalCompletionDependency, task.id);
             }
         }
-        // Task storage owns non-null external state snapshots with admitted consumer queue classes.
         FOUNDATION_ASSERT(task.externalStateSourceCount == 0u || task.externalStateSources);
 #if defined(NWB_DEBUG)
         for(usize sourceIndex = 0u; sourceIndex < task.externalStateSourceCount; ++sourceIndex)
@@ -212,7 +209,6 @@ b8 GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph,
                 return fail(GpuTaskGraphAnalysisStatus::InvalidResourceUse, task.id, {}, use.resource);
 
             const GpuTaskGraphResourceView resource = graph.resourceAt(use.resource.index);
-            // Only typed imports bind backend objects, and they never use HazardDomain.
             FOUNDATION_ASSERT(resource.type != GpuGraphResourceType::HazardDomain || !resource.hasBackendResource);
             if(
                 (resource.type != GpuGraphResourceType::HazardDomain && use.requiredState == ResourceStates::Unknown)
@@ -288,8 +284,6 @@ b8 GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph,
         if(dependencyAdjacency.edgeIndices.size() != outAnalysis.m_edges.size()){
             BuildTaskDependencyAdjacency(outAnalysis.m_edges, graph.taskCount(), scratchArena, dependencyAdjacency);
         }
-        // Physical hazards only connect earlier semantic-order accesses to the current task.
-        // Those forward edges preserve the already smallest stable topological order and cannot introduce a cycle.
         BuildSchedulingEdges(outAnalysis.m_edges, dependencyAdjacency, outAnalysis.m_topologicalOrder, scratchArena, outAnalysis.m_schedulingEdges);
         BuildSchedulingTaskAdjacency(
             outAnalysis.m_schedulingEdges,

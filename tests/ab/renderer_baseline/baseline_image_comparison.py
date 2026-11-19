@@ -1,5 +1,3 @@
-"""Read and compare the renderer baseline capture images."""
-
 from __future__ import annotations
 
 import argparse
@@ -66,7 +64,6 @@ class BaselineImageComparison:
             rows.append(bytes(rgb))
         return width, height, b"".join(rows)
 
-
     @staticmethod
     def write_bmp_rgb(path: Path, width: int, height: int, rgb: bytes) -> None:
         if width <= 0 or height <= 0 or len(rgb) != width * height * 3:
@@ -88,7 +85,6 @@ class BaselineImageComparison:
                     bgr[pixel + 2] = row[pixel]
                 output.write(bgr)
                 output.write(padding)
-
 
     @staticmethod
     def compare_bmp_rgb(reference_path: Path, candidate_path: Path, difference_path: Path) -> PixelDifference:
@@ -116,7 +112,6 @@ class BaselineImageComparison:
         total_pixels = reference_width * reference_height
         return PixelDifference(width=reference_width, height=reference_height, max_abs=max_abs, mean_abs=total_abs / len(reference_rgb), changed_pixels=changed_pixels, total_pixels=total_pixels,)
 
-
     @staticmethod
     def difference_failures(args: argparse.Namespace, difference: PixelDifference) -> List[str]:
         maximum_max_abs = 0 if args.require_exact else args.maximum_max_abs
@@ -130,4 +125,3 @@ class BaselineImageComparison:
         if maximum_changed_fraction is not None and difference.changed_fraction > maximum_changed_fraction:
             failures.append(f"changed fraction {difference.changed_fraction:.6f} exceeds {maximum_changed_fraction:.6f}")
         return failures
-

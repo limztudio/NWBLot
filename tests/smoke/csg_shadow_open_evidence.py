@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Validate open-shadow runtime receipts and image evidence."""
 
 import re
 
@@ -53,7 +52,6 @@ class CsgOpenShadowRuntimeEvidence:
             message = "\n".join(lines[start + 1:end]).strip("\n")
             if message != OPEN_CAPACITY_MESSAGE:
                 raise SmokeFailure("terminal65 requires the complete exact open-capacity flags=16 warning message")
-            # Waive only this exact severity and message pair.
             remaining = "\n".join(lines[:start] + lines[end:])
         elif warning_indices:
             raise SmokeFailure(f"{case}: valid open shadow emitted a warning")

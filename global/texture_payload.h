@@ -17,9 +17,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Linear UASTC block layouts and the internal cooked texture binary contract.
-
-
 namespace TextureDimension{
     static constexpr u8 s_TextureDimensionTexture2DBase = 0u;
     enum Enum : u8{
@@ -41,7 +38,6 @@ namespace TexturePayloadFormat{
     static constexpr u8 s_TexturePayloadFormatUastcLdr4x4Base = 0u;
     enum Enum : u8{
         UastcLdr4x4 = s_TexturePayloadFormatUastcLdr4x4Base,
-        // RGB-only ASTC HDR 4x4 bitstream in the Basis encoder.
         UastcHdr4x4,
     };
 };
@@ -61,13 +57,9 @@ namespace TexturePayloadFormat{
 namespace TextureAlphaMode{
     static constexpr u8 s_TextureAlphaModeOpaqueBase = 0u;
     enum Enum : u8{
-        // The primary texture stream has no meaningful alpha and samples as one.
         Opaque = s_TextureAlphaModeOpaqueBase,
-        // LDR UASTC stores alpha in its ordinary RGBA blocks.
         EmbeddedLdr,
-        // HDR color remains RGB-only while a single normalized alpha value is supplied at load time.
         ConstantUnorm8,
-        // HDR color is followed by a same-layout UASTC LDR alpha stream.
         SeparateUastcLdr4x4,
     };
 };
@@ -100,7 +92,6 @@ inline constexpr u32 s_UastcBlockWidth = 4u;
 inline constexpr u32 s_UastcBlockHeight = 4u;
 inline constexpr u32 s_UastcBytesPerBlock = 16u;
 inline constexpr u32 s_TextureCubeFaceCount = 6u;
-// UNORM8 255 is reserved for opaque mode; constant-alpha payloads use [0, 254].
 inline constexpr u32 s_OpaqueAlphaUnorm8 = 255u;
 inline constexpr u32 s_MaxConstantAlphaUnorm8 = s_OpaqueAlphaUnorm8 - 1u;
 
@@ -291,7 +282,6 @@ struct MipChainLayoutError{
 
     const u64 blocksX64 = DivideUp(static_cast<u64>(width), static_cast<u64>(s_UastcBlockWidth));
     const u64 blocksY64 = DivideUp(static_cast<u64>(height), static_cast<u64>(s_UastcBlockHeight));
-    // u32 extents keep each block axis within u32, so the block count fits u64.
     const u64 blockCount = blocksX64 * blocksY64;
     if(blockCount > Limit<u64>::s_Max / s_UastcBytesPerBlock)
         return MakeUnexpected(Failure{});
@@ -440,12 +430,11 @@ namespace TextureBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_TextureMagic = 0x54455831u; // TEX1
+inline constexpr u32 s_TextureMagic = 0x54455831u;
 inline constexpr u32 s_TextureVersion = 4u;
 
 static constexpr usize s_PackedAlignBytes = 1u;
 
-// alphaInfo stores its mode in bits 0..7 and the UNORM8 constant in bits 8..15; the high half must remain zero.
 #pragma pack(push, 1)
 struct HeaderBinary{
     u32 magic = s_TextureMagic;

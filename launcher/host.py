@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""HostProbe: Host platform/architecture probing and preset path layout."""
 
 from __future__ import annotations
 
@@ -14,8 +13,6 @@ from launcher.constants import (ARCH_AARCH64_ALIAS, ARCH_AMD64_ALIAS, ARCH_ARM64
 
 
 class HostProbe:
-    """Host platform/architecture probing and preset path layout."""
-
     @staticmethod
     def host_platform_name(system_name: Optional[str] = None) -> str:
         system = system_name or platform.system()

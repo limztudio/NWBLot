@@ -102,7 +102,6 @@ b8 TryHitEditCaretLineAndStop(in Span<EditCaretLine> lines, in Span<EditBoxCaret
     return true;
 }
 
-// Queries owned projections of validated caret geometry; copied hosts share line, midpoint and preedit endpoint behavior.
 Expected<usize> HitEditCaretGeometry(in Span<EditCaretLine> lines, in Span<EditBoxCaretStop> stops, in Point localPoint){
     u32 lineIndex = 0u;
     usize committedByte = 0u;
@@ -174,7 +173,6 @@ Expected<usize> ResolveEditCaretPageTarget(
     const Expected<EditBoxCaretStop> resolved = TryFindEditCaretStopByCommittedByte(stops, result.value());
     if(!resolved.has_value() || cast<usize>(resolved.value().lineIndex) >= lines.size())
         return MakeUnexpected(Failure());
-    // A page that cannot reach another row preserves the active caret, including a short document boundary.
     if(resolved.value().lineIndex == current.value().lineIndex)
         return activeCaret;
     return result.value();

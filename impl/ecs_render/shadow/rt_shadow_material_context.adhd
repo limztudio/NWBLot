@@ -152,7 +152,6 @@ Expected<PreparedShadowMaterialContextUploads> PreparedShadowMaterialContext::re
 
 
 b8 RayTraceMaterialResources::ensureShadowInstanceMaterialBuffer(in usize instanceCount){
-    // CPU-uploaded material context is shared by the exclusive HW/SW backends.
     if(this.m_shadow.m_shadowInstanceMaterialBuffer.valid() && this.m_shadow.m_shadowInstanceMaterialCapacity >= instanceCount)
         return this.ensureRayTraceMaterialContextHeapHandle(this.m_shadow.m_shadowInstanceMaterialBuffer.deref(), this.m_shadow.m_shadowInstanceMaterialHeapHandle);
 
@@ -180,7 +179,6 @@ b8 RayTraceMaterialResources::ensureShadowInstanceMaterialBuffer(in usize instan
 }
 
 b8 RayTraceMaterialResources::ensureShadowInstanceContextBuffer(in usize instanceCount){
-    // Shadow tracing needs an instance record for every gathered occluder.
     if(instanceCount == 0u)
         return !this.m_shadow.m_shadowInstanceBuffer.valid() || this.ensureRayTraceMaterialContextHeapHandle(this.m_shadow.m_shadowInstanceBuffer.deref(), this.m_shadow.m_shadowInstanceHeapHandle);
     if(this.m_shadow.m_shadowInstanceBuffer.valid() && this.m_shadow.m_shadowInstanceCapacity >= instanceCount)
@@ -209,7 +207,6 @@ b8 RayTraceMaterialResources::ensureShadowInstanceContextBuffer(in usize instanc
 }
 
 b8 RayTraceMaterialResources::ensureShadowMaterialTypedBuffer(in usize byteCount){
-    // Keep one word so the heap binding remains valid with no transparent occluders.
     const usize requiredByteCount = ResolveMaterialTypedBufferByteCount(byteCount, sizeof(u32));
     if(this.m_shadow.m_shadowMaterialTypedBuffer.valid() && this.m_shadow.m_shadowMaterialTypedCapacity >= requiredByteCount)
         return this.ensureRayTraceMaterialContextHeapHandle(this.m_shadow.m_shadowMaterialTypedBuffer.deref(), this.m_shadow.m_shadowMaterialTypedHeapHandle);
@@ -245,7 +242,6 @@ void RendererRayTracingSystem::confirmPreparedShadowMaterialContextUploads(){
         this.clearPreparedShadowMaterialContext();
 }
 
-// The frozen software traversal indexes this context, so a new context always drops it.
 b8 RendererRayTracingSystem::capturePreparedShadowMaterialContext(
     in PreparedShadowMaterialContextRoute route,
     in b8 staticScene,

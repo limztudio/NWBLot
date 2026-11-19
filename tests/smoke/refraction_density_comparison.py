@@ -1,5 +1,3 @@
-"""Evaluate paired refraction density timing results."""
-
 import statistics
 
 from renderer_workload_registry import AVBOIT as RENDERER_AVBOIT
@@ -72,4 +70,3 @@ class RefractionDensityComparison:
             "wall_rejected_trials": wall_rejected, "control_assessment": "Report control movement explicitly; host measurement floor is not established by this acquisition.",
             "combined_work_policy": RefractionDensityComparison.combined_work_policy(baseline_scheduling),
             "interpretation": "Combined work is normalized by completed GPU frames. Compositor is affected, not a control. Wall callback time includes pacing; it is neither isolated CPU cost nor measured presentation cadence. No FPS claim follows from these counters."}
-

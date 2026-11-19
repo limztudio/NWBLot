@@ -209,7 +209,6 @@ char* MutableB(){{ return g_MutableB; }}
             link_arguments = [*self.target_flags, *map(str, objects), str(self.options.runtime_object), LIT_O, str(executable)]
             if self.windows:
                 link_arguments.extend(["-Wl,/nodefaultlib:libcmt", "-Wl,/defaultlib:" + self.library])
-        # The runtime is deliberately last: Mach-O needs the wrapper to place its constructor first.
         link_command = [sys.executable, str(self.linker_wrapper), LIT_RUNTIME_OBJECT, str(self.options.runtime_object), "--", str(self.options.compiler), *link_arguments]
         require_success(run(link_command, self.directory), "Link startup fixture")
         image = executable.read_bytes()
@@ -281,4 +280,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

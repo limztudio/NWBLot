@@ -10,7 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Software-BVH build-state import owns the mesh software-BVH parent plus raytracing BVH sort-buffer graph imports.
 class FrameGraphSoftwareBvhBuildStateInputs{
     public in RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources;
     public b8 softwareTraceResourcesPrepared;
@@ -48,8 +47,6 @@ class FrameGraphSoftwareBvhBuildStateImporter : NoCopy{
     public Expected<FrameGraphSoftwareBvhBuildStateResult> declare(in FrameGraphSoftwareBvhBuildStateInputs inputs);
 }
 
-
-// Graph imports for the preflighted trace geometry buffers, trace material textures, their resource sets, and software BVH build state.
 class FrameGraphTraceGeometryResult{
     public Vector<GpuGraphResourceId> traceGeometry;
     public Vector<GpuGraphResourceId> hardwareTraceGeometry;

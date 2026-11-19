@@ -19,7 +19,6 @@ enum<u8> AvboitTargetFramebufferKind{
     Accumulation = 1
 }
 
-// Pass traits select timing, pipeline and framebuffer kind for the common alias-free/CSG record sequence.
 class AvboitComputeEmulationRecordTrait{
     public GpuTimingScopeDefinition timingScope;
     public MaterialPipelinePass pipelinePass;

@@ -50,7 +50,6 @@ Expected<SelectableMetrics> MeasureSelectable(in UiSkin skin, in SelectableStyle
     return metrics;
 }
 
-// Use the same display-scale visual bounds and resolved padding that sized the control.
 b8 PaintSelectable(
     mut PaintBuilder paint,
     mut TextService text,

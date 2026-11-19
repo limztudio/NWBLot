@@ -67,7 +67,6 @@ struct ArenaAllocatorTraits{
     using reference = T&;
     using const_reference = const T&;
 
-    // Storage transfers carry the arena that owns its allocation.
     using propagate_on_container_move_assignment = TrueType;
     using propagate_on_container_swap = TrueType;
     using is_always_equal = FalseType;

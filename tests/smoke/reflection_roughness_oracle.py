@@ -1,5 +1,3 @@
-"""Compute the independent GGX reflection reference."""
-
 from functools import lru_cache
 import math
 
@@ -47,7 +45,6 @@ class ReflectionRoughnessOracle:
         view = ReflectionRoughnessOracle.normalize((camera_x - point[0], 1.4 - point[1], -6.0))
         nv = -view[2]
         if roughness == 0.0:
-            # Smooth reflection intersects the emitter plane directly.
             direction = (-view[0], -view[1], view[2])
             distance = -8.0 / direction[2]
             hit_x, hit_y = point[0] + direction[0] * distance, point[1] + direction[1] * distance
@@ -72,7 +69,6 @@ class ReflectionRoughnessOracle:
             distribution = alpha_squared / (math.pi * denominator * denominator)
             masking = 1.0 / (1.0 + lambda_v + ReflectionRoughnessOracle.smith_lambda(nl, alpha))
             fresnel = MIRROR_F0 + (1.0 - MIRROR_F0) * (1.0 - vh) ** 5
-            # Parallel receiver and emitter normals cancel one NdotL against the BRDF denominator.
             total += distribution * masking * fresnel * nl * area / (4.0 * nv * distance_squared)
         return total
 

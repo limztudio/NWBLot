@@ -50,7 +50,6 @@ def capture_case(args, case):
     command.extend("--application-arg=" + argument for argument in args.application_arg)
     capture_args = WindowCaptureArguments(capture.STRICT_LOG_FAILURE_MESSAGES).parse_args(command)
     if case == LIT_TERMINAL65 and args.warning_policy == LIT_ENABLED:
-        # Only the warning-enabled terminal arm defers WARNING validation to the exact single flags=16 check below.
         capture_args.reject_log_message.remove(LIT_WARNING_TAG)
     environment = capture_environment("cut", "directional", "open")
     for key in tuple(environment):

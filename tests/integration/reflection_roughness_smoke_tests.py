@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Independent physics sanity checks and rejection cases for completed-history image acceptance."""
 
 import os
 from pathlib import Path
@@ -49,7 +48,6 @@ def reference_frame(roughness, scale=1.0, swap_colors=False, camera_x=0.0):
 
 class ReflectionRoughnessReferenceTests(unittest.TestCase):
     def test_exact_mirror_hits_virtual_emitter_and_rejects_wrong_position(self):
-        # Point x=-1.6*6/14 reflects exactly to emitter x=-1.6 at z=-8.
         self.assertAlmostEqual(ReflectionRoughnessOracle.integrated_radiance((-1.6 * 6 / 14, 1.4, 0), 0, 0), 0.95, places=6)
         self.assertEqual(ReflectionRoughnessOracle.integrated_radiance((0, 1.4, 0), 0, 0), 0)
         self.assertEqual(ReflectionRoughnessOracle.integrated_radiance((-1.6 * 6 / 14, 1.4, 0), 0, 1), 0)

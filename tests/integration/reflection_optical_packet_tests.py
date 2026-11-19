@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-"""Reflection/optical queue coverage, collection reuse, slice packet, and context transition analysis."""
-
 
 from pathlib import Path
 import sys

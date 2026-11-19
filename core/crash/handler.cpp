@@ -102,7 +102,6 @@ int RunCrashHandlerProcess([[maybe_unused]] const isize argc, [[maybe_unused]] t
         CrashDetail::CrashRequest request;
         if(!ReadAllWin32Handle(requestReadHandle, &request, sizeof(request)))
             break;
-        // Defensive: reject a corrupt/interleaved request (writer serialization should prevent this).
         if(!CrashDetail::CrashProtocol::IsCurrentCrashRequest(request))
             break;
 
@@ -138,7 +137,6 @@ int RunCrashHandlerProcess([[maybe_unused]] const isize argc, [[maybe_unused]] t
         CrashDetail::CrashRequest request;
         if(!ReadAllFileDescriptor(requestReadFd, &request, sizeof(request)))
             break;
-        // Defensive: reject a corrupt/interleaved request (writer serialization should prevent this).
         if(!CrashDetail::CrashProtocol::IsCurrentCrashRequest(request))
             break;
 

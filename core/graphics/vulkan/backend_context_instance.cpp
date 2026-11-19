@@ -194,7 +194,6 @@ b8 BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
         return false;
     }
 
-    // createDevice rebuilds extension sets; retain this instance capability separately.
     m_hdr10ColorSpaceExtensionEnabled = isInstanceExtensionEnabled(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
 
     {

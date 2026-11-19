@@ -226,7 +226,6 @@ class AvboitIntegrationProbeTask{
             || !commands.tryWriteBuffer(this.control.deref(), this.controlWords)
         )
             return false;
-        // Reused storage must return to neutral even when the next dispatch skips every XY cell.
         this.progress.stage = "volume clear and integration dispatch";
         commands.clearTextureFloat(this.volume.deref(), TextureSubresourceSet(), Color(1.0f, 1.0f, 1.0f, 1.0f));
         commands.setBufferState(this.extinction.deref(), ResourceStates::ShaderResource);
@@ -403,7 +402,6 @@ class RefractionTileProbeTask{
         verifyDense.setPipeline(this.verifyDense.deref()).setIndirectParams(this.arguments.deref());
         commands.setComputeState(verifyDense);
         this.heap.bindCompute(commands, this.verifyDense.deref());
-        // A valid reversed list distinguishes direct dense mapping from queue traversal without changing classifier output.
         RefractionPushConstants verifyPush = this.push;
         verifyPush.tileListSlot = this.denseTileListSlot;
         commands.setPushConstants(verifyPush);

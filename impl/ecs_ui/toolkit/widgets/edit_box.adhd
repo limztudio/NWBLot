@@ -21,7 +21,6 @@ TextLayoutStatus AdoptEditBoxShapingResult<T>(mut EditBoxView view, mut forward 
     return TextLayoutStatus::Success;
 }
 
-// The view owns its display text and the font versions used by its hard lines.
 [move_only]
 class EditBoxView{
     private String m_display;

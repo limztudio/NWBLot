@@ -16,7 +16,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Divisor must be positive.
 [[nodiscard]] inline constexpr i64 DivideFloorI64(const i64 value, const i64 divisor)noexcept{
     const i64 quotient = value / divisor;
     return quotient - (value % divisor < 0 ? 1 : 0);
@@ -27,7 +26,6 @@
     return quotient + (value % divisor > 0 ? 1 : 0);
 }
 
-// Value must be finite and within the finite f32 range.
 [[nodiscard]] inline f32 RoundF64ToF32Bound(const f64 value, const b8 upper)noexcept{
     const f32 rounded = static_cast<f32>(value);
     if(upper){

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Generate the deterministic source image and project scene manifest for the texture runtime smoke."""
 
 import argparse
 from pathlib import Path
@@ -40,7 +39,6 @@ asset.assets = {
 
 
 def texture_pixel(x: int, y: int) -> Tuple[int, int, int, int]:
-    # Red-dominant texels produce measurable indirect bounce on the white receiver.
     palette = ((244, 42, 42), (244, 42, 42), (244, 42, 42), (244, 42, 42), (240, 84, 42), (240, 84, 42), (52, 218, 104), (56, 112, 246),)
     tile_size = 8
     if x % tile_size == 0 or y % tile_size == 0:

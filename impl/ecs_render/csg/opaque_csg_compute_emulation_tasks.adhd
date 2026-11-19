@@ -38,7 +38,6 @@ b8 OpaqueCsgReceiverComputeEmulationGraphTaskPayload::record(mut CommandList com
     if(!frameSetupReady)
         return true;
 
-    // The imported output set is immutable; reject a corrupted plan.
     if(!this.plan.matches())
         return false;
 
@@ -83,7 +82,6 @@ b8 OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(mut CommandList comm
     if(!frameSetupReady)
         return true;
 
-    // Reject a corrupted retained plan.
     if(!this.plan.geometry.generated.matches())
         return false;
 
@@ -104,7 +102,6 @@ b8 OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(mut CommandList comm
     ViewportState deferredViewportState;
     deferredViewportState.addViewportAndScissorRect(this.targets.framebuffer.deref().getFramebufferInfo().getViewport());
     this.opaqueCsgTiming.emplace(this.graphics.gpuTiming(), s_TimingScopeOpaqueCsg, this.graphics.getDevice(), commands);
-    // Close the marker here; the sample callback owns finishTiming/discard.
     if(!FinishSplitGpuTimingMarker(this.opaqueCsgTiming))
         return false;
     MaterialPassDrawContext drawContext(

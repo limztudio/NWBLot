@@ -19,7 +19,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Whole-resource state filter. Entries keep the first input ordinal per kind/pointer; resources stay caller-owned.
 class CommandListResourceSelection final : NoCopy{
 public:
     struct Entry{

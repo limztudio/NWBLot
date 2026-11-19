@@ -8,8 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Owns zero-crossing splits with the shared edge cache (never welds source verts) and interpolated attributes, emitting the kept split triangles.
-// Keep side is distance >= 0; caller snaps |distance| <= boundaryEpsilon to zero first.
 Expected<b8, CsgDeformViabilityReason> ClipCsgDeformWallShell(
     in CsgDeformShape shape,
     in f32 boundaryEpsilon,

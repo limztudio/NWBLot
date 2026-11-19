@@ -219,7 +219,6 @@ b8 TryClaimContextState(
     if(inOutStateClaimCount < s_SmallStateClaims)
         return TryClaimSmallContextState(claim, inOutSmallStateClaims, inOutStateClaimCount);
     if(inOutStateClaimCount == s_SmallStateClaims){
-        // Small frames never clear or allocate the retained hash storage from an earlier large frame.
         inOutStateClaims.clear();
         if(inOutStateClaims.bucket_count() == 0u)
             inOutStateClaims.reserve(s_SmallStateClaims * 2u);

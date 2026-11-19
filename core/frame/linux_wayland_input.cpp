@@ -64,7 +64,6 @@ NWB_DECLARE_LINUX_KEY_SYMBOLS(WaylandKeySymbols, xkb_keysym_t, XKB_KEY);
 static void ReleaseKeymapResources(const i32 fd, void* const map, const u32 size)noexcept{
     const b8 unmapFailed = map && munmap(map, size) != 0;
     const i32 unmapError = unmapFailed ? errno : 0;
-    // Linux releases the descriptor before reporting close errors; retrying can close a reused descriptor.
     const b8 closeFailed = close(fd) != 0;
     const i32 closeError = closeFailed ? errno : 0;
     if(unmapFailed){
@@ -270,7 +269,6 @@ void WaylandFrameInput::OnKeyboardRepeatInfo(void* data, [[maybe_unused]] wl_key
 
 
 WaylandFrameInput::~WaylandFrameInput()noexcept{
-    // Seat proxies are released by destroy() before the display disconnects; the xkb objects do not depend on the display.
     if(m_xkbState)
         xkb_state_unref(m_xkbState);
     if(m_xkbKeymap)

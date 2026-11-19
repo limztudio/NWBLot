@@ -59,7 +59,6 @@ using namespace __hidden_gpu_task_scheduler_submission_bindings;
     timingPacketChains.reset();
     timingTicketIndices.reset();
     packetGeneration = range.first.generation;
-    // Match member allocation and destruction order so a single admitted range releases scratch storage in LIFO order.
     timingTickets.reserve(taskTimingTicketCount);
     submissionHooks.reserve(taskSubmissionHookCount);
     if(taskTimingTicketCount > s_InlineBindingCount){
@@ -84,7 +83,6 @@ using namespace __hidden_gpu_task_scheduler_submission_bindings;
             return false;
 
         if(timingAnchors){
-            // Declaration validity establishes the graph generation before index-only anchor membership.
             if(!timingAnchors->insert(binding.task.index).second)
                 return false;
         }
@@ -112,7 +110,6 @@ using namespace __hidden_gpu_task_scheduler_submission_bindings;
             for(const ResolvedTimingTicket& existing : timingTickets){
                 if(existing.timingTicket.get() != binding.timingTicket)
                     continue;
-                // One one-shot ticket may have semantic aliases only within the same merged packet.
                 if(existing.packet != packet)
                     return false;
                 ticketAlreadyBound = true;
@@ -146,7 +143,6 @@ using namespace __hidden_gpu_task_scheduler_submission_bindings;
         if(!packet.valid() || packet.index < range.first.index || static_cast<usize>(packet.index) >= rangeEnd)
             return false;
 
-        // Packet uniqueness also rejects duplicate task anchors: one native submission has one hook.
         if(submissionHookIndices){
             if(!submissionHookIndices->try_emplace(packet.index, submissionHooks.size()).second)
                 return false;
@@ -186,7 +182,6 @@ const QueueSubmissionPreSubmitHook* TaskSubmissionBindings::collectPacket(const 
         if(packet.generation == packetGeneration){
             const auto it = timingPacketChains->find(packet.index);
             if(it != timingPacketChains->end()){
-                // Links retain first authored occurrence, even when bindings interleave several packets.
                 for(usize index = it.value().first; index != Limit<usize>::s_Max; index = nextTimingTicket[index])
                     inOutTimingTickets.push_back(timingTickets[index].timingTicket);
             }

@@ -1,5 +1,3 @@
-"""Compare reflection roughness and related image evidence."""
-
 from reflection_image_analysis import ReflectionImageAnalysis
 from reflection_roughness_reference import frame_grid
 from window_capture_smoke import SmokeFailure
@@ -25,7 +23,6 @@ class ReflectionRoughnessImageEvidence:
 
     @staticmethod
     def compare_smooth_glass_scene(left, right, maximum_mean_error=0.30):
-        # Roughness only affects non-glass receivers, so both glass captures share the same stripe geometry.
         if left[:2] != right[:2]:
             raise SmokeFailure(LIT_MATCHED_SCENE_CAPTURES_HAVE_DIFFERENT_)
         width, height, rows = ReflectionImageAnalysis.validate_frame(left)
@@ -92,4 +89,3 @@ class ReflectionRoughnessImageEvidence:
         if not (0 <= error256 < error64 < error8) or error256 >= error8 * 0.8:
             raise SmokeFailure("8/64/256 accepted samples did not converge monotonically toward the independent GGX reference")
         return {"accepted_caps": [8, 64, 256], "normalized_reference_errors": [error8, error64, error256]}
-

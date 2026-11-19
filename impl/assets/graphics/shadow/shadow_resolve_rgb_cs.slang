@@ -2,9 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// RGB transmittance shares the opaque resolve source. The channel picks visibility and guidance at build.
-
-
 #define NWB_SHADOW_RESOLVE_CHANNELS NWB_SHADOW_RESOLVE_CHANNELS_RGB
 
 

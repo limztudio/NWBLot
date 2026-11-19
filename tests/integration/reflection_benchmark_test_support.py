@@ -1,6 +1,3 @@
-"""Shared fixtures for reflection benchmark tests."""
-
-
 def report(rows, cpu_frames=500):
     text = f"=== interval: {cpu_frames} frames / 0.500000s ===\n"
     for scope, total, samples in rows:

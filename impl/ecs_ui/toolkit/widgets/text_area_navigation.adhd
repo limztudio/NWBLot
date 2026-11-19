@@ -10,7 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shape the event's current model during the host loan. The resolver keeps no layout between keys.
 class TextAreaNavigationResolver : IEditNavigationResolver{
     private mut TextService m_text;
     private in Context m_context;

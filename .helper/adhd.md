@@ -21,6 +21,8 @@ When using `--depfile`, paths must be safe for both Ninja and Make depfiles. The
   - Use the exact 128-slash separator (`////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////`) between major file sections.
   - Keep exactly two blank lines before and after every file-scope 128-slash separator (except immediately after `// limztudio@gmail.com`, which has no blank line before the banner separator).
   - End every file with the closing 128-slash separator followed by exactly two newline terminators (`\r\n\r\n`, one blank line at EOF).
+- **No Comments**:
+  - Do not write explanatory, behavioral, section-heading, or workaround/hacky-fix comments in `.adhd` files. Use clear, descriptive names for functions, classes, types, constants, and variables instead. Preserve only `// limztudio@gmail.com`, exact 128-slash separators, and required third-party license notices.
 - **Indentation, Braces & Line Width**:
   - 4-space indentation (no tabs), K&R braces (`class Foo{`, `if(cond){`, `else{`), and a 260-character soft line width.
   - No space between closing `)` and trailing method qualifiers (`const`, `override`):

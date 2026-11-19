@@ -15,8 +15,6 @@
 
 NWB_VULKAN_BEGIN
 
-
-// AMD breadcrumb ring provides best-effort per-queue observations; physical queues may execute out of sequence.
 struct AmdBreadcrumbSlotRecord{
     u64 serial = 0u;
     usize markerHash = 0u;
@@ -45,14 +43,11 @@ struct AmdBreadcrumbStorage{
     VulkanAllocationHandle allocation = {};
     void* mappedMemory = nullptr;
     VulkanDetail::AmdBreadcrumbRing::Layout layout;
-    // Prevents concurrent recording from tearing marker records or per-queue reservation serials.
     Futex slotMutex;
     Optional<Metadata> metadata;
 
 
 public:
-    // The caller supplies a validated, non-empty ring layout.
-    // Both arrays allocate once with device-lifetime backing, so their spans fit the persistent arena.
     [[nodiscard]] b8 initializeMetadata(const VulkanDetail::AmdBreadcrumbRing::Layout& newLayout, const Name& allocationLog);
     [[nodiscard]] b8 initialize(VulkanAllocator& allocator, const GpuPhysicalQueueTopology& topology);
     void release(VulkanAllocator& allocator)noexcept;

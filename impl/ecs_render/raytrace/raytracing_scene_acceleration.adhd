@@ -83,11 +83,8 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
     LightSpaceShadowSceneGather lightSpaceGather(this.m_lightSpaceShadow, this.m_csgShapeRegistry, this.m_world);
     lightSpaceGather.begin(candidateCount, true);
     Vector<RayTracingInstanceDesc> instances;
-    // Instance descs hold raw BLAS pointers. The graph-owned TLAS retains handles until Shadow Preparation submits.
     Vector<RayTracingAccelStructHandle> instanceBlases;
-    // Kept parallel to instances for hardware InstanceID lookup.
     Vector<NwbRtInstanceMaterialGpu> instanceMaterials;
-    // All-occluder trace context; draw buffers hold one transparency class.
     InstanceGpuDataVector shadowInstanceData;
     MaterialTypedByteDataVector shadowMaterialTypedBytes;
     MaterialTypedConstantRangeMap shadowConstantTypedRanges;
@@ -118,7 +115,6 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
     this.m_rayTracingState.shadow.m_shadowMeshAttributeHandles.clear();
     this.m_rayTracingState.shadow.m_shadowMeshPositionHandles.clear();
     this.m_rayTracingState.shadow.m_shadowMeshCount = 0u;
-    // Gates transparent-shadow resource preparation.
     this.m_rayTracingState.sceneBvh.m_sceneHasTransparentOccluder = false;
     b8 staticScene = true;
     b8 contentComplete = true;
@@ -139,7 +135,6 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
             continue;
 
         const auto meshResult = ResolveRenderableMeshResources(meshSystem.value(), this.m_meshSystem, entity);
-        // An entity without a mesh attachment contributes no geometry to the scene.
         if(!meshResult.has_value() && meshResult.error() == RenderableMeshResolution::Absent)
             continue;
         if(!meshResult.has_value() || !meshResult.value().meshResources.blas.valid() || !meshResult.value().meshResources.triangleIndexBuffer.valid() || !meshResult.value().meshResources.attributeBuffer.valid()
@@ -148,11 +143,9 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
             opticalScene.markIncomplete();
             continue;
         }
-        // Runtime mesh updates disable static TLAS reuse.
         if(meshResult.value().resolvedMesh.runtime || meshResult.value().meshResources.runtimeMesh)
             staticScene = false;
 
-        // Reuse one table slot for instances sharing geometry.
         mut Buffer meshIndexBuffer = meshResult.value().meshResources.triangleIndexBuffer.deref();
         const usize meshKey = meshResult.value().meshResources.triangleIndexBuffer.identity();
         u32 meshSlot = 0u;
@@ -207,7 +200,6 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
             instanceDesc.transform = f32x3x4(objectToWorld);
         }
 
-        // Build material context in InstanceID order; unresolved materials remain opaque.
         const u32 meshInstanceIndex = cast<u32>(instances.size());
         NwbRtInstanceMaterialGpu instanceMaterial;
         InstanceGpuData shadowInstance;
@@ -219,7 +211,6 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
 
         const b8 transparent = (instanceMaterial.flags & RtInstanceMaterialFlag::Transparent) != 0u;
         const b8 refractive = (instanceMaterial.flags & RtInstanceMaterialFlag::Refractive) != 0u;
-        // Opaque candidates terminate RayQuery; transparent candidates retain material evaluation.
         if(!transparent)
             instanceDesc.setFlags(RayTracingInstanceFlags::ForceOpaque);
         instanceDesc.setInstanceMask(ResolveRayTracingInstanceMask(transparent, refractive));
@@ -285,7 +276,6 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
         }
     }
 
-    // TLAS and material context use separate static keys.
     u64 tlasStaticSceneHash = 0u;
     if(staticScene)
         tlasStaticSceneHash = ComputeTlasStaticSceneIdentity(Span<RayTracingInstanceDesc>(instances));
@@ -313,13 +303,11 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
             return false;
         }
         RayTracingAccelStructHandle tlas = tlasResult.value();
-        // Retire the old heap block before replacing the TLAS generation.
         RetireDescriptor(heap, this.m_rayTracingState.sceneBvh.m_tlasHeapHandle);
         this.m_rayTracingState.sceneBvh.m_tlas = tlas;
         RayTracingBuildPolicy().initializeCreatedSceneTlas(capacity, this.m_rayTracingState.sceneBvh.m_tlasBackingFresh, this.m_rayTracingState.sceneBvh.m_tlasMaxInstances);
     }
 
-    // Allocate a heap block only for a new TLAS generation.
     if(!IsDescriptorClass(this.m_rayTracingState.sceneBvh.m_tlasHeapHandle, GpuDescriptorClass::AccelStruct)){
         RetireDescriptor(heap, this.m_rayTracingState.sceneBvh.m_tlasHeapHandle);
         if(!AssignDescriptor(heap, GpuDescriptorClass::AccelStruct, DescriptorWriteItemRayTracingAccelStruct(0u, this.m_rayTracingState.sceneBvh.m_tlas.deref()), this.m_rayTracingState.sceneBvh.m_tlasHeapHandle)){
@@ -335,7 +323,6 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
         return false;
     const u64 hwMaterialContextHash = materialContextHash.value();
 
-    // Freeze the selected hardware instance stream before recording; accepted preparation publishes its cache identity.
     if(!canReuseTlas){
         if(!this.m_preparedSceneTlas.capture(this.m_rayTracingState, staticScene, tlasStaticSceneHash, Span<RayTracingInstanceDesc>(instances), Span<RayTracingAccelStructHandle>(instanceBlases))){
             error("RendererSystem: could not freeze scene TLAS build after preflight");
@@ -343,8 +330,6 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
         }
     }
 
-    // Publish semantic identity from the complete current gather, including cache-hit frames.
-    // Missing geometry or an unresolved surface hook must disable temporal consumers without changing acceleration-cache policy.
     if(!this.m_hardwareOpticalScene.prepare(opticalScene) || !this.m_hardwareOpticalScene.prepareRuntimeBounds(opticalScene, this.m_shaderSystem))
         return false;
     this.m_preparedSceneContentStamp = RayTracingSceneIdentityBuilder().buildSoftwareContentStamp(tlasStaticSceneHash, hwMaterialContextHash, opticalScene.contentHash(), csg.hasCsg, csg.identity, staticScene, contentComplete);
@@ -361,7 +346,6 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
     this.m_preparedSceneContentStamp = RayTracingSceneContentStamp();
     this.m_lightSpaceShadow.m_captureSceneTrusted = false;
 
-    // Software scene BVH and material context share hardware instance ordering.
     const Optional<mut MeshSystem> meshSystem = this.m_world.borrowSystem<MeshSystem>();
     if(!meshSystem.has_value())
         return false;
@@ -370,14 +354,11 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
     LightSpaceShadowSceneGather lightSpaceGather(this.m_lightSpaceShadow, this.m_csgShapeRegistry, this.m_world);
     lightSpaceGather.begin(candidateCount, false);
 
-    // Parallel instance records and CPU BVH build values.
     Vector<SceneSwBvhInstanceGpu> instances;
     Vector<SoftwareSceneRefitInstanceGpu> sceneRefitInputs;
     Vector<BufferHandle> sceneRefitRoots;
     Vector<SceneBvhPrimitiveCalculation> instanceBvhPrimitives;
-    // Parallel material records index scene-BVH leaves.
     Vector<NwbRtInstanceMaterialGpu> instanceMaterials;
-    // All-occluder trace context; draw buffers hold one transparency class.
     InstanceGpuDataVector shadowInstanceData;
     MaterialTypedByteDataVector shadowMaterialTypedBytes;
     Vector<PreparedSceneSwBvhMesh> preparedMeshes;
@@ -431,7 +412,6 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
         if(!meshResult.has_value() && meshResult.error() == RenderableMeshResolution::Absent)
             continue;
         const b8 meshReady = meshResult.has_value();
-        // Preflight selects pending mesh storage; the prepared build and traversal validate topology before use.
         const b8 topologyReady = meshReady && readinessPolicy.isTopologyReady(meshReady, meshResult.value().meshResources.swBvhTopologyBuilt, meshResult.value().meshResources.runtimeMesh, meshResult.value().meshResources.swBvhBuildPending);
         if(
             !meshReady
@@ -447,11 +427,9 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
             opticalScene.markIncomplete();
             continue;
         }
-        // Runtime mesh updates disable static scene-BVH reuse.
         if(meshResult.value().resolvedMesh.runtime || meshResult.value().meshResources.runtimeMesh)
             staticScene = false;
 
-        // Reuse one table slot for instances sharing geometry.
         mut Buffer meshNodeBuffer = meshResult.value().meshResources.swBvhNodeBuffer.deref();
         const usize meshKey = meshResult.value().meshResources.swBvhNodeBuffer.identity();
         u32 meshSlot = 0u;
@@ -539,7 +517,6 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
         instance.worldToObject = f32x3x4(worldToObject);
         instance.primitiveCount = ComputeMeshTrianglePrimitiveCount(meshResult.value().meshResources.meshletPrimitiveIndexCount);
 
-        // Build material context in scene-BVH leaf order; unresolved materials remain opaque.
         const u32 meshInstanceIndex = cast<u32>(instances.size());
         NwbRtInstanceMaterialGpu instanceMaterial;
         InstanceGpuData shadowInstance;
@@ -599,7 +576,6 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
         return true;
     }
 
-    // Topology hash includes bounds, transforms, and transparent-subtree class.
     u64 sceneStaticHash = 0u;
     if(staticScene)
         sceneStaticHash = RayTracingSceneIdentityBuilder().staticSceneHash(Span<SceneSwBvhInstanceGpu>(instances), Span<SceneBvhPrimitiveCalculation>(instanceBvhPrimitives));
@@ -620,7 +596,6 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
         SoftwareBvhBuilder builder(this.m_graphics, this.m_shaderSystem, this.m_rayTracingState.sceneBvh);
         if(!builder.ensureSceneBvhBuffers(instanceCount, materials) || !HasPreparedSceneBvhBuffers(this.m_rayTracingState, instanceCount))
             return false;
-        // CPU-build the small scene BVH and upload the shared node layout.
         Vector<u32> indices;
         Vector<u32> instanceLeafCost;
         Vector<SceneBvhNodeCalculation> buildNodes;
@@ -667,7 +642,6 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
     if(!this.m_softwareOpticalScene.prepare(opticalScene) || !this.m_softwareOpticalScene.prepareRuntimeBounds(opticalScene, this.m_shaderSystem))
         return false;
     this.m_preparedSceneContentStamp = RayTracingSceneIdentityBuilder().buildSoftwareContentStamp(sceneStaticHash, swMaterialContextHash, opticalScene.contentHash(), csg.hasCsg, csg.identity, staticScene, contentComplete);
-    // The material collector admits immutable uploaded assets/fixtures; runtime image bindings must also invalidate sampling trust.
     this.m_rayTracingState.shadow.m_softwareTransparentSampling.m_history.prepareScene(this.m_preparedSceneContentStamp);
     lightSpaceGather.publishSoftwareCaptureIdentity(instanceCount, Span<NwbRtInstanceMaterialGpu>(instanceMaterials), Span<InstanceGpuData>(shadowInstanceData), Span<u8>(shadowMaterialTypedBytes),
         Span<TextureHandle>(this.m_preparedShadowTraceMaterialSampledTextures), contentComplete);

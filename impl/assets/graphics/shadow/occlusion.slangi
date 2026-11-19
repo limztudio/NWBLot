@@ -11,7 +11,6 @@
 
 #include "binding_slots.h"
 
-// The G-buffer reads and shared TLAS come from the global descriptor heap; target-generation G-buffer images are selected by push slot.
 #include "../bindless/bindless_heap.slangi"
 
 
@@ -22,9 +21,6 @@
 #error "shadow RayQuery sources must provide the visibility StorageImage heap slot expression"
 #endif
 #define g_NwbShadowVisibility nwbHeapStorageImage2DArrayFloat4(NWB_SHADOW_RQ_VISIBILITY_STORAGE_SLOT)
-
-// The hardware opaque path commits its first FORCE_OPAQUE hit for a binary blocked/lit result and reads no geometry.
-// Colored software shadows fetch transparent-occluder geometry through the global descriptor heap.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

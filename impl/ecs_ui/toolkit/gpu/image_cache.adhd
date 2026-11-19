@@ -45,7 +45,6 @@ class GpuImageCache : NoCopy{
             + CountMissingCacheEntries(this.m_textureCache, snapshot.textureImages(), SameCachedGpuTexture);
         if(!ShouldTrimGpuImageCache(this.m_glyphCache.size(), this.m_sdfCache.size(), this.m_textureCache.size(), missing))
             return;
-        // Keep conflicting versions for validation. Frames keep their own references to evicted versions.
         RetainReferencedCacheEntries(snapshot.glyphPages(), SameCachedGpuGlyph, this.m_glyphCache);
         RetainReferencedCacheEntries(snapshot.sdfPages(), SameCachedGpuSdf, this.m_sdfCache);
         RetainReferencedCacheEntries(snapshot.textureImages(), SameCachedGpuTexture, this.m_textureCache);

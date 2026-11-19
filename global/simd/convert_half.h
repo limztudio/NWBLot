@@ -20,7 +20,6 @@ namespace HalfConvertDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// IEEE-754 binary32/binary16 layout; scalar fallback documents the shared bit contract.
 inline constexpr u32 s_F32ToF16OverflowBits = 0x47800000u;
 inline constexpr u32 s_F32ToF16UnderflowBits = 0x33000000u;
 inline constexpr u32 s_F32ToF16MinNormalBits = 0x38800000u;

@@ -369,7 +369,6 @@ void VerifyPaintImageFixture_NullThirdKindRejectsEarlierCandidatesAtomicallyAndA
         RecordUiPaintImageNullThirdPassInitial(self.m_builder, glyph, image);
         RecordUiPaintImageNullThirdPassInitial(reference, glyph, image);
         EXPECT_FALSE(UiPaintOverlayPrepareOneGlyphOneSdfAndImageSpan(self.m_builder, upgrade, sdf, invalidImages));
-        // Retry image admission in a second builder before either builder finishes.
         if(pass != 0u){
             RecordUiPaintImageNullThirdPassRetry(self.m_builder, upgrade, sdf, addition);
             RecordUiPaintImageNullThirdPassRetry(reference, upgrade, sdf, addition);

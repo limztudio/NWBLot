@@ -12,7 +12,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Empty target ranges are covered without inspecting the inputs.
 template<typename ItemT, typename EligibleT, typename BeginT, typename EndT>
 [[nodiscard]] inline b8 CoversHalfOpenRange(const u64 begin, const u64 end, const Span<const ItemT> intervals, EligibleT&& eligible, BeginT&& beginOf, EndT&& endOf)noexcept(
     noexcept(static_cast<b8>(eligible(DeclVal<const ItemT&>()) && beginOf(DeclVal<const ItemT&>()) <= DeclVal<u64&>() && endOf(DeclVal<const ItemT&>()) > DeclVal<u64&>()))
@@ -32,7 +31,6 @@ template<typename ItemT, typename EligibleT, typename BeginT, typename EndT>
     return true;
 }
 
-// Input intervals must be nonempty and sorted by begin.
 template<typename ItemT, typename BeginT, typename EndT, typename VisitT>
 inline void VisitOverlappingSortedIntervals(const Span<const ItemT> intervals, BeginT&& beginOf, EndT&& endOf, VisitT&& visit)noexcept(
     noexcept(static_cast<b8>(true && beginOf(DeclVal<const ItemT&>()) < DeclVal<u64&>()))

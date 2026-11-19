@@ -72,7 +72,6 @@ void X11KeyboardInput::synchronize(::Display* const display){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame X11 physical key-state query failed"));
         return;
     }
-    // Keys held while focus returns must remain repeats until their physical release.
     for(usize keycode = 0u; keycode < s_KeyStateCount; ++keycode)
         m_keyStates[keycode] = (static_cast<u8>(keymap[keycode / s_BitsPerByte]) & (1u << (keycode % s_BitsPerByte))) != 0u;
 }
@@ -129,7 +128,6 @@ void X11KeyboardInput::Dispatch(Frame& frame, const XKeyEvent& keyEvent, i32 act
     if(dispatchPhysical && keyEvent.keycode)
         frame.input().keyboardUpdate(key, static_cast<i32>(keyEvent.keycode), action, mods);
     if(dispatchText && action != InputAction::Release){
-        // Forwarded XIM commits bypass the ordinary physical key policy.
         if(dispatchPhysical && frame.input().keyboardTextBlocked(static_cast<i32>(keyEvent.keycode)))
             return;
         ITextInputService* const textInput = frame.tryTextInput();
@@ -145,7 +143,6 @@ void X11KeyboardInput::process(Frame& frame, const XKeyEvent& event, const b8 di
     const u64 receivedAtMs = DurationInMS<u64>(TimerNow());
     const b8 released = event.type == KeyRelease;
     if(m_filteredKeyHistory.isForwardedDuplicate(keycode, released, timestamp, serial, event.send_event != False, receivedAtMs)){
-        // The physical event already ran, but an unfiltered press must still reach XIM text lookup.
         if(dispatchText && !released)
             Dispatch(frame, event, InputAction::Press, true, false);
         return;
@@ -161,7 +158,6 @@ void X11KeyboardInput::process(Frame& frame, const XKeyEvent& event, const b8 di
         Dispatch(frame, event, action, dispatchText);
         return;
     }
-    // A coalesced autorepeat release must not return later as a real XIM-forwarded release.
     if(!dispatchText)
         m_filteredKeyHistory.recordFiltered(keycode, true, timestamp, serial, receivedAtMs);
     const auto& frameData = frame.data<Common::LinuxFrame>();

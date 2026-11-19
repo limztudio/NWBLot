@@ -71,8 +71,6 @@ b8 CommandList::resetTimerQuery(TimerQuery& query){
             claim.recordingID = m_currentCmdBuf->m_recordingID;
             claim.recordsReset = true;
 
-            // Device-timeline reset: recorded into the command buffer so the validation layer can order it before timestamp writes.
-            // vkCmdResetQueryPool is illegal inside a render pass instance.
             m_context.deviceDispatch.vkCmdResetQueryPool(m_currentCmdBuf->m_cmdBuf, query.m_queryPool, s_TimerQueryBeginIndex, s_TimerQueryTimestampCount);
             resetRecorded = true;
         }
@@ -179,8 +177,6 @@ Expected<TimerQueryRecordingToken> CommandList::beginTimerQuery(TimerQuery& quer
                 claim.resetAuthorizationSubmission = claim.consumesResetAuthorization ? query.m_resetAuthorizationSubmission : QueueSubmissionToken{};
                 claim.consumedResetAuthorizationGeneration = claim.consumesResetAuthorization ? query.m_resetAuthorizationGeneration : 0u;
 
-                // Inline-capable positions order reset and begin in this command buffer.
-                // Render-pass and transfer-only timestamp positions consume the reset authorization recorded on a compatible physical queue.
                 if(recordsInlineReset){
                     m_context.deviceDispatch.vkCmdResetQueryPool(m_currentCmdBuf->m_cmdBuf, query.m_queryPool, s_TimerQueryBeginIndex, s_TimerQueryTimestampCount);
                 }

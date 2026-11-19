@@ -24,8 +24,6 @@ struct GpuTaskGraphCompileOptions;
 
 class GpuTaskScheduler final : NoCopy{
 private:
-    // Admission pins the lifecycle device while recording, callbacks, submission, or a GPU wait is in progress.
-    // The metadata lock is never held across those operations, preserving concurrent scheduler execution.
     class DeviceOperation final : NoCopy{
         friend class GpuTaskScheduler;
 
@@ -104,19 +102,15 @@ public:
 
 
 public:
-    // Device owner attaches after creation, detaches before destruction; stop/join producers and finish GPU waits first.
     [[nodiscard]] b8 attachDevice(Device& device)noexcept;
     [[nodiscard]] b8 detachDevice(Device& device)noexcept;
     [[nodiscard]] b8 isAttachedTo(const Device& device)const noexcept;
     [[nodiscard]] b8 isInitialized()const noexcept;
-    // A detached scheduler is idle. Token waits require an attached matching device and an accepted token.
     [[nodiscard]] b8 wait()const;
     [[nodiscard]] b8 wait(const QueueSubmissionToken& token)const;
 
 
 public:
-    // Freezes queue assignment at admission from a current pressure snapshot, then inits caller-owned artifacts for the immutable plan.
-    // Explicit queue loads in compileOptions override automatic timeline sampling for deterministic tooling and tests.
     [[nodiscard]] b8 scheduleGraph(
         const GpuTaskGraph& graph, const GpuTaskGraphCompileOptions& options, GpuTaskGraphAnalysis& analysis,
         GpuTaskGraphQueueAssignments& assignments, GpuCompiledGraph& compiled, GpuRecordedGraph& recorded, GpuGraphSubmissionTransaction& transaction
@@ -144,7 +138,6 @@ public:
         GpuRecordedGraph& recordedGraph,
         GpuGraphSubmissionTransaction& transaction
     )const;
-    // Records and executes the compiler-frozen ordinary graph prefix. Native recorder construction and queue submission remain scheduler-owned.
     [[nodiscard]] b8 executeGraph(
         const GpuTaskGraphNormalExecutionDesc& desc,
         Alloc::ScratchArena& scratchArena,
@@ -155,8 +148,6 @@ public:
         GpuTimingRecorder* timingRecorder,
         GpuSubmissionPacketId* outFailedPacket = nullptr
     )const;
-    // Executes one graph-owned terminal recovery/finalization task after ordinary graph work reaches an accepted frontier.
-    // The scheduler owns recorder construction and all native queue-submission details.
     [[nodiscard]] b8 executeAcceptedFrontierTask(
         const GpuCompiledGraph& compiledGraph,
         GpuTaskId task,
@@ -167,8 +158,6 @@ public:
         GpuTimingRecorder* timingRecorder,
         GpuSubmissionPacketId* outFailedPacket = nullptr
     )const;
-    // Executes one semantic late task after its graph dependencies have accepted.
-    // Recorded and accepted callbacks retain the task-level lifecycle contract while the scheduler owns native recording and submission.
     [[nodiscard]] b8 executeTask(
         const GpuCompiledGraph& compiledGraph,
         GpuTaskId task,
@@ -221,8 +210,6 @@ private:
         GpuRecordedGraph& recordedGraph,
         GpuGraphSubmissionTransaction& transaction
     )const;
-    // Records/submits the selected ordinary prefix. Without a terminal task, frontier packets must form one terminal suffix.
-    // The executor rejects a frontier inside its prefix before recording; it never touches later caller-owned work.
     [[nodiscard]] b8 submitGraph(
         const GpuCompiledGraph& compiledGraph,
         const GpuNativePacketRecorder& recorder,
@@ -236,7 +223,6 @@ private:
 
 
 private:
-    // Records/submits one frontier recovery/finalization task. Failure rejects the unaccepted task.
     [[nodiscard]] b8 recordAndSubmitAcceptedFrontierTask(
         const GpuCompiledGraph& compiledGraph,
         const GpuNativePacketRecorder& recorder,
@@ -247,7 +233,6 @@ private:
         GpuGraphSubmissionTransaction& transaction,
         GpuSubmissionPacketId* outFailedPacket = nullptr
     )const;
-    // Records/submits one late task post-accept: recorded checks the final-state seed, accepted publishes from the token.
     [[nodiscard]] b8 recordAndSubmitTask(
         const GpuCompiledGraph& compiledGraph,
         const GpuNativePacketRecorder& recorder,
@@ -275,7 +260,6 @@ private:
         GpuCommandIrCapture* commandIrCapture,
         GpuSubmissionPacketId* outFailedPacket
     )const;
-    // Caller-owned exclusive SubmissionOperation; this path reuses the executor without same-transaction gate reentry.
     [[nodiscard]] b8 recordAndSubmitTaskWithinSubmissionOperation(
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
@@ -290,7 +274,6 @@ private:
         GpuGraphSubmissionTransaction& transaction,
         GpuSubmissionPacketId* outFailedPacket
     )const;
-    // Arms one recording attempt and binds its transaction while the caller keeps the exclusive operation.
     [[nodiscard]] b8 prepareRecordingAttemptAndBindTransactionWithinSubmissionOperation(
         const GpuCompiledGraph& compiledGraph,
         GpuSubmissionPacketId packet,
@@ -302,8 +285,6 @@ private:
         GpuRecordedGraph& recordedGraph,
         GpuGraphSubmissionTransaction& transaction
     )const;
-    // The caller owns one active composite submission operation for the full native-accept, task-callback, and transaction-publication sequence.
-    // It supplies semantic bindings while the packet primitive stays internal.
     [[nodiscard]] b8 submitPacketRangeWithinSubmissionOperation(
         const GpuCompiledGraph& compiledGraph,
         const GpuRecordedGraph& recordedGraph,
@@ -316,8 +297,6 @@ private:
         GpuGraphSubmissionTransaction& transaction,
         GpuSubmissionPacketId* outFailedPacket
     )const;
-    // The caller owns one valid SubmissionOperation for the full native-accept, task-callback, and transaction-publication sequence.
-    // Range submission supplies its synchronous semantic obligations here.
     [[nodiscard]] b8 submitPacketWithinSubmissionOperation(
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
@@ -334,7 +313,6 @@ private:
 
 
 private:
-    // Null only between device lifetimes; ownership stays with GraphicsRuntime or the standalone caller.
     Device* m_device = nullptr;
     mutable Futex m_lifecycleMutex;
     mutable usize m_activeOperations = 0u;

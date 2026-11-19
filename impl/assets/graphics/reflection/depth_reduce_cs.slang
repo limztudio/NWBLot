@@ -30,10 +30,6 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID){
 
     float2 depthInterval = float2(1.0, 0.0);
     if(all(sourceExtent == destinationExtent)){
-        // A depth sample represents a pixel center.
-        // Neighbors expand the local planar footprint before rejection; a center-only range can miss a slope edge.
-        // Sky remains depth one in both bounds.
-        // These are visible-depth bounds, not a volume's entry/exit depths.
         for(int y = -1; y <= 1; ++y){
             for(int x = -1; x <= 1; ++x){
                 const int2 source = clamp(int2(destination) + int2(x, y), int2(0), int2(sourceExtent) - 1);
@@ -47,12 +43,10 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID){
         return;
     }
 
-    // Mip extents floor-halve per axis. Odd axes contribute three samples, so no edge texel vanishes; unchanged stays 1->1.
     const uint2 begin = uint2(sourceExtent.x == destinationExtent.x ? destination.x : destination.x * 2u, sourceExtent.y == destinationExtent.y ? destination.y : destination.y * 2u);
     const uint2 span = uint2(sourceExtent.x == destinationExtent.x ? 1u : 2u + (sourceExtent.x & 1u), sourceExtent.y == destinationExtent.y ? 1u : 2u + (sourceExtent.y & 1u));
     for(uint y = 0u; y < span.y; ++y){
         for(uint x = 0u; x < span.x; ++x){
-            // The frozen source descriptor exposes one mip; level zero is relative to that view.
             const float2 interval = nwbHeapSampledImage2D(g_NwbReflectionDepthPush.sourceSlot).Load(int3(begin + uint2(x, y), 0)).xy;
             depthInterval.x = min(depthInterval.x, interval.x);
             depthInterval.y = max(depthInterval.y, interval.y);

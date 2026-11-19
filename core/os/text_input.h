@@ -80,7 +80,6 @@ public:
     return lhs.service == rhs.service && lhs.generation == rhs.generation;
 }
 
-// Coordinates are native window-client pixels. Linux surface coordinates are converted by the backend.
 struct TextInputRect{
     i32 x = 0;
     i32 y = 0;
@@ -148,17 +147,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Construct, update, native dispatch, poll and destroy on the owning OS/event thread.
-// No UI callback or model is borrowed.
-// begin/update copy valid UTF-8 without embedded NUL.
-// All text positions are UTF-8 byte boundaries, never code-point counts.
-// Preedit positions index event.text; deletion addresses the snapshot at surroundingRevision.
-// Caret distances address the caret; Selection distances skip the selected range and preserve its bytes.
-// poll consumes an event and copies its text into the caller's arena.
-// A service admits only one active session.
-// Focus loss or event overflow discards pending events and leaves one terminal Cancelled event for that token.
-// A cancelled token can poll that event once; end or a new begin invalidates it.
-// Stale/foreign native delivery is rejected.
 interface ITextInputService : private NoCopy{
 public:
     virtual ~ITextInputService()noexcept = default;
@@ -174,13 +162,9 @@ public:
     [[nodiscard]] virtual TextInputAdmission::Enum updateCaret(TextInputSessionToken token, TextInputRect caret) = 0;
     [[nodiscard]] virtual TextInputAdmission::Enum updateSurrounding(TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte, TextInputChangeCause::Enum cause = TextInputChangeCause::Other) = 0;
     [[nodiscard]] virtual TextInputPollResult::Enum poll(TextInputSessionToken token, TextInputEvent& event) = 0;
-    // Called by Frame's native focus path before ordinary input focus dispatch. Initially unfocused.
     [[nodiscard]] virtual b8 setFocused(b8 focused) = 0;
 };
 
-// The native HWND is borrowed until service destruction.
-// nullptr returns an explicit unsupported service.
-// Native Linux factories and event bridges belong to their X11/Wayland domains.
 [[nodiscard]] Expected<GlobalUniquePtr<ITextInputService>> CreateTextInputService(Alloc::GlobalArena& arena, void* nativeWindowHandle);
 
 

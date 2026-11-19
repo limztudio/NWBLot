@@ -3,7 +3,6 @@ cmake_minimum_required(VERSION 3.25)
 include("${CMAKE_CURRENT_LIST_DIR}/fbx_to_nwb_test_helpers.cmake")
 
 file(MAKE_DIRECTORY "${OUTPUT_DIR}")
-# Canonical identity follows the existing emitted float policy, including signed zero and tiny values.
 set(identity_source [=[mesh asset;
 asset.positions = [[0, 0, 0], [1, 0, 0], [0, 1, 0]];
 asset.normals = [[0.0, 0, 1], [-0.0, 0, 1], [0.0, 0, 1]];
@@ -81,12 +80,10 @@ set(expected_refs [=[asset.vertex_refs = [
     [1, 0, 0, 2, 0],
 ];]=])
 
-# Fixture text must be independent of checkout line endings before CRLF is added.
 foreach(fixture IN ITEMS mesh_source decoys expected_refs)
     string(REPLACE "\r\n" "\n" ${fixture} "${${fixture}}")
 endforeach()
 
-# Comment/string decoys and trivia around punctuation must preserve unrelated bytes and actual geometry.
 foreach(case_name IN ITEMS comments trivia)
     set(positions_assignment "asset.positions =")
     if(case_name STREQUAL "trivia")
@@ -136,7 +133,6 @@ foreach(case_name IN ITEMS comments trivia)
     endif()
 endforeach()
 
-# Repeated/compound/expression assignments cannot safely map a parsed value back to one literal range.
 foreach(case_name IN ITEMS repeated compound expression)
     string(REPLACE "@positions_assignment@" "asset.positions =" source "${mesh_source}")
     set(extra_assignment "")

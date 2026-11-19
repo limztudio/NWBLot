@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Reject inherited UI fixture state and preserve independent SDR and atlas edge references."""
 
 import pathlib
 import sys

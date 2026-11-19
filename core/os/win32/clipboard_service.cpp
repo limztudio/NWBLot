@@ -195,7 +195,6 @@ ClipboardStatus::Enum Win32ClipboardService::writeNativeText(const AStringView t
         }
     }
 
-    // Allocate and validate before replacing the current clipboard. SetClipboardData transfers this allocation.
     const usize extraCarriageReturns = CountBareLineFeeds(WStringView(m_wideText.data(), m_wideText.size()));
     const usize bytes = (m_wideText.size() + extraCarriageReturns + 1u) * sizeof(wchar);
     const HGLOBAL memory = GlobalAlloc(GMEM_MOVEABLE, bytes);

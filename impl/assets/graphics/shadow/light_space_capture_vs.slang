@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Outside the clip volume, so a culled vertex is clipped away.
 #define NWB_LIGHT_SPACE_CAPTURE_CULLED_CLIP_POSITION float4(2.0, 2.0, 2.0, 1.0)
 
 
@@ -23,7 +22,6 @@ NwbLightSpaceCaptureVertex main(uint vertex : SV_VertexID, uint primitiveBase : 
     if(view.depthRange.w == 0.0 || g_NwbLightSpacePush.instanceIndex >= g_NwbLightSpacePush.instanceCount)
         return output;
     const NwbRtInstanceMaterial material = nwbLightSpaceMaterial(g_NwbLightSpacePush.instanceIndex);
-    // SV_VertexID is the canonical position index fetched by the native index buffer.
     const float3 local = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(vertex * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
     output.worldPosition = nwbLightSpaceWorldPosition(local, g_NwbLightSpacePush.instanceIndex);
     output.position = nwbLightSpaceProject(view, output.worldPosition);

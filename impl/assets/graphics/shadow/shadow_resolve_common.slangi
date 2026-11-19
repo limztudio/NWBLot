@@ -18,7 +18,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Compile each stage separately so the full-resolution upsample does not reserve the wavelet shared-memory tile.
 #ifndef NWB_SHADOW_RESOLVE_COMPILED_STAGE
 #error NWB_SHADOW_RESOLVE_COMPILED_STAGE must select a resolve stage.
 #endif
@@ -26,7 +25,6 @@
 #error NWB_SHADOW_RESOLVE_COMPILED_STAGE must select the wavelet or upsample stage.
 #endif
 
-// Scalar opaque, RGB transparent, and combined upsample variants share the same filtering equations.
 #ifndef NWB_SHADOW_RESOLVE_CHANNELS
 #define NWB_SHADOW_RESOLVE_CHANNELS NWB_SHADOW_RESOLVE_CHANNELS_SCALAR
 #endif
@@ -47,16 +45,11 @@
     typedef float  NwbShadowResolveVisFVec;
 #endif
 
-
-// Half-resolution edge-aware a-trous soft-shadow resolve.
-// Visibility uses 1.0 as its lit/multiplicative identity; invalid taps must never write 0.
-
-// Typed global-heap view for the camera position.
 struct NwbShadowResolveSceneShading{
     float4 cameraPosition;
 };
 #pragma warning(push)
-#pragma warning(disable: 39001) // Deliberate typed UniformBuffer heap view.
+#pragma warning(disable: 39001)
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbShadowResolveSceneShading, Std140DataLayout> g_NwbHeapShadowResolveSceneShadings[];
 #pragma warning(pop)
 
@@ -67,10 +60,8 @@ struct NwbShadowResolveSceneShading{
 #define g_NwbShadowResolveSceneShading g_NwbHeapShadowResolveSceneShadings[g_NwbShadowResolvePushConstants.sceneShadingSlot]
 
 #if NWB_SHADOW_RESOLVE_COMPILED_STAGE == NWB_SHADOW_RESOLVE_STAGE_WAVELET
-// Groupshared tile for small-dilation wavelet passes.
 groupshared NwbShadowResolveVisVec g_NwbShadowResolveTileVis[NWB_SHADOW_RESOLVE_TILE_TEXELS];
 groupshared half2  g_NwbShadowResolveTileNormal[NWB_SHADOW_RESOLVE_TILE_TEXELS];
-// Half-res geometry cache is RGBA16F. Keep its distance half in LDS; widen only for the Gaussian.
 groupshared half   g_NwbShadowResolveTileDist[NWB_SHADOW_RESOLVE_TILE_TEXELS];
 groupshared uint   g_NwbShadowResolveTileValid[NWB_SHADOW_RESOLVE_TILE_TEXELS];
 #endif
@@ -87,27 +78,22 @@ half4 nwbShadowResolveGeomAtHalf(const int2 halfTexel){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Guided upsample parameters.
 #define NWB_SHADOW_RESOLVE_GUIDED_RADIUS 1
 #define NWB_SHADOW_RESOLVE_GUIDED_EPS_FRAC 0.02
 #define NWB_SHADOW_RESOLVE_GUIDED_NORMAL_GATE 0.5
 #define NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE (2 * NWB_SHADOW_RESOLVE_GUIDED_RADIUS + 1)
 #define NWB_SHADOW_RESOLVE_GUIDED_TAP_COUNT (NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE * NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE)
 
-// Quadratic B-spline weights preserve affine signals and vanish as taps leave the rounded three-sample support.
-// The offset is src-round(src) in [-0.5, 0.5], so every weight lands in [0, 0.75]; half math is sufficient here.
 half3 nwbShadowResolveSpatialWeights(const half offset){
     const half2 side = half2(half(0.5h) - offset, half(0.5h) + offset);
     return half3(half(0.5h) * side.x * side.x, half(NWB_SHADOW_RESOLVE_BSPLINE_CENTER_BASE) - offset * offset, half(0.5h) * side.y * side.y);
 }
 
 half nwbShadowResolveNormalWeightVec(const float3 centerNormal, const half2 tapOct){
-    // The normal-agreement weight is a (0, 1) bounded filter factor, so half arithmetic is sufficient here.
     const float3 tn = nwbOctDecodeNormal(float2(tapOct));
     return half(pow(max(dot(centerNormal, tn), 0.0h), NWB_SHADOW_RESOLVE_NORMAL_POWER));
 }
 
-// Use temporal variance only after enough history samples.
 #if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
 #define NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE NWB_SHADOW_RESOLVE_RGB_SIGMA_SCALE
 #else
@@ -125,7 +111,6 @@ half nwbShadowResolveLuma(const half3 c){
 
 #if NWB_SHADOW_RESOLVE_CHANNELS != NWB_SHADOW_RESOLVE_CHANNELS_COMBINED
 half nwbShadowResolveValueWeightVec(const NwbShadowResolveVisVec centerVis, const NwbShadowResolveVisVec tapVis, const float sigmaLum){
-    // The value-similarity weight is a (0, 1) bounded filter factor: run the luma delta in half, matching RGBA16F storage.
     return half(exp(-abs(nwbShadowResolveLuma(tapVis) - nwbShadowResolveLuma(centerVis)) / half(sigmaLum)));
 }
 
@@ -145,7 +130,6 @@ NwbShadowResolveVisVec nwbShadowResolveLoadInput(const int2 tap, const uint slot
 
 float4 nwbShadowResolveStore(const NwbShadowResolveVisFVec v){
 #if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_COMBINED
-    // Retain opaque half precision before multiplication; image-store rounding may select an adjacent half value.
     return float4(float(half(v.x)) * v.yzw, 1.0);
 #elif NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
     return float4(v, 1.0);
@@ -154,7 +138,6 @@ float4 nwbShadowResolveStore(const NwbShadowResolveVisFVec v){
 #endif
 }
 
-// Use temporal moments when valid; otherwise estimate spatial variance.
 float nwbShadowResolveCenterSigmaLum(const int2 texel, const uint slot, const int hw, const int hh, const uint momentsValid){
     if(momentsValid != 0u){
         const half3 momentSample = half3(nwbHeapSampledImage2DArray(g_NwbShadowResolvePushConstants.momentsSlot).Load(int4(texel, (int)slot, 0)).xyz);
@@ -165,7 +148,6 @@ float nwbShadowResolveCenterSigmaLum(const int2 texel, const uint slot, const in
             return NWB_SHADOW_RESOLVE_SIGMA_LUM * sqrt(varTemporal) + NWB_SHADOW_RESOLVE_SIGMA_LUM_EPS;
         }
     }
-    // Spatial visibility moments stay in (0, 1), so half accumulation is sufficient here.
     half mean = half(0.0h);
     half mean2 = half(0.0h);
     int cnt = 0;
@@ -188,7 +170,6 @@ float nwbShadowResolveCenterSigmaLum(const int2 texel, const uint slot, const in
     if(cnt <= 0)
         return NWB_SHADOW_RESOLVE_SIGMA_LUM_EPS;
     const half invCount = half(1.0h) / half(cnt);
-    // Visibility moments stay in (0, 1), so compute the spatial variance in half; FP16 has headroom here.
     const half varSpatial = max(mean2 * invCount - (mean * invCount) * (mean * invCount), half(0.0h));
     return NWB_SHADOW_RESOLVE_SIGMA_LUM * sqrt(float(varSpatial)) + NWB_SHADOW_RESOLVE_SIGMA_LUM_EPS;
 }

@@ -15,8 +15,6 @@
 
 
 namespace SimdBenchmarkAbi{
-
-// Keep each timer outside the batch while allowing its kernel to inline into the loop.
 template<typename Batch, typename... Args>
 [[gnu::flatten]] FOUNDATION_NOINLINE auto RunMemoryBatch(const Batch& batch, Args&&... args)noexcept{
     return batch.run(Forward<Args>(args)...);

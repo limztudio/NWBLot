@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Build the isolated environment for a stress measurement."""
 
 import platform
 

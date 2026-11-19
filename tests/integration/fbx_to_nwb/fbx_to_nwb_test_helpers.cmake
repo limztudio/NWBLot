@@ -1,4 +1,3 @@
-# Converter runs in the verify scripts must finish well inside their CTest budget.
 set(nwb_fbx_to_nwb_process_timeout_seconds 30)
 set(nwb_fbx_to_nwb_missing_stream_index 4294967295)
 set(nwb_fbx_to_nwb_hex_byte_chars 2)
@@ -59,7 +58,6 @@ function(nwb_require_no_match text pattern failure_message)
 endfunction()
 
 function(nwb_require_crlf_text_file path label)
-    # Read hex bytes because CMake string reads can normalize line endings.
     file(READ "${path}" text_hex HEX)
     string(FIND "${text_hex}" "0d0a" crlf_offset)
     if(crlf_offset EQUAL -1)

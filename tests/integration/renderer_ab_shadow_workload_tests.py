@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-"""Renderer A/B workload policy, control selection, shadow, and reflection workload analysis."""
-
 
 import contextlib
 import copy

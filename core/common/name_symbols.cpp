@@ -121,7 +121,6 @@ private:
             const auto hash = ComputeNameHash(text);
             if(!hash)
                 return MakeUnexpected(Failure{});
-            // Verify stored text first; insert after the census releases its lock.
             if(snapshot.ownerName == Name(*hash))
                 FOUNDATION_FATAL_ASSERT(insert(*hash, text));
         }

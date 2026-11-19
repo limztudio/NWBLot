@@ -9,9 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// HW opaque-only occlusion (binary any-hit). Transparent shadows multiply on from software (grazing chords differ).
-
-
 #include "binding_slots.h"
 #include "constants.h"
 #include "../raytrace/constants.h"
@@ -21,7 +18,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The deferred selector is a global heap entry supplied by the push block; the opaque trace has no local cbuffer.
 #ifndef NWB_SHADOW_RQ_DEFERRED_RESOURCES_HEAP_SLOT
 #error "shadow RayQuery sources must provide the deferred-resource heap slot expression"
 #endif
@@ -30,7 +26,6 @@
 
 #include "occlusion.slangi"
 #include "../scene/buffer.slangi"
-// The soft cone-jitter, shared with the software traversal so the HW opaque path softens IDENTICALLY.
 #include "shadow_sampling.slangi"
 #include "shadow_ray_setup.slangi"
 
@@ -38,7 +33,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per light: one HW occlusion ray; 0 on first opaque hit else 1 (software tints transparents). Jitter in the source cone; zero radius stays hard.
 half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, const NwbSceneLight light, const float2 jitter){
     float3 toLight;
     float tMin;
@@ -52,10 +46,8 @@ half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, c
     ray.TMin = tMin;
     ray.TMax = tEnd;
 
-    // Opaque fast path: transparent candidates skip (software tints); FORCE_OPAQUE occluders end the search with no loads.
     RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
     query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, NWB_RT_SHADOW_BASE_INSTANCE_MASK, ray);
-    // Drain non-opaque candidates uncommitted; opaque occluders never reach here. Body is empty on purpose.
     while(query.Proceed());
 
     return (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? half3(0.0h, 0.0h, 0.0h) : half3(1.0h, 1.0h, 1.0h);

@@ -21,7 +21,6 @@ NWB_CORE_BEGIN
 Expected<isize> Win32TextInputService::resolveContextMessage(const u32 message, const usize wParam, const isize lParam)noexcept{
     if(!isOwnerThread() || message != WM_IME_SETCONTEXT)
         return MakeUnexpected(Failure{});
-    // Keep the native flags, not the filtered result: ending a custom edit restores the ordinary IME UI.
     m_nativeContextFlags = lParam;
     m_nativeContextKnown = true;
     m_nativeContextActive = wParam != FALSE;
@@ -37,11 +36,9 @@ void Win32TextInputService::replayContextVisibility(){
     const HWND window = static_cast<HWND>(m_nativeWindowHandle.get());
     if(!IsWindow(window))
         return;
-    // Activation may precede the edit session. Reapply the last native options when ownership changes.
     m_replayingContext = true;
     const b8 ownedBefore = activeSession().valid();
     SendMessageW(window, WM_IME_SETCONTEXT, TRUE, static_cast<LPARAM>(m_nativeContextFlags));
-    // Native forwarding may synchronously cancel the session. Restore the now-current policy once in that case.
     if(ownedBefore != activeSession().valid() && m_nativeContextActive && focused() && IsWindow(window))
         SendMessageW(window, WM_IME_SETCONTEXT, TRUE, static_cast<LPARAM>(m_nativeContextFlags));
     m_replayingContext = false;

@@ -27,9 +27,7 @@ struct CpuWorkerPlacement{
 
     u32 logicalProcessorIndex = s_InvalidProcessor;
     u32 processorGroup = 0u;
-    // Platform ordinal capacity; larger is faster, not comparable across machines.
     u32 performanceClass = 0u;
-    // Any means homogeneous or unknown; Efficiency includes every tier below fastest.
     CpuAffinity::Enum affinity = CpuAffinity::Any;
 
 
@@ -41,9 +39,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Query on the worker-creating thread; honors CPU sets; never invents indices.
 [[nodiscard]] Expected<InteropVector<CpuWorkerPlacement>> QueryCpuWorkerPlacements();
-// Applies one processor identity, including groups and indices beyond 63.
 [[nodiscard]] b8 SetCurrentThreadCpuPlacement(const CpuWorkerPlacement& placement);
 
 [[nodiscard]] u32 QueryCpuCoreCount(CpuAffinity::Enum type);

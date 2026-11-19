@@ -122,7 +122,6 @@ void PublishCrashStateSnapshot()noexcept{
     for(usize i = 0u; i < s_MaxBreadcrumbs; ++i)
         snapshot.breadcrumbs[i] = g_State.breadcrumbs[i];
 
-    // Clear the write claim before publication: a fault may interrupt the publishing thread immediately after the index store.
     image.access.store(0u, MemoryOrder::release);
     g_State.publishedSnapshotImage.store(imageIndex, MemoryOrder::release);
 }
@@ -197,7 +196,6 @@ CrashRequest BuildCrashDumpRequest(const CrashReasonKind::Enum reasonKind, const
         request.manualExceptionRecordSize = sizeof(EXCEPTION_RECORD);
         request.manualContextArchitecture = s_WindowsContextArchitecture;
         request.manualContext = options.manualContext->context;
-        // RtlCaptureContext owns only this fixed CONTEXT, without separately allocated XSTATE bytes.
         request.manualContext.ContextFlags &= ~s_WindowsExtendedContextFlag;
         request.manualExceptionRecord = options.manualContext->exceptionRecord;
         request.exceptionPointers = 0u;
@@ -247,8 +245,6 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
     if(!CrashProtocol::IsCurrentCrashRequest(request))
         return CrashDumpResult{ CrashDumpStatus::RequestFailed };
 
-    // GPU report/dump ship as package files straight from caller bytes (no POD copy, no heap alloc).
-    // Device-lost path only (normal thread context), never the signal/SEH path; binary-verbatim writes.
     if(!options.gpuReport.empty() || !options.gpuDump.empty()){
         Alloc::PersistentArena& dumpArena = DumpArena();
         const ::Path<Alloc::PersistentArena> packageDirectory = RequestPendingDirectory(dumpArena, request);

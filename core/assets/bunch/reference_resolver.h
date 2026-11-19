@@ -48,7 +48,6 @@ using ScratchNameHashSet = HashSet<NameHash, Alloc::ScratchArena, Hasher<NameHas
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Tiny documents keep inline lookups; larger ones share one exact-text index.
 class DeclarationLookup final : NoCopy{
 private:
     using Declaration = Core::Metascript::Document::Declaration;

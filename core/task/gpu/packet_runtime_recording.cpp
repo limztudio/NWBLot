@@ -165,7 +165,6 @@ b8 GpuNativePacketRecorder::recordPacket(
         || !outRecordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactAccess)
     )
         return false;
-    // One capture per compiled plan. Reject a stale non-empty capture before opening a packet with no primitive command.
     if(commandIrCapture && commandIrCapture->recordCount() != 0u && (commandIrCapture->graphGeneration() != planAccess.generation() || commandIrCapture->planGeneration() != planAccess.planGeneration()))
         return false;
     if(commandIrCapture && commandIrCapture->recordCount() != 0u && commandIrCapture->recordingAttemptGeneration() != recordingAttemptGeneration)
@@ -315,7 +314,6 @@ b8 GpuNativePacketRecorder::recordPacket(
                     break;
                 }
 
-                // Record-time validation is mandatory. The imported source is authoritative; lower a local copy without seeding Unknown.
                 GpuCompiledBarrier loweredBarrier = barrier;
                 loweredBarrier.isGraphInitialState = false;
                 recorded = graph.applyCompiledBarrier(compiledGraph, planAccess, recordingAccess, task, loweredBarrier, *commandList);
@@ -323,7 +321,6 @@ b8 GpuNativePacketRecorder::recordPacket(
             else
                 recorded = graph.applyCompiledBarrier(compiledGraph, planAccess, recordingAccess, task, barrier, *commandList);
         }
-        // A retained state matching the compiler plan still needs a native tracker entry. Otherwise a later packet cannot import that graph-declared state.
         if(recorded)
             recorded = graph.seedTaskRetainedResourceStates(compiledGraph, planAccess, recordingAccess, task, *commandList);
         if(recorded)
@@ -498,7 +495,6 @@ b8 GpuNativePacketRecorder::recordPacket(
     recordedPacket.recordingSeconds = DurationInSeconds<f64>(recordingEnd, recordingBegin);
     recordedPacket.recordingWorkerDomain = recordingWorkerDomain;
     recordedPacket.recordingWorkerIndex = recordingWorkerIndex;
-    // Publish the slot only after its native list is retained; also keeps it consistent for diagnostic reads.
     graphRecordingOwnership.publish();
     recordedPacket.commandListCount = 1u;
     PacketArtifactPublicationScope artifactPublication(outRecordedGraph, packetID, artifactAccess);

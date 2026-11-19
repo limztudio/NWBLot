@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Version-pinned, host-native LLVM C bindings for literal bitcode rewriting."""
 
 from __future__ import annotations
 
@@ -25,8 +24,6 @@ LLVM_RETURN_STATUS_ACTION = 2
 
 
 class LlvmApi:
-    """Load LLVM with the Python process architecture and exact compiler version."""
-
     def __init__(self, library_path: Path, expected_version: Tuple[int, int, int]) -> None:
         if len(expected_version) != VERSION_PART_COUNT or any(component < 0 for component in expected_version):
             raise ValueError("LLVM requires an explicit major/minor/patch version")
@@ -99,4 +96,3 @@ class LlvmApi:
         diagnostic = self.take_message(message)
         if invalid:
             raise RuntimeError(f"LLVM module verification failed: {diagnostic}")
-

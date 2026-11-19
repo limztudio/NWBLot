@@ -59,7 +59,6 @@ public:
 
 
 public:
-    // The caller holds validated declaration and compiled-plan views for the admitted packet range.
     [[nodiscard]] b8 resolve(
         const GpuTaskGraph::DeclarationReadView& declarationAccess,
         const GpuCompiledGraph::ReadView& planAccess,

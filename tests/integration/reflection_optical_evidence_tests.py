@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Reflection optical statistics and evidence output regression tests."""
 
 import contextlib
 import io

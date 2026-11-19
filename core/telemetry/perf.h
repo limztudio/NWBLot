@@ -24,9 +24,9 @@ NWB_TELEMETRY_BEGIN
 
 
 inline constexpr u16 s_PerfTimingPayloadVersion = 1u;
-inline constexpr u32 s_PerfTimingPayloadMagic = 0x4E575046u; // NWPF
+inline constexpr u32 s_PerfTimingPayloadMagic = 0x4E575046u;
 inline constexpr u16 s_PerfMemoryPayloadVersion = 1u;
-inline constexpr u32 s_PerfMemoryPayloadMagic = 0x4E57504Du; // NWPM
+inline constexpr u32 s_PerfMemoryPayloadMagic = 0x4E57504Du;
 
 namespace PerfTimingSource{
     enum Enum : u8{
@@ -97,7 +97,6 @@ static_assert(alignof(EncodedPerfMemoryPayloadHeader) == s_PerfPackedAlignBytes,
 static_assert(IsStandardLayout_V<EncodedPerfMemoryPayloadHeader>, "EncodedPerfMemoryPayloadHeader must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedPerfMemoryPayloadHeader>, "EncodedPerfMemoryPayloadHeader must stay binary-serializable");
 
-// scopeText borrows the parsed payload bytes; keep them alive and unchanged while reading.
 struct PerfTimingPayload{
     Name scopeName = s_NameNone;
     AStringView scopeText;
@@ -105,7 +104,6 @@ struct PerfTimingPayload{
     PerfTimingSource::Enum source = PerfTimingSource::Unknown;
 };
 
-// scopeText borrows the parsed payload bytes; keep them alive and unchanged while reading.
 struct PerfMemoryPayload{
     Name scopeName = s_NameNone;
     AStringView scopeText;

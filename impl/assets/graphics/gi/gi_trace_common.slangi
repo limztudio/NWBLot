@@ -9,9 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared GI hit data and Lambert shading; hardware/software backends provide traversal and heap-slot access.
-
-
 #include "constants.h"
 #include "../scene/buffer.slangi"
 #include "../scene/lighting.slangi"
@@ -22,7 +19,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Neutral albedo for an unconsumed miss. A surfaceless hit gets mid-grey only via the no-surface fallback.
 #ifndef NWB_GI_SW_TRACE_DEFAULT_ALBEDO
 #define NWB_GI_SW_TRACE_DEFAULT_ALBEDO 0.5h, 0.5h, 0.5h
 #endif
@@ -31,7 +27,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Closest-hit result: world-space point, geometric face normal, and authored baseColor for the bounce.
 struct NwbGiTraceHit{
     bool hit;
     float t;
@@ -40,19 +35,14 @@ struct NwbGiTraceHit{
     half3 albedo;
 };
 
-// Backend-provided nearest-hit query.
 NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, float tMax);
 
-// Geometric blockers include transparent surfaces; occlusion needs no attribute or material reconstruction.
 bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Lambert hit shade: direct light * the authored material-surface base colour.
-// The caller adds any surfel-to-surfel multi-bounce term.
-// Shadow rays use the backend's nwbGiTraceOccluded implementation.
 half3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
     half3 irradiance = half3(0.0h, 0.0h, 0.0h);
 
@@ -72,9 +62,7 @@ half3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
     }
 
 #if NWB_GI_HIT_SHADOW_RAYS
-    // One occlusion ray toward the DOMINANT light (the highest-NdotL lit light): miss -> lit, hit -> shadowed.
     {
-        // Dominant-light NdotL tracking is a (0, 1) bounded factor; half math is sufficient here.
         half bestNdotl = half(0.0h);
         float3 dominantLightDir = float3(0.0, 1.0, 0.0);
         uint dominantLightIndex = NWB_GI_INVALID_LIGHT_INDEX;
@@ -103,10 +91,9 @@ half3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
                 if(distance > 0.0)
                     dominantLightDir = toLight / distance;
             }
-            // Local-light occlusion ends before the source; geometry behind it cannot shadow the bounce surface.
             const bool occluded = shadowMaximum > NWB_GI_TRACE_RAY_MIN_DISTANCE && nwbGiTraceOccluded(shadowOrigin, dominantLightDir, NWB_GI_TRACE_RAY_MIN_DISTANCE, shadowMaximum);
             if(occluded)
-                irradiance *= 0.0h; // fully shadowed by the dominant-light occlusion ray
+                irradiance *= 0.0h;
         }
     }
 #endif

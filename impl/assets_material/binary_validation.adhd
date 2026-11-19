@@ -21,8 +21,6 @@ b8 TryAssignMaterialResourceReferenceAsset(in MaterialResourceKind resourceKind,
     }
 }
 
-
-// Transparent materials need all three pass shaders; opaque materials carry none.
 b8 HasValidMaterialAvboitPixelShaderContract(
     in b8 transparent,
     in AssetRef<PixelShader> accumulatePixelShader,

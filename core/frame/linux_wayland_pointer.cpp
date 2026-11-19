@@ -102,7 +102,6 @@ void WaylandPointerInput::OnPointerEnter(void* data, [[maybe_unused]] wl_pointer
 void WaylandPointerInput::OnPointerLeave(void* data, [[maybe_unused]] wl_pointer* pointer, [[maybe_unused]] u32 serial, [[maybe_unused]] wl_surface* surface){
     auto& pointerInput = *MakeNotNull(static_cast<WaylandPointerInput*>(data));
     pointerInput.m_frame.input().pointerLeave();
-    // The compositor retains pointer focus during the implicit grab; leave terminates any remaining grab.
     pointerInput.m_frame.input().pointerCaptureLost();
 }
 

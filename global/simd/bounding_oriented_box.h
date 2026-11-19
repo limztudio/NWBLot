@@ -50,7 +50,6 @@ inline void FOUNDATION_SIMD_CALL BoundingOrientedBox::TransformOrientedBoxValue(
 
     outCenter = Vector3Transform(boxCenter, matrix);
     outOrientation = QuaternionNormalize(QuaternionMultiply(decomposition->rotation, boxOrientation));
-    // Project the transformed source axes into the output frame before bounding nonuniform scale or reflection.
     const SIMDVectorSingle projectedAxis0 = Vector3InverseRotate(Vector3TransformNormal(Vector3Rotate(s_SIMDIdentityR0, boxOrientation), matrix), outOrientation);
     const SIMDVectorSingle projectedAxis1 = Vector3InverseRotate(Vector3TransformNormal(Vector3Rotate(s_SIMDIdentityR1, boxOrientation), matrix), outOrientation);
     const SIMDVectorSingle projectedAxis2 = Vector3InverseRotate(Vector3TransformNormal(Vector3Rotate(s_SIMDIdentityR2, boxOrientation), matrix), outOrientation);
@@ -87,7 +86,6 @@ inline void FOUNDATION_SIMD_CALL BoundingDoubleOrientedBox::TransformOrientedBox
 
     outCenter = VectorDouble3Transform(boxCenter, matrix);
     outOrientation = QuaternionDoubleNormalize(QuaternionDoubleMultiply(decomposition->rotation, boxOrientation));
-    // Project the transformed source axes into the output frame before bounding nonuniform scale or reflection.
     const SIMDVectorDouble projectedAxis0 = VectorDouble3InverseRotate(VectorDouble3TransformNormal(VectorDouble3Rotate(s_DoubleSIMDIdentityR0, boxOrientation), matrix), outOrientation);
     const SIMDVectorDouble projectedAxis1 = VectorDouble3InverseRotate(VectorDouble3TransformNormal(VectorDouble3Rotate(s_DoubleSIMDIdentityR1, boxOrientation), matrix), outOrientation);
     const SIMDVectorDouble projectedAxis2 = VectorDouble3InverseRotate(VectorDouble3TransformNormal(VectorDouble3Rotate(s_DoubleSIMDIdentityR2, boxOrientation), matrix), outOrientation);

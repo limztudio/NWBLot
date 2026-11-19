@@ -10,7 +10,6 @@ if(NOT result EQUAL 0)
     message(FATAL_ERROR "Delayed-write control export failed:\n${stdout}\n${stderr}")
 endif()
 
-# Small outputs fit the stream buffer and fail when flushed to /dev/full at close.
 foreach(asset_type IN ITEMS mesh model bunch)
     string(RANDOM LENGTH 12 ALPHABET "0123456789abcdef" invocation)
     set(failure_path "${OUTPUT_DIR}/${asset_type}_${invocation}.nwb")

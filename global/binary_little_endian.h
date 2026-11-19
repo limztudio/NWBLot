@@ -51,7 +51,6 @@ inline void WriteF32LittleEndianAt(const f32 value, const usize offset, Containe
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The caller has admitted four readable bytes.
 [[nodiscard]] inline u32 ReadU32LittleEndian(const NotNull<const u8*> bytes)noexcept{
     return static_cast<u32>(bytes.get()[0u]) | (static_cast<u32>(bytes.get()[1u]) << s_BitsPerByte) | (static_cast<u32>(bytes.get()[2u]) << (s_BitsPerByte * 2u)) | (static_cast<u32>(bytes.get()[3u]) << (s_BitsPerByte * 3u));
 }

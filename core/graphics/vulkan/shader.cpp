@@ -216,7 +216,6 @@ Expected<ShaderHandle> Device::createShaderSpecialization(Shader& baseShader, co
     shader->m_desc = base.m_desc;
     FOUNDATION_ASSERT(!base.m_spirvWords.empty());
     shader->m_spirvWords = base.m_spirvWords;
-    // The validated name starts at a SPIR-V word and keeps its offset in the byte-for-byte module copy.
     const auto entryPointWords = MakeNotNull(reinterpret_cast<const u32*>(base.m_entryPointName.data()));
     FOUNDATION_ASSERT(entryPointWords.get() >= base.m_spirvWords.data() && entryPointWords.get() < base.m_spirvWords.data() + base.m_spirvWords.size());
     const usize entryPointWordOffset = static_cast<usize>(entryPointWords.get() - base.m_spirvWords.data());

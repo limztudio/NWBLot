@@ -1,4 +1,3 @@
-"""Native combo input builds on the positioned wheel and held-key list helper."""
 from __future__ import annotations
 
 from list_native import ListNativeInput

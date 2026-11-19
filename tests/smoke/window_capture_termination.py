@@ -1,5 +1,3 @@
-"""Terminate captured processes while retaining failure evidence."""
-
 import platform
 import subprocess
 
@@ -26,7 +24,6 @@ class CaptureProcessTermination:
         termination_error = None
         try:
             if process.poll() is None:
-                # Close the X11 window gracefully so shutdown writes Name sidecars.
                 host_platform = platform.system()
                 if host_platform == LIT_WINDOWS:
                     try:

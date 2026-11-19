@@ -13,7 +13,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Owns the layout, its font versions, and the caret geometry for its hard lines.
 [move_only]
 class EditCaretGeometry{
     private TextLayout m_layout;
@@ -23,7 +22,6 @@ class EditCaretGeometry{
     private EditTextMode m_mode = EditTextMode::SingleLine;
     private b8 m_ready = false;
 
-    // Keep the old layout and geometry until the candidate and mapping pass validation.
     [cpp_unwind]
     public b8 adoptLayout(mut TextLayout layout, in StringView expectedText, in Span<EditCaretMapping> mapping, in usize committedBytes, in EditTextMode mode){
         return this.adoptLayout(layout, expectedText, mapping, committedBytes, mode, Span<usize>());
@@ -44,7 +42,6 @@ class EditCaretGeometry{
         return true;
     }
 
-    // Native preedit may address scalar edges inside graphemes.
     public Expected<Rect> caretRect(in usize displayByte)const{
         return TryResolveEditCaretRectWhenReady(this.m_ready, this.m_layout.utf8(), this.m_layout.lines(), this.m_layout.clusters(), this.m_boundaries, displayByte);
     }

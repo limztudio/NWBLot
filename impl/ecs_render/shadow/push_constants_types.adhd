@@ -29,7 +29,6 @@ class ShadowCombinedTemporalPushConstants{
     public u32 transparentMomentsOutSlot = 0u;
 }
 
-// Dedicated transparent trace ABI leaves all opaque, hardware and coarse software kernels unchanged.
 [serialize]
 class SoftwareTransparentSamplingPush{
     public u32 width = 0u;
@@ -48,7 +47,6 @@ class SoftwareTransparentSamplingPush{
     public u32 receiverFactor = s_ShadowReceiverFactorHalf;
 }
 
-// CPU mirror of the heap-only software-shadow selector block.
 [serialize]
 class SwShadowHeapPushConstants{
     public u32 width = 0u;
@@ -73,7 +71,6 @@ class SwShadowHeapPushConstants{
     public u32 receiverFactor = s_ShadowReceiverFactorHalf;
 }
 
-// CPU mirror of hardware RayQuery shadow push constants.
 [serialize]
 class ShadowRqPushConstants{
     public u32 frameIndex = 0u;
@@ -84,7 +81,6 @@ class ShadowRqPushConstants{
     public u32 visibilityStorageSlot = 0u;
 }
 
-// CPU mirror of half-resolution hardware soft-shadow push constants.
 [serialize]
 class ShadowRqSoftPushConstants{
     public u32 width = 0u;
@@ -99,7 +95,6 @@ class ShadowRqSoftPushConstants{
     public u32 receiverFactor = s_ShadowReceiverFactorHalf;
 }
 
-// CPU mirror of NwbShadowResolvePushConstants.
 [serialize]
 class ShadowResolvePushConstants{
     public u32 width = 0u;
@@ -125,7 +120,6 @@ class ShadowResolvePushConstants{
     public u32 receiverFactor = s_ShadowReceiverFactorHalf;
 }
 
-// The combined wavelet extends the shared resolve ABI with opaque moments and output.
 [serialize]
 class ShadowCombinedWaveletPushConstants{
     public ShadowResolvePushConstants resolve;
@@ -134,7 +128,6 @@ class ShadowCombinedWaveletPushConstants{
     public u32 opaqueOutputStorageSlot = 0u;
 }
 
-// CPU mirror of shadow geometry-downsample push constants.
 [serialize]
 class ShadowGeometryDownsamplePushConstants{
     public u32 width = 0u;
@@ -149,7 +142,6 @@ class ShadowGeometryDownsamplePushConstants{
     public u32 receiverFactor = s_ShadowReceiverFactorHalf;
 }
 
-// CPU mirror of temporal shadow-reprojection push constants.
 [serialize]
 class ShadowReprojectMergePushConstants{
     public Array<f32, 16u> prevWorldToClip;

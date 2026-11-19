@@ -64,7 +64,6 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
             const BalancedPartitionRange range = ComputeBalancedPartitionRange(begin, chunk, chunkSize, remainder);
             const usize first = range.first;
             const usize last = range.last;
-            // Internal captures are trivial; no user callable runs under the lock.
             node.function = [context, invoke, first, last](){ invoke.get()(context, first, last); };
         }
         const usize outstanding = AddSize(m_outstanding, chunkCount);

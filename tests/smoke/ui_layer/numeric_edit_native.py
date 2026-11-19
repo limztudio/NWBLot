@@ -1,8 +1,3 @@
-"""Native numeric drafts and reads of the actual Win32/X11 clipboard.
-
-Win32 text uses posted WM_CHAR units and therefore does not qualify live IME.
-X11 text resolves digits, punctuation, and shifted ASCII letters to native keys.
-"""
 from __future__ import annotations
 
 import ctypes
@@ -65,7 +60,6 @@ class NumericEditNativeInput(PopupToolsNativeInput):
             else:
                 self.tap("BackSpace")
             return
-        # Keep the replacement in the same native input queue as Ctrl+A.
         if value:
             encoded = value.encode("utf-16-le")
             for offset in range(0, len(encoded), 2):
@@ -86,4 +80,3 @@ class NumericEditNativeInput(PopupToolsNativeInput):
             time.sleep(TEXT_SETTLE_SECONDS)
             return
         time.sleep(TEXT_SETTLE_SECONDS)
-

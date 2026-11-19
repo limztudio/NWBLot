@@ -13,7 +13,6 @@
 
 
 struct NwbOpticalGeometryQuery{
-    // Reserve one budget unit before each receiver collection; validation/coverage may reject first. Ordinary scenes drop both lists.
     static bool closestSurfaceHit(
         const NwbOpticalTraceConfig config,
         const float3 origin,
@@ -67,7 +66,6 @@ struct NwbOpticalGeometryQuery{
         return true;
     }
 
-    // Resolve ties around the nearest boundary first. One hit cannot reveal coincident volumes, so a second bounded query is needed.
     static bool checkBoundary(
         const NwbOpticalTraceConfig config,
         const float3 origin,
@@ -170,7 +168,6 @@ struct NwbOpticalGeometryQuery{
             }
 #endif
             if(query.CandidatePrimitiveIndex() == hit.primitive){
-                // The already reconstructed primitive is the common case; only another triangle needs seam geometry.
                 found = true;
                 continue;
             }

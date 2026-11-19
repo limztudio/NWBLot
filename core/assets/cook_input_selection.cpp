@@ -174,7 +174,6 @@ Expected<void, CookInputSelectionError> CookInputSelector::Select(
 
         NotNull<const PathSelectionIndex*> selectionIndex(&fileIndex);
 #if !defined(FOUNDATION_PLATFORM_WINDOWS)
-        // Directory containment follows host case rules; explicit asset identities retain their canonical spelling.
         if(isDirectory){
             if(!directoryIndex)
                 directoryIndex.emplace(files, true, scratchArena);

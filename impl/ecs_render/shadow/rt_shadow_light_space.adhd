@@ -238,7 +238,6 @@ void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
     state.m_csgRequired = false;
     if(!ShouldPreflightLightSpaceShadows(state.m_csg.snapshot.hasCsg, this.m_shadowVisibilityHardwareSupported, state.m_settings.backend, state.m_sceneEligible))
         return;
-    // Use the same scene ordering and shadow-slot allocator as the later prefix. That prefix may only select a fitting generation.
     Array<SceneLightGpuData, s_SceneMaxLights> lights;
     Array<f32, s_SceneMaxLights> causticImportance;
     const u32 lightCount = ResolveSceneLights(this.m_world, lights, causticImportance);
@@ -281,7 +280,6 @@ Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(in 
     );
 }
 
-// Graph declaration can change the admitted light list, but never creates or grows its GPU resources.
 void RendererRayTracingSystem::prepareLightSpaceShadows(in Span<SceneLightGpuData> lights){
     mut LightSpaceShadowState state = this.m_lightSpaceShadow;
     mut LightSpaceShadowSnapshot snapshot = state.m_snapshot;
@@ -325,10 +323,8 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(in Span<SceneLightGpuDat
     );
     snapshot.captureTicket = state.m_captureHistory.prepare(identity, state.m_settings.captureCadence);
     snapshot.captureHistory = Optional<mut LightSpaceCaptureHistory>(state.m_captureHistory);
-    // Reuse retains the fitted views, CSG context and converted crossings together; current templates must not overwrite them.
     if(!snapshot.captureTicket.reuse){
         snapshot.plan = plan;
-        // Keep hashed resource objects alive until their map generation is replaced; pointer identities cannot alias replacements.
         state.m_captureBuffers.assign(state.m_sceneBuffers.begin(), state.m_sceneBuffers.end());
         state.m_captureTextures.assign(state.m_sceneTextures.begin(), state.m_sceneTextures.end());
     }
@@ -392,7 +388,6 @@ b8 LightSpaceResourceSet::ensureLightSpaceShadowPipelines(){
         return true;
     mut Device device = this.m_graphics.getDevice();
     mut GpuDescriptorHeap heap = device.getDescriptorHeap();
-    // Fragment stores/atomics are mandatory baseline device features, independently of ray-query support.
     const FormatSupport depthSupport = FormatSupport::Texture | FormatSupport::DepthStencil | FormatSupport::ShaderLoad;
     if(!heap.isInitialized() || (hardwareCsg && !heap.hasAccelStructLayout()) || (device.queryFormatSupport(Format::D32) & depthSupport) != depthSupport)
         return false;

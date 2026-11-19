@@ -69,7 +69,6 @@ b8 RunAllocationBatch<const usize Count>(in Array<AllocationRequest, Count> requ
     return valid;
 }
 
-// Public container operations model collecting and sorting transient work while a caller retains earlier storage.
 b8 RunScopedCollection(in usize count, mut ScratchStorage testArena){
     b8 valid = true;
     {
@@ -145,7 +144,6 @@ void VerifyGlobalArenaTests_SharedOwnerAllocationChurnPreservesPayloadAndAccount
                         allocationFailed = true;
                         break;
                     }
-                    // Volatile payload accesses retain the cross-thread allocator correctness check in opt/fin builds.
                     const u8 firstByte = cast<u8>(threadIndex);
                     const u8 lastByte = cast<u8>(iteration);
                     allocation.writeVolatile(0u, firstByte);
@@ -750,7 +748,6 @@ void VerifyScratchArenaReuse_AlignmentBucketsKeepIndependentLifoStacksAndCallerS
                 EXPECT_EQ(sentinels[index][63u], cast<u8>(index + 83u));
             }
         }
-        // The alignment buckets are independent, so global reverse order is not required here.
         for(usize index = 0u; index < s_Alignments.size(); ++index)
             FreeBytes(testArena, sentinels[index], s_Alignments[index], 64u);
     }
@@ -806,7 +803,6 @@ void VerifyScratchArenaReuse_RelocatedAndZeroSizedTopReallocationsExposeThePrevi
         EXPECT_EQ(ResizeBytes(testArena, grown, 8u, 256u), grown);
         EXPECT_EQ(testArena.memoryStats().reallocationCount, 1u);
         EXPECT_EQ(testArena.memoryStats().usedBytes, 320u);
-        // Zero-size top resize returns the retired address.
         EXPECT_EQ(ResizeBytes(testArena, grown, 8u, 0u), grown);
         EXPECT_EQ(testArena.memoryStats().usedBytes, 64u);
         EXPECT_EQ(sentinel[0u], 41u);
@@ -914,7 +910,6 @@ void VerifyScratchArenaReuse_RelocationReusesCachedBackingAndUnlinksAnEmptiedFor
         EXPECT_EQ(sentinel[0u], 79u);
         FreeBytes(testArena, sentinel, 8u, 64u);
 
-        // Relocation must release the old chunk beneath the replacement block.
         allocation = AllocateBytes(testArena, 8u, 128u);
         ASSERT_NE(allocation, RawAllocation());
         allocation[0u] = 101u;
@@ -949,7 +944,6 @@ void VerifyScratchArenaReuse_FailedRelocationPreservesLiveAllocationsCachedChunk
         FreeBytes(testArena, cached, 1u, cachedBytes);
         const ArenaMemoryStats before = testArena.memoryStats();
         EXPECT_EQ(ResizeBytes(testArena, allocation, 1u, usize.max), RawAllocation());
-        // Aligned request that overflows only when adding the chunk header.
         EXPECT_EQ(AllocateBytes(testArena, 256u, usize.max - 255u), RawAllocation());
         const ArenaMemoryStats after = testArena.memoryStats();
         EXPECT_EQ(after.usedBytes, before.usedBytes);
@@ -1093,7 +1087,6 @@ void VerifyAllocatorUsageBoundaries_GlobalArenaChargesUsableBytesAcrossOddSizeRe
         pointer = replacement;
         EXPECT_EQ(testArena.memoryStats().usedBytes, BackendSize(pointer));
         const ArenaMemoryStats beforeFailure = testArena.memoryStats();
-        // Windows debug builds can use a separate CRT errno in the allocator DLL.
         SetRangeError();
         RawAllocation backendInvalidAlignment = BackendReallocate(pointer, 0u, 3u);
         const i32 backendInvalidAlignmentError = AllocationError();

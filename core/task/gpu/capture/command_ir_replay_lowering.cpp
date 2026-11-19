@@ -70,7 +70,6 @@ namespace __hidden_gpu_command_ir_replay_lowering{
     return GpuCommandIrReplayError::None;
 }
 
-// Semantic preflight admitted every backend resource here, and the graph stays caller-stable.
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBackendOperands(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, const GpuPhysicalQueueInfo& commandQueue, CommandList& commandList)noexcept{
     switch(record.opcode){
     case GpuCommandIrOpcode::CopyBuffer:{
@@ -109,7 +108,6 @@ namespace __hidden_gpu_command_ir_replay_lowering{
     }
 }
 
-// Preflight cannot check native ownership, so scan the packet before taking the recording lease.
 [[nodiscard]] static GpuCommandIrReplayResult ValidateBackendOperandPacket(
     const BinaryByteView bytes,
     const GpuCommandIrOwnedStream* const ownedStream,
@@ -123,7 +121,6 @@ namespace __hidden_gpu_command_ir_replay_lowering{
     if(!commandQueue)
         return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::BackendResourceNotReady, expectedStreamValidation);
 
-    // A reader failure surfaces through next() below.
     GpuCommandIrStreamReader reader(bytes);
     u64 recordIndex = 0u;
     GpuCommandIrDetail::RasterReplayState rasterState;
@@ -140,7 +137,6 @@ namespace __hidden_gpu_command_ir_replay_lowering{
         const b8 raster = GpuCommandIrDetail::IsRasterOpcode(decoded.opcode);
         const GpuSubmissionPacketId recordPacket = raster ? decoded.raster.packet : decoded.builtin.packet;
         if(recordPacket == packet){
-            // Preflight rejected every raster record without the owned sidecar.
             FOUNDATION_ASSERT(!raster || ownedStream);
             const GpuCommandIrReplayError::Enum operandError = raster
                 ? GpuCommandIrDetail::ValidateRasterBackendOperand(decoded.raster, *ownedStream, graph, *commandQueue, recordIndex, commandList, rasterState)
@@ -213,7 +209,6 @@ static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const Gp
     if(!result.valid())
         return result;
 
-    // Preflight admitted this packet and its queue on the same pinned plan.
     const GpuCompiledPacketView packetView = compiledGraph.packet(packet);
     FOUNDATION_ASSERT(packetView.valid());
     const GpuSubmissionPacket& packetPlan = *packetView.plan;
@@ -237,7 +232,6 @@ static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const Gp
         return backendPreflight;
 
     const u64 recordingLeaseSerial = commandList.recordingLeaseSerial();
-    // Preflight already proved legality, so this walk can lower without a duplicate command list.
     GpuCommandIrStreamReader reader(bytes);
     u64 recordIndex = 0u;
     for(;;){
@@ -256,7 +250,6 @@ static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const Gp
             continue;
         }
 
-        // Preflight admitted these resources and the raster sidecar; the graph and bytes are caller-stable and concurrent mutation stays unsupported.
         FOUNDATION_ASSERT(raster || (graph.validResource(decoded.builtin.destination) && ((decoded.builtin.opcode != GpuCommandIrOpcode::CopyBuffer && decoded.builtin.opcode != GpuCommandIrOpcode::CopyTexture) || graph.validResource(decoded.builtin.source))));
 
         if(raster){

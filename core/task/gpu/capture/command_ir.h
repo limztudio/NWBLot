@@ -19,7 +19,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Command capture is opt-in; native recording is the default.
 namespace GpuCommandIrOpcode{
     static constexpr u8 s_GpuCommandIrOpcodeCopyBufferBase = 0u;
     enum Enum : u8{
@@ -65,8 +64,7 @@ namespace GpuCommandIrWireOpcode{
     };
 };
 
-// Same-host tooling format; magic/version reject incompatible layouts.
-inline constexpr u32 s_GpuCommandIrStreamMagic = 0x4E574349u; // NWCI
+inline constexpr u32 s_GpuCommandIrStreamMagic = 0x4E574349u;
 inline constexpr u16 s_GpuCommandIrStreamVersion = 5u;
 
 #pragma pack(push, 1)
@@ -76,7 +74,6 @@ struct GpuCommandIrStreamHeaderPrefix{
     u16 reserved = 0u;
 };
 
-// Graph and packet handles use distinct generations.
 struct GpuCommandIrStreamHeader{
     u32 magic = s_GpuCommandIrStreamMagic;
     u16 version = s_GpuCommandIrStreamVersion;
@@ -90,11 +87,9 @@ struct GpuCommandIrStreamHeader{
 
 struct GpuCommandIrHeader{
     GpuCommandIrWireOpcode::Enum opcode = GpuCommandIrWireOpcode::CopyBuffer;
-    // Total record bytes including this header. Each opcode has one fixed-size payload.
     u16 byteSize = 0u;
 };
 
-// Records target the header generations; queue generation stays command-local.
 struct GpuCommandIrRecordContext{
     u32 taskIndex = Limit<u32>::s_Max;
     u32 packetIndex = Limit<u32>::s_Max;
@@ -207,7 +202,6 @@ struct GpuCommandIrClearTextureRectUIntRecord{
     GpuCommandIrUIntColor uintClearValue;
 };
 
-// Blob offsets are relative to the owned section after all fixed command records.
 struct GpuCommandIrUploadBufferRecord{
     GpuCommandIrHeader header;
     GpuCommandIrRecordContext context;
@@ -322,8 +316,6 @@ struct GpuCommandIrRasterHeapOwner;
 struct GpuCommandIrRasterOwnerTable;
 class GpuCommandIrOwnerAnchor;
 
-
-// Reader validates only the wire contract; topology needs a later phase.
 namespace GpuCommandIrStreamReadStatus{
     enum Enum : u8{
         End,
@@ -369,7 +361,6 @@ public:
     }
 };
 
-// Non-owning sequential reader; backing bytes must stay alive and unchanged.
 class GpuCommandIrStreamReader final : NoCopy{
 public:
     explicit GpuCommandIrStreamReader(BinaryByteView bytes)noexcept;
@@ -405,13 +396,11 @@ private:
     u64 m_nextRecordIndex = 0u;
 };
 
-// Walks a stream with the syntax reader; returns success or first bad location.
 [[nodiscard]] GpuCommandIrStreamValidationResult ValidateGpuCommandIrStream(BinaryByteView bytes)noexcept;
 
 
 class GpuCommandIrCapture;
 
-// A checkpoint identifies an exact prefix of one capture and one recording attempt.
 class GpuCommandIrCaptureCheckpoint final{
     friend class GpuCommandIrCapture;
 
@@ -434,7 +423,6 @@ private:
     usize m_rasterHeapOwnerCount = 0u;
 };
 
-// Caller-arena-owned immutable exported bytes; capture reset and graph teardown cannot change them.
 class GpuCommandIrOwnedStream final : NoCopy{
     friend class GpuCommandIrCapture;
 
@@ -464,8 +452,6 @@ private:
     GpuCommandIrRasterOwnerTable* m_rasterOwners = nullptr;
 };
 
-
-// Replay is opt-in; streams hold task bodies lowered into fresh packets.
 namespace GpuCommandIrReplayError{
     enum Enum : u8{
         None,
@@ -507,8 +493,6 @@ namespace GpuCommandIrReplayError{
 
 struct GpuCommandIrReplayResult{
     GpuCommandIrReplayError::Enum error = GpuCommandIrReplayError::None;
-    // Syntax failures preserve the reader's exact byte diagnostic.
-    // Semantic failures identify the decoded record that failed graph-aware preflight and use Limit<u64>::s_Max when no record was reached.
     GpuCommandIrStreamValidationResult streamValidation;
     u64 recordIndex = Limit<u64>::s_Max;
 
@@ -519,13 +503,9 @@ public:
     }
 };
 
-// Graph-only validation for `packet`'s commands (no native list): whole stream syntax-checked, other packets ignored for one-at-a-time replay.
-// Ownership/readiness need a replay list (checked at replay).
 [[nodiscard]] GpuCommandIrReplayResult PreflightGpuCommandIrPacket(BinaryByteView bytes, const GpuTaskGraphDeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledGraph, GpuSubmissionPacketId packet)noexcept;
 [[nodiscard]] GpuCommandIrReplayResult PreflightGpuCommandIrPacket(const GpuCommandIrOwnedStream& stream, const GpuTaskGraphDeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledGraph, GpuSubmissionPacketId packet)noexcept;
 
-// Preflight then lowers only `packet`'s commands: list open on the packet's exact queue/class, no render pass, bytes+graph stable.
-// No seeds/barriers/submit; caller keeps the packet contract.
 [[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacket(const GpuCommandIrOwnedStream& stream, const GpuTaskGraphDeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledGraph, GpuSubmissionPacketId packet, CommandList& commandList);
 
 
@@ -546,7 +526,6 @@ public:
     [[nodiscard]] u64 planGeneration()const noexcept{ return m_planGeneration; }
 
     [[nodiscard]] u64 recordingAttemptGeneration()const noexcept{ return m_recordingAttemptGeneration; }
-    // A non-empty capture belongs to one recording attempt, even when graph and plan survive a rejected retry.
     [[nodiscard]] b8 beginRecordingAttempt(u64 recordingAttemptGeneration)noexcept;
     [[nodiscard]] BinaryByteView commandBytes()const;
     [[nodiscard]] Expected<GpuCommandIrOwnedStream> exportOwned(GraphicsArena& arena)const;
@@ -555,8 +534,6 @@ public:
     [[nodiscard]] GpuCommandIrCaptureCheckpoint checkpoint()const noexcept;
     [[nodiscard]] b8 rollback(const GpuCommandIrCaptureCheckpoint& target)noexcept;
     [[nodiscard]] b8 captureSetGraphicsState(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, const GpuCommandIrRasterStateDesc& state);
-    // ownerArena and the descriptor owner's arena must outlive every exported stream that retains this heap binding.
-    // The Device and its heap must outlive the last retained lease/artifact.
     [[nodiscard]] b8 captureBindGraphicsHeap(
         GpuDescriptorHeap& heap,
         GraphicsArena& ownerArena,
@@ -586,8 +563,6 @@ public:
     }
     [[nodiscard]] b8 captureDraw(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, const DrawArguments& arguments, b8 indexed);
     [[nodiscard]] b8 captureEndRenderPass(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue);
-    // Packet recording checkpoints before invoking task payloads and rolls back an incomplete task-recording attempt.
-    // This is a recording trace; a later reader may separately correlate it with submission acceptance.
     void rollback(usize recordCount)noexcept;
 
     [[nodiscard]] b8 captureUploadBuffer(

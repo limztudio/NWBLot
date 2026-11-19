@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Actual geometry rendered with ordinary AVBOIT, without optical interfaces. Shading exposes curved/flat faces.
 static const half NWB_SMOKE_REFRACTION_PREVIEW_AMBIENT_SHADE = 0.3h;
 static const half NWB_SMOKE_REFRACTION_PREVIEW_DIFFUSE_SHADE = 0.7h;
 static const float3 NWB_SMOKE_REFRACTION_PREVIEW_LIGHT_DIRECTION = float3(-0.45, 0.65, -0.60);

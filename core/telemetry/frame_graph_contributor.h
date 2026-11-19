@@ -48,7 +48,6 @@ struct FrameGraphPassMetadata{
 
 class FrameGraphBuilder final : NoCopy{
 public:
-    // Statistics tables may be prepopulated, but must only be changed through this builder during its lifetime.
     FrameGraphBuilder(Alloc::ScratchArena& scratchArena, FrameGraphNodeDescs& nodes, FrameGraphEdgeDescs& edges, FrameGraphPendingNameEdges& pendingNameEdges, const u64 frameIndex = 0u)
         : m_scratchArena(scratchArena)
         , m_nodes(nodes)
@@ -84,7 +83,6 @@ public:
     [[nodiscard]] b8 addPhysicalQueueRuntimeStatistics(FrameGraphNodeHandle owner, const FrameGraphPhysicalQueueRuntimeStatistics& statistics);
     [[nodiscard]] b8 addPacketSubmissionStatistics(FrameGraphNodeHandle owner, const FrameGraphPacketSubmissionStatisticsRecord& statistics);
 
-    // Labels are copied into the scratch arena and remain valid while that arena lives.
     [[nodiscard]] FrameGraphNodeHandle addPass(const Name& scope, const AStringView label, const u8 flags = 0u){
         return addNode(scope, label, FrameGraphNodeKind::Pass, FrameGraphPassMetadata{}, flags);
     }

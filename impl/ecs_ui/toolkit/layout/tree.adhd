@@ -10,7 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Build and arrange on one owning UI thread. The supplied arena outlives the tree and its published boxes.
 class LayoutTree : NoCopy{
     private Vector<LayoutTreeNode> m_nodes;
     private Vector<LayoutTreeWork> m_work;
@@ -19,7 +18,6 @@ class LayoutTree : NoCopy{
     private u32 m_maxNodes;
     private b8 m_buildFailed = false;
 
-    // Capacity is clamped to s_LayoutMaxNodes; zero capacity admits no nodes.
     public LayoutTree(){
         this.m_maxNodes = s_LayoutMaxNodes;
         this.m_nodes.reserve(this.m_maxNodes);
@@ -36,7 +34,6 @@ class LayoutTree : NoCopy{
         this.m_stagedBoxes.reserve(this.m_maxNodes);
     }
 
-    // Start a new build while retaining the last successful arranged output.
     public void reset(){
         this.m_nodes.clear();
         this.m_work.clear();
@@ -44,7 +41,6 @@ class LayoutTree : NoCopy{
         this.m_buildFailed = false;
     }
 
-    // A failed admission poisons this build until reset().
     public Expected<u32> addNode(in u32 parent, in LayoutNodeDesc description){
         const Expected<u32> index = TryAppendLayoutTreeNode(this.m_nodes, this.m_maxNodes, this.m_buildFailed, parent, description);
         if(!index.has_value()){
@@ -54,7 +50,6 @@ class LayoutTree : NoCopy{
         return index.value();
     }
 
-    // Root sizing follows its policies against the viewport. All geometry stays in logical units.
     public b8 arrange(in Rect viewport){
         return ArrangeLayoutTree(
             Span<LayoutTreeNode>(this.m_nodes),

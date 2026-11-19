@@ -110,14 +110,12 @@ CpuTaskScheduler::CpuTaskScheduler(const CpuTaskSchedulerConfig& config)
     const u32 reserved = Min(config.reservedThreadCount, available);
     m_workerCount = config.workerCount == CpuTaskSchedulerConfig::s_AutomaticWorkerCount ? available - reserved : config.workerCount;
     m_placements.reserve(m_workerCount);
-    // Reserve fastest CPUs for the caller by default.
     const usize first = config.workerCount == CpuTaskSchedulerConfig::s_AutomaticWorkerCount ? reserved : 0u;
     for(u32 worker = 0u; worker < m_workerCount; ++worker){
         CpuWorkerPlacement placement;
         if(!topology.empty()){
             const usize usable = topology.size() - Min(first, topology.size() - 1u);
             usize selected = first + static_cast<usize>(worker) % usable;
-            // Small budgets still span both capacity classes when two or more workers exist.
             if(m_workerCount > 1u && static_cast<usize>(m_workerCount) < usable){
                 selected = first + static_cast<usize>(worker) * (usable - 1u) / (m_workerCount - 1u);
             }
@@ -257,7 +255,6 @@ Expected<CpuTaskScheduler::TaskHandle, CpuTaskAdmissionError::Enum> CpuTaskSched
                 visit(reachable.parent);
             }
         }
-        // Reserve dependency storage first; duplicate predecessors are valid fan-in.
         m_searchStack.clear();
         m_searchStack.reserve(dependencyCount);
         for(usize index = 0u; index < dependencyCount; ++index){
@@ -368,7 +365,6 @@ void CpuTaskScheduler::enqueueLocked(const u32 index)noexcept{
 }
 
 CpuTaskScheduler::TaskHandle CpuTaskScheduler::claimLocked(const CpuAffinity::Enum affinity, const b8 mainThread, const b8 cooperative, ScopeWait* const preferredScope)noexcept{
-    // Periodically admit background and normal work even while critical producers keep publishing.
     const u64 dispatch = m_dispatchCount;
     const usize firstPriority = dispatch % __hidden_cpu_task_scheduler::s_BackgroundAdmissionPeriod == __hidden_cpu_task_scheduler::s_BackgroundAdmissionTick
         ? static_cast<usize>(CpuTaskPriority::Background)
@@ -519,9 +515,7 @@ void CpuTaskScheduler::execute(const TaskHandle handle, const usize workerIndex,
 void CpuTaskScheduler::retire(TaskHandle handle, TaskNode& first)noexcept{
     TaskNode* node = &first;
     while(node){
-        // The locked Retiring transition transfers exclusive retirement ownership to this caller.
         FOUNDATION_ASSERT(node->state == TaskState::Retiring);
-        // Tasks retain callables until descendants complete; destruction precedes publication.
         node->function.reset();
         TaskHandle parentHandle;
         TaskNode* parentToRetire = nullptr;
@@ -553,7 +547,6 @@ void CpuTaskScheduler::retire(TaskHandle handle, TaskNode& first)noexcept{
             }
             const b8 scopeCompleted = node->scope && node->scope->m_pending.fetch_sub(1u, MemoryOrder::acq_rel) == 1u;
             if(node->canceled){
-                // Generations retire in increasing order. Capacity was reserved before publishing this task.
                 if(node->latestCanceledGeneration != 0u)
                     node->olderCanceledGenerations.push_back(node->latestCanceledGeneration);
                 node->latestCanceledGeneration = handle.generation;
@@ -573,7 +566,6 @@ void CpuTaskScheduler::retire(TaskHandle handle, TaskNode& first)noexcept{
                 m_freeNode = handle.index;
             }
             wakeMask = workerWakeMaskLocked();
-            // Ready prerequisites and completed joins can change a registered waiter's predicate.
             wakeJoiners = m_joinWaiters != 0u && (madeReady || scopeCompleted || m_outstanding == 0u || m_handleJoinWaiters != 0u);
         }
         notifyProgress(wakeMask, wakeJoiners);

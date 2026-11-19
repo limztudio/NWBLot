@@ -9,9 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared build-kernel triangle input. Morton generation and bottom-up fitting share this stream; keep decoding together.
-
-
 #include "binding_slots.h"
 #include "constants.h"
 #include "bvh_common.slangi"

@@ -432,7 +432,6 @@ void VerifyAssetsGraphics_SharedCodecPayloadsKeepDistinctVirtualPathsUnderLongBu
     ASSERT_TRUE(WriteGraphicsFixtureText(JoinGraphicsPath2(assetRoot, "samplers", "first.nwb"), s_LinearWrapSamplerMetadata));
     ASSERT_TRUE(WriteGraphicsFixtureText(JoinGraphicsPath2(assetRoot, "samplers", "second.nwb"), s_LinearWrapSamplerMetadata));
 
-    // A 200-character directory leaves room for compact artifacts within the traditional Windows path limit.
     const usize rootTextLength = GraphicsPathUtf8ByteCount(root);
     ASSERT_LT(rootTextLength, 199u);
     AssetString directoryName(testArena.arena);
@@ -503,7 +502,6 @@ void VerifyAssetsGraphics_FailedReorderedSharedPayloadBuildPreservesPublishedVir
     ASSERT_TRUE(ReserveGraphicsManifest(3u, reordered));
     ASSERT_TRUE(AppendTestCookPayload(secondPath, samplerPayload, reordered, s_SharedCookKeyHash));
     ASSERT_TRUE(AppendTestCookPayload(firstPath, samplerPayload, reordered, s_SharedCookKeyHash));
-    // Reorder both shared-payload entries before failing, so publication also has to create a new artifact slot.
     ASSERT_TRUE(AppendTestCookPayload(s_AssetInputNameProjectSamplersFailing, samplerPayload, reordered, s_SharedCookKeyHash));
     CorruptManifestLastPayloadHash(reordered);
     EXPECT_FALSE(WriteBuiltManifestHelper(publishedDirectory, reordered, scratch));

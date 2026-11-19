@@ -1,5 +1,3 @@
-"""Compare production reflection spatial-owner framebuffers."""
-
 from reflection_roughness_oracle import ReflectionRoughnessOracle
 from reflection_spatial_owner_evidence import LIT_SEQUENCE, SELECTIONS
 from window_capture_smoke import SmokeFailure
@@ -38,4 +36,3 @@ class ReflectionSpatialOwnerImageEvidence:
                 raise SmokeFailure("fresh radius references do not discriminate wrong-radius bank selection")
             result[LIT_RADIUS_DISCRIMINATION][str(first) + "_" + str(second)] = { "projected_mirror_pixels": area, "pixels_differing_by_more_than_two": changed, "minimum_discriminating_pixels": minimum}
         return result
-

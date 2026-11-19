@@ -176,7 +176,6 @@ class MaterialBinaryReader{
         }
         const u32 fieldCount = fieldCountResult.value();
 
-        // Successful reads keep the cursor inside the binary.
         if(cast<usize>(blockCount) > (binary.size() - inOutCursor) / s_MaterialTypedLayoutBlockBytes){
             error("Material::loadBinary failed: typed layout block count exceeds available data");
             return false;

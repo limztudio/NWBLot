@@ -27,7 +27,6 @@ namespace GpuTaskGraphBuiltinDetail{
 
 template<typename ResourceDesc>
 [[nodiscard]] inline b8 BuiltInTaskCanMaterializeRetainedState(const ResourceDesc& resourceDesc, const ResourceStates::Mask graphInitialState, const ResourceStates::Mask externalFinalState)noexcept{
-    // Retained resources restore to descriptor state at packet close. Built-ins may start from a different state via compiler barriers.
     if(!resourceDesc.keepInitialState)
         return true;
     return resourceDesc.initialState != ResourceStates::Unknown && graphInitialState == resourceDesc.initialState && (externalFinalState == ResourceStates::Unknown || externalFinalState == resourceDesc.initialState);
@@ -117,7 +116,6 @@ template<typename Payload, typename CaptureCopyFn, typename EmitCopyFn>
         return true;
     if(resourceDesc.initialState == ResourceStates::Unknown || (externalFinalState != ResourceStates::Unknown && externalFinalState != resourceDesc.initialState))
         return false;
-    // An Unknown write-only destination never invents an input state. Fresh managed subresources lower from Undefined.
     return graphInitialState == ResourceStates::Unknown || graphInitialState == resourceDesc.initialState;
 }
 

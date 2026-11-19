@@ -269,10 +269,8 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
         return false;
     }
 
-    // Compiler artifacts are reused member storage reset per submission; render() never constructs graph objects.
     this.resetFrameTaskGraph();
     mut GpuTaskGraph graph = this.m_frameTaskGraph;
-    // Dispatch plans are reused member storage; only capacity growth may allocate, never per-frame creation.
     mut Vector<MeshSkinningGraphDispatchPlan> dispatchPlans = this.m_frameDispatchPlans;
     dispatchPlans.clear();
     auto skinningBindings = this.m_world.view<SkinnedMeshBindingComponent>();
@@ -292,14 +290,12 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
     if(!resourceUses.has_value())
         return false;
 
-    // Retain prior-frame state with its consuming task; source stays serial by contract.
     Array<GpuTaskExternalStateSource, 1u> previousFrameStateSources;
     const auto source = this.m_acceptedSkinningState.borrowSource();
     if(source.has_value())
         previousFrameStateSources[0].setState(source.value());
 
     GpuTimingSubmissionTicket timingTicket(this.m_graphics.gpuTiming());
-    // Dispatch payload slices reference reused member storage that outlives this.m_frameTaskGraph.
     mut Vector<MeshSkinningLocalBoundsDispatch> localBoundsDispatches = this.m_frameLocalBoundsDispatches;
     localBoundsDispatches.clear();
     localBoundsDispatches.reserve(dispatchPlans.size());
@@ -427,7 +423,6 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
     if(!ValidateCompiledSkinningGraphPlan(planValid, packetCount, terminalQueue.has_value() && terminalQueue.value().id == graphicsQueue))
         return false;
 
-    // Live-buffer list is reused member storage; only capacity growth may allocate, never per-frame creation.
     this.collectLiveSkinningStateBuffers();
     GpuPersistentStateCandidate candidate(this.m_acceptedSkinningState);
     SkinningStateHandoff skinningState(this.m_acceptedSkinningState, candidate, Span<BufferHandle>(this.m_frameLiveBuffers));
@@ -525,7 +520,6 @@ Expected<b8> MeshSkinningSystem::ensureRuntimeResources(mut MeshSkinningRuntimeI
         }
         rebuilt.skinBuffer = skinBufferResult.value();
 
-        // Live pose data arrives from the graph after ECS updates; setup owns only the Skin-sized storage.
         auto jointPaletteBufferResult = CreateSkinningJointPaletteBuffer(this.m_graphics, jointPaletteBufferName, jointCount, sizeof(SkeletonJointMatrix), instance.handle.value);
         if(!jointPaletteBufferResult.has_value())
             return MakeUnexpected(Failure());
@@ -547,7 +541,6 @@ Expected<b8> MeshSkinningSystem::ensureRuntimeResources(mut MeshSkinningRuntimeI
     if(!this.createRuntimeResourceBindlessHeapHandles(instance, rebuilt))
         return MakeUnexpected(Failure());
 
-    // Rebuilds allocate fresh slots; free the replaced generation before dropping its handles.
     this.releaseRuntimeResourceBindlessHeapHandles(resources);
     resources = rebuilt;
     retireRebuilt.published = true;

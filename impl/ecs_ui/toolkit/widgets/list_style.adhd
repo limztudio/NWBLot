@@ -10,7 +10,6 @@
 
 
 const f32 s_ListDefaultHeight = 240.0f;
-// Padding left, top, right, bottom, then minimum x and y.
 const usize s_ListRowMetricCount = 6u;
 const usize s_ListLanguageBufferBytes = 64u;
 const u32 s_ListMaxPreparedRows = 1024u;
@@ -67,7 +66,6 @@ class ListResult{
     public b8 focused = false;
 }
 
-// Stable across interaction states so hover, selection and disabling cannot change text placement.
 class SelectableMetrics{
     public Insets padding;
     public Point minimum;

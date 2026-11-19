@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The source copies the query and owns a stable-key view. Filtering preserves full-source metadata.
 interface ISearchableListDataSource : IListDataSource{
     b8 filter(in StringView query);
     in IListDataSource filtered()const;

@@ -49,7 +49,6 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
     set(_nwb_smoke_capture_early_settle_seconds "0.75")
     set(_nwb_smoke_capture_mid_settle_seconds "2.0")
     set(_nwb_smoke_capture_late_settle_seconds "3.25")
-    # CTest budgets include process startup and orderly teardown around the script timeout.
     set(_nwb_window_capture_smoke_ctest_timeout_seconds 150)
     set(_nwb_csg_temporal_script_timeout_seconds 150)
     set(_nwb_csg_temporal_ctest_timeout_seconds 210)
@@ -163,8 +162,6 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         endif()
     endfunction()
 
-    # Fixture-only material families stay out of the shared smoke catalog.
-    # Each fixture root supplies its own project.nwb and scenes/main.nwb alongside the shared smoke asset library.
     function(nwb_add_fixture_smoke_assets TARGET_NAME FIXTURE_NAME RUNTIME_ROOT DESCRIPTION)
         set(_nwb_fixture_asset_root_args --asset-root "impl/assets" --asset-root "tests/smoke/assets")
         set(_nwb_fixture_input_patterns "${PROJECT_SOURCE_DIR}/impl/assets/*" "${PROJECT_SOURCE_DIR}/global/slang/*" "${CMAKE_CURRENT_LIST_DIR}/assets/*")
@@ -192,7 +189,6 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         )
         nwb_configure_runtime_smoke_target(nwb_transparent_multi_smoke "${_nwb_transparent_multi_runtime_root}" transparent_multi_runtime)
 
-        # F1 exercises frame-lagged lighting teardown and re-bootstrap on the shared scene.
         nwb_declare_executable(nwb_frame_lagged_async_lighting_smoke)
         nwb_target_adhd_sources(nwb_frame_lagged_async_lighting_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_scene_and_setup.adhd"
@@ -421,7 +417,6 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         add_custom_target(nwb_skinning_culling_benchmark_assets DEPENDS "${_nwb_skinning_culling_asset_stamp}")
         add_dependencies(nwb_skinning_culling_benchmark nwb_skinning_culling_benchmark_assets)
 
-        # Shadows and caustics must follow live deformed geometry rather than bind pose.
         nwb_declare_executable(nwb_skinned_caustic_smoke)
         nwb_target_adhd_sources(nwb_skinned_caustic_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/skinned_caustic_transition.adhd"
@@ -440,7 +435,6 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
                     ${_nwb_skinning_culling_logserver_args} CONFIGURATIONS dbg opt)
         set_tests_properties(nwb_skinned_caustic_csg_transition_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_skinned_caustic_transition_ctest_timeout_seconds})
 
-        # The crowd stresses scene updates and opaque/transparent shadows across two lights.
         nwb_declare_executable(nwb_stress_test_smoke)
         nwb_target_adhd_sources(nwb_stress_test_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/stress_crowd_scenes.adhd"
@@ -455,7 +449,6 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             set_tests_properties(nwb_stress_presentation_timing_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} TIMEOUT ${_nwb_stress_presentation_timing_timeout_seconds} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE})
         endif()
 
-        # The A/B harness runs this binary for both transparent and opaque-only shadow arms.
         nwb_declare_executable(nwb_hardware_shadow_boundary_healthy_benchmark)
         nwb_target_adhd_sources(nwb_hardware_shadow_boundary_healthy_benchmark NAMESPACE "NWB::Tests::Smoke" SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/stress_crowd_scenes.adhd"
@@ -465,7 +458,6 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_configure_runtime_smoke_target(nwb_hardware_shadow_boundary_healthy_benchmark "${_nwb_skinning_culling_runtime_root}" stress_test_runtime nwb_ecs_model nwb_ecs_mesh_skinning)
         add_dependencies(nwb_hardware_shadow_boundary_healthy_benchmark nwb_skinning_culling_benchmark_assets)
 
-        # Both M4 arms share assets while the async arm requires a dedicated Compute queue.
         nwb_declare_executable(nwb_async_shadow_m4_sync_benchmark)
         nwb_target_adhd_sources(nwb_async_shadow_m4_sync_benchmark NAMESPACE "NWB::Tests::Smoke" SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/stress_crowd_scenes.adhd"
@@ -498,11 +490,9 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/soft_shadow_test_project.adhd"
         )
         nwb_configure_runtime_smoke_target(nwb_soft_shadow_test_smoke "${_nwb_skinning_culling_runtime_root}" soft_shadow_test_project nwb_ecs_model nwb_ecs_mesh_skinning)
-        # Cook private timing materials for NWB_SOFT_SHADOW_TEST_TIMING=1 A/B runs.
         nwb_add_fixture_smoke_assets(nwb_soft_shadow_timing_smoke_assets soft_shadow_timing "${CMAKE_BINARY_DIR}/Testing/soft_shadow_timing_smoke_runtime/$<CONFIG>" "soft shadow timing" soft_shadow_timing_assets)
         add_dependencies(nwb_soft_shadow_test_smoke nwb_skinning_culling_benchmark_assets nwb_soft_shadow_timing_smoke_assets)
 
-        # Default GI smoke uses the open-top box while NWB_GI_SMOKE_COMPLEX_SCENE selects the skylight maze.
         nwb_declare_executable(nwb_gi_test_smoke)
         nwb_target_adhd_definitions(nwb_gi_test_smoke NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
         nwb_target_adhd_sources(nwb_gi_test_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
@@ -510,12 +500,10 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/gi_test_runtime.adhd"
         )
         nwb_configure_runtime_smoke_target(nwb_gi_test_smoke "${_nwb_skinning_culling_runtime_root}" gi_test_runtime nwb_ecs_csg)
-        # Coverage, complex, and CSG GI scenes cook private GI material families.
         set(_nwb_gi_runtime_root "${CMAKE_BINARY_DIR}/Testing/gi_smoke_runtime/$<CONFIG>")
         nwb_add_fixture_smoke_assets(nwb_gi_smoke_assets gi "${_nwb_gi_runtime_root}" "GI" gi_assets)
         add_dependencies(nwb_gi_test_smoke nwb_skinning_culling_benchmark_assets nwb_gi_smoke_assets)
 
-        # Separate opt-in fixture for same-cell perpendicular face GI coverage.
         nwb_add_window_capture_smoke(nwb_gi_coverage_probe_capture_smoke gi_coverage_probe_capture.bmp "$<TARGET_FILE:nwb_gi_test_smoke>" "${_nwb_gi_runtime_root}" "NWB GI Test" "--application-capture" "--application-capture-frame-count" "1"
             "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" "--timeout" "${_nwb_gi_coverage_probe_script_timeout_seconds}" "--expect-log-message" "GiTestSmokeProject: coverage probe with perpendicular same-cell faces created"
                 "--expect-log-message" "GiTestSmokeProject: complex GI live warmup start"
@@ -562,4 +550,3 @@ endif()
 if(TARGET nwb_loader AND TARGET nwb_ecs_ui AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
     add_subdirectory(ui_layer)
 endif()
-

@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The graph records the resource barriers declared by this task.
 class BarrierOnlyGraphTask{
     public GpuTaskCommandRequirements commandRequirements()const{
         return GpuTaskCommandRequirements();

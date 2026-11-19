@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise keyed combo preview, commit, cancellation, and GPU popup composition."""
+
 from __future__ import annotations
 
 import json
@@ -41,7 +41,6 @@ class ComboRun(KeyedRun):
         super().__init__(args, backend, handle, process, log_directory, log_baseline, log_pattern, native_type=ComboNativeInput, snapshot_reader=COMBO_PROBE.snapshot, observer=COMBO_PROBE.observe,
             minimum_height=400, fixture=LIT_COMBO, capture_stage="during combo UI capture")
         self.expected = {"selected": 0, LIT_CURSOR: 0, "count": 100000, LIT_FOCUSED: 0, "reversed": 0, "removed": 0, "visible": 1, "commits": 0, "underlying": 0, "open": 0, "enabled": 1, "bottom": 0, "source_generation": 1}
-
 
     def write_report(self, passed):
         report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "input_path": "Win32 posted keys/pointer/positioned WM_MOUSEWHEEL messages"

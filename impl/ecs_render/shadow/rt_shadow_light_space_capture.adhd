@@ -255,7 +255,6 @@ b8 LightSpaceShadowRecorder::resolve(
     }
     if(hardwareCsg)
         return true;
-    // Alpha is initialized by the map dispatch before the fallback reads it through the same UAV binding.
     commandList.setTextureState(outputTexture, TextureSubresourceSet(), ResourceStates::UnorderedAccess, true);
     commandList.commitBarriers();
     ComputeState fallbackState;

@@ -48,7 +48,6 @@ class PendingMaterialTypedByteEntry : NoCopy{
     }
 }
 
-// Hash and size narrow the lookup. Distinct byte strings can share both.
 class MaterialTypedByteContentRangeMap : NoCopy{
     private HashMap<MaterialTypedByteBucket, usize> m_heads;
     private Vector<MaterialTypedByteEntry> m_entries;
@@ -110,7 +109,6 @@ class MaterialTypedByteContentRangeMap : NoCopy{
         if(found.has_value())
             return found.value();
 
-        // Source bytes may point into the upload vector being grown.
         const auto head = this.m_heads.try_emplace(MaterialTypedByteBucket(lookup), usize.max);
         PendingMaterialTypedByteEntry pending(this.m_entries);
         const usize index = this.m_entries.size();

@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Hosts own scroll state; its offset and identity contain no retained application or OS references.
 class ScrollState : NoCopy{
     private u64 m_instanceGeneration;
     private f64 m_offset = 0.0;

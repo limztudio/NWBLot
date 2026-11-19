@@ -1,5 +1,3 @@
-"""Analyze feedback capture geometry and image equivalence."""
-
 import math
 
 from reflection_image_analysis import ReflectionImageAnalysis, FOREGROUND_REGION, GLASS_REGION, OPAQUE_REGION
@@ -58,7 +56,6 @@ class ReflectionFeedbackImageAnalysis:
     @staticmethod
     def compare_static_images(baseline, feedback, case):
         if case == LIT_ROUGH_FURNACE:
-            # Average pixel samples across each rough frame instead of comparing stochastic pixels directly.
             from reflection_roughness_reference import analyze_furnace
             return {LIT_BASELINE_2: analyze_furnace(baseline, 1.0), LIT_FEEDBACK_2: analyze_furnace(feedback, 1.0)}
         if case == LIT_FEEDBACK_LONG_MISS:

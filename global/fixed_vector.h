@@ -114,7 +114,6 @@ public:
 
     constexpr size_type max_size()const noexcept{ return s_MaxElements; }
 
-    // Slots remain constructed; successful removals reset them from the back.
     constexpr void clear()noexcept(ResetSlotIsNoexcept()){
         while(m_currentSize != 0u){
             ResetSlot(data()[m_currentSize - 1u]);

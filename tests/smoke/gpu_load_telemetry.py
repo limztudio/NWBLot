@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""Passive Windows PDH GPU-engine observations for smoke timing campaigns.
-
-These counters expose engine load, not GPU frequency. Publication-window
-alignment is approximate; raw timestamps and invalid samples remain available.
-"""
 
 import ctypes
 from datetime import datetime, timezone
@@ -23,17 +18,7 @@ INVALID_DATA = 0xC0000BC6
 CSTATUS_INVALID_DATA = 0xC0000BBA
 
 
-
-
-
-
-
-
-
-
 class PdhEngineQuery:
-    """One persistent wildcard query; no subprocess is launched per sample."""
-
     def __init__(self):
         if os.name != "nt":
             raise SmokeFailure("passive GPU-engine telemetry requires Windows PDH")
@@ -90,7 +75,6 @@ class PdhEngineQuery:
         storage = ctypes.create_string_buffer(size.value)
         status = self.api.PdhGetFormattedCounterArrayW(self.counter, 0x200 | 0x8000, ctypes.byref(size), ctypes.byref(count), storage)
         if status in (NO_DATA, INVALID_DATA, CSTATUS_INVALID_DATA, MORE_DATA):
-            # Skip transient PDH buffer races and retry on the next 1 Hz sample.
             return status, []
         self._require(status, "read engine samples")
         items = ctypes.cast(storage, ctypes.POINTER(self.item_type))

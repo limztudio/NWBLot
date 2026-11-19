@@ -28,7 +28,6 @@ const usize s_PreparedGroupSize = size_of<PreparedFontImageGroup>();
 
 const u32 s_CollectionSignature = 0x74746366u;
 
-// SFNT directory holds a big-endian u16 table count at byte 4 followed by 16-byte table records.
 const usize s_SfntTableCountHighByte = 4u;
 const usize s_SfntTableCountLowByte = 5u;
 const usize s_SfntTableRecordBytes = 16u;
@@ -40,7 +39,6 @@ const usize s_FirstRecordLengthField = s_FontSfntHeaderBytes + s_SfntRecordLengt
 const usize s_SecondRecordOffsetField = s_OneTableDirectoryBytes + s_SfntRecordOffsetField;
 const usize s_SecondRecordLengthField = s_OneTableDirectoryBytes + s_SfntRecordLengthField;
 
-// The big-endian u16 unitsPerEm field of the 'head' table.
 const usize s_HeadUnitsPerEmOffset = 18u;
 const usize s_HeadUnitsPerEmEnd = 20u;
 
@@ -237,7 +235,6 @@ void VerifyAssetsFont_SfntDirectoryRejectsTruncatedRecordsAndUnsupportedTableCou
 }
 
 void VerifyAssetsFont_SfntTableViewsCheckBoundsWithoutCopyingOrScanningOtherRecords(){
-    // Two records, then the first table's data right after the directory.
     const u32 tableDataOffset = 44u;
     const u32 tableDataBytes = 4u;
     Vector<u8> bytes;
@@ -280,7 +277,6 @@ void VerifyAssetsFont_SfntTableViewsCheckBoundsWithoutCopyingOrScanningOtherReco
 void VerifyAssetsFont_SfntTableBoundsHandleOverflowAndEmptyEndSpansWithoutAddingFontPolicy(){
     Vector<u8> bytes;
     bytes.resize(32u, 0u);
-    // Signature admission remains with Font validation.
     WriteBigU32At(bytes, 0u, s_CollectionSignature);
     bytes[s_SfntTableCountLowByte] = 1u;
     WriteBigU32At(bytes, s_FontSfntHeaderBytes, s_FontSfntHeadTag);
@@ -305,7 +301,6 @@ void VerifyAssetsFont_SfntTableBoundsHandleOverflowAndEmptyEndSpansWithoutAdding
     EXPECT_TRUE(emptyTableResult.value().bytes.empty());
     EXPECT_TRUE(SpanDataOffsetMatches(emptyTableResult.value().bytes, bytes, bytes.size()));
 
-    // Directory-overlap admission remains with Font validation.
     WriteBigU32At(bytes, s_FirstRecordOffsetField, 0u);
     WriteBigU32At(bytes, s_FirstRecordLengthField, 4u);
     const Expected<FontSfntDirectory> overlapDir = ReadFontSfntDirectory(bytes);
@@ -646,7 +641,6 @@ void VerifyPreparedFontSource_MalformedDirectoryCountsAndOverflowRejectBeforePay
     for(usize index = 0u; index < fields.size(); ++index)
         CheckMalformedPreparedField(fields[index], binary, outputArena);
 
-    // Valid maximum dimensions still require their full payload length before any SFNT/image allocation.
     Vector<u8> oversized = CopyFontFixtureBytes(binary);
     WriteLittleU32At(oversized, s_HeaderBytes, s_MaxImageSide);
     WriteLittleU32At(oversized, s_HeaderBytes + s_GroupHeightField, s_MaxImageSide);

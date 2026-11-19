@@ -159,7 +159,6 @@ void VerifyAssetBunchOwnership_LongExportAndReferencePathsReclaimScopedResultsAn
 
         const ArenaMemoryStats retainedMetadata = fixture.metadataArena.memoryStats();
 
-        // Keep this regression within one chunk per alignment so it isolates string growth from chunk-stack reuse.
         GraphicsScratchArena scratch = GraphicsScratchArena(s_AssetCaseTestsAssetBunchLongPathScratch, 65536u);
         ScratchPattern sentinel(scratch, 32u, 73u);
         ASSERT_TRUE(sentinel.valid());
@@ -170,7 +169,6 @@ void VerifyAssetBunchOwnership_LongExportAndReferencePathsReclaimScopedResultsAn
         const StringView secondPathView = formattedSecond;
         for(usize iteration = 0u; iteration < 16u; ++iteration){
             {
-                // Keep scratch allocations in stack order.
                 Expected<ExpandedAssetMetadataVector> expandedResult = ExpandBunchWithScratch(fixture.assetRoot, virtualRootView, filePath, fixture.document, scratch);
                 ASSERT_TRUE(expandedResult.has_value());
                 in ExpandedAssetMetadataVector output = expandedResult.value();
@@ -474,7 +472,6 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseAbsolutePathSha1AndSharesAcro
     EXPECT_NE(initialHeader.flags & s_BuiltAssetFlagStandalone, 0u);
     EXPECT_EQ(initialHeader.entryCount, 1u);
 
-    // A cache written by a different producer must not be reused.
     {
         GraphicsScratchArena scratch = GraphicsScratchArena(s_CodecScratchArena);
         const ExecutablePaths executablePaths = ExecutablePaths();
@@ -533,7 +530,6 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseAbsolutePathSha1AndSharesAcro
         EXPECT_NE(changedFont.paramSha256, changedTexture.paramSha256);
     }
 
-    // Build again into a separate outputDirectory; unchanged .nwb params reuse __asset_cache/<sha1>.nwba and log cache hit.
     const GraphicsTestPath builtSecond = JoinGraphicsPath(root, "built_second");
     ASSERT_TRUE(BuildAndGatherWithExplicitRepoRoot(testArena, root, assetRoot, builtSecond, JoinGraphicsPath(root, "out_second")));
     EXPECT_TRUE(SawCapturedMessage(logger, "is already cached"));
@@ -543,7 +539,6 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseAbsolutePathSha1AndSharesAcro
     ASSERT_TRUE(cachedSampler.has_value());
     EXPECT_FLOAT_EQ(cachedSampler.value().description().mipBias, 0.0f);
 
-    // Corrupt the cached payload section hash; build must reject the corrupted cache entry and repair it.
     AssetBytes corruptedCacheBytes = initialCacheBytes;
     BuiltAssetFileHeader corruptedHeader = initialHeader;
     corruptedHeader.payloadSectionHashFnv64 = corruptedHeader.payloadSectionHashFnv64 ^ 1u;
@@ -554,7 +549,6 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseAbsolutePathSha1AndSharesAcro
     ASSERT_TRUE(GraphicsReadBinaryFile(expectedCacheFilePath, repairedCacheBytes).has_value());
     EXPECT_EQ(repairedCacheBytes, initialCacheBytes);
 
-    // A corrupt count must be rejected before reserving memory.
     corruptedHeader = initialHeader;
     corruptedHeader.entryCount = u32.max;
     corruptedCacheBytes = initialCacheBytes;
@@ -564,7 +558,6 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseAbsolutePathSha1AndSharesAcro
     ASSERT_TRUE(GraphicsReadBinaryFile(expectedCacheFilePath, repairedCacheBytes).has_value());
     EXPECT_EQ(repairedCacheBytes, initialCacheBytes);
 
-    // Modify .nwb parameter; checksum changes and invalidates __asset_cache/<sha1>.nwba.
     ASSERT_TRUE(WriteGraphicsFixtureText(mixedCaseNwbPath, s_ModifiedSamplerCacheMetadata));
     ASSERT_TRUE(BuildAndGatherWithExplicitRepoRoot(testArena, root, assetRoot, JoinGraphicsPath(root, "built_third"), JoinGraphicsPath(root, "out_third")));
 
@@ -578,7 +571,6 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseAbsolutePathSha1AndSharesAcro
     ASSERT_TRUE(updatedSampler.has_value());
     EXPECT_FLOAT_EQ(updatedSampler.value().description().mipBias, 3.5f);
 
-    // Multi-entry standalone asset_bunch packs all entries into one __asset_cache/<sha1>.nwba and gathers them across cache hits.
     const GraphicsTestPath bunchRoot = JoinGraphicsPath(root, "bunch_assets");
     const GraphicsTestPath bunchNwbPath = JoinGraphicsPath2(bunchRoot, "Components", "Pair.nwb");
     ASSERT_TRUE(WriteGraphicsFixtureText(bunchNwbPath, "transform_component first;\r\ntransform_component second;\r\nasset_bunch bunch = [first, second];\r\n"));

@@ -23,9 +23,6 @@ static const float NWB_OPTICAL_BOUNDS_SEGMENT_EPSILON_SCALE = 8.0;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A separated coordinate interval proves the entire segment misses the transparent union.
-// Overlapping intervals are inconclusive: this deliberately accepts fewer rays than a slab test and needs neither division nor reciprocals.
-// Including t=0 also proves the origin is exterior; the trace's positive TMin must never hide an initial medium.
 bool nwbOpticalSegmentOutsideBounds(const float3 origin, const float3 normalizedDirection, const float maxDistance, const float3 boundsMin, const float3 boundsMax){
     if(!all(isfinite(origin)) || !all(isfinite(normalizedDirection)) || !isfinite(maxDistance) || maxDistance <= 0.0 || !all(isfinite(boundsMin)) || !all(isfinite(boundsMax)) || any(boundsMin > boundsMax))
         return false;
@@ -37,15 +34,11 @@ bool nwbOpticalSegmentOutsideBounds(const float3 origin, const float3 normalized
     const float3 magnitude = abs(origin) + abs(normalizedDirection) * maxDistance + max(abs(boundsMin), abs(boundsMax)) + float3(1.0);
     if(!all(isfinite(endpoint)) || !all(isfinite(magnitude)))
         return false;
-    // Eight binary32 epsilons cover endpoint math, magnitude rounding, and interval arithmetic, with or without contraction.
-    // The unit floor also covers flushed subnormal operations.
-    // Include operand magnitudes so cancellation at an endpoint cannot erase its arithmetic uncertainty.
     const float3 margin = magnitude * (NWB_OPTICAL_BOUNDS_SEGMENT_EPSILON_SCALE * NWB_FLOAT_EPSILON);
     const float3 segmentMin = min(origin, endpoint) - margin;
     const float3 segmentMax = max(origin, endpoint) + margin;
     if(!all(isfinite(margin)) || !all(isfinite(segmentMin)) || !all(isfinite(segmentMax)))
         return false;
-    // Strict separation keeps endpoints, tangencies and uncertainty-band contacts on the full optical path.
     return any(segmentMax < boundsMin) || any(segmentMin > boundsMax);
 }
 
@@ -53,16 +46,12 @@ bool nwbOpticalSegmentOutsideBounds(const float3 origin, const float3 normalized
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// This proof reads the same frozen metadata as optical bootstrap but contains no material evaluation or ray query.
-// False means unknown, never occluded.
-// Callers must retain the full optical path for every unproven segment.
 bool nwbOpticalSegmentProvenExterior(const uint opticalSceneHeapSlot, const float3 origin, const float3 initialDirection, const float minDistance, const float maxDistance, const uint maxQueries){
     if(opticalSceneHeapSlot == NWB_BINDLESS_HEAP_INVALID_SLOT || maxQueries == 0u || !all(isfinite(origin)) || !all(isfinite(initialDirection)) || !isfinite(minDistance) || !isfinite(maxDistance) || minDistance < 0.0 || maxDistance <= minDistance)
         return false;
     const float directionLengthSquared = dot(initialDirection, initialDirection);
     if(!isfinite(directionLengthSquared) || directionLengthSquared <= 0.0)
         return false;
-    // Match optical transport's actual trace direction, including its normalization of already normalized inputs.
     const float3 direction = normalize(initialDirection);
     const float normalizedLengthSquared = dot(direction, direction);
     if(!all(isfinite(direction)) || !isfinite(normalizedLengthSquared) || normalizedLengthSquared <= 0.0)

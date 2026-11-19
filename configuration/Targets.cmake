@@ -69,7 +69,6 @@ endfunction()
 function(nwb_target_link_libraries_whole_archive target)
     foreach(library IN LISTS ARGN)
         target_link_libraries(${target} PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,${library}>")
-        # Force whole-archive even when a transitive link names this library normally.
         set_property(TARGET ${target} PROPERTY "LINK_LIBRARY_OVERRIDE_${library}" WHOLE_ARCHIVE)
     endforeach()
 endfunction()
@@ -219,7 +218,6 @@ function(nwb_target_adhd_sources target_name)
     endforeach()
 
     if(gen_headers)
-        # One target may call this once per namespace, so each call gets its own gen target.
         set(gen_target "${target_name}_adhd_gen")
         set(gen_index 1)
         while(TARGET ${gen_target})

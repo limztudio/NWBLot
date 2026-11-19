@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Validate completed reflection statistics and accepted-token evidence."""
 
 import os
 from pathlib import Path
@@ -53,7 +52,6 @@ class ReflectionCompletedStatisticsTests(unittest.TestCase):
     def log_line(sample):
         return "ReflectionSmokeStatistics: " + " ".join(f"{name}={sample[name]}" for name in STATISTICS_FIELDS)
 
-
     def test_parser_rejects_missing_duplicate_and_noninteger_fields(self):
         line = self.log_line(self.sample())
         for malformed in (line.rsplit(" ", 1)[0], line + " sequence=1", line.replace(LIT_SCREEN_HITS_600, "screen_hits=nan"), line.replace(LIT_SCREEN_HITS_600, "unknown=600")):
@@ -69,7 +67,6 @@ class ReflectionCompletedStatisticsTests(unittest.TestCase):
             self.assertEqual(ReflectionStatistics.validate_statistics([sample], case, mode, budget), [sample])
 
     def test_zero_budget_omits_prepared_scene_without_relaxing_positive_budget_admission(self):
-        # Actual zero-budget CSG capture: hardware was advertised at startup, while no hardware scene was prepared.
         log = ("ReflectionSmokeStatistics: sequence=3 generation=2 frame=3 mode=2 width=960 height=720 " "requested_budget=0 effective_budget=0 queue_capacity=1 hardware_requested=1 hardware_available=0 "
             "hardware_ready=0 token_queue=0 token_value=81 physical_queue=0 device_generation=1 candidates=0 " "hardware_rays=0 hardware_hits=0 opaque_pixels=217668 glass_pixels=0 fallback_pixels=217668 " "screen_attempts=0 screen_hits=0")
         sample = ReflectionStatistics.parse_statistics(log)[0]

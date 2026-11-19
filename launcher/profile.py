@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""ProfileSessionController: Logserver profile session (ports, session startup, client args)."""
 
 from __future__ import annotations
 
@@ -19,8 +18,6 @@ from launcher.constants import (CWD_PREFIX, LOGSERVER_LABEL, LOG_PREFIX, MSG_LAU
 
 
 class ProfileSessionController:
-    """Logserver profile session (ports, session startup, client args)."""
-
     @staticmethod
     def choose_free_tcp_port() -> int:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:

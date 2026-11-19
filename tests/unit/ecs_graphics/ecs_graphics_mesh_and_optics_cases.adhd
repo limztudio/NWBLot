@@ -290,14 +290,12 @@ void VerifyObjectGeometryCacheTests_LayoutChecksFinalStructuredPaddingWithinUint
     const MeshGeometryBufferPolicy policy = MeshGeometryBufferPolicy();
     const u64 addressableBytes = cast<u64>(u32.max) + 1u;
     const u64 maximumRecords = addressableBytes / s_TestShaderMeshObjectVertexByteSize;
-    // Reserve a full final structured record for the index region, including its view-alignment padding.
     const u64 lastValidRefBytes = (maximumRecords - 2u) * s_MeshletLocalVertexRefBytes;
     const Expected<ObjectGeometryCacheLayout> layout = policy.resolveObjectCacheLayout(lastValidRefBytes, 3u);
     ASSERT_TRUE(layout.has_value());
     EXPECT_LE(layout.value().bufferByteSize, addressableBytes);
     EXPECT_EQ(layout.value().bufferByteSize % s_TestShaderMeshObjectVertexByteSize, 0u);
     EXPECT_EQ(layout.value().indexByteOffset + 3u * 4u, layout.value().bufferByteSize - 36u);
-    // Structured alignment padding pushes this index span past uint32 addressing.
     EXPECT_LE(maximumRecords * s_TestShaderMeshObjectVertexByteSize + 3u * 4u, addressableBytes);
     EXPECT_FALSE(policy.resolveObjectCacheLayout(lastValidRefBytes + s_MeshletLocalVertexRefBytes, 3u).has_value());
 }
@@ -331,7 +329,6 @@ void VerifyObjectGeometryCacheTests_ImmutableStaticContentReusesZeroRevisionOnly
     const ObjectGeometryCacheSnapshotType accepted = CaptureObjectGeometryCache(mesh);
     EXPECT_FALSE(accepted.requiresDecode);
     EXPECT_EQ(accepted.sourceRevision, 0u);
-    // A content decision never substitutes for the required retained resource and decoder bindings.
     EXPECT_FALSE(accepted.valid());
 }
 
@@ -664,7 +661,6 @@ void VerifyOpticalScene_CancellationRetainsOrderedAffineEnclosure(){
     minimum = f32x3u(VectorSingle(bounds.value().minimum));
     maximum = f32x3u(VectorSingle(bounds.value().maximum));
 
-    // The exact third coordinate is one; cancellation must not make its error budget disappear.
     Array<f64, 3> exact = Array<f64, 3>();
     exact[0u] = 0.99999988079071044921875;
     exact[1u] = 0.0;
@@ -774,7 +770,6 @@ void VerifyOutputLayerColor_TransparentHdrLayerPreservesSceneAndOpaqueUiIgnoresS
 }
 
 void VerifyOutputLayerColor_HdrBlendsInLinearNitsBeforeOnePqEncoding(){
-    // Half-opacity paper white over black is 101.5 nits, not half of the encoded paper-white signal.
     const ShaderFloat3 actual = nwbHdr10EncodeSceneWithUi(ShaderFloat3(0.0), ShaderFloat3(0.5), 0.5f);
     OutputLayerColor_ExpectColorNear(actual, nwbHdr10PqEncodeNits(ShaderFloat3(101.5)), 0.000001);
     const ShaderFloat3 encodedBlend = HdrMultiply(nwbHdr10EncodeUiLinear(ShaderFloat3(1.0)), ShaderFloat3(0.5));

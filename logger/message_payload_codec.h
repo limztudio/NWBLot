@@ -101,7 +101,6 @@ public:
             return MakeUnexpected(TStringView(FOUNDATION_TEXT("Received a non-null-terminated message")));
         }
 
-        // Serialized text can start at an unaligned byte offset; copy into aligned character storage before reading it.
         LogString message(arena);
         const usize messageBytes = textBytes - sizeof(tchar);
         message.resize(messageBytes / sizeof(tchar));

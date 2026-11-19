@@ -59,8 +59,6 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
         NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: expected command-list identity array is null"));
         return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
-    // Queue-global synchronization belongs to the next accepted native submission.
-    // Validation and injected pre-driver rejection must leave it pending, especially when it contains the acquired swap-chain semaphore.
     if(localWaitCount > 0u && !localWaits){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: local wait array is null"));
         return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
@@ -206,7 +204,6 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
             return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
         }
         if(tracked.hasRetainedTopLevelAccelStructs()){
-            // Trace packets retain the selected BLAS sets until their own queue completion.
             tracked.retainAcceptedTopLevelAccelStructReferences();
             for(usize buildIndex = 0u; buildIndex < numCmd; ++buildIndex)
                 tracked.retainPendingTopLevelAccelStructReferences(*ppCmd[buildIndex]->m_currentCmdBuf);
@@ -320,7 +317,6 @@ VkResult Queue::updateLastFinishedID(){
     u64 completedValue = 0;
     const VkResult res = m_context.deviceDispatch.vkGetSemaphoreCounterValue(m_context.device, m_trackingSemaphore, &completedValue);
     if(res == VK_SUCCESS)
-        // vkQueueWaitIdle() beats a later timeline query. Never let a stale driver value resurrect retired buffers.
         m_lastFinishedID = Max(m_lastFinishedID, completedValue);
     else if(res == VK_ERROR_DEVICE_LOST)
         m_device.markDeviceLost();
@@ -378,7 +374,6 @@ Queue::CommandBufferList::iterator Queue::recycleCommandBuffer(CommandBufferList
         return next;
     }
 
-    // Submission/retirement holds m_mutex here. Worker recording never takes m_mutex, so no lock cycle.
     ScopedLock lock(workerArena->mutex);
 
     FOUNDATION_ASSERT(source.get_allocator() == workerArena->commandBuffersPool.get_allocator());
@@ -418,7 +413,6 @@ Expected<u64> Device::queueGetCompletedInstance(CommandQueue::Enum queue){
 }
 
 Expected<u64> Device::queueGetCompletedInstance(const GpuPhysicalQueueId& queue){
-    // Rejected-submit cleanup retires CPU-side bookkeeping; device-lost already marked the device terminal, so skip the second timeline query here.
     if(isDeviceLost())
         return MakeUnexpected(Failure{});
 

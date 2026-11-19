@@ -1,6 +1,3 @@
-"""Offline self-test for the renderer-baseline A/B runner: BMP round trips, pixel diffing, corpus loading and verification, and capture orchestration with faked processes."""
-
-
 from __future__ import annotations
 
 
@@ -193,7 +190,6 @@ def run_self_test(harness) -> int:
         raw_backend.prepare_window.assert_not_called()
         raw_backend.capture_window.assert_not_called()
 
-        # A completed readback must record its own source frame.
         complex_args = SimpleNamespace(**vars(orchestration_args))
         complex_args.profile = LIT_SURFEL_GI_COMPLEX
         complex_capture = root / "complex.bmp"

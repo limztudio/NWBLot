@@ -32,7 +32,6 @@ RAW_NAME = "cpu_gpu_timing.txt"
 
 
 def launch_environment(base, case, raw_path):
-    # Run the reflection workload with the CPU and GPU timing probe.
     workload = RendererWorkloadRegistry.reflection_workload(LIT_DIAGNOSTIC, case, LIT_HARDWARE, 0.0, False, False, reflection.HARDWARE)
     env, overrides = ab.configure_environment(base, workload, raw_path)
     env.pop("NWB_GPU_TIMING_FILE", None)

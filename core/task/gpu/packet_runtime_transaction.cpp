@@ -68,7 +68,6 @@ public:
 
 private:
     void publish()noexcept{
-        // Graph completion precedes the token commit: the last packet resolves its binding after every task is terminal.
         m_graph.completePacketSubmissionAcceptance(m_compiledGraph, m_planAccess, m_packet, m_lease);
         m_transaction.commitAcceptedPacket(m_graph, m_compiledGraph, m_packet, m_token, m_nativeSubmissionInfo);
         m_active = false;
@@ -124,7 +123,6 @@ b8 GpuGraphSubmissionTransaction::tryReset(const GpuCompiledGraph& compiledGraph
     }
 
     const GpuPhysicalQueueTopology queueTopology = planAccess.queueTopology();
-    // A prior unwound reset may have left partial staging contents.
     GraphicsVector<PacketRuntime>& nextPackets = m_resetStagingPackets;
     GraphicsVector<LatestAcceptedQueueToken>& nextLatestAcceptedQueueTokens = m_resetStagingLatestAcceptedQueueTokens;
     nextPackets.clear();
@@ -150,7 +148,6 @@ b8 GpuGraphSubmissionTransaction::tryReset(const GpuCompiledGraph& compiledGraph
     NothrowScopedLock lock(m_mutex);
     m_packets.swap(nextPackets);
     m_latestAcceptedQueueTokens.swap(nextLatestAcceptedQueueTokens);
-    // Drop the displaced contents but keep the capacity for the next reset.
     nextPackets.clear();
     nextLatestAcceptedQueueTokens.clear();
     m_generation = nextGeneration;
@@ -253,8 +250,6 @@ void GpuGraphSubmissionTransaction::resolveSubmissionBindingIfTerminalLocked(con
     if(!m_activeSubmissionBinding.valid() || m_submissionBindingResolved || !allPacketsTerminalLocked())
         return;
 
-    // The exact bound plan and terminal transaction packets prove every graph task was accepted or discarded.
-    // Keep terminal resolution declaration-storage free because the last packet lease may have released its read claim.
     m_submissionBindingResolved = graph.resolveSubmissionTransaction(compiledGraph, m_recordingAttemptGeneration, m_activeSubmissionBinding);
     if(!m_submissionBindingResolved)
         FOUNDATION_FATAL_ASSERT_MSG(false, "terminal transaction packets must resolve their exact graph binding");
@@ -342,8 +337,6 @@ b8 GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     if(!timingResolved)
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("GPU task graph: Accepted packet quarantined invalid timing query ownership"));
 
-    // Native acceptance remains hidden while synchronous task and semantic observers publish.
-    // If an observer throws, the publication guard commits that irreversible acceptance while the exception unwinds.
     graph.notifyPacketSubmissionAccepted(compiledGraph, planAccess, packetID, token, lease);
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
         const GpuTaskGraphTaskAcceptedCallback* const callback = taskAcceptedCallbacks.find(tasks[taskIndex]);
@@ -365,8 +358,6 @@ void GpuGraphSubmissionTransaction::commitAcceptedPacket(const GpuTaskGraph& gra
     const GpuPhysicalQueueInfo* const queueInfo = planAccess.queueInfo(packet.queue);
     if(!queueInfo || queueInfo->queueClass >= CommandQueue::kCount)
         FOUNDATION_FATAL_ASSERT_MSG(false, "accepted packet commit must retain its compiled physical queue");
-    // reset() and cancellation cannot cross a graph-owned submission lease.
-    // Once the graph publishes accepted callbacks, this transaction resolution is therefore an invariant rather than a second failure point.
     PacketRuntime& runtime = m_packets[packetID.index];
     if(runtime.state != PacketRuntimeState::Submitting)
         FOUNDATION_FATAL_ASSERT_MSG(false, "accepted packet commit requires the exact submitting transaction packet");

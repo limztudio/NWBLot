@@ -1,5 +1,3 @@
-"""Validate production reflection spatial-owner phase and history evidence."""
-
 import re
 
 from window_capture_smoke import SmokeFailure
@@ -51,7 +49,6 @@ class ReflectionSpatialOwnerEvidence:
                 raise SmokeFailure("missing or unexpected owner evidence field")
             result.append(item)
         return result
-
 
     @staticmethod
     def validate_owner_evidence(text, selection, history, statistics):
@@ -116,4 +113,3 @@ class ReflectionSpatialOwnerEvidence:
         if not covering:
             raise SmokeFailure("captured image is not the first frame of its completed seed-zero epoch")
         return {"radii": list(expected), "phases": phases, "warm": warmed, "captured_graphics_frame": source, "capture_work": coverage[0], "covering_history": covering[0], "completed_spatial_windows": windows}
-

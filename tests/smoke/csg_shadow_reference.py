@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Independent receiver-world samples and Beer-law oracle for the CSG shadow atlas."""
 
 import math
 
@@ -39,21 +38,11 @@ LIT_SPHERE_UNION_CENTER = "sphere_union_center"
 ARMS = (LIT_REFERENCE, LIT_CUT, LIT_UNCUT, LIT_MOVED, LIT_CAMERA_SHIFT)
 ANALYTIC_ARMS = (LIT_CUT, LIT_UNCUT)
 BYTE_TOLERANCE = 12.0
-# Constant-thickness sample regions holding name, receiver xy, and cut or uncut optical lengths.
 REGIONS = ((LIT_CLEAR, 0.0, 0.0, 0.0, 0.0), (LIT_OPAQUE_HOLE, -1.7, 1.0, 0.0, None), ("opaque_old_hole", -2.3, 1.0, None, None), ("opaque_rim", -2.5, 1.0, None, None), ("opaque_cap", 0.0, 1.0, None, None), (LIT_GLASS_DEPTH, 2.0, 1.0, 1.0, 2.0),
     (LIT_GLASS_HOLE, -1.7, -1.0, 0.0, 2.0), ("glass_old_hole", -2.3, -1.0, 2.0, 2.0), ("glass_rim", -2.5, -1.0, 2.0, 2.0), (LIT_OVERLAP, 0.0, -1.0, 2.0, 4.0), ("glass_control", 2.0, -1.0, 2.0, 2.0),)
 
 
-
-
-
-
-
-
-
-
 def project_receiver(x, y, width, height, camera_x=0.0):
-    # Fixture camera is at z=-4 with the engine's explicit 60-degree vertical FOV and no rotation.
     pixels_per_world = height / (8.0 * math.tan(math.pi / 6.0))
     return round(width * 0.5 + (x - camera_x) * pixels_per_world - 0.5), round(height * 0.5 - y * pixels_per_world - 0.5)
 
@@ -107,10 +96,6 @@ def compare_frames(frames, light=LIT_DIRECTIONAL):
 ANALYTIC_REGION_SPACING = 0.006
 ANALYTIC_REGIONS = ((LIT_CLEAR, 0.0, 0.0), (LIT_PLANE_LEFT, -2.3, 1.0), ("plane_right", -1.7, 1.0), (LIT_ELLIPSOID_CENTER, 0.0, 1.0), ("ellipsoid_offset", 0.25, 1.0), ("ellipsoid_rim", 0.61, 1.0), (LIT_CAPSULE_BODY, 2.0, 1.0), ("capsule_endcap", 2.0, 1.52),
     (LIT_AXIAL_CAPSULE_CENTER, -2.0, -1.0), ("axial_capsule_offset", -1.82, -1.0), (LIT_SPHERE_UNION_CENTER, 0.0, -1.0), ("sphere_union_offset", 0.3, -1.0), ("uncut_control", 2.0, -1.0),)
-
-
-
-
 
 
 def receiver_pixel_world(x, y, width, height):

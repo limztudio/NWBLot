@@ -28,9 +28,7 @@ const StringView s_TextureRuntimeTintParameter = "texture_runtime.color_tint";
 const f32 s_TextureCameraHeight = 3.1f;
 const f32 s_TextureCameraDistance = 5.7f;
 const f32 s_TextureCameraPitch = 0.36f;
-// Cast a foreground shadow on the white floor to expose red indirect bounce from the sphere.
 const f32 s_TextureDirectionalLightPitch = 0.48f;
-// Aim the shadow toward the foreground rather than hiding the receiver spill behind the sphere from the camera.
 const f32 s_TextureDirectionalLightYaw = 2.2f;
 const f32 s_TextureDirectionalLightIntensity = 2.0f;
 const u32 s_TextureFramebufferCaptureDefaultFrameCount = 360u;
@@ -73,7 +71,6 @@ u8 ExpectedSRGBClearByte(in f32 value, in b8 srgb){
     const f32 clamped = Clamp(value, 0.0f, 1.0f);
     f32 encoded = clamped;
     if(srgb){
-        // Round each scalar step independently of the packed sRGB implementation.
         const f32 power = Pow(clamped, 1.0f / 2.4f);
         const f32 scaled = cast<f32>(cast<f64>(1.055f) * cast<f64>(power));
         const f32 nonlinear = cast<f32>(cast<f64>(scaled) - cast<f64>(0.055f));
@@ -288,7 +285,6 @@ class TextureSmokeProject : IProjectEntryCallbacks{
             return false;
 
         const EntityID activeCamera = CreateSmokeCamera(s_TextureCameraHeight, s_TextureCameraDistance, s_TextureCameraPitch, SmokeWorldRef(this.m_world));
-        // Use an untextured white floor to isolate indirect color bounce from the sphere.
         this.m_whiteGround = CreateTintedStaticMeshEntity(
             s_TextureGroundPlaneMesh,
             s_WhiteGroundMaterial,
@@ -298,7 +294,6 @@ class TextureSmokeProject : IProjectEntryCallbacks{
             VectorSingle(3.25f, 1.0f, 3.25f, 0.0f),
             SmokeWorldRef(this.m_world)
         );
-        // Place the UV-mapped sphere just above the white floor.
         this.m_texturedSphere = CreateTintedStaticMeshEntity(
             s_TexturedSphereMesh,
             s_TextureMaterial,

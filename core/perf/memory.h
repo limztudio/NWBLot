@@ -67,7 +67,6 @@ struct MemoryDelta{
     i64 allocationCount = 0;
     i64 reallocationCount = 0;
     i64 deallocationCount = 0;
-    // False when snapshots are incomparable or any signed counter difference is unrepresentable.
     b8 hasSamples = false;
 
 

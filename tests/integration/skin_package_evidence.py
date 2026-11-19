@@ -1,4 +1,3 @@
-"""Read and validate built UI skin and texture package evidence."""
 from __future__ import annotations
 
 import pathlib

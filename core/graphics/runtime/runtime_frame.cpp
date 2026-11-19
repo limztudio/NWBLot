@@ -73,8 +73,6 @@ public:
         accumulate(scope, DurationInSeconds<f64>(TimerNow(), begin));
     }
 
-    // Render passes execute on the main thread.
-    // One frame sample sums each callback without counting queue waits twice.
     void accumulate(const Perf::TimingScopeId scope, const f64 seconds)noexcept{
         if(!scope.valid())
             return;
@@ -111,9 +109,6 @@ public:
 
 
 b8 GraphicsRuntime::runFrame(){
-    // This deliberately spans the complete logical graphics frame: normal presentation, headless no-window work, and submission-suspended maintenance.
-    // Detailed phase scopes sit within this aggregate, so consumers must not sum them with it.
-    // Record only a successful call so a failed frame can never be published with a later one.
     const b8 recordFrameTiming = m_cpuTiming && m_cpuTiming->enabled() && m_frameTimingScope.valid();
     Timer frameTimingBegin;
     const u64 sampleFrameIndex = m_frameIndex;
@@ -134,8 +129,6 @@ b8 GraphicsRuntime::runFrame(){
         return rendered;
     }
 
-    // Do not let a capture hold hide a device-loss/recreation request.
-    // No backend calls here, so the last finished frame stays on screen while the loop stays responsive.
     if(m_deviceRecreationRequested)
         return false;
 
@@ -161,14 +154,10 @@ b8 GraphicsRuntime::prepareFramePreamble(){
     m_gpuTiming.collect(device, m_frameIndex);
     m_gpuTiming.beginFrame(m_frameIndex);
 
-    // Materialize and reset every declared timer-query pool before any pass preparation can record a timestamp.
-    // Per-pass preparation may submit GPU packets, so this must remain ahead of it as well as every later render packet on the same GPU timeline.
     if(m_gpuTiming.collectionActive()){
         if(!m_gpuTiming.materializeRequestedQueries(device))
             NWB_LOGGER_WARNING(FOUNDATION_TEXT("GraphicsRuntime: failed to materialize one or more requested GPU-timing query pools"));
 
-        // Do not allow render-pass scopes to reuse a prior frame's reset if graph recording or submission fails.
-        // The task's accepted callback reenables only the pools covered by the successfully submitted packet.
         m_gpuTiming.discardFrameReset();
         if(!GraphicsModuleDetail::FrameTimingResetGraph::Submit(*this, *m_standaloneGraphWorkspaces, m_gpuTiming)){
             m_gpuTiming.discardFrameReset();
@@ -196,8 +185,6 @@ Expected<void, CpuTaskAdmissionError::Enum> GraphicsRuntime::renderWithPhaseTimi
         return {};
     }
 
-    // Each task pairs preparation with rendering.
-    // Each pass's prepared work publishes before the next pass prepares; main-thread execution keeps platform contracts.
     CpuTaskScope frameTasks(m_cpuScheduler, m_frameTaskProfileLabel);
     const CpuTaskOptions options{ .priority = CpuTaskPriority::Critical, .target = CpuTaskTarget::MainThread, };
     CpuTaskHandle previous;
@@ -226,7 +213,6 @@ Expected<void, CpuTaskAdmissionError::Enum> GraphicsRuntime::renderWithPhaseTimi
             if(phaseTiming)
                 phaseTiming->stage(m_renderPassesTimingScope, renderBegin);
 
-            // Later task callbacks observe this request before touching the invalidated device generation.
             if(device.requiresRecreation())
                 requestDeviceRecreation();
         }, options, previous.valid() ? &previous : nullptr, previous.valid() ? 1u : 0u
@@ -322,8 +308,6 @@ b8 GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const phas
             if(phaseTiming)
                 phaseTiming->stage(m_framePreambleTimingScope, framePreambleBegin);
             if(!preamblePrepared){
-                // prepareFramePreamble() returns false only after the device requires recreation.
-                // Do not issue recovery GPU work; required device teardown owns the unresolved acquired image and synchronization.
                 requestDeviceRecreation();
                 return false;
             }
@@ -362,8 +346,6 @@ b8 GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const phas
             if(phaseTiming)
                 phaseTiming->stage(m_presentTimingScope, presentBegin);
             if(!presented){
-                // A consumed presentation already cleared acquisition and makes abandonment a no-op.
-                // Every healthy unconsumed failure is drained and quarantined before recreation.
                 if(!device.requiresRecreation() && !m_backend->abandonAcquiredFrame())
                     NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("GraphicsRuntime: failed to quarantine the unpresented acquired frame; device teardown is required."));
                 requestDeviceRecreation();

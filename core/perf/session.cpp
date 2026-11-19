@@ -68,7 +68,6 @@ void Session::ensureMemoryScopes(){
     if(!captureOptions().memoryActive())
         return;
 
-    // Scope creation for arena owners lives in this setup step, never in the record calls below.
     const ArenaMemoryOwnerRecord* owner = FirstArenaMemoryOwnerRecord();
     while(owner){
         ArenaMemoryOwnerIdentity identity;

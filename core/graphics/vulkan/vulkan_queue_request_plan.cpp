@@ -37,7 +37,6 @@ VulkanQueueRequestPlan::VulkanQueueRequestPlan(Alloc::ScratchArena& scratchArena
             appendSameClassQueue(queueClass, primaryFamily, queueIndex);
     };
 
-    // Cross-family auxiliary stays the first non-primary entry; primary-family extras register after it.
     if(input.createCrossFamilySecondaryGraphicsQueue)
         appendSameClassQueue(CommandQueue::Graphics, input.secondaryGraphicsQueueFamily, s_GraphicsQueueIndex);
     appendPrimaryFamilyQueues(CommandQueue::Graphics, input.graphicsQueueFamily, s_SecondaryGraphicsQueueIndex);

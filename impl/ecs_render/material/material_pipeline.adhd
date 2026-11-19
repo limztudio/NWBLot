@@ -220,7 +220,6 @@ Expected<mut MaterialPipelineResources> RendererMaterialSystem::createRendererPi
     MaterialPipelineBuilder pipelineBuilder(buildInputs);
 
     const b8 meshSupported = this.m_graphics.queryFeatureSupport(Feature::Meshlets);
-    // Surface info admission already requires the mesh shader and the opaque pixel shader.
     assert(pass != MaterialPipelinePass::Opaque || materialInfo.pixelShader.valid());
     assert(materialInfo.meshShader.valid());
 
@@ -290,7 +289,6 @@ b8 MaterialPipelineBuilder::loadPassPixelShader(){
         return inputs.shaderSystem.loadShader<PixelShader, CsgSubsystem>(lambda[](in CsgSubsystem s) -> AssetRef<PixelShader>{ return s.receiverSurfacePs; }, s_ShaderArchiveDefaultVariant, s_CsgReceiverSurfacePsDebugName, inputs.resources.pixelShader);
     if(inputs.avboitCsgClipPipeline)
         return inputs.shaderSystem.loadShader<PixelShader>(inputs.passPixelShaderName, StringView(inputs.avboitCsgShaderVariant), inputs.passPixelShaderDebugName, inputs.resources.pixelShader);
-    // AVBOIT pixel shaders are generated per material with its binding/surface contract; load the resolved pass shader at its default variant.
     return inputs.shaderSystem.loadShader<PixelShader>(inputs.passPixelShaderName, s_ShaderArchiveDefaultVariant, inputs.passPixelShaderDebugName, inputs.resources.pixelShader);
 }
 
@@ -305,9 +303,7 @@ b8 MaterialPipelineBuilder::buildMesh(){
     pipelineDesc.setMeshShader(inputs.resources.meshShader);
     pipelineDesc.setPixelShader(inputs.resources.pixelShader);
     pipelineDesc.setRenderState(inputs.renderState);
-    // Set 0 is the shared push-only range; all CSG and AVBOIT resources are selected through the global heap.
     pipelineDesc.addBindingLayout(inputs.materialPassBindingLayout);
-    // Keep both fixed heap layouts in every mesh pipeline; samplers are frozen surface.
     pipelineDesc.addBindingLayout(inputs.heap.getResourceLayout()).addBindingLayout(inputs.heap.getSamplerLayout());
 
     auto meshletPipelineResult = inputs.device.createMeshletPipeline(pipelineDesc, inputs.framebuffer.getFramebufferInfo());
@@ -365,7 +361,6 @@ b8 MaterialPipelineBuilder::buildCompute(){
         return false;
     if(!this.loadPassPixelShader())
         return false;
-    // The compute-emulation mesh stage shares the mesh-shader source-stream runtime, so it needs the persistent tables too.
     if(!CreateHeapComputePipeline(inputs.device, inputs.resources.computeShader, inputs.materialState.m_computeBindingLayout, false, inputs.resources.computePipeline)){
         error("RendererSystem: failed to create compute pipeline for material '{}'", inputs.materialKey.resolvedText());
         return false;
@@ -390,7 +385,6 @@ b8 MaterialPipelineBuilder::buildCompute(){
     }
 
     inputs.resources.renderPath = RenderPath::ComputeEmulation;
-    // The shared mesh_compute program is independent of authored materials.
     inputs.resources.sharedGeometryComputeProgram = IsSharedComputeEmulationProgram(
         inputs.pipelineKey.csgMode,
         inputs.sharedMeshShaderAssetName,

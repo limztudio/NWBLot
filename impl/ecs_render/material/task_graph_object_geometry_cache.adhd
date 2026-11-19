@@ -144,7 +144,6 @@ class ObjectGeometryGraphEntry{
     public GpuTaskId producer;
 }
 
-// All material raster phases share this registry for the lifetime of one graph declaration.
 class ObjectGeometryCacheGraph : NoCopy{
     private mut GpuTaskGraph m_graph;
     private mut RendererMaterialSystem m_materialSystem;
@@ -266,7 +265,6 @@ class ObjectGeometryCacheGraph : NoCopy{
             return true;
         for(in GpuTaskResourceUse use : cacheReads)
             rasterUses.push_back(use);
-        // A read-only cache needs no phase task when this frame produced no writes.
         if(producers.empty())
             return true;
         if(!dependency.valid())

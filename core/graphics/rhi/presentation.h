@@ -48,7 +48,6 @@ namespace PresentationReceiptStatus{
     enum Enum : u8{ Pending, Accepted, Rejected };
 };
 
-// Main-thread observation of one native present attempt. The receipt retains identity, never image resources.
 struct PresentationReceipt{
     QueueSubmissionToken availabilityCompletion;
     ResourceStates::Mask nativeInitialState = ResourceStates::Unknown;
@@ -70,7 +69,6 @@ public:
             reset();
     }
 
-    // Pending means no exact attempt is known, including invalid or different acquisition identities.
     [[nodiscard]] PresentationReceiptStatus::Enum status(const AcquiredBackBuffer& acquired)const noexcept{
         const QueueSubmissionToken& token = acquired.availabilityCompletion;
         if(!valid() || !token.valid() || !token.hasPhysicalQueueIdentity())

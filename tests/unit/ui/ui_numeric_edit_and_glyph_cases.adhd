@@ -1594,7 +1594,6 @@ void VerifyUiPaintGlyphTests_NewerAppendOnlyPageUpgradesBindingWithoutMovingEarl
     ASSERT_TRUE(self.m_builder.drawGlyph(original, Rect(1.0f, 1.0f, 4.0f, 4.0f), earlierUv));
     ASSERT_TRUE(self.prepareSingleGlyphPage(appended));
     ASSERT_TRUE(self.m_builder.drawGlyph(appended, Rect(6.0f, 1.0f, 4.0f, 4.0f), Rect(0.5f, 0.5f, 0.25f, 0.25f)));
-    // A later caller retaining the old page must neither downgrade the binding nor split the compatible batch.
     ASSERT_TRUE(self.m_builder.drawGlyph(original, Rect(11.0f, 1.0f, 4.0f, 4.0f), earlierUv));
     const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.glyphPages().size(), 1u);

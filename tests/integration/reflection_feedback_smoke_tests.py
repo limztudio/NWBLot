@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Projection, motion and measured-cost guard tests for the pending SSR-feedback capture suite."""
 
 import math
 from dataclasses import replace
@@ -219,7 +218,6 @@ class CompletedFeedbackTests(unittest.TestCase):
         samples[-1][LIT_SCREEN_RETURNS] = 101
         with self.assertRaisesRegex(SmokeFailure, "bounded actual"):
             self.validate(samples, stats=stats)
-
 
     def test_epoch_start_cannot_move_without_an_epoch_change(self):
         _, samples = self.observations()

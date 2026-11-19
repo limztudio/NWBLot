@@ -134,7 +134,6 @@ class GpuImageResources : NoCopy{
             return MakeUnexpected(versionResult.error());
         GpuVersion<GpuGlyphVersion> version = versionResult.value();
         in GlyphPageBinding binding = page.deref().binding();
-        // Upload only a fresh immutable image. Accepted readiness stays with this version across presentation retries.
         GpuSampledTextures textures;
         if(!textures.createAndUploadPage(
             this.m_graphics,
@@ -150,13 +149,11 @@ class GpuImageResources : NoCopy{
             version.deref().m_readinessToken
         ))
             return MakeUnexpected(Failure());
-        // Frames retain superseded versions; evicting a cache entry never overwrites an image or frees a live frame's descriptor.
         if(replaceIndex < this.m_imageCache.glyphs().size())
             this.m_imageCache.glyphs().erase(this.m_imageCache.glyphs().begin() + cast<isize>(replaceIndex));
         else if(ShouldEvictGpuImageCacheBeforeInsert(this.m_imageCache.glyphs().size(), this.m_imageCache.sdfs().size(), this.m_imageCache.textures().size()))
             this.m_imageCache.evict();
         this.m_imageCache.glyphs().push_back(version);
-        // Cache accepted uploads before descriptor publication so descriptor exhaustion retries cannot discard their readiness.
         if(!PrepareGpuSampledTextureDescriptor(this.m_graphics, version.deref().m_texture, Format::R8_UNORM, version.deref().m_sampledImage))
             return MakeUnexpected(Failure());
         return version;
@@ -166,7 +163,6 @@ class GpuImageResources : NoCopy{
     public b8 prepareGlyphPages(in DrawSnapshot snapshot, mut Vector<GpuVersion<GpuGlyphVersion>> versions){
         in Vector<SharedGlyphPage> pages = snapshot.glyphPages();
         versions.reserve(pages.size());
-        // Retain successful earlier uploads if preparation fails partway through the page set.
         while(versions.size() < pages.size()){
             const Expected<GpuVersion<GpuGlyphVersion>> version = this.prepareGlyphPage(pages[versions.size()]);
             if(!version.has_value())
@@ -229,12 +225,9 @@ class GpuImageResources : NoCopy{
             version.deref().m_readinessToken
         ))
             return MakeUnexpected(Failure());
-        // Native accepted upload commands retain their destination image until the physical queue completes.
-        // Frame owners retain sampled descriptors; cache eviction therefore releases neither a live image nor a live draw view.
         if(ShouldEvictGpuImageCacheBeforeInsert(this.m_imageCache.glyphs().size(), this.m_imageCache.sdfs().size(), this.m_imageCache.textures().size()))
             this.m_imageCache.evict();
         this.m_imageCache.sdfs().push_back(version);
-        // Preserve every accepted upload before descriptor publication; retrying a failed descriptor never uploads again.
         if(!PrepareGpuSampledTextureDescriptor(this.m_graphics, version.deref().m_texture, version.deref().m_texture.deref().getDescription().format, version.deref().m_sampledImage))
             return MakeUnexpected(Failure());
         return version;
@@ -268,7 +261,6 @@ class GpuImageResources : NoCopy{
             this.m_imageCache.textures().push_back(reused);
             return reused;
         }
-        // The source factory owns structural payload validation; immutable cache insertion keeps a debug-only invariant.
         assert(source.deref().texture().validatePayload());
         const Expected<GpuVersion<GpuTextureImageVersion>> versionResult = this.m_versions.make<GpuTextureImageVersion>(this.m_graphics, source);
         if(!versionResult.has_value())
@@ -282,7 +274,6 @@ class GpuImageResources : NoCopy{
         }
         if(ShouldEvictGpuImageCacheBeforeInsert(this.m_imageCache.glyphs().size(), this.m_imageCache.sdfs().size(), this.m_imageCache.textures().size()))
             this.m_imageCache.evict();
-        // Retain each successful immutable upload before a later image or frame preparation can fail.
         this.m_imageCache.textures().push_back(version);
         return version;
     }

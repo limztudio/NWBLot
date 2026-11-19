@@ -22,10 +22,8 @@ struct NwbShadowGuidedUpsample{
         const bool background = nwbHeapSampledImage2D(g_NwbShadowResolvePushConstants.depthSlot).Load(int3(fullTexel, 0)).r >= NWB_SCENE_BACKGROUND_DEPTH;
 
     #if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
-        // The caller barriers the opaque upsample before transparent read-modify-write.
         const uint fold = g_NwbShadowResolvePushConstants.upsampleFold;
     #endif
-        // Background pixels have a fixed lit identity. Exit before loading G-buffer guidance that cannot affect it.
         if(background){
             for(uint slot = slotStart; slot < slotEnd; ++slot){
     #if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
@@ -38,7 +36,6 @@ struct NwbShadowGuidedUpsample{
 
         const int hw = (int)g_NwbShadowResolvePushConstants.halfWidth;
         const int hh = (int)g_NwbShadowResolvePushConstants.halfHeight;
-        // Trace and geometry samples lie at full pixel index factor*h, rather than the center of each block.
         const float2 src = float2(pixel) / float(g_NwbShadowResolvePushConstants.receiverFactor);
         const int2 baseTexel = int2(round(src));
         const float2 offset = src - float2(baseTexel);
@@ -53,7 +50,6 @@ struct NwbShadowGuidedUpsample{
         const float guidedEps = NWB_SHADOW_RESOLVE_GUIDED_EPS_FRAC * centerDist;
         const float guidedEpsSq = guidedEps * guidedEps;
 
-        // Geometry identical per light at a pixel: build the 3x3 once, keep tap order, each layer loads its own values.
         uint validTapMask = 0u;
         uint guidedTapMask = 0u;
         float tapCoefficients[NWB_SHADOW_RESOLVE_GUIDED_TAP_COUNT];
@@ -65,7 +61,6 @@ struct NwbShadowGuidedUpsample{
             [unroll] for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
                 const uint tapIndex = (uint)((dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS) * NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE + dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS);
                 const uint tapBit = 1u << tapIndex;
-                // Widen the (0, 1) bounded half product at the float regression-accumulator boundary.
                 const float spatialWeight = float(weightsX[dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS] * weightsY[dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS]);
                 if(spatialWeight <= 0.0)
                     continue;
@@ -92,8 +87,6 @@ struct NwbShadowGuidedUpsample{
         const float guidedMeanG = sumG * invWeightSum;
         const float guidedVarG = max(sumG2 * invWeightSum - guidedMeanG * guidedMeanG, 0.0);
         const float regressionScale = hasGuidedTaps ? guidedMeanG / (guidedVarG + guidedEpsSq) : 0.0;
-        // mean(P) - mean(G) * cov(G,P) / (var(G) + epsilon) is linear in each visibility tap.
-        // Fold its scalar coefficients once, preserving the geometry gates and support for every light layer.
         [unroll] for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
             [unroll] for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
                 const uint tapIndex = (uint)((dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS) * NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE + dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS);
@@ -112,7 +105,6 @@ struct NwbShadowGuidedUpsample{
                 const int2 anchorOffset = int2(int(anchorTap % NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE), int(anchorTap / NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE)) - int2(NWB_SHADOW_RESOLVE_GUIDED_RADIUS);
                 const int2 anchorTexel = clamp(baseTexel + anchorOffset, int2(0), int2(hw - 1, hh - 1));
                 const NwbShadowResolveVisFVec anchor = (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(anchorTexel, slot);
-                // The coefficient sum is one analytically. Anchor the affine sum so constant visibility stays exact.
                 result = anchor;
                 [unroll] for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
                     [unroll] for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){

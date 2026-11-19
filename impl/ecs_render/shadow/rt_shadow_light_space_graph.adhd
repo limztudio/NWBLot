@@ -41,7 +41,6 @@ b8 CanDeclareLightSpaceShadowMaps(in b8 snapshotReady, in b8 dependencyValid, in
 
 
 void AppendLightSpaceSceneRead(mut Vector<GpuTaskResourceUse> outUses, in GpuTaskResourceUse use){
-    // The light-space scene inputs are whole-resource reads, including material texture sets.
     assert(use.access == GpuTaskResourceAccess::Read);
     assert(use.range.bufferRange == s_EntireBuffer && use.range.textureSubresources == s_AllSubresources);
     for(mut GpuTaskResourceUse previous : outUses){
@@ -82,7 +81,6 @@ b8 GatherCaptureReads(in GpuTaskGraph graph, in LightSpaceShadowGraphInputs inpu
         }
     }
     for(in LightSpaceShadowCaster caster : inputs.snapshot.casters){
-        // The scene geometry importer already retains this exact frozen canonical index buffer.
         const GpuGraphResourceId resource = declarations.findImportedBuffer(caster.triangleIndexBuffer);
         if(!resource.valid())
             return false;
@@ -174,7 +172,6 @@ class LightSpaceDiagnosticTask{
             return false;
         if(!this.shadowPrepared)
             return true;
-        // The task's public state stays UAV; only this bounded copy temporarily reads the accumulated diagnostic word.
         commandList.setBufferState(this.sourceBuffer.deref(), ResourceStates::CopySource);
         commandList.commitBarriers();
         commandList.copyBuffer(this.readback.deref(), 0u, this.sourceBuffer.deref(), s_CsgShadowRayFailureOffset, sizeof(u32));
@@ -309,7 +306,6 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(in LightSpaceShadowG
     const auto countsResult = ImportExternalBuffer(graph, snapshot.counts, Name(s_LightSpaceGraphCounts), "Light-Space Crossing Counts", ResourceStates::Common, ResourceStates::Common);
     const auto eventsResult = ImportExternalBuffer(graph, snapshot.events, Name(s_LightSpaceGraphEvents), "Light-Space Crossings", ResourceStates::Common, ResourceStates::Common);
     const auto viewsResult = ImportExternalBuffer(graph, snapshot.views, Name(s_LightSpaceGraphViews), "Light-Space Views", ResourceStates::Common, ResourceStates::Common);
-    // Opaque capture clears every layer. Unknown preserves fresh Undefined; accepted state sources retain native states.
     const auto depthResult = ImportExternalTexture(graph, snapshot.depth, s_LightSpaceGraphDepth, "Light-Space Opaque Depth", ResourceStates::Unknown, ResourceStates::Common);
     if(!countsResult.has_value() || !eventsResult.has_value() || !viewsResult.has_value() || !depthResult.has_value())
         return MakeUnexpected(Failure());
@@ -327,11 +323,9 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(in LightSpaceShadowG
         result.csgOpaqueDepth = csgOpaqueDepthResult.value();
     }
     if(snapshot.captureTicket.reuse){
-        // Receiver tasks retain all current scene/BVH reads and the accepted native map state sources.
         result.ready = inputs.dependency;
         return result;
     }
-    // A retained draw buffer is untouched during reuse; importing its final state would promise an unowned graph export.
     const auto drawArgumentsResult = ImportExternalBuffer(graph, snapshot.drawArguments, Name(s_LightSpaceGraphDrawArguments), "Light-Space Draw Arguments", ResourceStates::Common, ResourceStates::Common);
     if(!drawArgumentsResult.has_value())
         return MakeUnexpected(Failure());
@@ -373,7 +367,6 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(in LightSpaceShadowG
             return MakeUnexpected(Failure());
         csgUpload = csgUploadResult.value();
         if(!initialize){
-            // Retain accumulated failures across new captures until the bounded asynchronous readback observes them.
             const u32 payloadOffset = s_CsgShadowRayFailureOffset + sizeof(u32);
             const auto payloadResult = graph.copyUploadBytes<u32>(snapshot.csgContextBytes.subspan(payloadOffset));
             if(!payloadResult.has_value())

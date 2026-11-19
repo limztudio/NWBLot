@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-"""Combined and exterior caustic evidence analysis for the reflection/optical smoke."""
-
 
 import contextlib
 import io
@@ -44,7 +42,6 @@ LIT_MAIN = "__main__"
 
 class CombinedCausticTests(unittest.TestCase):
     def setUp(self):
-        # Small synthetic images for toggle and ground checks.
         isolate_exterior = patch.object(CausticOpticalImageEvidence, LIT_ANALYZE_EXTERIOR_REFLECTION, return_value={"isolated_in_test": True})
         isolate_exterior.start()
         self.addCleanup(isolate_exterior.stop)
@@ -92,7 +89,6 @@ class CombinedCausticTests(unittest.TestCase):
         self.assertNotIn(LIT_NWB_REFLECTION_SMOKE_TEMPORAL, environment)
         self.assertNotIn(LIT_NWB_CAUSTIC_SMOKE_SCREEN_REFRACTION_BA, environment)
 
-
     def test_software_contributions_keep_thresholds_and_exclude_hardware_radiometry(self):
         with patch.object(CausticOpticalImageEvidence, LIT_ANALYZE_EXTERIOR_REFLECTION) as exterior:
             result = CausticOpticalImageEvidence.analyze_frames(self.frames(), software_ray_tracing=True)
@@ -103,7 +99,6 @@ class CombinedCausticTests(unittest.TestCase):
             frames[disabled] = frames[LIT_COMBINED]
             with self.subTest(disabled=disabled), self.assertRaises(SmokeFailure):
                 CausticOpticalImageEvidence.analyze_frames(frames, software_ray_tracing=True)
-
 
     def test_software_environment_drops_inherited_hardware_or_scene_override(self):
         with patch.dict(caustic.os.environ, {LIT_NWB_REFRACTION_SMOKE_CASE: LIT_NESTED, LIT_NWB_REFLECTION_SMOKE_MODE: "hardware", LIT_NWB_GPU_TIMING_FILE: "inherited.csv"}):

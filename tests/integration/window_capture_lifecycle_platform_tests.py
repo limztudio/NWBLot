@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-"""Window capture platform backend lifecycle tests."""
-
 
 import subprocess
 import sys
@@ -211,7 +209,6 @@ class LinuxCaptureFallbackTests(unittest.TestCase):
         self.assertIs(result, white_capture)
         capture._window_root_region.assert_not_called()
 
-
     def test_flat_direct_capture_keeps_raise_settle_and_root_fallback(self):
         backend = object.__new__(window_capture_smoke.LinuxX11Capture)
         backend.display, backend.root = object(), 1
@@ -250,7 +247,7 @@ class LinuxPreparedCaptureTests(unittest.TestCase):
 
         def read(*_args):
             pixel = caret if clock.now % 1.0 < 0.5 else background
-            clock.now += 0.6  # Conversion follows the already frozen native image.
+            clock.now += 0.6
             return SimpleNamespace(pixel=pixel, has_pixel_variation=True, appears_empty_or_white=False)
 
         def sleep(delay):

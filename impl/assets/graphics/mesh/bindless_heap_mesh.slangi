@@ -9,15 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Global descriptor heap - typed mesh-stream views over the StorageBuffer class.
-// Raster geometry is stored in eleven immutable streams with five different structured element layouts plus four raw byte streams.
-// They share the StorageBuffer table: type/stride below is a shader-side view, like the BVH-node alias.
-// Per-draw instance data carries the slot for each mesh-stream ABI position.
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #include "../bindless/bindless_heap.slangi"
 #include "meshlet_payload.slangi"
 #include "material_typed_bindings.slangi"
@@ -28,7 +19,7 @@
 
 
 #pragma warning(push)
-#pragma warning(disable: 39001) // Deliberate typed views of the StorageBuffer descriptor table in bindless_heap.
+#pragma warning(disable: 39001)
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbHeapMeshPositionBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbHeapMeshHalf4Buffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbMeshUv0, Std430DataLayout> g_NwbHeapMeshUv0Buffers[];

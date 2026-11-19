@@ -161,8 +161,6 @@ b8 BackendContext::abandonAcquiredFrame(){
         && m_framePresentation.m_framePresentationSwapChainIndex == m_swapChainIndex
     ;
     const b8 abandonmentReady = currentImageReady && (presentationSignalIdle || presentationSignalTracked);
-    // Invalidate presentation identity before touching signal state.
-    // Keeping m_frameAcquired set quarantines the WSI image even if retirement or draining fails, so no later beginFrame, claim, or present can reuse it.
     m_swapChainIndex = Limit<u32>::s_Max;
     if(!abandonmentReady){
         NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Acquired-frame abandonment preconditions failed; forcing device teardown."));
@@ -326,8 +324,6 @@ Expected<b8, PresentationFailure> BackendContext::present(){
     const VulkanDetail::QueuePresentWaitDisposition::Enum presentWaitDisposition = VulkanDetail::ClassifyQueuePresentWaitDisposition(res);
     m_swapChainImages[m_swapChainIndex].presentationState.observeQueuePresentWaitDisposition(presentWaitDisposition);
     if(presentWaitDisposition != VulkanDetail::QueuePresentWaitDisposition::Consumed){
-        // Host/device OOM and unknown failures do not prove the accepted binary signal was consumed.
-        // Preserve its tracking until successful idle-and-replacement quarantine or terminal teardown.
         if(presentWaitDisposition == VulkanDetail::QueuePresentWaitDisposition::DeviceLost){
             m_rhiDevice->markDeviceLost();
             captureDeviceLossAfterUnlock(VulkanArenaScope::s_PresentContext, &presentationLock);
@@ -343,7 +339,6 @@ Expected<b8, PresentationFailure> BackendContext::present(){
         return MakeUnexpected(PresentationFailure{ presentationAccepted });
     }
 
-    // Every consumed disposition has retired the binary wait even when the surface itself must be recreated.
     resetFramePresentationSignal();
     m_frameAcquired = false;
     m_frameAbandonmentComplete = false;

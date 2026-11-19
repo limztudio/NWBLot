@@ -20,7 +20,6 @@ struct OnlineF64Statistics{
     u32 count = 0u;
 };
 
-// The input must contain between one and u32 maximum samples.
 [[nodiscard]] inline OnlineF64Statistics ComputeOnlineF64Statistics(const Span<const f64> samples)noexcept{
     OnlineF64Statistics result;
     result.minimum = samples.front();

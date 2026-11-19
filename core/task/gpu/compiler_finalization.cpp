@@ -87,8 +87,6 @@ namespace GpuTaskGraphCompilerDetail{
         resourceStateDependencies.push_back(dependency);
     };
 
-    // Imported metadata may require a graph-owned terminal state for post-graph resume.
-    // Texture/buffer keep every terminal fragment; AS stays whole-allocation; state retained even without a native transition.
     for(usize resourceIndex = 0u; resourceIndex < graph.resourceCount(); ++resourceIndex){
         const GpuTaskGraphResourceView resource = graph.resourceAt(resourceIndex);
         if(resource.externalFinalState == ResourceStates::Unknown)
@@ -96,7 +94,6 @@ namespace GpuTaskGraphCompilerDetail{
 
         const b8 hasExternalFinalRelease = resource.externalFinalReleaseDestinationQueue.valid();
 
-        // Graph storage admits a known external final state only for texture, buffer and acceleration structure resources.
         const GpuCompiledBarrierType::Enum exportType = StateExportBarrierType(resource.type);
         FOUNDATION_ASSERT(exportType < GpuCompiledBarrierType::Count);
 
@@ -119,8 +116,6 @@ namespace GpuTaskGraphCompilerDetail{
 
             const b8 performsFinalization = state.state != resource.externalFinalState || (hasExternalFinalRelease && state.queue != resource.externalFinalReleaseDestinationQueue);
             if(performsFinalization){
-                // The selected terminal task owns the external transition/release for this exact fragment.
-                // A shadowed earlier terminal user must finish before that op; matching state alone never orders read-only packets.
                 for(usize earlierStateIndex = resourceHistory.first(resource.id); earlierStateIndex != Limit<usize>::s_Max && earlierStateIndex < terminalStateIndex; earlierStateIndex = resourceHistory.next(earlierStateIndex)){
                     const TrackedCompiledResourceState& earlierState = trackedResourceStates[earlierStateIndex];
                     if(!RangesOverlap(resource, earlierState.range, terminalRange))
@@ -147,8 +142,6 @@ namespace GpuTaskGraphCompilerDetail{
                 else if(externalExportPacket != terminalPacket || externalExportSourceQueue != state.queue){
                     externalExportUsesOnePacket = false;
                 }
-                // Texture and buffer ownership snapshots retain disjoint terminal ranges from different queues.
-                // Acceleration structures still have one allocation owner and cannot publish conflicting releases.
                 if(resource.type != GpuGraphResourceType::Texture && resource.type != GpuGraphResourceType::Buffer && (externalExportPacket != terminalPacket || externalExportSourceQueue != state.queue))
                     return false;
                 if(compiledPlan.externalResourceExportSources.size() >= s_SourceMax)
@@ -164,8 +157,6 @@ namespace GpuTaskGraphCompilerDetail{
             if(hasExternalFinalRelease && state.queue != resource.externalFinalReleaseDestinationQueue){
                 const GpuCompiledBarrierType::Enum releaseType = OwnershipReleaseBarrierType(resource.type);
                 FOUNDATION_ASSERT(releaseType < GpuCompiledBarrierType::Count);
-                // Export the exact final state before ownership moves.
-                // Native lowering therefore captures the same state in the released snapshot and the paired Vulkan queue-family release barrier.
                 if(!AppendCompiledOwnershipTransfer(plan, resource, terminalRange, state.task, GpuTaskId{}, state.queue, resource.externalFinalReleaseDestinationQueue, GpuOwnershipTransferRoute::ExternalExport))
                     return false;
                 pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{
@@ -213,8 +204,6 @@ namespace GpuTaskGraphCompilerDetail{
             }
         }
         if(!hasTerminalDeclaredRange){
-            // A final-state requirement cannot be published from an untouched or state-unknown resource.
-            // Reject compilation rather than leaving a direct renderer bridge to guess whether the requirement held.
             return false;
         }
         if(hasExternalFinalRelease){
@@ -235,8 +224,6 @@ namespace GpuTaskGraphCompilerDetail{
 }
 
 [[nodiscard]] b8 AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
-    // Consumers are visited after their producer, so ownership releases are discovered late.
-    // Group them only after planning completes to keep every task's epilogue span contiguous in the immutable compiled graph.
     GpuTaskGraphCompiledPlanStorage& compiledPlan = plan.compiledPlan;
     constexpr usize s_BarrierMax = static_cast<usize>(Limit<u32>::s_Max);
     if(compiledPlan.epilogueBarriers.size() > s_BarrierMax || plan.pendingEpilogueBarriers.size() > s_BarrierMax - compiledPlan.epilogueBarriers.size())
@@ -252,7 +239,6 @@ namespace GpuTaskGraphCompilerDetail{
 
     for(GpuCompiledTask& compiledTask : compiledPlan.tasks)
         compiledTask.epilogueBarrierCount = 0u;
-    // Every pending barrier belongs to a task that packetization already published.
     for(const PendingCompiledEpilogueBarrier& pending : plan.pendingEpilogueBarriers){
         auto& compiledTask = *MakeNotNull(FindCompiledTask(compiledPlan, pending.task));
         ++compiledTask.epilogueBarrierCount;
@@ -266,8 +252,6 @@ namespace GpuTaskGraphCompilerDetail{
     }
     compiledPlan.epilogueBarriers.resize(barrierCount);
 
-    // Reuse each task's count as its fill cursor.
-    // Traversing discovery order keeps exports before their paired ownership releases without allocating a separate grouping table.
     for(const PendingCompiledEpilogueBarrier& pending : plan.pendingEpilogueBarriers){
         auto& compiledTask = *MakeNotNull(FindCompiledTask(compiledPlan, pending.task));
         const usize barrierIndex = static_cast<usize>(compiledTask.epilogueBarrierOffset) + compiledTask.epilogueBarrierCount;

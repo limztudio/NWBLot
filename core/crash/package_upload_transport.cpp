@@ -48,7 +48,6 @@ static b8 s_CurlGlobalInitialized = false;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// PersistentArena rounds C allocations to MaxAlign; reject unsupported round-up before its throwing size arithmetic.
 [[nodiscard]] static constexpr b8 CanAllocateCrashCurlBytes(const usize size)noexcept{
     constexpr usize s_MaxRoundedBytes = Limit<usize>::s_Max - (alignof(MaxAlign) - 1u);
     return size <= s_MaxRoundedBytes;

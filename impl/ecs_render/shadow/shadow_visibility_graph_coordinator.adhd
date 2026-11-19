@@ -17,7 +17,6 @@ class ShadowVisibilityGraphContext{
     public mut RendererRayTracingSystem rayTracing;
     public mut GpuPersistentResourceStateCache shadowComputeState;
     public mut GpuPersistentResourceStateCache shadowReturnState;
-    // Graph callbacks observe the pipeline-owned preparation result after declaration.
     public in b8 shadowPrepared;
 
     public ShadowVisibilityGraphContext(

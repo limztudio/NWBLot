@@ -31,7 +31,6 @@ class RendererDeferredState : NoCopy{
     public u32 m_lightGpuDataCount = 0u;
     public Array<u8, s_SceneShadingGpuDataBytes> m_sceneShadingGpuData;
     public b8 m_sceneShadingGpuDataValid = false;
-    // Cached bytes avoid redundant light-buffer uploads.
     public Array<u8, s_DeferredLightGpuByteCount> m_lightGpuData;
     public b8 m_lightGpuDataValid = false;
 

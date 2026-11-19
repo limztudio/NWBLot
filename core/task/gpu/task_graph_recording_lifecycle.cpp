@@ -88,7 +88,6 @@ b8 GpuTaskGraph::beginRecordingAttempt(const GpuCompiledGraph& compiledGraph, co
             || task.lifecycleState == TaskLifecycleState::Accepted
         )
             return false;
-        // Once a plan began recording, every task must receive its discarded callback before a different plan or retry can re-arm the graph.
         if(m_activeRecordingPlanGeneration != 0u && task.lifecycleState != TaskLifecycleState::Discarded)
             return false;
     }
@@ -335,7 +334,6 @@ b8 GpuTaskGraph::validForDeviceGeneration(const u16 deviceGeneration)const noexc
         return false;
 
     const auto validStateSource = [deviceGeneration](const CommandListResourceStateHandoff* const states)noexcept{
-        // Recording validates snapshot contents; valid snapshots must belong to the active native device lifetime.
         return !states || !states->valid() || states->validForDeviceGeneration(deviceGeneration);
     };
 
@@ -367,7 +365,6 @@ b8 GpuTaskGraph::validForDeviceGeneration(const u16 deviceGeneration)const noexc
         )
             return false;
     }
-    // Token append and upgrade validate one shared generation before publishing immutable completion storage.
     if(m_externalCompletionDeviceGeneration != 0u && m_externalCompletionDeviceGeneration != deviceGeneration)
         return false;
     return true;

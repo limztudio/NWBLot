@@ -83,7 +83,6 @@ REGION_EDIT_NORMAL = "edit.normal"
 REGION_EDIT_FOCUSED = "edit.focused"
 REGION_LIST_BACKGROUND = "list.background"
 
-# Name, fill RGB, border RGB; RGB is authored in sRGB and alpha is straight coverage.
 PANELS = [(REGION_PANEL_NORMAL, (24, 29, 37), (63, 77, 93)), ("window.normal", (27, 34, 44), (71, 86, 105)), ("window.title", (34, 47, 64), (71, 86, 105)), (REGION_BUTTON_NORMAL, (45, 60, 80), (79, 101, 126)), (REGION_BUTTON_HOVER, (60, 84, 112), (107, 147, 188)),
     (REGION_BUTTON_PRESSED, (33, 47, 65), (88, 128, 171)), (REGION_BUTTON_DISABLED, (37, 43, 52), (58, 65, 75)), (REGION_EDIT_NORMAL, (15, 20, 28), (65, 80, 100)), (REGION_EDIT_FOCUSED, (18, 26, 37), (97, 174, 240)), ("edit.disabled", (29, 33, 40), (54, 61, 70)),
     ("checkbox.normal", (20, 27, 36), (81, 103, 129)), ("checkbox.hover", (34, 48, 65), (109, 163, 211)), ("checkbox.checked", (40, 102, 164), (110, 186, 245)), ("checkbox.disabled", (32, 37, 45), (57, 65, 76)), ("radio.normal", (20, 27, 36), (81, 103, 129)),
@@ -94,7 +93,6 @@ PANELS = [(REGION_PANEL_NORMAL, (24, 29, 37), (63, 77, 93)), ("window.normal", (
 ICONS = [("checkbox.mark", KIND_CHECK), ("radio.mark", KIND_DOT), ("combo.arrow", KIND_DOWN), ("window.close", KIND_CROSS), ("window.collapse", KIND_DOWN), ("scrollbar.arrow.up", KIND_UP), ("scrollbar.arrow.down", KIND_DOWN), ("scrollbar.arrow.left", KIND_LEFT),
     ("scrollbar.arrow.right", KIND_RIGHT), ("white", KIND_WHITE),]
 
-# Linear RGB and straight alpha, in UiSkinColorRole order.
 COLOR_ROLES = [{FIELD_NAME: "text.normal", FIELD_RGBA: [0.92, 0.94, 0.98, 1.0]}, {FIELD_NAME: "text.disabled", FIELD_RGBA: [0.48, 0.50, 0.55, 1.0]}, {FIELD_NAME: "text.tooltip", FIELD_RGBA: [1.0, 1.0, 1.0, 1.0]}, {FIELD_NAME: "edit.background", FIELD_RGBA: [0.08, 0.10, 0.14, 1.0]},
     {FIELD_NAME: "edit.selection", FIELD_RGBA: [0.20, 0.40, 0.78, 0.75]},
     {FIELD_NAME: "edit.inactive_selection", FIELD_RGBA: [0.28, 0.31, 0.38, 0.55]},
@@ -174,7 +172,6 @@ def _generate_into(directory: Path) -> None:
                             accum[ALPHA_CHANNEL_INDEX] += CHANNEL_MAX
                 offset = ((origin_y + y) * ATLAS_SIZE + origin_x + x) * RGBA_CHANNEL_COUNT
                 if accum[ALPHA_CHANNEL_INDEX]:
-                    # Keep straight RGB at antialiased edges; alpha alone records coverage.
                     samples = accum[ALPHA_CHANNEL_INDEX] / CHANNEL_MAX
                     pixels[offset:offset + RGBA_CHANNEL_COUNT] = bytes([round(accum[c] / samples) for c in range(RGB_CHANNEL_COUNT)] + [round(accum[ALPHA_CHANNEL_INDEX] / SAMPLE_COUNT)])
         region = {FIELD_NAME: name, FIELD_RECT: [origin_x, origin_y, REGION_SIZE, REGION_SIZE]}
@@ -188,7 +185,6 @@ def _generate_into(directory: Path) -> None:
     png += png_chunk(b"IHDR", struct.pack(">IIBBBBB", ATLAS_SIZE, ATLAS_SIZE, PNG_BIT_DEPTH, PNG_COLOR_TYPE_RGBA, 0, 0, 0))
     png += png_chunk(b"IDAT", zlib.compress(rows, PNG_COMPRESSION_LEVEL)) + png_chunk(b"IEND", b"")
     (directory / SOURCE_IMAGE_NAME).write_bytes(png)
-    # Semantic aliases share atlas artwork.
     parts = {region[FIELD_NAME]: region for region in regions}
     for name, source in ((REGION_LIST_BACKGROUND, REGION_EDIT_NORMAL), ("list.row.normal", REGION_BUTTON_NORMAL), ("list.row.disabled", REGION_BUTTON_DISABLED), ("scroll.track", REGION_PANEL_NORMAL), ("scroll.thumb", REGION_BUTTON_NORMAL),
         ("combo.normal", REGION_BUTTON_NORMAL), ("combo.hover", REGION_BUTTON_HOVER), ("combo.open", REGION_BUTTON_PRESSED), ("combo.focused", REGION_EDIT_FOCUSED), ("combo.disabled", REGION_BUTTON_DISABLED)):

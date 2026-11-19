@@ -156,7 +156,6 @@ Expected<GpuGraphResourceId, GpuSampledTextureImportError> ImportGpuSampledTextu
 ){
     CompactString suffix = CompactString("");
     AppendUnsignedU64Text(suffix, cast<u64>(desc.index));
-    // Graph imports unify equal identities; every immutable snapshot page needs a distinct texture and completion name.
     const Expected<Name> readyIdentity = DeriveName(desc.readyPrefix, suffix.view());
     const Expected<Name> textureIdentity = DeriveName(desc.texturePrefix, suffix.view());
     if(!readyIdentity.has_value() || !textureIdentity.has_value())

@@ -16,8 +16,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared per-corner ABI: packed Half4 normal at NORMAL_BYTE_OFFSET, Float2 uv0 at UV0_BYTE_OFFSET.
-// Offsets and stride use NWB_RAYTRACE_VERTEX_ATTRIBUTE_*; callers own heap loads.
 struct NwbRayTraceVertexAttrib{
     half3 normal;
     float2 uv0;

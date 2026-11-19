@@ -203,7 +203,6 @@ class CsgCausticTimingProbe{
             const TimingView view = this.m_context.perfSession.gpuTimingView();
             if(!view.valid())
                 return true;
-            // Steady warm-up starts only after every measured GPU pass has completed real work.
             for(usize scopeIdx = 0u; scopeIdx < s_CsgCausticGpuScopeCount; ++scopeIdx){
                 const Name expectedName = CsgCausticGpuTimingScopeName(scopeIdx);
                 b8 ready = false;
@@ -324,7 +323,6 @@ class CsgCausticTimingProbe{
                 this.m_lastPublication[scope] = stats.publishFrameIndex;
                 if(stats.firstSampleFrameIndex < this.m_firstSource)
                     continue;
-                // This fixed fixture emits exactly one accepted range for each selected scope and source frame.
                 if(stats.lastSampleFrameIndex >= sourceFrame || stats.firstSampleFrameIndex > stats.lastSampleFrameIndex || stats.sampleCount != stats.lastSampleFrameIndex - stats.firstSampleFrameIndex + 1u || this.m_records.size() == s_SmokeTimingMaxRecords){
                     error("CsgCausticTiming: source coverage is incomplete, duplicated or outside buffered native endpoints");
                     return false;
@@ -624,7 +622,6 @@ class CsgShadowAtlas{
     }
 
     private void createReferencePieces(in SmokeBoxBounds box, in SmokeBoxBounds cutter, in b8 transparent, in CsgShadowMode mode, in SmokeMaterialRef opaqueMaterial, mut World world){
-        // Six disjoint ordinary boxes represent the subtraction without CSG components or generated caps.
         Array<SmokeBoxBounds, 6u> pieces = Array<SmokeBoxBounds, 6u>();
         if(!BuildSmokeBoxSubtractionPieces(box, cutter, pieces)){
             this.createBox(box, transparent, mode, opaqueMaterial, world);
@@ -741,13 +738,11 @@ class CsgShadowAtlas{
         SetSmokeCsgCutterMatrix(CreateSmokeCsgSphereCutter(CsgShadowAnalyticGroupName(1u), sphereShape, active, VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), world), ellipsoid, world);
 
         SetSmokeCsgCutterMatrix(CreateSmokeCsgCapsuleCutter(CsgShadowAnalyticGroupName(2u), capsuleShape, active, VectorSingle(0.35f, 0.25f, 0.0f, 0.0f), world), MatrixTranslation(2.0f, 1.0f, -6.0f), world);
-        // An exact axis permutation exercises the capsule's zero radial-speed branch.
         const MatrixSingle alongLight = MatrixSet(1.0f, 0.0f, 0.0f, -2.0f, 0.0f, 0.0f, -1.0f, -1.0f, 0.0f, 1.0f, 0.0f, -6.0f, 0.0f, 0.0f, 0.0f, 1.0f);
         SetSmokeCsgCutterMatrix(CreateSmokeCsgCapsuleCutter(CsgShadowAnalyticGroupName(3u), capsuleShape, active, VectorSingle(0.3f, 0.4f, 0.0f, 0.0f), world), alongLight, world);
 
         SetSmokeCsgCutterMatrix(CreateSmokeCsgSphereCutter(CsgShadowAnalyticGroupName(4u), sphereShape, active, VectorSingle(0.55f, 0.0f, 0.0f, 0.0f), world), MatrixTranslation(0.0f, -1.0f, -6.25f), world);
         SetSmokeCsgCutterMatrix(CreateSmokeCsgSphereCutter(CsgShadowAnalyticGroupName(4u), sphereShape, active, VectorSingle(0.55f, 0.0f, 0.0f, 0.0f), world), MatrixTranslation(0.0f, -1.0f, -5.75f), world);
-        // The infinite plane keeps the control in the CSG route while removing only z <= -8, outside its box.
         SetSmokeCsgCutterMatrix(CreateSmokeCsgPlaneCutter(CsgShadowAnalyticGroupName(5u), planeShape, active, VectorSingle(0.0f, 0.0f, 1.0f, 8.0f), world), MatrixIdentity(), world);
         [essential] info("CsgShadowSmokeProject: analytic atlas tiles=6 shapes=plane,sphere,capsule");
     }
@@ -757,7 +752,6 @@ class CsgShadowAtlas{
         if(mode.openCase == CsgShadowOpenCase::Reference){
             if(!this.createBox(SmokeBoxBounds(f32x3u(-1.9f, -0.7f, -7.0f), f32x3u(-0.5f, 0.7f, -5.0f)), true, s_CsgShadowOpenFiveMesh, mode, opaqueMaterial, world).valid())
                 return false;
-            // Separate ordinary two-sheet instances give an independent exact even-pair reference beyond the ordinary four-event approximation.
             for(u32 pair = 0u; pair < 3u; ++pair){
                 const f32 lower = -7.0f + cast<f32>(pair) * 0.8f;
                 if(!this.createBox(SmokeBoxBounds(f32x3u(0.5f, -0.7f, lower), f32x3u(1.9f, 0.7f, lower + 0.4f)), true, s_CsgShadowOpenPairMesh, mode, opaqueMaterial, world).valid())

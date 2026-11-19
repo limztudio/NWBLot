@@ -1,5 +1,3 @@
-"""Validation of the authored stress workload and its startup evidence."""
-
 import math
 import re
 

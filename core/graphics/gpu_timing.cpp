@@ -294,7 +294,6 @@ void GpuTimingRecorder::endScope(CommandList& commandList, GpuTimingScope& scope
 
     GpuTimingAccumulator::QueryEndResult::Enum endResult = GpuTimingAccumulator::QueryEndResult::Invalid;
     {
-        // Drop the lock before publishing into the ticket: terminal paths take the ticket first, then release query ownership.
         ScopedLock lock(m_mutex);
         GpuTimingAccumulator* accumulator = findAccumulator(scope);
         if(accumulator)
@@ -318,7 +317,6 @@ void GpuTimingRecorder::endScopeFromOpeningCommandList(CommandList& commandList,
 
     GpuTimingAccumulator::QueryEndResult::Enum endResult = GpuTimingAccumulator::QueryEndResult::Invalid;
     {
-        // Preserve recorder -> accumulator lock ordering while the already-reserved scope is closed.
         NothrowScopedLock lock(m_mutex);
         GpuTimingAccumulator* const accumulator = findAccumulator(scope);
         if(accumulator)
@@ -495,7 +493,6 @@ b8 GpuTimingRecorder::submissionCompleted(Device& device, const QueueSubmissionT
 
     QueueCompletion& completion = m_queueCompletions[physicalQueue.index];
     if(completion.queue != physicalQueue){
-        // A failed query proves no completion for this pass.
         const Expected<u64> completedValue = device.queueGetCompletedInstance(physicalQueue);
         completion.queue = physicalQueue;
         completion.value = completedValue ? *completedValue : 0u;

@@ -16,7 +16,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Initialize once with a nonempty span whose size fits a u32 index.
 template<typename ArenaT>
 struct HierarchicalIndexSet final : NoCopy{
     static constexpr usize s_IndexBitsPerLevel = 6u;

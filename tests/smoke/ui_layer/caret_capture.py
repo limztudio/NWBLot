@@ -1,4 +1,3 @@
-"""Observe displayed caret pixels before capturing a full-frame blink-on sample."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -9,7 +8,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from window_capture_smoke import SmokeFailure, ensure_process_running  # noqa: E402
 
-# A blink-on sample must follow an observed off phase within this window.
 CARET_PHASE_WINDOW_SECONDS = 0.15
 CARET_POLL_SECONDS = 0.025
 

@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared 2x2 coarse neighborhood loading, edge classification, and interpolation for adaptive transparent shadow passes.
 struct NwbSwShadowCoarseSamples{
     half3 t00;
     half3 t10;
@@ -29,7 +28,6 @@ struct NwbSwShadowCoarseLight{
     bool isEdge;
 };
 
-// Bilinear 2x2 coarse neighborhood lookup with clamped border coordinates and exact quarter-step half weights.
 NwbSwShadowCoarseLocation nwbSwShadowLocateCoarseSample(const uint2 pixel, const uint2 coarseSize){
     const float2 coarseCoord = float2(pixel) * (1.0 / float(NWB_SW_SHADOW_COARSE_FACTOR));
     NwbSwShadowCoarseLocation location;
@@ -60,11 +58,9 @@ half3 nwbSwShadowInterpolateCoarse(const NwbSwShadowCoarseSamples samples, const
     return lerp(tx0, tx1, weights.y);
 }
 
-// Classifies coarse 2x2 samples for one scene light; the caller handles the edge action.
 bool nwbSwShadowLoadCoarseLight(const NwbSwShadowCoarseLocation location, const uint lightIndex, const half edgeThreshold, out NwbSwShadowCoarseLight outLight){
     const float slotF = g_NwbSceneLights[lightIndex].params.z;
     if(slotF < 0.0){
-        // Callers ignore this value when false, but every out path must still be initialized for Slang.
         outLight.slot = 0u;
         outLight.samples.t00 = half3(0.0h);
         outLight.samples.t10 = half3(0.0h);
@@ -76,7 +72,6 @@ bool nwbSwShadowLoadCoarseLight(const NwbSwShadowCoarseLocation location, const 
 
     outLight.slot = uint(slotF);
     outLight.samples = nwbSwShadowLoadCoarseSamples(location.c0, location.c1, outLight.slot);
-    // The coarse range is a (0, 1) half visibility delta; half compare is sufficient here.
     outLight.isEdge = nwbSwShadowCoarseRange(outLight.samples) > edgeThreshold;
     return true;
 }

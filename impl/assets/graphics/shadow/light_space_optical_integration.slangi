@@ -16,7 +16,6 @@ struct NwbLightSpaceOpticalIntegration{
         return nwbHeapRawBuffer(g_NwbSwShadowMaterialContextSlots.materialSlots.y).Load(NWB_RT_OPTICAL_SCENE_HEADER_BYTES + instance * NWB_RT_OPTICAL_INSTANCE_BYTES + NWB_RT_OPTICAL_INSTANCE_BOUNDARY_OFFSET);
     }
 
-    // Mixed receivers integrate retained open surfaces independently of their closed solid and cap boundaries.
     static void integrateInstance(const uint pixelIndex, const uint end, const uint instance, const float receiverDepth, const uint4 csgRange, const bool closed, inout uint index, inout half3 opticalDepth, inout half interfaceProduct){
         const bool csg = (csgRange.z & NWB_CSG_RAY_RECEIVER_ACTIVE) != 0u;
         half3 absorption = half3(0.0h);
@@ -76,13 +75,11 @@ struct NwbLightSpaceOpticalIntegration{
         const uint count = nwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(pixelIndex * NWB_LIGHT_SPACE_PIXEL_WORD_BYTES);
         if(count > NWB_LIGHT_SPACE_EVENTS_PER_TEXEL)
             return false;
-        // The shade producer sorts every completed texel by instance ASC, depth DESC, primitive ASC.
         for(uint record = 0u; record < count; ++record){
             const NwbLightSpaceEvent event = nwbLightSpaceLoadEvent(pixelIndex, record);
             if(!isfinite(event.depth) || (event.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK) >= g_NwbLightSpacePush.instanceCount)
                 return false;
         }
-        // Bounded (0, 1) transmittance math stays half; depth/distance/chord geometry remains float.
         half3 opticalDepth = half3(0.0h);
         half interfaceProduct = half(1.0h);
         uint index = 0u;

@@ -35,7 +35,6 @@ class RadioGroupStyle{
     public f32 rowGap = s_StyleSpacingSmall;
     public f32 indicatorExtent = s_StyleControlExtent;
     public f32 gap = s_StyleSpacingMedium;
-    // Fraction of the indicator extent inset on each side of its checked mark.
     public f32 markInset = s_StyleMarkInset;
 }
 
@@ -100,7 +99,6 @@ class RadioGroupMetrics{
     public f32 rowGap = s_StyleSpacingSmall;
     public f32 markInset = s_StyleMarkInset;
     public Insets padding;
-    // Complete intrinsic group size, including its outer padding.
     public Point contentSize;
     public u32 count = 0u;
 }

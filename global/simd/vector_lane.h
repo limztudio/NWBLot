@@ -15,7 +15,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Active component masks for vector helpers that consume only a subset of SIMD lanes.
 namespace VectorComponentMask{
 
 
@@ -36,7 +35,6 @@ inline constexpr u32 s_XYZW = 0xFu;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Active component masks for vector helpers that consume only a subset of SIMD lanes.
 namespace VectorDoubleComponentMask{
 
 
@@ -96,7 +94,6 @@ template<typename T> requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
         return integer + 1.0f;
     }
     else{
-        // Integer-bit rounding preserves binary64 range, signed zero, and ties independently of the floating-point rounding mode.
         const u64 bits = BitCast<u64>(value);
         const u64 magnitude = bits & s_F64AbsoluteBitMask;
         const u64 sign = bits & s_F64SignBitMask;
@@ -544,7 +541,6 @@ FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL SplatLane(SIMDVectorDoub
 
 
 #if defined(FOUNDATION_HAS_AVX2)
-// Preserve sequential reduction order and broadcast only after the final scalar-lane addition.
 FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL Reduce3(SIMDVectorDouble value)noexcept{
     const __m128d low = GetLow(value), high = GetHigh(value);
     const __m128d xy = _mm_add_sd(low, _mm_unpackhi_pd(low, low));

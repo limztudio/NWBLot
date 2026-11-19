@@ -320,7 +320,6 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                 break;
             }
         }
-        // Writing through a mutable reference field leaves the containing object unchanged.
         const b8 writesThroughBorrow = isMutationTarget
             && m_symbols.resolveRefMode(inferExprTypeRef(ownerClass, &method, expr, scope)) == ParamPassingMode::Mut;
         if(expr.lhs && !checkExpr(ownerClass, scope, isMutationTarget && !writesThroughBorrow, method, *expr.lhs, errors))
@@ -767,7 +766,6 @@ b8 TypeChecker::isReceiverConst(const ClassDecl* ownerClass, const MethodDecl& m
     return false;
 }
 
-// Conservative mutability check for unresolved C++ calls: identify adhd lvalues that can bind to non-const references.
 b8 TypeChecker::isPotentiallyMutableLvalueExpr(const ClassDecl* ownerClass, const MethodDecl& method, const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
     switch(expr.kind){
     case ExprKind::Identifier:{

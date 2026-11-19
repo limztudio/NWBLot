@@ -26,7 +26,6 @@ void WaylandTextInputService::OnRegistryGlobal(void* const data, wl_registry* co
     auto& service = *MakeNotNull(static_cast<WaylandTextInputService*>(data));
     if(AStringView(interfaceName) != zwp_text_input_manager_v3_interface.name || service.m_manager || version == 0u)
         return;
-    // Protocol v1 commits cursor-rectangle updates through its explicit commit request.
     service.m_manager = static_cast<zwp_text_input_manager_v3*>(wl_registry_bind(registry, name, &zwp_text_input_manager_v3_interface, 1u));
     service.m_managerName = name;
     if(service.m_seat){
@@ -179,7 +178,6 @@ void WaylandTextInputService::receiveDone(const u32 serial){
         clearPending();
         return;
     }
-    // A delayed done from this session still delivers text; only its native-state feedback must wait.
     m_waitingForCurrentSerial = serial != m_commitSerial;
     if(m_pendingInvalid){
         clearPending();
@@ -194,7 +192,6 @@ void WaylandTextInputService::receiveDone(const u32 serial){
             status = emitDeleteSurrounding(token, m_pendingBefore, m_pendingAfter, provenance.revision, TextInputDeletionBasis::Selection);
         }
         else{
-            // Refuse stale or unsent surrounding ranges before applying later native batch edits.
             clearPending();
             if(!cancelSession(token, TextInputCancelReason::NativeCancelled))
                 NWB_LOGGER_WARNING(FOUNDATION_TEXT("Wayland text input: stale surrounding batch could not cancel current session"));

@@ -318,7 +318,6 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(mut MeshSkinningRuntimeIns
     uploaded = AssignPaddedRawRuntimeBuffer(instance, s_MeshletPrimitiveIndicesSuffix, instance.meshletPrimitiveIndices, false, s_RuntimeCacheMeshletPrimitiveIndexLabel, this.m_graphics, instance.meshletPrimitiveIndexBuffer) && uploaded;
     uploaded = AssignRuntimeBuffer<u32>(instance, s_AttributeSkinsSuffix, instance.attributeSkins, false, s_RuntimeCacheAttributeSkinLabel, this.m_graphics, false, false, sharedQueues, false, instance.attributeSkinBuffer) && uploaded;
 
-    // Both shadow backends trace triangles; always build the reconstructed index buffer.
     if(uploaded){
         const auto triangleIndices = TryBuildMeshSkinningTraceIndices(instance);
         if(!triangleIndices.has_value())
@@ -327,13 +326,11 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(mut MeshSkinningRuntimeIns
         uploaded = AssignRuntimeBuffer<u32>(instance, s_RtTriangleIndicesBufferName, triangleIndices.value(), false, s_RuntimeCacheRtTriangleIndexLabel, this.m_graphics, true, rtSupported, sharedQueues, true, instance.triangleIndexBuffer) && uploaded;
     }
 
-    // Per-corner trace attributes seeded from bind-pose; repack overwrites normals per frame.
     if(uploaded){
         const auto triangleAttributes = TryBuildMeshSkinningTraceAttributes(instance);
         if(!triangleAttributes.has_value())
             return false;
 
-        // The per-frame skinned-normal repack pass writes this buffer as a raw UAV in place.
         uploaded = AssignRuntimeBuffer<AttribGpu>(instance, s_RtTriangleAttributesBufferName, triangleAttributes.value(), true, s_RuntimeCacheRtTriangleAttributeLabel, this.m_graphics, true, false, sharedQueues, false, instance.attributeBuffer) && uploaded;
     }
 

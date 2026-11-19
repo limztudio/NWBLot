@@ -61,7 +61,6 @@ def compare_refraction_frames(reference, refracted):
     for x, y in region_pixels(width, height, GLASS_REGION):
         glass_count += 1
         before, after = baseline[y][x], output[y][x]
-        # Both directions are required: merely attenuating, tinting, or replacing clear glass with black cannot pass as geometric stripe displacement.
         if max(before) - min(before) < 25 and max(after) - min(after) < 25:
             before_luma, after_luma = sum(before) / 3.0, sum(after) / 3.0
             dark_to_light += before_luma < 85 and after_luma > 155
@@ -127,7 +126,6 @@ def capture_variant(args, name, enabled, hardware, expected_dispatch):
     env["NWB_REFRACTION_SMOKE_ENABLED"] = LIT_ENABLED_FLAG if enabled else LIT_DISABLED_FLAG
     env["NWB_REFRACTION_SMOKE_HARDWARE"] = LIT_ENABLED_FLAG if hardware else LIT_DISABLED_FLAG
     env["NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"] = "0.016666667"
-    # A previously pinned interactive smoke frame must not suspend the readback.
     env.pop("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", None)
     result = subprocess.run(command, env=env, check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
     if result.returncode == SKIP_EXIT_CODE:

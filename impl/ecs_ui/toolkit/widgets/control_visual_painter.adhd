@@ -263,7 +263,6 @@ class ControlVisualPainter{
         if(resize.has_value())
             painted = paint.drawRegion(resize.value().name, corner, style.text);
         else{
-            // Skins may supply a resize sprite. The default atlas uses its white sprite for a logical corner grip.
             Rect horizontal;
             Rect vertical;
             ResolveWindowResizeGripBars(corner, horizontal, vertical);

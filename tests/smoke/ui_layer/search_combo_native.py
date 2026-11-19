@@ -1,4 +1,3 @@
-"""Native searchable combo text, clipboard chords, and result navigation."""
 from __future__ import annotations
 
 import time

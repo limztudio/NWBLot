@@ -153,7 +153,6 @@ Expected<GpuTaskGraphOutputLayer> GpuRendererState::declare(mut GpuTaskGraph gra
     layerScheduling.allowParallelRecording = true;
     layerScheduling.allowSameClassQueueRouting = true;
     layerScheduling.preferNonPrimarySameClassQueue = true;
-    // Vertex upload, index upload, and clear.
     FixedVector<GpuTaskId, s_GpuRasterDependencyCapacity> dependencies;
     GpuRasterResourceUses uses;
     GpuGraphResourceId vertices;
@@ -407,7 +406,6 @@ b8 GpuRendererState::renderStandalone(in AcquiredPresentationFrame frame){
     mut GraphicsRuntime graphics = this.m_graphics;
     if(!MatchesGpuAcquiredPresentationFrame(graphics.acquiredPresentationFrame(), frame))
         return false;
-    // Only the exact accepted acquired image is already produced. A rejected claimed scene graph owns its recovery tail.
     if(MatchesGpuAcquiredPresentationFrame(this.m_lastAcceptedAcquired, frame))
         return true;
     if(!this.m_pending.valid())
@@ -441,7 +439,6 @@ b8 GpuRendererState::renderStandalone(in AcquiredPresentationFrame frame){
     if(pending.deref().m_finalConsumer.valid())
         this.acceptOutputLayer(pending.deref().m_snapshot.generation(), pending.deref().m_finalConsumer);
     if(!submitted.has_value() || !submitted.value().valid()){
-        // Retain immutable inputs and accepted-prefix tokens; a later acquired frame can retry after completion.
         this.m_claimed = false;
         this.m_declaredGraph.reset();
         return false;

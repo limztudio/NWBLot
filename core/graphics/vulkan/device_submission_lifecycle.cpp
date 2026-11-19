@@ -76,7 +76,6 @@ void Device::endSubmissionOperation()noexcept{
 }
 
 b8 Device::beginLifecycleDrain()noexcept{
-    // Submission hooks run while leased; re-entrant teardown must fail before closing the gate.
     if(submissionOperationActiveOnCurrentThread())
         return false;
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Qualify skinned multiline plain-text editing through native input and displayed GPU state."""
+
 from __future__ import annotations
 
 import json
@@ -142,7 +142,6 @@ class TextAreaRun:
                 raise SmokeSkip("the TextArea fixture needs a logical client of at least 640x440")
             if not settled:
                 if snapshot[LIT_SEQUENCE] <= entry_sequence:
-                    # Wait for the post-toggle marker sequence before clicking the moved viewport.
                     time.sleep(CHECKPOINT_POLL_SECONDS)
                     continue
                 settled = True
@@ -161,7 +160,6 @@ class TextAreaRun:
             report = capture_frame()
             failed = [probe for probe in report["probes"] if not probe[LIT_PASSED]]
             if (report["model_matches"] and report["geometry_matches"] and report["extra_matches"] and (extent is None or tuple(report[LIT_EXTENT]) == extent) and len(failed) == 1 and failed[0]["name"] == LIT_CARET):
-                # Reuse the exact oracle sample only when every other displayed-state requirement already matches.
                 probe = failed[0]
                 column, row = probe["position"]
                 sample = (column, max(0, row - 1), min(report[LIT_EXTENT][1], row + 2), probe[LIT_EXPECTED], probe["tolerance"])
@@ -169,10 +167,8 @@ class TextAreaRun:
                     wait_for_caret_phase(self.backend, self.handle, self.process, [sample], stage_deadline)
                     self.caret_phase_waits += 1
                 except SmokeFailure:
-                    # Retry capture when GPU load delays the 1s caret blink cycle.
                     time.sleep(CHECKPOINT_POLL_SECONDS)
                     continue
-                # Freeze the admitted caret phase before log collection or another native preparation delay.
                 report = capture_frame(prepared=True, refresh_snapshot=True)
             if report[LIT_PASSED]:
                 self.snapshot = snapshot

@@ -64,13 +64,11 @@ b8 GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWr
         return false;
     }
 
-    // Handle owns binding and index; authored type preserves storage-buffer aliases.
     DescriptorWriteItem writeItem = item;
     writeItem.slot = getRegisterSlot(descriptorClass);
     writeItem.arrayElement = handle.slot();
 
     if(descriptorClass == GpuDescriptorClass::AccelStruct){
-        // TLAS handles retain backing AS until deferred free; generations need fresh handles.
         if(handle.slot() >= m_accelStructBufferBlocks.size() || handle.slot() >= m_accelStructResources.size()){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap::write: AccelStruct handle slot {} is out of range."), handle.slot());
             return false;
@@ -219,7 +217,6 @@ b8 GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWr
 
 
 void GpuDescriptorHeap::bindCompute(CommandList& commandList, const ComputePipeline& pipeline, const GpuDescriptorHandle accelStructHandle){
-    // Bind persistent resource/sampler blocks at 0/1 and optional TLAS at 2.
     commandList.bindDescriptorBufferHeap(*this, pipeline, accelStructHandle);
 }
 

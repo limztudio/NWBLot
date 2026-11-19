@@ -260,11 +260,9 @@ Expected<SoftwareSceneRefitGraphTasks> DeclareSoftwareSceneRefit(in SoftwareScen
         return MakeUnexpected(Failure());
     const GpuGraphResourceId input = inputResult.value();
     Vector<GpuTaskResourceUse> uses;
-    // The input buffer and the scene nodes.
     uses.reserve(snapshot.deref().meshNodes.size() + s_SoftwareSceneRefitFixedUseCapacity);
     uses.push_back(ReadUse(input, ResourceStates::ShaderResource));
     uses.push_back(ReadWriteUse(sceneNodes, ResourceStates::UnorderedAccess));
-    // Reuse every root's existing import, including accepted meshes without a build in this frame.
     for(in BufferHandle root : snapshot.deref().meshNodes){
         GpuGraphResourceId resource;
         {

@@ -2,8 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Software-only adaptive trace: converged static receivers use one independent sample; all other pixels retain three.
-
 #if !defined(NWB_SW_TRANSPARENT_ADAPTIVE) || (NWB_SW_TRANSPARENT_ADAPTIVE != 0 && NWB_SW_TRANSPARENT_ADAPTIVE != 1)
 #error "software transparent sampling requires an explicit fixed or adaptive variant"
 #endif
@@ -33,12 +31,10 @@ struct NwbSoftwareTransparentSamplingPush{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// TRANSPARENT occluder class: the soft transparent trace skips opaque blockers and integrates the colored crossings only.
 #define NWB_SW_SHADOW_OCCLUDER NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
 
 #include "sw_shadow_gbuffer.slangi"
 
-// sw_shadow_ray.slangi pulls shadow_sampling.slangi (nwbShadowLowDiscrepancy2D + the cone jitter) transitively.
 #include "sw_shadow_ray.slangi"
 #if NWB_SW_TRANSPARENT_ADAPTIVE
 #include "software_transparent_sampling.slangi"
@@ -67,7 +63,6 @@ uint nwbSwTransparentSampleCount(const uint2 pixel, const uint lightSlot, const 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Half-resolution soft transparent transmittance output (one layer per shadow slot) denoised and folded by RGB shadow_resolve.
 #define g_NwbSwShadowTransparentSoftHalf nwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.transparentSoftHalfStorageSlot)
 
 #define NWB_SW_SHADOW_SOFT_TRACE_OUTPUT g_NwbSwShadowTransparentSoftHalf

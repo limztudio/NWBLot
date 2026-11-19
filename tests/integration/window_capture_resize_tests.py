@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-"""Window capture resize configuration, lifecycle, and backend checks."""
-
 
 import os
 import sys

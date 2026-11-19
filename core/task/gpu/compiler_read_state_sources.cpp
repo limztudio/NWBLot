@@ -42,7 +42,6 @@ using namespace GpuTaskGraphCompilerDetail;
     if(const RayTracingAccelStruct* const accelStruct = graph.accelStructForResource(resource.id))
         buffer = accelStruct->getBackingBuffer();
     if(buffer){
-        // Buffer restoration changes synchronization masks but has no image layout; the consumer reseeds its exact read state.
         const BufferDesc& description = buffer->getCreationDescription();
         return !description.keepInitialState || description.initialState != ResourceStates::Unknown;
     }
@@ -152,7 +151,6 @@ const TrackedCompiledResourceState* FindConcurrentReadStateSource(
     const usize previousStateIndex = static_cast<usize>(&previousState - plan.trackedResourceStates.data());
     if(previousState.readStateSourceIndex > previousStateIndex)
         return nullptr;
-    // A propagated earlier index already passed the complete packet-close proof; only a new anchor scans its packet.
     if(previousState.readStateSourceIndex == previousStateIndex && !__hidden_gpu_task_graph_compiler_read_state_sources::PacketPreservesReadStateSource(plan, resource, source.range, source))
         return nullptr;
     return &source;
@@ -171,7 +169,6 @@ ResourceStates::Mask ReadStateSourceSnapshotState(const GpuTaskGraph::Declaratio
 }
 
 b8 AppendOverlappingReaderDependencies(GpuTaskGraphResourceStatePlan& plan, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& range, const TrackedCompiledResourceState& previousState, const GpuSubmissionPacketId& consumer){
-    // Exclusive sharing always chains overlapping readers through their latest state seeds.
     if(!ResourceUsesConcurrentQueueSharing(resource, plan.topology))
         return true;
     if(previousState.resource != resource.id || previousState.access != GpuTaskResourceAccess::Read || !RangeContains(resource, previousState.range, range))
@@ -183,7 +180,6 @@ b8 AppendOverlappingReaderDependencies(GpuTaskGraphResourceStatePlan& plan, cons
         if(!RangesOverlap(resource, reader.range, range))
             continue;
         if(IsWriteAccess(reader.access)){
-            // A covering writer joins preceding readers through hazards; subsequent readers depend on that writer.
             if(RangeContains(resource, reader.range, range))
                 return true;
             mayBoundReadEpoch = false;
@@ -196,7 +192,6 @@ b8 AppendOverlappingReaderDependencies(GpuTaskGraphResourceStatePlan& plan, cons
             continue;
         }
         if(!__hidden_gpu_task_graph_compiler_read_state_sources::ReadStatesCompatible(resource, reader.state, previousState.state)){
-            // The newer covering read already joined this older epoch. Partial or task-local changes need full history.
             if(mayBoundReadEpoch && newerOverlappingTask.valid() && reader.task != newerOverlappingTask && RangeContains(resource, reader.range, range))
                 return true;
             mayBoundReadEpoch = false;

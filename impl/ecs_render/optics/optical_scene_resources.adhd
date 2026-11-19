@@ -174,7 +174,6 @@ class RayTracingOpticalSceneResources : NoCopy{
             result.finalize = this.m_runtimeBoundsSnapshot;
             result.buffer = this.m_runtimeBoundsSnapshot.deref().outputBuffer;
             result.descriptor = this.m_runtimeBoundsSnapshot.deref().outputDescriptor;
-            // CPU readiness is distinct from the validity computed from the accepted GPU position stream.
             result.boundsComplete = false;
         }
         return result;

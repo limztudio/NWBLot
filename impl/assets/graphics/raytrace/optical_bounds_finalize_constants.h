@@ -15,7 +15,6 @@
 #define NWB_OPTICAL_BOUNDS_RUNTIME_SLOT_OFFSET 48u
 #define NWB_OPTICAL_BOUNDS_RUNTIME_INSTANCE_OFFSET 52u
 
-// Integer affine bounds use a common fixed-point grid and an outward binary32 error budget.
 #define NWB_OPTICAL_BOUNDS_SIGN_BIT 0x80000000u
 #define NWB_OPTICAL_BOUNDS_MAGNITUDE_MASK 0x7fffffffu
 #define NWB_OPTICAL_BOUNDS_FRACTION_MASK 0x007fffffu

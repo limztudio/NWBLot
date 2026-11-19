@@ -48,8 +48,6 @@ struct VulkanContext{
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR rayTracingPipelineProperties{};
 
     VkPhysicalDeviceAccelerationStructurePropertiesKHR accelStructProperties{};
-    // These are the feature bits actually enabled through vkCreateDevice's pNext chain.
-    // Extension names alone are not capability answers because an enabled extension may have had its feature bit disabled.
     b8 accelerationStructureFeatureEnabled = false;
     b8 rayTracingPipelineFeatureEnabled = false;
     b8 rayQueryFeatureEnabled = false;
@@ -57,8 +55,6 @@ struct VulkanContext{
     b8 clusterAccelerationStructureFeatureEnabled = false;
     b8 rayTracingInvocationReorderFeatureEnabled = false;
     b8 rayTracingInvocationReorderExtFeatureEnabled = false;
-    // True only after an enabled calibrated-timestamp extension exposes the DEVICE domain and its dispatch pair completes a device-domain probe.
-    // It is immutable after Device construction.
     b8 comparableGpuTimestamps = false;
     b8 hostQueryResetFeatureEnabled = false;
     b8 textureCompressionBcFeatureEnabled = false;
@@ -68,21 +64,16 @@ struct VulkanContext{
     b8 fullDrawIndexUint32FeatureEnabled = false;
     b8 multiDrawIndirectFeatureEnabled = false;
     b8 drawIndirectFirstInstanceFeatureEnabled = false;
-    // Descriptor-buffer limits used for layout and offsets.
     VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptorBufferProperties{};
     VkPhysicalDeviceCooperativeVectorPropertiesNV coopVecProperties{};
-    // Cooperative-vector feature bits from the device-create chain, not a later probe.
     VkPhysicalDeviceCooperativeVectorFeaturesNV coopVecFeatures{};
     VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures{};
     VkPhysicalDeviceMeshShaderPropertiesEXT meshShaderProperties{};
     VkPhysicalDeviceRayTracingLinearSweptSpheresFeaturesNV rayTracingLinearSweptSpheresFeatures{};
     VkPhysicalDeviceClusterAccelerationStructurePropertiesNV nvClusterAccelerationStructureProperties{};
-    // Core subgroup properties (the engine requires Vulkan 1.3).
     VkPhysicalDeviceSubgroupProperties subgroupProperties{};
     DescriptorBufferManager* descriptorBufferManager = nullptr;
 
-    // Physical families used for Graphics/AsyncCompute/Transfer resource sharing.
-    // Every auxiliary family is invalid unless the optional cross-family same-class route registered that physical transport on this Device.
     i32 graphicsQueueFamilyIndex = s_InvalidQueueFamilyIndex;
     i32 auxiliaryGraphicsQueueFamilyIndex = s_InvalidQueueFamilyIndex;
     i32 asyncComputeQueueFamilyIndex = s_InvalidQueueFamilyIndex;

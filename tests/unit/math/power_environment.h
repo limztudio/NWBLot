@@ -61,7 +61,6 @@ namespace Tests::MathCases{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// These expressions use the host C++ compiler's contraction and operator rules.
 template<typename T>
 FOUNDATION_NOINLINE T ReferenceMultiplyAdd(const T first, const T second, const T addend)noexcept{
     return first * second + addend;

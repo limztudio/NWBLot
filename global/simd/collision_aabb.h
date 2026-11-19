@@ -18,7 +18,6 @@ namespace AabbTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Calculation result only; callers store retained bounds in Float/Double storage types.
 struct alignas(SIMDVectorSingle) Bounds{
     SIMDVectorSingle minBounds;
     SIMDVectorSingle maxBounds;
@@ -52,7 +51,6 @@ namespace AabbDoubleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Calculation result only; callers store retained bounds in Float/Double storage types.
 struct alignas(SIMDVectorDouble) Bounds{
     SIMDVectorDouble minBounds;
     SIMDVectorDouble maxBounds;

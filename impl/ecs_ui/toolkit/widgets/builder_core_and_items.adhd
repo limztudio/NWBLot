@@ -319,7 +319,6 @@ void Builder::loadButtonMetrics(mut Point size, mut Insets padding)const{
 
 
 b8 Builder::validateDeferredSources()const{
-    // Every loan remains live through all later source callbacks, including those in an ended child scope.
     for(in auto frame : this.m_scope.value().m_radioGroups){
         if(!this.radioGroupMatches(frame))
             return false;
@@ -340,7 +339,6 @@ b8 Builder::validateDeferredSources()const{
 }
 
 b8 Builder::validateDeferredStates()const{
-    // No source callbacks run after these model checks until every scope's loans have been released.
     for(in auto frame : this.m_scope.value().m_sliders){
         if(!this.sliderMatches(frame))
             return false;
@@ -381,7 +379,6 @@ b8 Builder::validateDeferredStates()const{
 }
 
 void Builder::releaseDeferredLoans(){
-    // Frozen geometry and input targets retain copied tokens and keys, never source or model loans.
     this.m_scope.value().m_radioGroups.clear();
     this.m_scope.value().m_sliders.clear();
     for(mut auto frame : this.m_scope.value().m_textAreas){
@@ -624,7 +621,6 @@ b8 Builder::paintItem(in BuilderItem item, in LayoutBox box){
     if(item.state.kind == WidgetKind::Separator)
         return true;
     if(NeedsBasicControlHitTarget(interactive, item.annotated)){
-        // Disabled controls still cover the panel; the router consumes the panel barrier beneath them.
         const HitTarget target = targets.makeBasicControlHitTarget(box.rectangle, clip, item.enabled, interactive, item.contextMenu);
         return this.m_context.addTarget(item.state, target);
     }

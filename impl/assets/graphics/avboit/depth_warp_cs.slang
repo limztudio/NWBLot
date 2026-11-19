@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Every work buffer comes from the global heap via the shared slot payload. Keep names below so the warp stays readable.
 #define g_CoverageWords nwbAvboitCoverageWords()
 #define g_DepthWarp nwbAvboitDepthWarpUav()
 #define g_Control nwbAvboitControlUav()
@@ -17,7 +16,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Low-bit marker of each aligned bin of 2, 4, 8, 16 and 32 coverage slices.
 static const uint NWB_AVBOIT_COVERAGE_MARKER_MASK_BIN2 = 0x55555555u;
 static const uint NWB_AVBOIT_COVERAGE_MARKER_MASK_BIN4 = 0x11111111u;
 static const uint NWB_AVBOIT_COVERAGE_MARKER_MASK_BIN8 = 0x01010101u;
@@ -34,7 +32,6 @@ uint nwbAvboitCoverageWord(uint wordIndex){
 }
 
 uint nwbAvboitCoarsenCoverageWord(uint coverageWord, uint compressionShift){
-    // Each reduction keeps one low-bit marker per occupied aligned bin.
     if(compressionShift > 0u)
         coverageWord = (coverageWord | (coverageWord >> 1u)) & NWB_AVBOIT_COVERAGE_MARKER_MASK_BIN2;
     if(compressionShift > 1u)

@@ -21,7 +21,6 @@ b8 EnsureCausticEmissionTargetBufferStorage(
     mut GpuDescriptorHandle inoutHeapHandle,
     mut usize inoutCapacity
 ){
-    // Replace the heap slot before retiring the old emission-target buffer.
     mut GpuDescriptorHeap heap = graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized()){
         error("RendererSystem: caustic emission targets require the initialized global descriptor heap");
@@ -52,7 +51,6 @@ b8 EnsureCausticEmissionTargetBufferStorage(
         .setByteSize(ComputeCausticEmissionTargetBufferByteSize(capacity))
         .setStructStride(cast<u32>(s_CausticEmissionTargetGpuBytes))
         .setDebugName(s_RenderNameCausticEmissionTargets)
-        // The upload and asynchronous photon reads share this immutable per-frame input.
         .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
         .enableAutomaticStateTracking(ResourceStates::Common)
     ;

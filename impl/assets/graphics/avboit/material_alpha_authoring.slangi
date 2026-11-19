@@ -9,15 +9,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared alpha path for AVBOIT material occupancy/extinction authoring.
-// Include after the material surface hook is in scope and after the pass declares its regular bindless or CSG-local opaque-depth contract.
-
-
 bool nwbAvboitLoadAcceptedMaterialAlpha(const float4 position, const half4 color, const float3 normal, const float4 tangent, const float2 uv0, const float4 worldPosition, out half outAlpha){
     outAlpha = half(0.0h);
 
-    // The selected optical object's entry and exit surfaces are resolved together by bounded refraction.
-    // Removing that complete instance here keeps full-coverage glass from extinguishing its own background.
     if(nwbAvboitRefractionEnabled()){
         const uint2 fullSize = uint2(nwbAvboitFullWidth(), nwbAvboitFullHeight());
         const int3 fullTexel = int3(min(uint2(nwbAvboitFullUvFromLowFragCoord(position.xy) * float2(fullSize)), fullSize - 1u), 0);
@@ -49,7 +43,6 @@ bool nwbAvboitLoadAcceptedMaterialAlpha(const float4 position, const half4 color
     return nwbAvboitAcceptLowDepthFragment(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.w), nwbHeapSampler(g_NwbDeferredBindlessResources.lightingSlots.w), position, outAlpha, virtualSlice);
 }
 
-// Occupancy and extinction share one raster payload. Keep conversion here so a new input field cannot reach only one pass.
 bool nwbAvboitLoadAcceptedMaterialAlpha(const NwbAvboitMaterialAlphaPixelInput input, out half outAlpha){
     return nwbAvboitLoadAcceptedMaterialAlpha(input.position, half4(input.color), input.normal, input.tangent, input.uv0, input.worldPosition, outAlpha);
 }

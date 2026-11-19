@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A BLAS build derives geometry from retained buffers. Keep the resolved op, not a mesh pointer: meshes may prune before record.
 class PreparedMeshBlasBuild{
     public Name meshName = Name();
     public RayTraceBufferHandle positionBuffer = RayTraceBufferHandle();
@@ -31,9 +30,6 @@ class PreparedMeshBlasBuild{
     public b8 performRefit = false;
 }
 
-
-// The software builder shares global scratch; one frozen op retains mesh inputs/outputs plus the scratch generation.
-// Never retain MeshResources pointers: runtime geometry can be replaced or pruned between preflight and Shadow Preparation recording.
 class PreparedMeshSwBvhBuild{
     public Name meshName = Name();
     public RayTraceBufferHandle positionBuffer = RayTraceBufferHandle();
@@ -71,8 +67,6 @@ class PreparedMeshSwBvhBuild{
     public b8 performRefit = false;
 }
 
-
-// Scene traversal consumes one descriptor entry per distinct mesh. Own the handles so recording sees preparation's set.
 class PreparedSceneSwBvhMesh{
     public Name meshName = Name();
     public RayTraceBufferHandle nodeBuffer = RayTraceBufferHandle();

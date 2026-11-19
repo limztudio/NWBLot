@@ -26,8 +26,6 @@ namespace __hidden_gpu_task_graph_imports{
 
 
 [[nodiscard]] static b8 CompatibleResourceMetadata(const GpuTaskGraphResourceView& resource, const GpuGraphResourceDesc& desc)noexcept{
-    // Re-importing an ownership source through the ordinary typed-import overload could silently exchange one of its immutable ownership snapshots.
-    // Require callers to reuse its graph resource ID instead.
     if(resource.initialOwnerHandoffSourceCount != 0u || desc.initialOwnerHandoffSources || desc.initialOwnerHandoffSourceCount != 0u)
         return false;
     return
@@ -44,8 +42,6 @@ namespace __hidden_gpu_task_graph_imports{
 }
 
 [[nodiscard]] static b8 CompatibleRetainedExternalFinalState(const b8 keepInitialState, const ResourceStates::Mask nativeInitialState, const ResourceStates::Mask externalFinalState)noexcept{
-    // Native command-list close restores retained resources to their descriptor state.
-    // A typed graph import must not publish a different known terminal state after that restoration.
     return !keepInitialState || externalFinalState == ResourceStates::Unknown || externalFinalState == nativeInitialState;
 }
 
@@ -102,7 +98,6 @@ Expected<GpuGraphResourceId> GpuTaskGraph::importTexture(const TextureHandle& te
 
     GpuGraphResourceDesc resolvedDesc = desc;
     if(!resolvedDesc.hasExplicitInitialState && resolvedDesc.initialState == ResourceStates::Unknown){
-        // Managed-fresh descriptors keep Unknown for native textures whose state the creation desc never set.
         resolvedDesc.initialState = texture->resolveTaskGraphImportInitialState();
     }
     if(resolvedDesc.queueSharing != ResourceQueueSharing::Exclusive && resolvedDesc.queueSharing != textureDesc.queueSharing)

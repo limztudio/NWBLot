@@ -76,7 +76,6 @@ template<typename ArenaT>
     return ::Path<ArenaT>(arena, *path);
 }
 
-// Retains first-occurrence order and original path spelling; callers select their duplicate identity contract.
 [[nodiscard]] Expected<CookVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveAssetRoots(const Path& repoRoot, Span<const CookString> sources, b8 inferFromInputs, AssetRootDuplicatePolicy::Enum duplicatePolicy, ScratchArena& scratchArena);
 
 template<typename PathArenaT>

@@ -9,9 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-draw material context from the AVBOIT push constant. Include after common/gbuffer_io, before typed accessors.
-
-
 uint nwbMeshShadingModelId(){
     return (g_NwbAvboitDraw.nwbMeshDispatch[NWB_MESH_PUSH_DISPATCH_FLAGS] >> NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT) & NWB_MESH_DISPATCH_SHADING_MODEL_MASK;
 }

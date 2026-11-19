@@ -28,7 +28,6 @@ b8 IsCanonicalMultilineScalar(in u32 scalar){
     return scalar == s_EditUnicodeLineFeed || (scalar >= s_TextUnicodeSpace && (scalar < s_TextUnicodeDelete || scalar > s_TextUnicodeC1Last) && scalar != s_TextUnicodeLineSeparator && scalar != s_TextUnicodeParagraphSeparator);
 }
 
-// The caret has a one-second cycle. Invalid or nonpositive deltas leave its phase unchanged.
 f64 AdvanceCaretPhase(in f64 phase, in f64 deltaSeconds){
     const b8 validPhase = IsFinite(phase) && phase > 0.0;
     const b8 validDelta = IsFinite(deltaSeconds) && deltaSeconds > 0.0;

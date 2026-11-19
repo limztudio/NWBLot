@@ -250,7 +250,6 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
     AppendUnsignedDecimal(guard, ComputeFnv64Text(identity));
     out.append("#ifndef ").append(guard).append("\r\n#define ").append(guard).append("\r\n");
 
-    // Independent importers can instantiate the same class from different namespaces.
     if(ownerNamespace != localNamespace){
         if(!localNamespace.empty())
             out.append("}\r\n");

@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-"""Window capture texture and transparent CSG image analysis checks."""
-
 
 import math
 import sys
@@ -70,7 +68,6 @@ class TransparentCsgAnalysisTests(unittest.TestCase):
 
     @classmethod
     def receiver_hull(cls, pose, clipped):
-        # Project the scaled octahedron and keep the local y<=0 pyramid after roll, pitch, and yaw.
         yaw = {LIT_EARLY: 0.0, LIT_MID: 1.0, "late": 2.0}[pose]
         pitch, roll = .32 * yaw, .16 * yaw
         points = []
@@ -113,7 +110,6 @@ class TransparentCsgAnalysisTests(unittest.TestCase):
             for x in range(x0, x1):
                 point = ((x + .5 - cls.WIDTH / 2) / cls.HEIGHT, (y + .5 - cls.HEIGHT / 2) / cls.HEIGHT)
                 if cls.signed_margin(hull, point) >= 0:
-                    # Keep foreground coverage high so only missing green receiver identity rejects this control.
                     rows[y][x] = (receiver_color or cls.RECEIVER) if receiver else ((180, 50, 30) if x % 2 == 0 else (40, 90, 180))
         return rows
 

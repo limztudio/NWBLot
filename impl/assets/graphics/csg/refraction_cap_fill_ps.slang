@@ -25,7 +25,6 @@ struct NwbCsgRefractionCapFillPixelOutput{
 
 
 NwbCsgRefractionCapFillPixelOutput main(const NwbCsgCapFillPixelInput input){
-    // Each draw selects one receiver so a non-refractive nearer cap cannot hide a refractive cap behind it.
     const uint receiverIndex = g_NwbCsgCapFillPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX];
     const NwbCsgIntervalCapPixel cap = nwbCsgSampleNearestIntervalCap(input.position, receiverIndex);
     if(!cap.visible)

@@ -15,8 +15,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Mesh storage stays 16-bit; raster interfaces use float (no storageInputOutput16 requirement; promote at boundary).
-// UVs/positions/depth stay float for precision.
 #define NWB_MESH_RASTER_PAYLOAD_FIELDS \
     [[vk::location(NWB_MESH_RASTER_COLOR_LOCATION)]] float4 color : COLOR0; \
     [[vk::location(NWB_MESH_RASTER_NORMAL_LOCATION)]] float3 normal : NORMAL0; \

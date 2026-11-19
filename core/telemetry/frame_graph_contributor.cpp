@@ -57,7 +57,6 @@ FrameGraphBuilder::FrameGraphBuilder(
 {
     m_physicalQueueRuntimeStatistics = &physicalQueueRuntimeStatistics;
     m_physicalQueueIdentities.reserve(physicalQueueRuntimeStatistics.size());
-    // Coalesce seeded identities without changing malformed source rows; the payload codec still validates those rows.
     for(const auto& record : physicalQueueRuntimeStatistics){
         const u64 identity = __hidden_frame_graph_contributor::PhysicalQueueIdentity(record.ownerNodeIndex, record.statistics.queue);
         if(m_physicalQueueIdentities.contains(identity))

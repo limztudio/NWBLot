@@ -27,8 +27,6 @@ void SetFloatingPointFlushMode(in u32 mode){
     WriteFlushControl((ReadFlushControl() & ~bits) | ((mode & 1u) << 15u) | ((mode & 2u) << 5u));
 }
 
-
-// Every finite binary32 product is an integer multiple of 2^-298.
 class Dyadic{
     public Array<u64, 10> words;
     public b8 negative = false;

@@ -16,7 +16,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Interval/peel resources are generation heap entries. The CSG context selects the deferred-slot payload.
 #ifndef NWB_GRAPHICS_CSG_RUNTIME_SLANGI
 #error "CSG bindless resources require the CSG runtime context selector"
 #endif

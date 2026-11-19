@@ -94,7 +94,6 @@ class Arm:
 
 def configure_environment(base, workload, timing_file):
     env = dict(base)
-    # Preserve a requested validation override as an error, never silently mute it.
     for key in ("VK_INSTANCE_LAYERS", "VK_LOADER_LAYERS_ENABLE"):
         if env.get(key, "").strip():
             raise SmokeFailure(f"explicit validation layer override is incompatible with timing: {key}")

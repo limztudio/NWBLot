@@ -67,15 +67,12 @@ struct NwbCausticPhotonEmission{
         return x;
     }
 
-    // Deterministic stratified emission jitter shared by both backends.
     static float2 jitter(uint photonIndex){
         const uint h0 = hashU32(photonIndex * NWB_CAUSTIC_JITTER_GOLDEN_RATIO + NWB_CAUSTIC_JITTER_SEED_OFFSET);
         const uint h1 = hashU32(h0 ^ NWB_CAUSTIC_JITTER_SECOND_SEED_SALT);
         return float2((float)(h0 >> NWB_CAUSTIC_JITTER_DROPPED_BITS) * NWB_CAUSTIC_JITTER_UNIT_SCALE, (float)(h1 >> NWB_CAUSTIC_JITTER_DROPPED_BITS) * NWB_CAUSTIC_JITTER_UNIT_SCALE);
     }
 
-    // Frame-parity checkerboards cover the full grid in two frames and retain jitter keyed to the physical full-grid cell.
-    // Phase count1 is the non-temporal full-grid path.
     static float2 temporalCell(const uint photonIndex, const uint gridSide, const uint frameIndex, const uint temporalPhaseCount){
         const uint fullGridSide = max(gridSide, 1u);
         const uint phaseCount = temporalPhaseCount == NWB_CAUSTIC_TEMPORAL_PHASE_COUNT ? NWB_CAUSTIC_TEMPORAL_PHASE_COUNT : NWB_CAUSTIC_TEMPORAL_DISABLED_PHASE_COUNT;
@@ -98,7 +95,6 @@ struct NwbCausticPhotonEmission{
         return (float2(column, row) + jitter) / (float)fullGridSide;
     }
 
-    // Aim each photon at one refractive target's projected AABB.
     static NwbCausticEmission emitAtTarget(float3 lightDir, float3 aabbMin, float3 aabbMax, float2 cell){
         NwbCausticEmission emission;
         emission.valid = false;
@@ -130,7 +126,6 @@ struct NwbCausticPhotonEmission{
     }
 
     static NwbCausticPhoton createPhoton(const NwbCausticEmission emission, const half3 lightColor, const uint emissionTargetCount, const uint photonCount, const bool finiteOrigin, const float3 sourcePosition){
-        // Photon budgets exceed the finite half range; normalize energy in float before quantizing the final flux.
         const float perPhoton = emission.domainArea * float(emissionTargetCount) / float(max(photonCount, 1u));
 
         NwbCausticPhoton photon;

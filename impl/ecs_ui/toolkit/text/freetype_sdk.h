@@ -31,7 +31,6 @@ public:
     void addDefaultModules()noexcept{ m_library.addDefaultModules(); }
     [[nodiscard]] i32 closeLibrary()noexcept{ return m_view ? FT_Err_Invalid_Argument : m_library.closeLibrary(); }
 
-    // FontFace owns the unchanged SFNT bytes until after both native handles close.
     [[nodiscard]] i32 open(const Span<const u8> bytes, const i64 index)noexcept{
         if(m_view)
             return FT_Err_Invalid_Argument;

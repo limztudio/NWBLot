@@ -44,7 +44,6 @@ uint nwbMeshFrameViewHeapSlot(){ return g_NwbRefractionPush.viewHeapSlot; }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A hardware hit reuses the screen cache only when its depth and world distance match the cached opaque surface.
 static const float NWB_REFRACTION_CACHED_HIT_DEPTH_TOLERANCE = 0.0002;
 static const float NWB_REFRACTION_CACHED_HIT_DISTANCE_MIN = 0.01;
 static const float NWB_REFRACTION_CACHED_HIT_DISTANCE_SCALE = 0.002;
@@ -130,10 +129,8 @@ bool nwbRefractionTryResolveHardware(const NwbRefractionEntry entry, out half4 o
     }
     float3 exitPosition = float3(0.0);
     float3 outgoingDirection = float3(0.0);
-    // Exit cosine is a saturate-bounded (0, 1) factor feeding the bounded Fresnel attenuation below.
     half exitCosine = half(0.0h);
     float pathLength = 0.0;
-    // Trace at most two internal reflections within the same primary instance, accumulating Beer-Lambert distance until transmission.
     for(uint internalBounce = 0u; internalBounce <= NWB_REFRACTION_MAX_INTERNAL_BOUNCES; ++internalBounce){
         nwbRefractionCount(NWB_REFRACTION_COUNTER_exitQueries);
         NwbRayTraceGeometryHit exitGeometry;
@@ -146,7 +143,6 @@ bool nwbRefractionTryResolveHardware(const NwbRefractionEntry entry, out half4 o
             return true;
         }
 #endif
-        // Stop when a different instance is hit inside the primary; open meshes use the sheet fallback.
         if(!exitValid){
             nwbRefractionCount(NWB_REFRACTION_COUNTER_exitMisses);
             return false;
@@ -159,7 +155,6 @@ bool nwbRefractionTryResolveHardware(const NwbRefractionEntry entry, out half4 o
         if(dot(outgoingDirection, outgoingDirection) >= NWB_REFRACTION_DIRECTION_LENGTH_SQUARED_MIN)
             break;
         nwbRefractionCount(NWB_REFRACTION_COUNTER_tirEvents);
-        // Discard residual internally reflected energy at the bounce cap rather than leaking straight-through background.
         if(internalBounce == NWB_REFRACTION_MAX_INTERNAL_BOUNCES){
             nwbRefractionCount(NWB_REFRACTION_COUNTER_tirCappedPixels);
             return true;
@@ -172,8 +167,6 @@ bool nwbRefractionTryResolveHardware(const NwbRefractionEntry entry, out half4 o
 
     if(NwbRefractionHardwareBackgroundTrace.trace(entry, instanceMaterialHeapSlot, exitPosition, outgoingDirection, attenuation, outRadiance))
         return true;
-    // Keep the primary volume's exit (direction/thickness/Fresnel); secondary glass adds cached AVBOIT appearance only.
-    // Full background replace: no double-count of partially traced layers.
     outContinuationOrigin = exitPosition;
     outContinuationDirection = outgoingDirection;
     outContinuationAttenuation = attenuation;

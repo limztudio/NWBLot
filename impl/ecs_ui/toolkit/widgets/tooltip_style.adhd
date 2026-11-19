@@ -170,7 +170,6 @@ b8 BindTooltipOwner(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The host owns each state and lends it through the matching endPanel/endWindow/endPopup.
 class TooltipState : NoCopy{
     public u64 m_instanceGeneration = AllocateServiceIdentity();
     public u64 m_revision = 1u;
@@ -222,7 +221,6 @@ class TooltipState : NoCopy{
     }
 }
 
-// A new hover starts at zero; only contiguous accepted hover updates accrue time. Invalid inputs preserve the state.
 b8 UpdateTooltipState(
     mut TooltipState state,
     in WidgetId anchor,

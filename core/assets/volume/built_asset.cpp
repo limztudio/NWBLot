@@ -213,7 +213,6 @@ b8 WriteBuiltAssets(
             return false;
         }
 
-        // Preserve files referenced by the previous manifest if a later entry fails during this publication.
         for(;;){
             if(artifactIndex == Limit<u64>::s_Max){
                 NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: built asset filename slots are exhausted"));

@@ -54,7 +54,6 @@ public:
 [[nodiscard]] static GpuTaskSchedulingHint FrameTimingResetScheduling()noexcept{
     GpuTaskSchedulingHint scheduling;
     scheduling.cost = GpuTaskCostHint::Tiny;
-    // Complete CPU-visible preamble boundary. Later timestamp scopes reserve only after this packet accepts; never merge.
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
     scheduling.overlapPreferred = false;

@@ -151,7 +151,6 @@ void GpuCommandIrCapture::reset()noexcept{
     static_assert(IsNothrowDestructible_V<GraphicsBytes::value_type>);
     FOUNDATION_FATAL_ASSERT_MSG(m_commandBytes.size() >= sizeof(GpuCommandIrStreamHeader), "Command IR capture reset requires its reserved stream header storage");
 
-    // Shrinking resize keeps capacity without allocating.
     m_recordEndOffsets.clear();
     m_blobEndOffsets.clear();
     m_recordSerials.clear();
@@ -380,7 +379,6 @@ b8 GpuCommandIrCapture::append(const GpuCommandIrBuiltinTaskRecord& record){
     )
         return false;
 
-    // Reserve first so failure leaves both sequences unchanged.
     ContainerDetail::ReserveGrowingCapacity(m_recordEndOffsets, nextRecordCount);
     ContainerDetail::ReserveGrowingCapacity(m_blobEndOffsets, nextRecordCount);
     ContainerDetail::ReserveGrowingCapacity(m_recordSerials, nextRecordCount);
@@ -445,7 +443,6 @@ b8 GpuCommandIrCapture::appendCommandBytes(const GpuCommandIrBuiltinTaskRecord& 
         encoded.depthClearValue = record.depthClearValue;
         encoded.stencilClearValue = record.stencilClearValue;
         encoded.clearTextureValueType = static_cast<u8>(record.clearTextureValueType);
-        // Color clears ignore aspect flags; depth/stencil selection is encoded only for depth/stencil clears.
         if(record.clearTextureValueType == GpuClearTextureTaskValueType::DepthStencil){
             if(record.clearDepth)
                 encoded.clearFlags = static_cast<GpuCommandIrClearTextureFlag::Mask>(static_cast<u8>(encoded.clearFlags) | GpuCommandIrClearTextureFlag::ClearDepth);
@@ -513,7 +510,6 @@ void GpuCommandIrCapture::rollbackPrefix(const usize recordCount, const u64 grap
     const usize blobEnd = recordCount == 0u ? 0u : m_blobEndOffsets[recordCount - 1u];
     static_assert(IsNothrowDestructible_V<usize>);
     static_assert(IsNothrowDestructible_V<GraphicsBytes::value_type>);
-    // Both resizes only shrink, so they cannot allocate.
     m_recordEndOffsets.resize(recordCount);
     m_blobEndOffsets.resize(recordCount);
     m_recordSerials.resize(recordCount);

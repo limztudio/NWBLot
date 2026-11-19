@@ -65,7 +65,6 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
 
     GpuTaskId intervalDependency = inputs.producer.uploadTask;
 
-    // Declare interval-producer states here, before native recording, not on the occupancy task.
     const BufferRange transparentCsgInstanceRange(0u, prePayload.transparentCsgSnapshot.instanceCount * size_of<InstanceGpuData>());
     const BufferRange transparentCsgMaterialTypedRange(0u, prePayload.transparentCsgSnapshot.materialTypedByteCount);
     const BufferRange transparentCsgReceiverRange(0u, prePayload.transparentCsgSnapshot.frameData.receiverRanges.size() * size_of<CsgReceiverRangeGpuData>());
@@ -74,7 +73,6 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
     Vector<GpuTaskResourceUse> avboitIntervalResourceUses;
     avboitIntervalResourceUses.reserve(s_TransparentCsgIntervalResourceUseCapacity);
     if(prePayload.transparentCsgStreamsUploaded){
-        // The receiver raster binds the framebuffer with LOAD, writes off; declare every attachment to preserve contents.
         avboitIntervalResourceUses.push_back(ReadUse(inputs.resources.albedo, ResourceStates::RenderTarget));
         avboitIntervalResourceUses.push_back(ReadUse(inputs.resources.normal, ResourceStates::RenderTarget));
         avboitIntervalResourceUses.push_back(ReadUse(inputs.resources.worldPosition, ResourceStates::RenderTarget));
@@ -87,7 +85,6 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
         avboitIntervalResourceUses.push_back(ReadBufferUse(inputs.resources.csgCutters, transparentCsgCutterRange));
         avboitIntervalResourceUses.push_back(ReadUse(inputs.resources.csgClipContextSlots, ResourceStates::ConstantBuffer));
         avboitIntervalResourceUses.push_back(ReadUse(inputs.resources.csgIntervalSampleState, ResourceStates::ConstantBuffer));
-        // Sparse payloads are write-only from Unknown; ID/count stay ReadWrite from their clears.
         avboitIntervalResourceUses.push_back(WriteTextureUse(inputs.resources.csgCapBackNormal, inputs.resources.csgPeelSubresources, ResourceStates::UnorderedAccess));
         avboitIntervalResourceUses.push_back(WriteTextureUse(inputs.resources.csgIntervalDepth, inputs.resources.csgPeelSubresources, ResourceStates::UnorderedAccess));
         avboitIntervalResourceUses.push_back(ReadWriteTextureUse(inputs.resources.csgIntervalId, inputs.resources.csgPeelSubresources, ResourceStates::UnorderedAccess));
@@ -234,7 +231,6 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
     if(!inputs.prefixTask.valid())
         return MakeUnexpected(Failure());
 
-    // Freeze the transparent CSG interval producer before AVBOIT recording; snapshot covers receiver work only.
     result.uploadTask = inputs.prefixTask;
     GpuGraphResourceSetId transparentCsgMaterialGeometrySet = GpuGraphResourceSetId();
     GpuGraphResourceSetId transparentCsgMaterialSampledTextureSet = GpuGraphResourceSetId();
@@ -340,7 +336,6 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
                 warning("RendererSystem: could not retain immutable transparent CSG interval upload data");
                 return MakeUnexpected(Failure());
             }
-            // Caustics and AVBOIT submit independently. Only the first upload starts a new packet.
             if(!AppendImmutableBufferUpload(this.m_graph, instances.value(), inputs.resources.materialInstances,
                 s_RenderNameRenderAvboitTransparentCsgMaterialInstancesUpload, "Transparent CSG Material Instances Upload", result.uploadTask, false)){
                 warning("RendererSystem: could not declare transparent CSG material instance upload");
@@ -385,7 +380,6 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
         }
     }
 
-    // Clear frozen rect after uploads so the graph owns CopyDest -> UAV ordering.
     if(avboitPrePayload.transparentCsgStreamsUploaded){
         CsgIntervalRectClearDesc clearDesc;
         clearDesc.intervalClearIdentity = Name(s_RenderNameRenderAvboitTransparentCsgIntervalClear);

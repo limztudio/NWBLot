@@ -12,7 +12,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One fixed allocation preserves LIFO reclamation when the caller uses a scratch arena.
 template<typename Key, typename ArenaT, typename Hash = Hasher<Key>, typename Equal = EqualTo<Key>>
 class FixedIndexMap final : NoCopy{
 private:

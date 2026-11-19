@@ -5,7 +5,7 @@
 const StringView s_SubsystemDiagnosticPrefix = "Subsystem meta";
 const StringView s_SubsystemSubsystemsFieldName = "subsystems";
 
-const u32 s_SubsystemMagic = 0x53554231u; // SUB1
+const u32 s_SubsystemMagic = 0x53554231u;
 const u32 s_SubsystemVersion = 1u;
 
 

@@ -1,4 +1,3 @@
-"""Decode post-end slider snapshots and qualify their exact value and atlas pixels."""
 from __future__ import annotations
 
 import math
@@ -130,7 +129,6 @@ def observe_slider(frame, snapshot, expected, *, extent=None, skin="default", ex
         tint = (0.55, 0.55, 0.55, 0.6) if not enabled else ((0.85, 0.85, 0.85, 1.0) if mode == "pressed" else ((1.08, 1.08, 1.08, 1.0) if mode == LIT_HOVER else (1.0, 1.0, 1.0, 1.0)))
         track_tint = (0.55, 0.55, 0.55, 0.6) if not enabled else (1.0, 1.0, 1.0, 1.0)
         fill, border = HOVER if enabled and mode == LIT_HOVER else NORMAL
-        # Pick the track half opposite the thumb, inside the opaque middle slice.
         track_point = (track[0] + track[2] * (0.75 if normalized < 0.5 else 0.25), center(track)[1])
         record(f"{prefix}_track_fill", pixel(track_point), compose(linear_channels(TRACK[0]), 1.0, track_tint, backdrop))
         thumb_point = center(thumb)

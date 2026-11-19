@@ -64,7 +64,6 @@ def capture(args, route, arm):
         if key.startswith(("NWB_CAUSTIC_", "NWB_REFLECTION_SMOKE_", "NWB_REFRACTION_SMOKE_")):
             environment.pop(key)
     environment["NWB_CSG_CAUSTIC_DISABLED"] = "1" if arm == LIT_DISABLED else "0"
-    # Keep each absorbed photon above the fixed-point splat precision while preserving total emitted energy.
     environment["NWB_CAUSTIC_PHOTON_GRID_DIVISOR"] = str(PHOTON_GRID_DIVISOR)
     print(f"Capturing CSG caustics {route}/{arm} at frame {args.frames}...", flush=True)
     result = subprocess.run(command, env=environment, check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)

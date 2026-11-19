@@ -32,7 +32,6 @@ EditWordRange ResolveEditCompositionRange(in usize compositionAnchor, in usize c
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// UTF8 byte selections always lie on Unicode 17 extended grapheme boundaries; preedit stays separate from committed text.
 class EditModel : NoCopy{
     private u64 m_instanceGeneration;
     private EditLimits m_limits;
@@ -201,8 +200,6 @@ class EditModel : NoCopy{
         return this.setSelection(0u, this.m_text.size());
     }
 
-    // Home/End address the current hard line in Multiline mode; document movement always addresses the complete text.
-    // Word movement groups whitespace, ASCII punctuation, and all remaining graphemes without a linguistic word claim.
     public b8 move(in EditMove movement, in b8 extend){
         EditSelectionActions selectionActions;
         return selectionActions.move(
@@ -228,7 +225,6 @@ class EditModel : NoCopy{
         return this.move(movement, false);
     }
 
-    // Returns the complete run containing a grapheme boundary; document end selects the preceding run.
     public Expected<EditWordRange> wordRangeAt(in usize position)const{
         return ResolveEditWordRangeAt(this.text(), this.m_boundaries, position);
     }
@@ -247,7 +243,6 @@ class EditModel : NoCopy{
         return this.replaceRange(range.begin, range.end, "");
     }
 
-    // Native surrounding deletion uses byte distances from the caret and preserves the original selection in undo.
     public b8 eraseSurrounding(in usize beforeBytes, in usize afterBytes){
         if(!CanEraseEditSurrounding(beforeBytes, afterBytes, this.m_caret, this.m_text.size()))
             return false;
@@ -256,7 +251,6 @@ class EditModel : NoCopy{
         return this.replaceRange(this.m_caret - beforeBytes, this.m_caret + afterBytes, "");
     }
 
-    // Native selection surrounding deletion retains selected bytes and direction, rejecting merged endpoint seams.
     public b8 eraseAroundSelection(in usize beforeBytes, in usize afterBytes){
         return ApplyEditModelEraseAroundSelection(
             beforeBytes,
@@ -350,7 +344,6 @@ class EditModel : NoCopy{
         );
     }
 
-    // Preedit positions are validated UTF8 scalar boundaries, because native IMEs may select part of a grapheme.
     public b8 updateComposition(in StringView value, in usize anchor, in usize caret){
         EditCompositionRules rules;
         return rules.update(
@@ -409,7 +402,6 @@ class EditModel : NoCopy{
     }
 
     private b8 replaceRange(in usize begin, in usize end, in StringView replacement){
-        // Inserted combining marks and neighboring emoji may merge clusters; keep the caret at a valid following edge.
         return ApplyEditModelReplaceRange(
             begin,
             end,

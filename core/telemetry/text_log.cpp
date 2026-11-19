@@ -89,8 +89,6 @@ b8 BuildTextLogPayload(const Common::LogType::Enum type, TStringView message, Al
         return false;
     }
 
-    // Preserve views into the previous payload before a header write or vector growth can invalidate them.
-    // Ordinary logger input is external, so it converts directly into the reusable destination allocation.
     Optional<TString<Alloc::ScratchArena>> aliasedMessage;
     if(!message.empty() && outPayload.data()){
         const usize sourceAddress = reinterpret_cast<usize>(message.data());

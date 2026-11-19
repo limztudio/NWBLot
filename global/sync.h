@@ -51,7 +51,7 @@ inline void MachinePause([[maybe_unused]] i32 delay)noexcept{
         _mm_pause();
         --delay;
     }
-#else /* Generic */
+#else
     YieldThread();
 #endif
 }
@@ -122,16 +122,13 @@ private:
 
 class AtomicBackOff : NoCopy{
 private:
-    // Power-of-two pause threshold approximating a context switch.
     static constexpr i32 s_LoopsBeforeYield = 16;
 
 
 public:
-    // Default construction must stay cheap for hot spin loops.
     AtomicBackOff()noexcept
         : m_count(1)
         {}
-    // This constructor pauses immediately; do not use on hot paths.
     AtomicBackOff(b8)noexcept
         : m_count(1)
         { pause(); }
@@ -148,7 +145,6 @@ public:
         }
     }
 
-    // Returns false once the pause threshold saturates.
     b8 boundedPause()noexcept{
         MachinePause(m_count);
         if(m_count < s_LoopsBeforeYield){
@@ -171,7 +167,6 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Requires zero-initialized storage; no constructor permits use during static initialization.
 class MallocMutex : NoCopy{
 public:
     void lock()noexcept{

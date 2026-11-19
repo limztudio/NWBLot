@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Copies the exact model fence for asynchronous clipboard and native text-input work without retaining a model pointer.
 class EditModelSnapshot{
     public String m_expectedText;
     public String m_expectedPreedit;

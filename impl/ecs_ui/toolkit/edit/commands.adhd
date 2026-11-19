@@ -50,9 +50,6 @@ b8 EraseEditWord(mut EditModel model, in b8 forward){
     return model.eraseSurrounding(beforeBytes, afterBytes);
 }
 
-// Active preedit owns editing keys and Enter.
-// Escape first cancels preedit without cancelling the widget.
-// Clipboard actions describe requests; the host borrows its OS service to perform the actual exchange.
 EditCommandResult ApplyEditCommand(mut EditModel model, in EditCommandRequest request, in b8 readOnly){
     EditCommandResult result;
     if(!IsAdmittedEditCommand(request.command))

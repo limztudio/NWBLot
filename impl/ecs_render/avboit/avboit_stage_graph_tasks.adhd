@@ -84,7 +84,6 @@ Expected<GpuTaskId> FrameGraphAvboitStage::declare(in FrameGraphAvboitStageInput
     avboitCsgIntervalCombinePayload.frameBindings = inputs.frameBindings;
     avboitCsgIntervalCombinePayload.csgResources = inputs.csgResources;
 
-    // Freeze the transparent CSG interval producer before AVBOIT recording; snapshot covers receiver work only.
     TransparentCsgIntervalBuilder transparentCsgIntervalBuilder(this.m_graph, this.m_materialSystem, this.m_csgSystem, this.m_avboitSystem);
     const auto transparentCsgIntervalResult = transparentCsgIntervalBuilder.declare(
         TransparentCsgIntervalProducerInputs(inputs.targets, inputs.csgFrameState, inputs.frameBindings, inputs.csgResources, inputs.meshViewState, inputs.resources, inputs.prefixTask, inputs.hasTransparentRenderers),
@@ -329,7 +328,6 @@ Expected<AvboitClearChainResult> DeclareAvboitClearChain(mut GpuTaskGraph graph,
     if(!inputs.uploadTask.valid())
         return MakeUnexpected(Failure());
 
-    // Clear targets after uploads and before occupancy.
     GpuTaskId avboitClearTask = inputs.uploadTask;
     if(inputs.clearTargets){
         if(!AreAllAvboitClearResourcesValid(
@@ -353,7 +351,6 @@ Expected<AvboitClearChainResult> DeclareAvboitClearChain(mut GpuTaskGraph graph,
         avboitClearScheduling.forceSubmissionBoundary = false;
         avboitClearScheduling.allowPacketMerge = true;
         avboitClearScheduling.mergeWithPrevious = true;
-        // Clear chain and Occupancy share one AVBOIT Pre timing packet across consumer frontiers.
         avboitClearScheduling.allowMergeAcrossConsumerFrontier = true;
         auto makeAvboitFloatClearDesc = lambda[](in GpuGraphResourceId destination, in Color value, in GpuClearTextureTaskRecordHooks recordHooks) -> GpuClearTextureTaskDesc{
             GpuClearTextureTaskDesc clearDesc;

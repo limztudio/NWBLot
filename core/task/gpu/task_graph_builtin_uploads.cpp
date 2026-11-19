@@ -47,8 +47,6 @@ struct UploadBufferTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBa
             return false;
 
         commandList.endRenderPass();
-        // The compiler tracks `finalState` for later tasks, but the native write itself requires CopyDest.
-        // Make the internal transition explicit and commit it before vkCmdCopyBuffer; writeBuffer only queues its own state.
         const BufferRange uploadRange(payload.destinationOffsetBytes, bytes->size());
         commandList.setBufferState(payload.destination.get(), ResourceStates::CopyDest, false, uploadRange);
         commandList.commitBarriers();
@@ -102,7 +100,6 @@ struct UploadTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskB
 
         commandList.endRenderPass();
         const TextureSubresourceSet subresources(payload.mipLevel, 1u, payload.arraySlice, 1u);
-        // See UploadBufferTask: native writes need CopyDest even though graph analysis publishes finalState.
         commandList.setTextureState(payload.destination.get(), subresources, ResourceStates::CopyDest);
         commandList.commitBarriers();
         if(!commandList.tryWriteTexture(*payload.destination, payload.arraySlice, payload.mipLevel, bytes->data(), payload.rowPitch, payload.depthPitch, payload.aspect))
@@ -173,12 +170,9 @@ Expected<GpuTaskId> GpuTaskGraph::addUploadBufferTask(const GpuTaskDesc& desc, c
     if(
         uploadDesc.destinationOffsetBytes > destinationDesc.byteSize
         || source->dataSize > destinationDesc.byteSize - uploadDesc.destinationOffsetBytes
-        // Keep declaration acceptance aligned with CommandList::tryWriteBuffer so a built-in upload cannot fail only during late packet recording.
         || (uploadDesc.destinationOffsetBytes & (sizeof(u32) - 1u)) != 0u
         || (source->dataSize & (sizeof(u32) - 1u)) != 0u
         || !GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(destinationDesc, destinationResource.initialState, destinationResource.externalFinalState)
-        // Upload bodies perform their own CopyDest -> final-state transition.
-        // A retained descriptor restores its descriptor state at packet close, so the primitive's graph-visible final state must match that restore.
         || (destinationDesc.keepInitialState && uploadDesc.finalState != destinationDesc.initialState)
     )
         return MakeUnexpected(Failure{});

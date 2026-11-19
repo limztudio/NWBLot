@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CPU-only tests of reflection benchmark timing analysis."""
+
 import copy
 from pathlib import Path
 import sys

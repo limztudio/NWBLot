@@ -148,14 +148,12 @@ b8 TypeLayoutAnalyzer::supportsClassOperation(const ClassDecl& decl, const Span<
             return false;
     }
 
-    // Recursive containers can revisit their element class. Other fields still determine its operations.
     usize repeatedSpecializations = 0u;
     for(const ValueTypeVisit* visit = active; visit; visit = visit->parent){
         if(&visit->decl != &decl)
             continue;
         if(decl.templateParams.empty() || TypeComparator(m_symbols).areEquivalent(visit->instance, instance))
             return true;
-        // An expanding recursive specialization may never revisit an identical type.
         if(++repeatedSpecializations == 64u)
             return false;
     }

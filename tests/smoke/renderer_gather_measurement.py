@@ -1,5 +1,3 @@
-"""Validate renderer gathering samples and summarize accepted measurements."""
-
 import json
 import math
 import statistics
@@ -121,7 +119,6 @@ class GatherMeasurement:
             measured = row[LIT_SCOPES_MS]
             if measured[LIT_GRAPHICS_FRAME] <= 0 or measured[LIT_GRAPHICS_RENDER] <= 0:
                 raise SmokeFailure("timed graphics work is empty")
-            # Sibling subtotals must not exceed their enclosing timer.
             if measured[LIT_GRAPHICS_PREPARE_RESOURCES] + measured[LIT_GRAPHICS_RENDER_PASSES] > measured[LIT_GRAPHICS_RENDER] + .005:
                 raise SmokeFailure("callback subtotals exceed their measured parent")
             if measured[LIT_GRAPHICS_RENDER] > measured[LIT_GRAPHICS_FRAME] + .005:
@@ -145,7 +142,6 @@ class GatherMeasurement:
             if scope in GPU_INACTIVE:
                 raise SmokeFailure(f"inactive GPU pass ran: {scope}")
             if workload == LIT_OPAQUE and scope in GPU_TRANSPARENT:
-                # The actual AVBOIT owner clears newly created targets once, including an opaque-only warm-up.
                 if scope != LIT_RENDER_AVBOIT_CLEAR or last >= start:
                     raise SmokeFailure(f"inactive measured GPU pass ran: {scope}")
             key = (scope, publish)
@@ -155,7 +151,7 @@ class GatherMeasurement:
             frontier[scope] = (publish, last)
             total = GatherMeasurement.finite(row.get(LIT_TOTAL_MS), "GPU total milliseconds")
             if first < start or last > end:
-                continue  # Never attribute a mixed warm-up/drain publication to measured CPU frames.
+                continue
             destination = gpu.setdefault(scope, {LIT_TOTAL_MS: 0., LIT_GPU_SAMPLES: 0, LIT_REPORTS: 0})
             destination[LIT_TOTAL_MS] += total
             destination[LIT_GPU_SAMPLES] += count
@@ -215,4 +211,3 @@ class GatherMeasurement:
     @staticmethod
     def read_result(path, workload, mode):
         return GatherMeasurement.summarize_rows([json.loads(line) for line in path.read_text(encoding=LIT_UTF_8).splitlines() if line], workload, mode)
-

@@ -1,4 +1,3 @@
-"""Native tooltip hover and context menu keyboard/secondary-pointer requests."""
 from __future__ import annotations
 
 import ctypes

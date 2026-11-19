@@ -8,7 +8,7 @@ const f32 s_UiSkinDefaultFontSize = 16.0f;
 const f32 s_UiSkinMinDefaultFontSizeScale = 64.0f;
 const f32 s_UiSkinMinDefaultFontSize = 1.0f / s_UiSkinMinDefaultFontSizeScale;
 const f32 s_UiSkinMaxDefaultFontSize = 2048.0f;
-const u32 s_UiSkinBinaryMagic = 0x55495331u; // UIS1
+const u32 s_UiSkinBinaryMagic = 0x55495331u;
 const u32 s_UiSkinBinaryVersion = 3u;
 const u32 s_UiSkinPaletteColorCount = 17u;
 const usize s_UiSkinHeaderBinaryBytes = 96u;
@@ -98,7 +98,6 @@ enum<u8> UiSkinColorRole{
     kCount
 }
 
-// Atlas rectangles and slice borders use top-left-origin pixels; padding and minimum sizes use logical units.
 [reflect]
 class UiSkinRect{
     public u32 x = 0u;

@@ -1,6 +1,3 @@
-"""X11 drawable pixel readback and image lifetime."""
-
-
 import ctypes
 
 from window_capture_image import write_capture_rows
@@ -39,7 +36,6 @@ class X11DrawablePixels:
         finally:
             self.x11.XDestroyImage(image)
 
-
     def capture(self, drawable, output_handle, x, y, width, height, output_path):
         image = self.x11.XGetImage(self.display, drawable, x, y, width, height, ctypes.c_ulong(-1).value, self.Z_PIXMAP,)
         if not image:
@@ -49,7 +45,6 @@ class X11DrawablePixels:
             return self.write_ximage_bmp(output_handle, image.contents, output_path)
         finally:
             self.x11.XDestroyImage(image)
-
 
     def write_ximage_bmp(self, output_handle, image, output_path):
         bytes_per_pixel = (image.bits_per_pixel + 7) // 8

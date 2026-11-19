@@ -129,7 +129,6 @@ Expected<StagingTextureHandle> Device::createStagingTexture(const TextureDesc& d
         FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Failed to create staging texture: computed layout overflows"));
         return MakeUnexpected(Failure{});
     }
-    // Every admitted mip has at least one byte, so the layout and the array total are nonzero.
     FOUNDATION_ASSERT(layout->arrayByteSize != 0u);
     const auto totalSize = TryMultiply<u64>(layout->arrayByteSize, static_cast<u64>(d.arraySize));
     if(!totalSize){
@@ -201,7 +200,6 @@ Expected<StagingTextureMapping> Device::mapStagingTexture(StagingTexture& stagin
         return MakeUnexpected(Failure{});
     }
 
-    // Creation sets the layout once: one mip layout per mip and an overflow-checked total size.
     FOUNDATION_ASSERT(staging.m_mipLayouts.size() == staging.m_creationDesc.mipLevels && staging.m_totalByteSize == staging.m_arrayByteSize * static_cast<u64>(staging.m_creationDesc.arraySize));
 
     if(slice.mipLevel >= staging.m_creationDesc.mipLevels){
@@ -255,8 +253,6 @@ void Device::unmapStagingTexture(StagingTexture& staging){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to unmap staging texture: texture is not mapped"));
         return;
     }
-
-    // CPU-access staging allocations remain mapped until destruction.
 }
 
 

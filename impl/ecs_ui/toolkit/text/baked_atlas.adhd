@@ -10,7 +10,6 @@
 
 type SharedBakedFontAtlas = Shared<BakedFontAtlas>;
 
-// A font version retains only the rendering metadata and image bytes of its source atlas.
 class BakedFontAtlas : NoCopy{
     private Vector<FontAtlasGlyph> m_glyphs;
     private Vector<SharedSdfAtlasPage> m_pages;

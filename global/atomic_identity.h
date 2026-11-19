@@ -14,7 +14,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The caller owns a counter initialized to one; exhausted identity domains terminate rather than reusing an identity.
 [[nodiscard]] inline u64 NextNonWrappingIdentity(Atomic<u64>& nextIdentity)noexcept{
     const u64 identity = nextIdentity.fetch_add(1u, MemoryOrder::relaxed);
     if(identity == 0u || identity == Limit<u64>::s_Max)
@@ -22,7 +21,6 @@
     return identity;
 }
 
-// The counter is unchanged when its next value is zero or the maximum.
 [[nodiscard]] inline u64 TryNextAtomicIdentity(Atomic<u64>& nextIdentity)noexcept{
     u64 identity = nextIdentity.load(MemoryOrder::relaxed);
     while(identity != 0u && identity != Limit<u64>::s_Max){

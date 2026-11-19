@@ -105,7 +105,6 @@ class DeferredLightingStageBuilder : NoCopy{
             dependencies.push_back(inputs.graphicsPrefixTask);
             if(laggedBindlessSlotsGraphOwned)
                 dependencies.push_back(result.historySlotsUploadTask);
-            // The transparent finalizer restores depth layout before lighting samples it.
             if(inputs.hasTransparentRenderers)
                 dependencies.push_back(inputs.avboitFinalTask);
             external.push_back(inputs.historyReadReadyCompletion);

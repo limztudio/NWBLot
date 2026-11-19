@@ -85,8 +85,6 @@ b8 GpuBufferStateFanIn::Merge(
         return lhs.beginning < rhs.beginning;
     });
 
-    // Sweep the union of interval boundaries.
-    // A branch retaining the base state contributes no change; independent changes must agree only where their byte ranges overlap.
     usize previousBufferIndex = 0u;
     u64 previousOffset = 0u;
     for(const BufferRangeEvent& event : events){

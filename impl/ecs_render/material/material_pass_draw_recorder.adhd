@@ -59,11 +59,8 @@ class MaterialPassDrawRecorder : NoCopy{
     public void renderMaterialPassDrawItems(mut MaterialPassDrawContext context, in MaterialPassDrawItemsView drawItems);
     public void renderIndexedMaterialPassDrawItems(mut MaterialPassDrawContext context, in Span<MaterialPassDrawItem> drawItems);
     public void renderMeshMaterialPassDrawItems(mut MaterialPassDrawContext context, in Span<MaterialPassDrawItem> drawItems);
-    // Graph-only producer half. The graph owns generated output UAV states; this method records only the dispatch.
     public void generateComputeMaterialPassDrawItems(mut MaterialPassDrawContext context, in Span<MaterialPassDrawItem> drawItems);
-    // Graph-only raster half. The graph provides each output Combined; this method records state, heap, push constants, draws.
     public void renderComputeMaterialPassDrawItemsRasterOnly(mut MaterialPassDrawContext context, in Span<MaterialPassDrawItem> drawItems);
-    // Per-draw generation and rasterization retain the local UAV-to-vertex/index handoff when outputs alias.
     public void renderComputeMaterialPassDrawItems(mut MaterialPassDrawContext context, in Span<MaterialPassDrawItem> drawItems);
     public b8 prepareMaterialPassResourceBindingsImpl(in Span<MaterialPassDrawItem> drawItems, in b8 computeEmulation);
 }

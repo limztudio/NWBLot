@@ -29,7 +29,6 @@ class AvboitPreRecordPolicy{
 
 
 b8 AvboitPreGraphTaskPayload::record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-    // A CSG upload without its frozen stream would detach clears and consumers.
     if(!CanRecordAvboitPrePass(this.transparentCsgStreamsUploaded, this.transparentCsgSnapshot.captured))
         return false;
 
@@ -66,9 +65,7 @@ GpuTaskSchedulingHint BuildAvboitComputeEffectSchedulingHint(){
     scheduling.allowPacketMerge = true;
     scheduling.mergeWithPrevious = true;
     scheduling.allowMergeAcrossConsumerFrontier = true;
-    // Keep each effect in one recording packet while the compiler chooses its queue.
     ConfigureComputeEffectRoutingHint(true, scheduling);
-    // Accepted samples use the queue class and exact transport chosen by this compile.
     scheduling.allowTimingFeedbackRouting = true;
     scheduling.allowCrossClassTimingFeedbackRouting = true;
     return scheduling;
@@ -169,7 +166,6 @@ b8 DeclareAvboitRasterRecordPhase(
     resourceUses.push_back(ReadUse(inputs.resources.avboitMaterialDomain));
     resourceUses.push_back(ReadUse(inputs.resources.avboitCsgDomain));
 
-    // Keep the final upload as stream anchor; replacing it hides a broken producer handoff.
     if(streamsUploaded)
         stageOutputs.streamTask = inputs.upload.uploadTask;
     GpuTaskId rasterDependency = initialRasterDependency;
@@ -525,7 +521,6 @@ b8 DeclareAvboitAccumulationRecord(
     accumulationFinalizeScheduling.forceSubmissionBoundary = false;
     accumulationFinalizeScheduling.allowPacketMerge = true;
     accumulationFinalizeScheduling.mergeWithPrevious = true;
-    // Finalizer is Accumulation's tail; retain its timing/acceptance packet before Lighting.
     accumulationFinalizeScheduling.allowMergeAcrossConsumerFrontier = true;
     GpuTaskDesc accumulationFinalizeDesc;
     accumulationFinalizeDesc

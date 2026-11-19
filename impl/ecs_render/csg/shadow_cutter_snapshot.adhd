@@ -48,7 +48,6 @@ static_assert(s_CsgRayShapeCapsule == s_ShaderCsgRayShapeCapsule);
 
 class CsgShadowSnapshot{
     public Vector<CsgShadowReceiverRangeGpu> receiverRanges;
-    // Built-in ray records use NWB_CSG_RAY_SHAPE_* in shapeType, with the existing CSG cutter layout.
     public Vector<CsgCutterGpuData> cutters;
     public u64 identity = 0u;
     public u64 contentIdentity = 0u;

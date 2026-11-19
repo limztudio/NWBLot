@@ -21,7 +21,7 @@ NWB_TELEMETRY_BEGIN
 
 
 inline constexpr u16 s_DiagnosticPayloadVersion = 1u;
-inline constexpr u32 s_DiagnosticPayloadMagic = 0x4E574447u; // NWDG
+inline constexpr u32 s_DiagnosticPayloadMagic = 0x4E574447u;
 
 namespace DiagnosticPayloadFlag{
     static constexpr auto s_DiagnosticPayloadFlagNoneBase = 0u;
@@ -52,7 +52,6 @@ static_assert(alignof(EncodedDiagnosticPayloadHeader) == s_DiagnosticPackedAlign
 static_assert(IsStandardLayout_V<EncodedDiagnosticPayloadHeader>, "EncodedDiagnosticPayloadHeader must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedDiagnosticPayloadHeader>, "EncodedDiagnosticPayloadHeader must stay binary-serializable");
 
-// Text fields borrow the parsed payload bytes; keep them alive and unchanged while reading.
 struct DiagnosticPayload{
     AStringView event;
     AStringView category;

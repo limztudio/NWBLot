@@ -1,5 +1,3 @@
-"""Read capture bitmaps and compare their pixels for the async-shadow benchmark."""
-
 from __future__ import annotations
 
 import struct
@@ -26,7 +24,6 @@ class PixelDiff:
 
 class BitmapImage:
     def __init__(self, path: Path):
-        """Read the 24-bit BMPs written by the shared native-window capture helper."""
         data = path.read_bytes()
         if len(data) < 54 or data[:2] != b"BM":
             raise SmokeFailure(f"capture is not a BMP: {path}")

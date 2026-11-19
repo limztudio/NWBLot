@@ -255,7 +255,6 @@ class SoftShadowTemporalMergeRecorder : NoCopy{
 b8 ShadowVisibilityTargetBuilder::build(mut DeferredFrameTargets targets){
     if(!IsSupportedShadowReceiverFactor(targets.shadowReceiverFactor))
         return false;
-    // Deferred lighting always samples this per-slot transmittance target.
     targets.shadowVisibilityFormat = Format::RGBA16_FLOAT;
 
 
@@ -267,7 +266,6 @@ b8 ShadowVisibilityTargetBuilder::build(mut DeferredFrameTargets targets){
         .setDimension(TextureDimension::Texture2DArray)
         .setFormat(targets.shadowVisibilityFormat)
         .setIsUAV(true)
-        // The lagged-history copy may run on Transfer after producers finish. Keep all three transports shareable.
         .setQueueSharing(ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
     ;
     if(!CreateShadowVisibilityTarget(this.m_graphics, visibilityDesc, s_ShadowVisibilityTargetName, "RendererSystem: failed to create shadow visibility target", targets.shadowVisibility))
@@ -280,7 +278,6 @@ b8 ShadowVisibilityTargetBuilder::build(mut DeferredFrameTargets targets){
         targets.shadowReceiverFactor
     );
 
-    // Round up half-resolution scratch so odd extents retain coverage.
     targets.shadowCoarseTransmittanceFormat = Format::RGBA16_FLOAT;
     TextureDesc coarseDesc;
     coarseDesc
@@ -295,7 +292,6 @@ b8 ShadowVisibilityTargetBuilder::build(mut DeferredFrameTargets targets){
     if(!CreateShadowVisibilityTarget(this.m_graphics, coarseDesc, s_ShadowCoarseTransmittanceTargetName, "RendererSystem: failed to create shadow coarse transmittance target", targets.shadowCoarseTransmittance))
         return false;
 
-    // Ping-pong half-resolution soft visibility and geometry cache.
     targets.shadowSoftFormat = Format::RGBA16_FLOAT;
     targets.shadowSoftGeometryFormat = Format::RGBA16_FLOAT;
     const u32 softHalfWidth = targetGridExtents.softHalfWidth;
@@ -320,7 +316,6 @@ b8 ShadowVisibilityTargetBuilder::build(mut DeferredFrameTargets targets){
         .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
     ;
 
-    // Recreated history must not reproject through the previous target's matrix.
     if(
         !CreateShadowVisibilityTarget(this.m_graphics, softHalfDesc, s_ShadowSoftHalfATargetName, "RendererSystem: failed to create soft shadow half-A target", targets.shadowSoftHalfA)
         || !CreateShadowVisibilityTarget(this.m_graphics, softHalfDesc, s_ShadowSoftHalfBTargetName, "RendererSystem: failed to create soft shadow half-B target", targets.shadowSoftHalfB)
@@ -342,7 +337,6 @@ b8 ShadowVisibilityTargetBuilder::build(mut DeferredFrameTargets targets){
         this.m_rayTracingState.softShadow.m_softShadowHistoryFrontIsA
     );
 
-    // Transparent temporal history shares geometry and the opaque history selector.
     if(
         !CreateShadowVisibilityTarget(this.m_graphics, softHalfDesc, s_TransparentSoftHalfTargetName, "RendererSystem: failed to create soft transparent shadow half target", targets.transparentSoftHalf)
         || !CreateShadowVisibilityTarget(this.m_graphics, softHalfDesc, s_TransparentHistATargetName, "RendererSystem: failed to create soft transparent shadow history-A target", targets.transparentHistA)
@@ -352,7 +346,6 @@ b8 ShadowVisibilityTargetBuilder::build(mut DeferredFrameTargets targets){
     )
         return false;
 
-    // All resolve allocations belong to this target generation. Verify both history selectors once, before publication.
     for(u32 selector = 0u; selector < s_ShadowHistorySelectorCount; ++selector){
         const b8 frontIsA = selector != 0u;
         SoftShadowCombinedWaveletInputs waveletInputs;
@@ -375,7 +368,6 @@ b8 ShadowVisibilityTargetBuilder::build(mut DeferredFrameTargets targets){
         }
     }
 
-    // Edge records are capped at one per pixel; overflow falls back to interpolation.
     const Expected<u32> edgeListCapacityResult = TryResolveShadowEdgeListCapacityRecords(targets.width, targets.height);
     if(!edgeListCapacityResult.has_value())
         return false;
@@ -489,11 +481,9 @@ void RecordSoftwareAdaptiveShadow(in Optional<in GraphOwnedAdaptiveShadowPlan> p
     const u32 coarseGroupsX = adaptiveGrid.coarseGroupsX;
     const u32 coarseGroupsY = adaptiveGrid.coarseGroupsY;
 
-    // Compacted mode traces only classified edge records.
     const b8 graphOwnsAdaptivePlan = plan.has_value() && plan.value().enabled;
     const b8 compact = graphOwnsAdaptivePlan && plan.value().compact;
 
-    // Coarse transmittance feeds both adaptive resolve modes.
     commandList.setEnableUavBarriersForTexture(targets.shadowCoarseTransmittance.get(), true);
     commandList.setTextureState(targets.shadowCoarseTransmittance.get(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
     commandList.setTextureState(targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
@@ -505,12 +495,10 @@ void RecordSoftwareAdaptiveShadow(in Optional<in GraphOwnedAdaptiveShadowPlan> p
     commandList.setPushConstants(coarsePush);
     commandList.dispatch(coarseGroupsX, coarseGroupsY, 1u);
 
-    // Synchronize the coarse write before resolve.
     commandList.setTextureState(targets.shadowCoarseTransmittance.get(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
     commandList.commitBarriers();
 
     if(compact){
-        // The append list is bounded by this frame's reset counter.
         commandList.setEnableUavBarriersForBuffer(state.shadow.m_swShadowEdgeCounterBuffer.get(), true);
         commandList.setEnableUavBarriersForBuffer(state.shadow.m_swShadowEdgeListBuffer.get(), true);
         commandList.setBufferState(state.shadow.m_swShadowEdgeCounterBuffer.get(), ResourceStates::UnorderedAccess);
@@ -518,7 +506,6 @@ void RecordSoftwareAdaptiveShadow(in Optional<in GraphOwnedAdaptiveShadowPlan> p
         commandList.setBufferState(state.shadow.m_swShadowIndirectArgsBuffer.get(), ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
 
-        // Classify interpolated interiors and append traceable edges.
         commandList.setTextureState(targets.shadowCoarseTransmittance.get(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
         commandList.setTextureState(targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
@@ -529,13 +516,11 @@ void RecordSoftwareAdaptiveShadow(in Optional<in GraphOwnedAdaptiveShadowPlan> p
         commandList.setPushConstants(classifyPush);
         commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
 
-        // Classify produces the list and in-place visibility writes.
         commandList.setBufferState(state.shadow.m_swShadowEdgeCounterBuffer.get(), ResourceStates::UnorderedAccess);
         commandList.setBufferState(state.shadow.m_swShadowEdgeListBuffer.get(), ResourceStates::UnorderedAccess);
         commandList.setTextureState(targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
 
-        // Build indirect dispatch arguments from the clamped list count.
         commandList.setBufferState(state.shadow.m_swShadowIndirectArgsBuffer.get(), ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
         SwShadowHeapPushConstants argsPush = MakeSoftwareShadowFramePush(state, targets);
@@ -545,7 +530,6 @@ void RecordSoftwareAdaptiveShadow(in Optional<in GraphOwnedAdaptiveShadowPlan> p
         commandList.setPushConstants(argsPush);
         commandList.dispatch(1u, 1u, 1u);
 
-        // Indirect dispatch consumes the generated arguments and list.
         commandList.setBufferState(state.shadow.m_swShadowEdgeCounterBuffer.get(), ResourceStates::UnorderedAccess);
         commandList.setBufferState(state.shadow.m_swShadowEdgeListBuffer.get(), ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
@@ -563,7 +547,6 @@ void RecordSoftwareAdaptiveShadow(in Optional<in GraphOwnedAdaptiveShadowPlan> p
         commandList.dispatchIndirect(0u);
     }
     else{
-        // Full-resolution adaptive fallback.
         commandList.setTextureState(targets.shadowCoarseTransmittance.get(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
         commandList.setTextureState(targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
@@ -581,7 +564,6 @@ void RecordSoftwareAdaptiveShadow(in Optional<in GraphOwnedAdaptiveShadowPlan> p
 
 
 void RecordSoftwareTransparentShadowTrace(in SoftwareTransparentShadowTraceInputs inputs, in RendererRayTracingState state, mut CommandList commandList, mut DeferredFrameTargets targets, mut GpuDescriptorHeap heap){
-    // The software route is retained for devices without hardware ray queries.
     if(!inputs.graphOwnsOpaqueToTransparentBoundary){
         commandList.setTextureState(targets.transparentSoftHalf.get(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
         commandList.setTextureState(targets.shadowVisibility.get(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
@@ -592,7 +574,6 @@ void RecordSoftwareTransparentShadowTrace(in SoftwareTransparentShadowTraceInput
 
     const b8 samplingHistoryUsable = CanUseSoftwareTransparentSamplingHistory(inputs, state.softShadow.m_softTransparentTemporalReady, state.shadow.m_softwareTransparentSampling.m_history.usable());
     if(samplingHistoryUsable && !inputs.graphOwnsOpaqueToTransparentBoundary){
-        // These reads also belong to the split trace task; unsplit phases retain local transitions.
         commandList.setTextureState(targets.shadowSoftGeometry.get(), s_FramebufferSubresources, ResourceStates::ShaderResource);
         commandList.setTextureState(targets.shadowSoftGeometryPrev.get(), s_FramebufferSubresources, ResourceStates::ShaderResource);
         TexturePtr moments = targets.transparentMomentsB.get();

@@ -1,11 +1,9 @@
-"""Publish fixture launch handles into caller-owned state before each admission step."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 from window_capture_smoke import SmokeFailure
 
-# Upper bound for the first display log marker after the fixture window appears.
 DISPLAY_MARKER_TIMEOUT_SECONDS = 15.0
 
 

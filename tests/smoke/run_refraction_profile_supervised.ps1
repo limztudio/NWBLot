@@ -1,9 +1,4 @@
 #requires -Version 7.0
-<#
-Run this supervisor through Start-Process -WindowStyle Hidden so its lifetime is
-independent of the originating interactive command. It supervises one complete
-fixed campaign; it never resumes partial trials or selectively replays cells.
-#>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)][string]$RepositoryRoot,
@@ -135,7 +130,6 @@ try{
         $status.state = 'launching'
         Write-StatusJson $statusPath $status
         $child = Start-Process -FilePath $PythonExecutable -ArgumentList $commandLine -WorkingDirectory $RepositoryRoot -WindowStyle Hidden -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-        # Retain the native handle so ExitCode remains available after exit.
         $null = $child.Handle
         $status.python_pid = $child.Id
         $status.state = 'running'

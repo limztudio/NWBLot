@@ -39,7 +39,6 @@ FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL RoundFixed(SIMDVectorSin
     const __m128i integral = _mm_cmpgt_epi32(magnitude, _mm_set1_epi32(static_cast<i32>(s_F32FractionLimitBits)));
     __m128i result{};
     if constexpr(Mode == Rounding::Floor || Mode == Rounding::Ceiling){
-        // Only finite values below 2^23 need conversion, preserving precision exceptions without invalid conversions.
         const __m128 safe = _mm_andnot_ps(_mm_castsi128_ps(integral), value);
         __m128i integer = _mm_cvttps_epi32(safe);
         const __m128 truncated = _mm_cvtepi32_ps(integer);
@@ -50,7 +49,6 @@ FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL RoundFixed(SIMDVectorSin
         result = _mm_castps_si128(_mm_cvtepi32_ps(integer));
     }
     else{
-        // Integer masks preserve fixed nearest/truncate rounding and signed zero without raising precision exceptions.
         const __m128i isSmall = _mm_cmplt_epi32(magnitude, _mm_set1_epi32(static_cast<i32>(s_F32OneBits)));
         const __m128i exponent = _mm_srli_epi32(magnitude, static_cast<i32>(s_F32MantissaBitCount));
         const __m128i shift = _mm_sub_epi32(_mm_set1_epi32(static_cast<i32>(s_F32IntegerExponent)), exponent);
@@ -72,7 +70,6 @@ FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL RoundFixed(SIMDVectorSin
     result = _mm_or_si128(_mm_and_si128(integral, magnitude), _mm_andnot_si128(integral, result));
     result = _mm_or_si128(result, sign);
     const __m128i isNaN = _mm_cmpgt_epi32(magnitude, _mm_set1_epi32(static_cast<i32>(s_F32InfinityBits)));
-    // Quiet only NaN lanes so large finite inputs cannot overflow during payload-preserving addition.
     const __m128 nan = _mm_and_ps(_mm_castsi128_ps(isNaN), value);
     const __m128 quietNaN = _mm_add_ps(nan, nan);
     return _mm_or_ps(_mm_and_ps(_mm_castsi128_ps(isNaN), quietNaN), _mm_andnot_ps(_mm_castsi128_ps(isNaN), _mm_castsi128_ps(result)));
@@ -231,10 +228,8 @@ FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorMod(SIMDVectorSing
 }
 
 FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleMod(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
-    // FMod stays libm per lane for exact results. The floor fix-up runs in packed lanes.
     const SIMDVectorDouble remainder = VectorDoubleSet(FMod(v0[0], v1[0]), FMod(v0[1], v1[1]), FMod(v0[2], v1[2]), FMod(v0[3], v1[3]));
     const SIMDVectorDouble zero = VectorDoubleEqual(remainder, VectorDoubleZero());
-    // Only nonzero remainders whose sign differs from the divisor add the divisor; other lanes add 0 + 0.
     const SIMDVectorDouble wrap = VectorDoubleAndCInt(VectorDoubleNotEqualInt(VectorDoubleAndInt(VectorDoubleXorInt(remainder, v1), s_DoubleSIMDNegativeZero), VectorDoubleZero()), zero);
     const SIMDVectorDouble wrapped = VectorDoubleAdd(VectorDoubleAndInt(remainder, wrap), VectorDoubleAndInt(v1, wrap));
     return VectorDoubleSelect(VectorDoubleSelect(remainder, wrapped, wrap), VectorDoubleAndInt(v1, s_DoubleSIMDNegativeZero), zero);

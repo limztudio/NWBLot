@@ -104,8 +104,6 @@ void TrackedCommandBuffer::commitRetainedBufferStateCommits()noexcept{
 }
 
 void TrackedCommandBuffer::appendRetainedTextureStateCommit(Texture& texture, const MipLevel mipLevel, const ArraySlice arraySlice){
-    // The closing barrier and its deferred state publication outlive CommandList::clearState().
-    // Keep the texture alive with the command buffer until Queue::submit accepts or discards the command buffer.
     m_resourceReferences.retainTexture(texture);
 
     m_retainedTextureStateCommits.push_back(RetainedTextureStateCommit{ .texture = MakeNotNull(&texture), .mipLevel = mipLevel, .arraySlice = arraySlice, });

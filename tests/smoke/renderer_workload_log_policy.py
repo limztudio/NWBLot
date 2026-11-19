@@ -1,5 +1,3 @@
-"""Validate frozen renderer workload runtime logs."""
-
 from dataclasses import asdict
 import math
 import re
@@ -41,7 +39,6 @@ class RendererWorkloadLogPolicy:
             raise SmokeFailure("one actual selected device identity is required")
         material_routes = {}
         for material, route in re.findall(r"^RendererSystem: material '([^']+)' selected (.+)$", text, re.MULTILINE):
-            # A material can serve both indexed ordinary meshes and compute-emulated CSG meshes.
             material_routes.setdefault(material, set()).add(route)
         if not material_routes:
             raise SmokeFailure("material execution-route evidence is missing")
@@ -64,7 +61,6 @@ class RendererWorkloadLogPolicy:
         availability = [line for line in lines if line in ("ReflectionSmokeProject: hardware available", "ReflectionSmokeProject: hardware unavailable")]
         if len(availability) != 1:
             raise SmokeFailure("one unambiguous reflection hardware capability marker is required")
-        # Check the startup query cap for both optical_clear and optical_inside.
         if policy.family == LIT_OPTICAL_INSIDE:
             prefix = "ReflectionSmokeProject: optical query limit "
             if [line[len(prefix):] for line in lines if line.startswith(prefix)] != [str(policy.optical_queries)]:

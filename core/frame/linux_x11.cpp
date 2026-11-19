@@ -62,7 +62,6 @@ static constexpr u32 s_X11MouseButton6 = 10u;
 static constexpr u32 s_X11MouseButton7 = 11u;
 static constexpr u32 s_X11MouseButton8 = 12u;
 static constexpr f64 s_ScrollUnit = 1.0;
-// Idle throttle while hidden or unfocused; mirrors the Wayland inactive timeout.
 static constexpr i32 s_InactivePollSleepMs = 10;
 static constexpr int s_X11CardinalPropertyFormatBits = 32;
 
@@ -315,7 +314,6 @@ b8 InitX11Frame(Frame& frame){
     XSelectInput(display, GetX11Window(frameData), s_WindowEventMask);
     XStoreName(display, GetX11Window(frameData), windowTitle.data());
 
-    // Publish _NET_WM_PID so process managers can find the window and close it, even headless on XWayland where PID lookup is key.
     {
         const Atom pidAtom = XInternAtom(display, "_NET_WM_PID", False);
         if(pidAtom != None){
@@ -389,12 +387,10 @@ b8 RunX11Frame(Frame& frame){
                     event.xany.window == GetX11Window(frameData) && (event.type == KeyPress || event.type == KeyRelease)
                     && s_Keyboard.isRetiredDuplicate(event.xkey)
                 ){
-                    // XIM must not re-forward an old context's echo into its replacement context.
                     continue;
                 }
                 const XEvent physical = event;
                 if(FilterX11TextInputEvent(*textInput, event)){
-                    // XIM filtering owns text. Normalized physical presses/releases must remain balanced.
                     if(physical.xany.window == GetX11Window(frameData) && (physical.type == KeyPress || physical.type == KeyRelease) && physical.xkey.keycode != 0u)
                         s_Keyboard.process(frame, physical.xkey, false);
                     else if(physical.type == FocusIn || physical.type == FocusOut || physical.type == UnmapNotify || physical.type == DestroyNotify){

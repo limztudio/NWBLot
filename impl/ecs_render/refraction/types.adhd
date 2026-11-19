@@ -68,7 +68,6 @@ const Name s_RefractionScreenDebugName = "ECSRender_RefractionScreen";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A completed accepted diagnostic copy, regardless of later presentation outcome.
 class RefractionStatistics{
     public u64 sequence = 0u;
     public u64 generation = 0u;

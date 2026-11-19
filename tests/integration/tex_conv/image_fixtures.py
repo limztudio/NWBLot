@@ -1,5 +1,3 @@
-"""Image fixtures for prepared texture integration."""
-
 from __future__ import annotations
 
 import math
@@ -69,7 +67,6 @@ class TextureImageFixtures:
 
     @staticmethod
     def write_openexr(path: pathlib.Path, pixels: tuple[tuple[float, float, float, float], ...], channel_names: tuple[str, ...] = (LIT_A, LIT_B, LIT_G, LIT_R), channel_types: tuple[int, ...] = ()) -> None:
-        # Minimal uncompressed scanline EXR writer so tests need no external image packages.
         width = 4
         height = 2
         if len(pixels) != width * height:

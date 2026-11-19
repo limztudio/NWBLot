@@ -40,34 +40,26 @@ class RtCausticState{
     public f32x4 m_causticTargetBoundsMin = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 m_causticTargetBoundsMax = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
 
-    // Software caustics are push-only and reuse the SW trace geometry.
     public BindingLayoutHandle m_swCausticBindingLayout;
     public ShaderHandle m_swCausticShader;
     public ComputePipelineHandle m_swCausticPipeline;
     public ShaderHandle m_swCausticCsgShader;
     public ComputePipelineHandle m_swCausticCsgPipeline;
-    // Hardware caustics are push-only and use the TLAS plus global heap views.
     public BindingLayoutHandle m_hwCausticBindingLayout;
     public RayTracingPipelineHandle m_hwCausticPipeline;
     public RayTracingShaderTableHandle m_hwCausticShaderTable;
     public RayTracingPipelineHandle m_hwCausticCsgPipeline;
     public RayTracingShaderTableHandle m_hwCausticCsgShaderTable;
-    // Per-frame refractive-instance AABBs shared by caustic lights.
     public CausticEmissionTargetBuffer m_causticEmissionTargets;
-    // Push-only a-trous caustic resolve.
     public CausticResolveState m_causticResolve;
-    // Half-resolution geometry cache for edge-aware caustic resolve.
     public BindingLayoutHandle m_causticGeometryDownsampleBindingLayout;
     public ShaderHandle m_causticGeometryDownsampleShader;
     public ComputePipelineHandle m_causticGeometryDownsamplePipeline;
-    // Decay persistent accumulator after seeding; clear it after target recreation.
     public BindingLayoutHandle m_causticAccumulatorDecayBindingLayout;
     public ShaderHandle m_causticAccumulatorDecayShader;
     public ComputePipelineHandle m_causticAccumulatorDecayPipeline;
 
-    // Fresh heap views preserve old buffers for recorded dispatches.
     public u32 m_causticRefractiveInstanceCount = 0u;
-    // Producer runs only when refractive instances and caustic lights exist.
     public u32 m_causticLightCount = 0u;
 
     public b8 m_swCausticDispatchLogged = false;

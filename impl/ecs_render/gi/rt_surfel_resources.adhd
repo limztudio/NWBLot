@@ -400,7 +400,6 @@ b8 RendererRayTracingSystem::createSurfelTargets(mut DeferredFrameTargets target
     if(!IsValidSurfelGiResolveSize(resolveSize))
         return false;
 
-    // Deferred lighting samples resolved surfel GI, never the writable pool.
     targets.surfelIrradianceFormat = Format::RGBA16_FLOAT;
     TextureDesc surfelIrradianceDesc;
     surfelIrradianceDesc.setWidth(targets.width).setHeight(targets.height).setFormat(targets.surfelIrradianceFormat).setIsUAV(true).setQueueSharing(ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setName(s_SurfelIrradianceTargetName);
@@ -414,7 +413,6 @@ b8 RendererRayTracingSystem::createSurfelTargets(mut DeferredFrameTargets target
         return false;
     }
 
-    // Transient reduced-resolution surfel resolve input.
     TextureDesc surfelIrradianceHalfDesc;
     surfelIrradianceHalfDesc.setWidth(resolveSize.width).setHeight(resolveSize.height).setFormat(targets.surfelIrradianceFormat).setIsUAV(true).setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).setName(s_SurfelIrradianceHalfTargetName);
     auto surfelIrradianceHalfResult = this.m_graphics.createTexture(surfelIrradianceHalfDesc);
@@ -479,7 +477,6 @@ void RendererRayTracingSystem::finalizeSurfelResourceInitialization(){
 
 [cpp_unwind]
 b8 RendererRayTracingSystem::ensureSurfelResources(){
-    // Persistent field storage survives window resizes.
     if(!this.hasSurfelWork())
         return true;
 
@@ -498,42 +495,31 @@ b8 RendererRayTracingSystem::ensureSurfelResources(){
     BufferDesc readbackDesc;
     readbackDesc.setByteSize(ComputeSurfelWordBufferByteSize(cast<u32>(s_SurfelReadbackCounterCount))).setCpuAccess(CpuAccessMode::Read).setQueueSharing(ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setDebugName(Name(s_SurfelResourceCounterReadback)).enableAutomaticStateTracking(ResourceStates::CopyDest);
     BufferDesc constantsDesc;
-    // The upload and asynchronous consumers share this selector.
     constantsDesc.setByteSize(size_of<NwbSurfelConstantsGpu>()).setIsConstantBuffer(true).setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(s_SurfelResourceConstants)).enableAutomaticStateTracking(ResourceStates::Common);
 
     const u64 guidePoolStride = cast<u64>(s_ShaderSurfelGuideFloat4Stride) * s_ShaderSurfelGuideFloat4SPerSurfel;
     if(
-        // Fresh pool storage needs one clear before tracing.
         !EnsureSurfelBuffer(this.m_graphics, this.m_rayTracingState.surfelGi, MakeSurfelStructuredDesc(ComputeSurfelBufferByteSize(s_ShaderSurfelRecordSize, poolCapacity), s_ShaderSurfelRecordSize, true, false,
             ResourceQueueSharing::GraphicsAsyncComputeAndTransfer, Name(s_SurfelResourcePool)), "RendererSystem: failed to create surfel pool buffer", true, true, this.m_rayTracingState.surfelGi.m_surfelPoolBuffer)
-        // Four float4 guide lanes per surfel; this live-only buffer is never needed by bounce gathers.
         || !EnsureSurfelBuffer(this.m_graphics, this.m_rayTracingState.surfelGi, MakeSurfelStructuredDesc(ComputeSurfelBufferByteSize(guidePoolStride, poolCapacity), s_ShaderSurfelGuideFloat4Stride, true, false,
             ResourceQueueSharing::GraphicsAsyncComputeAndTransfer, Name(s_SurfelResourceGuidePool)), "RendererSystem: failed to create surfel guide pool buffer", true, false, this.m_rayTracingState.surfelGi.m_surfelGuidePoolBuffer)
-        // Hash heads use 0xFFFFFFFF as the empty sentinel.
         || !EnsureSurfelBuffer(this.m_graphics, this.m_rayTracingState.surfelGi, MakeSurfelStructuredDesc(ComputeSurfelBufferByteSize(size_of<u32>(), cellCount), size_of<u32>(), true, false,
             ResourceQueueSharing::GraphicsAsyncComputeAndTransfer, Name(s_SurfelResourceCellHead)), "RendererSystem: failed to create surfel cell-head buffer", true, false, this.m_rayTracingState.surfelGi.m_surfelCellHeadBuffer)
-        // The persistent counter writes on Compute; the diagnostic tail may copy it on Transfer before the next import.
         || !EnsureSurfelBuffer(this.m_graphics, this.m_rayTracingState.surfelGi, MakeSurfelStructuredDesc(ComputeSurfelWordBufferByteSize(cast<u32>(s_SurfelReadbackCounterCount)), size_of<u32>(), true, false,
             ResourceQueueSharing::GraphicsAsyncComputeAndTransfer, Name(s_SurfelResourceCounter)), "RendererSystem: failed to create surfel counter buffer", true, false, this.m_rayTracingState.surfelGi.m_surfelCounterBuffer)
-        // Build-args rewrites the indirect dispatch buffer each frame.
         || !EnsureSurfelBuffer(this.m_graphics, this.m_rayTracingState.surfelGi, MakeSurfelStructuredDesc(ComputeSurfelWordBufferByteSize(s_ShaderSurfelTraceIndirectArgsWordCount), size_of<u32>(), true, true,
             ResourceQueueSharing::GraphicsAndAsyncCompute, Name(s_SurfelResourceTraceIndirectArgs)), "RendererSystem: failed to create surfel trace indirect-args buffer", false, false, this.m_rayTracingState.surfelGi.m_surfelTraceIndirectArgsBuffer)
-        // Age-free pushes ids and spawn pops them from this persistent free list.
         || !EnsureSurfelBuffer(this.m_graphics, this.m_rayTracingState.surfelGi, MakeSurfelStructuredDesc(ComputeSurfelBufferByteSize(size_of<u32>(), poolCapacity), size_of<u32>(), true, false,
             ResourceQueueSharing::GraphicsAndAsyncCompute, Name(s_SurfelResourceFreeList)), "RendererSystem: failed to create surfel free-list buffer", true, false, this.m_rayTracingState.surfelGi.m_surfelFreeListBuffer)
-        // Bounce gathers read a stable previous-frame pool snapshot.
         || !EnsureSurfelBuffer(this.m_graphics, this.m_rayTracingState.surfelGi, MakeSurfelStructuredDesc(ComputeSurfelBufferByteSize(s_ShaderSurfelRecordSize, poolCapacity), s_ShaderSurfelRecordSize, false, false,
             ResourceQueueSharing::GraphicsAsyncComputeAndTransfer, Name(s_SurfelResourcePoolSnapshot)), "RendererSystem: failed to create surfel pool snapshot buffer", false, false, this.m_rayTracingState.surfelGi.m_surfelPoolSnapshotBuffer)
-        // Snapshot hash heads alongside the pool for a consistent bounce gather.
         || !EnsureSurfelBuffer(this.m_graphics, this.m_rayTracingState.surfelGi, MakeSurfelStructuredDesc(ComputeSurfelBufferByteSize(size_of<u32>(), cellCount), size_of<u32>(), false, false,
             ResourceQueueSharing::GraphicsAsyncComputeAndTransfer, Name(s_SurfelResourceCellHeadSnapshot)), "RendererSystem: failed to create surfel cell-head snapshot buffer", false, false, this.m_rayTracingState.surfelGi.m_surfelCellHeadSnapshotBuffer)
         || !EnsureSurfelBuffer(this.m_graphics, this.m_rayTracingState.surfelGi, readbackDesc, "RendererSystem: failed to create surfel counter readback buffer", false, false, this.m_rayTracingState.surfelGi.m_surfelCounterReadback)
-        // Every surfel pass binds this per-frame parameter buffer as a ConstantBuffer.
         || !EnsureSurfelBuffer(this.m_graphics, this.m_rayTracingState.surfelGi, constantsDesc, "RendererSystem: failed to create surfel constant buffer", false, false, this.m_rayTracingState.surfelGi.m_surfelConstants)
     )
         return false;
 
-    // Persistent descriptors own backing resources until deferred retirement.
     if(
         !EnsureHeapBuffer(GpuDescriptorClass::UniformBuffer, false, heap, this.m_rayTracingState.surfelGi.m_surfelConstants.deref(), this.m_rayTracingState.surfelGi.m_surfelConstantsHeapHandle)
         || !EnsureHeapBuffer(GpuDescriptorClass::StorageBuffer, true, heap, this.m_rayTracingState.surfelGi.m_surfelPoolBuffer.deref(), this.m_rayTracingState.surfelGi.m_surfelPoolHeapHandle)
@@ -549,7 +535,6 @@ b8 RendererRayTracingSystem::ensureSurfelResources(){
         return false;
     }
 
-    // Only tracing differs between hardware and software surfel paths.
     SurfelGiPipelineSet pipelines(this.m_graphics, this.m_shaderSystem, this.m_rayTracingState.surfelGi);
     b8 traceReady = false;
     if(this.m_rayTracingState.surfelGi.m_surfelUseHwTrace)
@@ -575,7 +560,6 @@ b8 RendererRayTracingSystem::prepareSurfelResources(mut DeferredFrameTargets tar
     if(!this.ensureSurfelResources())
         return false;
 
-    // GI consumes the same selector descriptor as the other current ray effects.
     RayTraceMaterialResources materialResources(this.m_graphics, this.m_rayTracingState.sceneBvh, this.m_rayTracingState.shadow);
     if(!targets.bindless.valid() || !IsDescriptorClass(targets.bindless.slotsBufferDescriptor, GpuDescriptorClass::UniformBuffer) || !materialResources.ensureRayTraceMaterialContextSlotsHeapHandle()){
         error("RendererSystem: surfel GI trace heap context is incomplete");

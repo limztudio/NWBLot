@@ -108,14 +108,12 @@ public:
         , m_deallocate(other.m_deallocate)
         , m_offset(other.m_offset)
     {}
-    // Cross-type ownership needs the live source pointer before its base adjustment is erased.
     template<typename U>
     ArenaDeleter(const ArenaDeleter<U, POOL>& other, TypeIdentity<U*> source, typename EnableIf<IsConvertible<U*, T*>::value && !IsSame_V<RemoveCV_T<U>, RemoveCV_T<T>>>::type* = 0)noexcept
         : pool(other.pool)
     {
         if(source){
             m_deallocate = other.m_deallocate;
-            // Callable source policies retain the allocation type; other private pools keep their existing target-operator contract.
             if(!m_deallocate){
                 if constexpr(ArenaDeleter<U, POOL>::CanDeallocate())
                     m_deallocate = &ArenaDeleter<U, POOL>::Deallocate;
@@ -129,10 +127,8 @@ public:
 
 
 public:
-    // Raw reset or copied-functor reuse must match the retained concrete public-pool allocation policy.
     void operator()(T* p)const noexcept{
         static_assert(IsCompleteType_V<T>, "Attempting to call the destructor of an incomplete type");
-        // Destruction can reenter a surviving owner and replace its deleter.
         POOL* const targetPool = pool;
         const DeallocateFunction deallocate = m_deallocate;
         void* const allocation = reinterpret_cast<void*>(reinterpret_cast<usize>(p) - m_offset);

@@ -5,7 +5,6 @@ function(nwb_simd_benchmark_entry target benchmark_source benchmark_function arg
     nwb_target_adhd_sources(${target} NAMESPACE "SimdOptimizationBenchmark" SOURCES "${CMAKE_CURRENT_LIST_DIR}/benchmark_cli.adhd")
     target_link_libraries(${target} PRIVATE nwb_tool_cli)
     if(NOT benchmark_source STREQUAL "memory_storage_probe")
-        # Qualification samples the exception flags and rounding mode after individual operations.
         target_compile_options(${target} PRIVATE
             "$<$<CXX_COMPILER_ID:Clang,AppleClang>:-ffp-model=strict>"
             "$<$<CXX_COMPILER_ID:GNU>:-frounding-math;-ftrapping-math>"
@@ -87,8 +86,6 @@ nwb_target_adhd_sources(nwb_simd_pow_qualification NAMESPACE "SimdOptimizationBe
 target_link_libraries(nwb_simd_pow_qualification PRIVATE nwb_test_common_names nwb_common nwb_alloc)
 nwb_simd_benchmark_entry(nwb_simd_pow_qualification pow_qualification RunPowQualificationCli 4)
 
-
-# The packed float candidate measures the default contraction and exception behavior.
 set_source_files_properties(
     "${CMAKE_BINARY_DIR}/adhd_gen/nwb_simd_pow_qualification/tests/performance/simd_optimization/pow_packed_single.adhd.cpp"
     PROPERTIES COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:Clang,AppleClang>:-ffp-model=precise>;$<$<CXX_COMPILER_ID:GNU>:-fno-rounding-math>;$<$<CXX_COMPILER_ID:MSVC>:/fp:precise>"

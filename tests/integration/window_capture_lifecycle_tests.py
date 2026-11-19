@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-"""Window capture render-ready, application, platform backend, caret, and resize lifecycles."""
-
 
 import os
 import subprocess
@@ -307,8 +305,6 @@ class ApplicationCaptureLifecycleTests(unittest.TestCase):
                  mock.patch.object(window_capture_smoke, LIT_SHUTDOWN_LOGSERVER_AND_COLLECT, return_value=window_capture_smoke.FRAMEBUFFER_CAPTURE_SKIP_MESSAGE,):
                 with self.assertRaisesRegex(window_capture_smoke.SmokeSkip, "transfer-source usage is unavailable"):
                     window_capture_smoke.launch_and_capture_application(args)
-
-
 
 
 class UiSmokeEntrypointBootstrapTests(unittest.TestCase):

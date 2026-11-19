@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Exercise the duplicate-volume image oracle without a GPU."""
 
 from copy import deepcopy
 from pathlib import Path

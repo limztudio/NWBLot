@@ -5,8 +5,6 @@
 const GpuTimingScopeDefinition s_TimingScopeMeshDispatch("render.mesh_dispatch");
 const GpuTimingScopeDefinition s_TimingScopeRaster("render.raster");
 const GpuTimingScopeDefinition s_TimingScopeFrame("render.frame");
-// render.frame starts in the isolated primary-Graphics graph prelude and retires after final presentation.
-// Dedicated-queue envelopes remain separate from this primary-queue timestamp interval.
 const GpuTimingScopeDefinition s_TimingScopeAsyncPrefix("render.async_prefix");
 const GpuTimingScopeDefinition s_TimingScopeAsyncShadow("render.async_shadow");
 const GpuTimingScopeDefinition s_TimingScopeAsyncSurfelGi("render.async_surfel_gi");
@@ -23,7 +21,6 @@ const GpuTimingScopeDefinition s_TimingScopeLightSpaceShadowMapOpaque("render.sh
 const GpuTimingScopeDefinition s_TimingScopeLightSpaceShadowMapTransparent("render.shadow.light_space_map_transparent");
 const GpuTimingScopeDefinition s_TimingScopeLightSpaceShadowFallbackOpaque("render.shadow.light_space_fallback_opaque");
 const GpuTimingScopeDefinition s_TimingScopeLightSpaceShadowFallbackTransparent("render.shadow.light_space_fallback_transparent");
-// Keep the aggregate shadow envelope; publish expensive phases separately.
 const GpuTimingScopeDefinition s_TimingScopeShadowOpaqueTrace("render.shadow_opaque_trace");
 const GpuTimingScopeDefinition s_TimingScopeShadowGeometryDownsample("render.shadow_geometry_downsample");
 const GpuTimingScopeDefinition s_TimingScopeShadowOpaqueTemporal("render.shadow_opaque_temporal");
@@ -38,7 +35,6 @@ const GpuTimingScopeDefinition s_TimingScopeShadowTransparentResolve("render.sha
 const GpuTimingScopeDefinition s_TimingScopeSwBvhSort("render.sw_bvh_sort");
 const GpuTimingScopeDefinition s_TimingScopeCausticPhotons("render.caustic_photons");
 const GpuTimingScopeDefinition s_TimingScopeCausticResolve("render.caustic_resolve");
-// Match the graph task identity so detailed frame telemetry receives this dispatch timing.
 const GpuTimingScopeDefinition s_TimingScopeRefractionResolve("render.avboit.refraction_resolve");
 const GpuTimingScopeDefinition s_TimingScopeRefractionClassifyTiles("render.avboit.refraction_classify_tiles");
 const GpuTimingScopeDefinition s_TimingScopeRefractionClearTileArguments("render.avboit.refraction_tile_arguments_clear");

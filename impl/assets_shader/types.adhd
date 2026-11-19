@@ -5,7 +5,7 @@
 const u32 s_SpvMagic = 0x07230203u;
 const usize s_SpvWordBytes = 4u;
 const usize s_SpvWordByteMask = s_SpvWordBytes - 1u;
-const u32 s_AssetPayloadMagic = 0x53484431u; // SHD1
+const u32 s_AssetPayloadMagic = 0x53484431u;
 const u32 s_AssetPayloadVersion = 1u;
 const usize s_AssetPayloadHeaderBytes = 8u;
 const usize s_MaxShaderEntryPointBytes = 0xFFFFFFFFu;

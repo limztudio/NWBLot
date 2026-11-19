@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-"""Renderer A/B caustic measurement analysis."""
-
 
 import contextlib
 import copy
@@ -262,7 +260,6 @@ class CausticMeasurementTests(unittest.TestCase):
                 utility.validate_gpu_debug(text.replace(marker, "requested only"), [LIT_GPUDBG])
 
     def test_synthetic_distinct_frozen_roots_replay_and_tampering_checks(self):
-        # Synthetic parser input only.
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             policy = {**benchmark.caustic.POLICY, "width": 160, "height": 120}
@@ -324,7 +321,6 @@ class CausticMeasurementTests(unittest.TestCase):
                 report.write_text(json.dumps(changed_workload), encoding=LIT_UTF_8)
                 with self.assertRaisesRegex(benchmark.SmokeFailure, "footprint or workload analysis or framebuffer launcher changed"):
                     utility.validate_report(report, identity)
-                # Replay must bind the launcher from the selected arm root.
                 baseline_identity = {**identity, LIT_SOURCE: sources[LIT_BASELINE]}
                 baseline_document = copy.deepcopy(document)
                 baseline_document[LIT_ARM] = baseline_identity

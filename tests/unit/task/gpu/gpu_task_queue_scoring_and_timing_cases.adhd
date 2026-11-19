@@ -306,7 +306,6 @@ void VerifyGpuScoring_CachedLoadsAndScoresMatchIndependentReferenceAfterMovesAnd
             const GpuTaskDependencyEdge edge = allEdges[edgeIndex];
             reachable[edge.producer.index][edge.consumer.index] = true;
         }
-        // Plain Floyd-Warshall closure is independent of the packed scheduling representation.
         for(usize intermediate = 0u; intermediate < s_GpuScoringTaskCount; ++intermediate)
             for(usize producer = 0u; producer < s_GpuScoringTaskCount; ++producer)
                 for(usize consumer = 0u; consumer < s_GpuScoringTaskCount; ++consumer)
@@ -376,7 +375,6 @@ void VerifyGpuScoring_CachedLoadsAndScoresMatchIndependentReferenceAfterMovesAnd
             );
         }
 
-        // Exercise zero eligible off-queue cost, including cancellation by self and a singleton exclusion.
         for(usize row = 0u; row < assignments.size(); ++row){
             scoringData.updateAssignmentLoads(assignments[row].task, assignments[row].queue, queues[0u].id);
             assignments[row].queue = queues[0u].id;
@@ -506,7 +504,6 @@ void VerifyGpuScoring_AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOpt
     assignmentOptions.timingFrameIndex = 9u;
 
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
-    // Disabled remains an exact deterministic fallback even when a complete snapshot is present.
     ASSERT_TRUE(Assign(assignments, operationScratch, graph, analysis, topology, assignmentOptions));
     const Optional<GpuTaskQueueAssignment> disabledAssignmentOpt = FindQueueAssignment(assignments, task);
     ASSERT_TRUE(disabledAssignmentOpt.has_value());
@@ -517,7 +514,6 @@ void VerifyGpuScoring_AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOpt
 
     timingPolicy.enabled = true;
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
-    // The accepted primary route switched at frame five, so the configured dwell period still retains it.
     ASSERT_TRUE(Assign(assignments, operationScratch, graph, analysis, topology, assignmentOptions));
     const Optional<GpuTaskQueueAssignment> dwellAssignmentOpt = FindQueueAssignment(assignments, task);
     ASSERT_TRUE(dwellAssignmentOpt.has_value());
@@ -647,7 +643,6 @@ void VerifyGpuScoring_CalibratesOptInTimingFeedbackBeforeHysteresisSwitches(){
     EXPECT_EQ(frameTwoAssignment.queue, queues[0u].id);
     EXPECT_EQ(frameTwoAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingCalibration, GpuTaskQueueAssignmentModifier::None);
 
-    // Calibration observations update route history without becoming the committed incumbent.
     ASSERT_TRUE(timingHistory.recordNonCommittingSample(timingKey, auxiliaryGraphicsQueue.id, 0.001));
     timingHistory.snapshot(timingSnapshot);
     assignmentOptions.timingFrameIndex = 3u;
@@ -660,7 +655,6 @@ void VerifyGpuScoring_CalibratesOptInTimingFeedbackBeforeHysteresisSwitches(){
     EXPECT_EQ(frameThreeAssignment.reason, GpuTaskQueueAssignmentReason::RequiredGraphics);
     EXPECT_NE(frameThreeAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback, GpuTaskQueueAssignmentModifier::None);
 
-    // Under-sampled probe frames do not commit the probed route as the incumbent.
     GpuTaskTimingHistoryStore intervalTimingHistory = testArena.makeTimingHistory(2u);
     intervalTimingHistory.resetForDeviceGeneration(queues[0u].id.deviceGeneration);
     ASSERT_TRUE(intervalTimingHistory.recordSample(timingKey, queues[0u].id, 0.010, 10u));
@@ -846,7 +840,6 @@ void VerifyGpuScoring_QueueTimingScoreUsesOnlyReducedIncomingDependencies(){
     thirdTimingKey.task = thirdIdentity;
     thirdTimingKey.queue = CommandQueue::Graphics;
     GpuTaskTimingHistoryStore timingHistory = testArena.makeTimingHistory();
-    // A and B each have one measured fast route, so history alone splits them across the auxiliary queues.
     for(u64 frameIndex = 1u; frameIndex <= 4u; ++frameIndex){
         ASSERT_TRUE(timingHistory.recordSample(firstTimingKey, firstAuxiliaryQueue.id, 0.001, frameIndex));
         ASSERT_TRUE(timingHistory.recordSample(secondTimingKey, secondAuxiliaryQueue.id, 0.001, frameIndex));
@@ -890,7 +883,6 @@ void VerifyGpuScoring_QueueTimingScoreUsesOnlyReducedIncomingDependencies(){
     ASSERT_TRUE(thirdAssignmentOpt.has_value());
     EXPECT_EQ(firstAssignmentOpt.value().queue, firstAuxiliaryQueue.id);
     EXPECT_EQ(secondAssignmentOpt.value().queue, secondAuxiliaryQueue.id);
-    // Transitive reduction drops the redundant A-to-C edge so C stays on B's queue.
     EXPECT_EQ(thirdAssignmentOpt.value().queue, secondAuxiliaryQueue.id);
     EXPECT_TRUE(timingSnapshot.valid());
     EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
@@ -1334,7 +1326,6 @@ void GpuScoringRunRejectedCrossClassCase(
     EXPECT_EQ(assignment.queue, expectedQueue);
     EXPECT_EQ(assignment.modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback, GpuTaskQueueAssignmentModifier::None);
 
-    // A rejected policy must also drop the earlier valid result.
     timingPolicy.minimumRelativeBenefit = 2.0;
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
     EXPECT_FALSE(Assign(assignments, operationScratch, graph, analysis, topology, assignmentOptions));
@@ -1443,10 +1434,8 @@ void VerifyGpuScoring_RanksEqualTimingRoutesDeterministicallyAndKeepsDwellAndFam
     ASSERT_TRUE(preloadAssignmentOpt.has_value());
     ASSERT_TRUE(targetAssignmentOpt.has_value());
     EXPECT_EQ(preloadAssignmentOpt.value().queue, firstAuxiliaryGraphicsQueue.id);
-    // Choose the unloaded second auxiliary queue when both histories are equally fast.
     EXPECT_EQ(targetAssignmentOpt.value().queue, secondAuxiliaryGraphicsQueue.id);
 
-    // A non-committing sample adds route history but must not move the committed incumbent or restart its dwell.
     ASSERT_TRUE(timingHistory.recordNonCommittingSample(targetTimingKey, firstAuxiliaryGraphicsQueue.id, 0.020));
     const GpuTaskTimingAssignmentKey targetAssignmentKey = GpuTaskTimingAssignmentKeyFromHistoryKey(targetTimingKey);
     const Optional<GpuTaskTimingAssignmentState> targetAssignmentStateOpt = FindStoreTimingAssignmentValue(timingHistory, targetAssignmentKey);
@@ -1465,7 +1454,6 @@ void VerifyGpuScoring_RanksEqualTimingRoutesDeterministicallyAndKeepsDwellAndFam
     EXPECT_EQ(dwellAssignment.queue, queues[0u].id);
     EXPECT_EQ(dwellAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback, GpuTaskQueueAssignmentModifier::None);
 
-    // The faster history on queue ID 1 now names another family, and the target has no cross-family opt-in.
     GpuPhysicalQueueInfo crossFamilyGraphicsQueue = GraphicsQueue(1u);
     crossFamilyGraphicsQueue.familyIndex = 1u;
     Array<GpuPhysicalQueueInfo, 2> crossFamilyQueues = Array<GpuPhysicalQueueInfo, 2>();

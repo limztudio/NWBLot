@@ -21,8 +21,6 @@ NWB_CORE_BEGIN
 [[nodiscard]] ClipboardStatus::Enum DecodeClipboardLatin1(AStringView text, AString<Alloc::GlobalArena>& output);
 [[nodiscard]] ClipboardStatus::Enum EncodeClipboardLatin1(AStringView text, AString<Alloc::GlobalArena>& output);
 
-
-// Native transfer chunks may split a UTF-8 sequence. Validate encoding only after the complete byte stream arrives.
 class ClipboardTextAccumulator final{
 public:
     explicit ClipboardTextAccumulator(Alloc::GlobalArena& arena)noexcept;

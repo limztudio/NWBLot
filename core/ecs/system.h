@@ -73,7 +73,6 @@ public:
 
     virtual void prepare([[maybe_unused]] World& world){}
 
-    // The scheduler keeps this task incomplete until update and its submitted descendants finish.
     [[nodiscard]] virtual Expected<void, CpuTaskAdmissionError::Enum> update(World& world, f32 delta) = 0;
 
     [[nodiscard]] virtual CpuTaskOptions taskOptions()const noexcept{
@@ -137,10 +136,8 @@ public:
 private:
     Alloc::GlobalArena& m_arena;
 
-    // Every conflicting predecessor keeps registration order; independent work has no stage barrier.
     Vector<DependencyList, Alloc::GlobalArena> m_dependencies;
     SystemList m_allSystems;
-    // Retain capacity across execute() calls.
     Vector<CpuTaskScheduler::TaskHandle, Alloc::GlobalArena> m_executionHandles;
     Vector<CpuTaskScheduler::TaskHandle, Alloc::GlobalArena> m_executionDependencies;
     Vector<Expected<void, CpuTaskAdmissionError::Enum>, Alloc::GlobalArena> m_executionResults;

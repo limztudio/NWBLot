@@ -51,7 +51,6 @@ class CsgDeformRebuild : NoCopy{
         mut Vector<CsgDeformVertex> outVertices,
         mut Vector<CsgDeformTriangle> outTriangles
     ){
-        // Input spans can refer to the output vectors.
         const Expected<CsgDeformStats, CsgDeformFailure> result = this.execute(inputVertices, inputTriangles, cuts, options);
         outVertices.clear();
         outTriangles.clear();

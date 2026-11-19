@@ -93,7 +93,6 @@ b8 GpuRendererState::prepare(in AcquiredPresentationFrame acquired){
     }
     mut Device device = this.m_graphics.getDevice();
     if(this.m_pending.deref().m_prepared){
-        // A failed graph may have accepted uploads or raster. Rebuild only after that exact prefix completes.
         if(!this.m_pending.deref().prefixComplete(device))
             return true;
         this.m_pending.deref().m_acquired = acquired;
@@ -102,7 +101,6 @@ b8 GpuRendererState::prepare(in AcquiredPresentationFrame acquired){
         this.m_declaredGraph.reset();
         return true;
     }
-    // Retire all completed owners before cache eviction or descriptor allocation can need their heap slots.
     for(mut auto slot : this.m_slots){
         if(slot.inFlight.valid() && slot.inFlight.deref().complete(device))
             slot.inFlight.reset();
@@ -129,7 +127,6 @@ b8 GpuRendererState::prepare(in AcquiredPresentationFrame acquired){
         this.m_declaredGraph.reset();
         return true;
     }
-    // Admission is bounded. The pending immutable CPU generation survives until a slot becomes available.
     return true;
 }
 

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Adversarial parser and image-oracle tests; no renderer or GPU work is performed."""
 
 import copy
 import json

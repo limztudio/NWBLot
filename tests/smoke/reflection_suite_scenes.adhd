@@ -46,7 +46,6 @@ class ReflectionFeedbackScene{
         if(!this.createPanel(VectorSingle(0.008f, 0.008f, 0.008f, 1.0f), VectorSingle(0.0f, 1.4f, 0.0f, 0.0f), VectorSingle(2.8f, 1.0f, 1.8f, 0.0f), 0.95f, false, world).valid())
             return false;
         const EntityID red = this.createPanel(VectorSingle(1.0f, 0.01f, 0.01f, 1.0f), VectorSingle(-1.7f, 1.0f, -3.0f, 0.0f), VectorSingle(0.3f, 1.0f, 0.25f, 0.0f), world);
-        // Move the off-screen green panel into view to trigger provisional SSR feedback.
         this.m_green = this.createPanel(VectorSingle(0.01f, 1.0f, 0.01f, 1.0f), VectorSingle(3.0f, 2.0f, -3.0f, 0.0f), VectorSingle(0.3f, 1.0f, 0.35f, 0.0f), world);
         if(!red.valid() || !this.m_green.valid())
             return false;
@@ -122,7 +121,6 @@ class ReflectionReferenceScene{
         f32 shift = 0.0f;
         if(moved)
             shift = 0.9f;
-        // Marker spheres behind the camera reflect through z=0 to virtual images at z=+8.
         const EntityID red = this.createMesh(
             s_ReflectionSuiteSphereMesh,
             s_ReflectionSuiteOpaqueMaterial,
@@ -150,7 +148,6 @@ class ReflectionReferenceScene{
             greenX = 3.0f;
         else if(moved)
             greenX = 1.45f;
-        // Hybrid reflection resolves provisional screen hits against virtual images at z=+3.
         this.createPanel(s_ReflectionSuiteOpaqueMaterial, VectorSingle(1.0f, 0.01f, 0.01f, 1.0f), VectorSingle(redX, 1.0f, -3.0f, 0.0f), VectorSingle(0.3f, 1.0f, 0.25f, 0.0f));
         this.createPanel(s_ReflectionSuiteOpaqueMaterial, VectorSingle(0.01f, 1.0f, 0.01f, 1.0f), VectorSingle(greenX, 2.0f, -3.0f, 0.0f), VectorSingle(0.3f, 1.0f, 0.35f, 0.0f));
     }
@@ -166,7 +163,6 @@ class ReflectionReferenceScene{
             0.95f
         );
         [essential] assert(floor.valid(), "ReflectionSmokeProject: floor mirror creation failed");
-        // Reflection through y=0 places virtual marker centers at y=-2.
         this.createPanel(s_ReflectionSuiteOpaqueMaterial, VectorSingle(1.0f, 0.01f, 0.01f, 1.0f), VectorSingle(-1.7f, 2.0f, 3.0f, 0.0f), VectorSingle(0.3f, 1.0f, 0.25f, 0.0f));
         this.createPanel(s_ReflectionSuiteOpaqueMaterial, VectorSingle(0.01f, 1.0f, 0.01f, 1.0f), VectorSingle(1.7f, 2.0f, 3.0f, 0.0f), VectorSingle(0.3f, 1.0f, 0.35f, 0.0f));
     }
@@ -381,7 +377,6 @@ class ReflectionRoughnessScene{
             mutated = SetSmokeMaterialHalf4(this.m_red, s_ReflectionSurfaceInterfaceName, "runtime.color_tint", VectorSingle(0.0f, 0.0f, 0.0f, 1.0f), world);
         }
         else if(this.m_case == ReflectionRoughnessCase::Light){
-            // Keep a positive-intensity authored light present so scene gathering does not insert its default light.
             mutated = SetSmokeLightColor(this.m_light, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), world);
         }
         else if(this.m_case == ReflectionRoughnessCase::Deform){

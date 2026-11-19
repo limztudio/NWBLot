@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""DispatchRouter: Build/run target command dispatch."""
 
 from __future__ import annotations
 
@@ -12,8 +11,6 @@ from launcher.constants import (COMMAND_HELP_LONG, COMMAND_HELP_SHORT, COMMAND_S
 
 
 class DispatchRouter:
-    """Build/run target command dispatch."""
-
     @staticmethod
     def run_target_command(args) -> int:
         env = BuildController.build_environment(args)

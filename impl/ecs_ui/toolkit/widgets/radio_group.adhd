@@ -38,8 +38,6 @@ b8 MatchesRadioGroupSource(in IListDataSource source, in RadioGroupState state, 
     return IsRadioGroupStateCurrent(state, snapshot, guard) && count == choices.count;
 }
 
-
-// Copy the complete bounded source before atomically committing reconciliation; callbacks cannot reenter this state.
 Expected<RadioGroupChoices> CollectRadioGroupChoices(in IListDataSource source, in RadioGroupSnapshot snapshot, in IRadioGroupReconcileGuard guard, mut RadioGroupState state, mut RadioGroupResult result){
     RadioGroupChoices candidate;
     if(!IsRadioGroupStateCurrent(state, snapshot, guard))
@@ -74,7 +72,6 @@ Expected<RadioGroupChoices> CollectRadioGroupChoices(in IListDataSource source, 
     u64 selected = 0u;
     u64 cursor = 0u;
     ReconcileRadioGroupSelectionAndCursor(snapshot, candidate, selected, cursor);
-    // A second observation catches one-shot metadata mutation from the preceding final count callback.
     if(!MatchesRadioGroupSource(source, state, snapshot, candidate, guard) || !MatchesRadioGroupSource(source, state, snapshot, candidate, guard))
         return MakeUnexpected(Failure());
     AdvanceNonWrappingRevision(state.m_revision);

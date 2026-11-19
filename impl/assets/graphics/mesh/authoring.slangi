@@ -31,8 +31,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Mesh/compute stages share the global heap for frame data. The typed-binding contract gates the pixel hook.
-
 #include "runtime.slangi"
 #include "encoding.slangi"
 #include "material_typed_accessors.slangi"

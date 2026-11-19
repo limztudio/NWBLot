@@ -58,7 +58,6 @@ b8 GpuTextureStateFanIn::MergeTransient(CommandListResourceStateHandoff& result,
             && resultState.ownerQueue == state.ownerQueue
             && resultState.releaseDestinationQueue == state.releaseDestinationQueue
         ){
-            // Retain both read scopes for the next transition without changing native layout or ownership.
             resultState.state |= state.state;
             return true;
         }

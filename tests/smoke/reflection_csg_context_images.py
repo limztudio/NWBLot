@@ -1,5 +1,3 @@
-"""Compare captured CSG context transition images."""
-
 import hashlib
 
 from reflection_csg_context_evidence import LIT_PHASE, LIT_NAME, LIT_CASE

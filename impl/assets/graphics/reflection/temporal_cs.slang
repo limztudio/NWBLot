@@ -26,7 +26,6 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID){
     const uint2 pixel = dispatchThreadId.xy;
     if(pixel.x >= g_NwbReflectionTemporal.width || pixel.y >= g_NwbReflectionTemporal.height)
         return;
-    // Invalid history has no graph read dependency, so this branch must precede every previous-history load.
     if(g_NwbReflectionTemporal.historyValid == 0u || g_NwbReflectionTemporal.previousSampleCount == 0u)
         return;
     const half4 specular = half4(nwbHeapSampledImage2D(g_NwbReflectionTemporal.opaqueSpecularSlot).Load(int3(pixel, 0)));
@@ -42,10 +41,6 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID){
     const uint count = min(g_NwbReflectionTemporal.previousSampleCount, limit - 1u) + 1u;
     if(count == 1u)
         return;
-    // The camera and complete content stamp are unchanged.
-    // Every pixel contributes one sample, including true zero and environment samples.
-    // This pointwise update has no neighboring read/write race or spatial feedback.
-    // The difference form keeps equal finite-half endpoints exact, including 65504 at the upper storage limit.
     const half3 radiance = half3(previous.rgb) + (half3(current.rgb) - half3(previous.rgb)) * (half(1.0h) / half(count));
     const half3 roundedRadiance = nwbReflectionRoundHistory(radiance, pixel, g_NwbReflectionTemporal.sampleIndex, g_NwbReflectionTemporal.samplingSeed);
     nwbHeapStorageImage2DFloat4(g_NwbReflectionTemporal.currentRadianceUavSlot)[pixel] = float4(roundedRadiance, current.a);

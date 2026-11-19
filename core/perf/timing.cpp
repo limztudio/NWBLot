@@ -106,7 +106,6 @@ void TimingRecorder::recordSample(const Name& scopeName, const f64 seconds, cons
     if(!m_enabled || !scopeName)
         return;
 
-    // Record paths only consume scopes registered during setup; scope creation belongs to registerScope callers, never to per-frame record calls.
     const auto found = m_scopeMap.find(scopeName);
     if(found == m_scopeMap.end())
         return;

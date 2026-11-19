@@ -19,8 +19,6 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Descriptor-buffer manager: host-mapped resource/sampler segments bind by byte offset.
-
 class DescriptorBufferManager final : NoCopy{
     friend class Device;
     friend class CommandList;
@@ -29,8 +27,6 @@ class DescriptorBufferManager final : NoCopy{
 
 
 public:
-    // Resource and sampler descriptor buffers are always bound in this order.
-    // A TLAS set reuses the resource descriptor buffer, so the optional third offset extends this fixed topology.
     static constexpr u32 s_ResourceDescriptorBufferIndex = 0u;
     static constexpr u32 s_SamplerDescriptorBufferIndex = 1u;
     static constexpr u32 s_PersistentDescriptorBufferCount = 2u;
@@ -38,7 +34,6 @@ public:
 
 
 private:
-    // Host-mapped descriptor segment with synchronized free ranges and live-allocation tracking.
     struct SegmentStorage{
         const Expected<u64> storageIdentity;
         VkBuffer buffer = VK_NULL_HANDLE;
@@ -77,7 +72,6 @@ public:
 
     [[nodiscard]] b8 isEnabled()const noexcept;
 
-    // Exact driver descriptor size; 0 when descriptor buffers are disabled.
     [[nodiscard]] u32 getDescriptorSize(VkDescriptorType descriptorType)const noexcept;
     [[nodiscard]] u32 getOffsetAlignmentBytes()const noexcept;
     [[nodiscard]] u64 getUniformBufferAddressAlignmentBytes()const noexcept{
@@ -96,7 +90,6 @@ public:
         return m_context.physicalDeviceProperties.limits.maxTexelBufferElements;
     }
 
-    // Allocates aligned, zeroed descriptor bytes from free ranges or the bump pointer.
     [[nodiscard]] Expected<DescriptorBufferSegment> allocate(DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignmentBytes){
         return allocateForBindingGeneration(kind, sizeBytes, alignmentBytes, 0u);
     }
@@ -105,14 +98,12 @@ public:
         freeForBindingGeneration(segment, 0u);
     }
 
-    // Validates allocation identity, then encodes one descriptor.
     b8 writeDescriptor(const DescriptorWriteItem& item, const DescriptorBufferSegment& allocation, u32 dstOffsetBytes, VkDescriptorType descriptorType);
 
 
 private:
     [[nodiscard]] Expected<VkResult, VkResult> shutdownForLifecycleOperation();
     void shutdownForDeviceTeardown()noexcept;
-    // Driver layout sizes may exceed the working-size defaults; addresses become immutable after the first allocation in a generation.
     [[nodiscard]] b8 reserveInitialCapacityForBindingGeneration(u32 resourceBytes, u32 samplerBytes, u64 requiredGeneration);
     [[nodiscard]] Expected<DescriptorBufferSegment> allocateForBindingGeneration(DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignmentBytes, u64 requiredGeneration);
     void freeForBindingGeneration(const DescriptorBufferSegment& segment, u64 requiredGeneration);

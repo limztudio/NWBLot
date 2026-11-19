@@ -1,5 +1,3 @@
-"""Balanced experiment ordering and paired bootstrap inference."""
-
 import math
 import random
 import statistics
@@ -13,7 +11,6 @@ class PairedExperimentAnalysis:
         self.draws = draws
 
     def balanced_orders(self, variants, blocks):
-        """Williams rows balance position and preceding treatment over a full cycle."""
         count = len(variants)
         cycle = count if count % 2 == 0 else 2 * count
         if blocks < 5 or blocks % cycle:

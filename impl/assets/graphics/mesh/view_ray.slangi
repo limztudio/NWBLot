@@ -26,7 +26,6 @@ float2 nwbMeshViewPixelNdc(const uint2 pixel, const uint2 extent){
     return float2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
 }
 
-// Derive the perspective basis with the same stored-matrix multiplication convention as rasterization.
 NwbMeshViewRayBasis nwbMeshViewRayBasis(){
     const float4x4 worldToClip = g_NwbMeshWorldToClip;
     const float4 clipX = mul(worldToClip, float4(1.0, 0.0, 0.0, 0.0));
@@ -39,7 +38,6 @@ NwbMeshViewRayBasis nwbMeshViewRayBasis(){
     return result;
 }
 
-// Frustum-plane intersection remains well conditioned when inverse far-plane homogeneous w approaches zero.
 float3 nwbMeshViewBasisRayDirection(const float2 ndc, const NwbMeshViewRayBasis basis){
     const float3 xPlane = basis.horizontal - ndc.x * basis.forward;
     const float3 yPlane = basis.vertical - ndc.y * basis.forward;
@@ -54,7 +52,6 @@ float3 nwbMeshViewRayDirection(const float2 ndc){
 float3 nwbMeshViewRadialPosition(const uint2 outputPixel, const uint2 sourcePixel, const uint2 extent, const float distance){
     const NwbMeshViewRayBasis basis = nwbMeshViewRayBasis();
     const float3 direction = nwbMeshViewBasisRayDirection(nwbMeshViewPixelNdc(outputPixel, extent), basis);
-    // Neighbor cap repair preserves camera-space z while transferring its FP32 radial depth onto the output pixel ray.
     float radialDistance = distance;
     if(any(outputPixel != sourcePixel)){
         const float3 sourceDirection = nwbMeshViewBasisRayDirection(nwbMeshViewPixelNdc(sourcePixel, extent), basis);

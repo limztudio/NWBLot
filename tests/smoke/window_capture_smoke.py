@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 import fnmatch
 import os
 from pathlib import Path
@@ -52,7 +53,6 @@ FRAMEBUFFER_CAPTURE_SKIP_MESSAGE = "FramebufferCapture: skipped because swap-cha
 
 
 def run_smoke_main(argv, parse_args, run, *, default_timeout=None, self_test=None, output_stream=None, failure_types=(SmokeFailure, OSError, ValueError, TimeoutError)):
-    """Apply common smoke CLI timeout and exit-status handling."""
     if default_timeout is not None and not any(argument == LIT_TIMEOUT or argument.startswith("--timeout=") for argument in argv):
         argv = [*argv, LIT_TIMEOUT, str(default_timeout)]
     args = parse_args(argv)
@@ -66,25 +66,6 @@ def run_smoke_main(argv, parse_args, run, *, default_timeout=None, self_test=Non
     except failure_types as error:
         print(f"FAIL: {error}", file=output_stream, flush=True)
         return 1
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def finish_logserver_cleanup(logserver, output, errors, primary_failure, terminate, write_report):
@@ -124,13 +105,6 @@ def cleanup_capture_processes(testbed, handle, logserver, primary_error):
         CapturedProcessOutput.dispose_process_output_capture(capture)
 
 
-
-
-
-
-
-
-
 def finish_observed_output(skip_reason, observed):
     if skip_reason and observed:
         message, path = observed[0]
@@ -140,12 +114,6 @@ def finish_observed_output(skip_reason, observed):
             path.unlink()
         except OSError as error:
             raise SmokeFailure(f"failed to remove process output capture '{path}': {error}") from error
-
-
-
-
-
-
 
 
 def window_capture_source_paths():
@@ -172,7 +140,6 @@ def launch_logserver(args, executable, env):
         log_pattern = standalone_log_pattern(executable)
         return None, None, log_directory, snapshot_log_files(log_directory, log_pattern), log_pattern
 
-    # Resolve relative executable paths before Popen changes to the runtime directory.
     logserver = Path(args.logserver_executable).resolve() if args.logserver_executable else executable_sibling(executable, LIT_LOGSERVER)
     if not logserver:
         write_status("INFO: logserver executable was not found; using standalone loader logs")
@@ -205,7 +172,6 @@ def launch_logserver(args, executable, env):
             raise SmokeFailure(f"{error}\n{tail}") from error
         raise
 
-    # Poll the owned server; shutdown still checks the full log baseline.
     log_baseline = ScopedLogBaseline(log_baseline, log_pattern, process.pid)
     return process, port, log_directory, log_baseline, log_baseline.live_pattern
 
@@ -265,14 +231,6 @@ def shutdown_logserver_and_collect(process, directory, baseline, pattern, shutdo
     wait_for_log_drain(directory, baseline, pattern)
     baseline, pattern = full_log_scope(baseline, pattern)
     return collect_log_delta(directory, baseline, pattern) if directory else ""
-
-
-
-
-
-
-
-
 
 
 def launch_and_capture(args, backend):
@@ -388,8 +346,6 @@ def launch_and_capture_application(args):
     result = read_bmp_24(args.output)
     validate_capture_for_args(args, result)
     return result
-
-
 
 
 def main(argv):

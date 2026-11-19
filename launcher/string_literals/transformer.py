@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Pool and encode surviving Clang literal globals without changing named objects."""
 
 from __future__ import annotations
 
@@ -211,7 +210,6 @@ def _record(api: LlvmApi, context: int, module: int, target_data: int, candidate
 
 
 def transform_bitcode(input_path: Path, output_path: Path, llvm_library: Path, expected_version: Tuple[int, int, int]) -> Dict[str, object]:
-    """Rewrite optimized bitcode; output appears only after successful verification."""
     input_path = Path(input_path).resolve(strict=True)
     output_path = Path(output_path).resolve()
     api = LlvmApi(llvm_library, expected_version)
@@ -282,4 +280,3 @@ def transform_bitcode(input_path: Path, output_path: Path, llvm_library: Path, e
                 os.unlink(temporary_name)
             except FileNotFoundError:
                 pass
-

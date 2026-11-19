@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A removed green stripe exposes false GI hits; retained red open triangles must still reflect and block rays.
 static const float NWB_SMOKE_GI_CSG_MIXED_OPEN_PLANE_Z_OFFSET = 1.0;
 static const float NWB_SMOKE_GI_CSG_MIXED_OPEN_PLANE_Z_TOLERANCE = 0.015;
 static const float NWB_SMOKE_GI_CSG_MIXED_NORMAL_Z_MIN = 0.9;

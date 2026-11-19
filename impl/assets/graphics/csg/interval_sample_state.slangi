@@ -17,11 +17,11 @@
 
 struct NwbCsgIntervalSampleState{
     uint4 workRect;
-    uint4 resourceSlots; // x selects the shared mesh view; the remaining words preserve the std140 lane.
+    uint4 resourceSlots;
 };
 
 #pragma warning(push)
-#pragma warning(disable: 39001) // The interval sample state is a typed uniform-table alias.
+#pragma warning(disable: 39001)
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbCsgIntervalSampleState, Std140DataLayout> g_NwbHeapCsgIntervalSampleStates[];
 #pragma warning(pop)
 

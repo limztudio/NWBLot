@@ -1,6 +1,3 @@
-"""Windows window-capture backend: user32/gdi32 bindings, interactive-desktop preflight, client-area BitBlt readback, and synthetic input."""
-
-
 import ctypes
 import time
 from window_capture_outcome import SmokeSkip, WindowsDesktopUnavailable, SmokeFailure  # noqa: E402
@@ -54,7 +51,6 @@ def require_windows_interactive_desktop(user32=None):
         raise SmokeFailure(f"GetProcessWindowStation failed: {getattr(ctypes, 'get_last_error', ctypes.get_errno)()}")
     flags = WindowsUserObjectFlags()
     length_needed = ctypes.c_uint32()
-    # Check WSF_VISIBLE on the borrowed process window station handle.
     if not user32.GetUserObjectInformationW(ctypes.c_void_p(station), 1, ctypes.byref(flags), ctypes.sizeof(flags), ctypes.byref(length_needed)):
         raise SmokeFailure(f"GetUserObjectInformationW(UOI_FLAGS) failed: {getattr(ctypes, 'get_last_error', ctypes.get_errno)()}")
     if not flags.dwFlags & 0x0001:
@@ -232,14 +228,12 @@ class WindowsCapture:
             raise SmokeFailure("exact framebuffer extent must remain within 1..16384 pixels")
         client_width, client_height = self.client_size(hwnd)
         window_width, window_height = self._window_size(hwnd)
-        # Preserve the current nonclient frame without guessing caption/border dimensions.
         outer_width = width + window_width - client_width
         outer_height = height + window_height - client_height
         if outer_width < width or outer_height < height:
             raise SmokeFailure("window/client rectangles disagree while calculating the requested resize")
         flags = self.SWP_NOMOVE | self.SWP_NOZORDER | self.SWP_SHOWWINDOW | self.SWP_ASYNCWINDOWPOS
         if allow_outside_work_area:
-            # Bypass default tracking bounds so large test framebuffers keep their requested size.
             flags |= self.SWP_NOSENDCHANGING
         if not self.user32.SetWindowPos(ctypes.c_void_p(hwnd), None, 0, 0, outer_width, outer_height, flags):
             raise SmokeFailure(f"SetWindowPos failed while resizing HWND 0x{hwnd:x}")
@@ -256,7 +250,6 @@ class WindowsCapture:
 
     def _prepare_capture_window(self, hwnd):
         hwnd_ptr = ctypes.c_void_p(hwnd)
-        # Repeated restore/show requests can animate an already settled client before the screen capture.
         if self.user32.IsIconic(hwnd_ptr) or self.user32.IsZoomed(hwnd_ptr):
             self.user32.ShowWindow(hwnd_ptr, self.SW_RESTORE)
         elif not self.user32.IsWindowVisible(hwnd_ptr):
@@ -282,7 +275,6 @@ class WindowsCapture:
         return dwmapi
 
     def prepare_raw_client_window(self, hwnd):
-        """Prepare the HWND for full raw client-area capture before waiting for readiness."""
         self._prepare_capture_window(hwnd)
 
         preference = ctypes.c_int(self.DWMWCP_DONOTROUND)
@@ -306,11 +298,9 @@ class WindowsCapture:
         return WindowsScreenPixels(self.user32, self.gdi32).capture(hwnd, rect, output_path)
 
     def capture_window(self, hwnd, output_path):
-        # Both entry points capture renderer-owned client pixels.
         return self.capture_client_window(hwnd, output_path)
 
     def capture_client_window(self, hwnd, output_path):
-        # Capture only the client area to exclude the DWM window frame.
         self._prepare_capture_window(hwnd)
         rect = self._client_rect(hwnd)
         if not rect:
@@ -318,7 +308,6 @@ class WindowsCapture:
         return self._capture_screen_rect(hwnd, rect, output_path)
 
     def capture_prepared_raw_client_window(self, hwnd, output_path):
-        """Capture the full raw client area after prepare_raw_client_window."""
         rect = self._client_rect(hwnd)
         if not rect:
             raise SmokeFailure(LIT_HWND_CLIENT_RECT_UNAVAILABLE.format(hwnd=hwnd))

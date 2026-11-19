@@ -47,7 +47,6 @@ class CausticLightSelector{
         if(refractiveInstanceCount == 0u || lightCount == 0u || causticImportance.size() < cast<usize>(lightCount))
             return 0u;
 
-        // Importance-ranked caustic slots (mirrors shadow selection). Highest eligible light per slot; points never qualify.
         u32 assignedCount = 0u;
         for(u32 slot = 0u; slot < s_SceneCausticSlotCount; ++slot){
             f32 bestImportance = -1.0f;

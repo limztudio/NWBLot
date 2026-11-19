@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Clipboard failure cleanup for native numeric and text-area fixtures."""
 
 from pathlib import Path
 import sys

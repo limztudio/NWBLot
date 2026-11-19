@@ -6,7 +6,6 @@ set(_nwb_sw_optical_ctest_timeout_seconds 1020)
 set(_nwb_sw_stress_resize_width 1001)
 set(_nwb_sw_stress_resize_height 701)
 
-# Exercise the selected disabled hardware ray tracing policy even on a capable adapter.
 function(nwb_add_software_raytracing_smoke TEST_NAME TARGET_NAME RUNTIME_DIRECTORY WINDOW_TITLE)
     nwb_add_window_capture_smoke("${TEST_NAME}" "${TEST_NAME}.bmp" "$<TARGET_FILE:${TARGET_NAME}>" "${RUNTIME_DIRECTORY}" "${WINDOW_TITLE}" "--application-arg=--disable-hardware-ray-tracing" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>"
         "--timeout" "${_nwb_sw_smoke_script_timeout_seconds}" "--render-ready-timeout" "${_nwb_sw_smoke_render_ready_timeout_seconds}" "--settle-seconds" "${_nwb_sw_smoke_settle_seconds}" "--expect-log-message" "Loader: hardware ray tracing disabled before device creation" "--expect-log-message" "RendererSystem: dispatched software shadow traversal"

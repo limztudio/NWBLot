@@ -290,7 +290,6 @@ b8 RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(){
             break;
         }
     }
-    // An unchanged scene can have no mesh work or allocated scratch; freeze an authoritative empty plan.
     if(!hasCandidate){
         this.m_preparedMeshSwBvhBuildPlanFrozen = true;
         return true;
@@ -307,7 +306,6 @@ b8 RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(){
         return false;
 
     for(in MeshRayTracingResourceSnapshot mesh : meshes){
-        // Match the direct update policy, including off-screen mesh resources.
         if(!MeshAccelerationStatePolicy().requiresSoftwareBvhUpdate(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision))
             continue;
         if(
@@ -358,7 +356,6 @@ void RendererRayTracingSystem::clearPreparedMeshSwBvhBuilds(){
 [cpp_unwind]
 b8 RendererRayTracingSystem::preparePendingMeshSwBvhResources(){
     SoftwareBvhBuilder bvh(this.m_graphics, this.m_shaderSystem, this.m_rayTracingState.sceneBvh);
-    // Prepare storage only for geometry requiring an acceleration update.
     b8 allResourcesReady = true;
     MeshRayTracingResourceSnapshotVector meshes;
     this.m_meshSystem.collectRayTracingResourceSnapshots(meshes);

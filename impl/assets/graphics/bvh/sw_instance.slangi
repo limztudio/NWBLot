@@ -15,7 +15,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared software-BVH scene-instance ABI. The three affine rows plus four trailing words match the 64-byte C++ SceneSwBvhInstanceGpu record.
 struct NwbSwBvhInstance{
     float4 worldToObjectRow0;
     float4 worldToObjectRow1;
@@ -27,7 +26,7 @@ struct NwbSwBvhInstance{
 };
 
 #pragma warning(push)
-#pragma warning(disable: 39001) // Deliberate typed view of the StorageBuffer descriptor table in bindless_heap.
+#pragma warning(disable: 39001)
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> g_NwbHeapSwBvhInstanceBuffers[];
 #pragma warning(pop)
 
@@ -43,12 +42,10 @@ float3 nwbSwBvhTransformPoint(const NwbSwBvhInstance instance, const float3 poin
     return float3(dot(instance.worldToObjectRow0.xyz, point) + instance.worldToObjectRow0.w, dot(instance.worldToObjectRow1.xyz, point) + instance.worldToObjectRow1.w, dot(instance.worldToObjectRow2.xyz, point) + instance.worldToObjectRow2.w);
 }
 
-// Leave ray directions un-normalized so object-space and world-space ray parameters stay identical.
 float3 nwbSwBvhTransformVector(const NwbSwBvhInstance instance, const float3 vector){
     return float3(dot(instance.worldToObjectRow0.xyz, vector), dot(instance.worldToObjectRow1.xyz, vector), dot(instance.worldToObjectRow2.xyz, vector));
 }
 
-// Inverse-transpose of object->world, as the transpose of the stored world->object 3x3. Callers choose their own normalization/fallback policy.
 float3 nwbSwBvhTransformNormal(const NwbSwBvhInstance instance, const float3 objectNormal){
     return float3(
         dot(float3(instance.worldToObjectRow0.x, instance.worldToObjectRow1.x, instance.worldToObjectRow2.x), objectNormal),

@@ -82,8 +82,6 @@ b8 PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& declara
         return true;
     };
 
-    // Task and packet scopes share the timing recorder's identity namespace.
-    // Count both together once so repeated tasks and an authored task identity matching another packet's derived identity reserve their full demand.
     const GpuSubmissionPacketRange packetTimingEnvelopeRange = planAccess.packetTimingEnvelopeRange();
     for(usize packetIndex = 0u; packetIndex < planAccess.packetCount(); ++packetIndex){
         const GpuSubmissionPacketId packetID = planAccess.packetIdAt(packetIndex);
@@ -93,7 +91,6 @@ b8 PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& declara
         const GpuSubmissionPacket& packet = *packetView.plan;
         const GpuTaskId* const tasks = packetView.tasks;
 
-        // Scope IDs and report rows follow first registration, with each packet preceding its task scopes.
         if(packet.recordsTiming){
             const auto packetScopeName = PacketTimingScopeName(declarationAccess, planAccess, packetID);
             if(!packetScopeName || !countScopeOccurrence(*packetScopeName))
@@ -120,8 +117,6 @@ b8 PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& declara
     }
     for(const Name& scopeName : scopeOrder){
         const u32 occurrenceCount = scopeOccurrences.find(scopeName).value();
-        // Recording runs inside render/submission: declare demand only.
-        // The frame preamble owns GPU pool creation through materializeRequestedQueries(), so this path never calls device.createTimerQuery().
         if(!timingRecorder->requestScopeQueries(scopeName, occurrenceCount * s_MaxFramesInFlight))
             return false;
     }

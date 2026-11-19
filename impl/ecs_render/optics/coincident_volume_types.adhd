@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Prepared static inputs; retained selection holds entity IDs, never borrowed pointers.
 class CoincidentOpticalVolumeCandidate{
     public AssetRef<Mesh> mesh;
     public AssetRef<Material> material;
@@ -19,7 +18,6 @@ class CoincidentOpticalVolumeCandidate{
     public Name group = s_NameNone;
     public EntityID entity = s_InvalidEntityId;
     public i32 priority = 0;
-    // Identical-material grouping also requires the same authored medium semantics.
     public u32 boundaryMode = 0u;
     public i32 mediumPriority = 0;
 }
@@ -193,7 +191,6 @@ void SelectSuppressedCoincidentOpticalVolumes(
 
     HashMap<CoincidentOpticalVolumeKey, usize> representatives;
     representatives.reserve(candidateCount);
-    // Inspect membership each frame; components may change without structural mutation.
     for(usize index = 0u; index < candidateCount; ++index){
         if(!ValidCoincidentOpticalVolumeCandidate(candidates[index]))
             continue;

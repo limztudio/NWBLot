@@ -16,7 +16,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Compacted edge records feed the indirect transparent retrace.
 #define NWB_SW_SHADOW_INDIRECT_ARGS_GROUP_COUNT_X 0u
 #define NWB_SW_SHADOW_INDIRECT_ARGS_GROUP_COUNT_Y 1u
 #define NWB_SW_SHADOW_INDIRECT_ARGS_GROUP_COUNT_Z 2u
@@ -24,7 +23,6 @@
 
 #define NWB_SW_SHADOW_GROUP_SIZE 8
 
-// Shared C++/shader coarse transparent-trace scale.
 #define NWB_SW_SHADOW_COARSE_SHIFT 2u
 #define NWB_SW_SHADOW_COARSE_FACTOR (1u << NWB_SW_SHADOW_COARSE_SHIFT)
 
@@ -34,10 +32,8 @@
 #define NWB_SW_SHADOW_EDGE_COUNTER_TRACE 1
 #define NWB_SW_SHADOW_EDGE_COUNTER_SIZE 2
 
-// Packed pixel and light-loop index.
 #define NWB_SW_SHADOW_EDGE_RECORD_WORDS 2
 
-// Occluder class for traversal passes.
 #define NWB_SW_SHADOW_OCCLUDER_OPAQUE 0
 #define NWB_SW_SHADOW_OCCLUDER_TRANSPARENT 1
 
@@ -50,7 +46,6 @@
 
 #define NWB_SW_SHADOW_TRANSPARENT_JITTER_SALT 2654435761u
 
-// Over-deep traversal conservatively blocks light.
 #define NWB_SW_SHADOW_SCENE_STACK_SIZE 32
 #define NWB_SW_SHADOW_MESH_STACK_SIZE 64
 

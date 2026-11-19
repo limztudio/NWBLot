@@ -9,16 +9,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Bindings for every pass on the live field. Spawn/bounce select their prior-frame snapshot at use sites.
-
-
 #include "surfel_heap_resources.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The push block selects the live field, not a local set. Aliases expand to global heap accesses.
 #define g_NwbSurfelConstants g_NwbHeapSurfelConstantBuffers[g_NwbSurfelHeapPushConstants.constantsHeapSlot]
 #define g_NwbSurfelPool g_NwbHeapSurfelWritablePools[g_NwbSurfelHeapPushConstants.poolHeapSlot]
 #define g_NwbSurfelGuidePool g_NwbHeapSurfelWritableGuidePools[g_NwbSurfelHeapPushConstants.guidePoolHeapSlot]

@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-# Gracefully close a known X11 top-level window by sending a WM_DELETE_WINDOW ClientMessage.
-#
-# Send WM_DELETE_WINDOW so X11 apps exit cleanly and write .namesym sidecars.
-#
-# Send the ClientMessage to the exact captured X11 window ID.
+
 import ctypes
 import ctypes.util
 import sys
@@ -18,7 +14,6 @@ Window = ctypes.c_ulong
 Atom = ctypes.c_ulong
 Bool = ctypes.c_int
 
-# Explicit result types prevent ctypes from truncating 64-bit pointers and atoms.
 xlib.XOpenDisplay.restype = DisplayP
 xlib.XOpenDisplay.argtypes = [ctypes.c_char_p]
 xlib.XCloseDisplay.argtypes = [DisplayP]
@@ -41,15 +36,14 @@ def send_wm_delete(disp, win):
     if not protocols or not delete_window:
         return False
     xlib.XSendEvent.argtypes = [DisplayP, Window, Bool, ctypes.c_long, ctypes.POINTER(XClientMessageEvent)]
-    # Send once with NoEventMask so delivery works without a window manager.
     ev = XClientMessageEvent()
-    ev.type = X11_CLIENT_MESSAGE_TYPE  # ClientMessage
+    ev.type = X11_CLIENT_MESSAGE_TYPE
     ev.display = disp
     ev.window = win
     ev.message_type = protocols
     ev.format = X11_CLIENT_MESSAGE_FORMAT_BITS
     ev.data_l[0] = delete_window
-    ev.data_l[1] = 0  # timestamp
+    ev.data_l[1] = 0
     if xlib.XSendEvent(disp, win, False, 0, ctypes.byref(ev)) == 0:
         return False
     xlib.XFlush(disp)

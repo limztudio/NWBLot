@@ -55,19 +55,15 @@ class RuntimeMeshDesc{
     public RuntimeMeshBuffers buffers;
     public RuntimeMeshLocalBounds localBounds;
     public u64 version = 0u;
-    // Accepted object-space geometry generation; zero requires conservative updates, including pending deformation.
     public u64 geometryContentRevision = 0u;
     public Name meshKey = s_NameNone;
     public Span<u32> solidTriangleWords;
-    // Optional 32-byte runtime_bounds_constants.h GPU record for this accepted geometryContentRevision; null while pending.
     public BufferHandle localBoundsBuffer;
-    // Optional meshletCount records with the same accepted bounds ABI; each record carries its own VALID proof.
     public BufferHandle meshletLocalBoundsBuffer;
     public EntityID entity = s_InvalidEntityId;
-    public BufferHandle triangleIndexBuffer;   // RT-only; null when ray tracing is unsupported
-    public BufferHandle attributeBuffer;       // RT-only flat per-triangle-corner trace attributes; null when ray tracing is unsupported
+    public BufferHandle triangleIndexBuffer;
+    public BufferHandle attributeBuffer;
     public u32 meshletCount = 0u;
-    // Logical corner count; backing buffer is word-padded, never use its byte size.
     public u32 meshletPrimitiveIndexCount = 0u;
     public b8 dynamicMeshletBoundsFresh = false;
     public b8 dynamicMeshletConesFresh = false;
@@ -85,7 +81,6 @@ class RuntimeMeshDesc{
 
 interface IRuntimeMeshProvider{
     Expected<RuntimeMeshDesc> resolveRuntimeMesh(in EntityID entity);
-    // Attachment identity remains available when buffers or an evaluated pose are not ready yet.
     b8 hasRuntimeMeshBinding(in EntityID entity)const;
     void markLiveRuntimeMeshes(mut RuntimeMeshRequestSet requests);
 }

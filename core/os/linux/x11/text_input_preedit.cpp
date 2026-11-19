@@ -104,7 +104,6 @@ Bool X11TextInputService::OnPreeditCaret(XIC context, const XPointer data, const
         current = static_cast<usize>(caret.position);
         break;
     default:
-        // Word and vertical motions need client text layout; retain the current scalar position.
         break;
     }
     if(!service.m_preedit.moveCaret(current)){

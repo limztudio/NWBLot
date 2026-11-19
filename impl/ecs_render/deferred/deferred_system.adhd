@@ -45,7 +45,6 @@ class RendererDeferredSystem : NoCopy{
 
     public b8 setPresentationSettings(in PresentationSettings settings);
 
-    // Resolve immutable per-frame data; confirm CPU mirrors only after packet accepts.
     public SceneShadingBufferUploads prepareSceneShadingBufferUploads(in f32 fallbackAspectRatio, in RayTracingLightingClassificationInput rayTracingInput)const;
     public void confirmSceneShadingBufferUploads(in Span<SceneLightGpuData> lights, in b8 lightUploadRequired, in SceneShadingGpuData sceneShadingState, in b8 sceneShadingUploadRequired);
     public b8 createDeferredLightingResources();

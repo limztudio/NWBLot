@@ -97,7 +97,6 @@ namespace UiLayerPresentation = NWB::Impl::UiLayerPresentation;
 
 inline constexpr TStringView s_WindowTitle = FOUNDATION_TEXT("NWB Testbed");
 
-// C++ interface adapter required because ISearchableListDataSource::filtered() returns const IListDataSource&.
 template<typename StateT>
 class UiFilteredListSource final : public ISearchableListDataSource, NoCopy{
 private:

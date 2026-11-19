@@ -69,7 +69,6 @@ class ListLayoutPreparer{
         request.direction = TextDirection::LeftToRight;
         if(!this.m_scope.listStateMatches(this.m_context, frame))
             return MakeUnexpected(Failure());
-        // Shape the temporary text before calling the source again.
         auto layout = this.m_text.layout(request);
         if(!layout.has_value() || !this.m_scope.listMatches(this.m_context, frame))
             return MakeUnexpected(Failure());
@@ -121,7 +120,6 @@ class ListLayoutPreparer{
                 const usize found = ListRowInsertionIndex(rows, index);
                 if(found != rows.size() && rows[found].index == index)
                     continue;
-                // The work bound is independent of dataset size, even when a cursor reveal introduces a new interval.
                 if(rows.size() >= s_ListMaxPreparedRows)
                     return MakeUnexpected(Failure());
                 auto row = this.prepareListRow(frame, index);
@@ -135,12 +133,10 @@ class ListLayoutPreparer{
                 return MakeUnexpected(Failure());
             if(height == frame.rowHeight){
                 frame.scrollOffset = candidate.value().offset;
-                // Another declaration can share this state with a different sizing context.
                 if(state.m_measureKey == frame.measureKey && !(state.m_rowHeight > frame.rowHeight))
                     state.m_rowHeight = frame.rowHeight;
                 return candidate.value();
             }
-            // Retain the first visible row and its pixel offset at the inherited clip edge while the uniform estimate grows.
             const f64 offset = ComputeListExpandedScrollOffset(
                 candidate.value().contentClip.y,
                 candidate.value().viewport.y,

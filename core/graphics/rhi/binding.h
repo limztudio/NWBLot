@@ -46,7 +46,6 @@ struct BindingLayoutItem{
 
     ResourceType::Enum type : 8;
     u8 reserved : 8;
-    // Push constant byte size for PushConstants, 1 for VolatileConstantBuffer, or descriptor array size (>= 1) for other types.
     u16 size : 16;
 
 
@@ -106,29 +105,22 @@ public:
     BindingLayoutDesc& addItem(const BindingLayoutItem& value){ bindings.push_back(value); return *this; }
 };
 
-// BindlessLayoutType describes descriptor classes in the global heap.
-// Slang bindings and host layouts must agree on explicit Vulkan descriptor-set and binding indices.
 namespace BindlessLayoutType{
     static constexpr u8 s_BindlessLayoutTypeImmutableBase = 0;
     enum Enum : u8{
-        Immutable = s_BindlessLayoutTypeImmutableBase, // Must use registerSpaces to define a fixed descriptor type
+        Immutable = s_BindlessLayoutTypeImmutableBase,
 
-        MutableSrvUavCbv,   // Global non-sampler resource table
-                            // Valid types: Texture_SRV/UAV, TypedBuffer_SRV/UAV, StructuredBuffer_SRV/UAV, RawBuffer_SRV/UAV, ConstantBuffer.
+        MutableSrvUavCbv,
 
-        MutableSampler,     // Global sampler table
-                            // Valid descriptor types: Sampler
+        MutableSampler,
     };
 };
 
-// Bindless layouts describe a global heap array in the shader; `registerSpaces` selects its bindings.
-// They are never per-pass tables.
 struct BindlessLayoutDesc{
     FixedVector<BindingLayoutItem, s_MaxBindlessRegisterSpaces> registerSpaces;
     u32 maxCapacity = 0;
     u32 descriptorSetIndex = Limit<u32>::s_Max;
 
-    // This resource-bearing layout takes an explicit SPIR-V descriptor set; push-only BindingLayouts take none.
     ShaderType::Mask visibility = ShaderType::None;
     BindlessLayoutType::Enum layoutType = BindlessLayoutType::Immutable;
 
@@ -155,8 +147,8 @@ struct DescriptorWriteItem{
     static constexpr usize s_ByteSize = 40u;
 
     union{
-        TextureSubresourceSet subresources; // valid for Texture_SRV, Texture_UAV
-        BufferRange range; // valid for Buffer_SRV, Buffer_UAV, ConstantBuffer
+        TextureSubresourceSet subresources;
+        BufferRange range;
         Array<u64, 2> rawData;
     };
     static_assert(sizeof(TextureSubresourceSet) == TextureSubresourceSet::s_ByteSize, "sizeof(TextureSubresourceSet) is supposed to be 16 bytes");
@@ -164,13 +156,10 @@ struct DescriptorWriteItem{
 
     void* resourceHandle;
     u32 slot;
-    // Descriptor-array index; must be less than the matching BindingLayoutItem's size.
     u32 arrayElement;
     ResourceType::Enum type          : 8;
     TextureDimension::Enum dimension : 8;
-    // valid for Texture_SRV, Texture_UAV
     Format::Enum format              : 8;
-    // Valid for Texture_SRV, Texture_UAV, Buffer_SRV, and Buffer_UAV.
     u8 reserved                      : 8;
 
 
@@ -256,7 +245,6 @@ public:
 
 
 public:
-    // Intentionally uninitialized to avoid clearing large descriptor arrays.
     DescriptorWriteItem()noexcept{}
 
 

@@ -1,5 +1,3 @@
-"""Read and validate prepared texture metadata and payload layout."""
-
 from __future__ import annotations
 
 import json

@@ -1226,7 +1226,6 @@ void VerifyLightSpacePlan_BoundsExternalSettingsAndShaderAddressSpace(){
         requests[index] = MakeLightRequest(index, index, LightType::Point);
     Expected<LightSpacePlan> plan = TryBuildLightSpacePlan(settings, requests, u32.max, 20u, false);
     ASSERT_TRUE(plan.has_value());
-    // One six-face 2048 map exceeds the shader address range.
     EXPECT_EQ(plan.value().lightCount, 0u);
     settings.pointResolution = 1024u;
     plan = TryBuildLightSpacePlan(settings, requests, u32.max, 20u, false);
@@ -1637,7 +1636,6 @@ void VerifyEcsGraphics_MaterialTypedByteRangeHashCollisionRetainsOwnedBytes(){
         firstBytes.fill(0u);
     }
 
-    // Compare payload bytes even when hash and byte length match.
     const Optional<MaterialTypedByteRange> firstFound = context.findByLookup(collisionHash, originalFirstBytes);
     ASSERT_TRUE(firstFound.has_value());
     EXPECT_EQ(firstFound.value().byteOffset, 0u);
@@ -1667,7 +1665,6 @@ void VerifyEcsGraphics_MaterialTypedByteRangeUploadAliasSurvivesGrowthAndMutatio
     ASSERT_EQ(context.uploadSize(), expectedBytes.size() * 2u);
     EXPECT_TRUE(context.rangeMatchesUpload(appendedRange, expectedBytes));
 
-    // Mutating the original upload bytes cannot change the retained dedup key.
     context.invertUploadPrefix(expectedBytes.size());
     const usize uploadByteCount = context.uploadSize();
     const Expected<MaterialTypedByteRange> rangeResult6 = context.findOrAppend(expectedBytes);

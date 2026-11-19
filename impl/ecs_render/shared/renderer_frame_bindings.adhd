@@ -61,7 +61,6 @@ class MeshViewBufferSnapshot{
     }
 }
 
-// Mesh owns the registration transaction; snapshot pairs buffers with published handles.
 class MeshFrameBindingSnapshot{
     public BufferHandle instanceBuffer;
     public BufferHandle materialTypedBuffer;

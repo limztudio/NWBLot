@@ -123,7 +123,6 @@ void VerifyX11TextInputDispatchFence_CallbackCancellationDefersContextUntilOuter
         nativeContextAlive = false;
     }
     EXPECT_TRUE(nativeContextAlive);
-    // The input method can still read its IC after its client callback and nested native call return.
     if(fence.leave()){
         nativeContextAlive = false;
     }
@@ -170,7 +169,6 @@ void VerifyX11FilteredKeyHistory_NewRepeatsAdvanceWithoutRevivingOlderForwardedP
 void VerifyX11FilteredKeyHistory_CoalescedAutorepeatReleaseCannotClearTheLaterRepeatedPress(){
     X11FilteredKeyHistory history = X11FilteredKeyHistory();
     history.recordFiltered(23u, false, 100u, 50u, 1000u);
-    // Legacy X11 autorepeat coalesces this release with the adjacent press without releasing the held key.
     history.recordFiltered(23u, true, 120u, 55u, 1020u);
     history.recordFiltered(23u, false, 120u, 55u, 1020u);
     EXPECT_TRUE(history.isForwardedDuplicate(23u, true, 120u, 55u, false, 1030u));
@@ -278,7 +276,6 @@ void VerifyX11FilteredKeyHistory_ZeroTimeEchoKeepsTheXimSerialUpperBitsAcrossThe
     history.synchronizeSession(TextInputSessionToken(1u, 1u));
     history.recordFiltered(23u, false, 0u, 0x0000fff0u, 1000u);
     history.synchronizeSession(TextInputSessionToken(1u, 2u));
-    // XIM forwards low sequence bits in the event and high bits in its separate protocol field.
     const u32 currentSerial = 0x00010010u;
     EXPECT_FALSE(history.isRetiredDuplicate(23u, false, 0u, currentSerial, false, 1010u));
     history.recordFiltered(23u, false, 0u, currentSerial, 1010u);

@@ -111,7 +111,6 @@ b8 HasCsgSlangIncludeExtension(in StringView includePath){
     return PathHasListedExtension(includePathValue, slangIncludeExtensions);
 }
 
-// `eval` is hand-written source and `module_include` is the generated module include; both are engine/project-rooted virtual paths.
 b8 ValidateCsgReservedVirtualRootPath(in Path nwbFilePath, in StringView fieldName, in StringView includePath){
     return ValidateCsgReservedVirtualRoot(nwbFilePath, fieldName, HasReservedAssetVirtualRoot(includePath));
 }

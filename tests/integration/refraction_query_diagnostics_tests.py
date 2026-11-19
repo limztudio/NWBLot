@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Reject stale, incomplete and internally inconsistent refraction work evidence."""
 
 import copy
 from pathlib import Path

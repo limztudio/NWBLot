@@ -164,8 +164,6 @@ void CommandList::releaseTextureOwnership(Texture* textureResource, TextureSubre
     const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
     const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
 
-    // Releases require explicit image layouts; never invent one for untouched images.
-    // Validate every affected subresource before publishing any tracked state or destination.
     for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
             const ResourceStates::Mask state = m_stateTracker.getTextureState(&texture, arraySlice, mipLevel);

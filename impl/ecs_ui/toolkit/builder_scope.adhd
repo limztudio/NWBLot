@@ -200,7 +200,6 @@ class BuilderContextMenuFrame{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Each declaration scope owns its transient layout and control loans in the caller's UI arena.
 [friend(Builder, ListLayoutPreparer)]
 class BuilderScopeFrame : NoCopy{
     private Optional<mut BuilderScopeFrame> m_parent;

@@ -32,13 +32,6 @@ constexpr usize s_SIMDMemoryCopyHalfWordBytes = 2u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Copies exactly byteCount bytes between disjoint ranges in normal CPU-accessible memory; SIMD packets use ordinary cached accesses.
-// Requests above 8192 bytes use the CRT, and partial packet tails use fixed-size builtin copies.
-// Both pointers must be aligned to s_SIMDMemoryCopyAlignment for a nonzero count.
-// Destination must already contain byte storage or live trivially copyable objects; this operation does not establish typed object lifetimes.
-// Insufficient capacity, null pointers, misalignment, or overlapping ranges terminate before either range is accessed.
-// A zero count does not inspect either range.
-// Mapped GPU memory requires the same CPU access contract, with synchronization and visibility managed by the caller.
 FOUNDATION_INLINE void SIMDMemoryCopy(void* destination, usize destinationCapacity, const void* source, usize byteCount)noexcept{
     if(byteCount == 0u)
         return;

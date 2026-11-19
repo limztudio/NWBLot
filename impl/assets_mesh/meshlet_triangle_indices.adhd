@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Flat positionStream-space triangle index buffer from meshlet streams.
 Expected<Vector<u32>> BuildMeshletTriangleIndices(
     in Span<MeshletDesc> meshlets,
     in Span<MeshletLocalVertexRef> localVertexRefs,

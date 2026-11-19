@@ -1,4 +1,3 @@
-"""Validate completed GPU timing coverage for reflection workloads."""
 import math
 
 from window_capture_smoke import SmokeFailure
@@ -63,4 +62,3 @@ class ReflectionGpuCoverage:
     @staticmethod
     def kernel_work_ms(summaries, variant, mip_count, history_samples=16):
         return sum(summaries[scope][LIT_MEAN_MS] * (mip_count if scope == DEPTH else 1) for scope in ReflectionGpuCoverage.required_scopes(variant, history_samples) if scope in KERNELS)
-

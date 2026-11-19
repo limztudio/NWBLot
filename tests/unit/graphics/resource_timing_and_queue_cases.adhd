@@ -234,7 +234,6 @@ void VerifyGpuTimingPacketEnvelopeMetrics_CorrelatesLargeOutOfOrderFrame(){
     samples.reserve(1u + outputs.size());
     b8 completedEarly = false;
     for(usize arrivalIndex = 0u; arrivalIndex < scopeCount; ++arrivalIndex){
-        // An odd stride permutes this power-of-two input count and separates arrival order from queue order.
         const usize scopeIndex = (arrivalIndex * 773u) % scopeCount;
         const GpuPacketEnvelopeMetricScope scope = scopes[scopeIndex];
         const u64 beginTicks = cast<u64>(scopeIndex / 2u) * 20u + cast<u64>(scopeIndex % 2u) * 5u;

@@ -16,7 +16,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Each tracing pass chooses its occluder class at compile time.
 #ifndef NWB_SW_SHADOW_OCCLUDER
 #error "each software-shadow trace pass must #define NWB_SW_SHADOW_OCCLUDER before including sw_shadow_traverse.slangi"
 #endif
@@ -39,7 +38,6 @@ uint nwbMeshFrameViewHeapSlot(){
 #include "sw_shadow_intersect.slangi"
 #include "sw_shadow_geometry.slangi"
 
-// (nwbShadowDispatchSurface), which routes by surfaceDispatchId to return each occluder's optical params.
 #include "shadow_surface.slangi"
 #include "shadow/generated/surface_dispatch.slangi"
 
@@ -55,10 +53,6 @@ uint nwbSwShadowInstanceCount(){
     return g_NwbSwShadowPush.instanceCount;
 }
 
-
-// Per-instance traversal walks ONE mesh BVH into temporary instance optics and finalizes them exactly once.
-// The caller combines completed optics into persistent ray state; temporary crossings never cross instances.
-// Returns the traversal outcome so the scene walk knows whether optics are complete, absent, or conservatively blocked.
 NwbShadowInstanceStatus nwbSwShadowInstanceOptics(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax, __ref NwbShadowInstanceOptics optics){
     const NwbSwBvhInstance instance = nwbHeapSwBvhInstances(g_NwbSwShadowMaterialContextSlots.sceneSlots.y)[instanceIndex];
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(g_NwbSwShadowMaterialContextSlots.sceneSlots.z)[instanceIndex];
@@ -69,7 +63,6 @@ NwbShadowInstanceStatus nwbSwShadowInstanceOptics(const uint instanceIndex, cons
 #endif
 #endif
     const bool transparent = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) != 0u;
-    // Compile-time class filter avoids runtime traversal branching.
 #if NWB_SW_SHADOW_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
     if(transparent)
         return NwbShadowInstanceStatus::NoIntersection;
@@ -79,23 +72,17 @@ NwbShadowInstanceStatus nwbSwShadowInstanceOptics(const uint instanceIndex, cons
 #endif
     nwbShadowInstanceOpticsBegin(optics);
     bool hasAbsorption = false;
-    // Per-mesh heap indices are non-uniform and must be decorated at every access.
     const float3 origin = nwbSwBvhTransformPoint(instance, worldOrigin);
     const float3 direction = nwbSwBvhTransformVector(instance, worldDirection);
     const float3 invDir = nwbSwShadowSafeInvDir(direction);
 
-    // Near-first traversal defers only far children for early exits.
-
-    // Crossing integration is order-independent; never narrow tMax for transparent occluders.
     uint stack[NWB_SW_SHADOW_MESH_STACK_SIZE];
-    // Slang needs one array write before the loop; only pushed slots are read.
     stack[0u] = 0u;
     uint stackPointer = 0u;
 
-    // Child nodes are prevalidated by parent ranking; test only the root at loop entry.
     NwbBvhNode node = nwbHeapBvhNodes(material.nodeSlot)[0u];
     if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, node.aabbMin, node.aabbMax))
-        return NwbShadowInstanceStatus::NoIntersection; // whole mesh missed: no occluder
+        return NwbShadowInstanceStatus::NoIntersection;
 
     while(true){
         if(nwbBvhNodeIsLeaf(node)){
@@ -169,10 +156,9 @@ NwbShadowInstanceStatus nwbSwShadowInstanceOptics(const uint instanceIndex, cons
             if(farMiss)
                 continue;
 
-            // Conservatively block light rather than skip an over-deep subtree.
             if((stackPointer + 1u) >= NWB_SW_SHADOW_MESH_STACK_SIZE)
                 return NwbShadowInstanceStatus::StackOverflow;
-            stack[stackPointer] = farChild; // defer; descend the near child inline next iteration
+            stack[stackPointer] = farChild;
             ++stackPointer;
         }
     }
@@ -191,23 +177,20 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
     nwbShadowAccumulateInstance(acc, optics);
 }
 
-// Scene traversal refines candidate instances through mesh BVHs.
 void nwbSwShadowOccluded(const float3 origin, const float3 direction, const float tMin, const float tMax, inout NwbShadowVisibilityAccumulator acc){
     if(nwbSwShadowInstanceCount() == 0u)
         return;
 
     const float3 invDir = nwbSwShadowSafeInvDir(direction);
 
-    // Near-first scene traversal preserves early exits.
     uint stack[NWB_SW_SHADOW_SCENE_STACK_SIZE];
-    // Slang needs one array write before the loop; only pushed slots are read.
     stack[0u] = 0u;
     uint stackPointer = 0u;
 
     NwbBvhNode node = nwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[0u];
 #if NWB_SW_SHADOW_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
     if(!nwbBvhNodeContainsTransparentOccluder(node))
-        return; // every scene leaf is opaque, so this compile-time transparent pass has no work
+        return;
 #endif
     if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, node.aabbMin, node.aabbMax))
         return;
@@ -228,7 +211,6 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
             const NwbBvhNode leftNode = nwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[left];
             const NwbBvhNode rightNode = nwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[right];
 #if NWB_SW_SHADOW_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
-            // Prune opaque-only subtrees for transparent-only traces.
             const bool leftTransparent = nwbBvhNodeContainsTransparentOccluder(leftNode);
             const bool rightTransparent = nwbBvhNodeContainsTransparentOccluder(rightNode);
 #endif

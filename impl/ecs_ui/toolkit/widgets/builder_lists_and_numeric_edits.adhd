@@ -174,7 +174,6 @@ b8 Builder::prepareListMetrics(mut BuilderListFrame frame){
         state.m_measureKey = key;
         state.m_rowHeight = height;
     }
-    // The last painted offset may belong to a different styled declaration than the measurement cache.
     if(NeedsListScrollOffsetRescale(state.m_scrollRowHeight, state.m_scrollSourceGeneration, key.sourceGeneration, state.m_rowHeight)){
         const f64 offset = ComputeListRescaledScrollOffset(
             state.m_placement.contentClip.y,
@@ -201,7 +200,6 @@ ListResult Builder::virtualList(in StringView stableKey, in borrow IListDataSour
         this.m_context.fail();
         return result;
     }
-    // A body callback may have closed or reopened its popup; no model loan is allowed past that boundary.
     if(!this.synchronizePopup()){
         result.valid = true;
         return result;
@@ -255,8 +253,6 @@ ListResult Builder::virtualList(in StringView stableKey, in borrow IListDataSour
         result.valid = false;
         return result;
     }
-    // A fractional offset or a skin minimum can expose more than one row in a natural viewport.
-    // Finish that bounded measurement before its intrinsic height enters the parent layout.
     if(options.height.policy == LayoutSizePolicy::Content && frame.rowCount != 0u){
         while(true){
             LayoutBox provisional;
@@ -333,7 +329,6 @@ b8 Builder::paintList(in BuilderItem item, in LayoutBox box){
     );
     if(!this.m_context.addTarget(item.state, host) || !this.paintListRows(item, frame, placement))
         return false;
-    // Paint owns its glyph pages now; keep no shaped rows alive through later sibling lists.
     frame.rows.clear();
     if(placement.scrollbarVisible){
         const auto thumbId = TryMakeWidgetId(item.state.id, s_WidgetPartScrollbar);

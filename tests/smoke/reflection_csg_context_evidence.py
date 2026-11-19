@@ -1,5 +1,3 @@
-"""Validate completed CSG reflection transition evidence."""
-
 import math
 import re
 

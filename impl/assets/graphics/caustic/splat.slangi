@@ -9,9 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Backend-independent receiver splat. HW and SW deposit surviving photons identically.
-
-
 #include "resolve_binding_slots.h"
 #include "../scene/binding_slots.h"
 
@@ -28,7 +25,6 @@
 #endif
 
 static const float NWB_CAUSTIC_SPLAT_MIN_CLIP_W = 1e-6;
-// Receiver match tolerance: a few G-buffer texels of world spacing, with a world-space floor.
 static const float NWB_CAUSTIC_SPLAT_REJECT_TEXEL_SCALE = 4.0;
 static const float NWB_CAUSTIC_SPLAT_REJECT_MIN_DISTANCE = 0.05;
 
@@ -61,12 +57,10 @@ void nwbCausticSplat(const float3 worldPos, const half3 flux){
     if(baseTexel.x < 0 || baseTexel.y < 0 || baseTexel.x >= (int)NWB_CAUSTIC_SPLAT_PUSH.width || baseTexel.y >= (int)NWB_CAUSTIC_SPLAT_PUSH.height)
         return;
 
-    // Receiver identity is validated in world space so the tolerance follows scene scale and grazing-angle gradients.
     const float sceneDepth = NWB_CAUSTIC_SPLAT_GBUFFER_DEPTH.Load(int3(baseTexel, 0)).r;
     if(sceneDepth >= NWB_SCENE_BACKGROUND_DEPTH)
         return;
 
-    // Both backends bind the deferred RGBA16F world-position buffer here. Keep that compact payload until the FP32 distance test.
     const half3 sceneWorldPosSample = half3(NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION.Load(int3(baseTexel, 0)).xyz);
     const float3 sceneWorldPos = float3(sceneWorldPosSample);
     const int2 rightTexel = int2(min(baseTexel.x + 1, (int)NWB_CAUSTIC_SPLAT_PUSH.width - 1), baseTexel.y);
@@ -76,7 +70,6 @@ void nwbCausticSplat(const float3 worldPos, const half3 flux){
     if(length(worldPos - sceneWorldPos) > rejectTolerance)
         return;
 
-    // Bilinear splat weights are (0, 1) bounded factors, so half arithmetic is sufficient here.
     const half2 frac = half2(screen - float2(baseTexel));
     const half w00 = (half(1.0h) - frac.x) * (half(1.0h) - frac.y);
     const half w10 = frac.x * (half(1.0h) - frac.y);

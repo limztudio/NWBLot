@@ -225,7 +225,6 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
     opaqueProduced = false;
     transparentTraceProduced = false;
     opaqueFrameIndex = 0u;
-    // Only the prepared route exposes this boundary; other paths keep the monolithic Shadow Visibility callback.
     const b8 preparedSoftTransparentFoldCandidate =
         rayTracingPlan.softTransparentFoldReady
         && deferredTargets.shadowCoarseTransmittance.valid() && deferredTargets.shadowSoftHalfA.valid() && deferredTargets.shadowSoftHalfB.valid()
@@ -244,15 +243,11 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
     this.m_deferredShadowCombinedUpsample = routeSelection.combinedSoftUpsample;
     this.m_deferredShadowCombinedWavelet = routeSelection.combinedSoftWavelet;
     this.m_deferredShadowCombinedTemporal = routeSelection.combinedSoftTemporal;
-    // Adaptive fallback stays in the monolithic callback, but its primitives and diagnostic lifecycle are fixed by this route.
-    // A frame with no clear/copy work still owns its tick through the semantic task's accepted hook without gaining empty graph nodes.
     const b8 graphOwnedAdaptiveCandidate = !splitSoftTransparentFold && rayTracingPlan.adaptivePlan.enabled;
     GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan;
     if(graphOwnedAdaptiveCandidate)
         graphOwnedAdaptivePlan = rayTracingPlan.adaptivePlan;
-    // Merge pipeline may be ready before history has an accepted frame. Bootstrap publishes the pair, but only usable history samples prior geometry.
     const b8 softShadowHistoryReadable = rayTracingPlan.softShadowHistoryReadable;
-    // Opaque merge runs before the transparent tail and shares its selector. Freeze its pair while the packet owns the temporal route.
     const b8 graphOwnsOpaqueTemporalMergeEntryStates = routeSelection.graphOwnsOpaqueTemporalMergeEntryStates;
     const b8 opaqueHistoryFrontIsA = rayTracingPlan.historyFrontIsA;
 
@@ -274,7 +269,6 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
         traceGeometrySetUse = traceResourceSets.uses[0u];
 
     if(splitSoftTransparentFold){
-        // The prepared soft path keeps the opaque first wavelet, resolve tail, transparent trace, and temporal/RGB resolve as separate callbacks.
         const SoftShadowSplitRoute splitRoute = MakeSoftShadowSplitRoute(hardwareShadowSupported, hardwareCsgShadow, csgShadow, traceGeometryStatesGraphOwned, routeSelection);
         const SoftShadowSplitResourceInputs splitResourceInputs(
             deferredTargets, rayTracingResources, rayTracingPlan,
@@ -318,8 +312,6 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
     GpuTaskId shadowVisibilityDependency = prefixTask;
     b8 adaptivePrimitivePrecedesVisibility = false;
     if(graphOwnedAdaptivePlan.enabled){
-        // The append counter is private adaptive scratch.
-        // The compiler owns its CopyDest->UAV handoff before the Shadow Visibility callback, which still gates the adaptive producer.
         GpuTaskSchedulingHint primitiveScheduling;
         primitiveScheduling.cost = GpuTaskCostHint::Tiny;
         primitiveScheduling.forceSubmissionBoundary = false;
@@ -346,9 +338,6 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
         }
     }
 
-    // Preparedness is established while Shadow Prepare records, after this graph is declared.
-    // The monolithic path opens with an all-lit clear: real producers overwrite it, a missing one keeps white with no state bridge.
-    // Keep this Compute-native clear on the selected Compute packet with Shadow Visibility.
     GpuTaskSchedulingHint allLitClearScheduling;
     allLitClearScheduling.cost = GpuTaskCostHint::Tiny;
     allLitClearScheduling.forceSubmissionBoundary = false;
@@ -420,12 +409,10 @@ void ShadowVisibilityMergeValidator::validate(in GpuCompiledGraphReadView compil
     tasks.combinedWavelet = pipeline.m_shadowVisibilityGraph.m_deferredShadowCombinedWavelet;
     tasks.combinedTemporal = pipeline.m_shadowVisibilityGraph.m_deferredShadowCombinedTemporal;
     outResult.preparedTasksMerged = PreparedShadowVisibilityTasksSharePacket(compiledPlan, tasks);
-    // Keep the all-lit clear in its packet; split-soft frames keep native clear.
     const b8 hasOpaqueSplitTask = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityOpaqueTask.valid();
     const b8 hasAllLitClearTask = pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityAllLitClearTask.valid();
     const b8 clearSharesPacket = hasAllLitClearTask && compiledPlan.tasksSharePacket(pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask, pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityAllLitClearTask);
     outResult.allLitClearMerged = ResolveAllLitShadowClearMerged(hasOpaqueSplitTask, hasAllLitClearTask, clearSharesPacket);
-    // The append-counter clear must precede visibility in the same packet.
     outResult.adaptivePrimitivesMerged = !pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityAdaptiveCounterClearTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask, pipeline.m_shadowVisibilityGraph.m_deferredShadowVisibilityAdaptiveCounterClearTask);
 }
 
@@ -461,10 +448,8 @@ b8 ShadowVisibilityResourcePlanner::prepare(in ShadowVisibilityResourceInputs in
     result.resourceUses.reserve(ResolveShadowTraceGeometryReserveCount(s_ShadowVisibilityResourceUseCapacity, traceGeometryStatesGraphOwned, inputs.traceGeometryResources.size()));
     result.resourceUses.push_back(ReadUse(worldPosition));
     result.resourceUses.push_back(ReadUse(normal));
-    // Shadow visibility samples the bindless depth image, so its declared layout must match the native shader read.
     result.resourceUses.push_back(ReadUse(depth, ResourceStates::ShaderResource));
     result.resourceUses.push_back(ReadUse(currentBindlessSlots, ResourceStates::ConstantBuffer));
-    // The split opaque producer overwrites visibility; the software monolith also folds transparency in place.
     if(splitSoftTransparentFold)
         result.resourceUses.push_back(WriteUse(shadowVisibility, ResourceStates::UnorderedAccess));
     else
@@ -474,8 +459,6 @@ b8 ShadowVisibilityResourcePlanner::prepare(in ShadowVisibilityResourceInputs in
     b8 optionalResourcesImported =
         (splitSoftTransparentFold || AppendShadowTemporalTexture(this.m_graph, result.resourceUses, inputs.deferredTargets.shadowCoarseTransmittance, Name(s_ShadowPassCoarseTransmittance),
             s_ShadowCoarseTransmittanceLabel, ShadowTemporalResourceUseKind::UnorderedAccessWrite))
-        // The retained callback first overwrites these scratch targets, then resolves them locally within the same command list.
-        // Its graph entry must therefore preserve Unknown -> UAV first writes rather than fabricate a ReadWrite native source for a fresh target generation.
         && AppendShadowTemporalTexture(this.m_graph, result.resourceUses, inputs.deferredTargets.shadowSoftHalfA, Name(s_ShadowSoftHalfAName), s_ShadowSoftHalfALabel, ShadowTemporalResourceUseKind::UnorderedAccessWrite)
         && AppendShadowTemporalTexture(this.m_graph, result.resourceUses, inputs.deferredTargets.shadowSoftHalfB, Name(s_ShadowSoftHalfBName), s_ShadowSoftHalfBLabel, ShadowTemporalResourceUseKind::UnorderedAccessWrite)
         && AppendShadowTemporalTexture(this.m_graph, result.resourceUses, inputs.deferredTargets.shadowSoftGeometry, Name(s_ShadowSoftGeometryName), s_ShadowSoftGeometryLabel, ShadowTemporalResourceUseKind::UnorderedAccessWrite)

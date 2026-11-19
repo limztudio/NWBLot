@@ -101,7 +101,6 @@ b8 ReserveCsgStructuredBuffer(
 b8 ReplaceCsgStorageBufferHeapHandle(mut Device device, mut Buffer buffer, mut GpuDescriptorHandle inOutHandle){
     mut GpuDescriptorHeap heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !ReplaceHeapBuffer(GpuDescriptorClass::StorageBuffer, false, heap, buffer, inOutHandle)){
-        // The buffer was replaced; drop the stale handle for a later retry.
         RetireDescriptor(heap, inOutHandle);
         return false;
     }
@@ -240,7 +239,6 @@ b8 RendererCsgSystem::prepareCsgFrameResources(in usize receiverRangeCount, in u
     if(!this.m_csgState.m_clipBindingLayout.valid())
         return false;
 
-    // Draw paths consume these handles only via a graph snapshot.
     assert(this.m_csgState.m_receiverRangeBufferCapacity >= receiverRangeCount);
     assert(this.m_csgState.m_cutterBufferCapacity >= cutterCount);
     assert(this.m_csgState.m_receiverRangeBufferHeapHandle.valid());
@@ -279,7 +277,6 @@ Expected<CsgClipContextSlots> RendererCsgSystem::prepareCsgClipContextSlotData(
     if(!csgResources.frameReady(csgFrameData) || !frameBindings.bindingValid() || !targets.bindless.slotsBufferDescriptor.valid())
         return MakeUnexpected(Failure());
 
-    // Freeze indirections now; later records must not see another generation.
     return ResolveCsgClipContextSlots(
         csgResources.receiverRangeHeapHandle.slot(),
         csgResources.cutterHeapHandle.slot(),
@@ -302,7 +299,6 @@ Expected<CsgIntervalSampleStateGpuData> RendererCsgSystem::prepareCsgIntervalSam
     if(!csgResources.frameReady(csgFrameData) || !frameBindings.bindingValid())
         return MakeUnexpected(Failure());
 
-    // Freeze rect and slot before recording; later state must not leak in.
     return ResolveCsgIntervalSampleState(csgFrameData.workRegion, targets.width, targets.height, frameBindings.meshView.heapHandle.slot());
 }
 

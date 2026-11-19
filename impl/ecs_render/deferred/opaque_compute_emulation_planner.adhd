@@ -82,7 +82,6 @@ class OpaqueComputeEmulationPlanner : NoCopy{
         mut GbufferGraphTask gbufferPayload,
         mut Optional<GpuTimingMeasure> opaqueRegularSharedComputeEmulationTiming
     ){
-        // Generated-vertex buffers persist per mesh, so only the alias-free regular opaque case hoists compute ahead of raster.
         this.m_regularPayload.frameBindings = frameBindings;
         const b8 opaqueComputeEmulationPlanCaptured =
             CanCaptureOpaqueRegularComputeEmulationPlan(
@@ -108,9 +107,6 @@ class OpaqueComputeEmulationPlanner : NoCopy{
             warning("RendererSystem: could not declare graph-owned opaque compute-emulation output states");
         gbufferPayload.regularComputeEmulationOutputStatesGraphOwned = this.m_regularOutputOwned;
 
-        // A persistent generated-vertex buffer is normally a local dispatch/raster bridge.
-        // Handle the small alias classes explicitly: two through five regular opaque compute items sharing one frozen output and heap slot.
-        // Opaque CSG remains out of scope so no CSG producer/raster phase can observe this alternation.
         const b8 opaqueSharedComputeEmulationPlanCaptured =
             CanCaptureOpaqueSharedComputeEmulationPlan(
                 hasOpaqueCsgFrameWork,

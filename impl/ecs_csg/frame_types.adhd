@@ -23,7 +23,6 @@ enum<u8> CsgReceiverPass{
 [reflect]
 class CsgReceiverDrawState{
     public u32 firstCutter = 0u;
-    // cutterCount lets render CSG iterate the lookup range directly, skipping receiver/group resolve.
     public u32 cutterCount = 0u;
     public CsgReceiverKind receiverKind = CsgReceiverKind::Static;
     public b8 active = false;

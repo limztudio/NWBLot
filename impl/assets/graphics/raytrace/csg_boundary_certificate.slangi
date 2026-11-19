@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A current-ray certificate contains resolved identities and failures, never borrowed crossing storage.
 struct NwbRayTraceCsgBoundaryCheck{
     bool hit;
     uint failure;

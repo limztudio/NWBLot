@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Reject wrong receiver association, partial leaks, and vacuous optical controls."""
 
 from pathlib import Path
 import sys

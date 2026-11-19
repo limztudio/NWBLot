@@ -108,7 +108,6 @@ nwb_require_import_output("${generated_uv_text}" "generated UV tangent")
 nwb_require_import_output("${partial_tangent_text}" "partial tangent")
 nwb_require_import_output("${fallback_text}" "fallback tangent")
 
-# Default unit conversion (centimeters to meters) shrinks 1-unit FBX triangles near 1e-8 area^2.
 foreach(default_space_mode IN ITEMS imported smooth regenerate)
     set(default_space_output "${OUTPUT_DIR}/wedge_default_${default_space_mode}.nwb")
     execute_process(COMMAND "${FBX_TO_NWB_EXE}" "${INPUT_FBX}" --output "${default_space_output}" --asset-type mesh --normal-mode "${default_space_mode}" --yes --force RESULT_VARIABLE default_result OUTPUT_VARIABLE default_stdout ERROR_VARIABLE default_stderr)

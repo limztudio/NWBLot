@@ -19,7 +19,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared bounded session/event lifecycle for native backends and deterministic platform fakes.
 class QueuedTextInputService : public ITextInputService{
 public:
     explicit QueuedTextInputService(Alloc::GlobalArena& arena);

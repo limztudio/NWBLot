@@ -1,4 +1,3 @@
-"""Native automatically sized list input, including positioned vertical wheel events."""
 from __future__ import annotations
 
 import ctypes
@@ -26,7 +25,6 @@ class ListNativeInput(EditNativeInput):
         super().key(name, down, repeat=repeat, shift=shift, control=control)
 
     def wheel(self, steps, x, y):
-        """Positive steps scroll upward; positions are physical client coordinates."""
         if not math.isfinite(steps) or steps != int(steps) or abs(steps) > 200:
             raise ValueError("native list wheel steps must be an integer between -200 and 200")
         self.pointer(x, y)

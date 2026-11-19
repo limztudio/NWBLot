@@ -1059,7 +1059,6 @@ void VerifyGpuTelemetry_RanksEqualDurationsAfterShorterCandidateAppears(){
             100u
         );
         ASSERT_TRUE(selectedOpt.has_value());
-        // Queue one wins the slow tie while queue two wins the fast tie by lower load.
         EXPECT_EQ(selectedOpt.value().id, queues[4u].id);
         EXPECT_EQ(reorderedQueues.size(), 5u);
     }
@@ -1189,7 +1188,6 @@ void VerifyGpuTelemetry_PreservesOrderedAverageAndExtremaAcrossRollingWindows(){
         f64 expectedMinimum = samples[begin];
         f64 expectedMaximum = samples[begin];
         u32 expectedCount = 0u;
-        // Independent scalar oracle fixes the original reduction order and exact rounding.
         for(usize sampleIndex = begin; sampleIndex <= index; ++sampleIndex){
             ++expectedCount;
             expectedAverage += (samples[sampleIndex] - expectedAverage) / cast<f64>(expectedCount);

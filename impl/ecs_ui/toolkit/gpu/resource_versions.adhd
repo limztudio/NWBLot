@@ -166,7 +166,6 @@ Expected<GpuVersion<GpuTargetVersion>> CreateGpuTarget(in SharedPool versions, m
     const GpuPhysicalQueueId queue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
     if(!queue.valid())
         return MakeUnexpected(Failure());
-    // Transition the fresh image before publishing its sampled view.
     const Expected<QueueSubmissionToken> submitted = graphics.standaloneGraph().submitStandaloneTaskGraph(
         lambda[in target](mut GpuTaskGraph graph) -> Expected<GpuTaskId>{ return DeclareGpuTargetInitialization(target, graph); }, queue);
     if(!submitted.has_value())

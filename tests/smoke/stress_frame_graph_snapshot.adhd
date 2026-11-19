@@ -320,7 +320,6 @@ b8 ValidateStressFrameGraphSnapshot(in FrameGraphPayload payload, in u64 sourceF
     return true;
 }
 
-// Captures the pixel-freeze frame snapshot through public telemetry.
 b8 CaptureStressFrameGraphSnapshot(in StringView outputPath, in u64 completedFrames, mut ProjectRuntimeContext context){
     mut GraphicsRuntime graphics = context.graphics;
     const u64 graphicsFrame = graphics.getFrameIndex();
@@ -328,7 +327,6 @@ b8 CaptureStressFrameGraphSnapshot(in StringView outputPath, in u64 completedFra
         error("StressFrameGraphSnapshot: no completed frame or output path");
         return false;
     }
-    // Capture the completed frame before runFrame advances the frame index.
     const u64 sourceFrame = graphicsFrame - 1u;
     Vector<u8> encodedBytes;
     String snapshotJson = String();

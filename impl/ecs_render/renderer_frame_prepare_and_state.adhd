@@ -149,7 +149,6 @@ b8 RendererFramePipeline::validateResources(in u32 width, in u32 height, in u32 
     const u32 surfelResolveFactor = cast<u32>(this.m_surfelGiQualitySettings.resolveResolution);
     const u32 shadowReceiverFactor = this.m_raytracingSystem.requestedShadowReceiverFactor();
     if(DoesFrameTargetScaleFactorRequireRecreation(this.m_frameTargets.surfelResolveFactor, surfelResolveFactor, this.m_frameTargets.shadowReceiverFactor, shadowReceiverFactor)){
-        // Shared producers must drain and recreate before their retained queue handoffs are cleared.
         if(!this.m_graphics.waitForIdle())
             return false;
         this.invalidateResources();
@@ -164,7 +163,6 @@ b8 RendererFramePipeline::validateResources(in u32 width, in u32 height, in u32 
         this.m_frameTargets.surfelResolveFactor, this.m_frameTargets.shadowReceiverFactor, width, height, surfelResolveFactor, shadowReceiverFactor
     );
     if(!targetsReady){
-        // New targets invalidate stale compute scratch and visibility returns.
         this.resetTargetGenerationStateHandoffs();
         this.resetLaggedLightingHistoryTracking();
         this.resetFrameTargets();
@@ -182,7 +180,6 @@ b8 RendererFramePipeline::validateResources(in u32 width, in u32 height, in u32 
     if(!targetsReady || !this.m_frameTargets.valid())
         return false;
 
-    // Pipeline compatibility setup uses the stable framebuffer-zero prototype, not a currently acquired image.
     const FramebufferPtr presentationFramebuffer = this.m_graphics.getFramebuffer(0u);
     if(IsValidFramebufferPtr(presentationFramebuffer)){
         if(!this.m_deferredSystem.createDeferredPresentPipeline(DerefFramebufferPtr(presentationFramebuffer)))
@@ -236,7 +233,6 @@ void RendererFramePipeline::invalidateResources(){
     this.m_reflectionSystem.invalidateResources();
     this.m_raytracingSystem.invalidateResources();
     this.resetFrameTargets();
-    // AVBOIT pipelines also consume Material's shared push layout, so release those pipelines before Material clears the layout owner.
     this.m_avboitSystem.invalidateResources();
     this.m_shaderSystem.invalidateResources();
     this.m_meshSystem.invalidateResources();
@@ -302,7 +298,6 @@ b8 RendererFramePipeline::prepareResources(in FramebufferPtr framebuffer){
     if(hasCsgFrameWork && !deferredTargets.csgIntervalTargetsValid())
         return false;
 
-    // CSG receiver ranges are indexed by material-pass instance; an active pass reserves one range per renderer.
     usize csgReceiverRangeCount = 0u;
     if(hasCsgFrameWork)
         csgReceiverRangeCount = this.m_world.view<RendererComponent>().candidateCount();
@@ -313,19 +308,15 @@ b8 RendererFramePipeline::prepareResources(in FramebufferPtr framebuffer){
     if(this.m_preparedHasTransparentRenderers && !this.m_avboitSystem.prepareAvboitPassResources(this.m_preparedCsgFrameState, deferredTargets))
         return false;
 
-    // Material owns growth. Once every domain pass prepares, publish one Mesh generation; retain the prior one on refresh.
     const MaterialPassBufferSnapshot materialBuffers = this.m_materialSystem.materialPassBufferSnapshot();
     if(materialBuffers.valid() && !this.m_meshSystem.prepareMeshFrameBindings(materialBuffers))
         return false;
     if(hasCsgFrameWork && !materialBuffers.valid())
         return false;
 
-    // Create CSG resources once here; draw paths only consume prepared layouts and handles.
     if(hasCsgFrameWork && !this.m_csgSystem.prepareCsgFrameResources(csgReceiverRangeCount, cast<usize>(this.m_preparedCsgFrameState.cutterCount)))
         return false;
 
-    // Resource selection and capacity growth happen before shared-graph compilation.
-    // The first deferred packet records the corresponding GPU work later, after every selected handle has been imported declaratively.
     this.m_raytracingSystem.discardSurfelResourceInitialization();
     if(!this.m_raytracingSystem.preflightShadowVisibilityResources(deferredTargets)){
         this.m_shadowPrepareGraph.m_shadowPreparationOutcome.resourcesValid = false;
@@ -334,11 +325,9 @@ b8 RendererFramePipeline::prepareResources(in FramebufferPtr framebuffer){
         return false;
     }
     this.m_shadowPrepareGraph.m_shadowPreparationOutcome.resourcesValid = true;
-    // The ray scene prepares geometry on its own. Reflection borrows neutral context only after that preflight picks a generation.
     this.m_preparedReflectionSceneAvailable = IsReflectionHardwareTraceRequested(this.m_reflectionSettings.traceMode) && this.m_raytracingSystem.prepareSceneQueryResources();
     ++this.m_reflectionFrameIndex;
 
-    // Refraction loads shaders and creates pipelines in preparation; the graph build only consumes the snapshot.
     const b8 opticalCaptureRequested = this.m_preparedHasTransparentRenderers && (this.m_refractionEnabled || this.m_reflectionSettings.traceMode != ReflectionTraceMode::Disabled);
     this.m_preparedRefractionActive = opticalCaptureRequested && this.m_raytracingSystem.refraction().prepareRefractionResources();
     const b8 hasTransparentCsgFrameWork = HasTransparentCsgFrameWork(this.m_preparedCsgFrameState.hasTransparentStaticWork, this.m_preparedCsgFrameState.hasTransparentSkinnedWork);
@@ -402,7 +391,6 @@ b8 RendererFramePipeline::setReflectionSettings(in ReflectionSettings settings){
 void RendererFramePipeline::setFrameLaggedAsyncLightingEnabled(in b8 enabled){
     if(this.m_frameLaggedAsyncLightingEnabled == enabled)
         return;
-    // Proof that disabling the mode returned to the current-frame path: set when turning off, cleared by the next accepted normal frame.
     this.m_laggedLightingCurrentFrameAcceptancePending = this.m_frameLaggedAsyncLightingEnabled && !enabled;
     if(this.m_frameLaggedAsyncLightingEnabled && !enabled && this.m_laggedLightingHistorySubmissionToken.valid()){
         this.m_laggedLightingHistoryWriterDrainToken = this.m_laggedLightingHistorySubmissionToken;
@@ -452,7 +440,6 @@ void RendererFramePipeline::commitFrameTargets(mut DeferredFrameTargets targets)
 
 [cpp_unwind]
 void RendererFramePipeline::resetFrameTargets(){
-    // AVBOIT owns descriptor registrations embedded in the aggregate, so retire them before Deferred clears it.
     this.m_avboitSystem.resetAvboitFrameTargets(this.m_frameTargets.avboit);
     this.m_deferredSystem.resetDeferredFrameTargets(this.m_frameTargets);
 }
@@ -541,7 +528,6 @@ void RendererFramePipeline::resetSharedDeferredFrameTaskState(){
 }
 
 void RendererFramePipeline::resetTargetGenerationStateHandoffs(){
-    // Replaced targets invalidate retained compute-local state.
     this.m_raytracingSystem.invalidateLightSpaceShadowCapture();
     this.m_shadowComputePersistentState.reset();
     this.m_shadowVisibilityReturnState.reset();
@@ -554,7 +540,6 @@ void RendererFramePipeline::resetTargetGenerationStateHandoffs(){
 }
 
 void RendererFramePipeline::resetInvalidatedResourceStateHandoffs(){
-    // Only retained cross-frame state resets here.
     this.resetTargetGenerationStateHandoffs();
     this.m_shadowPreparePersistentState.reset();
 }

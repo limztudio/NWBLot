@@ -411,7 +411,6 @@ WidgetOptions MakeStretchWidthSmokeWidget(in f32 height){
     return options;
 }
 
-// Admit only marker grids whose integer coordinates are exact in FP32.
 Array<f32, Count> BuildSmokeMarkerPositions<const usize Count>(in u32 origin, in u32 step){
     const u32 exactIntegerLimit = 16777216u;
     [essential] assert(Count > 0u && step > 0u, "Smoke marker grid requires positive count and step");
@@ -445,7 +444,6 @@ Array<f32, Count> BuildSmokeMarkerPositions<const usize Count>(in u32 origin, in
     return positions;
 }
 
-// Reconstruct a single-line fixture's selection from the canonical geometry for its framebuffer probe.
 Rect CaptureEditSelection(mut EditBoxView view, mut TextService text, in EditModel model, in EditBoxPlacement placement, in f32 fontSize){
     [essential] assert(model.textMode() == EditTextMode::SingleLine, "Single-line edit selection capture expected");
     const b8 captured = view.snapshot(model);
@@ -468,7 +466,6 @@ Rect CaptureEditSelection(mut EditBoxView view, mut TextService text, in EditMod
     return selection;
 }
 
-// Compute expected row height from the accepted content extent.
 Expected<Rect> SmokeListRowBounds(in ScrollPlacement placement, in u64 index){
     if(placement.rowCount == 0u)
         return MakeUnexpected(Failure());
@@ -757,7 +754,6 @@ void PaintPassiveSmokeValueMarkers(in Span<u64> values, in u64 sequence, mut UiP
     PaintKeyedSmokeValueMarkers(values, sequence, 12u, 8u, 8u, 18u, context);
 }
 
-// Progress, slider, and image snapshots paint one 12-bit marker swatch per value part plus sequence swatches along the bottom edge.
 void PaintSmokeValueMarkers(in Span<u64> values, in Span<u64> bits, in u64 sequence, mut UiPaintContext context){
     const f32 y = context.display.logicalHeight - 18.0f;
     u32 marker = 0u;

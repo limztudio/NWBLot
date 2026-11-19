@@ -21,7 +21,6 @@ struct NwbRefractionHardwareBackgroundTrace{
             nwbSceneResolveLight(g_NwbSceneLights[lightIndex], position, lightVector, lightRadiance);
             radiance += lightRadiance * half(max(dot(normal, lightVector), 0.0h));
         }
-        // Offscreen hits have no camera lighting cache and use the bounded diffuse surface approximation shared with GI.
         return radiance * surface.baseColor;
     }
 
@@ -37,7 +36,6 @@ struct NwbRefractionHardwareBackgroundTrace{
         const float3 opaqueWorld = nwbHeapSampledImage2D(g_NwbRefractionResources.gbufferSlots.z).Load(int3(pixel, 0)).xyz;
         const float3 cameraDelta = position - g_NwbRefractionView.cameraPosition.xyz;
         const float3 opaqueDelta = opaqueWorld - position;
-        // Needs depth plus world distance. Depth alone goes lax far away and returns a foreground hit for hidden RT.
         const float maxDistanceSquared = max(NWB_REFRACTION_CACHED_HIT_DISTANCE_MIN * NWB_REFRACTION_CACHED_HIT_DISTANCE_MIN, dot(cameraDelta, cameraDelta) * (NWB_REFRACTION_CACHED_HIT_DISTANCE_SCALE * NWB_REFRACTION_CACHED_HIT_DISTANCE_SCALE));
         if(dot(opaqueDelta, opaqueDelta) > maxDistanceSquared)
             return false;
@@ -48,11 +46,7 @@ struct NwbRefractionHardwareBackgroundTrace{
     static bool trace(const NwbRefractionEntry entry, const uint instanceMaterialHeapSlot, const float3 exitPosition, const float3 outgoingDirection, const half3 attenuation, inout half4 outRadiance){
         float3 origin = exitPosition + outgoingDirection * entry.bias;
         half3 accumulated = half3(0.0h);
-        // Layer transmittance and backdrop coverage are (0, 1) bounded factors, so half arithmetic is sufficient here.
         half transmittance = half(1.0h);
-        // Normally one background query.
-        // Up to three flat transparent hits may be evaluated before the bounded approximation.
-        // Further glass or an incomplete continuation uses the exit-based approximation below without tracing a new volume.
         for(uint layer = 0u; layer < NWB_REFRACTION_MAX_BACKGROUND_LAYERS; ++layer){
             nwbRefractionCount(NWB_REFRACTION_COUNTER_backgroundQueries);
 #if NWB_RT_CSG_ENABLED

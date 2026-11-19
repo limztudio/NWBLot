@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Reject optical CSG leak evidence and unrelated-frame comparisons."""
 
 from pathlib import Path
 import sys

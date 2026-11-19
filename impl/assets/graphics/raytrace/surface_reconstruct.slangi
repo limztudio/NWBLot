@@ -27,9 +27,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The caller supplies mesh-frame material accessors for its frozen ray material context.
-// The material slot must select the same context; effects, lighting, and path decisions stay out of this hit helper.
-// Closest geometric identity is independent of material reconstruction and caller admission policy.
 struct NwbRayTraceGeometryHit{
     bool hit;
     bool frontFace;

@@ -44,7 +44,6 @@ def verify_pipeline(executable: pathlib.Path, root: pathlib.Path) -> None:
 
 def verify_utility(executable: pathlib.Path, root: pathlib.Path) -> None:
     result = run(executable, [LIT_NWB_UNKNOWN_OPTION], root)
-    # Preserve CLI11 ExtrasError exit code 109.
     assert result.returncode == 109, (executable, result)
     assert LIT_NWB_UNKNOWN_OPTION in result.stderr, result
     assert "Press Enter to exit" not in result.stdout, result
@@ -77,4 +76,3 @@ def main() -> None:
 
 if __name__ == LIT_MAIN:
     main()
-

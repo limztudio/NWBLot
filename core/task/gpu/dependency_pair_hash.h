@@ -24,7 +24,6 @@ NWB_CORE_BEGIN
     return PackU32Words(consumerIndex, producerIndex);
 }
 
-// Packed producer/consumer indices need full-byte mixing before power-of-two hash-table bucket selection.
 struct GpuTaskDependencyPairHasher{
     [[nodiscard]] usize operator()(const u64 pairKey)const noexcept{
         return static_cast<usize>(ComputeFnv64Bytes(&pairKey, sizeof(pairKey)));

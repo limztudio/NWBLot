@@ -45,7 +45,6 @@ NwbCsgRayCollection nwbCsgRayCollectCrossings<T : NwbCsgRayOpenVisitor>(
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex];
     RayDesc ray;
 #if NWB_CSG_RAY_RETAINED_POSE
-    // Keep the direction unnormalized so the retained ray's parameter survives mapping through the current TLAS pose.
     if(!nwbCsgRayPrepareHardwareRay(contextSlot, instanceIndex, worldOrigin, worldDirection, ray.Origin, ray.Direction)){
         result.failure = NWB_CSG_RAY_FAILURE_TOPOLOGY;
         return result;
@@ -73,7 +72,6 @@ NwbCsgRayCollection nwbCsgRayCollectCrossings<T : NwbCsgRayOpenVisitor>(
             }
             continue;
         }
-        // Physical inverse-transpose normals preserve oriented volume membership under reflected instance transforms.
         const float3 normal = nwbRayTraceTriangleGeometricNormal(material, primitive, worldToObject);
         const float facing = dot(normal, worldDirection);
         if(!isfinite(facing) || facing == 0.0){

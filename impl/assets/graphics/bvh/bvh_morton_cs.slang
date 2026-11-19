@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One thread per triangle: emit the (code, original-triangle-index) sort pair. Padding slots keep the host-cleared sentinel, so they sort to the end.
 [numthreads(NWB_BVH_BUILD_GROUP_SIZE, 1, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint triangle = dispatchThreadID.x;

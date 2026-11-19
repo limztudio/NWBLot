@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Build and run the font_builder utility through the repository launcher."""
 
 from __future__ import annotations
 
@@ -24,4 +23,3 @@ def main(argv: Sequence[str]) -> int:
 
 if __name__ == MAIN_ENTRY:
     raise SystemExit(main(sys.argv[1:]))
-

@@ -51,15 +51,12 @@ class RayTracingOpticalRuntimeBounds{
     }
 }
 
-// Built in the existing RT gather, after duplicate suppression and with the exact emitted instance ordering.
-// Invalid or omitted geometry clears the air-shortcut proof, including when no known transparent instance remains.
 class RayTracingOpticalSceneGather{
     public RayTracingOpticalSceneHeaderGpu header;
     public Vector<RayTracingOpticalInstanceGpu> instances;
     public Vector<RayTracingOpticalRuntimeBounds> runtimeBounds;
     public b8 hasBounds = false;
     public b8 boundsCompleteExceptRuntime = true;
-    // Policy-only specialization; incomplete geometry and bounds still reject transport in the shader.
     public b8 unspecifiedBoundariesOnly = true;
 
     public RayTracingOpticalSceneGather(){}
@@ -88,7 +85,6 @@ class RayTracingOpticalSceneGather{
         const b8 staticComplete = this.boundsCompleteExceptRuntime;
         const u32 instanceIndex = cast<u32>(this.instances.size());
         this.append(entity, renderer, true, VectorSingle(), VectorSingle(), false);
-        // The CPU upload stays deliberately incomplete. Only the GPU finalizer can validate this contributor.
         if(!ValidOpticalRuntimeBoundsHandle(boundsBuffer.valid(), boundsDescriptor.valid(), boundsDescriptor.descriptorClass() == GpuDescriptorClass::StorageBuffer))
             return;
         this.boundsCompleteExceptRuntime = staticComplete;

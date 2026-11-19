@@ -144,7 +144,6 @@ class ShadowPrepareGeometryResources : NoCopy{
             if(index != usize.max)
                 this.at(index).listedForTrace = true;
         }
-        // Requests were inserted in BLAS build order, with duplicate buffers removed.
         for(in PreparedMeshBlasBuild build : this.m_inputs.blasBuilds){
             if(!build.positionBuffer.valid() || !build.triangleIndexBuffer.valid())
                 return false;
@@ -223,9 +222,7 @@ b8 ShadowPrepareResourcePlanner::prepare(in ShadowPrepareResourceInputs inputs, 
     ));
     result.accelStructFinalizeResourceUses.reserve(ResolveExpectedAccelStructFinalizeResourceUseCount(sceneTlasBuildGraphOwned, inputs.preparedMeshBlasBuilds.size()));
     geometryResources.prepareStorage(meshBlasGeometryBuildInputStatesGraphOwned);
-    // Shadow Preparation owns post-transition boundaries; Compute readers wait on this packet.
     result.resourceUses.push_back(ReadWriteUse(currentBindlessSlots, ResourceStates::ConstantBuffer));
-    // Retain Shadow Preparation as producer; WAW handoff retires the immutable upload.
     result.resourceUses.push_back(WriteUse(materialContextSlots, ResourceStates::ConstantBuffer));
     if(inputs.uploads.csgTraceContext.valid())
         result.resourceUses.push_back(WriteUse(inputs.uploads.csgTraceContext, ResourceStates::ShaderResource));
@@ -256,14 +253,12 @@ b8 ShadowPrepareResourcePlanner::prepare(in ShadowPrepareResourceInputs inputs, 
                 resourcesImported = false;
                 continue;
             }
-            // First build knows native Common; retained storage imports the accepted binding.
             const ResourceStates blasInitialState = ShadowPrepareBlasInitialState(build.backingFresh);
             GpuGraphResourceDesc blasDesc = AccelStructResourceDesc(blasIdentity.value(), "Prepared Mesh BLAS");
             blasDesc.setInitialState(blasInitialState);
             const auto blas = this.m_graph.importAccelStruct(build.blas, blasDesc);
             resourcesImported = resourcesImported && blas.has_value();
             if(blas.has_value()){
-                // Typed acceleration-structure uses lower through their backing allocation.
                 result.resourceUses.push_back(ReadWriteUse(blas.value(), ResourceStates::AccelStructWrite));
                 result.accelStructFinalizeResourceUses.push_back(ReadUse(blas.value(), ResourceStates::AccelStructRead));
             }
@@ -293,8 +288,6 @@ b8 ShadowPrepareResourcePlanner::prepare(in ShadowPrepareResourceInputs inputs, 
     if(!geometryResources.gatherRemainingTraceResources())
         return false;
 
-
-    // Frozen trace list may carry build inputs; keep them separate from the SRV subset.
     GpuGraphResourceSetId shadowPrepareTraceGeometrySet;
     if(!geometryResources.m_remainingTraceGeometry.empty()){
         GpuGraphResourceSetDesc setDesc;
@@ -333,7 +326,6 @@ b8 ShadowPrepareResourcePlanner::prepare(in ShadowPrepareResourceInputs inputs, 
     const b8 softwareBvhBuildStateStatesGraphOwned = softwareBvhBuildStateSet.valid();
     if(!softwareBvhBuildStateStatesGraphOwned){
         for(in GpuGraphResourceId resource : inputs.softwareBvhBuildStateResources){
-            // Parent links and scratch keep native UAV state; they are state-only resources.
             result.resourceUses.push_back(ReadWriteUse(resource, ResourceStates::UnorderedAccess));
         }
     }
@@ -345,7 +337,6 @@ b8 ShadowPrepareResourcePlanner::prepare(in ShadowPrepareResourceInputs inputs, 
         result.resourceSetUses[result.resourceSetUseCount++] = softwareBvhBuildStateSetUse;
 
     if(inputs.rayTracingShadowResources.sceneTlas.valid()){
-        // Imports observe the backing generation; retained storage stays Unknown until accepted.
         const ResourceStates sceneTlasInitialState = this.m_raytracingSystem.sceneTlasBackingInitialState();
         GpuGraphResourceDesc tlasDesc = AccelStructResourceDesc(Name(s_SceneTlasResourceName), s_SceneTlasResourceLabel);
         tlasDesc.setInitialState(sceneTlasInitialState);
@@ -355,18 +346,15 @@ b8 ShadowPrepareResourcePlanner::prepare(in ShadowPrepareResourceInputs inputs, 
         resourcesImported = resourcesImported && sceneTlasResult.has_value();
         if(result.sceneTlas.valid()){
             if(sceneTlasBuildGraphOwned){
-                // Frozen recorder only builds; graph lowers Write entry, successor lowers Read handoff.
                 result.resourceUses.push_back(ReadWriteUse(result.sceneTlas, ResourceStates::AccelStructWrite));
                 result.accelStructFinalizeResourceUses.push_back(ReadUse(result.sceneTlas, ResourceStates::AccelStructRead));
             }
             else{
-                // Cached scene TLAS remains read-ready; retain its accepted-state handoff.
                 result.resourceUses.push_back(ReadWriteUse(result.sceneTlas, ResourceStates::AccelStructRead));
             }
         }
     }
     for(in MeshBlasGraphState state : liveMeshBlasGraphStates){
-        // Frozen plans own retained handles; never collide replacements with frozen identities.
         if(geometryResources.isPreparedMeshBlasBuild(state.meshName))
             continue;
 
@@ -382,11 +370,9 @@ b8 ShadowPrepareResourcePlanner::prepare(in ShadowPrepareResourceInputs inputs, 
         resourcesImported = resourcesImported && blas.has_value();
         if(blas.has_value()){
             if(state.nativeBuildsBlas){
-                // Retained backing keeps its accepted read state until the selected build is published.
                 result.resourceUses.push_back(ReadWriteUse(blas.value(), ResourceStates::AccelStructRead));
             }
             else{
-                // State-only import; rejected preparation re-pends and seeds accepted state.
                 result.resourceUses.push_back(ReadUse(blas.value(), ResourceStates::AccelStructRead));
             }
         }

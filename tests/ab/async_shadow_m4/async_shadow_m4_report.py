@@ -143,7 +143,6 @@ class AsyncShadowM4Report:
                 f"(more than {MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS} required)",), self.gate("graph-owned shadow timing", shadow_scope_passed, f"median {self.format_ms(shadow.median_ms)} (min {args.minimum_shadow_ms:.4f} ms), " f"positive {shadow.positive_sample_count}/{shadow.sample_count}",), self.gate("critical path", timing_passed,
                 f"sync {self.format_ms(sync_frame.median_ms)}, async {self.format_ms(async_frame.median_ms)}, " f"delta {regression_percent:+.3f}% (limit +{args.maximum_frame_regression_percent:.3f}%)",), self.gate("pixel parity", pixel_passed, pixel_detail), self.gate(
                 "runtime and validation logs", logs_passed, "no forbidden log messages" if logs_passed else f"sync={sync.forbidden_log_messages}, async={async_run.forbidden_log_messages}",),]
-        # Functional failures still fail when positive timing intervals are too few.
         if lane_passed and pixel_passed and logs_passed and not intervals_passed:
             verdict = LIT_INCONCLUSIVE
         else:

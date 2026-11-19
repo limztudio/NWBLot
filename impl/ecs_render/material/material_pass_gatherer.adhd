@@ -257,7 +257,6 @@ class MaterialDrawGather{
         const auto primary = this.pipeline(material, key);
         if(!primary.has_value() || !this.prepareGeometry(mesh, primary.value()))
             return false;
-        // Creating the sibling pipeline can relocate the primary cache entry.
         const RenderPath path = primary.value().renderPath;
         const MaterialPassPipelineResourceSnapshot primarySnapshot = CaptureMaterialPassPipelineResourceSnapshot(primary.value());
         const b8 surfaceActive = IsCsgReceiverSurfacePassActive(clipActive, this.pass);
@@ -431,7 +430,6 @@ extern const u32 s_EmulationVertexWorldPositionLocation;
 
 [cpp_unwind]
 Expected<BindingLayoutHandle> RendererMaterialSystem::prepareMaterialPassBindingLayout(){
-    // Every material pass uses this push-only layout; transparent consumes the full payload.
     if(!EnsurePushConstantBindingLayout(this.m_graphics.getDevice(), sizeof(TransparentDrawPushConstants), ShaderTypeMask::All, this.m_materialState.m_materialPassBindingLayout)){
         error("RendererSystem: failed to create the shared material-pass push-constant layout");
         return MakeUnexpected(Failure());
@@ -441,7 +439,6 @@ Expected<BindingLayoutHandle> RendererMaterialSystem::prepareMaterialPassBinding
 
 [cpp_unwind]
 b8 RendererMaterialSystem::prepareMeshComputeBindingLayout(){
-    // The unified UAV keeps its existing heap selector; only the compute tail adds the generated-index byte offset.
     if(!EnsurePushConstantBindingLayout(this.m_graphics.getDevice(), sizeof(MeshComputePushConstants), ShaderTypeMask::Compute, this.m_materialState.m_computeBindingLayout)){
         error("RendererSystem: failed to create compute-emulation binding layout");
         return false;

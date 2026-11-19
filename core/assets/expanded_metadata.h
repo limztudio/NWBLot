@@ -25,7 +25,6 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Each record owns its resolved value; the value's arena must outlive the record.
 struct ExpandedAssetMetadata{
     Name assetType = s_NameNone;
     Name virtualPath = s_NameNone;

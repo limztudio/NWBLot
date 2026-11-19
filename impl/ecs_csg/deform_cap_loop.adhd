@@ -51,7 +51,6 @@ b8 OrderCsgDeformBoundaryLoopInto(in Span<CsgDeformCutLoopEdge> edges, mut Vecto
     outLoop.clear();
     if(edges.empty())
         return true;
-    // Boundary edges keep source-triangle winding, so consecutive edges meet head-to-tail or tail-to-tail. Walk them undirected for one closed ring.
     Vector<CsgDeformCutLoopEdge> remaining;
     remaining.reserve(edges.size());
     for(in CsgDeformCutLoopEdge edge : edges)
@@ -102,7 +101,6 @@ Expected<u32> FillCsgDeformCutCaps(
     CollectCsgDeformBoundaryEdges(inOutTriangles, scratchEdges);
     if(scratchEdges.empty())
         return capTriangles;
-    // Peel one closed loop at a time from the boundary set; open chains stay cap-free while a closed but degenerate loop fails viability.
     Vector<CsgDeformCutLoopEdge> remaining;
     remaining.reserve(scratchEdges.size());
     for(usize i = 0u; i < scratchEdges.size(); ++i)
@@ -139,7 +137,6 @@ Expected<u32> FillCsgDeformCutCaps(
                     ++edgeIndex;
             }
         }
-        // Open chains carry no closable loop; they stay viable cap-free. Only a closed degenerate loop fails.
         if(!OrderCsgDeformBoundaryLoopInto(loopEdges, loop))
             continue;
         const Expected<CsgDeformVertex> center = TryResolveCsgDeformCapLoopCenter(inOutVertices, loop, inOutTriangles.size());

@@ -7,8 +7,6 @@ unset(_nwb_logserver_core_adhd)
 if(WIN32)
     target_link_libraries(nwb_logserver_core PRIVATE dbghelp)
 endif()
-# Radeon GPU Detective in-process .rgd decoder.
-# The logger-owned adapter consumes the vendored amdrdf/system_info/isa_decoder/comgr_utils/pix stack.
 target_link_libraries(nwb_logserver_core
     PUBLIC
         nwb::microhttpd

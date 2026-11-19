@@ -31,7 +31,6 @@ u32 CpuTaskScheduler::workerWakeMaskLocked()const noexcept{
 }
 
 void CpuTaskScheduler::notifyWorkers(const u32 wakeMask)noexcept{
-    // Masks compute under the queue mutex; claimed tasks wake the next parked worker first.
     for(u32 affinity = 0u; affinity < s_AffinitySlotCount; ++affinity){
         if((wakeMask & (1u << affinity)) != 0u)
             m_workerChanged[affinity].notify_one();
@@ -39,7 +38,6 @@ void CpuTaskScheduler::notifyWorkers(const u32 wakeMask)noexcept{
 }
 
 void CpuTaskScheduler::notifyProgress(const u32 wakeMask, const b8 wakeJoiners)noexcept{
-    // Wait registration and this snapshot share m_mutex; later waiters observe the published progress in their predicates.
     if(wakeJoiners)
         m_changed.notify_all();
     notifyWorkers(wakeMask);

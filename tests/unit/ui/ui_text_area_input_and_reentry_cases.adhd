@@ -611,7 +611,6 @@ void VerifyUiTextAreaInputScrollTests_UnfocusedThumbPressPreservesGrabOffsetAndT
     ASSERT_TRUE(foundAfterPress.has_value());
     const HitTarget afterPress = foundAfterPress.value();
     EXPECT_EQ(afterPress.control, thumb.control);
-    // Lanes are the quarter and half drag steps.
     const VectorSingle dragY = travel * VectorSingle(0.25f, 0.5f, 0.0f, 0.0f) + VectorSingle(originValue.y, originValue.y, originValue.y, originValue.y);
     const VectorDouble expectedScroll = VectorDouble(thumb.gestureMaximum, thumb.gestureMaximum, thumb.gestureMaximum, thumb.gestureMaximum) * VectorDouble(0.25, 0.5, 0.0, 0.0) + VectorDouble(50.0, 50.0, 50.0, 50.0);
     const Point quarter = Point(origin.x, dragY.x);

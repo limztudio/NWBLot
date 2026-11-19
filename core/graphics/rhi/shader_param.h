@@ -66,13 +66,13 @@ static_assert((offsetof(IndirectInstanceDesc, transform) % alignof(Float4)) == s
 #endif
 
 struct IndirectArgs{
-    u32               clusterCount; // Number of cluster references.
+    u32               clusterCount;
 #if defined(__cplusplus)
-    u32               clusterReferencesStride = sizeof(GpuVirtualAddress); // Byte stride between references; must be at least 8.
+    u32               clusterReferencesStride = sizeof(GpuVirtualAddress);
 #else
-    u32               clusterReferencesStride; // Byte stride between references; must be at least 8.
+    u32               clusterReferencesStride;
 #endif
-    GpuVirtualAddress clusterAddresses; // GPU address of the first constructed CLAS reference.
+    GpuVirtualAddress clusterAddresses;
 };
 #if defined(__cplusplus)
 static_assert(IsStandardLayout_V<IndirectArgs>, "IndirectArgs must stay GPU-uploadable");

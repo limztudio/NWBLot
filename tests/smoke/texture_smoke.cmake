@@ -1,5 +1,4 @@
 if(TARGET nwb_tex_conv)
-    # Generate deterministic PNG/.tex fixtures per configuration to exercise tex_conv during cooking.
     set(_nwb_texture_smoke_runtime_root "${CMAKE_BINARY_DIR}/Testing/texture_smoke_runtime/$<CONFIG>")
     set(_nwb_texture_smoke_generated_asset_root "${_nwb_texture_smoke_runtime_root}/generated_project/assets")
     set(_nwb_texture_smoke_generated_texture_directory "${_nwb_texture_smoke_generated_asset_root}/textures")

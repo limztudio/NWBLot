@@ -316,7 +316,6 @@ inline void FrustumPlanes(
     const SIMDVectorSingle relativeMin = VectorSubtract(minBounds, v0);
     const SIMDVectorSingle relativeMax = VectorSubtract(maxBounds, v0);
     const auto crossAxis = [](const SIMDVectorSingle first, const SIMDVectorSingle second)noexcept{
-        // Separate products preserve zero axes for parallel and collapsed edges.
         const SIMDVectorSingle positive = VectorMultiply(VectorSwizzle<1, 2, 0, 3>(first), VectorSwizzle<2, 0, 1, 3>(second));
         const SIMDVectorSingle negative = VectorMultiply(VectorSwizzle<2, 0, 1, 3>(first), VectorSwizzle<1, 2, 0, 3>(second));
         return VectorSubtract(positive, negative);
@@ -658,7 +657,6 @@ inline void FrustumPlanes(
     const SIMDVectorDouble relativeMin = VectorDoubleSubtract(minBounds, v0);
     const SIMDVectorDouble relativeMax = VectorDoubleSubtract(maxBounds, v0);
     const auto crossAxis = [](const SIMDVectorDouble first, const SIMDVectorDouble second)noexcept{
-        // Separate products preserve zero axes for parallel and collapsed edges.
         const SIMDVectorDouble positive = VectorDoubleMultiply(VectorDoubleSwizzle<1, 2, 0, 3>(first), VectorDoubleSwizzle<2, 0, 1, 3>(second));
         const SIMDVectorDouble negative = VectorDoubleMultiply(VectorDoubleSwizzle<2, 0, 1, 3>(first), VectorDoubleSwizzle<1, 2, 0, 3>(second));
         return VectorDoubleSubtract(positive, negative);

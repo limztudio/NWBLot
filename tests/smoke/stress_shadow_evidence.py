@@ -1,5 +1,3 @@
-"""Validation of software shadow and receiver quality evidence."""
-
 import re
 
 from window_capture_outcome import SmokeFailure
@@ -35,7 +33,6 @@ class ShadowEvidence:
         self._args = args
 
     def verify_software(self, text):
-        """New acquisitions must prove the requested settings reached the application."""
         args = self._args
         records = [line.strip() for line in text.splitlines() if line.strip().startswith(SOFTWARE_SHADOW_SETTINGS)]
         if len(records) != 1:
@@ -59,7 +56,6 @@ class ShadowEvidence:
             raise SmokeFailure("every-frame acquisition unexpectedly reused a light-space capture")
         return {"capture_cadence_name": args.software_shadow_capture_cadence, "accepted_reuse_verified": bool(reuse_records), "backend_name": args.software_shadow_backend, "budget_mib": args.software_shadow_budget_mib,
             "blocker_search_name": args.software_shadow_blocker_search, LIT_REQUESTED: requested, LIT_OBSERVED: observed, LIT_VERIFIED: True}
-
 
     def verify_quality(self, text, expected_extent=None):
         args = self._args
@@ -100,4 +96,3 @@ class ShadowEvidence:
             raise SmokeFailure("unrequested temporal-one dispatch was recorded")
         return {"transparent_sampling": args.shadow_transparent_sampling, "receiver_resolution": args.shadow_receiver_resolution, "receiver_factor": factor, "allocations": allocations,
             "bootstrap_samples": 3, "accepted_history_samples": 1 if args.shadow_transparent_sampling == LIT_TEMPORAL_ONE else 3, "effective_dispatch_verified": bool(dispatched), "hardware": hardware, LIT_VERIFIED: True}
-

@@ -133,16 +133,11 @@ void GpuTimingAccumulator::recordFrameReset(CommandList& commandList){
 
     const b8 canReset = commandList.canResetTimerQueryHere();
     const CommandListParameters commandListDescription = commandList.getResolvedDescription();
-    // Retain pending pools until their result is observable instead of erasing a late GPU sample.
-    // Pools reset this frame stay unusable to dynamic-rendering scopes until the caller confirms this list submitted.
     for(QueryRecord& record : m_queries){
         record.frameResetRecorded = false;
         record.frameResetRecordingQueue = {};
-        // A new preamble supersedes deps kept from a rejected scope in an older frame; inline-capable positions drop it on failure.
         if(record.state == QueryState::Available)
             record.frameResetSubmission = {};
-        // An external-reset-required scope must observe this frame's reset, not an earlier frame's.
-        // Leave the pool unavailable until confirmFrameReset() sees a successful preamble.
         record.deviceReady = false;
         if(!canReset || !record.query || record.state != QueryState::Available)
             continue;
@@ -175,8 +170,6 @@ void GpuTimingAccumulator::discardFrameReset()noexcept{
     for(QueryRecord& record : m_queries){
         record.frameResetRecorded = false;
         record.frameResetRecordingQueue = {};
-        // A failed (or not-yet-recorded) preamble must not let an external-reset-required position reuse a previous frame's reset.
-        // An inline-reset-capable position still performs its own device-timeline reset.
         record.deviceReady = false;
     }
 }
@@ -198,9 +191,6 @@ Expected<GpuTimingAccumulator::QueryBegin> GpuTimingAccumulator::beginQuery(Comm
     }
 
     QueryRecord& record = m_queries[index];
-    // beginTimerQuery self-resets an already prepared pool only when this exact recording position supports a native reset.
-    // Render-pass and transfer-only timestamp scopes consume a reset accepted from recordFrameReset().
-    // Under-reserved or undeclared scopes skip instead of allocating persistent query pools from a recording path.
     if(!commandList.isRecording() || !commandList.hasCommandBuffer() || commandList.commandRecordingFailed())
         return MakeUnexpected(Failure{});
     if(!commandList.canRecordTimerQueryHere()){
@@ -212,8 +202,6 @@ Expected<GpuTimingAccumulator::QueryBegin> GpuTimingAccumulator::beginQuery(Comm
         return QueryBegin{};
     }
 
-    // A device-timeline reset authorizes exactly one timestamp pair.
-    // Consume it as soon as the reservation records its begin endpoint, even if that command buffer is later discarded before submission.
     const auto timerQueryRecording = commandList.beginTimerQuery(*record.query);
     if(!timerQueryRecording)
         return MakeUnexpected(Failure{});
@@ -414,8 +402,6 @@ b8 GpuTimingAccumulator::reserveQueries(Device& device, const u32 queryCount){
             ++usableQueryCount;
     }
 
-    // Quarantine never makes an accepted begin-only native query available again.
-    // Preserve that object until every command buffer retaining it is gone, and materialize replacement capacity for the next frame preamble instead.
     while(usableQueryCount < queryCount){
         if(!appendQuery(device))
             return false;
@@ -445,8 +431,6 @@ b8 GpuTimingAccumulator::appendQuery(Device& device){
 }
 
 void GpuTimingAccumulator::releaseQuery(QueryRecord& record)noexcept{
-    // A discarded command buffer may already contain timestamp writes.
-    // Require another accepted preamble before an external-reset-required position reuses this pool; an inline-reset-capable position resets it itself.
     const GpuPhysicalQueueId retirementPhysicalQueue = record.physicalQueue;
     const u64 retirementFrameIndex = record.frameIndex;
     const GpuTimingSampleAttribution retirementAttribution = record.attribution;
@@ -475,8 +459,6 @@ void GpuTimingAccumulator::releaseQuery(QueryRecord& record)noexcept{
     record.deviceReady = false;
     record.retirementNotificationPending = false;
 
-    // An unsubscribe may mark an unaccepted scope and stream its notification after releasing the recorder lock.
-    // Preserve that payload in the now-available pool, and keep findAvailableQuery() from reusing it until drained.
     if(retirementNotificationPending){
         FOUNDATION_ASSERT(retirementAttribution != s_NoGpuTimingSampleAttribution);
         record.physicalQueue = retirementPhysicalQueue;
@@ -488,8 +470,6 @@ void GpuTimingAccumulator::releaseQuery(QueryRecord& record)noexcept{
 }
 
 void GpuTimingAccumulator::releaseUnacceptedQuery(QueryRecord& record)noexcept{
-    // Never restore deviceReady: a rejected ticket still leaves query writes behind, so a retry needs a fresh preamble.
-    // Keep the accepted reset token only so an inline-reset-capable retry remains ordered after it.
     const QueueSubmissionToken frameResetSubmission = record.frameResetSubmission;
     releaseQuery(record);
     record.frameResetSubmission = frameResetSubmission;

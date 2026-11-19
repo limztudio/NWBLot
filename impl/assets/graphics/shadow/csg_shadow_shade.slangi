@@ -110,7 +110,6 @@ bool nwbCsgShadowEmitSpan(
         return false;
     NwbLightSpaceEvent outputFar = farEvent;
     NwbLightSpaceEvent outputNear = nearEvent;
-    // The output describes retained-volume boundaries independently of the source shell's orientation.
     outputFar.instanceAndFacing = instance | NWB_LIGHT_SPACE_EVENT_ENTERING;
     outputNear.instanceAndFacing = instance;
     if(farCutter != NWB_CSG_RAY_INVALID_INDEX && !nwbCsgShadowCapEvent(instance, farCutter, farEvent.depth, true, rayOrigin, rayDirection, outputFar))
@@ -158,7 +157,6 @@ bool nwbCsgShadowSubtractSpan(
     return nwbCsgShadowEmitSpan(pixel, transparent, instance, cursor, nearEvent, cursorCutter, NWB_CSG_RAY_INVALID_INDEX, rayOrigin, rayDirection, outputCount, opaqueDepth);
 }
 
-// Input records stay local while expanded cap records overwrite the same bounded global stream.
 bool nwbCsgShadowConvertEvents(const uint pixel, const NwbLightSpaceView view, const uint2 viewPixel, const uint count, out bool converted){
     converted = false;
     NwbLightSpaceEvent input[NWB_LIGHT_SPACE_EVENTS_PER_TEXEL];

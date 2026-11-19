@@ -125,7 +125,6 @@ b8 ShadowPipelineSet::ensureShadowPipeline(){
         return false;
     }
 
-    // Trace layouts are push-only; resources come from the global heap.
     if(!EnsurePushConstantBindingLayout(device, sizeof(ShadowRqSoftPushConstants), ShaderTypeMask::Compute, this.m_shadow.m_shadowBindingLayout)){
         error("RendererSystem: failed to create shadow binding layout");
         this.m_shadow.m_shadowPipelineFailed = true;
@@ -163,7 +162,6 @@ b8 ShadowPipelineSet::ensureShadowSoftPipeline(){
         return false;
     }
 
-    // Soft and hard traces share their push-only layout.
     if(!this.m_shadow.m_shadowBindingLayout.valid()){
         error("RendererSystem: shadow binding layout missing for the soft RayQuery pipeline");
         this.m_softShadow.m_shadowSoftPipelineFailed = true;
@@ -203,7 +201,6 @@ b8 ShadowPipelineSet::ensureSwShadowPipeline(){
             return false;
         }
 
-        // Compaction uses a persistent counter and UAV-writable indirect-args buffer.
         BufferDesc edgeCounterDesc;
         edgeCounterDesc
             .setByteSize(ResolveSoftwareShadowEdgeCounterByteSize(s_ShaderSwEdgeCounterSize))
@@ -358,7 +355,6 @@ b8 ShadowPipelineSet::ensureShadowReprojectMergePipeline(){
     return true;
 }
 
-// Both trace backends publish the same independent channel textures and use the same optional resolve pipelines.
 void ShadowPipelineSet::prepareSoftCombinedResolvePipelines(){
     if(!CanPrepareSoftCombinedResolvePipelines(this.m_softShadow.m_softShadowReady, this.m_softShadow.m_softTransparentReady))
         return;

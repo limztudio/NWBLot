@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const u32 s_SamplerBinaryMagic = 0x53414D31u; // SAM1
+const u32 s_SamplerBinaryMagic = 0x53414D31u;
 const u32 s_SamplerBinaryVersion = 1u;
 const usize s_SamplerHeaderBinaryByteSize = 64u;
 const usize s_SamplerPackedAlignBytes = 1u;

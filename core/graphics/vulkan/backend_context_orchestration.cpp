@@ -59,8 +59,6 @@ b8 BackendContext::createDevice(){
     }
 
     auto resolveDeviceExtensionFeature = [this](const AStringView name)noexcept->DeviceExtensionFeature::Enum{
-        // Feature metadata remains canonical even when policy removes an extension from the default optional set.
-        // A caller that names that extension explicitly must still receive coherent feature query/enable handling.
         for(const ExtEntry& entry : s_OptionalDeviceExts){
             if(name == entry.name)
                 return entry.feature;

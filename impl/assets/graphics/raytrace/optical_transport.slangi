@@ -15,11 +15,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The effect supplies terminal illumination. The walker owns no project/environment/output/cache/stats state.
 half3 nwbOpticalSurfaceRadiance(const NwbRayTraceSurfaceHit hit, const float3 observerDirection);
 half3 nwbOpticalEnvironmentRadiance(const float3 direction);
 
-// One dominant transmitted path; radiance preserved on every termination. Secondary Fresnel is omitted; TIR keeps membership.
 NwbOpticalTraceResult nwbOpticalTrace(const NwbOpticalTraceConfig config, const float3 initialOrigin, const float3 initialDirection){
     NwbOpticalTraceResult result = (NwbOpticalTraceResult)0;
     result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
@@ -122,13 +120,11 @@ NwbOpticalTraceResult nwbOpticalTrace(const NwbOpticalTraceConfig config, const 
             return result;
 
         if(optical.mode == NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED){
-            // Backdrop coverage is a (0, 1) bounded factor, so half math is sufficient here.
             const half coverage = hit.surface.renderCoverage;
             if(!isfinite(coverage)){
                 result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
                 return result;
             }
-            // The backdrop alpha is a (0, 1) bounded factor, so half arithmetic is sufficient here.
             const half alpha = half(saturate(coverage));
             if(alpha > half(0.0h))
                 result.radiance += throughput * alpha * nwbOpticalSurfaceRadiance(hit, -direction);
@@ -167,9 +163,6 @@ NwbOpticalTraceResult nwbOpticalTrace(const NwbOpticalTraceConfig config, const 
             return result;
 #endif
         }
-        // Reconstructed hits have FP32 world-position uncertainty, independent of the receiver's FP16 G-buffer bias.
-        // Offset to the next geometric half-space and require progress on the next query.
-        // Near-coincident crossings within the same uncertainty band were checked before changing direction; no instance is ignored.
         physicalOrigin = hit.position;
         continuationUncertainty = nwbOpticsPositionUncertainty(hit.position);
         const float3 offsetNormal = dot(direction, hit.geometricNormal) >= 0.0 ? hit.geometricNormal : -hit.geometricNormal;

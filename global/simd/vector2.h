@@ -17,7 +17,6 @@ namespace SIMDVectorDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Packed binary32 lane multipliers { +1, -1 } for the NEON 2D cross product.
 inline constexpr u64 s_Vector2CrossLaneSignBits = 0xBF8000003F800000ull;
 
 

@@ -394,7 +394,6 @@ b8 Compile(
 ){
     const GpuTaskGraphCompiler compiler = GpuTaskGraphCompiler();
     GpuTaskGraphCompileOptions metadataOptions = options;
-    // Allow metadata-only tasks in unit packetization helpers.
     metadataOptions.allowMetadataOnlyTasks = true;
     const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
     return compiler.compile(declarations, topology, metadataOptions, scratch.scratchArena, analysis, assignments, compiledGraph);
@@ -412,7 +411,6 @@ b8 Compile(
     return Compile(analysis, assignments, compiledGraph, scratch, graph, topology, options);
 }
 
-// Compile on a topology where Compute and Transfer capabilities stay on their dedicated queue classes.
 b8 CompileWithSeparatedCommandQueues(
     mut GpuTaskGraphAnalysis analysis,
     mut GpuTaskGraphQueueAssignments assignments,

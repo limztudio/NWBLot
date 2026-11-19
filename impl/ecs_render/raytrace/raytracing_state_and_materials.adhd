@@ -127,8 +127,6 @@ RayTracingSceneGraphResources RendererRayTracingSystem::snapshotSceneGraphResour
 
 [cpp_unwind]
 Expected<RayTraceMaterialContextSlots> RendererRayTracingSystem::snapshotRayTraceMaterialContextSlots(){
-    // The shared graph has already imported this constant buffer and its UniformBuffer descriptor by the time its preparation packet records.
-    // Never recreate here: a recording-time replacement would break frozen identity and the selector snapshot.
     if(!this.m_rayTracingState.sceneBvh.m_rayTraceMaterialContextSlotsBuffer.valid() || !this.m_rayTracingState.sceneBvh.m_rayTraceMaterialContextSlotsHeapHandle.valid()
         || this.m_rayTracingState.sceneBvh.m_rayTraceMaterialContextSlotsHeapHandle.descriptorClass() != GpuDescriptorClass::UniformBuffer)
         return MakeUnexpected(Failure());
@@ -159,7 +157,6 @@ Expected<RayTraceMaterialContextSlots> RendererRayTracingSystem::snapshotRayTrac
         return MakeUnexpected(Failure());
     }
 
-    // Optical metadata follows the selected backend's instance order and retains its preflighted descriptor.
     RayTracingOpticalSceneSnapshot opticalScene;
     if(this.m_shadowVisibilityHardwareSupported)
         opticalScene = this.m_hardwareOpticalScene.snapshot();

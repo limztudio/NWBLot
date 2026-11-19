@@ -118,7 +118,6 @@ b8 GpuTaskGraphCompiler::assignQueues(
                 }
             }
         }
-        // Capability matches overestimate every legal static, balancing, and timing route across the complete graph.
         needsSchedulingReachability = capableQueueCount >= s_OverlapQueueMinimum;
     }
     GpuTaskSchedulingReachability schedulingReachability(scratchArena);
@@ -126,13 +125,10 @@ b8 GpuTaskGraphCompiler::assignQueues(
         return fail(GpuTaskGraphQueueAssignmentStatus::InvalidGraphAnalysis);
     GpuTaskQueueScoringData scoringData(graph, analysis, schedulingReachability, options, scratchArena);
 
-    // Establish every legal route before scoring.
-    // Compatible merge chains share one provisional queue; packetization still checks frontiers.
     for(const GpuTaskQueuePlacementGroup& group : groups){
         auto& selectedQueue = *MakeNotNull(FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, group));
         for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
             const GpuTaskId taskID = analysis.topologicalOrder()[group.assignmentOffset + taskOffset];
-            // Groups partition the unique topological order of current graph tasks.
             FOUNDATION_ASSERT(
                 taskID.valid()
                 && taskID.generation == outAssignments.m_generation
@@ -156,8 +152,6 @@ b8 GpuTaskGraphCompiler::assignQueues(
     FOUNDATION_ASSERT(outAssignments.m_assignments.size() == outAssignments.m_assignmentIndicesByTask.size());
     scoringData.rebuildAssignmentLoads(outAssignments.m_assignments, topology);
 
-    // Score complete groups against the same provisional plan, omitting group-local work from crossing/overlap costs.
-    // This bounds automatic placement to the available queue classes and keeps physical-topology iteration order irrelevant.
     Vector<GpuPhysicalQueueId, Alloc::ScratchArena> scoredQueues(groups.size(), scratchArena);
     Vector<GpuTaskQueueAssignmentReason::Enum, Alloc::ScratchArena> scoredReasons(groups.size(), scratchArena);
     for(usize groupIndex = 0u; groupIndex < groups.size(); ++groupIndex){
@@ -186,7 +180,6 @@ b8 GpuTaskGraphCompiler::assignQueues(
                 ++candidateCount;
             }
         }
-        // A single legal class needs no choice score; final per-task diagnostics are still computed below.
         if(candidateCount > 1u){
             selectedQueue = nullptr;
             b8 hasIndependentOverlap = false;
@@ -200,8 +193,6 @@ b8 GpuTaskGraphCompiler::assignQueues(
                     candidate.score.queueLoad = 0;
                 }
             }
-            // Finite crossing costs permit useful async overlap.
-            // Without independent work, keep serial chains on one queue instead of scattering them by graph load.
             const b8 compareTotalScore = !conservative && hasIndependentOverlap;
             for(const Candidate& candidate : candidates){
                 if(!candidate.queue)
@@ -240,7 +231,6 @@ b8 GpuTaskGraphCompiler::assignQueues(
         }
     }
 
-    // Optional physical balancing applies to independent singleton placements. It cannot separate an explicit merge chain.
     b8 needsSameClassBalancing = false;
     for(const GpuTaskQueuePlacementGroup& group : groups){
         if(group.assignmentCount != 1u || group.initialOwnershipQueue.valid())
@@ -293,7 +283,6 @@ b8 GpuTaskGraphCompiler::assignQueues(
                 assignment.dedicated = selectedQueue->dedicated;
                 assignment.initialQueue = selectedQueue->id;
             }
-            // Fixed and merged groups contribute the same prefix cost as routed singletons.
             u64& prefixQueueCost = prefixQueueCosts[static_cast<usize>(selectedQueue.get() - topology.queues)];
             for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
                 const GpuTaskId task = outAssignments.m_assignments[group.assignmentOffset + taskOffset].task;

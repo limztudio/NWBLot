@@ -28,7 +28,7 @@ NWB_ASSETS_BEGIN
 
 
 inline constexpr AStringView s_BuiltAssetExtension = ".nwba";
-inline constexpr u32 s_BuiltAssetMagic = 0x4142574eu; // NWBA
+inline constexpr u32 s_BuiltAssetMagic = 0x4142574eu;
 inline constexpr u16 s_BuiltAssetVersion = 2u;
 inline constexpr u32 s_BuiltAssetFlagStandalone = 1u << 0u;
 

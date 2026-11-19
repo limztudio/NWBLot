@@ -87,7 +87,7 @@ Expected<MeshletPipelineHandle> Device::createMeshletPipeline(const MeshletPipel
 
     PipelineShaderStageVector shaderStages{ scratchArena };
     PipelineSpecializationInfoVector specInfos{ scratchArena };
-    shaderStages.reserve(s_MeshletPipelineStageReserveCount); // Task (optional), Mesh, Fragment
+    shaderStages.reserve(s_MeshletPipelineStageReserveCount);
     specInfos.reserve(s_MeshletPipelineStageReserveCount);
 
     if(desc.amplificationShader && m_context.meshShaderFeatures.taskShader != VK_TRUE){

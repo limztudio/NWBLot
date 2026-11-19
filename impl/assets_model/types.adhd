@@ -285,7 +285,6 @@ b8 ValidateModelPayloadObjects(
         return false;
     const usize objectCount = objectCountResult.value();
 
-    // One object is necessarily unique and a mesh cannot have a separate skeleton parent in that model.
     if(objectCount == 1u)
         return ValidateSingleModelPayloadObject(skeletonObjects, staticMeshObjects, skinnedMeshObjects);
 

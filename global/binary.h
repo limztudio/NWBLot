@@ -76,7 +76,6 @@ template<typename T>
     return lhs.size() == rhs.size() && (rhs.empty() || FOUNDATION_MEMCMP(lhs.data(), rhs.data(), rhs.size()) == 0);
 }
 
-// The pattern must fit the output and must not overlap it.
 inline void FillRepeatingBytes(const usize byteCount, const Span<const u8> pattern, void* bytes)noexcept{
     if(byteCount == 0u || pattern.empty())
         return;

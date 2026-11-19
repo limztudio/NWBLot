@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The default key step is one hundredth of the range.
 const f64 s_SliderDefaultKeyStepDivisor = 100.0;
 const u32 s_SliderPageStepCount = 10u;
 
@@ -35,7 +34,6 @@ class SliderOptions{
     public b8 enabled = true;
     public f64 minimum = 0.0;
     public f64 maximum = 1.0;
-    // Zero chooses one hundredth of the range, with a representable fallback for tiny spans.
     public f64 keyStep = 0.0;
 }
 

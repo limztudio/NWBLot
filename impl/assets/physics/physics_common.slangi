@@ -1,0 +1,193 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_PHYSICS_COMMON_SLANGI
+#define NWB_PHYSICS_COMMON_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "constants.h"
+#include "bindless/bindless_heap.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbPhysicsGpuPushConstants{
+    uint itemCount;
+    uint itemOffset;
+    uint modeOrSecondaryCount;
+    uint flags;
+    float deltaTime;
+    float invDeltaTime;
+    float maxLinearVelocity;
+    float linearSlop;
+    float4 gravitySpeculative;
+    uint4 slots0;
+    uint4 slots1;
+};
+
+struct NwbPhysicsGpuBodyState{
+    float4 linearVelocityPad;
+    float4 angularVelocityPad;
+    float4 deltaPositionFlags;
+    float4 deltaRotation;
+};
+
+struct NwbPhysicsGpuBodySim{
+    float4 positionInvMass;
+    float4 rotation;
+    float4 forceLinearDamping;
+    float4 torqueAngularDamping;
+    float4 gravityScaleFlags;
+    float4 invInertiaWorldRow0;
+    float4 invInertiaWorldRow1;
+    float4 invInertiaWorldRow2;
+    float4 invInertiaLocalRow0;
+    float4 invInertiaLocalRow1;
+    float4 invInertiaLocalRow2;
+};
+
+struct NwbPhysicsGpuShapeProxy{
+    float4 localCenterRadius;
+    float4 localExtentOrP1;
+    float4 localRotation;
+    float4 aabbMinPad;
+    float4 aabbMaxPad;
+    uint4 bodyIndexTypeShape;
+    uint4 filterData;
+};
+
+struct NwbPhysicsGpuBroadphasePair{
+    uint4 indices;
+};
+
+struct NwbPhysicsGpuNarrowphaseManifold{
+    uint4 pairInfo;
+    float4 normalPad;
+    float4 anchorA[NWB_PHYSICS_MAX_MANIFOLD_POINTS];
+    float4 anchorBSeparation[NWB_PHYSICS_MAX_MANIFOLD_POINTS];
+    uint4 featureIds;
+};
+
+struct NwbPhysicsGpuContactPoint{
+    float4 rABaseSep;
+    float4 rBRelVel;
+    float4 impulsesMass;
+    float4 anchorLever;
+};
+
+struct NwbPhysicsGpuContactConstraint{
+    uint4 indicesCountFlags;
+    float4 normalFriction;
+    float4 tangent1Restitution;
+    float4 tangent2Rolling;
+    float4 centerATwistMass;
+    float4 centerBTwistImpulse;
+    float4 softnessTangent00;
+    float4 tangentMassFriction;
+    float4 invMassTangentVel;
+    float4 invIA0;
+    float4 invIA1;
+    float4 invIA2;
+    float4 invIB0;
+    float4 invIB1;
+    float4 invIB2;
+    float4 rollingMass0;
+    float4 rollingMass1;
+    NwbPhysicsGpuContactPoint points[NWB_PHYSICS_MAX_MANIFOLD_POINTS];
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[vk::push_constant]] ConstantBuffer<NwbPhysicsGpuPushConstants> g_NwbPhysicsPushConstants;
+
+#pragma warning(push)
+#pragma warning(disable: 39001)
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<uint, Std430DataLayout> g_NwbPhysicsUintBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuBodyState, Std430DataLayout> g_NwbPhysicsBodyStateBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuBodySim, Std430DataLayout> g_NwbPhysicsBodySimBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuShapeProxy, Std430DataLayout> g_NwbPhysicsShapeProxyBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuBroadphasePair, Std430DataLayout> g_NwbPhysicsBroadphasePairBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuNarrowphaseManifold, Std430DataLayout> g_NwbPhysicsNarrowphaseManifoldBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuContactConstraint, Std430DataLayout> g_NwbPhysicsContactConstraintBuffers[];
+#pragma warning(pop)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Hamilton quaternion multiplication matching global/simd/quaternion_arithmetic.h.
+float4 nwbPhysicsQuatMul(const float4 a, const float4 b){
+    return float4(
+        a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+        a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+        a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
+        a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z
+    );
+}
+
+float4 nwbPhysicsQuatNormalize(const float4 q){
+    const float lenSq = dot(q, q);
+    if(lenSq > 1.0e-12f)
+        return q * rsqrt(lenSq);
+    return float4(0.0f, 0.0f, 0.0f, 1.0f);
+}
+
+float3 nwbPhysicsQuatRotate(const float3 v, const float4 q){
+    const float3 t = 2.0f * cross(q.xyz, v);
+    return v + q.w * t + cross(q.xyz, t);
+}
+
+float3 nwbPhysicsQuatInvRotate(const float3 v, const float4 q){
+    return nwbPhysicsQuatRotate(v, float4(-q.xyz, q.w));
+}
+
+float4 nwbPhysicsIntegrateDeltaQuat(const float4 q, const float3 omega, const float h){
+    const float halfH = 0.5f * h;
+    const float4 dq = float4(omega * halfH, 0.0f);
+    const float4 combined = q + nwbPhysicsQuatMul(dq, q);
+    return nwbPhysicsQuatNormalize(combined);
+}
+
+float3 nwbPhysicsMulMat3Rows(const float3 r0, const float3 r1, const float3 r2, const float3 v){
+    return float3(dot(r0, v), dot(r1, v), dot(r2, v));
+}
+
+float3 nwbPhysicsMulSymmetric3(const float4 m0, const float4 m1, const float3 v){
+    const float3 r0 = float3(m0.x, m0.y, m0.z);
+    const float3 r1 = float3(m0.y, m0.w, m1.x);
+    const float3 r2 = float3(m0.z, m1.x, m1.y);
+    return float3(dot(r0, v), dot(r1, v), dot(r2, v));
+}
+
+float3 nwbPhysicsApplyLinearLocks(const float3 v, const uint flags){
+    return float3(
+        (flags & NWB_PHYSICS_BODY_FLAG_LOCK_LINEAR_X) != 0u ? 0.0f : v.x,
+        (flags & NWB_PHYSICS_BODY_FLAG_LOCK_LINEAR_Y) != 0u ? 0.0f : v.y,
+        (flags & NWB_PHYSICS_BODY_FLAG_LOCK_LINEAR_Z) != 0u ? 0.0f : v.z
+    );
+}
+
+float3 nwbPhysicsApplyAngularLocks(const float3 w, const uint flags){
+    return float3(
+        (flags & NWB_PHYSICS_BODY_FLAG_LOCK_ANGULAR_X) != 0u ? 0.0f : w.x,
+        (flags & NWB_PHYSICS_BODY_FLAG_LOCK_ANGULAR_Y) != 0u ? 0.0f : w.y,
+        (flags & NWB_PHYSICS_BODY_FLAG_LOCK_ANGULAR_Z) != 0u ? 0.0f : w.z
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

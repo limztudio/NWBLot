@@ -1,0 +1,71 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_scene/components.adhd>
+#include <impl/physics/world.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[arena, component("rigid_body")]
+class RigidBodyComponent{
+    public BodyType type = BodyType::Dynamic;
+    public f32x4 linearVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 angularVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32 linearDamping = 0.0f;
+    public f32 angularDamping = 0.01f;
+    public f32 gravityScale = 1.0f;
+    public f32 sleepThreshold = s_DefaultSleepThreshold;
+    public u32 motionLocks = 0u;
+    public b8 enableSleep = true;
+    public b8 isAwake = true;
+    public b8 isBullet = false;
+    public b8 isEnabled = true;
+    public b8 allowFastRotation = false;
+    public b8 enableGyroscopicTorque = false;
+    public b8 dirty = true;
+    public BodyId runtimeBodyId;
+}
+
+[arena, component("collider")]
+class ColliderComponent{
+    public ShapeType shapeType = ShapeType::Hull;
+    public f32x4 center(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 center2(0.0f, 0.5f, 0.0f, 0.0f);
+    public f32x4 halfExtents(0.5f, 0.5f, 0.5f, 0.0f);
+    public f32 radius = 0.5f;
+    public f32 density = 1.0f;
+    public f32 friction = 0.6f;
+    public f32 restitution = 0.0f;
+    public f32 rollingResistance = 0.0f;
+    public u32 categoryBits = 0x00000001u;
+    public u32 maskBits = u32.max;
+    public i32 groupIndex = 0;
+    public b8 isBox = true;
+    public b8 isSensor = false;
+    public b8 enableContactEvents = false;
+    public b8 enableHitEvents = false;
+    public b8 dirty = true;
+    public ShapeId runtimeShapeId;
+    public BodyId boundBodyId;
+}
+
+[arena, component("physics_world_config")]
+class PhysicsWorldConfigComponent{
+    public f32x4 gravity(0.0f, -9.81f, 0.0f, 0.0f);
+    public f32 fixedDeltaTime = 1.0f / 60.0f;
+    public u32 subStepCount = 4u;
+    public u32 maxSubStepsPerFrame = 4u;
+    public PhysicsBackendMode backendMode = PhysicsBackendMode::Auto;
+    public u32 gpuDispatchThreshold = s_DefaultGpuBodyThreshold;
+    public b8 enableSleep = true;
+    public b8 enableWarmStarting = true;
+    public b8 paused = false;
+    public b8 dirty = true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

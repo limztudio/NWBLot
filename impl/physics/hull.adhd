@@ -1,0 +1,352 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/physics/shapes.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class QuickhullFace{
+    public FixedVector<u32, 32u> vertices;
+    public Vector<u32> conflicts;
+    public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32 offset = 0.0f;
+    public b8 alive = true;
+}
+
+b8 ComputeTrianglePlane(in VectorSingle a, in VectorSingle b, in VectorSingle c, mut VectorSingle outNormal, mut f32 outOffset){
+    const VectorSingle raw = Cross(VectorSingle(b - a, 0.0f), VectorSingle(c - a, 0.0f));
+    const f32 lenSq = Vector3LengthSq(raw).x;
+    if(!IsFinite(lenSq) || lenSq <= 1.0e-12f)
+        return false;
+    outNormal = VectorSingle(raw * Rsqrt(VectorSingle(lenSq)), 0.0f);
+    outOffset = Vector3Dot(outNormal, VectorSingle(a, 0.0f)).x;
+    return true;
+}
+
+QuickhullFace MakeTriangleFace(in Span<f32x4> points, in u32 i0, in u32 i1, in u32 i2, in VectorSingle interior){
+    QuickhullFace f;
+    f.vertices.push_back(i0);
+    f.vertices.push_back(i1);
+    f.vertices.push_back(i2);
+    VectorSingle n(0.0f, 1.0f, 0.0f, 0.0f);
+    f32 d = 0.0f;
+    if(!ComputeTrianglePlane(VectorSingle(points[i0]), VectorSingle(points[i1]), VectorSingle(points[i2]), n, d)){
+        f.alive = false;
+        return f;
+    }
+    if(Vector3Dot(n, VectorSingle(interior, 0.0f)).x - d > 0.0f){
+        const u32 tmp = f.vertices[1u];
+        f.vertices[1u] = f.vertices[2u];
+        f.vertices[2u] = tmp;
+        n = -n;
+        d = -d;
+    }
+    f.normal = f32x4(n, 0.0f);
+    f.offset = d;
+    return f;
+}
+
+Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
+    if(!IsFinite(radius) || radius < 0.0f || inputPoints.size() < 4u)
+        return MakeUnexpected(Failure());
+
+    Vector<f32x4> uniquePts;
+    uniquePts.reserve(inputPoints.size());
+    for(usize i = 0u; i < inputPoints.size(); ++i){
+        const VectorSingle p = VectorSingle(inputPoints[i]);
+        if(!IsValidPositionVec3(p))
+            return MakeUnexpected(Failure());
+        b8 dup = false;
+        for(usize j = 0u; j < uniquePts.size(); ++j){
+            if(Vector3LengthSq(VectorSingle(p - VectorSingle(uniquePts[j]), 0.0f)).x <= 1.0e-8f){
+                dup = true;
+                break;
+            }
+        }
+        if(!dup)
+            uniquePts.push_back(f32x4(p, 0.0f));
+    }
+
+    if(uniquePts.size() < 4u)
+        return MakeUnexpected(Failure());
+
+    // Find 6 axis extremes and initial non-degenerate tetrahedron.
+    usize minIdx = 0u;
+    usize maxIdx = 0u;
+    for(usize axis = 0u; axis < 3u; ++axis){
+        usize lo = 0u;
+        usize hi = 0u;
+        for(usize i = 1u; i < uniquePts.size(); ++i){
+            const f32 v = VectorGetByIndex(VectorSingle(uniquePts[i]), cast<isize>(axis));
+            if(v < VectorGetByIndex(VectorSingle(uniquePts[lo]), cast<isize>(axis)))
+                lo = i;
+            if(v > VectorGetByIndex(VectorSingle(uniquePts[hi]), cast<isize>(axis)))
+                hi = i;
+        }
+        if(Vector3LengthSq(VectorSingle(VectorSingle(uniquePts[hi]) - VectorSingle(uniquePts[lo]), 0.0f)).x
+            > Vector3LengthSq(VectorSingle(VectorSingle(uniquePts[maxIdx]) - VectorSingle(uniquePts[minIdx]), 0.0f)).x){
+            minIdx = lo;
+            maxIdx = hi;
+        }
+    }
+    if(minIdx == maxIdx)
+        return MakeUnexpected(Failure());
+
+    const VectorSingle p0 = VectorSingle(uniquePts[minIdx]);
+    const VectorSingle p1 = VectorSingle(uniquePts[maxIdx]);
+    const VectorSingle lineDir = SafeNormalizeVec3(p1 - p0, VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+
+    usize thirdIdx = s_NullIndex;
+    f32 bestLineDistSq = 1.0e-8f;
+    for(usize i = 0u; i < uniquePts.size(); ++i){
+        const VectorSingle rel = VectorSingle(uniquePts[i]) - p0;
+        const VectorSingle perp = Cross(VectorSingle(rel, 0.0f), lineDir);
+        const f32 dSq = Vector3LengthSq(perp).x;
+        if(dSq > bestLineDistSq){
+            bestLineDistSq = dSq;
+            thirdIdx = i;
+        }
+    }
+    if(thirdIdx == s_NullIndex)
+        return MakeUnexpected(Failure());
+
+    const VectorSingle p2 = VectorSingle(uniquePts[thirdIdx]);
+    VectorSingle triN(0.0f, 1.0f, 0.0f, 0.0f);
+    f32 triD = 0.0f;
+    if(!ComputeTrianglePlane(p0, p1, p2, triN, triD))
+        return MakeUnexpected(Failure());
+
+    usize fourthIdx = s_NullIndex;
+    f32 bestPlaneDist = 1.0e-4f;
+    for(usize i = 0u; i < uniquePts.size(); ++i){
+        const f32 dist = Abs(Vector3Dot(triN, VectorSingle(uniquePts[i], 0.0f)).x - triD);
+        if(dist > bestPlaneDist){
+            bestPlaneDist = dist;
+            fourthIdx = i;
+        }
+    }
+    if(fourthIdx == s_NullIndex)
+        return MakeUnexpected(Failure());
+
+    const VectorSingle p3 = VectorSingle(uniquePts[fourthIdx]);
+    const VectorSingle interior = (p0 + p1 + p2 + p3) * 0.25f;
+
+    Vector<QuickhullFace> faces;
+    const Span<f32x4> ptsSpan(uniquePts);
+    faces.push_back(MakeTriangleFace(ptsSpan, cast<u32>(minIdx), cast<u32>(maxIdx), cast<u32>(thirdIdx), interior));
+    faces.push_back(MakeTriangleFace(ptsSpan, cast<u32>(minIdx), cast<u32>(maxIdx), cast<u32>(fourthIdx), interior));
+    faces.push_back(MakeTriangleFace(ptsSpan, cast<u32>(maxIdx), cast<u32>(thirdIdx), cast<u32>(fourthIdx), interior));
+    faces.push_back(MakeTriangleFace(ptsSpan, cast<u32>(thirdIdx), cast<u32>(minIdx), cast<u32>(fourthIdx), interior));
+
+    for(usize i = 0u; i < uniquePts.size(); ++i){
+        if(i == minIdx || i == maxIdx || i == thirdIdx || i == fourthIdx)
+            continue;
+        f32 maxDist = 1.0e-4f;
+        usize bestFace = s_NullIndex;
+        for(usize f = 0u; f < faces.size(); ++f){
+            if(!faces[f].alive)
+                continue;
+            const f32 dist = Vector3Dot(VectorSingle(faces[f].normal), VectorSingle(uniquePts[i], 0.0f)).x - faces[f].offset;
+            if(dist > maxDist){
+                maxDist = dist;
+                bestFace = f;
+            }
+        }
+        if(bestFace != s_NullIndex)
+            faces[bestFace].conflicts.push_back(cast<u32>(i));
+    }
+
+    // Expand hull iteratively.
+    while(true){
+        usize chosenFace = s_NullIndex;
+        u32 apexIdx = s_NullIndex;
+        f32 maxDist = 1.0e-4f;
+        for(usize f = 0u; f < faces.size(); ++f){
+            if(!faces[f].alive || faces[f].conflicts.empty())
+                continue;
+            for(usize c = 0u; c < faces[f].conflicts.size(); ++c){
+                const u32 pIdx = faces[f].conflicts[c];
+                const f32 dist = Vector3Dot(VectorSingle(faces[f].normal), VectorSingle(uniquePts[pIdx], 0.0f)).x - faces[f].offset;
+                if(dist > maxDist){
+                    maxDist = dist;
+                    chosenFace = f;
+                    apexIdx = pIdx;
+                }
+            }
+        }
+        if(chosenFace == s_NullIndex || apexIdx == s_NullIndex)
+            break;
+
+        const VectorSingle apex = VectorSingle(uniquePts[apexIdx]);
+        Vector<u32> visibleFaces;
+        Vector<u8> isVisible;
+        isVisible.resize(faces.size(), 0u);
+        for(usize f = 0u; f < faces.size(); ++f){
+            if(!faces[f].alive)
+                continue;
+            const f32 dist = Vector3Dot(VectorSingle(faces[f].normal), VectorSingle(apex, 0.0f)).x - faces[f].offset;
+            if(dist > 1.0e-5f){
+                isVisible[f] = 1u;
+                visibleFaces.push_back(cast<u32>(f));
+            }
+        }
+        if(visibleFaces.empty())
+            break;
+
+        // Collect directed horizon edges (tail, head) whose opposite face is not visible.
+        Vector<u64> horizonEdges;
+        for(usize v = 0u; v < visibleFaces.size(); ++v){
+            const u32 fIdx = visibleFaces[v];
+            in QuickhullFace face = faces[fIdx];
+            const usize vc = face.vertices.size();
+            for(usize e = 0u; e < vc; ++e){
+                const u32 va = face.vertices[e];
+                const u32 vb = face.vertices[(e + 1u) % vc];
+                b8 sharedVisible = false;
+                for(usize other = 0u; other < visibleFaces.size(); ++other){
+                    const u32 ofIdx = visibleFaces[other];
+                    if(ofIdx == fIdx)
+                        continue;
+                    in QuickhullFace oface = faces[ofIdx];
+                    const usize ovc = oface.vertices.size();
+                    for(usize oe = 0u; oe < ovc; ++oe){
+                        if(oface.vertices[oe] == vb && oface.vertices[(oe + 1u) % ovc] == va){
+                            sharedVisible = true;
+                            break;
+                        }
+                    }
+                    if(sharedVisible)
+                        break;
+                }
+                if(!sharedVisible)
+                    horizonEdges.push_back(PackU32Words(cast<isize>(va), cast<isize>(vb)));
+            }
+        }
+
+        Vector<u32> orphanedConflicts;
+        for(usize v = 0u; v < visibleFaces.size(); ++v){
+            const u32 fIdx = visibleFaces[v];
+            for(usize c = 0u; c < faces[fIdx].conflicts.size(); ++c){
+                const u32 cp = faces[fIdx].conflicts[c];
+                if(cp != apexIdx)
+                    orphanedConflicts.push_back(cp);
+            }
+            faces[fIdx].conflicts.clear();
+            faces[fIdx].alive = false;
+        }
+
+        const usize newFaceBegin = faces.size();
+        for(usize h = 0u; h < horizonEdges.size(); ++h){
+            const u32 va = LowU32Word(cast<isize>(horizonEdges[h]));
+            const u32 vb = HighU32Word(cast<isize>(horizonEdges[h]));
+            faces.push_back(MakeTriangleFace(ptsSpan, va, vb, apexIdx, interior));
+        }
+
+        for(usize c = 0u; c < orphanedConflicts.size(); ++c){
+            const u32 cp = orphanedConflicts[c];
+            f32 bestD = 1.0e-4f;
+            usize bestNew = s_NullIndex;
+            for(usize nf = newFaceBegin; nf < faces.size(); ++nf){
+                if(!faces[nf].alive)
+                    continue;
+                const f32 dist = Vector3Dot(VectorSingle(faces[nf].normal), VectorSingle(uniquePts[cp], 0.0f)).x - faces[nf].offset;
+                if(dist > bestD){
+                    bestD = dist;
+                    bestNew = nf;
+                }
+            }
+            if(bestNew != s_NullIndex)
+                faces[bestNew].conflicts.push_back(cp);
+        }
+    }
+
+    // Compact live faces and build vertices & half-edges.
+    HullShape result;
+    result.radius = radius;
+    Vector<u32> vertRemap;
+    vertRemap.resize(uniquePts.size(), s_NullIndex);
+
+    Vector<u32> liveFaces;
+    for(usize f = 0u; f < faces.size(); ++f){
+        if(faces[f].alive)
+            liveFaces.push_back(cast<u32>(f));
+    }
+    if(liveFaces.size() < 4u || liveFaces.size() > s_MaxHullFaces)
+        return MakeUnexpected(Failure());
+
+    VectorSingle minB = VectorSingle(s_MaxF32);
+    VectorSingle maxB = VectorSingle(-s_MaxF32);
+    VectorSingle sumVerts = VectorSingle(0.0f);
+
+    for(usize lf = 0u; lf < liveFaces.size(); ++lf){
+        in QuickhullFace qf = faces[liveFaces[lf]];
+        if(qf.vertices.size() < 3u)
+            return MakeUnexpected(Failure());
+
+        HullFace outFace;
+        outFace.plane = Plane3D(VectorSingle(qf.normal), qf.offset);
+        outFace.edge = cast<u8>(result.halfEdges.size());
+        outFace.vertexCount = cast<u8>(qf.vertices.size());
+        const u8 faceOutIdx = cast<u8>(result.faces.size());
+        const usize edgeBase = result.halfEdges.size();
+
+        for(usize vi = 0u; vi < qf.vertices.size(); ++vi){
+            const u32 rawVert = qf.vertices[vi];
+            if(vertRemap[rawVert] == s_NullIndex){
+                if(result.vertices.size() >= s_MaxHullVertices)
+                    return MakeUnexpected(Failure());
+                const u32 newIdx = cast<u32>(result.vertices.size());
+                vertRemap[rawVert] = newIdx;
+                const VectorSingle vp = VectorSingle(uniquePts[rawVert]);
+                result.vertices.push_back(f32x4(vp, 0.0f));
+                minB = Min(minB, vp);
+                maxB = Max(maxB, vp);
+                sumVerts = sumVerts + vp;
+            }
+            HalfEdge he;
+            he.tail = cast<u8>(vertRemap[rawVert]);
+            he.face = faceOutIdx;
+            he.next = cast<u8>(edgeBase + ((vi + 1u) % qf.vertices.size()));
+            he.twin = 255u;
+            if(result.halfEdges.size() >= 256u)
+                return MakeUnexpected(Failure());
+            result.halfEdges.push_back(he);
+        }
+        result.faces.push_back(outFace);
+    }
+
+    // Link twins.
+    for(usize e0 = 0u; e0 < result.halfEdges.size(); ++e0){
+        if(result.halfEdges[e0].twin != 255u)
+            continue;
+        const u8 a0 = result.halfEdges[e0].tail;
+        const u8 b0 = result.halfEdges[result.halfEdges[e0].next].tail;
+        for(usize e1 = e0 + 1u; e1 < result.halfEdges.size(); ++e1){
+            if(result.halfEdges[e1].twin != 255u)
+                continue;
+            const u8 a1 = result.halfEdges[e1].tail;
+            const u8 b1 = result.halfEdges[result.halfEdges[e1].next].tail;
+            if(a0 == b1 && b0 == a1){
+                result.halfEdges[e0].twin = cast<u8>(e1);
+                result.halfEdges[e1].twin = cast<u8>(e0);
+                break;
+            }
+        }
+        if(result.halfEdges[e0].twin == 255u)
+            return MakeUnexpected(Failure());
+    }
+
+    if(result.halfEdges.size() / 2u > s_MaxHullEdges)
+        return MakeUnexpected(Failure());
+
+    result.centroid = f32x4(sumVerts / cast<f32>(result.vertices.size()), 0.0f);
+    result.halfExtents = f32x4((maxB - minB) * 0.5f, 0.0f);
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

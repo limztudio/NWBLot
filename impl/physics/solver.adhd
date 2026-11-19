@@ -1,0 +1,801 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/physics/world.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_CpuParallelThreshold = 8u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void UpdateBroadPhasePairsCpu(mut PhysicsWorld world, mut CpuTaskScheduler cpuScheduler, mut u32 outPairCount){
+    outPairCount = 0u;
+    const usize moveCount = world.m_broadPhase.moveArray.size();
+    if(moveCount == 0u)
+        return;
+
+    world.m_broadPhase.workerBuckets.resize(moveCount);
+    for(usize i = 0u; i < moveCount; ++i)
+        world.m_broadPhase.workerBuckets[i].clear();
+
+    if(cpuScheduler.isParallelEnabled() && moveCount >= s_CpuParallelThreshold){
+        const usize grain = Max(cast<usize>(1u), moveCount / 16u);
+        const auto res = cpuScheduler.parallelFor(
+            0u,
+            moveCount,
+            grain,
+            lambda[mut world](in usize moveIdx) -> void{
+                const u32 proxyKey = world.m_broadPhase.moveArray[moveIdx];
+                if(proxyKey == s_NullIndex)
+                    return;
+                const u32 treeType = DecodeBroadPhaseTreeType(proxyKey);
+                const u32 proxyId = DecodeBroadPhaseProxyId(proxyKey);
+                const u32 shapeIdA = world.m_broadPhase.trees[treeType].userData(proxyId);
+                if(shapeIdA >= world.m_shapes.size() || !world.m_shapes[shapeIdA].alive)
+                    return;
+                in Shape shapeA = world.m_shapes[shapeIdA];
+                in Aabb3D queryBox = world.m_broadPhase.trees[treeType].fatAabb(proxyId);
+                mut Vector<CandidatePair> bucket = world.m_broadPhase.workerBuckets[moveIdx];
+
+                for(usize t = 0u; t < s_TreeCount; ++t){
+                    if(treeType == s_TreeStatic && t != s_TreeDynamic)
+                        continue;
+                    world.m_broadPhase.trees[t].queryAabb(
+                        queryBox,
+                        shapeA.filter.maskBits,
+                        lambda[in world, in shapeIdA, in shapeA, mut bucket](in u32 otherProxyId, in u32 shapeIdB) -> b8{
+                            if(shapeIdB == shapeIdA || shapeIdB >= world.m_shapes.size() || !world.m_shapes[shapeIdB].alive)
+                                return true;
+                            in Shape shapeB = world.m_shapes[shapeIdB];
+                            if(shapeA.bodyId == shapeB.bodyId)
+                                return true;
+                            if(!ShouldCollideFilters(shapeA.filter, shapeB.filter))
+                                return true;
+                            CandidatePair pair;
+                            if(shapeIdA < shapeIdB){
+                                pair.shapeIdA = shapeIdA;
+                                pair.shapeIdB = shapeIdB;
+                            }
+                            else{
+                                pair.shapeIdA = shapeIdB;
+                                pair.shapeIdB = shapeIdA;
+                            }
+                            bucket.push_back(pair);
+                            return true;
+                        }
+                    );
+                }
+            },
+            CpuTaskOptions()
+        );
+        if(!res.has_value())
+            return;
+    }
+    else{
+        for(usize moveIdx = 0u; moveIdx < moveCount; ++moveIdx){
+            const u32 proxyKey = world.m_broadPhase.moveArray[moveIdx];
+            if(proxyKey == s_NullIndex)
+                continue;
+            const u32 treeType = DecodeBroadPhaseTreeType(proxyKey);
+            const u32 proxyId = DecodeBroadPhaseProxyId(proxyKey);
+            const u32 shapeIdA = world.m_broadPhase.trees[treeType].userData(proxyId);
+            if(shapeIdA >= world.m_shapes.size() || !world.m_shapes[shapeIdA].alive)
+                continue;
+            in Shape shapeA = world.m_shapes[shapeIdA];
+            in Aabb3D queryBox = world.m_broadPhase.trees[treeType].fatAabb(proxyId);
+            mut Vector<CandidatePair> bucket = world.m_broadPhase.workerBuckets[moveIdx];
+
+            for(usize t = 0u; t < s_TreeCount; ++t){
+                if(treeType == s_TreeStatic && t != s_TreeDynamic)
+                    continue;
+                world.m_broadPhase.trees[t].queryAabb(
+                    queryBox,
+                    shapeA.filter.maskBits,
+                    lambda[in world, in shapeIdA, in shapeA, mut bucket](in u32 otherProxyId, in u32 shapeIdB) -> b8{
+                        if(shapeIdB == shapeIdA || shapeIdB >= world.m_shapes.size() || !world.m_shapes[shapeIdB].alive)
+                            return true;
+                        in Shape shapeB = world.m_shapes[shapeIdB];
+                        if(shapeA.bodyId == shapeB.bodyId)
+                            return true;
+                        if(!ShouldCollideFilters(shapeA.filter, shapeB.filter))
+                            return true;
+                        CandidatePair pair;
+                        if(shapeIdA < shapeIdB){
+                            pair.shapeIdA = shapeIdA;
+                            pair.shapeIdB = shapeIdB;
+                        }
+                        else{
+                            pair.shapeIdA = shapeIdB;
+                            pair.shapeIdB = shapeIdA;
+                        }
+                        bucket.push_back(pair);
+                        return true;
+                    }
+                );
+            }
+        }
+    }
+
+    world.m_broadPhase.discoveredPairs.clear();
+    HashSet<u64> seenPairs;
+    for(usize i = 0u; i < moveCount; ++i){
+        in Vector<CandidatePair> bucket = world.m_broadPhase.workerBuckets[i];
+        for(usize j = 0u; j < bucket.size(); ++j){
+            const CandidatePair cp = bucket[j];
+            const u64 key = PackUnorderedU32Pair(cast<isize>(cp.shapeIdA), cast<isize>(cp.shapeIdB));
+            if(seenPairs.insert(key).second)
+                world.m_broadPhase.discoveredPairs.push_back(cp);
+        }
+    }
+
+    SortSequence<CandidatePair>(world.m_broadPhase.discoveredPairs, lambda[](in CandidatePair lhs, in CandidatePair rhs) -> b8{
+        if(lhs.shapeIdA != rhs.shapeIdA)
+            return lhs.shapeIdA < rhs.shapeIdA;
+        return lhs.shapeIdB < rhs.shapeIdB;
+    });
+
+    outPairCount = cast<u32>(world.m_broadPhase.discoveredPairs.size());
+    for(usize i = 0u; i < world.m_broadPhase.discoveredPairs.size(); ++i){
+        const CandidatePair cp = world.m_broadPhase.discoveredPairs[i];
+        world.createContactInternal(cp.shapeIdA, cp.shapeIdB);
+    }
+
+    world.m_broadPhase.clearMoves();
+}
+
+void CollideContactsCpu(mut PhysicsWorld world, mut CpuTaskScheduler cpuScheduler){
+    Vector<u32> activeContactIds;
+    Vector<u32> pruneContactIds;
+    activeContactIds.reserve(world.m_contacts.size());
+
+    for(usize i = 0u; i < world.m_contacts.size(); ++i){
+        in Contact c = world.m_contacts[i];
+        if((c.flags & cast<u32>(ContactFlags::Alive)) == 0u)
+            continue;
+        const u32 bodyIdA = c.edges[0u].bodyId;
+        const u32 bodyIdB = c.edges[1u].bodyId;
+        if(!world.m_bodies[bodyIdA].alive || !world.m_bodies[bodyIdB].alive){
+            pruneContactIds.push_back(cast<u32>(i));
+            continue;
+        }
+        const b8 awakeA = world.m_bodies[bodyIdA].setIndex == s_AwakeSetIndex;
+        const b8 awakeB = world.m_bodies[bodyIdB].setIndex == s_AwakeSetIndex;
+        if(!awakeA && !awakeB)
+            continue;
+
+        in Shape sA = world.m_shapes[c.shapeIdA];
+        in Shape sB = world.m_shapes[c.shapeIdB];
+        if(!AabbOverlaps(FattenAabb(sA.aabb, s_SpeculativeDistance), sB.aabb)){
+            pruneContactIds.push_back(cast<u32>(i));
+            continue;
+        }
+        activeContactIds.push_back(cast<u32>(i));
+    }
+
+    for(usize i = 0u; i < pruneContactIds.size(); ++i)
+        world.destroyContactInternal(pruneContactIds[i]);
+
+    const usize count = activeContactIds.size();
+    if(count == 0u)
+        return;
+
+    Vector<Manifold> evaluatedManifolds;
+    evaluatedManifolds.resize(count);
+
+    if(cpuScheduler.isParallelEnabled() && count >= s_CpuParallelThreshold){
+        const usize grain = Max(cast<usize>(1u), count / 16u);
+        const auto res = cpuScheduler.parallelFor(
+            0u,
+            count,
+            grain,
+            lambda[in world, in activeContactIds, mut evaluatedManifolds](in usize idx) -> void{
+                const u32 cId = activeContactIds[idx];
+                in Contact c = world.m_contacts[cId];
+                in Shape sA = world.m_shapes[c.shapeIdA];
+                in Shape sB = world.m_shapes[c.shapeIdB];
+                in Body bA = world.m_bodies[c.edges[0u].bodyId];
+                in Body bB = world.m_bodies[c.edges[1u].bodyId];
+                in Transform3D xfA = world.m_solverSets[bA.setIndex].sims[bA.localIndex].transform;
+                in Transform3D xfB = world.m_solverSets[bB.setIndex].sims[bB.localIndex].transform;
+                f32 maxDist = s_SpeculativeDistance;
+                if((c.flags & cast<u32>(ContactFlags::Sensor)) != 0u)
+                    maxDist = 0.0f;
+                evaluatedManifolds[idx] = CollideShapePair(sA, xfA, sB, xfB, maxDist);
+            },
+            CpuTaskOptions()
+        );
+        if(!res.has_value())
+            return;
+    }
+    else{
+        for(usize idx = 0u; idx < count; ++idx){
+            const u32 cId = activeContactIds[idx];
+            in Contact c = world.m_contacts[cId];
+            in Shape sA = world.m_shapes[c.shapeIdA];
+            in Shape sB = world.m_shapes[c.shapeIdB];
+            in Body bA = world.m_bodies[c.edges[0u].bodyId];
+            in Body bB = world.m_bodies[c.edges[1u].bodyId];
+            in Transform3D xfA = world.m_solverSets[bA.setIndex].sims[bA.localIndex].transform;
+            in Transform3D xfB = world.m_solverSets[bB.setIndex].sims[bB.localIndex].transform;
+            f32 maxDist = s_SpeculativeDistance;
+            if((c.flags & cast<u32>(ContactFlags::Sensor)) != 0u)
+                maxDist = 0.0f;
+            evaluatedManifolds[idx] = CollideShapePair(sA, xfA, sB, xfB, maxDist);
+        }
+    }
+
+    for(usize idx = 0u; idx < count; ++idx){
+        const u32 cId = activeContactIds[idx];
+        mut Contact c = world.m_contacts[cId];
+        const Manifold oldM = c.manifold;
+        Manifold newM = evaluatedManifolds[idx];
+        MatchManifoldImpulses(oldM, newM, world.m_enableWarmStarting);
+        c.manifold = newM;
+
+        const b8 wasTouching = (c.flags & cast<u32>(ContactFlags::Touching)) != 0u;
+        b8 isTouching = false;
+        if(newM.pointCount > 0u){
+            f32 minSep = newM.points[0u].separation;
+            for(u32 p = 1u; p < newM.pointCount; ++p){
+                if(newM.points[p].separation < minSep)
+                    minSep = newM.points[p].separation;
+            }
+            if(minSep <= s_LinearSlop)
+                isTouching = true;
+        }
+
+        if(isTouching)
+            c.flags |= cast<u32>(ContactFlags::Touching);
+        else
+            c.flags &= ~cast<u32>(ContactFlags::Touching);
+
+        const b8 isSensor = (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u;
+        if(!isSensor){
+            if(newM.pointCount > 0u){
+                if(c.islandId == s_NullIndex && isTouching)
+                    LinkContactToIsland(world.m_bodies, world.m_islands, world.m_freeIslandIds, world.m_solverSets, world.m_contacts, cId);
+                if(c.colorIndex == s_NullIndex)
+                    AddContactToGraph(world.m_graph, world.m_bodies, world.m_contacts[cId]);
+            }
+            else{
+                if(c.colorIndex != s_NullIndex)
+                    RemoveContactFromGraph(world.m_graph, world.m_bodies, world.m_contacts, cId);
+                if(c.islandId != s_NullIndex)
+                    UnlinkContactFromIsland(world.m_islands, world.m_contacts, cId);
+            }
+        }
+
+        if((c.flags & cast<u32>(ContactFlags::EnableContactEvents)) != 0u){
+            if(!wasTouching && isTouching){
+                ContactBeginTouchEvent ev;
+                ev.shapeIdA = world.makeShapeId(c.shapeIdA);
+                ev.shapeIdB = world.makeShapeId(c.shapeIdB);
+                world.m_contactBeginEvents.push_back(ev);
+            }
+            else if(wasTouching && !isTouching){
+                ContactEndTouchEvent ev;
+                ev.shapeIdA = world.makeShapeId(c.shapeIdA);
+                ev.shapeIdB = world.makeShapeId(c.shapeIdB);
+                world.m_contactEndEvents.push_back(ev);
+            }
+        }
+    }
+
+    // Ensure every touching/speculative contact of any newly woken island is registered in the graph.
+    for(usize idx = 0u; idx < count; ++idx){
+        const u32 cId = activeContactIds[idx];
+        mut Contact c = world.m_contacts[cId];
+        if((c.flags & cast<u32>(ContactFlags::Alive)) == 0u || (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u)
+            continue;
+        if(c.manifold.pointCount > 0u && c.colorIndex == s_NullIndex)
+            AddContactToGraph(world.m_graph, world.m_bodies, c);
+    }
+}
+
+void IntegrateBodyVelocitiesRange(
+    mut Vector<BodySim> sims,
+    mut Vector<BodyState> states,
+    in VectorSingle gravity,
+    in f32 h,
+    in f32 maxLinearVelocity,
+    in usize idx
+){
+    mut BodyState state = states[idx];
+    if((state.flags & cast<u32>(BodyFlags::Dynamic)) == 0u)
+        return;
+
+    in BodySim sim = sims[idx];
+    if(sim.invMass <= 0.0f)
+        return;
+
+    VectorSingle v = VectorSingle(state.linearVelocity);
+    VectorSingle w = VectorSingle(state.angularVelocity);
+
+    v = v + VectorSingle(sim.force) * (h * sim.invMass) + gravity * (h * sim.gravityScale);
+    v = v * (1.0f / (1.0f + h * sim.linearDamping));
+
+    w = w + MulMat3Vec(sim.invInertiaWorld, VectorSingle(sim.torque)) * h;
+    if((state.flags & cast<u32>(BodyFlags::EnableGyroscopicTorque)) != 0u){
+        const VectorSingle q = VectorSingle(sim.transform.rotation);
+        const VectorSingle wLocal = Vector3InverseRotate(w, q);
+        const VectorSingle iOmega = MulMat3Vec(sim.inertia, wLocal);
+        const VectorSingle gyroLocal = -Cross(wLocal, iOmega);
+        const VectorSingle wNextLocal = wLocal + MulMat3Vec(sim.invInertiaLocal, gyroLocal) * h;
+        w = Vector3Rotate(wNextLocal, q);
+    }
+    w = w * (1.0f / (1.0f + h * sim.angularDamping));
+
+    v = ApplyLinearLocks(v, state.flags);
+    w = ApplyAngularLocks(w, state.flags);
+
+    const f32 speedSq = Vector3LengthSq(VectorSingle(v, 0.0f)).x;
+    if(speedSq > maxLinearVelocity * maxLinearVelocity && speedSq > s_NormalizeEpsilonSq)
+        v = v * (maxLinearVelocity / Sqrt(speedSq));
+
+    state.linearVelocity = f32x4(v, 0.0f);
+    state.angularVelocity = f32x4(w, 0.0f);
+}
+
+void IntegrateBodyPositionsAt(mut Vector<BodyState> states, in f32 h, in usize idx){
+    mut BodyState state = states[idx];
+    const VectorSingle v = ApplyLinearLocks(VectorSingle(state.linearVelocity), state.flags);
+    const VectorSingle w = ApplyAngularLocks(VectorSingle(state.angularVelocity), state.flags);
+    state.deltaPosition = f32x4(VectorSingle(state.deltaPosition) + v * h, 0.0f);
+    state.deltaRotation = f32x4(IntegrateDeltaQuaternion(VectorSingle(state.deltaRotation), w, h));
+}
+
+void FinalizeAwakeBodyAt(mut PhysicsWorld world, in f32 dt, in usize idx){
+    mut BodySim sim = world.m_solverSets[s_AwakeSetIndex].sims[idx];
+    mut BodyState state = world.m_solverSets[s_AwakeSetIndex].states[idx];
+    mut Body body = world.m_bodies[sim.bodyId];
+
+    const VectorSingle deltaP = VectorSingle(state.deltaPosition);
+    const VectorSingle deltaQ = VectorSingle(state.deltaRotation);
+
+    sim.center0 = sim.center;
+    sim.rotation0 = sim.transform.rotation;
+
+    const VectorSingle newCenter = VectorSingle(sim.center) + deltaP;
+    const VectorSingle newRot = SafeNormalizeQuat(QuaternionMultiply(deltaQ, VectorSingle(sim.transform.rotation)));
+    const VectorSingle newPos = newCenter - Vector3Rotate(VectorSingle(sim.localCenter), newRot);
+
+    sim.center = f32x4(newCenter, 0.0f);
+    sim.transform = Transform3D(newPos, newRot);
+    sim.invInertiaWorld = RotateSymmetricMat3(newRot, sim.invInertiaLocal);
+    sim.force = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    sim.torque = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+
+    state.deltaPosition = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    state.deltaRotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+
+    const VectorSingle v = VectorSingle(state.linearVelocity);
+    const VectorSingle w = VectorSingle(state.angularVelocity);
+    const f32 minExt = Max(sim.minExtent, 1.0e-3f);
+    const f32 linSq = Vector3LengthSq(VectorSingle(v, 0.0f)).x;
+    const f32 angSq = Vector3LengthSq(VectorSingle(w, 0.0f)).x * minExt * minExt;
+    const f32 thresh = body.sleepThreshold;
+    if(body.type == BodyType::Dynamic && (linSq + angSq) <= thresh * thresh)
+        body.sleepTime += dt;
+    else
+        body.sleepTime = 0.0f;
+}
+
+void FinalizeMovedBodiesBroadphaseAndEvents(mut PhysicsWorld world){
+    in SolverSet awakeSet = world.m_solverSets[s_AwakeSetIndex];
+    for(usize idx = 0u; idx < awakeSet.sims.size(); ++idx){
+        in BodySim sim = awakeSet.sims[idx];
+        mut Body body = world.m_bodies[sim.bodyId];
+        const VectorSingle disp = VectorSingle(sim.center) - VectorSingle(sim.center0);
+        const b8 moved = Vector3LengthSq(VectorSingle(disp, 0.0f)).x > 0.0f
+            || Vector4LengthSq(VectorSingle(sim.transform.rotation) - VectorSingle(sim.rotation0)).x > 0.0f;
+
+        if(moved){
+            u32 shapeIdx = body.headShapeId;
+            while(shapeIdx != s_NullIndex){
+                mut Shape shape = world.m_shapes[shapeIdx];
+                shape.aabb = ComputeShapeWorldAabb(shape, sim.transform);
+                if(shape.proxyKey != s_NullIndex)
+                    world.m_broadPhase.moveProxy(shape.proxyKey, shape.aabb, disp);
+                shapeIdx = shape.nextShapeId;
+            }
+        }
+
+        if(body.type == BodyType::Dynamic){
+            BodyMoveEvent ev;
+            ev.bodyId = world.makeBodyId(sim.bodyId);
+            ev.transform = sim.transform;
+            ev.userData = body.userData;
+            ev.fellAsleep = false;
+            body.bodyMoveIndex = cast<u32>(world.m_bodyMoveEvents.size());
+            world.m_bodyMoveEvents.push_back(ev);
+        }
+    }
+}
+
+void EvaluateSleepingIslands(mut PhysicsWorld world){
+    if(!world.m_def.enableSleep)
+        return;
+
+    Vector<u32> islandsToSleep;
+    in Vector<u32> awakeIslands = world.m_solverSets[s_AwakeSetIndex].islands;
+    for(usize i = 0u; i < awakeIslands.size(); ++i){
+        const u32 islandId = awakeIslands[i];
+        in Island island = world.m_islands[islandId];
+        if(!island.alive || island.bodies.empty())
+            continue;
+
+        b8 allCanSleep = true;
+        for(usize bi = 0u; bi < island.bodies.size(); ++bi){
+            in Body body = world.m_bodies[island.bodies[bi]];
+            if((body.flags & cast<u32>(BodyFlags::EnableSleep)) == 0u || body.sleepTime < s_TimeToSleep){
+                allCanSleep = false;
+                break;
+            }
+        }
+        if(allCanSleep)
+            islandsToSleep.push_back(islandId);
+    }
+
+    for(usize i = 0u; i < islandsToSleep.size(); ++i){
+        const u32 islandId = islandsToSleep[i];
+        in Island island = world.m_islands[islandId];
+        for(usize bi = 0u; bi < island.bodies.size(); ++bi){
+            in Body body = world.m_bodies[island.bodies[bi]];
+            if(body.bodyMoveIndex < world.m_bodyMoveEvents.size())
+                world.m_bodyMoveEvents[body.bodyMoveIndex].fellAsleep = true;
+        }
+        SleepIslandWithGraph(
+            world.m_graph,
+            world.m_bodies,
+            world.m_islands,
+            world.m_solverSets,
+            world.m_freeSolverSetIds,
+            world.m_contacts,
+            islandId
+        );
+    }
+}
+
+u32 CountSleepingBodies(in PhysicsWorld world){
+    u32 count = 0u;
+    for(usize s = 3u; s < world.m_solverSets.size(); ++s)
+        count += cast<u32>(world.m_solverSets[s].sims.size());
+    return count;
+}
+
+void SolveStepCpu(mut PhysicsWorld world, in f32 dt, in u32 subStepCount, mut CpuTaskScheduler cpuScheduler){
+    world.m_bodyMoveEvents.clear();
+    world.m_contactBeginEvents.clear();
+    world.m_contactEndEvents.clear();
+    world.m_contactHitEvents.clear();
+
+    u32 pairCount = 0u;
+    UpdateBroadPhasePairsCpu(world, cpuScheduler, pairCount);
+    CollideContactsCpu(world, cpuScheduler);
+
+    // Split any awake islands that lost contacts.
+    const usize awakeIslandSnapshotCount = world.m_solverSets[s_AwakeSetIndex].islands.size();
+    Vector<u32> candidateSplitIslands;
+    for(usize i = 0u; i < awakeIslandSnapshotCount; ++i){
+        const u32 islandId = world.m_solverSets[s_AwakeSetIndex].islands[i];
+        if(world.m_islands[islandId].alive && world.m_islands[islandId].constraintRemoveCount > 0u)
+            candidateSplitIslands.push_back(islandId);
+    }
+    for(usize i = 0u; i < candidateSplitIslands.size(); ++i){
+        SplitIslandInWorld(
+            world.m_bodies,
+            world.m_islands,
+            world.m_freeIslandIds,
+            world.m_solverSets,
+            world.m_contacts,
+            candidateSplitIslands[i]
+        );
+    }
+
+    if(dt <= 0.0f || subStepCount == 0u){
+        mut SolverSet awakeSet = world.m_solverSets[s_AwakeSetIndex];
+        for(usize i = 0u; i < awakeSet.sims.size(); ++i){
+            awakeSet.sims[i].force = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+            awakeSet.sims[i].torque = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        }
+        world.m_lastStats.bodyCount = world.activeBodyCount();
+        world.m_lastStats.awakeBodyCount = world.awakeBodyCount();
+        world.m_lastStats.sleepingBodyCount = CountSleepingBodies(world);
+        world.m_lastStats.shapeCount = world.activeShapeCount();
+        world.m_lastStats.contactCount = cast<u32>(world.m_pairContactMap.size());
+        world.m_lastStats.islandCount = cast<u32>(world.m_solverSets[s_AwakeSetIndex].islands.size());
+        world.m_lastStats.overflowContactCount = cast<u32>(world.m_graph.colors[s_OverflowColorIndex].contactIds.size());
+        world.m_lastStats.broadphasePairCount = pairCount;
+        world.m_lastStats.backendUsed = ExecutionBackendUsed::Cpu;
+        return;
+    }
+
+    const f32 h = dt / cast<f32>(subStepCount);
+    const f32 invH = 1.0f / h;
+    const Softness dynamicSoftness = MakeSoftness(world.m_def.contactHertz, world.m_def.contactDampingRatio, h);
+    const Softness staticSoftness = MakeSoftness(2.0f * world.m_def.contactHertz, world.m_def.contactDampingRatio, h);
+    const VectorSingle gravity = VectorSingle(world.m_def.gravity);
+
+    // Prepare contact constraints per graph color.
+    Array<Vector<ContactConstraint>, s_GraphColorCount> colorConstraints;
+    for(usize c = 0u; c < s_GraphColorCount; ++c){
+        const usize cCount = world.m_graph.colors[c].contactIds.size();
+        colorConstraints[c].resize(cCount);
+        if(cCount == 0u)
+            continue;
+
+        if(cpuScheduler.isParallelEnabled() && cCount >= s_CpuParallelThreshold){
+            const usize grain = Max(cast<usize>(1u), cCount / 16u);
+            const auto res = cpuScheduler.parallelFor(
+                0u,
+                cCount,
+                grain,
+                lambda[in world, in dynamicSoftness, in staticSoftness, in c, mut colorConstraints](in usize idx) -> void{
+                    const u32 contactId = world.m_graph.colors[c].contactIds[idx];
+                    PrepareContactConstraint(
+                        world.m_bodies,
+                        world.m_solverSets,
+                        world.m_contacts[contactId],
+                        dynamicSoftness,
+                        staticSoftness,
+                        world.m_enableWarmStarting,
+                        colorConstraints[c][idx]
+                    );
+                },
+                CpuTaskOptions()
+            );
+            if(!res.has_value())
+                return;
+        }
+        else{
+            for(usize idx = 0u; idx < cCount; ++idx){
+                const u32 contactId = world.m_graph.colors[c].contactIds[idx];
+                PrepareContactConstraint(
+                    world.m_bodies,
+                    world.m_solverSets,
+                    world.m_contacts[contactId],
+                    dynamicSoftness,
+                    staticSoftness,
+                    world.m_enableWarmStarting,
+                    colorConstraints[c][idx]
+                );
+            }
+        }
+    }
+
+    const usize awakeCount = world.m_solverSets[s_AwakeSetIndex].sims.size();
+    const f32 maxLinVel = world.m_def.maxLinearVelocity;
+    mut Vector<BodySim> sims = world.m_solverSets[s_AwakeSetIndex].sims;
+    mut Vector<BodyState> states = world.m_solverSets[s_AwakeSetIndex].states;
+
+    for(u32 subStep = 0u; subStep < subStepCount; ++subStep){
+        // 1. Integrate velocities.
+        if(cpuScheduler.isParallelEnabled() && awakeCount >= s_CpuParallelThreshold){
+            const usize grain = Max(cast<usize>(1u), awakeCount / 16u);
+            const auto res = cpuScheduler.parallelFor(
+                0u,
+                awakeCount,
+                grain,
+                lambda[mut sims, mut states, in gravity, in h, in maxLinVel](in usize idx) -> void{
+                    IntegrateBodyVelocitiesRange(sims, states, gravity, h, maxLinVel, idx);
+                },
+                CpuTaskOptions()
+            );
+            if(!res.has_value())
+                return;
+        }
+        else{
+            for(usize idx = 0u; idx < awakeCount; ++idx)
+                IntegrateBodyVelocitiesRange(sims, states, gravity, h, maxLinVel, idx);
+        }
+
+        // 2. Warm start (or clear per-substep impulses when warm-starting is disabled).
+        if(world.m_enableWarmStarting){
+            for(usize c = 0u; c < s_OverflowColorIndex; ++c){
+                const usize cCount = colorConstraints[c].size();
+                if(cCount == 0u)
+                    continue;
+                if(cpuScheduler.isParallelEnabled() && cCount >= s_CpuParallelThreshold){
+                    const usize grain = Max(cast<usize>(1u), cCount / 16u);
+                    const auto res = cpuScheduler.parallelFor(
+                        0u,
+                        cCount,
+                        grain,
+                        lambda[mut states, in colorConstraints, in c](in usize idx) -> void{
+                            WarmStartContactConstraint(states, colorConstraints[c][idx]);
+                        },
+                        CpuTaskOptions()
+                    );
+                    if(!res.has_value())
+                        return;
+                }
+                else{
+                    for(usize idx = 0u; idx < cCount; ++idx)
+                        WarmStartContactConstraint(states, colorConstraints[c][idx]);
+                }
+            }
+            for(usize idx = 0u; idx < colorConstraints[s_OverflowColorIndex].size(); ++idx)
+                WarmStartContactConstraint(states, colorConstraints[s_OverflowColorIndex][idx]);
+        }
+        else if(subStep > 0u){
+            for(usize c = 0u; c < s_GraphColorCount; ++c){
+                for(usize idx = 0u; idx < colorConstraints[c].size(); ++idx)
+                    ResetContactConstraintSubStepImpulses(colorConstraints[c][idx]);
+            }
+        }
+
+        // 3. Solve with bias.
+        for(usize c = 0u; c < s_OverflowColorIndex; ++c){
+            const usize cCount = colorConstraints[c].size();
+            if(cCount == 0u)
+                continue;
+            if(cpuScheduler.isParallelEnabled() && cCount >= s_CpuParallelThreshold){
+                const usize grain = Max(cast<usize>(1u), cCount / 16u);
+                const auto res = cpuScheduler.parallelFor(
+                    0u,
+                    cCount,
+                    grain,
+                    lambda[mut states, mut colorConstraints, in c, in invH](in usize idx) -> void{
+                        SolveContactConstraint(states, colorConstraints[c][idx], invH, true);
+                    },
+                    CpuTaskOptions()
+                );
+                if(!res.has_value())
+                    return;
+            }
+            else{
+                for(usize idx = 0u; idx < cCount; ++idx)
+                    SolveContactConstraint(states, colorConstraints[c][idx], invH, true);
+            }
+        }
+        for(usize idx = 0u; idx < colorConstraints[s_OverflowColorIndex].size(); ++idx)
+            SolveContactConstraint(states, colorConstraints[s_OverflowColorIndex][idx], invH, true);
+
+        // 4. Integrate positions.
+        if(cpuScheduler.isParallelEnabled() && awakeCount >= s_CpuParallelThreshold){
+            const usize grain = Max(cast<usize>(1u), awakeCount / 16u);
+            const auto res = cpuScheduler.parallelFor(
+                0u,
+                awakeCount,
+                grain,
+                lambda[mut states, in h](in usize idx) -> void{
+                    IntegrateBodyPositionsAt(states, h, idx);
+                },
+                CpuTaskOptions()
+            );
+            if(!res.has_value())
+                return;
+        }
+        else{
+            for(usize idx = 0u; idx < awakeCount; ++idx)
+                IntegrateBodyPositionsAt(states, h, idx);
+        }
+
+        // 5. Relax without bias.
+        for(usize c = 0u; c < s_OverflowColorIndex; ++c){
+            const usize cCount = colorConstraints[c].size();
+            if(cCount == 0u)
+                continue;
+            if(cpuScheduler.isParallelEnabled() && cCount >= s_CpuParallelThreshold){
+                const usize grain = Max(cast<usize>(1u), cCount / 16u);
+                const auto res = cpuScheduler.parallelFor(
+                    0u,
+                    cCount,
+                    grain,
+                    lambda[mut states, mut colorConstraints, in c, in invH](in usize idx) -> void{
+                        SolveContactConstraint(states, colorConstraints[c][idx], invH, false);
+                    },
+                    CpuTaskOptions()
+                );
+                if(!res.has_value())
+                    return;
+            }
+            else{
+                for(usize idx = 0u; idx < cCount; ++idx)
+                    SolveContactConstraint(states, colorConstraints[c][idx], invH, false);
+            }
+        }
+        for(usize idx = 0u; idx < colorConstraints[s_OverflowColorIndex].size(); ++idx)
+            SolveContactConstraint(states, colorConstraints[s_OverflowColorIndex][idx], invH, false);
+    }
+
+    // 6. Restitution pass.
+    const f32 restThresh = world.m_def.restitutionThreshold;
+    for(usize c = 0u; c < s_OverflowColorIndex; ++c){
+        const usize cCount = colorConstraints[c].size();
+        if(cCount == 0u)
+            continue;
+        if(cpuScheduler.isParallelEnabled() && cCount >= s_CpuParallelThreshold){
+            const usize grain = Max(cast<usize>(1u), cCount / 16u);
+            const auto res = cpuScheduler.parallelFor(
+                0u,
+                cCount,
+                grain,
+                lambda[mut states, mut colorConstraints, in c, in restThresh](in usize idx) -> void{
+                    ApplyRestitutionContactConstraint(states, colorConstraints[c][idx], restThresh);
+                },
+                CpuTaskOptions()
+            );
+            if(!res.has_value())
+                return;
+        }
+        else{
+            for(usize idx = 0u; idx < cCount; ++idx)
+                ApplyRestitutionContactConstraint(states, colorConstraints[c][idx], restThresh);
+        }
+    }
+    for(usize idx = 0u; idx < colorConstraints[s_OverflowColorIndex].size(); ++idx)
+        ApplyRestitutionContactConstraint(states, colorConstraints[s_OverflowColorIndex][idx], restThresh);
+
+    // 7. Store impulses back to contacts & emit hit events.
+    for(usize c = 0u; c < s_GraphColorCount; ++c){
+        for(usize idx = 0u; idx < colorConstraints[c].size(); ++idx){
+            in ContactConstraint cc = colorConstraints[c][idx];
+            mut Contact contact = world.m_contacts[cc.contactId];
+            StoreContactConstraintImpulses(cc, contact);
+            if((contact.flags & cast<u32>(ContactFlags::EnableHitEvents)) != 0u){
+                f32 maxApproach = 0.0f;
+                for(u32 p = 0u; p < cc.pointCount; ++p){
+                    if(-cc.points[p].relativeVelocity > maxApproach && cc.points[p].totalNormalImpulse > 0.0f)
+                        maxApproach = -cc.points[p].relativeVelocity;
+                }
+                if(maxApproach >= world.m_def.hitEventThreshold){
+                    ContactHitEvent hitEv;
+                    hitEv.shapeIdA = world.makeShapeId(contact.shapeIdA);
+                    hitEv.shapeIdB = world.makeShapeId(contact.shapeIdB);
+                    hitEv.normal = contact.manifold.normal;
+                    hitEv.point = contact.manifold.points[0u].point;
+                    hitEv.approachSpeed = maxApproach;
+                    world.m_contactHitEvents.push_back(hitEv);
+                }
+            }
+        }
+    }
+
+    // 8. Finalize awake body transforms, inertia, sleep timers, broadphase & move events.
+    if(cpuScheduler.isParallelEnabled() && awakeCount >= s_CpuParallelThreshold){
+        const usize grain = Max(cast<usize>(1u), awakeCount / 16u);
+        const auto res = cpuScheduler.parallelFor(
+            0u,
+            awakeCount,
+            grain,
+            lambda[mut world, in dt](in usize idx) -> void{
+                FinalizeAwakeBodyAt(world, dt, idx);
+            },
+            CpuTaskOptions()
+        );
+        if(!res.has_value())
+            return;
+    }
+    else{
+        for(usize idx = 0u; idx < awakeCount; ++idx)
+            FinalizeAwakeBodyAt(world, dt, idx);
+    }
+
+    FinalizeMovedBodiesBroadphaseAndEvents(world);
+    EvaluateSleepingIslands(world);
+
+    world.m_lastStats.bodyCount = world.activeBodyCount();
+    world.m_lastStats.awakeBodyCount = world.awakeBodyCount();
+    world.m_lastStats.sleepingBodyCount = CountSleepingBodies(world);
+    world.m_lastStats.shapeCount = world.activeShapeCount();
+    world.m_lastStats.contactCount = cast<u32>(world.m_pairContactMap.size());
+    world.m_lastStats.islandCount = cast<u32>(world.m_solverSets[s_AwakeSetIndex].islands.size());
+    world.m_lastStats.overflowContactCount = cast<u32>(world.m_graph.colors[s_OverflowColorIndex].contactIds.size());
+    world.m_lastStats.broadphasePairCount = pairCount;
+    world.m_lastStats.backendUsed = ExecutionBackendUsed::Cpu;
+}
+
+void StepPhysicsWorld(mut PhysicsWorld world, in f32 dt, in u32 subStepCount, mut CpuTaskScheduler cpuScheduler){
+    SolveStepCpu(world, dt, subStepCount, cpuScheduler);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

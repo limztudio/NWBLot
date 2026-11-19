@@ -1,0 +1,149 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/physics/solver.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_GpuWorkgroupSize = 64u;
+const u32 s_GpuInvalidIndex = 0xffffffffu;
+
+const u32 s_GpuShapeFlagIsBox = 0x00000001u;
+const u32 s_GpuShapeFlagSensor = 0x00000002u;
+const u32 s_GpuShapeFlagSpeculative = 0x00000004u;
+const u32 s_GpuShapeFlagDynamicBody = 0x00010000u;
+
+const u32 s_GpuBroadphaseModeUpdateAabbs = 0u;
+const u32 s_GpuBroadphaseModeEmitPairs = 1u;
+
+const u32 s_GpuSolverModeWarmStart = 0u;
+const u32 s_GpuSolverModeSolveBias = 1u;
+const u32 s_GpuSolverModeRelax = 2u;
+const u32 s_GpuSolverModeRestitution = 3u;
+
+const u32 s_GpuPushConstantsBytes = 80u;
+const u32 s_GpuBodyStateBytes = 64u;
+const u32 s_GpuBodySimBytes = 176u;
+const u32 s_GpuShapeProxyBytes = 112u;
+const u32 s_GpuBroadphasePairBytes = 16u;
+const u32 s_GpuNarrowphaseManifoldBytes = 176u;
+const u32 s_GpuContactPointBytes = 64u;
+const u32 s_GpuContactConstraintBytes = 528u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GpuPhysicsPushConstants{
+    public u32 itemCount = 0u;
+    public u32 itemOffset = 0u;
+    public u32 modeOrSecondaryCount = 0u;
+    public u32 flags = 0u;
+    public f32 deltaTime = 0.0f;
+    public f32 invDeltaTime = 0.0f;
+    public f32 maxLinearVelocity = 0.0f;
+    public f32 linearSlop = 0.0f;
+    public f32x4 gravitySpeculative(0.0f, 0.0f, 0.0f, 0.0f);
+    public u32x4 slots0(s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+    public u32x4 slots1(s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+}
+
+class GpuPhysicsBodyState{
+    public f32x4 linearVelocityPad(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 angularVelocityPad(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 deltaPositionFlags(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 deltaRotation(0.0f, 0.0f, 0.0f, 1.0f);
+}
+
+class GpuPhysicsBodySim{
+    public f32x4 positionInvMass(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 rotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 forceLinearDamping(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 torqueAngularDamping(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 gravityScaleFlags(1.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 invInertiaWorldRow0(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 invInertiaWorldRow1(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 invInertiaWorldRow2(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 invInertiaLocalRow0(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 invInertiaLocalRow1(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 invInertiaLocalRow2(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+class GpuPhysicsShapeProxy{
+    public f32x4 localCenterRadius(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localExtentOrP1(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 aabbMinPad(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 aabbMaxPad(0.0f, 0.0f, 0.0f, 0.0f);
+    public u32x4 bodyIndexTypeShape(s_GpuInvalidIndex, 0u, s_GpuInvalidIndex, 0u);
+    public u32x4 filterData(0u, 0u, 0u, 0u);
+}
+
+class GpuPhysicsBroadphasePair{
+    public u32x4 indices(s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+}
+
+class GpuPhysicsNarrowphaseManifold{
+    public u32x4 pairInfo(0u, 0u, 0u, 0u);
+    public f32x4 normalPad(0.0f, 1.0f, 0.0f, 0.0f);
+    public Array<f32x4, s_MaxManifoldPoints> anchorA;
+    public Array<f32x4, s_MaxManifoldPoints> anchorBSeparation;
+    public u32x4 featureIds(0u, 0u, 0u, 0u);
+}
+
+class GpuPhysicsContactPoint{
+    public f32x4 rABaseSep(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 rBRelVel(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 impulsesMass(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 anchorLever(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+class GpuPhysicsContactConstraint{
+    public u32x4 indicesCountFlags(s_GpuInvalidIndex, s_GpuInvalidIndex, 0u, 0u);
+    public f32x4 normalFriction(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32x4 tangent1Restitution(1.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 tangent2Rolling(0.0f, 0.0f, 1.0f, 0.0f);
+    public f32x4 centerATwistMass(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 centerBTwistImpulse(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 softnessTangent00(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32x4 tangentMassFriction(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 invMassTangentVel(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 invIA0(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 invIA1(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 invIA2(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 invIB0(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 invIB1(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 invIB2(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 rollingMass0(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 rollingMass1(0.0f, 0.0f, 0.0f, 0.0f);
+    public Array<GpuPhysicsContactPoint, s_MaxManifoldPoints> points;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(size_of<GpuPhysicsPushConstants>() == s_GpuPushConstantsBytes, "GpuPhysicsPushConstants layout drifted from shader");
+static_assert(size_of<GpuPhysicsBodyState>() == s_GpuBodyStateBytes, "GpuPhysicsBodyState layout drifted from shader");
+static_assert(size_of<GpuPhysicsBodySim>() == s_GpuBodySimBytes, "GpuPhysicsBodySim layout drifted from shader");
+static_assert(size_of<GpuPhysicsShapeProxy>() == s_GpuShapeProxyBytes, "GpuPhysicsShapeProxy layout drifted from shader");
+static_assert(size_of<GpuPhysicsBroadphasePair>() == s_GpuBroadphasePairBytes, "GpuPhysicsBroadphasePair layout drifted from shader");
+static_assert(size_of<GpuPhysicsNarrowphaseManifold>() == s_GpuNarrowphaseManifoldBytes, "GpuPhysicsNarrowphaseManifold layout drifted from shader");
+static_assert(size_of<GpuPhysicsContactPoint>() == s_GpuContactPointBytes, "GpuPhysicsContactPoint layout drifted from shader");
+static_assert(size_of<GpuPhysicsContactConstraint>() == s_GpuContactConstraintBytes, "GpuPhysicsContactConstraint layout drifted from shader");
+
+static_assert(is_trivially_copyable<GpuPhysicsPushConstants>(), "GpuPhysicsPushConstants must stay trivially copyable");
+static_assert(is_trivially_copyable<GpuPhysicsBodyState>(), "GpuPhysicsBodyState must stay trivially copyable");
+static_assert(is_trivially_copyable<GpuPhysicsBodySim>(), "GpuPhysicsBodySim must stay trivially copyable");
+static_assert(is_trivially_copyable<GpuPhysicsShapeProxy>(), "GpuPhysicsShapeProxy must stay trivially copyable");
+static_assert(is_trivially_copyable<GpuPhysicsBroadphasePair>(), "GpuPhysicsBroadphasePair must stay trivially copyable");
+static_assert(is_trivially_copyable<GpuPhysicsNarrowphaseManifold>(), "GpuPhysicsNarrowphaseManifold must stay trivially copyable");
+static_assert(is_trivially_copyable<GpuPhysicsContactPoint>(), "GpuPhysicsContactPoint must stay trivially copyable");
+static_assert(is_trivially_copyable<GpuPhysicsContactConstraint>(), "GpuPhysicsContactConstraint must stay trivially copyable");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

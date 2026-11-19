@@ -1,0 +1,270 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/physics/island.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class BitSet{
+    private Vector<u64> m_words;
+
+    public void clearAll(){
+        for(usize i = 0u; i < this.m_words.size(); ++i)
+            this.m_words[i] = 0u;
+    }
+
+    public void ensureCapacity(in u32 bitIndex){
+        const usize wordIndex = cast<usize>(bitIndex >> 6u);
+        if(wordIndex >= this.m_words.size())
+            this.m_words.resize(wordIndex + 1u, 0u);
+    }
+
+    public void setBit(in u32 bitIndex){
+        this.ensureCapacity(bitIndex);
+        const usize wordIndex = cast<usize>(bitIndex >> 6u);
+        const u64 mask = cast<u64>(1u) << (bitIndex & 63u);
+        this.m_words[wordIndex] = this.m_words[wordIndex] | mask;
+    }
+
+    public void clearBit(in u32 bitIndex){
+        const usize wordIndex = cast<usize>(bitIndex >> 6u);
+        if(wordIndex >= this.m_words.size())
+            return;
+        const u64 mask = cast<u64>(1u) << (bitIndex & 63u);
+        this.m_words[wordIndex] = this.m_words[wordIndex] & (~mask);
+    }
+
+    public b8 getBit(in u32 bitIndex)const{
+        const usize wordIndex = cast<usize>(bitIndex >> 6u);
+        if(wordIndex >= this.m_words.size())
+            return false;
+        const u64 mask = cast<u64>(1u) << (bitIndex & 63u);
+        return (this.m_words[wordIndex] & mask) != 0u;
+    }
+}
+
+class GraphColor{
+    public BitSet bodySet;
+    public Vector<u32> contactIds;
+
+    public void clear(){
+        this.bodySet.clearAll();
+        this.contactIds.clear();
+    }
+}
+
+class ConstraintGraph{
+    public Array<GraphColor, s_GraphColorCount> colors;
+
+    public void clear(){
+        for(usize i = 0u; i < s_GraphColorCount; ++i)
+            this.colors[i].clear();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void AddContactToGraph(mut ConstraintGraph graph, in Vector<Body> bodies, mut Contact contact){
+    if(contact.colorIndex != s_NullIndex)
+        return;
+
+    const u32 bodyIdA = contact.edges[0u].bodyId;
+    const u32 bodyIdB = contact.edges[1u].bodyId;
+    const b8 staticA = (bodies[bodyIdA].type == BodyType::Static || bodies[bodyIdA].type == BodyType::Kinematic);
+    const b8 staticB = (bodies[bodyIdB].type == BodyType::Static || bodies[bodyIdB].type == BodyType::Kinematic);
+
+    usize chosenColor = s_OverflowColorIndex;
+    if(!staticA && !staticB){
+        for(usize c = 0u; c < s_DynamicColorCount; ++c){
+            if(!graph.colors[c].bodySet.getBit(bodyIdA) && !graph.colors[c].bodySet.getBit(bodyIdB)){
+                chosenColor = c;
+                break;
+            }
+        }
+    }
+    else{
+        // Dynamic-static/kinematic contacts prefer the upper priority colors (20..22), falling back to 0..19 before overflow.
+        b8 found = false;
+        for(usize c = s_DynamicColorCount; c < s_OverflowColorIndex; ++c){
+            if((staticA || !graph.colors[c].bodySet.getBit(bodyIdA)) && (staticB || !graph.colors[c].bodySet.getBit(bodyIdB))){
+                chosenColor = c;
+                found = true;
+                break;
+            }
+        }
+        if(!found){
+            for(usize c = 0u; c < s_DynamicColorCount; ++c){
+                if((staticA || !graph.colors[c].bodySet.getBit(bodyIdA)) && (staticB || !graph.colors[c].bodySet.getBit(bodyIdB))){
+                    chosenColor = c;
+                    break;
+                }
+            }
+        }
+    }
+
+    mut GraphColor color = graph.colors[chosenColor];
+    if(chosenColor != s_OverflowColorIndex){
+        if(!staticA)
+            color.bodySet.setBit(bodyIdA);
+        if(!staticB)
+            color.bodySet.setBit(bodyIdB);
+    }
+
+    contact.colorIndex = cast<u32>(chosenColor);
+    contact.localIndex = cast<u32>(color.contactIds.size());
+    color.contactIds.push_back(contact.contactId);
+}
+
+void RemoveContactFromGraph(mut ConstraintGraph graph, in Vector<Body> bodies, mut Vector<Contact> contacts, in u32 contactId){
+    mut Contact contact = contacts[contactId];
+    const u32 colorIdx = contact.colorIndex;
+    if(colorIdx >= s_GraphColorCount)
+        return;
+
+    mut GraphColor color = graph.colors[colorIdx];
+    const u32 localIdx = contact.localIndex;
+    const u32 bodyIdA = contact.edges[0u].bodyId;
+    const u32 bodyIdB = contact.edges[1u].bodyId;
+
+    if(localIdx < color.contactIds.size()){
+        const u32 lastIdx = cast<u32>(color.contactIds.size() - 1u);
+        if(localIdx != lastIdx){
+            const u32 movedContactId = color.contactIds[lastIdx];
+            color.contactIds[localIdx] = movedContactId;
+            contacts[movedContactId].localIndex = localIdx;
+        }
+        color.contactIds.pop_back();
+    }
+
+    if(colorIdx != s_OverflowColorIndex){
+        if(bodies[bodyIdA].type == BodyType::Dynamic)
+            color.bodySet.clearBit(bodyIdA);
+        if(bodies[bodyIdB].type == BodyType::Dynamic)
+            color.bodySet.clearBit(bodyIdB);
+    }
+
+    contact.colorIndex = s_NullIndex;
+    contact.localIndex = s_NullIndex;
+}
+
+void WakeIslandWithGraph(
+    mut ConstraintGraph graph,
+    mut Vector<Body> bodies,
+    mut Vector<Island> islands,
+    mut Vector<SolverSet> sets,
+    mut Vector<u32> freeSolverSetIds,
+    mut Vector<Contact> contacts,
+    in u32 islandId
+){
+    if(islandId == s_NullIndex || islandId >= islands.size() || !islands[islandId].alive)
+        return;
+    const u32 oldSetIndex = islands[islandId].setIndex;
+    if(oldSetIndex == s_AwakeSetIndex || oldSetIndex < 3u)
+        return;
+
+    WakeIslandInSets(bodies, islands, sets, contacts, islandId);
+
+    if(oldSetIndex < sets.size() && sets[oldSetIndex].sims.empty() && sets[oldSetIndex].islands.empty())
+        freeSolverSetIds.push_back(oldSetIndex);
+
+    in Island island = islands[islandId];
+    for(usize i = 0u; i < island.contacts.size(); ++i){
+        const u32 cId = island.contacts[i].contactId;
+        if(cId < contacts.size() && contacts[cId].manifold.pointCount > 0u)
+            AddContactToGraph(graph, bodies, contacts[cId]);
+    }
+}
+
+void WakeBodyWithGraph(
+    mut ConstraintGraph graph,
+    mut Vector<Body> bodies,
+    mut Vector<Island> islands,
+    mut Vector<SolverSet> sets,
+    mut Vector<u32> freeSolverSetIds,
+    mut Vector<Contact> contacts,
+    in u32 bodyId
+){
+    if(bodyId >= bodies.size() || !bodies[bodyId].alive)
+        return;
+    const u32 setIdx = bodies[bodyId].setIndex;
+    if(setIdx == s_StaticSetIndex || setIdx == s_DisabledSetIndex || setIdx == s_AwakeSetIndex)
+        return;
+
+    if(bodies[bodyId].islandId != s_NullIndex){
+        WakeIslandWithGraph(graph, bodies, islands, sets, freeSolverSetIds, contacts, bodies[bodyId].islandId);
+        return;
+    }
+
+    WakeBodyWithIsland(bodies, islands, sets, contacts, bodyId);
+}
+
+void SleepIslandWithGraph(
+    mut ConstraintGraph graph,
+    mut Vector<Body> bodies,
+    mut Vector<Island> islands,
+    mut Vector<SolverSet> sets,
+    mut Vector<u32> freeSolverSetIds,
+    mut Vector<Contact> contacts,
+    in u32 islandId
+){
+    if(islandId == s_NullIndex || islandId >= islands.size() || !islands[islandId].alive)
+        return;
+    if(islands[islandId].setIndex != s_AwakeSetIndex)
+        return;
+
+    u32 sleepSetIndex = s_NullIndex;
+    if(!freeSolverSetIds.empty()){
+        sleepSetIndex = freeSolverSetIds[freeSolverSetIds.size() - 1u];
+        freeSolverSetIds.pop_back();
+    }
+    else{
+        sleepSetIndex = cast<u32>(sets.size());
+        SolverSet newSet;
+        newSet.setIndex = sleepSetIndex;
+        sets.push_back(newSet);
+    }
+
+    in Island island = islands[islandId];
+    for(usize i = 0u; i < island.contacts.size(); ++i){
+        const u32 cId = island.contacts[i].contactId;
+        if(cId < contacts.size() && contacts[cId].colorIndex != s_NullIndex)
+            RemoveContactFromGraph(graph, bodies, contacts, cId);
+    }
+
+    for(usize i = 0u; i < island.bodies.size(); ++i){
+        const u32 bodyId = island.bodies[i];
+        mut Body body = bodies[bodyId];
+        if(body.setIndex != s_AwakeSetIndex || body.localIndex >= sets[s_AwakeSetIndex].sims.size())
+            continue;
+        BodySim sim = sets[s_AwakeSetIndex].sims[body.localIndex];
+        sim.force = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        sim.torque = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        BodyState emptyState;
+        emptyState.flags = sim.flags;
+        RemoveBodyFromSolverSet(bodies, contacts, sets[s_AwakeSetIndex], body.localIndex);
+        AddBodyToSolverSet(bodies, sets[sleepSetIndex], sim, emptyState);
+    }
+
+    const u32 oldLocal = islands[islandId].localIndex;
+    if(oldLocal < sets[s_AwakeSetIndex].islands.size()){
+        const u32 lastIdx = cast<u32>(sets[s_AwakeSetIndex].islands.size() - 1u);
+        if(oldLocal != lastIdx){
+            const u32 movedId = sets[s_AwakeSetIndex].islands[lastIdx];
+            sets[s_AwakeSetIndex].islands[oldLocal] = movedId;
+            islands[movedId].localIndex = oldLocal;
+        }
+        sets[s_AwakeSetIndex].islands.pop_back();
+    }
+    islands[islandId].setIndex = sleepSetIndex;
+    islands[islandId].localIndex = cast<u32>(sets[sleepSetIndex].islands.size());
+    sets[sleepSetIndex].islands.push_back(islandId);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

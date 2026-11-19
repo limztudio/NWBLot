@@ -24,7 +24,7 @@ class UiSearchComboLabelResolver : IUiLabelResolver{
     }
 }
 
-class UiFilteredListState<ResolverT : IUiLabelResolver, const usize LabelCount, const u64 DisabledKey>{
+class UiFilteredListState<ResolverT : IUiLabelResolver, const usize LabelCount, const u64 DisabledKey> : IUiFilteredListState{
     private String m_query = "";
     private Array<u64, LabelCount> m_indices;
     private u64 m_count = cast<u64>(LabelCount);
@@ -35,37 +35,37 @@ class UiFilteredListState<ResolverT : IUiLabelResolver, const usize LabelCount, 
             this.m_indices[index] = cast<u64>(index);
     }
 
-    public u64 rowCount()const{
+    public u64 rowCount()const override{
         return cast<u64>(LabelCount);
     }
 
-    public u64 filteredRowCount()const{
+    public u64 filteredRowCount()const override{
         return this.m_count;
     }
 
-    public u64 filteredGeneration()const{
+    public u64 filteredGeneration()const override{
         return s_FilteredInstanceGeneration;
     }
 
-    public u64 filteredRevision()const{
+    public u64 filteredRevision()const override{
         return this.m_viewRevision;
     }
 
-    public u64 key(in u64 index)const{
+    public u64 key(in u64 index)const override{
         return ResolveImmutableListSourceKey(index, LabelCount);
     }
 
-    public u64 filteredKey(in u64 index)const{
+    public u64 filteredKey(in u64 index)const override{
         if(index < this.m_count)
             return this.key(this.m_indices[cast<usize>(index)]);
         return 0u;
     }
 
-    public Expected<u64> indexOf(in u64 keyValue)const{
+    public Expected<u64> indexOf(in u64 keyValue)const override{
         return TryResolveImmutableListSourceIndex(keyValue, LabelCount);
     }
 
-    public Expected<u64> filteredIndexOf(in u64 keyValue)const{
+    public Expected<u64> filteredIndexOf(in u64 keyValue)const override{
         for(u64 candidate = 0u; candidate < this.m_count && cast<usize>(candidate) < LabelCount; ++candidate){
             if(ResolveImmutableListSourceKey(this.m_indices[cast<usize>(candidate)], LabelCount) == keyValue)
                 return candidate;
@@ -73,19 +73,19 @@ class UiFilteredListState<ResolverT : IUiLabelResolver, const usize LabelCount, 
         return MakeUnexpected(Failure());
     }
 
-    public b8 enabled(in u64 index)const{
+    public b8 enabled(in u64 index)const override{
         return IsImmutableListSourceRowEnabled(index, LabelCount, DisabledKey);
     }
 
-    public b8 filteredEnabled(in u64 index)const{
+    public b8 filteredEnabled(in u64 index)const override{
         return index < this.m_count && this.enabled(this.m_indices[cast<usize>(index)]);
     }
 
-    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const{
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{
         return FindEnabledImmutableListSourceRow(start, reverse, LabelCount, DisabledKey);
     }
 
-    public Expected<u64> filteredFindEnabled(in u64 start, in b8 reverse)const{
+    public Expected<u64> filteredFindEnabled(in u64 start, in b8 reverse)const override{
         if(start >= this.m_count)
             return MakeUnexpected(Failure());
         u64 candidate = start;
@@ -104,17 +104,17 @@ class UiFilteredListState<ResolverT : IUiLabelResolver, const usize LabelCount, 
         return MakeUnexpected(Failure());
     }
 
-    public StringView text(in u64 index)const{
+    public StringView text(in u64 index)const override{
         return ResolverT().label(index);
     }
 
-    public StringView filteredText(in u64 index)const{
+    public StringView filteredText(in u64 index)const override{
         if(index < this.m_count)
             return ResolverT().label(this.m_indices[cast<usize>(index)]);
         return "";
     }
 
-    public b8 applyFilter(in StringView query){
+    public b8 applyFilter(in StringView query)override{
         if(this.m_viewRevision != 0u && query == StringView(this.m_query))
             return true;
         if(query.empty())

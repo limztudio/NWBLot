@@ -10,10 +10,10 @@
 
 
 [arena]
-class Project : IProjectEntryCallbacks, IInputEventHandler{
-    public Project(mut ProjectRuntimeContext context){
+class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPainter{
+    public Project(mut NotNullUniquePtr<World> world, mut ProjectRuntimeContext context){
         this.m_context = context;
-        this.m_world = CreateInitialWorldOrDie(context);
+        this.m_world = TakeNotNullUnique<World>(world);
         this.m_sceneSubsystems = ActiveSceneSubsystems();
         this.m_uiPreview = UiSkinPreview();
     }
@@ -61,13 +61,13 @@ class Project : IProjectEntryCallbacks, IInputEventHandler{
     }
 
     public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override{
-        if(action == CoreInputAction::Release)
+        if(action == s_InputActionReleaseBase)
             this.m_cameraInput.setKeyState(key, false);
 
         if(WantsUiKeyboard(this.m_world))
             return false;
 
-        if(action == CoreInputAction::Press || action == CoreInputAction::Repeat)
+        if(action == s_InputActionPress || action == s_InputActionRepeat)
             this.m_cameraInput.setKeyState(key, true);
 
         return false;
@@ -81,14 +81,14 @@ class Project : IProjectEntryCallbacks, IInputEventHandler{
     public b8 mouseButtonUpdate(in i32 button, in i32 action, in i32 mods)override{
         this.m_cameraInput.updateButton(
             WantsUiPointer(this.m_world),
-            button == MouseButton::Right,
-            action == CoreInputAction::Press,
-            action == CoreInputAction::Release
+            button == cast<i32>(MouseButton::Right),
+            action == s_InputActionPress,
+            action == s_InputActionReleaseBase
         );
         return false;
     }
 
-    public void paintUiLayer(mut UiPaintContext context){
+    public void paintUiLayer(mut UiPaintContext context)override{
         this.drawUiControls(context);
         this.m_uiPreview.paint(context);
     }
@@ -99,8 +99,9 @@ class Project : IProjectEntryCallbacks, IInputEventHandler{
             return false;
         }
 
+        CreateDefaultPhysicsScene(this.m_world);
         AttachProjectUiPaintEntity(this.m_world, this);
-        [essential] info("ProjectTestbed: startup scene created ({})", "45-degree directional + point light, female skinned character on a white ground plane");
+        [essential] info("ProjectTestbed: startup scene created ({})", "45-degree directional + point light, female skinned character, rigid-body tower + spheres on white ground plane");
         return true;
     }
 
@@ -138,6 +139,9 @@ class Project : IProjectEntryCallbacks, IInputEventHandler{
     }
 
     private void destroyWorld(){
+        if(this.m_worldDestroyed)
+            return;
+        this.m_worldDestroyed = true;
         DestroyInitialProjectWorld(this.m_context, this.m_world);
     }
 
@@ -150,8 +154,22 @@ class Project : IProjectEntryCallbacks, IInputEventHandler{
             return;
         SeparatorOptions separator = SeparatorOptions();
         separator.thickness = 1.0f;
+        u32 physicsBodies = 0u;
+        u32 physicsContacts = 0u;
+        u8 physicsBackend = 0u;
+        QueryPhysicsStats(this.m_world, physicsBodies, physicsContacts, physicsBackend);
+        StringView backendName = "CPU";
+        if(physicsBackend == 2u)
+            backendName = "GPU";
+        const String physicsLine = StringFormat("Physics: {} bodies, {} contacts ({})", physicsBodies, physicsContacts, backendName);
         if(context.ui.beginWindow("testbed_window", s_WindowTitleText, this.m_uiWindow, options)){
-            const b8 declared = context.ui.label("renderer", s_RendererLine) && context.ui.separator("separator", separator) && context.ui.label("character", s_CharacterLine);
+            const b8 declared =
+                context.ui.label("renderer", s_RendererLine)
+                && context.ui.separator("separator", separator)
+                && context.ui.label("character", s_CharacterLine)
+                && context.ui.separator("physics_sep", separator)
+                && context.ui.label("physics", StringView(physicsLine))
+            ;
             [essential] assert(declared);
         }
         const b8 ended = context.ui.endWindow();
@@ -165,6 +183,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler{
     private WindowState m_uiWindow = WindowState();
     private FlyCameraInput m_cameraInput = FlyCameraInput();
     private b8 m_inputRegistered = false;
+    private b8 m_worldDestroyed = false;
 }
 
 

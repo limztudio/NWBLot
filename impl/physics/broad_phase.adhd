@@ -1,0 +1,112 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/physics/dynamic_tree.adhd>
+#include <impl/physics/hull.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u32 ResolveBroadPhaseTreeType(in BodyType bodyType){
+    if(bodyType == BodyType::Static)
+        return s_TreeStatic;
+    if(bodyType == BodyType::Kinematic)
+        return s_TreeKinematic;
+    return s_TreeDynamic;
+}
+
+u32 EncodeBroadPhaseProxyKey(in u32 proxyId, in u32 treeType){
+    return (proxyId << 2u) | (treeType & 0x3u);
+}
+
+u32 DecodeBroadPhaseProxyId(in u32 proxyKey){
+    return proxyKey >> 2u;
+}
+
+u32 DecodeBroadPhaseTreeType(in u32 proxyKey){
+    return proxyKey & 0x3u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MovePair{
+    public u32 shapeId = s_NullIndex;
+    public u32 proxyKey = s_NullIndex;
+}
+
+class CandidatePair{
+    public u32 shapeIdA = s_NullIndex;
+    public u32 shapeIdB = s_NullIndex;
+}
+
+class BroadPhase{
+    public Array<DynamicTree, s_TreeCount> trees;
+    public Vector<u32> moveArray;
+    public HashSet<u32> moveSet;
+    public Vector<Vector<CandidatePair>> workerBuckets;
+    public Vector<CandidatePair> discoveredPairs;
+
+    public void clear(){
+        for(usize i = 0u; i < s_TreeCount; ++i)
+            this.trees[i].clear();
+        this.moveArray.clear();
+        this.moveSet.clear();
+        this.workerBuckets.clear();
+        this.discoveredPairs.clear();
+    }
+
+    public void createProxy(
+        in BodyType bodyType,
+        in Aabb3D aabb,
+        in u32 categoryBits,
+        in u32 shapeId,
+        in b8 forceMove,
+        mut u32 outProxyKey
+    ){
+        const u32 treeIdx = ResolveBroadPhaseTreeType(bodyType);
+        const u32 proxyId = this.trees[treeIdx].createProxy(aabb, categoryBits, shapeId);
+        outProxyKey = EncodeBroadPhaseProxyKey(proxyId, treeIdx);
+        if(treeIdx != s_TreeStatic || forceMove)
+            this.bufferMove(outProxyKey);
+    }
+
+    public void destroyProxy(in u32 proxyKey){
+        if(proxyKey == s_NullIndex)
+            return;
+        const u32 treeIdx = DecodeBroadPhaseTreeType(proxyKey);
+        const u32 proxyId = DecodeBroadPhaseProxyId(proxyKey);
+        this.unbufferMove(proxyKey);
+        this.trees[treeIdx].destroyProxy(proxyId);
+    }
+
+    public void moveProxy(in u32 proxyKey, in Aabb3D aabb, in VectorSingle displacement){
+        if(proxyKey == s_NullIndex)
+            return;
+        const u32 treeIdx = DecodeBroadPhaseTreeType(proxyKey);
+        const u32 proxyId = DecodeBroadPhaseProxyId(proxyKey);
+        if(this.trees[treeIdx].moveProxy(proxyId, aabb, displacement))
+            this.bufferMove(proxyKey);
+    }
+
+    public void bufferMove(in u32 proxyKey){
+        if(this.moveSet.insert(proxyKey).second)
+            this.moveArray.push_back(proxyKey);
+    }
+
+    public void unbufferMove(in u32 proxyKey){
+        this.moveSet.erase(proxyKey);
+    }
+
+    public void clearMoves(){
+        this.moveArray.clear();
+        this.moveSet.clear();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

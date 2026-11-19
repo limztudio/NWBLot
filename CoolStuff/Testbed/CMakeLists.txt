@@ -1,13 +1,19 @@
 nwb_declare_executable(testbed)
-nwb_target_adhd_sources(testbed NAMESPACE "Testbed" SOURCES
-    "${CMAKE_CURRENT_LIST_DIR}/*.adhd"
+file(GLOB _nwb_testbed_adhd_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false "${CMAKE_CURRENT_LIST_DIR}/*.adhd")
+list(REMOVE_ITEM _nwb_testbed_adhd_sources
+    "${CMAKE_CURRENT_LIST_DIR}/project_entry.adhd"
+)
+nwb_target_adhd_sources(testbed NAMESPACE "NWB::Testbed" SOURCES ${_nwb_testbed_adhd_sources})
+unset(_nwb_testbed_adhd_sources)
+nwb_target_adhd_sources(testbed NAMESPACE "NWB" SOURCES
+    "${CMAKE_CURRENT_LIST_DIR}/project_entry.adhd"
 )
 set_target_properties(testbed PROPERTIES DEBUGGER_WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}" WIN32_EXECUTABLE ON VS_DEBUGGER_WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}")
 nwb_target_link_libraries_whole_archive(testbed
     nwb_assets_mesh nwb_assets_skeleton nwb_assets_model nwb_assets_material nwb_assets_shader nwb_assets_texture nwb_assets_ui_skin
-    nwb_assets_font nwb_assets_font_atlas nwb_assets_sampler nwb_assets_subsystem nwb_assets_scene nwb_assets_graphics
+    nwb_assets_font nwb_assets_font_atlas nwb_assets_sampler nwb_assets_subsystem nwb_assets_scene nwb_assets_graphics nwb_assets_physics
 )
-target_link_libraries(testbed PRIVATE nwb_common nwb_alloc nwb_loader nwb_ecs_scene nwb_ecs_mesh nwb_ecs_skeleton nwb_ecs_model nwb_ecs_mesh_skinning nwb_ecs_render nwb_ecs_model_renderer nwb_ecs_ui nwb_ui_widgets)
+target_link_libraries(testbed PRIVATE nwb_common nwb_alloc nwb_loader nwb_ecs_scene nwb_ecs_mesh nwb_ecs_skeleton nwb_ecs_model nwb_ecs_mesh_skinning nwb_ecs_render nwb_ecs_model_renderer nwb_ecs_physics nwb_ecs_ui nwb_ui_widgets)
 
 nwb_copy_aftermath_runtime(testbed)
 

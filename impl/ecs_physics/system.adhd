@@ -1,0 +1,108 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_physics/system_sync.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[arena, modular, system("physics")]
+class PhysicsSystem{
+    private mut World m_world;
+    private PhysicsWorld m_physicsWorld;
+    private PhysicsGpuDispatcher m_gpuDispatcher;
+    private HashMap<EntityID, BodyId> m_entityBodies;
+    private HashMap<EntityID, ShapeId> m_entityShapes;
+    private f32 m_accumulator = 0.0f;
+    private WorldStepStats m_lastStepStats;
+    private b8 m_hasGpu;
+
+    public PhysicsSystem(mut World world){
+        this.m_world = world;
+        this.m_hasGpu = false;
+        this.registerDefaultAccesses();
+    }
+
+    public PhysicsSystem(
+        mut World world,
+        mut GraphicsRuntime graphics,
+        mut AssetManager assetManager,
+        in ShaderArchivePathResolver shaderPathResolver
+    ){
+        this.m_world = world;
+        this.m_gpuDispatcher.attachRuntime(graphics, assetManager, shaderPathResolver);
+        this.m_hasGpu = true;
+        this.registerDefaultAccesses();
+    }
+
+    private void registerDefaultAccesses(){
+        this.writeAccess<PhysicsWorldConfigComponent>();
+        this.writeAccess<RigidBodyComponent>();
+        this.writeAccess<ColliderComponent>();
+        this.writeAccess<TransformComponent>();
+    }
+
+    public mut PhysicsWorld physicsWorld(){ return this.m_physicsWorld; }
+    public in PhysicsWorld physicsWorld()const{ return this.m_physicsWorld; }
+    public in WorldStepStats lastStepStats()const{ return this.m_lastStepStats; }
+
+    public void setActiveSceneSubsystems(in ActiveSceneSubsystemsRef subsystems){
+        this.m_gpuDispatcher.setActiveSceneSubsystems(subsystems);
+    }
+
+    public b8 validateResources(){
+        if(!this.m_hasGpu)
+            return true;
+        if(!this.m_gpuDispatcher.validateResources())
+            warning("PhysicsSystem: GPU physics pipelines unavailable; falling back to CPU solver");
+        return true;
+    }
+
+    public void invalidateResources(){
+        this.m_gpuDispatcher.invalidateResources();
+    }
+
+    public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override{
+        f32 fixedDt = 1.0f / 60.0f;
+        u32 subStepCount = 4u;
+        u32 maxSubStepsPerFrame = 4u;
+        b8 paused = false;
+        ResolvePhysicsConfigSettings(this.m_world, this.m_physicsWorld, fixedDt, subStepCount, maxSubStepsPerFrame, paused);
+
+        SyncEcsEntitiesToPhysicsWorld(this.m_world, this.m_physicsWorld, this.m_entityBodies, this.m_entityShapes);
+
+        if(paused || !IsFinite(delta) || delta <= 0.0f)
+            return Expected<void, CpuTaskAdmissionError>();
+
+        const f32 clampedDelta = Min(delta, fixedDt * cast<f32>(maxSubStepsPerFrame));
+        this.m_accumulator += clampedDelta;
+
+        mut CpuTaskScheduler scheduler = this.m_world.taskScheduler();
+        u32 stepsExecuted = 0u;
+        while(this.m_accumulator + 1.0e-6f >= fixedDt && stepsExecuted < maxSubStepsPerFrame){
+            if(this.m_accumulator >= fixedDt)
+                this.m_accumulator -= fixedDt;
+            else
+                this.m_accumulator = 0.0f;
+
+            if(this.m_hasGpu)
+                StepWorldWithGpu(this.m_physicsWorld, this.m_gpuDispatcher, fixedDt, subStepCount, scheduler);
+            else
+                StepPhysicsWorld(this.m_physicsWorld, fixedDt, subStepCount, scheduler);
+
+            this.m_lastStepStats = this.m_physicsWorld.lastStepStats();
+            ++stepsExecuted;
+        }
+
+        if(stepsExecuted > 0u)
+            WriteBackPhysicsTransformsToEcs(this.m_world, this.m_physicsWorld);
+
+        return Expected<void, CpuTaskAdmissionError>();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,761 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/physics/shapes.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ShapeProxy{
+    public FixedVector<f32x4, s_MaxHullVertices> points;
+    public f32 radius = 0.0f;
+}
+
+class SimplexCache{
+    public Array<u8, 3u> indexA;
+    public Array<u8, 3u> indexB;
+    public u16 count = 0u;
+}
+
+class DistanceInput{
+    public ShapeProxy proxyA;
+    public ShapeProxy proxyB;
+    public Transform3D transformA;
+    public Transform3D transformB;
+    public b8 useRadii = false;
+}
+
+class DistanceOutput{
+    public f32x4 pointA(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 pointB(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32 distance = 0.0f;
+    public u32 iterations = 0u;
+}
+
+class SimplexVertex{
+    public f32x4 wA(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 wB(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 w(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32 u = 0.0f;
+    public u8 indexA = 0u;
+    public u8 indexB = 0u;
+}
+
+class Simplex{
+    public Array<SimplexVertex, 4u> v;
+    public u32 count = 0u;
+}
+
+class LocalRayHit{
+    public f32x4 point(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32 fraction = 1.0f;
+    public b8 hit = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ShapeProxy MakeSphereProxy(in SphereShape s){
+    ShapeProxy p;
+    p.points.push_back(s.center);
+    p.radius = s.radius;
+    return p;
+}
+
+ShapeProxy MakeCapsuleProxy(in CapsuleShape c){
+    ShapeProxy p;
+    p.points.push_back(c.center1);
+    p.points.push_back(c.center2);
+    p.radius = c.radius;
+    return p;
+}
+
+ShapeProxy MakeHullProxy(in HullShape hull){
+    ShapeProxy p;
+    for(usize i = 0u; i < hull.vertices.size(); ++i)
+        p.points.push_back(hull.vertices[i]);
+    p.radius = hull.radius;
+    return p;
+}
+
+ShapeProxy MakePointProxy(in VectorSingle point, in f32 radius){
+    ShapeProxy p;
+    p.points.push_back(f32x4(point, 0.0f));
+    p.radius = radius;
+    return p;
+}
+
+u8 FindSupportVertexIndex(in ShapeProxy proxy, in VectorSingle dir){
+    if(proxy.points.empty())
+        return 0u;
+
+    u8 bestIdx = 0u;
+    f32 bestDot = Vector3Dot(VectorSingle(proxy.points[0u]), VectorSingle(dir, 0.0f)).x;
+    for(usize i = 1u; i < proxy.points.size(); ++i){
+        const f32 d = Vector3Dot(VectorSingle(proxy.points[i]), VectorSingle(dir, 0.0f)).x;
+        if(d > bestDot){
+            bestDot = d;
+            bestIdx = cast<u8>(i);
+        }
+    }
+    return bestIdx;
+}
+
+VectorSingle ComputeSimplexClosestPoint(in Simplex s){
+    if(s.count == 1u)
+        return VectorSingle(s.v[0u].w);
+    if(s.count == 2u)
+        return VectorSingle(s.v[0u].w) * s.v[0u].u + VectorSingle(s.v[1u].w) * s.v[1u].u;
+    if(s.count == 3u)
+        return VectorSingle(s.v[0u].w) * s.v[0u].u + VectorSingle(s.v[1u].w) * s.v[1u].u + VectorSingle(s.v[2u].w) * s.v[2u].u;
+    return VectorSingle(0.0f);
+}
+
+void GetSimplexWitnessPoints(in Simplex s, mut VectorSingle outA, mut VectorSingle outB){
+    if(s.count == 1u){
+        outA = VectorSingle(s.v[0u].wA);
+        outB = VectorSingle(s.v[0u].wB);
+        return;
+    }
+    if(s.count == 2u){
+        outA = VectorSingle(s.v[0u].wA) * s.v[0u].u + VectorSingle(s.v[1u].wA) * s.v[1u].u;
+        outB = VectorSingle(s.v[0u].wB) * s.v[0u].u + VectorSingle(s.v[1u].wB) * s.v[1u].u;
+        return;
+    }
+    if(s.count == 3u){
+        outA = VectorSingle(s.v[0u].wA) * s.v[0u].u + VectorSingle(s.v[1u].wA) * s.v[1u].u + VectorSingle(s.v[2u].wA) * s.v[2u].u;
+        outB = VectorSingle(s.v[0u].wB) * s.v[0u].u + VectorSingle(s.v[1u].wB) * s.v[1u].u + VectorSingle(s.v[2u].wB) * s.v[2u].u;
+        return;
+    }
+    outA = VectorSingle(s.v[0u].wA) * s.v[0u].u + VectorSingle(s.v[1u].wA) * s.v[1u].u + VectorSingle(s.v[2u].wA) * s.v[2u].u + VectorSingle(s.v[3u].wA) * s.v[3u].u;
+    outB = outA;
+}
+
+void SolveSimplex2(mut Simplex s){
+    const VectorSingle w1 = VectorSingle(s.v[0u].w);
+    const VectorSingle w2 = VectorSingle(s.v[1u].w);
+    const VectorSingle e12 = VectorSingle(w2 - w1, 0.0f);
+
+    const f32 d12_2 = -Vector3Dot(w1, e12).x;
+    if(d12_2 <= 0.0f){
+        s.v[0u].u = 1.0f;
+        s.count = 1u;
+        return;
+    }
+
+    const f32 d12_1 = Vector3Dot(w2, e12).x;
+    if(d12_1 <= 0.0f){
+        s.v[1u].u = 1.0f;
+        s.count = 1u;
+        s.v[0u] = s.v[1u];
+        return;
+    }
+
+    const f32 invD = 1.0f / (d12_1 + d12_2);
+    s.v[0u].u = d12_1 * invD;
+    s.v[1u].u = d12_2 * invD;
+    s.count = 2u;
+}
+
+void SolveSimplex3(mut Simplex s){
+    const VectorSingle a = VectorSingle(s.v[0u].w);
+    const VectorSingle b = VectorSingle(s.v[1u].w);
+    const VectorSingle c = VectorSingle(s.v[2u].w);
+
+    const VectorSingle ab = VectorSingle(b - a, 0.0f);
+    const VectorSingle ac = VectorSingle(c - a, 0.0f);
+    const VectorSingle bc = VectorSingle(c - b, 0.0f);
+
+    const f32 dAB_1 = Vector3Dot(b, ab).x;
+    const f32 dAB_2 = -Vector3Dot(a, ab).x;
+    const f32 dAC_1 = Vector3Dot(c, ac).x;
+    const f32 dAC_2 = -Vector3Dot(a, ac).x;
+    const f32 dBC_1 = Vector3Dot(c, bc).x;
+    const f32 dBC_2 = -Vector3Dot(b, bc).x;
+
+    // Vertex regions.
+    if(dAB_2 <= 0.0f && dAC_2 <= 0.0f){
+        s.v[0u].u = 1.0f;
+        s.count = 1u;
+        return;
+    }
+    if(dAB_1 <= 0.0f && dBC_2 <= 0.0f){
+        s.v[1u].u = 1.0f;
+        s.v[0u] = s.v[1u];
+        s.count = 1u;
+        return;
+    }
+    if(dAC_1 <= 0.0f && dBC_1 <= 0.0f){
+        s.v[2u].u = 1.0f;
+        s.v[0u] = s.v[2u];
+        s.count = 1u;
+        return;
+    }
+
+    const VectorSingle n = Cross(ab, ac);
+    const VectorSingle na = Cross(b, c);
+    const VectorSingle nb = Cross(c, a);
+    const VectorSingle nc = Cross(a, b);
+
+    const f32 dABC_A = Vector3Dot(n, na).x;
+    const f32 dABC_B = Vector3Dot(n, nb).x;
+    const f32 dABC_C = Vector3Dot(n, nc).x;
+
+    // Edge regions.
+    if(dAB_1 > 0.0f && dAB_2 > 0.0f && dABC_C <= 0.0f){
+        const f32 inv = 1.0f / (dAB_1 + dAB_2);
+        s.v[0u].u = dAB_1 * inv;
+        s.v[1u].u = dAB_2 * inv;
+        s.count = 2u;
+        return;
+    }
+    if(dAC_1 > 0.0f && dAC_2 > 0.0f && dABC_B <= 0.0f){
+        const f32 inv = 1.0f / (dAC_1 + dAC_2);
+        s.v[0u].u = dAC_1 * inv;
+        s.v[2u].u = dAC_2 * inv;
+        s.v[1u] = s.v[2u];
+        s.count = 2u;
+        return;
+    }
+    if(dBC_1 > 0.0f && dBC_2 > 0.0f && dABC_A <= 0.0f){
+        const f32 inv = 1.0f / (dBC_1 + dBC_2);
+        s.v[1u].u = dBC_1 * inv;
+        s.v[2u].u = dBC_2 * inv;
+        s.v[0u] = s.v[2u];
+        s.count = 2u;
+        return;
+    }
+
+    const f32 sum = dABC_A + dABC_B + dABC_C;
+    if(Abs(sum) <= 1.0e-12f){
+        s.v[0u].u = 1.0f / 3.0f;
+        s.v[1u].u = 1.0f / 3.0f;
+        s.v[2u].u = 1.0f / 3.0f;
+        s.count = 3u;
+        return;
+    }
+    const f32 inv = 1.0f / sum;
+    s.v[0u].u = dABC_A * inv;
+    s.v[1u].u = dABC_B * inv;
+    s.v[2u].u = dABC_C * inv;
+    s.count = 3u;
+}
+
+void SolveSimplex4(mut Simplex s){
+    const SimplexVertex va = s.v[0u];
+    const SimplexVertex vb = s.v[1u];
+    const SimplexVertex vc = s.v[2u];
+    const SimplexVertex vd = s.v[3u];
+
+    const VectorSingle a = VectorSingle(va.w);
+    const VectorSingle b = VectorSingle(vb.w);
+    const VectorSingle c = VectorSingle(vc.w);
+    const VectorSingle d = VectorSingle(vd.w);
+
+    const f32 signDet = Vector3Dot(VectorSingle(b - a, 0.0f), Cross(VectorSingle(c - a, 0.0f), VectorSingle(d - a, 0.0f))).x;
+    f32 sign = -1.0f;
+    if(signDet >= 0.0f)
+        sign = 1.0f;
+
+    // Signed sub-tetrahedron volumes with origin.
+    const f32 dABCD_D = sign * Vector3Dot(a, Cross(b, c)).x;
+    const f32 dABCD_C = sign * Vector3Dot(d, Cross(b, a)).x;
+    const f32 dABCD_B = sign * Vector3Dot(c, Cross(d, a)).x;
+    const f32 dABCD_A = sign * Vector3Dot(b, Cross(d, c)).x;
+
+    // Actually check outward half-spaces for each of the 4 faces directly.
+    const f32 testABC = Vector3Dot(VectorSingle(d - a, 0.0f), Cross(VectorSingle(b - a, 0.0f), VectorSingle(c - a, 0.0f))).x;
+    const f32 oriABC = Vector3Dot(VectorSingle(-a, 0.0f), Cross(VectorSingle(b - a, 0.0f), VectorSingle(c - a, 0.0f))).x;
+
+    const f32 testABD = Vector3Dot(VectorSingle(c - a, 0.0f), Cross(VectorSingle(b - a, 0.0f), VectorSingle(d - a, 0.0f))).x;
+    const f32 oriABD = Vector3Dot(VectorSingle(-a, 0.0f), Cross(VectorSingle(b - a, 0.0f), VectorSingle(d - a, 0.0f))).x;
+
+    const f32 testACD = Vector3Dot(VectorSingle(b - a, 0.0f), Cross(VectorSingle(c - a, 0.0f), VectorSingle(d - a, 0.0f))).x;
+    const f32 oriACD = Vector3Dot(VectorSingle(-a, 0.0f), Cross(VectorSingle(c - a, 0.0f), VectorSingle(d - a, 0.0f))).x;
+
+    const f32 testBCD = Vector3Dot(VectorSingle(a - b, 0.0f), Cross(VectorSingle(c - b, 0.0f), VectorSingle(d - b, 0.0f))).x;
+    const f32 oriBCD = Vector3Dot(VectorSingle(-b, 0.0f), Cross(VectorSingle(c - b, 0.0f), VectorSingle(d - b, 0.0f))).x;
+
+    const b8 outABC = (oriABC * testABC) < 0.0f;
+    const b8 outABD = (oriABD * testABD) < 0.0f;
+    const b8 outACD = (oriACD * testACD) < 0.0f;
+    const b8 outBCD = (oriBCD * testBCD) < 0.0f;
+
+    if(!outABC && !outABD && !outACD && !outBCD){
+        const f32 total = dABCD_A + dABCD_B + dABCD_C + dABCD_D;
+        if(Abs(total) > 1.0e-12f){
+            const f32 inv = 1.0f / total;
+            s.v[0u].u = dABCD_A * inv;
+            s.v[1u].u = dABCD_B * inv;
+            s.v[2u].u = dABCD_C * inv;
+            s.v[3u].u = dABCD_D * inv;
+        }
+        else{
+            s.v[0u].u = 0.25f;
+            s.v[1u].u = 0.25f;
+            s.v[2u].u = 0.25f;
+            s.v[3u].u = 0.25f;
+        }
+        s.count = 4u;
+        return;
+    }
+
+    // Evaluate visible faces and pick the triangle with smallest closest-point distance.
+    Simplex bestSimplex;
+    bestSimplex.count = 1u;
+    bestSimplex.v[0u] = vd;
+    bestSimplex.v[0u].u = 1.0f;
+    f32 bestDistSq = Vector3LengthSq(d).x;
+
+    if(outABD){
+        Simplex cand;
+        cand.v[0u] = va;
+        cand.v[1u] = vb;
+        cand.v[2u] = vd;
+        cand.count = 3u;
+        SolveSimplex3(cand);
+        const f32 dSq = Vector3LengthSq(ComputeSimplexClosestPoint(cand)).x;
+        if(dSq < bestDistSq){
+            bestDistSq = dSq;
+            bestSimplex = cand;
+        }
+    }
+    if(outACD){
+        Simplex cand;
+        cand.v[0u] = va;
+        cand.v[1u] = vc;
+        cand.v[2u] = vd;
+        cand.count = 3u;
+        SolveSimplex3(cand);
+        const f32 dSq = Vector3LengthSq(ComputeSimplexClosestPoint(cand)).x;
+        if(dSq < bestDistSq){
+            bestDistSq = dSq;
+            bestSimplex = cand;
+        }
+    }
+    if(outBCD){
+        Simplex cand;
+        cand.v[0u] = vb;
+        cand.v[1u] = vc;
+        cand.v[2u] = vd;
+        cand.count = 3u;
+        SolveSimplex3(cand);
+        const f32 dSq = Vector3LengthSq(ComputeSimplexClosestPoint(cand)).x;
+        if(dSq < bestDistSq){
+            bestDistSq = dSq;
+            bestSimplex = cand;
+        }
+    }
+    if(outABC){
+        Simplex cand;
+        cand.v[0u] = va;
+        cand.v[1u] = vb;
+        cand.v[2u] = vc;
+        cand.count = 3u;
+        SolveSimplex3(cand);
+        const f32 dSq = Vector3LengthSq(ComputeSimplexClosestPoint(cand)).x;
+        if(dSq < bestDistSq){
+            bestDistSq = dSq;
+            bestSimplex = cand;
+        }
+    }
+
+    s = bestSimplex;
+}
+
+DistanceOutput ShapeDistance(in DistanceInput input, mut SimplexCache cache){
+    DistanceOutput out;
+    if(input.proxyA.points.empty() || input.proxyB.points.empty())
+        return out;
+
+    const Transform3D xfA = input.transformA;
+    const Transform3D xfB = input.transformB;
+    const VectorSingle qA = VectorSingle(xfA.rotation);
+    const VectorSingle qB = VectorSingle(xfB.rotation);
+
+    Simplex s;
+    if(cache.count > 0u && cache.count <= 3u){
+        s.count = cast<u32>(cache.count);
+        for(usize i = 0u; i < cast<usize>(cache.count); ++i){
+            u8 idxA = 0u;
+            if(cache.indexA[i] < input.proxyA.points.size())
+                idxA = cache.indexA[i];
+            u8 idxB = 0u;
+            if(cache.indexB[i] < input.proxyB.points.size())
+                idxB = cache.indexB[i];
+            s.v[i].indexA = idxA;
+            s.v[i].indexB = idxB;
+            const VectorSingle wA = TransformPoint(xfA, VectorSingle(input.proxyA.points[idxA]));
+            const VectorSingle wB = TransformPoint(xfB, VectorSingle(input.proxyB.points[idxB]));
+            s.v[i].wA = f32x4(wA, 0.0f);
+            s.v[i].wB = f32x4(wB, 0.0f);
+            s.v[i].w = f32x4(wB - wA, 0.0f);
+            s.v[i].u = 0.0f;
+        }
+    }
+    else{
+        s.count = 1u;
+        s.v[0u].indexA = 0u;
+        s.v[0u].indexB = 0u;
+        const VectorSingle wA = TransformPoint(xfA, VectorSingle(input.proxyA.points[0u]));
+        const VectorSingle wB = TransformPoint(xfB, VectorSingle(input.proxyB.points[0u]));
+        s.v[0u].wA = f32x4(wA, 0.0f);
+        s.v[0u].wB = f32x4(wB, 0.0f);
+        s.v[0u].w = f32x4(wB - wA, 0.0f);
+        s.v[0u].u = 1.0f;
+    }
+
+    Array<u8, 3u> saveA;
+    Array<u8, 3u> saveB;
+    u32 saveCount = 0u;
+
+    for(usize iter = 0u; iter < s_GjkMaxIterations; ++iter){
+        saveCount = s.count;
+        for(usize i = 0u; i < cast<usize>(saveCount) && i < 3u; ++i){
+            saveA[i] = s.v[i].indexA;
+            saveB[i] = s.v[i].indexB;
+        }
+
+        if(s.count == 2u)
+            SolveSimplex2(s);
+        else if(s.count == 3u)
+            SolveSimplex3(s);
+        else if(s.count == 4u)
+            SolveSimplex4(s);
+
+        if(s.count == 4u)
+            break;
+
+        const VectorSingle p = ComputeSimplexClosestPoint(s);
+        const f32 pLenSq = Vector3LengthSq(p).x;
+        if(pLenSq <= 1.0e-12f)
+            break;
+
+        const VectorSingle d = -p;
+        const VectorSingle localDirA = Vector3InverseRotate(-d, qA);
+        const VectorSingle localDirB = Vector3InverseRotate(d, qB);
+
+        const u8 idxA = FindSupportVertexIndex(input.proxyA, localDirA);
+        const u8 idxB = FindSupportVertexIndex(input.proxyB, localDirB);
+
+        b8 duplicate = false;
+        for(usize i = 0u; i < cast<usize>(saveCount) && i < 3u; ++i){
+            if(idxA == saveA[i] && idxB == saveB[i]){
+                duplicate = true;
+                break;
+            }
+        }
+        if(duplicate)
+            break;
+
+        const VectorSingle wA = TransformPoint(xfA, VectorSingle(input.proxyA.points[idxA]));
+        const VectorSingle wB = TransformPoint(xfB, VectorSingle(input.proxyB.points[idxB]));
+        const VectorSingle w = VectorSingle(wB - wA, 0.0f);
+
+        // Terminate when support progress falls below precision floor.
+        if(Vector3Dot(p - w, p).x <= 1.0e-6f * pLenSq)
+            break;
+
+        SimplexVertex newV;
+        newV.indexA = idxA;
+        newV.indexB = idxB;
+        newV.wA = f32x4(wA, 0.0f);
+        newV.wB = f32x4(wB, 0.0f);
+        newV.w = f32x4(w, 0.0f);
+        newV.u = 0.0f;
+        s.v[s.count] = newV;
+        ++s.count;
+        out.iterations = cast<u32>(iter + 1u);
+    }
+
+    VectorSingle pA = VectorSingle(0.0f);
+    VectorSingle pB = VectorSingle(0.0f);
+    GetSimplexWitnessPoints(s, pA, pB);
+
+    const VectorSingle delta = VectorSingle(pB - pA, 0.0f);
+    const f32 dist = Vector3Length(delta).x;
+    VectorSingle n = SafeNormalizeVec3(delta, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+
+    if(input.useRadii && dist > 1.0e-6f){
+        const f32 rA = input.proxyA.radius;
+        const f32 rB = input.proxyB.radius;
+        if(dist > rA + rB){
+            pA = pA + n * rA;
+            pB = pB - n * rB;
+            out.distance = dist - (rA + rB);
+        }
+        else{
+            const VectorSingle mid = (pA + n * rA + pB - n * rB) * 0.5f;
+            pA = mid;
+            pB = mid;
+            out.distance = 0.0f;
+        }
+    }
+    else{
+        out.distance = dist;
+    }
+
+    out.pointA = f32x4(pA, 0.0f);
+    out.pointB = f32x4(pB, 0.0f);
+    out.normal = f32x4(n, 0.0f);
+
+    cache.count = cast<u16>(Min(s.count, 3u));
+    for(usize i = 0u; i < cast<usize>(cache.count); ++i){
+        cache.indexA[i] = s.v[i].indexA;
+        cache.indexB[i] = s.v[i].indexB;
+    }
+
+    return out;
+}
+
+LocalRayHit RayCastSphere(in SphereShape sphere, in Transform3D xf, in VectorSingle origin, in VectorSingle translation, in f32 maxFraction){
+    LocalRayHit hit;
+    const VectorSingle c = TransformPoint(xf, VectorSingle(sphere.center));
+    const VectorSingle m = VectorSingle(origin - c, 0.0f);
+    const VectorSingle d = VectorSingle(translation, 0.0f);
+    const f32 r = sphere.radius;
+    const f32 cTerm = Vector3Dot(m, m).x - r * r;
+
+    if(cTerm <= 0.0f){
+        hit.hit = true;
+        hit.fraction = 0.0f;
+        hit.point = f32x4(origin, 0.0f);
+        hit.normal = f32x4(SafeNormalizeVec3(m, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
+        return hit;
+    }
+
+    const f32 a = Vector3Dot(d, d).x;
+    if(a <= 1.0e-12f)
+        return hit;
+
+    const f32 b = Vector3Dot(m, d).x;
+    if(b > 0.0f)
+        return hit;
+
+    const f32 discr = b * b - a * cTerm;
+    if(discr < 0.0f)
+        return hit;
+
+    const f32 t = (-b - Sqrt(discr)) / a;
+    if(t < 0.0f || t > maxFraction)
+        return hit;
+
+    const VectorSingle pt = origin + d * t;
+    hit.hit = true;
+    hit.fraction = t;
+    hit.point = f32x4(pt, 0.0f);
+    hit.normal = f32x4(SafeNormalizeVec3(pt - c, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
+    return hit;
+}
+
+LocalRayHit RayCastCapsule(in CapsuleShape capsule, in Transform3D xf, in VectorSingle origin, in VectorSingle translation, in f32 maxFraction){
+    LocalRayHit hit;
+    const VectorSingle a = TransformPoint(xf, VectorSingle(capsule.center1));
+    const VectorSingle b = TransformPoint(xf, VectorSingle(capsule.center2));
+    const VectorSingle ab = VectorSingle(b - a, 0.0f);
+    const VectorSingle d = VectorSingle(translation, 0.0f);
+    const f32 abLenSq = Vector3Dot(ab, ab).x;
+    if(abLenSq <= 1.0e-12f){
+        SphereShape sp;
+        sp.center = capsule.center1;
+        sp.radius = capsule.radius;
+        return RayCastSphere(sp, xf, origin, translation, maxFraction);
+    }
+
+    const f32 r = capsule.radius;
+    const VectorSingle m = VectorSingle(origin - a, 0.0f);
+
+    // Check initial overlap with capsule segment.
+    const f32 proj = Clamp(Vector3Dot(m, ab).x / abLenSq, 0.0f, 1.0f);
+    const VectorSingle closest0 = a + ab * proj;
+    if(Vector3LengthSq(VectorSingle(origin - closest0, 0.0f)).x <= r * r){
+        hit.hit = true;
+        hit.fraction = 0.0f;
+        hit.point = f32x4(origin, 0.0f);
+        hit.normal = f32x4(SafeNormalizeVec3(origin - closest0, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
+        return hit;
+    }
+
+    // Ray vs infinite cylinder.
+    const f32 md = Vector3Dot(m, ab).x;
+    const f32 nd = Vector3Dot(d, ab).x;
+    const f32 dd = Vector3Dot(d, d).x;
+    const f32 mm = Vector3Dot(m, m).x;
+    const f32 nn = Vector3Dot(d, ab).x;
+    const f32 qa = abLenSq * dd - nd * nd;
+    const f32 qb = abLenSq * Vector3Dot(m, d).x - md * nn;
+    const f32 qc = abLenSq * (mm - r * r) - md * md;
+
+    f32 bestT = maxFraction + 1.0f;
+    VectorSingle bestNormal = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
+
+    if(Abs(qa) > 1.0e-12f){
+        const f32 discr = qb * qb - qa * qc;
+        if(discr >= 0.0f){
+            const f32 t = (-qb - Sqrt(discr)) / qa;
+            if(t >= 0.0f && t <= maxFraction){
+                const f32 axisProj = md + t * nd;
+                if(axisProj >= 0.0f && axisProj <= abLenSq){
+                    bestT = t;
+                    const VectorSingle pt = origin + d * t;
+                    const VectorSingle segPt = a + ab * (axisProj / abLenSq);
+                    bestNormal = SafeNormalizeVec3(pt - segPt, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                }
+            }
+        }
+    }
+
+    // Test endcap spheres at a and b.
+    SphereShape capA;
+    capA.center = capsule.center1;
+    capA.radius = r;
+    const LocalRayHit hitA = RayCastSphere(capA, xf, origin, translation, maxFraction);
+    if(hitA.hit && hitA.fraction < bestT){
+        bestT = hitA.fraction;
+        bestNormal = VectorSingle(hitA.normal);
+    }
+
+    SphereShape capB;
+    capB.center = capsule.center2;
+    capB.radius = r;
+    const LocalRayHit hitB = RayCastSphere(capB, xf, origin, translation, maxFraction);
+    if(hitB.hit && hitB.fraction < bestT){
+        bestT = hitB.fraction;
+        bestNormal = VectorSingle(hitB.normal);
+    }
+
+    if(bestT <= maxFraction){
+        hit.hit = true;
+        hit.fraction = bestT;
+        hit.point = f32x4(origin + d * bestT, 0.0f);
+        hit.normal = f32x4(bestNormal, 0.0f);
+    }
+    return hit;
+}
+
+LocalRayHit RayCastHull(in HullShape hull, in Transform3D xf, in VectorSingle origin, in VectorSingle translation, in f32 maxFraction){
+    LocalRayHit hit;
+    if(hull.faces.empty())
+        return hit;
+
+    const VectorSingle localOrigin = InverseTransformPoint(xf, origin);
+    const VectorSingle localDir = Vector3InverseRotate(VectorSingle(translation, 0.0f), VectorSingle(xf.rotation));
+
+    f32 lower = 0.0f;
+    f32 upper = maxFraction;
+    usize entryFace = s_NullIndex;
+    f32 maxSignedDist = -s_MaxF32;
+    usize shallowestFace = 0u;
+
+    for(usize i = 0u; i < hull.faces.size(); ++i){
+        const VectorSingle n = VectorSingle(hull.faces[i].plane.normalOffset, 0.0f);
+        const f32 offset = hull.faces[i].plane.normalOffset.w + hull.radius;
+        const f32 numerator = offset - Vector3Dot(n, localOrigin).x;
+        const f32 denominator = Vector3Dot(n, localDir).x;
+
+        if(-numerator > maxSignedDist){
+            maxSignedDist = -numerator;
+            shallowestFace = i;
+        }
+
+        if(Abs(denominator) <= 1.0e-12f){
+            if(numerator < 0.0f)
+                return hit;
+        }
+        else{
+            const f32 t = numerator / denominator;
+            if(denominator < 0.0f){
+                if(t > lower){
+                    lower = t;
+                    entryFace = i;
+                }
+            }
+            else{
+                if(t < upper)
+                    upper = t;
+            }
+            if(upper < lower)
+                return hit;
+        }
+    }
+
+    if(lower <= 0.0f){
+        hit.hit = true;
+        hit.fraction = 0.0f;
+        hit.point = f32x4(origin, 0.0f);
+        const VectorSingle localN = VectorSingle(hull.faces[shallowestFace].plane.normalOffset, 0.0f);
+        hit.normal = f32x4(SafeNormalizeVec3(Vector3Rotate(localN, VectorSingle(xf.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
+        return hit;
+    }
+
+    if(entryFace != s_NullIndex && lower <= maxFraction){
+        const VectorSingle localN = VectorSingle(hull.faces[entryFace].plane.normalOffset, 0.0f);
+        hit.hit = true;
+        hit.fraction = lower;
+        hit.point = f32x4(origin + VectorSingle(translation, 0.0f) * lower, 0.0f);
+        hit.normal = f32x4(SafeNormalizeVec3(Vector3Rotate(localN, VectorSingle(xf.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
+    }
+    return hit;
+}
+
+LocalRayHit ShapeCastProxies(
+    in ShapeProxy proxyA,
+    in Transform3D xfA,
+    in VectorSingle translationA,
+    in ShapeProxy proxyB,
+    in Transform3D xfB,
+    in VectorSingle translationB,
+    in f32 maxFraction
+){
+    LocalRayHit hit;
+    const f32 totalRadius = proxyA.radius + proxyB.radius;
+    const f32 tolerance = 0.25f * s_LinearSlop;
+    const VectorSingle relMove = VectorSingle(translationB - translationA, 0.0f);
+
+    SimplexCache cache;
+    DistanceInput input;
+    input.proxyA = proxyA;
+    input.proxyB = proxyB;
+    input.transformA = xfA;
+    input.transformB = xfB;
+    input.useRadii = false;
+
+    f32 fraction = 0.0f;
+    for(usize iter = 0u; iter < s_ShapeCastMaxIterations; ++iter){
+        input.transformA.position = f32x4(VectorSingle(xfA.position) + VectorSingle(translationA, 0.0f) * fraction, 0.0f);
+        input.transformB.position = f32x4(VectorSingle(xfB.position) + VectorSingle(translationB, 0.0f) * fraction, 0.0f);
+
+        const DistanceOutput dist = ShapeDistance(input, cache);
+        if(dist.distance <= totalRadius + tolerance){
+            hit.hit = true;
+            hit.fraction = fraction;
+            const VectorSingle pA = VectorSingle(dist.pointA);
+            const VectorSingle pB = VectorSingle(dist.pointB);
+            const VectorSingle n = VectorSingle(dist.normal);
+            hit.normal = f32x4(n, 0.0f);
+            hit.point = f32x4((pA + pB) * 0.5f, 0.0f);
+            return hit;
+        }
+
+        // Rate at which B approaches A along separating normal n (from A to B).
+        const f32 approach = -Vector3Dot(VectorSingle(dist.normal), relMove).x;
+        if(approach <= 1.0e-8f)
+            return hit;
+
+        const f32 deltaFraction = (dist.distance - totalRadius) / approach;
+        fraction += deltaFraction;
+        if(fraction > maxFraction)
+            return hit;
+    }
+
+    return hit;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

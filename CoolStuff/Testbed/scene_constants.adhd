@@ -14,7 +14,6 @@ const f32x4 s_PointLightPosition(1.5f, 1.6f, 1.5f, 0.0f);
 const f32x4 s_PointLightColor(0.6f, 0.74f, 1.0f, 0.0f);
 const f32 s_PointLightIntensity = 2.0f;
 const f32 s_PointLightRange = 16.0f;
-const StringView s_InitWorldFailedNarrow = "ProjectTestbed initialization failed";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

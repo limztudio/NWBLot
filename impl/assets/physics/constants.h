@@ -1,0 +1,65 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_PHYSICS_CONSTANTS_H
+#define NWB_PHYSICS_CONSTANTS_H
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define NWB_PHYSICS_WORKGROUP_SIZE 64u
+#define NWB_PHYSICS_MAX_MANIFOLD_POINTS 4u
+#define NWB_PHYSICS_GRAPH_COLOR_COUNT 24u
+#define NWB_PHYSICS_DYNAMIC_COLOR_COUNT 20u
+#define NWB_PHYSICS_OVERFLOW_COLOR_INDEX 23u
+
+#define NWB_PHYSICS_SHAPE_TYPE_SPHERE 0u
+#define NWB_PHYSICS_SHAPE_TYPE_CAPSULE 1u
+#define NWB_PHYSICS_SHAPE_TYPE_HULL 2u
+
+#define NWB_PHYSICS_SHAPE_FLAG_IS_BOX 0x00000001u
+#define NWB_PHYSICS_SHAPE_FLAG_SENSOR 0x00000002u
+#define NWB_PHYSICS_SHAPE_FLAG_SPECULATIVE 0x00000004u
+#define NWB_PHYSICS_SHAPE_FLAG_DYNAMIC_BODY 0x00010000u
+
+#define NWB_PHYSICS_BODY_FLAG_LOCK_LINEAR_X 0x00000001u
+#define NWB_PHYSICS_BODY_FLAG_LOCK_LINEAR_Y 0x00000002u
+#define NWB_PHYSICS_BODY_FLAG_LOCK_LINEAR_Z 0x00000004u
+#define NWB_PHYSICS_BODY_FLAG_LOCK_ANGULAR_X 0x00000008u
+#define NWB_PHYSICS_BODY_FLAG_LOCK_ANGULAR_Y 0x00000010u
+#define NWB_PHYSICS_BODY_FLAG_LOCK_ANGULAR_Z 0x00000020u
+#define NWB_PHYSICS_BODY_FLAG_DYNAMIC 0x00001000u
+#define NWB_PHYSICS_BODY_FLAG_GYROSCOPIC 0x00010000u
+
+#define NWB_PHYSICS_BROADPHASE_MODE_UPDATE_AABBS 0u
+#define NWB_PHYSICS_BROADPHASE_MODE_EMIT_PAIRS 1u
+
+#define NWB_PHYSICS_SOLVER_MODE_WARM_START 0u
+#define NWB_PHYSICS_SOLVER_MODE_SOLVE_BIAS 1u
+#define NWB_PHYSICS_SOLVER_MODE_RELAX 2u
+#define NWB_PHYSICS_SOLVER_MODE_RESTITUTION 3u
+
+#define NWB_PHYSICS_INVALID_INDEX 0xffffffffu
+
+#define NWB_PHYSICS_RESTITUTION_THRESHOLD 1.0f
+
+#define NWB_PHYSICS_GPU_BODY_STATE_BYTES 64u
+#define NWB_PHYSICS_GPU_BODY_SIM_BYTES 176u
+#define NWB_PHYSICS_GPU_SHAPE_PROXY_BYTES 112u
+#define NWB_PHYSICS_GPU_BROADPHASE_PAIR_BYTES 16u
+#define NWB_PHYSICS_GPU_NARROWPHASE_MANIFOLD_BYTES 176u
+#define NWB_PHYSICS_GPU_CONTACT_POINT_BYTES 64u
+#define NWB_PHYSICS_GPU_CONTACT_CONSTRAINT_BYTES 528u
+#define NWB_PHYSICS_GPU_PUSH_CONSTANTS_BYTES 80u
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

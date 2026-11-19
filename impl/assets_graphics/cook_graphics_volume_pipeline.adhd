@@ -208,8 +208,10 @@ b8 ReadOrCompileShaderVariant(in PreparedShaderEntry prepared, in StringView var
     const ShaderVariantCacheReadStatus status = ReadCachedShaderVariantBytecode(entry.name, entry.stage, entry.entryPoint, cachePath, bytecode);
     if(status == ShaderVariantCacheReadStatus::Error)
         return false;
-    if(status == ShaderVariantCacheReadStatus::Hit)
+    if(status == ShaderVariantCacheReadStatus::Hit){
+        info("GraphicsCook: shader '{}' variant '{}' is already cached at '{}'", entry.name, variant, cachePath);
         return true;
+    }
     ShaderDefineCombo merged;
     merged.reserve(defines.size() + entry.implicitDefines.size());
     for(in auto define : defines)

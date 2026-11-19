@@ -109,27 +109,30 @@ b8 GatherAssets(in AssetGatherOptions options){
     HashMap<Name, usize> indices;
     indices.reserve(files.value().size());
     for(in String file : files.value()){
-        const auto built = volume.readBuiltAsset(Path(StringView(file)));
-        if(!built.has_value())
+        const auto builtCount = volume.readBuiltAsset(Path(StringView(file)));
+        if(!builtCount.has_value())
             return false;
-        const Name path = built.value().virtualPath;
-        const Span<u8> bytes = volume.sourceBytes(built.value().payloadOffset);
-        const auto inserted = indices.try_emplace(path, volume.manifest.entries.size());
-        if(!inserted.second){
-            mut CookPackEntry existing = volume.manifest.entries[inserted.first.value()];
-            if(!AreGatheredAssetPayloadsIdentical(existing.payloadBytes, bytes)){
-                if(!options.mergePayloads.apply(path, bytes, workspace, existing.payloadBytes)){
-                    LogConflictingBuiltAssetIdentity(path);
-                    return false;
+        for(usize entryIndex = 0u; entryIndex < builtCount.value(); ++entryIndex){
+            const BuiltAssetPayload built = volume.builtEntry(entryIndex);
+            const Name path = built.virtualPath;
+            const Span<u8> bytes = volume.sourceBytes(built.payloadOffset, built.payloadSize);
+            const auto inserted = indices.try_emplace(path, volume.manifest.entries.size());
+            if(!inserted.second){
+                mut CookPackEntry existing = volume.manifest.entries[inserted.first.value()];
+                if(!AreGatheredAssetPayloadsIdentical(existing.payloadBytes, bytes)){
+                    if(!options.mergePayloads.apply(path, bytes, workspace, existing.payloadBytes)){
+                        LogConflictingBuiltAssetIdentity(path);
+                        return false;
+                    }
+                    existing.identity.payloadSize = existing.payloadBytes.size();
+                    existing.identity.payloadHash = ComputeGatheredPayloadHash(existing.payloadBytes);
                 }
-                existing.identity.payloadSize = existing.payloadBytes.size();
-                existing.identity.payloadHash = ComputeGatheredPayloadHash(existing.payloadBytes);
             }
-            --volume.manifest.plannedFileCount;
+            else if(!volume.append(path, bytes))
+                return false;
         }
-        else if(!volume.append(path, bytes))
-            return false;
     }
+    volume.manifest.plannedFileCount = cast<u64>(volume.manifest.entries.size());
     const auto output = AbsolutePath(Path(StringView(options.outputDirectory)));
     if(!output.has_value()){
         LogGatherOutputResolveFailure(options.outputDirectory);

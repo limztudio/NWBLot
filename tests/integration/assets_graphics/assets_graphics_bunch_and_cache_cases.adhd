@@ -39,8 +39,23 @@ Expected<ExpandedAssetMetadataVector> ExpandRegisteredBunch(mut BunchFixture fix
     return result.value();
 }
 
-void PrepareCacheRecordHelper(in GraphicsTestPath root, in DiscoveredNwbFile discovered, in StringView metadataText, in Sha256Digest producer, mut GraphicsScratchArena scratch, mut ScratchString relativePath, mut ScratchString cacheName, mut NwbFileAssetCacheRecord outRecord){
-    PrepareGraphicsCacheRecord(root, JoinGraphicsPath(root, s_CacheDirectory), discovered, metadataText, producer, scratch.arena, relativePath, cacheName, outRecord);
+void PrepareCacheRecordHelper(in GraphicsTestPath root, in DiscoveredNwbFile discovered, in StringView metadataText, in Sha256Digest producer, mut GraphicsScratchArena scratch, mut ScratchString sourcePath, mut ScratchString cacheName, mut NwbFileAssetCacheRecord outRecord){
+    PrepareGraphicsCacheRecord(JoinGraphicsPath(root, s_CacheDirectory), discovered, metadataText, producer, scratch.arena, sourcePath, cacheName, outRecord);
+}
+
+usize CountNwbaFilesInDirectory(in GraphicsTestPath directory){
+    const auto entries = RecursiveDirectoryIteratorCreate(Path(directory));
+    if(!entries.has_value())
+        return usize.max;
+    usize count = 0u;
+    for(in DirectoryEntry entry : entries.value()){
+        const auto regular = entry.isRegularFile();
+        if(!regular.has_value())
+            return usize.max;
+        if(regular.value() && StringView(PathToString(entry.path().extensionView())) == s_BuiltAssetExtension)
+            ++count;
+    }
+    return count;
 }
 
 void VerifyAssetBunchOwnership_ClearReplacementAndDestructionReleaseAllResolvedValues(){
@@ -413,7 +428,7 @@ void VerifyAssetBunchLookup_NestedListFailureFollowsSourceTraversalOrder(){
     }
 }
 
-void VerifyAssetsGraphics_AssetCacheWritesLowercaseRelativePathSha1AndInvalidatesOnParamChange(){
+void VerifyAssetsGraphics_AssetCacheWritesLowercaseAbsolutePathSha1AndSharesAcrossProjects(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena = TestArena();
@@ -433,22 +448,30 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseRelativePathSha1AndInvalidate
     const GraphicsTestPath mixedCaseNwbPath = JoinGraphicsPath2(assetRoot, "Samplers", "First_Sampler.nwb");
     const Name virtualPath = s_ProjectSamplersFirstSampler;
 
-    ASSERT_TRUE(WriteGraphicsFixtureText(mixedCaseNwbPath, s_LinearWrapSamplerMetadata));
-    ASSERT_TRUE(BuildAndGatherWithExplicitRepoRoot(testArena, root, assetRoot, JoinGraphicsPath(root, "built_first"), prepared.outputDirectory));
-
-    const Sha1Digest expectedDigest = ComputeSha1Text("assets/samplers/first_sampler.nwb");
+    const auto absoluteMixed = AbsolutePath(Path(mixedCaseNwbPath));
+    ASSERT_TRUE(absoluteMixed.has_value());
+    String expectedSourcePathText = PathToString(absoluteMixed.value().lexicallyNormal());
+    CanonicalizeTextInPlace(expectedSourcePathText);
+    const Sha1Digest expectedDigest = ComputeSha1Text(StringView(expectedSourcePathText));
     AssetString expectedSha1Name(testArena.arena);
     AppendSha1Hex(expectedDigest, expectedSha1Name);
-
+    expectedSha1Name.append(s_BuiltAssetExtension);
     const GraphicsTestPath expectedCacheFilePath = JoinGraphicsPath2(root, s_CacheDirectory, StringView(expectedSha1Name));
+
+    ASSERT_TRUE(WriteGraphicsFixtureText(mixedCaseNwbPath, s_LinearWrapSamplerMetadata));
+    const GraphicsTestPath builtFirst = JoinGraphicsPath(root, "built_first");
+    ASSERT_TRUE(BuildAndGatherWithExplicitRepoRoot(testArena, root, assetRoot, builtFirst, prepared.outputDirectory));
+    EXPECT_FALSE(SawCapturedMessage(logger, "is already cached"));
+    EXPECT_EQ(CountNwbaFilesInDirectory(builtFirst), 0u);
+
     AssetBytes initialCacheBytes(testArena.arena);
     ASSERT_TRUE(GraphicsReadBinaryFile(expectedCacheFilePath, initialCacheBytes).has_value());
-    const Expected<NwbAssetCacheFileHeader> initialHeaderResult = ReadNwbCacheFileHeader(initialCacheBytes);
+    const Expected<BuiltAssetFileHeader> initialHeaderResult = ReadBuiltAssetFileHeader(initialCacheBytes);
     ASSERT_TRUE(initialHeaderResult.has_value());
-    const NwbAssetCacheFileHeader initialHeader = initialHeaderResult.value();
-    EXPECT_EQ(initialHeader.magic, s_NwbAssetCacheMagic);
-    EXPECT_EQ(initialHeader.version, s_NwbAssetCacheVersion);
-    EXPECT_NE(initialHeader.flags & s_NwbAssetCacheFlagStandalone, 0u);
+    const BuiltAssetFileHeader initialHeader = initialHeaderResult.value();
+    EXPECT_EQ(initialHeader.magic, s_BuiltAssetMagic);
+    EXPECT_EQ(initialHeader.version, s_BuiltAssetVersion);
+    EXPECT_NE(initialHeader.flags & s_BuiltAssetFlagStandalone, 0u);
     EXPECT_EQ(initialHeader.entryCount, 1u);
 
     // A cache written by a different producer must not be reused.
@@ -466,17 +489,18 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseRelativePathSha1AndInvalidate
         DiscoveredNwbFile discovered = MakeDiscoveredNwbFile(assetRoot, mixedCaseNwbPath, s_ProjectVirtualRoot, testArena, scratch);
         NwbFileAssetCacheRecord originalProducer(testArena.arena);
         NwbFileAssetCacheRecord staleProducer(testArena.arena);
-        ScratchString relativePath(scratch.arena);
+        ScratchString sourcePath(scratch.arena);
         ScratchString cacheName(scratch.arena);
-        PrepareCacheRecordHelper(root, discovered, s_LinearWrapSamplerMetadata, producer, scratch, relativePath, cacheName, originalProducer);
-        PrepareCacheRecordHelper(root, discovered, s_LinearWrapSamplerMetadata, otherProducer, scratch, relativePath, cacheName, staleProducer);
+        PrepareCacheRecordHelper(root, discovered, s_LinearWrapSamplerMetadata, producer, scratch, sourcePath, cacheName, originalProducer);
+        PrepareCacheRecordHelper(root, discovered, s_LinearWrapSamplerMetadata, otherProducer, scratch, sourcePath, cacheName, staleProducer);
         ASSERT_TRUE(originalProducer.canWriteCache);
         ASSERT_TRUE(staleProducer.canWriteCache);
+        EXPECT_EQ(StringView(originalProducer.sourcePathText), StringView(expectedSourcePathText));
         EXPECT_EQ(originalProducer.paramSha256, initialHeader.paramSha256);
         EXPECT_NE(staleProducer.paramSha256, originalProducer.paramSha256);
 
         AssetBytes staleBytes = initialCacheBytes;
-        NwbAssetCacheFileHeader staleHeader = initialHeader;
+        BuiltAssetFileHeader staleHeader = initialHeader;
         staleHeader.paramSha256 = staleProducer.paramSha256;
         ASSERT_TRUE(OverwritePOD(0u, staleHeader, staleBytes));
         ASSERT_TRUE(GraphicsWriteBinaryFile(expectedCacheFilePath, staleBytes));
@@ -497,20 +521,23 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseRelativePathSha1AndInvalidate
         NwbFileAssetCacheRecord initialSidecars(testArena.arena);
         NwbFileAssetCacheRecord changedFont(testArena.arena);
         NwbFileAssetCacheRecord changedTexture(testArena.arena);
-        PrepareCacheRecordHelper(root, bunch, StringView(largeMetadata), producer, scratch, relativePath, cacheName, initialSidecars);
+        PrepareCacheRecordHelper(root, bunch, StringView(largeMetadata), producer, scratch, sourcePath, cacheName, initialSidecars);
         ASSERT_TRUE(initialSidecars.canWriteCache);
         ASSERT_TRUE(WriteGraphicsFixtureText(fontPath, "font-two"));
-        PrepareCacheRecordHelper(root, bunch, StringView(largeMetadata), producer, scratch, relativePath, cacheName, changedFont);
+        PrepareCacheRecordHelper(root, bunch, StringView(largeMetadata), producer, scratch, sourcePath, cacheName, changedFont);
         ASSERT_TRUE(changedFont.canWriteCache);
         EXPECT_NE(initialSidecars.paramSha256, changedFont.paramSha256);
         ASSERT_TRUE(WriteGraphicsFixtureText(texturePath, "texture-two"));
-        PrepareCacheRecordHelper(root, bunch, StringView(largeMetadata), producer, scratch, relativePath, cacheName, changedTexture);
+        PrepareCacheRecordHelper(root, bunch, StringView(largeMetadata), producer, scratch, sourcePath, cacheName, changedTexture);
         ASSERT_TRUE(changedTexture.canWriteCache);
         EXPECT_NE(changedFont.paramSha256, changedTexture.paramSha256);
     }
 
-    // Build again into a separate outputDirectory; unchanged .nwb params reuse __asset_cache/<sha1>.
-    ASSERT_TRUE(BuildAndGatherWithExplicitRepoRoot(testArena, root, assetRoot, JoinGraphicsPath(root, "built_second"), JoinGraphicsPath(root, "out_second")));
+    // Build again into a separate outputDirectory; unchanged .nwb params reuse __asset_cache/<sha1>.nwba and log cache hit.
+    const GraphicsTestPath builtSecond = JoinGraphicsPath(root, "built_second");
+    ASSERT_TRUE(BuildAndGatherWithExplicitRepoRoot(testArena, root, assetRoot, builtSecond, JoinGraphicsPath(root, "out_second")));
+    EXPECT_TRUE(SawCapturedMessage(logger, "is already cached"));
+    EXPECT_EQ(CountNwbaFilesInDirectory(builtSecond), 0u);
 
     const Expected<SamplerAsset> cachedSampler = LoadCookedSamplerAsset(JoinGraphicsPath(root, "out_second"), virtualPath, 1u, testArena);
     ASSERT_TRUE(cachedSampler.has_value());
@@ -518,7 +545,7 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseRelativePathSha1AndInvalidate
 
     // Corrupt the cached payload section hash; build must reject the corrupted cache entry and repair it.
     AssetBytes corruptedCacheBytes = initialCacheBytes;
-    NwbAssetCacheFileHeader corruptedHeader = initialHeader;
+    BuiltAssetFileHeader corruptedHeader = initialHeader;
     corruptedHeader.payloadSectionHashFnv64 = corruptedHeader.payloadSectionHashFnv64 ^ 1u;
     ASSERT_TRUE(OverwritePOD(0u, corruptedHeader, corruptedCacheBytes));
     ASSERT_TRUE(GraphicsWriteBinaryFile(expectedCacheFilePath, corruptedCacheBytes));
@@ -537,19 +564,46 @@ void VerifyAssetsGraphics_AssetCacheWritesLowercaseRelativePathSha1AndInvalidate
     ASSERT_TRUE(GraphicsReadBinaryFile(expectedCacheFilePath, repairedCacheBytes).has_value());
     EXPECT_EQ(repairedCacheBytes, initialCacheBytes);
 
-    // Modify .nwb parameter; checksum changes and invalidates __asset_cache/<sha1>.
+    // Modify .nwb parameter; checksum changes and invalidates __asset_cache/<sha1>.nwba.
     ASSERT_TRUE(WriteGraphicsFixtureText(mixedCaseNwbPath, s_ModifiedSamplerCacheMetadata));
     ASSERT_TRUE(BuildAndGatherWithExplicitRepoRoot(testArena, root, assetRoot, JoinGraphicsPath(root, "built_third"), JoinGraphicsPath(root, "out_third")));
 
     AssetBytes updatedCacheBytes(testArena.arena);
     ASSERT_TRUE(GraphicsReadBinaryFile(expectedCacheFilePath, updatedCacheBytes).has_value());
-    const Expected<NwbAssetCacheFileHeader> updatedHeader = ReadNwbCacheFileHeader(updatedCacheBytes);
+    const Expected<BuiltAssetFileHeader> updatedHeader = ReadBuiltAssetFileHeader(updatedCacheBytes);
     ASSERT_TRUE(updatedHeader.has_value());
     EXPECT_NE(updatedHeader.value().paramSha256, initialHeader.paramSha256);
 
     const Expected<SamplerAsset> updatedSampler = LoadCookedSamplerAsset(JoinGraphicsPath(root, "out_third"), virtualPath, 1u, testArena);
     ASSERT_TRUE(updatedSampler.has_value());
     EXPECT_FLOAT_EQ(updatedSampler.value().description().mipBias, 3.5f);
+
+    // Multi-entry standalone asset_bunch packs all entries into one __asset_cache/<sha1>.nwba and gathers them across cache hits.
+    const GraphicsTestPath bunchRoot = JoinGraphicsPath(root, "bunch_assets");
+    const GraphicsTestPath bunchNwbPath = JoinGraphicsPath2(bunchRoot, "Components", "Pair.nwb");
+    ASSERT_TRUE(WriteGraphicsFixtureText(bunchNwbPath, "transform_component first;\r\ntransform_component second;\r\nasset_bunch bunch = [first, second];\r\n"));
+    const auto absoluteBunch = AbsolutePath(Path(bunchNwbPath));
+    ASSERT_TRUE(absoluteBunch.has_value());
+    String canonicalBunchAbs = PathToString(absoluteBunch.value().lexicallyNormal());
+    CanonicalizeTextInPlace(canonicalBunchAbs);
+    AssetString bunchSha1Name(testArena.arena);
+    AppendSha1Hex(ComputeSha1Text(StringView(canonicalBunchAbs)), bunchSha1Name);
+    bunchSha1Name.append(s_BuiltAssetExtension);
+    const GraphicsTestPath bunchCacheFilePath = JoinGraphicsPath2(root, s_CacheDirectory, StringView(bunchSha1Name));
+    ASSERT_TRUE(BuildAndGatherWithExplicitRepoRoot(testArena, root, bunchRoot, JoinGraphicsPath(root, "built_bunch_first"), JoinGraphicsPath(root, "out_bunch_first")));
+    AssetBytes bunchCacheBytes(testArena.arena);
+    ASSERT_TRUE(GraphicsReadBinaryFile(bunchCacheFilePath, bunchCacheBytes).has_value());
+    const Expected<BuiltAssetFileHeader> bunchHeader = ReadBuiltAssetFileHeader(bunchCacheBytes);
+    ASSERT_TRUE(bunchHeader.has_value());
+    EXPECT_EQ(bunchHeader.value().entryCount, 2u);
+    const GraphicsTestPath builtBunchSecond = JoinGraphicsPath(root, "built_bunch_second");
+    const GraphicsTestPath outBunchSecond = JoinGraphicsPath(root, "out_bunch_second");
+    ASSERT_TRUE(BuildAndGatherWithExplicitRepoRoot(testArena, root, bunchRoot, builtBunchSecond, outBunchSecond));
+    EXPECT_EQ(CountNwbaFilesInDirectory(builtBunchSecond), 0u);
+    auto mountedBunch = MountGraphicsTestVolume(outBunchSecond, testArena);
+    ASSERT_TRUE(mountedBunch.has_value());
+    EXPECT_EQ(mountedBunch.value().deref().fileCount(), 2u);
+
     EXPECT_EQ(logger.errorCount(), 0u);
     EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
 }
@@ -574,7 +628,7 @@ NWB_ADHD_GTEST(AssetBunchLookup, LocalCycleDetectionKeepsCanonicalVariableIdenti
 NWB_ADHD_GTEST(AssetBunchLookup, BunchDeclarationsAreExcludedFromExportAndNestedReferenceLookup, VerifyAssetBunchLookup_BunchDeclarationsAreExcludedFromExportAndNestedReferenceLookup)
 NWB_ADHD_GTEST(AssetBunchLookup, ExportLookupKeepsFullReferenceTextAndRejectsLiteralItems, VerifyAssetBunchLookup_ExportLookupKeepsFullReferenceTextAndRejectsLiteralItems)
 NWB_ADHD_GTEST(AssetBunchLookup, NestedListFailureFollowsSourceTraversalOrder, VerifyAssetBunchLookup_NestedListFailureFollowsSourceTraversalOrder)
-NWB_ADHD_GTEST(AssetsGraphics, AssetCacheWritesLowercaseRelativePathSha1AndInvalidatesOnParamChange, VerifyAssetsGraphics_AssetCacheWritesLowercaseRelativePathSha1AndInvalidatesOnParamChange)
+NWB_ADHD_GTEST(AssetsGraphics, AssetCacheWritesLowercaseAbsolutePathSha1AndSharesAcrossProjects, VerifyAssetsGraphics_AssetCacheWritesLowercaseAbsolutePathSha1AndSharesAcrossProjects)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

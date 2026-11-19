@@ -295,9 +295,9 @@ StringView EmbeddedNulMaterialResourceCandidate(){ return StringView("project/\0
 b8 HasNonZeroErrorCode(in ErrorCode code){ return code.value() != 0; }
 u32 MaterialParamF32ValueTypeId(){ return cast<u32>(MaterialParameterValueType::f32); }
 
-Expected<NwbAssetCacheFileHeader> ReadNwbCacheFileHeader(in Span<u8> bytes){
+Expected<BuiltAssetFileHeader> ReadBuiltAssetFileHeader(in Span<u8> bytes){
     usize cursor = 0u;
-    return ReadPOD<NwbAssetCacheFileHeader>(bytes, cursor);
+    return ReadPOD<BuiltAssetFileHeader>(bytes, cursor);
 }
 
 void ExpectNoShaderCompilerWorkDirectories(in GraphicsTestPath cache){
@@ -1316,7 +1316,7 @@ void VerifyMetadataRegistryStoragePass(mut TestArena fixtureArena, mut TestArena
     mut HeapStorageVector<SamplerCookEntry> samplers = GraphicsRegistryEntries<SamplerCookEntry>(metadata.entryRegistry, DescribeAssetType<Sampler>().name);
     in HeapStorageVector<ModelCookEntry> models = GraphicsRegistryEntries<ModelCookEntry>(metadata.entryRegistry, DescribeAssetType<Model>().name);
     const GraphicsTestPath emptyPath(fixtureArena.arena);
-    EXPECT_EQ(ParseGraphicsAssetMetadata(files, root, emptyPath, parseArena.arena, cpuScheduler, scratch.arena, metadata), !rejectDuplicate);
+    EXPECT_EQ(ParseGraphicsAssetMetadata(files, emptyPath, parseArena.arena, cpuScheduler, scratch.arena, metadata), !rejectDuplicate);
     ASSERT_EQ(samplers.size(), samplerCount);
     EXPECT_GE(samplers.capacity(), samplerCount);
     EXPECT_TRUE(models.empty());

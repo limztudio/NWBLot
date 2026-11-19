@@ -9,9 +9,16 @@
 
 
 #include "cook_metadata_internal.h"
+#include "built_asset_format.h"
 
+#include <core/common/log.h>
+
+#include <global/algorithm.h>
 #include <global/binary.h>
+#include <global/filesystem/operations.h>
+#include <global/scope_exit.h>
 #include <global/sha1.h>
+#include <global/text_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,35 +36,17 @@ namespace __hidden_cook_metadata_cache{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct DecodedCachedAssetEntry{
-    u32 nwbSubIndex = 0u;
-    Name assetType = s_NameNone;
-    Name virtualPath = s_NameNone;
-    Span<const u8> payloadBytes;
-};
-
-
-static void BuildNwbRelativePathText(const Path& repoRoot, const DiscoveredNwbFile& discoveredNwbFile, ScratchArena& scratchArena, ScratchString& outRelativePathText){
-    const ::Path<ScratchArena> sourcePath(scratchArena, discoveredNwbFile.filePath.lexicallyNormal());
-    if(!repoRoot.empty()){
-        const ::Path<ScratchArena> rootPath(scratchArena, repoRoot.lexicallyNormal());
-        const ::Path<ScratchArena> relativePath = sourcePath.lexicallyRelative(rootPath);
-        if(AssetPathsDetail::BuildRelativeAssetPathText(relativePath, outRelativePathText))
-            return;
+[[nodiscard]] static b8 BuildCanonicalAbsolutePathText(const Path& filePath, ScratchArena& scratchArena, ScratchString& outPathText){
+    const auto absolutePath = AbsolutePath(filePath);
+    if(!absolutePath){
+        outPathText.clear();
+        return false;
     }
 
-    const ::Path<ScratchArena> assetRootPath(scratchArena, discoveredNwbFile.assetRoot.lexicallyNormal());
-    const ::Path<ScratchArena> assetRelativePath = sourcePath.lexicallyRelative(assetRootPath);
-    if(AssetPathsDetail::BuildRelativeAssetPathText(assetRelativePath, outRelativePathText))
-        return;
-
-    outRelativePathText = discoveredNwbFile.normalizedPathText;
-    for(char& ch : outRelativePathText){
-        if(ch == '\\')
-            ch = '/';
-        else
-            ch = Canonicalize(ch);
-    }
+    const ::Path<ScratchArena> canonicalPath(scratchArena, absolutePath->lexicallyNormal());
+    outPathText = PathToString(scratchArena, canonicalPath);
+    CanonicalizeTextInPlace(outPathText);
+    return !outPathText.empty();
 }
 
 [[nodiscard]] static b8 AppendPairedSidecarChecksums(const Path& nwbFilePath, ScratchArena& scratchArena, Vector<u8, ScratchArena>& shaInput){
@@ -86,7 +75,7 @@ static void BuildNwbRelativePathText(const Path& repoRoot, const DiscoveredNwbFi
 
 [[nodiscard]] static Sha256Digest ComputeNwbParamChecksum(
     const DiscoveredNwbFile& discoveredNwbFile,
-    const AStringView relativePathText,
+    const AStringView sourcePathText,
     const AStringView metaText,
     const Sha256Digest& producerDigest,
     ScratchArena& scratchArena,
@@ -109,11 +98,11 @@ static void BuildNwbRelativePathText(const Path& repoRoot, const DiscoveredNwbFi
     const Sha256Digest metaSha256 = ComputeSha256(BinaryByteView{ metaBytes.data(), metaBytes.size() });
 
     Vector<u8, ScratchArena> shaInput(scratchArena);
-    shaInput.reserve(sizeof(u16) + relativePathText.size() + discoveredNwbFile.virtualRoot.view().size() + derivedVirtualPathView.size() + sizeof(Sha256Digest) * 3u + 16u);
-    AppendPOD(shaInput, s_NwbAssetCacheVersion);
+    shaInput.reserve(sizeof(u16) + sourcePathText.size() + discoveredNwbFile.virtualRoot.view().size() + derivedVirtualPathView.size() + sizeof(Sha256Digest) * 3u + 16u);
+    AppendPOD(shaInput, s_BuiltAssetVersion);
     AppendPOD(shaInput, producerDigest);
     if(
-        !AppendString(shaInput, relativePathText)
+        !AppendString(shaInput, sourcePathText)
         || !AppendString(shaInput, discoveredNwbFile.virtualRoot.view())
         || !AppendString(shaInput, derivedVirtualPathView)
     )
@@ -142,127 +131,92 @@ namespace CookMetadataDetail{
 
 
 void PrepareNwbFileAssetCacheRecord(
-    const Path& repoRoot,
     const Path& assetCacheDirectory,
     const DiscoveredNwbFile& discoveredNwbFile,
     const AStringView metaText,
     const Sha256Digest& producerDigest,
     ScratchArena& scratchArena,
-    ScratchString& inOutRelativePathText,
+    ScratchString& inOutSourcePathText,
     ScratchString& inOutCacheFileName,
     NwbFileAssetCacheRecord& outRecord
 ){
-    __hidden_cook_metadata_cache::BuildNwbRelativePathText(repoRoot, discoveredNwbFile, scratchArena, inOutRelativePathText);
-    outRecord.relativePathText.assign(inOutRelativePathText.data(), inOutRelativePathText.size());
+    const b8 canonicalPathOk = __hidden_cook_metadata_cache::BuildCanonicalAbsolutePathText(discoveredNwbFile.filePath, scratchArena, inOutSourcePathText);
+    outRecord.sourcePathText.assign(inOutSourcePathText.data(), inOutSourcePathText.size());
 
-    const Sha1Digest pathSha1 = ComputeSha1Text(AStringView(inOutRelativePathText));
+    const Sha1Digest pathSha1 = ComputeSha1Text(AStringView(inOutSourcePathText));
     inOutCacheFileName.clear();
-    inOutCacheFileName.reserve(Sha1Digest::s_HexTextLength);
+    inOutCacheFileName.reserve(Sha1Digest::s_HexTextLength + s_BuiltAssetExtension.size());
     AppendSha1Hex(pathSha1, inOutCacheFileName);
-    outRecord.cacheFilePath = assetCacheDirectory / inOutCacheFileName;
+    inOutCacheFileName += s_BuiltAssetExtension;
+
+    const Path combinedCachePath = assetCacheDirectory / inOutCacheFileName;
+    const auto absoluteCachePath = AbsolutePath(combinedCachePath);
+    outRecord.cacheFilePath = (absoluteCachePath ? *absoluteCachePath : combinedCachePath).lexicallyNormal();
 
     b8 canUseCache = false;
     outRecord.paramSha256 = __hidden_cook_metadata_cache::ComputeNwbParamChecksum(
         discoveredNwbFile,
-        AStringView(inOutRelativePathText),
+        AStringView(inOutSourcePathText),
         metaText,
         producerDigest,
         scratchArena,
         canUseCache
     );
-    outRecord.canWriteCache = canUseCache;
+    outRecord.canWriteCache = canonicalPathOk && canUseCache;
 }
 
 NwbCacheLoadResult::Enum TryLoadNwbFileAssetCache(
-    const NwbFileAssetCacheRecord& record,
-    const usize nwbFileIndex,
-    CookArena& cookArena,
-    Core::CpuTaskScheduler& cpuScheduler,
+    NwbFileAssetCacheRecord& inOutRecord,
     ScratchArena& scratchArena,
     CookEntryPathHashSet& seenPropertyAssetPathHashes,
-    ParsedAssetMetadata& outMetadata
+    const ParsedAssetMetadata& metadata
 ){
+    inOutRecord.cachedVirtualPaths.clear();
+
     Vector<u8, ScratchArena> cacheBytes(scratchArena);
-    if(!ReadBinaryFile(record.cacheFilePath, cacheBytes))
+    if(!ReadBinaryFile(inOutRecord.cacheFilePath, cacheBytes))
         return NwbCacheLoadResult::Miss;
 
-    usize cursor = 0u;
-    const auto header = ReadPOD<NwbAssetCacheFileHeader>(cacheBytes, cursor);
-    if(!header)
-        return NwbCacheLoadResult::Miss;
-    if(header->magic != s_NwbAssetCacheMagic || header->version != s_NwbAssetCacheVersion || header->headerSize != sizeof(NwbAssetCacheFileHeader))
-        return NwbCacheLoadResult::Miss;
-    if((header->flags & s_NwbAssetCacheFlagStandalone) == 0u || header->entryCount == 0u)
-        return NwbCacheLoadResult::Miss;
-    if(header->paramSha256 != record.paramSha256)
-        return NwbCacheLoadResult::Miss;
-    if(header->payloadSectionSize > static_cast<u64>(Limit<usize>::s_Max))
+    DecodedBuiltAssetFileView decodedFile;
+    Vector<DecodedBuiltAssetEntryView, ScratchArena> decodedEntries(scratchArena);
+    if(!BuiltAssetFormatDetail::DecodeBuiltAssetBytes(cacheBytes, decodedFile, decodedEntries))
         return NwbCacheLoadResult::Miss;
 
-    const usize payloadSectionSize = static_cast<usize>(header->payloadSectionSize);
-    if(cursor > cacheBytes.size() || cacheBytes.size() - cursor != payloadSectionSize)
+    if((decodedFile.header.flags & s_BuiltAssetFlagStandalone) == 0u)
         return NwbCacheLoadResult::Miss;
-    if(ComputeFnv64Bytes(cacheBytes.data() + cursor, payloadSectionSize) != header->payloadSectionHashFnv64)
+    if(decodedFile.header.paramSha256 != inOutRecord.paramSha256)
         return NwbCacheLoadResult::Miss;
-
-    const auto cachedRelativePath = ReadString(cacheBytes, cursor);
-    if(!cachedRelativePath || *cachedRelativePath != AStringView(record.relativePathText))
+    if(decodedFile.sourcePathText != AStringView(inOutRecord.sourcePathText))
         return NwbCacheLoadResult::Miss;
 
-    constexpr usize minimumEntryBytes = sizeof(u32) * 2u + sizeof(NameHash) * 2u + sizeof(u64) * 2u;
-    if(header->entryCount > (cacheBytes.size() - cursor) / minimumEntryBytes)
-        return NwbCacheLoadResult::Miss;
-
-    Vector<__hidden_cook_metadata_cache::DecodedCachedAssetEntry, ScratchArena> decodedEntries(scratchArena);
-    decodedEntries.reserve(header->entryCount);
-    for(u32 entryIndex = 0u; entryIndex < header->entryCount; ++entryIndex){
-        const auto nwbSubIndex = ReadPOD<u32>(cacheBytes, cursor);
-        const auto assetTypeHash = ReadPOD<NameHash>(cacheBytes, cursor);
-        const auto virtualPathHash = ReadPOD<NameHash>(cacheBytes, cursor);
-        const auto virtualPathText = ReadString(cacheBytes, cursor);
-        const auto payloadSize = ReadPOD<u64>(cacheBytes, cursor);
-        const auto payloadHashFnv64 = ReadPOD<u64>(cacheBytes, cursor);
-        if(!nwbSubIndex || !assetTypeHash || !virtualPathHash || !virtualPathText || !payloadSize || !payloadHashFnv64)
+    for(const DecodedBuiltAssetEntryView& entry : decodedEntries){
+        if(!entry.assetType || IsNonStandaloneAssetType(entry.assetType) || !metadata.entryRegistry.has(entry.assetType))
             return NwbCacheLoadResult::Miss;
-        if(*payloadSize > static_cast<u64>(Limit<usize>::s_Max))
-            return NwbCacheLoadResult::Miss;
-
-        const usize payloadByteCount = static_cast<usize>(*payloadSize);
-        if(!CanReadBytes(cacheBytes, cursor, payloadByteCount))
-            return NwbCacheLoadResult::Miss;
-        const u8* const payloadData = cacheBytes.data() + cursor;
-        cursor += payloadByteCount;
-        if(ComputeFnv64Bytes(payloadData, payloadByteCount) != *payloadHashFnv64)
-            return NwbCacheLoadResult::Miss;
-
-        const Name assetType(*assetTypeHash);
-        if(!assetType || IsNonStandaloneAssetType(assetType) || !outMetadata.entryRegistry.has(assetType))
-            return NwbCacheLoadResult::Miss;
-
-        Name virtualPath(*virtualPathHash);
-        if(!virtualPathText->empty()){
-            const auto parsedVirtualPath = Name::FromText(*virtualPathText);
-            if(parsedVirtualPath && parsedVirtualPath->identityHash() == *virtualPathHash)
-                virtualPath = *parsedVirtualPath;
-        }
-        if(!virtualPath)
-            return NwbCacheLoadResult::Miss;
-
-        decodedEntries.push_back(__hidden_cook_metadata_cache::DecodedCachedAssetEntry{
-            .nwbSubIndex = *nwbSubIndex,
-            .assetType = assetType,
-            .virtualPath = virtualPath,
-            .payloadBytes = Span<const u8>(payloadData, payloadByteCount),
-        });
     }
-    if(cursor != cacheBytes.size())
-        return NwbCacheLoadResult::Miss;
 
-    for(const __hidden_cook_metadata_cache::DecodedCachedAssetEntry& decoded : decodedEntries){
-        CookEntryParseContext parseContext{ cookArena, cpuScheduler, scratchArena, seenPropertyAssetPathHashes, nwbFileIndex, decoded.nwbSubIndex };
-        if(!outMetadata.entryRegistry.appendCachedEntry(decoded.assetType, CookEntrySourceLocation{ nwbFileIndex, decoded.nwbSubIndex }, decoded.virtualPath, decoded.payloadBytes, parseContext))
+    Vector<NameHash, ScratchArena> insertedHashes(scratchArena);
+    insertedHashes.reserve(decodedEntries.size());
+    ScopeExit rollbackSeenPaths([&]()noexcept{
+        for(const NameHash& insertedHash : insertedHashes)
+            seenPropertyAssetPathHashes.erase(insertedHash);
+    });
+
+    for(const DecodedBuiltAssetEntryView& entry : decodedEntries){
+        const NameHash pathHash = entry.virtualPath.hash();
+        if(!seenPropertyAssetPathHashes.insert(pathHash).second){
+            if(FindIf(insertedHashes.begin(), insertedHashes.end(), [&pathHash](const NameHash& existing)noexcept{ return existing == pathHash; }) != insertedHashes.end())
+                return NwbCacheLoadResult::Miss;
+
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: duplicate property asset virtual path '{}'"), ConvertString(entry.virtualPath.resolvedText()));
             return NwbCacheLoadResult::Error;
+        }
+        insertedHashes.push_back(pathHash);
     }
+
+    inOutRecord.cachedVirtualPaths.reserve(decodedEntries.size());
+    for(const DecodedBuiltAssetEntryView& entry : decodedEntries)
+        inOutRecord.cachedVirtualPaths.push_back(entry.virtualPath);
+    rollbackSeenPaths.release();
     return NwbCacheLoadResult::Hit;
 }
 

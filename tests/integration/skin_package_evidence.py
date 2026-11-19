@@ -8,6 +8,7 @@ import types
 
 LIT_UINT32_LITTLE_ENDIAN = "<I"
 LIT_ASSETS_LIST = "assets.list"
+LIT_CACHE_DIRECTORY = "__asset_cache"
 UTF_8 = "utf-8"
 TEXTURE_MAGIC = 0x54455831
 TEXTURE_VERSION = 4
@@ -19,7 +20,7 @@ SKIN_VERSION = 3
 NAME_HASH_BYTES = 64
 ATLAS_EXTENT = (256, 256)
 ARTIFACT_MAGIC = 0x4142574E
-ARTIFACT_VERSION = 1
+ARTIFACT_VERSION = 2
 
 
 class SkinPackageEvidence:
@@ -33,20 +34,22 @@ class SkinPackageEvidence:
         artifacts = {}
         for name in names:
             listed = pathlib.Path(name)
-            if listed.is_absolute() or listed.name != name or listed.suffix != ".nwba":
-                raise AssertionError(f"builder listed an invalid relative artifact filename: {name}")
-            path = (directory / listed).resolve()
-            if not path.is_relative_to(directory_root):
-                raise AssertionError(f"builder listed an artifact outside its output directory: {name}")
-            binary = path.read_bytes()
-            if len(binary) < helpers.ARTIFACT_HEADER.size:
-                raise AssertionError(f"truncated current asset artifact: {path}")
-            magic, version, identity, payload_size, _ = helpers.ARTIFACT_HEADER.unpack_from(binary)
-            if (magic != ARTIFACT_MAGIC or version != ARTIFACT_VERSION or payload_size != len(binary) - helpers.ARTIFACT_HEADER.size):
-                raise AssertionError(f"invalid current runtime asset artifact: {path}")
-            if identity in artifacts:
-                raise AssertionError("builder listed duplicate current artifact identities")
-            artifacts[identity] = binary[helpers.ARTIFACT_HEADER.size:]
+            if listed.suffix != ".nwba":
+                raise AssertionError(f"builder listed a non-.nwba artifact filename: {name}")
+            if listed.is_absolute():
+                path = listed.resolve()
+                if path.parent.name != LIT_CACHE_DIRECTORY:
+                    raise AssertionError(f"builder listed an absolute artifact outside {LIT_CACHE_DIRECTORY}: {name}")
+            else:
+                if listed.name != name:
+                    raise AssertionError(f"builder listed an invalid relative artifact filename: {name}")
+                path = (directory / listed).resolve()
+                if not path.is_relative_to(directory_root):
+                    raise AssertionError(f"builder listed an artifact outside its output directory: {name}")
+            for identity, payload in helpers.decode_artifact_bytes(path.read_bytes(), path):
+                if identity in artifacts:
+                    raise AssertionError("builder listed duplicate current artifact identities")
+                artifacts[identity] = payload
         if list(directory.rglob(helpers.LIT_VOL)):
             raise AssertionError("asset builder unexpectedly produced a volume")
         return artifacts
@@ -103,4 +106,3 @@ class SkinPackageEvidence:
             raise AssertionError("packaged skin changed the declared atlas extent")
         SkinPackageEvidence.cooked_texture_primary_range(texture)
         return skin_identity, texture_identity
-

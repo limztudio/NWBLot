@@ -75,7 +75,14 @@ b8 ReserveAssetVolumePackManifest(const u64 plannedFileCount, AssetVolumePackMan
     return true;
 }
 
-b8 AppendPayloadBytesToManifest(const Name& virtualPath, const Span<const u8> payloadBytes, AssetVolumePackManifest& manifest, const u64 cookKeyHash){
+b8 AppendPayloadBytesToManifest(
+    const Name& virtualPath,
+    const Span<const u8> payloadBytes,
+    AssetVolumePackManifest& manifest,
+    const u64 cookKeyHash,
+    const Core::Assets::CookEntrySourceLocation location,
+    const NameHash assetTypeHash
+){
     if(!ValidateManifestVirtualPath(virtualPath))
         return false;
     if(!payloadBytes.empty() && payloadBytes.data() == nullptr){
@@ -92,6 +99,9 @@ b8 AppendPayloadBytesToManifest(const Name& virtualPath, const Span<const u8> pa
     AssetVolumePackEntry& entry = manifest.entries.back();
     entry.virtualPath = virtualPath;
     entry.identity = identity;
+    entry.nwbFileIndex = location.nwbFileIndex;
+    entry.nwbSubIndex = location.nwbSubIndex;
+    entry.assetTypeHash = assetTypeHash;
     entry.payloadBytes.reserve(payloadBytes.size());
     AppendBytesNoReserveUnchecked(entry.payloadBytes, payloadBytes.data(), payloadBytes.size());
     return true;

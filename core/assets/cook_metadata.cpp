@@ -139,7 +139,6 @@ b8 AddPlannedFileCount(const u64 additionalFileCount, u64& inOutPlannedFileCount
 
 b8 ParseAssetMetadata(
     const Span<const DiscoveredNwbFile> nwbFiles,
-    const Path& repoRoot,
     const Path& assetCacheDirectory,
     CookArena& cookArena,
     Core::CpuTaskScheduler& cpuScheduler,
@@ -162,7 +161,7 @@ b8 ParseAssetMetadata(
     }
 
     ScratchString metaText{scratchArena};
-    ScratchString relativePathText{scratchArena};
+    ScratchString sourcePathText{scratchArena};
     ScratchString cacheFileName{scratchArena};
 
     b8 parsedAnyMetadata = false;
@@ -179,13 +178,12 @@ b8 ParseAssetMetadata(
             NwbFileAssetCacheRecord& cacheRecord = outMetadata.fileCacheRecords[fileIndex];
             const AStringView firstToken = ReadFirstIdentifierAfterCComments(AStringView(metaText));
             CookMetadataDetail::PrepareNwbFileAssetCacheRecord(
-                repoRoot,
                 assetCacheDirectory,
                 discoveredNwbFile,
                 AStringView(metaText),
                 producerDigest,
                 scratchArena,
-                relativePathText,
+                sourcePathText,
                 cacheFileName,
                 cacheRecord
             );
@@ -194,9 +192,6 @@ b8 ParseAssetMetadata(
             if(cacheRecord.canWriteCache && !IsLikelyNonStandaloneFirstToken(firstToken)){
                 const auto cacheResult = CookMetadataDetail::TryLoadNwbFileAssetCache(
                     cacheRecord,
-                    fileIndex,
-                    cookArena,
-                    cpuScheduler,
                     scratchArena,
                     seenPropertyAssetPathHashes,
                     outMetadata
@@ -207,9 +202,12 @@ b8 ParseAssetMetadata(
                     cacheRecord.standalone = true;
                     cacheRecord.loadedFromCache = true;
                     parsedAnyMetadata = true;
+                    NWB_LOGGER_INFO(FOUNDATION_TEXT("AssetCook: '{}' is already cached at '{}'"), PathToString<tchar>(discoveredNwbFile.filePath), PathToString<tchar>(cacheRecord.cacheFilePath));
                     continue;
                 }
             }
+#else
+            (void)firstToken;
 #endif
         }
 

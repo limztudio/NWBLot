@@ -45,24 +45,20 @@ namespace NwbCacheLoadResult{
 
 void CopyPairedSidecarRules(Vector<AssetPairedSidecarRule, ScratchArena>& outRules);
 void PrepareNwbFileAssetCacheRecord(
-    const Path& repoRoot,
     const Path& assetCacheDirectory,
     const DiscoveredNwbFile& discoveredNwbFile,
     AStringView metaText,
     const Sha256Digest& producerDigest,
     ScratchArena& scratchArena,
-    ScratchString& inOutRelativePathText,
+    ScratchString& inOutSourcePathText,
     ScratchString& inOutCacheFileName,
     NwbFileAssetCacheRecord& outRecord
 );
 [[nodiscard]] NwbCacheLoadResult::Enum TryLoadNwbFileAssetCache(
-    const NwbFileAssetCacheRecord& record,
-    usize nwbFileIndex,
-    CookArena& cookArena,
-    Core::CpuTaskScheduler& cpuScheduler,
+    NwbFileAssetCacheRecord& inOutRecord,
     ScratchArena& scratchArena,
     CookEntryPathHashSet& seenPropertyAssetPathHashes,
-    ParsedAssetMetadata& outMetadata
+    const ParsedAssetMetadata& metadata
 );
 
 

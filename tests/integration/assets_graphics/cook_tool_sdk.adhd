@@ -45,7 +45,7 @@ extern mut HeapStorageVector<Entry> GraphicsRegistryEntries<Entry>(mut CookEntry
 [cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::HasBucket")]
 extern b8 HasCookEntryRegistryBucket(in CookEntryRegistry registry, in Name type);
 [cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::ParseAssetMetadata")]
-extern b8 ParseGraphicsAssetMetadata(in auto files, in auto root, in auto cache, mut auto outputStorage, mut auto scheduler, mut auto scratch, mut ParsedAssetMetadata metadata);
+extern b8 ParseGraphicsAssetMetadata(in auto files, in auto cache, mut auto outputStorage, mut auto scheduler, mut auto scratch, mut ParsedAssetMetadata metadata);
 [cpp_header("<core/assets/cook_metadata_internal.h>"), cpp_name("::NWB::Core::Assets::CookMetadataDetail::CopyPairedSidecarRules")]
 extern void CopyGraphicsSidecarRules(mut ScratchStorageVector<AssetPairedSidecarRule> rules);
 [cpp_header("<core/assets/paths.h>"), cpp_name("::NWB::Core::Assets::ResolveVirtualAssetPath")]
@@ -86,14 +86,14 @@ extern class TestAString{
 [cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::NwbFileAssetCacheRecord")]
 extern class NwbFileAssetCacheRecord{
     GlobalPath cacheFilePath;
-    GlobalString relativePathText;
+    GlobalString sourcePathText;
     Sha256Digest paramSha256;
     b8 standalone;
     b8 loadedFromCache;
     b8 canWriteCache;
 };
-[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::NwbAssetCacheFileHeader"), cpp_flags(self_defaulted, binary_serializable)]
-extern class NwbAssetCacheFileHeader{
+[cpp_header("<core/assets/built_asset_format.h>"), cpp_name("::NWB::Core::Assets::BuiltAssetFileHeader"), cpp_flags(self_defaulted, binary_serializable)]
+extern class BuiltAssetFileHeader{
     u32 magic;
     u16 version;
     u16 headerSize;
@@ -157,12 +157,12 @@ extern mut AssetByteBuffer GraphicsCodecBytes(mut auto buffer);
 
 [cpp_header("<core/assets/input_list.h>"), cpp_name("::NWB::Core::Assets::ReadAssetInputList")]
 extern b8 ReadGraphicsInputList(in auto path, mut auto scratch, mut auto outputs, in b8 resolve);
-[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::s_NwbAssetCacheMagic")]
-extern const u32 s_NwbAssetCacheMagic;
-[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::s_NwbAssetCacheVersion")]
-extern const u16 s_NwbAssetCacheVersion;
-[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::s_NwbAssetCacheFlagStandalone")]
-extern const u32 s_NwbAssetCacheFlagStandalone;
+[cpp_header("<core/assets/built_asset_format.h>"), cpp_name("::NWB::Core::Assets::s_BuiltAssetMagic")]
+extern const u32 s_BuiltAssetMagic;
+[cpp_header("<core/assets/built_asset_format.h>"), cpp_name("::NWB::Core::Assets::s_BuiltAssetVersion")]
+extern const u16 s_BuiltAssetVersion;
+[cpp_header("<core/assets/built_asset_format.h>"), cpp_name("::NWB::Core::Assets::s_BuiltAssetFlagStandalone")]
+extern const u32 s_BuiltAssetFlagStandalone;
 [cpp_name("__FILE__")]
 extern const StringView s_GraphicsFixtureSource;
 

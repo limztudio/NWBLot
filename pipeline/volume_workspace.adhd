@@ -44,6 +44,7 @@ extern class CookPackManifest{
 extern class BuiltAssetPayload{
     Name virtualPath;
     usize payloadOffset;
+    usize payloadSize;
 };
 
 [cpp_header("<core/assets/volume/cook_types.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::AssetVolumeWriteResult")]
@@ -56,8 +57,9 @@ extern class CookVolumeManifest{
     CookPackManifest manifest;
     b8 reserve(in u64 count);
     b8 append(in Name path, in Span<u8> bytes);
-    Expected<BuiltAssetPayload> readBuiltAsset(in Path file);
-    Span<u8> sourceBytes(in usize offset)const;
+    Expected<usize> readBuiltAsset(in Path file);
+    BuiltAssetPayload builtEntry(in usize index)const;
+    Span<u8> sourceBytes(in usize offset, in usize size)const;
     Expected<CookVolumeWriteResult> writeVolume(in Path output, in StringView configuration)const;
     b8 writeBuiltAssets(in Path output)const;
 };
@@ -77,10 +79,13 @@ extern class CookVolumePreparation{
     void setConfiguration(in StringView value);
     b8 registerPreparers();
     usize entryCount()const;
+    u64 cachedEntryCount()const;
     void reservePaths(in usize count);
+    b8 seedCachedPaths();
     usize writerCount()const;
     b8 writeManifest(in usize index, mut CookVolumeManifest volume);
     b8 writeRegistryObjects(mut CpuTaskScheduler scheduler, mut CookVolumeManifest volume);
+    b8 writeBuiltAssets(in Path output, in CookVolumeManifest volume)const;
 };
 
 

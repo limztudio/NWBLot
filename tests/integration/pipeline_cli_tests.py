@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import hashlib
 import importlib.util
 import pathlib
 import shutil
@@ -37,11 +38,114 @@ LIT_MAIN = "__main__"
 LIT_EMPTY_ASSET_TYPE = ""
 
 
+ASSET_CACHE_DIRECTORY = "__asset_cache"
+LIT_ASSETS_LIST = "assets.list"
 ASSET_TYPE_SENTINEL = "nwb_cli_test_unsupported"
 CHILD_TIMEOUT_SECONDS = 30.0
-ARTIFACT_HEADER = struct.Struct("<II64sQQ")
+ARTIFACT_MAGIC = 0x4142574E
+ARTIFACT_VERSION = 2
+ARTIFACT_HEADER = struct.Struct("<IHHII32sQQ")
+ARTIFACT_ENTRY_PREFIX = struct.Struct("<I64s64sI")
+ARTIFACT_ENTRY_SUFFIX = struct.Struct("<QQ")
+FNV64_OFFSET_BASIS = 14695981039346656037
+FNV64_PRIME = 1099511628211
 VOLUME_HEADER = struct.Struct("<8sQQQQQ")
 VOLUME_INDEX_ENTRY = struct.Struct("<64sQQ")
+
+
+def compute_fnv64(data: bytes) -> int:
+    value = FNV64_OFFSET_BASIS
+    for byte in data:
+        value ^= byte
+        value = (value * FNV64_PRIME) & 0xFFFFFFFFFFFFFFFF
+    return value
+
+
+def encode_artifact_bytes(
+    flags: int,
+    param_sha256: bytes,
+    source_path: bytes,
+    entries: list[tuple[int, bytes, bytes, bytes, bytes]],
+) -> bytes:
+    payload_section = bytearray()
+    payload_section.extend(struct.pack("<I", len(source_path)))
+    payload_section.extend(source_path)
+    for sub_index, asset_type_hash, virtual_path_hash, virtual_path_text, payload in entries:
+        payload_section.extend(ARTIFACT_ENTRY_PREFIX.pack(sub_index, asset_type_hash, virtual_path_hash, len(virtual_path_text)))
+        payload_section.extend(virtual_path_text)
+        payload_section.extend(ARTIFACT_ENTRY_SUFFIX.pack(len(payload), compute_fnv64(payload)))
+        payload_section.extend(payload)
+    header = ARTIFACT_HEADER.pack(
+        ARTIFACT_MAGIC,
+        ARTIFACT_VERSION,
+        ARTIFACT_HEADER.size,
+        flags,
+        len(entries),
+        param_sha256,
+        len(payload_section),
+        compute_fnv64(payload_section),
+    )
+    return header + bytes(payload_section)
+
+
+def decode_artifact_bytes(binary: bytes, source: pathlib.Path | str = "<memory>") -> list[tuple[bytes, bytes]]:
+    if len(binary) < ARTIFACT_HEADER.size:
+        raise AssertionError(f"truncated asset artifact: {source}")
+    magic, version, header_size, _, entry_count, _, section_size, section_hash = ARTIFACT_HEADER.unpack_from(binary)
+    if magic != ARTIFACT_MAGIC or version != ARTIFACT_VERSION or header_size != ARTIFACT_HEADER.size or entry_count == 0:
+        raise AssertionError(f"invalid runtime asset artifact: {source}")
+    cursor = ARTIFACT_HEADER.size
+    if section_size != len(binary) - cursor or compute_fnv64(binary[cursor:]) != section_hash:
+        raise AssertionError(f"invalid runtime asset artifact section checksum: {source}")
+    if cursor + 4 > len(binary):
+        raise AssertionError(f"truncated source path in artifact: {source}")
+    source_len = struct.unpack_from("<I", binary, cursor)[0]
+    cursor += 4 + source_len
+    if cursor > len(binary):
+        raise AssertionError(f"truncated source path in artifact: {source}")
+    entries: list[tuple[bytes, bytes]] = []
+    for _ in range(entry_count):
+        if cursor + ARTIFACT_ENTRY_PREFIX.size > len(binary):
+            raise AssertionError(f"truncated entry prefix in artifact: {source}")
+        _, _, virtual_path_hash, text_len = ARTIFACT_ENTRY_PREFIX.unpack_from(binary, cursor)
+        cursor += ARTIFACT_ENTRY_PREFIX.size + text_len
+        if cursor + ARTIFACT_ENTRY_SUFFIX.size > len(binary):
+            raise AssertionError(f"truncated entry header in artifact: {source}")
+        payload_size, payload_hash = ARTIFACT_ENTRY_SUFFIX.unpack_from(binary, cursor)
+        cursor += ARTIFACT_ENTRY_SUFFIX.size
+        if cursor + payload_size > len(binary):
+            raise AssertionError(f"truncated entry payload in artifact: {source}")
+        payload = binary[cursor:cursor + payload_size]
+        cursor += payload_size
+        if compute_fnv64(payload) != payload_hash:
+            raise AssertionError(f"corrupt entry payload checksum in artifact: {source}")
+        entries.append((virtual_path_hash, payload))
+    if cursor != len(binary):
+        raise AssertionError(f"trailing bytes in artifact: {source}")
+    return entries
+
+
+def expected_cache_path(repo_root: pathlib.Path, source_path: pathlib.Path) -> pathlib.Path:
+    canonical = str(source_path.resolve()).replace("\\", "/").lower()
+    digest = hashlib.sha1(canonical.encode(LIT_UTF_8)).hexdigest()
+    return repo_root / ASSET_CACHE_DIRECTORY / f"{digest}.nwba"
+
+
+def read_manifest_artifact_paths(directory: pathlib.Path) -> list[pathlib.Path]:
+    manifest = directory / LIT_ASSETS_LIST
+    if not manifest.is_file():
+        raise AssertionError(f"missing assets.list in {directory}")
+    lines = manifest.read_text(encoding=LIT_UTF_8).splitlines()
+    if not lines or any(not line for line in lines):
+        raise AssertionError(f"builder published an empty artifact list in {directory}")
+    resolved: list[pathlib.Path] = []
+    for line in lines:
+        listed = pathlib.Path(line)
+        path = listed.resolve() if listed.is_absolute() else (directory / listed).resolve()
+        if path.suffix != ".nwba":
+            raise AssertionError(f"builder listed a non-.nwba artifact: {line}")
+        resolved.append(path)
+    return resolved
 
 
 def parse_args() -> argparse.Namespace:
@@ -67,16 +171,13 @@ def run_command(command: list[str], working_directory: pathlib.Path, failure: bo
 
 def read_artifacts(directory: pathlib.Path) -> dict[bytes, bytes]:
     artifacts = {}
-    for path in sorted(directory.rglob(LIT_NWBA)):
-        binary = path.read_bytes()
-        if len(binary) < ARTIFACT_HEADER.size:
-            raise AssertionError(f"truncated asset artifact: {path}")
-        magic, version, name_hash, payload_size, _ = ARTIFACT_HEADER.unpack_from(binary)
-        if magic != 0x4142574E or version != 1 or payload_size != len(binary) - ARTIFACT_HEADER.size:
-            raise AssertionError(f"invalid runtime asset artifact: {path}")
-        if name_hash in artifacts:
-            raise AssertionError(f"duplicate artifact identity in {directory}")
-        artifacts[name_hash] = binary[ARTIFACT_HEADER.size:]
+    manifest = directory / LIT_ASSETS_LIST
+    paths = read_manifest_artifact_paths(directory) if manifest.is_file() else sorted(directory.rglob(LIT_NWBA))
+    for path in paths:
+        for name_hash, payload in decode_artifact_bytes(path.read_bytes(), path):
+            if name_hash in artifacts:
+                raise AssertionError(f"duplicate artifact identity in {directory}")
+            artifacts[name_hash] = payload
     if not artifacts:
         raise AssertionError(f"builder produced no runtime artifacts in {directory}")
     if list(directory.rglob(LIT_VOL)):
@@ -164,13 +265,21 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
 
     combined_directory = root / "combined artifacts"
     run_command([str(args.asset_builder), *build_options, LIT_INPUT, str(first_asset), str(second_asset), LIT_OUTPUT_DIRECTORY, str(combined_directory)], root,)
+    first_cache_path = expected_cache_path(root, first_asset)
+    second_cache_path = expected_cache_path(root, second_asset)
+    if not first_cache_path.is_file() or not second_cache_path.is_file():
+        raise AssertionError("standalone cooked assets were not placed directly under __asset_cache/<sha1>.nwba")
+    if list(combined_directory.rglob(LIT_NWBA)):
+        raise AssertionError("asset builder duplicated standalone .nwba files outside __asset_cache")
+    if set(read_manifest_artifact_paths(combined_directory)) != {first_cache_path.resolve(), second_cache_path.resolve()}:
+        raise AssertionError("assets.list did not reference the shared __asset_cache .nwba files")
     combined_payloads = read_artifacts(combined_directory)
     if sampler_filters(combined_payloads) != [0, 1]:
         raise AssertionError("multiple input assets did not produce both runtime sampler descriptions")
 
-    exemplar = next(combined_directory.rglob(LIT_NWBA)).read_bytes()
-    magic, version, name_hash, _, _ = ARTIFACT_HEADER.unpack_from(exemplar)
-    empty_artifact = ARTIFACT_HEADER.pack(magic, version, name_hash, 0, 14695981039346656037)
+    exemplar = first_cache_path.read_bytes()
+    name_hash, _ = decode_artifact_bytes(exemplar, first_cache_path)[0]
+    empty_artifact = encode_artifact_bytes(0, b"\0" * 32, b"", [(0, b"\0" * 64, name_hash, b"", b"")])
     first_empty = root / "empty-first.nwba"
     second_empty = root / "empty-second.nwba"
     first_empty.write_bytes(empty_artifact)
@@ -194,7 +303,9 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
         directory = root / f"individual-{index}"
         list_path = root / f"input-{index}.txt"
         list_path.write_text(str(asset) + LIT_N, encoding=LIT_UTF_8)
-        run_command([str(args.asset_builder), *build_options, LIT_INPUT_LIST, str(list_path), LIT_OUTPUT_DIRECTORY, str(directory)], root,)
+        cache_hit_output = run_command([str(args.asset_builder), *build_options, LIT_INPUT_LIST, str(list_path), LIT_OUTPUT_DIRECTORY, str(directory)], root,)
+        if "[INFO]:" not in cache_hit_output or "is already cached" not in cache_hit_output:
+            raise AssertionError(f"builder did not notify cached asset via info(...):\n{cache_hit_output[-4000:]}")
         payloads = read_artifacts(directory)
         if sampler_filters(payloads) != [1 - index]:
             raise AssertionError("explicit builder input selection included unselected assets or changed their data")
@@ -215,6 +326,8 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
     cooked_directory = root / "cooked"
     run_command([sys.executable, str(args.pipeline_launcher), LIT_SKIP_BUILD, *build_options, LIT_INPUT, str(first_asset), str(second_asset), LIT_DEPENDENCY_COMPUTER, str(args.dependency_computer), LIT_ASSET_BUILDER, str(args.asset_builder), LIT_ASSET_GATHERER, str(args.asset_gatherer),
          LIT_OUTPUT_DIRECTORY, str(cooked_directory)], root,)
+    if (root / ASSET_CACHE_DIRECTORY / "pipeline").exists():
+        raise AssertionError("pipeline launcher created per-project intermediate cache subdirectories")
     if read_volume(cooked_directory) != combined_payloads:
         raise AssertionError("pipeline orchestration did not gather all built runtime payloads")
 
@@ -233,7 +346,11 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
     if set(refreshed_payloads) != set(read_artifacts(individual_directories[0])) or sampler_filters(refreshed_payloads) != [0]:
         raise AssertionError("gathering a rebuilt directory retained stale assets or an old runtime payload")
 
-    run_command([str(args.asset_gatherer), LIT_INPUT, str(individual_directories[0]), str(combined_directory), LIT_OUTPUT_DIRECTORY, str(gathered_directory)], root, failure=True,)
+    conflict_asset = second_root / LIT_SAMPLERS / "first.nwb"
+    write_sampler(conflict_asset, LIT_LINEAR)
+    conflict_directory = root / "conflict artifacts"
+    run_command([str(args.asset_builder), *build_options, LIT_INPUT, str(conflict_asset), LIT_OUTPUT_DIRECTORY, str(conflict_directory)], root,)
+    run_command([str(args.asset_gatherer), LIT_INPUT, str(conflict_directory), str(combined_directory), LIT_OUTPUT_DIRECTORY, str(gathered_directory)], root, failure=True,)
     if read_volume(gathered_directory) != combined_payloads:
         raise AssertionError("conflicting duplicate assets changed an already published volume")
 
@@ -254,7 +371,7 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
         raise AssertionError("an empty launcher build domain changed the previously cooked volume")
 
     corrupt_path = root / "corrupt.nwba"
-    artifact_bytes = bytearray(next(combined_directory.rglob(LIT_NWBA)).read_bytes())
+    artifact_bytes = bytearray(read_manifest_artifact_paths(combined_directory)[0].read_bytes())
     artifact_bytes[-1] ^= 0x01
     corrupt_path.write_bytes(artifact_bytes)
     run_command([str(args.asset_gatherer), LIT_INPUT, str(corrupt_path), LIT_OUTPUT_DIRECTORY, str(gathered_directory)], root, failure=True,)

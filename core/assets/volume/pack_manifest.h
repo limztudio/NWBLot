@@ -13,6 +13,7 @@
 
 #include "cook_types.h"
 
+#include <core/assets/cook_entry_registry.h>
 #include <global/span.h>
 
 
@@ -41,6 +42,9 @@ struct AssetVolumePackEntry{
     Name virtualPath = s_NameNone;
     AssetVolumePayloadIdentity identity;
     Core::Assets::AssetBytes payloadBytes;
+    usize nwbFileIndex = Limit<usize>::s_Max;
+    u32 nwbSubIndex = 0u;
+    NameHash assetTypeHash = {};
 
 
 public:
@@ -67,7 +71,14 @@ public:
 
 
 [[nodiscard]] b8 ReserveAssetVolumePackManifest(u64 plannedFileCount, AssetVolumePackManifest& manifest);
-[[nodiscard]] b8 AppendPayloadBytesToManifest(const Name& virtualPath, Span<const u8> payloadBytes, AssetVolumePackManifest& manifest, u64 cookKeyHash = 0u);
+[[nodiscard]] b8 AppendPayloadBytesToManifest(
+    const Name& virtualPath,
+    Span<const u8> payloadBytes,
+    AssetVolumePackManifest& manifest,
+    u64 cookKeyHash = 0u,
+    Core::Assets::CookEntrySourceLocation location = {},
+    NameHash assetTypeHash = {}
+);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

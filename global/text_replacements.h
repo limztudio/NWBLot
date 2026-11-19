@@ -13,7 +13,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Replacement text must not borrow from the source. Ranges must be disjoint; equal-start order is unspecified.
 template<typename ReplacementT, typename StringT>
 void ApplyTextReplacements(const Span<ReplacementT> inOutReplacements, StringT& inOutSource){
     Sort(inOutReplacements.begin(), inOutReplacements.end(), [](const ReplacementT& lhs, const ReplacementT& rhs)noexcept(noexcept(static_cast<b8>(lhs.begin > rhs.begin))) -> b8{

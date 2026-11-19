@@ -20,7 +20,6 @@ class RadioGroupLabel{
     }
 }
 
-// The source and state are borrowed for the lifetime of the enclosing scope.
 [move_only, friend(Builder)]
 class RadioGroupFrame : NoCopy{
     private in IListDataSource m_source;

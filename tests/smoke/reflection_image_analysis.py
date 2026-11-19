@@ -1,5 +1,3 @@
-"""Geometry and color checks for reflection smoke captures."""
-
 import math
 
 from reflection_statistics import LIT_DISABLED, LIT_FLOOR, LIT_SCREEN
@@ -35,7 +33,6 @@ class ReflectionImageAnalysis:
             raise SmokeFailure("reflection framebuffer is malformed or too small")
         return width, height, rows
 
-
     @staticmethod
     def region_pixels(width, height, region):
         left, top, right, bottom = region
@@ -43,26 +40,21 @@ class ReflectionImageAnalysis:
             for x in range(int(left * width), int(right * width)):
                 yield x, y
 
-
     @staticmethod
     def marker_color(pixel, color):
         channel = 0 if color == LIT_RED else 1
         return pixel[channel] >= 40 and all(pixel[channel] >= pixel[other] + 25 for other in range(3) if other != channel)
 
-
     @staticmethod
     def blue_foreground(pixel):
         return pixel[2] >= 110 and pixel[2] >= pixel[0] + 45 and pixel[2] >= pixel[1] + 45
 
-
     @staticmethod
     def marker_projection(width, height, color, moved=False):
-        # Virtual source reflected through z=0 sits 14 units from the camera at z=-6.
         focal_length = height / (2.0 * math.tan(math.pi / 6.0))
         x, y = (-1.6, 1.0) if color == LIT_RED else (1.6, 2.0)
         x += 0.9 if moved else 0.0
         return width * 0.5 + focal_length * x / 14.0, height * 0.5 - focal_length * (y - 1.4) / 14.0
-
 
     @staticmethod
     def analyze_markers(frame, moved=False, required=True):
@@ -91,7 +83,6 @@ class ReflectionImageAnalysis:
             results[color] = {LIT_PIXELS: len(points), LIT_MINIMUM_PROJECTED_AREA_PIXELS: math.ceil(minimum_pixels), LIT_CENTROID: [centroid_x, centroid_y], LIT_EXPECTED_CENTROID: [expected_x, expected_y], "outside_predicted_region": outside}
         return results
 
-
     @staticmethod
     def compare_marker_motion(original, moved):
         if original[:2] != moved[:2]:
@@ -108,7 +99,6 @@ class ReflectionImageAnalysis:
             after[color][LIT_EXPECTED_MOTION_X] = expected_shift
         return {LIT_ORIGINAL: before, LIT_MOVED: after}
 
-
     @staticmethod
     def panel_projection(width, height, color, case, reflected):
         focal_length = height / (2.0 * math.tan(math.pi / 6.0))
@@ -117,20 +107,17 @@ class ReflectionImageAnalysis:
             source_x += 0.25 if color == LIT_RED else -0.25
         elif case == LIT_BOUNDARY and color == LIT_GREEN:
             source_x = 3.0
-        # Virtual image at z=+3 sits three times farther from the camera than the source at z=-3.
         distance = 9.0 if reflected else 3.0
         if case == LIT_FLOOR:
             source_y = -2.0 if reflected else 2.0
             distance = 9.0
         return (width * 0.5 + focal_length * source_x / distance, height * 0.5 - focal_length * (source_y - 1.4) / distance, focal_length * 0.3 / distance, focal_length * half_height / distance)
 
-
     @staticmethod
     def in_panel_rectangle(point, projection, margin):
         x, y = point
         cx, cy, half_width, half_height = projection
         return abs(x - cx) <= half_width + margin and abs(y - cy) <= half_height + margin
-
 
     @staticmethod
     def analyze_panels(frame, case, mode):
@@ -165,7 +152,6 @@ class ReflectionImageAnalysis:
             results[color] = color_results
         return results
 
-
     @staticmethod
     def compare_panel_motion(original, moved):
         if original[:2] != moved[:2]:
@@ -184,7 +170,6 @@ class ReflectionImageAnalysis:
                 after[color][label][LIT_MEASURED_MOTION] = [dx, dy]
                 after[color][label][LIT_EXPECTED_MOTION_X] = expected_dx
         return {LIT_ORIGINAL: before, LIT_MOVED: after}
-
 
     @staticmethod
     def compare_opaque_glass(reference, reflected):
@@ -222,4 +207,3 @@ class ReflectionImageAnalysis:
             raise SmokeFailure("reflection changed pixels outside the opaque/glass silhouettes")
         metrics.update(foreground_pixels=len(foreground), foreground_retained=retained, foreground_added=added_foreground, exterior_changed=exterior_changed)
         return metrics
-

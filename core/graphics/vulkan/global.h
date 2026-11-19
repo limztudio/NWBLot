@@ -42,13 +42,11 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Application and API versions.
 inline constexpr u32 s_MinimumVersion = static_cast<u32>(VK_MAKE_API_VERSION(0, 1, 3, 0));
 inline constexpr u32 s_AppVersion = static_cast<u32>(VK_MAKE_API_VERSION(0, 1, 0, 0));
 inline constexpr u32 s_EngineVersion = static_cast<u32>(VK_MAKE_API_VERSION(0, 1, 0, 0));
 inline constexpr StringView s_AppName = "NWB";
 
-// Device memory and upload defaults.
 inline constexpr u64 s_DefaultUploadChunkSize = 64 * 1024 * 1024;
 inline constexpr u64 s_DefaultScratchChunkSize = 16 * 1024 * 1024;
 inline constexpr u64 s_ScratchMemoryLimit = 256 * 1024 * 1024;
@@ -61,20 +59,15 @@ inline constexpr usize s_SpirvWordAlignmentBytes = sizeof(u32);
 inline constexpr usize s_SpirvWordAlignmentMask = s_SpirvWordAlignmentBytes - 1u;
 inline constexpr u32 s_VulkanMemoryTypeBitCount = sizeof(u32) * 8u;
 
-// Fixed-size, pre-reserved arena for GPU crash reports.
-// Captured on device-lost, so it must not touch the growable heap (which may be unsafe at crash time); the block is reserved up front.
 inline constexpr usize s_GpuCrashReportArenaSize = 64u * 1024u;
-inline constexpr u32 s_MaxGpuCrashCaptureEntries = 64u; // aggregate cap across all queues and fault sections
-inline constexpr usize s_MaxGpuCrashMarkerChars = 256u; // per-marker truncation so one deep label cannot blow the budget
-inline constexpr usize s_MaxGpuCrashReportChars = 32u * 1024u; // report.details capacity; keeps peak use under the arena (no reallocs)
-inline constexpr usize s_MaxDeviceFaultVendorBinaryBytes = 512u * 1024u; // vendor blob cap; large dumps are skipped on device-lost.
-// Slots in each exact physical queue's disjoint AMD breadcrumb ring.
+inline constexpr u32 s_MaxGpuCrashCaptureEntries = 64u;
+inline constexpr usize s_MaxGpuCrashMarkerChars = 256u;
+inline constexpr usize s_MaxGpuCrashReportChars = 32u * 1024u;
+inline constexpr usize s_MaxDeviceFaultVendorBinaryBytes = 512u * 1024u;
 inline constexpr u32 s_MaxAmdBreadcrumbSlots = 256u;
-inline constexpr u32 s_AmdVendorId = 0x1002; // PCI vendor ID; gates Radeon GPU Detective naming.
-inline constexpr u32 s_NvidiaVendorId = 0x10DE; // PCI vendor ID; gates NVIDIA-only Aftermath setup
+inline constexpr u32 s_AmdVendorId = 0x1002;
+inline constexpr u32 s_NvidiaVendorId = 0x10DE;
 
-// Queue and swap chain defaults.
-// Local sentinel used until a compatible queue family is selected.
 inline constexpr i32 s_InvalidQueueFamilyIndex = -1;
 inline constexpr u32 s_GraphicsQueueIndex = 0;
 inline constexpr u32 s_SecondaryGraphicsQueueIndex = s_GraphicsQueueIndex + 1u;
@@ -83,14 +76,12 @@ inline constexpr u32 s_TransferQueueIndex = 0;
 inline constexpr u32 s_PresentQueueIndex = 0;
 inline constexpr u32 s_MaxMutableSwapChainFormats = 2;
 
-// Query and raster defaults.
 inline constexpr u32 s_TimerQueryTimestampCount = 2;
 inline constexpr u32 s_TimerQueryBeginIndex = 0;
 inline constexpr u32 s_TimerQueryEndIndex = 1;
 inline constexpr f32 s_DefaultRasterLineWidth = 1.0f;
 inline constexpr usize s_MeshletPipelineStageReserveCount = 3;
 
-// CPU-side parallel tuning for Vulkan helper paths.
 inline constexpr usize s_ParallelAdapterThreshold = 4;
 inline constexpr usize s_ParallelCoopVecThreshold = 128;
 inline constexpr usize s_ParallelSpecializationThreshold = 256;
@@ -102,13 +93,11 @@ inline constexpr usize s_ParallelTlasInstanceThreshold = 1024;
 inline constexpr usize s_TlasInstanceGrainSize = 256;
 inline constexpr usize s_DeviceSetupScratchArenaBytes = 32u * 1024u;
 
-// Ray tracing helper defaults.
 inline constexpr u64 s_DefaultTopLevelASBufferSize = 1024 * 1024;
 inline constexpr u32 s_RayTracingHitGroupShaderStageCount = 3;
 inline constexpr u32 s_TrianglesPerPrimitive = 3;
 inline constexpr u32 s_InstanceFieldMask24Bit = 0x00FFFFFF;
 
-// Scratch arena presets for transient Vulkan-side CPU allocations.
 inline constexpr usize s_GraphicsPipelineScratchArenaBytes = 2048;
 inline constexpr usize s_RayTracingScratchArenaBytes = 4096;
 

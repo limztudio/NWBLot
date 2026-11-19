@@ -83,7 +83,6 @@ X11TextInputService::~X11TextInputService()noexcept{
 }
 
 b8 X11TextInputService::initialize(){
-    // Xlib binds an input method to LC_CTYPE; select the user's native text locale during Frame startup.
     if(!SetLocale(LC_CTYPE, "") || !XSupportsLocale() || !XSetLocaleModifiers("")){
         NWB_LOGGER_WARNING(FOUNDATION_TEXT("X11 text input: native locale initialization unavailable"));
         return true;
@@ -102,7 +101,6 @@ b8 X11TextInputService::filterEvent(XEvent& event){
             releaseContext();
     });
 
-    // XIM transport replies target its hidden connection window, not the application window.
     return XFilterEvent(&event, None) != False;
 }
 
@@ -140,7 +138,6 @@ b8 X11TextInputService::dispatchKey(XKeyEvent& event){
     if(bytes <= 0)
         return true;
     const AStringView text(m_lookup.data(), static_cast<usize>(bytes));
-    // Editing and shortcut controls remain physical key events, rather than text commits.
     if(text.size() == 1u && (static_cast<u8>(text[0]) < s_UnicodeSpace || static_cast<u8>(text[0]) == s_UnicodeDelete))
         return true;
     const TextInputAdmission::Enum admission = emitCommit(token, text);
@@ -211,8 +208,6 @@ TextInputAdmission::Enum X11TextInputService::updateNativeCaret(const TextInputR
     });
 
     m_caretSpot = XPoint{ static_cast<short>(Clamp<i32>(caret.x, s_MinI16, s_MaxI16)), static_cast<short>(Clamp<i64>(static_cast<i64>(caret.y) + caret.height, s_MinI16, s_MaxI16)), };
-    // Always send the spot, even unmoved: this IM round trip also drains forwarded-key sync and keeps text/key order.
-    // Callback/no-preedit styles may ignore this optional candidate-window hint.
     const b8 unsupported = XSetICValues(m_context, XNPreeditAttributes, m_caretAttributes, nullptr) != nullptr;
     if(unsupported){
         m_caretHintSupported = false;
@@ -263,7 +258,6 @@ b8 X11TextInputService::createContext(){
     }
     if(!m_context)
         return false;
-    // The list points at m_caretSpot, so caret updates reuse it for the life of this context.
     m_caretAttributes = XVaCreateNestedList(0, XNSpotLocation, &m_caretSpot, nullptr);
     long filterMask = 0;
     XWindowAttributes attributes{};
@@ -296,8 +290,6 @@ void X11TextInputService::releaseContext()noexcept{
         XFree(m_caretAttributes);
         m_caretAttributes = nullptr;
     }
-    // Forwarded keys can leave connection-wide XIM_SYNC_REPLY work behind after their IC is destroyed.
-    // A replacement session gets a fresh connection; its input cannot inherit that retired protocol queue.
     XIM method = m_method;
     m_method = nullptr;
     m_reopenPending = method && XCloseIM(method) != False && m_style != 0u && !m_shuttingDown;

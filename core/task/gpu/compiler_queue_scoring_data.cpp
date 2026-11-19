@@ -45,12 +45,9 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
         const auto costGroup = scheduling.cost;
         if(!taskCostGroups.empty())
             taskCostGroups[taskIndex] = static_cast<u8>(costGroup);
-        // Recovery joins accepted work only after normal execution fails, so it supplies no expected normal overlap or load.
         taskCosts[taskIndex] = scheduling.isRecoverySubmission ? 0u : costGroupWeights[costGroup];
     }
 
-    // Hazard kinds and ranges remain available in analysis for diagnostics.
-    // Queue ownership scoring counts each producer/consumer/resource only once, so build that immutable index once for all candidate evaluations.
     Vector<NotNull<const GpuTaskDependencyEdge*>, Alloc::ScratchArena> uniqueEdges(scratchArena);
     uniqueEdges.reserve(analysis.inferredEdges().size());
     for(const GpuTaskDependencyEdge& edge : analysis.inferredEdges()){
@@ -112,7 +109,6 @@ void GpuTaskQueueScoringData::rebuildAssignmentLoads(const Span<const GpuTaskQue
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex)
         assignedQueueLoads[queueIndex] = { .queue = topology.queues[queueIndex].id, .estimatedCost = 0u };
 
-    // Edge-free, totally ordered, and unused reachability paths never query relation masks.
     if(taskCostGroups.empty()){
         assignedCostWords.clear();
         costWordsPerGroup = 0u;
@@ -144,7 +140,6 @@ void GpuTaskQueueScoringData::rebuildAssignmentLoads(const Span<const GpuTaskQue
         word = 0u;
 
     totalAssignedCost = 0u;
-    // Valid graph indices are u32 and each task cost is at most eight, so graph-only totals fit in u64.
     for(const GpuTaskQueueAssignment& assignment : assignments){
         const u64 cost = taskCosts[assignment.task.index];
         if(cost == 0u)

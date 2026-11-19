@@ -88,7 +88,6 @@ b8 DescriptorBufferManager::initialize(){
 
     const auto& props = m_context.descriptorBufferProperties;
 
-    // Initial working sizes; the first heap reserves larger driver-reported layouts before any allocation is published.
     constexpr u32 s_TargetResourceSegmentBytes = 32u * 1024u * 1024u;
     constexpr u32 s_TargetSamplerSegmentBytes = 2u * 1024u * 1024u;
 
@@ -236,7 +235,6 @@ b8 DescriptorBufferManager::reserveInitialCapacityForBindingGeneration(const u32
     if(*resourceCapacityBytes == m_resourceSegment.capacityBytes && *samplerCapacityBytes == m_samplerSegment.capacityBytes)
         return true;
 
-    // A freed allocation still leaves a high-water mark, so no recorded address can survive this startup-only replacement.
     ScopedLock resourceLock(m_resourceSegment.mutex);
     ScopedLock samplerLock(m_samplerSegment.mutex);
     if(m_resourceSegment.allocations.writableOffsetBytes() != 0u || m_samplerSegment.allocations.writableOffsetBytes() != 0u){
@@ -322,7 +320,6 @@ Expected<DescriptorBufferManager::BindingSnapshot> DescriptorBufferManager::capt
     if(!m_enabled || m_lifecycleTransitioning || m_bindingGeneration == 0u)
         return MakeUnexpected(Failure{});
 
-    // Enabled storage keeps both segments fully initialized; every segment rebuild disables storage on failure.
     FOUNDATION_ASSERT(
         m_resourceSegment.storageIdentity
         && m_samplerSegment.storageIdentity

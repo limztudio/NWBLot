@@ -77,7 +77,6 @@ struct StagingTextureMapping{
     }
 };
 
-// Sharing intent for multi-transport resources. Hides family indices; a set becomes concurrent sharing only for created families.
 namespace ResourceQueueSharing{
     static constexpr u8 s_ResourceQueueSharingExclusiveBase = 0;
 
@@ -103,7 +102,6 @@ namespace ResourceQueueSharing{
     }
 };
 
-// Physical admission facts for one resource. The backend owns the family list; consumers retaining the snapshot past the call boundary must copy it.
 struct ResourceQueueAdmissionSnapshot{
     const u32* queueFamilyIndices = nullptr;
     u32 queueFamilyIndexCount = 0u;
@@ -186,12 +184,10 @@ struct TextureDesc{
     b8 isTypeless = false;
     b8 isShadingRateSurface = false;
 
-    // Indicates that the texture is created with no backing memory, and memory is bound to the texture later using bindTextureMemory.
     b8 isVirtual = false;
 
     b8 useClearValue = false;
 
-    // keepInitialState restores each used subresource to initialState before close. Known only after submit; earlier consumers import the handoff.
     b8 keepInitialState = false;
 
 
@@ -232,7 +228,6 @@ struct TextureSlice{
     u32 y = 0;
     u32 z = 0;
 
-    // s_AllDimensions means the entire dimension is part of the region. resolve() will translate these values into actual dimensions.
     u32 width = s_AllDimensions;
     u32 height = s_AllDimensions;
     u32 depth = s_AllDimensions;
@@ -373,10 +368,10 @@ typedef GraphicsBackend::Handle<InputLayout> InputLayoutHandle;
 struct BufferDesc{
     Name debugName;
     u64 byteSize = 0;
-    u32 structStride = 0; // if non-zero it's structured
-    u32 maxVersions = 0; // only valid and required to be nonzero for volatile buffers on backends that keep per-version state
+    u32 structStride = 0;
+    u32 maxVersions = 0;
     ResourceStates::Mask initialState = ResourceStates::Common;
-    Format::Enum format = Format::UNKNOWN; // for typed buffer views
+    Format::Enum format = Format::UNKNOWN;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
     CpuAccessMode::Enum cpuAccess = CpuAccessMode::None;
     b8 canHaveUAVs = false;
@@ -390,13 +385,10 @@ struct BufferDesc{
     b8 isAccelStructStorage = false;
     b8 isShaderBindingTable = false;
 
-    // Dynamic/upload buffer whose contents live only in the current command list.
     b8 isVolatile = false;
 
-    // Indicates that the buffer is created with no backing memory, and memory is bound to the buffer later using bindBufferMemory.
     b8 isVirtual = false;
 
-    // see TextureDesc::keepInitialState
     b8 keepInitialState = false;
 
 
@@ -431,7 +423,6 @@ public:
 
     constexpr BufferDesc& setCpuAccess(CpuAccessMode::Enum value)noexcept{ cpuAccess = value; return *this; }
 
-    // Equivalent to .setInitialState(initialStateValue).setKeepInitialState(true)
     constexpr BufferDesc& enableAutomaticStateTracking(ResourceStates::Mask initialStateValue)noexcept{
         initialState = initialStateValue;
         keepInitialState = true;
@@ -440,7 +431,6 @@ public:
 };
 
 struct BufferRange{
-    // s_AllBytes marks an unbounded range; resolve() clamps it to the buffer's byte size.
     static constexpr u64 s_AllBytes = Limit<u64>::s_Max;
     static constexpr usize s_ByteSize = 16u;
 

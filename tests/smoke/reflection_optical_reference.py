@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Float64 geometric and radiometric oracle, independent of the renderer's optical walker."""
 
 import math
 
@@ -21,7 +20,6 @@ LIT_AMBIGUOUS = "ambiguous"
 
 
 def fresnel_snell(direction, incident_normal, eta_i, eta_t):
-    """Exact unpolarized dielectric Fresnel; None direction denotes total internal reflection."""
     cosine_i = max(0.0, min(1.0, -dot(direction, incident_normal)))
     eta = eta_i / eta_t
     sine_t_squared = eta * eta * (1.0 - cosine_i * cosine_i)
@@ -56,7 +54,6 @@ def chart_color(x):
 
 
 def dense_receiver_intersections(origin, direction):
-    # Independent world-space slabs: source boxes are translated by -8.5 and each separated component is one unit thick.
     crossings = []
     for nearest_z in (-8., -10., -12., -14., -16., -18., -20., -22., -24.):
         near, far = -math.inf, math.inf
@@ -74,7 +71,6 @@ def dense_receiver_intersections(origin, direction):
 
 
 def csg_receiver_intersects(case, origin, direction, maximum):
-    # Even a no-hit collection on the open quad reserves one traversal unit.
     minimum_z = -16. if case == LIT_OPTICAL_CSG_OPEN_TAIL else -10.
     maximum_z = 4. if case == LIT_OPTICAL_CSG_CAVITY else -8.
     near, far = 0., maximum
@@ -96,12 +92,10 @@ def trace_transmission(case, origin, direction, max_queries=16):
         return DENSE_RADIANCE, {LIT_QUERIES: 2 if case == "optical_csg_dense" else 1, LIT_REASON: "opaque_dense", LIT_CROSSINGS: len(intersections), LIT_TIR_EVENTS: 0, "nearest_distance": intersections[0]}
 
     if case in ("optical_sliver", "optical_csg_sliver", "optical_sub_ulp", "optical_csg_sub_ulp", "optical_group_gap", "optical_csg_group_gap", "optical_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp", "optical_group_entry", "optical_csg_group_entry"):
-        # Unresolved thin spans or gaps retain conservative rejection even when grouped endpoints leave the same nonzero membership.
         return (0.0, 0.0, 0.0), {LIT_QUERIES: 0, LIT_REASON: LIT_AMBIGUOUS, LIT_CROSSINGS: 0, LIT_TIR_EVENTS: 0}
     objects = ReflectionOpticalScene.boundaries(case)
     csg_receiver = case in (LIT_OPTICAL_CSG_CAP, LIT_OPTICAL_CSG_CAVITY, LIT_OPTICAL_CSG_OPEN_TAIL, LIT_OPTICAL_CSG_UNSPECIFIED_CAP)
     active = [item for item in objects if item.contains(origin)]
-    # At an interior start, ascending entry distance along the opposite direction reconstructs outer->inner membership.
     active.sort(key=lambda item: item.intersect(origin, scale(direction, -1))[0], reverse=True)
     used_queries = 1 if active else 0
     throughput, radiance = [1.0] * 3, [0.0] * 3
@@ -155,7 +149,6 @@ def trace_transmission(case, origin, direction, max_queries=16):
             crossings += 1
             reason = "unsupported"
             break
-        # A retained CSG interface reserves its ordinary tie query plus two receiver checks even when closed crossings are reused.
         boundary_checks = 3 if csg_receiver and kind == LIT_BOUNDARY else 1
         for _ in range(boundary_checks):
             if used_queries >= max_queries:
@@ -177,7 +170,6 @@ def trace_transmission(case, origin, direction, max_queries=16):
                 reason = "opaque_alpha"
                 break
         elif item.mode == LIT_UNSPECIFIED:
-            # Zero-coverage air interfaces still require tie checks at both crossings.
             crossings += 1
         else:
             crossings += 1

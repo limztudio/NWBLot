@@ -10,7 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Normalize asynchronous GPU timing windows by dispatch count.
 const f64 s_GpuTimingWarmupSeconds = 0.25;
 const f64 s_GpuTimingReportIntervalSeconds = s_SmokeProbeReportIntervalSeconds;
 const f64 s_GpuTimingMillisecondsPerSecond = 1000.0;
@@ -79,7 +78,6 @@ class GpuPassTimingProbe{
             if(!stats.valid())
                 continue;
 
-            // Track the last folded GPU window index so resets never double-count.
             if(this.m_scopes[i].lastFoldedPublish == stats.publishFrameIndex)
                 continue;
             this.m_scopes[i].lastFoldedPublish = stats.publishFrameIndex;

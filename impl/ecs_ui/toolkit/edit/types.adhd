@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The caret is visible for the first half of its one-second cycle.
 const f64 s_CaretVisiblePhaseEnd = 0.5;
 const usize s_EditDefaultMaxBytes = 4096u;
 const usize s_EditDefaultMaxHistoryRecords = 64u;
@@ -187,8 +186,6 @@ class SingleLineTextStep{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Bindings or device adapters supply admitted editing intent; native-consumed input is filtered before translation.
-// Accept inserts LF in multiline mode and submits in single-line mode; Submit always submits.
 EditCommandRequest TranslateEditCommand(in InputCommandIntent intent, in b8 repeat, in EditTextMode mode){
     EditCommandRequest request;
     request.command = EditCommand::None;

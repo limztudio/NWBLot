@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""LauncherCli: Argument-parser construction and top-level entry routing."""
 
 from __future__ import annotations
 
@@ -31,8 +30,6 @@ def _positive_finite_duration(value: str) -> float:
 
 
 class LauncherCli:
-    """Argument-parser construction and top-level entry routing."""
-
     @staticmethod
     def add_build_options(parser: argparse.ArgumentParser, *, allow_skip_build: bool = True) -> None:
         parser.add_argument(ARG_REPO_ROOT, type=Path, help=HELP_REPO_ROOT)

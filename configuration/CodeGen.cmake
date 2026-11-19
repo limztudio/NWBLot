@@ -52,7 +52,6 @@ function(nwb_apply_debug_symbols target)
 endfunction()
 
 function(nwb_configure_optimization)
-    # Root-directory optimization applies to every C/C++ target, including vendor libraries.
     if(NWB_COMPILER_FRONTEND_MSVC)
         add_compile_options($<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<CONFIG:dbg>>:/Od> $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<CONFIG:opt>>:/O2> $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<CONFIG:fin>>:/O2>)
     else()
@@ -89,7 +88,6 @@ function(nwb_apply_codegen target)
         target_link_options(${target} PRIVATE $<$<CONFIG:dbg>:/DEBUG> $<$<CONFIG:opt>:/DEBUG> $<$<CONFIG:opt>:/OPT:REF> $<$<CONFIG:opt>:/OPT:ICF> $<$<CONFIG:fin>:/DEBUG> $<$<CONFIG:fin>:/OPT:REF> $<$<CONFIG:fin>:/OPT:ICF>)
     else()
         target_compile_options(${target} PRIVATE -Wall -Wextra $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
-            # Crash unwinding needs asynchronous .eh_frame tables for faults between instructions, including fin builds that omit frame pointers.
             -fasynchronous-unwind-tables $<$<CONFIG:dbg>:-g> $<$<CONFIG:dbg>:-fno-omit-frame-pointer> $<$<CONFIG:opt>:-g> $<$<CONFIG:opt>:-fno-omit-frame-pointer> $<$<CONFIG:fin>:-g> $<$<CONFIG:fin>:-fomit-frame-pointer>)
     endif()
 endfunction()

@@ -33,8 +33,6 @@ class MeshViewSetupGraphTask{
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const;
 }
 
-
-// The CPU mirror is published on acceptance so a rejected recording still retries.
 class MeshViewUploadCommitGraphTask{
     private mut RendererMeshSystem m_meshSystem;
     private MeshViewGpuData m_viewState;

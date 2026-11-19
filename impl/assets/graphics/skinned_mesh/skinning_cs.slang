@@ -19,7 +19,6 @@ struct NwbSkinnedMeshPushConstants{
 
 [[vk::push_constant]] ConstantBuffer<NwbSkinnedMeshPushConstants> g_NwbSkinnedMeshPushConstants;
 
-// Persistent mesh streams use global heap entries; the runtime selector is uniform for the dispatch.
 #define g_NwbSkinnedMeshBindlessResources nwbSkinnedMeshHeapBindlessResources(g_NwbSkinnedMeshPushConstants.bindlessResourceSlots)
 
 
@@ -90,9 +89,7 @@ bool nwbSkinnedMeshApplyLinearSkinPosition(const uint skinIndex, inout float3 po
     const uint4 skinJoints = nwbSkinnedMeshSkinJoints(skin);
     const float4 skinWeights = nwbSkinnedMeshSkinWeights(skin);
     float3 skinnedPosition = float3(0.0);
-    // Skin influence weights are (0, 1) bounded factors; half accumulation is sufficient here.
     half totalWeight = half(0.0h);
-    // Position and normal skinning share the influence filter and normal-matrix admission.
     const float3 influenceValidationNormal = float3(0.0, 0.0, 1.0);
 
     for(uint influenceIndex = 0u; influenceIndex < NWB_MESH_SKIN_MAX_INFLUENCE_COUNT; ++influenceIndex){

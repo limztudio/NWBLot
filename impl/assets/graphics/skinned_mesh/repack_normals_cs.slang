@@ -10,14 +10,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Repacks deformed vertex normals into per-triangle-corner attributes for ray-traced shadows and caustics while preserving uv0.
 struct NwbSkinnedMeshRepackPushConstants{
     uint2 payload0;
 };
 
 [[vk::push_constant]] ConstantBuffer<NwbSkinnedMeshRepackPushConstants> g_NwbSkinnedMeshRepackPushConstants;
 
-// The persistent stream-slot payload is selected from the global UniformBuffer heap by payload0.y.
 #define g_NwbSkinnedMeshRepackBindlessResources nwbSkinnedMeshHeapBindlessResources(g_NwbSkinnedMeshRepackPushConstants.payload0[NWB_SKINNED_MESH_REPACK_PUSH_BINDLESS_RESOURCES_SLOT])
 
 
@@ -37,7 +35,6 @@ uint nwbSkinnedMeshRepackLoadPrimitiveIndex(const uint primitiveIndex){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One thread group per meshlet writes packed corner normals at (primitive * 3 + corner) from the deformed normal stream.
 [numthreads(NWB_SKINNED_MESH_REPACK_GROUP_SIZE_X, 1, 1)]
 void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     const uint meshletIndex = groupID.x;
@@ -55,7 +52,6 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
         const uint localAttributeIndex = nwbMeshletLocalAttribute(localVertexRef);
         const NwbMeshletAttributeStreamRef attributeRef = nwbMeshletDecodeAttributeRef(nwbHeapRawBuffer(g_NwbSkinnedMeshRepackBindlessResources.streamSlots2.x), meshlet, decodeInfo, localAttributeIndex);
 
-        // Stride 16: Half4 normal at +0, Float2 uv0 at +8. Write normal halves only; uv0 is pose-invariant.
         const NwbMeshHalf4 skinnedNormal = nwbSkinnedMeshHeapHalf4s(g_NwbSkinnedMeshRepackBindlessResources.streamSlots0.w)[attributeRef.normal];
         nwbSkinnedMeshHeapWritableRawBuffer(g_NwbSkinnedMeshRepackBindlessResources.streamSlots3.w).Store2(primitiveByte * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES, uint2(skinnedNormal.xy, skinnedNormal.zw));
     }

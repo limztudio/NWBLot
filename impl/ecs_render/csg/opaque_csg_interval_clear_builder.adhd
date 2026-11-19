@@ -68,7 +68,6 @@ b8 DeclareCsgIntervalRectClearTasks(
     }
     outFirstTask = firstTask.value();
 
-    // Keep the endpoint in the first clear's graphics packet across queue consumers.
     scheduling.allowMergeAcrossConsumerFrontier = true;
     GpuTaskDesc tailDesc;
     tailDesc.setIdentity(desc.receiverEventClearIdentity).setMarkerLabel(desc.receiverEventClearMarkerLabel).setScheduling(scheduling);

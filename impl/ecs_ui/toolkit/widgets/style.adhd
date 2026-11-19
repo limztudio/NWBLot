@@ -11,7 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Default metrics and colors shared by the widget styles and options.
 const f32 s_StyleSpacingSmall = 4.0f;
 const f32 s_StyleSpacingMedium = 8.0f;
 const f32 s_StyleFieldPaddingY = 6.0f;
@@ -25,7 +24,6 @@ const f32 s_StyleScrollWheelStep = 3.0f;
 const f32 s_StyleMarkInset = 0.3f;
 const f32 s_StyleDisabledIconAlpha = 0.5f;
 const f32 s_CheckmarkInsetFraction = 0.2f;
-// The mark loses its inset on both opposite sides.
 const f32 s_CheckmarkInsetSides = 2.0f;
 const f32 s_StyleWindowCollapseExtent = 20.0f;
 const f32 s_StyleWindowResizeExtent = 16.0f;
@@ -45,7 +43,6 @@ enum<u8> SeparatorDirection{
     Vertical,
 }
 
-// Semantic atlas names let another skin replace imagery and control metrics without application changes.
 class WidgetStyle{
     public Name panel = Name("panel.normal");
     public Name window = Name("window.normal");
@@ -88,7 +85,6 @@ class ContainerOptions{
 
 class SeparatorOptions{
     public LayoutSize length = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
-    // Zero uses the skin's minimum thickness, or one logical unit when no minimum is specified.
     public f32 thickness = 0.0f;
     public SeparatorDirection direction = SeparatorDirection::Horizontal;
 }

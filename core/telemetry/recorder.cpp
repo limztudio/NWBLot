@@ -160,8 +160,6 @@ b8 Recorder::appendPayloadUnlocked(EventSlotLease& lease, const EventHeader& hea
     if(header.payloadBytes != payload.size())
         return false;
 
-    // Prebuilt payloads from the recorder arena can transfer their backing allocation.
-    // Preserve the raw-byte append behavior for callers whose payload belongs to a different arena.
     if(payload.get_allocator().arenaPtr() != &m_arena)
         return appendUnlocked(lease, header, payload.data(), payload.size());
 
@@ -189,7 +187,6 @@ void Recorder::prepareDiagnosticSlotsUnlocked(){
         return;
 
     m_events.reserve(AddSize(m_events.size(), s_DiagnosticCaptureEventCapacity));
-    // Preparation can throw; retain completed slots so a later attempt finishes the same bounded pool.
     while(m_diagnosticSlotCount < s_DiagnosticCaptureEventCapacity){
         auto slot = MakeGlobalUnique<EventSlot>(m_arena, m_arena);
         if(!slot)
@@ -225,7 +222,6 @@ void Recorder::recordCapturedDiagnostic(const u64 frameIndex, const Span<const u
         dropDiagnosticCapture();
         return;
     }
-    // Both capacities were admitted before publication. Byte initialization and owning-pointer movement cannot throw.
     destination.resize(payloadBytes);
     FOUNDATION_MEMCPY(destination.data(), destination.size(), payload.data(), payloadBytes);
     available.record.header = __hidden_telemetry_recorder::MakeEventHeader(EventKind::Diagnostic, frameIndex, payloadBytes, streamId);

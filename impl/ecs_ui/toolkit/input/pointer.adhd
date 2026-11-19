@@ -23,7 +23,6 @@ enum<u8> PointerIntent{
     ContextMenu,
 }
 
-// Each contact keeps its identity through release or cancellation; hover is an explicit adapter capability.
 class PointerInput{
     public InputSource source;
     public PointerPhase phase = PointerPhase::Move;

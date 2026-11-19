@@ -9,15 +9,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// LOCAL_TILE sorts tiles, GLOBAL merges tiles, and GLOBAL_TAIL finishes tile-local merges.
-// Keep groupshared sorting inline: the bundled slangc crashes on nested barrier networks in callees.
-
-
 struct NwbBvhBitonicSortPushConstants{
-    uint elementCount;       // real element count (tail beyond it holds the 0xFFFFFFFF sentinel padding)
-    uint compareDistance;    // GLOBAL only: XOR distance for this merge step
-    uint sequenceSize;       // GLOBAL / GLOBAL_TAIL only: current bitonic sequence size (a power of two)
-    uint mode;               // NWB_BVH_SORT_MODE_*
+    uint elementCount;
+    uint compareDistance;
+    uint sequenceSize;
+    uint mode;
     uint keysHeapSlot;
     uint payloadHeapSlot;
 };
@@ -28,7 +24,6 @@ struct NwbBvhBitonicSortPushConstants{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Payload breaks equal Morton-code ties for stable BVH topology.
 bool nwbBvhSortPairLess(const uint keyA, const uint payloadA, const uint keyB, const uint payloadB){
     if(keyA != keyB)
         return keyA < keyB;
@@ -42,7 +37,6 @@ bool nwbBvhSortPairLess(const uint keyA, const uint payloadA, const uint keyB, c
 groupshared uint g_NwbBvhSortTileKeys[NWB_BVH_SORT_GROUP_SIZE];
 groupshared uint g_NwbBvhSortTilePayload[NWB_BVH_SORT_GROUP_SIZE];
 
-// Preprocessor-shared compare/swap keeps the inline tile modes aligned.
 #define NWB_BVH_SORT_TILE_COMPARE_SWAP(ASCENDING, PARTNER) \
     const uint keyA = g_NwbBvhSortTileKeys[local]; \
     const uint payloadA = g_NwbBvhSortTilePayload[local]; \
@@ -99,7 +93,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
             [unroll] for(uint compareDistance = sequenceSize >> 1u; compareDistance > 0u; compareDistance >>= 1u){
                 const uint partner = local ^ compareDistance;
                 if(partner > local){
-                    // Use global index so tiles alternate sort direction.
                     const bool ascending = (global & sequenceSize) == 0u;
                     NWB_BVH_SORT_TILE_COMPARE_SWAP(ascending, partner)
                 }

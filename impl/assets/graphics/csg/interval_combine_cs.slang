@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Each removed-interval source pair packs two span/peel source ids into one word.
 #define NWB_CSG_INTERVAL_SOURCE_BIT_COUNT 16u
 #define NWB_CSG_INTERVAL_SOURCE_MASK 0xffffu
 
@@ -27,7 +26,6 @@ struct NwbCsgClippedInterval{
     uint intervalIndex;
 };
 
-// The heap-selected CSG context resolves every input/output texture through typed StorageImage array aliases.
 #define g_NwbCsgBackCapNormal (nwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.x))
 #define g_NwbCsgIntervalDepth (nwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.y))
 #define g_NwbCsgIntervalId (nwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgPeelSlots.z))
@@ -191,7 +189,6 @@ void nwbCsgIntervalCombineSpan(
             unionCutterExit = candidate.cutterExit;
         }
         else if(candidate.cutterExit > unionCutterExit){
-            // Only the cutter extending the union's far boundary owns its visible cap and normal.
             lastInterval = candidate.intervalIndex;
             unionExit = candidate.linearDepth.y;
             unionCutterExit = candidate.cutterExit;

@@ -14,8 +14,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Both channels share receiver reprojection and neighborhood validity, retaining independent histories and moments.
-
 struct NwbCombinedShadowReprojectMergePushConstants{
     row_major float4x4 prevWorldToClip;
     uint receiverFactor;
@@ -62,7 +60,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float3 currentNormal = nwbOctDecodeNormal(float2(gc.xy));
     const float currentCameraDistance = float(gc.z);
 
-    // Ceil-sized receiver grids keep every top-left source coordinate inside the full-resolution target.
     const int2 full = int2(h * g_NwbShadowMergePush.receiverFactor);
     const half3 worldPositionSample = half3(nwbHeapSampledImage2D(g_NwbShadowMergePush.worldPositionSlot).Load(int3(full, 0)).xyz);
     const float3 currentWorldPosition = float3(worldPositionSample);

@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Resource fields name an engine/project asset resolved to a heap slot at runtime.
 b8 IsMaterialAssetReference(in StringView resourceName){
     usize rootEnd = resourceName.size();
     for(usize i = 0u; i < resourceName.size(); ++i){

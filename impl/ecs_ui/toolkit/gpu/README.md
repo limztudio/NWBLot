@@ -2,16 +2,21 @@
 
 `nwb_ui_gpu` renders a frozen `Ui::DrawSnapshot` into a single-sample, full-output-size
 `RGBA16_FLOAT` texture. It borrows `GraphicsRuntime`, `AssetManager`, a shader path
-resolver, and the caller's `GlobalArena`; it has no ECS or ImGui dependency.
+resolver, and `ActiveSceneSubsystemsRef` (supplied via `setActiveSceneSubsystems(...)`)
+while owning its internal storage in the caller's mother arena (`GlobalArena`, propagated
+automatically without an explicit arena parameter in `.adhd`, or passed as the hidden
+leading `::ArenaBase&` in generated C++); it has no ECS or ImGui dependency.
 
-Call `validateResources(width, height)` after the graphics swap-chain framebuffers
-exist, then `setSkin(identity, loadedSkin, skinGeneration)`. Resource validation
-creates the presentation pipeline from that framebuffer compatibility and retains
-four CPU frame owners for the three GPU slots plus a pending generation. `setSkin` can also rebind a later skin generation without a GPU
-idle wait. It loads and validates the referenced texture,
-creates its concrete GPU image and descriptor, and saves the loader's authoritative
-static-upload completion token. Skin identities and generation must match the
-snapshot submitted by `submit(Move(snapshot))`. Asset references identify assets;
+Call `setActiveSceneSubsystems(...)` and ensure the graphics swap-chain framebuffers
+exist before calling `validateResources(width, height)` (resource creation fails if
+`UiSubsystem` is absent), then call `setSkin(identity, loadedSkin, skinGeneration)`.
+Resource validation creates the presentation pipeline from that framebuffer compatibility
+and retains four CPU frame owners for the three GPU slots plus a pending generation.
+`setSkin` can also rebind a later skin generation without a GPU idle wait. It loads and
+validates the referenced texture, creates its concrete GPU image and descriptor, and saves
+the loader's authoritative static-upload completion token. Skin identities and generation
+must match the snapshot submitted by `submit(snapshot)` (in `.adhd`; C++ callers can use
+`submit(Move(snapshot))` via `[cpp_rvalue_overload]`). Asset references identify assets;
 the captured resource version owns the resolved GPU image.
 
 Each new target receives a graph-owned transparent clear from its actual unknown

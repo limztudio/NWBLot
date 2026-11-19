@@ -17,7 +17,6 @@ const Name s_FrameGraphNameEcsRenderMaterialDrawBuffers = "ecs_render/material_d
 const Name s_FrameGraphNameEcsRenderCsgIntervalTargets = "ecs_render/csg_interval_targets";
 const Name s_FrameGraphNameEcsRenderAvboitTargets = "ecs_render/avboit_targets";
 
-// Hashes the immutable upload payload, including edits and light order.
 u64 ComputeSceneLightingContentHash(in SceneShadingGpuData shading, in Span<SceneLightGpuData> lights){
     const u32 lightCount = cast<u32>(lights.size());
     usize seed = HashValue(lightCount);

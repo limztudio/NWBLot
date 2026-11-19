@@ -1,5 +1,3 @@
-"""Freeze and verify renderer benchmark artifact identities."""
-
 import json
 from pathlib import Path
 import re
@@ -54,7 +52,6 @@ class RendererBenchmarkIdentity:
 
     @staticmethod
     def binary_identity(executable):
-        # Freeze local loader dependencies and the crash helper, not unrelated sibling test executables or logger output created at shutdown.
         directory = executable.parent
         dependencies = {path for path in directory.iterdir() if path.is_file() and (path.suffix.lower() in (".dll", ".dylib") or ".so" in path.suffixes or path.name in ("crash_handler", LIT_CRASH_HANDLER_EXE))}
         if executable.suffix.lower() == ".exe" and not (directory / LIT_CRASH_HANDLER_EXE).is_file():
@@ -91,4 +88,3 @@ class RendererBenchmarkIdentity:
             for second_cache in second_caches:
                 if first_cache.samefile(second_cache):
                     raise SmokeFailure("arm runtime caches alias the same physical file")
-

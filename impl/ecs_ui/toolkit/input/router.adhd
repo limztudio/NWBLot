@@ -97,7 +97,6 @@ b8 IsPointerButtonReleaseEventType(in InputEventType type){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A single CPU owner serializes input and layout publication; native capture, IME, and clipboard remain OS services.
 class InputRouter : NoCopy{
     private InputAdmission m_admission;
     private InputCommandState m_commandSources;
@@ -130,7 +129,6 @@ class InputRouter : NoCopy{
     [cpp_unwind]
     public void restoreDefaultBindings(){ this.m_admission.restoreDefaultBindings(); }
     public in InputBindings bindings()const{ return this.m_admission.bindings(); }
-    // Drain events exactly once against the current committed layout; pending actions survive subsequent process calls.
     [cpp_unwind]
     public InputRoutingResult process(){
         InputRoutingResult result;
@@ -167,8 +165,6 @@ class InputRouter : NoCopy{
         );
         return result;
     }
-    // Failure preserves the committed layout and all interaction state; generations increase until reset.
-    // Context passes the focus-loss generation captured at preparation to fence delayed popup acceptance.
     [cpp_unwind]
     public b8 commitTargets(in Span<HitTarget> targets, in u64 layoutGeneration){
         return this.commitTargets(targets, layoutGeneration, Span<PopupScope>(), u64.max);
@@ -218,7 +214,6 @@ class InputRouter : NoCopy{
     }
     public b8 hasPopup()const{ return !this.m_popupState.records().empty(); }
     public usize popupCount()const{ return this.m_popupState.records().size(); }
-    // Accepted observations are borrowed only until layout publication, reset, or declaration retirement.
     public Optional<in PopupScope> popupScope(in PopupToken token)const{
         const Expected<usize> scopeIndex = FindRouterPopupScopeIndex(this.m_popupState.records(), token);
         if(!scopeIndex.has_value())
@@ -245,7 +240,6 @@ class InputRouter : NoCopy{
         return this.m_popupState.records().back().scope.token;
     }
     public u64 focusLossGeneration()const{ return this.m_focusLossGeneration; }
-    // Remove a hidden/deleted declaration immediately while a prior GPU frame remains pending.
     [cpp_unwind]
     public void invalidateTarget(in WidgetId id){
         this.retirePopup(id);
@@ -253,11 +247,9 @@ class InputRouter : NoCopy{
             return;
         this.reconcileTargets();
     }
-    // Transfer command focus to another input owner without cancelling already accepted UI actions.
     public void clearFocus(){
         this.m_commandSources.clearFocus();
     }
-    // Invalidate interaction and layout after resize/device/root changes; action sequences never restart.
     public void reset(){
         this.retireQueuedReleases();
         this.m_admission.clear();
@@ -265,7 +257,6 @@ class InputRouter : NoCopy{
         this.m_popupState.reset();
         this.cancelInteraction();
     }
-    // Device termination may suppress releases; only this device's pending sources are removed.
     public void cancelDeviceInput(in u64 device){
         if(MatchesInputDeviceSource(this.m_pointerState.activeSource(), device))
             this.terminatePointerSource(this.m_pointerState.activeSource());
@@ -282,12 +273,10 @@ class InputRouter : NoCopy{
     public Expected<ControlAction> consumeControlAction(in WidgetId host, in u64 declarationGeneration, in ControlToken token){
         return TryConsumeRouterControlAction(this.m_targetTable.targets(), this.m_targetTable.lookup(), this.m_popupState.records(), host, declarationGeneration, token, this.m_controlActions);
     }
-    // A replaced borrowed model cannot receive input from its still displayed earlier lifetime.
     public void fenceControl(in WidgetId host, in u64 declarationGeneration, in ControlToken token){
         if(this.m_targetTable.fenceControl(host, declarationGeneration, token))
             this.reconcileTargets();
     }
-    // Active updates are consumed once while retaining their press baseline; terminal updates survive until consumed.
     public Expected<PointerGesture> consumePointerGesture(in WidgetId id, in u64 declarationGeneration){
         return TryConsumeRouterPointerGesture(this.m_targetTable.targets(), this.m_targetTable.lookup(), this.m_popupState.records(), id, declarationGeneration, this.m_pointerState.gestures());
     }
@@ -312,7 +301,6 @@ class InputRouter : NoCopy{
     public u64 hoverActivityGeneration()const{ return this.m_hoverState.activityGeneration; }
     public WidgetId focus()const{ return this.m_commandSources.focus(); }
     public WidgetId capture()const{ return this.m_pointerState.capture(); }
-    // One spatial source can own activation and context-menu roles concurrently; other held contacts remain inert.
     public InputSource activePointerSource()const{ return this.m_pointerState.activeSource(); }
     public b8 acceptsPointerSource(in InputSource source)const{
         return this.m_pointerState.accepts(source);
@@ -324,7 +312,6 @@ class InputRouter : NoCopy{
     public b8 primaryDown()const{ return this.m_pointerState.primaryDown(); }
     public b8 secondaryDown()const{ return this.m_pointerState.secondaryDown(); }
     public b8 pointerKnown()const{ return this.m_hoverState.known; }
-    // Only an explicitly hover-capable source supplies cursor geometry; contact gestures keep their own position.
     public in Point pointerPosition()const{ return this.m_hoverState.position; }
     public b8 windowFocused()const{ return this.m_windowFocused; }
     public b8 wantsPointer()const{
@@ -339,11 +326,9 @@ class InputRouter : NoCopy{
     public b8 ownsSource(in InputSource source)const{
         return this.m_commandSources.owns(source);
     }
-    // Held commands cannot switch editors or begin editing after their delegated owner has retired.
     public b8 canEditCommand(in InputEvent event)const{
         return this.m_commandSources.canEdit(this.m_targetTable.targets(), this.m_targetTable.lookup(), this.m_popupState.records(), this.m_windowFocused, event);
     }
-    // Query a queued release before process retires its physical source.
     public b8 canSubmitCommand(in InputEvent event)const{
         return this.m_commandSources.canSubmit(this.m_targetTable.targets(), this.m_targetTable.lookup(), this.m_popupState.records(), this.m_windowFocused, event);
     }

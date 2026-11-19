@@ -1,4 +1,3 @@
-"""Match nested-popup markers, accepted focus scope, geometry, and atlas interiors."""
 from __future__ import annotations
 
 import math

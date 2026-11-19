@@ -2,7 +2,7 @@
 
 `FontAtlas` is the CPU asset for a complete static font face baked into independent scalar SDF pages. Each image group owns exact linear R8, RG8, RGB8, or RGBA8 bytes, with one distance page per stored channel. Alpha, when present, is the fourth distance plane; no channel is opacity. Images have one base mip, a one-texel exterior guard, and a fixed internal FreeType scalar SDF encoding (zero at byte 128, positive inside).
 
-Atlases are generated offline. Runtime users link `nwb_assets_font_atlas` and include `asset.adhd.h`; source cooking uses the ordinary `font_atlas` importer.
+Atlases are generated offline. Consumers link `nwb_assets_font_atlas` (`.adhd` callers include `asset.adhd`, while C++ callers include the generated `asset.adhd.h`); source cooking uses the ordinary `font_atlas` importer.
 
 ## Two-file authoring
 
@@ -48,9 +48,9 @@ The admission validator checks OpenType `kern` format-0 pairs, GPOS roots, Singl
 
 ## Bounds and failure atomicity
 
-Shared limits in `model.adhd` apply to offline preparation, cooking, the runtime binary, and GPU admission: 65,535 glyphs, eight groups, 1..4 channels and at most 2048 by 2048 per group, 128 MiB total image bytes, and 32 MiB total positioning bytes. Bake size is 16..256 ppem; spread is 2..32 pixels.
+Shared limits in `constants.adhd` apply to offline preparation, cooking, the runtime binary, and GPU admission: 65,535 glyphs, eight groups, 1..4 channels and at most 2048 by 2048 per group, 128 MiB total image bytes, and 32 MiB total positioning bytes. Bake size is 16..256 ppem; spread is 2..32 pixels.
 
-Prepared-source reads check the complete container layout before allocation and verify SFNT and image integrity before atlas construction. Metadata admission checks bounded integer fields, finite editable metrics, complete source glyph order, and a resolved typed Font reference; image layouts are read from the prepared source. Shared atlas validation checks byte counts and hashes, valid channel selection, padded plane extents against bitmap size, and guarded region overlap within the same channel. Different channels can share coordinates. Failed metadata parsing or runtime loading preserves the previously published output.
+Prepared-source reads check the complete container layout before allocation and verify SFNT and image integrity before atlas construction. Metadata admission checks bounded integer fields, finite editable metrics, complete source glyph order, and a resolved typed Font reference; image layouts are read from the prepared source. Shared atlas validation checks byte counts and hashes, valid channel selection, padded plane extents against bitmap size, and guarded region overlap within the same channel. Different channels can share coordinates. Cook metadata parsers (`ParseFontAtlasCookMetadataValue`, `ParseFontAtlasCookMetadata`) return `Expected<FontAtlasCookEntry>` by value; runtime `FontAtlas::loadBinary` preserves previously published output on failure.
 
 The cooked runtime atlas layout remains `FTA1` version 3: explicitly little-endian scalars, a fixed 164-byte header, sequential sections, bounded counts, zero reserved fields, and exact payload consumption. Every 48-byte group header stores width, height, channel count, byte count, and an internal pixel hash followed by tightly interleaved pixels. Glyph records and original positioning tables are serialized into this runtime asset after metadata admission.
 

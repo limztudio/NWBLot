@@ -6,7 +6,6 @@
 extern class SharedPool{
     ArenaMemoryStats memoryStats()const;
     Expected<Shared<T>> make<T>(...)const;
-    // The prepared value's arena must outlive every shared handle.
     Expected<Shared<T>> makePrepared<T>(mut auto prepared)const;
 };
 

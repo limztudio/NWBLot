@@ -231,7 +231,6 @@ void VerifyAssetsFontAtlas_EmptyAndPaddingBoundaryDigestsRejectMalformedText(){
     const Expected<Sha256Digest> emptyHash = ParseSha256("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
     ASSERT_TRUE(emptyHash.has_value());
     EXPECT_EQ(ComputeSha256(""), emptyHash.value());
-    // A 56-byte input requires a second block for the SHA-256 padding.
     const Expected<Sha256Digest> paddedHash = ParseSha256("248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1");
     ASSERT_TRUE(paddedHash.has_value());
     const StringView multiBlock = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
@@ -396,11 +395,9 @@ void VerifyAssetsFontAtlas_CompactNonPowerOfTwoGroupsRejectMissingChannelsAndLos
         EXPECT_FALSE(ValidateFontAtlasPayload(invalid));
         invalid = payload;
         invalid.glyphs[0u].x += 1u;
-        // The right exterior guard was removed by cropping.
         EXPECT_FALSE(ValidateFontAtlasPayload(invalid));
         invalid = payload;
         invalid.glyphs[0u].y += 1u;
-        // The lower exterior guard was removed by cropping.
         EXPECT_FALSE(ValidateFontAtlasPayload(invalid));
         invalid = payload;
         invalid.groups[0u].pixels.push_back(0u);
@@ -516,7 +513,6 @@ void VerifyAssetsFontAtlas_GuardedRegionsRejectSameChannelOverlapAndAllowIndepen
     second.x = 7u;
     ASSERT_TRUE(ValidateFontAtlasPayload(payload));
     second.x = 6u;
-    // Bitmaps are disjoint, but the one-texel guards overlap.
     EXPECT_FALSE(ValidateFontAtlasPayload(payload));
     second.x = 4u;
     EXPECT_FALSE(ValidateFontAtlasPayload(payload));
@@ -954,7 +950,6 @@ void VerifyAssetsFontMetadata_MissingTruncatedCorruptAndMismatchedFontSourcesAre
 
     corrupted = CopyFontFixtureBytes(originalFont);
     ASSERT_GT(corrupted.size(), 24u);
-    // The SFNT digest follows the six u32 prepared-source header fields.
     corrupted[24u] ^= 1u;
     ASSERT_TRUE(WriteBinaryFile(fontPath, corrupted));
     EXPECT_FALSE(ParseFontCookMetadataValue(s_FontAtlasOtherProject, path, face).has_value());

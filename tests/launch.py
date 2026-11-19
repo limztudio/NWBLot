@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Dispatch a test launcher to one of the runnable test workflows."""
 
 from __future__ import annotations
 

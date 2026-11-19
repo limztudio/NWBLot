@@ -42,17 +42,14 @@ inline constexpr AStringView s_FileHeader = "nwb_namesym_v1";
 [[nodiscard]] b8 Resolve(char* outText, usize outTextSize, const NameHash& hash);
 
 void InstallRuntimeRegistry();
-// Detaches callbacks before registry teardown so static use cannot dereference it.
 void UninstallRuntimeRegistry()noexcept;
 void ClearRuntimeSymbols();
 
 [[nodiscard]] b8 WriteDefaultFile();
 
 [[nodiscard]] usize EntryCount();
-// Serializes the registry using the current `.namesym` document format.
 [[nodiscard]] Expected<void> Serialize(AString<Alloc::GlobalArena>& outText);
 
-// Admits only the current document header before importing symbol records.
 [[nodiscard]] b8 LoadFromMemory(AStringView text, Alloc::ScratchArena& scratchArena);
 
 struct DefaultFileLoadFailure final{

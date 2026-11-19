@@ -79,7 +79,6 @@ class UiSkin{
     }
 }
 
-// The stock widget styles use this fixed region contract. Generic UiSkin assets may contain fewer regions.
 b8 ValidateUiSkinToolkitContract(in UiSkin skin){
     if(!skin.validatePayload())
         return false;

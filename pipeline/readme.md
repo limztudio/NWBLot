@@ -1,9 +1,11 @@
 # Asset pipeline
 
-The pipeline has three independent executables and one Python orchestrator. Build
-the `nwb_pipeline` CMake target to produce `dependency_computer`, `asset_builder`,
-and `asset_gatherer` (with `.exe` on Windows). `NWB_BUILD_PIPELINE` controls these
-targets and the asset build libraries.
+The `pipeline/` tree contains four executables and one Python orchestrator. Build
+the `nwb_pipeline` CMake target to produce `adhd_compiler`, `dependency_computer`,
+`asset_builder`, and `asset_gatherer` (with `.exe` on Windows); `pipeline/launch.py`
+runs the three asset-cooking stages (`dependency_computer`, `asset_builder`, and
+`asset_gatherer`), while `adhd_compiler` compiles `.adhd` sources during the CMake build.
+`NWB_BUILD_PIPELINE` controls these targets and the asset build libraries.
 
 Run the complete pipeline through the repository launcher:
 
@@ -57,25 +59,13 @@ Related assets required by metadata validation must be included in the inputs.
 python -m launcher run nwb_asset_builder --config dbg --working-directory . -- --input-list dependencies.list --repo-root . --asset-root project/assets --output-directory built --configuration dbg
 ```
 
-The output directory contains `.nwba` files and `assets.list`. Each artifact
-contains an 88-byte header followed by the exact runtime codec payload. The
-header stores a 32-bit magic (`0x4142574e`), 32-bit version (`1`), 64-byte virtual
-path `NameHash`, 64-bit payload size, and 64-bit FNV payload checksum. These fields
-use the engine's native little-endian binary encoding. The gatherer validates the
-header, size, checksum, and virtual identity before packaging the payload.
+Standalone `.nwb` cooked assets are published directly under `__asset_cache/` as `<sha1(lower(absolute path))>.nwba` so projects share cached cooked assets. `assets.list` in the output directory references those shared `__asset_cache/*.nwba` paths alongside relative filenames for project-scoped `.nwba` files built in the output directory. When a standalone asset (or cached shader bytecode variant) is already cached and up to date, the cook notifies via `info(...)`.
 
-Artifact names combine a compact hexadecimal slot with payload and cook hashes.
-The builder reuses byte-identical artifacts and advances past occupied slots with
-different contents, preserving artifacts referenced by an earlier manifest.
-`assets.list` contains relative filenames for only the current successful build. It is
-published after all artifacts have been written, so failed builds leave the
-previous manifest intact and removed inputs do not return through stale files.
-Older content files may remain in the build directory; directory gathering uses
-the current manifest. The entire build directory can be copied to another machine
-or path without its source files or compiler cache.
+Each `.nwba` file uses the unified version-2 binary format (`NWBA`): a 64-byte `BuiltAssetFileHeader` (`magic = 0x4142574e`, `version = 2`, `headerSize = 64`, flags, entry count, SHA-256 input fingerprint, payload section byte size, and 64-bit FNV payload-section checksum) followed by the source path string and `entryCount` validated asset entries. The gatherer validates the header, section checksum, per-entry payload FNV-64 checksums, and virtual identities before packaging payloads.
 
-`asset_gatherer` accepts `.nwba` files, build output directories, or an
-`--input-list`. Paths in a gather input list are relative to that list's directory.
+Project-scoped artifact names combine a compact hexadecimal slot with payload and cook hashes. The builder reuses byte-identical artifacts and advances past occupied slots with different contents, preserving artifacts referenced by an earlier manifest. `assets.list` references only the artifacts for the current successful build. It is published after all artifacts have been written, so failed builds leave the previous manifest intact and removed inputs do not return through stale files.
+
+`asset_gatherer` accepts `.nwba` files, build output directories, or an `--input-list`. Relative paths in a gather input list resolve against that list's directory, while absolute paths resolve directly.
 Directories with `assets.list` use that manifest; other directories are scanned
 for `.nwba` files. Identical duplicate virtual identities and payloads are merged.
 The graphics metadata merge callback combines shader archive index records from
@@ -130,11 +120,11 @@ python -m launcher pipeline --skip-build --tool-directory __exec/windows/arm64/f
 `--dry-run` prints planned build and pipeline commands without writing manifests,
 artifacts, or volumes, or running tools. `--input` overrides automatic `project.nwb`
 root discovery with an explicit seed list while still expanding transitive dependencies.
-`--build-directory` chooses where to retain intermediate artifacts; otherwise
-they live in an output-specific directory under the asset cache.
+`--build-directory` chooses where to write `assets.list` and project-scoped `.nwba` artifacts; otherwise
+they use an ephemeral workspace cleaned up after gathering while standalone cooked `.nwba` assets remain shared in `__asset_cache/`.
 
-The standalone asset cache keys cooked entries by their authored inputs and the
-running producer executable's SHA-256 and all registered paired sidecars present
+The standalone asset cache keys cooked entries by their lowercase canonical absolute path (`__asset_cache/<sha1(lower(absolute path))>.nwba`), authored inputs, the
+running producer executable's SHA-256, and all registered paired sidecars present
 beside the metadata. Rebuilding the producer or changing a sidecar therefore
 invalidates entries made by older inputs. When the executable cannot be
 read, the builder reports the problem and cooks without reading or writing that
@@ -148,22 +138,27 @@ The C++ dependency entry point is `NWB::Pipeline::DependencyComputer::ComputeAss
 with `AssetBuildOptions` in the same namespace; link `nwb_pipeline_asset_builder`
 to call it. The gather entry point is `NWB::Pipeline::AssetGatherer::GatherAssets`,
 declared with `AssetGatherOptions` in `pipeline/asset_gatherer/gather.adhd`; link
-`nwb_pipeline_asset_gatherer` to call it. Each tool owns its orchestration API and
-implementation. Shared artifact, cache, manifest, and volume-writing support remains
+`nwb_pipeline_asset_gatherer` to call it. Each tool is authored in `.adhd` and owns its orchestration API and
+implementation alongside the shared pipeline CLI/workspace layer (`nwb_pipeline_tools_common`
+with `pipeline/command_line.adhd` and `pipeline/root_discovery.adhd`, `pipeline/cook_workspace.{h,adhd}`,
+`pipeline/volume_workspace.{h,adhd}`, `pipeline/dependency_computer/dependency_workspace.{h,adhd}`,
+and `utilities/cli/` for `nwb_tool_cli` / `nwb_target_console_entry`). Shared artifact, cache, manifest, and volume-writing support remains
 in `core/assets/volume`; asset codecs, metadata parsers, and build registrations
 remain in their owning asset modules.
 
-Library callers gathering independently built graphics assets set
-`NWB::Pipeline::AssetGatherer::AssetGatherOptions::mergePayloads` to
-`NWB::Core::Assets::QueryAutoCollectedAssetGatherMerge(scratchArena)`, declared in
-`core/assets/gather_merge_registry.h`. The caller supplies its operation-owned scratch arena for the registration snapshot.
+Library callers gathering independently built graphics assets configure
+`NWB::Pipeline::AssetGatherer::AssetGatherOptions::mergePayloads` (`NWB::Pipeline::GatherMergeCallback`):
+C++ callers may assign `NWB::Core::Assets::QueryAutoCollectedAssetGatherMerge(scratchArena)`
+(`core/assets/gather_merge_registry.h`), while `.adhd` callers use
+`NWB::Pipeline::RegisteredGatherMerge(workspace)` (`pipeline/volume_workspace.adhd`).
 The graphics asset implementation self-registers its merge hook; the gather tool consumes the core registration contract.
 The generic gather API also accepts a project callback for other metadata merge
-contracts. A callback receives the duplicate virtual identity, an existing payload
-to update, and the incoming payload bytes. Returning `false` rejects the conflict
+contracts. An `AssetGatherMergeFunction` callback receives the duplicate virtual identity,
+the incoming payload bytes, the operation scratch arena, and an existing payload
+to update (`(virtualPath, incomingPayload, scratchArena, existingPayload)`). Returning `false` rejects the conflict
 and preserves the published volume. Callbacks must leave the existing payload
 unchanged when they fail.
 
 ## Library result contracts
 
-Fallible path, metadata, dependency-selection and volume-write producers return values through global `Expected<T, E>`. `DependencyProviderCatalog::selectInputs`, `read` and `resolve` return the selection, parsed document and provider index after admission. `WriteAssetVolume` returns `AssetVolumeWriteResult`, and `ReadBuiltAsset` returns identity/payload-offset data while retaining its caller-owned byte buffer. Build/gather orchestration, registered metadata accumulation and conflict callbacks keep their actual mutation or callback contracts. Check results before consuming them, preserve supplied arenas, and propagate failure before manifest or volume publication. See [produced values and expected failures](../docs/expected_results.md).
+Fallible path, metadata, dependency-selection and volume-write producers return values through global `Expected<T, E>`. `DependencyProviderCatalog::selectInputs` and `resolve` return the selection and provider index after admission, while document reading is owned by `NWB::Pipeline::CookDependencyAccess::read` (`pipeline/dependency_computer/dependency_workspace.{h,adhd}`, exposed through `DependencyProviderCatalog::access`). `WriteAssetVolume` returns `AssetVolumeWriteResult`, and `ReadBuiltAsset` returns entry identity and payload range data while retaining its caller-owned byte buffer. Build/gather orchestration, registered metadata accumulation and conflict callbacks keep their actual mutation or callback contracts. Check results before consuming them, preserve supplied arenas, and propagate failure before manifest or volume publication. See [produced values and expected failures](../docs/expected_results.md).

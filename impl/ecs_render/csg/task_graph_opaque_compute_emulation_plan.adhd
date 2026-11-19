@@ -100,7 +100,6 @@ class OpaqueCsgReceiverComputeEmulationGraphPlan{
                 this.reset();
                 return false;
             }
-            // Earlier ownership and receiver outputs both exclude this receiver.
             if(!outputs.insert(MaterialEmulationBufferIdentity(mesh.emulationVertexBuffer))){
                 this.reset();
                 return false;

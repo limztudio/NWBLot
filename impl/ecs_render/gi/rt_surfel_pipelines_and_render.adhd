@@ -313,7 +313,6 @@ b8 SurfelGiPipelineSet::ensureSurfelTracePipeline(){
     );
 }
 
-// Hardware trace twin; other surfel passes are shared.
 b8 SurfelGiPipelineSet::ensureSurfelTraceHwPipeline(){
     if(this.m_rayTracingState.m_surfelUseCsgTrace)
         return EnsureSurfelHwTracePipelineVariant(true, this.m_graphics, this.m_shaderSystem, this.m_rayTracingState.m_surfelHeapBindingLayout, this.m_rayTracingState.m_surfelTraceCsgHwShader, this.m_rayTracingState.m_surfelTraceCsgHwPipeline, this.m_rayTracingState.m_surfelTraceCsgHwPipelineFailed);
@@ -427,7 +426,6 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
     if(!heap.isInitialized())
         return false;
 
-    // Only the trace pass is backend-specific.
     const b8 useHwTrace = this.m_rayTracingState.surfelGi.m_surfelUseHwTrace;
     const b8 useCsgTrace = this.m_rayTracingState.surfelGi.m_surfelUseCsgTrace;
     ComputePipelineHandle tracePipeline = this.m_rayTracingState.surfelGi.m_surfelTracePipeline;
@@ -494,7 +492,6 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
         this.m_rayTracingState.sceneBvh.m_rayTraceMaterialContextSlotsHeapHandle.slot()
     );
 
-    // Order every in-place field update, including prior-frame spawn writes.
     if(this.m_rayTracingState.surfelGi.m_surfelPoolBuffer.valid())
         commandList.setEnableUavBarriersForBuffer(this.m_rayTracingState.surfelGi.m_surfelPoolBuffer.deref(), true);
     if(this.m_rayTracingState.surfelGi.m_surfelGuidePoolBuffer.valid())
@@ -508,7 +505,6 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
     if(this.m_rayTracingState.surfelGi.m_surfelTraceIndirectArgsBuffer.valid())
         commandList.setEnableUavBarriersForBuffer(this.m_rayTracingState.surfelGi.m_surfelTraceIndirectArgsBuffer.deref(), true);
 
-    // Age-free recycles unseen surfels before the graph-owned cell-head reset and hash rebuild.
     if(dispatchAgeFree){
         GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeSurfelAgeFree, this.m_graphics.getDevice(), commandList);
 
@@ -524,7 +520,6 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
     if(!HasSurfelPhaseAfterAgeFree(dispatchHashBuild, dispatchSpawn, dispatchTraceBuildArgs, dispatchTrace, dispatchResolve, dispatchRemaining))
         return true;
 
-    // Rebuild bucket lists before spawning uncovered surface representatives.
     if(dispatchHashBuild){
         GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeSurfelHashBuild, this.m_graphics.getDevice(), commandList);
 
@@ -540,7 +535,6 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
     if(!HasSurfelPhaseAfterHashBuild(dispatchSpawn, dispatchTraceBuildArgs, dispatchTrace, dispatchResolve, dispatchRemaining))
         return true;
 
-    // Spawn retains compatible surfaces and inserts uncovered candidates into bounded bucket lists.
     if(dispatchSpawn){
         GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeSurfelSpawn, this.m_graphics.getDevice(), commandList);
 
@@ -559,7 +553,6 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
     if(!HasSurfelPhaseAfterSpawn(dispatchTraceBuildArgs, dispatchTrace, dispatchResolve, dispatchRemaining))
         return true;
 
-    // Build an indirect dispatch sized for live surfels.
     if(dispatchTraceBuildArgs){
         commandList.commitBarriers();
         ComputeState state;
@@ -581,7 +574,6 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
         state.setPipeline(tracePipeline.deref());
         state.setIndirectParams(this.m_rayTracingState.surfelGi.m_surfelTraceIndirectArgsBuffer.deref());
         commandList.setComputeState(state);
-        // Hardware trace additionally selects the TLAS generation at set 2.
         if(this.m_rayTracingState.surfelGi.m_surfelUseHwTrace && !this.m_rayTracingState.sceneBvh.m_tlasHeapHandle.valid()){
             error("RendererSystem: cannot dispatch surfel HW GI without the descriptor-heap TLAS handle");
             return false;
@@ -597,7 +589,6 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
     if(!HasSurfelPhaseAfterTrace(dispatchResolve, dispatchRemaining))
         return true;
 
-    // Resolve at the target generation's selected scale so deferred lighting never touches the writable pool.
     if(dispatchResolve){
         const SurfelGiResolveSize resolveSize = MakeSurfelGiResolveSize(targets.width, targets.height, targets.surfelResolveFactor);
         {
@@ -623,7 +614,6 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
     if(!dispatchRemaining)
         return true;
 
-    // Surface-aware upsample preserves coverage across edges.
     {
         GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeSurfelUpsample, this.m_graphics.getDevice(), commandList);
 
@@ -646,7 +636,6 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
         commandList.dispatch(DivideUp(targets.width, groupSize), DivideUp(targets.height, groupSize), 1u);
     }
 
-    // The graph-owned late copy publishes its token only after Transfer/Compute/Graphics accepts. This pass only consumes completed diagnostics.
     {
         const u32 frameIndex = this.m_rayTracingState.surfelGi.m_surfelFrameIndex;
         const QueueSubmissionToken submissionToken = this.m_rayTracingState.surfelGi.m_surfelCountReadbackSubmissionToken;
@@ -676,7 +665,6 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
         }
     }
 
-    // Subsequent frames use steady-state round-robin updates.
     AdvanceSurfelGiFrameState(this.m_rayTracingState.surfelGi.m_surfelSeeded, this.m_rayTracingState.surfelGi.m_surfelFrameIndex);
     return true;
 }

@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Stable keys of widget parts; builder, paint, and input code must derive the same ids.
 const StringView s_WidgetPartPopup = "popup";
 const StringView s_WidgetPartRows = "rows";
 const StringView s_WidgetPartQuery = "query";
@@ -69,7 +68,6 @@ class WidgetId{
     public u64 value = 0u;
 }
 
-// Root identity comes from the host; include its lifetime generation rather than iteration order or an address.
 class WidgetRoot{
     public b8 operator==(in WidgetRoot rhs)const{
         return this.value == rhs.value && this.generation == rhs.generation;

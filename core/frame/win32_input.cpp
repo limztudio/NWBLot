@@ -225,7 +225,6 @@ Optional<LRESULT> Win32FrameInput::handleMessage(const UINT message, const WPARA
 
     const b8 ordinaryText = message == WM_CHAR || message == WM_SYSCHAR || (message == WM_UNICHAR && wParam != UNICODE_NOCHAR);
     const i32 textScancode = ordinaryText ? TranslateScancode(lParam) : 0;
-    // Text without a producing scan code is explicit native text, independent of a physical shortcut.
     if(ordinaryText && textScancode != 0 && m_frame.input().keyboardTextBlocked(textScancode)){
         if(auto* textInput = m_frame.tryTextInput()){
             if(!ResetWin32FallbackCharInput(*textInput))

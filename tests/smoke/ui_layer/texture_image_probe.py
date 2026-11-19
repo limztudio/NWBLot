@@ -1,4 +1,3 @@
-"""Decode owned texture snapshots and qualify independent bindings, UVs and deferred Builder images."""
 from __future__ import annotations
 
 import math

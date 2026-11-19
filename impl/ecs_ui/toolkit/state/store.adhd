@@ -16,7 +16,6 @@ class WidgetStateStore : NoCopy{
 
     [cpp_unwind]
     public WidgetStateStore(){
-        // Keep declarations at stable addresses until the frame retires.
         this.m_entries.reserve(s_WidgetStateRetainedCapacity);
         this.m_index.reserve(s_WidgetStateRetainedCapacity);
     }

@@ -23,7 +23,6 @@ Rect StoreTextLayoutInkBounds(in VectorDouble inkBounds){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The layout owns its UTF-8 and holds the font faces used by its positioned glyphs.
 [move_only, friend(TextLayoutFaultFixture)]
 class TextLayout{
     private String m_text;

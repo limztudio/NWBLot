@@ -49,7 +49,6 @@ void ISystem::registerAccess(ComponentTypeId typeId, AccessMode::Enum mode){
         if(access.typeId != typeId)
             continue;
 
-        // Write is stronger than read; keep the strongest access mode.
         if(mode == AccessMode::Write)
             access.mode = AccessMode::Write;
         return;
@@ -112,7 +111,6 @@ Expected<void, CpuTaskAdmissionError::Enum> SystemScheduler::execute(World& worl
     if(m_dirty)
         rebuild();
 
-    // Preparation can change storage; it stays on the caller before updates start.
     for(const auto system : m_allSystems)
         system->prepare(world);
 
@@ -130,7 +128,6 @@ Expected<void, CpuTaskAdmissionError::Enum> SystemScheduler::execute(World& worl
     Vector<TaskHandle, Alloc::GlobalArena>& dependencies = m_executionDependencies;
     CpuTaskScope& tasks = world.taskScope();
 
-    // Keep world/system data alive if publishing a later node throws after earlier work has started.
     ScopeExit drainSubmitted([&]()noexcept{ tasks.drain(); });
     const usize systemCount = m_allSystems.size();
     for(usize systemIndex = 0u; systemIndex < systemCount; ++systemIndex){

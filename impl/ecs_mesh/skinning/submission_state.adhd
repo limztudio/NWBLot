@@ -13,7 +13,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Captures CPU state true only when the producing command list was accepted.
 [serialize, reflect]
 class MeshSkinningSubmissionCommit{
     public u32 editRevision = 0u;

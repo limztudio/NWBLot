@@ -44,7 +44,6 @@ static_assert(offset_of<LightSpaceShadowPush>(meshletCount) == 96u);
 static_assert(offset_of<LightSpaceShadowPush>(receiverViewSlot) == 100u);
 static_assert(offset_of<LightSpaceShadowPush>(receiverCsgSampleStateSlot) == 104u);
 
-// Resource handles freeze one allocation generation. Graph tasks must copy the caster span into their arena.
 const usize s_LightSpaceFramebufferCount = s_SceneShadowSlotCount * s_PointLightViewCount;
 
 class LightSpaceShadowSnapshot{
@@ -118,8 +117,6 @@ class LightSpaceShadowState{
     public b8 m_csgRequired = false;
 }
 
-
-// Graph tasks own uploads, clears, and entry/exit states. Resolve owns its internal map-to-fallback UAV dependency.
 [modular]
 class LightSpaceShadowRecorder{
     public b8 views(in LightSpaceShadowSnapshot snapshot, mut CommandList commandList, mut GpuDescriptorHeap heap)const;

@@ -20,7 +20,6 @@
 #define NWB_UI_OUTPUT_PUSH_CONSTANTS_SAMPLER_SLOT_BYTE_OFFSET 4u
 #define NWB_UI_OUTPUT_PUSH_CONSTANTS_PRESENTATION_MODE_BYTE_OFFSET 8u
 
-// Sample the premultiplied linear UI layer over black, then apply the selected output transfer once.
 #define NWB_UI_OUTPUT_PUSH_CONSTANTS_FIELDS(UINT_FIELD) \
     UINT_FIELD(textureSlot) \
     UINT_FIELD(samplerSlot) \

@@ -77,7 +77,6 @@ struct CooperativeVectorMatrixLayoutDesc{
 
     usize size = 0;
 
-    // Byte stride; zero derives row/column stride. Optimal layouts ignore it and should use zero.
     usize stride = 0;
 
     CooperativeVectorDataType::Enum type = CooperativeVectorDataType::UInt8;
@@ -95,7 +94,6 @@ struct CooperativeVectorConvertMatrixLayoutDesc{
 
 usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum type)noexcept;
 
-// Row/column byte stride; successful zero for InferencingOptimal and TrainingOptimal, failure for invalid dimensions/type/layout or overflow.
 [[nodiscard]] Expected<usize> GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, u32 rows, u32 columns)noexcept;
 
 

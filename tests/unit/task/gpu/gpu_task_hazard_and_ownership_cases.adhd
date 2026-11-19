@@ -1627,7 +1627,6 @@ void VerifyGpuHazardOwner_DerivesRecordingReadyFrontiersFromStateSeedProducers()
     EXPECT_EQ(compiledPlan.compileStatistics().recordingFrontierCount, 2u);
     const Span<GpuPacketDependency> dependencies = PacketDependencies(compiledPlan.packet(consumerPacket));
     ASSERT_EQ(dependencies.size(), 2u);
-    // Deduplicating a state-seed dependency preserves the original scheduling order.
     EXPECT_EQ(dependencies[0u].producer, producerPacket);
     EXPECT_EQ(dependencies[1u].producer, orderingProducerPacket);
     const Span<GpuPacketStateSeed> stateSeeds = PrologueStateSeeds(consumerView);

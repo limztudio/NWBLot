@@ -837,7 +837,6 @@ void VerifyUiSliderLayoutTests_EndpointThumbPositionsMeetTheExactPaddedBounds(){
     const auto last = PlaceSlider(bounds, bounds, metrics.value(), 1.0);
     ASSERT_TRUE(last.has_value());
     EXPECT_FLOAT_EQ(first.value().thumb.x, first.value().travelBounds.x);
-    // Lanes are the thumb end and the travel end.
     const VectorSingle ends = VectorSingle(last.value().thumb.x, last.value().travelBounds.x, 0.0f, 0.0f) + VectorSingle(last.value().thumb.width, last.value().travelBounds.width, 0.0f, 0.0f);
     EXPECT_FLOAT_EQ(ends.x, ends.y);
 }
@@ -1237,7 +1236,6 @@ void VerifyUiSliderMathTests_OppositeExtremeBoundsNormalizeAndInterpolateWithout
 
 void VerifyUiSliderMathTests_SameSignExtremeBoundsUseABoundedDifference(){
     const f64 maximum = f64.max;
-    // Lanes are the positive and negative bounds.
     const VectorDouble bounds = VectorDouble(maximum, -maximum, 0.0, 0.0);
     const VectorDouble threeQuarters = bounds * VectorDouble(0.75, 0.75, 0.75, 0.75);
     Array<b8, 2u> signs;

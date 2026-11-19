@@ -198,7 +198,6 @@ void CommitSliderAdmissionState(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Public value intents retire copied input; diagnostics are published only after the enclosing Builder scope validates.
 class SliderState : NoCopy{
     public u64 m_instanceGeneration = AllocateServiceIdentity();
     public u64 m_inputGeneration = AllocateServiceIdentity();

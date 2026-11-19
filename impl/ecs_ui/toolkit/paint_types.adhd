@@ -206,7 +206,6 @@ void ResolveNineSliceCoordinates(
     f32 firstX = first.x;
     f32 secondX = second.x;
     if(rectangle.width < borderExtentX){
-        // Do not evaluate the division outside this branch.
         firstX = rectangle.x + rectangle.width * (borderLeft / borderExtentX);
         secondX = firstX;
     }

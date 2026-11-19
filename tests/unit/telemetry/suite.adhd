@@ -1494,7 +1494,6 @@ void VerifyAllocationOwnerTelemetry_KeepsHeapBackingRecordsWithoutCountingTheirU
     for(usize sourceIndex = 0u; sourceIndex < allSources.size(); ++sourceIndex){
         const MemorySourceEnum source = allSources[sourceIndex];
         MemorySnapshot snapshot = Suite_MakeOwnerSnapshot(owner, source);
-        // Keep explicit scope counters separate from the aliased arena summary.
         if(source == MemorySource::HeapBacking){
             snapshot.usedBytes = 300u;
             snapshot.peakUsedBytes = 3000u;
@@ -1564,7 +1563,6 @@ void VerifyAllocationOwnerTelemetry_ResolvesLoadedOwnerSymbolsByFullIdentityAndP
 
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     recorder.setCaptureOptions(TelemetryCaptureOptionsPerfOnly());
-    // Exact hash fallback text reproduces an opt/fin producer that has no local symbol sidecar loaded.
     ASSERT_TRUE(RecordTestPerfMemory(recorder, firstOwner, StringView(firstHashText), Suite_MakeOwnerSnapshot(firstOwner, MemorySource::Arena), MakeTestMemoryDelta(-1), 91u));
     ASSERT_TRUE(RecordTestPerfMemory(recorder, secondOwner, StringView(secondHashText), Suite_MakeOwnerSnapshot(secondOwner, MemorySource::Arena), MakeTestMemoryDelta(-1), 92u));
     ASSERT_TRUE(RecordTestPerfMemory(recorder, firstOwner, "Producer Display Name", Suite_MakeOwnerSnapshot(firstOwner, MemorySource::ExplicitScope), MakeTestMemoryDelta(-1), 93u));

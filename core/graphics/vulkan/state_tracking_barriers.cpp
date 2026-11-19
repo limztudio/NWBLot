@@ -42,7 +42,6 @@ VkImageMemoryBarrier2 BuildTextureStateBarrier(
     barrier.dstAccessMask = VulkanDetail::GetVkAccessFlags(stateBits);
     barrier.oldLayout = oldState != ResourceStates::Unknown ? VulkanDetail::GetVkImageLayout(oldState) : VK_IMAGE_LAYOUT_UNDEFINED;
     barrier.newLayout = VulkanDetail::GetVkImageLayout(stateBits);
-    // Ordinary transitions use Vulkan's explicit ignored queue-family sentinel.
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.image = image;
@@ -260,7 +259,6 @@ void CommandList::executePipelineBarrier(const Span<VkMemoryBarrier2> memoryBarr
         m_renderPassFramebuffer = nullptr;
     }
 
-    // Cross-queue semaphore waits cover unsupported producer scopes; lower them to NONE on the exact queue.
     const GpuPhysicalQueueInfo* const exactQueueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     const GpuQueueCapability::Mask exactQueueCapabilities = exactQueueInfo ? exactQueueInfo->capabilities : GpuQueueCapability::None;
     const u8 exactCapabilityBits = static_cast<u8>(exactQueueCapabilities);

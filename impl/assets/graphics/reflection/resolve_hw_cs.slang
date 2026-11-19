@@ -7,14 +7,12 @@
 #endif
 #define NWB_BINDLESS_TLAS 1
 
-// Reuse is confined to the selected CSG optical reflection kernel.
 #if NWB_RT_CSG_ENABLED && NWB_REFLECTION_OPTICAL_TRANSPORT
 #define NWB_CSG_RAY_OPTICAL_REUSE 1
 #endif
 
 #define NWB_REFLECTION_OPTICAL_TRANSPORT_UNSPECIFIED 2
 
-// The unspecified variant retains optical tracing for an exact all-Unspecified scene without closed-medium private storage.
 #if NWB_REFLECTION_OPTICAL_TRANSPORT == NWB_REFLECTION_OPTICAL_TRANSPORT_UNSPECIFIED
 #define NWB_OPTICAL_CLOSED_MEDIA 0
 #endif
@@ -148,14 +146,12 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
         const half rangeWeight = half(1.0h) - half(smoothstep(g_NwbReflectionParameters.distanceFadeStart, g_NwbReflectionParameters.maxRayDistance, result.distance));
         radiance = lerp(nwbReflectionEnvironment(surface.direction), radiance, rangeWeight);
     }
-    // Continuation supplies accumulated radiance incl. exterior misses. A capped/ambiguous path discards energy; sky would leak.
     nwbReflectionStore(pixel, glass, radiance * surface.weight, half(result.surfaceHit ? NWB_REFLECTION_SOURCE_HARDWARE : NWB_REFLECTION_SOURCE_FALLBACK));
     if(result.surfaceHit){
         nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_HARDWARE_HITS, 1u);
         nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_FALLBACK_PIXELS, NWB_REFLECTION_COUNTER_SUBTRACT_ONE);
     }
 #else
-    // A scene with no transparents uses this separate kernel. No media/event arrays, so opaque-only keeps the path.
     const NwbRayTraceSurfaceHit hit = nwbRayTraceClosestSurfaceHit(g_NwbReflectionMaterialContext.sceneSlots.z, surface.position + surface.normal * surface.bias, surface.direction, surface.bias, g_NwbReflectionParameters.maxRayDistance);
 #if NWB_RT_CSG_ENABLED
     nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_QUERY_BUDGET_UNITS, hit.queryBudgetUnits);

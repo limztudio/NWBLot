@@ -121,7 +121,6 @@ private:
             return MakeUnexpected(SharedLibraryFailure{ .code = ErrorCode(static_cast<i32>(error), SystemCategory()), });
         }
 #else
-        // dlsym requires clearing old loader state to distinguish a null symbol value from an actual lookup failure.
         ::dlerror();
         void* const symbol = ::dlsym(m_handle, nativeSymbolName.c_str());
         const char* const nativeError = ::dlerror();

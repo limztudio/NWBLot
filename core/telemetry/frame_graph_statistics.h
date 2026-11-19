@@ -19,9 +19,6 @@ NWB_TELEMETRY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Generation-scoped CPU telemetry; fixed-width counts (no host-width leak).
-// Wire records: packed fixed-size, codec-native byte order (no cross-endian format).
-// Durations are seconds.
 struct FrameGraphCompileRuntimeStatistics{
     u64 taskCount = 0u;
     u64 resourceCount = 0u;
@@ -146,7 +143,6 @@ struct FrameGraphRuntimeStatistics{
     b8 present = false;
 };
 
-// Exact CPU telemetry per physical queue; absent rows are unknown, not zero.
 struct FrameGraphPhysicalQueueCompileRuntimeStatistics{
     u64 taskCount = 0u;
     u64 packetCount = 0u;
@@ -212,10 +208,6 @@ struct FrameGraphPhysicalQueueRuntimeStatisticsRecord{
     FrameGraphPhysicalQueueRuntimeStatistics statistics;
 };
 
-// Exact native-submission telemetry for one compiler-generated packet.
-// Present packet tables hold every native submission per owner, even an empty table when nobody submitted.
-// Packet generation is the immutable plan generation.
-// Wait counts exclude backend-internal waits outside the graph.
 struct FrameGraphPacketSubmissionStatisticsRecord{
     u64 packetGeneration = 0u;
     u64 taskCount = 0u;

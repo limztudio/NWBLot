@@ -285,7 +285,6 @@ b8 FlushCrashReportsForRequest(const CrashRequest& request){
     CopyFixedBuffer(snapshot.crashUploadToken, request.crashUploadToken);
     CopyFixedBuffer(snapshot.protectedPendingPackageName, request.crashId);
 
-    // Out-of-process handler: no signal/exception limits, so a growable arena replaces the fixed DumpArena.
     Alloc::GlobalArena uploadArena(CrashArenaScope::s_UploadArena);
     return FlushPendingCrashReportsImpl(uploadArena, snapshot);
 }

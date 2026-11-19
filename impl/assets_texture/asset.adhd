@@ -34,7 +34,6 @@ class Texture{
     public b8 validatePayload()const;
     public b8 loadBinary(in Span<u8> binary);
 
-    // Cooked RGB values use the engine's linear working space; alpha is linear coverage.
     public void setPayload(
         in u32 width,
         in u32 height,

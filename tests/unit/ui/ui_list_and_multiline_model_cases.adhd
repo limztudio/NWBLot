@@ -761,7 +761,6 @@ void VerifyUiListBuilderTests_ContentViewportPreflightsTallSecondRowAtFractional
     const Expected<Rect> tallVisual = self.m_text.measure(tall.value(), display);
     ASSERT_TRUE(ordinaryVisual.has_value());
     ASSERT_TRUE(tallVisual.has_value());
-    // Lanes are the ordinary row and the tall row.
     const f32 padTop = metrics.value().padding.top;
     const f32 padBottom = metrics.value().padding.bottom;
     const f32 minY = metrics.value().minimum.y;
@@ -863,7 +862,6 @@ void VerifyUiListLoanTests_SameValueKeyCallbackRejectsTheLoanWhileDisplayedCaptu
 void VerifyUiListLoanTests_EnabledCallbackScrollIsPreservedWhenEnsureCursorRejectsTheChangedEpoch(mut UiListLoanTests self){
     self.m_state.select(5u);
     ASSERT_TRUE(self.acceptFirst());
-    // Same-value application selection requests cursor visibility and fences the previous input token before painting.
     self.m_state.select(5u);
     ASSERT_TRUE(self.declareList(2u));
     const UiFixtureAcceptedInputState<16u> displayed = self.accepted();

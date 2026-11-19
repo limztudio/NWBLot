@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Explicit caustic sampling controls and actual producer-budget verification."""
 
 import re
 

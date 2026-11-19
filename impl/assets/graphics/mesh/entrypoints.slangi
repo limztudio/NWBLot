@@ -22,7 +22,6 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
         return;
 
 #if NWB_MESH_EMULATION_INDEXED_OUTPUT
-    // One writer initializes the sentinel even when the first meshlet is culled.
     if(meshletIndex == 0u && groupThreadID.x == 0u)
         nwbMeshInitializeCulledVertex();
 #endif
@@ -54,8 +53,6 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
 
     nwbMeshBuildMeshletPositions(meshlet, decodeInfo, instance, groupThreadID.x);
 
-    // Full local-reference identity preserves attribute seams and meshlet-specific raster flags.
-    // Meshlet-level exits precede this cooperative phase, so all remaining lanes reach the barrier.
     const uint localVertexCount = nwbMeshletVertexCount(meshlet);
     for(uint localVertexIndex = groupThreadID.x; localVertexIndex < localVertexCount; localVertexIndex += NWB_MESH_SHADER_GROUP_SIZE_X){
         const NwbMeshGeneratedVertex generatedVertex = nwbMeshBuildMeshletVertex(meshletIndex, meshlet, decodeInfo, localVertexIndex, instance);

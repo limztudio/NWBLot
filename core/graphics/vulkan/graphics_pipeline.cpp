@@ -82,7 +82,6 @@ void CommandList::beginRenderPass(Framebuffer& framebuffer, const RenderPassPara
     if(!FramebufferRenderingPreparation(*this).prepareFramebuffer(&framebuffer, s_OperationName))
         return;
 
-    // Match automatic graphics-state passes: compiler-owned recording may supply exact attachment barriers.
     if(m_enableAutomaticBarriers){
         setResourceStatesForFramebuffer(framebuffer);
         if(m_commandRecordingFailed)

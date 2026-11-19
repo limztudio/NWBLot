@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""LauncherDiscovery: Repository launcher discovery and router dispatch."""
 
 from __future__ import annotations
 
@@ -29,8 +28,6 @@ from launcher.constants import (
 
 
 class LauncherDiscovery:
-    """Repository launcher discovery and router dispatch."""
-
     @staticmethod
     def _register_launcher(launchers: Dict[str, RepoLauncher], launcher: RepoLauncher) -> None:
         command = launcher.command
@@ -89,7 +86,6 @@ class LauncherDiscovery:
 
     @staticmethod
     def discover_directory_launchers(directory: Path, root: Optional[Path] = None) -> Dict[str, RepoLauncher]:
-        """Discover the launchers directly below one router directory."""
         root = (root or CmakeSettings.repo_root()).resolve()
         search_path = directory if directory.is_absolute() else root / directory
         search_path = search_path.resolve()
@@ -133,12 +129,6 @@ class LauncherDiscovery:
 
     @staticmethod
     def discover_leaf_launchers(directory: Path, root: Optional[Path] = None) -> Dict[str, RepoLauncher]:
-        """Discover runnable leaves below a category and retain their router routes.
-
-        A ``launch.py`` with descendant launchers is a router.  A leaf has no nested
-        launchers, and every directory between it and the category must provide a
-        router so nested groupings cannot be bypassed.
-        """
         root = (root or CmakeSettings.repo_root()).resolve()
         search_path = directory if directory.is_absolute() else root / directory
         search_path = search_path.resolve()
@@ -176,7 +166,3 @@ class LauncherDiscovery:
                 LauncherDiscovery._register_launcher(launchers, launcher)
 
         return dict(sorted(launchers.items()))
-
-
-
-

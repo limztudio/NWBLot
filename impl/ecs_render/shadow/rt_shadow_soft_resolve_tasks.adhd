@@ -34,7 +34,6 @@ void RecoverOpaqueSoftShadowAllLit(
     mut CommandList commandList
 ){
     raytracingSystem.clearShadowVisibility(commandList, targets);
-    // Skipped transparent callbacks still declare this output as UAV. Realign the tracker after the typed fallback clear.
     commandList.setTextureState(targets.shadowVisibility.deref(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
     commandList.commitBarriers();
     opaqueProduced = false;
@@ -109,7 +108,6 @@ class ShadowVisibilityOpaqueGraphTask{
 
         this.opaqueProduced = false;
         this.opaqueFrameIndex = 0u;
-        // A retry must never retain a timestamp whose producer command list is about to be replaced.
         if(this.shadowVisibilityTiming.has_value()){
             this.shadowVisibilityTiming.value().discardTiming();
             this.shadowVisibilityTiming.reset();
@@ -138,7 +136,6 @@ class ShadowVisibilityOpaqueGraphTask{
         if(!opaqueRecorded){
             warning("RendererSystem: split opaque soft-shadow producer failed; retaining all-lit visibility");
             this.raytracingSystem.clearShadowVisibility(commandList, this.targets);
-            // Later callbacks declare this output as UAV. Realign the tracker after the typed fallback clear.
             commandList.setTextureState(this.targets.shadowVisibility.deref(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
             this.shadowVisibilityTiming.value().discardTiming();
@@ -151,7 +148,6 @@ class ShadowVisibilityOpaqueGraphTask{
         }
 
         this.opaqueProduced = true;
-        // Both timestamp ranges end in the terminal fold callback, but their debug markers must close before this graph task's marker closes.
         const b8 visibilityMarkerFinished = FinishSplitGpuTimingMarker(this.shadowVisibilityTiming);
         b8 asyncMarkerFinished = true;
         if(this.asyncTiming.has_value())
@@ -534,7 +530,6 @@ class ShadowTransparentSoftFirstWaveletGraphTask{
                 if(this.raytracingSystem.renderSoftShadowCombinedWavelet(commandList, this.targets))
                     return true;
             }
-            // Opaque temporal merge already completed. Recover only its first wavelet, without blending history twice.
             this.transparentTraceProduced = false;
             DiscardGpuTimingMeasure(this.transparentResolveTiming);
             return this.raytracingSystem.renderSoftOpaqueShadowResolvePhase(commandList, this.targets, this.deferredLightingResources, this.opaqueFrameIndex, true, true, SoftShadowOpaqueResolvePhase::WaveletOnly);
@@ -659,7 +654,6 @@ class ShadowTransparentSoftFoldGraphTask{
             warning("RendererSystem: split transparent soft-shadow trace or first wavelet failed; preserving opaque visibility");
         }
 
-        // Fusion deferred the opaque upsample, so a failed transparent phase must still publish opaque visibility.
         if(ShouldPublishDeferredOpaqueFallbackUpsample(this.combinedUpsample, this.transparentTraceProduced)){
             if(!this.raytracingSystem.renderSoftShadowTerminalUpsample(commandList, this.targets, this.deferredLightingResources, false))
                 return false;
@@ -742,7 +736,6 @@ class ShadowVisibilityGraphTask{
         }
         else if(this.prepared)
             shadowVisibilityWritten = this.raytracingSystem.renderGpuBvhShadowVisibility(commandList, this.targets, this.deferredLightingResources, false, false, false, graphOwnedAdaptivePlan).has_value();
-        // The preceding typed white clear remains the all-lit result when no producer records.
 
         if(asyncTiming.has_value()){
             asyncTiming.value().finishTiming(commandList);

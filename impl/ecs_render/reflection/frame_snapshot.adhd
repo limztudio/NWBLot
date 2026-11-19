@@ -13,7 +13,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Copy handles and slots together before declaration. Only parameter values vary per frame.
 class ReflectionFrameSnapshot{
     public ReflectionFrameParameters parameters;
     public TextureHandle opaqueRadiance;

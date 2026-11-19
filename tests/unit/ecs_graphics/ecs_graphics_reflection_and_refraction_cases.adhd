@@ -411,7 +411,6 @@ void VerifyReflectionFeedback_InvalidAcceptedTokensQuarantineBankReuseUntilJoine
         EXPECT_FALSE(state.reserve(retry));
         state.discard(plan);
         EXPECT_TRUE(state.plan(Stamp(), ReflectionSettings(), true, 30u + invalid).quarantined);
-        // Reset models the renderer's explicit join/discard boundary, not an ordinary rejected frame.
         state.reset(1u);
         const ReflectionFeedbackPlan reset = state.plan(Stamp(), ReflectionSettings(), true, 40u + invalid);
         EXPECT_FALSE(reset.quarantined);

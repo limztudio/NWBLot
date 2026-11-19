@@ -91,14 +91,12 @@ void GpuInferredDependencyCollector::appendInferred(const GpuTaskDependencyEdge&
                 if(!m_inferredEdgeIndices.insert(index).second)
                     FOUNDATION_FATAL_ASSERT_MSG(false, "Inferred dependency promotion requires unique existing reasons");
             }
-            // Edge vectors cannot reach this reserved ordinal; it marks a pair promoted to indexed lookup.
             pair.firstInferredEdge = s_IndexedInferredEdges;
             indexed = true;
         }
     }
     const usize index = m_inferredEdges.size();
     m_inferredEdges.push_back(edge);
-    // Only a duplicate candidate is removed; every indexed ordinal keeps its original immutable edge.
     if(indexed && !m_inferredEdgeIndices.insert(index).second){
         m_inferredEdges.pop_back();
         return;

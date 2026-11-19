@@ -63,9 +63,6 @@ b8 GpuTaskGraphOwnershipValidator::ValidateInitialOwnership(const GpuTaskGraph::
         return true;
     };
 
-    // An import may name the exact physical queue that owned an exclusive texture/buffer/acceleration structure before graph work began.
-    // A different first packet must also name a fixed release destination, an imported completion, and a native state handoff source.
-    // That keeps the compiler from manufacturing an acquire or cross-queue wait on its own.
     for(usize resourceIndex = 0u; resourceIndex < graph.resourceCount(); ++resourceIndex){
         const GpuTaskGraphResourceView resource = graph.resourceAt(resourceIndex);
         const b8 hasExternalFinalRelease = resource.externalFinalReleaseDestinationQueue.valid();

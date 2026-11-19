@@ -2,9 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Hash build: live surfels InterlockedExchange into per-cell lists. Heads are CPU-cleared, so linking starts empty.
-
-
 #include "surfel_runtime.slangi"
 #include "surfel_hash.slangi"
 
@@ -34,7 +31,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const int3 cell = nwbSurfelCellCoord(surfel.position, cellSize);
     const uint bucket = nwbSurfelHashCell(cell, cellCount);
 
-    // Each surfel-index thread owns its exact cell and list link; the following pass observes both after the pool UAV barrier.
     uint previousHead = NWB_SURFEL_CELL_INVALID;
     InterlockedExchange(g_NwbSurfelCellHead[bucket], surfelIndex, previousHead);
     g_NwbSurfelPool[surfelIndex].cell = cell;

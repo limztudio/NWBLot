@@ -1,7 +1,6 @@
 include_guard(GLOBAL)
 
 function(nwb_configure_string_literals)
-    # Clang pools read-only literals by default on every target. /GF makes the same policy explicit for clang-cl.
     if(NWB_COMPILER_FRONTEND_MSVC)
         add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/GF>)
     endif()
@@ -32,7 +31,6 @@ function(nwb_configure_string_literals)
     set(NWB_STRING_LITERAL_LLVM_VERSION "${_nwb_literal_version}" PARENT_SCOPE)
     set(NWB_LLVM_C_LIBRARY "${_nwb_literal_library}" CACHE FILEPATH "Matching compiler-host LLVM C API shared library for string obfuscation." FORCE)
 
-    # Include the policy contents in compile commands so editing any stage invalidates existing objects.
     file(GLOB _nwb_literal_scripts CONFIGURE_DEPENDS "${_nwb_literal_directory}/*.py")
     list(APPEND _nwb_literal_scripts "${PROJECT_SOURCE_DIR}/global/string_literal_runtime.cpp")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${_nwb_literal_scripts})
@@ -65,7 +63,6 @@ function(nwb_attach_string_literal_runtime directory)
             target_sources("${_nwb_literal_target}" PRIVATE
                 $<TARGET_OBJECTS:nwb_string_literal_runtime>
             )
-            # Mach-O constructors follow link-input order. Put the one decoder before all consumer objects.
             set(_nwb_literal_link_launcher "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/launcher/string_literals/linker.py" --runtime-object $<TARGET_OBJECTS:nwb_string_literal_runtime> --)
             set_property(TARGET "${_nwb_literal_target}" PROPERTY C_LINKER_LAUNCHER "${_nwb_literal_link_launcher}")
             set_property(TARGET "${_nwb_literal_target}" PROPERTY CXX_LINKER_LAUNCHER "${_nwb_literal_link_launcher}")

@@ -1,4 +1,3 @@
-"""Publish a self-contained gallery from captured refraction frames."""
 import base64
 import json
 from pathlib import Path
@@ -61,7 +60,6 @@ byId('zoom').addEventListener('input',updateZoom);byId('layout').addEventListene
 class RefractionGalleryPublisher:
     @staticmethod
     def write(output_directory, manifest):
-        # Embed lossless PNGs with the exact captured RGB pixels alongside the raw BMPs.
         (output_directory / "gallery_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding=LIT_UTF_8)
         embedded = json.loads(json.dumps(manifest))
         for case in embedded[LIT_CASES]:
@@ -75,4 +73,3 @@ class RefractionGalleryPublisher:
             output.write(prefix)
             output.write(data)
             output.write(suffix)
-

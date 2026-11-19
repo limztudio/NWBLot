@@ -54,7 +54,6 @@ u64 ComputeMeshletLocalBoundsByteSize(in usize meshletCount, in u64 boundsRecord
     return cast<u64>(meshletCount) * boundsRecordByteSize;
 }
 
-// Replacement is atomic; no uninitialized bounds become visible through the runtime mesh provider.
 b8 CreateMeshSkinningLocalBoundsBuffers(mut GraphicsRuntime graphics, mut MeshSkinningRuntimeInstance instance){
     instance.deformationState.invalidateCurrent();
     if(!ValidateMeshSkinningLocalBoundsMeshletCount(instance.meshlets.size(), s_RuntimeMeshBoundsByteSize))

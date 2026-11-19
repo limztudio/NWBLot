@@ -66,7 +66,6 @@ private:
     u64 m_nextFramePresentationClaimIdentity = 0u;
     u64 m_framePresentationClaimIdentity = 0u;
     u32 m_framePresentationSwapChainIndex = Limit<u32>::s_Max;
-    // Hooks run inside queue submission, so they use this lock instead of the lifecycle lock.
     Futex m_framePresentationMutex;
     ConditionVariableAny m_framePresentationCondition;
     b8 m_framePresentationClaimIdentityExhausted = false;

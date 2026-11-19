@@ -72,7 +72,6 @@ void InputDispatcher::keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods
                     m_keyboardTextPolicies[static_cast<usize>(scancode)] = m_keyboardTextBlocked;
             }
         }
-        // Releases reach every handler so a focus change between handlers cannot leave a press held.
         return action != InputAction::Release && result.consumed;
     });
 }

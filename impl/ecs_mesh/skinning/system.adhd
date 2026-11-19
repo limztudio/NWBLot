@@ -24,12 +24,10 @@ type MeshSkinningBufferVector = Vector<BufferHandle>;
 
 [arena, modular, system("mesh_skinning")]
 class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
-    // Compiler artifacts. Declared once, reset per submit; render() only redeclares into reused storage.
     private GpuTaskGraph m_frameTaskGraph;
     private GpuCompiledGraph m_frameCompiledGraph;
     private GpuTaskGraphAnalysis m_frameTaskGraphAnalysis;
     private GpuGraphSubmissionTransaction m_frameSubmissionTransaction;
-    // The graph-runtime cache retains only accepted live skinning resources between graph generations.
     private GpuPersistentResourceStateCache m_acceptedSkinningState;
     private GpuTaskGraphQueueAssignments m_frameTaskGraphQueueAssignments;
     private GpuRecordedGraph m_frameRecordedGraph;
@@ -53,7 +51,6 @@ class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
     private ActiveSceneSubsystems m_defaultSceneSubsystems;
     private ActiveSceneSubsystemsRef m_activeSceneSubsystems;
     public MeshSkinningRuntimeResourceMap m_runtimeResources;
-    // Reused across submitFrameSkinningGraph() calls so per-frame render performs no GlobalArena creation.
     private Vector<MeshSkinningGraphDispatchPlan> m_frameDispatchPlans;
     private Vector<MeshSkinningGraphDispatchPlan> m_frameDeformationPlans;
     private Vector<MeshSkinningLocalBoundsDispatch> m_frameLocalBoundsDispatches;
@@ -158,7 +155,6 @@ class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
     private b8 repackPipelineReady()const{
         return this.m_repackBindingLayout.valid() && this.m_repackComputePipeline.valid();
     }
-    // Declares frame-local skinning as one Graphics packet; accepted task commits dirty state.
     private b8 submitFrameSkinningGraph();
     private b8 prepareRuntimeMeshResources(mut MeshSkinningRuntimeInstance instance){
         instance.deformationState.invalidateCurrent();
@@ -221,7 +217,6 @@ class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
         this.m_repackComputeShader.reset();
         this.m_repackComputePipeline.reset();
     }
-    // Resets reused frame graph storage so the next render() redeclares into clean members.
     private void resetFrameTaskGraph(){
         {
             const GpuCompiledGraphReadView planAccess(this.m_frameCompiledGraph);

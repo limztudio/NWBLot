@@ -143,7 +143,6 @@ b8 GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     GpuTimingSubmissionTicket* const ownedTimingTicket = recordedGraph.packetTimingTicket(packetID, artifactAccess);
     if(packet.recordsTiming != static_cast<b8>(ownedTimingTicket))
         return false;
-    // Range admission resolved unique nonnull tickets and checked every artifact owner under this same lease.
     Vector<NotNull<GpuTimingSubmissionTicket*>, Alloc::ScratchArena> submissionTimingTickets(scratchArena);
     submissionTimingTickets.reserve(timingTicketCount + (ownedTimingTicket ? 1u : 0u));
     if(ownedTimingTicket)
@@ -157,7 +156,6 @@ b8 GpuTaskScheduler::submitPacketWithinSubmissionOperation(
 
     const GpuRecordedPacket* const recordedPacket = recordedGraph.findWithinArtifactOperation(packetID, artifactAccess);
     const GpuPhysicalQueueInfo* const queue = planAccess.queueInfo(packet.queue);
-    // All validation before the transaction reservation is retryable. A caller that abandons this artifact uses discardUnaccepted() explicitly.
     if(!recordedPacket || recordedPacket->commandListCount == 0u || recordedPacket->commandListCount > GpuRecordedPacket::s_MaxCommandLists || !queue || !device().matchesPhysicalQueueIdentity(packet.queue)){
         return false;
     }
@@ -195,7 +193,6 @@ b8 GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     if(packet.joinsAcceptedQueueFrontier && !transaction.appendAcceptedQueueFrontierWaitTokens(packet.queue, waitTokens))
         return false;
 
-    // Freeze every ticket before validating the wait frontier so a reservation carrying a cross-queue frame-reset token stays retryable.
     SubmittingPacketUnwindScope submittingPacketUnwind(graph, transaction, compiledGraph, planAccess);
     usize preparedTimingTicketCount = 0u;
     PreparedTimingTicketsUnwindScope preparedTimingTicketsUnwind(submissionTimingTickets.data(), preparedTimingTicketCount);
@@ -213,8 +210,6 @@ b8 GpuTaskScheduler::submitPacketWithinSubmissionOperation(
         return false;
     }
 
-    // Device repeats this validation at its final boundary because another queue may still be resolving a concurrent native submit.
-    // Roll ticket preparation back here so a corrected external dependency can retry this packet.
     for(const QueueSubmissionToken& waitToken : waitTokens){
         if(device().validateSubmissionWaitToken(waitToken))
             continue;
@@ -228,7 +223,6 @@ b8 GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     nativeSubmissionInfo.sameQueueWaitElisionCount = waitStatistics.sameQueueWaitElisionCount;
     nativeSubmissionInfo.mergedTimelineWaitCount = waitStatistics.mergedTimelineWaitCount;
 
-    // Bad deps or completions are pre-submit input errors. Keep the recorded packet so the caller can retry with fixed tokens.
     GpuPacketSubmissionLease submissionLease;
     if(!transaction.beginPacketSubmission(graph, compiledGraph, packetID, recordedGraph.recordingAttemptGeneration(), submissionLease))
         return false;
@@ -254,7 +248,6 @@ b8 GpuTaskScheduler::submitPacketWithinSubmissionOperation(
         for(u8 commandListIndex = 0u; commandListIndex < recordedPacket->commandListCount; ++commandListIndex)
             graphSubmissionOwnerships[commandListIndex].reset();
     }
-    // Device has released its Queue locks. Serialize only the CPU publication tail; another packet may enter Vulkan meanwhile.
     SubmittingPacketUnwindScope resolutionSubmittingPacketUnwind(graph, transaction, compiledGraph, planAccess);
     PreparedTimingTicketsUnwindScope resolutionPreparedTimingTicketsUnwind(submissionTimingTickets.data(), preparedTimingTicketCount);
     ScopedLock resolutionLock(transaction.m_resolutionMutex);

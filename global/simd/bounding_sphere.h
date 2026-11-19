@@ -34,7 +34,6 @@
     const SIMDVectorSingle centerVector = CollisionDetail::SphereCenter(sphereValue);
     const SIMDVectorSingle sphereRadius = VectorSplatW(sphereValue);
     const SIMDMatrix transposed = MatrixTranspose(matrix);
-    // The largest absolute row sum of A^T A bounds its largest eigenvalue, including shear admitted by decomposition tolerances.
     const SIMDVectorSingle diagonal = VectorMergeX(Vector3LengthSq(transposed.v[0]), Vector3LengthSq(transposed.v[1]), Vector3LengthSq(transposed.v[2]), VectorZero());
     const SIMDVectorSingle dot01 = VectorAbs(Vector3Dot(transposed.v[0], transposed.v[1]));
     const SIMDVectorSingle dot02 = VectorAbs(Vector3Dot(transposed.v[0], transposed.v[2]));
@@ -53,7 +52,6 @@
     const SIMDVectorDouble centerVector = CollisionDoubleDetail::SphereCenter(sphereValue);
     const SIMDVectorDouble sphereRadius = VectorDoubleSplatW(sphereValue);
     const SIMDMatrixDouble transposed = MatrixDoubleTranspose(matrix);
-    // The largest absolute row sum of A^T A bounds its largest eigenvalue, including shear admitted by decomposition tolerances.
     const SIMDVectorDouble diagonal = VectorDoubleMergeX(VectorDouble3LengthSq(transposed.v[0]), VectorDouble3LengthSq(transposed.v[1]), VectorDouble3LengthSq(transposed.v[2]), VectorDoubleZero());
     const SIMDVectorDouble dot01 = VectorDoubleAbs(VectorDouble3Dot(transposed.v[0], transposed.v[1]));
     const SIMDVectorDouble dot02 = VectorDoubleAbs(VectorDouble3Dot(transposed.v[0], transposed.v[2]));

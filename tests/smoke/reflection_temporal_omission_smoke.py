@@ -123,7 +123,6 @@ def main(argv=None):
     for field in (LIT_EXECUTABLE_2, LIT_WORKING_DIRECTORY_2, LIT_LOGSERVER_EXECUTABLE_2, "output_directory", "namesym"):
         if getattr(args, field) is not None:
             setattr(args, field, getattr(args, field).resolve())
-    # Reuse the production CLI's finite-value validation before creating an artifact directory.
     acquisition_args(args, args.output_directory, CAPS[0])
     try:
         return run(args)

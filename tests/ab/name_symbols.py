@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Helpers for decoding stable engine Name hash tokens in A/B timing artifacts."""
 
 from __future__ import annotations
 
@@ -18,7 +17,6 @@ NAME_HASH_LANE_SEEDS = (FNV64_OFFSET_BASIS, FNV64_OFFSET_BASIS ^ 0x0123456789ABC
 
 
 def debug_name_hash_token(text: str) -> str:
-    """Match global/name.h's canonical eight-lane FNV-1a debug token."""
     lanes = list(NAME_HASH_LANE_SEEDS)
     for byte in text.encode(LIT_UTF_8):
         if ord(LIT_A) <= byte <= ord("Z"):

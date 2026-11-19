@@ -15,7 +15,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Precision-only scale: keep smallest deposits nonzero and total R32_UINT accumulation below wrap; resolve divides it out.
 #define NWB_CAUSTIC_FIXED_POINT_SCALE 1048576.0
 #define NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX 0x10000000u
 
@@ -23,12 +22,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The 2^20 scale exceeds half range. Widen first so small deposits survive; half math can erase them.
 uint nwbCausticFluxToFixedPoint(float fluxChannel){
     if(!nwbFiniteFloat(fluxChannel) || fluxChannel <= 0.0)
         return 0u;
     const float scaled = fluxChannel * NWB_CAUSTIC_FIXED_POINT_SCALE;
-    // Round once at the fixed-point boundary so small absorbed deposits do not lose a whole integer unit on every splat.
     return (uint)min(round(scaled), (float)NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX);
 }
 

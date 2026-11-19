@@ -3,7 +3,6 @@ nwb_target_adhd_sources(nwb_ecs_graphics_tests NAMESPACE "NWB::Tests::EcsGraphic
 target_sources(nwb_ecs_graphics_tests PRIVATE hdr10_shader_host.cpp surfel_shader_host.cpp)
 target_link_libraries(nwb_ecs_graphics_tests PRIVATE nwb_ecs_mesh_skinning nwb_ecs_skeleton nwb_ecs_scene nwb_ecs_mesh nwb_ecs_render nwb_common nwb_alloc)
 
-# These tests observe rounding modes and exception flags.
 set_source_files_properties(
     "${CMAKE_BINARY_DIR}/adhd_gen/nwb_ecs_graphics_tests/tests/unit/ecs_graphics/optical_bounds_cases.adhd.cpp"
     "${CMAKE_BINARY_DIR}/adhd_gen/nwb_ecs_graphics_tests/tests/unit/ecs_graphics/ecs_graphics_mesh_and_optics_cases.adhd.cpp"

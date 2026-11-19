@@ -101,7 +101,6 @@ class LightSpaceShadowStorageCapacity{
     public u32 arrayLayers = 0u;
 }
 
-// Frozen prepared soft-transparent route shared by the split resource declarations and the split task chain.
 class SoftShadowSplitRoute{
     public b8 hardwareShadowSupported = false;
     public b8 hardwareCsgShadow = false;

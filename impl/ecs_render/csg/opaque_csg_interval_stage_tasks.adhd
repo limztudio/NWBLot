@@ -94,7 +94,6 @@ void OpaqueCsgIntervalStage::capturePayloads(
     if(!hasOpaqueCsgFrameWork)
         return;
 
-    // The graph owns the producer fence chain. Normal prefix merges with G-buffer; FrontierSafe keeps each ticket.
     this.m_receiverSpanPayload.inputs.materialDrawBuffersUploaded = materialDrawBuffersUploaded;
     this.m_receiverSpanPayload.inputs.csgFrameBuffersUploaded = csgFrameBuffersUploaded;
     this.m_receiverSpanPayload.inputs.csgResources = csgResources;
@@ -218,8 +217,6 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(in OpaqueC
         return MakeUnexpected(Failure());
     }
 
-    // Interval-sample material follows Combine immediately, unlike opaque/receiver work. Sample rasterizes right after.
-    // That makes pairwise-distinct outputs graph-ownable without excluding earlier regular/receiver aliases.
     const b8 opaqueCsgIntervalSampleComputeEmulationPlanCaptured = CanCaptureOpaqueCsgIntervalSampleComputeEmulationPlan(
         inputs.hasCsgFrameGpuWork,
         this.m_intervalSamplePayload.materialFrameStatesGraphOwned,
@@ -246,7 +243,6 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(in OpaqueC
         this.m_intervalSamplePayload.opaqueCsgComputeEmulationTiming = Optional<mut Optional<GpuTimingMeasure>>(this.m_intervalSampleComputeEmulationTiming);
     else
         this.m_intervalSamplePayload.opaqueCsgComputeEmulationTiming.reset();
-    // Material instance and typed-material reads.
     csgIntervalSampleResourceUses.reserve(ComputeOpaqueCsgIntervalSampleResourceUseCapacity(inputs.hasOpaqueDrawItems, inputs.hasCsgFrameGpuWork));
     csgIntervalSampleResourceUses.push_back(ReadUse(inputs.resources.meshView, ResourceStates::ConstantBuffer));
     if(inputs.hasOpaqueDrawItems){
@@ -290,7 +286,6 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(in OpaqueC
         return MakeUnexpected(Failure());
     if(opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned){
         this.m_intervalSampleComputeEmulationPayload.csgResources = inputs.csgResources;
-        // Producer and sample share one CSG interval-sample ticket, spanning compute through the raster half.
         this.m_intervalSampleComputeEmulationPayload.instanceCount = inputs.instanceCount;
         this.m_intervalSampleComputeEmulationPayload.materialTypedByteCount = inputs.materialTypedByteCount;
         this.m_intervalSampleComputeEmulationPayload.materialDrawBuffersUploaded = this.m_intervalSamplePayload.inputs.materialDrawBuffersUploaded;
@@ -321,8 +316,6 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(in OpaqueC
         opaqueCsgIntervalSampleComputeEmulationScheduling.forceSubmissionBoundary = false;
         opaqueCsgIntervalSampleComputeEmulationScheduling.allowPacketMerge = true;
         opaqueCsgIntervalSampleComputeEmulationScheduling.mergeWithPrevious = true;
-        // Combine is the explicit immediate predecessor.
-        // The interval-image UAV handoff survives FrontierSafe splits; Sample merges so vertex handoff and timing stay together.
         opaqueCsgIntervalSampleComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
         GpuTaskDesc opaqueCsgIntervalSampleComputeEmulationDesc;
         opaqueCsgIntervalSampleComputeEmulationDesc
@@ -430,7 +423,6 @@ b8 OpaqueCsgIntervalSampleGraphTask::record(mut CommandList commands, in GpuTask
     const CsgFrameGpuDataView csgFrameData = readiness.csgFrameData;
     const b8 csgDrawResourcesReady = readiness.state.csgResourcesReady && (opaqueDrawItems.csg.empty() || this.inputs.materialSystem.drawRecorder().materialPassDrawResourcesReady(opaqueDrawItems.csg, this.inputs.frameBindings));
     const b8 csgReceiverSurfaceDrawResourcesReady = readiness.state.csgReceiverSurfaceDrawResourcesReady;
-    // Retire the reservation on later disagreement; never leave it stale.
     if(this.csgComputeEmulationOutputStatesGraphOwned && this.opaqueCsgComputeEmulationTiming.value().has_value() && !csgDrawResourcesReady){
         this.opaqueCsgComputeEmulationTiming.value().value().discardTiming();
         this.opaqueCsgComputeEmulationTiming.value().reset();

@@ -17,15 +17,15 @@ const u32 s_FontSfntMaxpTag = 0x6d617870u;
 const usize s_FontSfntHeadUnitsPerEmOffset = 18u;
 const usize s_FontSfntMaxpGlyphCountOffset = 4u;
 const u32 s_TrueTypeSignature = 0x00010000u;
-const u32 s_CffSignature = 0x4f54544fu; // OTTO
-const u32 s_FvarTag = 0x66766172u; // fvar
-const u32 s_Cff2Tag = 0x43464632u; // CFF2
-const u32 s_CmapTag = 0x636d6170u; // cmap
-const u32 s_HheaTag = 0x68686561u; // hhea
-const u32 s_HmtxTag = 0x686d7478u; // hmtx
-const u32 s_GlyfTag = 0x676c7966u; // glyf
-const u32 s_LocaTag = 0x6c6f6361u; // loca
-const u32 s_CffTableTag = 0x43464620u; // "CFF " with a trailing space
+const u32 s_CffSignature = 0x4f54544fu;
+const u32 s_FvarTag = 0x66766172u;
+const u32 s_Cff2Tag = 0x43464632u;
+const u32 s_CmapTag = 0x636d6170u;
+const u32 s_HheaTag = 0x68686561u;
+const u32 s_HmtxTag = 0x686d7478u;
+const u32 s_GlyfTag = 0x676c7966u;
+const u32 s_LocaTag = 0x6c6f6361u;
+const u32 s_CffTableTag = 0x43464620u;
 const usize s_HeadMinBytes = 54u;
 const usize s_CmapMinBytes = 4u;
 const usize s_MaxpMinBytes = 6u;
@@ -59,7 +59,7 @@ const StringView s_PreparedFontImageBytesTruncatedReason = "prepared image bytes
 const StringView s_PreparedFontImageHashMismatchReason = "prepared image content hash differs from its directory";
 const StringView s_PreparedFontLengthChangedReason = "prepared source changed length during read";
 const StringView s_PreparedFontChangedDuringReadReason = "prepared source changed during read";
-const u32 s_PreparedFontMagic = 0x324e4f46u; // FON2 in little-endian wire order.
+const u32 s_PreparedFontMagic = 0x324e4f46u;
 const u32 s_PreparedFontVersion = 1u;
 const usize s_PreparedFontHeaderBytes = 56u;
 const usize s_PreparedFontGroupHeaderBytes = 48u;
@@ -78,7 +78,7 @@ const usize s_PreparedFontGroupByteCountOffset = 12u;
 const usize s_PreparedFontGroupSha256Offset = 16u;
 const u64 s_PreparedFontMaxPixelBytes = 128ul * 1024ul * 1024ul;
 const u64 s_PreparedFontMaxFileBytes = cast<u64>(s_PreparedFontHeaderBytes) + cast<u64>(s_PreparedFontMaxGroupCount) * cast<u64>(s_PreparedFontGroupHeaderBytes) + cast<u64>(s_FontMaxSourceBytes) + s_PreparedFontMaxPixelBytes;
-const u32 s_FontBinaryMagic = 0x464f4e31u; // FON1
+const u32 s_FontBinaryMagic = 0x464f4e31u;
 const u32 s_FontBinaryVersion = 1u;
 const usize s_FontBinaryHeaderBytes = 24u;
 
@@ -270,7 +270,6 @@ Array<u8, 32> ComputeFontSha256Bytes(in Span<u8> input){
     return digest;
 }
 
-// Borrows the source buffer; the caller keeps it alive and unchanged while reading the directory or its tables.
 class FontSfntDirectory{
     public void assign(in Span<u8> bytes, in u16 tableCount){
         this.m_bytes = bytes;

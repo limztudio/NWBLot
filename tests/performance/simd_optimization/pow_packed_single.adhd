@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// This candidate uses the default floating-point model of the packed log and exp routines.
 VectorSingle PackedSinglePow(in VectorSingle x, in VectorSingle y){
     return VectorExp2(VectorMultiply(VectorLog2(x), y));
 }

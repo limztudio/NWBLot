@@ -42,8 +42,6 @@ class UiProgressSmokeScene : IUiSmokeInputScene{
     private void paintMarkers(mut UiPaintContext context)const;
 }
 
-
-// Scene fixture owning radio group sources and states across Builder loans.
 class UiRadioGroupSmokeScene : IUiSmokeInputScene{
     private UiRadioGroupSmokeSource m_source = UiRadioGroupSmokeSource();
     private RadioGroupState m_state = RadioGroupState();

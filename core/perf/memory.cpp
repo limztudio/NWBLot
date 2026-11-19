@@ -130,7 +130,6 @@ void MemoryRecorder::recordSnapshot(const Name& scopeName, const ::ArenaMemorySt
     if(!m_enabled || !scopeName)
         return;
 
-    // Record paths only consume scopes registered during setup; scope creation belongs to registerScope callers, never to per-frame record calls.
     const auto found = m_scopeMap.find(ScopeKey{ scopeName, source });
     if(found == m_scopeMap.end())
         return;

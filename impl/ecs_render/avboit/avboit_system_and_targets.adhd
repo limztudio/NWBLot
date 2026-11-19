@@ -173,7 +173,6 @@ b8 RendererAvboitSystem::createAvboitPipelines(){
 }
 
 void RendererAvboitSystem::resetAvboitFrameTargets(mut AvboitFrameTargets targets){
-    // Release owned descriptors only; the slot payload is borrowed.
     RetireAvboitTargetDescriptors(this.m_graphics.getDevice().getDescriptorHeap(), targets);
 
     targets.lowFramebuffer.reset();
@@ -338,7 +337,6 @@ b8 RendererAvboitSystem::createAvboitFrameTargets(mut DeferredFrameTargets creat
     if(!refractionTargets.createTileBuffers(layout.refractionTileCount, avboitTargets))
         return false;
 
-    // Pass setup waits for the deferred target builder.
     createdTargets.avboit = avboitTargets;
     this.m_avboitState.m_targetsNeedClear = true;
     return true;
@@ -392,7 +390,6 @@ b8 RendererAvboitSystem::registerAvboitFrameTargetDescriptors(mut DeferredFrameT
         return false;
     }
 
-    // Borrow the shared slot payload; populate it before deferred uploads it.
     avboitTargets.deferredSlotsBufferDescriptor = createdTargets.bindless.slotsBufferDescriptor;
     createdTargets.bindless.slots.avboitCoverage = avboitTargets.coverageBufferDescriptor.slot();
     createdTargets.bindless.slots.avboitDepthWarp = avboitTargets.depthWarpBufferDescriptor.slot();

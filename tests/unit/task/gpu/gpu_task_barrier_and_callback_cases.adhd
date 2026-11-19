@@ -878,7 +878,6 @@ void VerifyGpuBarrier_AllowsIndependentConcurrentReadStateSources(){
         EXPECT_EQ(exclusiveDeps[0u].producer, exclusiveGraphicsPacket);
     }
 
-    // Queues in one family retain exclusive ownership and require a handoff even with combined sharing flags.
     GpuPhysicalQueueInfo sameFamilyComputeQueue = DedicatedComputeQueue();
     sameFamilyComputeQueue.familyIndex = GraphicsQueue().familyIndex;
     sameFamilyComputeQueue.queueIndex = 1u;

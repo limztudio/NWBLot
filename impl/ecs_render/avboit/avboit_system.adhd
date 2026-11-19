@@ -90,7 +90,6 @@ class RendererAvboitSystem : NoCopy{
         this.m_avboitState.invalidateResources();
     }
 
-    // Host owns the graph artifact; AVBOIT owns its stage identifiers; users see the stage boundary.
     public void resetTaskGraphStage(){
         this.m_taskGraphStage.reset();
     }

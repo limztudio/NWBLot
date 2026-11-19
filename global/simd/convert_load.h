@@ -29,7 +29,6 @@ FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL LoadHalf(const Half4U& v
 #endif
 }
 
-// SIMD types are calculation values; persistent data uses typed layouts via these boundaries.
 FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL LoadFloat(const Float4& src)noexcept{
 #if defined(FOUNDATION_HAS_SCALAR)
     return SIMDConvertDetail::MakeF32(src.x, src.y, src.z, src.w);

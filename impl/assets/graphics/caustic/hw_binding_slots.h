@@ -9,13 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Hardware ray-traced caustic photon producer (raygen sibling of the SW compute producer).
-
-
-// Shares the SW producer push-constant layout.
 #include "sw_binding_slots.h"
 
-// The internal payload is one FP32 distance plus one 32-bit custom instance index.
 #define NWB_CAUSTIC_HW_MAX_PAYLOAD_BYTES 8u
 
 

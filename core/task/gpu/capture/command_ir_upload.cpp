@@ -101,7 +101,6 @@ b8 GpuCommandIrCapture::appendUpload(GpuCommandIrBuiltinTaskRecord record, const
     )
         return false;
 
-    // All potentially throwing allocations happen before either byte sequence changes.
     ContainerDetail::ReserveGrowingCapacity(m_recordEndOffsets, nextRecordCount);
     ContainerDetail::ReserveGrowingCapacity(m_blobEndOffsets, nextRecordCount);
     ContainerDetail::ReserveGrowingCapacity(m_recordSerials, nextRecordCount);

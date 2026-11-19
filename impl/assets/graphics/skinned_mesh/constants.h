@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Joint/weight pairs per serialized skin influence record.
 #define NWB_MESH_SKIN_MAX_INFLUENCE_COUNT 4u
 
 
@@ -22,7 +21,6 @@
 #define NWB_SKINNED_MESH_GROUP_SIZE_X 64
 #define NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X 128
 
-// 0 keeps the groupshared baseline; variants may opt into the wave path.
 #ifndef NWB_SKINNED_MESH_BOUNDS_USE_WAVE_REDUCE
 #define NWB_SKINNED_MESH_BOUNDS_USE_WAVE_REDUCE 0u
 #endif

@@ -104,7 +104,6 @@ const usize s_ShadowCombinedWaveletPushConstantsOpaqueOutputStorageSlotOffset = 
 const usize s_ShadowInstanceMaterialInitialCapacity = 128u;
 const StringView s_SwTransparentAdaptiveDisabledVariant = "NWB_SW_TRANSPARENT_ADAPTIVE=0";
 const StringView s_SwTransparentAdaptiveEnabledVariant = "NWB_SW_TRANSPARENT_ADAPTIVE=1";
-// Pipeline order matches the shader name table; the overflow args buffer is the third scratch buffer.
 const u32 s_HwTransparentGatherStage = 0u;
 const u32 s_HwTransparentEvaluateStage = 1u;
 const u32 s_HwTransparentOverflowStage = 2u;
@@ -156,7 +155,6 @@ enum<u8> SoftShadowOpaqueResolvePhase{
     WaveletOnly
 }
 
-// Soft resolve either overwrites visibility or multiplies transparent transmittance.
 enum<u32> SoftShadowUpsampleFold{
     Overwrite = 0u,
     Multiply
@@ -168,7 +166,6 @@ enum<u8> PreparedShadowMaterialContextRoute{
     Software = 2u
 }
 
-// Shader-mirrored shadow resolve stages.
 enum<u32> ShadowResolveStage{
     Wavelet = 1u,
     Upsample = 2u
@@ -223,9 +220,7 @@ class ShadowPrepareUploadTasks{
 
 class ShadowPrepareUploadChain{
     public ShadowPrepareUploadTasks tasks = ShadowPrepareUploadTasks();
-    // Last declared upload; Shadow Preparation depends on it.
     public ShadowGpuTaskId completionTask = ShadowGpuTaskId();
-    // Upload destinations stay invalid when their preflighted buffer is absent.
     public ShadowGpuGraphResourceId csgTraceContext = ShadowGpuGraphResourceId();
     public ShadowGpuGraphResourceId causticEmissionTargets = ShadowGpuGraphResourceId();
     public ShadowGpuGraphResourceId surfelFrameConstants = ShadowGpuGraphResourceId();
@@ -277,7 +272,6 @@ class LightSpaceShadowGraph{
     }
 }
 
-// Prepared shadow callbacks share one acceptance endpoint; combined stages omit their independent predecessors.
 class PreparedShadowVisibilityTasks{
     public ShadowGpuTaskId terminal = ShadowGpuTaskId();
     public ShadowGpuTaskId opaque = ShadowGpuTaskId();
@@ -298,7 +292,6 @@ class ShadowVisibilityMergeValidationResult{
     public b8 adaptivePrimitivesMerged = false;
 }
 
-// Only accepted static scene/light identities can authorize a reduced per-pixel sampling budget.
 class SoftwareTransparentSamplingHistory{
     public void prepareScene(in RayTracingSceneContentStamp scene){
         this.m_scene = scene;
@@ -429,10 +422,8 @@ class SoftwareTransparentShadowTraceInputs{
     public b8 historyFrontIsA = false;
 }
 
-
-// Cross-frame Buffer* cache. keepAlive prevents key reuse; failed registrations stay uncached.
 class RtMeshHeapHandleCacheEntry{
-    public BufferHandle keepAlive; // Pins the Buffer* key.
+    public BufferHandle keepAlive;
     public GpuDescriptorHandle handle;
     public b8 seenThisFrame = false;
 }
@@ -440,7 +431,6 @@ class RtMeshHeapHandleCacheEntry{
 
 class SoftwareTransparentSamplingState{
     public BindingLayoutHandle m_layout;
-    // Index zero keeps the fixed budget; index one consumes accepted sampling history.
     public Array<ShaderHandle, 2u> m_shaders;
     public Array<ComputePipelineHandle, 2u> m_pipelines;
     public SoftwareTransparentSamplingHistory m_history;

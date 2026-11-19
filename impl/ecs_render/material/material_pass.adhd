@@ -138,7 +138,6 @@ b8 MaterialPassDrawRecorder::setMaterialPassDrawPushConstants(mut MaterialPassDr
         return true;
     }
 
-    // Pixel-only CSG variants reuse the unused generated-vertex lane as the context selector; geometry reads it per instance.
     frameHeapSlots.generatedVertex = csgContextHeapSlot;
 
     SetShaderDrivenPushConstants(context.commandList, mesh.meshletCount, drawItem.instanceIndex, drawItem.materialConstantByteOffset, context.viewportState, frameHeapSlots, dispatchFlags);
@@ -148,7 +147,6 @@ b8 MaterialPassDrawRecorder::setMaterialPassDrawPushConstants(mut MaterialPassDr
 void MaterialPassDrawRecorder::dispatchComputeMaterialPassDrawItem(mut MaterialPassDrawContext context, in MaterialPassDrawItem drawItem, in MaterialPassMeshResourceSnapshot mesh, in MaterialPassPipelineResourceSnapshot pipelineResources){
     ComputeState computeState;
     computeState.setPipeline(pipelineResources.computePipeline.deref());
-    // Set 0 contains only the compute push range; the unified generated vertex/index UAV uses one global heap selector.
 
     context.commandList.setComputeState(computeState);
     this.m_graphics.getDevice().getDescriptorHeap().bindCompute(context.commandList, pipelineResources.computePipeline.deref());
@@ -250,7 +248,6 @@ void MaterialPassDrawRecorder::renderMeshMaterialPassDrawItems(mut MaterialPassD
         meshletState.setViewport(context.viewportState);
 
         context.commandList.setMeshletState(meshletState);
-        // Geometry streams are heap-backed for every raster material pass (opaque and AVBOIT alike).
         this.m_graphics.getDevice().getDescriptorHeap().bindGraphics(context.commandList, pipelineResources.meshletPipeline.deref());
 
         if(!this.setMaterialPassDrawPushConstants(context, drawItem, mesh))
@@ -266,7 +263,6 @@ void MaterialPassDrawRecorder::renderMeshMaterialPassDrawItems(mut MaterialPassD
 void MaterialPassDrawRecorder::generateComputeMaterialPassDrawItems(mut MaterialPassDrawContext context, in Span<MaterialPassDrawItem> drawItems){
     if(drawItems.empty())
         return;
-    // No local output transition here. A graph producer must have declared every selected buffer as a UAV first.
     assert(context.emulationOutputEntryStateGraphOwned);
     assert(context.frameBindings.meshView.buffer.valid());
 
@@ -285,7 +281,6 @@ void MaterialPassDrawRecorder::generateComputeMaterialPassDrawItems(mut Material
 void MaterialPassDrawRecorder::renderComputeMaterialPassDrawItemsRasterOnly(mut MaterialPassDrawContext context, in Span<MaterialPassDrawItem> drawItems){
     if(drawItems.empty())
         return;
-    // This half has no local output transition. The graph declares each unified generated buffer for vertex and index reads.
     assert(context.emulationOutputEntryStateGraphOwned);
     assert(context.frameBindings.meshView.buffer.valid());
 
@@ -317,7 +312,6 @@ void MaterialPassDrawRecorder::renderComputeMaterialPassDrawItems(mut MaterialPa
 
         this.setMaterialPassCommonBufferStates(context, mesh);
         context.commandList.setBufferState(mesh.emulationVertexBuffer.deref(), ResourceStates::UnorderedAccess);
-        // Compute-emulation runs the same heap-backed mesh runtime before the generated vertex buffer reaches the ordinary graphics raster stage.
         this.dispatchComputeMaterialPassDrawItem(context, drawItem, mesh, pipelineResources);
 
         context.commandList.setBufferState(mesh.emulationVertexBuffer.deref(), s_ObjectGeometryRasterState);
@@ -463,20 +457,17 @@ void RendererMaterialSystem::renderPreparedAvboitMaterialPass(
 
     commands.endRenderPass();
 
-    // Fresh producers open split timing. Reused regular output has a separate, already-validated graph producer.
     if(IsRejectedReusedEmulationOutputHandoff(emulationOutputReused, emulationOutputEntryStateGraphOwned, csgEmulationOutputEntryStateGraphOwned))
         return;
     const b8 splitEmulationTiming = UsesSplitEmulationTiming(emulationOutputEntryStateGraphOwned, csgEmulationOutputEntryStateGraphOwned, emulationOutputReused);
     if(splitEmulationTiming && (!emulationOutputTiming.has_value() || !emulationOutputTiming.value().has_value()))
         return;
 
-    // Declaration froze ordering and published bytes; keep this consumer side-effect free.
     if(!frameBindings.frameReady(instanceCount, materialTypedByteCount)){
         discardEmulationOutputTiming();
         return;
     }
     const b8 regularDrawResourcesReady = this.m_drawRecorder.materialPassDrawResourcesReady(drawItems.regular, frameBindings);
-    // Active handoff covers every regular draw; reject on late resource disagreement.
     if(emulationOutputEntryStateGraphOwned && !regularDrawResourcesReady){
         discardEmulationOutputTiming();
         return;
@@ -501,7 +492,6 @@ void RendererMaterialSystem::renderPreparedAvboitMaterialPass(
     );
     regularDrawContext.setFramebuffer(framebuffer);
     regularDrawContext.setAvboitTargets(avboitTargets);
-    // CSG opts in only via its own frozen producer; keep it separate from the regular flag.
     MaterialPassDrawContext csgDrawContext(
         commands,
         viewportState,
@@ -588,7 +578,6 @@ b8 RendererMaterialSystem::createObjectGeometryPipelineResources(mut MaterialPip
     if(!this.prepareMeshComputeBindingLayout())
         return false;
     mut Device device = this.m_graphics.getDevice();
-    // A single fixed engine decoder defines cache contents independently of the selected material or raster pass.
     if(!this.m_materialState.m_objectGeometryDecodePipeline.valid()){
         if(!this.m_shaderSystem.loadShader<ComputeShader, MeshSubsystem>(lambda[](in MeshSubsystem s) -> AssetRef<ComputeShader>{ return s.objectDecodeCs; }, s_ShaderArchiveDefaultVariant,
             s_ObjectGeometryDecodeDebugName, this.m_materialState.m_objectGeometryDecodeShader))

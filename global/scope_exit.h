@@ -12,7 +12,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Owns non-throwing cleanup until the operation explicitly publishes its result.
 template<typename Func>
 class ScopeExit final : NoCopy{
     static_assert(IsNothrowMoveConstructible_V<Func>, "ScopeExit cleanup must be nothrow move constructible");

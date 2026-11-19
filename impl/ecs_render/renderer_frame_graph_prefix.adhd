@@ -227,8 +227,6 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
     this.m_graphicsPrefixSceneShadingSetupTask = prefixSceneUploadResult.value().sceneShadingSetupTask;
     const RayTracingLightingClassification rayTracingLightingClassification = prefixSceneUploadResult.value().lightingClassification;
     const u32 sceneLightCount = prefixSceneUploadResult.value().lightCount;
-    // G-buffer load clears stay in attachment storage and G-buffer timing.
-    // Deferred-clear timing covers the opaque-color UAV clear before its Compute handoff.
     GpuTaskSchedulingHint clearScheduling;
     clearScheduling.cost = GpuTaskCostHint::Tiny;
     clearScheduling.forceSubmissionBoundary = false;
@@ -251,8 +249,6 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
     }
     this.m_graphicsPrefixDeferredClearTask = graphicsPrefixDeferredClearTaskResult.value();
 
-    // Freeze the opaque packet's draw ordering before recording.
-    // The two copied blobs below are the exact source of the heap-selected instance/material streams consumed by these saved draw items.
     MaterialPassDrawItemPartitions opaqueDrawItems;
     InstanceGpuDataVector instanceData;
     CsgFrameGpuData csgFrameData;
@@ -285,7 +281,6 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
     gbufferPayload.csgResources = csgResources;
 
     const b8 hasOpaqueDrawItems = !opaqueDrawItems.empty();
-    // G-buffer and the opaque CSG follow-up declare the shared material entry batch. The source-geometry batch is retained below.
     gbufferPayload.materialFrameStatesGraphOwned = hasOpaqueDrawItems;
     OpaqueUploadChainBuilder opaqueUploadChainBuilder(context.graph, context.material, context.csg);
     OpaqueUploadChainInputs uploadInputs(deferredTargets, frameBindings, csgResources, csgFrameData);
@@ -337,11 +332,6 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
         hasOpaqueCsgFrameWork
     );
 
-    // G-buffer makes peel/event images; span build publishes spans; Combine publishes removed-interval images; Sample takes them.
-    // Their recorders consume graph-owned StorageImage state without staging target transitions.
-
-    // The semantic opaque-CSG flag admits this clear before checking attachment readiness.
-    // The graph owns both CopyDest writes and their following UAV handoff.
     OpaqueCsgIntervalClearBuilder opaqueCsgIntervalClearBuilder(context.graph);
     OpaqueCsgIntervalClearInputs clearInputs;
     clearInputs.workRegion = csgFrameData.workRegion;
@@ -364,7 +354,6 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
     if(hasOpaqueCsgFrameWork)
         csgIntervalClearTask = opaqueCsgIntervalClearResult.value().clearTask;
 
-    // Capacity grows independently of each frozen draw stream. Synchronize only the bytes uploaded for this pass.
     const BufferRange materialInstanceRange(0u, ComputeOpaqueBufferByteRangeLength(instanceData.size(), sizeof(InstanceGpuData)));
     const BufferRange materialTypedRange(0u, ComputeOpaqueBufferByteRangeLength(materialTypedBytes.size(), 1u));
     const BufferRange csgReceiverRange(0u, ComputeOpaqueBufferByteRangeLength(csgFrameData.receiverRanges.size(), sizeof(CsgReceiverRangeGpuData)));
@@ -486,7 +475,6 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
     gbufferScheduling.allowPacketMerge = true;
     gbufferScheduling.mergeWithPrevious = true;
 
-    // Explicit immediate predecessor. Keep its UAV-to-vertex/index handoff in the primary-Graphics packet despite cross-queue consumers.
     gbufferScheduling.allowMergeAcrossConsumerFrontier = ShouldMergeOpaqueGbufferAcrossConsumerFrontier(opaqueComputeEmulationOutputStatesGraphOwned, opaqueSharedComputeEmulationOutputStatesGraphOwned, opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned);
     GpuTaskDesc gbufferDesc;
     gbufferDesc
@@ -497,7 +485,6 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
         .setResourceUses(gbufferResourceUses)
         .setResourceSetUses(gbufferMaterialResourceSetUses)
     ;
-    // Successors declare after G-buffer moves its payload. Keep frozen readiness/state bits by value, not from the moved payload.
     const b8 opaqueSharedMaterialDrawBuffersUploaded = gbufferPayload.materialDrawBuffersUploaded;
     const b8 opaqueSharedMaterialFrameStatesGraphOwned = gbufferPayload.materialFrameStatesGraphOwned;
     const b8 opaqueSharedMaterialGeometryStatesGraphOwned = gbufferPayload.materialGeometryStatesGraphOwned;
@@ -565,7 +552,6 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
         return MakeUnexpected(Failure());
     }
     this.m_graphicsPrefixTask = graphicsPrefixTaskResult.value();
-    // Publish only after every prefix task accepts declaration. The caller freezes dependent ray-tracing routes immediately after this successful return.
     context.rayTracing.publishPreparedLightingClassification(rayTracingLightingClassification, Span<SceneLightGpuData>(prefixSceneUploadResult.value().lightData).first(sceneLightCount));
     return prefixSceneUploadResult.value().sceneLightingContentHash;
 }

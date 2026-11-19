@@ -2,11 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared slot payload for ray-tracing material context buffers.
-// Matches ECSRenderDetail::RayTraceMaterialContextSlots exactly.
-// Buffers here are global-heap STORAGE_BUFFERs; each shader binds this cbuffer at a spare binding to select typed aliases.
-
-
 #ifndef NWB_GRAPHICS_RAYTRACE_MATERIAL_CONTEXT_SLOTS_SLANGI
 #define NWB_GRAPHICS_RAYTRACE_MATERIAL_CONTEXT_SLOTS_SLANGI
 
@@ -21,12 +16,12 @@
 
 
 struct NwbRayTraceMaterialContextSlots{
-    uint4 sceneSlots;    // scene BVH nodes, scene instances, instance-material records, typed material words
-    uint4 materialSlots; // mesh-instance material storage, optical scene storage, optical instance count, current CSG context (0xffffffff when absent)
+    uint4 sceneSlots;
+    uint4 materialSlots;
 };
 
 #pragma warning(push)
-#pragma warning(disable: 39001) // Deliberate typed view of the global UniformBuffer descriptor table.
+#pragma warning(disable: 39001)
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapMaterialContextSlotBuffers[];
 #pragma warning(pop)
 

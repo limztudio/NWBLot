@@ -11,9 +11,7 @@
 const Color s_ScrollbarThumbColor = Color(0.35f, 0.40f, 0.48f, 1.0f);
 const Color s_ScrollbarDisabledColor = Color(0.25f, 0.28f, 0.32f, 1.0f);
 const u32 s_ScrollAxisCount = 2u;
-// Each axis can add a reservation once, then both axes are rechecked.
 const u32 s_ScrollbarReservationPassLimit = 3u;
-// Activation values of the track parts before and after each scrollbar thumb.
 const u32 s_TextAreaScrollHorizontalBefore = 1u;
 const u32 s_TextAreaScrollHorizontalAfter = 2u;
 const u32 s_TextAreaScrollVerticalBefore = 3u;
@@ -86,7 +84,6 @@ class MovedScrollbarThumb{
 
 
 b8 SameScrollbarPlacementGeometry(in ScrollbarPlacement first, in ScrollbarPlacement second){
-    // Offset and thumb position change during an ordinary drag without changing its accepted press geometry.
     return EqualUiRect(first.track, second.track)
         && first.thumb.width == second.thumb.width
         && first.thumb.height == second.thumb.height

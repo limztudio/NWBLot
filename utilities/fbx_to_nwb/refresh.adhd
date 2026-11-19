@@ -71,7 +71,6 @@ Expected<AssignmentRange> FindListAssignmentRange(in StringView source, in Strin
                 if(token.type == MetascriptTokenType::Identifier && token.text == fieldName){
                     token = lexer.next();
                     if(IsRefreshAssignment(token.type)){
-                        // Rewriting needs one direct literal list even when parsing permits compound assignments.
                         if(found || token.type != MetascriptTokenType::Equal)
                             return MakeUnexpected(Failure());
                         found = true;

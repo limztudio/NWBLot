@@ -1,5 +1,3 @@
-"""Validate complex-GI capture warmup evidence."""
-
 from __future__ import annotations
 
 import math
@@ -76,4 +74,3 @@ class BaselineWarmupEvidence:
             raise SmokeFailure("complex GI live warmup and readback evidence is out of order")
         return {"start_graphics_frame": start_frame, "start_presentations": start_presentations, "required_presentations": required_presentations, "required_live_seconds": required_seconds,
             "elapsed_live_seconds": elapsed_seconds, "warmup_end_graphics_frame": end_frame, "end_presentations": end_presentations, LIT_CAPTURE_SOURCE_FRAME: capture_frame}
-

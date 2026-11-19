@@ -27,9 +27,6 @@ namespace GpuTaskGraphCompilerDetail{
     return task.scheduling.allowTimingFeedbackRouting && (task.scheduling.allowSameClassQueueRouting || task.scheduling.allowCrossClassTimingFeedbackRouting) && task.scheduling.overlapPreferred && !task.scheduling.avoidQueueCrossing;
 }
 
-// Same-class routing retains its independent physical-queue opt-in.
-// Every route into another Vulkan family keeps the separate family opt-in.
-// Cross-class timing is a stronger explicit opt-in and only uses command-compatible classes.
 [[nodiscard]] b8 IsLegalTimingFeedbackRoute(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology, const GpuTaskGraphTaskView& task, const GpuPhysicalQueueInfo& incumbent, const GpuPhysicalQueueInfo& candidate)noexcept{
     if(!AllowsTimingFeedbackRouting(task) || !IsLegalQueueAssignmentCandidate(graph, topology, task, candidate))
         return false;
@@ -47,12 +44,10 @@ namespace GpuTaskGraphCompilerDetail{
 }
 
 [[nodiscard]] b8 HasUsableTimingFeedback(const GpuTaskGraphQueueAssignmentOptions& options, const u16 deviceGeneration)noexcept{
-    // assignQueues() rejects an enabled invalid policy before this query.
     FOUNDATION_ASSERT(!options.timingFeedbackPolicy.enabled || options.timingFeedbackPolicy.valid());
     return options.timingFeedbackPolicy.enabled && options.timingHistory && options.timingHistory->valid() && options.timingHistory->deviceGeneration() == deviceGeneration;
 }
 
-// Same-family queues share work via timeline semaphore, no ownership transfer. Cross-family stays opt-in.
 [[nodiscard]] const GpuPhysicalQueueInfo* FindLeastLoadedSameClassQueue(
     const GpuTaskGraph::DeclarationReadView& graph,
     const Span<const u64> prefixQueueCosts,
@@ -97,7 +92,6 @@ namespace GpuTaskGraphCompilerDetail{
     const usize assignedPrefixCount,
     const b8 allowCrossFamilyRouting
 )noexcept{
-    // Balancing runs after every task has a dense assignment from the same topology; the prefix ends at the current group.
     FOUNDATION_ASSERT(assignedPrefixCount <= assignments.size());
     const GpuPhysicalQueueInfo* result = nullptr;
     usize resultAssignmentIndex = 0u;
@@ -173,7 +167,6 @@ namespace GpuTaskGraphCompilerDetail{
         if(!candidateHistory)
             continue;
 
-        // A fresh store may finish calibration with no probe as incumbent; the static route is then the baseline.
         const b8 canSwitch = assignmentState ? GpuTaskTimingDecision::CanSwitch(*incumbentHistory, *candidateHistory, *assignmentState, incumbent.id, candidate.id, frameIndex, policy) : GpuTaskTimingDecision::HistoryMeetsMinimumSamples(*incumbentHistory, policy)
                 && GpuTaskTimingDecision::HistoryMeetsMinimumSamples(*candidateHistory, policy)
                 && GpuTaskTimingDecision::BenefitExceedsHysteresis(*incumbentHistory, *candidateHistory, policy)
@@ -190,7 +183,6 @@ namespace GpuTaskGraphCompilerDetail{
         if(candidateHistory->averageSeconds != resultHistory->averageSeconds)
             continue;
 
-        // Queue scores break exact duration ties; measured differences need no graph-scoring scan.
         const GpuQueueAssignmentScore candidateScore = BuildQueueAssignmentScore(graph, analysis, assignments, assignmentIndicesByTask, topology, schedulingReachability, scoringData, task, candidate);
         if(!hasResultScore){
             resultScore = BuildQueueAssignmentScore(graph, analysis, assignments, assignmentIndicesByTask, topology, schedulingReachability, scoringData, task, *result);
@@ -207,7 +199,6 @@ namespace GpuTaskGraphCompilerDetail{
     return result;
 }
 
-// Calibration is narrower than selection: visits only legal opted-in routes until each has enough samples. Incumbent keeps this frame.
 [[nodiscard]] const GpuPhysicalQueueInfo* FindTimingFeedbackCalibrationQueue(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuPhysicalQueueTopology& topology,

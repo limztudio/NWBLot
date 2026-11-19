@@ -92,8 +92,7 @@ private:
     b8& m_flag;
 };
 
-// Rotating thread-local scratch for Name text in opt/fin; ring avoids aliasing in one expression.
-inline constexpr usize s_SymbolTextBufferLength = 1024u; // keep == NameSymbols::s_MaxResolvedTextLength
+inline constexpr usize s_SymbolTextBufferLength = 1024u;
 inline constexpr usize s_SymbolTextBufferCount = 8u;
 
 
@@ -166,7 +165,6 @@ inline void RecordNameSymbolText(const NameHash& hash, const BasicStringView<Cha
         state.callback(hash, AStringView(text), state.userData);
     }
     else{
-        // Wide->narrow by byte truncation, not UTF-8, so recorded text round-trips to the hash.
         Array<char, s_SymbolTextBufferLength> narrowText = {};
         usize copiedCount = 0u;
         for(const CharT ch : text){

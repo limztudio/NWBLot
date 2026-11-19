@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-"""Pure CPU tests for frozen-arm renderer A/B acquisition contracts."""
-
 
 import contextlib
 import copy
@@ -181,7 +179,6 @@ class FrozenIdentityTests(unittest.TestCase):
 
 
 class PairedInferenceTests(unittest.TestCase):
-
     def test_missing_duplicate_and_wrong_order_trials_are_not_silently_dropped(self):
         workload, orders, trials = trial_matrix()
         changed = copy.deepcopy(trials)

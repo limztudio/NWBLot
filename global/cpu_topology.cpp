@@ -73,7 +73,6 @@ static constexpr u32 s_QueryRetryCount = 4u;
     if(!GetProcessAffinityMask(process, &processMask, &systemMask))
         return MakeUnexpected(Failure{});
 
-    // Windows 11 reports all default groups here. Earlier Windows versions report the groups assigned to this process.
     USHORT groupCount = GetActiveProcessorGroupCount();
     if(groupCount == 0u)
         return MakeUnexpected(Failure{});
@@ -221,7 +220,6 @@ static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
         allCapacitiesKnown = allCapacitiesKnown && capacity != 0u;
         placements.push_back(CpuWorkerPlacement{ static_cast<u32>(processorIndex), 0u, capacity, CpuAffinity::Any });
     }
-    // Missing capacity is unknown, not an efficiency tier. Do not compare partial capacity data or clock frequencies.
     if(!allCapacitiesKnown){
         for(CpuWorkerPlacement& placement : placements)
             placement.performanceClass = 0u;

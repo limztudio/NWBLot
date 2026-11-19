@@ -108,7 +108,6 @@ VectorDouble ReplicatedKernelQuaternionSlerp<const b8 Candidate>(in VectorDouble
     signMask = VectorDoubleShiftLeft(signMask, VectorDoubleZero(), 3u);
     weights = VectorDoubleXorInt(weights, signMask);
     weights = VectorDoubleAdd(VectorDouble(1.0, 0.0, 0.0, 0.0), weights);
-    // Nonuniform weighted arguments use the four-lane sine path.
     VectorDouble firstWeight = VectorDoubleMultiply(weights, omega);
     firstWeight = VectorDoubleSin(firstWeight);
     firstWeight = VectorDoubleMultiply(firstWeight, VectorDoubleReciprocal(sine));
@@ -364,7 +363,6 @@ StringView ReplicatedOperationName(in u32 kindIndex){
     }
 }
 
-// Switch only accepted candidates to production after their implementations are applied.
 b8 IsReplicatedProductionCandidate(in u32 kindIndex){
     return kindIndex <= 8u || (kindIndex >= 12u && kindIndex <= 14u);
 }

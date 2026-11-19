@@ -563,7 +563,6 @@ void VerifyGpuExtFrontier_ExportsExternalFinalOwnershipWithMultipleTerminalPacke
     EXPECT_EQ(exportInfo.value().resource, texture);
     EXPECT_EQ(exportInfo.value().destinationQueue, queues[1u].id);
     EXPECT_EQ(exportInfo.value().finalState, ResourceStates::ShaderResource);
-    // No singular semantic producer exists: each mip's terminal range belongs to a different packet and queue.
     EXPECT_FALSE(exportInfo.value().producerTask.valid());
     EXPECT_FALSE(exportInfo.value().sourceQueue.valid());
     const Span<GpuCompiledExternalResourceExportSource> sources = ExportSources(exportView);
@@ -1448,7 +1447,6 @@ void VerifyGpuExtFrontier_FrontierScoredPacketizationCarriesTailPhysicalQueueFro
     EXPECT_EQ(firstAssignment.value().queue, queues[0u].id);
     EXPECT_EQ(mergedAssignment.value().queue, queues[0u].id);
     EXPECT_EQ(blockedAssignment.value().queue, queues[0u].id);
-    // Same-class balancing moves the consumer to the idle graphics queue in the same family.
     EXPECT_EQ(consumerAssignment.value().queue, queues[1u].id);
     EXPECT_NE(cast<u8>(consumerAssignment.value().modifiers) & cast<u8>(GpuTaskQueueAssignmentModifier::SameClassLoadBalance), 0u);
 
@@ -1592,7 +1590,6 @@ void VerifyGpuExtFrontier_FrontierSafeConsumerFrontierOverrideRequiresExplicitIm
     const GpuTaskId immediateFinalize = immediateFinalizeResult.value();
     ASSERT_TRUE(immediateFinalize.valid());
 
-    // Inferred ordering after the finalizer must not inherit the finalizer frontier override.
     GpuTaskSchedulingHint unrelatedScheduling = GpuTaskSchedulingHint();
     unrelatedScheduling.allowPacketMerge = true;
     unrelatedScheduling.mergeWithPrevious = true;
@@ -1612,7 +1609,6 @@ void VerifyGpuExtFrontier_FrontierSafeConsumerFrontierOverrideRequiresExplicitIm
     const GpuTaskId unrelatedSuccessor = unrelatedSuccessorResult.value();
     ASSERT_TRUE(unrelatedSuccessor.valid());
 
-    // Keep the cross-queue edge while sequencing the consumer after the merge, so packet order cannot fake a pass.
     Array<GpuTaskId, 2> consumerDependencies = Array<GpuTaskId, 2>();
     consumerDependencies[0u] = first;
     consumerDependencies[1u] = unrelatedSuccessor;

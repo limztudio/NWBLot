@@ -159,7 +159,6 @@ Expected<mut MaterialSurfaceInfo> RendererMaterialSystem::createMaterialSurfaceI
     in Material material = loadedAsset.value().deref();
 
     MaterialSurfaceInfo createdInfo = this.m_materialState.emptySurface();
-    // Material::loadBinary already rejected empty shader variants and missing material interfaces.
     assert(!material.shaderVariant().empty());
     assert(material.materialInterface() != s_NameNone);
 
@@ -175,7 +174,6 @@ Expected<mut MaterialSurfaceInfo> RendererMaterialSystem::createMaterialSurfaceI
     createdInfo.avboitOccupancyPixelShader = material.avboitOccupancyPixelShader();
     createdInfo.avboitExtinctionPixelShader = material.avboitExtinctionPixelShader();
 
-    // Material::loadBinary already validated the typed layout (hash, blocks, fields, bytes).
     assert(material.typedLayoutHash() != 0u && !material.typedBlockBytes().empty());
     assert(material.typedLayoutBlocks().size() <= cast<usize>(u32.max));
     assert(material.typedLayoutFields().size() <= cast<usize>(u32.max));

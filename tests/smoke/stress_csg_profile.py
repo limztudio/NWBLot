@@ -1,5 +1,3 @@
-"""Validation of the requested CSG stress workload and dispatch route."""
-
 import math
 import re
 

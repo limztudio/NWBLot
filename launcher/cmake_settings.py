@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""CmakeSettings: CMake configuration, cache settings, and launch paths."""
 
 from __future__ import annotations
 
@@ -21,8 +20,6 @@ from launcher.constants import (ARCH_X64, ARG_JOIN_SEPARATOR, CACHE_ENTRY_SEPARA
 
 
 class CmakeSettings:
-    """CMake configuration, cache settings, and launch paths."""
-
     @staticmethod
     def repo_root() -> Path:
         return Path(__file__).resolve().parents[1]

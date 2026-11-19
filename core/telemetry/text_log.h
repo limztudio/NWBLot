@@ -23,7 +23,7 @@ NWB_TELEMETRY_BEGIN
 
 
 inline constexpr u16 s_TextLogPayloadVersion = 1u;
-inline constexpr u32 s_TextLogPayloadMagic = 0x4E574C47u; // NWLG
+inline constexpr u32 s_TextLogPayloadMagic = 0x4E574C47u;
 
 #pragma pack(push, 1)
 struct EncodedTextLogPayloadHeader{
@@ -41,7 +41,6 @@ static_assert(alignof(EncodedTextLogPayloadHeader) == s_TextLogPackedAlignBytes,
 static_assert(IsStandardLayout_V<EncodedTextLogPayloadHeader>, "EncodedTextLogPayloadHeader must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedTextLogPayloadHeader>, "EncodedTextLogPayloadHeader must stay binary-serializable");
 
-// messageUtf8 borrows the parsed payload bytes; keep them alive and unchanged while reading.
 struct TextLogPayload{
     AStringView messageUtf8;
     Common::LogType::Enum type = Common::LogType::Info;

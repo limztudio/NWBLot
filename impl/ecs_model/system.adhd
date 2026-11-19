@@ -95,7 +95,6 @@ void RemoveInactiveModelEntities(mut World world, in usize inactiveObjectCount, 
             world.destroyEntity(entity);
     }
     if(inactiveRuntimeCount != 0u){
-        // Destroying objects can also remove runtime components.
         inactiveEntities.clear();
         world.view<ModelRuntimeComponent>().each(lambda[mut world, mut inactiveEntities](in EntityID entity, in ModelRuntimeComponent runtime) -> void{
             if(!world.hasComponent<ModelComponent>(entity))
@@ -192,7 +191,6 @@ class ModelSystem{
     private mut AssetManager m_assetManager;
     private ModelObjectRendererCallback m_applyRenderer;
     private Vector<SkeletonJointMatrix> m_scratchJoints;
-    // Reused across updateStaticMeshAttachments() calls so per-frame updates perform no allocations.
     private Vector<ModelAttachmentJointQuery> m_attachmentJointQueries;
     private Vector<usize> m_attachmentParentOrder;
 

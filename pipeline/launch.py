@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 from pathlib import Path
 import subprocess
 import sys
@@ -26,7 +25,6 @@ from launcher.constants import DEFAULT_DOMAIN  # noqa: E402
 TARGET = "nwb_pipeline"
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
-CACHE_KEY_HEX_DIGITS = 16
 TEXT_ENCODING = "utf-8"
 MAIN_ENTRY = "__main__"
 INPUT_LIST_LINE_END = "\n"
@@ -50,7 +48,7 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument(OPTION_ASSET_ROOT, type=Path, action=ACTION_EXTEND, nargs="+", required=True)
     parser.add_argument("--input", type=Path, action=ACTION_EXTEND, nargs="+", help="Explicit .nwb files or directories; defaults to the project.nwb root manifest")
     parser.add_argument(OPTION_OUTPUT_SHORT, OPTION_OUTPUT, OPTION_OUTPUT_DIRECTORY, type=Path, required=True)
-    parser.add_argument("--build-directory", type=Path, help="Persistent directory for standalone .nwba artifacts")
+    parser.add_argument("--build-directory", type=Path, help="Directory for build manifest and project-scoped .nwba artifacts")
     parser.add_argument(OPTION_CONFIGURATION, help="Asset configuration label; defaults to the selected --config")
     parser.add_argument(OPTION_ASSET_TYPE, default="graphics")
     parser.add_argument("--tool-directory", type=Path, help="Directory containing the three built pipeline executables")
@@ -140,9 +138,7 @@ def cook(options: argparse.Namespace) -> None:
     configuration = settings.config if options.configuration is None else options.configuration
     output = resolve_path(repo_root, options.output)
     cache = repo_root / ASSET_CACHE_DIRECTORY
-    output_key = hashlib.sha256(str(output).encode(TEXT_ENCODING)).hexdigest()[:CACHE_KEY_HEX_DIGITS]
-    configuration_key = hashlib.sha256(configuration.encode(TEXT_ENCODING)).hexdigest()[:CACHE_KEY_HEX_DIGITS]
-    built = resolve_path(repo_root, options.build_directory) if options.build_directory else cache / "pipeline" / configuration_key / output_key
+    explicit_built = resolve_path(repo_root, options.build_directory) if options.build_directory else None
 
     env = BuildController.build_environment(options)
     if not options.skip_build:
@@ -152,6 +148,7 @@ def cook(options: argparse.Namespace) -> None:
     tools = resolve_tools(options, settings)
     if options.dry_run:
         workspace = cache / "pipeline-dry-run"
+        built = explicit_built or (workspace / "built")
         for executable, arguments in pipeline_commands(options, repo_root, roots, output, built, configuration, tools, workspace):
             CmakeSettings.run_checked([executable, *arguments], repo_root, env, dry_run=True)
         return
@@ -159,6 +156,7 @@ def cook(options: argparse.Namespace) -> None:
     cache.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="pipeline-", dir=cache) as temporary:
         workspace = Path(temporary)
+        built = explicit_built or (workspace / "built")
         if options.input is not None:
             write_inputs(workspace / INPUT_LIST_NAME, inputs)
         for executable, arguments in pipeline_commands(options, repo_root, roots, output, built, configuration, tools, workspace):

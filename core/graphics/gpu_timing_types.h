@@ -29,7 +29,6 @@ struct GpuTimingScope{
     GpuTimingSubmissionTicket* submissionTicket = nullptr;
     usize submissionPublicationIndex = Limit<usize>::s_Max;
     u32 index = Limit<u32>::s_Max;
-    // Epoch and reservation distinguish a recreated accumulator and reused query-pool slot from an earlier scope.
     u32 epoch = 0u;
 
 
@@ -41,7 +40,6 @@ static_assert(IsTriviallyCopyable_V<GpuTimingScope>, "GPU timing publication mus
 
 struct GpuTimingScopeDefinition{
     Name identity = s_NameNone;
-    // Label storage must outlive the definition and every recording that uses it.
     AStringView markerLabel;
 
 
@@ -78,8 +76,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A recorder-issued opaque value retained from recording until the matching accepted GPU query completes.
-// The default-invalid value keeps ordinary timing scopes out of the optional completed-sample listener path.
 class GpuTimingSampleAttribution final{
     friend class GpuTimingRecorder;
     friend constexpr b8 operator==(const GpuTimingSampleAttribution& lhs, const GpuTimingSampleAttribution& rhs)noexcept;
@@ -111,7 +107,6 @@ inline constexpr b8 operator!=(const GpuTimingSampleAttribution& lhs, const GpuT
 
 inline constexpr GpuTimingSampleAttribution s_NoGpuTimingSampleAttribution;
 
-// An immutable task payload records its attribution before the scheduler resolves that recording.
 class GpuTimingRecordedSample final{
 public:
     [[nodiscard]] GpuTimingSampleAttribution attribution()const noexcept{ return m_attribution; }
@@ -131,20 +126,12 @@ struct GpuTimingSample{
     u64 sourceFrameIndex = 0u;
     f64 durationSeconds = 0.0;
     Name scopeName = s_NameNone;
-    // Accepted native queue per attributed outcome; stays valid when the backend exposes durations but no absolute cross-submission comparable range.
     GpuTimingSampleAttribution attribution = s_NoGpuTimingSampleAttribution;
     GpuComparableTimestampRange comparableRange;
     GpuPhysicalQueueId physicalQueue;
-    // False retires an attributed query whose value became unavailable (e.g. capture epoch change).
-    // durationSeconds is meaningful only when true.
     b8 published = false;
-    // Valid only for a published result with absolute comparable timestamps.
-    // Unpublished retirements keep physicalQueue but leave this range invalid even when raw query data existed.
 };
 
-// Listener context is caller-owned; callbacks run unlocked under a recursive gate.
-// External unsubscription waits; callback-stack unsubscription must outlive its stack.
-// Exceptions propagate; unpublished notices retire attribution only.
 struct GpuTimingSampleListener{
     void* context = nullptr;
     void (*invoke)(void* context, const GpuTimingSample& sample) = nullptr;
@@ -162,7 +149,6 @@ template<typename Receiver>
     } };
 }
 
-// Subscription identities are process-unique and never reused, so delayed snapshots cannot resolve a removed subscription to a replacement context.
 class GpuTimingSampleSubscription final{
     friend class GpuTimingRecorder;
     friend constexpr b8 operator==(const GpuTimingSampleSubscription& lhs, const GpuTimingSampleSubscription& rhs)noexcept;

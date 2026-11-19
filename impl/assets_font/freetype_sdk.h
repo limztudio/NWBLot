@@ -70,7 +70,6 @@ public:
     [[nodiscard]] i32 renderNormal()noexcept{ return FT_Render_Glyph(m_face->glyph, FT_RENDER_MODE_NORMAL); }
     [[nodiscard]] b8 hasOutline()const noexcept{ return m_face->glyph->format == FT_GLYPH_FORMAT_OUTLINE; }
     [[nodiscard]] i32 outlinePointCount()const noexcept{ return m_face->glyph->outline.n_points; }
-    // The pixels remain valid until the face loads or renders its next glyph.
     [[nodiscard]] FreeTypeBitmapView bitmap()const noexcept{
         const FT_GlyphSlot slot = m_face->glyph;
         const FT_Bitmap& bitmap = slot->bitmap;
@@ -171,7 +170,6 @@ public:
 
 
 private:
-    // FreeType resizes and frees live blocks in arbitrary order.
     Core::Alloc::GlobalArena m_libraryArena;
     FT_MemoryRec_ m_memory{};
     FT_Library m_library = nullptr;

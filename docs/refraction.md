@@ -7,8 +7,8 @@ changing device capability reporting. Both settings default to enabled.
 
 The renderer retains one primary refractive instance per pixel. A depth-tested
 raster pass captures its normal, IOR, absorption tint, transparent-pass instance
-identity, and front-boundary bit (`NWB_REFRACTION_CAPTURE_FRONT_BOUNDARY_FLAG` in
-bit 16 of `foregroundColor.x`) after opaque visibility and transparent CSG
+identity, and front-boundary bit (`NWB_AVBOIT_REFRACTION_FRONT_BOUNDARY_BIT` in
+bit 16 of `foregroundColor.x`, packed via `nwbAvboitPackRefractionIdentity`) after opaque visibility and transparent CSG
 intervals are ready. Capture uses the same authored material hook and draw
 ordering as the other AVBOIT passes. Its depth attachment is separate from opaque
 depth, which the capture shader checks explicitly. Clear glass may have zero
@@ -49,7 +49,7 @@ and exit. Background hits on opaque instances validate opaque or AVBOIT
 screen-color reuse directly from hit distance and instance flags before reading
 primitive, barycentric, or `worldToObject` intersection attributes; non-opaque
 instances and uncached opaque hits reconstruct the surface once and call
-`nwbRefractionShadeSurfaceHit` only when simplified direct diffuse lighting is
+`NwbRefractionHardwareBackgroundTrace::shadeSurfaceHit` only when simplified direct diffuse lighting is
 needed. This is not the full camera material shader.
 
 The independent screen shader has no ray-query capability. It performs at most
@@ -57,8 +57,10 @@ The independent screen shader has no ray-query capability. It performs at most
 usable screen hit. Without a geometric exit it uses a documented unit-thickness
 sheet approximation for absorption. Hardware preparation failure selects this
 already prepared pipeline while retaining a conservative declared resource set.
-CSG primaries also use this fallback because the raw triangle TLAS does not encode
-their boolean-cut exits.
+Hardware ray-query refraction also traces CSG primaries when `hasCsg` is set by
+selecting the `NWB_RT_CSG_ENABLED` shader variant (`impl/ecs_render/refraction/rt_refraction.adhd`,
+`nwbRayTraceClosestGeometryHit`); the screen-space fallback applies when hardware
+tracing is unavailable/disabled or entry/exit association misses.
 
 This first version does not implement a reflected radiance lobe, dispersion,
 rough-transmission sampling or denoising, arbitrary nested refractive media, or

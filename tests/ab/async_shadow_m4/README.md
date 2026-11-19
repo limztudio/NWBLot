@@ -30,10 +30,12 @@ python -m launcher async-shadow-m4 -- --pixel-capture-frames 128
 A separate diagnostic launch of either benchmark may set `NWB_STRESS_FRAME_GRAPH_FILE` to an output path while using `NWB_M4_PIXEL_CAPTURE_FREEZE_FRAME`. Before publishing the held-frame marker, the benchmark writes readable JSON plus the encoded public telemetry stream at `<path>.nwbs`. This capture request rejects presentation-measurement mode or a missing pixel freeze; keep it unset for ordinary paired timing runs. The snapshot includes task assignments, packet boundaries, barrier counts, and accepted submission waits for the completed frame. Submission counters distinguish emitted timeline waits, same-queue elisions, duplicate merges, and inherited elisions covered by prior accepted waits. Public analysis edges do not export compiled state-seed IDs or extra compiler dependency IDs; the snapshot explicitly marks those limits and does not qualify performance.
 
 On Windows, the M4 capture path restores, raises, and foregrounds the benchmark window before waiting for that
-held-frame marker. It requires `DwmSetWindowAttribute(DWMWA_WINDOW_CORNER_PREFERENCE=33,
-DWMWCP_DONOTROUND=1)` and `DwmFlush` to succeed before the existing raw client-area screen capture. This is scoped to
-M4. After preparing the window, it obtains the actual client rectangle in screen coordinates and moves the pointer
-to its center before waiting for the held-frame marker and the existing settle interval. This dismisses caption
+held-frame marker. It uses `WindowsCapture.prepare_raw_client_window` / `capture_prepared_raw_client_window` in
+`tests/smoke/window_capture_win32.py` (shared with `renderer_baseline` and UI smokes), requiring
+`DwmSetWindowAttribute(DWMWA_WINDOW_CORNER_PREFERENCE=33, DWMWCP_DONOTROUND=1)` and `DwmFlush` to succeed before the
+raw client-area screen capture. Specific to M4, `prepare_m4_client_area` obtains the actual client rectangle in screen
+coordinates and moves the pointer to its center before waiting for the held-frame marker and the existing settle
+interval. This dismisses caption
 tooltips that could overlap the captured client area. Missing or nonpositive client geometry and a failed
 `SetCursorPos` call fail the acquisition. The capture still compares every raw client pixel using the same fixture
 update count and parity thresholds. Windows 11 build 22000 or later is required: the

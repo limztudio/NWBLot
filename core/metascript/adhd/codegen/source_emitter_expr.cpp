@@ -503,7 +503,6 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             out.append("))");
             break;
         }
-        // Dependent requirements yield false for missing, inaccessible, and incompatible members.
         if(expr.layoutQuery == LayoutQueryKind::CppTypeAlias || expr.layoutQuery == LayoutQueryKind::NothrowRvalueMember){
             if(expr.layoutQuery == LayoutQueryKind::CppTypeAlias){
                 out.append("[]<class Owner, class Expected>()constexpr{ return requires{ requires ::IsSame_V<typename Owner::")

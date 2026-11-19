@@ -9,9 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Engine-owned AVBOIT entry/compositing; materials provide the shared surface hook and BXDF.
-
-
 #include "binding_slots.h"
 #include "../scene/binding_slots.h"
 #include "../mesh/runtime_constants.h"
@@ -21,22 +18,17 @@
 #include "common.slangi"
 #define g_NwbDeferredBindlessResources NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES
 
-// Scene resources are selected through the target-generation heap payload.
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbDeferredBindlessResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbDeferredBindlessResources.avboitSlots.w
 
-// Transparent fragments bypass opaque-G-buffer shadow and caustic sampling.
 #define NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED
 
-// AVBOIT draw push constants expose the same material context as rasterization.
 #include "../scene/lighting.slangi"
 
-// Project BXDFs own their tone-map policy and use this shared presentation query in either shading harness.
 bool nwbBxdfPresentationIsHdr10(){
     return nwbAvboitPresentationIsHdr10();
 }
 
-// Transport passes request linear radiance independently of the display presentation mode.
 bool nwbBxdfRequiresLinearOutput(){
     return true;
 }
@@ -48,7 +40,6 @@ bool nwbBxdfRequiresLinearOutput(){
 #include "../mesh/material_typed_accessors.slangi"
 #include "../mesh/surface.slangi"
 #include "../deferred/bxdf_surface.slangi"
-// Generated BXDF dispatch resolves from its own include root.
 #include "deferred/generated/bxdf_dispatch.slangi"
 
 
@@ -91,7 +82,6 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     const int3 fullTexel = int3(int2(input.position.xy), 0);
     float refractionDepth = NWB_SCENE_BACKGROUND_DEPTH;
     if(refractionCapture){
-        // Capture owns a separate depth attachment, so opaque rejection precedes material and CSG evaluation.
         const float opaqueDepth = nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.w).Load(fullTexel).r;
         if(input.position.z > opaqueDepth)
             discard;
@@ -118,7 +108,6 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
         discard;
 #endif
 
-    // Surface coverage must match occupancy and extinction.
     const NwbMeshSurface surface = nwbMaterialSurface();
 
     const half alpha = clamp(surface.renderCoverage, half(0.0h), half(1.0h));
@@ -130,7 +119,6 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
 
         NwbAvboitAccumulatePixelOutput capture;
         capture.accumColor = float4(nwbSafeNormalize(surface.normal, float3(0.0, 0.0, 1.0)), ior);
-        // Shadow absorption tint is a (0, 1) color factor, so half math is sufficient; widen only for the float4 store.
         capture.accumExtinction = float4(float3(clamp(surface.shadowAbsorptionTint, half3(0.0h), half3(1.0h))), float(alpha));
 #if NWB_CSG_ENABLED
         const bool frontBoundary = false;
@@ -138,7 +126,6 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
         const bool frontBoundary = input.frontFace;
 #endif
         capture.foregroundColor = float4(nwbAvboitPackRefractionIdentity(g_NwbMeshInstances[nwbMeshInstanceIndex()].entityId, frontBoundary), 0.0, 0.0);
-        // The capture framebuffer binds persistent F0/roughness at the shared PS's fourth output location.
         capture.foregroundExtinction = nwbPackMeshSurfaceReflection(surface.specularF0, surface.perceptualRoughness);
         return capture;
     }
@@ -159,9 +146,7 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     bxdfSurface.isBackground = false;
     bxdfSurface.indirectIrradiance = nwbBxdfIndirectIrradiance(bxdfSurface.worldPosition, bxdfSurface.normal);
 
-    // Negative pixel bypasses opaque-G-buffer shadow sampling.
     const half3 resolvedColor = nwbDeferredDispatchBxdf(bxdfSurface.shadingModel, bxdfSurface, int2(-1, -1));
-    // Opacity belongs in weightedAlpha. RGB stays nonnegative linear radiance until the final display transform.
     const half3 shadedColor = max(resolvedColor, half3(0.0h));
 
     NwbAvboitAccumulatePixelOutput output;
@@ -169,7 +154,6 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     output.accumExtinction = float4(nwbAvboitExtinctionFromAlpha(alpha), 0.0, 0.0, 0.0);
     output.foregroundColor = float4(0.0);
     output.foregroundExtinction = float4(0.0);
-    // Preserve foreground transparency at its camera pixel. Background resolves via the bent path separately.
     if(refractionDepth < NWB_SCENE_BACKGROUND_DEPTH && input.position.z < refractionDepth){
         output.foregroundColor = output.accumColor;
         output.foregroundExtinction = output.accumExtinction;

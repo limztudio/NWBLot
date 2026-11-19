@@ -45,7 +45,6 @@ const u64 s_ShadowDefaultMemoryBudgetBytes = 268435456ull;
 const u32 s_ShadowMinResolution = 32u;
 const u32 s_ShadowMaxResolution = 2048u;
 const u64 s_ShadowMaxMemoryBudgetBytes = 4294967295ull;
-// A point light renders one view per cube face.
 const u32 s_SceneMaxLights = 64u;
 const u32 s_PointLightViewCount = 6u;
 const usize s_LightSpaceMaxViews = 48u;
@@ -78,7 +77,6 @@ const StringView s_LightSpaceCsgShade0 = "NWB_LIGHT_SPACE_CSG_SHADE=0";
 const StringView s_LightSpaceCsgShade1 = "NWB_LIGHT_SPACE_CSG_SHADE=1";
 const StringView s_LightSpaceCsgOccluder0 = "NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=0";
 const StringView s_LightSpaceCsgOccluder1 = "NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=1";
-// Inclusive index ranges into the compute shader/pipeline tables of ensureLightSpaceShadowPipelines.
 const u32 s_LightSpaceFirstCsgOnlyPipelineIndex = 6u;
 const u32 s_LightSpaceLastCsgOnlyPipelineIndex = 10u;
 const u32 s_LightSpaceFirstCsgResolvePipelineIndex = 7u;
@@ -168,10 +166,8 @@ class LightSpaceCaptureTicket{
     public b8 reuse = false;
 }
 
-// A capture publishes only after its complete native packet and retained resource states are accepted.
 class LightSpaceCaptureHistory{
     public void beginFrame(){
-        // A skipped or rejected frame cannot extend the lifetime of the prior map generation.
         if(!this.m_frameAccepted)
             this.m_accepted = false;
         this.m_pendingTicket = LightSpaceCaptureTicket();
@@ -200,7 +196,6 @@ class LightSpaceCaptureHistory{
         this.m_pendingTicket.sequence = this.m_sequence;
         this.m_pendingTicket.reuse = reuse;
         this.m_captureRecorded = false;
-        // Refresh writes the maps in place. Their old identity must be unavailable even if recording or submission fails.
         if(!reuse)
             this.m_accepted = false;
         return this.m_pendingTicket;

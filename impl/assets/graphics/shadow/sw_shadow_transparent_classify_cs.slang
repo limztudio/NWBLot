@@ -2,9 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Stage-3 transparent shadow classify pass: appends edge texels for indirect full-resolution trace and interpolates smooth tiles.
-
-
 #include "sw_binding_slots.h"
 
 #include "sw_shadow_gbuffer.slangi"
@@ -14,7 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The classify pass reads/writes all worksets through their storage heap slots.
 #define g_NwbSwShadowCoarse nwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.coarseStorageSlot)
 #define g_NwbSwShadowVisibility nwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.visibilityStorageSlot)
 #define g_NwbSwShadowEdgeCounter nwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.edgeCounterStorageSlot)
@@ -33,7 +29,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     const int3 texel = int3(int2(pixel), 0);
 
-    // Background: leave the pristine (white) opaque mask; it casts no candidate rays.
     if(nwbSwShadowIsBackground(texel))
         return;
 
@@ -49,7 +44,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const uint slot = coarseLight.slot;
 
         if(coarseLight.isEdge){
-            // Edge texel: append (pixel, lightIndex) for indirect trace while leaving the opaque mask intact; fall back to interpolation on overflow.
             uint appendIndex;
             InterlockedAdd(g_NwbSwShadowEdgeCounter[NWB_SW_SHADOW_EDGE_COUNTER_APPEND], 1u, appendIndex);
             if(appendIndex < edgeCapacity){
@@ -58,14 +52,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 g_NwbSwShadowEdgeList[base + 1u] = i;
             }
             else{
-                // OVERFLOW: edge stays untraced; fall back to interp. Near-impossible at this capacity.
                 const half3 interp = nwbSwShadowInterpolateCoarse(coarseLight.samples, coarseLocation.weights);
                 const half3 opaqueMask = half3(g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb);
                 g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(opaqueMask * interp, 1.0);
             }
         }
         else{
-            // FLAT interior: interpolate the coarse transmittance and fold onto the pristine opaque mask in place.
             const half3 interp = nwbSwShadowInterpolateCoarse(coarseLight.samples, coarseLocation.weights);
             const half3 opaqueMask = half3(g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb);
             g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(opaqueMask * interp, 1.0);

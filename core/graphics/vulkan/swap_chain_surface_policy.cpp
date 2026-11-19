@@ -39,14 +39,12 @@ Expected<VulkanDetail::SwapChainSurfaceFormatSelection> SwapChainSurfacePolicy::
     const VkFormat requestedVkFormat = VulkanDetail::ConvertFormat(requestedSdrFormat);
     const Array<SdrCandidate, 3> candidates = {{
         { requestedVkFormat, requestedSdrFormat },
-        // RGBA8/BGRA8 sRGB are interchangeable presentation fallbacks for the engine's default request.
         { VK_FORMAT_B8G8R8A8_SRGB, Format::BGRA8_UNORM_SRGB },
         { VK_FORMAT_R8G8B8A8_SRGB, Format::RGBA8_UNORM_SRGB },
     }};
     for(const SdrCandidate& candidate : candidates){
         if(candidate.format == VK_FORMAT_UNDEFINED)
             continue;
-        // Respect a caller's non-default SDR format. The two portable fallbacks are only for the engine default.
         if(candidate.rhiFormat != requestedSdrFormat && requestedSdrFormat != Format::RGBA8_UNORM_SRGB && requestedSdrFormat != Format::BGRA8_UNORM_SRGB)
             continue;
 

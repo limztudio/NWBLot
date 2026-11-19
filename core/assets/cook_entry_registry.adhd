@@ -20,7 +20,6 @@ extern class CookEntryRegistry{
     b8 has(...)const;
     [cpp_flags(unwind)] b8 parseDocument(...);
     [cpp_flags(unwind)] b8 parseValue(...);
-    [cpp_flags(unwind)] b8 appendCachedEntry(...);
     usize bucketCount(...)const;
     b8 writeBucket(...);
     u64 entryCount(...)const;
@@ -43,14 +42,12 @@ extern class ICookEntryBucket{
     usize size()const;
     [cpp_flags(unwind)] b8 parseDocument(in GlobalPath root, in StringView virtualRoot, in GlobalPath path, in MetascriptDocument document, mut CookEntryParseContext context);
     [cpp_flags(unwind)] b8 parseValue(in Name path, in GlobalPath file, in MetascriptValue value, mut CookEntryParseContext context);
-    [cpp_flags(unwind)] b8 appendCachedEntry(in cpp_ref CookEntrySourceLocation source, in cpp_ref Name path, in Span<u8> bytes, mut CookEntryParseContext context);
     [cpp_flags(unwind)] b8 writeCookedAssets(mut CookEntryWriteContext context);
 };
 
 [cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::ICookedAssetWriter"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
 extern class ICookedAssetWriter{
     b8 writeCookedAsset(...);
-    b8 writeCachedCookedAsset(...);
 };
 
 

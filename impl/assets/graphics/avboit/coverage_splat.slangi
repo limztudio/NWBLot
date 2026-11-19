@@ -16,7 +16,6 @@ void nwbAvboitMarkCoverageSlice(uint virtualSlice){
 void nwbAvboitMarkCoverageFromDepth(float depth){
     uint virtualSlice0;
     uint virtualSlice1;
-    // Slice blend weights are (0, 1) bounded factors; half math is sufficient here.
     half sliceWeight0;
     half sliceWeight1;
     nwbAvboitLinearVirtualSlicesFromDepth(depth, virtualSlice0, virtualSlice1, sliceWeight0, sliceWeight1);

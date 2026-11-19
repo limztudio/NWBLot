@@ -121,8 +121,6 @@ namespace TriangleDoubleTests{
     return VectorDouble3Cross(VectorDoubleSubtract(v1, v0), VectorDoubleSubtract(v2, v0));
 }
 
-
-// Promote positions before subtracting so the area normal retains binary64 edge precision.
 [[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble BuildTriangleAreaNormal64(const SIMDVectorSingle a, const SIMDVectorSingle b, const SIMDVectorSingle c)noexcept{
     const SIMDVectorDouble origin = ConvertVectorSingleToDouble(VectorAndInt(a, s_SIMDMask3));
     const SIMDVectorDouble ab = VectorDoubleSubtract(ConvertVectorSingleToDouble(VectorAndInt(b, s_SIMDMask3)), origin);
@@ -134,11 +132,9 @@ namespace TriangleDoubleTests{
 
 [[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble TriangleAreaNormalLengthSquared(SIMDVectorDouble areaNormal)noexcept{
 #if defined(FOUNDATION_HAS_AVX2)
-    // Retain the AVX2 reduction order: (x squared + z squared) + y squared.
     areaNormal = VectorDoubleSwizzle<0, 2, 1, 3>(areaNormal);
 #endif
 #if defined(FOUNDATION_HAS_NEON64)
-    // The ARM64 final multiply-add follows the compiler's contraction policy.
     const SIMDVectorDouble z = VectorDoubleSplatZ(areaNormal);
     return VectorDoubleMultiplyAddExpression(z, z, VectorDouble2LengthSq(areaNormal));
 #else
@@ -189,7 +185,6 @@ namespace TriangleDoubleTests{
 }
 
 [[nodiscard]] inline b8 FOUNDATION_SIMD_CALL TriangleTests::Intersects(const SIMDVectorSingle a0, const SIMDVectorSingle a1, const SIMDVectorSingle a2, const SIMDVectorSingle b0, const SIMDVectorSingle b1, const SIMDVectorSingle b2)noexcept{
-    // Promotion keeps the separating-axis products finite across the full binary32 coordinate range.
     return TriangleDoubleTests::Intersects(
         ConvertVectorSingleToDouble(VectorAndInt(a0, s_SIMDMask3)), ConvertVectorSingleToDouble(VectorAndInt(a1, s_SIMDMask3)), ConvertVectorSingleToDouble(VectorAndInt(a2, s_SIMDMask3)),
         ConvertVectorSingleToDouble(VectorAndInt(b0, s_SIMDMask3)), ConvertVectorSingleToDouble(VectorAndInt(b1, s_SIMDMask3)), ConvertVectorSingleToDouble(VectorAndInt(b2, s_SIMDMask3))
@@ -208,7 +203,6 @@ namespace TriangleDoubleTests{
     const SIMDVectorDouble relativeA1 = VectorDoubleSubtract(first1, first0), relativeA2 = VectorDoubleSubtract(first2, first0);
     const SIMDVectorDouble relativeB0 = VectorDoubleSubtract(second0, first0), relativeB1 = VectorDoubleSubtract(second1, first0), relativeB2 = VectorDoubleSubtract(second2, first0);
     const auto differenceRoundoff = [](const SIMDVectorDouble point, const SIMDVectorDouble origin, const SIMDVectorDouble difference)noexcept{
-        // TwoDiff recovers the residual without widening the allowance by a large common translation.
         const SIMDVectorDouble virtualOrigin = VectorDoubleSubtract(point, difference), virtualPoint = VectorDoubleAdd(difference, virtualOrigin);
         return VectorDoubleAdd(VectorDoubleSubtract(point, virtualPoint), VectorDoubleSubtract(virtualOrigin, origin));
     };
@@ -223,7 +217,6 @@ namespace TriangleDoubleTests{
     const SIMDVectorDouble edgeA0 = relativeA1, edgeA1 = VectorDoubleSubtract(first2, first1), edgeA2 = VectorDoubleNegate(relativeA2);
     const SIMDVectorDouble edgeB0 = VectorDoubleSubtract(second1, second0), edgeB1 = VectorDoubleSubtract(second2, second1), edgeB2 = VectorDoubleSubtract(second0, second2);
     const auto crossAxis = [](const SIMDVectorDouble first, const SIMDVectorDouble second)noexcept{
-        // Separate products yield a zero axis for parallel directions, not an FMA residual.
         const SIMDVectorDouble positive = VectorDoubleMultiply(VectorDoubleSwizzle<1, 2, 0, 3>(first), VectorDoubleSwizzle<2, 0, 1, 3>(second));
         const SIMDVectorDouble negative = VectorDoubleMultiply(VectorDoubleSwizzle<2, 0, 1, 3>(first), VectorDoubleSwizzle<1, 2, 0, 3>(second));
         return VectorDoubleSubtract(positive, negative);
@@ -241,7 +234,6 @@ namespace TriangleDoubleTests{
             const SIMDVectorDouble projection = VectorDouble3Dot(relative, axis);
             const SIMDVectorDouble magnitude = VectorDouble3Dot(VectorDoubleAbs(relative), absoluteAxis), coordinateError = VectorDouble3Dot(VectorDoubleAbs(roundoff), absoluteAxis);
 #endif
-            // Three products plus two additions need an absolute cancellation bound; eight epsilons also cover bound and endpoint rounding.
             constexpr f64 s_ProjectionAllowanceFactor = 0x1p-49;
             const SIMDVectorDouble allowance = VectorDoubleMultiplyAddExpression(VectorDoubleAdd(magnitude, coordinateError), VectorDoubleReplicate(s_ProjectionAllowanceFactor), coordinateError);
             return VectorDoubleSelect(VectorDoubleSubtract(projection, allowance), VectorDoubleAdd(projection, allowance), s_DoubleSIMDMaskY);
@@ -269,7 +261,6 @@ namespace TriangleDoubleTests{
         return false;
 
     if(VectorDouble3Equal(normalA, zero) && VectorDouble3Equal(normalB, zero)){
-        // Closed degenerate triangles keep point/segment hulls, including collinear endpoint contact.
         const SIMDVectorDouble directionA = VectorDouble3Equal(edgeA0, zero) ? edgeA1 : edgeA0, directionB = VectorDouble3Equal(edgeB0, zero) ? edgeB1 : edgeB0;
         const SIMDVectorDouble normal = crossAxis(directionA, directionB);
         if(separated(directionA) || separated(directionB) || separated(normal) || separated(crossAxis(directionA, normal)) || separated(crossAxis(directionB, normal)))
@@ -281,7 +272,6 @@ namespace TriangleDoubleTests{
     }
 
     const auto edgeSeparated = [&](const SIMDVectorDouble edge)noexcept{
-        // In-plane edge normals cover coplanar triangles and degenerate hulls.
         return separated(crossAxis(edge, normalA)) || separated(crossAxis(edge, normalB)) || separated(crossAxis(edge, edgeB0)) || separated(crossAxis(edge, edgeB1)) || separated(crossAxis(edge, edgeB2));
     };
     if(edgeSeparated(edgeA0) || edgeSeparated(edgeA1) || edgeSeparated(edgeA2))

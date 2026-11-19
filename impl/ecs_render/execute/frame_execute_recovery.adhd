@@ -15,8 +15,6 @@ class FrameExecuteCpuSnapshot{
     public b8 deferredBindlessSlotsUploaded = false;
 }
 
-
-// Recovers a partly accepted deferred frame: runs the graph-owned recovery packet, then rejects the remaining normal packets.
 [modular]
 class FrameExecuteRecovery : NoCopy{
     private mut RendererFramePipeline m_renderer;

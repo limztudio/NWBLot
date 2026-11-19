@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Exercise source-frame, completed GPU and visual rejection gates for skinned transitions."""
 
 from array import array
 from copy import deepcopy

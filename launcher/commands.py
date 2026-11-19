@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Dispatch and list discovered repository launchers."""
 
 from __future__ import annotations
 
@@ -44,7 +43,6 @@ class LauncherCommands:
 
     @staticmethod
     def run_directory_launcher(directory: Path, argv: Sequence[str]) -> int:
-        """Dispatch a category launcher to one of its leaf launchers."""
         launchers = LauncherDiscovery.discover_directory_launchers(directory)
         values = list(argv)
         if not values:

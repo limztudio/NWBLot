@@ -1,41 +1,24 @@
 # Reflection smoke and validation
 
-Reflection stages one through seven are implemented and passed their final
-validation gates. The renderer combines hierarchical screen-space tracing with
-bounded hardware continuation and composites reflection on opaque surfaces and
-primary glass with AVBOIT. It supports opaque GGX roughness, strict static-scene
-temporal accumulation, separate spatial filtering, bounded secondary transmission
-through authored optical volumes, and optional screen-miss feedback.
+The reflection renderer combines hierarchical screen-space tracing with bounded
+hardware continuation and composites reflection on opaque surfaces and primary
+glass with AVBOIT. It supports opaque GGX roughness, strict static-scene temporal
+accumulation, separate spatial filtering, bounded secondary transmission through
+authored optical volumes, and optional screen-miss feedback.
 
-The final stage-seven run passed 100 actual-framebuffer checks on the Qualcomm
-Adreno X2-90 with required hardware ray queries and `--gpudbg`: 22 baseline and
-budget captures, 14 roughness captures, 30 optical captures, four combined
-caustic/refraction/reflection captures, 24 feedback captures, and six captures
-with reflection diagnostics disabled. All captures completed normally with clean
-runtime and GPU validation logs. All 358 ECS graphics tests and the six selected
-CPU test targets also passed. Stage-specific validation counts below describe
-their original gates.
-
-The optimized benchmark methodology and GPU timing evidence are documented
+Benchmark methodology and historical GPU timing evidence are documented
 separately in [Reflection performance](REFLECTION_PERFORMANCE.md). Completed
 traversal counters establish work performed; they do not establish a GPU speedup.
 Screen-miss feedback remains disabled by default.
 
-The September 12 [optical appearance experiment](REFLECTION_OPTICAL_EXPERIMENT.md)
-passed its scoped correctness checks but did not establish a reliable speedup,
-so the speculative shader changes were reverted. That report also records the
-upstream renderer repairs and the full-suite failures present at experiment completion. The subsequent
-[renderer error cleanup](../RENDERER_VALIDATION.md) repaired those failures; each report retains its separate
-qualification results.
+The historical [optical appearance experiment](REFLECTION_OPTICAL_EXPERIMENT.md)
+and subsequent [renderer error cleanup](../RENDERER_VALIDATION.md) retain their
+own point-in-time qualification records separately from this operational guide.
 
 The refraction fixture explicitly disables reflection to isolate its transmission
-comparisons. The 33-capture exact-duplicate gallery passed at the stage-two gate;
-that earlier run is separate evidence.
-
-The stage-four diagnostics extension records completed-frame statistics for every
-capture and adds hybrid floor captures with hardware budgets of zero and 64 rays.
-The accepted-token measurements establish bounded hardware work and lower
-hardware ray counts in the floor fixture. They do not establish a GPU speedup.
+comparisons. The diagnostics mode records completed-frame statistics and
+exercises bounded hybrid budgets without claiming a GPU speedup from counter
+ratios alone.
 
 The public `ReflectionSettings` contract is declared in
 `impl/ecs_render/reflection/settings.adhd` and applied through
@@ -70,21 +53,20 @@ therefore stores 7,372,536 bytes (about 7.03 MiB) with RG32, or about 14.06 MiB 
 RGBA32, excluding driver alignment and metadata. Building mip zero reads nine
 neighboring depth samples per pixel. The additional maximum-depth channel costs
 more storage and reduction bandwidth than a minimum-only hierarchy, while
-allowing empty intervals behind visible surfaces to be skipped. A CPU reference
-of the problematic backward-camera panel ray needed 173 iterations with minimum
-depth alone and 37 with interval bounds. That diagnostic explains the bounded
-trace fix; it is neither a GPU timing measurement nor an overall performance or
-hardware ray-savings claim. The capture passed with the existing 96-step limit
-and unchanged image assertion thresholds.
+allowing empty intervals behind visible surfaces to be skipped. Using min/max depth intervals allows empty intervals behind visible surfaces
+to be skipped so backward-camera rays stay within the 96-step limit without
+relying on unbounded iteration.
 
-The dedicated `nwb_reflection_smoke` target uses `reflection_probes_and_runtime.adhd` and
-`framebuffer_capture.adhd`. It reads back the actual 960x720 framebuffer after
-16 graphics presentation frames, then exits through normal application shutdown.
-Run from `Testing/smoke_runtime/<configuration>` so `cwd/res` selects the matching
-packed smoke assets. The shared `nwb_transparent_multi_smoke_assets` cook includes
-both `impl/assets` and `tests/smoke/assets`; rebuilding the target recooks changed
-shader/material assets. The `temporal_light` case also needs a fixture-only lit
-material from `tests/smoke/reflection_temporal_assets`.
+The dedicated `nwb_reflection_smoke` target compiles `reflection_optical_scenes.adhd`,
+`reflection_suite_scenes.adhd`, and `reflection_probes_and_runtime.adhd` and links
+`nwb_smoke_runtime_helpers` (including `framebuffer_capture.adhd`). It reads back
+the actual 960x720 framebuffer after 16 graphics presentation frames, then exits
+through normal application shutdown. Run from `Testing/smoke_runtime/<configuration>`
+so `cwd/res` selects the matching packed smoke assets. The shared
+`nwb_transparent_multi_smoke_assets` cook includes `impl/assets`,
+`tests/smoke/shared_assets`, and `tests/smoke/assets`; rebuilding the target
+recooks changed shader/material assets. The `temporal_light` case also needs a
+fixture-only lit material from `tests/smoke/reflection_temporal_assets`.
 `nwb_reflection_temporal_smoke_assets` prepares that root with the shared catalog
 and cooks it into `Testing/reflection_temporal_smoke_runtime/<configuration>`, so
 the temporal suite runs from that directory.
@@ -195,65 +177,20 @@ to 0.5% of the sampled exterior regions. Panel direct images must cover at least
 50% of their projected rectangle area and reflections at least 25%; color
 thresholds permit visible provisional SSR radiance. Their centroids must follow
 the separate geometric projections, with at most 3% of each marker color outside
-the expected direct/reflected regions. The boundary source and reflection masks
-must match their mode-specific visibility. Thirty-six independent synthetic analysis
-tests reject flat tint, missing or stationary markers, sparse correctly located
-patches, missing glass reflection, expanded/lost foreground, exterior corruption,
-malformed frames, direct-image substitution, incorrect floor or boundary images,
-incorrect direct/reflected motion scales, and inherited fixture controls. The
-statistics tests also reject malformed logs, wrong configurations, invalid tokens,
-stale generations/samples, missing warm-up completion, budget overruns, invalid
-outcome partitions, false accepted-screen evidence, and apparent ray savings
-caused by a smaller eligible population.
+the expected direct/reflected regions. The boundary source and reflection masks must match their mode-specific visibility.
+Independent synthetic analysis tests reject flat tint, missing or stationary
+markers, sparse correctly located patches, missing glass reflection, expanded/lost
+foreground, exterior corruption, malformed frames, direct-image substitution,
+incorrect floor or boundary images, incorrect direct/reflected motion scales, and
+inherited fixture controls. The statistics tests also reject malformed logs, wrong
+configurations, invalid tokens, stale generations/samples, missing warm-up
+completion, budget overruns, invalid outcome partitions, false accepted-screen
+evidence, and apparent ray savings caused by a smaller eligible population.
 
-The completed stage-two hardware captures contained 2,643-2,687 pixels per mirror
-marker, with no marker pixels outside the predicted regions. The measured
-horizontal movements were approximately 40.2 pixels for red and 40.1 for green,
-against the 40.085-pixel prediction. Disabled and screen/environment controls had
-zero colored marker pixels. The paired spheres gained 3,880 opaque and 3,881 glass
-reflection pixels. All 12,811 foreground pixels were retained, with zero added
-foreground pixels and zero changed exterior pixels. These are fixture-specific
-observations from the completed capture; they are not general image-quality or
-performance guarantees.
-
-The completed stage-three run measured the following reflected marker areas:
-
-| Case | Screen red / green pixels | Hardware red / green pixels | Hybrid red / green pixels |
-| --- | ---: | ---: | ---: |
-| Wall mirror (`onscreen`) | 1,410 / 1,942 | 1,470 / 2,058 | 1,470 / 2,058 |
-| Floor mirror (`floor`) | 1,470 / 2,058 | 1,470 / 2,058 | 1,470 / 2,058 |
-
-All these marker pixels were within their predicted regions. In the boundary
-case, screen mode retained 1,410 red pixels and lost the offscreen green marker
-entirely; hybrid retained 1,470 red and 2,058 green pixels. The on-screen sources
-moved inward by exactly 52 pixels in the captures, versus a 51.96-pixel prediction;
-their screen reflections moved by approximately 17.54/17.55 pixels, versus
-17.32 predicted. Hybrid also retained both fully offscreen sphere reflections.
-The opaque/glass comparison again measured 3,880/3,881 added reflection pixels,
-retained all 12,811 foreground pixels, and found no added foreground or changed
-exterior pixels.
-
-Visual inspection shows the wall-mirror SSR rectangles have small missing edge
-portions; hardware/hybrid restore their complete shapes. The floor screen capture
-contains black missing-background patches just above the colored reflections,
-where the camera source image cannot supply the occluded backdrop. Hybrid fills
-those regions through hardware continuation. Matching marker areas does not
-establish complete image equivalence or remove this screen-only visibility limit.
-
-The completed stage-four statistics used exactly 243,336 eligible floor samples
-in both routes. Hardware mode issued 243,336 rays; hybrid accepted 179,684 screen
-hits and issued 63,652 hardware rays. Every stable sample had those counts,
-establishing approximately 73.84% fewer actual hardware rays in this fixture.
-This is a ray-count reduction at the stated settings and scene, not a measured
-frame-time improvement.
-
-Each limited-budget capture supplied 13 completed samples from frame three or
-later. Both counted 63,652 hardware candidates and 179,684 accepted screen hits.
-The zero-budget case issued zero hardware rays with a one-entry queue allocation.
-The 64-ray case allocated 64 queue entries and issued exactly 64 rays. Those
-64 rays missed in this capture, so both controls retained 63,652 fallback pixels;
-zero hardware hits is valid when the budget selects rays that miss. Their visible
-floor markers and outcome partitions passed the same checks.
+Visually, wall-mirror SSR rectangles can lose small edge portions and floor-mirror
+screen traces show black missing-background patches just above reflected panels where
+the primary camera image lacks the occluded backdrop; hardware and hybrid modes
+restore those regions through hardware continuation.
 
 Build and run on the Windows ARM64 debug preset:
 
@@ -263,7 +200,21 @@ ctest --test-dir __cmake/build/windows-clang-arm64 -C dbg --output-on-failure -R
 python tests/smoke/reflection_smoke.py --executable __exec/windows/arm64/full/dbg/reflection_smoke.exe --working-directory __cmake/build/windows-clang-arm64/Testing/smoke_runtime/dbg --output-directory __cmake/build/windows-clang-arm64/Testing/smoke/dbg/reflection_statistics_gpudbg --logserver-executable __exec/windows/arm64/full/dbg/logserver.exe --require-hardware --application-arg=--gpudbg
 ```
 
-The portable CTest entry is `nwb_reflection_capture_smoke`. The launcher scene is
+Registered reflection capture CTests in `tests/smoke/reflection_smoke.cmake` are:
+
+- `nwb_reflection_capture_smoke` (`reflection_smoke.py --suite all`)
+- `nwb_reflection_temporal_omission_smoke` (`reflection_temporal_omission_smoke.py`, registered when `nwb_logserver` is built)
+- `nwb_csg_reflection_capture_smoke` (`csg_optics_smoke.py --effect reflection`)
+- `nwb_csg_reflection_collection_reuse_capture_smoke` (`reflection_optical_smoke.py --csg-reuse`)
+- `nwb_reflection_queue_boundary_capture_smoke` (`reflection_optical_smoke.py --queue-boundaries`)
+- `nwb_reflection_rough_capture_smoke` (`reflection_smoke.py --suite rough`)
+- `nwb_reflection_temporal_capture_smoke` (`reflection_smoke.py --suite temporal`)
+- `nwb_reflection_optical_capture_smoke` (`reflection_smoke.py --suite optical`)
+- `nwb_reflection_feedback_capture_smoke` (`reflection_smoke.py --suite feedback`)
+- `nwb_reflection_feedback_diagnostics_off_capture_smoke` (`reflection_smoke.py --suite feedback-diagnostics-off`)
+- `nwb_caustic_optical_capture_smoke` (`caustic_optical_smoke.py`, registered alongside caustic smokes)
+
+The interactive launcher scene is
 `reflection`, with `--reflection-case
 offscreen|moved|opaque_glass|onscreen|onscreen_moved|boundary|floor` and
 `--reflection-mode disabled|screen|hardware|hybrid`. Optional
@@ -281,11 +232,11 @@ failed visual comparisons remain inspectable. A passing report records the
 resulting image metrics and completed statistics. The report uses actual rendered pixels; it contains no
 illustrated or generated replacement images.
 
-Remaining work and limits are explicit:
+Current scope and limits are explicit:
 
-- The completed stage-five gate validates opaque GGX reflection and strict static
-  history in addition to the original smooth single-bounce cases. Camera or
-  content changes reject history; moving-camera reprojection is not implemented.
+- The roughness and temporal suites validate opaque GGX reflection and strict
+  static history in addition to the smooth single-bounce cases. Camera or content
+  changes reject history; moving-camera reprojection is not implemented.
 - Hardware hits use the authored BXDF with linear radiance and bounded lighting
   inputs. Additional reflection, shadow, GI, and transparent-volume transport at
   a secondary hit are not traced. A second transparent glass surface can therefore
@@ -293,17 +244,14 @@ Remaining work and limits are explicit:
 - Primary glass reflection is composited behind foreground AVBOIT. The paired
   fixture checks this order and visible reflection on glass; it is not a numerical
   proof of full reflection/refraction energy conservation or multilayer optics.
-- The stage-three cases distinguish on-screen reflection, uncertain back-facing
+- The screen/hybrid cases distinguish on-screen reflection, uncertain back-facing
   hits, front-facing floor hits, and offscreen continuation. They do not prove
   screen visibility for hidden geometry or reflected secondary transparent
-  transport. The separate stage-five mutation suite validates history rejection.
-- The strict refraction and caustic tests passed again at the stage-four gate;
-  exact-duplicate tests passed at stage two. Combined reflection/duplicate and more complex
-  reflected secondary transport cases remain part of the subsequent matrix.
-- No reflection speed improvement has been measured. The completion-associated
-  statistics provide frame/route-specific ray and outcome evidence, with optional
-  diagnostics enabled in this fixture. End-to-end timing benchmarks and the cost
-  of diagnostics must be evaluated separately before making a performance claim.
+  transport. The temporal mutation suite validates history rejection.
+- Completion-associated statistics provide frame/route-specific ray and outcome
+  evidence when diagnostics are enabled in the fixture. End-to-end timing
+  benchmarks and diagnostic overhead must be evaluated separately before making a
+  performance claim (see [Reflection performance](REFLECTION_PERFORMANCE.md)).
 
 For subsequent performance runs, enable `NWB_REFLECTION_SMOKE_TIMING=1` and use
 `NWB_GPU_TIMING_FILE`. The fixture forwards real frame delta to `FpsProbe` and
@@ -398,28 +346,8 @@ The interactive launcher also accepts `--reflection-case rough`,
 `--reflection-roughness`, `--reflection-history-samples`,
 `--reflection-post-reset-samples`, `--reflection-seed`, and on/off controls
 `--reflection-temporal`, `--reflection-spatial`, `--reflection-diagnostics`, and
-`--reflection-final-state`. Diagnostics can be disabled for later timing runs;
+`--reflection-final-state`. Diagnostics can be disabled for timing runs;
 source-anchored acceptance captures require it enabled.
-
-Stage five passed 14 roughness and 12 temporal GPU-debug captures at 960x720 on
-this host, alongside the original 22-capture reflection regression. Completed
-manifests and actual framebuffer images are under
-`Testing/smoke/dbg/reflection_roughness_gpudbg`,
-`Testing/smoke/dbg/reflection_temporal_gpudbg`, and
-`Testing/smoke/dbg/reflection_stage5_regression_gpudbg` in the build directory.
-The ECS graphics target passed 323 tests; the baseline and roughness analysis
-suites passed 37 and 32 tests respectively. The refraction GPU-debug and caustic
-sphere capture regressions passed again after the final stage-five build.
-
-The independent GGX reference error at roughness 0.4 decreased from 0.06200 at
-8 accepted samples to 0.01872 at 64 and 0.00682 at 256. The rough white-furnace
-mean linear albedo error was 0.000215. The separate radius-2 spatial filter
-reduced the fixture's high-frequency energy from 579.647 to 10.665 at 8 samples.
-These are image-quality measurements, not GPU time or frame-rate measurements.
-Smooth mirror history/raw and both authored glass-roughness cases were
-pixel-identical. Every first mutation image matched its fresh final-scene
-reference exactly. Skeletal deformation changed 3,875 red footprint pixels
-while preserving all 4,422 green control pixels.
 
 History remains RGBA16F. Before writing an accumulated mean, the temporal shader
 stochastically rounds RGB to exact half-representable FP32 values using an
@@ -443,8 +371,8 @@ single-volume union, equal-priority ties resolved by full entity ID, and one or
 two origin-containing volumes each have an independent reference.
 The failure fixtures use an unspecified optical boundary, mixed active medium
 contracts, independent unsuppressed coincident instances, five active media, a one-query slab limit and a TIR prism exhausted
-after three queries. All 30 captures passed GPU-debug validation, completed
-counter checks and the independent image analysis on this host.
+after three queries. Each optical capture verifies GPU validation (when enabled),
+completed counters, and independent image analysis.
 
 `reflection_optical_reference.py` uses float64 plane, convex-box and authored
 triangle intersections, exact unpolarized dielectric Fresnel and Snell's law.
@@ -459,19 +387,14 @@ must match both stripe position and channel energy. Screenshots are never blurre
 shifted or normalized to make them match. Duplicate and disconnected-instance
 comparisons additionally require the same reflected image.
 
-The faceted torus uses a four-pixel reference grid within its existing narrow
-projected region. Its 236 retained sample centers include 148 chart samples
-whose rays pass through glass and 34 whose rays leave and re-enter it. The
-oracle requires at least 60 transmitted and 16 re-entry chart samples, so extra
-unobstructed background cannot satisfy the test. Linear RGB MAE is 0.002457 for
-the torus; the largest per-case MAE in this run is 0.008575 for the inside-origin
-fixture. The duplicate, mirrored-transform, disconnected-instance and priority
-tie comparisons are byte-identical within the mirror region. The overlapping
-shell union differs from its single-volume reference by only 0.0000167 byte
-MAE there. These measurements apply to stable samples in the declared mirror
-region, not every ray from the primary glass visible around its boundary.
-Ambiguous seams, repeated TIR and exhausted paths elsewhere retain the defined
-conservative termination behavior.
+The faceted torus uses a four-pixel reference grid within its projected mirror
+region, requiring at least 60 transmitted chart samples and 16 re-entry chart
+samples so extra unobstructed background cannot satisfy the test. Duplicate,
+mirrored-transform, disconnected-instance, and priority-tie comparisons also
+verify the declared mirror region against their references. These measurements
+apply to stable samples in the declared mirror region, not every ray from the
+primary glass visible around its boundary. Ambiguous seams, repeated TIR and
+exhausted paths elsewhere retain the defined conservative termination behavior.
 
 Closed homogeneous volumes explicitly use `OpticalBoundaryMode::ClosedNested`
 or `ClosedPriority`. Volume caustics require the same explicit watertight, outward,
@@ -508,16 +431,6 @@ relabeled as scene-query counts. These counters establish bounded work, not GPU
 speed. No complete secondary path tracer or reflected caustic-cache lookup is
 claimed.
 
-The captured opaque-only reference issued 217,668 hardware paths and exactly
-217,668 scene queries using the plain kernel. The single clear slab used the
-same 217,668 admitted paths and 1,088,340 queries; three nested volumes used
-2,829,684. This is five and thirteen actual queries per path respectively,
-including interface coincidence validation. The three-query TIR-limit fixture
-reported real TIR events before exhausting its paths, and independent coincident
-instances reported ambiguity. These are completed work counters rather than
-timing measurements. Actual images, logs, final source hashes and metrics are
-under `Testing/smoke/dbg/reflection_optical_gpudbg` in the build directory.
-
 Run `python tests/integration/reflection_optical_smoke_tests.py` for the physical
 identities and negative image/counter cases, and
 `python tests/smoke/generate_reflection_optical_meshes.py --check` to verify the
@@ -544,45 +457,23 @@ primary-camera caustic cache. The script accepts the caustic executable and the
 same working-directory/output/logserver/`--require-hardware` arguments as the
 other capture runners. Its CTest name is `nwb_caustic_optical_capture_smoke`.
 
-The final four combined framebuffer captures pass the end-to-end harness:
-reflection changes 203,862 sphere pixels, camera refraction changes 10,156,
-and disabling caustics changes 36,229 ground pixels outside the sphere
-silhouette. Neither reflection nor camera-refraction toggling changes a ground
-pixel beyond the comparison threshold. The primary-glass reflection still
-requires AVBOIT optical composition when camera refraction is disabled: that
-variant reports the fixture's disabled camera-refraction state and uses the
-screen-space composition route, while hardware camera refraction is rejected.
-
-A geometry-based exterior oracle additionally selects 7,032 regular-grid samples
-whose reflected rays escape both the authored sphere mesh and the ground. It
-predicts their environment contribution from the disabled image, IOR 1.5,
-Schlick Fresnel and the fixed Reinhard/sRGB transform. All samples pass, with
-zero missing reflections, a minimum predicted-gain fraction of 0.97196 and RGB
-byte MAE 0.22628. This catches local dark patches that whole-image contribution
-counts can miss. The oracle rejects the saved defective image at seven samples.
-The final images, predictor metadata and lossless gallery are retained under
-`Testing/smoke/dbg/caustic_stage6_final_gpudbg`; the optical/combined CPU analysis
-suite passes 44 tests.
+The primary-glass reflection still requires AVBOIT optical composition when
+camera refraction is disabled: that variant reports disabled camera refraction
+and uses the screen-space composition route while hardware camera refraction is
+rejected. An exterior geometry oracle also samples rays escaping both the sphere
+mesh and ground, checking their environment contribution from the disabled
+reference image, IOR 1.5, Schlick Fresnel, and the fixed Reinhard/sRGB transform.
 
 Containment records remain immutable after candidate collection; bootstrap sorts
-scalar indices and constructs the ordered active media once. A GPU diagnostic
-identified the original destructive struct insertion losing a reversed entry/exit
-pair. The repair preserves geometry checks and physical transport limits instead
-of weakening the ambiguity policy. The 30-case optical suite passes again with
-the repaired shader under `Testing/smoke/dbg/reflection_stage6_final_optical_gpudbg`.
+scalar indices and constructs the ordered active media once so reversed entry/exit
+pairs are preserved. The neutral mesh resolver distinguishes no geometry
+attachment from an attached mesh whose descriptor/resources are unavailable: a
+model parent carrying renderer settings while spawned children supply geometry
+does not invalidate optical completeness, while missing attached geometry still
+does. Valid opaque deformation disables temporal trust without suppressing the
+plain reflection kernel.
 
-The neutral mesh resolver distinguishes no geometry attachment from an attached
-mesh whose descriptor/resources are unavailable. A model parent may carry renderer
-settings without a mesh; its spawned children supply geometry. Such parents do
-not invalidate optical completeness, while missing attached geometry still does.
-Valid opaque deformation disables temporal trust without suppressing the plain
-reflection kernel. Five behavior tests cover absent/static/runtime bindings and
-existing static fallback; all 342 ECS tests pass. All 12 temporal captures pass
-under `Testing/smoke/dbg/reflection_stage6_mesh_temporal_gpudbg`, including the
-posed red model's reflected footprint changing from 729 to 4,604 pixels with the
-4,422-pixel green control retained.
-
-## Stage7: accepted screen-trace feedback
+## Accepted screen-trace feedback
 
 The optional typed `screenFeedbackEnabled` setting defaults to false. It records
 smooth opaque/glass tile classes whose screen traces repeatedly miss, and reuses
@@ -597,110 +488,54 @@ Two banks of 8x8 tile/surface-class entries occupy 172,832 bytes at 960x720,
 including their 16-byte headers, about 168.8 KiB. The 953x713 NPOT fixture has the
 same rounded tile extent. Existing classification and argument-building tasks
 write disjoint entry/header ranges; feedback adds no separate GPU dispatch.
-The shared parameter block is 176 bytes and diagnostic counters are 96 bytes.
+The shared parameter block is 176 bytes and diagnostic counters are 100 bytes
+(`NWB_REFLECTION_COUNTER_SIZE = 100u`, 25 `u32` counters in
+`impl/assets/graphics/reflection/frame_constants.h`).
 The parameter block omits unused fields; its CPU mirror, shader declaration,
 upload size, and offset checks use the same current layout. Payload size is a
 layout fact; timing qualification remains separate.
 
 The leading parameter lane is an explicit `uint4` containing width, height,
-trace mode and hardware-enabled state. The remaining fields occupy tightly packed
-scalar lanes, for a 176-byte ABI. GPU probes isolated incorrect leading-field
-reads in the production classification path:
-the CPU upload and a minimal GPU reader agreed, while that path observed
-incorrect mode/width values and performed no reflection work. The explicit lane
-restores the contract. Offset checks cover all four fields. This evidence does
-not identify a particular compiler or driver stage as the cause.
+trace mode and hardware-enabled state, with the remaining fields occupying
+tightly packed scalar lanes for a 176-byte ABI verified by field-offset checks.
 
 Run the separate 24-capture suite through
 `reflection_smoke.py --suite feedback`, using the same executable, Testing
 working directory, output directory and logserver arguments as the other
 suites. `--feedback-cases offscreen_baseline,offscreen_feedback` selects a bounded
-pilot. New cases are `feedback_boundary`, `feedback_mutation` and
+pilot. Feedback cases cover `feedback_boundary`, `feedback_mutation` and
 `feedback_long_miss`; interactive launch accepts `--reflection-feedback on|off`,
 `--reflection-screen-steps 8..256` and `--reflection-extent native|npot`. The
 ordinary framebuffer is 960x720; the fixed NPOT preset is 953x713.
 
-All 24 captures pass with GPU debugging enabled. The nine smooth off/on image
-pairs are byte-identical, including opaque plus primary glass, provisional
-results, zero/64-ray budgets, ScreenSpace routing and the NPOT floor. The rough
-guard issues no bypass and passes its independent furnace energy check, with
-mean linear albedo error 0.012654. Completed counters preserve all 179,684
-accepted floor SSR hits per frame, and all 175,784 NPOT floor hits. The
-provisional wall preserves 3,352 positive-confidence returns with zero accepted
-SSR hits; its 64-ray budget prevents feedback bypass. Zero and 64-ray floor
-budgets, rough receivers and ScreenSpace-only routing also report zero bypass.
-
-The completed steady observations measure the following work. Each row averages
-36 completed source-frame observations; the means include periodic probe phases
-and are not GPU timing publication-window averages.
-
-| Scene | Mean SSR attempts, off → on | Mean actual hierarchy loads, off → on |
-| --- | ---: | ---: |
-| Offscreen markers, 96 steps | 217,668 → 13,586 | 1,950,558 → 121,742.39 |
-| Productive floor, 96 steps | 243,336 → 186,402.44 | 8,761,038 → 6,905,624.22 |
-| Opaque plus primary glass | 64,250 → 13,421.42 | 1,047,400 → 352,956.06 |
-| NPOT floor, 953x713 | 238,910 → 182,812.83 | 10,108,494 → 7,826,166.72 |
-| Long floor, 16 steps | 253,978 → 22,896.19 | 4,045,736 → 348,848.31 |
-
-The offscreen pair retains 217,668 hardware paths and 5,322 hits per steady
-frame; the long-floor pair retains 251,266 paths and 153,594 hits. Both issue
-actual periodic probes. The long-floor baseline independently qualifies as
-costly unsuccessful traversal: 9,143,208 attempts perform 145,646,496 hierarchy
-loads across 36 observations, averaging 15.92947 loads per attempt under the
-16-step bound. Of those attempts, 98.61484% exhaust the step budget. A separate
-96-step ScreenSpace capture verifies the direct/reflected panel positions near
-`(392,246)/(568,246)` and `(392,620)/(568,620)`.
-
-The first-mutation image is byte-identical to the fresh final scene. The green
-reflection moves 90 pixels left, against the independent prediction of
-90.06664 pixels, while the stationary red direct/reflected controls remain
-unchanged. Both changed/fresh images capture Graphics source frame 67, exactly
-matching their new feedback epoch's start. Both have exact completed-frame
-evidence: epoch 2, probe index 0, reset true, reused false and zero bypass.
-The scene mutation reports `SceneChanged`; the fresh scene's deliberate seed
-reset reports `SettingsChanged`. Positive screen returns increase from 1,410
-before the move to 3,352 on the first changed frame.
+The suite verifies byte-identical off/on smooth image pairs (across opaque plus
+primary glass, provisional results, zero/64-ray budgets, `ScreenSpace` routing,
+and the NPOT floor), blocks bypass for rough receivers and insufficient hardware
+budgets, checks furnace energy on rough guards, and confirms mutation
+resets (`SceneChanged` / `SettingsChanged`) against fresh final-scene images.
 
 Completed metadata distinguishes requested/enabled/reused control from actual
 bypass. The prior compatible potential-receiver bound must fit the hardware
 budget; `feedbackReused` alone does not prove that the GPU guard passed.
 Counters separately report potential receivers, any screen returns, bypassed
 pixels, probed surface classes, actual 64-bit hierarchy loads and exhausted-step
-misses. A latest-only completion query can skip an exact image frame. The
-epoch-start anchor still identifies a reset, but the report explicitly marks
-that exact-frame counter evidence unavailable. The changed/fresh captures in
-this run did include the exact source observations.
+misses. A latest-only completion query can skip an exact image frame; the
+epoch-start anchor still identifies a reset while unavailable exact-frame counter
+evidence is reported explicitly.
 
-The separate `--suite feedback-diagnostics-off` also passes all six captures
-under GPU debugging: offscreen, floor and opaque/glass with feedback off/on.
-All three image pairs are byte-identical. These frozen smooth cases disable
-reflection diagnostics and its statistics-based capture predicate, then use the
-ordinary readback after 65 prepared Graphics frames. Every completed readback
-identifies Graphics source frame 64, and the harness rejects all reflection
-statistics/history/feedback/optics logs. This establishes image equivalence
-without claiming unavailable feedback counter observations. The same
-`--feedback-cases` subset control is supported.
+The separate `--suite feedback-diagnostics-off` runs six off/on image-equivalence
+captures (`offscreen`, `floor`, and opaque/glass). These frozen smooth cases
+disable reflection diagnostics and its statistics-based capture predicate, then
+use the ordinary readback after 65 prepared Graphics frames and reject any
+reflection statistics/history/feedback/optics logs. `--feedback-cases` filtering
+remains supported.
 
-Both suites explicitly use optical query limit 16. Their manifests record
-executable and authored packed-volume hashes, excluding only exact contiguous
-canonical runtime pipeline-cache segments through the shared identity helper.
-Raw BMPs, lossless PNGs, per-launch logs and self-contained galleries are under
-`Testing/smoke/dbg/reflection_stage7_feedback_gpudbg` and
-`Testing/smoke/dbg/reflection_stage7_diagnostics_off_gpudbg`. CTest entries are
-`nwb_reflection_feedback_capture_smoke` and
+Both feedback suites explicitly use optical query limit 16. Their manifests
+record executable and authored packed-volume hashes, excluding only exact
+contiguous canonical runtime pipeline-cache segments through the shared identity
+helper. CTest entries are `nwb_reflection_feedback_capture_smoke` and
 `nwb_reflection_feedback_diagnostics_off_capture_smoke`.
 
-These results establish image preservation and reduced measured traversal work
-in the tested scenes. They do not establish a GPU speedup. See
-[Reflection performance](REFLECTION_PERFORMANCE.md) for the separate optimized
-diagnostics-off timing methodology and analysis of unrelated control scopes.
-Traversal counters alone do not justify changing the default. The older
-reflection, roughness, optical and combined-caustic regression coverage remains
-separate: all 358 ECS unit tests
-and six CPU test targets pass. The final 22 baseline, 14 roughness, 30 optical
-and four combined-caustic captures also pass under GPU debugging. Together
-with the 30 feedback captures, this completes 100 final GPU framebuffer checks.
-The combined sphere retains its exterior reflection contribution with no missing
-reflection samples in the independent geometric oracle. Final regression evidence
-is under `Testing/smoke/dbg/reflection_stage7_{all,rough,optical}_gpudbg` and
-`Testing/smoke/dbg/caustic_stage7_gpudbg`.
+Screen-miss feedback remains disabled by default; see
+[Reflection performance](REFLECTION_PERFORMANCE.md) for optimized
+diagnostics-off timing methodology and historical benchmark records.

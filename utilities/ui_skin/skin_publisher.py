@@ -1,5 +1,3 @@
-"""Publish generated UI skin files as one recoverable transaction."""
-
 import os
 from pathlib import Path
 import stat

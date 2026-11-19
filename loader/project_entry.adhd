@@ -76,7 +76,6 @@ using ProjectFrameClientSize = LoaderDetail::ProjectFrameClientSize;
 struct ProjectStartupContext{
     Core::GraphicsRuntime& graphics;
     Core::Alloc::GlobalArena& objectArena;
-    // The factory is copied into graphics configuration and must own any captured service lifetimes.
     Core::Filesystem::FilesystemFactory filesystemFactory;
 };
 
@@ -101,12 +100,10 @@ public:
     Core::Assets::AssetManager& assetManager;
     Core::Filesystem::IFilesystem& filesystem;
     Core::Telemetry::FrameGraphRegistry& frameGraphRegistry;
-    // Read-only timing and memory capture owned by the Frame.
     const Core::Perf::Session& perfSession;
     ShaderPathResolveCallback shaderPathResolver;
     TelemetryCaptureCallback telemetryCapture;
     TelemetryUploadFlushCallback telemetryUploadFlush;
-    // Controls both GPU-timing gates without enabling telemetry upload.
     PerfCaptureCallback perfCapture;
     RequestQuitCallback requestQuit;
 

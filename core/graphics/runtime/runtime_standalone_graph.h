@@ -24,8 +24,6 @@ namespace GraphicsModuleDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One reusable owner set for a synchronous standalone graph submission.
-// Returning a lease resets declarations and execution state but keeps container capacity and the recorded graph's command-list cache.
 struct StandaloneGraphWorkspace final : NoCopy{
     GpuTaskGraph graph;
     GpuTaskGraphAnalysis analysis;
@@ -51,8 +49,6 @@ public:
     void reset();
 };
 
-
-// Overlapping or reentrant submissions each lease their own workspace, so the pool grows only to the peak overlap.
 class StandaloneGraphWorkspacePool final : NoCopy{
 private:
     using WorkspaceOwner = GlobalUniquePtr<StandaloneGraphWorkspace>;
@@ -84,7 +80,6 @@ public:
 
 
 public:
-    // Device teardown must drop device-bound command lists first. False means a submission still holds a workspace.
     [[nodiscard]] b8 releaseCommandListCaches()noexcept;
 
 

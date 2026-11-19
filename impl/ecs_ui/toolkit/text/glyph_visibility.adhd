@@ -30,7 +30,6 @@ Expected<Rect> AtlasRectangle(in PlacedGlyph glyph, in BakedFontAtlas atlas, in 
     return ToTextGlyphAtlasRect(rectangle.value());
 }
 
-// Faces with untrusted coverage bounds stay eligible for raster preparation.
 TextGlyphIntersection Candidate(in PlacedGlyph glyph, in SharedBakedFontAtlas selectedAtlas, in f32 fontSize, in f32 physicalSize, in Point topLeft, in Rect clip, in Point pixelScale){
     const TextGlyphIntersection input = ValidateTextGlyphCandidateInputs(glyph.position, topLeft, fontSize, physicalSize, clip, pixelScale);
     if(input != TextGlyphIntersection::Visible)

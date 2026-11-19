@@ -63,12 +63,9 @@ void AppendOpaqueGbufferResourceUses(in DeferredGraphResourceImportResult resour
         uses.push_back(ReadBufferUse(resources.csgCutters, inputs.csgCutterRange));
         uses.push_back(ReadUse(resources.csgClipContextSlots, ResourceStates::ConstantBuffer));
         uses.push_back(ReadUse(resources.csgIntervalSampleState, ResourceStates::ConstantBuffer));
-        // CSG resolves target-specific images through the deferred bindless-slot buffer selected in its context.
         uses.push_back(ReadUse(resources.currentBindlessSlots, ResourceStates::ConstantBuffer));
     }
     if(inputs.hasOpaqueCsgFrameWork){
-        // Payloads and events never load priors. Interval ID + event count keep sparse-write validity after clears; only they need ReadWrite.
-        // Keeping the payloads write-only also permits their first graph use to begin at a fresh texture's native Unknown state.
         uses.push_back(WriteTextureUse(resources.csgCapBackNormal, inputs.csgPeelSubresources, ResourceStates::UnorderedAccess));
         uses.push_back(WriteTextureUse(resources.csgIntervalDepth, inputs.csgPeelSubresources, ResourceStates::UnorderedAccess));
         uses.push_back(ReadWriteTextureUse(resources.csgIntervalId, inputs.csgPeelSubresources, ResourceStates::UnorderedAccess));

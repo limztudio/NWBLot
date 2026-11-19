@@ -43,7 +43,6 @@ b8 ShouldResetStaleRecycledGpuFrame(in b8 alreadyAssignedPending, in u64 frameGe
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The caller joins GPU and graph work before invalidating the renderer.
 [cpp_type_alias(ShaderPathResolveCallback, ShaderArchivePathResolver)]
 class GpuRenderer : IGpuTaskGraphOutputLayerContributor, NoCopy{
     private ArenaObjectSlot<GpuRendererState> m_state = ArenaObjectSlot<GpuRendererState>();
@@ -148,7 +147,6 @@ class GpuRenderer : IGpuTaskGraphOutputLayerContributor, NoCopy{
         return true;
     }
 
-    // Rejection leaves the caller's snapshot intact.
     [cpp_rvalue_overload]
     public b8 submit(mut DrawSnapshot snapshot){
         mut GpuRendererState state = this.m_state.value();
@@ -166,7 +164,6 @@ class GpuRenderer : IGpuTaskGraphOutputLayerContributor, NoCopy{
                 slot.inFlight.reset();
         }
         for(mut auto frame : state.m_frames){
-            // Completed GPU work can still have graph payload owners; mutate only an exclusively retained frame.
             if(!IsExclusivelyRetainedGpuFrame(frame.valid(), frame.referenceCount()))
                 continue;
             AtomicThreadFence(MemoryOrder::acquire);

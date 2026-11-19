@@ -257,7 +257,6 @@ void GpuRoutingCheckIndexedScores<const usize TaskCount>(in GpuRoutingPartialDag
     ScratchStorageVector<GpuTaskQueuePlacementGroup> groups = ScratchStorageVector<GpuTaskQueuePlacementGroup>(scratch.scratchArena);
     ASSERT_TRUE(BuildQueuePlacementGroups(view, analysis, topology, scratch.scratchArena, groups).has_value());
 
-    // Scalar Floyd-Warshall is independent of packed rows, word bounds, and queue-cost membership.
     Vector<Array<b8, TaskCount>> reachable = Vector<Array<b8, TaskCount>>();
     reachable.resize(TaskCount);
     for(in GpuTaskDependencyEdge edge : analysis.schedulingEdges())
@@ -276,7 +275,6 @@ void GpuRoutingCheckIndexedScores<const usize TaskCount>(in GpuRoutingPartialDag
         }
     }
     GpuRoutingExpectIndexedScores<TaskCount>(view, analysis, assignments, indices, topology, reachability, scoringData, queues, groups, reachable);
-    // Change all three queue masks incrementally, including tasks across bitset words.
     for(usize row = 0u; row < assignments.size(); row += 5u){
         const GpuPhysicalQueueId destination = queues[(row + 1u) % queues.size()].id;
         scoringData.updateAssignmentLoads(assignments[row].task, assignments[row].queue, destination);
@@ -1024,7 +1022,6 @@ void VerifyGpuRouting_SparsePartialRowsAndDenseThresholdsBoundPeakScratch(){
         const usize matrixBytes = testCase.taskCount * wordsPerRow * 8u;
         const usize denseBytes = matrixBytes + testCase.taskCount * s_DenseReachabilityTaskMetadataBytes;
         if(testCase.shape == GpuRoutingPartialDagShape::ReversedPairs){
-            // A partial last tile and backward cross-word edges must not allocate the full square matrix.
             EXPECT_LT(scratch.scratchArena.memoryStats().peakUsedBytes, matrixBytes);
             EXPECT_TRUE(reachability.reaches(view.taskAt(512u).id, view.taskAt(511u).id));
             EXPECT_TRUE(reachability.reaches(view.taskAt(64u).id, view.taskAt(63u).id));
@@ -1185,7 +1182,6 @@ void GpuRoutingExpectScoresWithoutMasks(
     in Span<GpuPhysicalQueueInfo> queues,
     in usize taskCount
 ){
-    // Zero capacity proves neither optional index allocated storage, rather than merely clearing its contents.
     EXPECT_EQ(scoringData.taskCostGroups.capacity(), 0u);
     EXPECT_EQ(scoringData.assignedCostWords.capacity(), 0u);
     for(usize candidateIndex = 0u; candidateIndex < topology.queueCount; ++candidateIndex){
@@ -1851,7 +1847,6 @@ void VerifyGpuRouting_SameClassBalancingCountsMergedAndUnroutedPrefixCosts(){
     ASSERT_TRUE(Analyze(graph, operationScratch, analysis));
     ASSERT_TRUE(Assign(assignments, operationScratch, graph, analysis, topology));
 
-    // Keep merged work on queue zero and route task six to queue seven by affinity.
     Array<u16, 8> expectedQueueIndices = Array<u16, 8>();
     expectedQueueIndices[0u] = 0u;
     expectedQueueIndices[1u] = 0u;

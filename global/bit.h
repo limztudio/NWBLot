@@ -22,13 +22,11 @@ template<typename T>
     return static_cast<T>(1) << bitIndex;
 }
 
-// A difference of exactly half the sequence space is unordered.
 [[nodiscard]] inline constexpr b8 IsNewerSerialU32(const u32 value, const u32 previous)noexcept{
     const u32 difference = value - previous;
     return difference != 0u && difference < 0x80000000u;
 }
 
-// Equal values are admitted; a difference of half the sequence space is not.
 [[nodiscard]] inline constexpr b8 IsNotOlderSerialU32(const u32 value, const u32 previous)noexcept{
     return value - previous < 0x80000000u;
 }
@@ -51,7 +49,6 @@ template<typename T>
     return static_cast<T>(value & static_cast<T>(0u - value));
 }
 
-// Alignment must be a nonzero power of two.
 [[nodiscard]] inline constexpr usize AlignmentOffsetPowerOfTwo(const usize address, const usize alignment)noexcept{
     return (alignment - (address & (alignment - 1u))) & (alignment - 1u);
 }
@@ -83,7 +80,6 @@ template<typename T>
     return (static_cast<u64>(low) << 32u) | static_cast<u64>(high);
 }
 
-// Packs the first two 32-bit Sobol dimensions into the low and high words.
 [[nodiscard]] inline constexpr u64 ComputeSobol2U32(u32 index)noexcept{
     u32 x = 0u;
     u32 y = 0u;

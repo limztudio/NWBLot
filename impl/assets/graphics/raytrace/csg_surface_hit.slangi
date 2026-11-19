@@ -26,7 +26,6 @@ bool nwbRayTraceCsgCutterNormalUnique(const NwbCsgRayCutter cutter, const float3
     const float3 error = NWB_CSG_RAY_ROUNDOFF_EPSILON_SCALE * NWB_FLOAT_EPSILON * (abs(cutter.parameter0.xyz) + float3(dot(abs(cutter.worldToShapeRow0), abs(point)), dot(abs(cutter.worldToShapeRow1), abs(point)), dot(abs(cutter.worldToShapeRow2), abs(point))));
     const float maximum = max(q.x, max(q.y, q.z));
     const float tolerance = 2.0 * max(error.x, max(error.y, error.z));
-    // Box edges/corners have valid removed-solid membership but no unique transmitted cap normal.
     const uint faceCount = uint(q.x >= maximum - tolerance) + uint(q.y >= maximum - tolerance) + uint(q.z >= maximum - tolerance);
     return faceCount == 1u;
 }
@@ -93,7 +92,6 @@ NwbRayTraceGeometryHit nwbRayTraceCsgBoundaryGeometry(const uint contextSlot, co
                 || !nwbCsgAnalyticCutterNormal(other.shapeType, other.worldToShapeRow0, other.worldToShapeRow1, other.worldToShapeRow2, other.parameter0, worldPosition, normal)
                 || dot(normal, geometry.geometricNormal) < 1.0 - NWB_CSG_RAY_ROUNDOFF_EPSILON_SCALE * NWB_FLOAT_EPSILON
             ){
-                // Coincident cutter endpoints may share a normal; distinct normals form an unresolved union crease.
                 geometry.failure = NWB_CSG_RAY_FAILURE_AMBIGUOUS_NORMAL;
                 geometry.distance = minimum;
                 return geometry;
@@ -121,7 +119,6 @@ NwbRayTraceCsgBoundaryCheck nwbRayTraceCsgCheckedBoundary(const NwbRayTraceGeome
 }
 #endif
 
-// Optical bootstrap, tie checks and continuations share one collection body instead of duplicating its bounded crossing arrays at every call site.
 [noinline]
 NwbRayTraceGeometryHit nwbRayTraceCsgGeometryHit(
     const uint contextSlot,
@@ -149,7 +146,6 @@ NwbRayTraceGeometryHit nwbRayTraceCsgGeometryHit(
         const float tolerance = NWB_OPTICS_POSITION_TOLERANCE_SCALE * max(nwbOpticsPositionUncertainty(origin), nwbOpticsPositionUncertainty(position));
         const float windowMinimum = max(0.0, geometry.distance - tolerance);
         const float windowMaximum = geometry.distance + tolerance;
-        // Replayed boundaries still require the same generated-cap and coincident-cutter normal audits as a fresh collection.
         const NwbRayTraceGeometryHit window = nwbRayTraceCsgBoundaryGeometry(contextSlot, materialSlot, instanceIndex, origin, direction, windowMinimum, windowMaximum, resolution.window);
         geometry.certificate.reusable = true;
         geometry.certificate.window = nwbRayTraceCsgCheckedBoundary(window);

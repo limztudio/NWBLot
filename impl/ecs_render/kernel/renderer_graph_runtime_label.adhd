@@ -26,7 +26,6 @@ class RendererGraphRuntimeLabel{
                 label
             );
 
-            // Borrows plan topology + packet slots under the serialization contract; never the registry (recompile can move the plan).
             const Span<GpuPhysicalQueueInfo> runtimeQueues = runtimeQueueTopology.queueSpan();
             for(usize queueIndex = 0u; queueIndex < physicalQueueRuntimeStatistics.size(); ++queueIndex){
                 if(!AppendPhysicalQueueRuntimeTelemetryEntry(

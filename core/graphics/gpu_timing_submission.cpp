@@ -132,8 +132,6 @@ b8 GpuTimingSubmissionTicket::prepareSubmission(const Span<CommandList* const> c
         return false;
     }
 
-    // Queue::submit omits command lists whose buffer is absent.
-    // Reject this before submit: a split-scope producer must never run without its end-timestamp consumer.
     for(CommandList* const commandList : commandLists){
         if(!commandList || !commandList->hasCommandBuffer()){
             waitTokens.resize(initialWaitTokenCount);

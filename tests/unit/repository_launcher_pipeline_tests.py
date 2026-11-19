@@ -1,6 +1,3 @@
-"""Repository launcher dry-run domains, executable metadata, and pipeline launch behavior."""
-
-
 import importlib.util
 import json
 import subprocess
@@ -235,7 +232,6 @@ class PipelineLauncherTests(unittest.TestCase):
         resolve = self.patch(BuildController, LIT_RESOLVE_EXECUTABLE_PATH, side_effect=lambda settings, target, override, base_name, dry_run: override or self.tool_paths[target],)
         return configure, build, resolve
 
-
     def test_build_failure_propagates_without_resolving_or_launching_tools(self):
         _, build, resolve = self.prepare_pipeline_build()
         build.side_effect = SystemExit(21)
@@ -248,7 +244,6 @@ class PipelineLauncherTests(unittest.TestCase):
         self.stage.assert_not_called()
         self.process.assert_not_called()
         self.assertFalse(self.cache.exists())
-
 
     def test_pipeline_dry_run_has_no_subprocess_or_output_side_effects(self):
         with mock.patch(LIT_BUILTINS_PRINT), mock.patch.object(subprocess, LIT_POPEN) as popen:

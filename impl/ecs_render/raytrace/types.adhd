@@ -30,7 +30,6 @@ const Name s_RenderNameSoftwareSceneRefit = "SoftwareSceneRefit";
 const Name s_RenderNameRenderShadowPrepareSceneRefitInputsUpload = "render.shadow_prepare.scene_refit_inputs_upload";
 const Name s_RenderNameRenderShadowPrepareSceneRefit = "render.shadow_prepare.scene_refit";
 
-// Hash semantic scene inputs, not padded object representations.
 const u32 s_SceneStaticCacheHashVersion = 2u;
 const StringView s_SceneShadowInstanceMaterialName = "render.deferred_effects.instance_material";
 const StringView s_SceneShadowMaterialTypedName = "render.deferred_effects.material_typed";
@@ -48,16 +47,13 @@ const StringView s_SceneGeometryDomainLabel = "Scene Acceleration and Geometry";
 const StringView s_BlasNameSuffix = ":blas";
 const StringView s_SoftwareSceneRefitInputsName = "software_scene_refit_inputs";
 const usize s_TraceResourceSetUseCapacity = 2u;
-// Finite infinity for CPU BVH bounds.
 const f32 s_RayTracingFiniteInfinity = 1e30f;
 const u32 s_RayTracingTriangleIndexCount = 3u;
 const u32 s_RayTracingAllInstanceMask = 0xFFu;
-// Heap geometry buffers per mesh.
 const u32 s_HardwareRayTracingMeshBufferCount = 3u;
 const u32 s_SoftwareRayTracingMeshBufferCount = 4u;
 const usize s_TlasInitialInstanceCapacity = 128u;
 const usize s_SceneBvhInitialInstanceCapacity = 64u;
-// Fixed-grid binned SAH; leaf cost weights instance intersection cost.
 const u32 s_SceneBvhAxisCount = 3u;
 const u32 s_SceneBvhSahBinCount = 12u;
 const f32 s_SceneBvhSahTraversalCost = 1.0f;
@@ -69,7 +65,6 @@ const u32 s_RtShadowTransparentInstanceMask = 0x8u;
 const u32 s_RtCsgInstanceMask = 0x10u;
 const u32 s_RtRefractiveInstanceMask = 0x20u;
 const Name s_SceneTlasDebugName = "scene_tlas";
-// Conservative top-level bounds for transparent-shadow rays.
 const f32 s_SwShadowSceneBoundsMinPadding = 0.25f;
 const f32 s_SwShadowSceneBoundsRelativePadding = 0.10f;
 const usize s_FixedSceneResourceUseCount = 6u;
@@ -83,9 +78,6 @@ const usize s_SceneShadowBufferCount = 5u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Semantic identities selected by the current scene preflight, including direct transform and material edits.
-// Runtime deformation is unstamped.
-// Static mesh, texture and shader resources remain immutable until invalidation.
 class RayTracingSceneContentStamp{
     public RayTracingSceneContentStamp(){
         this.geometry = 0u;

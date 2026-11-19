@@ -278,7 +278,6 @@ void VerifyBuildInputSelection_ExplicitRootsPreserveFirstSpellingAndCallerDuplic
     ASSERT_EQ(exact.size(), 3u);
     EXPECT_EQ(exact[0u].path, JoinGraphicsPath2(self.ownedRoot(), s_AssetsDirectory, "Case").lexicallyNormal());
     EXPECT_EQ(exact[1u].path, JoinGraphicsPath2(self.ownedRoot(), s_AssetsDirectory, "case").lexicallyNormal());
-    // Explicit roots remain exact directories rather than climbing to their assets ancestor.
     EXPECT_EQ(exact[2u].path, JoinGraphicsPath3(self.ownedRoot(), "impl", s_AssetsDirectory, "graphics").lexicallyNormal());
     EXPECT_EQ(exact[2u].virtualRoot.view(), s_ProjectVirtualRoot);
     const Expected<ResolvedAssetRootVector, AssetRootResolutionError> hostResult = ResolveTestAssetRoots(self.ownedRoot(), sources, false, AssetRootDuplicatePolicy::HostFilesystem, scratch);
@@ -471,7 +470,6 @@ void VerifyAssetsGraphics_CsgShapeCookAndRuntimeUseCanonicalIdsRegardlessOfRegis
 
     TestValueSlot<CsgShapeCookEntryVector> cookedEntriesStorage;
     mut CsgShapeCookEntryVector cookedEntries = cookedEntriesStorage.constructIn(testArena);
-    // The cooker normalizes its input by name, while the runtime deliberately receives the inverse order.
     AddCsgShapeCookEntry(zebraShape, zebraModule, zebraInclude, testArena, cookedEntries);
     AddCsgShapeCookEntry(alphaShape, alphaModule, alphaInclude, testArena, cookedEntries);
     ASSERT_TRUE(AssignCsgShapeCookIds(cookedEntries));
@@ -753,7 +751,6 @@ void VerifyGatherInputs_MergedPayloadIdentitySurvivesLaterIdenticalDuplicate(mut
     ASSERT_FALSE(self.hasFatalFailure());
     self.writeInputs("c", 1u, 4u, 5u);
     ASSERT_FALSE(self.hasFatalFailure());
-    // Equal payloads collapse while the distinct third payload is appended once.
     self.enableTestMerge();
     ASSERT_TRUE(GatherAssets(self.m_options));
     EXPECT_EQ(self.mergeCallCount(), 1u);

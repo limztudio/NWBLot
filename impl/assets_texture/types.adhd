@@ -18,7 +18,7 @@ const u32 s_TextureRgba16FloatComponentCount = 4u;
 const u32 s_TextureRgba16FloatBytesPerTexel = 8u;
 const u32 s_TextureRgba16FloatAlphaByteOffset = 6u;
 const u64 s_TextureUastcBytesPerBlock = 16u;
-const u32 s_TextureBinaryMagic = 0x54455831u; // TEX1
+const u32 s_TextureBinaryMagic = 0x54455831u;
 const u32 s_TextureBinaryVersion = 4u;
 const usize s_TextureHeaderBinaryBytes = 44u;
 const usize s_TextureMipLevelBinaryBytes = 40u;
@@ -39,7 +39,6 @@ class TextureMipLevel{
     public u32 height = 0u;
     public u32 blockCountX = 0u;
     public u32 blockCountY = 0u;
-    // 2D payload planes per mip: one for 2D, six for cubemap, reduced Z extent for 3D.
     public u32 sliceCount = 1u;
 }
 

@@ -13,7 +13,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Admission uses a u64 bound; accumulation keeps the unsigned input type's arithmetic.
 template<typename T>
     requires(IsIntegral_V<T> && !IsSigned_V<T> && !IsSame_V<T, b8> && sizeof(T) <= sizeof(u64))
 [[nodiscard]] inline Expected<T> TrySumUnsignedWithU64Limit(const Span<const T> values)noexcept{

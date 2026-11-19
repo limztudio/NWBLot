@@ -86,7 +86,6 @@ namespace GpuPacketRuntimeDetail{
     ;
 }
 
-// External completions may come from any queue. With an imported acquire, the completion must prove the exact releasing queue.
 [[nodiscard]] b8 ValidateInitialOwnershipCompletions(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packetID)noexcept{
     const GpuCompiledPacketView packetView = planAccess.packet(packetID);
     if(!packetView.valid())

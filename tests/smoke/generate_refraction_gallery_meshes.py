@@ -85,7 +85,6 @@ class Mesh:
         points = [self.positions[index] for index in position_indices]
         normal = unit(cross(sub(points[1], points[0]), sub(points[2], points[0])))
         center = mul(tuple(sum(point[axis] for point in points) for axis in range(3)), 1.0 / len(points))
-        # The prism is convex and centered on the origin, so every face normal points away from the origin.
         if dot(normal, center) < 0.0:
             position_indices = list(reversed(position_indices))
             uvs = list(reversed(uvs))

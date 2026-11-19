@@ -224,7 +224,6 @@ b8 PublishEcsUiPointerCapturePart(mut UiEditPointerCaptureTests self, in b8 gest
     if(gesture){
         targets[1u].gestureReference = targets[1u].rectangle;
     }
-    // The copied router publication leaves the already accepted text geometry owned by the host.
     ++self.core.m_generation;
     if(!self.core.m_context.input().commitTargets(targets, self.core.m_generation)){
         return false;

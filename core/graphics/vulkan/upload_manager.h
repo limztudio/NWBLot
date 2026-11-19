@@ -39,7 +39,6 @@ private:
         enum Enum : u8{
             Upload,
             Scratch,
-            // CPU-written, device-addressed acceleration-structure build inputs such as TLAS instances and BLAS transforms.
             AccelStructBuildInput,
         };
     };
@@ -68,8 +67,6 @@ private:
 
 
 private:
-    // The owning list keeps every chunk address stable.
-    // Accepted submissions traverse only this intrusive active chain, so accumulated retired storage cannot increase the post-native-accept commit cost.
     struct QueueChunkLedger{
         GpuPhysicalQueueId queue;
         BufferChunkList chunks;

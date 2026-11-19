@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Renderer A/B coverage and wall-frame evidence tests."""
 
 import copy
 from pathlib import Path

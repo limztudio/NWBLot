@@ -75,12 +75,9 @@ struct TrackedResourceAccessLists{
 b8 GpuResourceHazardTracker::Append(const GpuTaskGraph::DeclarationReadView& graph, const Span<const GpuTaskId> orderedTasks, Alloc::ScratchArena& scratchArena, GpuInferredDependencyCollector& edgeCollector, GpuTaskId& invalidTask, GpuGraphResourceId& invalidResource){
     using namespace __hidden_gpu_resource_hazard_tracker;
     using namespace GpuTaskGraphCompilerDetail;
-    // Process physical resource use in the semantic stable order.
-    // Explicit and version edges outrank declaration order; per-resource state emits only the nearest RAW/WAR/WAW deps.
     usize potentialAccessCount = 0u;
     for(const GpuTaskId task : orderedTasks)
         potentialAccessCount += graph.taskAt(task.index).resourceUseCount;
-    // Resource-local lists retain active accesses in their original order and unlink overwritten ranges.
     Vector<TrackedResourceAccessLists, Alloc::ScratchArena> resourceAccesses(potentialAccessCount == 0u ? 0u : graph.resourceCount(), scratchArena);
     Vector<TrackedResourceAccess, Alloc::ScratchArena> writers(scratchArena);
     Vector<TrackedResourceAccess, Alloc::ScratchArena> readers(scratchArena);

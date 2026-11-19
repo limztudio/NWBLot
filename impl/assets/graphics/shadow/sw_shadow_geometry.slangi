@@ -18,7 +18,6 @@
 #include "../common/math.slangi"
 #include "../bvh/instance_material.slangi"
 
-// Global descriptor-heap accessors for per-mesh BVH nodes, positions, indices, and attributes.
 #include "../bvh/bindless_heap_bvh.slangi"
 #include "../bvh/bindless_heap_rt.slangi"
 
@@ -26,17 +25,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Software-shadow scene geometry, transform helpers, and attribute unpacking via g_NwbSwShadowMaterialContextSlots.
-
-// Inverse-transpose normal to world; matches raster under uniform scale. Guards singular transforms.
 float3 nwbSwShadowTransformNormal(const NwbSwBvhInstance instance, const float3 objectNormal){
     const float3 worldNormal = nwbSwBvhTransformNormal(instance, objectNormal);
     return nwbSafeNormalize(worldNormal, float3(0.0, 0.0, 1.0));
 }
 
-// Unpacks a triangle-corner shadow attribute (Half4U normal at +0, Float2U uv0 at +8) from the per-mesh attribute buffer.
 NwbRayTraceVertexAttrib nwbSwShadowLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
-    // attributeSlot is a non-uniform global heap slot; nwbHeapRawBuffer() applies the required decoration per load.
     const uint base = attributeIndex * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES;
     const uint2 packedNormal = nwbHeapRawBuffer(attributeSlot).Load2(base);
     const uint2 packedUv0 = nwbHeapRawBuffer(attributeSlot).Load2(base + NWB_RAYTRACE_VERTEX_ATTRIBUTE_UV0_BYTE_OFFSET);

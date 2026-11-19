@@ -2,10 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Reduced-to-full joint-bilateral upsample gated by distance + normal. Mirrors caustic stage-2 plus a normal gate.
-// Output: rgb = normalized HDR irradiance (no [0,1] clamp), a = continuous ambient-blend coverage.
-
-
 #include "surfel_heap_resources.slangi"
 #include "surfel_gbuffer.slangi"
 #include "surfel_coverage.slangi"
@@ -45,18 +41,16 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
 
     const int3 fullCoord = int3(int2(pixel), 0);
-    // G-buffer vectors are RGBA16F. Fetch compact, widen where filter precision matters.
     const half3 rawNormalSample = half3(nwbSurfelUpsampleGbufferNormal().Load(fullCoord).xyz);
     const float3 rawNormal = float3(rawNormalSample);
     if(dot(rawNormal, rawNormal) < NWB_SURFEL_GBUFFER_NORMAL_LENGTH_SQUARED_MIN){
-        g_NwbSurfelUpsampleOutput[pixel] = float4(0.0, 0.0, 0.0, 0.0);   // background -> hemiAmbient in lighting
+        g_NwbSurfelUpsampleOutput[pixel] = float4(0.0, 0.0, 0.0, 0.0);
         return;
     }
     const float3 centerNormal = float3(nwbSurfelDecodeGbufferNormal(rawNormalSample));
     const half3 centerWorldSample = half3(nwbSurfelUpsampleGbufferWorldPosition().Load(fullCoord).xyz);
     const float3 centerWorld = float3(centerWorldSample);
 
-    // Sigma from this pixel's own spacing (max of +x/+y for grazing). A few pixels of tolerance keeps same-surface taps.
     const int2 rightFull = int2(min(int(pixel.x) + 1, int(fullWidth) - 1), int(pixel.y));
     const int2 downFull = int2(int(pixel.x), min(int(pixel.y) + 1, int(fullHeight) - 1));
     const half3 rightWorldSample = half3(nwbSurfelUpsampleGbufferWorldPosition().Load(int3(rightFull, 0)).xyz);
@@ -71,7 +65,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     nwbSurfelUpsampleHalfIrradiance().GetDimensions(halfWidth, halfHeight);
     const uint factor = uint(g_NwbHeapSurfelConstantBuffers[g_NwbSurfelHeapPushConstants.constantsHeapSlot].screenHeightPad.y);
 
-    // Reduced-grid index follows the resolve's top-left point sample at p/factor.
     const float2 src = float2(pixel) / float(factor);
     const int2 baseTexel = int2(floor(src));
     const float2 lerpFrac = src - float2(baseTexel);
@@ -82,9 +75,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     [unroll] for(int j = 0; j < NWB_SURFEL_UPSAMPLE_TAP_SIDE; ++j){
         [unroll] for(int i = 0; i < NWB_SURFEL_UPSAMPLE_TAP_SIDE; ++i){
             const int2 tap = int2(clamp(baseTexel.x + i, 0, int(halfWidth) - 1), clamp(baseTexel.y + j, 0, int(halfHeight) - 1));
-            // Target is RGBA16F. Keep payload native-half in transport; geometry and accumulation stay FP32.
             const half4 tapValue = half4(nwbSurfelUpsampleHalfIrradiance().Load(int3(tap, 0)));
-            // Recover the tap's geometry from the SAME full texel the resolve gathered at (tap * factor, top-left).
             const int2 tapFull = int2(min(uint(tap.x) * factor, fullWidth - 1u), min(uint(tap.y) * factor, fullHeight - 1u));
             const half3 tapRawNormalSample = half3(nwbSurfelUpsampleGbufferNormal().Load(int3(tapFull, 0)).xyz);
             const float3 tapRawNormal = float3(tapRawNormalSample);
@@ -92,14 +83,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 continue;
             const float3 tapNormal = float3(nwbSurfelDecodeGbufferNormal(tapRawNormalSample));
             if(!nwbSurfelUpsampleNormalCompatible(dot(tapNormal, centerNormal)))
-                continue; // different surface (crease) -> would leak GI across the edge
+                continue;
             const half3 tapWorldSample = half3(nwbSurfelUpsampleGbufferWorldPosition().Load(int3(tapFull, 0)).xyz);
             const float3 tapWorld = float3(tapWorldSample);
             const float3 d = tapWorld - centerWorld;
             const float bilinearWeight = (i == 0 ? 1.0 - lerpFrac.x : lerpFrac.x) * (j == 0 ? 1.0 - lerpFrac.y : lerpFrac.y);
             const float weight = nwbSurfelUpsampleGeometryWeight(bilinearWeight, dot(d, d), invTwoSigmaWorldSq);
             const float coveredWeight = nwbSurfelUpsampleCoveredWeight(weight, float(tapValue.a));
-            // Uncovered taps still count toward weight, so coverage fades across gaps without diluting the estimate.
             compatibleWeightSum += weight;
             coveredWeightSum += coveredWeight;
             irradianceSum += coveredWeight * float3(tapValue.rgb);

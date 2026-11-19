@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Reject malformed density fixtures, incomplete cost accounting, and contaminated wall timing."""
 
 import contextlib
 import io
@@ -214,7 +213,6 @@ class RefractionDensityBenchmarkTests(unittest.TestCase):
     def test_old_extent_and_unsealed_boundary_reports_cannot_count_as_target_warmup(self):
         sample = lambda frames: {benchmark.FRAME: ScopeSample(1, frames)}
         reports = [sample(10000), sample(10000), sample(10000), sample(20), sample(30), sample(50), sample(500)]
-        # Discard the unsealed third header present at resize confirmation.
         start, retained = benchmark.retain_target_reports(reports, 3, 2, 100)
         self.assertEqual(start, 6)
         self.assertEqual(retained, reports[6:])

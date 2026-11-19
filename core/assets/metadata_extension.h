@@ -55,7 +55,6 @@ private:
     NotNull<DestroyFunction> m_destroy;
 };
 
-// The allocation arena must outlive the extension, including transfers between maps.
 using ParsedMetadataExtension = UniquePtr<void, ParsedMetadataExtensionDeleter>;
 
 

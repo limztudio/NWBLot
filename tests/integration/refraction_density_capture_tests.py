@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Reject incomplete, shifted, stale, and physically unrelated density captures."""
 
 import argparse
 from pathlib import Path

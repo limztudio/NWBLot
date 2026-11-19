@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Qualify numeric draft/value separation through OS input and displayed GPU state."""
+
 from __future__ import annotations
 
 import json
@@ -135,7 +135,6 @@ class NumericEditRun:
                 raise SmokeSkip("the numeric editor fixture needs a logical client of at least 640x400")
             if report is not None and report["model_matches"] and report["geometry_matches"] and report["extra_matches"]:
                 if (extent is None or tuple(report["extent"]) == extent) and all(probe[LIT_PASSED] or probe["name"].endswith("_caret") for probe in report["probes"]):
-                    # Wait for the next blink cycle only when the caret was not yet visible.
                     sample = self._caret_probe_sample(snapshot)
                     if sample is not None:
                         column, first_row, end_row, color, tolerance = sample
@@ -342,7 +341,6 @@ class NumericEditRun:
         self.checkpoint("resize_preserves_typed_and_canonical_drafts", extent=(800, 600))
         self.focus(LIT_INTEGER, "resized_focus_precedes_long_numeric_draft")
         long_integer = "0" * 64 + LIT_INTEGER_MAXIMUM_TEXT
-        # Drain each native input batch so the host queue never overflows.
         self.native.replace_text(long_integer[:32])
         self.draft_checkpoint("long_integer_first_native_batch_is_displayed", LIT_I, long_integer[:32], status=0, dirty=True, extent=(800, 600))
         self.native.text(long_integer[32:64])

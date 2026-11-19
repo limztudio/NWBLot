@@ -2,9 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Stage-3 indirect args: clamp append count, write {ceil(count/traceGroupSize),1,1} (0 = valid no-op), stash tail guard.
-
-
 #include "sw_binding_slots.h"
 #include "sw_shadow_heap_resources.slangi"
 
@@ -12,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The append counter and indirect arguments are both heap-selected writable uint buffers.
 #define g_NwbSwShadowEdgeCounter nwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.edgeCounterStorageSlot)
 #define g_NwbSwShadowIndirectArgs nwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.indirectArgsStorageSlot)
 

@@ -164,7 +164,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     this.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalClearTask = GpuTaskId();
     this.resetDeferredFrameTaskIdsAndFlags();
     this.resetDeferredTaskGraphRuntime();
-    // Declaration runs between artifact discard and execution-time compilation.
     const Timer declarationBegin = TimerNow();
     if(!this.declareFrameTimingBeginTask(frameTimingTransaction))
         return;
@@ -274,7 +273,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const Span<GpuGraphResourceId> causticTraceGeometryResources = SelectFrameTraceGeometry(traceGeometry, declaresHardwareCaustics);
     const GpuGraphResourceSetId causticTraceGeometrySet = SelectFrameTraceGeometrySet(traceGeometry, declaresHardwareCaustics);
 
-    // Freeze shadow routing after prefix handoff so transparent folding never sees the prior mask.
     RayTracingShadowVisibilityGraphPlanSnapshot rayTracingShadowVisibilityPlan = this.m_raytracingSystem.snapshotShadowVisibilityGraphPlan(declaresHardwareCaustics);
     if(rayTracingShadowVisibilityPlan.lightSpace.ready && hasOpaqueCsgFrameWork){
         if(!csgResources.bindingValid() || !frameBindings.meshView.bindingValid()){
@@ -326,7 +324,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         return;
     }
 
-    // Effects start from the prefix packet; declare Shadow/Software first for stable queue assignment.
     GpuExternalCompletionId writerDrain;
     if(features.laggedLightingHistoryWriterWaitPending)
         writerDrain = this.m_deferredLightingHistoryWriterDrainCompletion;
@@ -398,7 +395,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     GpuTaskId effectsTask = this.m_causticsGraph.m_deferredSoftwareCausticsTask;
     if(declaresHardwareCaustics)
         effectsTask = this.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask;
-    // Declare Surfel GI before hardware/AVBOIT to keep effects .deref(). surfel .deref(). suffix order.
     const SurfelGiGraphContext surfelGraphContext(this.m_deferredLightingTaskGraph, this.m_raytracingSystem, this.m_surfelGiComputePersistentState, this.m_surfelGiCounterPersistentState, this.m_surfelIrradianceReturnState, this.m_deferredFrameTimingEndTask);
     if(!this.m_surfelGiGraph.declareDeferredSurfelGiTask(
         surfelGraphContext,
@@ -424,7 +420,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     ))
         return;
 
-    // Declare Hardware Caustics before Lighting so declaration order owns the live irradiance RAW edge.
     if(declaresHardwareCaustics){
         HardwareCausticsStageBuilder hardwareCausticsStageBuilder(this.m_deferredLightingTaskGraph, this.m_raytracingSystem);
         HardwareCausticsStageInputs hardwareInputs(

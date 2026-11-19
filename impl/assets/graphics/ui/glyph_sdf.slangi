@@ -17,12 +17,10 @@ static const float NWB_UI_SDF_PIXEL_WIDTH_MIN = 0.001;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Alpha is an independent distance plane; select one channel without multiplying it into the other pages.
 float nwbUiSdfChannel(float4 sampled, uint channel){
     return channel == 0u ? sampled.x : channel == 1u ? sampled.y : channel == 2u ? sampled.z : sampled.w;
 }
 
-// FreeType u8 SDF represents zero at 128/255 and positive distance inside the outline.
 float nwbUiSdfDistance(float encoded, uint spreadPixels){
     return (encoded * NWB_UI_SDF_BYTE_MAX - NWB_UI_SDF_ZERO_LEVEL) * float(spreadPixels) / NWB_UI_SDF_ZERO_LEVEL;
 }

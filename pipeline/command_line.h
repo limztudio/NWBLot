@@ -27,7 +27,6 @@
 
 NWB_PIPELINE_BEGIN
 
-// The compiler must start before ADHD can generate the asset tools.
 namespace CompilerBootstrap{
 
 
@@ -91,7 +90,6 @@ public:
     {}
 };
 
-// Retain parsed values and CLI bindings through the terminal entry's help/error handler.
 class PipelineCommandLine final : NoCopy{
 public:
     explicit PipelineCommandLine(PipelineTool::Enum inTool);

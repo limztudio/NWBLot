@@ -35,9 +35,6 @@ inline constexpr Name s_SetupUploadReadinessBridgeIdentity("graphics.setup_uploa
     return CommandQueue::Graphics;
 }
 
-
-// A returned setup resource has no external-completion object for later direct consumers.
-// Record one explicit graph packet per declared consumer queue; its producer dependency lowers the exact timeline wait.
 struct SetupUploadReadinessBridgeGraphTask{
     struct Payload{
         GpuPhysicalQueueId consumerQueue;
@@ -78,7 +75,6 @@ struct SetupUploadReadinessBridgeGraphTask{
         if(!appendBridge(consumerQueue))
             return MakeUnexpected(Failure{});
     }
-    // The returned resource is ready on its direct consumer timeline even when the scheduler offloads its producer.
     if(!device.getQueue(directConsumerQueue) || !appendBridge(directConsumerQueue))
         return MakeUnexpected(Failure{});
     return terminalTask;
@@ -178,7 +174,6 @@ CommandQueue::Enum SetupUploadGraph::ResolveConsumerQueue(GraphicsBackend::Devic
 GpuTaskSchedulingHint SetupUploadGraph::Scheduling(const usize byteCount, const b8 sameClassRouting, const b8 crossFamilySameClassRouting)noexcept{
     GpuTaskSchedulingHint scheduling;
     scheduling.cost = byteCount >= s_LargeMinimumBytes ? GpuTaskCostHint::Large : GpuTaskCostHint::Tiny;
-    // A public setup call returns one accepted producer token, so retain a distinct explicit packet.
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
     scheduling.allowSameClassQueueRouting = sameClassRouting;
@@ -188,7 +183,6 @@ GpuTaskSchedulingHint SetupUploadGraph::Scheduling(const usize byteCount, const 
 }
 
 ResourceStates::Mask SetupUploadGraph::FinalState(const ResourceStates::Mask declaredInitialState)noexcept{
-    // Uploads with an Unknown descriptor state publish the concrete CopyDest post-write state.
     return declaredInitialState == ResourceStates::Unknown ? ResourceStates::CopyDest : declaredInitialState;
 }
 
@@ -212,7 +206,6 @@ b8 SetupUploadGraph::Submit(
         return false;
 
     if(!outUploadToken.valid()){
-        // The producer's accepted callback supplies the public token. A successful bridge graph without it breaks the setup API contract, so reject it.
         return false;
     }
     return true;

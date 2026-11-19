@@ -11,7 +11,6 @@
 #define NWB_ALLOC_NODISCARD [[nodiscard]]
 
 #if defined(_MSC_VER) && defined(_Ret_notnull_) && defined(_Post_writable_byte_size_)
-// stay consistent with VCRT definitions
 #define NWB_ALLOC_NEW_ATTRIBUTES(n) NWB_ALLOC_NODISCARD _Ret_notnull_ _Post_writable_byte_size_(n)
 #define NWB_ALLOC_NEW_NOTHROW_ATTRIBUTES(n) NWB_ALLOC_NODISCARD _Ret_maybenull_ _Success_(return != NULL) _Post_writable_byte_size_(n)
 #else

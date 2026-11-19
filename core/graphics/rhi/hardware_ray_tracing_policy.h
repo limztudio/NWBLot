@@ -17,7 +17,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Selects logical-device capabilities before instance creation; Disabled does not emulate hardware features.
 namespace HardwareRayTracingPolicy{
     static constexpr u8 s_HardwareRayTracingPolicyDisabledBase = 0;
     enum Enum : u8{

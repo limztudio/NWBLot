@@ -16,7 +16,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Preserve conservative occlusion while the retained context reports the exact traversal limitation asynchronously.
 half3 nwbCsgShadowRayFailure(const uint failure){
     uint previous;
     g_NwbHeapStorageBuffers[g_NwbLightSpacePush.csgContextSlot].InterlockedOr(NWB_CSG_SHADOW_RAY_FAILURE_OFFSET, failure, previous);

@@ -11,7 +11,6 @@
 
 const StringView s_TrueTypeExtension = ".ttf";
 const StringView s_OpenTypeExtension = ".otf";
-// One guard pixel on each side keeps neighbouring glyphs from bleeding into each other.
 const u32 s_GlyphGuardExtent = 2u;
 const u32 s_DefaultBakeExtent = 1024u;
 const u32 s_MinBakeExtent = 32u;

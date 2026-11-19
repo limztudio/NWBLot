@@ -40,7 +40,6 @@ b8 ShouldRetireUnseenWidgetState(in WidgetState state, in u64 frameGeneration){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One CPU owner coordinates declarations, input and the exact matching frozen frame's layout publication.
 class Context : NoCopy{
     private InputRouter m_input;
     private WidgetStateStore m_states;
@@ -134,7 +133,6 @@ class Context : NoCopy{
         }
         return this.declareId(id.value(), kind);
     }
-    // Compound controls declare internal scopes from their owning widget instead of borrowing the current layout scope.
     [cpp_unwind]
     public Expected<mut WidgetState> declarePart(in WidgetState owner, in StringView stableKey, in WidgetKind kind){
         if(this.m_failed || !this.currentDeclaration(owner)){
@@ -148,7 +146,6 @@ class Context : NoCopy{
         }
         return this.declareId(id.value(), kind);
     }
-    // A state instance may own only one control of a given kind in a frame, even across balanced roots/scopes.
     [cpp_unwind]
     public b8 claimState(in WidgetState owner, in u64 instanceGeneration){
         if(this.m_failed || !this.currentDeclaration(owner) || !TryClaimContextState(owner.kind, instanceGeneration, this.m_smallStateClaims, this.m_stateClaims, this.m_stateClaimCount)){
@@ -225,7 +222,6 @@ class Context : NoCopy{
             return MakeUnexpected(Failure());
         return this.m_input.consumePointerGesture(part, owner.declarationGeneration);
     }
-    // Registration reserves the declaration-order layer; activation may be repeated during deferred painting.
     [cpp_unwind]
     public b8 registerPopupScope(in WidgetState state, in PopupScope scope){
         PopupToken fenceToken;
@@ -262,7 +258,6 @@ class Context : NoCopy{
             this.discardPopupScope(ended);
         return !this.m_failed;
     }
-    // Discard an inactive scope and its descendants without disturbing the current parent activation.
     public void discardPopupScope(in PopupToken token){
         b8 removedAny = false;
         if(!DiscardContextPopupScope(token, this.m_popupStack, this.m_popupDepth, this.m_targets, this.m_popups, removedAny)){
@@ -297,7 +292,6 @@ class Context : NoCopy{
         this.m_frameGeneration = 0u;
         return true;
     }
-    // Only the host's exact accepted and successfully presented generation may publish its prepared hit layout.
     [cpp_unwind]
     public b8 commitFrame(in u64 generation){
         if(!CanCommitContextFrameGeneration(generation, this.m_readyGeneration))
@@ -331,7 +325,6 @@ class Context : NoCopy{
             this.m_readyGeneration
         );
     }
-    // Retire removed/hidden host roots even while a GPU frame is pending.
     [cpp_unwind]
     public void retainRoots(in Span<WidgetRoot> roots){
         if(this.m_states.entries().empty() && this.m_targets.empty() && this.m_popups.empty())

@@ -1,6 +1,3 @@
-"""Window-capture log plumbing: logserver port selection and readiness, log-file snapshots and deltas, and message waits."""
-
-
 import fnmatch
 import hashlib
 import os
@@ -55,7 +52,6 @@ def _hash_prefix(stream, size):
 
 
 def snapshot_log_files(directory, pattern):
-    """Snapshot append-only logs; an identical truncate-and-rewrite is not observable."""
     baseline = {}
     for path in matching_log_files(directory, pattern):
         with path.open(LIT_RB) as log_file:

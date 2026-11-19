@@ -50,7 +50,6 @@ void GpuDescriptorHeap::collectRetired(){
         }
     }
 
-    // A failed query keeps the queue's zero value, so its heap uses stay pending.
     for(QueueCompletion& completion : completions){
         const Expected<u64> completedValue = m_device.queueGetCompletedInstance(completion.queue);
         if(completedValue)
@@ -74,7 +73,6 @@ void GpuDescriptorHeap::collectRetired(){
         return false;
     };
 
-    // Admission IDs increase and compaction preserves order; one completed prefix applies to this locked completion snapshot.
     usize completedHeapUsePrefix = 0u;
     u64 firstIncompleteHeapUseID = 0u;
     b8 hasIncompleteHeapUse = false;

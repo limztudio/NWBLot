@@ -24,7 +24,6 @@ Expected<DescriptorBufferSegment> DescriptorBufferAllocationState::allocate(cons
         result.allocationSerial = m_nextAllocationSerial++;
         FOUNDATION_ASSERT(result.valid() && mappedMemory);
         FOUNDATION_MEMSET(static_cast<u8*>(mappedMemory) + result.offsetBytes, 0, result.sizeBytes);
-        // Ordered live ranges allow binary-search ownership checks.
         usize insertIndex = 0u;
         while(insertIndex < m_liveAllocations.size() && m_liveAllocations[insertIndex].offsetBytes < result.offsetBytes)
             ++insertIndex;
@@ -110,7 +109,6 @@ void DescriptorBufferAllocationState::free(const DescriptorBufferSegment& segmen
         return;
     }
 
-    // Free ranges stay inside the u32 segment capacity.
     const auto rangeEnd = [](const FreeRange& range)noexcept -> u32{
         FOUNDATION_ASSERT(range.sizeBytes <= UINT32_MAX - range.offsetBytes);
         return range.offsetBytes + range.sizeBytes;

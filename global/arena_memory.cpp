@@ -55,7 +55,6 @@ struct HeapMemoryShard{
     Atomic<u64> deallocationCount{ 0u };
     const HeapMemoryShard* next = nullptr;
 
-    // Separate different threads' writable counters even when CRT allocations have only ordinary alignment.
     Array<u8, s_HeapShardPadBytes> padding = {};
 };
 static_assert(sizeof(HeapMemoryShard) >= s_HeapShardMinBytes);
@@ -79,9 +78,6 @@ void AccumulateStats(ArenaMemoryStats& total, const ArenaMemoryStats& contributi
     total.deallocationCount += contribution.deallocationCount;
 }
 
-// Called with the lifecycle mutex held.
-// Records use the uninstrumented CRT and remain available for late static destruction and transient-arena history.
-// Registration cannot recurse through global new.
 [[nodiscard]] ArenaMemoryOwnerRecord& FindOrCreateOwner(const Name& ownerName){
     const usize bucketIndex = Hasher<Name>{}(ownerName) % s_OwnerBucketCount;
     for(ArenaMemoryOwnerRecord* record = s_OwnerBuckets[bucketIndex]; record; record = record->bucketNext){
@@ -106,8 +102,6 @@ void AccumulateStats(ArenaMemoryStats& total, const ArenaMemoryStats& contributi
     if(threadShard)
         return *threadShard;
 
-    // The shard has no TLS destructor and outlives its writer, preserving cross-thread frees and exited-thread counters.
-    // Allocation failure uses the permanent atomic fallback without failing an otherwise valid free.
     void* const storage = std::malloc(sizeof(HeapMemoryShard));
     if(!storage){
         s_ThreadHeapShard = &s_HeapFallback;
@@ -167,8 +161,6 @@ ArenaMemoryStats ArenaMemoryOwnerRecord::snapshot()const noexcept{
 ArenaMemoryTracker::ArenaMemoryTracker(const Name& ownerName, const ArenaMemoryReservation::Enum reservation)
     : m_reservation(reservation)
 {
-    // Publish only after every counter and link member has been initialized.
-    // The same lock protects readers until retirement has copied the final counters and detached this tracker before member destruction.
     ScopedLock lock(__hidden_arena_memory::s_OwnerMutex);
     __hidden_arena_memory::FindOrCreateOwner(ownerName).attach(*this);
 }
@@ -333,7 +325,6 @@ ArenaMemoryStats HeapBackingMemoryStats()noexcept{
         stats.reallocationCount += shard->reallocationCount.load(MemoryOrder::relaxed);
         stats.deallocationCount += shard->deallocationCount.load(MemoryOrder::relaxed);
     }
-    // Writers continue during capture; a cross-thread free can be observed before its allocation shard.
     stats.usedBytes = allocatedBytes >= releasedBytes ? allocatedBytes - releasedBytes : 0u;
     stats.reservedBytes = stats.usedBytes;
     u64 peak = __hidden_arena_memory::s_HeapSampledPeak.load(MemoryOrder::relaxed);

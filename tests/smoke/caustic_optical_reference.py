@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Mesh-derived exterior escape rays for the caustic sphere's smooth environment reflection."""
 
 from dataclasses import dataclass
 from functools import lru_cache
@@ -49,8 +48,6 @@ class Triangle:
 
 
 class MeshNode:
-    """CPU median BVH only accelerates independent geometric queries; it has no winding/bootstrap logic."""
-
     def __init__(self, triangles):
         self.minimum = tuple(min(triangle.minimum[axis] for triangle in triangles) for axis in range(3))
         self.maximum = tuple(max(triangle.maximum[axis] for triangle in triangles) for axis in range(3))
@@ -112,13 +109,11 @@ def hits_ground(origin, direction):
     if distance <= 0:
         return False
     point = add(origin, scale(direction, distance))
-    # Enlarge the authored receiver by 1cm to exclude boundary uncertainty conservatively.
     return abs(point[0]) <= 1.76 and abs(point[2] - 0.08) <= 1.56
 
 
 @lru_cache(maxsize=4)
 def exterior_samples(width=1280, height=900):
-    """Regular camera grid; selection depends on mesh geometry, never on which captured pixels are dark."""
     mesh = sphere_mesh()
     focal = height / (2 * math.tan(math.pi / 6))
     silhouette = focal * 0.7 / math.sqrt(2.2 ** 2 - 0.7 ** 2)
@@ -128,7 +123,6 @@ def exterior_samples(width=1280, height=900):
     selected = []
     for y in range(start_y, end_y + 1, step):
         for x in range(start_x, end_x + 1, step):
-            # A 7% silhouette inset and barycentric margin reject grazing rasterization/triangle-edge ambiguity.
             if (x + 0.5 - width / 2) ** 2 + (y + 0.5 - height / 2) ** 2 > (silhouette * 0.93) ** 2:
                 continue
             direction = normalized(((x + 0.5 - width / 2) / focal, -(y + 0.5 - height / 2) / focal, 1.0))
@@ -145,7 +139,6 @@ def exterior_samples(width=1280, height=900):
             reflected = add(direction, scale(normal, 2 * cosine))
             if cosine < 0.3 or dot(reflected, triangle.normal) < 0.2:
                 continue
-            # Offset ray origins by 1mm along the normal and reject 0.5mm depth boundary hits.
             origins = tuple(add(add(point, scale(normal, 0.001)), scale(direction, perturbation)) for perturbation in (-0.0005, 0.0, 0.0005))
             if any(mesh.intersect(origin, reflected) is not None or hits_ground(origin, reflected) for origin in origins):
                 continue
@@ -171,7 +164,6 @@ def expected_environment_color(disabled_rgb, fresnel):
 
 
 def predictor_metadata():
-    # Canonical LF content identity is stable across the repository's required CRLF checkout policy.
     digest = hashlib.sha256(MESH_PATH.read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest()
     return {"mesh": str(MESH_PATH.relative_to(Path(__file__).parent)), "mesh_lf_sha256": digest, "camera": CAMERA, "sphere_center": (0, 0.85, 0), "sphere_scale": 0.7, "vertical_fov_degrees": 60,
         "ior": IOR, "environment": ENVIRONMENT, "presentation": "sRGB of Reinhard scene radiance", "exposure": 1.0, "shoulder": SHOULDER, "minimum_fraction_of_predicted_byte_gain": 0.5, "rounding_allowance_bytes": 2.0}

@@ -190,11 +190,14 @@ Output separates differing result lanes, floating-point flag observations, `errn
 
 On Windows, `traps` separately checks isolated invalid, overflow and divide-by-zero controls before comparing mixed invalid/overflow lane orders. An additional edge gate checks exact-tiny `.5^149`/`.5^127` and subnormal-base zero-exponent behavior with underflow and underflow-plus-inexact enabled, all four rounding modes and available denormal modes. It compares delivered categories, errno, mapped/native status and control state; exact-tiny reference controls must deliver the expected underflow category. Reference controls must deliver the exact distinct Windows exception categories; unrelated SEH faults or a host/emulator delivering only sticky flags make trap qualification unavailable (`2`). A different candidate category returns `1`. Other platforms currently return `2` for `traps`; masked flag checks still run in the ordinary qualification. Do not infer first enabled exception priority from the masked checks.
 
-For standalone Windows qualification, the runner uses an existing `nwb_math_tests` `opt` entry from `compile_commands.json`, preserving its target, ISA, includes, defines and code-generation flags while replacing the source and output. It removes the generated `CMAKE_INTDIR` definition and records the full original entry and resulting compile/link commands. It builds only this test-owned probe in the chosen evidence directory and never configures or mutates the generated build tree.
+Build and run the standalone `nwb_simd_pow_qualification` target (executable `simd_pow_qualification`) with `-D NWB_BUILD_SIMD_BENCHMARKS=ON`:
 
 ```powershell
-python -B tests/performance/simd_optimization/run_pow_qualification.py --build-dir __cmake/build/windows-clang-arm64 --output __cmake/Testing/pow_arm64_opt --traps
-python -B tests/performance/simd_optimization/run_pow_qualification.py --build-dir __cmake/build/windows-clang-arm64 --output __cmake/Testing/pow_arm64_strict --strict --traps
+python -m launcher build nwb_simd_pow_qualification --configure-preset windows-clang-arm64 --config opt -D NWB_BUILD_TESTS=ON -D NWB_BUILD_SIMD_BENCHMARKS=ON
 ```
 
-Use the matching x64 build directory to qualify that target. Strict FP is additional evidence and does not replace the actual `opt` profile. The runner saves full compiler/linker/variant logs and per-mode counts in `results.json`. It returns `1` when any selected variant is rejected, `2` for build/control failure or requested trap qualification unavailable on the host, and `0` only when every requested gate passes. It runs no timings, so its results establish neither speed nor behavior on other platforms. Recorded rejection evidence is retained in the separate [power qualification report](pow_qualification_report.md).
+Invoke `simd_pow_qualification production|packed_single|packed_double [traps]` directly from the build output directory. It returns `1` when any selected variant is rejected, `2` when requested trap qualification is unavailable on the host, and `0` only when every requested gate passes; it runs no timings, so its results establish neither speed nor behavior on other platforms.
+
+> **Note:** `tests/performance/simd_optimization/run_pow_qualification.py` predates the `.adhd` migration (its `compile_commands.json` lookup and standalone probe paths still reference removed `math_tests.cpp` and `pow_qualification.cpp`), so build `nwb_simd_pow_qualification` directly through CMake/`launcher` until that wrapper script is updated.
+
+Recorded rejection evidence is retained in the separate [power qualification report](pow_qualification_report.md).

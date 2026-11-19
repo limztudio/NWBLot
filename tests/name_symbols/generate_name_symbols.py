@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # limztudio@gmail.com
-# Capture Name symbols reached by headless tools and GUI workloads.
 
 import argparse
 import glob
@@ -82,14 +81,12 @@ def log(message):
     print(LOG_PREFIX + str(message), flush=True)
 
 
-# Keep CMAKE_COMMAND as one argv item so executable paths may contain spaces.
 def resolve_cmake_command():
     cmake_command = os.environ.get(CMAKE_COMMAND_ENV)
     return [cmake_command] if cmake_command else [CMAKE_DEFAULT]
 
 
 def resolve_ctest_command():
-    # Resolve relative paths from the source directory.
     cmake_command = resolve_cmake_command()
     if cmake_command == [CMAKE_DEFAULT]:
         return [CTEST_DEFAULT]
@@ -156,7 +153,6 @@ def configure_and_build(arguments):
 
 
 def clean_stale_sidecars(arguments):
-    # Discard interrupted-run sidecars before collecting fresh output.
     removed = 0
     for old in glob.glob(os.path.join(arguments.buildmode_bin_dir, SIDECAR_GLOB)):
         try:
@@ -174,7 +170,6 @@ def run_workloads(arguments):
     for directory in arguments.mkdir:
         os.makedirs(directory, exist_ok=True)
 
-    # Failed workloads can still write useful sidecars.
     for spec in arguments.run:
         parts = spec.split(RUN_SPEC_SEPARATOR)
         if not parts or not parts[0]:
@@ -191,7 +186,6 @@ def run_workloads(arguments):
         if run_command(command + parts[1:], cwd=arguments.buildmode_bin_dir) != 0:
             log(MSG_RUN_NONZERO.format(parts[0]))
 
-    # Graceful GUI exits are required to write sidecars.
     ctest = resolve_ctest_command()
     for regex in arguments.ctest_regex:
         rc = run_command(ctest + [ARG_TEST_DIR_FLAG, arguments.build_dir, ARG_TEST_CONFIG_FLAG, arguments.config, ARG_TEST_REGEX_FLAG, regex, ARG_OUTPUT_ON_FAILURE], cwd=arguments.source_dir,)
@@ -232,7 +226,6 @@ def main(argv):
     if not configure_and_build(arguments):
         return 1
 
-    # Collection without workloads must preserve existing sidecars.
     if (arguments.run or arguments.ctest_regex) and not clean_stale_sidecars(arguments):
         return 1
 

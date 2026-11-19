@@ -1,5 +1,3 @@
-"""Validate refraction density fixture and framebuffer evidence."""
-
 import re
 
 from renderer_workload_log_policy import DIMENSIONS
@@ -77,4 +75,3 @@ class RefractionDensityEvidence:
         if clamped and target in dimensions and any(extent != target for extent in dimensions[dimensions.index(target):]):
             raise SmokeFailure("renderer extent changed after confirming the requested target")
         return {"target_extent": list(target), "clamped_initial_extent": list(clamped) if clamped else None}
-

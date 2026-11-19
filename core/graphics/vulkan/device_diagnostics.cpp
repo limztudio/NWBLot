@@ -20,7 +20,6 @@ NWB_VULKAN_BEGIN
 
 
 void Device::captureDeviceLoss(const AStringView context){
-    // Device loss must be recorded even when diagnostics are disabled.
     markDeviceLost();
     m_gpuCrashDiagnostics.capture(*this, context);
 }
@@ -29,7 +28,6 @@ Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(const GpuPhysicalQueueId
     AmdBreadcrumbWrite write;
     if(m_amdBreadcrumb.buffer == VK_NULL_HANDLE || !getPhysicalQueueInfo(queue))
         return write;
-    // A live breadcrumb buffer exists only after its metadata was built from the same layout.
     FOUNDATION_ASSERT(
         m_amdBreadcrumb.metadata
         && m_amdBreadcrumb.metadata->slotRecordCount == m_amdBreadcrumb.layout.totalSlotCount
@@ -38,7 +36,6 @@ Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(const GpuPhysicalQueueId
     );
 
     {
-        // Serialize the queue-local reservation and its paired CPU record.
         ScopedLock lock(m_amdBreadcrumb.slotMutex);
         const auto reservation = VulkanDetail::AmdBreadcrumbRing::BuildNextReservation(m_amdBreadcrumb.metadata->nextSerials[queue.index], m_amdBreadcrumb.layout.slotsPerQueue);
         if(!reservation)

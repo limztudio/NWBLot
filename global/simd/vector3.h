@@ -85,7 +85,6 @@ FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL Vector3Dot(SIMDVectorSin
 FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDouble3Dot(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
 #if defined(FOUNDATION_HAS_AVX2)
 #pragma STDC FENV_ACCESS ON
-    // Keep the original packed multiply so simultaneous active-lane exceptions retain their trap priority.
     v0 = VectorDoubleAndInt(v0, s_DoubleSIMDMask3);
     v1 = VectorDoubleAndInt(v1, s_DoubleSIMDMask3);
     const SIMDVectorDouble product = v0 * v1;

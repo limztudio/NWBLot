@@ -176,8 +176,6 @@ b8 GpuTaskGraphCompiler::compile(
     const f64 packetizationSeconds = DurationInSeconds<f64>(TimerNow(), packetizationBegin);
 
     const Timer resourceStatePlanningBegin = TimerNow();
-    // Start with graph-planned packet state seeds, transitions, UAV dependencies, and exclusive-family ownership releases.
-    // A state seed carries the producer's final snapshot plus its release target into open(), where the paired acquire emits before use.
     Vector<TrackedCompiledResourceState, Alloc::ScratchArena> trackedResourceStates(scratchArena);
     Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena> pendingEpilogueBarriers(scratchArena);
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena> initialOwnershipDependencies(scratchArena);
@@ -185,7 +183,6 @@ b8 GpuTaskGraphCompiler::compile(
     Vector<GpuPacketDependency, Alloc::ScratchArena> resourceStateDependencies(scratchArena);
     Vector<TrackedResourceStateFragment, Alloc::ScratchArena> stateFragments(scratchArena);
     Vector<GpuTaskResourceRange, Alloc::ScratchArena> taskFirstUseRanges(scratchArena);
-    // taskAt() exposes the expanded resource-use set. Each use appends at most one tracked state.
     usize trackedStateCapacity = 0u;
     for(const GpuCompiledTask& compiledTask : compiledPlan.tasks){
         const usize useCount = graph.taskAt(compiledTask.task.index).resourceUseCount;
@@ -265,7 +262,6 @@ b8 GpuTaskGraphCompiler::compile(
     statistics.epilogueBarrierCount = outCompiledGraph.m_epilogueBarriers.size();
     outCompiledGraph.buildPlanStatistics(graph, scratchArena);
     if(IsFinite(options.declarationSeconds)){
-        // Keep values >= 0, including -0.0; negative values become +0.0.
         statistics.declarationSeconds = options.declarationSeconds >= 0.0 ? options.declarationSeconds : 0.0;
     }
     else

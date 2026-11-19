@@ -49,7 +49,6 @@ b8 GbufferGraphTask::record(mut CommandList commands, in GpuTaskRecordContext co
         this.csgSystem.dispatchCsgIntervalPeels(commands, this.targets, csgFrameData, this.csgResources, this.frameBindings);
     }
 
-    // Clears begin the first segment; continuations resume with LOAD.
     RenderPassParameters renderPassParameters;
     renderPassParameters.colorClearValues[s_MeshGbufferBaseColorLocation] = s_ClearColor;
     renderPassParameters.colorClearValues[s_MeshGbufferNormalLocation] = s_GBufferNormalClearColor;
@@ -74,7 +73,6 @@ b8 GbufferGraphTask::record(mut CommandList commands, in GpuTaskRecordContext co
         if(regularDrawResourcesReady && (this.regularSharedComputeEmulationDrawsGraphOwned || !regularDrawItemsForGbuffer.empty())){
             if(this.regularSharedComputeEmulationDrawsGraphOwned){
                 this.regularSharedComputeEmulationTiming.value().emplace(this.graphics.gpuTiming(), s_TimingScopeOpaqueRegular, this.graphics.getDevice(), commands);
-                // Close the marker before finalizing this command list.
                 if(!FinishSplitGpuTimingMarker(this.regularSharedComputeEmulationTiming.value()))
                     return false;
                 if(!regularDrawItemsForGbuffer.empty())

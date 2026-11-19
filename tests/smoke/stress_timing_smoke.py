@@ -118,9 +118,7 @@ def validate_performance_target_request(args):
 
 
 def performance_target(measurement, intervals, minimum):
-    # Derive qualification from the validated accepted count and wall clock, not rounded log FPS or GPU samples.
     observed = measurement[LIT_PRESENTATIONS] / measurement[LIT_SECONDS]
-    # A stalled window leaves few positive intervals, so its target result is inconclusive.
     positive = sum(row[LIT_PRESENTATIONS] > 0 for row in intervals)
     inconclusive = minimum is not None and positive <= MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS
     return dict(requested=minimum is not None, minimum_fps=minimum, comparison=">", observed_fps=observed, positive_intervals=positive, inconclusive=inconclusive, source="accepted_native_presentations / steady_clock_seconds",

@@ -66,7 +66,6 @@ UiTooltipTestBinding MakeUiTooltipTestBinding(in WidgetId inAnchor, in u64 inDec
 
 Expected<UiTextureImagePaintSample> SampleUiTextureImage(in DrawSnapshot snapshot, in u64 generation){
     UiTextureImagePaintSample candidate = UiTextureImagePaintSample();
-    // Lanes are x, y.
     f32 originX = 0.0f;
     f32 originY = 0.0f;
     f32 cornerX = 0.0f;

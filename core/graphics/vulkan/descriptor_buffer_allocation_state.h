@@ -24,9 +24,7 @@ namespace DescriptorBufferSegmentKind{
 };
 
 struct DescriptorBufferSegment{
-    // Process-unique identity of the exact resource or sampler storage.
     u64 storageIdentity = 0;
-    // Prevents stale handles from writing a recycled byte range.
     u64 allocationSerial = 0;
     u32 offsetBytes = 0;
     u32 sizeBytes = 0;

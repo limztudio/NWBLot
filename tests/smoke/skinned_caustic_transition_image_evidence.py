@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Compare skinned caustic transition image evidence."""
 
 from array import array
 import statistics
@@ -48,7 +47,6 @@ class SkinnedCausticTransitionImageEvidence:
             raise SmokeFailure("transition receiver capture is blank or has no visible geometry contrast")
         return regions
 
-
     @staticmethod
     def difference(first, second):
         if not first or len(first) != len(second) or len(first) % 3:
@@ -59,7 +57,6 @@ class SkinnedCausticTransitionImageEvidence:
         return {LIT_MEAN_ABSOLUTE_CHANNEL_ERROR: statistics.mean(errors), LIT_P95_CHANNEL_ERROR: ordered[round((len(ordered) - 1) * .95)], LIT_LARGE_ERROR_FRACTION: sum(error > MATCH_LIMITS["large_error_channel_threshold"] for error in errors) / len(errors),
             LIT_CHANGED_PIXELS: changed, "pixels": len(errors) // 3}
 
-
     @staticmethod
     def require_match(first, second, label):
         measured = SkinnedCausticTransitionImageEvidence.difference(first, second)
@@ -67,14 +64,12 @@ class SkinnedCausticTransitionImageEvidence:
             raise SmokeFailure(f"{label} has stale or unstable posed geometry/light: {measured}")
         return measured
 
-
     @staticmethod
     def require_signal(first, second, minimum_pixels, label, minimum_mean=0):
         measured = SkinnedCausticTransitionImageEvidence.difference(first, second)
         if measured[LIT_CHANGED_PIXELS] < minimum_pixels or measured[LIT_MEAN_ABSOLUTE_CHANNEL_ERROR] < minimum_mean:
             raise SmokeFailure(f"{label} has no qualifying visible signal: {measured}")
         return measured
-
 
     @staticmethod
     def compare_series(series):
@@ -84,7 +79,6 @@ class SkinnedCausticTransitionImageEvidence:
         for sample in range(SAMPLE_COUNT):
             for region in REGIONS:
                 comparisons[LIT_CURRENT_VS_LAGGED].append({LIT_SAMPLE: sample, LIT_REGION: region, **SkinnedCausticTransitionImageEvidence.require_match(series[LIT_CURRENT][sample][region], series[LIT_LAGGED][sample][region], f"current/lagged sample {sample} {region}")})
-            # Measure photon contribution only on ground receiver pixels.
             if sample < 2:
                 comparisons[LIT_PHOTON_SIGNAL].append({LIT_SAMPLE: sample, **SkinnedCausticTransitionImageEvidence.require_signal(series[LIT_CURRENT][sample][LIT_GROUND], series[LIT_NO_PHOTONS][sample][LIT_GROUND], SIGNAL_LIMITS["photon_changed_pixels"], "hardware photons on ordinary ground",
                         SIGNAL_LIMITS["photon_mean_channel_error"])})
@@ -97,5 +91,3 @@ class SkinnedCausticTransitionImageEvidence:
                         SIGNAL_LIMITS["csg_changed_pixels"], "active cutter on the live skinned receiver")})
             comparisons[LIT_MOTION_SIGNAL].append({LIT_VARIANT: variant, **SkinnedCausticTransitionImageEvidence.require_signal(series[variant][0][LIT_RECEIVER], series[variant][1][LIT_RECEIVER], SIGNAL_LIMITS["motion_changed_pixels"], "live joint pose motion")})
         return comparisons
-
-

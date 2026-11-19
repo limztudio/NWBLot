@@ -9,16 +9,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared minimum context for the AVBOIT occupancy and extinction material passes.
-// Both evaluate the same authored surface hook solely to obtain renderCoverage, so their mesh/material binding contract must stay identical.
-
-
 #include "../mesh/runtime_constants.h"
 
 #define NWB_MESH_MATERIAL_CONTEXT_PROVIDED
 
 #include "common.slangi"
-// This alias resolves the target-generation payload through the UniformBuffer heap slot carried by the AVBOIT draw push constants.
 #define g_NwbDeferredBindlessResources NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES
 #include "../mesh/gbuffer_io.slangi"
 #include "material_context_authoring.slangi"

@@ -1,4 +1,3 @@
-"""Process termination fakes shared by deterministic smoke-harness regression checks."""
 from __future__ import annotations
 
 

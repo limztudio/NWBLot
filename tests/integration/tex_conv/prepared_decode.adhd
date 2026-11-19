@@ -88,7 +88,6 @@ b8 Decode(in StringView source, in StringView destination, in StringView mipText
     if(decodedBytes.size() != componentCount * bytesPerComponent)
         return false;
 
-    // Export the selected mip extent followed by interleaved linear RGBA binary32 values in little-endian order.
     Vector<u8> output = Vector<u8>();
     output.resize(cast<usize>(s_ChannelCount) * 4u + componentCount * 4u);
     usize offset = 0u;

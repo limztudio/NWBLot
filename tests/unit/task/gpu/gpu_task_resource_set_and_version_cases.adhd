@@ -1184,7 +1184,6 @@ void VerifyGpuResVersion_DeduplicatesVersionAndPhysicalHazardsInQueueScore(){
     EXPECT_TRUE(foundVersionDependency);
     EXPECT_TRUE(foundPhysicalRaw);
 
-    // The graphics queue has no compute support, so the compute consumer must cross queues.
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue(0u, QueueCapabilities(GpuQueueCapability::Graphics, GpuQueueCapability::Transfer));
     queues[1u] = DedicatedComputeQueue();

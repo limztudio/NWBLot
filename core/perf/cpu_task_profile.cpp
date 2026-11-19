@@ -33,7 +33,6 @@ inline constexpr Name s_ScopeJoin("cpu.task.scope_join");
 inline constexpr Name s_SchedulerJoin("cpu.task.scheduler_join");
 inline constexpr Name s_WorkerIdle("cpu.worker.idle");
 inline constexpr usize s_ReadBatchSize = 32u;
-// One SIMDVectorDouble holds four lanes.
 inline constexpr usize s_SecondsBatchLanes = 4u;
 inline constexpr f64 s_NanosecondsToSeconds = 1.0e-9;
 

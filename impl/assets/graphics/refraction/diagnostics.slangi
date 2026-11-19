@@ -50,7 +50,6 @@ void nwbRefractionFlushDiagnostics(const uint groupIndex){
 }
 #endif
 
-// Group-local atomics preserve divergent-path counts; each word is published once per tile.
 void nwbRefractionCount(const uint offset, const uint amount = 1u){
 #if NWB_REFRACTION_DIAGNOSTICS
     if(amount == 0u)

@@ -102,8 +102,6 @@ private:
     static constexpr Array<StringView, 1> s_DebugRequiredInstanceExts = {{ VK_EXT_DEBUG_UTILS_EXTENSION_NAME }};
     static constexpr Array<ExtEntry, 2> s_EnabledDeviceExts = {{
         { VK_KHR_MAINTENANCE1_EXTENSION_NAME, DeviceExtensionFeature::None },
-        // Descriptor buffers are the renderer's only descriptor transport.
-        // A device without this extension does not meet the renderer's minimum requirements.
         { VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME, DeviceExtensionFeature::DescriptorBuffer },
     }};
     static constexpr Array<ExtEntry, 15> s_OptionalDeviceExts = {{
@@ -120,8 +118,6 @@ private:
         { VK_EXT_MESH_SHADER_EXTENSION_NAME, DeviceExtensionFeature::MeshShader },
         { VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME, DeviceExtensionFeature::None },
         { VK_EXT_DEVICE_FAULT_EXTENSION_NAME, DeviceExtensionFeature::DeviceFault },
-        // UASTC HDR 4x4 blocks are directly valid ASTC HDR blocks.
-        // Keep this optional so consumers can select BC6H or RGBA16_FLOAT on hardware without it.
         { VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME, DeviceExtensionFeature::TextureCompressionAstcHdr },
         { VK_AMD_BUFFER_MARKER_EXTENSION_NAME, DeviceExtensionFeature::None },
     }};
@@ -171,18 +167,10 @@ public:
     [[nodiscard]] b8 commitSwapChainResize(SwapChainTransitionTicket&& ticket);
     [[nodiscard]] b8 commitDestroy(SwapChainTransitionTicket&& ticket)noexcept;
     [[nodiscard]] BeginFrameResult beginFrame();
-    // Idempotently retires synchronization for a healthy aborted frame.
-    // The acquired WSI image stays quarantined until swap-chain or device teardown; an already-resolved frame is a successful no-op.
     [[nodiscard]] b8 abandonAcquiredFrame();
-    // The return value retains continuation/retirement status.
-    // Output reports native present acceptance alone: true even if later sync fails, false for out-of-date surfaces.
     [[nodiscard]] Expected<b8, PresentationFailure> present();
-    // Claims the acquired image's completion semaphore for one exact graph packet.
-    // A null hook leaves the direct transition-submit path in present() active.
     [[nodiscard]] QueueSubmissionPreSubmitHook claimFramePresentationSignal()noexcept;
-    // The renderer confirms only the terminal packet token accepted by the graph submission transaction.
     [[nodiscard]] b8 confirmFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim, const QueueSubmissionToken& token)noexcept;
-    // A hook from a rejected/abandoned submit is unusable; retire its signal before the next frame.
     [[nodiscard]] b8 cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim);
 
 
@@ -245,13 +233,9 @@ private:
     VkDebugUtilsMessengerEXT m_debugUtilsMessenger = VK_NULL_HANDLE;
     VkPhysicalDevice m_vulkanPhysicalDevice = VK_NULL_HANDLE;
     i32 m_graphicsQueueFamily = s_InvalidQueueFamilyIndex;
-    // Family selected for the optional auxiliary Graphics queue; it differs from the primary only for explicitly enabled cross-family routing.
     i32 m_secondaryGraphicsQueueFamily = s_InvalidQueueFamilyIndex;
     i32 m_computeQueueFamily = s_InvalidQueueFamilyIndex;
-    // Offload family differs from the Compute role, which aliases Graphics on universal hardware.
     i32 m_asyncComputeQueueFamily = s_InvalidQueueFamilyIndex;
-    // Dedicated Compute and Transfer paths may likewise expose one cross-family auxiliary transport.
-    // Device registration is opt-in, and task-level scheduling must separately select the resulting route.
     i32 m_secondaryComputeQueueFamily = s_InvalidQueueFamilyIndex;
     i32 m_transferQueueFamily = s_InvalidQueueFamilyIndex;
     i32 m_secondaryTransferQueueFamily = s_InvalidQueueFamilyIndex;
@@ -262,17 +246,11 @@ private:
     VkSurfaceFormatKHR m_swapChainFormat = {};
     VkSwapchainKHR m_swapChain = VK_NULL_HANDLE;
     GraphicsVector<SwapChainImage> m_swapChainImages;
-    // One construction entry per VkQueue created from m_vulkanDevice.
-    // Device owns the corresponding synchronized states; physical scheduling queues and the present role retain only canonical indices.
     GraphicsVector<VulkanNativeQueueDesc> m_nativeQueues;
     DeviceHandle m_rhiDevice;
-    // Exact opt-in same-class transports registered after their class primary.
-    // The first entry for each class populates the per-class auxiliary family fields above; graph packets use this complete physical registry.
     GraphicsVector<VulkanPhysicalQueueDesc> m_sameClassQueues;
     AcquireSyncSlotVector m_acquireSyncSlots;
     SemaphoreVector m_presentSemaphores;
-    // Swap-chain-lifetime direct transition list.
-    // Created once with swap-chain resources and reopened per use; present() never creates a command list so the frame path stays allocation-free.
     CommandListHandle m_directPresentCommandList;
     GpuPhysicalQueueId m_directPresentQueue;
     ::Queue<EventQueryHandle, Alloc::GlobalArena> m_framesInFlight;

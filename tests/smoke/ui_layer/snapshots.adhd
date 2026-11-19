@@ -34,7 +34,6 @@ const u32 s_SmokeMarker24BitMask = 0xffffffu;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Snapshot of copied image declaration inputs and expected display geometry.
 class UiImageSnapshot{
     public Array<u64, 10u> values;
     public Array<Rect, 16u> rectangles;
@@ -42,8 +41,6 @@ class UiImageSnapshot{
     public u64 sequence = 0u;
 }
 
-
-// Snapshot of copied slider values and expected geometry.
 class UiSliderSnapshot{
     public Array<u64, 16u> values;
     public Array<u64, 4u> bits;
@@ -52,8 +49,6 @@ class UiSliderSnapshot{
     public u64 sequence = 0u;
 }
 
-
-// Copied post-scope observations and the GPU markers share this immutable sequence.
 class UiRadioGroupSnapshot{
     public Array<u64, 22u> values;
     public Array<Rect, 41u> rectangles;
@@ -61,8 +56,6 @@ class UiRadioGroupSnapshot{
     public u32 sequence = 0u;
 }
 
-
-// Snapshot of copied progress declaration inputs and expected display geometry.
 class UiProgressSnapshot{
     public Array<u64, 8u> values;
     public Array<u64, 2u> bits;
@@ -71,8 +64,6 @@ class UiProgressSnapshot{
     public u64 sequence = 0u;
 }
 
-
-// One owned observation is encoded in pixels after the enclosing Builder scope has ended.
 class UiNumericEditSnapshot{
     public Array<u64, 30u> values;
     public Array<Rect, 12u> rectangles;
@@ -80,8 +71,6 @@ class UiNumericEditSnapshot{
     public u32 sequence = 0u;
 }
 
-
-// The fixture records copied source generations, displayed markers and expected passive geometry.
 class UiTextureImageSnapshot{
     public Array<u64, 16u> values;
     public Array<u64, 3u> generations;
@@ -90,8 +79,6 @@ class UiTextureImageSnapshot{
     public u64 sequence = 0u;
 }
 
-
-// One owned observation follows the completed Builder scope and travels with the same GPU marker sequence.
 class UiTextAreaSnapshot{
     public Array<u64, 25u> values;
     public Array<Rect, 16u> rectangles;
@@ -133,7 +120,6 @@ interface ISmokeEnabledRows{
     b8 enabled(in u64 index)const;
 }
 
-// Arithmetic row lookup keeps the fixture independent of total row count and allocates labels on demand.
 class UiNumberedSmokeRows : ISmokeEnabledRows{
     private u64 m_generation = 1u;
     private b8 m_empty = false;
@@ -223,8 +209,6 @@ class UiNumberedSmokeRows : ISmokeEnabledRows{
     }
 }
 
-
-// Fixed five-key combo source state with a filtered view.
 class UiNestedPopupSmokeSourceState : ISmokeEnabledRows{
     private String m_query = "";
     private Array<u64, 5u> m_indices;

@@ -105,7 +105,6 @@ CommandMarkerRecordingToken CommandList::beginMarkerLease(const AStringView name
         m_context.instanceDispatch.vkCmdBeginDebugUtilsLabelEXT(m_currentCmdBuf->m_cmdBuf, &label);
     }
 
-    // Both vendors share one marker hash so resolveMarker works with either active.
     if(useGpuMarkers){
         if(useNvCheckpoint)
             m_context.deviceDispatch.vkCmdSetCheckpointNV(m_currentCmdBuf->m_cmdBuf, reinterpret_cast<const void*>(gpuCrashMarker));

@@ -79,7 +79,6 @@ class ReflectionTimingRenderPass{
         singleRangeScopes[14u] = s_TimingScopeReflectionHardware.identity;
         singleRangeScopes[15u] = s_TimingScopeReflectionTemporal.identity;
         singleRangeScopes[16u] = s_TimingScopeReflectionSpatial.identity;
-        // Reserve enough timer queries to cover all in-flight passes and depth mips.
         if(!this.m_pass.prepareScopes(singleRangeScopes, "ReflectionSmokeProject", "timing scope"))
             return false;
         if(!this.m_pass.prepareScope(s_TimingScopeReflectionDepthPyramid.identity, s_TimingProbeInFlightRanges * mipCount)){
@@ -430,7 +429,6 @@ class ReflectionSmokeConfiguration{
     private b8 m_freshFinalState = false;
 }
 
-// Observes completed reflection history and timing without owning renderer resources.
 class ReflectionSpatialOwnerProbe{
     public ReflectionSpatialOwnerProbe(mut ProjectRuntimeContext context){
         this.m_context = context;
@@ -574,7 +572,6 @@ class ReflectionSpatialOwnerProbe{
         );
         if(this.m_started && !this.m_finalReset && !this.m_phaseWork.valid() && work.firstSampleFrameIndex >= this.m_phaseSource)
             this.m_phaseWork = work;
-        // Require one completed spatial timing range per source frame in the window.
         if(
             this.m_finalReset
             && work.firstSampleFrameIndex <= this.m_finalSource
@@ -1143,7 +1140,6 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks, ISmokeCapturePredicat
         FramebufferCaptureOptions options = FramebufferCaptureOptions();
         if(this.m_extendedCase || this.m_configuration.feedbackCapture()){
             if(!this.m_configuration.settings().diagnosticsEnabled){
-                // Timing-only extended scenes do not request completed-state capture.
                 if(ReadSmokeEnvironmentString(s_ReflectionCapturePathEnv).has_value()){
                     error("ReflectionSmokeProject: controlled completed-state capture requires diagnostics");
                     return false;

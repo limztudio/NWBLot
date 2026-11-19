@@ -59,7 +59,6 @@ class LightSpaceCsgState{
     public Vector<CsgShadowReceiverInput> receivers;
     public Vector<LightSpaceCsgInstanceGpu> instances;
     public Vector<BufferHandle> dynamicBounds;
-    // Current CPU context uploads into independently retained shadow and GI buffers.
     public Vector<u8> bytes;
     public Vector<Span<u32>> solidTriangleMasks;
     public u64 captureGeometryIdentity = 0u;

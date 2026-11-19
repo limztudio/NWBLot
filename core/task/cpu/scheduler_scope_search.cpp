@@ -30,8 +30,6 @@ u32 CpuTaskScheduler::findScopeReadyLocked(const usize queue, ScopeWait& wait, u
         if(node->state == TaskState::Ready && QueueIndex(node->options) == queue)
             previous = anchor.index;
     }
-    // Publication can add paths to the joined scope.
-    // Retirement only removes paths, so a still-queued unrelated anchor stays safe until publication, even across other joins.
     u32 index = previous == TaskHandle::s_InvalidIndex ? m_ready[queue].head : m_nodes[previous].next;
     while(index != TaskHandle::s_InvalidIndex && !contributesToScopeLocked(index, wait)){
         previous = index;
@@ -59,7 +57,6 @@ b8 CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait& 
         m_scopeSearchIdentity = wait.scopeIdentity;
         invalidateScopeSearchLocked(false);
     }
-    // Downstream completion still waits for this live prerequisite, so retirement cannot invalidate a proven path.
     const u64 positiveStamp = m_scopeSearchGeneration + 1u;
     if(m_scopeContributionVisits[index] == positiveStamp)
         return true;
@@ -81,7 +78,6 @@ b8 CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait& 
             const auto positive = [this, positiveStamp](const TaskHandle handle)noexcept{
                 return resolveLocked(handle) && m_scopeContributionVisits[handle.index] == positiveStamp;
             };
-            // Only the processed prefix can contain discovery ancestors; unprocessed sibling frontiers stay untouched.
             for(usize previous = cursor; previous != 0u;){
                 const u32 ancestorIndex = m_searchStack[--previous];
                 const TaskNode& ancestor = m_nodes[ancestorIndex];
@@ -109,7 +105,6 @@ b8 CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait& 
         for(const TaskHandle dependent : node.dependents)
             visit(dependent);
     }
-    // Exhausted searches prove negatives; successful searches mark only paths proved to reach this scope.
     for(const u32 visited : m_searchStack)
         m_scopeContributionVisits[visited] = m_scopeSearchGeneration;
     return false;

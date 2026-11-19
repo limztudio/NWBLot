@@ -86,7 +86,6 @@ class CsgShapeModuleWriter{
         modules.reserve(entries.size());
         owners.reserve(entries.size());
         usize capacity = 0u;
-        // Validate every output path before replacing the generated include tree.
         for(in CsgShapeCookEntry module : entries){
             if(!modules.insert(module.shaderModule.hash()).second)
                 continue;

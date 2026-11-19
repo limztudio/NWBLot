@@ -23,7 +23,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Four seven-bit additive observation fields each hold at most 64 lanes without carrying into their neighbor.
 static const uint NWB_REFLECTION_OBSERVATION_FIELD_MASK = 127u;
 static const uint NWB_REFLECTION_ROUGH_OBSERVATION_SHIFT = 7u;
 static const uint NWB_REFLECTION_ATTEMPT_OBSERVATION_SHIFT = 14u;
@@ -33,7 +32,6 @@ static const uint NWB_REFLECTION_ROUGH_OBSERVATION = 1u << NWB_REFLECTION_ROUGH_
 static const uint NWB_REFLECTION_ATTEMPT_OBSERVATION = 1u << NWB_REFLECTION_ATTEMPT_OBSERVATION_SHIFT;
 static const uint NWB_REFLECTION_RETURN_OBSERVATION = 1u << NWB_REFLECTION_RETURN_OBSERVATION_SHIFT;
 
-// Opaque and glass each own two 32-lane candidate words, and one observation sum.
 static const uint NWB_REFLECTION_CANDIDATE_MASK_WORDS_PER_SURFACE = 2u;
 static const uint NWB_REFLECTION_CANDIDATE_MASK_COUNT = 4u;
 static const uint NWB_REFLECTION_OBSERVATION_SURFACE_COUNT = 2u;
@@ -45,7 +43,6 @@ static const uint NWB_REFLECTION_SCREEN_WORK_LIMIT_SHIFT = 16u;
 static const uint NWB_REFLECTION_SCREEN_WORK_LIMIT_MASK = 255u;
 static const uint NWB_REFLECTION_SCREEN_WORK_BYPASS_SHIFT = 24u;
 
-// Integer ops need no ballot or 64-bit atomics. Iterations pack in 16 bits (max 128*256), misses/bypass in 8 bits (max 128).
 groupshared uint g_NwbReflectionCandidateMasks[NWB_REFLECTION_CANDIDATE_MASK_COUNT];
 groupshared uint g_NwbReflectionCandidateBase;
 groupshared uint g_NwbReflectionObservations[NWB_REFLECTION_OBSERVATION_SURFACE_COUNT];
@@ -68,7 +65,6 @@ NwbReflectionFeedbackTile nwbReflectionLoadFeedbackTile(const uint2 pixel, const
         return tile;
     const uint tilesX = (g_NwbReflectionParameters.dimensionsAndRoute.x + NWB_REFLECTION_FEEDBACK_GROUP_SIZE - 1u) / NWB_REFLECTION_FEEDBACK_GROUP_SIZE;
     const uint tilesY = (g_NwbReflectionParameters.dimensionsAndRoute.y + NWB_REFLECTION_FEEDBACK_GROUP_SIZE - 1u) / NWB_REFLECTION_FEEDBACK_GROUP_SIZE;
-    // The CPU declares the prior-bank read only for compatible accepted observations. Check the header first.
     const uint4 header = nwbHeapRawBuffer(g_NwbReflectionParameters.feedbackReadSlot).Load4(0u);
     if((header.w & NWB_REFLECTION_FEEDBACK_HEADER_VALID) == 0u || header.z != tilesX * tilesY || header.y != g_NwbReflectionParameters.feedbackProbeIndex - 1u)
         return tile;
@@ -80,7 +76,6 @@ NwbReflectionFeedbackTile nwbReflectionLoadFeedbackTile(const uint2 pixel, const
     tile.state = entry;
     tile.previousValid = true;
     const uint budget = min(g_NwbReflectionParameters.maxHardwareRays, g_NwbReflectionParameters.queueCapacity);
-    // Reserving order may differ when SSR skips. Every potential receiver must fit, including rough pixels whose sample changed.
     if(entry == NWB_REFLECTION_FEEDBACK_DORMANT && header.x <= budget){
         const uint phase = nwbReflectionSamplingHash(entryIndex) & (NWB_REFLECTION_FEEDBACK_PROBE_PERIOD - 1u);
         tile.probe = (g_NwbReflectionParameters.feedbackProbeIndex & (NWB_REFLECTION_FEEDBACK_PROBE_PERIOD - 1u)) == phase;
@@ -123,7 +118,6 @@ bool nwbReflectionClassifySurface(const uint2 pixel, const bool glass, const Nwb
         return false;
     nwbReflectionRecordDiagnostic(glass ? NWB_REFLECTION_COUNTER_GLASS_PIXELS : NWB_REFLECTION_COUNTER_OPAQUE_PIXELS, 1u);
     if(!any(surface.weight > half3(0.0h))){
-        // Below-horizon VNDF samples remain true zeros, but still contributed to stable eligibility above.
         result.a = 1.0h;
         return false;
     }
@@ -144,10 +138,6 @@ bool nwbReflectionClassifySurface(const uint2 pixel, const bool glass, const Nwb
             screenWork = iterations | (limited ? 1u << NWB_REFLECTION_SCREEN_WORK_LIMIT_SHIFT : 0u);
             if(returned){
                 observations |= NWB_REFLECTION_RETURN_OBSERVATION;
-                // Even provisional low-confidence radiance keeps the tile active.
-                // Hardware replaces it only through the ordinary fallback route; feedback never drops a useful screen return.
-                // Weighted blend is half color math: weight/environment/radiance/confidence all fit FP16.
-                // Keep source encoding and the threshold comparison in FP32; the stored tag is half.
                 result = half4(surface.weight * lerp(environment, radiance, confidence), half(NWB_REFLECTION_SOURCE_SCREEN + NWB_REFLECTION_SOURCE_CONFIDENCE_ENCODE_SCALE * float(confidence)));
                 if(float(confidence) >= g_NwbReflectionParameters.screenConfidenceThreshold){
                     nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_SCREEN_HITS, 1u);
@@ -194,13 +184,11 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint groupIndex : SV_Gro
         half4 glassResult;
         opaqueCandidate = nwbReflectionClassifySurface(pixel, false, opaqueTile, opaqueResult, opaqueObservations, opaqueWork);
         glassCandidate = nwbReflectionClassifySurface(pixel, true, glassTile, glassResult, glassObservations, glassWork);
-        // Every surface receives exactly one dispatch-owned write, including invalid surfaces and true zeros.
         nwbReflectionStore(pixel, false, half3(opaqueResult.rgb), opaqueResult.a);
         nwbReflectionStore(pixel, true, half3(glassResult.rgb), glassResult.a);
     }
 
     if(sharedWork){
-        // Main owns all sync. Tail lanes join even on diagnostic/Disabled routes; zero budget still counts, never routes.
         GroupMemoryBarrierWithGroupSync();
         const uint maskIndex = groupIndex >> NWB_REFLECTION_CANDIDATE_WORD_SHIFT;
         const uint bit = 1u << (groupIndex & NWB_REFLECTION_CANDIDATE_WORD_LANE_MASK);

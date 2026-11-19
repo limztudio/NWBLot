@@ -142,7 +142,6 @@ void DiscardRendererFramePackets(
 void RendererFramePipeline::render(in FramebufferPtr framebuffer){
     this.m_frameGraphSourceFrameIndex = this.m_graphics.getFrameIndex();
 
-    // Preserve the accepted frontier; artifacts below reset for the next frame.
     if(this.m_deferredLightingTaskGraphScheduled){
         const GpuTaskGraphDeclarationReadView declarations(this.m_deferredLightingTaskGraph);
         const GpuCompiledGraphReadView compiledPlan(this.m_deferredLightingCompiledGraph);
@@ -193,7 +192,6 @@ void RendererFramePipeline::render(in FramebufferPtr framebuffer){
         this.m_graphics.requestDeviceRecreation();
         return;
     }
-    // Use the device's primary physical Graphics queue for scheduling.
     const GpuPhysicalQueueId primaryGraphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
     const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics);
     const u32 computeFamilyIndex = device.getQueueFamilyIndex(CommandQueue::Compute);
@@ -210,7 +208,6 @@ void RendererFramePipeline::render(in FramebufferPtr framebuffer){
     const QueueSubmissionToken laggedLightingHistorySubmissionToken = this.m_laggedLightingHistorySubmissionToken;
     const b8 laggedLightingHistorySubmissionPending = LaggedLightingHistoryTokenPending(device, laggedLightingHistoryTargetGeneration, laggedLightingHistorySubmissionToken, this.m_laggedLightingHistoryGeneration);
 
-    // Keep only an incomplete accepted tail as the writer drain.
     if(laggedLightingHistorySubmissionPending){
         this.m_laggedLightingHistoryWriterDrainToken = laggedLightingHistorySubmissionToken;
         this.m_laggedLightingHistoryWriterDrainGeneration = this.m_laggedLightingHistoryGeneration;
@@ -220,23 +217,19 @@ void RendererFramePipeline::render(in FramebufferPtr framebuffer){
 
     if(laggedAsyncLightingRequested){
         if(this.m_laggedLightingHistoryGeneration != laggedLightingHistoryTargetGeneration){
-            // Generations block recycled slots after resize.
             this.invalidateLaggedLightingHistorySubmission();
             this.m_laggedLightingHistoryGeneration = laggedLightingHistoryTargetGeneration;
         }
     }
     else
         this.resetLaggedLightingHistoryReadTracking();
-    // Snapshot the prior tail before declaration resets the token.
     const QueueSubmissionToken priorLaggedLightingHistoryReadReadyToken = this.m_laggedLightingHistorySubmissionToken;
     const QueueSubmissionToken priorLaggedLightingHistoryWriterDrainToken = this.m_laggedLightingHistoryWriterDrainToken;
     const b8 laggedLightingHistoryWriterWaitPending = priorLaggedLightingHistoryWriterDrainToken.valid();
     const b8 hardwareShadowSupported = this.m_graphics.queryFeatureSupport(Feature::RayTracingAccelStruct) && this.m_graphics.queryFeatureSupport(Feature::RayQuery);
     const b8 laggedAsyncLightingSchedule = ShouldScheduleLaggedAsyncLighting(laggedAsyncLightingRequested, laggedLightingHistoryResourcesReady, priorLaggedLightingHistoryReadReadyToken.valid());
-    // The history tail is optional; its failure must not break the frame.
     const b8 requestsLaggedLightingHistoryCapture = laggedAsyncLightingRequested;
     this.m_shadowPrepareGraph.m_shadowPreparationOutcome.ready = false;
-    // Compile graphs first; the prefix records its five tasks natively.
     RendererFrameGraphFeatures frameGraphFeatures;
     frameGraphFeatures.frameLaggedAsyncLightingEnabled = this.m_frameLaggedAsyncLightingEnabled;
     frameGraphFeatures.laggedLightingHistoryReady = laggedLightingHistoryResourcesReady;
@@ -246,7 +239,6 @@ void RendererFramePipeline::render(in FramebufferPtr framebuffer){
     frameGraphFeatures.hardwareCaustics = hardwareShadowSupported;
     this.m_raytracingSystem.discardSoftShadowTemporalHistory();
 
-    // Preserve mirrors so rejected recordings retry exactly.
     const RayTracingFrameCpuStateSnapshot rayTracingCpuState = this.m_rayTracingState.captureFrameCpuState();
     const b8 avboitTargetsNeedClear = this.m_avboitSystem.captureTargetClearState();
     const b8 deferredBindlessSlotsUploaded = deferredTargets.bindless.slotsUploaded;
@@ -257,7 +249,6 @@ void RendererFramePipeline::render(in FramebufferPtr framebuffer){
     executeCpuRestoreSnapshot.rayTracing = rayTracingCpuState;
     executeCpuRestoreSnapshot.avboitTargetsNeedClear = avboitTargetsNeedClear;
     executeCpuRestoreSnapshot.deferredBindlessSlotsUploaded = deferredBindlessSlotsUploaded;
-    // Retain this token even if Surfel GI consumes the diagnostic.
     const QueueSubmissionToken surfelCounterReadbackCompletionToken = rayTracingCpuState.surfelCountReadbackSubmissionToken;
 
     FrameExecuteTimingState timing(this.m_graphics);
@@ -352,7 +343,6 @@ void RendererFramePipeline::render(in FramebufferPtr framebuffer){
         topology
     )){
         timing.discardTickets();
-        // No packet accepted yet; restore the CPU-only classification.
         this.m_rayTracingState.restorePreparedLightingCpuState(rayTracingCpuState);
         return;
     }
@@ -378,7 +368,6 @@ void RendererFramePipeline::render(in FramebufferPtr framebuffer){
         return;
     }
 
-    // Empty hooks use direct presentation for standalone passes.
     const QueueSubmissionPreSubmitHook framePresentationSignal = this.m_graphics.claimFramePresentationSignal();
     GpuTaskGraphTaskSubmissionHook terminalHook;
     terminalHook.task = terminalPresentationTask;

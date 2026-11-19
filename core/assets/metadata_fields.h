@@ -127,7 +127,6 @@ template<typename PathArenaT, typename MetadataValue>
     const auto text = ReadMetadataStringField(nwbFilePath, object, diagnosticPrefix, fieldName, required);
     if(!text)
         return MakeUnexpected(text.error());
-    // An absent optional field must remain s_NameNone. Name("") is a valid, non-null hash.
     if(!text->present)
         return s_NameNone;
 

@@ -118,7 +118,6 @@ public:
     }
     void shape(const HarfBuzzFont& font)noexcept{ hb_shape(font.m_font, m_buffer, nullptr, 0u); }
 
-    // Both shaped spans borrow the buffer until its next mutation.
     [[nodiscard]] Span<const hb_glyph_info_t> glyphInfos()const noexcept{
         u32 count = 0u;
         const auto* infos = hb_buffer_get_glyph_infos(m_buffer, &count);

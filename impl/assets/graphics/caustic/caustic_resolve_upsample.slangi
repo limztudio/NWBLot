@@ -20,7 +20,6 @@ struct NwbCausticResolveUpsample{
         const uint2 firstTile = uint2(clamp(baseTexel, int2(0), maximum)) / NWB_CAUSTIC_RESOLVE_GROUP_SIZE;
         const uint2 lastTile = uint2(clamp(baseTexel + 1, int2(0), maximum)) / NWB_CAUSTIC_RESOLVE_GROUP_SIZE;
         const uint tilesX = (g_NwbCausticResolvePushConstants.halfWidth + NWB_CAUSTIC_RESOLVE_GROUP_SIZE - 1u) / NWB_CAUSTIC_RESOLVE_GROUP_SIZE;
-        // The four clamped bilinear taps occupy one, two or four activity tiles.
         for(uint y = firstTile.y; y <= lastTile.y; ++y){
             for(uint x = firstTile.x; x <= lastTile.x; ++x){
                 if(nwbHeapRawBuffer(g_NwbCausticResolvePushConstants.activityInputSlot).Load((y * tilesX + x) * NWB_CAUSTIC_RESOLVE_ACTIVITY_WORD_BYTES) != 0u)
@@ -37,7 +36,6 @@ struct NwbCausticResolveUpsample{
 
         const int hw = (int)g_NwbCausticResolvePushConstants.halfWidth;
         const int hh = (int)g_NwbCausticResolvePushConstants.halfHeight;
-        // Center-aligned full-to-half texel mapping; changing it shifts the upsample.
         const float2 src = (float2(pixel) + 0.5) * 0.5 - 0.5;
         const int2 baseTexel = int2(floor(src));
         const half2 lerpFrac = half2(src - float2(baseTexel));
@@ -54,7 +52,6 @@ struct NwbCausticResolveUpsample{
             return;
         }
 
-        // World-position G-buffer is RGBA16F. Promote only for the distance edge stop, like the half-res cache.
         const float3 centerWorld = float3(nwbCausticResolveWorldAtFull(fullTexel));
         const int2 rightFull = int2(min(fullTexel.x + 1, fw - 1), fullTexel.y);
         const int2 downFull = int2(fullTexel.x, min(fullTexel.y + 1, fh - 1));
@@ -64,7 +61,6 @@ struct NwbCausticResolveUpsample{
         const float sigmaWorld = spacing * NWB_CAUSTIC_RESOLVE_UPSAMPLE_SIGMA_SCALE;
         const float invTwoSigmaWorldSq = 1.0 / (2.0 * sigmaWorld * sigmaWorld);
 
-        // Bilinear and edge-stop weights are (0, 1) bounded factors with an HDR color accumulator, matching the half tile cache.
         half3 sum = half3(0.0h, 0.0h, 0.0h);
         half weightSum = half(0.0h);
         [unroll] for(int j = 0; j < 2; ++j){

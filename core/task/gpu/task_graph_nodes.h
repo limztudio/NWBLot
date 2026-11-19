@@ -103,7 +103,6 @@ struct GpuTaskNode{
     u32 resourceUseCount = 0u;
     u32 resourceVersionUseOffset = 0u;
     u32 resourceVersionUseCount = 0u;
-    // Preserve declaration structure after resource-set uses expand into the materialized range above.
     u32 directResourceUseCount = 0u;
     u32 declaredResourceSetUseCount = 0u;
     u32 expandedResourceSetMemberUseCount = 0u;
@@ -113,8 +112,6 @@ struct GpuTaskNode{
     GpuTaskAcceptedThunk acceptPayload = nullptr;
     GpuTaskDiscardedThunk discardPayload = nullptr;
     GpuTaskPayloadDestroyThunk destroyPayload = nullptr;
-    // Lifecycle callbacks are scoped to one graph-owned recording attempt.
-    // A retry only re-arms every task after the preceding attempt fully discarded, so a stale native packet cannot publish a later attempt.
     mutable u64 lifecycleAttemptGeneration = 0u;
     mutable u64 recordingClaimGeneration = 0u;
     mutable u64 submissionClaimGeneration = 0u;
@@ -170,7 +167,6 @@ struct ResourceImportMatch{
     b8 samePointer = false;
 };
 
-// The binding borrows an import argument only until its pending resource node takes ownership.
 struct ResourceBinding{
     const TextureHandle* texture = nullptr;
     const BufferHandle* buffer = nullptr;
@@ -218,7 +214,6 @@ struct PipelineImportMatch{
     b8 samePointer = false;
 };
 
-// The pending pipeline node retains the imported handle before any registry entry is published.
 struct PipelineBinding{
     const GraphicsPipelineHandle* graphicsPipeline = nullptr;
     const ComputePipelineHandle* computePipeline = nullptr;

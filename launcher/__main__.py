@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Package entry point (`python -m launcher`)."""
 
 import sys
 

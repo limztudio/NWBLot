@@ -53,7 +53,6 @@ class UiTextEditResult{
     public usize eventsApplied = 0u;
 }
 
-// The host advances the corresponding generation when a declaration or its backing model is replaced.
 class UiTextEditOwner{
     public b8 operator==(in UiTextEditOwner rhs)const{
         return this.widget == rhs.widget && this.declarationGeneration == rhs.declarationGeneration && this.modelGeneration == rhs.modelGeneration;
@@ -85,7 +84,6 @@ class UiEditBoxGeometry{
     public u64 modelGeneration = 0u;
 }
 
-// Editor-local policy: a released second press within 500 ms and four logical units selects a word run.
 class UiEditClickTracker{
     public void cancel(){
         this.m_owner = UiTextEditOwner();

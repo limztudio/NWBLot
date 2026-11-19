@@ -76,10 +76,9 @@ class WindowRun:
         finish = self.point(origin[0] + dx, origin[1] + dy)
         self.native.button(True, *start)
         if leave:
-            self.native._post(0x02A3)  # WM_MOUSELEAVE must retain the active title gesture.
+            self.native._post(0x02A3)
         self.native.pointer(*finish)
         self.native.button(False, *finish)
-        # Send the drag and release batch without sleeps.
         scale_x, scale_y = self.snapshot[LIT_SCALE]
         return (finish[0] - start[0]) / scale_x, (finish[1] - start[1]) / scale_y
 
@@ -154,7 +153,7 @@ class WindowRun:
         if self.native.windows:
             origin = self.title_point()
             self.native.button(True, *self.point(*origin))
-            self.native._post(0x0215)  # WM_CAPTURECHANGED through the native loss callback.
+            self.native._post(0x0215)
             self.native.button(False, *self.point(origin[0] + 25.0, origin[1] + 10.0))
             self.checkpoint(LIT_CAPTURE_CHANGE_CANCEL, bounds, count)
             self.click(LIT_BUTTON)

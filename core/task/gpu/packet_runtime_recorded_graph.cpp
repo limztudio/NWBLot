@@ -131,7 +131,6 @@ GpuRecordedGraph::GpuRecordedGraph(GraphicsArena& arena)noexcept
 GpuRecordedGraph::~GpuRecordedGraph()noexcept{
     FOUNDATION_FATAL_ASSERT_MSG(!ArtifactOperation::ActiveFor(*this), "GpuRecordedGraph destruction requires active artifact operations to finish first");
 
-    // Destruction joins readers. A callback holding another artifact/transaction must not wait here; symmetric deadlock.
     if(ArtifactOperation::Active() || GpuGraphSubmissionTransaction::SubmissionOperation::Active()){
         ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Exclusive);
         FOUNDATION_FATAL_ASSERT_MSG(artifactOperation.valid(), "nested GpuRecordedGraph destruction cannot wait for active artifact operations");
@@ -411,8 +410,6 @@ b8 GpuRecordedGraph::validForWithinArtifactOperation(
         && validForWithinArtifactOperation(compiledGraph, planAccess, artifactAccess)
         && storage->graphIdentity == &graph
         && storage->recordingAttemptGeneration != 0u
-        // A terminal accepted/discarded artifact remains a valid immutable result after the graph releases its active attempt lease.
-        // Declaration admission plus the exact compiled-plan identity proves that the source graph has not mutated.
     ;
 }
 

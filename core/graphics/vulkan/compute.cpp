@@ -187,7 +187,6 @@ void CommandList::dispatchIndirect(u32 offsetBytes){
         return;
     }
 
-    // The bound buffer can pack independent commands or shader data. Only this dispatch's arguments are consumed.
     setBufferState(&buffer, ResourceStates::IndirectArgument, false, BufferRange(offsetBytes, sizeof(DispatchIndirectArguments)));
     if(m_commandRecordingFailed)
         return;

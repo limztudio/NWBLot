@@ -37,7 +37,6 @@ class ProgressPlacement{
     public Rect fillCanvas;
 }
 
-// Each declaration owns its value, policy, resolved semantic names and skin metrics.
 class ProgressFrame{
     public f64 fraction = 0.0;
     public ProgressOptions options;
@@ -72,7 +71,6 @@ b8 IsValidProgressMetrics(in ProgressMetrics metrics){
         && cast<f64>(metrics.contentSize.y) >= cast<f64>(cast<f32>(height));
 }
 
-// Finite fractions clamp visually to the unit interval.
 Expected<ProgressMetrics> MeasureProgress(in ProgressOptions options, in ProgressStyle style, in UiSkinRegion track, in UiSkinRegion fill, in f32 density){
     if(
         !IsValidLayoutSize(options.width)
@@ -109,7 +107,6 @@ Expected<ProgressMetrics> MeasureProgress(in ProgressOptions options, in Progres
     return candidate;
 }
 
-// Paint fillCanvas under fillReveal intersected with clip to preserve small-fill skin borders.
 Expected<ProgressPlacement> PlaceProgress(in Rect bounds, in Rect clip, in ProgressMetrics metrics, in f64 fraction){
     if(!IsBoundedUiRect(bounds) || !IsBoundedUiRect(clip) || !IsValidProgressMetrics(metrics) || !IsFinite(fraction))
         return MakeUnexpected(Failure());

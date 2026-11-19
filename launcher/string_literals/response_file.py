@@ -1,5 +1,3 @@
-"""Parse response files and run tools with driver-specific quoting."""
-
 from __future__ import annotations
 
 import subprocess
@@ -22,7 +20,6 @@ UNTERMINATED_QUOTE_MESSAGE = "Unterminated quote in response file"
 class ResponseFileTool:
     @staticmethod
     def split_gnu_response(text: str) -> list[str]:
-        """LLVM GNU response escaping applies inside both kinds of quoted text."""
         result = []
         index = 0
         whitespace = " \t\r\n"
@@ -53,15 +50,12 @@ class ResponseFileTool:
             result.append("".join(word))
         return result
 
-
     @staticmethod
     def quote_gnu_response(arguments: Sequence[str]) -> str:
         return " ".join('"' + argument.replace("\\", "\\\\").replace('"', '\\"') + '"' for argument in arguments)
 
-
     @staticmethod
     def split_windows_response(text: str) -> list[str]:
-        """LLVM's Windows response quoting: backslashes escape only double quotes."""
         result = []
         index = 0
         while index < len(text):
@@ -100,12 +94,10 @@ class ResponseFileTool:
             result.append("".join(word))
         return result
 
-
     @staticmethod
     def driver_response_quoting(tool: str, arguments: Sequence[str] = ()) -> str:
         name = Path(tool).stem.lower()
         return QUOTING_WINDOWS if name.endswith((CLANG_CL_DRIVER_NAME, "lld-link")) or name == "link" or CL_DRIVER_MODE_OPTION in arguments else QUOTING_POSIX
-
 
     @staticmethod
     def expand_response_files(arguments: Sequence[str], quoting: Optional[str] = None) -> list[str]:
@@ -134,10 +126,8 @@ class ResponseFileTool:
 
         return expand(arguments, ())
 
-
     @staticmethod
     def run_tool(command: Sequence[str], response_path: Path, prefix: Sequence[str] = ()) -> subprocess.CompletedProcess:
-        """Keep expanded compiler/linker arguments below host command-line limits."""
         mode = ResponseFileTool.driver_response_quoting(command[0], command[1:])
         controls = [argument for argument in command[1:] if argument.startswith(RESPONSE_QUOTING_OPTION)]
         if controls:
@@ -148,4 +138,3 @@ class ResponseFileTool:
         text = subprocess.list2cmdline(arguments) if mode == QUOTING_WINDOWS else ResponseFileTool.quote_gnu_response(arguments)
         response_path.write_text(text + "\n", encoding=RESPONSE_FILE_ENCODING)
         return subprocess.run([*prefix, command[0], *controls, "@" + str(response_path.resolve())], check=False)
-

@@ -29,9 +29,6 @@ namespace GraphicsModuleDetail{ class StandaloneGraphWorkspacePool; };
 
 class GraphicsStandaloneService final : NoCopy{
 public:
-    // A synchronous caller may declare one isolated graph through this callback.
-    // The graph owns all native recording and submission; the callback keeps only declaration-time inputs and returns its terminal task.
-    // `userData` stays caller-owned during the call.
     using StandaloneTaskGraphDeclaration = Expected<GpuTaskId>(*)(void* userData, GpuTaskGraph& graph);
 
 
@@ -39,13 +36,9 @@ public:
     struct BufferSetupDesc{
         BufferDesc bufferDesc;
         const void* data = nullptr;
-        // Upload sizes and destination offsets must be four-byte aligned.
         usize dataSize = 0;
         u64 destOffsetBytes = 0;
-        // Optional output written after producer submission and consumer readiness bridges.
         QueueSubmissionToken* acceptedToken = nullptr;
-        // Direct native consumer timeline; kCount resolves from payload size, final state, and available queues.
-        // The scheduler independently places the producer and submits readiness bridges for consumers.
         CommandQueue::Enum queue = CommandQueue::kCount;
 
 
@@ -57,8 +50,6 @@ public:
         }
     };
 
-    // One immutable CPU payload per subresource. Batch copies regions into graph blobs first, so callers may free decoded memory on return.
-    // A 3D mip is one region at arraySlice 0 whose depthPitch covers a single Z slice; 2D/cube uploads provide one region per array slice.
     struct TextureUploadRegion{
         const void* data = nullptr;
         usize dataSize = 0u;
@@ -76,9 +67,6 @@ public:
         }
     };
 
-    // Multi-subresource texture upload via a compiler-owned graph.
-    // Explicit `finalState` (keepInitialState: == initialState).
-    // hasPhysicalInitialState declares the native pre-upload state; explicit Unknown starts fresh images UNDEFINED.
     struct TextureUploadBatchDesc{
         TextureHandle destination;
         const TextureUploadRegion* regions = nullptr;
@@ -86,7 +74,6 @@ public:
         QueueSubmissionToken* acceptedToken = nullptr;
         ResourceStates::Mask finalState = ResourceStates::Unknown;
         ResourceStates::Mask physicalInitialState = ResourceStates::Unknown;
-        // See BufferSetupDesc::queue; the resolved native consumer must be admitted by the destination sharing contract.
         CommandQueue::Enum queue = CommandQueue::kCount;
         b8 hasPhysicalInitialState = false;
     };
@@ -113,8 +100,6 @@ public:
             .finalState = finalState, .physicalInitialState = initialState, .hasPhysicalInitialState = true,
         });
     }
-    // Compiles, records, and submits an isolated graph synchronously.
-    // This is the graph-owned escape hatch for a standalone caller that has no renderer-owned frame graph but can still provide immutable task inputs.
     [[nodiscard]] Expected<QueueSubmissionToken> submitStandaloneTaskGraph(
         void* userData,
         StandaloneTaskGraphDeclaration declareTask,

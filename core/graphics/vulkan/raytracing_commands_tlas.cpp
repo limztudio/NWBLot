@@ -188,7 +188,7 @@ b8 CommandList::buildTopLevelAccelStructFromInstanceData(
     const RayTracingAccelStructBuildFlags::Mask buildFlags,
     const VkBuildAccelerationStructureFlagsKHR vkBuildFlags,
     TStringView operationName,
-    const RayTracingInstanceDesc* /*instances*/
+    const RayTracingInstanceDesc*
 ){
     Buffer* const backingBuffer = as.getBackingBuffer();
     if(!m_device.isAccelStructReadyForGpuUse(&as) || !backingBuffer || !isBufferAdmittedToCommandQueue(*backingBuffer)){
@@ -248,7 +248,6 @@ b8 CommandList::buildTopLevelAccelStructFromInstanceData(
         return false;
     buildInfo.scratchData.deviceAddress = *scratchAddressResult;
 
-    // Order BLAS writes and prior TLAS writes before this TLAS build.
     {
         auto reuseBarrier = VulkanDetail::MakeVkStruct<VkMemoryBarrier2>(VK_STRUCTURE_TYPE_MEMORY_BARRIER_2);
         reuseBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;

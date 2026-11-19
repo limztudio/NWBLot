@@ -314,7 +314,6 @@ EntityID CreateReflectionOpticalBox(
 }
 
 Expected<OpticalReceiverEntities> CreateReflectionDenseReceiver(in b8 csg, mut World world){
-    // An admitted cutter leaves the nearest surface of the 18-crossing receiver intact.
     const EntityID receiver = CreateTintedStaticMeshEntity(
         s_ReflectionOpticalDenseMesh,
         s_ReflectionOpticalOpaqueMaterial,
@@ -347,7 +346,6 @@ Expected<OpticalReceiverEntities> CreateReflectionCsgBoundaryReceiver(
     in OpticalBoundaryMode mode,
     mut World world
 ){
-    // The cavity case starts the reflected ray inside the removed receiver volume.
     f32 posZ = -9.0f;
     f32 scaleZ = 2.0f;
     if(cavity){
@@ -386,7 +384,6 @@ b8 CreateReflectionOpticalObjects(in StringView caseName, mut World world){
         return CreateReflectionOpticalBox(-9.5f, 1.0f, 1.0f, clearTrans, world, OpticalBoundaryMode::Unspecified).valid();
 
     if(caseName == s_OpticalGroupEntryCase || caseName == "optical_csg_group_entry"){
-        // The cutter replaces the final grouped entry with a cap while the preceding positive thin solid remains retained.
         const b8 ordinary = caseName == s_OpticalGroupEntryCase;
         SmokeMeshRef mesh = s_ReflectionOpticalCsgGroupEntryMesh;
         if(ordinary)
@@ -410,7 +407,6 @@ b8 CreateReflectionOpticalObjects(in StringView caseName, mut World world){
 
     const b8 groupGapSubUlp = caseName == s_OpticalGroupGapSubUlpCase || caseName == "optical_csg_group_gap_sub_ulp";
     if(groupGapSubUlp || caseName == s_OpticalGroupGapCase || caseName == "optical_csg_group_gap"){
-        // Three closed components hide a positive gap inside a grouped 1 -> 0 -> 1 -> 2 winding sequence.
         SmokeMeshRef mesh = s_ReflectionOpticalGroupGapMesh;
         if(groupGapSubUlp)
             mesh = s_ReflectionOpticalGroupGapSubUlpMesh;
@@ -436,7 +432,6 @@ b8 CreateReflectionOpticalObjects(in StringView caseName, mut World world){
 
     const b8 subUlp = caseName == s_OpticalSubUlpCase || caseName == "optical_csg_sub_ulp";
     if(subUlp || caseName == s_OpticalSliverCase || caseName == "optical_csg_sliver"){
-        // Preserve Fresnel loss when sub-ULP thickness rounds interfaces to equal ray distances.
         f32 thickness = 0.000008f;
         if(subUlp)
             thickness = 0.0000004f;
@@ -780,7 +775,6 @@ void ReportReflectionSlicePackets(
     b8 runtimePresent = false;
     for(in FrameGraphNodeDesc node : graph.nodes){
         if(node.name == s_SmokeTimingNameEcsRenderFrame && node.runtimeStatistics.present){
-            // Native packet tables are exported only for the renderer's actual source frame, not the builder's label.
             runtimePresent = graphAvailable && node.runtimeStatistics.deviceGeneration == primaryGraphics.deviceGeneration;
             planGeneration = node.runtimeStatistics.planGeneration;
             break;
@@ -853,7 +847,6 @@ void ReportReflectionSlicePackets(
     );
 }
 
-// Synchronized probe for reflection CSG captures and packet receipts.
 class ReflectionCsgContextProbe : ISmokeCapturePredicate{
     public ReflectionCsgContextProbe(mut ProjectRuntimeContext context){
         this.m_context = context;
@@ -891,7 +884,6 @@ class ReflectionCsgContextProbe : ISmokeCapturePredicate{
     }
 
     public b8 sampleSynchronizedFrame(in ReflectionStatistics statistics, mut World world, mut RendererSystem renderer){
-        // Wait before advancing the world so latest-only diagnostic rows are not skipped.
         if(!this.m_context.graphics.waitForIdle()){
             error("ReflectionCsgContext: diagnostic frame synchronization failed");
             return false;
@@ -964,7 +956,6 @@ class ReflectionCsgContextProbe : ISmokeCapturePredicate{
         const b8 denseCutterActive = !small && csg;
         if(!SetSmokeEntityVisible(this.m_entities.smallReceiver, small, world))
             return false;
-        // Keep the inactive dense receiver in the current scene during small phases, away from all reflected probe rays.
         if(!SetSmokeEntityPositionX(this.m_entities.denseReceiver, denseX, world))
             return false;
         SetSmokeCsgCutterActive(this.m_entities.smallCutter, small, world);

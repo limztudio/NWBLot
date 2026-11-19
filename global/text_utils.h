@@ -159,7 +159,6 @@ template<typename CharT = char>
     return text.substr(0u, nameEnd);
 }
 
-// The index must not exceed the view length.
 [[nodiscard]] inline constexpr b8 IsEscapedQuoteAt(const AStringView text, const usize quoteIdx)noexcept{
     usize backslashes = 0u;
     usize pos = quoteIdx;
@@ -228,7 +227,6 @@ template<typename CharT, usize N>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The input must remain valid while the output grows.
 template<typename StringT>
 inline void AppendTextDiscardCrAndExpandLf(StringT& out, const AStringView text)noexcept(noexcept(out.append("\r\n")) && noexcept(out.push_back(char{}))){
     for(usize i = 0u; i < text.size(); ++i){
@@ -292,7 +290,6 @@ template<typename CharT>
     return count;
 }
 
-// The destination must have enough space and not overlap the input.
 template<typename CharT>
 [[nodiscard]] inline usize CopyWithCrBeforeBareLf(const BasicStringView<CharT> text, CharT* const destination)noexcept(IsArithmetic_V<CharT>){
     usize output = 0u;
@@ -356,7 +353,6 @@ template<typename CharT>
         || (scalar >= 0x5bu && scalar <= 0x60u) || (scalar >= 0x7bu && scalar <= 0x7eu);
 }
 
-// Fallback is null-terminated; both inputs must remain valid while the output grows.
 template<typename StringT>
 void AppendAsciiUpperIdentifier(const AStringView text, const char* const fallback, StringT& inOutText)noexcept(
     noexcept(DeclVal<void(*)(usize)noexcept>()(inOutText.size()))

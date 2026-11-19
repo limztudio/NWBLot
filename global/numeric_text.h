@@ -56,7 +56,6 @@ inline constexpr u64 s_HexNibbleMask = 0xFu;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Caller-owned bounded storage keeps scalar formatting independent of an allocator or locale.
 [[nodiscard]] inline Expected<AStringView, ErrorCode> FormatI64(const i64 value, const Span<char> buffer)noexcept{
     char* const begin = buffer.data();
     const auto result = std::to_chars(begin, begin + buffer.size(), value);
@@ -65,7 +64,6 @@ inline constexpr u64 s_HexNibbleMask = 0xFu;
     return AStringView(begin, static_cast<usize>(result.ptr - begin));
 }
 
-// The shortest general representation roundtrips to the same finite double, including signed zero.
 [[nodiscard]] inline Expected<AStringView, ErrorCode> FormatF64(const f64 value, const Span<char> buffer)noexcept{
     if(!IsFinite(value))
         return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
@@ -80,7 +78,6 @@ inline constexpr u64 s_HexNibbleMask = 0xFu;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Full-range caller storage makes decimal formatting total, including zero and the largest usize.
 namespace TextDetail{
 
 
@@ -231,7 +228,6 @@ template<typename NumberT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Stops at the first nondigit and wraps modulo 2^64, including overlong prefixes.
 template<typename CharT>
 [[nodiscard]] inline constexpr u64 ParseDecimalPrefixU64(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     u64 value = 0u;

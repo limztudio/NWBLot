@@ -11,7 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Cached resources keep the descriptors used by the patched material fields alive.
 class RendererMaterialResourceState : NoCopy{
     public HashMap<Name, UniquePtr<TextureGpuResource>> textureAssetCache;
     public HashMap<Name, UniquePtr<SamplerGpuResource>> samplerAssetCache;
@@ -37,7 +36,6 @@ class MaterialTextureIdentity{
     }
 }
 
-// If growing the ordered output fails, the texture must be eligible for a later append.
 class MaterialTextureInsertion : NoCopy{
     private mut HashSet<MaterialTextureIdentity> m_index;
     private MaterialTextureIdentity m_key;

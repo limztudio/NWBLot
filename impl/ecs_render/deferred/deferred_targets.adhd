@@ -226,7 +226,6 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     createdTargets.csgReceiverSpanLayerCount = s_CsgReceiverSpanLayerCount;
     createdTargets.csgRemovedIntervalLayerCount = s_CsgRemovedIntervalLayerCount;
 
-    // AsyncCompute lighting samples every G-buffer attachment after Graphics AVBOIT; keep their sharing concurrent.
     if(!CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.albedoFormat, false, true, s_ClearColor, s_DeferredAlbedoTargetName, "RendererSystem: failed to create deferred albedo target", this.m_graphics, createdTargets.albedo))
         return MakeUnexpected(Failure());
     if(!CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.normalFormat, false, true, s_GBufferNormalClearColor, s_DeferredNormalTargetName, "RendererSystem: failed to create deferred normal target", this.m_graphics, createdTargets.normal))

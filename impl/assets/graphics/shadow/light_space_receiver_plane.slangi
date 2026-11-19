@@ -9,17 +9,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Encoded normals keep 10 bits per component, so one quantization step is 2^-10.
 #define NWB_LIGHT_SPACE_PLANE_NORMAL_QUANTIZATION_STEPS 1024.0
-// Plane distance roundoff, in float epsilons.
 #define NWB_LIGHT_SPACE_PLANE_ROUNDOFF_EPSILONS 8.0
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Reconstruct the captured texel-center ray, then intersect the receiver's local plane along that ray.
-// Both projection types use the actual stored view basis; framebuffer Y increases opposite projected Y.
 bool nwbLightSpaceReceiverDepth(const NwbLightSpaceView view, const uint2 pixel, const float3 origin, const float3 receiverNormal, const float3 receiverPositionError, out float projectedDepth, out float linearDepth){
     projectedDepth = 0.0;
     linearDepth = 0.0;
@@ -50,7 +46,6 @@ bool nwbLightSpaceReceiverDepth(const NwbLightSpaceView view, const uint2 pixel,
         direction = -view.originOrDirection.xyz;
         footprint = min(2.0 / (sqrt(xScale) * float(view.map.x)), 2.0 / (sqrt(yScale) * float(view.map.y)));
     }
-    // Encoded unit normals have at most 2^-10 error per decoded component. Normalization increases its L2 bound.
     const float rawNormalError = sqrt(NWB_LIGHT_SPACE_SPATIAL_DIMENSION_COUNT) / NWB_LIGHT_SPACE_PLANE_NORMAL_QUANTIZATION_STEPS;
     const float normalError = 2.0 * rawNormalError / (1.0 - rawNormalError);
     const float roundoff = NWB_LIGHT_SPACE_PLANE_ROUNDOFF_EPSILONS * NWB_FLOAT_EPSILON;
@@ -73,7 +68,6 @@ bool nwbLightSpaceReceiverDepth(const NwbLightSpaceView view, const uint2 pixel,
 #endif
     const float planeError = dot(abs(receiverNormal), positionError) + normalError * length(relativeHit) + roundoff * (length(relativeAnchor) + abs(distance));
     const float depthError = planeError / (abs(denominator) - denominatorError);
-    // Never convert an unstable plane into an unbounded depth bias. Keep error well inside a texel to avoid light leaks.
     if(!isfinite(depthError) || !isfinite(footprint) || footprint <= 0.0 || depthError > 0.25 * footprint)
         return false;
     const float3 corrected = hit - direction * depthError;
@@ -86,14 +80,10 @@ bool nwbLightSpaceReceiverDepth(const NwbLightSpaceView view, const uint2 pixel,
     if(depth > 1.0){
         if((view.light.w & NWB_LIGHT_SPACE_FLAG_FITTED_COVERAGE) == 0u)
             return false;
-        // All captured casters lie before the fitted far plane.
-        // Threshold 1 includes them while clear D32 stays lit.
-        // Retain the actual corrected plane distance for PCSS rather than inverting a clamped depth.
         projectedDepth = 1.0;
         linearDepth = point ? distance - depthError : nwbLightSpaceLinearDepth(view, corrected);
         return isfinite(linearDepth) && linearDepth >= 0.0;
     }
-    // One full D32 spacing covers stored-depth quantization; keep its world-space effect inside the same bound.
     projectedDepth = asfloat(asuint(depth) - 1u);
     if(point){
         const float scale = view.depthRange.x * view.depthRange.y;
@@ -111,9 +101,6 @@ bool nwbLightSpaceReceiverDepth(const NwbLightSpaceView view, const uint2 pixel,
     return isfinite(linearDepth) && linearDepth >= 0.0;
 }
 
-
-// Compact penumbra estimates need only an approximate receiver distance, never a visibility threshold.
-// Omit invalid or grazing neighbors without the center/visibility path's quantization and footprint proof.
 bool nwbLightSpaceReceiverEstimateDepth(const NwbLightSpaceView view, const uint2 pixel, const float3 origin, const float3 receiverNormal, out float linearDepth){
     linearDepth = 0.0;
     if(!all(isfinite(origin)) || !all(isfinite(receiverNormal)) || any(view.map.xy == 0u))

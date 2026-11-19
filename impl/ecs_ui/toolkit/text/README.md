@@ -2,9 +2,12 @@
 
 `nwb_ui_text` owns font versions, shaping, multiline label layout, cluster hit testing,
 and grayscale coverage plus optional baked SDF atlas images. Its public dependencies
-include `nwb_ui`, `nwb_assets_font_atlas`, and the Core FreeType and HarfBuzz bindings.
+include `nwb_ui`, `nwb_assets_font_atlas`, `nwb_assets_font_freetype` (`impl/assets_font/freetype_sdk.{h,adhd}`),
+and `nwb::harfbuzz`, with local SDK adapters in `impl/ecs_ui/toolkit/text/freetype_sdk.{h,adhd}`
+and `harfbuzz_sdk.{h,adhd}`.
 
-Construct `TextService` with the UI owner's `Core::Alloc::GlobalArena`. That arena must
+Construct `TextService()` in `.adhd` using the UI owner's mother arena (`Core::Alloc::GlobalArena`,
+passed as the hidden leading `::ArenaBase&` in generated C++). That arena must
 outlive the service, every returned layout, every published glyph page, and submitted
 paint snapshots. Call `setFonts()` on the owning UI thread with an ordered primary and
 fallback list of matching loaded `Font` assets, typed `AssetRef<Font>` identities,
@@ -47,7 +50,7 @@ font does not establish paragraph bidi, Unicode line breaking, or native IME sup
 ## Layout, measurement, and hit testing
 
 `TextLayoutBuilder` consumes `ITextShaper` and publishes a move-only `TextLayout`.
-`layout(request)` returns `Expected<TextLayout, TextLayoutStatus::Enum>`. Check success
+`layout(request)` returns `Expected<TextLayout, TextLayoutStatus>` in `.adhd` (`Expected<TextLayout, TextLayoutStatus::Enum>` in generated C++). Check success
 before consuming or moving the new layout; a failure carries its layout status and
 does not modify an earlier caller-owned layout. The layout owns copied UTF-8 text, positioned glyphs, cluster records,
 and line records in the builder's arena. It has no automatic wrapping, alignment,

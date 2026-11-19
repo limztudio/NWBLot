@@ -44,7 +44,6 @@ b8 SourceEmitter::tryEmitScalarFloatExpr(MString& out, const Expr& expr)const{
     const MStringView prefix = CodegenSymbols::SimdPrefix(isDouble);
     const MStringView scalarType = CodegenSymbols::SimdScalarCppType(isDouble);
     if(assignment){
-        // Evaluate the right side before asking for the target, outside generated names.
         out.append("([](auto __target, const auto __rhs)").append(lambdaExceptionSpec()).append(" -> decltype(auto){ auto& __lhs = __target(); __lhs = ");
     }
     else if(increment){

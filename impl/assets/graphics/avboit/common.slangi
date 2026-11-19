@@ -64,9 +64,6 @@ struct NwbAvboitDrawPushConstants{
 #include "push_constants.slangi"
 #undef NWB_AVBOIT_PUSH_CONSTANTS
 
-// AVBOIT's five work buffers and the target-generation slot payload are global heap entries.
-// The push block carries only the UniformBuffer descriptor index for that shared payload; the payload then selects every StorageBuffer entry.
-// This keeps the transparent draw ABI at the portable 128-byte limit while removing pass-local buffer/CBV descriptors entirely.
 #define NWB_AVBOIT_DEFERRED_SLOTS_DESCRIPTOR_SLOT g_NwbAvboitDraw.nwbAvboitHeapSlots[NWB_AVBOIT_PUSH_HEAP_SLOT_DEFERRED_BINDLESS_RESOURCES]
 #include "heap_resources.slangi"
 
@@ -113,7 +110,6 @@ void nwbAvboitLinearVirtualSlicesFromDepth(float depth, out uint outSlice0, out 
 
     outSlice0 = uint(sliceBase);
     outSlice1 = min(outSlice0 + 1u, virtualSliceCount - 1u);
-    // Slice blend weights are (0, 1) bounded factors; half math is sufficient here.
     const half blendWeight1 = outSlice1 != outSlice0 ? half(slicePosition - sliceBase) : half(0.0h);
     outWeight1 = blendWeight1;
     outWeight0 = half(1.0h) - blendWeight1;

@@ -20,26 +20,21 @@ class MaterialSurfaceInfo{
     public String shaderVariant;
     public AssetRef<PixelShader> pixelShader;
     public AssetRef<MeshShader> meshShader;
-    // Transparent surface materials require this cook-generated AVBOIT accumulation shader; opaque materials carry none.
     public AssetRef<PixelShader> avboitAccumulatePixelShader;
-    // Occupancy/extinction must evaluate the same surface.renderCoverage and follow the same presence contract.
     public AssetRef<PixelShader> avboitOccupancyPixelShader;
     public AssetRef<PixelShader> avboitExtinctionPixelShader;
     public u64 typedLayoutHash = 0u;
     public Vector<MaterialTypedLayoutBlock> typedLayoutBlocks;
     public Vector<MaterialTypedLayoutField> typedLayoutFields;
     public Vector<MaterialResourceReference> resourceReferences;
-    // The cooked constants have zero-filled resource words. The renderer patches a working copy and restores from this copy on invalidation.
     public Vector<u8> unpatchedConstantTypedBytes;
     public Vector<u8> constantTypedBytes;
     public Vector<u8> mutableDefaultTypedBytes;
     public u32 shadingModelId = 0u;
     public u32 surfaceDispatchId = 0u;
-    // CSG caps evaluate the generated surface hook with this material's constants. Opaque stage shaders have no hook.
     public b8 csgCapSurfaceDispatchAvailable = false;
     public b8 csgCapSurfaceDispatchUnavailableLogged = false;
     public b8 resourceReferencesResolved = false;
-    // Refractive classifies RT casters; NwbMeshSurface owns IOR and shadow absorption values.
     public b8 transparent = false;
     public b8 twoSided = false;
     public b8 refractive = false;

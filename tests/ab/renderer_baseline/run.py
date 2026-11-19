@@ -197,7 +197,6 @@ def capture_scene(args: argparse.Namespace, profile: BaselineProfile, capture_pa
                 if not log_directory:
                     raise SmokeFailure("frame-locked renderer baseline requires a readable runtime-log directory")
                 wait_for_log_message(log_directory, log_baseline, log_pattern, profile.capture_ready_log, args.startup_timeout,)
-                # Wait for the held update phase to settle before client capture.
                 time.sleep(args.settle_seconds)
             else:
                 time.sleep(args.settle_seconds)

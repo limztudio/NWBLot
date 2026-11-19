@@ -57,7 +57,6 @@ b8 GpuGraphSubmissionTransaction::appendAcceptedQueueFrontierWaitTokens(const Gp
             continue;
         if(!latest.queue.valid() || latest.queue.deviceGeneration != m_deviceGeneration || !latest.token.valid() || !latest.token.matchesPhysicalQueue(latest.queue.index, latest.queue.deviceGeneration))
             return false;
-        // One newest token per queue, so no producer duplicates even after several accepts before the recovery tail arms.
         outTokens.push_back(latest.token);
     }
     return true;

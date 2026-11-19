@@ -66,7 +66,6 @@ bool nwbLightSpaceBuildView(inout NwbLightSpaceView view){
         if(!isfinite(farPlane) || farPlane <= minimumNearPlane)
             return false;
         float minimumCasterDistance = farPlane;
-        // A near-plane-clipped caster needs ray traversal. Current posed mesh roots prove this without CPU readback.
         for(uint instanceIndex = 0u; instanceIndex < g_NwbLightSpacePush.instanceCount; ++instanceIndex){
             if(nwbCsgShadowHardwareCompose() && !nwbCsgShadowReceiver(instanceIndex))
                 continue;
@@ -80,7 +79,6 @@ bool nwbLightSpaceBuildView(inout NwbLightSpaceView view){
                 return false;
             minimumCasterDistance = min(minimumCasterDistance, conservativeDistance);
         }
-        // Inside a 90-degree cube face view-Z >= radialDistance / sqrt(3). Keep a further factor-two caster margin.
         const float nearPlane = max(minimumNearPlane, minimumCasterDistance * (0.5 / sqrt(NWB_LIGHT_SPACE_SPATIAL_DIMENSION_COUNT)));
         if(!isfinite(nearPlane) || nearPlane >= farPlane)
             return false;
@@ -123,7 +121,6 @@ bool nwbLightSpaceBuildView(inout NwbLightSpaceView view){
         if(!all(isfinite(view.worldToClipRows[row])))
             return false;
     }
-    // Hardware composition fits the complete CSG caster set, independently of the ordinary map-quality setting.
     if(nwbCsgShadowHardwareCompose())
         view.light.w |= NWB_LIGHT_SPACE_FLAG_FITTED_COVERAGE;
     return true;

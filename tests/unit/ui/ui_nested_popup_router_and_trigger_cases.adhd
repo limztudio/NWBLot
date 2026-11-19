@@ -999,7 +999,6 @@ void VerifyUiNestedPopupReentryTests_LateParentRevisionScopeReentryRejectsAfterA
     self.m_siblingSource.resetObservations();
     self.m_childSource.observeAttemptsOf(self.m_parentSource);
     self.m_siblingSource.observeAttemptsOf(self.m_parentSource);
-    // The parent has finished painting before child text arms its next revision call in final validation.
     self.m_childSource.armRevisionAfterText(self.m_parentSource, self.m_builder);
     EXPECT_FALSE(self.m_builder.endPopup());
     EXPECT_EQ(self.m_childSource.arms(), 1u);

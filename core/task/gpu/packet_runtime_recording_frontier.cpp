@@ -285,8 +285,6 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                 workerBusySeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(workerBusySeconds), VectorDoubleReplicate(recordedPacket->recordingSeconds)));
         }
 
-        // CpuTaskScheduler workers and its calling thread are all callable logical recording slots.
-        // Keeping the entire successful ready-frontier operation in the denominator exposes serial fallbacks and underfilled frontiers.
         const f64 workerCount = static_cast<f64>(cpuScheduler.workerThreadCount());
         const f64 logicalWorkerSlotCount = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(workerCount), VectorDoubleReplicate(1.0)));
         outRecordedGraph.addRecordingElapsedSeconds(elapsedSeconds, artifactOperation);
@@ -294,7 +292,6 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         outRecordedGraph.addReadyFrontierStatistics(elapsedSeconds, workerBusySeconds, availableWorkerSeconds, artifactOperation);
     };
 
-    // Command-IR is one linear artifact: capture stays serial, right after prepare, so one span owns the op.
     if(!usesParallelRecording){
         if(!recordPreparedPacketRangeInCompileOrder(graph, compiledGraph, planAccess, artifactOperation, range, serialStateFanInScratchArena, *serialScratch, outRecordedGraph, outCommandIrCapture, outFailedPacket))
             return false;
@@ -324,7 +321,6 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         }
         return true;
     };
-    // Compiler order is already free for monotonic frontiers, including a deep state-seed chain. A later independent packet may lower the frontier again.
     if(!recordingFrontiersAreMonotonic){
         Sort(recordingEntries.begin(), recordingEntries.end(), __hidden_gpu_packet_runtime_recording_frontier::LessPacketRecordingFrontierEntry);
     }
@@ -365,7 +361,6 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                     parallelResults[parallelIndex] = 0u;
                     return;
                 }
-                // Serial lists keep zero; shift every lease by one. The stable domain stops a second scheduler aliasing this shard.
                 parallelResults[parallelIndex] = recordPacket(
                     graph,
                     compiledGraph,
@@ -430,7 +425,6 @@ b8 GpuNativePacketRecorder::recordPreparedPacketRangeInCompileOrder(
 )const{
     const usize rangeBegin = range.first.index;
     const usize rangeEnd = rangeBegin + range.packetCount;
-    // Compiler packet IDs are in stable topological order, preserving state-seed dependencies.
     for(usize packetIndex = rangeBegin; packetIndex < rangeEnd; ++packetIndex){
         const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
         if(!recordPacket(graph, compiledGraph, planAccess, artifactAccess, packet, 0u, 0u, stateFanInScratchArena, scratch, outRecordedGraph, outCommandIrCapture)){

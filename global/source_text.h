@@ -64,7 +64,6 @@
     return ExtractLeadingIdentifier(text.substr(index));
 }
 
-// The starting index must point to an opening quote.
 [[nodiscard]] inline usize SkipQuotedLiteral(const AStringView text, usize index)noexcept{
     const char quote = text[index++];
     while(index < text.size() && text[index] != quote){

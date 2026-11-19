@@ -116,8 +116,6 @@ thread_local GpuGraphSubmissionTransaction::SubmissionOperation* GpuGraphSubmiss
 
 
 GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(const GpuGraphSubmissionTransaction& transaction, const SubmissionOperationMode::Enum mode, const GpuRecordedGraph::ArtifactOperation* const borrowedArtifact)noexcept{
-    // Any reentry, for the same or another transaction, is a prompt rejection regardless of target availability.
-    // An exception finalizer can therefore run after its local gates unwind without retaining an unrelated transaction gate on this thread.
     if(s_ActiveOperation)
         return;
     if(GpuRecordedGraph::ArtifactOperation::Active() && !borrowedArtifact)

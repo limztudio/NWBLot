@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise delayed noninteractive tooltips and anchor-bound context menu commands."""
+
 from __future__ import annotations
 
 import json
@@ -135,7 +135,6 @@ class PopupToolsRun:
         self.native.confirmed_button(True, *anchor, deadline=self.deadline)
         self.checkpoint("held_primary_suppresses_tooltip", tooltip=0, sentinel_focused=0)
         self.native.confirmed_button(False, *anchor, deadline=self.deadline)
-        # Move the pointer off the anchor so the hover tooltip does not reappear during capture.
         self.hover(LIT_COUNTER)
         self.checkpoint("primary_release_activates_anchor", anchor_clicks=1)
         self.hover(LIT_COUNTER)
@@ -206,7 +205,6 @@ class PopupToolsRun:
         self.hover(LIT_COUNTER)
         self.checkpoint("enable_restores_attachment", enabled=1)
         self.click(LIT_ANCHOR)
-        # Move the pointer off the anchor so the hover tooltip stays hidden.
         self.hover(LIT_COUNTER)
         self.checkpoint("fresh_primary_focuses_enabled_anchor", anchor_clicks=2)
         self.hover(LIT_COUNTER)

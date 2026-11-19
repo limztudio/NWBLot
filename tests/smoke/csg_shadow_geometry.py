@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Independent carved-box and analytic optical-length oracle."""
 
 import math
 
@@ -35,7 +34,6 @@ class CsgShadowGeometry:
 
     @staticmethod
     def reference_optical_length(x, y, arm, light):
-        """Intersect mathematical solids, subtract cutter intervals, then sum each volume independently."""
         origin = (x, y, 0.0)
         distance = math.sqrt(x * x + y * y + 144.0)
         direction = (-x / distance, -y / distance, -12.0 / distance) if light == LIT_POINT else (0.0, 0.0, -1.0)
@@ -69,7 +67,6 @@ class CsgShadowGeometry:
 
     @staticmethod
     def expected_sample_rgb(x, y, arm, light):
-        # The slab solver already returns Euclidean distance, including the point-light ray angle.
         return CsgShadowGeometry.expected_rgb(CsgShadowGeometry.reference_optical_length(x, y, arm, light), x, y, LIT_DIRECTIONAL)
 
     @staticmethod
@@ -83,7 +80,6 @@ class CsgShadowGeometry:
 
     @staticmethod
     def analytic_optical_length(x, y, arm):
-        """World-space cross sections of six glass boxes; no engine transforms or ray solver are reused."""
         for slot in range(6):
             dx, dy = x - ((slot % 3) - 1) * 2.0, y - (1.0 if slot < 3 else -1.0)
             if abs(dx) > 0.7 or abs(dy) > 0.7:
@@ -91,14 +87,12 @@ class CsgShadowGeometry:
             if arm == LIT_UNCUT or slot == 5:
                 return 2.0
             if slot == 0:
-                # Cut the tilted half-space 0.5 * dx + z + 6 <= 0.
                 cuts = [(-math.inf, -6.0 - 0.5 * dx)]
             elif slot == 1:
                 radial = (dx / 0.5) ** 2 + (dy / 0.45) ** 2
                 half_chord = 0.75 * math.sqrt(max(0.0, 1.0 - radial))
                 cuts = [(-6.0 - half_chord, -6.0 + half_chord)]
             elif slot == 2:
-                # The distance to the transverse Y segment separates body and hemispherical endcaps.
                 segment_distance = max(0.0, abs(dy) - 0.25)
                 half_chord = math.sqrt(max(0.0, 0.35 ** 2 - dx ** 2 - segment_distance ** 2))
                 cuts = [(-6.0 - half_chord, -6.0 + half_chord)]

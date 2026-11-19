@@ -46,7 +46,6 @@ public:
 
 
 public:
-    // Descriptor-buffer metadata; layouts must be pure resource or sampler sets.
     [[nodiscard]] b8 isDescriptorBufferCompatible()const noexcept{ return m_descriptorBufferCompatible; }
 
     [[nodiscard]] u32 getDescriptorBufferSetSizeBytes()const noexcept{ return m_descriptorBufferSetSizeBytes; }
@@ -59,10 +58,8 @@ public:
 private:
     BindingLayoutDesc m_desc;
     BindlessLayoutDesc m_bindlessDesc;
-    // Only push-only layouts own a reusable zero-set pipeline layout.
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     Vector<VkDescriptorSetLayout, Alloc::GlobalArena> m_descriptorSetLayouts;
-    // Driver-created set size, segment, and binding offsets.
     u32 m_descriptorBufferSetSizeBytes = 0;
     u32 m_pushConstantByteSize = 0;
     DescriptorBufferSegmentKind::Enum m_descriptorBufferSegmentKind = DescriptorBufferSegmentKind::None;
@@ -101,9 +98,7 @@ public:
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
 
     [[nodiscard]] u64 getDeviceAddress()const noexcept{ return m_deviceAddress; }
-    // Exposed for explicit scheduling handoffs.
     [[nodiscard]] Buffer* getBackingBuffer()const noexcept{ return m_buffer.get(); }
-    // Graph declarations retain this handle when a task must seed or transition the backing storage explicitly.
     [[nodiscard]] const BufferHandle& getBackingBufferHandle()const noexcept{ return m_buffer; }
     Object getNativeHandle(ObjectType objectType)noexcept;
 
@@ -251,8 +246,6 @@ public:
     [[nodiscard]] ResourceStates::Mask getPermanentBufferState(Buffer* buffer)const noexcept;
     [[nodiscard]] ResourceStates::Mask getTextureState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const noexcept;
     [[nodiscard]] ResourceStates::Mask getBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer)const noexcept;
-    // Explicit state comes from this command list or an imported packet handoff.
-    // A keep-initial-state descriptor fallback deliberately does not count: graph lowering can still declare the first known graph state.
     [[nodiscard]] b8 hasExplicitTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const noexcept;
     [[nodiscard]] b8 hasExplicitBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer, b8 requireKnown = false)const noexcept;
 

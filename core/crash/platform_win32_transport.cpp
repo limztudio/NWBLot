@@ -44,14 +44,11 @@ CrashDumpTransportStatus::Enum WindowsCrashTransport::Request(CrashState& state,
     if(state.requestWriteHandle == INVALID_HANDLE_VALUE)
         return CrashDumpTransportStatus::Failed;
 
-    // Re-entrancy guard: a fault inside the transport (e.g. the SEH filter faulting) must not re-enter or self-deadlock.
     static thread_local b8 s_InTransport = false;
     if(s_InTransport)
         return CrashDumpTransportStatus::Failed;
     s_InTransport = true;
 
-    // One writer owns the request pipe and ack event; other requests are not sent.
-    // One async-safe CAS, never blocks.
     u32 expected = 0u;
     if(!state.transportInFlight.compare_exchange_strong(expected, 1u, MemoryOrder::acq_rel, MemoryOrder::acquire)){
         s_InTransport = false;
@@ -75,8 +72,6 @@ CrashDumpTransportStatus::Enum WindowsCrashTransport::Request(CrashState& state,
             break;
         }
 
-        // Wake on the ack event OR the handler process dying, so a dead/wedged handler never costs the full timeout.
-        // Falls back to a single-object wait if the handler process handle is unavailable.
         Array<HANDLE, s_CrashWaitHandleCount> waitHandles = { state.crashHandledEvent, state.handlerProcessInfo.hProcess };
         const DWORD waitCount = state.handlerProcessInfo.hProcess ? s_CrashWaitHandleCount : 1u;
         const DWORD waitResult = WaitForMultipleObjects(waitCount, waitHandles.data(), FALSE, waitMilliseconds);
@@ -97,7 +92,6 @@ CrashDumpTransportStatus::Enum WindowsCrashTransport::Request(CrashState& state,
             status = CrashDumpTransportStatus::TimedOut;
             break;
         }
-        // WAIT_OBJECT_0 + 1 (handler process exited) or WAIT_FAILED: treat as a failed transport.
         status = CrashDumpTransportStatus::Failed;
     }while(false);
 

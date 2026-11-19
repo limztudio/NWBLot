@@ -59,15 +59,11 @@ public:
 
 
 public:
-    // The caller owns this unaccepted recording transaction; its command buffers cannot submit concurrently.
     [[nodiscard]] b8 discardUnacceptedRecording(const TimerQueryRecordingToken& token)noexcept;
-    // The caller has made its prior endpoint packet permanently non-submittable.
-    // Preserve the accepted begin cycle while relinquishing only the stale end owner so a recovery command buffer can record its replacement endpoint.
     [[nodiscard]] b8 releaseUnacceptedEndForRecovery(const TimerQueryRecordingToken& token)noexcept;
 
 
 private:
-    // Caller holds m_mutex while consulting prerequisite and completed-cycle predicates.
     [[nodiscard]] QueueSubmissionToken prerequisiteSubmissionWithinLock()const noexcept{
         return m_completedCycleSubmission.valid() ? m_completedCycleSubmission : m_resetAuthorizationSubmission;
     }

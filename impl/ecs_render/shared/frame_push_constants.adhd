@@ -18,8 +18,6 @@ extern const u32 s_ShaderSceneLightRecordFloatCount;
 const u32 s_RtInvalidSlot = 0xffffffffu;
 const usize s_SmallInlineIndexCapacity = 32u;
 const usize s_PromotedInlineIndexCapacity = s_SmallInlineIndexCapacity * 4u;
-// Shared-output emulation alternates one generate and one raster phase per draw.
-// Keep supported range in contract; domains stay independent of RendererFramePipeline.
 const usize s_SharedComputeEmulationPhasesPerDraw = 2u;
 const usize s_SharedComputeEmulationMinimumDrawCount = 2u;
 const usize s_SharedComputeEmulationMaximumDrawCount = 5u;
@@ -85,7 +83,6 @@ enum<u8> SharedComputeEmulationPhase{
     Raster = 1u
 }
 
-// Ray tracing gathers emission targets before Deferred ranks lights. The root module brokers this contract between them.
 class RayTracingLightingClassificationInput{
     public u32 refractiveInstanceCount = 0u;
 }
@@ -95,7 +92,6 @@ class RayTracingLightingClassification{
     public u32 softShadowSlotMask = 0u;
 }
 
-// Eleven std140 uint4 lanes of ordinary-pass heap slots.
 [serialize]
 class DeferredBindlessResourceSlots{
     public u32 gbufferBaseColor = 0u;
@@ -125,11 +121,9 @@ class DeferredBindlessResourceSlots{
 
     public u32 avboitExtinctionOverflow = 0u;
     public u32 avboitTransmittanceStorage = 0u;
-    // Compute composite output sampled by the Graphics presentation blit.
     public u32 compositeColor = 0u;
     public u32 compositeColorStorage = 0u;
 
-    // CSG typed Texture2DArray aliases use the global StorageImage heap.
     public u32 csgCapBackNormal = 0u;
     public u32 csgIntervalDepth = 0u;
     public u32 csgIntervalId = 0u;
@@ -177,7 +171,6 @@ class StatisticsReservationKey{
     public u32 slot;
 }
 
-// Summarizes one owner-serialized ledger drain at the compiler boundary.
 class RendererTaskTimingFeedbackDrainResult{
     public usize acceptedAssignmentCount = 0u;
     public usize recordedSampleCount = 0u;
@@ -191,7 +184,6 @@ class MeshFrameHeapSlots{
     public u32 instance = 0u;
     public u32 materialTyped = 0u;
     public u32 view = 0u;
-    // Emulation writable vertex buffer; mesh-shader draws leave this lane zero.
     public u32 generatedVertex = 0u;
 }
 
@@ -224,7 +216,6 @@ class EmulatedVertex{
 
 [serialize]
 class SceneShadingGpuData{
-    // xyz = camera world position, w = active light count.
     public f32x4 cameraPositionLightCount(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
@@ -233,19 +224,13 @@ static_assert(size_of<SceneShadingGpuData>() == s_SceneShadingGpuDataBytes, "Sce
 
 [serialize]
 class SceneLightGpuData{
-    // xyz = world position (point/spot), w = spot inner cone cosine.
     public f32x4 position(0.0f, 0.0f, 0.0f, 1.0f);
-    // directional: toward-light; spot: emission axis. w = spot outer cone cosine.
     public f32x4 direction(0.0f, 0.0f, -1.0f, 1.0f);
-    // xyz = color, w = intensity.
     public f32x4 colorIntensity(1.0f, 1.0f, 1.0f, 1.0f);
-    // x = range, y = light type, z = shadow slot (negative = no slot), w = caustic slot (negative = no slot).
     public f32x4 params(0.0f, 0.0f, -1.0f, -1.0f);
-    // Soft-shadow source size: x = angular radius, y = punctual radius; z/w reserved.
     public f32x4 params2(0.00465f, 0.05f, 0.0f, 0.0f);
 }
 
-// Only the compute producer reads this tail; raster and custom geometry use the base mesh push ABI.
 [serialize]
 class MeshComputePushConstants{
     public ShaderDrivenPushConstants mesh;
@@ -253,12 +238,10 @@ class MeshComputePushConstants{
     public Array<u32, 3u> reserved;
 }
 
-// Immutable frame facts for graph declaration; queue assignment stays a compiler result.
 class RendererFrameGraphFeatures{
     public b8 frameLaggedAsyncLightingEnabled = false;
     public b8 laggedLightingHistoryReady = false;
     public b8 laggedLightingHistoryReadReady = false;
-    // A prior history-copy tail still reads live targets; next writers must wait for it.
     public b8 laggedLightingHistoryWriterWaitPending = false;
     public b8 hasTransparentRenderers = false;
     public b8 hardwareCaustics = false;

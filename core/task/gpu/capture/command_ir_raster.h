@@ -19,9 +19,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Raster records carry graph indices and scalars only.
-// Variable vertex bindings and push bytes live in the stream blob.
-// The first retained raster scope supports one color attachment, one viewport, optional scissor, and direct draws.
 #pragma pack(push, 1)
 inline constexpr usize s_GpuCommandIrGraphicsStateRecordBytes = 112u;
 inline constexpr usize s_GpuCommandIrDrawRecordBytes = 36u;
@@ -226,7 +223,6 @@ private:
     Atomic<u32> m_references{ 1u };
 };
 
-// The arena backing an owner box must outlive every capture/exported stream that retains the returned anchor.
 template<typename T>
 [[nodiscard]] Expected<GpuCommandIrOwnerAnchor> MakeGpuCommandIrOwnerAnchor(GraphicsArena& arena, T owner)noexcept(IsNothrowConvertible_V<T&&, T> && IsNothrowMoveConstructible_V<T> && IsNothrowDestructible_V<T>){
     auto* const box = NewArenaObject<GpuCommandIrRetainedOwnerBox<T>>(arena, arena, Move(owner));
@@ -257,7 +253,6 @@ struct GpuCommandIrRasterStateOwner{
     usize recordIndex = 0u;
 };
 
-// Sidecar owners never enter the wire. Heap lease and descriptor owner stay live until replay records the binding.
 struct GpuCommandIrRasterHeapOwner{
     GraphicsPipelineHandle pipeline;
     GpuCommandIrOwnerAnchor lease;

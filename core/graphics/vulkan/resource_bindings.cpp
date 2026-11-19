@@ -92,7 +92,6 @@ VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages)noexcept{
     return flags;
 }
 
-// Clamp descriptor-buffer alignment for 32-bit byte offsets.
 u32 GetDescriptorBufferOffsetAlignmentBytes(const VulkanContext& context)noexcept{
     const VkDeviceSize alignment = context.descriptorBufferProperties.descriptorBufferOffsetAlignment;
     return (alignment == 0 || alignment > UINT32_MAX) ? 1u : static_cast<u32>(alignment);
@@ -111,7 +110,6 @@ void DestroyPipelineAndOwnedLayout(const VulkanContext& context, VkPipeline& pip
     }
 }
 
-// Samplers occupy their dedicated descriptor-buffer segment.
 constexpr DescriptorBufferSegmentKind::Enum GetDescriptorBufferSegmentKind(ResourceType::Enum type)noexcept{
     return type == ResourceType::Sampler ? DescriptorBufferSegmentKind::Sampler : DescriptorBufferSegmentKind::Resource;
 }
@@ -299,7 +297,6 @@ Expected<BindingLayoutHandle> Device::createBindingLayout(const BindingLayoutDes
 
     layout->m_pipelineLayout = *pipelineLayout;
 
-    // Push constants are pipeline-layout state, not descriptor-set state.
     layout->m_descriptorBufferCompatible = true;
 
     return layout;

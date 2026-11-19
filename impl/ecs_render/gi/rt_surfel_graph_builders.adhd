@@ -199,7 +199,6 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
 
     GpuTaskSchedulingHint scheduling;
     scheduling.cost = GpuTaskCostHint::Large;
-    // Live Lighting joins both effects; lagged Lighting retains their independent publication boundaries.
     scheduling.forceSubmissionBoundary = useLaggedLightingHistory;
     scheduling.allowPacketMerge = !useLaggedLightingHistory;
     scheduling.mergeWithPrevious = !useLaggedLightingHistory;
@@ -236,13 +235,11 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
     this.m_deferredSurfelGiSnapshotCopyTask = surfelGiLifecycleResult.value().snapshotCopyTask;
     GpuTaskId surfelGiDependency = surfelGiLifecycleResult.value().dependency;
 
-    // Zero coverage is the no-op; keep its clear at the front of the GI packet.
     GpuTaskSchedulingHint surfelIrradianceClearScheduling;
     surfelIrradianceClearScheduling.cost = GpuTaskCostHint::Tiny;
     surfelIrradianceClearScheduling.allowPacketMerge = true;
     surfelIrradianceClearScheduling.mergeWithPrevious = !useLaggedLightingHistory;
     surfelIrradianceClearScheduling.allowMergeAcrossConsumerFrontier = !useLaggedLightingHistory;
-    // Compatible live effects share the snapshot packet; the GI chain retains its selected queue.
     ConfigureComputeEffectRoutingHint(false, surfelIrradianceClearScheduling);
     const Array<GpuTaskResourceUse, 1u> surfelIrradianceClearResourceUse(WriteTextureUse(surfelIrradiance, s_FramebufferSubresources, ResourceStates::CopyDest));
     GpuTaskDesc surfelIrradianceClearDesc;
@@ -266,7 +263,6 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
     surfelGiScheduling.forceSubmissionBoundary = false;
     surfelGiScheduling.allowPacketMerge = true;
     surfelGiScheduling.mergeWithPrevious = true;
-    // GI stages share one accepted timing packet; cross-queue consumers wait for it.
     surfelGiScheduling.allowMergeAcrossConsumerFrontier = true;
     ConfigureComputeEffectRoutingHint(true, surfelGiScheduling);
     if(surfelGiResourcePlan.graphOwnsSurfelGiResolve){
@@ -471,7 +467,6 @@ void SurfelGiCounterReadbackBuilder::declare(in RayTracingSurfelPersistentResour
 
     const Array<GpuCopyBufferTaskRegion, 1u> regions(SurfelBufferCopy(counter, readback, ComputeSurfelWordBufferByteSize(cast<u32>(s_SurfelReadbackCounterCount))));
     GpuTaskSchedulingHint scheduling;
-    // Infrequent diagnostic after presentation; small copy so Transfer absorbs it.
     scheduling.cost = GpuTaskCostHint::Small;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
@@ -485,7 +480,6 @@ void SurfelGiCounterReadbackBuilder::declare(in RayTracingSurfelPersistentResour
         return;
     }
     outTask = deferredSurfelGiCounterReadbackTaskResult.value();
-    // The token stays invalid until native submission accepts; this timestamp is only read when it publishes.
     this.m_raytracingSystem.markSurfelCountReadbackScheduled();
 }
 
@@ -514,7 +508,6 @@ Expected<SurfelGiLifecycleResult> SurfelGiLifecycleBuilder::declare(in SurfelGiL
     if(this.m_raytracingSystem.needsSurfelResourceInitialization()){
         GpuTaskSchedulingHint initializationScheduling;
         initializationScheduling.cost = GpuTaskCostHint::Medium;
-        // Merge serial successors into the first clear's packet; never force a boundary here.
         initializationScheduling.allowPacketMerge = true;
         GpuTaskDesc poolClearDesc;
         poolClearDesc
@@ -535,7 +528,6 @@ Expected<SurfelGiLifecycleResult> SurfelGiLifecycleBuilder::declare(in SurfelGiL
         GpuTaskSchedulingHint chainedInitializationScheduling = initializationScheduling;
         chainedInitializationScheduling.cost = GpuTaskCostHint::Tiny;
         chainedInitializationScheduling.mergeWithPrevious = true;
-        // Snapshot may route to Transfer; retain the full init chain in one accepted packet.
         chainedInitializationScheduling.allowMergeAcrossConsumerFrontier = true;
         GpuTaskId initializationDependency = result.preparationTask;
         if(

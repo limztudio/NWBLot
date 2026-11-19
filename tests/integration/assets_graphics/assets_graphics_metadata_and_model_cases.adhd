@@ -99,7 +99,6 @@ void VerifyAssetsGraphics_MeshletRefEncodingCrossesIndexWidthBoundaries(){
 }
 
 void VerifyAssetsGraphics_MeshletOct16DecodePreservesQuantizationAndFoldBits(){
-    // Scalar octahedral decode fixes UNORM endpoint and fold rounding.
     for(u32 packed = 0u; packed < 65536u; ++packed){
         const ScopedTestTrace trace(packed);
         ASSERT_TRUE(MatchesScalarOct16Reference(packed));
@@ -780,7 +779,6 @@ void VerifyModelCookMetadata_RedundantSkinnedMeshReferenceIsRejectedAndSkinOnlyR
     EXPECT_EQ(logger.errorCount(), 1u);
 }
 
-// Metadata construction and result checks stay outside the timed public cook-metadata parsing operation.
 void VerifyModelCookMetadata_FourRowTransformFailsWithoutReplacingPreviousValueAndThreeRowsRecover(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard registration(logger, LoggerBreakPolicy::BreakOnFatal);

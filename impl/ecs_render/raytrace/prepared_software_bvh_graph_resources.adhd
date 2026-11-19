@@ -21,8 +21,6 @@ class PreparedMeshSwBvhGraphResources{
 
 type PreparedMeshSwBvhGraphResourceVector = Vector<PreparedMeshSwBvhGraphResources>;
 
-
-// A missing graph identity rejects the complete returned resource list.
 Expected<PreparedMeshSwBvhGraphResourceVector> ResolvePreparedSoftwareBvhGraphResources(in GpuTaskGraph graph, in Span<PreparedMeshSwBvhBuild> builds){
     PreparedMeshSwBvhGraphResourceVector result;
     if(builds.empty())

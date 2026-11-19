@@ -77,13 +77,11 @@ inline constexpr f64 s_ArmNearOverflow = 0x1.fffffffa3aae2p+6 * 32;
 inline constexpr f64 s_ArmUnderflow = -150.0 * 32;
 inline constexpr f64 s_ArmMayUnderflow = -149.0 * 32;
 
-// AArch64 FPSR/FPCR bits: cumulative input-denormal flag, flush-to-zero, input-denormal trap and the five exception trap enables.
 inline constexpr u32 s_ArmFpsrInputDenormalFlag = 0x80u;
 inline constexpr u32 s_ArmFpcrFlushToZero = 0x01000000u;
 inline constexpr u32 s_ArmFpcrInputDenormalTrap = 0x8000u;
 inline constexpr u32 s_ArmFpcrExceptionTrapMask = 0x1f00u;
 
-// powf log table (16 entries) and exp table (32 entries) index splits.
 inline constexpr u32 s_ArmLogOffsetBits = 0x3f330000u;
 inline constexpr u32 s_ArmLogTableIndexShift = 19u;
 inline constexpr u32 s_ArmLogTableIndexMask = 15u;
@@ -92,12 +90,10 @@ inline constexpr u32 s_ArmLogExponentShift = 18u;
 inline constexpr u32 s_ArmExpTableIndexMask = 31u;
 inline constexpr u32 s_ArmExpScaleShift = 47u;
 
-// x in [2^-16, 2^16] and |y| <= 4 keep log2(x) * y within [-64, 64].
 inline constexpr u32 s_ArmBoundedXMinBits = 0x37800000u;
 inline constexpr u32 s_ArmBoundedXMaxBits = 0x47800000u;
 inline constexpr u32 s_ArmBoundedYMaxBits = 0x40800000u;
 
-// ArmCheckInt result for a binary32 exponent value.
 inline constexpr i32 s_ArmNotInteger = 0;
 inline constexpr i32 s_ArmOddInteger = 1;
 inline constexpr i32 s_ArmEvenInteger = 2;
@@ -159,7 +155,6 @@ struct ArmArithmetic{
             __asm__ __volatile__("mrs %0, fpsr" : "=r"(restoredNativeStatus));
             restoredNativeStatus |= (initialNativeStatus | operationNativeStatus) & s_ArmFpsrInputDenormalFlag;
             __asm__ __volatile__("msr fpsr, %0" : : "r"(restoredNativeStatus));
-            // Exact tiny results still trap when underflow is enabled.
             i32 enabled = flags & ~static_cast<i32>(control) & FE_ALL_EXCEPT;
             if constexpr(IsSame_V<T, SIMDVectorSingle>){
                 const UInt4 magnitude = BitCast<UInt4>(value) & s_F32AbsoluteBitMask;
@@ -214,11 +209,9 @@ struct ArmArithmetic{
     [[nodiscard]] FOUNDATION_INLINE SIMDVectorSingle narrow(SIMDVectorDouble a)const noexcept{
 #pragma STDC FENV_ACCESS ON
         if constexpr(Ordered){
-            // Conversion tests tininess before rounding and before inexact.
             const UInt64x4 magnitude = BitCast<UInt64x4>(a) & s_F64AbsoluteBitMask;
             u64 nativeControl{};
             __asm__ __volatile__("mrs %0, fpcr" : "=r"(nativeControl));
-            // FZ consumes binary64 subnormal inputs as zero.
             const u64 minimum = (nativeControl & s_ArmFpcrFlushToZero) != 0u ? s_F64MinNormalBits : 1u;
             const auto tiny = (magnitude >= minimum) & (magnitude < s_ArmTinyNarrowThresholdBits);
             if((control & FE_UNDERFLOW) == 0u && __builtin_reduce_or(tiny) != 0u){
@@ -339,7 +332,6 @@ FOUNDATION_INLINE SIMDVectorSingle ArmPackedBody(const SIMDVectorSingle x, const
                 }
                 if(b == s_F32OneBits){
                     if(a < s_F32MinNormalBits){
-                        // The CRT normalizes subnormal x before its y == 1 return.
                         const SIMDVectorSingle normalizedShortcut = math.multiply(VectorReplicate(BitCast<f32>(ix[lane])), VectorReplicate(s_ArmSubnormalScale));
                         __asm__ __volatile__("" : : "w"(normalizedShortcut));
                     }
@@ -471,13 +463,11 @@ FOUNDATION_NOINLINE inline SIMDVectorSingle FOUNDATION_SIMD_CALL Pow(const SIMDV
 #pragma STDC FENV_ACCESS ON
     u64 nativeControl{};
     __asm__ __volatile__("mrs %0, fpcr" : "=r"(nativeControl));
-    // Native input-denormal traps have a different packed instruction category.
     if((nativeControl & s_ArmFpcrInputDenormalTrap) != 0u)
         return ArmIDEOriginal(x, y);
     if((nativeControl & s_ArmFpcrExceptionTrapMask) != 0u)
         return ArmEnabledPower(x, y);
     const UInt4 ix = BitCast<UInt4>(x), iy = BitCast<UInt4>(y), absoluteY = iy & s_F32AbsoluteBitMask;
-    // These bounds keep log2(x) * y within [-64, 64].
     const Int4 normalX = (ix >= s_ArmBoundedXMinBits) & (ix <= s_ArmBoundedXMaxBits);
     const Int4 zeroY = absoluteY == 0u;
     const Int4 normalY = (absoluteY >= s_F32MinNormalBits) & (absoluteY <= s_ArmBoundedYMaxBits);

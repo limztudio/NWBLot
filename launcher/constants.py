@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
-"""Shared launcher literals (single-domain constants module)."""
 
 from pathlib import Path as _Path
-
-
 
 
 ARCH_X64 = "x64"

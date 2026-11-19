@@ -194,7 +194,6 @@ uint nwbCsgRayValidateReceiverOrigin(const float3 localOrigin, const NwbBvhNode 
 bool nwbCsgRayBoundsIntersect(const NwbSwBvhInstance instance, const NwbBvhNode root, const float3 worldOrigin, const float3 worldDirection, const float minimum, const float maximum){
     const float3 origin = nwbSwBvhTransformPoint(instance, worldOrigin);
     const float3 direction = nwbSwBvhTransformVector(instance, worldDirection);
-    // Invalid current-pose bounds must reach the diagnosed geometry path rather than silently omit a receiver.
     if(!all(isfinite(origin)) || !all(isfinite(direction)) || !all(isfinite(root.aabbMin)) || !all(isfinite(root.aabbMax)) || any(root.aabbMin > root.aabbMax))
         return true;
     float entry;
@@ -205,7 +204,6 @@ bool nwbCsgRaySameDistance(const float first, const float second){
     return abs(first - second) <= NWB_CSG_RAY_ROUNDOFF_EPSILON_SCALE * NWB_FLOAT_EPSILON * max(max(abs(first), abs(second)), NWB_CSG_RAY_DISTANCE_MAGNITUDE_MIN);
 }
 
-// Outward slab uncertainty is used only to certify removed space, never as an occluder or a ray bias.
 bool nwbCsgRayReceiverSegment(const NwbSwBvhInstance instance, const NwbBvhNode root, const float3 worldOrigin, const float3 worldDirection, const float minimum, const float maximum, out float2 segment){
     segment = float2(minimum, maximum);
     const float3 origin = nwbSwBvhTransformPoint(instance, worldOrigin);
@@ -259,7 +257,6 @@ NwbCsgRayTriangleHit nwbCsgRayIntersectTriangle(const NwbRtInstanceMaterial mate
         return result;
     if(closed && !triangle.owned){
 #if NWB_CSG_RAY_STRICT_NORMALS
-        // A zero-winding witness retains crease normals without changing solid membership.
         result.crossing.windingDelta = 0;
 #else
         result.hit = false;
@@ -320,7 +317,6 @@ uint nwbCsgRayInsertCrossing(const uint materialSlot, const uint instanceIndex, 
         const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex];
         if(nwbRayTraceIncidentBoundary(material, crossings[index].primitive, crossings[index].barycentrics, crossing.primitive, crossing.barycentrics)){
 #if NWB_CSG_RAY_STRICT_NORMALS
-            // A solid crease has one membership crossing but no unique optical interface normal.
             crossings[index].normalAmbiguous = true;
 #endif
             return 0u;

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Radiometric oracle for parallel glass slabs separated by a CSG cavity."""
 
 from csg_shadow_reference import region_pixels
 from window_capture_smoke import SmokeFailure
@@ -31,7 +30,6 @@ def decode_srgb(value):
 
 def expected_split_ratio():
     interface = 1.0 - ((IOR - 1.0) / (IOR + 1.0)) ** 2
-    # Normal-incidence photons travel straight through the two added cavity interfaces.
     return tuple(interface ** 2 / tint for tint in TRANSMISSION)
 
 

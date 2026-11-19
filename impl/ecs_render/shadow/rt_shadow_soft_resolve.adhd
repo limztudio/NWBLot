@@ -234,15 +234,12 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
     if(!splitSoftTransparentFold)
         timing.emplace(this.m_graphics.gpuTiming(), s_TimingScopeShadowVisibility, this.m_graphics.getDevice(), commandList);
 
-    // Hardware tracing shares the half-resolution soft-shadow resolve when available.
     if(this.m_rayTracingState.softShadow.m_softShadowReady && this.m_rayTracingState.softShadow.m_shadowSoftPipeline && this.m_rayTracingState.softShadow.m_softShadowSlotMask != 0u){
         const u32 softGroupsX = ResolveWrappingRayTracingDispatchGroup(targets.width, targets.shadowReceiverFactor, cast<u32>(s_ShadowRtGroupSize));
         const u32 softGroupsY = ResolveWrappingRayTracingDispatchGroup(targets.height, targets.shadowReceiverFactor, cast<u32>(s_ShadowRtGroupSize));
 
-        // Resolve reuses the trace outputs as UAV/SRV scratch.
         this.enableSoftShadowResolveBarriers(commandList, targets);
 
-        // Advance the jitter sequence once for the primary shadow producer.
         const u32 frameIndex = this.m_rayTracingState.softShadow.m_softShadowFrameIndex++;
         producedFrameIndex = frameIndex;
 
@@ -283,12 +280,10 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
             LightSpaceShadowLogReporter().reportCsgDispatch(true, true, lightSpace.value().push.instanceCount, this.m_lightSpaceShadow.m_csgDispatchLogged);
         }
 
-        // Split resolve declares the trace fence; unsplit soft resolve phases retain their internal UAV fence.
         this.dispatchPrimarySoftShadowResolve(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, splitOpaqueSoftResolve, splitSoftTransparentFold, graphOwnsOpaqueTemporalMergeEntryStates);
         return producedFrameIndex;
     }
 
-    // Full-resolution inline-RayQuery fallback.
     {
         GpuTimingMeasure opaqueTraceTiming(this.m_graphics.gpuTiming(), s_TimingScopeShadowOpaqueTrace, this.m_graphics.getDevice(), commandList);
 
@@ -515,7 +510,6 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     const u32 softHalfHeight = DivideUpWrapping(targets.height, targets.shadowReceiverFactor);
 
     if(dispatchOpaqueGeometry){
-        // Graph declares downsample inputs; later soft-shadow transitions stay local.
         commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
 
         {
@@ -558,17 +552,13 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
 
     if(dispatchOpaqueResolve || dispatchOpaqueResolveTail){
         const ShadowReprojectMergeHeapResources opaqueMerge = SelectOpaqueMergeResources(targets, frontIsA);
-        // Merge writes the NEXT pair; the wavelet must read that same pair, never stale A.
         if(ShouldDispatchOpaqueTemporalMerge(dispatchOpaqueResolve, opaqueTemporalActive, opaquePhase)){
             GpuTimingMeasure opaqueTemporalTiming(this.m_graphics.gpuTiming(), s_TimingScopeShadowOpaqueTemporal, this.m_graphics.getDevice(), commandList);
 
-            // The graph owns the selected history/moments plus stable previous-geometry/world reads.
-            // The geometry downsample above still needs this callback's local UAV-to-SRV transition before the opaque merge samples it.
             mergeRecorder.record(opaqueMerge, graphOwnsOpaqueTraceToFirstWaveletBoundary, graphOwnsOpaqueGeometryToResolveBoundary, graphOwnsOpaqueTemporalMergeEntryStates, graphOwnsOpaqueTemporalMergeEntryStates);
         }
 
         if(opaquePhase != SoftShadowOpaqueResolvePhase::TemporalOnly){
-            // The first wavelet reads this frame's trace or temporal merge directly, preserving its exact filtering input.
             OpaqueSoftShadowResolveOptions opaqueOptions;
             opaqueOptions.frontIsA = frontIsA;
             opaqueOptions.temporalActive = opaqueTemporalActive;
@@ -616,7 +606,6 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     if((dispatchTransparentMerge || dispatchTransparentWavelet) && this.m_rayTracingState.softShadow.m_softTransparentReady){
         const b8 transparentTemporalActive = this.m_rayTracingState.softShadow.m_softTransparentTemporalReady;
         const ShadowReprojectMergeHeapResources transparentMerge = SelectTransparentMergeResources(targets, frontIsA);
-        // Keep the RGB wavelet's temporal variance paired with the history just emitted by the transparent merge.
         if(dispatchTransparentMerge && transparentTemporalActive){
             GpuTimingMeasure transparentTemporalTiming(this.m_graphics.gpuTiming(), s_TimingScopeShadowTransparentTemporal, this.m_graphics.getDevice(), commandList);
 
@@ -646,8 +635,6 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         }
     }
 
-    // Do not mutate the target-generation handles while the sibling caustics and surfel-GI workers can still validate targets.bindless.
-    // RendererFramePipeline finalizes this pending CPU-side swap only after its complete ordered Graphics submission succeeds.
     if(ShouldAdvanceSoftShadowTemporalHistory(dispatchTransparentResolve, splitTransparentResolve, dispatchTransparentResolveTail, this.m_rayTracingState.softShadow.m_softShadowTemporalReady))
         this.m_rayTracingState.softShadow.m_softShadowTemporalHistoryAdvancePending = true;
 }

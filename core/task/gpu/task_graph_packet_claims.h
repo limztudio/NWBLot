@@ -61,8 +61,6 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A failed parallel recorder transfers its exact packet claim into this capability before leaving its worker.
-// The ready-frontier owner can then invoke typed discard callbacks serially after every worker has joined.
 class GpuPacketRecordingAbort final : NoCopy{
     friend class GpuTaskGraph;
 
@@ -94,7 +92,6 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A packet claim is an opaque capability. Only its acquiring recorder runs thunks, completes, or abandons that attempt.
 class GpuPacketRecordingLease final : NoCopy{
     friend class GpuTaskGraph;
     friend class GpuPacketRecordingAccess;
@@ -131,7 +128,6 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Checks one recording claim once, then carries the read proof through preflight and lowering without retaking the mutex.
 class GpuPacketRecordingAccess final : NoCopy{
     friend class GpuTaskGraph;
     friend class GpuNativePacketRecorder;
@@ -160,7 +156,6 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Submission shares recording's exclusive rule: no discard while Device owns the packet; only the transaction resolves it.
 class GpuPacketSubmissionLease final : NoCopy{
     friend class GpuTaskGraph;
     friend class GpuGraphSubmissionTransaction;

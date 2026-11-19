@@ -1,6 +1,3 @@
-"""X11 synthetic input events and coordinate projection."""
-
-
 import ctypes
 
 from window_capture_outcome import SmokeFailure
@@ -109,4 +106,3 @@ class X11InputSender:
         event.y_root = root_y
         event.state = state
         event.same_screen = True
-

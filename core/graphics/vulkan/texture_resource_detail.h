@@ -119,8 +119,6 @@ struct TextureCreateMetadata{
     return imageType;
 }
 
-// Creation copies the cached aspect and block layout from the creation format.
-
 [[nodiscard]] inline b8 IsTextureImageWithinFormatLimits(const VkImageCreateInfo& imageInfo, const VkImageFormatProperties& formatProperties)noexcept{
     return
         imageInfo.extent.width <= formatProperties.maxExtent.width

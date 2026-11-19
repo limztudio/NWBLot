@@ -48,7 +48,6 @@ enum<u8> ReflectionHistoryResetReason{
     ResourcesChanged
 }
 
-// Unavailable or unstamped inputs disable temporal reuse; versions alone prove nothing.
 class ReflectionSceneContentStamp{
     public ReflectionSceneContentStamp(){
         this.geometry = 0u;
@@ -77,18 +76,15 @@ class ReflectionSceneContentStamp{
     public b8 trusted;
 }
 
-// A completed accepted reflection copy, regardless of later presentation outcome.
 class ReflectionStatistics{
     public u64 sequence = 0u;
     public u64 generation = 0u;
     public u64 graphicsFrameIndex = 0u;
     public u64 historyEpoch = 0u;
     public u64 historyStartGraphicsFrame = 0u;
-    // Enabled is writer eligibility; reused is the CPU previous-valid flag.
     public u64 feedbackSequence = 0u;
     public u64 feedbackEpoch = 0u;
     public u64 feedbackStartGraphicsFrame = 0u;
-    // Actual hierarchy loads; may exceed u32 at large extents.
     public u64 screenIterations = 0u;
     public ReadbackQueueToken acceptedToken = ReadbackQueueToken();
     public u32 frameIndex = 0u;
@@ -104,16 +100,13 @@ class ReflectionStatistics{
     public u32 feedbackProbeIndex = 0u;
     public u32 candidates = 0u;
     public u32 hardwareRays = 0u;
-    // Admitted rays conservatively proven to need no optical continuation; diagnostic only.
     public u32 exteriorEligibleRays = 0u;
     public u32 hardwareHits = 0u;
     public u32 opaquePixels = 0u;
     public u32 glassPixels = 0u;
     public u32 fallbackPixels = 0u;
     public u32 screenAttempts = 0u;
-    // Only screen hits meeting the confidence threshold are accepted.
     public u32 screenHits = 0u;
-    // Reserved traversal units enforce the path limit; physical queries count issued hardware operations.
     public u32 queryBudgetUnits = 0u;
     public u32 physicalQueries = 0u;
     public u32 bootstrapEvents = 0u;

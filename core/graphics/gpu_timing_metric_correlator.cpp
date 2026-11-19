@@ -24,7 +24,6 @@ namespace __hidden_gpu_timing_metric_correlator{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Retain enough rejected-frame endpoints to pair an asynchronously arriving timestamp without allowing the correlation caches to grow unbounded.
 inline constexpr u64 s_PendingMetricRetentionFrames = static_cast<u64>(s_MaxFramesInFlight) * 8u;
 
 
@@ -81,7 +80,6 @@ b8 GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
             ++it;
     }
 
-    // The validated index moves into the pending frame, keeping lookup and duplicate checks on the same identity.
     PendingPacketEnvelopeMetric candidate(m_arena);
     candidate.scopeIndices.reserve(scopeCount);
     const u16 deviceGeneration = scopes[0u].physicalQueue.deviceGeneration;
@@ -204,7 +202,6 @@ b8 GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
         candidate.queueOutputs.push_back(PacketEnvelopeMetricQueueOutputRecord{ .physicalQueue = output.physicalQueue, .internalIdleScopeName = output.internalIdleScopeName, .internalIdleScope = *idleOutput, });
     }
 
-    // Publish only a complete frame; candidate cleanup preserves output roles already recorded above.
     m_pendingPacketEnvelopeMetrics.push_back(Move(candidate));
     return true;
 }

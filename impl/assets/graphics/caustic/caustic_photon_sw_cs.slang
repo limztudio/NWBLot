@@ -38,7 +38,7 @@ uint nwbMeshFrameInstanceHeapSlot(){
     return g_NwbCausticSwMaterialContextSlots.materialSlots.x;
 }
 uint nwbMeshFrameViewHeapSlot(){
-    return 0u; // The caustic surface path does not consume the mesh-view alias.
+    return 0u;
 }
 
 
@@ -68,7 +68,7 @@ uint nwbMeshFrameViewHeapSlot(){
 
 
 #pragma warning(push)
-#pragma warning(disable: 39001) // Deliberate typed aliases of the global heap descriptor tables.
+#pragma warning(disable: 39001)
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbHeapCausticSwEmissionTargets[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbCausticPhotonView, Std140DataLayout> g_NwbHeapCausticSwViews[];
 #pragma warning(pop)
@@ -121,12 +121,10 @@ bool nwbCausticSwInstanceEvents(
     const bool refractive = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE) != 0u;
     if(!refractive)
         return true;
-    // Per-mesh geometry slots must remain non-uniform at every access.
     const float3 origin = nwbSwBvhTransformPoint(instance, worldOrigin);
     const float3 direction = nwbSwBvhTransformVector(instance, worldDirection);
     const float3 invDir = nwbBvhSafeInvDir(direction);
 
-    // Near-first descent tightens maximum before far-subtree tests.
     uint stack[NWB_CAUSTIC_SW_MESH_STACK_SIZE];
     stack[0u] = 0u;
     uint stackPointer = 1u;
@@ -238,7 +236,6 @@ bool nwbCausticCollectRefractiveEvents(
     }
 
     if(sceneOverflow){
-        // Instance order is independent of SAH depth; keep every candidate when the fast traversal exceeds its local stack.
         eventCount = 0u;
         boundary = (NwbCausticBoundary)0;
         tolerance = NWB_OPTICS_POSITION_TOLERANCE_SCALE * nwbOpticsPositionUncertainty(origin);
@@ -255,8 +252,6 @@ bool nwbCausticCollectRefractiveEvents(
 #endif
 }
 
-
-// Per-instance traversal refines the nearest triangle hit.
 void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, inout NwbCausticHit closest){
     const NwbSwBvhInstance instance = nwbHeapSwBvhInstances(g_NwbCausticSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(g_NwbCausticSwMaterialContextSlots.sceneSlots.z)[instanceIndex];
@@ -269,7 +264,6 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
     const float3 direction = nwbSwBvhTransformVector(instance, worldDirection);
     const float3 invDir = nwbBvhSafeInvDir(direction);
 
-    // Near-first descent tightens closest.t before far-subtree tests.
     uint stack[NWB_CAUSTIC_SW_MESH_STACK_SIZE];
     stack[0u] = 0u;
     uint stackPointer = 1u;
@@ -322,7 +316,6 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
     }
 }
 
-// Software closest-hit refines scene-BVH candidates through mesh BVHs.
 NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin, float tMax){
     NwbCausticHit closest = (NwbCausticHit)0;
     closest.hit = false;
@@ -381,7 +374,6 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     }
 
 #if NWB_RT_CSG_ENABLED
-    // Match hardware closest-hit ordering: the current CSG receivers refine the nearest ordinary surface.
     const uint contextSlot = g_NwbCausticSwMaterialContextSlots.materialSlots.w;
     const uint materialSlot = g_NwbCausticSwMaterialContextSlots.sceneSlots.z;
     const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_BASE_OFFSET);

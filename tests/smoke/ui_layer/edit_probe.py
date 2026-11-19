@@ -1,4 +1,3 @@
-"""Read frozen edit-box metadata and check matching presentation pixels."""
 from __future__ import annotations
 
 import math
@@ -75,10 +74,6 @@ def caret_required(field, state, readonly, visible, selection):
 
 
 def caret_pixel_column(logical_left, scale_x):
-    """Select the one physical column covered by a one-pixel caret.
-
-    Pixel centers are n + 0.5; the left edge is inclusive.
-    """
     return math.ceil(logical_left * scale_x - 0.5)
 
 
@@ -129,7 +124,6 @@ def observe_edit(frame, snapshot, primary, secondary, readonly, visible, *, exte
         geometry_matches = geometry_matches and cx <= kx <= cx + cw + 0.75 and cy <= ky < cy + ch
         background = (18, 26, 37) if state[4] else (15, 20, 28)
         probe(f"{field}_skin", (bx + bw - 16.0, by + bh - 6.0), background, tolerance=8)
-        # A clear gutter outside the control catches glyphs escaping its clip when the line scrolls.
         probe(f"{field}_clip_gutter", (bx + bw + 4.0, by + bh / 2.0), (27, 34, 44), tolerance=8)
         if caret_required(field, state, readonly, visible, selection):
             geometry_matches = geometry_matches and abs(kw * scale_x - 1.0) <= 0.01
@@ -140,7 +134,6 @@ def observe_edit(frame, snapshot, primary, secondary, readonly, visible, *, exte
             sx, sy, sw, sh = geometry["selection"]
             geometry_matches = geometry_matches and sw > 1.0 and sh > 1.0
             if sw > 1.0 and sh > 1.0:
-                # Sample selection fill near the bottom of the line to avoid glyph ink.
                 linear_background = linear_channels(background)
                 color = tuple(foreground * 0.75 + backdrop * 0.25 for foreground, backdrop in zip((0.20, 0.40, 0.78), linear_background))
                 probe(f"{field}_selection", (sx + min(sw / 2.0, 4.0), min(sy + sh, cy + ch) - 2.0), linear_rgb_bytes(color))

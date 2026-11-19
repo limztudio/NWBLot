@@ -18,7 +18,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The FP16 position bound matches NWB_REFLECTION_POSITION_RELATIVE_ERROR in frame_constants.h.
 static const float NWB_REFLECTION_SPATIAL_POSITION_RELATIVE_ERROR = 0.0009765625;
 static const float NWB_REFLECTION_SPATIAL_FOCAL_MIN = 1e-6;
 static const float NWB_REFLECTION_SPATIAL_VIEW_COSINE_MIN = 0.05;
@@ -26,11 +25,9 @@ static const float NWB_REFLECTION_SPATIAL_DENOMINATOR_MIN = 1e-8;
 static const float NWB_REFLECTION_SPATIAL_PLANE_TOLERANCE_MIN = 1e-4;
 static const float NWB_REFLECTION_SPATIAL_PLANE_FOOTPRINT_SCALE = 0.25;
 static const float NWB_REFLECTION_SPATIAL_TAP_DISTANCE_MARGIN = 1.5;
-// Neighbors beyond these differences are rejected before weighting.
 static const half NWB_REFLECTION_SPATIAL_ROUGHNESS_DIFFERENCE_MAX = 0.1h;
 static const half NWB_REFLECTION_SPATIAL_F0_DIFFERENCE_MAX = 0.05h;
 static const half NWB_REFLECTION_SPATIAL_NORMAL_AGREEMENT_MIN = 0.95h;
-// Falloff rates of the bilateral weight exponent.
 static const half NWB_REFLECTION_SPATIAL_NORMAL_FALLOFF = 80.0h;
 static const half NWB_REFLECTION_SPATIAL_F0_FALLOFF = 200.0h;
 static const half NWB_REFLECTION_SPATIAL_ROUGHNESS_FALLOFF = 50.0h;
@@ -46,7 +43,6 @@ struct NwbReflectionSpatialPushConstants{
 };
 [[vk::push_constant]] ConstantBuffer<NwbReflectionSpatialPushConstants> g_NwbReflectionSpatial;
 
-// Mesh owns the view ABI; filtering only borrows its projection and camera-position prefix.
 struct NwbReflectionSpatialView{
     row_major float4x4 worldToClip;
     row_major float4x4 clipToWorld;
@@ -71,7 +67,6 @@ struct NwbReflectionSpatialView{
 #define NWB_REFLECTION_SPATIAL_TILE_WIDTH (NWB_REFLECTION_SPATIAL_GROUP_SIZE + 2u * NWB_REFLECTION_SPATIAL_CACHE_RADIUS)
 #define NWB_REFLECTION_SPATIAL_TILE_TEXELS (NWB_REFLECTION_SPATIAL_TILE_WIDTH * NWB_REFLECTION_SPATIAL_TILE_WIDTH)
 
-// Color tile caches use half4 to match RGBA16F storage; geometry caches stay float4 for plane and edge math.
 groupshared half4 g_NwbReflectionSpatialRadiance[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
 groupshared half4 g_NwbReflectionSpatialSpecular[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
 groupshared float4 g_NwbReflectionSpatialPositionDepth[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
@@ -109,7 +104,6 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
     if(filterEligible)
         InterlockedOr(g_NwbReflectionSpatialTileEligible, 1u);
     GroupMemoryBarrierWithGroupSync();
-    // Tile decision is uniform after both barriers. Ineligible tiles only copy; no halo/position/normal fetch needed.
     if(g_NwbReflectionSpatialTileEligible == 0u){
         if(insideImage)
             nwbHeapStorageImage2DFloat4(g_NwbReflectionSpatial.destinationRadianceUavSlot)[pixel] = float4(center);
@@ -128,7 +122,6 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
         centerPositionDepth.xyz = nwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.z).Load(sourceTexel).xyz;
         centerNormal = nwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.y).Load(sourceTexel);
     }
-    // Reuse each lane's eligibility inputs; every center entry has one writer, including partial-image tails.
     g_NwbReflectionSpatialRadiance[centerIndex] = center;
     g_NwbReflectionSpatialSpecular[centerIndex] = specular;
     g_NwbReflectionSpatialPositionDepth[centerIndex] = centerPositionDepth;
@@ -158,7 +151,6 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
         g_NwbReflectionSpatialPositionDepth[tileIndex] = positionDepth;
         g_NwbReflectionSpatialNormal[tileIndex] = normal;
     }
-    // No active-tile lane returns before the cache barrier. Center/halo writers are disjoint; each readable entry has one writer.
     GroupMemoryBarrierWithGroupSync();
     if(!insideImage)
         return;
@@ -180,7 +172,6 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
     const float3 viewDirection = nwbSafeNormalize(g_NwbReflectionSpatialView.cameraPosition.xyz - position, normal);
     const float tangentFootprint = pixelFootprint / max(abs(dot(normal, viewDirection)), NWB_REFLECTION_SPATIAL_VIEW_COSINE_MIN);
     const half roughness = saturate(specular.a);
-    // Rougher lobes tolerate more spatial variance reduction; the mirror limit continuously approaches one texel.
     const float sigma = float(radius) * float(roughness);
     const float spatialDenominator = max(2.0 * sigma * sigma, NWB_REFLECTION_SPATIAL_DENOMINATOR_MIN);
     float3 sum = float3(center.rgb);
@@ -190,7 +181,6 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
             if(x == 0 && y == 0)
                 continue;
             const float spatialExponent = -float(x * x + y * y) / spatialDenominator;
-            // Nonpositive exponents add nothing. Keep the combined exponent; shortcut adds no epsilon or re-rounding.
             if(exp(spatialExponent) == 0.0)
                 continue;
             const int2 neighborPixel = int2(pixel) + int2(x, y);
@@ -200,7 +190,6 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
             const uint neighborIndex = uint(neighborTilePixel.y) * tileWidth + uint(neighborTilePixel.x);
             const float neighborDepth = g_NwbReflectionSpatialPositionDepth[neighborIndex].w;
             const half4 neighborSpecularH = g_NwbReflectionSpatialSpecular[neighborIndex];
-            // RGBA16F specular cache is already native-half; widen only at the float isfinite check below.
             const half4 neighborSpecular = neighborSpecularH;
             if(!isfinite(neighborDepth) || neighborDepth < 0.0 || neighborDepth >= 1.0 || !all(isfinite(float4(neighborSpecular))) || neighborSpecular.a <= half(0.0h) || !any(neighborSpecular.rgb > half3(0.0h)))
                 continue;
@@ -210,7 +199,6 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
             if(roughnessDifference > half(NWB_REFLECTION_SPATIAL_ROUGHNESS_DIFFERENCE_MAX) || maxF0Difference > half(NWB_REFLECTION_SPATIAL_F0_DIFFERENCE_MAX))
                 continue;
             const float3 neighborNormal = nwbSafeNormalize(g_NwbReflectionSpatialNormal[neighborIndex].xyz * 2.0 - 1.0, normal);
-            // The normal-agreement gate is a (0, 1) bounded factor, so half arithmetic is sufficient here.
             const half normalAgreement = half(dot(normal, neighborNormal));
             if(normalAgreement < half(NWB_REFLECTION_SPATIAL_NORMAL_AGREEMENT_MIN))
                 continue;
@@ -218,7 +206,6 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
             if(!all(isfinite(neighborPosition)))
                 continue;
             const float3 displacement = neighborPosition - position;
-            // Bound FP16 positions componentwise, test both tangent planes: receiver-edge filter, not reprojection.
             const float3 positionUncertainty = (abs(position) + abs(neighborPosition)) * NWB_REFLECTION_SPATIAL_POSITION_RELATIVE_ERROR;
             const float planeTolerance = max(NWB_REFLECTION_SPATIAL_PLANE_TOLERANCE_MIN, max(dot(positionUncertainty, abs(normal)), dot(positionUncertainty, abs(neighborNormal))) + pixelFootprint * NWB_REFLECTION_SPATIAL_PLANE_FOOTPRINT_SCALE);
             const float planeDistance = max(abs(dot(displacement, normal)), abs(dot(displacement, neighborNormal)));
@@ -228,7 +215,6 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
             const half4 neighbor = neighborH;
             if(neighbor.a <= half(0.0h) || !all(isfinite(neighbor.rgb)))
                 continue;
-            // The combined bilateral weight is a (0, 1) bounded filter factor, so half arithmetic is sufficient here.
             const half normalizedPlaneDistance = half(planeDistance / planeTolerance);
             const half weight = half(exp(
                 spatialExponent
@@ -237,9 +223,6 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
                 -half(NWB_REFLECTION_SPATIAL_F0_FALLOFF) * maxF0Difference * maxF0Difference
                 -half(NWB_REFLECTION_SPATIAL_ROUGHNESS_FALLOFF) * roughnessDifference * roughnessDifference
             ));
-            // Accumulate in FP32: weighted HDR sums can exceed FP16 range before normalization.
-            // True zero samples participate normally.
-            // Rejecting black samples or clamping bright samples biases energy, and filtered output must never be used as the next temporal-history bank.
             sum += float3(neighbor.rgb) * float(weight);
             weightSum += float(weight);
         }

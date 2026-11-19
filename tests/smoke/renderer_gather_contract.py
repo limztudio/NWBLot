@@ -1,5 +1,3 @@
-"""Frozen renderer gathering workload and evidence constants."""
-
 LIT_WINDOW_TIMEOUT_SECONDS = 30.
 
 LIT_PROCESS_POLL_SECONDS = .1

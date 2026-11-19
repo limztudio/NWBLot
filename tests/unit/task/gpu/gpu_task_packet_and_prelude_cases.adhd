@@ -313,7 +313,6 @@ void VerifyGpuPacket_RecreatesPacketRecordingStateAfterRecompile(){
         else
             staleFirstQueue.deviceGeneration = cast<u16>(firstQueue.deviceGeneration + 1u);
         EXPECT_FALSE(recordedGraph.physicalQueueRecordingStatistics(compiledGraph, compiledPlan, staleFirstQueue).valid());
-        // A current-generation ID is still invalid when the compiled plan has no matching physical topology entry.
         GpuPhysicalQueueId nonPlanQueue = GpuPhysicalQueueId();
         nonPlanQueue.index = 3u;
         nonPlanQueue.deviceGeneration = compiledPlan.deviceGeneration();
@@ -353,7 +352,6 @@ void VerifyGpuPacket_RecreatesPacketRecordingStateAfterRecompile(){
         EXPECT_FALSE(recordedGraph.physicalQueueRecordingStatistics(compiledGraph, compiledPlan, secondQueue).valid());
     }
 
-    // Reset releases old command lists and rebuilds packet scratch for the new graph.
     recordedGraph.reset(compiledGraph);
     transaction.reset(compiledGraph);
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
@@ -1839,7 +1837,6 @@ void VerifyGpuPacket_QueueScoreUsesOnlyReducedOutgoingDependencies(){
     ASSERT_TRUE(Analyze(graph, operationScratch, analysis));
     ASSERT_EQ(analysis.edges().size(), 3u);
     ASSERT_EQ(analysis.schedulingEdges().size(), 2u);
-    // The graphics queue has no compute support, so the compute producer must run on the dedicated queue.
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue(0u, QueueCapabilities(GpuQueueCapability::Graphics, GpuQueueCapability::Transfer));
     queues[1u] = DedicatedComputeQueue();
@@ -1920,7 +1917,6 @@ void VerifyGpuPacket_DeduplicatesRawOwnershipScoreAndIgnoresSameFamilyQueueCross
     ASSERT_EQ(analysis.inferredEdges().size(), 6u);
     ASSERT_EQ(analysis.schedulingEdges().size(), 2u);
 
-    // The graphics queue has no compute support, so the compute consumer must run on the dedicated queue.
     const GpuPhysicalQueueInfo graphicsQueue = GraphicsQueue(0u, QueueCapabilities(GpuQueueCapability::Graphics, GpuQueueCapability::Transfer));
     Array<GpuPhysicalQueueInfo, 2> separateFamilyQueues = Array<GpuPhysicalQueueInfo, 2>();
     separateFamilyQueues[0u] = graphicsQueue;
@@ -2004,7 +2000,6 @@ void VerifyGpuPacket_RejectsInvalidAndIncompatibleQueueTopologiesDeterministical
     EXPECT_EQ(assignments.diagnostic().status, GpuTaskGraphQueueAssignmentStatus::InvalidQueueTopology);
 
     GpuPhysicalQueueInfo duplicateNativeQueue = GraphicsQueue(3u);
-    // Different graph IDs must not alias the same physical queue family/index transport.
     duplicateNativeQueue.queueIndex = GraphicsQueue().queueIndex;
     Array<GpuPhysicalQueueInfo, 2> duplicateNativeQueues = Array<GpuPhysicalQueueInfo, 2>();
     duplicateNativeQueues[0u] = GraphicsQueue();

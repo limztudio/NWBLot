@@ -1,4 +1,3 @@
-"""Shared SDR marker encoding and authored UI atlas sampling references."""
 from __future__ import annotations
 
 import math
@@ -36,7 +35,6 @@ def compose(source, alpha, tint, backdrop):
 
 
 def authored_texel(kind, x, y, fill, border):
-    """Match the authored four-by-four straight-alpha tile before UASTC compression."""
     if not 0 <= x < 24 or not 0 <= y < 24:
         return (0.0, 0.0, 0.0), 0.0
     samples = []
@@ -70,7 +68,6 @@ def _sample_texel(kind, sx, sy, fill, border):
 
 
 def sampled_tile(kind, rectangle, pixel, scale, fill, border, crop=(0.0, 0.0, 24.0, 24.0)):
-    """Bilinear raw-tile sampling at the physical pixel center, with optional UV cropping."""
     x, y, width, height = rectangle
     sx = ((pixel[0] + 0.5) / scale[0] - x) / width * crop[2] + crop[0] - 0.5
     sy = ((pixel[1] + 0.5) / scale[1] - y) / height * crop[3] + crop[1] - 0.5
@@ -78,7 +75,6 @@ def sampled_tile(kind, rectangle, pixel, scale, fill, border, crop=(0.0, 0.0, 24
 
 
 def sampled_region(rectangle, pixel, scale, fill, border):
-    """Sample the shipped six-unit nine-slice at the physical pixel center."""
     x, y, width, height = rectangle
     px, py = (pixel[0] + 0.5) / scale[0] - x, (pixel[1] + 0.5) / scale[1] - y
     if not 0.0 <= px < width or not 0.0 <= py < height:

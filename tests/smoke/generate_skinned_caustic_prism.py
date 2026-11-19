@@ -27,7 +27,6 @@ def asset_text():
     lines = [content, "skeleton skeleton;", "", "skeleton.joints = [", "    {", '        "name": "root",', '        "local_bind_pose": ' + identity + ",", "    },", "    {", '        "name": "bend",',
         '        "parent": "root",', '        "local_bind_pose": ' + identity + ",", "    },", "];", "", "skin skin;", "", "skin.mesh = mesh;", "skin.skeleton = skeleton;", "", "skin.influences = ["]
     for _, y, _ in mesh.positions:
-        # Bind the lower four vertices to root and the upper four to child.
         weights = (1, 0, 0, 0) if y < 0 else (0, 1, 0, 0)
         lines.append('    { "joints": [0, 1, 0, 0], "weights": [' + ", ".join(map(str, weights)) + "] },")
     lines += ["];", "", "skin.inverse_bind_matrices = [", "    " + identity + ",", "    " + identity + ",", "];", "", "model model;", "", "model.skeletons = {", '    "skeleton": { "skeleton": skeleton, },',

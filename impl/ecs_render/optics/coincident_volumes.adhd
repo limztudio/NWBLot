@@ -13,7 +13,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Pipeline owns one frozen selection shared by all consumers; raster/RT keep their ABIs.
 class RendererOpticalVolumeSelection : NoCopy{
     private HashSet<EntityID> m_suppressed;
 
@@ -73,7 +72,6 @@ class RendererOpticalVolumeSelection : NoCopy{
         this.select(Span<CoincidentOpticalVolumeCandidate>(candidates));
     }
 
-    // Candidates must contain each entity at most once.
     public void select(in Span<CoincidentOpticalVolumeCandidate> candidates){
         SelectSuppressedCoincidentOpticalVolumes(candidates, this.m_suppressed);
     }

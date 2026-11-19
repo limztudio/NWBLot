@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared half-resolution cone-jittered trace parameterized by output buffer, sample count, and salt.
 #if !defined(NWB_SW_SHADOW_SOFT_TRACE_OUTPUT) || !defined(NWB_SW_SHADOW_SOFT_TRACE_SPP) || !defined(NWB_SW_SHADOW_SOFT_TRACE_JITTER_SALT)
 #error "sw_shadow_soft_trace.slangi requires output, sample count, and jitter-salt macros"
 #endif
@@ -26,7 +25,6 @@ void nwbSwShadowTraceSoft(const uint3 dispatchThreadID){
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
     const uint maximumSamples = min(max(g_NwbSwShadowPush.softSampleCount, 1u), NWB_SW_SHADOW_SOFT_TRACE_SPP);
 
-    // Background is the multiplicative identity for both the opaque and colored resolve paths.
     if(nwbSwShadowIsBackground(texel)){
         for(uint i = 0u; i < lightCount; ++i){
             const float slot = g_NwbSceneLights[i].params.z;

@@ -1,5 +1,3 @@
-"""Validate reflection CPU timing lifecycle and publication coverage."""
-
 import math
 import re
 from types import SimpleNamespace
@@ -42,14 +40,12 @@ class ReflectionCpuTimingEvidence:
             raise SmokeFailure("reflection diagnostic duration must be finite and positive")
         return value
 
-
     @staticmethod
     def _one(lines, prefix, pattern):
         matches = [line for line in lines if line.startswith(prefix)]
         if len(matches) != 1 or not (match := re.fullmatch(pattern, matches[0])):
             raise SmokeFailure(f"reflection diagnostic needs one valid {prefix} record")
         return match, lines.index(matches[0])
-
 
     @staticmethod
     def parse_runtime_log(text, case):
@@ -110,7 +106,6 @@ class ReflectionCpuTimingEvidence:
         return dict(case=case, first=first, last=last, seconds=seconds, presentations=count, first_source=source_first, end_source=source_end, warmup_seconds=warmup, preparation_presentations=prepared,
             positive_intervals=positive, intervals=intervals, accepted_wall_frame_ms=LIT_MILLISECONDS_PER_SECOND * seconds / count, diagnostic_only=True, performance_qualification=False, runtime_signature=RendererWorkloadLogPolicy.device_material_signature(text))
 
-
     @staticmethod
     def validate_publications(log_text, raw_path, measurement):
         result = timing.verify_capture(log_text, raw_path, measurement, True, "reflection")
@@ -142,4 +137,3 @@ class ReflectionCpuTimingEvidence:
                 coverage[f"{domain}:{name}"] = dict(positive_publication_intervals=len(seen_intervals), completed_samples=sum(row[LIT_SAMPLES] for row in rows), first_source=rows[0][LIT_FIRST_SOURCE_FRAME], last_source=rows[-1][LIT_LAST_SOURCE_FRAME])
         result["required_publication_coverage"] = coverage
         return result
-

@@ -13,17 +13,13 @@
 #define NWB_SCENE_LIGHT_RECORD_FLOAT_COUNT 20u
 #define NWB_SCENE_MAX_LIGHTS 64u
 
-// params.y packs LightType; these midpoints decode directional/point/spot.
 #define NWB_SCENE_LIGHT_TYPE_DIRECTIONAL_MAX 0.5
 #define NWB_SCENE_LIGHT_TYPE_POINT_MAX 1.5
 
-// Cleared depth at or above this has no scene receiver.
 #define NWB_SCENE_BACKGROUND_DEPTH 0.999999
 
-// Per-light transmittance layers; lights without a slot stay fully lit.
 #define NWB_SCENE_SHADOW_SLOT_COUNT 8u
 
-// Caustic slots ride params.w (negative = none); point lights are excluded.
 #define NWB_SCENE_CAUSTIC_SLOT_COUNT 4u
 
 

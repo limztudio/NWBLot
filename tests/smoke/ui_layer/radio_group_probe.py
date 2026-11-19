@@ -1,4 +1,3 @@
-"""Decode frozen radio snapshots and compare model, atlas and placement pixels."""
 from __future__ import annotations
 
 import math
@@ -109,7 +108,6 @@ def observe_radio_group(frame, snapshot, expected, *, extent=None, skin="default
             return
         geometry_matches = geometry_matches and key != snapshot[LIT_REMOVED] \
             and contains(group, row) and contains(row, indicator) and contains(indicator, mark)
-        # At 14px these ASCII labels fit the authored 24px indicator, which determines natural row height.
         geometry_matches = geometry_matches and abs(row[3] - 24.0) <= 0.01 and abs(indicator[2] - 24.0) <= 0.01
         geometry_matches = geometry_matches and abs(indicator[3] - 24.0) <= 0.01
         geometry_matches = geometry_matches and abs(mark[2] - indicator[2] * 0.4) <= 0.01
@@ -122,9 +120,7 @@ def observe_radio_group(frame, snapshot, expected, *, extent=None, skin="default
         tint = (0.55, 0.55, 0.55, 0.6) if not enabled or key == 30 else ((0.85, 0.85, 0.85, 1.0) if pressed == (prefix, key) else (1.0, 1.0, 1.0, 1.0))
         ix, iy, iw, ih = indicator
         probe(f"{prefix}indicator{key}_fill", (ix + 4.0, iy + ih / 2.0), compose(linear_channels(fill), 1.0, tint, backdrop))
-        # Compare authored border samples at pixel centers for scaled DPI.
         candidates = []
-        # Sample the right indicator border away from the left focus overlay.
         left = max(0, math.floor((ix + iw - 1.5) * scale[0]))
         right = min(width, math.ceil((ix + iw) * scale[0]))
         top = round((iy + ih / 2.0) * scale[1])

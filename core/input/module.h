@@ -58,7 +58,6 @@ public:
 
 
 public:
-    // Remove a handler before destroying it, including during a callback.
     void addHandlerToFront(IInputEventHandler& handler){ queueOrApplyHandlerMutation(HandlerMutationType::AddFront, MakeNotNull(&handler)); }
     void addHandlerToBack(IInputEventHandler& handler){ queueOrApplyHandlerMutation(HandlerMutationType::AddBack, MakeNotNull(&handler)); }
     void removeHandler(IInputEventHandler& handler){ queueOrApplyHandlerMutation(HandlerMutationType::Remove, MakeNotNull(&handler)); }
@@ -66,14 +65,11 @@ public:
     void setMousePositionScale(f32 x, f32 y)noexcept;
 
     [[nodiscard]] b8 windowFocused()const noexcept{ return m_windowFocused; }
-    // Focus is window lifecycle state; every current handler observes each transition.
     void windowFocusUpdate(b8 focused);
-    // Native pointer lifecycle reaches every owner and never consumes keyboard state.
     void pointerLeave();
     void pointerCaptureLost();
 
     void keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods);
-    // Releases preserve queued character policy; a supplied native scancode selects its captured press/repeat policy.
     [[nodiscard]] b8 keyboardTextBlocked(i32 scancode = -1)const noexcept;
     void keyboardCharInput(u32 unicode, i32 mods);
     void mousePosUpdate(f64 xpos, f64 ypos);

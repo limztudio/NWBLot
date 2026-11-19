@@ -99,7 +99,6 @@ RenderState BuildRendererAvboitRefractionCaptureRenderState(){
     RenderState renderState;
     renderState.depthStencilState.enableDepthTest().enableDepthWrite().setDepthFunc(ComparisonFunc::LessOrEqual);
     renderState.rasterState.enableDepthClip().setCullBack();
-    // Nearest fragment wins; no attachment blends.
     return renderState;
 }
 

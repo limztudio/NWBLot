@@ -403,7 +403,6 @@ TypeRef* ImporterContext::mapType(CXType type, const b8 isParamContext, const u3
         return ref;
     };
 
-    // Preserve sugared NWB typedefs before canonicalization collapses fixed-width types.
     if(const MStringView direct = CppImporterSemantics::MapDirectTypeName(sugaredLeaf); !direct.empty())
         return allocateNonGenericLeafType(direct, BuiltinTypeSemantics::IsScalarType(direct));
 

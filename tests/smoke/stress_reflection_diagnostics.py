@@ -1,5 +1,3 @@
-"""Validate accepted reflection diagnostic samples from a stress run."""
-
 import re
 
 from window_capture_smoke import SmokeFailure

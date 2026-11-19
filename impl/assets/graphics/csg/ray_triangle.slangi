@@ -28,7 +28,6 @@ struct NwbCsgRayTriangleIntersection{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Products of two FP32 significands fit in 48 bits; no optional shader integer or FP64 features are needed.
 uint3 nwbCsgRayExactProduct(const float first, const float second){
     const uint a = asuint(first) & 0x7fffffffu;
     const uint b = asuint(second) & 0x7fffffffu;
@@ -94,7 +93,6 @@ uint2 nwbCsgRayShiftProduct(const uint3 product, const uint exponent){
     return uint2((low >> shift) | (high << (32u - shift)), high >> shift);
 }
 
-// Align exact products before subtraction when FP32 interpolation loses a small accepted edge.
 float2 nwbCsgRayExactEdgeMagnitude(const float2 first, const float2 second){
     const uint3 a = nwbCsgRayExactProduct(first.x, second.y);
     const uint3 b = nwbCsgRayExactProduct(first.y, second.x);
@@ -117,7 +115,6 @@ float2 nwbCsgRayExactEdgeMagnitude(const float2 first, const float2 second){
     return float2(value, value == 0.0 ? 0.0 : float(exponent));
 }
 
-// Shared edge endpoints use one order and interpolation, independent of each incident triangle's third vertex.
 float nwbCsgRayEdgeDistance(const float3 first, const float3 second, const float direction){
     const bool ordered = first.x < second.x || (first.x == second.x && (first.y < second.y || (first.y == second.y && first.z <= second.z)));
     const float3 a = ordered ? first : second;
@@ -161,7 +158,6 @@ NwbCsgRayTriangleIntersection nwbCsgRayTriangleIntersection(const float3 v0, con
         return result;
     const int orientation = any(signs > int3(0)) ? 1 : -1;
     result.owned = !closed || ((signs.x != 0 || nwbCsgRayOwnsEdge(p1.xy, p2.xy, orientation)) && (signs.y != 0 || nwbCsgRayOwnsEdge(p2.xy, p0.xy, orientation)) && (signs.z != 0 || nwbCsgRayOwnsEdge(p0.xy, p1.xy, orientation)));
-    // Only interpolation is scaled per triangle; exact coverage above always uses the shared ray-space positions.
     const float2 projectedMagnitude = max(abs(p0.xy), max(abs(p1.xy), abs(p2.xy)));
     const float scale = asfloat(max(asuint(max(projectedMagnitude.x, projectedMagnitude.y)) & 0x7f800000u, 0x00800000u));
     const float2 q0 = p0.xy / scale;

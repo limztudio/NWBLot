@@ -14,7 +14,6 @@ const usize s_MeshGbufferWorldPositionLocation = 2u;
 const usize s_MeshGbufferSpecularRoughnessLocation = 3u;
 const usize s_MeshGbufferTargetCount = 4u;
 
-// G-buffer sentinels; keep creation and clears in lockstep.
 const Color s_GBufferNormalClearColor = Color(0.5f, 0.5f, 1.0f, 1.0f);
 const Color s_GBufferWorldPositionClearColor = Color(0.0f, 0.0f, 0.0f, 1.0f);
 const Color s_GBufferSpecularRoughnessClearColor = Color(0.0f, 0.0f, 0.0f, 1.0f);

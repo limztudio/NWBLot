@@ -16,7 +16,6 @@ enum<u8> ControlActionKind{
     Right,
 }
 
-// The host supplies value lifetimes; the router retains no model or data-source address.
 class ControlToken{
     public b8 operator==(in ControlToken rhs)const{
         return this.instanceGeneration == rhs.instanceGeneration && this.contentGeneration == rhs.contentGeneration && this.contentRevision == rhs.contentRevision;

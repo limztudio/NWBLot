@@ -32,7 +32,6 @@ namespace __hidden_vulkan_device{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Timeline values live one logical-device lifetime. Indices come from the Device registry; generation rejects old tokens after recreate.
 static VulkanDetail::DeviceGenerationAllocator s_DeviceGenerationAllocator;
 
 
@@ -75,7 +74,6 @@ Device::Device(const DeviceDesc& desc)
     , m_scratchManager(*this, s_DefaultScratchChunkSize, s_ScratchMemoryLimit, UploadManager::ChunkKind::Scratch)
     , m_accelStructInputManager(*this, s_DefaultAccelStructInputChunkSize, s_AccelStructInputMemoryLimit, UploadManager::ChunkKind::AccelStructBuildInput)
 {
-    // A constructor failure cannot invoke Device::~Device; no work has been published to callers yet.
     const i32 initialExceptionCount = UncaughtExceptionCount();
     ScopeExit releaseUnpublishedResources([this, initialExceptionCount]()noexcept{
         if(UncaughtExceptionCount() > initialExceptionCount)
@@ -155,14 +153,11 @@ Device::Device(const DeviceDesc& desc)
 
     VulkanDeviceFeatureSetup::Initialize(m_context, desc, m_gpuCrashDiagnostics.enabled());
 
-    // Resolve every ASTC and BC sampled-image path up front.
-    // Texture loading consults this cache, so it can select ASTC, BC, or an uncompressed fallback before allocating data.
     probeCompressedTextureFormats();
 
     const VulkanDetail::DescriptorBufferStartupPrerequisites descriptorBufferPrerequisites = VulkanDetail::QueryDescriptorBufferStartupPrerequisites(m_context);
     const b8 descriptorBufferStartupReady = VulkanDetail::HasDescriptorBufferStartupPrerequisites(descriptorBufferPrerequisites);
 
-    // Descriptor-buffer startup prerequisites are mandatory for this device.
     if(!descriptorBufferStartupReady){
         NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Required descriptor-buffer startup prerequisites are unavailable."));
     }

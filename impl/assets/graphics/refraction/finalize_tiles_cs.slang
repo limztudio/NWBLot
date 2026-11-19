@@ -8,8 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The preceding classifier dispatch publishes its counter before this one-group selection.
-// Exactly one indirect record is active; the dense kernel never reads the compact queue.
 [numthreads(1, 1, 1)]
 void main(){
     const uint tilesX = (g_NwbRefractionPush.width + NWB_REFRACTION_GROUP_SIZE - 1u) / NWB_REFRACTION_GROUP_SIZE;

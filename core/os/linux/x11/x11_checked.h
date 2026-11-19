@@ -23,10 +23,8 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Property format is the item width in bits. Format 32 items are passed as long values on the client side.
 inline constexpr int s_X11PropertyByteFormat = 8;
 inline constexpr int s_X11PropertyLongFormat = 32;
-// Property lengths and request sizes count 4-byte units.
 inline constexpr usize s_X11WireUnitBytes = 4u;
 
 
@@ -50,8 +48,6 @@ struct X11PropertyFailure{
     u8 errorCode = 0u;
 };
 
-
-// Foreign selection requestors can disappear between Xlib calls. Check those errors without a fatal Xlib handler.
 class X11CheckedOperation final : NoCopy{
     friend Expected<X11Property, X11PropertyFailure> ReadX11Property(Display& display, Window window, Atom property, b8 remove, usize maxBytes);
 

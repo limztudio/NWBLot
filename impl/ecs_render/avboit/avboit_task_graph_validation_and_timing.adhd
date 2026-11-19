@@ -144,7 +144,6 @@ RendererAvboitTaskGraphValidation ValidateAvboitTaskGraphStage(
         && compiledGraph.tasksSharePacket(taskGraphStage.m_preTask, taskGraphStage.m_clearFirstTask)
         && compiledGraph.tasksSharePacket(taskGraphStage.m_preTask, taskGraphStage.m_clearTask)
     );
-    // Keep CSG clears with AVBOIT Pre for its timing and handoff.
     const b8 avboitPrePacketContainsTransparentCsgClear =
         (!taskGraphStage.m_transparentCsgIntervalClearFirstTask.valid() && !taskGraphStage.m_transparentCsgIntervalClearTask.valid())
         || (
@@ -155,7 +154,6 @@ RendererAvboitTaskGraphValidation ValidateAvboitTaskGraphStage(
         )
     ;
     const b8 avboitPrePacketContainsOccupancy = compiledGraph.tasksSharePacket(taskGraphStage.m_preTask, taskGraphStage.m_occupancyTask) && compiledGraph.taskPrecedesInSamePacket(taskGraphStage.m_preTask, taskGraphStage.m_occupancyTask);
-    // Span/Combine share Pre's timing; reject a split before recording.
     const b8 avboitPrePacketContainsCsgReceiverSpan = !taskGraphStage.m_csgReceiverSpanTask.valid() || compiledGraph.tasksSharePacket(taskGraphStage.m_preTask, taskGraphStage.m_csgReceiverSpanTask);
     const b8 avboitPrePacketContainsCsgIntervalCombine = !taskGraphStage.m_csgIntervalCombineTask.valid() || compiledGraph.tasksSharePacket(taskGraphStage.m_preTask, taskGraphStage.m_csgIntervalCombineTask);
     const Optional<GpuPhysicalQueueInfo> avboitPreQueue = compiledGraph.findQueueInfoForTask(taskGraphStage.m_preTask);
@@ -176,7 +174,6 @@ RendererAvboitTaskGraphValidation ValidateAvboitTaskGraphStage(
     );
     const b8 avboitExtinctionPacketContainsStreams = !taskGraphStage.m_extinctionStreamTask.valid() || compiledGraph.tasksSharePacket(taskGraphStage.m_extinctionTask, taskGraphStage.m_extinctionStreamTask);
     const b8 avboitAccumulationPacketContainsStreams = !taskGraphStage.m_accumulationStreamTask.valid() || compiledGraph.tasksSharePacket(taskGraphStage.m_accumulationTask, taskGraphStage.m_accumulationStreamTask);
-    // The finalizer is part of accumulation's packet; a split would bypass it.
     const b8 avboitAccumulationPacketContainsFinalizer = !hasTransparentRenderers || compiledGraph.tasksSharePacket(taskGraphStage.m_accumulationTask, taskGraphStage.m_accumulationFinalizeTask);
     const Optional<GpuPhysicalQueueInfo> avboitDepthWarpQueue = compiledGraph.findQueueInfoForTask(taskGraphStage.m_depthWarpTask);
     const Optional<GpuPhysicalQueueInfo> avboitExtinctionQueue = compiledGraph.findQueueInfoForTask(taskGraphStage.m_extinctionTask);
@@ -199,7 +196,6 @@ RendererAvboitTaskGraphValidation ValidateAvboitTaskGraphStage(
     const b8 depthWarpRunsOnCompute = IsAvboitQueueOnClass(avboitDepthWarpQueue, CommandQueue::Compute);
     const b8 integrationRunsOnGraphics = IsAvboitQueueOnClass(avboitIntegrationQueue, CommandQueue::Graphics);
     const b8 integrationRunsOnCompute = IsAvboitQueueOnClass(avboitIntegrationQueue, CommandQueue::Compute);
-    // Keep natural stage order; collapsed stages merge with adjacent Graphics.
     const b8 avboitNaturalStagePlacementValid = !hasTransparentRenderers || (
         avboitDepthWarpQueue.has_value()
         && avboitExtinctionQueue.has_value()
@@ -224,7 +220,6 @@ RendererAvboitTaskGraphValidation ValidateAvboitTaskGraphStage(
         && (!integrationRunsOnGraphics || (compiledGraph.tasksSharePacket(taskGraphStage.m_extinctionTask, taskGraphStage.m_integrationTask) && compiledGraph.tasksSharePacket(taskGraphStage.m_integrationTask, taskGraphStage.m_accumulationTask)))
         && compiledGraph.tasksSharePacket(taskGraphStage.m_accumulationTask, taskGraphStage.m_accumulationFinalizeTask)
     );
-    // Require exact packet order so the graph owns the output handoff.
     const b8 avboitOccupancyComputeEmulationMerged =
         IsAvboitComputeEmulationMerged(compiledGraph, taskGraphStage.m_occupancyComputeEmulationTask, taskGraphStage.m_occupancyTask, taskGraphStage.m_occupancyStreamTask, avboitOccupancyComputeEmulationQueue, avboitOccupancyQueue)
         && (
@@ -237,7 +232,6 @@ RendererAvboitTaskGraphValidation ValidateAvboitTaskGraphStage(
             )
         )
     ;
-    // Shared outputs need contiguous D/R callbacks in Pre's packet.
     const b8 avboitOccupancySharedComputeEmulationMerged = IsAvboitOccupancySharedComputeEmulationMerged(
         taskGraphStage,
         compiledGraph,
@@ -254,7 +248,6 @@ RendererAvboitTaskGraphValidation ValidateAvboitTaskGraphStage(
         avboitExtinctionComputeEmulationQueue,
         avboitExtinctionQueue
     );
-    // Shared outputs need a packet-local D/R chain.
     const b8 avboitExtinctionSharedComputeEmulationMerged = IsAvboitExtinctionSharedComputeEmulationMerged(
         taskGraphStage,
         compiledGraph,
@@ -270,7 +263,6 @@ RendererAvboitTaskGraphValidation ValidateAvboitTaskGraphStage(
         avboitAccumulationComputeEmulationQueue,
         avboitAccumulationQueue
     );
-    // Shared outputs need packet-local D/R callbacks.
     const b8 avboitAccumulationSharedComputeEmulationMerged = IsAvboitAccumulationSharedComputeEmulationMerged(
         taskGraphStage,
         compiledGraph,
@@ -326,7 +318,6 @@ b8 RendererAvboitSystem::appendTaskGraphTimingTickets(
     in usize maxBindingCount,
     in Func<64u, b8(in GpuTaskId, mut GpuTimingSubmissionTicket)> appendTicket
 )const{
-    // Depth warp, extinction, integration, and accumulation tickets.
     const Expected<usize> requiredBindingCount = TryResolveAvboitRequiredTimingBindingCount(
         validation.valid(),
         validation.stage().hasTransparentTasks,
@@ -344,7 +335,6 @@ b8 RendererAvboitSystem::appendTaskGraphTimingTickets(
         if(!appendTicket(this.m_taskGraphStage.m_depthWarpTask, timingTickets.depthWarp))
             return false;
         if(this.m_taskGraphStage.m_extinctionComputeEmulationTask.valid()){
-            // Shares the one Extinction ticket.
             if(!appendTicket(this.m_taskGraphStage.m_extinctionComputeEmulationTask, timingTickets.extinction))
                 return false;
         }
@@ -353,7 +343,6 @@ b8 RendererAvboitSystem::appendTaskGraphTimingTickets(
         if(!appendTicket(this.m_taskGraphStage.m_integrationTask, timingTickets.integration))
             return false;
         if(this.m_taskGraphStage.m_accumulationComputeEmulationTask.valid()){
-            // Shares the one Accumulation ticket.
             if(!appendTicket(this.m_taskGraphStage.m_accumulationComputeEmulationTask, timingTickets.accumulation))
                 return false;
         }

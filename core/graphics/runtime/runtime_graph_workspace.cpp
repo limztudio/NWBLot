@@ -54,7 +54,6 @@ StandaloneGraphWorkspacePool::Lease::Lease(StandaloneGraphWorkspacePool& pool)
 StandaloneGraphWorkspacePool::Lease::~Lease()noexcept(false){
     if(!m_workspace)
         return;
-    // An unwinding submission destroys its workspace instead of resetting it, so no reset callback runs during the unwind.
     if(UncaughtExceptionCount() > m_exceptionCount){
         m_pool.discard(*m_workspace);
         return;
@@ -85,7 +84,6 @@ StandaloneGraphWorkspace* StandaloneGraphWorkspacePool::acquire(){
         }
     }
 
-    // Only a new peak of overlapping or reentrant submissions creates another owner set.
     WorkspaceOwner created = MakeGlobalUnique<StandaloneGraphWorkspace>(m_arena, m_arena);
     if(!created)
         return nullptr;
@@ -96,10 +94,8 @@ StandaloneGraphWorkspace* StandaloneGraphWorkspacePool::acquire(){
 }
 
 void StandaloneGraphWorkspacePool::release(StandaloneGraphWorkspace& workspace){
-    // A throwing reset destroys this owner set during the unwind, so a stuck lease never blocks device teardown.
     ScopeExit discardOnUnwind([this, &workspace]()noexcept{ discard(workspace); });
 
-    // Reset outside the lock because payload teardown may run task callbacks.
     workspace.reset();
     discardOnUnwind.release();
 

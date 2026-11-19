@@ -132,7 +132,6 @@ b8 RendererMeshSystem::createMeshGeometryHeapHandles(mut MeshResources mesh){
         return false;
     }
 
-    // A non-empty partial set signals a broken lifetime transition, never a safe merge.
     for(in GpuDescriptorHandle handle : mesh.geometryHeapHandles)
         assert(!handle.valid());
 

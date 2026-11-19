@@ -1,5 +1,3 @@
-"""Compare balanced renderer gathering trials and their controls."""
-
 import statistics
 
 from experiment_statistics import PairedExperimentAnalysis

@@ -15,7 +15,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared by hardware RayQuery and software BVH traversal.
 #define NWB_SHADOW_RAY_MIN_DISTANCE 0.001
 #define NWB_SHADOW_DIRECTIONAL_RAY_MAX_DISTANCE 1.0e7
 #define NWB_SHADOW_LIGHT_DIRECTION_EPSILON 1.0e-5

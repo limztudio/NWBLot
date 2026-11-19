@@ -124,7 +124,6 @@ b8 GpuTimingFrameTransaction::prepareForRecovery()noexcept{
     if(!needsRetirement())
         return true;
 
-    // The old endpoint lives in an unsubmitted packet, so the recovery list may overwrite the end slot; the begin stays held.
     if(m_state == State::BeginAccepted)
         return true;
     if(m_state == State::EndRecorded && m_recorder.prepareDeferredScopeForRecovery(m_scope)){
@@ -174,9 +173,6 @@ GpuTimingMeasure::GpuTimingMeasure(GpuTimingRecorder& recorder, const GpuTimingS
     : m_recorder(recorder)
     , m_commandList(commandList)
 {
-    // For a normal one-command-list scope, the marker brackets the whole timing range.
-    // A split scope closes the marker before its producer list closes and stamps the end on the ordered consumer list.
-    // Identity stays separate for aggregation; the marker keeps authored text so release builds never see a Name hash.
     if(!scopeDefinition.valid()){
         FOUNDATION_ASSERT(!scopeDefinition.identity && scopeDefinition.markerLabel.empty());
         return;
@@ -194,7 +190,6 @@ GpuTimingMeasure::GpuTimingMeasure(GpuTimingRecorder& recorder, const GpuTimingS
 
 GpuTimingMeasure::~GpuTimingMeasure()noexcept{
     if(UncaughtExceptionCount() != 0){
-        // A split measure may outlive its opening list on unwind; only this stale token relinquishes, never the opener.
         abandonTimingWithoutCallbacks();
         m_marker = {};
         return;

@@ -53,7 +53,6 @@ static void WaitForOwnedProcess(const HANDLE process, const b8 terminateImmediat
     DWORD waited = WaitForSingleObject(process, terminateImmediately ? 0u : CrashDetail::s_HandlerExitWaitMilliseconds);
     b8 terminated = false;
     if(!terminateImmediately && waited != WAIT_OBJECT_0){
-        // Preserve detached upload completion after the existing bounded normal shutdown wait.
         observations.record(NativeFailure(CrashDetail::PlatformOperation::WaitProcess, waited == WAIT_FAILED ? GetLastError() : ERROR_TIMEOUT));
         return;
     }
@@ -166,8 +165,6 @@ void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpCon
     outOptions.stackPointer = __hidden_crash_win32::ContextStackPointer(storage.context);
     outOptions.framePointer = __hidden_crash_win32::ContextFramePointer(storage.context);
 
-    // Capture in-process (all modules loaded); server only resolves symbols, never unwinds (no .pdata needed).
-    // Leading capture frames dropped via options.callstackFramesToSkip.
     Array<void*, s_MaxCallstackFrames> backTrace;
     const USHORT capturedFrames = RtlCaptureStackBackTrace(0u, static_cast<ULONG>(s_MaxCallstackFrames), backTrace.data(), nullptr);
     outOptions.callstackFrameCount = 0u;
@@ -194,7 +191,6 @@ Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<ArenaT>& handle
     if(handlerExecutablePath.size() > s_MaxCommandCharacters - s_ArgumentCharacters)
         return MakeUnexpected(__hidden_crash_win32::NativeFailure(PlatformOperation::PrepareCommand, ERROR_FILENAME_EXCED_RANGE));
 
-    // Allocate all command and attribute storage before the first native handle exists.
     TString<Alloc::ScratchArena> commandLine(scratchArena);
     commandLine.resize(handlerExecutablePath.size() + s_ArgumentCharacters);
     SIZE_T attributeListBytes = 0u;
@@ -227,7 +223,6 @@ Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<ArenaT>& handle
     SECURITY_ATTRIBUTES securityAttributes = {};
     securityAttributes.nLength = sizeof(securityAttributes);
     securityAttributes.bInheritHandle = TRUE;
-    // The request pipe admits a whole fixed CrashRequest without waiting for a child drain.
     if(!CreatePipe(&requestReadHandle, &requestWriteHandle, &securityAttributes, static_cast<DWORD>(sizeof(CrashRequest))))
         return MakeUnexpected(__hidden_crash_win32::NativeFailure(PlatformOperation::CreateRequestChannel, GetLastError()));
     if(!SetHandleInformation(requestWriteHandle, HANDLE_FLAG_INHERIT, 0u))

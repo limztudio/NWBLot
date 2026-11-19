@@ -39,7 +39,6 @@ NwbCsgIntervalCapFillPixelOutput main(const NwbCsgCapFillPixelInput input){
     const NwbMeshSurface surface = nwbCsgCapSurface(cap, receiver, -cap.normal);
 
     NwbCsgIntervalCapFillPixelOutput output;
-    // baseColor.a carries the deferred BXDF id, while the other packed fields exactly match the mesh G-buffer.
     output.baseColor = half4(clamp(surface.baseColor, half3(0.0h), half3(1.0h)), half(receiver.rangeInfo.w));
     output.normal = half4(nwbCsgCapFillEncodeNormal(surface.normal), surface.param0);
     output.worldPosition = half4(half3(cap.worldPosition), surface.param1);

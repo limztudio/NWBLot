@@ -116,7 +116,6 @@ namespace __hidden_gpu_command_ir_raster_lowering{
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateDraw(const GpuCommandIrRasterTaskRecord& record, const GpuCommandIrRasterTaskRecord& stateRecord, const GpuCommandIrRasterStateOwner& owner)noexcept{
     const b8 indexed = record.opcode == GpuCommandIrWireOpcode::DrawIndexed;
     if(indexed){
-        // Graph preflight requires an index resource for indexed draws, and the state owner check admitted its buffer.
         auto& index = *MakeNotNull(owner.indexBuffer.get());
         const u32 indexBytes = GraphicsBackend::GetIndexElementByteSize(stateRecord.indexFormat);
         if(!GraphicsBackend::IsIndexDrawRangeValid(index.getDescription(), stateRecord.indexOffset, record.drawArguments.startIndexLocation, record.drawArguments.vertexCount, indexBytes))
@@ -226,7 +225,6 @@ GpuCommandIrReplayError::Enum ValidateRasterBackendOperand(
     case GpuCommandIrWireOpcode::SetPushConstants:{
         if(!state.active)
             return GpuCommandIrReplayError::InvalidRasterState;
-        // An active state was admitted with this owner and its pipeline.
         auto& owner = *MakeNotNull(stream.rasterStateOwner(state.graphicsState.framebufferOwnerIndex));
         FOUNDATION_ASSERT(owner.pipeline);
         if(record.blobSizeBytes > owner.pipeline->pushConstantByteSize)
@@ -251,7 +249,6 @@ GpuCommandIrReplayError::Enum ValidateRasterBackendOperand(
     }
 }
 
-// Backend operand preflight already admitted these owners and blob ranges on the same stable stream.
 b8 LowerRasterOperation(const GpuCommandIrRasterTaskRecord& record, const GpuCommandIrOwnedStream& stream, const BinaryByteView blobBytes, CommandList& commandList){
     switch(record.opcode){
     case GpuCommandIrWireOpcode::SetGraphicsState:{

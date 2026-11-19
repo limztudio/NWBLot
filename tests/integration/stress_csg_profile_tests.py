@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Verify optional CSG workload admission, actual shadow routing and measurement evidence."""
 
 from pathlib import Path
 import sys

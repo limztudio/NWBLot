@@ -33,7 +33,6 @@ template<typename T>
 template<typename T>
 [[nodiscard]] FOUNDATION_NOINLINE T ScalarDivideReference(const T first, const T second)noexcept{ return first / second; }
 
-// Follow the native scalar contraction policy of this build.
 template<typename T>
 [[nodiscard]] FOUNDATION_NOINLINE T ScalarMultiplyAddReference(const T first, const T second, const T addend)noexcept{
     return first * second + addend;

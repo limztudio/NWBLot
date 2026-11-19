@@ -60,7 +60,6 @@ b8 ValidateGraphemeText(in StringView text, in b8 singleLine){
     return true;
 }
 
-// Canonical multiline text contains LF and ordinary UTF8 scalars; all other ASCII/C1 controls and line separators fail.
 b8 ValidateMultilineText(in StringView text){
     if(text.size() > cast<usize>(i32.max))
         return false;

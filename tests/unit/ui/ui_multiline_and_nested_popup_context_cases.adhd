@@ -1091,7 +1091,6 @@ void VerifyUiNestedPopupBuilderTests_ChildPaintEscapesParentClipAndLayersRemainO
     EXPECT_GT(apply.value().clip.x, self.m_parent.placement().bounds.x + self.m_parent.placement().bounds.width);
     EXPECT_LE(apply.value().clip.x, apply.value().rectangle.x);
     EXPECT_LE(apply.value().clip.y, apply.value().rectangle.y);
-    // Lanes are clip right, clip bottom, rectangle right, rectangle bottom.
     const VectorSingle edges = VectorSingle(apply.value().clip.x, apply.value().clip.y, apply.value().rectangle.x, apply.value().rectangle.y) + VectorSingle(apply.value().clip.width, apply.value().clip.height, apply.value().rectangle.width, apply.value().rectangle.height);
     EXPECT_GE(edges.x, edges.z);
     EXPECT_GE(edges.y, edges.w);

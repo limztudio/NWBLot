@@ -128,8 +128,6 @@ Expected<GpuTimingScope> GpuTimingRecorder::beginDeferredScope(const Name& scope
     auto scope = beginScope(scopeName, attribution, false, device, commandList);
     if(!scope)
         return MakeUnexpected(Failure{});
-    // The frame transaction owns this reservation until the accepted end packet.
-    // The begin ticket has no rollback handle: a recovery endpoint may be needed after that begin already executed on the device timeline.
     if(scope->submissionTicket)
         scope->submissionTicket->cancelScopePublication(scope->submissionPublicationIndex);
     scope->submissionTicket = nullptr;

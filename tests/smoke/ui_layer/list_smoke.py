@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise a 100000-row virtual list through native input and accepted GPU presentation."""
+
 from __future__ import annotations
 
 import json
@@ -33,7 +33,6 @@ class ListRun(KeyedRun):
         super().__init__(args, backend, handle, process, log_directory, log_baseline, log_pattern, native_type=ListNativeInput, snapshot_reader=snapshot_from_logs, observer=observe_list,
             minimum_height=400, fixture=LIT_LIST, capture_stage="during virtual-list UI capture")
         self.expected = {LIT_SELECTED: 0, LIT_CURSOR: 0, "count": 100000, "focused": 0, "reversed": 0, "removed": 0, "visible": 1, "commits": 0, "underlying": 0}
-
 
     def write_report(self, passed):
         report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "input_path": "Win32 posted keys/pointer/positioned WM_MOUSEWHEEL messages"

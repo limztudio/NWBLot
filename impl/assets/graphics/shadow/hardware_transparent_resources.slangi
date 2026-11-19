@@ -56,7 +56,6 @@ struct NwbHardwareTransparentCrossing{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Each word occupies a complete pixel plane, so neighboring invocations write consecutive words.
 uint nwbHwShadowCrossingAddress(const uint pixel, const uint rayCount, const uint slot, const uint word){
     return (1u + slot * NWB_HW_TRANSPARENT_CROSSING_WORDS + word) * rayCount + pixel;
 }

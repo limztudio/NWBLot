@@ -222,7 +222,6 @@ void VerifySIMDMemory_ProtectedPageEdgesRejectOverreadsUnderreadsAndOutOfRangeSt
             for(in b8 sourceAtEnd : s_Directions){
                 for(in b8 destinationAtEnd : s_Directions){
                     FillTestBytes(destination.data, s_Poison, destination.accessibleBytes);
-                    // Nonmultiple tails leave less than one vector of poison before the upper guard to keep both starts aligned.
                     const usize sourceStart = EdgeOffset(sourceAtEnd, (source.accessibleBytes - count) & ~(s_SIMDMemoryCopyAlignment - 1u));
                     const usize destinationStart = EdgeOffset(destinationAtEnd, (destination.accessibleBytes - count) & ~(s_SIMDMemoryCopyAlignment - 1u));
                     const usize runtimeCount = ObserveValue<usize>(count);

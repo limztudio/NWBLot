@@ -253,7 +253,6 @@ void RendererRayTracingSystem::dispatchHardwareTransparentShadow(mut CommandList
                 BindHardwareTransparentShadowStage(state, s_HwTransparentEvaluateStage, false, this.m_rayTracingState.sceneBvh.m_tlasHeapHandle, push, commandList, heap);
                 commandList.dispatch(groupsX, groupsY, 1u);
             }
-            // Fast evaluation and continuation write disjoint pixels, but the next sample reads their accumulated result.
             commandList.setTextureState(targets.transparentSoftHalf.deref(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess, true);
             commandList.commitBarriers();
             {
@@ -266,7 +265,6 @@ void RendererRayTracingSystem::dispatchHardwareTransparentShadow(mut CommandList
     }
     if(this.m_rayTracingState.softShadow.m_softShadowSlotMask != 0u)
         this.reportTransparentShadowSampling(sampleCount);
-    // The trace task exports scratch in its declared UAV state, including the indirect-argument allocation.
     commandList.setBufferState(state.m_crossingsBuffer.deref(), ResourceStates::UnorderedAccess);
     commandList.setBufferState(state.m_overflowListBuffer.deref(), ResourceStates::UnorderedAccess);
     commandList.setBufferState(state.m_overflowArgsBuffer.deref(), ResourceStates::UnorderedAccess);

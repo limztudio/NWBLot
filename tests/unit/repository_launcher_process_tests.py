@@ -1,6 +1,3 @@
-"""Repository launcher process-stop and build-boundary behavior."""
-
-
 import argparse
 import io
 import subprocess
@@ -191,7 +188,6 @@ class LauncherProfileProcessTests(unittest.TestCase):
                 server.terminate.assert_not_called()
                 server.kill.assert_not_called()
                 server.wait.assert_not_called()
-
 
     def test_stop_failure_closes_started_profile_session_before_application_spawn(self):
         for detach in (False, True):

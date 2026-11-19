@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-"""Strict presentation measurement replay and performance-target checks; never launch a renderer."""
-
 
 import json
 from pathlib import Path
@@ -281,7 +279,6 @@ class StressPerformanceTargetTests(unittest.TestCase):
         self.assertEqual((output / LIT_PROCESS_TAIL_TXT).read_text(), LIT_PROCESS_PRESERVED)
         self.assertEqual(result[LIT_IDENTITY_BEFORE], {LIT_VERIFIED: True})
         self.assertEqual(result[LIT_IDENTITY_BEFORE], result[LIT_IDENTITY_AFTER])
-
 
     def test_target_does_not_bypass_validation_or_identity_checks(self):
         for text in (self.rate_log(62) + LIT_VUID_123, self.rate_log(62).replace("blocker_search=0", "blocker_search=1")):

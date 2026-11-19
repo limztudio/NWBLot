@@ -18,8 +18,6 @@ GpuTaskGraph::DeclarationMutationScope::DeclarationMutationScope(GpuTaskGraph& g
     : m_graph(graph)
     , m_declarationLock(graph.m_declarationMutex)
 {
-    // Mutation owns the recursive declaration gate before briefly taking lifecycle state.
-    // Teardown and recording take only the lifecycle gate and reject a nonzero claim count, so neither path waits back on this gate.
     ScopedLock lock(m_graph.m_lifecycleMutex);
     if(m_graph.m_teardownInProgress || m_graph.m_activeRecordingPlanGeneration != 0u || m_graph.m_activeDeclarationReadCount != 0u || m_graph.m_activeDeclarationAccessCount == Limit<u32>::s_Max)
         return;
@@ -70,7 +68,6 @@ GpuTaskGraphDeclarationReadView::GpuTaskGraphDeclarationReadView(const GpuTaskGr
 }
 
 void GpuTaskGraphDeclarationReadView::acquire(const GpuTaskGraph& graph)noexcept{
-    // Try-admission reads lifecycle state only; unpublished mutation rejects first, so neither path waits on the other.
     NothrowScopedLock lock(graph.m_lifecycleMutex);
     if(graph.m_teardownInProgress || graph.m_activeDeclarationAccessCount == Limit<u32>::s_Max || graph.m_activeDeclarationReadCount == Limit<u32>::s_Max || graph.m_activeDeclarationAccessCount != graph.m_activeDeclarationReadCount)
         return;
@@ -78,8 +75,6 @@ void GpuTaskGraphDeclarationReadView::acquire(const GpuTaskGraph& graph)noexcept
     ++graph.m_activeDeclarationAccessCount;
     ++graph.m_activeDeclarationReadCount;
     m_graph = &graph;
-
-    // The counters retain the shared read claim after the admission turnstile is released.
 }
 
 

@@ -25,14 +25,13 @@ def generate(work_directory, output_directory, converter):
     spec = importlib.util.spec_from_file_location("engine_skin_artwork", REPO / "utilities/ui_skin/generate_default.py")
     artwork = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(artwork)
-    # Reverse tile placement as well as replacing colors, so fixed default UV assumptions fail visibly.
     artwork.PANELS = [(name, *PALETTE.get(name, (fill, border))) for name, fill, border in reversed(artwork.PANELS)]
     artwork.ICONS = list(reversed(artwork.ICONS))
     artwork.generate(work_directory)
     metadata = (work_directory / LIT_ATLAS_NWB).read_text(encoding=LIT_UTF_8)
     region_lines = metadata.split(LIT_ASSET_REGIONS_OPEN, 1)[1].split("];", 1)[0].splitlines()
     regions = [json.loads(line.strip().rstrip(",")) for line in region_lines if line.strip().startswith("{")]
-    expected_regions = len(artwork.PANELS) + len(artwork.ICONS) + 10  # Default artwork plus semantic aliases.
+    expected_regions = len(artwork.PANELS) + len(artwork.ICONS) + 10
     if (len(regions) != expected_regions or len({region[LIT_NAME] for region in regions}) != len(regions) or any("rect" not in region for region in regions)):
         raise ValueError("default skin region catalog changed unexpectedly")
     for region in regions:

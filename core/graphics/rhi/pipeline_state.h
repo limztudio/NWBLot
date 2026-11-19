@@ -256,9 +256,6 @@ public:
 
 
 struct ViewportState{
-    // These are in pixels.
-    // Set each state either in the PSO or per draw call in DrawArguments, not both.
-    // Leaving these vectors empty means no state is set.
     FixedVector<Viewport, s_MaxViewports> viewports;
     FixedVector<Rect, s_MaxViewports> scissorRects;
 

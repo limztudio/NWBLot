@@ -13,17 +13,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The widget lends its model for the call. The host owns OS services and pending input.
 interface IEditBoxHost : NoCopy{
     EditBoxResult edit(in WidgetState widget, in EditBoxOptions options, mut EditModel model);
 
-    // Deferred controls identify their popup before publishing candidate geometry.
     EditBoxResult editInPopup(in WidgetState widget, in EditBoxOptions options, in PopupToken popup, mut EditModel model);
 
-    // Deliver actions in event order before the widget takes its paint snapshot.
     EditBoxResult editActions(in WidgetState widget, in EditBoxOptions options, in PopupToken popup, mut EditModel model, mut IEditActionSink actions);
 
-    // Resolve navigation against the current model between queued events.
     EditBoxResult editNavigated(
         in WidgetState widget,
         in EditBoxOptions options,

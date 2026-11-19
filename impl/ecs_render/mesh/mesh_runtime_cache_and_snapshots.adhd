@@ -120,7 +120,6 @@ Expected<mut MeshResources> RendererMeshSystem::createMeshResources(in AssetRef<
         return MakeUnexpected(Failure());
 
     in Mesh mesh = loadedAsset.value().deref();
-    // Mesh::loadBinary already ran the full payload validation (including u32 stream limits).
     assert(mesh.validatePayload());
     assert(mesh.meshlets().size() <= cast<usize>(u32.max));
     assert(mesh.meshletPrimitiveIndices().size() <= cast<usize>(u32.max));
@@ -139,7 +138,6 @@ Expected<mut MeshResources> RendererMeshSystem::createMeshResources(in AssetRef<
     createdMesh.csgLocalBounds = csgLocalBounds.value();
 
     const b8 rtSupported = this.m_graphics.queryFeatureSupport(Feature::RayTracingAccelStruct);
-    // Both tracing backends read raw position/index buffers for material evaluation.
     const b8 swShadow = RequiresShadowSoftwareBvhBuild(rtSupported);
 
     b8 uploaded = true;
@@ -157,7 +155,6 @@ Expected<mut MeshResources> RendererMeshSystem::createMeshResources(in AssetRef<
     if(!uploaded)
         return MakeUnexpected(Failure());
 
-    // Both shadow backends trace triangles; always create the reconstructed index buffer.
     {
         const auto triangleIndices = BuildMeshletTriangleIndices(mesh);
         if(!triangleIndices.has_value()){
@@ -175,7 +172,6 @@ Expected<mut MeshResources> RendererMeshSystem::createMeshResources(in AssetRef<
         indexFlags.canHaveRawViews = true;
         indexFlags.isIndexBuffer = true;
         indexFlags.accelStructBuildInput = rtSupported;
-        // Async shadow packet shares this stream; keep sharing consistent to avoid ownership transfer.
         indexFlags.queueSharing = ResourceQueueSharing::GraphicsAndAsyncCompute;
         auto indexBuffer = SetupRequiredBuffer<u32>(this.m_graphics, indexBufferName.value(), triangleIndices.value(), indexFlags);
         if(!indexBuffer.has_value()){
@@ -187,7 +183,6 @@ Expected<mut MeshResources> RendererMeshSystem::createMeshResources(in AssetRef<
         MeshAccelerationStatePolicy().finalizeShadowIndices(meshPath, triangleIndices.value().size(), createdMesh.meshletPrimitiveIndexCount, rtSupported, swShadow, createdMesh.blasBuildPending, createdMesh.swBvhBuildPending);
     }
 
-    // Flat per-corner trace attributes in lockstep with the index buffer; always carries a raw view.
     {
         const auto triangleAttributes = BuildMeshletTriangleAttributes(mesh);
         if(!triangleAttributes.has_value()){
@@ -203,7 +198,6 @@ Expected<mut MeshResources> RendererMeshSystem::createMeshResources(in AssetRef<
 
         BufferFlags attributeFlags;
         attributeFlags.canHaveRawViews = true;
-        // Tracing shares these attributes on AsyncCompute; keep shared-read input.
         attributeFlags.queueSharing = ResourceQueueSharing::GraphicsAndAsyncCompute;
         auto attributeBuffer = SetupRequiredBuffer<AttribGpu>(this.m_graphics, attributeBufferName.value(), triangleAttributes.value(), attributeFlags);
         if(!attributeBuffer.has_value()){

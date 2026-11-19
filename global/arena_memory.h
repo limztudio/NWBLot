@@ -66,7 +66,6 @@ public:
             m_reservedBytes.fetch_sub(bytes, MemoryOrder::relaxed);
     }
 
-    // Direct arenas derive reservation from usage; hot paths update local counters only.
     void recordAllocation(u64 bytes)noexcept;
     void recordReallocation(u64 oldBytes, u64 newBytes)noexcept;
     void recordDeallocation(u64 bytes)noexcept;
@@ -106,9 +105,7 @@ struct ArenaMemoryOwnerSnapshot{
     ArenaMemorySource::Enum source = ArenaMemorySource::Arena;
 };
 
-// Records live for process lifetime; traversal captures head to stay bounded.
 [[nodiscard]] const ArenaMemoryOwnerRecord* FirstArenaMemoryOwnerRecord()noexcept;
-// Identity and successor are immutable after publication; this read does not sample counters or lock live trackers.
 [[nodiscard]] const ArenaMemoryOwnerRecord* ReadArenaMemoryOwnerIdentity(const ArenaMemoryOwnerRecord& record, ArenaMemoryOwnerIdentity& outIdentity)noexcept;
 
 FOUNDATION_INLINE Name ArenaMemoryTracker::ownerName()const noexcept{
@@ -120,7 +117,6 @@ FOUNDATION_INLINE Name ArenaMemoryTracker::ownerName()const noexcept{
 }
 [[nodiscard]] const ArenaMemoryOwnerRecord* ReadArenaMemoryOwnerRecord(const ArenaMemoryOwnerRecord& record, ArenaMemoryOwnerSnapshot& outSnapshot)noexcept;
 
-// Raw heap total is separate from named arenas; per-thread counters retain exited history.
 void RecordHeapMemoryAllocation(u64 bytes)noexcept;
 void RecordHeapMemoryReallocation(u64 oldBytes, u64 newBytes)noexcept;
 void RecordHeapMemoryDeallocation(u64 bytes)noexcept;

@@ -1,5 +1,3 @@
-"""Parse and validate window capture command-line arguments."""
-
 import argparse
 import math
 from pathlib import Path

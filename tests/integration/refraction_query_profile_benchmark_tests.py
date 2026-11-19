@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Reject biased profile orders, incomplete campaigns, and unusable host telemetry."""
 
 from collections import Counter
 import contextlib

@@ -74,8 +74,6 @@ private:
 
 
 private:
-    // Records one compiler-derived non-empty contiguous range.
-    // Earlier producer packets needed by the range must already be recorded, keeping deliberate late tails separate from the ordinary graph prefix.
     [[nodiscard]] b8 recordPacketRangeInCompileOrder(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -85,7 +83,6 @@ private:
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         GpuCommandIrCapture* outCommandIrCapture = nullptr
     )const;
-    // Task endpoints resolve after compilation, keeping record spans independent of packet splitting while preserving intentional late tails.
     [[nodiscard]] b8 recordTaskRangeInCompileOrder(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -96,7 +93,6 @@ private:
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         GpuCommandIrCapture* outCommandIrCapture = nullptr
     )const;
-    // Records ready frontiers via cpuScheduler; parallel only on unanimous opt-in, else serial. Synchronous.
     [[nodiscard]] b8 recordPacketRangeInReadyFrontiers(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -110,7 +106,6 @@ private:
 
 
 private:
-    // Caller must own artifactAccess and complete prepareRecordingAttempt().
     [[nodiscard]] b8 recordPreparedPacketRangeInCompileOrder(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -161,7 +156,6 @@ private:
 
 private:
     Device& m_device;
-    // Optional; all-None graphs keep the plain recorder path. A timing-aware recorder must outlive its tickets.
     GpuTimingRecorder* m_timingRecorder = nullptr;
 };
 
@@ -188,7 +182,6 @@ struct PacketWaitStatistics{
 [[nodiscard]] b8 ValidateInitialOwnershipCompletionToken(const GpuTaskGraphInitialOwnerHandoffSourceView& source, const GpuCompiledBarrier& barrier, const GpuPhysicalQueueInfo& sourceQueue, const QueueSubmissionToken& token, u16 deviceGeneration)noexcept;
 [[nodiscard]] b8 ValidateInitialOwnershipCompletions(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packetID)noexcept;
 
-// Reject missing declaration tokens across the entire range before any native packet can be accepted.
 [[nodiscard]] b8 ValidateExternalDependencyTokens(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketRange& range)noexcept;
 
 

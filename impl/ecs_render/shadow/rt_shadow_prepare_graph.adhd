@@ -138,7 +138,6 @@ class ShadowPrepareGraphTask{
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
         this.outcome.ready = false;
-        // The graph establishes the selector ConstantBuffer state before recording.
         if(!this.targets.bindless.valid())
             return false;
         const auto shadowResourcesPrepared = this.raytracingSystem.recordPreflightShadowVisibilityResources(
@@ -151,12 +150,10 @@ class ShadowPrepareGraphTask{
             this.preparedMeshSwBvhBuildsRecordedByGraph
         );
 
-        // Selector upload precedes this task; compiler establishes ConstantBuffer state first.
         if(!shadowResourcesPrepared.has_value())
             return false;
         this.outcome.ready = shadowResourcesPrepared.value();
 
-        // These declarations export BLAS/SW-BVH boundary states before the Prefix packet seeds.
         return true;
     }
 
@@ -173,7 +170,6 @@ class ShadowPrepareGraphTask{
     public void discarded(){
         this.timingTicket.discard();
 
-        // Failed preparation keeps storage but invalidates the frame plan and caches.
         this.outcome.ready = false;
         this.outcome.resourcesValid = false;
         this.targets.bindless.slotsUploaded = this.deferredBindlessSlotsWereUploaded;
@@ -277,7 +273,6 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
         return false;
     GpuTaskId shadowPrepareDependency = uploads.completionTask;
 
-    // Hardware TLAS builds retain their preflight instance stream; the first Graphics packet owns the native build.
     const b8 sceneTlasBuildGraphOwned = context.rayTracing.preparedSceneTlasBuildReady();
     const b8 meshBlasBuildsGraphOwned = context.rayTracing.preparedMeshBlasBuildsReady();
     const Span<PreparedMeshBlasBuild> preparedMeshBlasBuilds = context.rayTracing.preparedMeshBlasBuilds();
@@ -293,7 +288,6 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
     ))
         return false;
     const b8 meshBlasGeometryBuildInputStatesGraphOwned = ResolveMeshBlasGeometryBuildInputStatesGraphOwned(meshBlasBuildsGraphOwned, softwareTraceResourcesPrepared, meshSwBvhBuildsGraphOwned);
-    // Software preparation uses typed sentinel clears before each mesh build.
     const b8 pureSoftwareMeshSwBvhBuildsGraphOwnedCandidate = meshSwBvhBuildsGraphOwned && !context.rayTracing.shadowVisibilityHardwareSupported();
 
     PreparedMeshSwBvhGraphResourceVector pureSoftwareMeshSwBvhGraphResources;
@@ -323,7 +317,6 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
     }
 
     if(context.rayTracing.preparedSceneSwBvhRefit().valid()){
-        // A scene refit requires every frozen mesh build to be declared before it.
         if(!CanDeclareShadowPrepareSceneSwBvhRefit(context.rayTracing.preparedMeshSwBvhBuildPlanFrozen(), preparedMeshSwBvhBuilds.size(), pureSoftwareMeshSwBvhBuildsGraphOwned))
             return false;
         const auto refitTasks = DeclareSoftwareSceneRefit(context.rayTracing.preparedSceneSwBvhRefit(), uploads.sceneBvhNodes, shadowPrepareDependency, context.graph);
@@ -344,7 +337,6 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
     scheduling.forceSubmissionBoundary = false;
     scheduling.allowPacketMerge = true;
     scheduling.mergeWithPrevious = true;
-    // Software per-mesh chains precede this endpoint. Keep the whole packet even when later consumers form a frontier.
     scheduling.allowMergeAcrossConsumerFrontier = ShouldMergeShadowPrepareAcrossConsumerFrontier(pureSoftwareMeshSwBvhBuildsGraphOwned, this.m_deferredShadowPrepareSceneRefitTask.valid());
     GpuTaskExternalStateSource shadowPrepareStateSource;
     const auto persistent = context.persistentState.borrowSource();
@@ -451,7 +443,6 @@ b8 ShadowAccelerationFinalizeBuilder::declare(
     accelStructFinalizeScheduling.forceSubmissionBoundary = false;
     accelStructFinalizeScheduling.allowPacketMerge = true;
     accelStructFinalizeScheduling.mergeWithPrevious = true;
-    // Compute consumers follow Shadow Preparation. Keep Read finalizers in the same packet so they wait on every build.
     accelStructFinalizeScheduling.allowMergeAcrossConsumerFrontier = true;
     GpuTaskDesc accelStructFinalizeDesc;
     accelStructFinalizeDesc
@@ -459,7 +450,6 @@ b8 ShadowAccelerationFinalizeBuilder::declare(
         .setMarkerLabel("Shadow Preparation Accel-Struct Finalize")
         .setScheduling(accelStructFinalizeScheduling)
         .setDependency(prepareTask)
-        // The typed final-state collection expands to the same inputs. Keep individuals when members form no unique set.
     ;
     const Array<GpuTaskResourceSetUse, 1u> finalizeSets(accelStructFinalizeSetUse);
     if(accelStructFinalizeSetGraphOwned)
@@ -482,39 +472,30 @@ b8 ShadowAccelerationFinalizeBuilder::declare(
 
 void ShadowPreparePacketValidator::validate(in GpuCompiledGraphReadView compiledPlan, mut ShadowPreparePacketValidationResult outResult)const{
     in RendererFramePipeline pipeline = this.m_pipeline;
-    // Software clears belong to the Shadow Preparation packet; a split would omit them.
     if(!pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSoftwareBvhBuildFirstTask.valid())
         outResult.softwareBvhBuildsMerged = !pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSoftwareBvhBuildLastTask.valid();
     else
         outResult.softwareBvhBuildsMerged = pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSoftwareBvhBuildLastTask.valid()
             && compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSoftwareBvhBuildFirstTask)
             && compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSoftwareBvhBuildLastTask);
-    // The endpoint must never accept uploaded scene topology without its current-pose refit.
     outResult.softwareSceneRefitMerged =
         pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSceneRefitTask.valid() == pipeline.m_shadowPrepareGraph.m_sceneBvhRefitInputsUploadTask.valid()
         && (!pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSceneRefitTask.valid()
             || (compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSceneRefitTask) && compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_sceneBvhRefitInputsUploadTask)))
     ;
-    // Frozen transitions must share the build's submission for an atomic handoff.
     outResult.accelStructFinalizeMerged = !pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareAccelStructFinalizeTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareAccelStructFinalizeTask);
-    // Selector uploads must stay in the Shadow Preparation packet.
     outResult.bindlessSlotsUploadMerged = !pipeline.m_shadowPrepareGraph.m_deferredBindlessSlotsUploadTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_deferredBindlessSlotsUploadTask);
-    // Keep the upload in the first packet so it becomes the handoff.
     outResult.rayTraceMaterialContextSlotsUploadMerged =
         (!pipeline.m_shadowPrepareGraph.m_rayTraceMaterialContextSlotsUploadTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_rayTraceMaterialContextSlotsUploadTask))
         && (!pipeline.m_shadowPrepareGraph.m_csgTraceContextUploadTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_csgTraceContextUploadTask))
     ;
-    // Nonempty caustic payloads must live in the Shadow Preparation packet.
     outResult.causticEmissionTargetsUploadMerged = !pipeline.m_shadowPrepareGraph.m_causticEmissionTargetsUploadTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_causticEmissionTargetsUploadTask);
-    // Surfel constants must share the Shadow Preparation packet.
     outResult.surfelFrameConstantsUploadMerged = !pipeline.m_shadowPrepareGraph.m_surfelFrameConstantsUploadTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_surfelFrameConstantsUploadTask);
-    // This triple must stay in the first accepted packet.
     outResult.shadowMaterialContextUploadsMerged =
         (!pipeline.m_shadowPrepareGraph.m_shadowInstanceMaterialUploadTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_shadowInstanceMaterialUploadTask))
         && (!pipeline.m_shadowPrepareGraph.m_shadowInstanceUploadTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_shadowInstanceUploadTask))
         && (!pipeline.m_shadowPrepareGraph.m_shadowMaterialTypedUploadTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_shadowMaterialTypedUploadTask))
     ;
-    // Keep the pair in Shadow Preparation as the only producer.
     outResult.sceneBvhUploadsMerged =
         pipeline.m_shadowPrepareGraph.m_sceneBvhNodesUploadTask.valid() == pipeline.m_shadowPrepareGraph.m_sceneBvhInstancesUploadTask.valid()
         && (!pipeline.m_shadowPrepareGraph.m_sceneBvhNodesUploadTask.valid()
@@ -534,8 +515,6 @@ b8 ShadowSoftwareBvhBuildChain::declare(
     mut GpuTaskId firstTask,
     mut GpuTaskId lastTask
 ){
-
-    // Operations share scratch; keep clears adjacent in the accepting packet.
     GpuTaskSchedulingHint clearScheduling;
     clearScheduling.cost = GpuTaskCostHint::Tiny;
     clearScheduling.forceSubmissionBoundary = false;

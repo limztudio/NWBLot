@@ -65,7 +65,6 @@ class PreparedGlyph{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Construct, set fonts, shape and paint on the owning UI thread.
 class TextService : NoCopy{
     private TextShaper m_shaper = TextShaper();
     private GlyphAtlas m_atlas = GlyphAtlas();
@@ -99,7 +98,6 @@ class TextService : NoCopy{
         return target.shape(request, this.m_shaper);
     }
 
-    // Include visible glyph support at every pixel-snap phase without populating the coverage atlas.
     [cpp_unwind]
     public Expected<Rect> measure(in TextLayout layout, in DisplayMetrics display){
         if(layout.lines().empty())
@@ -156,7 +154,6 @@ class TextService : NoCopy{
         const Point deviceScale = MakeDisplayPixelScalePoint(display);
         Vector<usize> candidates;
         candidates.reserve(layout.glyphs().size());
-        // Validate every candidate before raster preparation changes the coverage atlas.
         for(usize index = 0u; index < layout.glyphs().size(); ++index){
             in PlacedGlyph glyph = layout.glyphs()[index];
             const SharedBakedFontAtlas atlas = SelectAtlas(glyph, raster.physicalSize);

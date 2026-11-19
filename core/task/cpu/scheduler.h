@@ -80,7 +80,6 @@ private:
     };
 
     struct ReadyQueue{
-        // Intrusive MPMC links: every producer publication and consumer claim holds m_mutex.
         u32 head = TaskHandle::s_InvalidIndex;
         u32 tail = TaskHandle::s_InvalidIndex;
     };
@@ -157,7 +156,6 @@ public:
 
 
 public:
-    // Concurrent submission from any thread; producers must finish before destruction.
     template<typename Func>
     [[nodiscard]] Expected<TaskHandle, CpuTaskAdmissionError::Enum> submit(Func&& function, CpuTaskOptions options = {}){
         return submitTask(TaskFunction(Forward<Func>(function)), nullptr, options, nullptr, 0u);
@@ -177,14 +175,11 @@ public:
 public:
     void wait(TaskHandle handle);
     void wait();
-    // Terminal cleanup: stop admission and skip queued callbacks before joining active work.
     void drain()noexcept;
     void pumpMainThread();
     [[nodiscard]] b8 isComplete(TaskHandle handle)const;
     [[nodiscard]] CpuTaskSchedulerStatistics statistics()const noexcept;
-    // Register labels during setup; reuse handles in options and scopes.
     [[nodiscard]] CpuTaskProfileLabel registerProfileLabel(const Name& name);
-    // Capture changes discard buffered events; zero capacity disables profiling.
     void setProfiling(b8 enabled, u64 frameIndex = 0u);
     [[nodiscard]] usize readProfileEvents(CpuTaskProfileEvent* output, usize capacity)noexcept;
     [[nodiscard]] u64 domainIdentity()const noexcept{ return m_domainIdentity; }
@@ -237,7 +232,6 @@ private:
     void profileReadyLocked(u32 index)noexcept;
     [[nodiscard]] ProfileSample prepareProfileLocked(CpuTaskProfileKind::Enum kind, TaskHandle task, CpuTaskProfileLabel label, usize workerIndex, CpuAffinity::Enum affinity)const noexcept;
     void finishProfileLocked(const ProfileSample& sample, Timer end)noexcept;
-    // Callers provide roots and visit filters after starting the locked search.
     void beginLockedSearch()noexcept;
 
 
@@ -301,7 +295,6 @@ public:
 
 
 public:
-    // Scopes accept concurrent producers; join before destroying the scope.
     template<typename Func>
     Expected<TaskHandle, CpuTaskAdmissionError::Enum> submit(Func&& function, CpuTaskOptions options = {}){
         return m_scheduler.submitTask(CpuTaskScheduler::TaskFunction(Forward<Func>(function)), this, options, nullptr, 0u);
@@ -320,7 +313,6 @@ public:
 
 public:
     void wait(){ m_scheduler.waitScope(*this); }
-    // Terminal cleanup aborts the shared service; use cancel() for ordinary scope cancellation.
     void drain()noexcept;
     void cancel()noexcept;
     [[nodiscard]] CpuTaskScheduler& scheduler()const noexcept{ return m_scheduler; }
@@ -345,7 +337,6 @@ public:
         );
         if(!admitted){
             drainOnFailure.release();
-            // Cancellation intentionally skips this scope's unadmitted range.
             if(admitted.error() == CpuTaskAdmissionError::ScopeCanceled)
                 return {};
             return MakeUnexpected(admitted.error());
@@ -361,7 +352,6 @@ private:
     CpuTaskScheduler& m_scheduler;
     const CpuTaskProfileLabel m_profileLabel;
     Atomic<usize> m_pending{ 0u };
-    // Assigned under the scheduler mutex; simultaneous joins share contribution proofs.
     u64 m_searchIdentity = 0u;
     b8 m_canceled = false;
     b8 m_allowCallerWork = false;

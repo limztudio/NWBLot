@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shadow trace serves material accessors via per-hit globals, so the hook runs here and in raster.
 #define NWB_MESH_MATERIAL_CONTEXT_PROVIDED
 #include "../mesh/material_typed_bindings.slangi"
 
@@ -17,8 +16,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One ray hit resolved for the surface hook: corner attributes + occluder record (instance/dispatch/constant offset).
-// Normal is world space (surface contract); backends inverse-transpose before filling.
 struct NwbShadowHit{
     uint meshInstanceIndex;
     uint surfaceDispatchId;
@@ -33,7 +30,6 @@ struct NwbShadowHit{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-invocation material context populated from the current hit before invoking the material surface hook.
 static uint g_NwbShadowMaterialConstantByteOffset = 0u;
 static uint g_NwbShadowMeshInstanceIndex = 0u;
 static uint g_NwbShadowSurfaceDispatchId = 0u;
@@ -68,7 +64,6 @@ NwbMeshInstanceData nwbMeshLoadInstance(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Typed-word loads for generated .bind accessors.
 #include "../mesh/material_typed_accessors.slangi"
 #include "../mesh/surface.slangi"
 
@@ -76,7 +71,6 @@ NwbMeshInstanceData nwbMeshLoadInstance(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Builds the surface-input bundle from a ray hit with world-space normal, uv0, worldPosition, and neutral color/tangent defaults.
 NwbMeshSurfaceInputs nwbShadowBuildSurfaceInputs(NwbShadowHit hit){
     NwbMeshSurfaceInputs inputs;
     inputs.color = half4(1.0h, 1.0h, 1.0h, 1.0h);
@@ -84,7 +78,6 @@ NwbMeshSurfaceInputs nwbShadowBuildSurfaceInputs(NwbShadowHit hit){
     inputs.tangent = float4(1.0, 0.0, 0.0, 1.0);
     inputs.uv0 = hit.uv0;
     inputs.worldPosition = hit.worldPosition;
-    // World-space shadow ray direction used by surface hooks and per-crossing Fresnel evaluation.
     inputs.incidentDirection = hit.rayDirection;
     return inputs;
 }

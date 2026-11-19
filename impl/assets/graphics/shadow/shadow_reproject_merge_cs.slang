@@ -14,11 +14,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Reprojects half-resolution soft-shadow history from the previous world-to-clip matrix.
-// Geometry validation, variance clamping, and antilag reject invalid or changing history.
-
 struct NwbShadowReprojectMergePushConstants{
-    // Must match ShadowReprojectMergePushConstants in C++ and its row-major Float44U layout.
     row_major float4x4 prevWorldToClip;
     uint width;
     uint height;
@@ -26,7 +22,7 @@ struct NwbShadowReprojectMergePushConstants{
     uint halfHeight;
     uint lightSlotStart;
     uint lightSlotCount;
-    uint historyValid; // 0 forces pure-current output and prevents history reads.
+    uint historyValid;
     uint softTraceSlot;
     uint historyInSlot;
     uint momentsInSlot;

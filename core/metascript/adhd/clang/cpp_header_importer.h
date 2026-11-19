@@ -35,7 +35,6 @@ namespace CppHeaderImporter{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Parse C++ headers via libclang and merge external decls into 'outUnit'.
 [[nodiscard]] b8 ImportHeaders(
     const CppHeaderImportOptions& options,
     MetaArena& arena,
@@ -43,7 +42,6 @@ namespace CppHeaderImporter{
     MVector<ParseError>& outErrors
 );
 
-// Format external ('isExtern') decls in 'unit' as valid .adhd extern source.
 [[nodiscard]] MString FormatExternAdhd(const TranslationUnit& unit, MetaArena& arena);
 
 

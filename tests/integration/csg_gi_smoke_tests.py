@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Reject GI comparisons without live post-presentation warmup and exact readback source evidence."""
 
 from pathlib import Path
 import sys

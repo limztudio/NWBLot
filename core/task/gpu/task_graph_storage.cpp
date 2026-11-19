@@ -125,7 +125,6 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
             return MakeUnexpected(Failure{});
     }
 
-    // Resource sets are immutable. Expand now so later stages see the same concrete member uses.
     usize expandedResourceUseCount = desc.resourceUseCount;
     const usize remainingResourceUseCapacity = static_cast<usize>(Limit<u32>::s_Max) - m_resourceUses.size();
     if(expandedResourceUseCount > remainingResourceUseCapacity)
@@ -140,8 +139,6 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
         expandedResourceUseCount += resourceSet.memberCount;
     }
 
-    // Task declarations capture every valid native handoff when the graph accepts the declaration.
-    // Invalid sources cannot become valid after this immutable copy, so reject them at the declaration boundary.
     Optional<GraphicsVector<GlobalUniquePtr<CommandListResourceStateHandoff>>> externalStateSnapshots;
     if(desc.externalStateSourceCount != 0u){
         auto& snapshots = externalStateSnapshots.emplace(m_arena);
@@ -323,7 +320,6 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
                 return MakeUnexpected(Failure{});
             for(usize previousSourceIndex = 0u; previousSourceIndex < sourceIndex; ++previousSourceIndex){
                 const GpuGraphInitialOwnerHandoffSourceDesc& previousSource = desc.initialOwnerHandoffSources[previousSourceIndex];
-                // One completion names one queue timeline. Sharing it across queues would wait on the wrong frontier.
                 if(source.completion == previousSource.completion && source.sourceQueue != previousSource.sourceQueue)
                     return MakeUnexpected(Failure{});
                 const b8 overlaps = desc.type == GpuGraphResourceType::Texture ? source.range.textureSubresources.overlaps(previousSource.range.textureSubresources) : desc.type == GpuGraphResourceType::AccelStruct
@@ -335,7 +331,6 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
         }
     }
 
-    // Freeze producer snapshots at declaration so recording never depends on producer-owned storage.
     const usize initialOwnerHandoffSourceOffset = m_initialOwnerHandoffSources.size();
     Optional<GraphicsVector<GlobalUniquePtr<CommandListResourceStateHandoff>>> initialOwnerHandoffStateSnapshots;
     if(hasInitialOwnerHandoff){
@@ -483,7 +478,6 @@ Expected<GpuGraphResourceSetId> GpuTaskGraph::appendResourceSet(const GpuGraphRe
             if(!validResource(member))
                 return MakeUnexpected(Failure{});
 
-            // Validity establishes this graph generation before index-only membership is used.
             if(memberIndex < s_InlineMemberCount){
                 for(usize previousMemberIndex = 0u; previousMemberIndex < memberIndex; ++previousMemberIndex){
                     if(inlineMembers[previousMemberIndex] == member.index)
@@ -493,7 +487,6 @@ Expected<GpuGraphResourceSetId> GpuTaskGraph::appendResourceSet(const GpuGraphRe
             }
             else{
                 if(!indexedMembers){
-                    // Direct capacity construction avoids an empty-table proxy allocation and later rehash.
                     indexedMembers.emplace(AddSize(desc.memberCount, desc.memberCount), m_declarationScratch);
                     indexedMembers->insert(inlineMembers.begin(), inlineMembers.end());
                 }
@@ -596,7 +589,6 @@ const GpuTaskGraph::GpuUploadBlobNode* GpuTaskGraph::findUploadBlob(const GpuUpl
 
 
 GpuTaskGraph::MarkerLabelRange GpuTaskGraph::appendMarkerLabel(const AStringView text){
-    // Callers admit a nonempty label that fits the u32 marker storage.
     FOUNDATION_ASSERT(!text.empty() && text.size() <= Limit<u32>::s_Max - m_markerText.size());
 
     const MarkerLabelRange range{ static_cast<u32>(m_markerText.size()), static_cast<u32>(text.size()) };

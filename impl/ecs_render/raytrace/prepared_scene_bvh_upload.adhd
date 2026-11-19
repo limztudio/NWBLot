@@ -26,9 +26,6 @@ b8 HasPreparedSceneBvhBuffers(in RendererRayTracingState state, in u32 instanceC
     return IsPreparedSceneBvhStorageReady(state, requiredNodeCount, instanceCount);
 }
 
-
-// Scene hierarchy and leaf instances share topology/indices; preflight freezes one batch per storage generation.
-// A fresh capture keeps node and instance bytes together for one graph upload; accepted static-cache reuse keeps only identity, counts, and hash.
 [modular]
 class PreparedSceneBvhUpload : NoCopy{
     private Vector<u8> m_nodeBytes;
@@ -66,12 +63,10 @@ class PreparedSceneBvhUpload : NoCopy{
     }
 
     public Expected<PreparedSceneBvhUploads> retainUploads(in RendererRayTracingState state, mut GpuTaskGraph graph)const;
-    // Publishes the accepted static-scene hash; false when no fresh upload was pending.
     public b8 publishAcceptedUpload(mut RendererRayTracingState state)const;
 
     public b8 storageMatches(in RendererRayTracingState state)const;
     public b8 covers(in usize sceneInstanceCount)const{ return this.m_ready && this.m_instanceCount == sceneInstanceCount; }
-    // A fresh upload stays valid; cache reuse still needs the accepted static-scene hash over the same instances.
     public b8 snapshotAccepted(in RendererRayTracingState state)const;
     public b8 ready()const{ return this.m_ready; }
     public b8 uploadRequired()const{ return this.m_uploadRequired; }

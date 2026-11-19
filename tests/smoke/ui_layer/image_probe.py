@@ -1,4 +1,3 @@
-"""Decode passive image snapshots and qualify sprite, nine-slice, tint and clip pixels."""
 from __future__ import annotations
 
 import re

@@ -54,7 +54,6 @@ class SmokeCpuGpuTimingProbe{
         this.m_enabled = requested;
         if(!this.m_enabled)
             return true;
-        // Reserve before warmup: no publication rows allocate or write files inside the measured window.
         this.m_records.reserve(s_MaxRecords);
         [essential] info("SmokeCpuGpuTimingProbe: enabled owner={} cpu=1 gpu=1 memory=0 diagnostic_only=1", this.m_owner);
         return true;
@@ -79,7 +78,6 @@ class SmokeCpuGpuTimingProbe{
             return false;
         if(!complete)
             return true;
-        // The presentation probe sampled its final steady-clock timestamp before this potentially slow file write.
         if(!this.write(presentation.total(), session.frameIndex()))
             return false;
         this.m_complete = true;

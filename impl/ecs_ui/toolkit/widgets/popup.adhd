@@ -10,7 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The host lends state through the outermost popup end; each opening binds to its exact parent lifetime.
 class PopupState : NoCopy{
     public u64 m_instanceGeneration;
     public u64 m_openGeneration = 0u;

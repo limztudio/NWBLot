@@ -1,4 +1,3 @@
-# Opt-in profiling fixture excluded from default CTest runs.
 option(NWB_BUILD_RENDERER_GATHER_BENCHMARK "Build the fixed renderer CPU gathering benchmark" OFF)
 if(NWB_BUILD_RENDERER_GATHER_BENCHMARK)
     set(_nwb_gather_runtime_root "${CMAKE_BINARY_DIR}/Testing/gather_benchmark_runtime/$<CONFIG>")

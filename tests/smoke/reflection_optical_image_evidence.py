@@ -1,5 +1,3 @@
-"""Compare optical framebuffer captures with the independent image oracle."""
-
 import math
 
 from reflection_image_analysis import ReflectionImageAnalysis
@@ -19,7 +17,6 @@ class ReflectionOpticalImageEvidence:
     @staticmethod
     def reference_points(spec):
         if spec.case in DENSE_CASES:
-            # Central rays remain inside every receiver slab through z=-25, beyond the ordinary chart at z=-14.
             return ((x, y) for y in range(280, 441, 8) for x in range(352, 609, 8))
         if spec.case == LIT_OPTICAL_TORUS:
             return ((x, y) for y in range(332, 389, 4) for x in range(400, 561, 4))
@@ -41,7 +38,6 @@ class ReflectionOpticalImageEvidence:
                 if path[LIT_REASON] != "opaque_dense" or path[LIT_CROSSINGS] != DENSE_RECEIVER_CROSSINGS or min(expected) <= 0.:
                     raise SmokeFailure("dense receiver oracle lacks eighteen distinct closed crossings and a positive opaque hit")
                 dense_crossings.append(path[LIT_CROSSINGS])
-            # Exclude a one-pixel margin around analytic discontinuities.
             neighbors = [pixel_reference(spec.case, x + dx + 0.5, y + dy + 0.5, max_queries=spec.queries)[0] for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1))]
             if any(max(abs(a - b) for a, b in zip(expected, neighbor)) > 0.025 for neighbor in neighbors):
                 rejected_edges += 1
@@ -65,14 +61,12 @@ class ReflectionOpticalImageEvidence:
         mae = sum(errors) / len(errors)
         percentile = sorted(errors)[math.floor(0.95 * (len(errors) - 1))]
         reference_mean = sum(expected_sum) / (3 * stable_points)
-        # Trim at most 5% near-critical mesh discretization outliers.
         ordered_errors = sorted(errors)
         kept_errors = ordered_errors[:max(len(ordered_errors) - math.ceil(len(ordered_errors) * 0.05), 1)]
         trimmed_mae = sum(kept_errors) / len(kept_errors)
         if trimmed_mae > 0.025 + reference_mean * 0.02 or percentile > 0.065 + reference_mean * 0.035:
             raise SmokeFailure(f"{spec.name}: reflected stripe transport disagrees with the independent reference " f"(linear RGB MAE {mae:.6f}, p95 {percentile:.6f}, expected mean {reference_mean:.6f})")
         for channel, (actual, expected) in enumerate(zip(actual_sum, expected_sum)):
-            # Trim at most 5% FP32 mesh-discretization outliers near the critical angle.
             ordered = sorted(deviation[channel] for deviation in channel_deviations)
             kept = ordered[:max(stable_points - math.ceil(stable_points * 0.05), 1)]
             trimmed = sum(kept) / len(kept)
@@ -92,4 +86,3 @@ class ReflectionOpticalImageEvidence:
         if mae > 0.2 or changed > len(errors) * 0.005:
             raise SmokeFailure("equivalent optical volume arrangement changed reflected transport")
         return {"mirror_byte_mae": mae, "channels_differing_by_more_than_two": changed}
-

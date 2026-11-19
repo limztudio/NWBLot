@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Reject missing cap interfaces, stale uncut photons, and disabled ordinary multi-refractor deposition."""
 
 from pathlib import Path
 import sys
@@ -54,7 +53,6 @@ class CsgCausticOracleTests(unittest.TestCase):
 
     def test_missing_generated_interfaces_fail_fresnel_beer_ratio(self):
         frames = self.frames()
-        # Removing glass without the two cavity interfaces leaves the Beer ratio alone.
         for arm in (LIT_REFERENCE, LIT_CUT):
             for x, y in region_pixels(REGIONS[0], 480, 360, spacing=0.045):
                 frames[arm][2][y][x] = (encode_srgb(0.04), encode_srgb(0.08), encode_srgb(0.12))

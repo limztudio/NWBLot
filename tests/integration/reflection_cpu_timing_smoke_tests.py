@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Reject incomplete, stale and misleading CPU/GPU diagnostic evidence without launching a renderer."""
 
 from pathlib import Path
 import sys
@@ -82,7 +81,6 @@ class ReflectionCpuTimingTests(unittest.TestCase):
 
     def test_publication_coverage_cannot_be_inferred_from_presentations(self):
         raw = raw_publications()
-        # All 110 completed samples remain, but every target publication is observed in only the final interval.
         lines = []
         for line in raw.splitlines():
             if line.startswith("sample "):

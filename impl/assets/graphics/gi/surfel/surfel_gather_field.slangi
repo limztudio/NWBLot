@@ -9,9 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The pass selects a read-only surfel field via the four macros below. Keeping traversal here stops live/prev drift.
-
-
 #ifndef NWB_SURFEL_GATHER_FIELD_POOL
     #error NWB_SURFEL_GATHER_FIELD_POOL must select a read-only NwbSurfel buffer
 #endif
@@ -49,12 +46,10 @@ bool nwbSurfelGatherField(const float3 worldPosition, const float3 normal, const
     const float3 biasedPosition = worldPosition + normal * normalBias;
 
     half3 irradianceSum = half3(0.0h);
-    // Gather weights are (0, 1) bounded factors, so half arithmetic is sufficient here.
     half totalWeight = half(0.0h);
     const int3 baseCell = nwbSurfelCellCoord(biasedPosition, cellSize);
     for(int dz = -NWB_SURFEL_GATHER_CELL_EXTENT; dz <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dz)
     for(int dy = -NWB_SURFEL_GATHER_CELL_EXTENT; dy <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dy){
-        // These immutable heads are independent of each list walk; consume them in the original dx order.
         uint rowHeads[2 * NWB_SURFEL_GATHER_CELL_EXTENT + 1];
         [unroll] for(int dx = -NWB_SURFEL_GATHER_CELL_EXTENT; dx <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dx){
             const uint bucket = nwbSurfelHashCell(baseCell + int3(dx, dy, dz), cellCount);
@@ -71,14 +66,12 @@ bool nwbSurfelGatherField(const float3 worldPosition, const float3 normal, const
                 if(nwbSurfelIsAlive(sampleState) && sampleCount != 0u){
                     const half normalWeight = half(saturate(dot(normal, NWB_SURFEL_GATHER_FIELD_POOL[id].normal)));
                     half weight = half(0.0h);
-                    // Reject zero-weight orientations and foreign collision residents before position/falloff work; retain rounded half weights.
                     if(normalWeight > half(0.0h) && nwbSurfelSameCell(NWB_SURFEL_GATHER_FIELD_POOL[id].cell, cell)){
                         const float3 position = NWB_SURFEL_GATHER_FIELD_POOL[id].position;
                         const float dist = length(biasedPosition - position);
                         const half distanceWeight = half(saturate(1.0h - dist / radius));
                         const half confidence = saturate(half(sampleCount) / half(NWB_SURFEL_GATHER_FULL_CONFIDENCE_SAMPLE_COUNT));
                         weight = normalWeight * distanceWeight * confidence;
-                        // Keep SH loads and reconstruction conditional on an actual contribution.
                         if(weight > half(0.0h)){
                             irradianceSum += nwbSurfelShReconstruct(half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shR), half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shG), half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shB), half3(normal)) * weight;
                         }
@@ -93,13 +86,11 @@ bool nwbSurfelGatherField(const float3 worldPosition, const float3 normal, const
 
     if(totalWeight < half(NWB_SURFEL_GATHER_WEIGHT_EPSILON))
         return false;
-    // Keep normalized irradiance for bounce tracing. Coverage fades its contribution near support edges.
     outIrradiance = irradianceSum / totalWeight;
     outCoverage = half(nwbSurfelGatherCoverage(float(totalWeight)));
     return true;
 }
 
-// Bounce tracing uses the normalized previous-frame field, not its screen-space ambient-blend confidence.
 bool nwbSurfelGatherField(const float3 worldPosition, const float3 normal, const uint poolCapacity, out half3 outIrradiance){
     half ignoredCoverage;
     return nwbSurfelGatherField(worldPosition, normal, poolCapacity, outIrradiance, ignoredCoverage);

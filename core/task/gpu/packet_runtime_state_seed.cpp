@@ -38,7 +38,6 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
     scratch.externalBaseStateSeed.reset();
     scratch.externalMergedStateSeed.reset();
 
-    // Base-plus-branches fan-in from declarations: a later source may replace the base, two sources may not disagree.
     const auto appendSourceSubset = [&]{
         if(scratch.stateSubsetScratch.empty())
             return true;
@@ -118,7 +117,6 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
                     return false;
                 }
 
-                // Empty subsets stay absent; a later source or the compiler transition supplies the real state.
                 if(!appendSourceSubset())
                     return false;
             }
@@ -171,13 +169,11 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
             return false;
         }
 
-        // An imported handoff must name every first-use range; a gap rejects recording instead of using creation state.
         if(scratch.stateSubsetScratch.empty() || !appendSourceSubset())
             return false;
         return appendMergedExternalSource();
     };
 
-    // External handoffs resolve from compiler markers. They import first so the list opens released and emits the acquire before prologue.
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
         const GpuCompiledTaskView compiledTaskView = planAccess.findTask(tasks[taskIndex]);
         if(!compiledTaskView.valid())
@@ -193,8 +189,6 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
         }
     }
 
-    // Declaration-owned sources are attached to the task that needs their imported state.
-    // That preserves the source/resource relationship across packet coalescing and lets ordinary record traversal remain compiler-owned.
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
         const GpuTaskGraphTaskView task = declarationAccess.taskAt(tasks[taskIndex].index);
         if(task.externalStateSourceCount == 0u)
@@ -249,13 +243,9 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
         }
         else
             return false;
-        // A missing declared producer state must not fall back to the resource creation state.
         return !subset.empty();
     };
 
-    // Consecutive subsets from one immutable source agree on overlapping state.
-    // Preserve source order between batches.
-    // The scratch vector owns temporary snapshots; fan-in copies their contents before this local storage is released.
     constexpr usize s_MaxSeedSubsetBatch = 8u;
     Vector<CommandListResourceStateHandoff, Alloc::ScratchArena> seedSubsetBatch(stateFanInScratchArena);
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
@@ -273,7 +263,6 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
             while(batchCount < s_MaxSeedSubsetBatch && batchCount < compiledTask.prologueStateSeedCount - seedIndex && stateSeeds[seedIndex + batchCount].sourcePacket == firstSeed.sourcePacket)
                 ++batchCount;
 
-            // Preserve prefix failures when a partial merge would split an existing pending buffer release.
             if(batchCount == 1u || scratch.initialStateSeed.hasPendingBufferReleases() || sourceStates->hasPendingBufferReleases()){
                 for(usize offset = 0u; offset < batchCount; ++offset){
                     if(!buildSeedSubset(stateSeeds[seedIndex + offset], *sourceStates, scratch.stateSubsetScratch) || !appendInitialStateSubset())
@@ -290,7 +279,6 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
             Array<const CommandListResourceStateHandoff*, s_MaxSeedSubsetBatch> branches = {};
             for(usize offset = 0u; offset < batchCount; ++offset){
                 CommandListResourceStateHandoff& subset = seedSubsetBatch[offset];
-                // Every original range still passes its own exact selection and nonempty validation.
                 if(!buildSeedSubset(stateSeeds[seedIndex + offset], *sourceStates, subset))
                     return MakeUnexpected(Failure{});
                 branches[offset] = &subset;

@@ -22,11 +22,11 @@ On the software route, eligible directional lights use one light-space view and 
 
 Invalid views, missing point faces, invalid events, unstable receivers, overflow, unsupported features, and lights outside the map budget retain software BVH traversal. Map resolve and fallback use separate kernels so successful map receivers avoid the traversal working set. Storage admission respects checked addressing, memory budget, and the device's storage-buffer descriptor range. Per-view culling retains uncertain draws.
 
-`ReuseOneFrame` retains depth, counts, shaded events, and GPU-fitted views together for one subsequent accepted frame. It skips upload/clear/fit/capture/shade while still shading current receivers and declaring current BVH/material fallback inputs. The following accepted frame refreshes. Only world transforms may lag; changed geometry revisions, material bytes, light data, instance/boundary ordering, layout, resources, and invalid history force capture. Runtime geometry without an accepted content revision and CSG cannot reuse. Bind-pose world rotation preserves the accepted object-space revision, making this stress scene eligible after initialization.
+`ReuseOneFrame` and `ReuseTwoFrames` retain depth, counts, shaded events, and GPU-fitted views together for one or two subsequent accepted frames. They skip upload/clear/fit/capture/shade while still shading current receivers and declaring current BVH/material fallback inputs (including CSG light-space captures reused across rigid transforms). The following accepted frame refreshes. Only world transforms may lag; changed geometry revisions, material bytes, light data, instance/boundary ordering, layout, resources, and invalid history force capture. Runtime geometry without an accepted content revision cannot reuse. Bind-pose world rotation preserves the accepted object-space revision, making this stress scene eligible after initialization.
 
 The shadow feature owns pending and accepted capture tickets and pins their geometry/texture identities. Refresh invalidates old in-place contents before recording; complete recording and successful shadow packet/resource-state acceptance publish the replacement. Rejection, skipped frames, resize, and graph retries cannot extend stale history. Reuse omits the untouched draw-argument import instead of promising an unowned final-state export. Selected-backend regression coverage exercises accepted depth-state ownership through existing public contracts.
 
-One-frame capture reuse can delay moving shadows. Finite map resolution, fitted coverage and five-tap blocker estimation can alter contact detail, penumbrae and edge leakage. Temporal-one transparent sampling uses one sample only after accepted filtered history; bootstrap/reset uses three. These are explicit quality estimates, not image-equivalence claims.
+One- or two-frame capture reuse can delay moving shadows. Finite map resolution, fitted coverage, and reduced-tap blocker estimation (`CompactCross5` or `Center1`) can alter contact detail, penumbrae and edge leakage. Temporal-one transparent sampling uses one sample only after accepted filtered history; bootstrap/reset uses three. These are explicit quality estimates, not image-equivalence claims.
 
 Caustics keep their hardware/software producers and temporal phases. Photon-grid divisor 2 reduces grid area to one quarter; divisor 4 to one sixteenth, preserving energy normalization while changing noise/detail/convergence. All five wavelet dilations remain; large dilations avoid unused shared-memory allocation. Surfel GI retains its shared cache/resolve and backend choice. RT-disabled camera reflection/refraction use screen-space paths and existing miss handling, so arbitrary off-screen transport is unavailable. SSR remains at 96 steps in the performance profile.
 
@@ -34,18 +34,20 @@ Header-first light-view lookup and shared FP32 shadow-resolve coefficients remai
 
 ## Defaults and explicit profiles
 
-Renderer settings remain conservative. Only the direct Stress application's base settings select the performance profile; other smoke scenes retain their defaults. Explicit smoke environment values override that base. The Python stress harness writes every quality control itself, so its default acquisition remains the reference profile regardless of the direct application's base settings.
+Renderer settings remain conservative. Only the direct Stress application's base settings select the performance profile; other smoke scenes retain their defaults. Explicit smoke environment values override that base. The Python stress harness writes every quality control itself; note its CLI defaults select `quarter` for `--shadow-receiver-resolution` and `--surfel-gi-resolve-resolution`, whereas the renderer's own defaults are `Half`:
 
-| Setting | Renderer / harness reference | Direct Stress base / explicit performance run |
-| --- | --- | --- |
-| Software shadow backend | Automatic | Automatic; hardware route remains hardware |
-| Directional / point map size; budget | 512 / 256; 256 MiB | Unchanged |
-| Software coverage | Reference | FittedVolume |
-| Blocker search | ReferenceGrid9 | CompactCross5 |
-| Capture cadence | EveryFrame | ReuseOneFrame on software; hardware benchmark explicitly selects EveryFrame |
-| Transparent shadow sampling | ReferenceThree | TemporalOne after accepted history |
-| Caustic photon-grid divisor | 1 | 2 with logical-device RayQuery; otherwise 4 |
-| SSR iteration cap | 96 | 96 |
+| Setting | Renderer default | Direct Stress base (`stress_test_runtime.adhd`) | Explicit performance CLI example |
+| --- | --- | --- | --- |
+| Software shadow backend | Automatic | Automatic; hardware route remains hardware | Automatic |
+| Directional / point map size; budget | 512 / 256; 256 MiB | Unchanged | Unchanged |
+| Shadow receiver resolution | Half | Quarter | Quarter (harness CLI default) |
+| Surfel GI resolve resolution | Half | Quarter | Quarter (harness CLI default) |
+| Software coverage | Reference | FittedVolume | FittedVolume |
+| Blocker search | ReferenceGrid9 | Center1 | CompactCross5 |
+| Capture cadence | EveryFrame | ReuseTwoFrames | ReuseOneFrame (software) / EveryFrame (hardware) |
+| Transparent shadow sampling | ReferenceThree | TemporalOne after accepted history | TemporalOne after accepted history |
+| Caustic photon-grid divisor | 1 | 2 with logical-device RayQuery; otherwise 4 | 2 (hardware) / 4 (software) |
+| SSR iteration cap | 96 | 96 | 96 |
 
 Production receives typed settings in the shadow, caustic and reflection domains. Environment parsing stays in smoke helpers. A reuse benchmark requires both the applied setting and an actual accepted reuse marker; unsupported routes cannot silently qualify that request.
 
@@ -76,4 +78,4 @@ ctest --test-dir $perfBuild -C opt -j 1 -L software_raytracing --output-on-failu
 
 True no-RT runs must record `Loader: hardware ray tracing disabled before device creation`, show software renderer dispatch, and reject hardware dispatch. This exercises the selected device policy on the capable adapter; tests do not assert native provider feature or descriptor-layout log tuples. Other renderer device requirements still apply. See [software ray tracing qualification](../tests/smoke/software_raytracing.md).
 
-For reference controls explicitly select reference coverage, nine-tap blockers, EveryFrame, ReferenceThree, and photon divisor 1 while keeping bodies, resolution and motion identical. Inspect actual moving/fixed-pose captures for overlapping thickness, contact gaps, self-shadow acne, point-face seams, diagonal blockers, temporal trails and caustic detail. The average-FPS gate does not remove those visual tradeoffs or establish performance for independently deforming characters.
+For reference controls explicitly select reference coverage, nine-tap blockers, `EveryFrame`, `ReferenceThree`, photon divisor 1, `--shadow-receiver-resolution half`, and `--surfel-gi-resolve-resolution half` while keeping bodies, resolution and motion identical. Inspect actual moving/fixed-pose captures for overlapping thickness, contact gaps, self-shadow acne, point-face seams, diagonal blockers, temporal trails and caustic detail. The average-FPS gate does not remove those visual tradeoffs or establish performance for independently deforming characters.

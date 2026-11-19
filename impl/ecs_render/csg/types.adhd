@@ -70,15 +70,12 @@ class CsgBoundsGpuData{
 
 [serialize]
 class CsgReceiverRangeGpuData{
-    // The CSG shaders pack these four scalars as a single uint4 (rangeInfo):
-    //   x = firstCutter, y = cutterCount, z = flags, w = shadingModelId.
     public u32 firstCutter = 0u;
     public u32 cutterCount = 0u;
     public u32 flags = 0u;
     public u32 shadingModelId = 0u;
     public f32x3x4 worldToReceiver(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
     public CsgBoundsGpuData localBounds;
-    // Cap-fill context packs as uint4: dispatch id, byte offset, instance index.
     public u32 surfaceDispatchId = s_CsgInvalidIndex;
     public u32 materialConstantByteOffset = 0u;
     public u32 meshInstanceIndex = 0u;
@@ -102,20 +99,17 @@ class CsgShadowReceiverRangeGpu{
     public u32 firstCutter = 0u;
     public u32 cutterCount = 0u;
     public u32 flags = 0u;
-    // Packed contexts assign the absolute byte offset of this receiver's cooked membership words.
     public u32 solidTriangleWordOffset = 0u;
 }
 
 class CsgShadowReceiverInput{
     public EntityID entity = s_InvalidEntityId;
     public CsgReceiverPass receiverPass = CsgReceiverPass::Opaque;
-    // Leave false when CPU bounds cannot conservatively contain the current deformed receiver.
     public b8 boundsValid = false;
     public f32x3u worldMin(0.0f, 0.0f, 0.0f);
     public f32x3u worldMax(0.0f, 0.0f, 0.0f);
 }
 
-// CSG context is one global UniformBuffer entry; no pass binds it locally.
 [serialize]
 class CsgClipContextSlots{
     public u32 receiverRanges = 0u;
@@ -128,7 +122,6 @@ class CsgClipContextSlots{
     public u32 padding1 = 0u;
 }
 
-// Interval-sampling payload via CsgClipContextSlots; immutable frame blob when active.
 [serialize]
 class CsgIntervalSampleStateGpuData{
     public u32 workMinX = 0u;

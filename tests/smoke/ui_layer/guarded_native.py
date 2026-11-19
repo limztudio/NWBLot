@@ -1,4 +1,3 @@
-"""Positioned native input with a saved and restored Win32 cursor constraint."""
 from __future__ import annotations
 
 import ctypes

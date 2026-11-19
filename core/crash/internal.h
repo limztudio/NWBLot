@@ -130,8 +130,6 @@ struct PlatformFailure{
     ErrorCode filesystemError{};
 };
 
-// Created before the lifecycle lock: deferred observation runs after unlocking, including during unwind.
-// Retains the primary operation failure (or first cleanup failure) and total count; other details are coalesced into that explicit count.
 class PlatformCleanupObservations final : NoCopy{
 public:
     PlatformCleanupObservations()noexcept = default;
@@ -202,8 +200,6 @@ public:
 #endif
 };
 
-// Snapshot images are immutable while pinned; only normal-context writers hold the lifecycle mutex.
-// A fault reader never takes that mutex or waits for an interrupted writer to finish.
 inline constexpr u64 s_SnapshotWriteClaim = u64{ 1u } << 63u;
 inline constexpr u64 s_SnapshotMaxReaders = s_SnapshotWriteClaim - 1u;
 static_assert(Atomic<u64>::is_always_lock_free && Atomic<u32>::is_always_lock_free, "crash snapshot publication requires native lock-free atomics");
@@ -265,8 +261,6 @@ struct CrashState{
     u32 diagnosticCaptureCount = 0u;
     Atomic<u32> publishedSnapshotImage{ 0u };
     Atomic<u32> suppressedPlatformCrashCaptures{ 0u };
-    // Crash-transport channel guard: one CAS claims the pipe/event so concurrent faulting threads never interleave fixed-POD writes.
-    // Distinct from `mutex` (the assert path may hold it), and atomic (not Futex) so it stays signal/SEH-safe.
     Atomic<u32> transportInFlight{ 0u };
 
 #if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
@@ -335,7 +329,6 @@ template<typename ArenaT>
 [[nodiscard]] StringView PlatformKindName(u32 platform)noexcept;
 [[nodiscard]] StringView ReasonKindName(u32 reasonKind)noexcept;
 
-// The caller owns g_State.mutex and has completed its normal-context mutation.
 void PublishCrashStateSnapshot()noexcept;
 void SnapshotCrashState(CrashReasonKind::Enum reasonKind, u32 reasonCode, CrashRequest& outRequest)noexcept;
 void SuppressNextPlatformCrashCapture()noexcept;

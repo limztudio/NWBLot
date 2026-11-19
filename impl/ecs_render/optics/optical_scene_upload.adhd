@@ -90,7 +90,6 @@ b8 ValidAcceptedOpticalSubmissionToken(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Only an accepted write on the primary Graphics queue can replace the resident upload.
 class RayTracingOpticalUploadState : NoCopy{
     private BufferHandle m_buffer;
     private RayTracingOpticalSceneUploadHandle m_acceptedUpload;
@@ -193,7 +192,6 @@ class RayTracingOpticalUploadState : NoCopy{
             token.value,
             this.m_acceptedToken.value
         )){
-            // This callback follows native acceptance. Discard cannot prove the old bytes survived an unknown write.
             this.m_quarantined = true;
             return false;
         }

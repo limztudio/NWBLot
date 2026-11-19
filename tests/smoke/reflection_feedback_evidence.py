@@ -1,5 +1,3 @@
-"""Validate completed reflection feedback and traversal evidence."""
-
 from dataclasses import dataclass
 import math
 import re
@@ -47,7 +45,6 @@ FEEDBACK_FIELDS = (LIT_SEQUENCE, LIT_GENERATION, LIT_GRAPHICS_FRAME, LIT_FEEDBAC
 
 @dataclass(frozen=True)
 class TraversalEvidence:
-    """Measured baseline work, normalized from completed renderer counters after the public schema is finalized."""
     attempts: int
     iterations: int
     step_limit_misses: int

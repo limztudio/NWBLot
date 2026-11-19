@@ -34,7 +34,6 @@ inline constexpr u64 s_LargeQueueCostWeight = 8u;
 
 inline constexpr u8 s_ValidQueueCapabilityMask = static_cast<u8>(GpuQueueCapability::Transfer) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Graphics);
 
-// Short-lived compilers allocate packet identity process-wide. Graph generation still names task/resource handles.
 static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 
 
@@ -63,8 +62,6 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
     return false;
 }
 
-// A sharing mask becomes Vulkan concurrent sharing only when it names at least two distinct families supplied by this compile topology.
-// A single requested family remains exclusive and may use ordinary ownership handoffs.
 [[nodiscard]] static b8 LogicalSharingUsesConcurrentQueueSharing(const ResourceQueueSharing::Mask sharing, const GpuPhysicalQueueTopology& topology)noexcept{
     if(sharing == ResourceQueueSharing::Exclusive)
         return false;
@@ -139,7 +136,6 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
             const GpuPhysicalQueueInfo& previous = topology.queues[previousIndex];
             if(
                 previous.id == queue.id
-                // One domain/index names one transport; else one native queue could split into two packet identities.
                 || (previous.familyIndex == queue.familyIndex && previous.queueIndex == queue.queueIndex)
             )
                 return false;

@@ -25,11 +25,9 @@ namespace __hidden_vulkan_descriptor_heap{
     inline constexpr u32 s_DefaultResourceCapacity = 16384u;
     inline constexpr u32 s_DefaultSamplerCapacity = 2048u;
 
-    // Resource descriptors share one register set and omit the sampler and acceleration-structure class tags, which use their own descriptor sets.
     inline constexpr u32 s_ResourceClassCount = 9u;
     inline constexpr u32 s_SampledImageOrTexelClassCount = 6u;
 
-    // Reserve TLAS blocks across in-flight generation replacement.
     inline constexpr u32 s_AccelStructCapacity = s_MaxFramesInFlight + 2u;
 
 
@@ -142,7 +140,6 @@ b8 GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         }
     }
 
-    // Idempotent shutdown recovers partially initialized descriptor blocks.
     shutdownLocked();
     m_desc = desc;
     const auto failInitialization = [this](){
@@ -207,7 +204,6 @@ b8 GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         return failInitialization();
     }
 
-    // Resource block contains bindless non-sampler classes in slot order.
     BindlessLayoutDesc resourceLayoutDesc;
     resourceLayoutDesc
         .setLayoutType(BindlessLayoutType::MutableSrvUavCbv)
@@ -238,7 +234,6 @@ b8 GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap resource layout is not descriptor-buffer-compatible despite descriptor-buffer initialization."));
         return failInitialization();
     }
-    // Samplers require a separate descriptor-buffer layout.
     BindlessLayoutDesc samplerLayoutDesc;
     samplerLayoutDesc
         .setLayoutType(BindlessLayoutType::MutableSampler)
@@ -261,7 +256,6 @@ b8 GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap sampler layout is not descriptor-buffer-compatible despite descriptor-buffer initialization."));
         return failInitialization();
     }
-    // TLAS uses immutable one-descriptor generation blocks at set 2.
     if(m_context.extensions.khrAccelerationStructure){
         BindlessLayoutDesc accelStructLayoutDesc;
         accelStructLayoutDesc
@@ -290,7 +284,6 @@ b8 GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         m_accelStructBufferBindingOffset = offsetIt->second;
     }
 
-    // Reserve exact driver layout footprints, including every immutable in-flight TLAS generation, before publishing descriptor addresses.
     const u32 offsetAlignmentBytes = m_context.descriptorBufferManager->getOffsetAlignmentBytes();
     const auto resourceLayoutBytes = AlignUpChecked<u32>(m_resourceLayout->getDescriptorBufferSetSizeBytes(), offsetAlignmentBytes);
     const auto accelStructLayoutBytes = AlignUpChecked<u32>(m_accelStructLayout ? m_accelStructLayout->getDescriptorBufferSetSizeBytes() : 0u, offsetAlignmentBytes);
@@ -306,7 +299,6 @@ b8 GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
     if(!m_context.descriptorBufferManager->reserveInitialCapacityForBindingGeneration(static_cast<u32>(requiredResourceBytes), m_samplerLayout->getDescriptorBufferSetSizeBytes(), m_descriptorBufferGeneration))
         return failInitialization();
 
-    // Carve persistent mapped resource and sampler blocks once.
     if(!DescriptorBufferWriter(*this).initialize(offsetAlignmentBytes))
         return failInitialization();
 
@@ -384,7 +376,6 @@ Expected<GpuDescriptorHandle> GpuDescriptorHeap::allocate(const GpuDescriptorCla
         ScopedLock lock(m_mutex);
         hasRetiredSlots = m_initialized && descriptorClass < GpuDescriptorClass::Count && (descriptorClass != GpuDescriptorClass::AccelStruct || m_accelStructLayout) && m_retiredCount != 0u;
     }
-    // Reclaim deferred slots on this ordinary allocation path before choosing a slot; owner destruction only journals retirement.
     if(hasRetiredSlots)
         collectRetired();
 
@@ -502,7 +493,6 @@ u32 GpuDescriptorHeap::getRegisterSlot(const GpuDescriptorClass::Enum descriptor
 }
 
 GpuDescriptorHeap::SlotAllocator& GpuDescriptorHeap::allocatorForClass(const GpuDescriptorClass::Enum descriptorClass)noexcept{
-    // Ordinary resources share slots; TLAS selects immutable set-2 blocks.
     if(descriptorClass == GpuDescriptorClass::Sampler)
         return m_samplerSlots;
     if(descriptorClass == GpuDescriptorClass::AccelStruct)

@@ -11,7 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Rectangle lanes are x, y, width, height; comparisons preserve scalar Min/Max ties and NaNs on every backend.
 [[nodiscard]] FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL IntersectRectBoundsValue(const SIMDVectorSingle lhs, const SIMDVectorSingle rhs)noexcept{
     const SIMDVectorSingle lhsEnd = VectorAdd(VectorSwizzle<0, 1, 0, 1>(lhs), VectorSwizzle<2, 3, 2, 3>(lhs));
     const SIMDVectorSingle rhsEnd = VectorAdd(VectorSwizzle<0, 1, 0, 1>(rhs), VectorSwizzle<2, 3, 2, 3>(rhs));
@@ -25,7 +24,6 @@
     return VectorGetZ(bounds) > VectorGetX(bounds) && VectorGetW(bounds) > VectorGetY(bounds);
 }
 
-// The preserving policy retains NaNs and signed zero in extent lanes.
 template<b8 PreserveExtent>
 [[nodiscard]] FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL IntersectRectValueImpl(const SIMDVectorSingle lhs, const SIMDVectorSingle rhs)noexcept{
     const SIMDVectorSingle bounds = IntersectRectBoundsValue(lhs, rhs);
@@ -42,7 +40,6 @@ template<b8 PreserveExtent>
     return IntersectRectValueImpl<true>(lhs, rhs);
 }
 
-// Padding lanes are left, top, right, bottom; retain the two separately rounded size subtractions.
 template<b8 PreserveExtent>
 [[nodiscard]] FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL InsetRectValueImpl(const SIMDVectorSingle rectangle, const SIMDVectorSingle padding)noexcept{
     const SIMDVectorSingle origin = VectorAdd(VectorSwizzle<0, 1, 0, 1>(rectangle), VectorSwizzle<0, 1, 0, 1>(padding));

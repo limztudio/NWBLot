@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Current object-space geometry bounds. VALID requires nonempty geometry and every contributing position finite.
 #define NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE 32u
 #define NWB_RUNTIME_MESH_BOUNDS_MIN_OFFSET 0u
 #define NWB_RUNTIME_MESH_BOUNDS_FLAGS_OFFSET 12u

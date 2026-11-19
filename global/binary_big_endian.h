@@ -15,7 +15,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The caller has admitted two readable bytes.
 [[nodiscard]] inline u16 ReadU16BigEndian(const NotNull<const u8*> bytes)noexcept{
     return static_cast<u16>((static_cast<u16>(bytes.get()[0u]) << s_BitsPerByte) | bytes.get()[1u]);
 }
@@ -30,13 +29,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The caller has admitted four readable bytes.
 [[nodiscard]] inline u32 ReadU32BigEndian(const NotNull<const u8*> bytes)noexcept{
     return (static_cast<u32>(bytes.get()[0u]) << (s_BitsPerByte * 3u)) | (static_cast<u32>(bytes.get()[1u]) << (s_BitsPerByte * 2u)) | (static_cast<u32>(bytes.get()[2u]) << s_BitsPerByte) | static_cast<u32>(bytes.get()[3u]);
 }
 
-
-// The caller has admitted the requested bytes.
 [[nodiscard]] inline u16 ReadAdmittedU16BigEndian(const Span<const u8> bytes, const usize offset)noexcept{
     return ReadU16BigEndian(NotNull<const u8*>(bytes.data() + offset));
 }

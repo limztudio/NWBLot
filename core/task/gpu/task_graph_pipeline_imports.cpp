@@ -27,8 +27,6 @@ namespace __hidden_gpu_task_graph_pipeline_imports{
 
 
 [[nodiscard]] static b8 CompatiblePipelineMetadata(const GpuTaskGraphPipelineView& pipeline, const GpuGraphPipelineDesc& desc)noexcept{
-    // Identity and concrete pipeline kind define the graph-side table key.
-    // Marker text is observational metadata, matching resource imports where a later compatible import reuses the original graph-owned label.
     return pipeline.identity == desc.identity && pipeline.type == desc.type;
 }
 
@@ -135,7 +133,6 @@ GpuTaskGraph::PipelineImportMatch GpuTaskGraph::findPipelineImportMatch(const Na
                 match = { found.value(), true };
         }
         const auto found = m_pipelineIdentityIndex->find(identity.identityHash());
-        // Pointer equality wins at the same ordinal; an earlier identity conflict retains its rejection priority.
         if(found != m_pipelineIdentityIndex->end() && found.value() < match.index)
             return { found.value(), false };
         return match;
@@ -175,7 +172,6 @@ void GpuTaskGraph::preparePipelineIndexes(const PipelinePointerKey& pendingPoint
             }
         }
 
-        // Publish only indexes of retained nodes. Failed appends may keep capacity without changing lookup results.
         static_assert(IsNothrowMoveConstructible_V<ImportIdentityIndex>);
         static_assert(IsNothrowMoveConstructible_V<PipelinePointerIndex>);
         m_pipelineIdentityIndex.emplace(Move(identities));

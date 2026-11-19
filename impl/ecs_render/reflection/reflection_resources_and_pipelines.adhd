@@ -391,7 +391,6 @@ b8 RendererReflectionSystem::prepareCsgDispatchResources(){
         this.m_preparedCsgDispatch = index;
         return true;
     }
-    // Recorded callbacks keep each state immutable while their handles are alive.
     const auto created = this.m_versions.make<ReflectionCsgDispatchState>(this.m_graphics.gpuTiming());
     if(!created.has_value())
         return false;

@@ -244,7 +244,6 @@ b8 Device::canCreateSampledTextureFormat(const Format::Enum format)const{
     imageFormatInfo.format = vkFormat;
     imageFormatInfo.type = VK_IMAGE_TYPE_2D;
     imageFormatInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    // Static textures must be uploadable as well as sampled, so verify both uses together.
     imageFormatInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
     auto imageFormatProperties = VulkanDetail::MakeVkStruct<VkImageFormatProperties2>(VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2);

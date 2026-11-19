@@ -37,7 +37,6 @@ namespace FrameDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Turns Win32 keyboard, character, IME and pointer messages into frame input events for one window.
 class Win32FrameInput{
 public:
     Win32FrameInput(Frame& frame, HWND hwnd)noexcept
@@ -47,7 +46,6 @@ public:
 
 
 public:
-    // Returns the window procedure result when the message is an input message handled here.
     [[nodiscard]] Optional<LRESULT> handleMessage(UINT message, WPARAM wParam, LPARAM lParam);
     void dispatchTextInputFocus(b8 focused);
 

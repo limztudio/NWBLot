@@ -71,8 +71,6 @@ GpuRecordedGraph::ArtifactOperation::ArtifactOperation(const GpuRecordedGraph& r
         return;
     }
 
-    // Mutating cross-artifact/transaction reentry is rejected even when the target happens to be idle.
-    // This keeps blocking cleanup outside every unrelated scheduler gate and removes the symmetric ABBA shape entirely.
     if(s_ActiveOperation || GpuGraphSubmissionTransaction::SubmissionOperation::Active())
         return;
     const b8 acquireExclusive = exclusive;

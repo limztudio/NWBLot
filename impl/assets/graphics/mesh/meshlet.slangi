@@ -15,7 +15,6 @@ groupshared float3 g_NwbMeshletSourcePositions[NWB_MESH_SHADER_MAX_VERTICES];
 groupshared float3 g_NwbMeshletWorldPositions[NWB_MESH_SHADER_MAX_VERTICES];
 groupshared float4 g_NwbMeshletClipPositions[NWB_MESH_SHADER_MAX_VERTICES];
 #if NWB_MESH_SHADER_EMULATION_COMPUTE && NWB_MESH_EMULATION_INDEXED_OUTPUT
-// Indexed output stores complete vertices directly; only clip positions are shared for triangle culling.
 groupshared float4 g_NwbMeshletStagedClipPositions[NWB_MESH_SHADER_MAX_VERTICES];
 #else
 groupshared NwbMeshGeneratedVertex g_NwbMeshletStagedVertices[NWB_MESH_SHADER_MAX_VERTICES];

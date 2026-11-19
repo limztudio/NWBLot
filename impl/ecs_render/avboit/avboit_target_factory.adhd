@@ -45,7 +45,6 @@ Expected<TextureHandle> CreateAvboitTransmittanceVolume(mut GraphicsRuntime grap
         .setFormat(format)
         .setDimension(TextureDimension::Texture3D)
         .setIsUAV(true)
-        // Cross-lane submissions own the execution/memory dependencies.
         .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName(s_AvboitTransmittanceVolumeTargetName)
         .setClearValue(Color(1.0f, 1.0f, 1.0f, 1.0f))
@@ -61,7 +60,6 @@ Expected<BufferHandle> CreateAvboitU32Buffer(mut GraphicsRuntime graphics, in u6
         .setByteSize(byteSize)
         .setStructStride(s_AvboitU32WordByteSize)
         .setCanHaveUAVs(true)
-        // Shared by raster passes and interleaved compute kernels.
         .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(debugName)
         .enableAutomaticStateTracking(ResourceStates::Common)

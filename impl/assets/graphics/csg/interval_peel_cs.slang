@@ -20,12 +20,10 @@ struct NwbCsgIntervalPeelEntry{
     uint id;
 };
 
-// Standalone peel has no mesh constants. Its view slot rides its own push payload; b13 stays a layout gap.
 #define NWB_MESH_VIEW_BUFFER_HEAP_SLOT (g_NwbCsgIntervalDispatchPushConstants.resourceSlots[NWB_CSG_INTERVAL_DISPATCH_PUSH_RESOURCE_SLOT_VIEW])
 #include "../mesh/bindless_heap_mesh.slangi"
 #include "../mesh/view_ray.slangi"
 
-// CSG context selects Texture2DArray UAVs from the heap; formatless support permits both float formats.
 #define g_NwbCsgBackCapNormal (nwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.x))
 #define g_NwbCsgIntervalDepth (nwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.y))
 #define g_NwbCsgIntervalId (nwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgPeelSlots.z))
@@ -183,7 +181,6 @@ bool nwbCsgBuildIntervalPeelEntry(const float3 rayBegin, const float3 rayVector,
     outEntry.frontLinearDepth = min(frontLinearDepth, backLinearDepth);
     outEntry.backLinearDepth = max(frontLinearDepth, backLinearDepth);
     const float3 viewFacingFallback = normalize(-rayVector);
-    // Alpha distinguishes a genuine cutter exit from the clipped receiver bound used only for removal.
     outEntry.backCapNormal = hasBackCap ? half4(half3(nwbCsgFlippedCutterWorldNormal(backWorldPosition, cutter, viewFacingFallback)), 1.0h) : half4(0.0h);
     outEntry.id = nwbCsgPackIntervalId(receiverIndex);
     return outEntry.backLinearDepth >= outEntry.frontLinearDepth && outEntry.id != 0u;
@@ -193,7 +190,6 @@ bool nwbCsgFindCutterIntervalOnRay(const float3 rayBegin, const float3 rayVector
     outEntry = nwbCsgInvalidIntervalPeelEntry();
     const NwbCsgCutter cutter = g_NwbCsgCutters[cutterIndex];
 
-    // Rebase at the receiver to keep quadratic coefficients small for distant cameras.
     float2 analyticInterval;
     if(nwbCsgTryAnalyticCutterInterval(rayBegin + rayVector * beginT, rayVector, cutter, analyticInterval)){
         const float frontT = max(beginT, beginT + analyticInterval.x);

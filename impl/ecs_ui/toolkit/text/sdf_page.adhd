@@ -12,7 +12,6 @@
 type SdfAtlasPixels = Vector<u8>;
 type SharedSdfAtlasPage = Shared<SdfAtlasPage>;
 
-// Each channel holds a separate signed-distance page. Published pixels stay immutable.
 class SdfAtlasPage : NoCopy{
     private SdfAtlasPageBindingRecord<Font> m_binding;
     private SdfAtlasPixels m_pixels;

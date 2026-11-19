@@ -88,7 +88,6 @@ public:
     NativeProcessArguments(const NativeProcessArguments&) = delete;
     NativeProcessArguments(NativeProcessArguments&&)noexcept = default;
     ~NativeProcessArguments()noexcept{
-        // Argument bytes sit above both vector blocks in a scratch arena; retire them before member storage in reverse allocation order.
         while(!text.empty())
             text.pop_back();
     }
@@ -188,7 +187,6 @@ inline constexpr mode_t s_RedirectedOutputFileMode = 0666;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A child killed by a signal reports 128 plus the signal number.
 [[nodiscard]] inline Expected<int, ErrorCondition> WaitForProcessExitCode(const pid_t childPid)noexcept{
     int status = 0;
     pid_t waitedPid = -1;
@@ -305,7 +303,6 @@ template<typename ArenaT>
     }
     if(commandLineCapacity > commandLine.max_size())
         return MakeUnexpected(ProcessExecutionFailure::InvalidArguments);
-    // Quoting adds at most two bytes per input byte plus surrounding quotes; reserve once so a scratch arena never retains abandoned growth buffers.
     commandLine.reserve(commandLineCapacity);
     for(const AStringView argument : arguments)
         ProcessExecutionDetail::AppendWindowsCommandLineArgument(commandLine, argument);

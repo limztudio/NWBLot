@@ -318,8 +318,6 @@ b8 AppendPhysicalQueueRuntimeTelemetryEntry(
     if(directCommandArenaStatistics.valid())
         AppendCommandArenaWorkerStatistics(directCommandArenaStatistics, label);
 
-    // Recorded packets retain the exact worker domain/index used for native allocation.
-    // Walk compiled order, reject identities already seen on this queue; packet counts are small, so no persistent storage.
     const usize packetCount = deferredCompiledPlan.packetCount();
     for(usize packetIndex = 0u; packetIndex < packetCount; ++packetIndex){
         b8 matchesQueue = false;
@@ -498,7 +496,6 @@ void CompleteRendererTaskTimingSample(
     if(pendingSamples[pendingIndex].sampleResolved)
         return;
 
-    // Every matching notification is terminal; only complete positive durations enter history.
     pendingSamples[pendingIndex].sampleResolved = true;
     if(!IsValidCompletedRendererTaskTimingSample(
         feedbackActive,

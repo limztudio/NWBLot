@@ -83,7 +83,6 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
     if(!analysis.validFor(graph))
         return fail();
 
-    // Graph storage keeps task indices below u32 max, and valid analysis holds one order entry plus adjacency per task.
     const usize taskCount = graph.taskCount();
     FOUNDATION_ASSERT(taskCount <= static_cast<usize>(Limit<u32>::s_Max));
     if(analysis.schedulingEdges().empty()){
@@ -109,7 +108,6 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
         totalOrder = reachesNext;
     }
     if(totalOrder){
-        // Direct edges between adjacent topological tasks prove all pairs ordered, so overlap cannot exist.
         outReachability.m_topologicalRanks.resize(taskCount);
         for(usize orderIndex = 0u; orderIndex < taskCount; ++orderIndex)
             outReachability.m_topologicalRanks[analysis.topologicalOrder()[orderIndex].index] = static_cast<u32>(orderIndex);
@@ -152,7 +150,6 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
                 sourceRange.end = Max(sourceRange.end, childRange.end);
             }
         }
-        // Forward ancestry bounds stay separate until every producer has propagated its own ancestors.
         for(const GpuTaskId task : analysis.topologicalOrder()){
             auto& range = outReachability.m_relatedWordRanges[task.index];
             const auto producers = analysis.schedulingProducers(task);
@@ -172,13 +169,11 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
                 return fail();
             compactWordCount += span;
         }
-        // Include temporary bounds and retained offsets so compact rows reduce peak scratch use.
         constexpr usize s_CompactBudgetReserveDivisor = 4u;
         const usize compactBudget = (totalWordCount - totalWordCount / s_CompactBudgetReserveDivisor) * sizeof(u64);
         const usize compactBytes = compactWordCount * sizeof(u64);
         const auto metadataBytes = TryMultiply<usize>(taskCount, sizeof(usize) + sizeof(GpuTaskSchedulingReachability::WordRange));
         const b8 compactRows = metadataBytes && compactBytes <= compactBudget && *metadataBytes <= compactBudget - compactBytes;
-        // Retaining the bounds costs at most 1/32 of a dense matrix at this width; smaller dense rows release them.
         constexpr usize s_MinDenseBoundsReuseWordsPerRow = 64u;
         if(compactRows || wordsPerRow >= s_MinDenseBoundsReuseWordsPerRow){
             if(compactRows)
@@ -208,7 +203,6 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
                     const usize sourceBegin = sourceOffset + descendantRange.begin - sourceFirstWord;
                     const usize childBegin = childOffset + descendantRange.begin - childFirstWord;
                     const usize wordCount = descendantRange.end - descendantRange.begin;
-                    // Snapshot the bounds before writes so the closure OR can be vectorized.
                     for(usize word = 0u; word < wordCount; ++word)
                         outReachability.m_words[sourceBegin + word] |= outReachability.m_words[childBegin + word];
                 }
@@ -223,7 +217,6 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
         }
     }
     outReachability.m_words.resize(totalWordCount, 0u);
-    // Reverse topology completes each consumer's nonzero descendant span before its producer reads it.
     outReachability.m_relatedWordRanges.resize(taskCount);
     for(auto& range : outReachability.m_relatedWordRanges)
         range = { .begin = wordsPerRow, .end = 0u };
@@ -249,7 +242,6 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
             sourceRange.end = Max(sourceRange.end, Max(consumerRange.end, consumerWordIndex + 1u));
         }
     }
-    // Symmetrize the completed directed closure with bounded tile storage; ranks preserve strict direction.
     SymmetrizeDenseBitMatrix(outReachability.m_words, taskCount, wordsPerRow);
     outReachability.m_topologicalRanks.resize(taskCount);
     for(usize orderIndex = 0u; orderIndex < analysis.topologicalOrder().size(); ++orderIndex)

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Require current GPU timing rows and preserve publication-window measurements."""
 
 from pathlib import Path
 import sys

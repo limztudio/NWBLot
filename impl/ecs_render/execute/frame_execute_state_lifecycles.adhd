@@ -142,7 +142,6 @@ class FrameExecuteStateLifecycleSet : NoCopy{
         if(rayTracingShadowResources.sceneTlasBackingBuffer.valid())
             this.appendStateBuffer(rayTracingShadowResources.sceneTlasBackingBuffer);
         b8 stateCandidateRequired = rayTracingShadowResources.sceneTlas.valid() || renderer.m_raytracingSystem.preparedMeshSwBvhBuildsReady() || renderer.m_raytracingSystem.shadowVisibilitySoftwareResourcesPreflighted();
-        // Keep accepted trace-geometry state with the handoff, including invisible streams.
         for(in BufferHandle acceptedBuffer : acceptedTraceGeometry){
             this.appendStateBuffer(acceptedBuffer);
             stateCandidateRequired = true;

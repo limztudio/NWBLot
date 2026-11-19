@@ -24,7 +24,6 @@ RUNTIME_CSG_VISIBLE_SMOKE = "csg_visible_smoke_runtime"
 RUNTIME_CSG_SKINNED_VISIBLE_SMOKE = "csg_skinned_visible_smoke_runtime"
 RUNTIME_SKINNING_CULLING_BENCHMARK = "skinning_culling_benchmark_runtime"
 RUNTIME_REFLECTION_TEMPORAL_SMOKE = "reflection_temporal_smoke_runtime"
-# Reflection cases whose fixture-only materials are cooked only into a private runtime.
 REFLECTION_CASE_RUNTIMES = {"temporal_light": RUNTIME_REFLECTION_TEMPORAL_SMOKE}
 DEFAULT_SCENE = "transparent-multi"
 ENV_REFLECTION_PREFIX = "NWB_REFLECTION_SMOKE_"

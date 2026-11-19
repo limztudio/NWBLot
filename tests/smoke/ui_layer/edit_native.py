@@ -1,8 +1,3 @@
-"""Native edit-box input helpers, separate from the shared smoke backend.
-
-Win32 commits use WM_CHAR and therefore bypass a live IME. X11 commits use real
-ASCII key events; Korean coverage comes from the fixture's initial document.
-"""
 from __future__ import annotations
 
 import ctypes
@@ -19,7 +14,6 @@ LIT_UTF_16_LE = "utf-16-le"
 LIT_LITTLE = "little"
 LIT_TAB = "Tab"
 
-# Let posted text commit and real pointer tracking settle before the next step.
 TEXT_SETTLE_SECONDS = 0.15
 POINTER_SETTLE_SECONDS = 0.15
 
@@ -48,7 +42,6 @@ class EditNativeInput(NativeInput):
         if not user32.SetCursorPos(position.x, position.y):
             raise SmokeFailure("SetCursorPos failed before native double-click")
         try:
-            # TrackMouseEvent observes the real pointer even when button messages are posted.
             time.sleep(POINTER_SETTLE_SECONDS)
             yield
         finally:
@@ -186,4 +179,3 @@ class EditNativeInput(NativeInput):
         self.text(value, settle=False)
         self.key(LIT_TAB, True)
         self.key(LIT_TAB, False)
-

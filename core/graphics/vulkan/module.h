@@ -43,15 +43,12 @@ namespace ObjectTypes{
 class Device;
 typedef Handle<Device> DeviceHandle;
 
-// Canonical native queue construction identity. Enumerate every queue once, presentation-only included.
 struct VulkanNativeQueueDesc{
     VkQueue queue = VK_NULL_HANDLE;
     u32 familyIndex = Limit<u32>::s_Max;
     u32 queueIndex = Limit<u32>::s_Max;
 };
 
-// One canonical native queue for the RHI scheduler.
-// `primaryForClass` selects the class-based CommandQueue route; graph packets use the Device-assigned physical ID.
 struct VulkanPhysicalQueueDesc{
     u32 nativeQueueIndex = Limit<u32>::s_Max;
     u32 timestampValidBits = 0u;
@@ -69,8 +66,6 @@ struct DeviceDesc{
     VolkInstanceTable instanceDispatch = {};
     VolkDeviceTable deviceDispatch = {};
 
-    // Required canonical registry inputs, synchronously consumed by CreateDevice.
-    // The native table includes queues that are intentionally absent from physical task-graph topology, such as a distinct present-only queue.
     const VulkanNativeQueueDesc* nativeQueues = nullptr;
     usize nativeQueueCount = 0u;
     const VulkanPhysicalQueueDesc* physicalQueues = nullptr;
@@ -87,25 +82,18 @@ struct DeviceDesc{
     const AStringView* deviceExtensions = nullptr;
     usize numDeviceExtensions = 0;
 
-    // True when VkPhysicalDeviceVulkan12Features::bufferDeviceAddress was enabled at device creation.
     b8 bufferDeviceAddressSupported = false;
-    // Retains the exact VkPhysicalDeviceVulkan12Features::hostQueryReset bit enabled at device creation time.
     b8 hostQueryResetFeatureEnabled = false;
-    // Retains the texture-compression features enabled through vkCreateDevice.
     b8 textureCompressionBcFeatureEnabled = false;
     b8 textureCompressionAstcLdrFeatureEnabled = false;
     b8 textureCompressionAstcHdrFeatureEnabled = false;
-    // Indicates if dynamic rendering was enabled at device creation time (via Vulkan 1.3 core or KHR extension)
     b8 dynamicRenderingSupported = false;
-    // Indicates if synchronization2 was enabled at device creation time (via Vulkan 1.3 core or KHR extension)
     b8 synchronization2Supported = false;
     b8 independentBlendFeatureEnabled = false;
     b8 fullDrawIndexUint32FeatureEnabled = false;
     b8 multiDrawIndirectFeatureEnabled = false;
     b8 drawIndirectFirstInstanceFeatureEnabled = false;
     b8 meshShaderFeatureEnabled = false;
-    // Enabled feature-chain state for optional ray-tracing capabilities.
-    // Distinct from extension-name presence, so queries never advertise an extension whose feature bit stayed off.
     b8 accelerationStructureFeatureEnabled = false;
     b8 rayTracingPipelineFeatureEnabled = false;
     b8 rayQueryFeatureEnabled = false;
@@ -113,14 +101,10 @@ struct DeviceDesc{
     b8 clusterAccelerationStructureFeatureEnabled = false;
     b8 rayTracingInvocationReorderFeatureEnabled = false;
     b8 rayTracingInvocationReorderExtFeatureEnabled = false;
-    // Indicates if VK_NV_cooperative_vector feature bits were enabled at device creation time.
     b8 cooperativeVectorFeatureEnabled = false;
     b8 cooperativeVectorTrainingFeatureEnabled = false;
-    // True when VK_EXT_mesh_shader taskShader was enabled at device creation.
     b8 meshTaskShaderSupported = false;
-    // True when VK_NV_ray_tracing_linear_swept_spheres spheres was enabled at device creation.
     b8 rayTracingSpheresSupported = false;
-    // True when VK_NV_ray_tracing_linear_swept_spheres linearSweptSpheres was enabled at device creation.
     b8 rayTracingLinearSweptSpheresSupported = false;
     b8 gpuCrashDiagnosticsEnabled = false;
 

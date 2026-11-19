@@ -30,7 +30,6 @@ b8 IsDeferredTransferTailAvailable(
 
 
 void RestorePrefixCpuState(mut RendererMeshSystem meshSystem, mut RendererDeferredSystem deferredSystem){
-    // Rejected recording invalidates upload mirrors.
     meshSystem.invalidateMeshViewBufferUploadMirror();
     deferredSystem.invalidateSceneLightingUploadMirrors();
 }
@@ -65,7 +64,6 @@ b8 FrameExecuteRecovery::discardUnacceptedGraphPackets(){
 b8 FrameExecuteRecovery::executeFrameRecoveryTask(){
     mut RendererFramePipeline renderer = this.m_renderer;
 
-    // Retire the scope after rejection; Graphics order needs no extra wait.
     if(renderer.m_graphics.getDevice().requiresRecreation()){
         [essential] warning("RendererSystem: frame recovery packet skipped because the graphics device requires recreation");
         renderer.m_deferredFrameRecoveryArmed = false;
@@ -112,7 +110,6 @@ b8 FrameExecuteRecovery::recoverPendingFrameSubmission(){
 
 b8 FrameExecuteRecovery::recoverPendingFrameThenDiscardUnaccepted(){
     const b8 recovered = this.recoverPendingFrameSubmission();
-    // Record/submit while Declared; then reject remaining normal packets.
     return this.discardUnacceptedGraphPackets() && recovered;
 }
 
@@ -122,7 +119,6 @@ void FrameExecuteRecovery::failFrameRenderRecovery(){
         return;
     renderer.m_frameRenderRecoveryFailed = true;
     [essential] warning("RendererSystem: cannot safely continue after an unresolved frame recovery submission; requesting device recreation");
-    // Defer recreation until accepted work is safe.
     renderer.m_graphics.requestDeviceRecreation();
 }
 
@@ -224,7 +220,6 @@ b8 FrameExecutePresentTails::executeSurfelCounterReadback(in Optional<GpuPhysica
     if(!renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask.valid())
         return true;
 
-    // No normal-frame consumer; record only after Present.
     const b8 readbackTailAvailable = IsDeferredTransferTailAvailable(
         this.m_finalPresentationSubmissionToken.valid(),
         renderer.m_deferredLightingTaskGraphScheduled,
@@ -244,7 +239,6 @@ b8 FrameExecutePresentTails::executeSurfelCounterReadback(in Optional<GpuPhysica
     }
     else{
         GpuPersistentStateCandidate readbackCounterStateCandidate(renderer.m_surfelGiCounterPersistentState);
-        // Keep the candidate private until Transfer accepts.
         SurfelCounterReadbackAcceptance readbackContext(renderer.m_surfelGiCounterPersistentState, renderer.m_raytracingSystem, readbackCounterStateCandidate, counterBuffers);
         const GpuTaskGraphTaskRecordedCallback readbackRecordedCallback = MakeGpuTaskRecordedCallback(renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask, readbackContext);
         const GpuTaskGraphTaskAcceptedCallback readbackAcceptedCallback = MakeGpuTaskAcceptedCallback(renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask, readbackContext);
@@ -269,7 +263,6 @@ b8 FrameExecutePresentTails::executeSurfelCounterReadback(in Optional<GpuPhysica
             return false;
         }
         else{
-            // Publish only after retained state commits.
             assert(renderer.m_raytracingSystem.surfelCountReadbackSubmissionMatches(readbackSubmissionToken));
         }
     }
@@ -280,12 +273,10 @@ b8 FrameExecutePresentTails::executeSurfelCounterReadback(in Optional<GpuPhysica
 void FrameExecutePresentTails::executeLaggedLightingHistoryCapture(mut DeferredFrameTargets targets, in Optional<GpuPhysicalQueueInfo> historyQueue, in b8 requestsCapture, in b8 captureDeclared, in b8 laggedAsyncLightingSchedule){
     mut RendererFramePipeline renderer = this.m_renderer;
     if(requestsCapture && !captureDeclared){
-        // Present already completed; force next frame through bootstrap.
         warning("RendererSystem: deferred lagged lighting-history tail was unavailable; reverting to current-frame lighting");
         renderer.invalidateLaggedLightingHistorySubmission();
     }
     else if(captureDeclared){
-        // The history copy depends on Present; publication needs accepted presentation.
         if(!IsDeferredTransferTailAvailable(
             this.m_finalPresentationSubmissionToken.valid(),
             renderer.m_deferredLightingTaskGraphScheduled,
@@ -325,7 +316,6 @@ void FrameExecutePresentTails::executeLaggedLightingHistoryCapture(mut DeferredF
             if(historyCopySubmissionToken.valid() && (!historyCopyAccepted || !historyCopyAcceptance.acceptedStateReady)){
                 if(!this.m_recovery.executeFrameRecoveryTask())
                     this.m_recovery.failFrameRenderRecovery();
-                // The accepted copy cannot be replayed.
                 this.m_recovery.failFrameRenderRecovery();
                 return;
             }
@@ -336,7 +326,6 @@ void FrameExecutePresentTails::executeLaggedLightingHistoryCapture(mut DeferredF
                 renderer.invalidateLaggedLightingHistorySubmission();
             }
             else{
-                // The accepted hook publishes this token; keep the assertion here.
                 assert(renderer.m_laggedLightingHistorySubmissionToken.queue == historyCopySubmissionToken.queue && renderer.m_laggedLightingHistorySubmissionToken.value == historyCopySubmissionToken.value);
                 if(!laggedAsyncLightingSchedule)
                     renderer.reportLaggedLightingTransition(LaggedLightingReport::BootstrapAccepted, targets.laggedLightingHistory.generation);

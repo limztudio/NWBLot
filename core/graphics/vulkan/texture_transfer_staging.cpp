@@ -40,7 +40,6 @@ static constexpr TStringView s_SliceCopyContractReason = FOUNDATION_TEXT("source
     const auto range = VulkanDetail::TextureTransferLayout::BuildStagingRange(stagingSlice, stagingMipLayout, stagingFormatLayout, stagingArrayByteSize, stagingTotalByteSize, requiredOffsetAlignment, false);
     if(!range)
         return MakeUnexpected(Failure{});
-    // The required alignment is the common multiple of both copy alignments.
     FOUNDATION_ASSERT((range->byteOffset % s_BufferAlignmentBytes) == 0u && (range->byteOffset % stagingFormatLayout.bytesPerBlock) == 0u);
 
     VkBufferImageCopy region{};

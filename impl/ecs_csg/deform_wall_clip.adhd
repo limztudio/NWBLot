@@ -24,7 +24,6 @@ Expected<u32> SplitCsgDeformEdgeVertex(
         return edgeSplits[edge];
     const CsgDeformVertex firstVertex = vertices[cast<usize>(first)];
     const CsgDeformVertex secondVertex = vertices[cast<usize>(second)];
-    // A zero secondDistance selects the second endpoint.
     const Expected<CsgDeformVertex> mixed = TryBuildInterpolatedCsgDeformVertex(firstVertex, secondVertex, firstDistance, secondDistance);
     if(!mixed.has_value())
         return MakeUnexpected(Failure());

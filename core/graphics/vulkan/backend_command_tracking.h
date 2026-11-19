@@ -137,8 +137,6 @@ private:
 
     u64 m_recordingID = 0;
     u64 m_submissionID = 0;
-    // Explicit graph-worker leases own one queue-local Vulkan pool each.
-    // Recycled buffers retain that identity until the queue timeline retires them; default/direct lease zero instead keeps its private pool.
     u64 m_recordingWorkerDomain = 0u;
     u32 m_recordingWorkerIndex = 0u;
     TrackedCommandBufferArenaState::Enum m_arenaState = TrackedCommandBufferArenaState::Untracked;

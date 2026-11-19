@@ -5,7 +5,6 @@ The paired smoke executables are intentionally identical except that the synchro
 the default async-compute lane request before selected-backend device creation. This runner refuses a Graphics queue route, captures
 fixed-yaw pixel output from both binaries, collects the renderer's
 timestamp envelopes, and makes the M4 rollout gate explicit:
-
 * a distinct dedicated compute queue must be active;
 * the graph-owned render.async_shadow scope must contain measurable work;
 * render.frame (the Graphics critical path) must not regress beyond the configured tolerance; and
@@ -142,7 +141,6 @@ def wait_for_measurement_timing_boundary(process, timing_path: Path, timeout_sec
             if not math.isfinite(seconds) or seconds <= 0.0:
                 raise SmokeFailure(f"invalid post-warmup GPU timing interval in {timing_path}")
             header_count += 1
-            # A second header proves the first warmup report closed.
             if header_count == 2:
                 return match.start()
         time.sleep(LIT_TIMING_POLL_SECONDS)
@@ -166,14 +164,12 @@ def find_forbidden_log_messages(log_text: str, needles: Sequence[str]) -> List[s
 
 
 def capture_m4_client_area(capture_backend, window, capture_path):
-    """Capture application pixels only; Windows excludes the compositor-owned non-client frame."""
     if isinstance(capture_backend, WindowsCapture):
         return capture_backend.capture_prepared_raw_client_window(window, capture_path)
     return capture_backend.capture_client_window(window, capture_path)
 
 
 def prepare_m4_client_area(capture_backend, window):
-    """Stabilize the Windows M4 client capture before the held-frame marker."""
     if isinstance(capture_backend, WindowsCapture):
         capture_backend.prepare_raw_client_window(window)
         client_rect = capture_backend._client_rect(window)
@@ -187,7 +183,6 @@ def prepare_m4_client_area(capture_backend, window):
 
 @dataclass
 class BenchmarkStartup:
-    # Keep each acquired resource visible to the caller's finally block before the next step can fail.
     logserver_process: Optional[object] = None
     app_process: Optional[object] = None
     log_directory: Optional[Path] = None
@@ -212,7 +207,6 @@ def start_benchmark(args: argparse.Namespace, mode: str, executable: Path, captu
 
 
 def run_frame_locked_capture(args: argparse.Namespace, mode: str, executable: Path, capture_backend,) -> FrameLockedCapture:
-    """Capture a settled temporal frame after an identical number of world ticks in each mode."""
     if not executable.is_file():
         raise SmokeFailure(f"{mode} executable does not exist: {executable}")
 
@@ -354,7 +348,6 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     missing = [f"--{name.replace('_', '-')}" for name in required if getattr(args, name) is None]
     if missing:
         parser.error(f"missing required arguments: {', '.join(missing)}")
-    # The native environment reader uses full-consumption std::from_chars<f32>.
     yaw_token = re.fullmatch(r"-?([0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?", args.frozen_yaw)
     if yaw_token is None:
         parser.error(LIT_FROZEN_YAW_MUST_BE_A_FINITE_FLOAT32_DE)
@@ -363,7 +356,6 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
             frozen_yaw = Decimal(args.frozen_yaw).copy_abs()
         except InvalidOperation:
             parser.error(LIT_FROZEN_YAW_MUST_BE_A_FINITE_FLOAT32_DE)
-        # Nonzero values rounding to zero or infinity are native range errors.
         if not Decimal.from_float(2.0 ** -150) < frozen_yaw < Decimal(2 ** 128 - 2 ** 103):
             parser.error(LIT_FROZEN_YAW_MUST_BE_A_FINITE_FLOAT32_DE)
     require_non_negative(parser, LIT_WARMUP_SECONDS, args.warmup_seconds)
@@ -402,7 +394,6 @@ def run(args: argparse.Namespace) -> int:
 
     capture_backend = None
     try:
-        # Run async first so hosts without dedicated compute exit 77 early.
         capture_backend = create_capture_backend()
         async_capture = (run_frame_locked_capture(args, LIT_ASYNC, args.async_executable, capture_backend) if not args.skip_pixel_parity else None)
         async_run = run_single_mode(args, LIT_ASYNC, args.async_executable, load_name_symbols(args.async_namesym), capture_backend, async_capture,)

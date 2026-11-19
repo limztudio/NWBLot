@@ -94,7 +94,7 @@ Do not edit or overwrite a corpus reference in place. Replacing it requires a ne
 for every profile, a documented same-revision noise re-capture, a new checksummed registry, and an acceptance-audit
 update explaining why the approved current output changed.
 
-The `transparent-avboit` profile is frame-locked at 96 completed render submissions. Its smoke project sets the
+The `transparent-avboit` profile is frame-locked at 96 `onUpdate` world-update callbacks (counted by `tests/smoke/transparent_multi_runtime.adhd`). Its smoke project sets the
 test-only `NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME` control, suspends further submission, logs the ready marker,
 then allows a fixed 0.75-second present settle while the native event loop remains alive before it captures the
 pinned temporal phase. `transparent-avboit` and `skinned-csg` also set the test-only

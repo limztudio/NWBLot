@@ -189,7 +189,6 @@ GpuTaskSchedulingHint MakeSkinningSerialMergeScheduling(in GpuTaskCostHint cost)
     scheduling.avoidQueueCrossing = true;
     scheduling.forceSubmissionBoundary = false;
     scheduling.allowPacketMerge = true;
-    // The external renderer consumes one accepted skinning state on this serial timeline.
     scheduling.mergeWithPrevious = true;
     scheduling.frontierScoredMergeDomain = s_SerialMergeDomain;
     return scheduling;
@@ -380,8 +379,6 @@ class MeshSkinningFrameResourceImports : NoCopy{
     }
 }
 
-// Per-mesh declarations of one skinning frame: the immutable dispatch plan plus its selector upload, rest-to-skinned copy, and joint-palette upload.
-// Every declared transfer chains on one serial dependency that the frame's deformation task then follows.
 [modular]
 class MeshSkinningFramePlanBuilder : NoCopy{
     private mut MeshSkinningSystem m_system;
@@ -399,7 +396,6 @@ class MeshSkinningFramePlanBuilder : NoCopy{
         this.m_plans = plans;
     }
 
-    // False only for a frame-fatal declaration failure; meshes without a ready pose or dirty bounds are skipped.
     public b8 declare(in EntityID entity, in SkinnedMeshBindingComponent binding);
 
     public GpuTaskId terminalTask()const{

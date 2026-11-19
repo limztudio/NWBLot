@@ -115,7 +115,6 @@ GraphicsRuntime::GraphicsRuntime(GraphicsAllocator& allocator, CpuTaskScheduler&
 {
     m_deviceCreationParams.hardwareRayTracingPolicy = HardwareRayTracingPolicy::Automatic;
 #if defined(FOUNDATION_PLATFORM_WINDOWS) && (defined(__x86_64__) || defined(_M_X64))
-    // Match the conservative ARM64 default when this x64 process runs under emulation.
     USHORT processMachine = IMAGE_FILE_MACHINE_UNKNOWN;
     USHORT nativeMachine = IMAGE_FILE_MACHINE_UNKNOWN;
     if(IsWow64Process2(GetCurrentProcess(), &processMachine, &nativeMachine) && nativeMachine == IMAGE_FILE_MACHINE_ARM64)
@@ -125,8 +124,6 @@ GraphicsRuntime::GraphicsRuntime(GraphicsAllocator& allocator, CpuTaskScheduler&
 }
 
 GraphicsRuntime::~GraphicsRuntime()noexcept(false){
-    // An active unwind is already terminal.
-    // Detach the borrowed device binding without native callbacks or a GPU join, so the original exception reaches the application-entry boundary.
     const auto detachDevice = [this]()noexcept{
         if(auto* device = m_backend->getDevice(); device && m_gpuTasks.isAttachedTo(*device)){
             if(!m_gpuTasks.detachDevice(*device))
@@ -252,8 +249,6 @@ b8 GraphicsRuntime::destroy(){
         return false;
     }
     if(!m_backend->commitDestroy(Move(*transitionTicket))){
-        // Commit rejection retains the backend device.
-        // Restore only our binding; failed initialization must never detach or replace a scheduler belonging to a different runtime.
         if(detachScheduler && m_backend->getDevice() == device && !m_gpuTasks.attachDevice(*device))
             NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("GraphicsRuntime: failed to restore the GPU scheduler after device teardown was rejected."));
         requestDeviceRecreation();
@@ -268,7 +263,6 @@ b8 GraphicsRuntime::waitForIdle(){
     if(auto* device = m_backend->getDevice()){
         if(m_gpuTasks.isAttachedTo(*device))
             return m_gpuTasks.wait();
-        // A failed initialization may have created this device while the injected scheduler belongs elsewhere.
         return device->waitForIdle();
     }
     return true;
@@ -301,7 +295,6 @@ u32 GraphicsRuntime::queryWaveLaneCount()const noexcept{
     const auto info = getDevice().getWaveLaneCounts();
     if(info.maxWaveLaneCount > 0u)
         return info.maxWaveLaneCount;
-    // No wave size reported: 64 lanes is the safe desktop upper bound and keeps groupshared reductions correct.
     return __hidden_graphics_feature_queries::s_DefaultWaveLaneCount;
 }
 

@@ -30,7 +30,6 @@ class MeshSkinningDeformationInputs{
     }
 }
 
-// Accepted object-space output is reusable only for the same resolved GPU palette and resource generation.
 class MeshSkinningDeformationState{
     private Vector<SkeletonJointMatrix> m_acceptedJoints;
     private Vector<SkeletonJointMatrix> m_pendingJoints;
@@ -87,7 +86,6 @@ class MeshSkinningDeformationState{
         return true;
     }
 
-    // Zero also covers a changed pose awaiting this frame's graph submission.
     public u64 contentRevision()const{
         if(this.m_current)
             return this.m_acceptedRevision;

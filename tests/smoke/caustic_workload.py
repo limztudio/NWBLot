@@ -1,5 +1,3 @@
-"""Fixed caustic workload settings and runtime evidence validation."""
-
 import math
 import re
 
@@ -58,7 +56,6 @@ class CausticWorkload:
         if len(routes) != 1 or routes[0] != LIT_HARDWARE:
             raise SmokeFailure("one supported caustic shadow route is required")
         validate_expected_log_text(text, ["RendererSystem: dispatched hardware transparent shadow traversal"], ["RendererSystem: dispatched software shadow traversal"])
-        # Reject contradictory values as well as requiring the selected value once.
         for prefix in ("AvboitTimingProbe: in-flight ranges ", "AvboitTimingProbe: render unfocused ", "AvboitTimingProbe: caustic in-flight ranges ", "CausticSphereSmokeProject: reflection mode ",
             "CausticSphereSmokeProject: camera refraction ", LIT_CAUSTICSPHERESMOKEPROJECT_CAUSTICS, "CausticTimingProbe: scene "):
             if sum(line.startswith(prefix) for line in lines) != 1:
@@ -109,7 +106,6 @@ class CausticWorkload:
 
     @staticmethod
     def validate_warmup(scopes):
-        # Require twelve actual completed GPU observations, covering six checkerboard parity cycles.
         for name in ("render.frame", PHOTONS):
             value = scopes.get(name)
             if value is None or value["gpu_samples"] < 12 or value["total_ms"] <= 0:

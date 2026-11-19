@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Diagnostic publication provenance and fail-closed parser tests; no renderer or GPU is launched."""
 
 from pathlib import Path
 import sys
@@ -61,7 +60,6 @@ def complete_log(records=12):
 
 
 class SmokeCpuGpuTimingTests(unittest.TestCase):
-
     def test_unrecognized_or_tampered_hash_does_not_satisfy_required_phase(self):
         from name_symbols import debug_name_hash_token
         token = debug_name_hash_token(LIT_GRAPHICS_PRESENT)

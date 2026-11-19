@@ -25,8 +25,8 @@ namespace CrashDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_RequestMagic = 0x4E574243u; // NWBC
-inline constexpr u32 s_AckMagic = 0x4E574241u; // NWBA
+inline constexpr u32 s_RequestMagic = 0x4E574243u;
+inline constexpr u32 s_AckMagic = 0x4E574241u;
 inline constexpr u32 s_RequestVersion = 2u;
 inline constexpr usize s_MaxMetadata = 32u;
 inline constexpr usize s_MaxBreadcrumbs = 128u;
@@ -133,8 +133,6 @@ struct CrashAck{
     Array<char, s_MaxShortText> crashId = {};
 };
 
-// This fixed-size native protocol is shared only by the application and its same-build handler.
-// Native context admission does not provide mixed-binary or cross-architecture message framing.
 class CrashProtocol final{
 public:
     [[nodiscard]] static b8 IsCurrentCrashRequest(const CrashRequest& request)noexcept;

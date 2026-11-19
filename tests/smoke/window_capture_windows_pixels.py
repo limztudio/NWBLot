@@ -1,6 +1,3 @@
-"""Windows GDI screen-pixel capture and sampling."""
-
-
 import ctypes
 
 from window_capture_image import write_capture_rows

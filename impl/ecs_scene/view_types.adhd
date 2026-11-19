@@ -20,7 +20,6 @@ VectorSingle NormalizeSceneVector3Or(in VectorSingle value, in VectorSingle fall
     return VectorSingle(scaled, 0.0f);
 }
 
-// Calculation rows are right, up, forward, and position/depth bias; never retained as scene storage.
 MatrixSingle BuildDefaultSceneViewBasis(){
     const VectorSingle angles(s_DefaultSceneViewYaw, s_DefaultSceneViewPitch, s_DefaultSceneViewYaw, s_DefaultSceneViewPitch);
     const VectorSingle sinAngles = Sin(angles);

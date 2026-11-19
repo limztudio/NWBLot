@@ -19,7 +19,6 @@
 inline void TransposeBitMatrix64(Array<u64, s_BitsPerU64>& tile)noexcept{
     u64 mask = 0x00000000FFFFFFFFull;
     for(usize shift = s_BitsPerU64 / 2u; shift != 0u; shift /= 2u){
-        // Exchange each row-address bit with the corresponding column-address bit, starting with the high bit.
         for(usize block = 0u; block < s_BitsPerU64; block += shift * 2u){
             for(usize offset = 0u; offset < shift; ++offset){
                 u64& low = tile[block + offset];
@@ -34,8 +33,6 @@ inline void TransposeBitMatrix64(Array<u64, s_BitsPerU64>& tile)noexcept{
     }
 }
 
-
-// Dense and compact storage must contain every transposed destination bit.
 inline void SymmetrizeDenseBitMatrix(const Span<u64> words, const usize dimension, const usize wordsPerRow)noexcept{
     for(usize rowBlock = 0u; rowBlock < wordsPerRow; ++rowBlock){
         const usize rowBase = rowBlock * s_BitsPerU64;

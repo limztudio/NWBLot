@@ -28,7 +28,6 @@ void nwbHwShadowCollect(const RayDesc ray, const uint pixel, const uint rayCount
             query.Abort();
             return;
         }
-        // Engine triangle BLASes contain one geometry; the material table indexes that geometry's primitive stream.
         NwbHardwareTransparentCrossing crossing;
         crossing.distance = query.CandidateTriangleRayT();
         crossing.instance = query.CandidateInstanceID();

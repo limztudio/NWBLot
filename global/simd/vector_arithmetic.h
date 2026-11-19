@@ -49,7 +49,6 @@ FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleAdd(SIMDVect
     return v0 + v1;
 }
 
-// Adds raw unsigned 32-bit lane representations with modulo arithmetic.
 FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorAddInt(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(FOUNDATION_HAS_SCALAR)
     return VectorSetInt(VectorGetIntX(v0) + VectorGetIntX(v1), VectorGetIntY(v0) + VectorGetIntY(v1), VectorGetIntZ(v0) + VectorGetIntZ(v1), VectorGetIntW(v0) + VectorGetIntW(v1));
@@ -60,7 +59,6 @@ FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorAddInt(SIMDVectorS
 #endif
 }
 
-// Adds raw unsigned 64-bit lane representations with modulo arithmetic.
 FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleAddInt(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
 #if defined(FOUNDATION_HAS_NEON64)
     return SIMDVectorDoubleDetail::FromUIntPairs(vaddq_u64(SIMDVectorDoubleDetail::GetLowBits(v0), SIMDVectorDoubleDetail::GetLowBits(v1)), vaddq_u64(SIMDVectorDoubleDetail::GetHighBits(v0), SIMDVectorDoubleDetail::GetHighBits(v1)));
@@ -103,7 +101,6 @@ FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleMultiply(SIM
     return v0 * v1;
 }
 
-// Widen raw unsigned 32-bit lanes to full unsigned 64-bit products without floating-point operations.
 FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorMultiplyUInt32Wide(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(FOUNDATION_HAS_NEON64)
     const uint32x4_t a = vreinterpretq_u32_f32(v0);
@@ -173,7 +170,6 @@ FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleMultiplyAdd(
 #endif
 }
 
-// Preserve the compiler's contraction policy for a source multiply-add expression instead of requiring an explicit FMA.
 FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorMultiplyAddExpression(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)noexcept{
 #if defined(FOUNDATION_HAS_SCALAR)
     return VectorSet(VectorGetX(v0) * VectorGetX(v1) + VectorGetX(v2), VectorGetY(v0) * VectorGetY(v1) + VectorGetY(v2), VectorGetZ(v0) * VectorGetZ(v1) + VectorGetZ(v2), VectorGetW(v0) * VectorGetW(v1) + VectorGetW(v2));
@@ -182,7 +178,6 @@ FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorMultiplyAddExpress
 #endif
 }
 
-// Preserve the compiler's contraction policy for a source multiply-add expression instead of requiring an explicit FMA.
 FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleMultiplyAddExpression(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)noexcept{
 #if defined(FOUNDATION_HAS_NEON64)
     return SIMDVectorDoubleDetail::FromPairs(
@@ -291,7 +286,6 @@ FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleScale(SIMDVe
     return VectorDoubleMultiply(value, VectorDoubleReplicate(scale));
 }
 
-// Min/max select the second operand for equal or unordered lanes.
 FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorMin(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(FOUNDATION_HAS_SCALAR)
     return VectorSet(

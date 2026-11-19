@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""BuildController: CMake build orchestration and executable resolution."""
 
 from __future__ import annotations
 
@@ -14,8 +13,6 @@ from launcher.constants import (CMAKE_BUILD_FLAG, CMAKE_CONFIG_FLAG, CMAKE_PARAL
 
 
 class BuildController:
-    """CMake build orchestration and executable resolution."""
-
     @staticmethod
     def build_targets(args, settings: LaunchSettings, targets: Sequence[str], env: Dict[str, str]) -> None:
         if args.skip_build:

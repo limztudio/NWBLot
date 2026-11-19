@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Identify authored packed resources while separating the exact backend-owned mutable pipeline cache."""
 
 import hashlib
 
@@ -9,7 +8,6 @@ LIT_UTF_8 = "utf-8"
 
 
 def volume_segment_filename(volume_name, segment_index):
-    """Match core/filesystem/volume_naming.h: UTF-8 FNV-1a of the canonical name_index.vol."""
     value = 14695981039346656037
     for byte in f"{volume_name}_{segment_index}.vol".encode(LIT_UTF_8):
         value = ((value ^ byte) * 1099511628211) & 0xffffffffffffffff
@@ -21,7 +19,6 @@ def runtime_pipeline_cache_paths(directory):
     if not resources.is_dir():
         return []
     result = []
-    # Packed-volume segments are numbered contiguously from zero.
     index = 0
     while True:
         path = resources / volume_segment_filename("runtime_pipeline_cache", index)

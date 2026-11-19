@@ -163,7 +163,6 @@ class PaintImageBindings{
         const Expected<usize> addedTextures = CountNewPaintBindings<ImageSource, TextureBindingPolicy>(textures, this.m_textureImages, TextureBindingPolicy());
         if(!addedTextures.has_value() || !CanAdmitPaintImageBindingCounts(this.m_glyphPages.size(), this.m_sdfPages.size(), this.m_textureImages.size(), addedGlyphs.value(), addedSdf.value(), addedTextures.value()))
             return false;
-        // Validate all image kinds before publishing any binding or upgrading a coverage page.
         this.m_glyphPages.reserve(this.m_glyphPages.size() + addedGlyphs.value());
         this.m_sdfPages.reserve(this.m_sdfPages.size() + addedSdf.value());
         this.m_textureImages.reserve(this.m_textureImages.size() + addedTextures.value());

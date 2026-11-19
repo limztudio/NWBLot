@@ -123,7 +123,6 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
         const GpuSubmissionPacket& packet = m_packets[packetIndex];
         if(packet.taskCount > 1u)
             statistics.mergedTaskCount += packet.taskCount - 1u;
-        // A frontier only grows from earlier packets, so it never passes the packet index.
         FOUNDATION_ASSERT(packet.recordingFrontier <= packetIndex);
         statistics.recordingFrontierCount = Max(statistics.recordingFrontierCount, static_cast<usize>(packet.recordingFrontier) + 1u);
 
@@ -138,7 +137,6 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
         const GpuPacketDependency* const dependencies = packet.dependencyCount > 0u ? m_packetDependencies.data() + packet.dependencyOffset : nullptr;
         for(u32 dependencyIndex = 0u; dependencyIndex < packet.dependencyCount; ++dependencyIndex){
             const GpuPacketDependency& dependency = dependencies[dependencyIndex];
-            // This runs before publish, so validPacket() would reject every packet here.
             FOUNDATION_ASSERT(dependency.producer.valid() && dependency.producer.generation == m_planGeneration && dependency.producer.index < m_packets.size());
             const GpuSubmissionPacket& producer = m_packets[dependency.producer.index];
             if(producer.queue == packet.queue)
@@ -224,7 +222,6 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
         if(repeatedSignature)
             ++destination.incomingRepeatedOwnershipTransferSignatureCount;
 
-        // Only the first occurrence of a signature contributes avoidability, even when later fragments differ.
         OwnershipResourceStatistics& resource = resourceInsertion.first.value();
         if(transfer.concurrentSharingCouldAvoid && resource.avoidableSignatureCount < s_ConcurrentSharingAdviceSignatureThreshold){
             ++resource.avoidableSignatureCount;
@@ -241,7 +238,6 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
             if(!transfer.concurrentSharingCouldAvoid || (transfer.sourceQueue != physical.queue && transfer.destinationQueue != physical.queue))
                 continue;
 
-            // Every transfer resource was added by try_emplace in the loop above.
             const auto resource = resources.find(transfer.resource);
             FOUNDATION_ASSERT(resource != resources.end());
             OwnershipResourceStatistics& resourceStatistics = resource.value();

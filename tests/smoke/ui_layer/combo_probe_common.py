@@ -1,4 +1,3 @@
-"""Shared accepted-snapshot and displayed-pixel contract for combo smoke scenes."""
 from __future__ import annotations
 
 import math

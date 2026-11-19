@@ -32,7 +32,6 @@ template<typename IteratorT, typename SentinelT, typename VisitT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Match range-for lookup and its auto iterator/sentinel storage, including copies from reference results.
 template<typename RangeT, typename VisitT>
 [[nodiscard]] consteval b8 IsNothrowRangeFor()noexcept{
     if constexpr(IsBoundedArray_V<RangeT>){

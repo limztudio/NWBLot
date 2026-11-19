@@ -62,7 +62,6 @@ b8 Win32TextInputService::handleMessage(const u32 message, const usize wParam, c
         admission = publishCompositionPreedit(token, {}, 0u, 0u);
         break;
     case WM_IME_CHAR:
-        // GCS_RESULTSTR already supplied the commit. DefWindowProc would turn this into duplicate WM_CHAR messages.
         return true;
     default:
         return false;
@@ -77,7 +76,6 @@ b8 Win32TextInputService::handleMessage(const u32 message, const usize wParam, c
 
 
 TextInputAdmission::Enum Win32TextInputService::acceptCodePoint(const TextInputSessionToken token, const u32 codePoint, const u32 repeatCount){
-    // Editing/navigation control keys are delivered through the ordinary key path, never committed as document text.
     if(codePoint < s_UnicodeSpace || codePoint == s_UnicodeDelete)
         return TextInputAdmission::Accepted;
     Array<char, s_Utf8MaxSequenceBytes> bytes;

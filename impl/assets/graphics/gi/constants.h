@@ -9,16 +9,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Hit shading keeps the same dominant-light occlusion policy on both traversal backends.
 #ifndef NWB_GI_HIT_SHADOW_RAYS
 #define NWB_GI_HIT_SHADOW_RAYS 1
 #endif
 
-// Software scene and mesh traversal capacities.
 #define NWB_GI_SW_MESH_STACK_SIZE 32
 #define NWB_GI_SW_SCENE_STACK_SIZE 64
 
-// Hemisphere measure and trace-distance policy shared by the GI shader paths.
 #define NWB_GI_FULL_TURN_RADIANS 6.28318530718f
 #define NWB_GI_TRACE_RAY_MIN_DISTANCE 0.001f
 #define NWB_GI_TRACE_RAY_MAX_DISTANCE 10000.0f

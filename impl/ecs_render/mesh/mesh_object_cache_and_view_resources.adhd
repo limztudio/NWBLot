@@ -127,7 +127,6 @@ b8 RendererMeshSystem::createMeshViewBuffer(){
         .setByteSize(size_of<MeshViewGpuData>())
         .setIsConstantBuffer(true)
         .setDebugName(s_MeshViewBufferName)
-        // Either caustic producer can consume the view; keep concurrent to avoid serializing lanes.
         .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).enableAutomaticStateTracking(ResourceStates::Common)
     ;
     auto meshViewBufferResult = this.m_graphics.createBuffer(meshViewBufferDesc);

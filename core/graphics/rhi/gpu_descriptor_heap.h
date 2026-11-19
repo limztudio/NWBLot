@@ -20,43 +20,25 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Global descriptor-heap contract.
-
-// A heap resource is addressed everywhere (C++ and shader) by one opaque 32-bit GpuDescriptorHandle.
-// Bit-layout and class taxonomy are shared; the Vulkan renderer resolves handles through its global heap.
-
-// Resource classes a shader selects between.
-// Each class maps to exactly one heap register space, so the class tag alone selects the shader-side array.
 namespace GpuDescriptorClass{
     static constexpr u8 s_GpuDescriptorClassSampledImageBase = 0;
     enum Enum : u8{
-        SampledImage = s_GpuDescriptorClassSampledImageBase, // Texture_SRV           -> SAMPLED_IMAGE
-        StorageImage,       // Texture_UAV           -> STORAGE_IMAGE
-        SampledBuffer,      // TypedBuffer_SRV       -> UNIFORM_TEXEL_BUFFER
-        StorageBuffer,      // StructuredBuffer_UAV  -> STORAGE_BUFFER (structured/raw SRV+UAV share one descriptor)
-        UniformBuffer,      // ConstantBuffer        -> UNIFORM_BUFFER
-        AccelStruct,        // RayTracingAccelStruct -> ACCELERATION_STRUCTURE_KHR (see note below)
-        Sampler,            // Sampler               -> SAMPLER (separate index namespace)
-        // Texture2DArray uses a distinct shader descriptor array from Texture2D although both use sampled-image descriptors.
-        SampledImage2DArray,// Texture2DArray_SRV     -> SAMPLED_IMAGE
-        // Texture3D requires its own shader descriptor array despite using the same sampled-image descriptor type.
-        SampledImage3D,     // Texture3D_SRV          -> SAMPLED_IMAGE
-        // A uint Texture2DArray has a distinct shader image type from the floating-point Texture2DArray descriptor array.
-        SampledImage2DArrayUint, // Texture2DArray<uint>_SRV -> SAMPLED_IMAGE
-        // Cubemaps require a cube image view and a distinct shader descriptor array from Texture2D.
-        SampledImageCube,        // TextureCube_SRV -> SAMPLED_IMAGE
+        SampledImage = s_GpuDescriptorClassSampledImageBase,
+        StorageImage,
+        SampledBuffer,
+        StorageBuffer,
+        UniformBuffer,
+        AccelStruct,
+        Sampler,
+        SampledImage2DArray,
+        SampledImage3D,
+        SampledImage2DArrayUint,
+        SampledImageCube,
 
         Count
     };
-
-    // AccelStruct selects a distinct immutable descriptor-buffer block per live TLAS generation.
 };
 
-// One opaque 32-bit integer: the only thing that crosses the C++/shader boundary.
-//   bits 31..28 (4): class tag - GpuDescriptorClass::Enum (<= Count classes, fits with headroom)
-//   bits 27..0 (28): slot index - global within its namespace (resource heap or sampler heap), max 2^28
-
-// Generation/versioning is intentionally not packed here (index bits are more valuable); a debug-only side table validates handles instead.
 struct GpuDescriptorHandle{
     static constexpr u32 s_Invalid = 0xFFFFFFFFu;
     static constexpr u32 s_ClassShift = 28u;
@@ -64,7 +46,6 @@ struct GpuDescriptorHandle{
 
 
 public:
-    // 0x0FFFFFFF, max slot index per namespace
     u32 value = s_Invalid;
 
 
@@ -94,8 +75,6 @@ inline constexpr b8 operator!=(const GpuDescriptorHandle lhs, const GpuDescripto
 static constexpr usize s_GpuDescriptorHandleByteSize = 4;
 static_assert(sizeof(GpuDescriptorHandle) == s_GpuDescriptorHandleByteSize, "GpuDescriptorHandle is supposed to be a single 32-bit word");
 
-// Values connecting the generic descriptor heap to the shared shader ABI.
-// Core validates this payload without depending on the implementation-owned macro contract; stricter layout checks run at initialize().
 struct GpuDescriptorHeapAbi{
     u32 resourceSetIndex = s_MaxU32;
     u32 samplerSetIndex = s_MaxU32;
@@ -134,11 +113,9 @@ public:
     }
 };
 
-// Capacities are hard ceilings (no mid-frame growth).
-// Effective caps clamp to device limits at initialize() and are logged; zero means "use the renderer default".
 struct GpuDescriptorHeapDesc{
-    u32 resourceCapacity = 0;   // slots shared by all non-sampler classes (one global namespace)
-    u32 samplerCapacity = 0;    // samplers live in their own global namespace
+    u32 resourceCapacity = 0;
+    u32 samplerCapacity = 0;
     GpuDescriptorHeapAbi bindlessHeapAbi;
 
 
@@ -147,29 +124,17 @@ public:
     constexpr GpuDescriptorHeapDesc& setBindlessHeapAbi(const GpuDescriptorHeapAbi& value)noexcept{ bindlessHeapAbi = value; return *this; }
 };
 
-// Coherent-by-value lifecycle snapshot for the descriptor-buffer global heap.
-// The Vulkan backend samples every field while holding its heap mutex.
-// Resource slots share one namespace for every non-sampler, non-TLAS class; TLAS slots use per-generation blocks.
 struct GpuDescriptorHeapLifecycleStatistics{
-    // False after shutdown or before initialization. The remaining counters are ordinarily zero in that state.
     b8 initialized = false;
     u32 resourceCapacity = 0u;
     u32 samplerCapacity = 0u;
     u32 accelStructCapacity = 0u;
-    // A live slot is allocated and has not yet entered deferred-free quarantine.
     usize resourceLiveSlotCount = 0u;
     usize samplerLiveSlotCount = 0u;
     usize accelStructLiveSlotCount = 0u;
-    // Slots awaiting reuse: a pending CPU snapshot may still record them, or a prior binding may still need them.
     usize pendingRetiredSlotCount = 0u;
-    // Heap uses with an accepted submission token, retained until collectRetired() reaps their token.
-    // This can include work that has physically completed but has not yet been collected.
     usize acceptedHeapUseCount = 0u;
-    // Heap uses still owned by a recorded command buffer without an accepted submission token.
-    // Rejected or abandoned command buffers stop contributing here before collectRetired() releases their retired slots.
     usize unsubmittedHeapUseCount = 0u;
-    // Heap uses whose command buffer was discarded without an accepted token.
-    // They have no trustworthy physical queue identity and remain visible only until collectRetired() releases the associated deferred-free slots.
     usize abandonedHeapUseCount = 0u;
 };
 
@@ -177,8 +142,6 @@ struct GpuDescriptorHeapLifecycleStatistics{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Borrows unpublished descriptor handles until their owning operation publishes or abandons them.
-// Named handles and arrays must outlive the guard; clearing a published array entry transfers that entry's retirement responsibility.
 template<typename HeapT>
 class GpuDescriptorRetirementGuard final : NoCopy{
 public:

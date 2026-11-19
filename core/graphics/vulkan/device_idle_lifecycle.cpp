@@ -46,7 +46,6 @@ b8 Device::waitForIdle(){
 }
 
 void Device::runGarbageCollection(){
-    // Avoid extra queue queries after device loss.
     if(isDeviceLost())
         return;
 

@@ -22,7 +22,6 @@
     return true;
 }
 
-// The input must be valid UTF-8.
 [[nodiscard]] inline usize CountUtf8ScalarsAssumingValid(const AStringView text)noexcept{
     usize count = 0u;
     for(const char byte : text){
@@ -32,7 +31,6 @@
     return count;
 }
 
-// The requested prefix is validated; bytes after the boundary are not read.
 [[nodiscard]] inline Expected<usize> Utf8ByteOffset(const AStringView text, const usize character)noexcept{
     usize position = 0u;
     usize index = 0u;

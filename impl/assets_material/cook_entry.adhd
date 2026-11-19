@@ -15,7 +15,6 @@ type MaterialStageShaderMap = HashMap<ShaderType, AssetRef<IShader>>;
 type MaterialParameterMap = HashMap<CompactString, CompactString>;
 
 class MaterialCookEntry{
-    // Readable source text (not Name); the cook builds paths and dedup keys from it.
     public String virtualPath;
     public String materialInterface;
     public u64 typedLayoutHash = 0u;
@@ -24,23 +23,17 @@ class MaterialCookEntry{
     public TypedBlockByteVector typedBlockBytes;
     public ResourceReferenceVector resourceReferences;
     public String shaderVariant;
-    // Deferred lighting BXDF source; resolved and deduped by the cross-asset phase.
     public String bxdfSource;
-    // Surface hook; empty when explicit `shaders` are declared instead.
     public String surfaceSource;
     public MaterialStageShaderMap stageShaders;
-    // Generated AVBOIT accumulate PS name; empty for opaque materials.
     public String avboitAccumulatePixelShaderName;
-    // Occupancy/extinction twins of the accumulate name.
     public String avboitOccupancyPixelShaderName;
     public String avboitExtinctionPixelShaderName;
     public MaterialParameterMap parameters;
     public u32 shadingModelId = 0u;
-    // Surface dispatch id, deduped over the `surface` source set.
     public u32 surfaceDispatchId = 0u;
     public b8 transparent = false;
     public b8 twoSided = false;
-    // Explicit caster classification, independent of transparency; NwbMeshSurface supplies the optical parameters.
     public b8 refractive = false;
 }
 

@@ -68,7 +68,6 @@ b8 BuildRuntimeSkinPayload(
     return true;
 }
 
-// Encode mesh-owned data only when creating its GPU buffer.
 Expected<Vector<MeshSkinningInfluenceGpu>> BuildSkinInfluences(in MeshSkinningRuntimeInstance instance){
     if(!ValidateMeshSkinningInfluenceStream(instance.handle.value, instance.skeletonJointCount, instance.skin))
         return MakeUnexpected(Failure());

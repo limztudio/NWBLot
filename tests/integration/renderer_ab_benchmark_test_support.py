@@ -1,6 +1,3 @@
-"""Shared trial, manifest, and log builders for the renderer A/B benchmark analysis test modules."""
-
-
 from pathlib import Path
 import sys
 

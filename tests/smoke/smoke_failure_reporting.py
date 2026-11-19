@@ -1,5 +1,3 @@
-"""Keep the original failure visible if its report cannot be saved."""
-
 import sys
 
 

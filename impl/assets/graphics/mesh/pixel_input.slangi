@@ -54,14 +54,12 @@ static float3 inWorldPosition;
 static float3 inIncidentDirection;
 static float inPixelDepth;
 
-// Rasterizer-independent hook inputs (trace builds them from hits as the rasterizer does from pixels). Consultable attributes only.
 struct NwbMeshSurfaceInputs{
     half4 color;
     float3 normal;
     float4 tangent;
     float2 uv0;
     float3 worldPosition;
-    // Incident ray direction. Raster supplies camera-to-surface from the view; the shadow trace supplies the occlusion ray.
     float3 incidentDirection;
 };
 
@@ -69,7 +67,6 @@ struct NwbMeshSurfaceInputs{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Loads the surface-input statics a hook reads. Raster and trace paths both route through here so the hook sees the same inputs regardless of stage.
 void nwbLoadMeshSurfaceInputs(NwbMeshSurfaceInputs inputs){
     inColor = inputs.color;
     inNormal = inputs.normal;
@@ -81,7 +78,6 @@ void nwbLoadMeshSurfaceInputs(NwbMeshSurfaceInputs inputs){
 
 void nwbLoadMeshPixelInput(NwbMeshPixelInput input, const float3 incidentDirection){
     NwbMeshSurfaceInputs inputs;
-    // Raster uses float for Vulkan portability. Color narrows to the material FP16; normals/tangents stay float.
     inputs.color = half4(input.color);
     inputs.normal = float3(input.normal);
     inputs.tangent = float4(input.tangent);

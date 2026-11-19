@@ -15,7 +15,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// All interval passes share one push-only ABI. Its slot selects the context, then generation resources.
 struct NwbCsgIntervalDispatchPushConstants{
     uint4 frame;
     uint4 workRegion;

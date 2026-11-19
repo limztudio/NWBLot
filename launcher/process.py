@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""ProcessLauncher: Launched-process lifecycle (stop, terminate, launch, run)."""
 
 from __future__ import annotations
 
@@ -19,11 +18,7 @@ from launcher.constants import (APPLICATION_FORCED_STOP_TIMEOUT_SECONDS, APPLICA
     PROFILE_CLIENT_ADDRESS_FLAG, PROFILE_CLIENT_PORT_FLAG, PROFILE_LOGSERVER_TERMINATE_TIMEOUT_SECONDS, PROFILE_LOG_READY_POLL_SECONDS, STOP_KIND_FORCED, STOP_KIND_GRACEFUL,)
 
 
-
-
 class ProcessLauncher:
-    """Launched-process lifecycle (stop, terminate, launch, run)."""
-
     @staticmethod
     def stop_existing_process(executable: Path, platform_name: str) -> None:
         if platform_name == PLATFORM_WINDOWS:

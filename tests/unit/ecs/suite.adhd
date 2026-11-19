@@ -352,7 +352,6 @@ void VerifyEcs_SystemDependenciesPreserveRegistrationOrderAcrossComponents(){
     ASSERT_TRUE(scheduler.execute(testWorld.world, 0.0f).has_value());
     EXPECT_EQ(observed, 18);
 
-    // Removing and adding a system invalidates the cached predecessor list.
     scheduler.removeSystem(transfer);
     velocity = 31;
     ASSERT_TRUE(scheduler.execute(testWorld.world, 0.0f).has_value());

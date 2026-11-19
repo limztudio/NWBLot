@@ -161,7 +161,6 @@ void RetireTextAreaScrollState(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Owns copied scroll admission, separate from preferred-column navigation and the application model.
 class TextAreaScrollState{
     public ControlToken prepare(
         in WidgetState widget,

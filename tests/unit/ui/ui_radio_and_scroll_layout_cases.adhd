@@ -547,7 +547,6 @@ void VerifyUiRadioGroupPopupTests_ChildEndKeepsTheRadioStateLoanThroughTheOuterm
     EXPECT_NE(self.m_childState.inputGeneration(), token);
     EXPECT_EQ(self.m_childState.selectedKey(), 20u);
     EXPECT_FALSE(self.m_context.commitFrame(2u));
-    // Discarding a rejected popup candidate may retire displayed popup focus/scopes, but never replaces its layout.
     self.expectAccepted(displayed, false, false);
 }
 
@@ -1279,7 +1278,6 @@ void VerifyUiScrollbarLayoutTests_ExtremeFiniteStoredOffsetsClampBeforeThumbArit
     const ScrollViewportPlacement placement = placementResult.value();
     EXPECT_DOUBLE_EQ(placement.horizontal.offset, 312.0);
     EXPECT_DOUBLE_EQ(placement.vertical.offset, 132.0);
-    // Lanes are horizontal thumb end, horizontal track end, vertical thumb end, vertical track end.
     const VectorSingle starts = VectorSingle(placement.horizontal.thumb.x, placement.horizontal.track.x, placement.vertical.thumb.y, placement.vertical.track.y);
     const VectorSingle ends = starts + VectorSingle(placement.horizontal.thumb.width, placement.horizontal.track.width, placement.vertical.thumb.height, placement.vertical.track.height);
     EXPECT_FLOAT_EQ(ends.x, ends.y);

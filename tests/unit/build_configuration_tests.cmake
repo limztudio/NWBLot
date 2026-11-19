@@ -42,7 +42,6 @@ function(nwb_check_configuration_admission case_name configuration expected_conf
     endif()
 endfunction()
 
-# Native CMake configuration names and case variants must fail before losing canonical code-generation settings.
 foreach(configuration IN ITEMS Debug Release RelWithDebInfo MinSizeRel unknown DBG Opt FIN OFF 0 " dbg")
     nwb_check_configuration_admission("invalid" "${configuration}" "" FALSE)
 endforeach()

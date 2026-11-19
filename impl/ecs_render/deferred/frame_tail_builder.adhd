@@ -47,8 +47,6 @@ class DeferredFrameTailBuilder : NoCopy{
             return MakeUnexpected(Failure());
 
         if(inputs.capturesLaggedLightingHistory){
-            // The built-in derives whole-resource copy declarations and retains imports; slices stay explicit only in the copy body.
-            // Caustic and surfel irradiance copy regions follow the shadow visibility slots.
             Array<GpuCopyTextureTaskRegion, s_HistoryCopyRegionCount> historyCopyRegions;
             for(u32 shadowSlot = 0u; shadowSlot < s_SceneShadowSlotCount; ++shadowSlot){
                 mut GpuCopyTextureTaskRegion region = historyCopyRegions[shadowSlot];
@@ -76,9 +74,6 @@ class DeferredFrameTailBuilder : NoCopy{
             result.historyCopyTask = historyCopyTaskResult.value();
         }
 
-        // Recovery is a late independent Graphics tail.
-        // It deliberately has no packet dependency on normal work: a rejected suffix must not prevent it from retiring the accepted frame prefix.
-        // Its compiled packet asks the graph transaction to join every accepted non-Graphics physical queue at submit time.
         const auto recoveryDomainResult = this.m_graph.importHazardDomain(HazardDomainDesc(Name(s_RenderNameRenderFrameRecoveryTiming), "Frame Recovery Timing"));
         if(!recoveryDomainResult.has_value()){
             warning("RendererSystem: could not import deferred frame-recovery graph resources");

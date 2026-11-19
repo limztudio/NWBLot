@@ -47,8 +47,6 @@ private:
 
 
 private:
-    // runFrame creates this on the stack only for a capture-enabled normal frame.
-    // It stages phase durations and registers scope identities; only successful frames flush sample values.
     struct CpuTimingPhaseBatch;
 
 
@@ -63,26 +61,16 @@ public:
 public:
     b8 init(const Common::FrameData& data);
     b8 setDebugRuntimeEnabled(b8 enabled)noexcept;
-    // Controls actual hardware RT extensions/features for the next logical device. Must precede instance creation.
     b8 setHardwareRayTracingPolicy(HardwareRayTracingPolicy::Enum policy)noexcept;
-    // Must be configured before device creation. Unsupported adapters retain the Graphics-only path.
     b8 setAsyncComputeLaneEnabled(b8 enabled)noexcept;
-    // Requests HDR10/PQ presentation where the current display surface supports it.
-    // Unsupported surfaces automatically retain the normal SDR swap chain.
-    // Must be configured before device creation.
     b8 setHDR10OutputEnabled(b8 enabled)noexcept;
-    // Requests transfer-source usage for presentation images.
-    // Unsupported surfaces retain the normal swap chain and report readback unavailable.
-    // Must be configured before device creation.
     b8 setSwapChainReadbackEnabled(b8 enabled)noexcept;
     b8 setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi)noexcept;
     template<typename ArenaT>
     FOUNDATION_INLINE void setPipelineCacheDirectory(const ::Path<ArenaT>& directory){ m_deviceCreationParams.pipelineCacheDirectory = directory; }
     b8 setFilesystemFactory(const Filesystem::FilesystemFactory& factory);
-    // Holds the update/event loop while runFrame records nothing, so an external capture can sample the last finished frame.
     void setFrameSubmissionSuspended(b8 suspended)noexcept{ m_frameSubmissionSuspended = suspended; }
     b8 runFrame();
-    // A render pass calls this when an accepted cross-queue release is unrecoverable. The generation stops; the owner recreates device/resources.
     void requestDeviceRecreation()const;
     [[nodiscard]] b8 isDeviceRecreationRequested()const noexcept{ return m_deviceRecreationRequested; }
     [[nodiscard]] b8 updateWindowState(u32 width, u32 height, b8 windowVisible, b8 windowIsInFocus);
@@ -96,23 +84,17 @@ public:
     [[nodiscard]] GraphicsBackend::Device& getDevice()const noexcept;
     [[nodiscard]] GpuTaskScheduler& gpuTasks()const noexcept{ return m_gpuTasks; }
     [[nodiscard]] Expected<GraphicsVector<AdapterInfo>> enumerateAdapters();
-    // Identity comes from the selected physical device, not a later enumeration. Valid after device creation.
     [[nodiscard]] Expected<AdapterInfo> getSelectedAdapterInfo()const;
     [[nodiscard]] b8 queryFeatureSupport(Feature::Enum feature)const noexcept;
-    // Wave/subgroup size, or 64 when the device cannot report it. Sizes groupshared reductions and wave-intrinsic specializations.
     [[nodiscard]] u32 queryWaveLaneCount()const noexcept;
 
     void addRenderPassToBack(IRenderPass& pass);
     void removeRenderPass(IRenderPass& pass);
 
-    // The deferred graph claims the current swap-chain binary semaphore and attaches it to its exact terminal packet.
-    // Direct/non-graph render paths receive an empty hook and retain BackendContext::present()'s fallback.
     [[nodiscard]] QueueSubmissionPreSubmitHook claimFramePresentationSignal()noexcept;
     [[nodiscard]] b8 confirmFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim, const QueueSubmissionToken& token)noexcept;
     [[nodiscard]] b8 cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim);
 
-    // Optional overlays register here instead of coupling a renderer directly to their module.
-    // The active contributor may append one final Graphics packet to a renderer-owned task graph before presentation.
     void setTaskGraphPresentationContributor(IGpuTaskGraphPresentationContributor* contributor)noexcept{
         m_taskGraphPresentationContributor = contributor;
     }
@@ -131,7 +113,6 @@ public:
         return m_taskGraphPresentationContributor;
     }
 
-    // Pre-output layers declare independent producers and join only at final display composition.
     void setTaskGraphOutputLayerContributor(IGpuTaskGraphOutputLayerContributor* contributor)noexcept{
         m_taskGraphOutputLayerContributor = contributor;
     }
@@ -152,10 +133,7 @@ public:
 
     [[nodiscard]] TStringView getRendererString()const noexcept;
     [[nodiscard]] u64 getFrameIndex()const noexcept{ return m_frameIndex; }
-    // Main-thread lifetime count of accepted native presentations, independent of render callbacks and GPU queries.
-    // Preserved across resize, destroy/init and device recreation; this is not a monitor scan-out completion count.
     [[nodiscard]] u64 getSuccessfulPresentationCount()const noexcept{ return m_successfulPresentationCount; }
-    // Last actual native present attempt, matched by the complete acquisition identity rather than a later frame.
     [[nodiscard]] const PresentationReceipt& lastPresentationReceipt()const noexcept{ return m_lastPresentationReceipt; }
 
     [[nodiscard]] GpuTimingRecorder& gpuTiming()noexcept{ return m_gpuTiming; }
@@ -179,8 +157,6 @@ public:
 #endif
     void setPointerScaleChangedCallback(PointerScaleChangedCallback callback, void* userData);
 
-    // Valid only while Graphics is preparing, rendering, or presenting one successfully acquired frame.
-    // The snapshot owns the exact back buffer and its matching framebuffer so presentation consumers never infer WSI identity from mutable backend state.
     [[nodiscard]] const AcquiredPresentationFrame& acquiredPresentationFrame()const noexcept{ return m_acquiredPresentationFrame; }
     [[nodiscard]] Texture* getBackBuffer(u32 index)const noexcept;
     [[nodiscard]] u32 getBackBufferCount()const noexcept;
@@ -200,7 +176,6 @@ public:
     [[nodiscard]] b8 backBufferResized();
     void displayScaleChanged();
 
-    // Allocation/submission work before each frame's preparation. After acquire, before render(); headless callers use it to order without beginFrame().
     [[nodiscard]] b8 prepareFramePreamble();
     [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> render(){ return renderWithPhaseTiming(nullptr); }
     void notifyPointerScaleChanged()const;
@@ -223,10 +198,7 @@ private:
     SwapChainRuntimeState m_swapChainState;
     u32 m_frameIndex = 0;
     GpuTimingRecorder m_gpuTiming;
-    // Optional and non-owning: Frame's perf Session owns this sink and outlives Graphics.
-    // It is used only by the main-thread runFrame boundary; packet recording and setup workers intentionally remain outside this sink.
     Perf::TimingSink* m_cpuTiming = nullptr;
-    // Frame and phase scopes registered once when the sink is attached, not per frame in runFrame().
     Perf::TimingScopeId m_frameTimingScope;
     Perf::TimingScopeId m_animateTimingScope;
     Perf::TimingScopeId m_beginFrameTimingScope;
@@ -241,7 +213,6 @@ private:
 
 private:
     NotNullUniquePtr<Backend, BackendOwner::deleter_type> m_backend;
-    // Declared after the backend so its device-bound command-list caches release before the device.
     NotNullUniquePtr<GraphicsModuleDetail::StandaloneGraphWorkspacePool, StandaloneGraphWorkspacesOwner::deleter_type> m_standaloneGraphWorkspaces;
     GraphicsStandaloneService m_standaloneGraph;
 
@@ -253,7 +224,6 @@ private:
     b8 m_frameSubmissionSuspended = false;
 
     GraphicsModuleDetail::RenderPassCollection m_renderPasses;
-    // Non-owning: the contributing system unregisters before its lifetime ends.
     IGpuTaskGraphPresentationContributor* m_taskGraphPresentationContributor = nullptr;
     IGpuTaskGraphOutputLayerContributor* m_taskGraphOutputLayerContributor = nullptr;
     Timer m_previousFrameTimestamp = {};

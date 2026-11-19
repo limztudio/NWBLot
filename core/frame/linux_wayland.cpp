@@ -129,7 +129,6 @@ static void OnOutputScale(void* data, [[maybe_unused]] wl_output* output, i32 fa
     ApplyBufferScale(context, factor);
 }
 
-// Output is bound at version 2, so newer name/description events cannot be sent.
 static const wl_output_listener s_OutputListener = {
     &OnOutputGeometry,
     &OnOutputMode,

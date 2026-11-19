@@ -10,7 +10,6 @@
 
 
 #if NWB_CSG_RAY_STRICT_NORMALS
-// A crossing group can hide an exit/entry. Transport must reject lost interfaces, not admit them free.
 float nwbCsgRayCollapsedOpticalBoundary(
     __constref NwbCsgRayCrossing crossings[NWB_CSG_RAY_CROSSING_CAPACITY],
     const uint crossingCount,
@@ -38,7 +37,6 @@ float nwbCsgRayCollapsedOpticalBoundary(
         winding += negativeDelta + positiveDelta;
         if(first - groupBegin <= 1u)
             continue;
-        // Distinct FP32 parameters inside one uncertainty group do not prove the order of its solid transitions.
         if(initialGroupWinding + negativeDelta > 0 || initialGroupWinding + positiveDelta < 0 || ((initialGroupWinding == 0 || winding == 0) && (negativeDelta == 0 || positiveDelta == 0)))
             continue;
         const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex];
@@ -54,7 +52,6 @@ float nwbCsgRayCollapsedOpticalBoundary(
         const float2 segment = float2(max(distance, minimum), min(crossings[first - 1u].distance, maximum));
         if(segment.y <= segment.x && (crossings[first - 1u].distance != distance || distance <= minimum || distance >= maximum))
             continue;
-        // A nonzero unresolved span must be certified completely removed, including cutter gaps and cropped ray intervals.
         const float margin = NWB_CSG_RAY_ROUNDOFF_EPSILON_SCALE * NWB_FLOAT_EPSILON * max(max(abs(segment.x), abs(segment.y)), NWB_CSG_RAY_DISTANCE_MAGNITUDE_MIN);
         bool removed = false;
         for(uint index = 0u; index < cutCount; ++index){
@@ -91,7 +88,6 @@ bool nwbCsgRayReceiverSegmentRemoved(
     return false;
 }
 
-// Every requested window repeats its winding, cropped uncertainty and cutter subtraction checks against the complete initialized crossing prefix.
 NwbCsgRayBoundary nwbCsgRayResolveCollectedBoundary(
     const uint materialSlot,
     const uint instanceIndex,
@@ -184,7 +180,6 @@ NwbCsgRayClosedWindows nwbCsgRayResolveClosedWindows(
                     return result;
                 nextCollapsedBoundary = nwbCsgRayCollapsedOpticalBoundary(crossings, crossingCount, materialSlot, instanceIndex, initialWinding, result.window.distance, maximum, cuts, cutCount);
             }
-            // The first window may select this pair's entry; its exit must still compete at the strict second minimum.
             if(result.window.hit && nwbCsgRaySelectSpanBoundary(retainedNear, retainedFar, result.window.distance, maximum, result.next)){
                 if(nextCollapsedBoundary <= result.next.distance)
                     result.next.failure = NWB_CSG_RAY_FAILURE_AMBIGUOUS_NORMAL;
@@ -206,7 +201,6 @@ NwbCsgRayClosedWindows nwbCsgRayResolveClosedWindows(
 }
 #endif
 
-// Closed crossings extend to the receiver's far exit; open surfaces compete only inside the caller's hit range.
 NwbCsgRayResolution nwbCsgRayResolveBoundary(
     const uint contextSlot,
     const uint materialSlot,

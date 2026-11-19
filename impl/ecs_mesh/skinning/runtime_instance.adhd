@@ -31,7 +31,6 @@ class MeshSkinningRuntimeInstance{
     public Vector<MeshletLocalVertexRef> meshletLocalVertexRefs;
     public Vector<u8> meshletPrimitiveIndices;
     public Vector<u32> attributeSkins;
-    // The source mesh stays owned by the runtime cache until this instance is released.
     public Span<u32> solidTriangleWords;
     public Vector<SkinInfluence4> skin;
     public Vector<SkeletonJointMatrix> inverseBindMatrices;
@@ -51,7 +50,6 @@ class MeshSkinningRuntimeInstance{
     public BufferHandle meshletLocalVertexRefBuffer;
     public BufferHandle meshletPrimitiveIndexBuffer;
     public BufferHandle attributeSkinBuffer;
-    // Canonical triangle indices and bind-pose per-corner attributes shared by hardware and software tracing.
     public BufferHandle triangleIndexBuffer;
     public BufferHandle attributeBuffer;
     public BufferHandle meshletLocalBoundsBuffer;
@@ -207,7 +205,6 @@ MeshSkinningResourceBuffers CaptureMeshSkinningResourceBuffers(in MeshSkinningRu
     return buffers;
 }
 
-// Keep the full current pose for validation and deformation history; the graph owns its upload copy.
 class RuntimeSkinPayloadScratch{
     public Vector<SkeletonJointMatrix> poseJoints;
     public Vector<SkeletonJointMatrix> jointMatrices;

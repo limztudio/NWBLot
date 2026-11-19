@@ -24,7 +24,6 @@
 
 const StringView s_FlickerProjectName = "FlickerTestSmokeProject";
 
-// Spinning opaque and glass bodies expose shadow flicker.
 const SmokeModelRef s_FlickerModel = "project/characters/body/model";
 const SmokeModelRef s_FlickerCausticModel = "project/characters/caustic_closed_body/model";
 const SmokeMaterialRef s_FlickerOpaqueMaterial = "project/smoke/transparent_multi/materials/ground";
@@ -45,7 +44,6 @@ const f32 s_FlickerDirectionalLightPitch = 0.9f;
 const f32 s_FlickerDirectionalLightYaw = 0.65f;
 const f32 s_FlickerDirectionalLightIntensity = 2.0f;
 
-// The repro targets point-light shadows: per-pixel directions and finite ray lengths.
 const f32 s_FlickerPointLightHeight = 2.6f;
 const f32 s_FlickerPointLightIntensity = 9.0f;
 const f32 s_FlickerPointLightRange = 16.0f;
@@ -75,11 +73,9 @@ class FlickerTestSmokeProject : IProjectEntryCallbacks{
     }
 
     public b8 onStartup()override{
-        // Register arrow yaw scrubbing at the front of the input chain.
         this.m_context.input.addHandlerToBack(this.m_arrowYawInput);
         const EntityID activeCamera = CreateSmokeCamera(s_FlickerCameraHeight, s_FlickerCameraDistance, s_FlickerCameraPitch, SmokeWorldRef(this.m_world));
 
-        // Enable caustics unless NWB_FLICKER_TEST_NO_CAUSTICS is set.
         const Expected<String> noCausticsValue = ReadSmokeEnvironmentString("NWB_FLICKER_TEST_NO_CAUSTICS");
         const b8 disableCaustics = noCausticsValue.has_value() && StringView(noCausticsValue.value()).starts_with("1");
 
@@ -93,7 +89,6 @@ class FlickerTestSmokeProject : IProjectEntryCallbacks{
             SmokeWorldRef(this.m_world)
         );
 
-        // Overlapping opaque and glass shadows exercise their combined response.
         const SmokeTintedModelEntityResult opaqueModel = CreateTintedModelEntity(
             s_FlickerModel,
             s_FlickerOpaqueMaterial,
@@ -163,7 +158,6 @@ class FlickerTestSmokeProject : IProjectEntryCallbacks{
         if(IsFinite(delta))
             safeDelta = Max(delta, 0.0f);
         this.m_fpsProbe.recordFrame(safeDelta);
-        // Yaw priority: fixed override, manual scrub, then automatic spin.
         this.m_yaw.update(safeDelta, this.m_frozenYaw, this.m_frozenYaw >= 0.0f, this.m_arrowYawInput, s_FlickerManualYawSpeed, s_FlickerSpinSpeed, s_FlickerMaxSpinDelta);
         this.spinCharacters();
         SetSmokeWindowTitleSuffix(this.m_context, GetProjectWindowTitle(), FormatSmokeYawWindowTitleSuffix(this.m_yaw.yaw(), this.m_yaw.manualControl(), s_2PI));

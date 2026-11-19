@@ -46,10 +46,6 @@ void RecordUiClipboardDrainOutcome(in UiClipboardPublicationStatus status, mut U
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Copies are immutable native publications.
-// Their owned OS requests survive later edits, focus and widget removal.
-// Drain on the OS thread; destruction cancels remaining requests.
-// Service and arena outlive this bounded owner.
 [modular]
 class UiClipboardPublications : NoCopy{
     private mut IClipboardService m_service;

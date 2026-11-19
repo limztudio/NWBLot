@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Build and run the tex_conv utility through the repository launcher."""
 
 from __future__ import annotations
 

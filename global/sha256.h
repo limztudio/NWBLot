@@ -198,7 +198,6 @@ inline void Compress(Array<u32, s_StateWordCount>& state, const Array<u8, ShaBe3
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Byte-oriented SHA-256 content identity; no host byte-order or allocator dependency.
 [[nodiscard]] inline Sha256Digest ComputeSha256(const BinaryByteView input)noexcept{
     return ShaBe32Detail::ComputeDigest<Sha256Digest, Sha256Detail::s_StateWordCount, &Sha256Detail::Compress>(input, Sha256Detail::s_InitialState);
 }

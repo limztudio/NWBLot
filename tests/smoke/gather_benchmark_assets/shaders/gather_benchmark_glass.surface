@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Optional benchmark-only root. Homogeneous glass keeps source gathering active; overrides change only authored tint.
 static const half NWB_SMOKE_GATHER_BENCHMARK_GLASS_TINT_MIN = 0.01h;
 static const half NWB_SMOKE_GATHER_BENCHMARK_GLASS_IOR = 1.5h;
 static const half NWB_SMOKE_GATHER_BENCHMARK_GLASS_COVERAGE = 0.2h;

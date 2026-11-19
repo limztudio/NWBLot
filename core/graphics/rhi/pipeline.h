@@ -171,7 +171,6 @@ typedef GraphicsBackend::Handle<MeshletPipeline> MeshletPipelineHandle;
 struct RayTracingPipelineShaderDesc{
     ShaderHandle shader;
     BindingLayoutHandle bindingLayout;
-    // Borrowed until pipeline creation; retained descriptions refer to pipeline-owned group metadata.
     AStringView exportName;
 
 
@@ -190,7 +189,6 @@ struct RayTracingPipelineHitGroupDesc{
     ShaderHandle anyHitShader;
     ShaderHandle intersectionShader;
     BindingLayoutHandle bindingLayout;
-    // Borrowed until pipeline creation; retained descriptions refer to pipeline-owned group metadata.
     AStringView exportName;
     b8 isProceduralPrimitive = false;
 
@@ -211,7 +209,7 @@ struct RayTracingPipelineDesc{
     Vector<RayTracingPipelineHitGroupDesc, ::ArenaBase> hitGroups;
     BindingLayoutVector globalBindingLayouts;
     u32 maxPayloadSize = 0;
-    u32 maxAttributeSize = sizeof(f32) * 2; // typical case: float2 uv;
+    u32 maxAttributeSize = sizeof(f32) * 2;
     u32 maxRecursionDepth = 1;
     b8 allowOpacityMicromaps = false;
     b8 allowClusterAccelerationStructures = false;

@@ -211,7 +211,6 @@ void VerifyAssetsGraphics_ShaderDependencyChecksumIncludesOrderedSearchRootsWith
     ASSERT_TRUE(externalSearch.has_value());
     EXPECT_NE(externalSearch.value(), firstSearch.value());
 
-    // Unused case-only search roots keep their exact spelling even on case-insensitive hosts.
     firstDirectories.clear();
     firstDirectories.push_back(JoinGraphicsPath(root, "CaseOnly"));
     const Expected<u64> upperCaseSearch = ComputeSingleAliasShaderDependencyChecksum(firstDependencies, firstDirectories, root, "source", scratch);

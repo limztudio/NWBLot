@@ -20,7 +20,6 @@ AvboitGraphTaskId SelectAvboitTransparencyCompletionTask(in AvboitGraphTaskId ac
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// AVBOIT owns its stage identifiers; the host observes the typed boundary and owns execution.
 class RendererAvboitTaskGraphStageState{
     public AvboitGraphTaskId m_clearFirstTask = AvboitGraphTaskId();
     public AvboitGraphTaskId m_clearTask = AvboitGraphTaskId();
@@ -94,7 +93,6 @@ class RendererAvboitTaskGraphStageState{
     }
 }
 
-// Host sees only this immutable result; task topology and queue/packet rules stay inside AVBOIT.
 class RendererAvboitTaskGraphValidation{
     public RendererTaskGraphTransparencyStage m_stage;
     public b8 m_valid;

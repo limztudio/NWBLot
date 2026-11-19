@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Generate the default UI skin through the repository launcher."""
 
 from __future__ import annotations
 

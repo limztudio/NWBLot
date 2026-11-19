@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CPU-only tests of reflection benchmark launch and qualification contracts."""
+
 import contextlib
 import copy
 import io

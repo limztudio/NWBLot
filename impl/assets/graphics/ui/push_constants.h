@@ -25,7 +25,6 @@
 #define NWB_UI_PUSH_CONSTANTS_SDF_SPREAD_BYTE_OFFSET 32u
 #define NWB_UI_PUSH_CONSTANTS_SDF_ENCODING_BYTE_OFFSET 36u
 
-// Shared CPU/Slang field order; heap selectors address SampledImage and Sampler classes respectively.
 #define NWB_UI_PUSH_CONSTANTS_FIELDS(FLOAT2_FIELD, UINT_FIELD) \
     FLOAT2_FIELD(scale) \
     FLOAT2_FIELD(translate) \

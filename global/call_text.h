@@ -17,7 +17,6 @@ struct CallTextParts{
     AStringView arguments;
 };
 
-// Returned views borrow from text.
 [[nodiscard]] inline Expected<CallTextParts> SplitNonemptyCallText(const AStringView text)noexcept{
     const AStringView trimmed = TrimView(text);
     usize openParen = trimmed.size();

@@ -58,7 +58,6 @@ void LoadVolkDeviceDispatch(VolkInstanceTable& instanceDispatch, VolkDeviceTable
     FOUNDATION_ASSERT(device != VK_NULL_HANDLE);
     ScopedLock lock(__hidden_vulkan_dispatch::GetVolkTableLoadMutex());
 
-    // Volk loads vkGetDeviceProcAddr through one process-global slot; refresh both tables under one lock.
     volkLoadInstanceTable(&instanceDispatch, instance);
     volkLoadDeviceTable(&deviceDispatch, device);
 }

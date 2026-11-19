@@ -29,7 +29,6 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Descriptor-buffer-only bindless heap at sets 0/1; required at device creation.
 class GpuDescriptorHeap final : NoCopy{
     friend class Device;
     friend class CommandList;
@@ -40,8 +39,6 @@ class GpuDescriptorHeap final : NoCopy{
 private:
     class DescriptorBufferWriter;
 
-    // Capacities are fixed per initialized generation.
-    // The shared pool outlives these typed allocations, including partially initialized tables.
     template<typename T>
     class FixedTable final : NoCopy{
     public:
@@ -98,16 +95,12 @@ private:
         };
     };
 
-    // Fresh indices plus a recycled free list per namespace.
     struct SlotAllocator{
         u32 capacity = 0;
-        // Every allocated or quarantined slot lies below nextFresh; only clear() resets this high-water mark.
         u32 nextFresh = 0;
         FixedTable<u32> freeList;
         usize freeCount = 0u;
-        // PendingRecording is the only freed state that native recording may still consume.
         FixedTable<SlotState::Enum> slotStates;
-        // Keeps the allocated class authoritative while a slot is live or quarantined.
         FixedTable<u8> allocatedClasses;
 
 
@@ -159,48 +152,35 @@ public:
 
 
 public:
-    // Prevents slot reuse while CPU snapshots may still record.
-    // The final overlapping release establishes the native heap-use boundary for every slot freed under the leases.
     [[nodiscard]] PendingRecordingLease acquirePendingRecordingLease();
 
     b8 initialize(const GpuDescriptorHeapDesc& desc);
     void shutdown();
 
     [[nodiscard]] b8 isInitialized()const noexcept{ return m_initialized; }
-    // Coherent aggregate lifecycle counters; intentionally does not identify individual physical queues.
     [[nodiscard]] GpuDescriptorHeapLifecycleStatistics lifecycleStatistics()const noexcept;
 
-    // Fails (logged) when the heap is not ready or the class namespace is exhausted.
     [[nodiscard]] Expected<GpuDescriptorHandle> allocate(GpuDescriptorClass::Enum descriptorClass);
 
-    // Defers reuse across pending CPU recording and until every protected heap binding completes or is abandoned.
     void free(GpuDescriptorHandle handle);
 
-    // Resolves deferred reuse from accepted queue tokens and their completed timelines.
     void collectRetired();
 
-    // Caller must not overwrite a slot read by in-flight work.
     b8 write(GpuDescriptorHandle handle, const DescriptorWriteItem& item);
 
-    // Bind after state setup; optionally includes a per-generation TLAS block at set 2.
     void bindCompute(CommandList& commandList, const ComputePipeline& pipeline, GpuDescriptorHandle accelStructHandle = GpuDescriptorHandle::Invalid());
 
-    // Graphics equivalents of bindCompute.
     void bindGraphics(CommandList& commandList, const GraphicsPipeline& pipeline);
     void bindGraphics(CommandList& commandList, const MeshletPipeline& pipeline);
 
-    // Ray-tracing equivalent of bindCompute; optionally binds a TLAS block at set 2.
     void bindRayTracing(CommandList& commandList, const RayTracingPipeline& pipeline, GpuDescriptorHandle accelStructHandle = GpuDescriptorHandle::Invalid());
 
-    // Resource and sampler layouts at sets 0 and 1.
     [[nodiscard]] const BindingLayoutHandle& getResourceLayout()const noexcept{ return m_resourceLayout; }
 
     [[nodiscard]] const BindingLayoutHandle& getSamplerLayout()const noexcept{ return m_samplerLayout; }
-    // Per-generation one-descriptor TLAS layout at set 2.
     [[nodiscard]] const BindingLayoutHandle& getAccelStructLayout()const noexcept{ return m_accelStructLayout; }
 
     [[nodiscard]] b8 hasAccelStructLayout()const noexcept{ return m_accelStructLayout != nullptr; }
-    // SPIR-V binding number for a descriptor class.
     [[nodiscard]] u32 getRegisterSlot(GpuDescriptorClass::Enum descriptorClass)const noexcept;
 
 
@@ -233,18 +213,14 @@ private:
     BindingLayoutHandle m_samplerLayout;
     BindingLayoutHandle m_accelStructLayout;
 
-    // The pool is destroyed after every table, including during unwinding.
     Optional<Alloc::PersistentArena> m_storageArena;
     DescriptorBufferSegment m_resourceBufferBlock{};
     DescriptorBufferSegment m_samplerBufferBlock{};
-    // TLAS blocks are immutable per generation until deferred free.
     FixedTable<DescriptorBufferSegment> m_accelStructBufferBlocks;
     FixedTable<RayTracingAccelStructHandle> m_accelStructResources;
-    // Resource keep-alives protect descriptors used by in-flight work.
     FixedTable<BufferHandle> m_resourceDescriptorBuffers;
     FixedTable<TextureHandle> m_resourceDescriptorTextures;
     FixedTable<SamplerHandle> m_samplerDescriptorResources;
-    // Binding byte offsets within a set block.
     Array<u32, GpuDescriptorClass::Count> m_classBufferOffset = {};
     u32 m_accelStructBufferBindingOffset = 0u;
 

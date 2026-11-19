@@ -19,7 +19,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared event-thread request lifecycle for native backends and deterministic platform fakes.
 class QueuedClipboardService : public IClipboardService{
 private:
     struct Request{
@@ -55,7 +54,6 @@ public:
 
 
 protected:
-    // Native events may complete a started token on a later event-thread iteration. No client storage is borrowed.
     virtual void startNativeRequest(ClipboardRequestToken token, ClipboardOperation::Enum operation, ClipboardChannel::Enum channel, AStringView text) = 0;
     virtual void cancelNativeRequest(ClipboardRequestToken token);
     virtual void pumpNativeRequests();

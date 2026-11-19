@@ -68,7 +68,6 @@ ReflectionFeedbackPlan ResolveReflectionFeedbackPlan(
     result.eligible = !quarantined && enabled && stamp.trusted && settings.traceMode == ReflectionTraceMode::Hybrid && settings.maxHardwareRaysPerFrame > 0u;
     result.reused = result.eligible && previousEligible && !result.reset;
     result.previousBank = acceptedBank;
-    // Never overwrite the accepted bank.
     if(acceptedSequence != 0u)
         result.currentBank = 1u - acceptedBank;
     else

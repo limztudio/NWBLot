@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""CPU checks for the temporal recording proof's whole-log and control coverage policy."""
 
 from dataclasses import asdict
 from pathlib import Path

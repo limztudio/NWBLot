@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Qualify passive image geometry, retained options, tint, clipping and popup scope."""
+
 from __future__ import annotations
 
 import json

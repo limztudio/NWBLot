@@ -63,7 +63,6 @@ CASES = ("reference", "clear", "tinted", "tilted", "nested2", "nested3", "priori
     "csg_reference", "csg_cap", "csg_cavity", "csg_open_tail", "unspecified_reference", "csg_unspecified_cap", "sliver", "csg_sliver", "sub_ulp", "csg_sub_ulp", "group_gap", "csg_group_gap",
     "group_gap_sub_ulp", "csg_group_gap_sub_ulp", "group_entry", "csg_group_entry")
 CAPTURES = tuple(OpticalCapture(LIT_OPTICAL + name, LIT_OPTICAL + name) for name in CASES) + (OpticalCapture(LIT_OPTICAL_QUERY_LIMIT, "optical_clear", 1), OpticalCapture(LIT_OPTICAL_TIR_LIMIT, LIT_OPTICAL_TIR, 3))
-# Query budgets straddling 64-thread groups and the 8192-ray dispatch limit.
 QUEUE_BOUNDARY_BUDGETS = (0, 1, 63, 64, 65, 8191, 8192, 8193, DEFAULT_RAY_BUDGET)
 QUEUE_BOUNDARY_CAPTURES = (OpticalCapture("optical_csg_reference", "optical_csg_reference"),) + tuple(OpticalCapture("optical_csg_cap" if budget == DEFAULT_RAY_BUDGET else f"optical_csg_cap_budget_{budget}",
         LIT_OPTICAL_CSG_CAP, ray_budget=budget) for budget in QUEUE_BOUNDARY_BUDGETS)

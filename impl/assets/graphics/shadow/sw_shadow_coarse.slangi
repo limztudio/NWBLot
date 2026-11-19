@@ -17,24 +17,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Coarse trace: one ray per coarse texel. Opaque/transparent passes differ only in occluder class.
-
-
-// Coarse transmittance is a heap StorageImage. Trace writes it, classify/resolve reads the same view; no local binding.
 #define g_NwbSwShadowCoarse nwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.coarseStorageSlot)
 
-
-// One thread per coarse texel: trace one ray from the block's top-left G-buffer texel into the coarse buffer.
 void nwbSwShadowCoarseTrace(const uint2 coarsePixel){
     if(coarsePixel.x >= g_NwbSwShadowPush.coarseWidth || coarsePixel.y >= g_NwbSwShadowPush.coarseHeight)
         return;
-    // Coarse texel k samples the top-left full-resolution texel at k * FACTOR.
     const uint2 base = coarsePixel * NWB_SW_SHADOW_COARSE_FACTOR;
     const int3 texel = int3(int2(base), 0);
 
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
 
-    // Background stores WHITE so the resolve range test sees the boundary as an edge (re-traced) rather than bleeding.
     if(nwbSwShadowIsBackground(texel)){
         for(uint i = 0u; i < lightCount; ++i){
             const float slot = g_NwbSceneLights[i].params.z;

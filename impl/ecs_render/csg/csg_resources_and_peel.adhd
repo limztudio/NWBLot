@@ -167,9 +167,7 @@ void DispatchCsgIntervalCompute(
 ){
     ComputeState computeState;
     computeState.setPipeline(pipeline);
-    // Push-only layout; the rest is heap-selected.
     commandList.setComputeState(computeState);
-    // Bind after setComputeState so the StorageImage table resolves.
     heap.bindCompute(commandList, pipeline);
 
     const CsgIntervalComputeDispatchPlan dispatchPlan = BuildCsgIntervalComputeDispatchPlan(
@@ -277,7 +275,6 @@ b8 RendererCsgSystem::createCsgIntervalPeelResources(mut DeferredFrameTargets ta
     if(!this.createCsgIntervalSampleStateBuffer())
         return false;
 
-    // Push range selects the CSG context and mesh view; the rest is heap-owned.
     if(!EnsurePushConstantBindingLayout(device, sizeof(CsgIntervalDispatchPushConstants), ShaderTypeMask::Compute, this.m_csgState.m_intervalPeelBindingLayout)){
         error("RendererSystem: failed to create CSG interval peel binding layout");
         return false;

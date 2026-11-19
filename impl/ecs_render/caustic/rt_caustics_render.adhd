@@ -120,7 +120,6 @@ void DispatchCausticResolvePass(
     assert(input.texture.valid());
     assert(output.texture.valid());
     assert(input.texture != output.texture);
-    // Sequence indices match the graph: prepare, five wavelets, then upsample.
     const CausticResolveActivitySlots activitySlots = ResolveCausticActivitySlots(
         stage,
         cast<u32>(CountTrailingZeros(stepWidth)),
@@ -180,7 +179,6 @@ CausticPhotonPushConstants MakeCausticPhotonPushConstants(
     );
 }
 
-// Photon timing either finishes an interval opened by decay or starts at this producer.
 [cpp_unwind]
 void StartCausticPhotonTiming(mut GraphicsRuntime graphics, mut CommandList commands, in Optional<mut Optional<GpuTimingMeasure>> retained, mut Optional<GpuTimingMeasure> local){
     if(!retained.has_value() || !retained.value().has_value())
@@ -203,7 +201,6 @@ b8 RendererRayTracingSystem::setCausticQualitySettings(in CausticQualitySettings
     if(this.m_causticQualitySettings.photonGridDivisor == settings.photonGridDivisor)
         return true;
     this.m_causticQualitySettings = settings;
-    // The next selected producer clears its accumulator through the existing accepted bootstrap transaction.
     this.m_rayTracingState.caustics.m_causticAccumulatorInitialized = false;
     this.m_rayTracingState.caustics.m_swCausticDispatchLogged = false;
     this.m_rayTracingState.caustics.m_hwCausticDispatchLogged = false;
@@ -242,7 +239,6 @@ b8 RendererRayTracingSystem::dispatchCausticAccumulatorDecay(mut CommandList com
     if(!targets.causticAccumulator.valid() || !targets.bindless.causticAccumulatorStorage.valid() || !this.m_rayTracingState.caustics.m_causticAccumulatorDecayPipeline.valid())
         return false;
 
-    // The task declares the accumulator write and the photon producer dependency.
     commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.deref(), true);
 
     const CausticAccumulatorDecayPushConstants decayPush = MakeCausticAccumulatorDecayPushConstants(
@@ -264,7 +260,6 @@ b8 RendererRayTracingSystem::dispatchCausticAccumulatorDecay(mut CommandList com
 }
 
 b8 RendererRayTracingSystem::hasCausticWork(in MeshViewBufferSnapshot meshView)const{
-    // Software photons require a caustic light, refractor, and software scene BVH.
     const b8 hardwareShadowSupported = this.m_graphics.queryFeatureSupport(Feature::RayTracingAccelStruct) && this.m_graphics.queryFeatureSupport(Feature::RayQuery);
     b8 pipelineReady = this.m_rayTracingState.caustics.m_swCausticPipeline.valid();
     if(this.m_lightSpaceShadow.m_csg.snapshot.hasCsg)
@@ -280,7 +275,6 @@ b8 RendererRayTracingSystem::hasCausticWork(in MeshViewBufferSnapshot meshView)c
 
 [cpp_unwind]
 b8 RendererRayTracingSystem::renderGpuBvhCaustics(mut CommandList commandList, in MeshViewBufferSnapshot meshView, mut DeferredFrameTargets targets, in Optional<mut Optional<GpuTimingMeasure>> causticPhotonTiming){
-    // Software photon producer runs before deferred lighting.
     if(!this.hasCausticWork(meshView))
         return false;
     assert(meshView.bindingValid());
@@ -320,7 +314,6 @@ b8 RendererRayTracingSystem::renderGpuBvhCaustics(mut CommandList commandList, i
 
 [cpp_unwind]
 b8 RendererRayTracingSystem::renderHwCaustics(mut CommandList commandList, in MeshViewBufferSnapshot meshView, mut DeferredFrameTargets targets, in Optional<mut Optional<GpuTimingMeasure>> causticPhotonTiming){
-    // Hardware photons share the accumulator and resolve with the software reference.
     if(!this.hasHwCausticWork(meshView))
         return false;
     assert(meshView.bindingValid());
@@ -356,7 +349,6 @@ b8 RendererRayTracingSystem::renderHwCaustics(mut CommandList commandList, in Me
     RayTracingState rayTracingPassState;
     rayTracingPassState.setShaderTable(shaderTable.deref());
     commandList.setRayTracingState(rayTracingPassState);
-    // Bind heap blocks after RayTracingState; set 2 selects the TLAS generation.
     heap.bindRayTracing(commandList, pipeline.deref(), this.m_rayTracingState.sceneBvh.m_tlasHeapHandle);
     commandList.setPushConstants(pushConstants);
 
@@ -375,7 +367,6 @@ void RendererRayTracingSystem::dispatchCausticGeometryDownsample(mut CommandList
     mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
     assert(heap.isInitialized());
 
-    // The graph declares the writable geometry cache and its later sampled handoff.
     commandList.setEnableUavBarriersForTexture(targets.causticResolveGeometry.deref(), true);
 
     const RayTracingDispatchGroups groups = ResolveRayTracingDispatchGroups(targets.width, targets.height, s_CausticResolveDownscaleFactor, cast<u32>(s_CausticResolveGroupThreadCount));
@@ -406,7 +397,6 @@ void RendererRayTracingSystem::dispatchCausticResolvePrepare(mut CommandList com
     mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
     assert(heap.isInitialized());
 
-    // Prepare reads accumulated photons and resolve geometry, then writes the parity-selected half-resolution target.
     EnableCausticResolveBarriers(commandList, targets);
     const RayTracingDispatchGroups groups = ResolveRayTracingDispatchGroups(targets.width, targets.height, s_CausticResolveDownscaleFactor, cast<u32>(s_CausticResolveGroupThreadCount));
     const f32 effectiveIntensity = EffectiveCausticIntensity(s_DefaultCausticTemporalDecay);
@@ -438,7 +428,6 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(mut CommandList
     EnableCausticResolveBarriers(commandList, targets);
     const RayTracingDispatchGroups groups = ResolveRayTracingDispatchGroups(targets.width, targets.height, s_CausticResolveDownscaleFactor, cast<u32>(s_CausticResolveGroupThreadCount));
     const f32 effectiveIntensity = EffectiveCausticIntensity(s_DefaultCausticTemporalDecay);
-    // Alternate the prepare output and its counterpart while doubling the wavelet sampling distance.
     const b8 inputIsHalfB = IsCausticWaveletInputHalfB(cast<u32>(s_CausticResolvePassCount), passIndex);
 
     const u32 stepWidth = ResolveCausticWaveletStepWidth(passIndex);
@@ -468,14 +457,12 @@ void RendererRayTracingSystem::dispatchCausticResolveUpsample(mut CommandList co
     mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
     assert(heap.isInitialized());
 
-    // The graph-owned five wavelet passes have completed. Only the fixed half-B upsample remains in this callback.
     EnableCausticResolveBarriers(commandList, targets);
     commandList.setEnableUavBarriersForTexture(targets.causticIrradiance.deref(), true);
 
     const u32 fullGroupsX = ComputeCausticFullDispatchGroups(targets.width);
     const u32 fullGroupsY = ComputeCausticFullDispatchGroups(targets.height);
 
-    // Normalize temporal accumulation to retain non-temporal brightness.
     const f32 effectiveIntensity = EffectiveCausticIntensity(s_DefaultCausticTemporalDecay);
 
     const CausticResolvePassResources halfB = MakeCausticResolvePassResources(targets, true);
@@ -484,7 +471,6 @@ void RendererRayTracingSystem::dispatchCausticResolveUpsample(mut CommandList co
         targets.bindless.causticIrradiance.slot(),
         targets.bindless.causticIrradianceStorage.slot()
     );
-    // Edge-aware upsample into deferred-lighting irradiance.
     DispatchCausticResolvePass(
         commandList,
         heap,
@@ -503,7 +489,6 @@ void RendererRayTracingSystem::dispatchCausticResolveUpsample(mut CommandList co
 
 [cpp_unwind]
 b8 RendererRayTracingSystem::prepareCausticEmissionTargetResources(){
-    // Emission targets are refractive world bounds. Freeze bytes here; graph declaration keeps only this snapshot.
     this.m_preparedCausticEmissionTargetBytes.clear();
     this.m_rayTracingState.caustics.m_causticRefractiveInstanceCount = 0u;
     this.m_unsupportedCausticVolumeCount = 0u;

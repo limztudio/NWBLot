@@ -1,5 +1,3 @@
-"""Compare complete paired renderer trials and qualify their evidence."""
-
 import math
 import statistics
 

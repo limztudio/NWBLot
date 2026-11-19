@@ -31,7 +31,6 @@ b8 EqualEmulationOutputIdentity(in u32 left, in u32 right){
     return left == right;
 }
 
-// Keep small draw batches on the stack. Promote once when more identities arrive.
 class MaterialPassEmulationOutputIndex<T> : NoCopy{
     private FixedVector<T, s_SmallInlineIndexCapacity> m_inline;
     private HashSet<T> m_index;

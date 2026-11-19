@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One thread per leaf walks to root; the second child to arrive unions. Barrier publishes boxes; parentless root stops.
 [numthreads(NWB_BVH_BUILD_GROUP_SIZE, 1, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint leaf = dispatchThreadID.x;
@@ -20,7 +19,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint internalCount = g_NwbBvhBuildPushConstants.internalCount;
     const uint leafNodeIndex = internalCount + leaf;
 
-    // A full build reads the triangle from the sorted payload; a refit reuses the leaf's primitive and only recomputes boxes.
     const bool refit = g_NwbBvhBuildPushConstants.refitMode != NWB_BVH_BUILD_MODE_FULL;
     const uint triangle = refit ? (g_NwbHeapBvhWritableNodeBuffers[g_NwbBvhBuildPushConstants.nodeHeapSlot][leafNodeIndex].leftChild & ~NWB_BVH_LEAF_FLAG) : g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBuildPushConstants.payloadHeapSlot][leaf];
     float3 p0;

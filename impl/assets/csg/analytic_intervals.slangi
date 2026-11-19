@@ -15,7 +15,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Directions remain unnormalized so transformed intervals preserve the caller's ray parameter.
 bool nwbCsgAnalyticSlab(const float origin, const float direction, const float extent, inout float2 interval){
     if(direction == 0.0)
         return abs(origin) <= extent;

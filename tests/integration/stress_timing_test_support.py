@@ -1,6 +1,3 @@
-"""Shared argument, log, and record builders for the stress presentation timing test modules."""
-
-
 from pathlib import Path
 import sys
 
@@ -52,7 +49,6 @@ def valid_log(characters_per_class=10):
     lines.append(workload.SPAWN + f"{characters_per_class * 2} spinning characters ({characters_per_class} transparent + " f"{characters_per_class} opaque) over ground, directional + point light")
     lines.append(workload_record(characters_per_class))
     lines.append("RendererSystem: deferred rendering targets ready (1280x900, format test)")
-    # Synthetic fixed simulation delta is 1/60, while genuine wall/count evidence yields 16 FPS.
     lines.append("Fixture: fixed simulation delta 0.016666667")
     lines.append("CausticQualitySmoke: requested photon_grid_divisor=1")
     lines.append(LIT_SURFELGIQUALITYSMOKE_REQUESTED_RESOLVE)

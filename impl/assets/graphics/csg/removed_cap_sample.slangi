@@ -63,7 +63,6 @@ NwbCsgRemovedCapSample nwbCsgSampleNearestRemovedCap(const uint2 pixel, const ui
     unavailable.depth = NWB_CSG_INVALID_DISTANCE;
     if(any(workRect.xy >= workRect.zw))
         return unavailable;
-    // Only pixels within the existing repair radius can receive a cap from the work rectangle.
     const uint2 nearest = clamp(pixel, workRect.xy, workRect.zw - 1u);
     const uint2 distance = max(pixel, nearest) - min(pixel, nearest);
     if(any(distance > uint2(NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS)))

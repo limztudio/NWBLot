@@ -175,7 +175,6 @@ def main(argv=None):
         print(f"SKIP: {error}", file=sys.stderr, flush=True)
         return SKIP_EXIT_CODE
     except (SmokeFailure, SmokeSkip, OSError) as error:
-        # Missing validation/device support still fails this native qualification.
         write_failure_report(write_json, output / LIT_RESULT_JSON, {LIT_SCHEMA: 1, LIT_PASSED: False, "error": str(error)})
         print(f"FAIL: {error}", file=sys.stderr, flush=True)
         return 1

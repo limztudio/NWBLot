@@ -263,7 +263,6 @@ Value& Value::operator+=(const Value& rhs){
 
     if(m_type == ValueType::List){
         if(rhs.m_type == ValueType::List){
-            // The separately owned list survives relocation when rhs is an element of this list.
             const ListType& sourceList = *rhs.m_data.m_list;
             if(m_data.m_list->size() > Limit<usize>::s_Max - sourceList.size()){
                 FOUNDATION_ASSERT_MSG(false, OperationValidator::s_ListAppendSizeOverflowText);

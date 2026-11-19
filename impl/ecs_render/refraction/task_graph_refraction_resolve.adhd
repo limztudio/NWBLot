@@ -205,7 +205,6 @@ class RefractionClearTileArgumentsGraphTask{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Diagnostic counter writes and readback share the resolve's primary graphics queue.
 class RefractionClearStatisticsGraphTask{
     private BufferHandle m_destination;
     private GpuGraphResourceId m_resource;

@@ -297,7 +297,6 @@ b8 SwapChainLifecycle::createSwapChainResources(Alloc::ScratchArena& scratchAren
         return false;
     }
 
-    // Direct presentation list is swap-chain lifetime state; create it here so present() only reopens it.
     m_context.resetDirectPresentCommandList();
     {
         const GpuPhysicalQueueId primaryGraphicsQueue = m_context.m_rhiDevice->getPrimaryPhysicalQueue(CommandQueue::Graphics);

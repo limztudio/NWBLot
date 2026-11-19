@@ -22,7 +22,6 @@ enum<u8> UiLayerPresentation{
     Standalone,
 }
 
-// Retains CPU update time until a UI paint frame actually begins.
 class UiFrameDelta{
     public void add(in f32 deltaSeconds){
         if(!IsFinite(deltaSeconds) || deltaSeconds < 0.0f)

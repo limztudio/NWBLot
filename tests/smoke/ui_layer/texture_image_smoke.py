@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Qualify owned concrete texture bindings, copied inputs, cache lifetimes and Builder popup images."""
+
 from __future__ import annotations
 
 import json

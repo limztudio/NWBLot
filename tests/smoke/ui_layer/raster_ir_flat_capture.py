@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Capture a blank startup frame or a resized UI framebuffer without desktop composition."""
+
 from pathlib import Path
 import sys
 
@@ -99,7 +99,6 @@ def main(argv):
             window_capture_smoke.write_status("FAIL: --resize-before-capture requires --application-capture")
             return 1
         return _capture_after_resize(args, resize)
-    # Require every pixel in the captured flat startup frame to be black.
     window_capture_validation.validate_capture_result = lambda result: None
     return window_capture_smoke.main(argv)
 

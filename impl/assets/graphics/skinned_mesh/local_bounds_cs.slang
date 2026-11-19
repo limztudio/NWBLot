@@ -25,7 +25,6 @@ groupshared uint g_NwbSkinnedMeshLocalBoundsInvalid[NWB_SKINNED_MESH_BOUNDS_GROU
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Relative float rounding allowance added around the merged bounds.
 #define NWB_SKINNED_MESH_BOUNDS_MARGIN_SCALE 4.76837158203125e-7
 
 
@@ -69,7 +68,6 @@ void main(uint3 groupThreadID : SV_GroupThreadID){
     if(lane != 0u)
         return;
 
-    // Cover float rounding and subnormal flush before a consumer applies an arbitrary world-space scale.
     float3 lower = g_NwbSkinnedMeshLocalBoundsMin[0u];
     float3 upper = g_NwbSkinnedMeshLocalBoundsMax[0u];
     const float3 margin = max(max(abs(lower), abs(upper)) * NWB_SKINNED_MESH_BOUNDS_MARGIN_SCALE, float3(asfloat(NWB_FLOAT_MIN_NORMAL_BITS)));

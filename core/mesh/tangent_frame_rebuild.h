@@ -65,7 +65,6 @@ inline constexpr u32 s_UvComponentMask = 0x3u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-vertex sums for one rebuild use Double storage so cross products from valid Float inputs never underflow or overflow.
 struct TangentFrameAccumulator{
     Double4 normal;
     Double4 tangent;

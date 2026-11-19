@@ -170,7 +170,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Synchronization2 gives sampled images and read-only attachments one shared native layout.
 inline constexpr VkImageLayout s_ReadOnlyImageLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
 
 
@@ -333,7 +332,6 @@ constexpr VkPipelineColorBlendAttachmentState ConvertBlendState(const BlendState
 
 VkDescriptorType ConvertDescriptorType(ResourceType::Enum type)noexcept;
 VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages)noexcept;
-// Descriptor-buffer offset alignment clamped to a 32-bit value (1 when zero/oversized) for byte-offset math.
 u32 GetDescriptorBufferOffsetAlignmentBytes(const VulkanContext& context)noexcept;
 void DestroyPipelineAndOwnedLayout(const VulkanContext& context, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, b8& ownsPipelineLayout);
 u32 GetPushConstantByteSize(const BindingLayoutDesc& desc)noexcept;

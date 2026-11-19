@@ -144,7 +144,6 @@ b8 ValidateStagedPopupScopes(in Span<PopupScope> scopes, in Span<PopupRecord> ex
             if(!scope.parent.valid() || !parent)
                 return false;
         }
-        // A child cannot reuse its open lifetime beneath a different ancestor lifetime.
         for(usize previous = 0u; previous < existingPopups.size(); ++previous){
             if(existingPopups[previous].scope.token == scope.token && existingPopups[previous].scope.parent != scope.parent)
                 return false;

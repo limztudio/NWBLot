@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Exercise reflection image oracles against correct geometry and false-positive failures."""
 
 from html.parser import HTMLParser
 import json
@@ -49,7 +48,6 @@ class ReflectionSmokeAnalysisTests(unittest.TestCase):
 
     def marker_frame(self, moved=False):
         rows = [[(20, 20, 20) for _ in range(self.width)] for _ in range(self.height)]
-        # Independent projected positions for a 60-degree vertical FOV, 14-unit virtual-source distance.
         shift = 17 if moved else 0
         for cx, cy, color in ((170 + shift, 157, (180, 5, 5)), (230 + shift, 139, (5, 180, 5))):
             for y in range(cy - 9, cy + 10):
@@ -72,7 +70,6 @@ class ReflectionSmokeAnalysisTests(unittest.TestCase):
 
     def panel_frame(self, case=LIT_ONSCREEN, mode=LIT_SCREEN, reflection_shift=None):
         rows = [[(20, 20, 20) for _ in range(self.width)] for _ in range(self.height)]
-        # Independently rounded projections at 400x300, computed from authored world-space rectangles.
         direct = {LIT_RED: (53, 185, 26, 22), LIT_GREEN: (347, 98, 26, 30)}
         reflected = {LIT_RED: (151, 162, 9, 7), LIT_GREEN: (249, 133, 9, 10)}
         if case == LIT_ONSCREEN_MOVED:
@@ -93,7 +90,6 @@ class ReflectionSmokeAnalysisTests(unittest.TestCase):
                 if label == LIT_REFLECTION and reflection_shift:
                     cx += reflection_shift[0]
                     cy += reflection_shift[1]
-                # Half-strength provisional screen radiance still has to retain visible, localized marker color.
                 value = 90 if mode == LIT_SCREEN and label == LIT_REFLECTION else 180
                 rgb = (value, 5, 5) if color == LIT_RED else (5, value, 5)
                 for y in range(cy - half_height, cy + half_height + 1):

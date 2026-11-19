@@ -1,5 +1,3 @@
-"""Collect passive Windows GPU host capability inventory."""
-
 import json
 import os
 import shutil

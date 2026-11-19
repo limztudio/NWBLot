@@ -220,7 +220,6 @@ b8 RefractionRenderer::recordRefractionTileClassification(mut CommandList comman
     GpuTimingMeasure timing(this.m_system.m_graphics.gpuTiming(), s_TimingScopeRefractionClassifyTiles, this.m_system.m_graphics.getDevice(), commandList);
 
     commandList.dispatch(ComputeRefractionTileDispatchGroups(targets.width, s_RefractionShaderGroupSize), ComputeRefractionTileDispatchGroups(targets.height, s_RefractionShaderGroupSize), 1u);
-    // Finalization consumes the completed counter and replaces both mutually exclusive argument records.
     commandList.setBufferState(targets.avboit.refractionTileArguments.deref(), ResourceStates::UnorderedAccess, true);
     commandList.commitBarriers();
     state.setPipeline(resources.finalizeTilesPipeline.deref());
@@ -236,7 +235,6 @@ b8 RefractionRenderer::recordRefractionResolve(mut CommandList commandList, in D
     if(!CanRecordRefractionPass(resources.valid(), targets.bindless.valid(), targets.width, targets.height))
         return false;
 
-    // The graph owns transitions and frozen declarations; this records without rebuilds.
     const auto push = ResolveRefractionPushConstants(
         targets.width,
         targets.height,
@@ -259,7 +257,6 @@ b8 RefractionRenderer::recordRefractionResolve(mut CommandList commandList, in D
         GpuTimingMeasure timing(this.m_system.m_graphics.gpuTiming(), s_TimingScopeRefractionResolve, this.m_system.m_graphics.getDevice(), commandList);
 
         commandList.dispatchIndirect(0u);
-        // Both kernels declare the same output; retain its write dependency even though one argument record is empty.
         commandList.setTextureState(targets.avboit.refractionResolve.deref(), TextureSubresourceSet(), ResourceStates::UnorderedAccess, true);
         commandList.commitBarriers();
         state.setPipeline(resources.densePipeline.deref());

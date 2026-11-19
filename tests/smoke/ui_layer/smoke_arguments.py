@@ -1,4 +1,3 @@
-"""Shared UI capture argument admission and runtime path resolution."""
 import argparse
 import math
 from pathlib import Path

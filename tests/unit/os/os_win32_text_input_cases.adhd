@@ -597,7 +597,6 @@ void VerifyWin32TextInputFixture_UnfocusedSceneFallbackRefusesLateWindowCharacte
     ASSERT_TRUE(self.endSession(self.m_token));
     EXPECT_EQ(self.sendChar(0xd83du, 0), 0);
     EXPECT_EQ(self.m_sceneCharacterCount, 0u);
-    // Direct focus state update leaves fallback reset to the refusal guard, as a defensive late-message case.
     ASSERT_TRUE(self.setFocused(false));
     EXPECT_EQ(self.sendChar(cast<u32>('A'), 0), 0);
     EXPECT_EQ(self.m_sceneCharacterCount, 0u);

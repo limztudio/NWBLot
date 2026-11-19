@@ -1,4 +1,3 @@
-"""Cross-platform native input and foreground/capture tracking for UI smoke fixtures."""
 from __future__ import annotations
 
 import ctypes
@@ -150,7 +149,7 @@ class NativeInput:
 
     def focus_loss_and_gain(self):
         if self.windows:
-            self._post(0x0006, 0)  # WM_ACTIVATE / WA_INACTIVE reaches the real native lifecycle callback.
+            self._post(0x0006, 0)
             time.sleep(FOCUS_SETTLE_SECONDS)
             self._post(0x0006, 1)
         else:
@@ -159,5 +158,3 @@ class NativeInput:
             time.sleep(FOCUS_SETTLE_SECONDS)
             self.backend.focus_window(self.handle)
         time.sleep(FOCUS_SETTLE_SECONDS)
-
-

@@ -262,7 +262,6 @@ void CreateDefaultPhysicsScene(mut NotNullUniquePtr<World> worldHandle){
         cfg.dirty = true;
     }
 
-    // Ground collider aligned under ground_plane.nwb (top surface at y = 0).
     {
         Entity groundEntity = world.createEntity();
         mut TransformComponent xf = groundEntity.addComponent<TransformComponent>();
@@ -282,7 +281,6 @@ void CreateDefaultPhysicsScene(mut NotNullUniquePtr<World> worldHandle){
     const Name sphereModelName = Name("project/meshes/physics_sphere/model");
     const Name whiteMatName = Name("project/materials/mat_white_opaque");
 
-    // 4-box stacking tower beside the skinned character, clearly framed in the open viewport.
     for(u32 i = 0u; i < 4u; ++i){
         Entity boxEntity = world.createEntity();
         mut TransformComponent xf = boxEntity.addComponent<TransformComponent>();
@@ -309,7 +307,6 @@ void CreateDefaultPhysicsScene(mut NotNullUniquePtr<World> worldHandle){
         rnd.material = AssetRef<Material>(whiteMatName);
     }
 
-    // 2 falling spheres.
     for(u32 i = 0u; i < 2u; ++i){
         Entity sphereEntity = world.createEntity();
         mut TransformComponent xf = sphereEntity.addComponent<TransformComponent>();

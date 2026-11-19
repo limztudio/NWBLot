@@ -12,14 +12,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Receiver geometry packs the octahedral normal in .xy, camera distance in .z, and validity in .w.
-
 struct NwbShadowGeometryDownsamplePushConstants{
     uint width;
     uint height;
     uint halfWidth;
     uint halfHeight;
-    // Global heap SampledImage slots select the full-resolution G-buffer inputs.
     uint worldPositionSlot;
     uint normalSlot;
     uint depthSlot;
@@ -31,7 +28,6 @@ struct NwbShadowGeometryDownsamplePushConstants{
 [[vk::push_constant]] ConstantBuffer<NwbShadowGeometryDownsamplePushConstants> g_NwbShadowGeometryDownsamplePushConstants;
 
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbShadowGeometryDownsamplePushConstants.sceneShadingSlot
-// This pass never reads lights, but scene/buffer.slangi requires a valid heap expression for the shared helper ABI.
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT 0u
 #include "../scene/buffer.slangi"
 
@@ -47,7 +43,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(halfTexel.x >= g_NwbShadowGeometryDownsamplePushConstants.halfWidth || halfTexel.y >= g_NwbShadowGeometryDownsamplePushConstants.halfHeight)
         return;
 
-    // Sample the receiver block's top-left full-resolution texel, matching the traces.
     const int2 full = int2(
         min((int)halfTexel.x * g_NwbShadowGeometryDownsamplePushConstants.receiverFactor, (int)g_NwbShadowGeometryDownsamplePushConstants.width - 1),
         min((int)halfTexel.y * g_NwbShadowGeometryDownsamplePushConstants.receiverFactor, (int)g_NwbShadowGeometryDownsamplePushConstants.height - 1)
@@ -55,15 +50,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     const float depth = nwbHeapSampledImage2D(g_NwbShadowGeometryDownsamplePushConstants.depthSlot).Load(int3(full, 0)).r;
     if(depth >= NWB_SCENE_BACKGROUND_DEPTH){
-        // Background (no receiver): validity 0. Normal/distance are irrelevant (the resolve skips invalid taps).
         g_NwbShadowGeometryOutput[halfTexel] = float4(0.0, 0.0, 0.0, 0.0);
         return;
     }
 
-    // Vector attachments are RGBA16F. Preserve precision until the normalization/distance math that needs it.
     const half3 worldSample = half3(nwbHeapSampledImage2D(g_NwbShadowGeometryDownsamplePushConstants.worldPositionSlot).Load(int3(full, 0)).xyz);
     const float3 world = float3(worldSample);
-    // Normals are [0,1]-encoded (decode `n*2-1`); normalize so the octahedral pack sees a unit vector.
     const half3 normalSample = half3(nwbHeapSampledImage2D(g_NwbShadowGeometryDownsamplePushConstants.normalSlot).Load(int3(full, 0)).xyz);
     const float3 normal = normalize(float3(normalSample) * 2.0 - 1.0);
     const half2 octNormal = half2(nwbOctEncodeNormal(normal));

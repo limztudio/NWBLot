@@ -13,9 +13,7 @@
 #define NWB_LIGHT_SPACE_EVENT_BYTES 20u
 #define NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK 0x7fffffffu
 #define NWB_LIGHT_SPACE_EVENT_ENTERING 0x80000000u
-// The last event word holds the captured primitive first, then the packed blue absorption and interface transmission.
 #define NWB_LIGHT_SPACE_EVENT_TAIL_OFFSET 16u
-// One uint per texel in the counts and opaque-depth buffers.
 #define NWB_LIGHT_SPACE_PIXEL_WORD_BYTES 4u
 #define NWB_LIGHT_SPACE_VIEW_ROW_COUNT 4u
 #define NWB_LIGHT_SPACE_VIEW_BYTES 128u

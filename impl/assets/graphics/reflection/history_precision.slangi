@@ -15,17 +15,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Float bit layout of the half rounding: the smallest normal half, the 13 mantissa bits a half drops, and the half spacing in float mantissa units.
 static const uint NWB_REFLECTION_HISTORY_HALF_MIN_NORMAL_BITS = 0x38800000u;
 static const uint NWB_REFLECTION_HISTORY_HALF_DROPPED_MASK = 0x1fffu;
 static const uint NWB_REFLECTION_HISTORY_HALF_UNIT_BITS = 0x2000u;
 static const uint NWB_REFLECTION_HISTORY_HALF_KEPT_MASK = 0xffffe000u;
-// Shifting a float significand right by 126 minus its exponent field aligns it to the half subnormal unit.
 static const uint NWB_REFLECTION_HISTORY_SUBNORMAL_SHIFT_BASE = 126u;
 static const uint NWB_REFLECTION_HISTORY_IMPLICIT_BIT = 0x800000u;
 static const uint NWB_REFLECTION_HISTORY_MANTISSA_MASK = 0x7fffffu;
 static const float NWB_REFLECTION_HISTORY_HALF_SUBNORMAL_UNIT = 0.000000059604644775390625;
-// Separate rounding streams for the sample index and the green channel; blue reuses the golden-ratio seed.
 static const uint NWB_REFLECTION_HISTORY_ROUNDING_SAMPLE_SEED = 0xa511e9b3u;
 static const uint NWB_REFLECTION_HISTORY_ROUNDING_GREEN_SEED = 0x63d83595u;
 
@@ -33,14 +30,11 @@ static const uint NWB_REFLECTION_HISTORY_ROUNDING_GREEN_SEED = 0x63d83595u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Quantize the mean to an exact half in FP32 first: image conversion promises no rounding direction.
-// Narrow contract (nonnegative halves, count <= 256): no native half conversion needed.
 float nwbReflectionRoundHistoryHalf(const float value, const uint random){
     const uint bits = asuint(value);
     if(bits == 0u)
         return value;
     if(bits >= NWB_REFLECTION_HISTORY_HALF_MIN_NORMAL_BITS){
-        // A uniform 13-bit integer selects the upper neighbor with exactly the discarded fraction's probability.
         const uint increment = (random & NWB_REFLECTION_HISTORY_HALF_DROPPED_MASK) < (bits & NWB_REFLECTION_HISTORY_HALF_DROPPED_MASK) ? NWB_REFLECTION_HISTORY_HALF_UNIT_BITS : 0u;
         return asfloat((bits & NWB_REFLECTION_HISTORY_HALF_KEPT_MASK) + increment);
     }
@@ -48,13 +42,11 @@ float nwbReflectionRoundHistoryHalf(const float value, const uint random){
     const uint significand = NWB_REFLECTION_HISTORY_IMPLICIT_BIT | (bits & NWB_REFLECTION_HISTORY_MANTISSA_MASK);
     const uint mask = (1u << shift) - 1u;
     const uint increment = (random & mask) < (significand & mask) ? 1u : 0u;
-    // All half subnormals are exact normal FP32 values. Integer-to-float and scaling by 2^-24 are exact here.
     return float((significand >> shift) + increment) * NWB_REFLECTION_HISTORY_HALF_SUBNORMAL_UNIT;
 }
 
 half3 nwbReflectionRoundHistory(const float3 radiance, const uint2 pixel, const uint sampleIndex, const uint samplingSeed){
     const uint pixelSeed = nwbReflectionSamplingHash(pixel.x ^ nwbReflectionSamplingHash(pixel.y ^ samplingSeed));
-    // Rounding uses its own seed path, past the history cap so a repeated seed never adds correlation.
     const uint roundingSeed = pixelSeed ^ nwbReflectionSamplingHash(sampleIndex ^ NWB_REFLECTION_HISTORY_ROUNDING_SAMPLE_SEED);
     return half3(
         half(nwbReflectionRoundHistoryHalf(radiance.r, nwbReflectionSamplingHash(roundingSeed))),

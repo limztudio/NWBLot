@@ -93,7 +93,6 @@ private:
 
 
 public:
-    // Reserves a marker slot; invalid when AMD breadcrumbs are unavailable.
     struct AmdBreadcrumbWrite{
         VkBuffer buffer = VK_NULL_HANDLE;
         VkDeviceSize offset = 0u;
@@ -108,18 +107,14 @@ public:
 
 
 public:
-    // Success owns a nonnull wrapper in its original creation state; virtual resources can still require memory binding.
     [[nodiscard]] Expected<HeapHandle> createHeap(const HeapDesc& d);
     [[nodiscard]] Expected<TextureHandle> createTexture(const TextureDesc& d);
     [[nodiscard]] Expected<MemoryRequirements> getTextureMemoryRequirements(Texture& texture);
     b8 bindTextureMemory(Texture& texture, Heap& heap, u64 offset);
-    // Nonlogging backing-readiness snapshot for command/packet preflight; this is not a synchronization guarantee.
     [[nodiscard]] b8 isTextureReadyForGpuUse(Texture* textureResource, VkImageUsageFlags requiredUsage = 0u)const noexcept;
     [[nodiscard]] b8 isTextureReadyForGpuUse(Texture& textureResource, VkImageUsageFlags requiredUsage = 0u)const noexcept{
         return isTextureReadyForGpuUse(&textureResource, requiredUsage);
     }
-    // The caller owns native binding and lifetime and must provide exact immutable creation provenance.
-    // Only one live Texture wrapper may name a VkImage per Device.
     [[nodiscard]] Expected<TextureHandle> createHandleForNativeTexture(ObjectType objectType, Object nativeTextureHandle, const TextureDesc& desc, const NativeTextureProvenance& nativeProvenance);
     [[nodiscard]] Expected<StagingTextureHandle> createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess);
     Expected<StagingTextureMapping> mapStagingTexture(StagingTexture& staging, const TextureSlice& slice, CpuAccessMode::Enum requestedAccess);
@@ -137,16 +132,10 @@ public:
     }
     [[nodiscard]] Expected<MemoryRequirements> getBufferMemoryRequirements(Buffer& buffer);
     b8 bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset);
-    // Nonlogging backing-readiness snapshot for command/packet preflight; this is not a synchronization guarantee.
-    // Native wrappers trust caller-managed binding.
-    // Managed ordinary buffers require their VMA allocation, while managed virtual buffers require a retained, device-owned bound Heap allocation.
-    // CPU mapping is irrelevant.
     [[nodiscard]] b8 isBufferReadyForGpuUse(Buffer* bufferResource, VkBufferUsageFlags requiredUsage = 0u)const noexcept;
     [[nodiscard]] b8 isBufferReadyForGpuUse(Buffer& bufferResource, VkBufferUsageFlags requiredUsage = 0u)const noexcept{
         return isBufferReadyForGpuUse(&bufferResource, requiredUsage);
     }
-    // The caller owns native binding and lifetime and must provide the exact immutable creation provenance.
-    // Only one live Buffer wrapper may name a VkBuffer per Device.
     [[nodiscard]] Expected<BufferHandle> createHandleForNativeBuffer(ObjectType objectType, Object nativeBufferHandle, const BufferDesc& desc, const NativeBufferProvenance& nativeProvenance);
     [[nodiscard]] Expected<ShaderHandle> createShader(const ShaderDesc& d, const void* binary, usize binarySize);
     template<GpuContiguousPodContainer Container>
@@ -204,13 +193,11 @@ public:
     [[nodiscard]] Expected<MemoryRequirements> getAccelStructMemoryRequirements(RayTracingAccelStruct& accelerationStructure);
     [[nodiscard]] Expected<RayTracingClusterOperationSizeInfo> getClusterOperationSizeInfo(const RayTracingClusterOperationParams& params);
     b8 bindAccelStructMemory(RayTracingAccelStruct& accelerationStructure, Heap& heap, u64 offset);
-    // Structural readiness deliberately allows an unbuilt acceleration structure to remain a legal build target.
     [[nodiscard]] b8 isAccelStructReadyForGpuUse(RayTracingAccelStruct* accelStructResource)const noexcept;
     [[nodiscard]] b8 isAccelStructReadyForGpuUse(RayTracingAccelStruct& accelStructResource)const noexcept{
         return isAccelStructReadyForGpuUse(&accelStructResource);
     }
     [[nodiscard]] Expected<CommandListHandle> createCommandList(const CommandListParameters& params = CommandListParameters());
-    // Cross-queue dependencies are immutable submission-local token edges.
     [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandLists(CommandList* const* commandLists, usize numCommandLists, CommandQueue::Enum executionQueue, const QueueSubmissionDesc& submitDesc);
     [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandLists(CommandList& commandList, CommandQueue::Enum executionQueue, const QueueSubmissionDesc& submitDesc){
         CommandList* commandListPtr = &commandList;
@@ -222,8 +209,6 @@ public:
         return executeCommandLists(&commandListPtr, 1u, executionQueue, submitDesc);
     }
 
-    // The registry owns every active native VkQueue.
-    // Broad CommandQueue calls use the primary record; graph recording/submission picks a concrete ID directly.
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_deviceGeneration; }
 
     [[nodiscard]] const VkPhysicalDeviceLimits& getPhysicalDeviceLimits()const noexcept{ return m_context.physicalDeviceProperties.limits; }
@@ -240,20 +225,13 @@ public:
     }
     [[nodiscard]] Expected<GpuQueueTimelineSnapshot> getQueueTimelineSnapshot(const GpuPhysicalQueueId& queue);
     [[nodiscard]] b8 supportsComparableGpuTimestamps()const noexcept{ return m_context.comparableGpuTimestamps; }
-    // Absolute ranges require the extension-backed logical-device epoch and a complete 64-bit queue timestamp.
-    // Partial-width timestamps remain valid for modular ordinary durations only.
     [[nodiscard]] b8 supportsComparableGpuTimestamps(const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] GpuCommandArenaStatistics getCommandArenaStatistics(const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] GpuCommandArenaWorkerStatistics getCommandArenaWorkerStatistics(const GpuPhysicalQueueId& queue, u64 recordingWorkerDomain, u32 recordingWorkerIndex)const noexcept;
     [[nodiscard]] b8 matchesPhysicalQueueIdentity(CommandQueue::Enum queue, u16 physicalQueueIndex, u16 deviceGeneration)const noexcept;
     [[nodiscard]] b8 matchesPhysicalQueueIdentity(const GpuPhysicalQueueId& queue)const noexcept;
-    // Validates an accepted token as a current submission wait without changing queue state.
-    // The producer timeline is sampled under its queue mutex so a failed submit cannot expose a tentative value as available work.
     [[nodiscard]] b8 validateSubmissionWaitToken(const QueueSubmissionToken& token)const noexcept;
-    // Blocks until one exact accepted queue timeline value completes.
-    // This proves that a bridged WSI binary semaphore wait consumed its signal before the acquire slot is reset and reused.
     [[nodiscard]] b8 waitForSubmissionToken(const QueueSubmissionToken& token);
-    // Native device loss permits loss-aware teardown. Logical quarantine still requires an idle join before freeing.
     [[nodiscard]] b8 isDeviceLost()const noexcept{ return m_deviceLost.load(MemoryOrder::acquire); }
 
     [[nodiscard]] b8 requiresRecreation()const noexcept{
@@ -270,13 +248,10 @@ public:
     void runGarbageCollection();
     [[nodiscard]] b8 queryFeatureSupport(Feature::Enum feature)const noexcept;
     [[nodiscard]] WaveLaneCountRange getWaveLaneCounts()const noexcept;
-    // Maximum byte range represented by one storage-buffer descriptor; independent of allocation/VRAM budgets.
     [[nodiscard]] u64 getMaxStorageBufferRange()const noexcept;
     [[nodiscard]] FormatSupport::Mask queryFormatSupport(Format::Enum format)noexcept;
     [[nodiscard]] Expected<CooperativeVectorDeviceFeatures> queryCoopVecFeatures();
     [[nodiscard]] Expected<usize> getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns);
-    // Borrowed interoperability identity only.
-    // External queue operations remain the caller's responsibility and must not overlap engine submission, presentation, idle, or teardown.
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue)noexcept;
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, const GpuPhysicalQueueId& queue)noexcept;
     b8 isGpuCrashDiagnosticsEnabled()const noexcept{ return m_gpuCrashDiagnostics.enabled() && m_context.extensions.nvDeviceDiagnosticCheckpoints; }
@@ -321,8 +296,6 @@ private:
     }
     [[nodiscard]] b8 beginLifecycleDrain()noexcept;
     void endLifecycleDrain()noexcept;
-    // Records the prepare phase's idle-or-loss proof.
-    // Once sealed, the submission gate remains closed and the destructor must not issue another fallible Vulkan wait during the commit phase.
     [[nodiscard]] b8 sealLifecycleDrainForDestruction()noexcept;
     [[nodiscard]] b8 submissionsBlocked()const noexcept{
         return requiresRecreation() || (m_submissionOperationState.load(MemoryOrder::acquire) & s_SubmissionDrainBit) != 0u;
@@ -330,7 +303,6 @@ private:
     [[nodiscard]] Expected<QueueSubmissionToken> consumeAcquiredImageSemaphore(VkSemaphore semaphore);
     [[nodiscard]] Expected<VkResult> presentNativeQueue(u32 nativeQueueIndex, const VkPresentInfoKHR& presentInfo);
     void releaseOwnedResources()noexcept;
-    // Probed once at device initialization so compressed texture selection does not rely on a later optimistic format-property query.
     void probeCompressedTextureFormats();
     [[nodiscard]] FormatSupport::Mask queryFormatSupportUncached(Format::Enum format)const noexcept;
     [[nodiscard]] b8 canCreateSampledTextureFormat(Format::Enum format)const;
@@ -383,7 +355,6 @@ private:
     Atomic<u64> m_submissionOperationState = 0u;
     Atomic<u64> m_nextTimerQueryIncarnation = 0u;
     u16 m_deviceGeneration = 0u;
-    // Actual Vulkan loss and logical quarantine remain distinct so only proven loss may bypass an idle teardown join.
     Atomic<b8> m_deviceLost = false;
     Atomic<b8> m_deviceQuarantined = false;
     Atomic<b8> m_lifecycleDestructionPrepared = false;
@@ -404,7 +375,6 @@ private:
     GraphicsVector<GpuPhysicalQueueInfo> m_physicalQueueInfos;
     Array<Queue*, static_cast<u32>(CommandQueue::kCount)> m_primaryQueues = {};
     Array<b8, static_cast<u32>(CommandQueue::kCount)> m_explicitPrimaryQueues = {};
-    // Only block-compressed entries are populated; all are resolved before the device is exposed.
     Array<FormatSupport::Mask, static_cast<usize>(Format::Count)> m_compressedFormatSupport = {};
 
     UploadManager m_uploadManager;

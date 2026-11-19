@@ -1,4 +1,3 @@
-"""Validate optical and caustic contributions in captured framebuffers."""
 import math
 
 from caustic_optical_reference import exterior_samples, expected_environment_color, predictor_metadata
@@ -32,7 +31,6 @@ class CausticOpticalImageEvidence:
             tested += 1
             ratios.append(observed_gain / expected_gain)
             errors.extend(abs(a - b) for a, b in zip(observed, expected))
-            # Allow two display bytes for quantization and require at least half of the expected signal.
             if observed_gain + 2 < 0.5 * expected_gain:
                 missing.append((x, y))
         if tested < 2000 or weak > len(selected) * 0.1:
@@ -52,7 +50,6 @@ class CausticOpticalImageEvidence:
         width, height, rows = ReflectionImageAnalysis.validate_frame(combined)
         if any(frame[:2] != combined[:2] for frame in frames.values()):
             raise SmokeFailure("combined optical captures have different dimensions")
-        # Projected sphere bounds for camera at z=-2.2 and radius 0.7.
         radius = height / (2 * math.tan(math.pi / 6)) * 0.7 / math.sqrt(2.2 ** 2 - 0.7 ** 2)
         results = {}
         for variant in VARIANTS[1:]:
@@ -74,7 +71,6 @@ class CausticOpticalImageEvidence:
                         gain = sum(a) - sum(b)
                         ground_gain += gain
                         if gain > 0:
-                            # Focused caustic gain must concentrate in a few 8x8 cells rather than spread across the ground.
                             key = (x // (width // 8 + 1), y // (height // 8 + 1))
                             ground_cells[key] = ground_cells.get(key, 0) + gain
             if variant == LIT_REFLECTION_DISABLED:
@@ -86,7 +82,6 @@ class CausticOpticalImageEvidence:
                 positive_gain = sum(ground_cells.values())
                 ordered_cells = sorted(ground_cells.values(), reverse=True)
                 focus_share = sum(ordered_cells[:3]) / positive_gain if positive_gain > 0 else 0.0
-                # Measure concentrated positive gain because bright ground tonemapping compresses per-pixel deltas.
                 if ground_gain < 1500 or focus_share < 0.4:
                     raise SmokeFailure("caustic toggle produced no visible positive photon contribution on the ground")
             elif sphere_changed < max(100, math.pi * radius * radius * 0.005):
@@ -98,4 +93,3 @@ class CausticOpticalImageEvidence:
         else:
             results[LIT_REFLECTION_DISABLED][LIT_EXTERIOR_ENVIRONMENT] = CausticOpticalImageEvidence.analyze_exterior_reflection(combined, frames[LIT_REFLECTION_DISABLED])
         return results
-

@@ -1,5 +1,3 @@
-"""Describe frozen renderer benchmark workloads."""
-
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable
@@ -56,7 +54,6 @@ class Workload:
     name: str
     width: int
     height: int
-    # AVBOIT raster timing records one range per frame across the whole pass.
     scope_multipliers: tuple
     secondary_scope: str
     environment_overrides: tuple
@@ -76,7 +73,6 @@ class Workload:
 
     @property
     def observed_scopes(self):
-        # Decode inactive scope hashes so unexpected scopes still fail zero-coverage checks.
         return self.scopes + self.inactive_scopes
 
     @property

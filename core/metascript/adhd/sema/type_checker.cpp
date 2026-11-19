@@ -482,8 +482,6 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
     if(!m_layoutOptimizer.optimizeTranslationUnit(unit, errors))
         ok = false;
 
-    // A specialization emitted here owns a copy of the imported template's method bodies.
-    // Resolve member access, borrow conversions and backend calls before the header emitter uses them.
     m_recordGlobalHeaders = true;
     for(ClassDecl* owner : unit.classes){
         if(!owner->isImported || owner->isExtern || owner->templateParams.empty())

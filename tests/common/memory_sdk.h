@@ -44,7 +44,6 @@ inline void FreeBytes(::ArenaBase& arena, const RawAllocation block, const usize
     arena.deallocate(block.bytes, alignment, count);
 }
 
-// Holds the address separately from a declared count for tests of pointer/count interfaces.
 template<typename T>
 class TestArrayData{
 public:

@@ -22,7 +22,6 @@ struct NwbSkinnedMeshBoundsPushConstants{
 
 [[vk::push_constant]] ConstantBuffer<NwbSkinnedMeshBoundsPushConstants> g_NwbSkinnedMeshBoundsPushConstants;
 
-// The persistent stream-slot payload is selected from the global UniformBuffer heap by payload0.y.
 #define g_NwbSkinnedMeshBoundsBindlessResources nwbSkinnedMeshHeapBindlessResources(g_NwbSkinnedMeshBoundsPushConstants.payload0[NWB_SKINNED_MESH_BOUNDS_PUSH_BINDLESS_RESOURCES_SLOT])
 
 
@@ -102,13 +101,11 @@ void nwbSkinnedMeshBoundsStore(const uint meshletIndex, const float4 sphere, con
 
 void nwbSkinnedMeshBoundsReduceMinMax(const uint groupThreadIndex){
 #if NWB_SKINNED_MESH_BOUNDS_USE_WAVE_REDUCE
-    // Two-stage fold: WaveActiveMin/Max, then a log2 tree over per-wave results.
     const uint waveLaneCount = WaveGetLaneCount();
     const uint laneIndex = WaveGetLaneIndex();
     const uint waveIndex = groupThreadIndex / waveLaneCount;
     const float3 waveMin = WaveReadLaneFirst(WaveActiveMin(g_NwbSkinnedMeshBoundsMin[groupThreadIndex]));
     const float3 waveMax = WaveReadLaneFirst(WaveActiveMax(g_NwbSkinnedMeshBoundsMax[groupThreadIndex]));
-    // Waves must finish reading lane slots before leaders overwrite them.
     GroupMemoryBarrierWithGroupSync();
     if(laneIndex == 0u){
         g_NwbSkinnedMeshBoundsMin[waveIndex] = waveMin;
@@ -297,7 +294,6 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     nwbSkinnedMeshBoundsReduceMinMax(groupThreadIndex);
     nwbSkinnedMeshBoundsReduceValidPositionCount(groupThreadIndex);
 
-    // Bounds proof cannot discard a nonfinite position even though sphere/cone reconstruction keeps its existing policy.
     if(groupThreadIndex == 0u){
         nwbSkinnedMeshBoundsStoreLocalPartial(meshletIndex, g_NwbSkinnedMeshBoundsMin[0u], g_NwbSkinnedMeshBoundsMax[0u], g_NwbSkinnedMeshBoundsValidPositionCount[0u] == positionCount);
     }
@@ -342,7 +338,6 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
         g_NwbSkinnedMeshBoundsConeAxis = nwbSafeNormalize(g_NwbSkinnedMeshBoundsAreaNormal[0u], float3(0.0));
     GroupMemoryBarrierWithGroupSync();
 
-    // Cone-cutoff cosine accumulation stays in (-1, 1]; half math is sufficient here; widen only at the float groupshared store.
     half localConeCutoff = half(1.0h);
     for(uint localPrimitiveIndex = groupThreadIndex; localPrimitiveIndex < primitiveCount; localPrimitiveIndex += NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X){
         float3 areaFaceNormal = float3(0.0);

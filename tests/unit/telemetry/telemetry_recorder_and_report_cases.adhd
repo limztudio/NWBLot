@@ -1255,7 +1255,6 @@ void VerifyTelemetry_RecorderExplicitForeignBuilderStorageIsCopiedOrReleasedOnEv
                         TelemetryBytes foreignPayload(foreignArena.arena);
                         foreignPayload.resize(64u, 37u);
                         const auto buildPayload = lambda[mut foreignPayload, mut foreignArena, in outcome, mut recorder](mut TelemetryPayloadStorage storage, mut TelemetryBytes payload) -> b8{
-                            // Explicit move construction replaces allocator identity, independently of assignment policy.
                             TestReplaceWithMovedPayload(payload, foreignPayload);
                             EXPECT_TRUE(TestUsesStorage(payload, foreignArena.arena));
                             if(outcome == 2u)

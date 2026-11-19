@@ -1,5 +1,3 @@
-"""Validate completed optical transport and queue evidence."""
-
 import re
 
 from reflection_statistics import ReflectionStatistics
@@ -87,7 +85,6 @@ class ReflectionOpticalEvidence:
 
     @staticmethod
     def validate_queue_coverage(statistics, spec):
-        # Optical query limits apply after hardware admission on mixed opaque and glass queues.
         if spec.case not in ("optical_inside", "optical_inside_nested", LIT_OPTICAL_TIR, LIT_OPTICAL_CSG_CAP, LIT_OPTICAL_CSG_OPEN_TAIL, LIT_OPTICAL_UNSPECIFIED_REFERENCE, LIT_OPTICAL_CSG_UNSPECIFIED_CAP, *DENSE_CASES):
             return None
         completed = []
@@ -240,4 +237,3 @@ class ReflectionOpticalEvidence:
             LIT_CONTRACT: "Closed receivers reuse exact tie certificates; a positive open event beyond the nearest chart disables reuse. "
                 "The extended open root also requires one terminal no-hit collection. Query exhaustion preserves reserved work and black residual radiance. "
                 "Valid-air controls author the sole transparent receiver as Unspecified, selecting the normal all-Unspecified optical kernel."}
-

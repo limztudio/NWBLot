@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Completed-frame GGX and strict-history smoke evidence; images always come from GPU readback."""
 
 from reflection_statistics import ReflectionStatistics
 
@@ -56,8 +55,6 @@ LIT_NORMALIZED_REFERENCE_ERROR = "normalized_reference_error"
 LIT_LIMITATIONS = "limitations"
 
 
-
-
 @dataclass(frozen=True)
 class CaptureSpec:
     name: str
@@ -77,8 +74,6 @@ ROUGH_CAPTURES = (CaptureSpec(LIT_MIRROR, roughness=0), CaptureSpec(LIT_ROUGH_02
     CaptureSpec(LIT_GLASS_SMOOTH, case=LIT_ROUGH_GLASS, roughness=0), CaptureSpec(LIT_GLASS_AUTHORED_ROUGH, case=LIT_ROUGH_GLASS, roughness=0.6),)
 TEMPORAL_CAPTURES = tuple(CaptureSpec(kind + suffix, case=LIT_TEMPORAL + kind, roughness=0 if kind == LIT_DEFORM else 0.4, final_state=fresh) for kind in (LIT_CAMERA, LIT_TRANSFORM, LIT_MATERIAL, LIT_LIGHT, LIT_DEFORM)
     for suffix, fresh in ((LIT_RESET_2, False), (LIT_FRESH, True))) + (CaptureSpec(LIT_CAMERA_SETTLED, case="temporal_camera", post_reset_samples=64), CaptureSpec(LIT_DEFORM_BIND, case=LIT_ROUGH_DEFORM, roughness=0),)
-
-
 
 
 def spec_environment(spec):
@@ -120,12 +115,6 @@ def capture(args, spec):
     evidence = ReflectionHistoryEvidence.validate_history(log_text, statistics, spec)
     evidence["statistics"] = statistics
     return evidence
-
-
-
-
-
-
 
 
 def analyze_suite(args):

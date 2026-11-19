@@ -1,4 +1,3 @@
-"""Compare combo source state, accepted geometry, and matching GPU marker pixels."""
 from __future__ import annotations
 
 from combo_probe_common import ComboProbe

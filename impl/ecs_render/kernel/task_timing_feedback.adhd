@@ -26,7 +26,6 @@ class PendingRendererTimingSubscription : NoCopy{
     }
 }
 
-// The recorder drains retained callbacks before the renderer releases its history.
 class RendererTaskTimingFeedback : NoCopy{
     private mut GraphicsRuntime m_graphics;
     private RendererTaskTimingFeedbackState m_state;

@@ -12,8 +12,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Ray-tracing domain owns live scene/material tables; effects retain this snapshot post-preflight plus frozen geometry/texture bundles.
-// Schedulable != dispatchable: scene prep must also succeed.
 class RayTracingSceneGraphResources{
     public RayTracingSceneContentStamp contentStamp;
     public RayTracingAccelStructHandle sceneTlas;
@@ -41,7 +39,6 @@ class RayTracingSceneGraphResources{
 }
 
 class RayTracingSceneGraphReads{
-    // Ordinary scene reads remain inline; only admitted CSG work allocates the variable posed-bounds list.
     public Array<GpuTaskResourceUse, s_FixedSceneResourceUseCount> uses;
     public Vector<GpuTaskResourceUse> csgUses;
 
@@ -59,7 +56,6 @@ class RayTracingSceneGraphReads{
 }
 
 class TraceResourceSetUses{
-    // Trace geometry set and trace material sampled-texture set.
     public Array<GpuTaskResourceSetUse, s_TraceResourceSetUseCapacity> uses;
     public usize useCount = 0u;
 }
@@ -187,7 +183,6 @@ Expected<RayTracingSceneGraphReads> ImportRayTracingSceneGraphReads(in RayTracin
         importedBuffers[index] = importedBufferResult.value();
     }
 
-    // Shared consumers reuse this identity. Reimporting the same TLAS returns it, keeping producer and cross-effect deps.
     GpuGraphResourceDesc tlasDesc = AccelStructResourceDesc(Name(s_SceneTlasResourceName), s_SceneTlasResourceLabel);
     tlasDesc.setInitialState(tlasInitialState);
     const auto tlasResult = graph.importAccelStruct(resources.sceneTlas, tlasDesc);

@@ -17,7 +17,6 @@ NWB_METASCRIPT_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Parses variables, struct descriptions, attributes and assignments without selecting a document root.
 class StatementParser final{
 private:
     using ScratchNameList = Vector<MStringView, Alloc::ScratchArena>;

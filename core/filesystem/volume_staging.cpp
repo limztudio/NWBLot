@@ -216,7 +216,6 @@ static b8 PublishStagedVolumeImpl(const ::StagedDirectoryPaths<StagedArenaT>& st
 
     Vector<FilesystemVolumeStagingDetail::VolumeSegmentMove, Alloc::ScratchArena> moves(scratchArena);
     moves.reserve(AddSize(*existingSegmentCount, segmentCount));
-    // Release prepared paths in reverse construction order before the shared scratch plan storage.
     ScopeExit releaseMovePaths([&]()noexcept{
         while(!moves.empty())
             moves.pop_back();

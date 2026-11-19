@@ -41,7 +41,6 @@ class SurfelGiGraphContext{
 
 [modular]
 class SurfelGiGraphCoordinator : NoCopy{
-    // Surfel lifecycle publishes after all four clears accept; stages share one effects packet.
     public GpuTaskId m_deferredSurfelGiPreparationTask;
     public GpuTaskId m_deferredSurfelGiInitializationLifecycleTask;
     public GpuTaskId m_deferredSurfelGiSnapshotCopyTask;
@@ -54,7 +53,6 @@ class SurfelGiGraphCoordinator : NoCopy{
     public GpuTaskId m_deferredSurfelGiTraceTask;
     public GpuTaskId m_deferredSurfelGiResolveTask;
     public GpuTaskId m_deferredSurfelGiTask;
-    // A rare diagnostic tail: it depends on GI but records/submits after Present on Transfer when available.
     public GpuTaskId m_deferredSurfelGiCounterReadbackTask;
 
     public SurfelGiGraphCoordinator(){}

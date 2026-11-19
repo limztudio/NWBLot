@@ -1,5 +1,3 @@
-"""Linux process stop and pidfd ownership tests."""
-
 import sys
 import unittest
 from pathlib import Path
@@ -33,7 +31,6 @@ class LauncherLinuxProcessStopTests(unittest.TestCase):
         self.assertEqual([mock.call(12), mock.call(13), mock.call(11)], fake_os.close.call_args_list)
         self.assertEqual([mock.call(101), mock.call(102), mock.call(103)], fake_os.pidfd_open.call_args_list)
 
-
     def test_linux_inspection_failure_closes_handles_before_signalling(self):
         fake_os = mock.Mock()
         fake_os.listdir.return_value = ["101", "102"]
@@ -50,7 +47,6 @@ class LauncherLinuxProcessStopTests(unittest.TestCase):
         fake_signal.pidfd_send_signal.assert_not_called()
         self.assertEqual([mock.call(12), mock.call(11)], fake_os.close.call_args_list)
 
-
     def test_linux_disappearing_process_does_not_signal_reused_pid(self):
         fake_os = mock.Mock()
         fake_os.listdir.return_value = ["101"]
@@ -66,7 +62,6 @@ class LauncherLinuxProcessStopTests(unittest.TestCase):
             ProcessLauncher.stop_existing_process(Path("application"), launcher.PLATFORM_LINUX)
         fake_signal.pidfd_send_signal.assert_not_called()
         fake_os.close.assert_called_once_with(11)
-
 
     def test_linux_missing_image_for_live_process_fails_closed(self):
         fake_os = mock.Mock()
@@ -85,7 +80,6 @@ class LauncherLinuxProcessStopTests(unittest.TestCase):
         fake_signal.pidfd_send_signal.assert_not_called()
         fake_os.close.assert_called_once_with(11)
 
-
     def test_linux_deleted_or_ambiguous_image_rejects_launch_before_signalling(self):
         fake_os = mock.Mock()
         fake_os.listdir.return_value = ["101", "102"]
@@ -101,7 +95,6 @@ class LauncherLinuxProcessStopTests(unittest.TestCase):
                 ProcessLauncher.stop_existing_process(target, launcher.PLATFORM_LINUX)
         fake_signal.pidfd_send_signal.assert_not_called()
         self.assertEqual([mock.call(12), mock.call(11)], fake_os.close.call_args_list)
-
 
     def test_linux_rejects_launch_if_matching_process_ignores_sigterm(self):
         fake_os = mock.Mock()
@@ -121,7 +114,6 @@ class LauncherLinuxProcessStopTests(unittest.TestCase):
         fake_signal.pidfd_send_signal.assert_called_once_with(11, 15)
         fake_os.close.assert_called_once_with(11)
 
-
     def test_linux_ignores_kernel_threads_without_an_executable(self):
         fake_os = mock.Mock()
         fake_os.listdir.return_value = ["101"]
@@ -136,7 +128,6 @@ class LauncherLinuxProcessStopTests(unittest.TestCase):
             ProcessLauncher.stop_existing_process(Path("application"), launcher.PLATFORM_LINUX)
         fake_signal.pidfd_send_signal.assert_not_called()
         fake_os.close.assert_called_once_with(11)
-
 
     def test_linux_older_kernel_thread_stat_without_status_flag(self):
         fake_os = mock.Mock()
@@ -155,7 +146,6 @@ class LauncherLinuxProcessStopTests(unittest.TestCase):
         fake_signal.pidfd_send_signal.assert_not_called()
         fake_os.close.assert_called_once_with(11)
 
-
     def test_linux_waits_for_high_numbered_pidfd(self):
         fake_os = mock.Mock()
         fake_os.listdir.return_value = ["101"]
@@ -173,7 +163,6 @@ class LauncherLinuxProcessStopTests(unittest.TestCase):
         fake_select.poll.return_value.register.assert_called_once_with(2048, 1)
         fake_os.close.assert_called_once_with(2048)
 
-
     def test_linux_reused_pid_owned_by_another_user_is_not_signalled(self):
         fake_os = mock.Mock()
         fake_os.listdir.return_value = ["101"]
@@ -187,7 +176,6 @@ class LauncherLinuxProcessStopTests(unittest.TestCase):
         fake_os.readlink.assert_not_called()
         fake_signal.pidfd_send_signal.assert_not_called()
         fake_os.close.assert_called_once_with(11)
-
 
     def test_linux_target_named_deleted_suffix_is_ambiguous(self):
         fake_os = mock.Mock()
@@ -205,13 +193,11 @@ class LauncherLinuxProcessStopTests(unittest.TestCase):
         fake_signal.pidfd_send_signal.assert_not_called()
         fake_os.close.assert_called_once_with(11)
 
-
     def test_linux_missing_pidfd_support_rejects_stop(self):
         fake_os = mock.Mock(spec=["listdir"])
         with mock.patch("launcher.linux_process_stopper.os", fake_os):
             with self.assertRaisesRegex(SystemExit, "requires Linux pidfd support"):
                 ProcessLauncher.stop_existing_process(Path(LIT_APPLICATION), launcher.PLATFORM_LINUX)
-
 
 
 if __name__ == "__main__":

@@ -68,13 +68,11 @@ template<typename Element>
 template<typename Element, usize Count>
 [[nodiscard]] FOUNDATION_INLINE b8 EqualElements(const NotNull<const Element*> lhs, const NotNull<const Element*> rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
-    // Clang bool vectors use packed bits; wide integers are not supported native lane elements.
     if constexpr(s_NativeEqualityPackets && (IsSame_V<Element, f32> || (IsIntegral_V<Element> && !IsSame_V<Element, b8> && sizeof(Element) <= sizeof(u64)))){
         constexpr usize s_Lanes = s_SIMDVectorBytes / sizeof(Element);
         for(usize first = 0u; first < Count; first += s_Lanes){
             const usize count = Count - first < s_Lanes ? Count - first : s_Lanes;
             EqualityPacket<Element> lhsPacket{}, rhsPacket{};
-            // Exact-sized loads support borrowed unaligned arrays and two/three-lane tails.
             __builtin_memcpy(&lhsPacket, lhs.get() + first, count * sizeof(Element));
             __builtin_memcpy(&rhsPacket, rhs.get() + first, count * sizeof(Element));
             if constexpr(IsSame_V<Element, f32>){
@@ -85,7 +83,6 @@ template<typename Element, usize Count>
                 const UInt4 minimumNormal{ s_PacketF32MinNormalBits, s_PacketF32MinNormalBits, s_PacketF32MinNormalBits, s_PacketF32MinNormalBits };
                 const auto exceptional = (lhsMagnitude > infinity) | (rhsMagnitude > infinity) | ((lhsMagnitude != UInt4{}) & (lhsMagnitude < minimumNormal)) | ((rhsMagnitude != UInt4{}) & (rhsMagnitude < minimumNormal));
                 if(__builtin_reduce_or(exceptional) != 0){
-                    // Preserve skipped NaN/denormal flags and traps after an earlier mismatch.
                     for(usize lane = 0u; lane < count; ++lane){
                         if(lhs.get()[first + lane] != rhs.get()[first + lane])
                             return false;
@@ -117,7 +114,6 @@ template<typename Value, usize Count>
 template<typename Value>
 [[nodiscard]] FOUNDATION_INLINE b8 EqualMixedFloat3(const Value& lhs, const Value& rhs)noexcept{
     f32 lhsValues[3], rhsValues[3];
-    // Copy XYZ as storage so an unused signaling NaN never crosses a scalar FP ABI.
     __builtin_memcpy(lhsValues, &lhs, sizeof(lhsValues));
     __builtin_memcpy(rhsValues, &rhs, sizeof(rhsValues));
     return EqualElements<f32, 3u>(MakeNotNull<const f32*>(lhsValues), MakeNotNull<const f32*>(rhsValues)) && lhs.w == rhs.w;

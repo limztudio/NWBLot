@@ -1,6 +1,3 @@
-"""BMP image and native-pixel codecs for window capture."""
-
-
 import ctypes
 import struct
 
@@ -32,7 +29,6 @@ class Bmp24Codec:
                     encoded.extend((blue, green, red))
                 out.write(encoded)
                 out.write(padding)
-
 
     @staticmethod
     def read_bmp_24_rows(path):
@@ -84,7 +80,6 @@ class Bmp24Codec:
         return width, height, rows_rgb
 
 
-
 class NativePixelCodec:
     @staticmethod
     def channel_from_mask(pixel, mask):
@@ -98,7 +93,6 @@ class NativePixelCodec:
         maximum = (1 << bit_count) - 1
         return (value * 255 + maximum // 2) // maximum
 
-
     @staticmethod
     def ximage_rgb_rows(image, byte_order):
         bytes_per_pixel = (image.bits_per_pixel + 7) // 8
@@ -106,7 +100,6 @@ class NativePixelCodec:
         raw = ctypes.string_at(image.data, raw_size)
         rows = []
 
-        # Map RGB888 masks directly and scale other XImage channel masks.
         if (image.bits_per_pixel in (24, 32) and (image.red_mask, image.green_mask, image.blue_mask) == (0xFF0000, 0xFF00, 0xFF)
                 and byte_order in (LIT_LITTLE, LIT_BIG) and image.width >= 0 and image.bytes_per_line >= image.width * bytes_per_pixel):
             red, green, blue = (2, 1, 0) if byte_order == LIT_LITTLE else (bytes_per_pixel - 3, bytes_per_pixel - 2, bytes_per_pixel - 1)
@@ -129,7 +122,6 @@ class NativePixelCodec:
             rows.append(row)
 
         return rows
-
 
     @staticmethod
     def bgra_rgb_rows(buffer, width, height):

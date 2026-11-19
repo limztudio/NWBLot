@@ -21,7 +21,6 @@ b8 X11FilteredKeyHistory::Newer(const u32 timestamp, const u32 serial, const Sta
 }
 
 b8 X11FilteredKeyHistory::Current(const Stamp& stamp, const u64 receivedAtMs)noexcept{
-    // A 32-bit X timestamp cannot order events across an inactivity interval of half its range.
     return stamp.valid && receivedAtMs >= stamp.receivedAtMs && receivedAtMs - stamp.receivedAtMs < s_HalfRange;
 }
 

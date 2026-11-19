@@ -95,7 +95,6 @@ VectorSingle PackedDoublePow(in VectorSingle x, in VectorSingle y){
     const VectorDouble bounded = VectorDoubleMin(VectorDoubleReplicate(129.0), VectorDoubleMax(VectorDoubleReplicate(-151.0), power));
     const VectorDouble integral = VectorDoubleFloor(bounded);
     const VectorDouble remainder = VectorDoubleScale(VectorDoubleSubtract(bounded, integral), 0x1.62e42fefa39efp-1);
-    // The series use binary64 lanes so the final binary32 rounding has guard bits.
     VectorDouble exponential = VectorDoubleReplicate(s_InverseFactorials[20]);
     for(i32 degree = 19; degree >= 0; --degree)
         exponential = VectorDoubleMultiplyAdd(exponential, remainder, VectorDoubleReplicate(s_InverseFactorials[degree]));
@@ -711,7 +710,6 @@ u64 VerifyPowVariant(in PowVariant variant){
         if(!ok)
             break;
 
-        // Search every 8-bit transition in the actual rounded reference expression.
         for(u32 transition = 1u; transition < 256u && ok; ++transition){
             u32 lower = 0u;
             u32 upper = 0x3f800000u;

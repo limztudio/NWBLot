@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Verify accepted screen-trace feedback, bounded work, and actual framebuffer image equivalence."""
 
 import base64
 from dataclasses import asdict, dataclass

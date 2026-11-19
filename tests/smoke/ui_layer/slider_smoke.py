@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Qualify continuous sliders through native input and post-end displayed snapshots."""
+
 from __future__ import annotations
 
 import json

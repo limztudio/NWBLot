@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Owns cutter dispatch and per-vertex distances with the shared epsilon snap; walls and caps agree.
 Expected<b8, CsgDeformViabilityReason> ComputeCsgDeformShapeDistances(
     in CsgDeformShape shape,
     in Span<CsgDeformVertex> vertices,

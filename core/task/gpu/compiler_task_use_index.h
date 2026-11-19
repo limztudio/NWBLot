@@ -28,7 +28,6 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The current immutable task's complete declaration order is indexed, including uses with no requested state.
 class TaskResourceUseIndex final : NoCopy{
 public:
     TaskResourceUseIndex(usize resourceCount, u64 graphGeneration, usize useCapacity, Alloc::ScratchArena& scratchArena);

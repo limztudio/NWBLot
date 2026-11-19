@@ -49,7 +49,6 @@ Expected<LightSpacePlan> TryBuildLightSpacePlan(in SoftwareShadowSettings settin
         const u32 textureResolution = Max(outPlan.textureResolution, resolution);
         const u64 eventBytes = pixels * s_LightSpaceEventsPerTexel * s_LightSpaceEventBytes;
         const u64 countBytes = pixels * s_LightSpacePixelWordBytes;
-        // Every D32 array layer uses the largest selected extent, even when its viewport is smaller.
         const u64 depthBytes = cast<u64>(textureResolution) * cast<u64>(textureResolution) * cast<u64>(newViewCount) * s_LightSpacePixelWordBytes;
         const u64 viewBytes = cast<u64>(newViewCount) * s_LightSpaceViewBytes;
         const u64 drawArgumentBytes = cast<u64>(newViewCount) * cast<u64>(drawCount) * s_LightSpaceDrawArgumentBytes;

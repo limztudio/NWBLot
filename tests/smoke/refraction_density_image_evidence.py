@@ -1,5 +1,3 @@
-"""Projection and image evidence for the refraction density capture."""
-
 import math
 
 from refraction_density_benchmark import DENSITIES, ROUTES
@@ -44,7 +42,6 @@ class RefractionDensityImageEvidence:
     def encoded_transmission(level, transmission):
         encoded = level / 255
         linear = encoded / 12.92 if encoded <= .04045 else ((encoded + .055) / 1.055) ** 2.4
-        # Inverting then reapplying Reinhard cancels its common exposure/shoulder scale.
         mapped = transmission * linear / (1 - linear + transmission * linear)
         return 255 * (12.92 * mapped if mapped <= .0031308 else 1.055 * mapped ** (1 / 2.4) - .055)
 
@@ -69,7 +66,6 @@ class RefractionDensityImageEvidence:
         incident_length = math.sqrt(1 + ray_x * ray_x + ray_y * ray_y)
         inside_z = math.sqrt(1 - (ray_x * ray_x + ray_y * ray_y) / (2.25 * incident_length * incident_length))
         focal_pixels = height / (2 * tangent)
-        # Exclude slab side-wall exits from the flat Fresnel check.
         return max(2, math.ceil(.2 * max(ray_x, ray_y) / (1.5 * incident_length * inside_z) * focal_pixels / 6) + 2)
 
     @staticmethod

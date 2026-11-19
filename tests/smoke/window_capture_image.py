@@ -1,6 +1,3 @@
-"""Window-capture image IO and analysis: 24-bit BMP read/write, foreground and region pixel statistics, and the smoke-specific image oracles."""
-
-
 from dataclasses import dataclass
 from window_capture_image_codec import Bmp24Codec, NativePixelCodec
 from window_capture_image_regions import ImageRegions
@@ -96,5 +93,3 @@ def analyze_rgb_rows(rows_rgb):
     non_white_fraction = non_white_pixels / total_pixels
     appears_empty_or_white = mean_luma >= 245.0 and non_white_fraction < 0.01
     return ImageAnalysis(has_pixel_variation, appears_empty_or_white)
-
-

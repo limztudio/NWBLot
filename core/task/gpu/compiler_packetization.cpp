@@ -179,16 +179,11 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskGraphPacketTimingEnvelopeOptions& timingEnvelope,
     GpuTaskGraphCompiledPlanStorage& compiledPlan
 ){
-    // The sole compile() caller runs after successful analysis and queue assignment for this graph and sizes an empty task map.
     FOUNDATION_ASSERT(analysis.validFor(graph) && assignments.validFor(graph) && compiledPlan.compiledTaskIndexByTask.size() == graph.taskCount() && compiledPlan.tasks.empty());
 
-    // Default: one acceptance/sync point per task.
-    // Opt-in successors may share the preceding compatible packet (FrontierScored absorbs only cheap successors with no cross-queue frontier).
-    // Renderer boundaries stay stable.
     __hidden_gpu_task_graph_compiler_packetization::PacketMergeSummary precedingPacketSummary;
     const b8 trackConsumerFrontiers = policy == GpuTaskGraphPacketizationPolicy::FrontierSafe || policy == GpuTaskGraphPacketizationPolicy::FrontierScored;
     for(const GpuTaskId taskID : analysis.topologicalOrder()){
-        // The topological order is a unique permutation of current graph tasks, each with a published queue assignment.
         FOUNDATION_ASSERT(
             taskID.valid()
             && taskID.generation == compiledPlan.graphGeneration
@@ -230,7 +225,6 @@ namespace GpuTaskGraphCompilerDetail{
                 precedingPacketAllowsMerge = precedingPacketMatchesScoredMergeDomain;
             }
             if(precedingPacketAllowsMerge && scoredMergeRequested){
-                // A score covers only an immediate serial chain. Never order unrelated work by coalescing; Medium/Large stays independent unless merged.
                 const GpuTaskId precedingTask = compiledPlan.packetTasks[precedingPacket.taskOffset + precedingPacket.taskCount - 1u];
                 const b8 directlyDependsOnPrecedingTask = __hidden_gpu_task_graph_compiler_packetization::SchedulingConsumersContain(analysis, precedingTask, taskID);
                 const b8 eligibleScoredMerge = directlyDependsOnPrecedingTask && task.scheduling.cost <= GpuTaskCostHint::Small && !task.scheduling.allowMergeAcrossConsumerFrontier;
@@ -239,8 +233,6 @@ namespace GpuTaskGraphCompilerDetail{
                 precedingPacketAllowsMerge = eligibleScoredMerge;
             }
             if(precedingPacketAllowsMerge && task.scheduling.allowMergeAcrossConsumerFrontier){
-                // This narrow opt-in is only valid for an explicit immediate successor.
-                // It must not let an unrelated same-queue task quietly absorb an already-signallable cross-queue frontier.
                 const GpuTaskId precedingTask = compiledPlan.packetTasks[precedingPacket.taskOffset + precedingPacket.taskCount - 1u];
                 b8 explicitlyDependsOnPrecedingTask = false;
                 for(usize dependencyIndex = 0u; dependencyIndex < task.dependencyCount; ++dependencyIndex){

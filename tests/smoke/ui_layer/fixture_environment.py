@@ -1,4 +1,3 @@
-"""Isolate one current UI fixture from inherited selectors and capture controls."""
 from __future__ import annotations
 
 import platform

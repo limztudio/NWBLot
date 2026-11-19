@@ -22,13 +22,11 @@ NWB_CORE_BEGIN
 class GpuNativePacketRecorder;
 class CommandListResourceSelection;
 
-// Queue identity for command lists and state handoffs (avoids pulling in device.h).
 namespace CommandQueue{
     static constexpr u8 s_CommandQueueGraphicsBase = 0;
     enum Enum : u8{
         Graphics = s_CommandQueueGraphicsBase,
         Compute,
-        // Optional copy transport, only when the selected backend exposes a distinct transfer-only queue.
         Transfer,
 
         kCount
@@ -37,7 +35,6 @@ namespace CommandQueue{
 
 inline constexpr usize s_QueueClassCount = static_cast<usize>(CommandQueue::kCount);
 
-// Native recording names the pool/timeline owner queue. IDs scope to one device generation; invalid IDs never key ownership.
 struct GpuPhysicalQueueId{
     u16 index = Limit<u16>::s_Max;
     u16 deviceGeneration = 0u;
@@ -56,7 +53,6 @@ inline constexpr b8 operator!=(const GpuPhysicalQueueId& lhs, const GpuPhysicalQ
     return !(lhs == rhs);
 }
 
-// Completion edge from an accepted submission. False for rejected/empty work; sync-only submits may still forward a token.
 struct QueueSubmissionToken{
     u64 value = 0;
     u16 physicalQueueIndex = Limit<u16>::s_Max;
@@ -85,7 +81,6 @@ public:
     return !(lhs == rhs);
 }
 
-// Immutable queue pressure sampled at one scheduling decision. Timeline distance is a coarse availability signal.
 struct GpuQueueTimelineSnapshot{
     GpuPhysicalQueueId queue;
     u64 submittedValue = 0u;
@@ -115,7 +110,6 @@ namespace GpuQueueCapability{
     NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
 };
 
-// `queueClass` keeps API capability validation; `id` selects the native transport.
 struct GpuPhysicalQueueInfo{
     u32 familyIndex = Limit<u32>::s_Max;
     u32 queueIndex = 0u;
@@ -126,7 +120,6 @@ struct GpuPhysicalQueueInfo{
     b8 dedicated = false;
 };
 
-// Borrowed immutable topology view; its producer owns the storage. A compiled-graph view becomes invalid at reset/recompile.
 struct GpuPhysicalQueueTopology{
     const GpuPhysicalQueueInfo* queues = nullptr;
     usize queueCount = 0u;
@@ -142,8 +135,6 @@ public:
     }
 };
 
-// Native command storage for one queue. Snapshots sample thread-safe counters, so fields may advance mid-query.
-// The storage estimate covers client-visible pool and command-buffer handles only, not opaque driver memory or wrapper capacity.
 struct GpuCommandArenaStatistics{
     u64 workerArenaCount = 0u;
     u64 commandPoolEpochCount = 0u;
@@ -163,9 +154,6 @@ public:
     [[nodiscard]] b8 valid()const noexcept{ return queue.valid(); }
 };
 
-// Snapshot for one recording worker on one physical queue.
-// Direct recording is domain/index {0,0}; shards use the GpuRecordedPacket domain/index.
-// Counters sample independently and may advance during the query; the storage estimate covers handle objects only, not opaque driver memory.
 struct GpuCommandArenaWorkerStatistics{
     u64 recordingWorkerDomain = 0u;
     u64 commandPoolEpochCount = 0u;
@@ -189,7 +177,6 @@ public:
 typedef GraphicsBackend::Handle<EventQuery> EventQueryHandle;
 typedef GraphicsBackend::Handle<TimerQuery> TimerQueryHandle;
 
-// One begin/end cycle. Query, queue, generation, and reset authorization stop a reused buffer from closing another cycle.
 struct TimerQueryRecordingEndpoints{
     b8 recordsBegin = false;
     b8 recordsEnd = false;
@@ -209,7 +196,6 @@ public:
     }
 };
 
-// One command-list marker. Native recording identity blocks stale closes on a reused list; markerSerial separates owners at the same nesting depth.
 struct CommandMarkerRecordingToken{
     u64 recordingLeaseSerial = 0u;
     u64 nativeRecordingID = 0u;
@@ -222,7 +208,6 @@ public:
     }
 };
 
-// Raw device timestamps for one timer query. Only the low timestampValidBits are exposed, so durations use modular tick arithmetic.
 struct TimerQueryResult{
     static constexpr u32 s_FullWidthBits = 64u;
 
@@ -265,10 +250,6 @@ public:
     }
 };
 
-// Final tracked state of one primary list for the next to begin from. Refs stay alive until the consumer opens.
-
-// Carries transient and permanent state. UAV-barrier policy stays per-list; keepInitialState captures after close-time restore.
-// Before the producer is accepted, this handoff is the only valid cross-list source for that restored native state.
 class CommandListResourceStateHandoff final : NoCopy{
     friend class GraphicsBackend::CommandList;
     friend class GpuNativePacketRecorder;
@@ -280,7 +261,6 @@ class CommandListResourceStateHandoff final : NoCopy{
 private:
     struct TextureState{
         Texture* texture = nullptr;
-        // Invalid ID means shared or unclaimed; otherwise the last owning queue. A valid release target needs a paired acquire.
         GpuPhysicalQueueId ownerQueue;
         GpuPhysicalQueueId releaseDestinationQueue;
         ResourceStates::Mask state = ResourceStates::Unknown;
@@ -322,35 +302,22 @@ public:
     [[nodiscard]] b8 valid()const noexcept{ return m_valid; }
 
     [[nodiscard]] u16 deviceGeneration()const noexcept{ return m_deviceGeneration; }
-    // Snapshots keep raw backend pointers. Keep the producer Device identity so stale snapshots reject after recreation.
     [[nodiscard]] b8 validForDeviceGeneration(const u16 deviceGeneration)const noexcept{
         return m_valid && deviceGeneration != 0u && m_deviceGeneration == deviceGeneration;
     }
 
-    // Fan-in merge of branch-final states over a normalized base (branches opened from base; base < branches < consumer).
-    // Final states only: callers keep cross-branch hazards disjoint.
-    // False on invalid/incompatible; `this` != inputs.
     [[nodiscard]] b8 buildFanIn(const CommandListResourceStateHandoff& base, const CommandListResourceStateHandoff* const* branches, usize branchCount, Alloc::ScratchArena& scratchArena);
 
-    // Subset handoff of selected resources (cross-queue imports take only what their queue may access).
-    // Nulls ignored, `source` may alias `this`; failure-atomic.
     [[nodiscard]] b8 buildResourceSubset(const CommandListResourceStateHandoff& source, Texture* const* textures, usize textureCount, Buffer* const* buffers, usize bufferCount, Alloc::ScratchArena& scratchArena);
-    // Reuses one completed selection across multiple filtered snapshots without retaining its scratch storage.
     [[nodiscard]] b8 buildResourceSubset(const CommandListResourceStateHandoff& source, const CommandListResourceSelection& selection);
     [[nodiscard]] b8 buildTextureRangeSubset(const CommandListResourceStateHandoff& source, Texture* texture, TextureSubresourceSet subresources);
-    // Clips ordinary buffer states. Pending ownership releases must be selected in full because the acquire must use their original byte ranges.
     [[nodiscard]] b8 buildBufferRangeSubset(const CommandListResourceStateHandoff& source, Buffer* buffer, BufferRange range);
-    // Imported exclusive-owner texture handoffs need one concrete state per selected subresource, with source owner and release target checked.
     [[nodiscard]] b8 coversTextureRangeWithOwnership(Texture* texture, TextureSubresourceSet subresources, GpuPhysicalQueueId expectedOwnerQueue, GpuPhysicalQueueId expectedReleaseDestinationQueue)const noexcept;
-    // Buffer ownership must cover every byte in the requested range; unrelated intervals may have different owners.
     [[nodiscard]] b8 coversBufferWithOwnership(Buffer* buffer, GpuPhysicalQueueId expectedOwnerQueue, GpuPhysicalQueueId expectedReleaseDestinationQueue, BufferRange range = s_EntireBuffer)const noexcept;
     [[nodiscard]] b8 coversBufferWithOwnership(Buffer& buffer, GpuPhysicalQueueId expectedOwnerQueue, GpuPhysicalQueueId expectedReleaseDestinationQueue, BufferRange range = s_EntireBuffer)const noexcept{
         return coversBufferWithOwnership(&buffer, expectedOwnerQueue, expectedReleaseDestinationQueue, range);
     }
-    // Copies a valid state snapshot without exposing backend tracker storage.
-    // Packet recording retains graph-owned producer seeds while individual command-list consumers request their own final handoff.
     [[nodiscard]] b8 copyFrom(const CommandListResourceStateHandoff& source);
-    // Swaps snapshot storage with no alloc. Both snapshots must share one arena.
     [[nodiscard]] b8 exchangeSnapshot(CommandListResourceStateHandoff& snapshot)noexcept;
     [[nodiscard]] b8 hasPendingBufferReleases()const noexcept;
     [[nodiscard]] b8 empty()const noexcept{

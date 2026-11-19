@@ -249,10 +249,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 
 if __name__ == MAIN_ENTRY:
-    # Direct CMake invocation avoids executing the launcher's public CLI facade.
     import types
     package = types.ModuleType(ROOT_PACKAGE)
     package.__path__ = [str(Path(__file__).resolve().parents[1])]
     sys.modules.setdefault(ROOT_PACKAGE, package)
     raise SystemExit(main())
-

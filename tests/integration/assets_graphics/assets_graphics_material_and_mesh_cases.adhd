@@ -484,7 +484,6 @@ void VerifyAssetsGraphics_MaterialBindDiscoveryValidation(){
     const GraphicsTestPath cacheSubdir = JoinGraphicsPath3(prepared.root, s_CacheDirectory, s_TestsConfiguration, s_MaterialBindIncludesDirectory);
     const GraphicsTestPath generatedIncludePath = JoinGraphicsPath3(cacheSubdir, s_ProjectVirtualRoot, s_MaterialInterfacesDirectory, s_SurfaceBindFilename);
 
-    // Removing the last bind source clears its generated include on recook.
     const GraphicsTestPath assetRoot = JoinGraphicsPath(prepared.root, s_AssetsDirectory);
     const Expected<b8, ErrorCode> removedBind = GraphicsRemoveFile(JoinGraphicsPath2(assetRoot, s_MaterialInterfacesDirectory, s_SurfaceBindFilename));
     ASSERT_TRUE(removedBind.has_value());
@@ -718,7 +717,6 @@ void VerifyAssetsGraphics_MaterialFailedReloadPreservesTypedLayoutStagesFlagsAnd
     const Expected<MaterialBinaryTypedLayoutOffsets> layoutOffsets = FindTestMaterialBinaryTypedLayoutOffsets(binary);
     ASSERT_TRUE(layoutOffsets.has_value());
 
-    // First stage entry follows block bytes, resource references, and stage count.
     const usize firstStageOffset = layoutOffsets.value().blockByteCountOffset + 4u + material.typedBlockBytes().size() + 4u + material.resourceReferences().size() * s_MaterialResourceReferenceBytes + 4u;
     for(u32 invalidCase = 0u; invalidCase < 5u; ++invalidCase){
         const ScopedTestTrace trace(invalidCase);
@@ -738,7 +736,6 @@ void VerifyAssetsGraphics_MaterialFailedReloadPreservesTypedLayoutStagesFlagsAnd
             malformed.push_back(0u);
             break;
         case 4u:
-            // Materials only hold mesh and pixel stages.
             ASSERT_TRUE(OverwriteVertexStageInMaterialBytes(firstStageOffset, malformed));
             break;
         default: break;

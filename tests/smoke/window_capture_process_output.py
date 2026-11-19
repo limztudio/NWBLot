@@ -1,5 +1,3 @@
-"""Own temporary process-output captures and their launch lifecycle."""
-
 from dataclasses import dataclass
 from pathlib import Path
 import subprocess

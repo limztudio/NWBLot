@@ -19,7 +19,6 @@ NWB_METASCRIPT_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Token stream and parse error sink shared by the statement, expression, attribute, and adhd parsers.
 class ParserCursor final{
     friend class ExpressionParser;
     friend class StatementParser;

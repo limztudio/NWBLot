@@ -162,7 +162,6 @@ b8 CaptureOutputState(
 
 [cpp_unwind]
 b8 RecordRasterCommandIr(in GpuRasterTask payload, in GpuTaskRecordContext context, mut CommandList commands){
-    // A task-local stream must not silently disappear from a caller's separate packet capture.
     if(context.hasCommandIrCapture())
         return false;
     in GpuFrame frame = payload.frame;

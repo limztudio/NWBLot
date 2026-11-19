@@ -218,7 +218,6 @@ void CommandBufferResourceReferences::promoteMembershipIndex(){
     for(const RetainedBufferStateCommit& commit : m_bufferStateCommits)
         membership[NotNull<GraphicsResource*>(commit.buffer.get())] |= s_BufferStateCommit;
 
-    // Build membership off to the side; on failure the ordered lists stay authoritative.
     static_assert(IsNothrowMoveConstructible_V<MembershipIndex>);
     m_membership.emplace(Move(membership));
 }

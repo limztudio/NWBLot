@@ -14,7 +14,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The event-thread bridge owns snapshots and events. Application models are lent only by the current declaration.
 [modular]
 class UiEditBoxHost : IEditBoxHost{
     [cpp_unwind]

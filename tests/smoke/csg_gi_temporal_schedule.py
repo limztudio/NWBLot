@@ -1,5 +1,3 @@
-"""Validate CSG temporal capture schedule and runtime log evidence."""
-
 import math
 import re
 

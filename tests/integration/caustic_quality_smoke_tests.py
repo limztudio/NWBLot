@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Validate explicit quality selection and actual producer evidence without launching a renderer."""
 
 from pathlib import Path
 import sys
@@ -60,7 +59,6 @@ class CausticQualitySmokeTests(unittest.TestCase):
                     for variant in VARIANTS:
                         env = optical.capture_environment(variant, software, divisor)
                         self.assertEqual(env[LIT_NWB_CAUSTIC_PHOTON_GRID_DIVISOR], str(divisor))
-
 
     def test_missing_mismatched_malformed_and_incoherent_evidence_fails(self):
         text = record(2)

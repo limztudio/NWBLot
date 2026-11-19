@@ -51,8 +51,6 @@ private:
             if(!backing)
                 return nullptr;
 
-            // Header and aligned payload share one backing allocation.
-            // Logical capacity excludes the header so cache sizing and arena telemetry keep their contract.
             return new(backing) Chunk(payloadSize, MakeNotNull(static_cast<u8*>(backing) + payloadOffset));
         }
 
@@ -193,13 +191,11 @@ public:
                 return nullptr;
         }
 
-        // A raw zero-byte allocation may leave one empty active chunk; it owns no tracked bytes.
         void* p = bucket.active->allocate(size).get();
         m_memoryStats.recordAllocation(size);
         return p;
     }
 
-    // LIFO only: p is the bucket's most-recent alloc. Grows in place, else moves to a fresh block.
     [[nodiscard]] FOUNDATION_INLINE void* reallocate(void* p, usize align, usize size)override{
         FOUNDATION_ASSERT_MSG(IsValidAlignment(align), FOUNDATION_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
         if(!IsValidAlignment(align))
@@ -241,7 +237,6 @@ public:
         return next;
     }
 
-    // LIFO across chunks: empty chunks cache and expose the prior live alloc; out-of-order frees are no-ops reclaimed at destroy.
     FOUNDATION_INLINE void deallocate(void* p, usize align, usize size)noexcept override{
         FOUNDATION_ASSERT_MSG(IsValidAlignment(align), FOUNDATION_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
         if(!IsValidAlignment(align) || size == 0u)
@@ -282,8 +277,6 @@ private:
                 return nullptr;
         }
 
-        // Secure the replacement before changing ownership.
-        // Each undersized cached chunk is retired once; future new chunks keep the high-water size so alternating workloads do not recreate small chunks.
         while(bucket.cached && bucket.cached != chunk){
             Chunk* discarded = bucket.cached;
             bucket.cached = discarded->m_next;

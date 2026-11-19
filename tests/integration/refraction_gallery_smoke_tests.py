@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Check invalid selections, inherited capture state, and pixel thresholds."""
 
 import argparse
 from pathlib import Path
@@ -48,7 +47,6 @@ class RefractionGalleryTests(unittest.TestCase):
         self.assertNotIn(LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH, env)
         self.assertNotIn(LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_CO, env)
         self.assertEqual(inherited[LIT_NWB_REFRACTION_SMOKE_CASE], LIT_NESTED)
-
 
     def test_difference_counts_only_pixels_above_channel_threshold(self):
         reference = (2, 1, [[(0, 0, 0), (10, 10, 10)]])

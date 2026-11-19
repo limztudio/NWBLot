@@ -1,5 +1,3 @@
-"""Paired reflection timing inference and control-drift classification."""
-
 from pathlib import Path
 import statistics
 import sys

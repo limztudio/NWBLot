@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Text-area capture, caret and native pixel-sampling regression tests."""
 
 import math
 import sys

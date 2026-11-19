@@ -51,7 +51,6 @@ b8 GpuTaskGraph::applyCompiledBarrier(
             const ArraySlice arrayEnd = subresources.baseArraySlice + subresources.numArraySlices;
             for(ArraySlice arraySlice = subresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
                 for(MipLevel mipLevel = subresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
-                    // open() can seed this subresource from a handoff. The declaration wins when no explicit tracker state exists.
                     if(commandList.hasExplicitTextureSubresourceState(resource.texture.get(), arraySlice, mipLevel))
                         continue;
                     commandList.beginTrackingTextureState(resource.texture.get(), TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u), barrier.before);
@@ -82,7 +81,6 @@ b8 GpuTaskGraph::applyCompiledBarrier(
         const ResourceStates::Mask permanentState = commandList.getPermanentTextureState(resource.texture.get());
         if(permanentState != ResourceStates::Unknown && permanentState != barrier.after)
             return false;
-        // A thunk may transition past its declared entry use. Reapply the compiler final state and keep it, so close publishes a full handoff.
         commandList.setTextureState(resource.texture.get(), barrier.range.textureSubresources, barrier.after);
         commandList.beginTrackingTextureState(resource.texture.get(), barrier.range.textureSubresources, barrier.after);
         return true;
@@ -106,8 +104,6 @@ b8 GpuTaskGraph::applyCompiledBarrier(
         const ResourceStates::Mask permanentState = commandList.getPermanentBufferState(backingBuffer);
         if(permanentState != ResourceStates::Unknown && permanentState != barrier.after)
             return false;
-        // Acceleration-structure state and ownership are represented by Vulkan through the allocation that backs the AS.
-        // Keep that lowering private to the graph runtime while retaining one typed graph resource.
         commandList.setAccelStructState(resource.accelStruct.get(), barrier.after);
         commandList.beginTrackingBufferState(backingBuffer, barrier.after);
         return true;
@@ -171,7 +167,6 @@ b8 GpuTaskGraph::applyCompiledBarrier(
         if(!resolveOwnershipQueues() || commandList.getResolvedDescription().physicalQueue != destinationQueue->id)
             return false;
 
-        // open() already imports the producer seed and emits the paired acquire; this record is a checked plan marker.
         return true;
     }
     default:
@@ -201,7 +196,6 @@ b8 GpuTaskGraph::seedTaskRetainedResourceStates(const GpuCompiledGraph& compiled
             if(!resource.texture)
                 return false;
             const TextureDesc& description = resource.texture->getCreationDescription();
-            // Seed only a state the backend keeps at packet close; other resources need a compiler transition or record-time state first.
             if(!description.keepInitialState || description.initialState != use.requiredState)
                 continue;
 
@@ -222,7 +216,6 @@ b8 GpuTaskGraph::seedTaskRetainedResourceStates(const GpuCompiledGraph& compiled
                 if(!stateMatches)
                     break;
             }
-            // A task can set this state in its own body (e.g. upload flips CopyDest back to ShaderResource). Only seed what is already there.
             if(!stateMatches)
                 continue;
             commandList.beginTrackingTextureState(resource.texture.get(), subresources, use.requiredState);

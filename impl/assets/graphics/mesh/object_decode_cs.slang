@@ -23,7 +23,7 @@ struct NwbMeshObjectVertex{
 };
 
 #pragma warning(push)
-#pragma warning(disable: 39001) // The object cache shares the canonical StorageBuffer descriptor table.
+#pragma warning(disable: 39001)
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbMeshObjectVertex, Std430DataLayout> g_NwbHeapMeshObjectVertexBuffers[];
 #pragma warning(pop)
 
@@ -35,7 +35,6 @@ struct NwbMeshObjectVertex{
 void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     const uint meshletIndex = groupID.x;
     const uint outputSlot = nwbMeshFrameGeneratedVertexHeapSlot();
-    // The marker makes the culled vertex independent of the current instance and view, including an empty mesh.
     if(meshletIndex == 0u && groupThreadID.x == 0u){
         const NwbMeshObjectVertex sentinel = { float4(0.0), uint2(0u), uint2(0u), float2(0.0), uint2(0u) };
         g_NwbHeapMeshObjectVertexBuffers[outputSlot][NWB_MESH_OBJECT_SENTINEL_VERTEX_INDEX] = sentinel;
@@ -62,7 +61,6 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
         g_NwbHeapMeshObjectVertexBuffers[outputSlot][outputIndex] = output;
     }
 
-    // Topology is invariant under instance/view changes. Preserve primitive offsets, winding, and local-reference seams.
     const uint primitiveCount = nwbMeshletPrimitiveCount(meshlet);
     for(uint primitiveIndex = groupThreadID.x; primitiveIndex < primitiveCount; primitiveIndex += NWB_MESH_SHADER_GROUP_SIZE_X){
         const uint primitiveBase = meshlet.primitiveOffset + primitiveIndex * NWB_MESHLET_TRIANGLE_INDEX_COUNT;

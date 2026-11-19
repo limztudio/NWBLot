@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Independent area-integrated GGX reference for the actual reflection smoke image."""
 
 import math
 
@@ -21,7 +20,6 @@ def decode_radiance(channel):
     mapped = encoded / 12.92 if encoded <= 0.04045 else ((encoded + 0.055) / 1.055) ** 2.4
     if mapped >= 0.999:
         raise SmokeFailure("rough reflection reached the clipped presentation range")
-    # The fixture pins exposure=1 and the Reinhard shoulder=1 before the sRGB attachment conversion.
     return mapped / (1.0 - mapped)
 
 
@@ -99,7 +97,6 @@ def analyze_furnace(frame, roughness):
     for cell, value in zip(cells, actual):
         point = ReflectionRoughnessOracle.receiver_point((cell[0] + cell[2]) * 0.5, (cell[1] + cell[3]) * 0.5, width, height)
         nv = -ReflectionRoughnessOracle.normalize((-point[0], 1.4 - point[1], -6.0))[2]
-        # At alpha=1 and F0=1, correlated Smith single-scatter GGX has this closed-form directional albedo.
         expected = 1.0 if roughness == 0.0 else 1.0 - nv * math.log1p(1.0 / nv)
         pixel_count = (cell[2] - cell[0]) * (cell[3] - cell[1])
         blue = sum(DECODED_RADIANCE[rows[y][x][2]] for y in range(cell[1], cell[3]) for x in range(cell[0], cell[2])) / pixel_count

@@ -12,6 +12,7 @@
 
 
 #include "asset_file_discovery.h"
+#include "built_asset_format.h"
 #include "cook_dependency_registry.h"
 #include "cook_entry_registry.h"
 #include "expanded_metadata.h"
@@ -173,24 +174,10 @@ template<typename EntryT, ParseMetadataValueFn<EntryT> ParseValFn>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_NwbAssetCacheMagic = 0x4341574eu; // NWAC
-inline constexpr u16 s_NwbAssetCacheVersion = 2u;
-inline constexpr u32 s_NwbAssetCacheFlagStandalone = 1u << 0u;
-
-struct NwbAssetCacheFileHeader{
-    u32 magic = s_NwbAssetCacheMagic;
-    u16 version = s_NwbAssetCacheVersion;
-    u16 headerSize = sizeof(NwbAssetCacheFileHeader);
-    u32 flags = 0u;
-    u32 entryCount = 0u;
-    Sha256Digest paramSha256 = {};
-    u64 payloadSectionSize = 0u;
-    u64 payloadSectionHashFnv64 = 0u;
-};
-
 struct NwbFileAssetCacheRecord{
     Path cacheFilePath;
-    CookString relativePathText;
+    CookString sourcePathText;
+    CookVector<Name> cachedVirtualPaths;
     Sha256Digest paramSha256 = {};
     b8 standalone = false;
     b8 loadedFromCache = false;
@@ -200,7 +187,8 @@ struct NwbFileAssetCacheRecord{
 public:
     explicit NwbFileAssetCacheRecord(CookArena& arena)noexcept
         : cacheFilePath(arena)
-        , relativePathText(arena)
+        , sourcePathText(arena)
+        , cachedVirtualPaths(arena)
     {}
 };
 
@@ -367,7 +355,7 @@ void RegisterAssetPairedSidecarRule(const AssetPairedSidecarRule& rule);
 [[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedDocumentMetadataParsers(AssetDocumentMetadataParseContext& context);
 [[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedValueMetadataParsers(AssetValueMetadataParseContext& context);
 [[nodiscard]] Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> TryAutoCollectedAssetBunchExpanders(const AssetBunchExpandContext& context);
-[[nodiscard]] b8 ParseAssetMetadata(Span<const DiscoveredNwbFile> nwbFiles, const Path& repoRoot, const Path& assetCacheDirectory, CookArena& cookArena, Core::CpuTaskScheduler& cpuScheduler, ScratchArena& scratchArena, ParsedAssetMetadata& outMetadata);
+[[nodiscard]] b8 ParseAssetMetadata(Span<const DiscoveredNwbFile> nwbFiles, const Path& assetCacheDirectory, CookArena& cookArena, Core::CpuTaskScheduler& cpuScheduler, ScratchArena& scratchArena, ParsedAssetMetadata& outMetadata);
 
 template<typename Entry, typename Asset, typename Codec, const AStringView& DiagnosticPrefix, typename Read, typename Build>
 [[nodiscard]] inline b8 RegisterAuthoredCookEntry(CookEntryRegistry& registry, const TStringView label, const b8 acceptsValue, const b8 logsFailure, Read, Build){

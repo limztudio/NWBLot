@@ -17,7 +17,6 @@
 #define NWB_SHADOW_RESOLVE_SIGMA_BASE 4.0
 #define NWB_SHADOW_RESOLVE_SIGMA_EPS_BASE 0.05
 #define NWB_SHADOW_RESOLVE_SIGMA_DISTANCE_MIN 1e-3
-// The kernel reaches this many taps to each side of the center; the tile halo covers both sides.
 #define NWB_SHADOW_RESOLVE_KERNEL_RADIUS 2
 #define NWB_SHADOW_RESOLVE_KERNEL_HALO (2 * NWB_SHADOW_RESOLVE_KERNEL_RADIUS)
 #define NWB_SHADOW_RESOLVE_KERNEL_SIDE (NWB_SHADOW_RESOLVE_KERNEL_HALO + 1)
@@ -27,7 +26,6 @@
 #define NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_CENTER 6.0h
 #define NWB_SHADOW_RESOLVE_BSPLINE_CENTER_BASE 0.75h
 
-// 5x5 B-spline a-trous kernel shared by independent and fused visibility filters.
 static const half NWB_SHADOW_RESOLVE_KERNEL[NWB_SHADOW_RESOLVE_KERNEL_SIDE] = {
     half(NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_OUTER / NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_DENOMINATOR),
     half(NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_INNER / NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_DENOMINATOR),
@@ -37,7 +35,6 @@ static const half NWB_SHADOW_RESOLVE_KERNEL[NWB_SHADOW_RESOLVE_KERNEL_SIDE] = {
 };
 
 struct NwbShadowResolvePushConstants{
-    // Must match ShadowResolvePushConstants in C++; resource slots select global heap views.
     uint width;
     uint height;
     uint halfWidth;
@@ -46,8 +43,8 @@ struct NwbShadowResolvePushConstants{
     uint stage;
     uint lightSlotStart;
     uint lightSlotCount;
-    uint momentsValid; // May sample temporal moments only when nonzero.
-    uint upsampleFold; // 0 overwrites opaque visibility; 1 multiplies transparent visibility and leaves background unchanged.
+    uint momentsValid;
+    uint upsampleFold;
     uint geometrySlot;
     uint depthSlot;
     uint worldPositionSlot;
@@ -57,7 +54,7 @@ struct NwbShadowResolvePushConstants{
     uint outputStorageSlot;
     uint visibilityStorageSlot;
     uint sceneShadingSlot;
-    uint opaqueInputColorSlot; // Combined upsample reads the opaque half-resolution input from this slot.
+    uint opaqueInputColorSlot;
     uint receiverFactor;
 };
 

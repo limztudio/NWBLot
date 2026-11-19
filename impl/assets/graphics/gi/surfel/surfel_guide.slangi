@@ -9,9 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Piecewise-constant guide in the surfel local frame. Equal intervals give equal solid angles; mixed PDF covers both.
-
-
 #include "../constants.h"
 #include "surfel_binding_slots.h"
 
@@ -19,7 +16,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Four float4 entries per surfel live in a separate guide buffer; this local value is used by active trace rays.
 struct NwbSurfelGuide{
     float4 weights[NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL];
 };
@@ -28,17 +24,14 @@ struct NwbSurfelGuide{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// lowbias32 integer hash.
 static const uint NWB_SURFEL_GUIDE_HASH_OUTER_SHIFT = 16u;
 static const uint NWB_SURFEL_GUIDE_HASH_MIDDLE_SHIFT = 15u;
 static const uint NWB_SURFEL_GUIDE_HASH_FIRST_MULTIPLIER = 0x7feb352du;
 static const uint NWB_SURFEL_GUIDE_HASH_SECOND_MULTIPLIER = 0x846ca68bu;
 
-// Random values keep the top 22 hash bits and scale them by 2^-22.
 static const uint NWB_SURFEL_GUIDE_RANDOM_DROPPED_BITS = 10u;
 static const float NWB_SURFEL_GUIDE_RANDOM_UNIT_SCALE = 1.0 / 4194304.0;
 
-// Each float4 guide entry packs four bins.
 static const uint NWB_SURFEL_GUIDE_BINS_PER_FLOAT4 = 4u;
 static const uint NWB_SURFEL_GUIDE_FLOAT4_BIN_SHIFT = 2u;
 static const uint NWB_SURFEL_GUIDE_FLOAT4_BIN_MASK = 3u;
@@ -57,8 +50,6 @@ uint nwbSurfelGuideHash(uint value){
 }
 
 float nwbSurfelGuideRandom(uint seed){
-    // A 22-bit midpoint is exactly representable in float32 and stays strictly inside (0, 1).
-    // Using 24 bits could round the upper endpoint to one, outside the last CDF stratum.
     return (float(nwbSurfelGuideHash(seed) >> NWB_SURFEL_GUIDE_RANDOM_DROPPED_BITS) + 0.5) * NWB_SURFEL_GUIDE_RANDOM_UNIT_SCALE;
 }
 
@@ -96,7 +87,6 @@ float nwbSurfelGuideInversePdf(const NwbSurfelGuide guide, const uint bin, const
     if(guidedRayCount == 0u)
         return NWB_GI_FULL_TURN_RADIANS;
 
-    // Both ray classes share the mixture PDF. Scale by rayCount * binCount * guideTotal to skip three divisions.
     const float binWeight = nwbSurfelGuideWeight(guide, bin);
     const float denominator = float(uniformRayCount) * guideTotal + float(guidedRayCount * NWB_SURFEL_GUIDE_BIN_COUNT) * binWeight;
     return NWB_GI_FULL_TURN_RADIANS * float(rayCount) * guideTotal / denominator;

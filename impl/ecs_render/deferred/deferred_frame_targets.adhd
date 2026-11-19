@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Deferred owns these buffers, while the root module freezes their generation for graph imports and ray-tracing payloads.
 b8 ValidDeferredCsgTargetLayerCounts(
     in u32 peelLayerCount,
     in u32 receiverEventLayerCount,
@@ -40,11 +39,9 @@ class DeferredLightingGraphResources{
     }
 }
 
-// Deferred target generation owns these heap registrations and retires them before target release.
 class DeferredBindlessFrameResources{
     public BufferHandle slotsBuffer;
     public DeferredBindlessResourceSlots slots;
-    // Shared global-heap UniformBuffer slot payload.
     public GpuDescriptorHandle slotsBufferDescriptor = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle gbufferBaseColor = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle gbufferNormal = GpuDescriptorHandleInvalid();
@@ -52,7 +49,6 @@ class DeferredBindlessFrameResources{
     public GpuDescriptorHandle gbufferSpecularRoughness = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle gbufferDepth = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle shadowVisibility = GpuDescriptorHandleInvalid();
-    // Writable view of the sampled shadow visibility array.
     public GpuDescriptorHandle shadowVisibilityStorage = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle causticIrradiance = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle causticIrradianceStorage = GpuDescriptorHandleInvalid();
@@ -80,7 +76,6 @@ class DeferredBindlessFrameResources{
     public GpuDescriptorHandle avboitLinearSampler = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle sceneShading = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle lightList = GpuDescriptorHandleInvalid();
-    // Typed uint accumulator plus floating-point caustic resolve views.
     public GpuDescriptorHandle causticAccumulator = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle causticAccumulatorStorage = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle causticHistory = GpuDescriptorHandleInvalid();
@@ -207,7 +202,6 @@ class DeferredBindlessFrameResources{
     }
 }
 
-// Optional immutable one-frame-lagged lighting history.
 class DeferredLaggedLightingHistoryResources{
     public TextureHandle shadowVisibility;
     public TextureHandle causticIrradiance;
@@ -218,7 +212,6 @@ class DeferredLaggedLightingHistoryResources{
     public GpuDescriptorHandle shadowVisibilityDescriptor = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle causticIrradianceDescriptor = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle surfelIrradianceDescriptor = GpuDescriptorHandleInvalid();
-    // Prevents accepting history from a recycled target generation.
     public u64 generation = 0u;
     public b8 slotsUploaded = false;
 
@@ -281,40 +274,29 @@ class DeferredFrameTargets{
     public TextureHandle csgRemovedIntervalData;
     public TextureHandle csgRemovedIntervalCount;
     public TextureHandle opaqueColor;
-    // Compute output presented by a Graphics blit.
     public TextureHandle compositeColor;
     public TextureHandle depth;
-    // Full-resolution per-light visibility; HW opaque and SW transparent paths combine here.
     public TextureHandle shadowVisibility;
-    // Half-resolution adaptive transparent-shadow scratch; null when disabled.
     public TextureHandle shadowCoarseTransmittance;
-    // Half-resolution opaque soft-shadow ping-pong and geometry cache.
     public TextureHandle shadowSoftHalfA;
     public TextureHandle shadowSoftHalfB;
     public TextureHandle shadowSoftGeometry;
-    // Reprojected opaque soft-shadow history and moments; reset with the visibility target.
     public TextureHandle shadowHistA;
     public TextureHandle shadowHistB;
     public TextureHandle shadowMomentsA;
     public TextureHandle shadowMomentsB;
     public TextureHandle shadowSoftGeometryPrev;
-    // Separate transparent history is denoised before multiplying onto opaque visibility.
     public TextureHandle transparentSoftHalf;
     public TextureHandle transparentHistA;
     public TextureHandle transparentHistB;
     public TextureHandle transparentMomentsA;
     public TextureHandle transparentMomentsB;
-    // Additive caustic targets; black is the no-producer identity.
     public TextureHandle causticIrradiance;
-    // Screen-space surfel GI avoids sharing the writable pool with deferred lighting.
     public TextureHandle surfelIrradiance;
-    // Reduced-resolution surfel GI gather output; surfelResolveFactor belongs to this target generation.
     public TextureHandle surfelIrradianceHalf;
     public TextureHandle causticAccumulator;
-    // Half-resolution caustic a-trous ping-pong.
     public TextureHandle causticHistory;
     public TextureHandle causticResolveHalf;
-    // Half-resolution caustic geometry cache.
     public TextureHandle causticResolveGeometry;
     public FramebufferHandle framebuffer;
     public DeferredBindlessFrameResources bindless;

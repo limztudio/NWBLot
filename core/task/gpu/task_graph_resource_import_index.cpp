@@ -51,8 +51,6 @@ GpuGraphResourceImportIndex::ResourceImportMatch GpuGraphResourceImportIndex::fi
         }
         if(identity){
             const auto found = m_resourceIdentityIndex->find(*identity);
-            // At the same ordinal the typed pointer wins.
-            // An earlier identity conflict still rejects before a later pointer match, matching the original ordered import validation.
             if(found != m_resourceIdentityIndex->end() && found.value() < match.index)
                 return { found.value(), false };
         }
@@ -107,7 +105,6 @@ void GpuGraphResourceImportIndex::prepareResourceIndexes(const Span<const Resour
         usize pointerCount = pendingPointer.pointer ? 1u : 0u;
         for(usize index = 0u; index < resources.size(); ++index){
             const ResourceNode& resource = resources[index];
-            // Insertion retains the first ordinal; later declarations must never replace earlier lookup priority.
             identities.emplace(resource.identity.identityHash(), static_cast<u32>(index));
             if(MakeResourcePointerKey(resource).pointer)
                 ++pointerCount;
@@ -122,7 +119,6 @@ void GpuGraphResourceImportIndex::prepareResourceIndexes(const Span<const Resour
             }
         }
 
-        // Build both tables before publishing either. Both hold published ordinals only.
         static_assert(IsNothrowMoveConstructible_V<IdentityIndex>);
         static_assert(IsNothrowMoveConstructible_V<PointerIndex>);
         m_resourceIdentityIndex.emplace(Move(identities));
@@ -138,7 +134,6 @@ void GpuGraphResourceImportIndex::prepareResourceSetIndex(const Span<const Resou
         return;
     const usize identityCount = AddSize(sets.size(), 1u);
     IdentityIndex identities(AddSize(identityCount, identityCount), m_arena);
-    // emplace intentionally keeps the first ordinal for the exact identity.
     for(usize index = 0u; index < sets.size(); ++index)
         identities.emplace(sets[index].identity.identityHash(), static_cast<u32>(index));
     static_assert(IsNothrowMoveConstructible_V<IdentityIndex>);

@@ -1,5 +1,3 @@
-"""Validate smoke-owned CPU/GPU publications without treating overlapping scopes as wall-time components."""
-
 import math
 from pathlib import Path
 import re
@@ -34,7 +32,6 @@ LIT_UTF_8 = "utf-8"
 ENABLED = "SmokeCpuGpuTimingProbe: enabled "
 COMPLETE = "SmokeCpuGpuTimingProbe: complete "
 REQUIRED_CPU = {LIT_GRAPHICS_FRAME, LIT_GRAPHICS_PREPARE_RESOURCES, LIT_GRAPHICS_RENDER_PASSES, LIT_GRAPHICS_BEGIN_FRAME, LIT_GRAPHICS_PRESENT}
-# Known producer scope names decoded via the canonical Name hash.
 KNOWN_CPU = ("frame.project_update", LIT_GRAPHICS_FRAME, "graphics.animate", LIT_GRAPHICS_BEGIN_FRAME, "graphics.frame_preamble", "graphics.render", LIT_GRAPHICS_PREPARE_RESOURCES, LIT_GRAPHICS_RENDER_PASSES,
     "graphics.prepare_resources_failed", LIT_GRAPHICS_PRESENT, "graphics.garbage_collect", "cpu.task.queue_delay", "cpu.task.execution", "cpu.task.handle_join", "cpu.task.scope_join",
     "cpu.task.scheduler_join", "cpu.worker.idle", "cpu.task.ecs.world", "cpu.task.graphics.setup", "cpu.task.graphics.frame")
@@ -43,7 +40,6 @@ KNOWN_GPU = ("render.frame", "render.async_prefix", "render.async_shadow", "rend
     "render.shadow.light_space_views", "render.shadow.light_space_opaque_capture", "render.shadow.light_space_transparent_capture", "render.shadow.light_space_shade", "render.shadow.light_space_map_opaque", "render.shadow.light_space_map_transparent",
     "render.shadow.light_space_fallback_opaque", "render.shadow.light_space_fallback_transparent", "render.surfel_spawn", "render.surfel_age_free", "render.surfel_hash_build", "render.surfel_trace", "render.surfel_resolve", "render.surfel_upsample")
 CHECKED_SYMBOLS = known_name_symbols(KNOWN_CPU + KNOWN_GPU)
-
 
 
 def _integer(value):

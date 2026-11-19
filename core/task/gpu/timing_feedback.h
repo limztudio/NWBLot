@@ -17,7 +17,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Queue routing stays a compiler policy choice. Scores stay visible for inspection, outside correctness and sync planning.
 struct GpuQueueAssignmentScore{
     i32 overlap = 0;
     i32 queueLoad = 0;
@@ -30,9 +29,6 @@ public:
     [[nodiscard]] i32 total()const noexcept;
 };
 
-
-// Accepted assignment and dwell state follow semantic work across queue-class changes.
-// Duration histories stay route-specific below, but a Graphics -> Compute -> Graphics sequence must update one shared switch timeline.
 struct GpuTaskTimingAssignmentKey{
     Name task = s_NameNone;
     u32 variant = 0u;
@@ -50,8 +46,6 @@ inline constexpr b8 operator!=(const GpuTaskTimingAssignmentKey& lhs, const GpuT
     return !(lhs == rhs);
 }
 
-
-// Route key for measured work. Class goes in the key; the exact queue stays separate so same-class queues never blend.
 struct GpuTaskTimingKey{
     Name task = s_NameNone;
     u32 variant = 0u;
@@ -185,8 +179,6 @@ public:
     }
 };
 
-// This state is intentionally separate from duration statistics.
-// It lets a compiler damp assignment changes even when the timing query that established the last accepted route completes several frames later.
 struct GpuTaskTimingAssignmentState{
     GpuTaskTimingAssignmentKey key;
     u64 lastAcceptedFrameIndex = 0u;
@@ -207,17 +199,12 @@ inline constexpr u64 s_MinFramesBetweenSwitches = 30u;
 inline constexpr u32 s_MinSwitchSamples = 8u;
 };
 
-
-// Disabled by default. Missing timing or a bad snapshot never changes deterministic assignment.
 struct GpuTaskTimingFeedbackPolicy{
     f64 minimumAbsoluteBenefitSeconds = 0.0;
     f64 minimumRelativeBenefit = 0.0;
     u64 minimumFramesBetweenSwitches = GpuTaskTimingFeedbackPolicyDetail::s_MinFramesBetweenSwitches;
     u32 minimumSampleCount = GpuTaskTimingFeedbackPolicyDetail::s_MinSwitchSamples;
     u32 calibrationIntervalFrames = 1u;
-    // Short on samples, one opted-in route probes every N frames. Cross-family probes need the family opt-in; cross-class also need timing.
-    // Zero disables calibration.
-    // Probes stop once every legal route reaches minimumSampleCount.
     b8 enabled = false;
 
 
@@ -229,7 +216,6 @@ public:
 
 class GpuTaskTimingHistoryStore;
 
-// Only the owning store writes a snapshot. Compile reads plain values, blind to query completion and mutable frame state.
 class GpuTaskTimingHistorySnapshot final : NoCopy{
     friend class GpuTaskTimingHistoryStore;
 
@@ -265,7 +251,6 @@ private:
 
 inline constexpr u32 s_DefaultGpuTaskTimingHistorySampleCount = 32u;
 
-// Bounded rolling samples for one device generation. Mutation APIs stay out of validation, barriers, and waits.
 class GpuTaskTimingHistoryStore final : NoCopy{
 private:
     struct HistoryRecord{
@@ -288,12 +273,8 @@ public:
     void reset()noexcept;
     void reset(GpuTaskTimingHistorySnapshot& outSnapshot)noexcept;
     void resetForDeviceGeneration(u16 deviceGeneration)noexcept;
-    // A collected query is accepted GPU work. Dwell state advances only on newer frames, never backwards on late completion.
     [[nodiscard]] b8 recordSample(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue, f64 durationSeconds, u64 sourceFrameIndex);
-    // Adds duration statistics without changing adaptive assignment state.
-    // This records both bounded calibration observations and accepted samples whose assignment was committed separately at submission resolution.
     [[nodiscard]] b8 recordNonCommittingSample(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue, f64 durationSeconds);
-    // Packet acceptance reports the selected route even when timestamp capacity was unavailable.
     [[nodiscard]] b8 noteAcceptedAssignment(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue, u64 sourceFrameIndex);
     void snapshot(GpuTaskTimingHistorySnapshot& outSnapshot)const;
 

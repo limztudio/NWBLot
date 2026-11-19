@@ -42,7 +42,6 @@ namespace FrameDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Owns the Wayland seat and keyboard state of one frame.
 class WaylandFrameInput{
 private:
     static constexpr i32 s_DefaultKeyRepeatRate = 25;
@@ -70,18 +69,14 @@ public:
 
 public:
     [[nodiscard]] b8 createKeymapContext()noexcept;
-    // Binds the first advertised seat; later seats are ignored while one is bound.
     void bindSeat(wl_registry& registry, u32 name, u32 version);
     void removeSeat(u32 name);
-    // Keyboard focus is only accepted for this surface, and pointer positions are scaled by its buffer scale.
     void observeSurface(wl_surface* surface, i32 bufferScale)noexcept;
     void attachClipboard(IClipboardService& clipboard)const;
     void attachTextInput(ITextInputService& textInput)const;
     void stopKeyRepeat()noexcept;
-    // Shortens an idle poll timeout so a pending key repeat still fires on time.
     [[nodiscard]] i32 pollTimeoutForKeyRepeat(i32 timeoutMs)const noexcept;
     void processKeyRepeat();
-    // Releases the seat objects; this must run before the display disconnects.
     void destroy()noexcept;
 
 
@@ -115,7 +110,6 @@ private:
     b8 m_keyboardFocused = false;
     b8 m_repeatPending = false;
 
-    // Pointer callbacks borrow the seat version, scale, serial and keyboard state above.
     WaylandPointerInput m_pointerInput;
 };
 

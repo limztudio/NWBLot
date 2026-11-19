@@ -24,9 +24,6 @@ static const float NWB_RAYTRACE_INCIDENT_SUPPORT_EPSILON_SCALE = 8.0;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A triangle's cross product carries area and instance scale, unlike an authored unit shading normal.
-// Normalize relative to its own magnitude so valid small triangles and large instances never acquire a fixed fallback axis.
-// Degenerate or nonfinite geometry returns zero, which the optical membership/progress checks reject.
 float3 nwbRayTraceScaleGeometryVector(const float3 value){
     if(!all(isfinite(value)))
         return float3(0.0);
@@ -50,8 +47,6 @@ float3 nwbRayTraceTriangleGeometricNormal(const NwbRtInstanceMaterial material, 
     const float3 v0 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(triangle.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
     const float3 v1 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(triangle.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
     const float3 v2 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(triangle.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-    // Inverse-transpose preserves physical outwardness (even under negative determinant; no det-sign multiply).
-    // Optical membership uses this normal.
     const float3 edge0 = nwbRayTraceScaleGeometryVector(v1 - v0);
     const float3 edge1 = nwbRayTraceScaleGeometryVector(v2 - v0);
     const float3 normal = nwbRayTraceScaleGeometryVector(cross(edge0, edge1));
@@ -63,7 +58,6 @@ float3 nwbRayTraceTriangleGeometricNormal(const NwbRtInstanceMaterial material, 
     return nwbRayTraceNormalizeGeometryVector(worldNormal);
 }
 
-// Only real seams merge: indexed adjacency + opposite orientation; coplanarity via triple-product bound.
 bool nwbRayTraceCoplanarSeam(const uint instanceMaterialHeapSlot, const uint instance, const uint firstPrimitive, const uint secondPrimitive){
     if(firstPrimitive == secondPrimitive)
         return true;
@@ -95,12 +89,10 @@ bool nwbRayTraceCoplanarSeam(const uint instanceMaterialHeapSlot, const uint ins
     return isfinite(determinant) && isfinite(error) && dot(normal, normal) > 0.0 && abs(determinant) <= error;
 }
 
-// A closed solid's crease or vertex is one crossing even when hard normal/UV seams duplicate its position indices.
 bool nwbRayTraceIncidentBoundary(const NwbRtInstanceMaterial material, const uint firstPrimitive, const float2 firstBarycentrics, const uint secondPrimitive, const float2 secondBarycentrics){
     const float3 firstWeights = float3(1.0 - firstBarycentrics.x - firstBarycentrics.y, firstBarycentrics);
     const float3 secondWeights = float3(1.0 - secondBarycentrics.x - secondBarycentrics.y, secondBarycentrics);
     const float supportEpsilon = NWB_RAYTRACE_INCIDENT_SUPPORT_EPSILON_SCALE * NWB_FLOAT_EPSILON;
-    // Interior triangle hits cannot share an incident edge/vertex, so reject them before loading either triangle's geometry.
     if(all(abs(firstWeights) > supportEpsilon) && !any(firstWeights >= 1.0 - supportEpsilon))
         return false;
     if(all(abs(secondWeights) > supportEpsilon) && !any(secondWeights >= 1.0 - supportEpsilon))

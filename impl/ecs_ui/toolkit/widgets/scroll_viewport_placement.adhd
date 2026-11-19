@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Resolve coupled bar visibility in logical coordinates.
 Expected<ScrollViewportPlacement> CalculateScrollViewportPlacement(in Rect bounds, in Rect clip, in Insets padding, in Point contentMeasure, in f32 caretWidth, in Point previousScroll, in f32 thickness, in f32 minThumb){
     if(
         !IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidUiPadding(padding)

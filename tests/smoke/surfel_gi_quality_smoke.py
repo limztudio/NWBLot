@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Explicit surfel resolve quality and recorded target/dispatch-size verification."""
 
 import re
 

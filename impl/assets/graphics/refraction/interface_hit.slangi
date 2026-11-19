@@ -15,7 +15,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Refraction admits the nearest retained boundary. Rejected faces/instances do not need a material.
 NwbMeshSurface nwbRefractionEvaluateTriangleSurface(const NwbRtInstanceMaterial material, const float3 position, const float3 direction, const uint primitive, const float2 barycentrics, const float3x4 worldToObject){
     const uint triangleBase = primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
     const uint4 a0 = nwbHeapRawBuffer(material.attributeSlot).Load4(triangleBase * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES);

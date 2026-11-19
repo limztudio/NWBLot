@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One bit per frustum plane; a caster is culled only when every corner is outside a common plane.
 #define NWB_LIGHT_SPACE_CULL_PLANE_LEFT 1u
 #define NWB_LIGHT_SPACE_CULL_PLANE_RIGHT 2u
 #define NWB_LIGHT_SPACE_CULL_PLANE_BOTTOM 4u
@@ -17,16 +16,12 @@
 #define NWB_LIGHT_SPACE_CULL_PLANE_NEAR 16u
 #define NWB_LIGHT_SPACE_CULL_PLANE_FAR 32u
 #define NWB_LIGHT_SPACE_CULL_ALL_PLANES 0x3fu
-// Bound arithmetic roundoff, in float epsilons.
 #define NWB_LIGHT_SPACE_CULL_ROUNDOFF_EPSILONS 32.0
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Every clip inequality is affine in object position.
-// Eight bound corners enclose all current posed triangles.
-// Uncertain arithmetic retains the caster; only a common, strictly outside plane can remove its draw.
 bool nwbLightSpaceBoundsOutside(const NwbLightSpaceView view, const uint instanceIndex, const float3 minimum, const float3 maximum){
     if(view.depthRange.w == 0.0)
         return false;
@@ -34,7 +29,6 @@ bool nwbLightSpaceBoundsOutside(const NwbLightSpaceView view, const uint instanc
     const NwbMeshInstanceData transform = nwbHeapMeshInstances(nwbMeshFrameInstanceHeapSlot())[material.meshInstanceIndex];
     if(!all(isfinite(minimum)) || !all(isfinite(maximum)) || any(minimum > maximum) || !all(isfinite(transform.scale.xyz)) || !all(isfinite(transform.rotation)) || !all(isfinite(transform.translation)))
         return false;
-    // A flushed subnormal endpoint need not preserve its order relative to an interior source position.
     const uint3 minimumBits = asuint(minimum) & NWB_FLOAT_MAGNITUDE_BITS_MASK;
     const uint3 maximumBits = asuint(maximum) & NWB_FLOAT_MAGNITUDE_BITS_MASK;
     if(any((minimumBits != 0u) & (minimumBits < NWB_FLOAT_MIN_NORMAL_BITS)) || any((maximumBits != 0u) & (maximumBits < NWB_FLOAT_MIN_NORMAL_BITS)))
@@ -48,7 +42,6 @@ bool nwbLightSpaceBoundsOutside(const NwbLightSpaceView view, const uint instanc
         const float3 q = abs(transform.rotation.xyz);
         const float3 magnitude = abs(scaled);
         const float3 twiceCross = 2.0 * (q.yzx * magnitude.zxy + q.zxy * magnitude.yzx);
-        // Bound the actual quaternion/TRS operation terms before the projection's own dot-product rounding.
         const float3 worldError = roundoff * (magnitude + abs(transform.rotation.w) * twiceCross + q.yzx * twiceCross.zxy + q.zxy * twiceCross.yzx + abs(transform.translation)) + float3(NWB_FLOAT_MIN_NORMAL);
         const float4 clip = nwbLightSpaceProject(view, world);
         float4 error;

@@ -37,24 +37,17 @@ struct NwbDeferredCompositePixelOutput{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Surface images commonly expose ColorAttachment and sampled usage but not storage writes.
-// Composite math runs in composite_cs on AsyncCompute; this Graphics pass samples it for present.
-// SDR uses the attachment's sRGB conversion; HDR10 explicitly converts Rec.709 scene color to Rec.2020/PQ before writing its A2B10G10R10 surface.
 NwbDeferredCompositePixelOutput main(NwbDeferredCompositePixelInput input){
     const SamplerState sampler = nwbHeapSampler(g_NwbDeferredBindlessResources.lightingSlots.w);
-    // Composite color is linear RGBA16F. Exposure and display mapping happen once, after every transport effect.
     const half3 compositeColor = half3(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.avboitWorkSlots1.z).Sample(sampler, input.uv).rgb);
-    // Bound extreme finite exposure controls to the representable scene range before HDR conversion or division.
     const float3 exposedColor = min(float3(clamp(compositeColor, half3(0.0h), half3(NWB_DEFERRED_FINITE_HALF_MAX))) * g_NwbDeferredCompositePushConstants.exposure, float3(NWB_DEFERRED_FINITE_HALF_MAX));
     const float3 sdrColor = g_NwbDeferredCompositePushConstants.toneMap == NWB_DEFERRED_TONE_MAP_REINHARD ? exposedColor / (exposedColor + g_NwbDeferredCompositePushConstants.shoulder) : saturate(exposedColor);
 
-    // The optional layer is display-linear premultiplied Rec.709; it joins after scene mapping and before encoding.
     float4 outputLayer = float4(0.0);
     if(g_NwbDeferredCompositePushConstants.outputLayerSlot != NWB_DEFERRED_INVALID_HEAP_SLOT)
         outputLayer = nwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.outputLayerSlot).Sample(sampler, input.uv);
 
     NwbDeferredCompositePixelOutput output;
-    // HDR10 blends in absolute linear nits and encodes PQ once; SDR uses the attachment's sRGB conversion once.
     const half3 presentationColor = g_NwbDeferredCompositePushConstants.presentationMode == NWB_DEFERRED_PRESENTATION_HDR10
         ? half3(nwbHdr10EncodeSceneWithUi(float3(exposedColor), outputLayer.rgb, outputLayer.a))
         : half3(nwbOutputLayerOver(float3(sdrColor), outputLayer.rgb, outputLayer.a))

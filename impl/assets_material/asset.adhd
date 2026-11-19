@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Materials hold only mesh and pixel stages. The compute emulation shader is found by the mesh shader name, so it is never stored here.
 b8 IsSupportedMaterialShaderStage(in ShaderType shaderType){
     return shaderType == ShaderType::MeshStage || shaderType == ShaderType::PixelStage;
 }
@@ -87,16 +86,11 @@ class Material{
     public in ResourceReferenceVector resourceReferences()const{ return this.m_resourceReferences; }
     public in StageShaderArray stageShaders()const{ return this.m_stageShaders; }
     public u32 stageShaderCount()const{ return this.m_stageShaderCount; }
-    // Cook-generated AVBOIT accumulate pixel shader for this material's transparent draw.
-    // Valid only for surface-authored transparent materials; missing means a cook/runtime contract failure.
-    // Not a graphics stage: the material has one pixel stage, and this is the transparent-only shader the renderer selects by pass.
     public in AssetRef<PixelShader> avboitAccumulatePixelShader()const{ return this.m_avboitAccumulatePixelShader; }
-    // Accumulate twins for AVBOIT passes; same surface renderCoverage and validity as above.
     public in AssetRef<PixelShader> avboitOccupancyPixelShader()const{ return this.m_avboitOccupancyPixelShader; }
     public in AssetRef<PixelShader> avboitExtinctionPixelShader()const{ return this.m_avboitExtinctionPixelShader; }
     public b8 transparent()const{ return this.m_transparent; }
     public b8 twoSided()const{ return this.m_twoSided; }
-    // Refractive-caster flag, separate from `transparent`. Refraction values stay shader-side (NwbMeshSurface).
     public b8 refractive()const{ return this.m_refractive; }
 }
 

@@ -143,8 +143,6 @@ private:
     T* m_value = nullptr;
 };
 
-
-// Handles keep the pool alive after its original owner or caller arena leaves scope.
 class SharedPool{
 public:
     using uses_leading_arena_t = ::ArenaBase;
@@ -163,7 +161,6 @@ public:
         return allocate<T>(m_pool, Forward<Args>(args)...);
     }
 
-    // The prepared value keeps its original arena. That arena must outlive every handle to the value.
     template<typename T>
     [[nodiscard]] Expected<Shared<T>> makePrepared(T& prepared)const{
         return allocate<T>(SharedDetail::PreparedValue{}, m_pool, prepared);

@@ -90,7 +90,6 @@ constexpr f32 s_3PIDIV4 = 2.3561944905f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// IEEE-754 binary32/binary64 bit layout.
 inline constexpr u32 s_F32SignBitMask = 0x80000000u;
 inline constexpr u32 s_F32AbsoluteBitMask = 0x7fffffffu;
 inline constexpr u32 s_F32SignBitShift = 31u;
@@ -152,9 +151,9 @@ constexpr u64 s_DoubleSELECT_1 = 0xFFFFFFFFFFFFFFFFull;
 
 
 FOUNDATION_GLOBAL_CONST SIMDVectorConstF s_SIMDSinCoefficients0 = { { { -0.16666667f, +0.0083333310f, -0.00019840874f, +2.7525562e-06f } } };
-FOUNDATION_GLOBAL_CONST SIMDVectorConstF s_SIMDSinCoefficients1 = { { { -2.3889859e-08f, -0.16665852f /*Est1*/, +0.0083139502f /*Est2*/, -0.00018524670f /*Est3*/ } } };
+FOUNDATION_GLOBAL_CONST SIMDVectorConstF s_SIMDSinCoefficients1 = { { { -2.3889859e-08f, -0.16665852f, +0.0083139502f, -0.00018524670f } } };
 FOUNDATION_GLOBAL_CONST SIMDVectorConstF s_SIMDCosCoefficients0 = { { { -0.5f, +0.041666638f, -0.0013888378f, +2.4760495e-05f } } };
-FOUNDATION_GLOBAL_CONST SIMDVectorConstF s_SIMDCosCoefficients1 = { { { -2.6051615e-07f, -0.49992746f /*Est1*/, +0.041493919f /*Est2*/, -0.0012712436f /*Est3*/ } } };
+FOUNDATION_GLOBAL_CONST SIMDVectorConstF s_SIMDCosCoefficients1 = { { { -2.6051615e-07f, -0.49992746f, +0.041493919f, -0.0012712436f } } };
 FOUNDATION_GLOBAL_CONST SIMDVectorConstF s_SIMDArcCoefficients0 = { { { +1.5707963050f, -0.2145988016f, +0.0889789874f, -0.0501743046f } } };
 FOUNDATION_GLOBAL_CONST SIMDVectorConstF s_SIMDArcCoefficients1 = { { { +0.0308918810f, -0.0170881256f, +0.0066700901f, -0.0012624911f } } };
 FOUNDATION_GLOBAL_CONST SIMDVectorConstF s_SIMDATanCoefficients0 = { { { -0.3333314528f, +0.1999355085f, -0.1420889944f, +0.1065626393f } } };

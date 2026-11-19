@@ -195,7 +195,6 @@ class PlacedGlyphRecord<TFace>{
     public u32 byteBegin = 0u;
     public u32 byteEnd = 0u;
     public Point position;
-    // Shaping ink is relative to the glyph baseline origin; an empty rectangle is conservatively unknown at paint time.
     public Rect ink;
     public GlyphCoverageBounds coverage;
 }

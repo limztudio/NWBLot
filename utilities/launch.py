@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Dispatch a utility launcher to one of the utility workflows."""
 
 from __future__ import annotations
 

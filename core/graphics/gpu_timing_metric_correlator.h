@@ -35,8 +35,6 @@ struct GpuPacketEnvelopeMetricQueueOutput{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Owns the persistent role reservations and bounded pending-range state shared by GPU-derived timing metrics.
-// Callers serialize access so query-pool synchronization remains with the recorder that feeds completed ranges.
 class GpuTimingMetricCorrelator final : NoCopy{
 private:
     using PacketEnvelopeScopeIndex = HashMap<Name, usize, Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>;
@@ -99,7 +97,6 @@ public:
         const Name& queueOverlapScope,
         Span<const GpuPacketEnvelopeMetricQueueOutput> queueOutputInputs
     );
-    // Stages completed derived samples without invoking the timing sink. The caller owns the observer-publication boundary.
     void recordTimestampRange(const Name& scopeName, u64 frameIndex, const GpuComparableTimestampRange& range, Alloc::ScratchArena& scratchArena, GpuTimingSinkSampleVector& performanceSamples);
     [[nodiscard]] b8 hasOutputRole(const Name& scopeName)const noexcept;
     void discardPendingRanges()noexcept;

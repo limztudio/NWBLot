@@ -123,7 +123,6 @@ struct ShaderDesc{
     static constexpr AStringView s_DefaultEntryName = "main";
 
     Name debugName;
-    // Borrowed until shader creation completes; the created shader rebinds this to its own retained bytecode.
     AStringView entryName = s_DefaultEntryName;
     ShaderType::Mask shaderType = ShaderType::None;
 

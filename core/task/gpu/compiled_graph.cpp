@@ -261,7 +261,6 @@ GpuSubmissionPacketRange GpuCompiledGraph::allPacketRange()const noexcept{
 const GpuCompiledTask* GpuCompiledGraph::findTask(const GpuTaskId& task)const noexcept{
     if(!task.valid() || task.generation != m_generation || task.index >= m_compiledTaskIndexByTask.size())
         return nullptr;
-    // Successful packetization maps every declaration task to its own compiled task.
     const u32 compiledTaskIndex = m_compiledTaskIndexByTask[task.index];
     FOUNDATION_ASSERT(compiledTaskIndex < m_tasks.size());
     const GpuCompiledTask& compiledTask = m_tasks[compiledTaskIndex];
@@ -304,7 +303,6 @@ b8 GpuCompiledGraph::taskPrecedesInSamePacket(const GpuTaskId& first, const GpuT
     FOUNDATION_ASSERT(validPacket(firstTask->packet));
     FOUNDATION_ASSERT(m_packets[firstTask->packet.index].taskCount != 0u && static_cast<usize>(m_packets[firstTask->packet.index].taskOffset) + m_packets[firstTask->packet.index].taskCount <= m_packetTasks.size());
 
-    // Packetization appends compiled tasks and packet task IDs together in execution order.
     const u32 firstTaskIndex = m_compiledTaskIndexByTask[first.index];
     const u32 secondTaskIndex = m_compiledTaskIndexByTask[second.index];
     FOUNDATION_ASSERT(m_packetTasks[firstTaskIndex] == first);

@@ -150,7 +150,6 @@ b8 SymbolTable::canAccessMember(const ClassDecl& receiver, const ClassDecl* call
     if(access == AccessSpecifier::Public || canAccessPrivateMembers(owner, caller))
         return true;
     if(access == AccessSpecifier::Protected && caller){
-        // Protected access through an object requires the caller's own type or a derived object.
         for(auto* object = &receiver; object; object = object->concreteBase){
             if(object == caller){
                 for(auto* base = caller->concreteBase; base; base = base->concreteBase){

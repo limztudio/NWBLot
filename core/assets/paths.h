@@ -62,7 +62,6 @@ namespace AssetPathsDetail{
 
 [[nodiscard]] b8 CanonicalNativeTextEquals(TStringView nativeText, AStringView expected, Alloc::ScratchArena& scratchArena);
 
-// The result borrows nativeText or convertedText.
 template<typename ArenaT>
 [[nodiscard]] inline AStringView NativeTextView(const TStringView nativeText, AString<ArenaT>& convertedText){
 #if defined(FOUNDATION_UNICODE)

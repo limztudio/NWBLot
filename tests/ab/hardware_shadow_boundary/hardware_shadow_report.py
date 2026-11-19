@@ -125,7 +125,6 @@ class HardwareShadowReport:
             threshold = self.args.maximum_transparent_frame_regression_percent
             gates.append(self.gate(LIT_OPTIONAL_HARDWARE_TRANSPARENT_FRAME_BU, frame_delta_percent <= threshold, f"healthy {healthy_frame.median_ms:.4f} ms, baseline {baseline_frame.median_ms:.4f} ms, " f"delta {frame_delta_percent:+.3f}% (limit +{threshold:.3f}%)",))
 
-        # Functional failures still fail when positive timing intervals are too few.
         if healthy_semantics_passed and baseline_semantics_passed and runtime_logs_passed and not intervals_passed:
             verdict = LIT_INCONCLUSIVE
         else:
@@ -184,4 +183,3 @@ class HardwareShadowReport:
     def make_failure_report(self, error: SmokeFailure, healthy: Optional[RunResult], baseline: Optional[RunResult]) -> Dict[str, object]:
         return { LIT_SCHEMA: LIT_NWB_HARDWARE_SHADOW_BOUNDARY_V1, LIT_GENERATED_UTC: datetime.now(timezone.utc).isoformat(), LIT_VERDICT: LIT_FAIL, LIT_COLLECTION_ERROR: str(error), LIT_GATES: [self.gate("target-scene collection", False, str(error))],
             LIT_HEALTHY: self.raw_run_payload(healthy) if healthy else None, LIT_BASELINE: self.raw_run_payload(baseline) if baseline else None, }
-

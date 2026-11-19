@@ -16,7 +16,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Engine-owned G-buffer PS entry: engine owns entry + writes; each material provides only its surface hook.
 NwbMeshGBufferOutput main(NwbMeshPixelInput input){
     nwbLoadMeshPixelInput(input, nwbMeshCameraToSurfaceDirection(input.worldPosition.xyz));
 

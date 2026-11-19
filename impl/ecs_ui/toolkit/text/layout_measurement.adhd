@@ -138,7 +138,6 @@ void ExpandMeasuredTextBoundsWithRaster(
     const VectorDouble origin(cast<f64>(glyphPosition.x), cast<f64>(glyphPosition.y), cast<f64>(glyphPosition.x), cast<f64>(glyphPosition.y));
     const VectorDouble pixelOrigin(cast<f64>(raster.x), cast<f64>(raster.y), cast<f64>(raster.x), cast<f64>(raster.y));
     const VectorDouble pixelEnd = pixelOrigin + VectorDouble(cast<f64>(raster.width), cast<f64>(raster.height), cast<f64>(raster.width), cast<f64>(raster.height));
-    // CoverageRectangle snaps the bitmap origin to the nearest physical pixel; every translation phase differs by at most half a pixel on each axis.
     const VectorDouble snap = VectorDouble(s_TextHalfPixel) / VectorDouble(cast<f64>(display.pixelScaleX), cast<f64>(display.pixelScaleY), cast<f64>(display.pixelScaleX), cast<f64>(display.pixelScaleY));
     const VectorDouble first = (origin + (pixelOrigin / scaleVec)) - snap;
     const VectorDouble last = (origin + (pixelEnd / scaleVec)) + snap;

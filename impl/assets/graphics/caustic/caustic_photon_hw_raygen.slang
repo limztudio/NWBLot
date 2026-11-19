@@ -14,7 +14,6 @@
 
 #include "caustic_hw_common.slangi"
 #include "../raytrace/constants.h"
-// Only raygen includes the bounce loop and backend hook, keeping TraceRay recursion at one.
 #include "caustic_trace.slangi"
 #if NWB_RT_CSG_ENABLED
 #define NWB_CSG_RAY_HARDWARE 1
@@ -84,7 +83,6 @@ bool nwbCausticCollectRefractiveEvents(
 #endif
 }
 
-// Complete the nearest ordinary-geometry query before CSG refinement; the same custom instance record supplies its refractive classification.
 NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin, float tMax){
     RayDesc ray;
     ray.Origin = origin;
@@ -97,7 +95,6 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     p.instance = NWB_CAUSTIC_HW_MISS_INSTANCE;
 
 #if NWB_RT_CSG_ENABLED
-    // Keep live optical state within the inline CSG query path instead of a native TraceRay continuation.
     RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
     query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, NWB_RT_SHADOW_BASE_INSTANCE_MASK, ray);
     while(query.Proceed()){}
@@ -137,7 +134,6 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The hardware raygen mirrors the SW photon sequence over the selected temporal-budget 2D grid.
 [shader("raygeneration")] void main(){
     const uint photonIndex = DispatchRaysIndex().y * DispatchRaysDimensions().x + DispatchRaysIndex().x;
     if(photonIndex >= g_NwbCausticHwPushConstants.photonCount)
@@ -149,10 +145,8 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     if(!nwbCausticPickLight(photonIndex, light))
         return;
 
-    // Photons travel along the light's emission axis.
     const float3 lightDir = nwbSafeNormalize(-light.direction.xyz, float3(0.0, 0.0, -1.0));
 
-    // Hash target selection to decorrelate it from the photon grid.
     const uint targetIndex = NwbCausticPhotonEmission.hashU32(photonIndex) % g_NwbCausticHwPushConstants.emissionTargetCount;
     const NwbCausticEmissionTarget target = nwbCausticHwEmissionTargets()[targetIndex];
     const float3 targetAabbMin = target.aabbMin.xyz;

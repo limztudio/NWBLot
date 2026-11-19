@@ -101,7 +101,6 @@ class ShaderVariantDefineAssignment{
     public StringView assignment;
 }
 
-// Buffer identity alone does not describe which regions a retained draw generates and consumes.
 class GeneratedGeometryOutputLayout{
     public b8 matches(in u32 indexByteOffset, in b8 indexed)const{
         return this.indexByteOffset == indexByteOffset && this.indexed == indexed;
@@ -118,7 +117,6 @@ GeneratedGeometryOutputLayout MakeGeneratedGeometryOutputLayout(in u32 offset, i
     return layout;
 }
 
-// Retain the selected draw metadata so recording rejects changed packet inputs before generating into the shared output.
 class GeneratedGeometryEquivalenceKey{
     public b8 matches(
         in Name drawMeshKey,

@@ -49,19 +49,16 @@ void DeviceCrashDiagnostics::capture(Device& device, const AStringView context){
     const b8 hasDeviceFault = device.m_context.extensions.extDeviceFault;
     const b8 hasBufferMarker = device.m_context.extensions.amdBufferMarker && device.m_amdBreadcrumb.buffer != VK_NULL_HANDLE;
 
-    // Capture only the first concurrent device-loss report.
     if(m_captured.exchange(true))
         return;
 
     GpuCrashReport report(m_reportArena);
     Vector<u8, Alloc::PersistentArena> vendorBinary(m_vendorBinaryArena);
 
-    // Bound all temporary capture allocations to the fixed crash arenas.
     {
         report.details.reserve(s_MaxGpuCrashReportChars);
         report.context.append(context.data(), context.size());
 
-        // One aggregate budget bounds all fault sections.
         u32 remainingEntries = s_MaxGpuCrashCaptureEntries;
 
         if(hasCheckpoints){
@@ -70,8 +67,6 @@ void DeviceCrashDiagnostics::capture(Device& device, const AStringView context){
                 if(remainingEntries == 0u)
                     continue;
 
-                // Vulkan checkpoint retrieval is a device-loss diagnostic and has no VkQueue host-synchronization requirement.
-                // Do not wait behind a potentially wedged submission lock while collecting it.
                 VkQueue queue = physicalQueue->m_nativeQueue.queue;
                 uint32_t checkpointCount = 0;
                 device.m_context.deviceDispatch.vkGetQueueCheckpointDataNV(queue, &checkpointCount, nullptr);
@@ -103,7 +98,6 @@ void DeviceCrashDiagnostics::capture(Device& device, const AStringView context){
         if(hasBufferMarker && remainingEntries > 0u){
             FOUNDATION_ASSERT(device.m_amdBreadcrumb.mappedMemory && device.m_amdBreadcrumb.metadata && device.m_amdBreadcrumb.metadata->slotRecordCount == device.m_amdBreadcrumb.layout.totalSlotCount && device.m_amdBreadcrumb.metadata->nextSerialCount == device.m_amdBreadcrumb.layout.physicalQueueCount);
             const auto breadcrumbSlots = MakeNotNull(static_cast<const u32*>(device.m_amdBreadcrumb.mappedMemory));
-            // Select each exact queue independently because physical queues remain unordered globally.
             for(usize queueIndex = 0u; queueIndex < device.m_amdBreadcrumb.layout.physicalQueueCount && remainingEntries > 0u; ++queueIndex){
                 const GpuPhysicalQueueId& queue = device.m_physicalQueueInfos[queueIndex].id;
                 const auto firstSlot = VulkanDetail::AmdBreadcrumbRing::ResolveSlot(device.m_amdBreadcrumb.layout, queue, 0u);
@@ -113,7 +107,6 @@ void DeviceCrashDiagnostics::capture(Device& device, const AStringView context){
                 AmdBreadcrumbSlotRecord newestRecord;
                 b8 hasObservedMarker = false;
                 {
-                    // Lock with breadcrumb reservations to avoid pairing an observation with a torn record.
                     ScopedLock lock(device.m_amdBreadcrumb.slotMutex);
                     for(usize localSlot = 0u; localSlot < device.m_amdBreadcrumb.layout.slotsPerQueue; ++localSlot){
                         const usize flatSlot = firstSlot->flatSlot + localSlot;
@@ -254,7 +247,6 @@ void DeviceCrashDiagnostics::capture(Device& device, const AStringView context){
 
     NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: GPU crash detected during {}:\n{}"), ConvertString(report.context), ConvertString(report.details));
 
-    // Attach available Aftermath dump while its bytes remain owned by the module.
     if(Aftermath::IsActive()){
         const Aftermath::GpuCrashDumpView dump = Aftermath::WaitForCrashDump();
         if(dump.data && dump.size != 0u){

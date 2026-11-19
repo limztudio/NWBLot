@@ -1,6 +1,3 @@
-"""Validate completed reflection frame statistics."""
-
-
 import re
 
 from window_capture_smoke import SmokeFailure
@@ -108,7 +105,6 @@ class ReflectionStatistics:
                 or sample[LIT_HARDWARE_HITS] > sample[LIT_HARDWARE_RAYS]:
                 raise SmokeFailure("actual hardware rays or hits exceeded the completed frame budget")
             zero_samples = eligible - sample[LIT_SCREEN_HITS] - sample[LIT_HARDWARE_HITS] - sample[LIT_FALLBACK_PIXELS]
-            # GGX samples below the geometric horizon are valid zero radiance, with no trace or fallback.
             if not (0 <= zero_samples <= sample[LIT_OPAQUE_PIXELS] if allow_zero_samples else zero_samples == 0):
                 raise SmokeFailure("reflection outcome counters do not partition eligible pixels")
             if mode in (LIT_DISABLED, LIT_SCREEN) and (sample[LIT_HARDWARE_RAYS] or sample[LIT_HARDWARE_HITS] or sample[LIT_CANDIDATES]):

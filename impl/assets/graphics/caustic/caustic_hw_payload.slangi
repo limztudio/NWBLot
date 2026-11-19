@@ -9,13 +9,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Internal TraceRay result: one FP32 distance and the full custom instance index; no material or geometric-normal copy.
 struct NwbCausticHwPayload{
     float distance;
     uint instance;
 };
 
-// Custom instance indices have 24 bits, so a hit never matches this value.
 #define NWB_CAUSTIC_HW_MISS_INSTANCE 0xFFFFFFFFu
 
 

@@ -17,13 +17,8 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Accepted native snapshot between graph generations, for live imports used in a later graph.
-// Retains typed handles so rebuilds cannot dangle; no renderer policy leaks into this utility.
 class GpuPersistentResourceStateCache final : NoCopy{
 public:
-    // A pre-submission candidate built for one cache from a recorded packet's final state.
-    // On commit, the cache exchanges storage with it.
-    // The consumed candidate keeps the displaced accepted storage alive until its caller has unwound outside the accepted-submission gate.
     class Candidate final : NoCopy{
         friend class GpuPersistentResourceStateCache;
 
@@ -94,15 +89,10 @@ public:
 
     [[nodiscard]] b8 replaceBufferSubset(const CommandListResourceStateHandoff& source, Span<const BufferHandle> buffers);
 
-    // Replaces the cache with `source` filtered to live imports, for pruning a removed runtime generation.
     [[nodiscard]] b8 replaceResourceSubset(const CommandListResourceStateHandoff& source, Span<const TextureHandle> textures, Span<const BufferHandle> buffers, Alloc::ScratchArena& scratchArena);
 
-    // Builds an acceptance-only candidate from the retained base state and `source`.
-    // The caller must call commit() only after the packet that produced `source` is accepted; a rejected packet leaves this cache untouched.
     [[nodiscard]] b8 buildMergedResourceSubset(const CommandListResourceStateHandoff& source, Span<const TextureHandle> textures, Span<const BufferHandle> buffers, Alloc::ScratchArena& scratchArena, Candidate& outCandidate)const;
 
-    // Produces a typed, filtered source for recording without altering the accepted cache.
-    // This preserves the last accepted state when the newly recorded packet is later rejected.
     [[nodiscard]] b8 buildFilteredResourceSubset(
         const CommandListResourceStateHandoff& source,
         Span<const TextureHandle> textures,
@@ -136,7 +126,6 @@ private:
     CommandListResourceStateHandoff m_states;
     GraphicsVector<TextureHandle> m_textures;
     GraphicsVector<BufferHandle> m_buffers;
-    // The in-place self filter stages new handles here and swaps them in. These stay empty between calls and only keep capacity.
     GraphicsVector<TextureHandle> m_spareTextures;
     GraphicsVector<BufferHandle> m_spareBuffers;
 };

@@ -41,9 +41,7 @@ namespace RayTracingOpacityMicromapBuildFlags{
 };
 
 struct RayTracingOpacityMicromapUsageCount{
-    // Number of OMMs with the specified subdivision level and format.
     u32 count = 0;
-    // Micro triangle count is 4^N, where N is the subdivision level.
     u32 subdivisionLevel = 0;
     OpacityMicromapFormat::Enum format = OpacityMicromapFormat::OC1_2_State;
 };
@@ -51,18 +49,12 @@ struct RayTracingOpacityMicromapUsageCount{
 struct RayTracingOpacityMicromapDesc{
     Name debugName;
 
-    // OMM flags. Applies to all OMMs in array.
     RayTracingOpacityMicromapBuildFlags::Mask flags = RayTracingOpacityMicromapBuildFlags::None;
-    // OMM counts for each subdivision level and format combination in the inputs.
     GraphicsVector<RayTracingOpacityMicromapUsageCount> counts;
 
-    // Base pointer for raw OMM input data.
-    // The device address at inputBufferOffset must be 256-byte aligned.
-    // It's also recommended to try to organize OMMs together that are expected to be used spatially close together.
     Buffer* inputBuffer = nullptr;
     u64 inputBufferOffset = 0;
 
-    // One entry per OMM matching the VkMicromapTriangleEXT layout. The device address must be 256-byte aligned.
     Buffer* perOmmDescs = nullptr;
     u64 perOmmDescsOffset = 0;
 
@@ -131,7 +123,6 @@ struct RayTracingGeometryAABB{
 };
 
 struct RayTracingGeometryTriangles{
-    // Keep the first two fields of every geometry descriptor as Buffer* for easier debugging.
     Buffer* indexBuffer = nullptr;
     Buffer* vertexBuffer = nullptr;
     u64 indexOffset = 0;
@@ -326,8 +317,8 @@ struct RayTracingInstanceDesc{
     u32 instanceContributionToHitGroupIndex : 24;
     RayTracingInstanceFlags::Mask flags : 8;
     union{
-        RayTracingAccelStruct* bottomLevelAS; // for buildTopLevelAccelStruct
-        u64 blasDeviceAddress; // for buildTopLevelAccelStructFromBuffer - use RayTracingAccelStruct::getDeviceAddress()
+        RayTracingAccelStruct* bottomLevelAS;
+        u64 blasDeviceAddress;
     };
 
 
@@ -371,8 +362,6 @@ namespace RayTracingAccelStructBuildFlags{
         MinimizeMemory = 0x10,
         PerformUpdate = 0x20,
 
-        // Allows a TLAS to include an instance that points at a null BLAS or has a zero instance mask.
-        // Only affects local validation; it does not translate to backend AS build flags.
         AllowEmptyInstances = 0x80,
     };
 
@@ -380,8 +369,8 @@ namespace RayTracingAccelStructBuildFlags{
 };
 
 struct RayTracingAccelStructDesc{
-    usize topLevelMaxInstances = 0; // only applies when isTopLevel = true
-    GraphicsVector<RayTracingGeometryDesc> bottomLevelGeometries; // only applies when isTopLevel = false
+    usize topLevelMaxInstances = 0;
+    GraphicsVector<RayTracingGeometryDesc> bottomLevelGeometries;
     Name debugName;
     RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
@@ -420,27 +409,27 @@ typedef GraphicsBackend::Handle<RayTracingAccelStruct> RayTracingAccelStructHand
 
 namespace RayTracingClusterOperationType{
     enum Enum : u8{
-        Move,                       // Moves CLAS, CLAS Templates, or Cluster BLAS
-        ClasBuild,                  // Builds CLAS from clusters of triangles
-        ClasBuildTemplates,         // Builds CLAS templates from triangles
-        ClasInstantiateTemplates,   // Instantiates CLAS templates
-        BlasBuild,                  // Builds Cluster BLAS from CLAS
+        Move,
+        ClasBuild,
+        ClasBuildTemplates,
+        ClasInstantiateTemplates,
+        BlasBuild,
     };
 };
 
 namespace RayTracingClusterOperationMoveType{
     enum Enum : u8{
-        BottomLevel,                // Moved objects are Clustered BLAS
-        ClusterLevel,               // Moved objects are CLAS
-        Template,                   // Moved objects are Cluster Templates
+        BottomLevel,
+        ClusterLevel,
+        Template,
     };
 };
 
 namespace RayTracingClusterOperationMode{
     enum Enum : u8{
-        ImplicitDestinations,       // Require destination storage; address and size result arrays are independently optional
-        ExplicitDestinations,       // Require address and size arrays; implicit destination storage is forbidden
-        GetSizes,                   // Require only the size result array
+        ImplicitDestinations,
+        ExplicitDestinations,
+        GetSizes,
     };
 
     [[nodiscard]] constexpr b8 IsDestinationTopologyValid(const Enum mode, const b8 hasAddresses, const b8 hasSizes, const b8 hasImplicitDestination)noexcept{
@@ -478,41 +467,30 @@ struct RayTracingClusterOperationMoveParams{
 };
 
 struct RayTracingClusterOperationClasBuildParams{
-    // Index of the last geometry in a single CLAS
     u32 maxGeometryIndex = 0;
 
-    // Maximum number of unique geometries in a single CLAS
     u32 maxUniqueGeometryCount = 1;
 
-    // Maximum number of triangles in a single CLAS
     u32 maxTriangleCount = 0;
 
-    // Maximum number of vertices in a single CLAS
     u32 maxVertexCount = 0;
 
-    // Maximum number of triangles summed over all CLAS (in the current cluster operation)
     u32 maxTotalTriangleCount = 0;
 
-    // Maximum number of vertices summed over all CLAS (in the current cluster operation)
     u32 maxTotalVertexCount = 0;
 
-    // Minimum number of bits to be truncated in vertex positions across all CLAS (in the current cluster operation)
     u32 minPositionTruncateBitCount = 0;
 
-    // Vertex format accepted by the backend cluster acceleration structure implementation.
     Format::Enum vertexFormat = Format::RGB32_FLOAT;
 };
 
 struct RayTracingClusterOperationBlasBuildParams{
-    // Maximum number of CLAS references in a single BLAS
     u32 maxClasPerBlasCount = 0;
 
-    // Maximum number of CLAS references summed over all BLAS (in the current cluster operation)
     u32 maxTotalClasCount = 0;
 };
 
 struct RayTracingClusterOperationParams{
-    // Maximum number of acceleration structures or templates to build, instantiate, or move.
     u32 maxArgCount = 0;
 
     RayTracingClusterOperationType::Enum type = RayTracingClusterOperationType::Move;
@@ -527,23 +505,20 @@ struct RayTracingClusterOperationParams{
 struct RayTracingClusterOperationDesc{
     RayTracingClusterOperationParams params;
 
-    u64 scratchSizeInBytes = 0;                            // Size of scratch resource returned by getClusterOperationSizeInfo() scratchSizeInBytes
+    u64 scratchSizeInBytes = 0;
 
-    Buffer* inIndirectArgCountBuffer = nullptr;            // Buffer containing the number of AS to build, instantiate, or move
-    u64 inIndirectArgCountOffsetInBytes = 0;               // Offset (in bytes) to where the count is in the inIndirectArgCountBuffer
-    Buffer* inIndirectArgsBuffer = nullptr;                // Source-record array for the selected operation; cluster BLAS builds use IndirectArgs.
-    u64 inIndirectArgsOffsetInBytes = 0;                   // Offset (in bytes) to where the descriptor array starts inIndirectArgsBuffer
+    Buffer* inIndirectArgCountBuffer = nullptr;
+    u64 inIndirectArgCountOffsetInBytes = 0;
+    Buffer* inIndirectArgsBuffer = nullptr;
+    u64 inIndirectArgsOffsetInBytes = 0;
 
-    // In/Out Resources Required by ExplicitDestinations; optional result array for ImplicitDestinations.
     Buffer* inOutAddressesBuffer = nullptr;
-    u64 inOutAddressesOffsetInBytes = 0;                   // Used only when inOutAddressesBuffer is provided
+    u64 inOutAddressesOffsetInBytes = 0;
 
-    // Output Resources Required by ExplicitDestinations and GetSizes; independently optional as a result array for ImplicitDestinations.
     Buffer* outSizesBuffer = nullptr;
-    u64 outSizesOffsetInBytes = 0;                         // Used only when outSizesBuffer is provided
-    // Required only by ImplicitDestinations. Size with getClusterOperationSizeInfo() or a prior GetSizes operation.
+    u64 outSizesOffsetInBytes = 0;
     Buffer* outAccelerationStructuresBuffer = nullptr;
-    u64 outAccelerationStructuresOffsetInBytes = 0;        // Used only when outAccelerationStructuresBuffer is provided
+    u64 outAccelerationStructuresOffsetInBytes = 0;
 };
 
 

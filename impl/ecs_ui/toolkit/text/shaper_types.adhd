@@ -12,7 +12,6 @@ b8 IsTextAsciiAlphaNumericOrHyphen(in u32 codePoint){
     return IsAsciiAlpha(codePoint) || (codePoint >= 0x30u && codePoint <= 0x39u) || codePoint == 0x2du;
 }
 
-// This validates scalar UTF-8 and admitted label controls, not Unicode grapheme or paragraph segmentation.
 TextLayoutStatus ValidateTextRequest(in ShapeRequest request, in b8 allowLineBreaks){
     if(
         request.text.size() > s_TextMaxBytes

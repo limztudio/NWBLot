@@ -171,7 +171,6 @@ b8 BackendContext::createFrameSyncQueries(){
     if(!m_rhiDevice)
         return false;
 
-    // One fence per in-flight frame, created with device/swap-chain resources so present() only recycles.
     while(!m_framesInFlight.empty())
         m_framesInFlight.pop();
     m_queryPool.clear();

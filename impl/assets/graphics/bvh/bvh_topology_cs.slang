@@ -15,7 +15,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Common-prefix length of augmented keys (Morton + index tie-break). -1 for out-of-range neighbours.
 int nwbBvhDelta(const int lhs, const int rhs, const uint primitiveCount){
     if(rhs < 0 || rhs >= (int)primitiveCount)
         return -1;
@@ -26,7 +25,6 @@ int nwbBvhDelta(const int lhs, const int rhs, const uint primitiveCount){
     return (int)NWB_BVH_KEY_BIT_COUNT + (int)nwbBvhClz((uint)lhs ^ (uint)rhs);
 }
 
-// Karras split: the last key index of the left child's range within [first, last].
 int nwbBvhFindSplit(const int first, const int last, const uint primitiveCount){
     const int commonPrefix = nwbBvhDelta(first, last, primitiveCount);
     int split = first;
@@ -44,8 +42,6 @@ int nwbBvhFindSplit(const int first, const int last, const uint primitiveCount){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One thread per internal node: find its key range, split it, link children, record parents for the fit.
-// The host clears the parent buffer to NWB_BVH_INVALID first, so the root (internal node 0, never a child) keeps no parent.
 [numthreads(NWB_BVH_BUILD_GROUP_SIZE, 1, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint internalIndex = dispatchThreadID.x;

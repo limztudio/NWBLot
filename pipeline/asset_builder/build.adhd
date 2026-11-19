@@ -118,21 +118,31 @@ b8 BuildAssets(in AssetBuildOptions options){
         return false;
     const String canonical = BuildCanonicalSafeCacheName(options.configuration.view());
     prepare.setConfiguration(SelectEffectiveBuildConfiguration(canonical));
-    if(!prepare.registerPreparers() || !AddPlannedFileCount(cast<u64>(prepare.entryCount()), prepare.plannedFileCount))
+    u64 seenReserveCount = 0u;
+    if(
+        !prepare.registerPreparers()
+        || !AddPlannedFileCount(cast<u64>(prepare.entryCount()), prepare.plannedFileCount)
+        || !AddPlannedFileCount(prepare.plannedFileCount, seenReserveCount)
+        || !AddPlannedFileCount(prepare.cachedEntryCount(), seenReserveCount)
+    )
         return false;
     CookVolumeManifest manifest(workspace);
     if(!manifest.reserve(prepare.plannedFileCount))
         return false;
-    const Optional<usize> reserve = TryClampManifestHashReserveCount(prepare.plannedFileCount);
+    const Optional<usize> reserve = TryClampManifestHashReserveCount(seenReserveCount);
     if(reserve.has_value())
         prepare.reservePaths(reserve.value());
+    if(!prepare.seedCachedPaths())
+        return false;
     for(usize index = 0u; index < prepare.writerCount(); ++index){
         if(!prepare.writeManifest(index, manifest))
             return false;
     }
-    if(!prepare.writeRegistryObjects(options.scheduler, manifest) || !manifest.writeBuiltAssets(catalog.paths.outputDirectory))
+    if(!prepare.writeRegistryObjects(options.scheduler, manifest) || !prepare.writeBuiltAssets(catalog.paths.outputDirectory, manifest))
         return false;
-    [essential] info("AssetBuilder: built {} assets into '{}'", manifest.manifest.entries.size(), options.outputDirectory);
+    const u64 cachedAssetCount = prepare.cachedEntryCount();
+    const u64 totalAssetCount = cast<u64>(manifest.manifest.entries.size()) + cachedAssetCount;
+    [essential] info("AssetBuilder: built {} assets ({} cached) into '{}'", totalAssetCount, cachedAssetCount, options.outputDirectory);
     return true;
 }
 

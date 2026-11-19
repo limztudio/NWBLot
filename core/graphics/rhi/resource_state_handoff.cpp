@@ -128,7 +128,6 @@ b8 CommandListResourceStateHandoff::buildResourceSubset(const CommandListResourc
             }
         }
 
-        // Reserve all selected families before publication so allocation failure preserves the snapshot.
         m_textureStates.reserve(textureStateCount);
         m_bufferStates.reserve(bufferStateCount);
         m_permanentTextureStates.reserve(permanentTextureStateCount);

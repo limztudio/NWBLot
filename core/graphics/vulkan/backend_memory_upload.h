@@ -54,7 +54,6 @@ public:
     [[nodiscard]] GpuVirtualAddress getGpuVirtualAddress()const noexcept{ return m_deviceAddress; }
 
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
-    // Task-graph declarations copy this production admission snapshot while retaining the Buffer itself.
     [[nodiscard]] ResourceQueueAdmissionSnapshot getQueueAdmissionSnapshot()const noexcept{
         return ResourceQueueAdmissionSnapshot{
             .queueFamilyIndices = m_bufferQueueFamilyIndices.empty() ? nullptr : m_bufferQueueFamilyIndices.data(),
@@ -63,7 +62,6 @@ public:
             .usesConcurrentSharing = m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT,
         };
     }
-    // Resolves the state a typed task-graph import may inherit from live retained/native provenance.
     [[nodiscard]] ResourceStates::Mask resolveTaskGraphImportInitialState()const noexcept;
     virtual Object getNativeHandle(ObjectType objectType)noexcept override;
 
@@ -93,7 +91,7 @@ private:
     const b8 m_creationInitialStateKnown;
     b8 m_persistentlyMapped = false;
     b8 m_requiresInvalidate = false;
-    b8 m_managed = true; // if true, owns the VkBuffer or VMA allocation
+    b8 m_managed = true;
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
 };
@@ -148,7 +146,6 @@ public:
     [[nodiscard]] const TextureDesc& getCreationDescription()const noexcept{ return m_creationDesc; }
     [[nodiscard]] b8 descriptionMatchesCreation()const noexcept;
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
-    // Task-graph declarations copy this production admission snapshot while retaining the Texture itself.
     [[nodiscard]] ResourceQueueAdmissionSnapshot getQueueAdmissionSnapshot()const noexcept{
         return ResourceQueueAdmissionSnapshot{
             .queueFamilyIndices = m_imageQueueFamilyIndices.empty() ? nullptr : m_imageQueueFamilyIndices.data(),
@@ -157,7 +154,6 @@ public:
             .usesConcurrentSharing = m_imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT,
         };
     }
-    // Resolves the state a typed task-graph import may inherit from live retained/native provenance.
     [[nodiscard]] ResourceStates::Mask resolveTaskGraphImportInitialState()const noexcept;
     Object getNativeHandle(ObjectType objectType)noexcept;
     [[nodiscard]] Expected<Object> getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, b8);
@@ -195,7 +191,7 @@ private:
     mutable Futex m_retainedSubresourceStatesMutex;
 
     const b8 m_creationInitialStateKnown;
-    b8 m_managed = true; // if true, owns the VkImage or VMA allocation
+    b8 m_managed = true;
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
 };

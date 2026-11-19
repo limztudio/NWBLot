@@ -107,12 +107,6 @@ b8 ICookedAssetWriter::writeCookedAsset(const AStringView assetKind, const Name&
         return writeCookedAsset(convertedAssetKind, virtualPath, asset, codec, location);
     });
 }
-
-b8 ICookedAssetWriter::writeCachedCookedAsset(const AStringView assetKind, const Name& virtualPath, const IAssetCodec& codec, const Span<const u8> payloadBytes){
-    return __hidden_cook_entry_registry::WithConvertedAssetKind(assetKind, [&](const TStringView convertedAssetKind){
-        return writeCachedCookedAsset(convertedAssetKind, virtualPath, codec, payloadBytes);
-    });
-}
 #endif
 
 
@@ -143,14 +137,6 @@ b8 CookEntryRegistry::parseValue(const Name& assetType, const Name virtualPath, 
         return bucket->parseValue(virtualPath, nwbFilePath, asset, context);
 
     NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: unsupported asset type '{}' in asset_bunch from meta '{}'"), ConvertString(assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
-    return false;
-}
-
-b8 CookEntryRegistry::appendCachedEntry(const Name& assetType, const CookEntrySourceLocation& location, const Name& virtualPath, const Span<const u8> payloadBytes, CookEntryParseContext& context){
-    ICookEntryBucket* bucket = find(assetType);
-    if(bucket)
-        return bucket->appendCachedEntry(location, virtualPath, payloadBytes, context);
-
     return false;
 }
 

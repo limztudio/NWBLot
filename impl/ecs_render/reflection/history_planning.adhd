@@ -63,7 +63,6 @@ ReflectionHistoryPlan ResolveReflectionHistoryPlan(
     else
         result.previousSampleCount = 0u;
     result.previousBank = acceptedBank;
-    // Rejected transitions keep last accepted history.
     if((result.eligible || previousEligible) && acceptedSequence != 0u)
         result.currentBank = 1u - acceptedBank;
     else

@@ -36,7 +36,6 @@ const f32 s_ReflectionDefaultEnvTopB = 0.3f;
 const f32 s_ReflectionDefaultEnvBottomRgb = 0.04f;
 const f32x3u s_ReflectionDefaultEnvironmentTop(s_ReflectionDefaultEnvTopR, s_ReflectionDefaultEnvTopG, s_ReflectionDefaultEnvTopB);
 const f32x3u s_ReflectionDefaultEnvironmentBottom(s_ReflectionDefaultEnvBottomRgb, s_ReflectionDefaultEnvBottomRgb, s_ReflectionDefaultEnvBottomRgb);
-// One timed range owns a begin and an end timestamp query.
 const u32 s_ReflectionGpuTimingQueriesPerRange = 2u;
 const u32 s_ReflectionTraceSliceRays = 8192u;
 const u32 s_ReflectionIndirectArgumentBytes = 12u;
@@ -134,7 +133,6 @@ class ReflectionSampleBase{
     public u32 y = 0u;
 }
 
-// Root wiring retains textures and declares reads; compositing sees only this contract.
 class ReflectionCompositeInputs{
     public u32 opaqueRadianceSlot = 0xffffffffu;
     public u32 glassRadianceSlot = 0xffffffffu;
@@ -276,7 +274,6 @@ class ReflectionFeedbackBinding{
     public GpuDescriptorHandle descriptor;
 }
 
-// A native mip chain for u32 extents cannot contain more than 32 levels.
 class ReflectionDepthPyramidSnapshot{
     public b8 valid()const{
         return this.texture.valid() && this.pipeline.valid() && this.mipCount > 0u && this.mipCount <= s_ReflectionMaxDepthMips;

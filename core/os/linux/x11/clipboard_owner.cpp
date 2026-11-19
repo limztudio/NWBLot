@@ -89,7 +89,6 @@ b8 X11ClipboardService::convertTarget(const XSelectionRequestEvent& event, const
         return selection.latin1Available && sendText(event.requestor, property, XA_STRING, selection.latin1);
     X11CheckedOperation checked(m_display);
     if(target == m_targetsAtom){
-        // XA_STRING is the last target and is offered only when Latin-1 text is available.
         constexpr usize s_TargetCount = 7u;
         constexpr usize s_TargetCountWithoutLatin1 = s_TargetCount - 1u;
         Array<Atom, s_TargetCount> targets{ m_targetsAtom, m_timestampAtom, m_multipleAtom, m_utf8Atom, m_utf8MimeAtom, m_textAtom, XA_STRING };

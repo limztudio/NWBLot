@@ -8,8 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Extents and offsets are logical doubles; only the clipped visible row interval reaches float paint geometry.
-// Reject viewports that cannot be represented within the double content extent.
 Expected<ScrollPlacement> CalculateScrollPlacement(in Rect bounds, in Rect inheritedClip, in Insets padding, in f32 scrollbarWidth, in f32 minimumThumb, in u64 rowCount, in f32 rowHeight, in f64 offset){
     if(
         !IsValidUiRect(bounds) || !IsValidUiRect(inheritedClip) || !IsValidUiPadding(padding)

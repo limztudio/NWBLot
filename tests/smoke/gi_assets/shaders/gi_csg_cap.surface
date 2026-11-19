@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Only the inward back cap reflects green. Original cube triangles and the cutter-union side seams stay black.
 static const float NWB_SMOKE_GI_CSG_CAP_PLANE_Z = 0.4;
 static const float NWB_SMOKE_GI_CSG_CAP_PLANE_Z_TOLERANCE = 0.015;
 static const float NWB_SMOKE_GI_CSG_CAP_NORMAL_Z_THRESHOLD = -0.9;

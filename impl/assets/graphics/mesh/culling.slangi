@@ -42,7 +42,6 @@ bool nwbMeshletBackfaceCull(const float3 cameraPos, const float3 center, const f
         return false;
 
     const float3 view = toCamera / dist;
-    // Cone sine/cosine factors are (0, 1) bounded; half math is sufficient here; widen only at the comparisons.
     const half sinTheta = sqrt(max(half(0.0h), half(1.0h) - coneCos * coneCos));
     const half sinAlpha = saturate(half(radius / dist));
     const half cosAlpha = sqrt(max(half(0.0h), half(1.0h) - sinAlpha * sinAlpha));

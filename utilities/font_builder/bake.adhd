@@ -155,7 +155,6 @@ b8 PackGlyphs(in BakeOptions options, in Span<RasterGlyph> glyphs, mut FontAtlas
     return true;
 }
 
-// Options must already pass ValidateOptions.
 [cpp_unwind]
 Expected<FontAtlasPayload> Bake(in BakeOptions options, mut Vector<u8> outSourceFontBytes){
     auto source = ReadFontSourceInput(options.source);

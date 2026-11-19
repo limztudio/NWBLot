@@ -68,7 +68,6 @@ class MeshFrameBindings : NoCopy{
         retireMaterialTyped.release();
         retireView.release();
 
-        // Keep retired buffers alive until descriptors enter deferred-reuse quarantine.
         this.retireSnapshotDescriptors(heap, retired);
 
         assert(this.m_snapshot.matches(materialBuffers, meshViewBuffer));

@@ -79,8 +79,6 @@ class AvboitDepthWarpStageResult{
     public AvboitGraphTaskId completionTask = AvboitGraphTaskId();
 }
 
-
-// Domains publish this boundary after declaring topology; downstream avoids local coupling.
 class RendererTaskGraphTransparencyStage{
     public AvboitGraphTaskId firstTask;
     public AvboitGraphTaskId completionTask;

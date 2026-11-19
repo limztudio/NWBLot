@@ -1,4 +1,3 @@
-"""Bounded Win32 and X11 clipboard reads for native edit smoke tests."""
 from __future__ import annotations
 
 import ctypes
@@ -55,9 +54,7 @@ class NumericClipboardReader:
             x11.XCheckTypedWindowEvent.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.POINTER(NumericClipboardEvent)]
             x11.XCheckTypedWindowEvent.restype = ctypes.c_int
 
-
     def read_text(self, *, timeout=CLIPBOARD_READ_TIMEOUT_SECONDS, max_bytes=CLIPBOARD_MAX_BYTES):
-        """Read CLIPBOARD/CF_UNICODETEXT without replacing its owner or data."""
         if max_bytes <= 0 or max_bytes > CLIPBOARD_MAX_BYTES:
             raise ValueError(f"numeric clipboard read bound must be between 1 and {CLIPBOARD_MAX_BYTES} bytes")
         if self.windows:

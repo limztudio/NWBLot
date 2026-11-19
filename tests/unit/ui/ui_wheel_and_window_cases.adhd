@@ -150,13 +150,11 @@ void VerifyUiGlyphSdf_FreeTypeZeroIs128Over255AndExteriorInteriorClampToEndpoint
     EXPECT_FLOAT_EQ(UiGlyphSdfDistance(1.0f, 8u), 7.9375f);
     EXPECT_FLOAT_EQ(UiGlyphSdfCoverage(UiGlyphSdfDistance(0.0f, 8u), 1.0f), 0.0f);
     EXPECT_FLOAT_EQ(UiGlyphSdfCoverage(UiGlyphSdfDistance(1.0f, 8u), 1.0f), 1.0f);
-    // A generic 0.5 threshold is incorrect for FreeType's asymmetric u8 encoding.
     EXPECT_FLOAT_EQ(UiGlyphSdfCoverage(UiGlyphSdfDistance(0.5f, 8u), 1.0f), 0.46875f);
 }
 
 void VerifyUiGlyphSdf_FlatFieldsRemainFiniteAcrossEveryAdmittedSpread(){
     EXPECT_FLOAT_EQ(UiGlyphSdfCoverage(0.0f, 0.0f), 0.5f);
-    // The flat-field epsilon bounds FP32 decode residuals across all spreads.
     for(u32 spread = s_FontAtlasMinSpreadPixels; spread <= s_FontAtlasMaxSpreadPixels; ++spread)
         EXPECT_NEAR(UiGlyphSdfCoverage(UiGlyphSdfDistance(128.0f / 255.0f, spread), 0.0f), 0.5f, 0.01f);
     EXPECT_FLOAT_EQ(UiGlyphSdfCoverage(-1.0f, 0.0f), 0.0f);

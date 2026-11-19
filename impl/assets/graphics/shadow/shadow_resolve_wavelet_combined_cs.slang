@@ -12,7 +12,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The prefix matches the independent resolve. Each channel retains its own moments and output image.
 struct NwbCombinedShadowWaveletPushConstants{
     NwbShadowResolvePushConstants resolve;
     uint opaqueMomentsSlot;
@@ -22,7 +21,6 @@ struct NwbCombinedShadowWaveletPushConstants{
 
 [[vk::push_constant]] ConstantBuffer<NwbCombinedShadowWaveletPushConstants> g_NwbCombinedShadowWaveletPush;
 
-// This fixed first-wavelet program needs only the step-one halo; the independent kernels retain their larger halos.
 static const int NWB_COMBINED_SHADOW_WAVELET_STEP = 1;
 static const int NWB_COMBINED_SHADOW_WAVELET_TILE_SIDE = NWB_SHADOW_RESOLVE_GROUP_SIZE + 4;
 static const uint NWB_COMBINED_SHADOW_WAVELET_TILE_TEXELS = NWB_COMBINED_SHADOW_WAVELET_TILE_SIDE * NWB_COMBINED_SHADOW_WAVELET_TILE_SIDE;
@@ -115,7 +113,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     const int hh = (int)g_NwbCombinedShadowWaveletPush.resolve.halfHeight;
     const bool inBounds = pixel.x < (uint)hw && pixel.y < (uint)hh;
     const int step = NWB_COMBINED_SHADOW_WAVELET_STEP;
-    // The host selects this pipeline only for the first wavelet with distinct retained temporal inputs.
     const int tileWidth = NWB_COMBINED_SHADOW_WAVELET_TILE_SIDE;
     const uint tileTexels = NWB_COMBINED_SHADOW_WAVELET_TILE_TEXELS;
     const int2 tileOrigin = int2(groupID.xy) * NWB_SHADOW_RESOLVE_GROUP_SIZE - int2(NWB_SHADOW_RESOLVE_KERNEL_RADIUS * step, NWB_SHADOW_RESOLVE_KERNEL_RADIUS * step);
@@ -157,7 +154,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             InterlockedOr(g_NwbCombinedShadowWaveletNonLit, 1u);
         GroupMemoryBarrierWithGroupSync();
         if(inBounds){
-            // A fully-lit halo has exact normalized visibility one; mixed tiles retain the original half-weight reduction.
             if(centerGeom.w <= half(NWB_SHADOW_GEOMETRY_VALID_THRESHOLD) || g_NwbCombinedShadowWaveletNonLit == 0u)
                 nwbCombinedShadowWaveletStore(pixel, slot, 1.0h, half3(1.0h));
             else{
@@ -180,7 +176,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                         const half normalWeight = half(pow(max(dot(centerNormal, tapNormal), 0.0h), NWB_SHADOW_RESOLVE_NORMAL_POWER));
                         const half opaqueValueWeight = half(exp(-abs(tap.x - center.x) / half(sigma.x)));
                         const half rgbValueWeight = half(exp(-abs(nwbLuminance(tap.yzw) - nwbLuminance(center.yzw)) / half(sigma.y)));
-                        // Keep each half multiplication and accumulation in the original order, including separate denominators.
                         const half opaqueWeight = NWB_SHADOW_RESOLVE_KERNEL[kx + NWB_SHADOW_RESOLVE_KERNEL_RADIUS] * NWB_SHADOW_RESOLVE_KERNEL[ky + NWB_SHADOW_RESOLVE_KERNEL_RADIUS] * distanceWeight * normalWeight * opaqueValueWeight;
                         const half rgbWeight = NWB_SHADOW_RESOLVE_KERNEL[kx + NWB_SHADOW_RESOLVE_KERNEL_RADIUS] * NWB_SHADOW_RESOLVE_KERNEL[ky + NWB_SHADOW_RESOLVE_KERNEL_RADIUS] * distanceWeight * normalWeight * rgbValueWeight;
                         opaqueSum += float(opaqueWeight) * float(tap.x);

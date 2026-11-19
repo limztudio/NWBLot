@@ -33,13 +33,10 @@ struct WaylandTextInputProvenance{
 
 class WaylandTextInputSurroundingState;
 
-// v3 deletion excludes the selected range and may address only the exact surrounding slice sent to the compositor.
 [[nodiscard]] b8 CanApplyWaylandTextInputDeletion(const WaylandTextInputProvenance& provenance, u64 currentRevision, const WaylandTextInputSurroundingState& wire, usize anchorByte, usize caretByte, usize beforeBytes, usize afterBytes)noexcept;
 
-// v3 messages accept at most 4000 UTF-8 bytes and must contain the entire selection.
 [[nodiscard]] WaylandTextInputSurrounding SliceWaylandTextInputSurrounding(AStringView text, usize anchorByte, usize caretByte)noexcept;
 
-// Record only a surrounding snapshot that fits and was sent to the compositor.
 class WaylandTextInputSurroundingState final{
     friend b8 CanApplyWaylandTextInputDeletion(const WaylandTextInputProvenance& provenance, u64 currentRevision, const WaylandTextInputSurroundingState& wire, usize anchorByte, usize caretByte, usize beforeBytes, usize afterBytes)noexcept;
 
@@ -58,10 +55,8 @@ private:
     u64 m_revision = 0u;
 };
 
-// Round the native client-pixel caret rectangle outward in surface-local coordinates, including negative positions.
 [[nodiscard]] TextInputRect WaylandTextInputRectForPixels(TextInputRect pixels, i32 bufferScale)noexcept;
 
-// Caret changes must preserve the reason attached to a deferred surrounding-text update.
 class WaylandTextInputDeferredState final{
 public:
     void clear()noexcept;
@@ -76,8 +71,6 @@ private:
     TextInputChangeCause::Enum m_cause = TextInputChangeCause::InputMethod;
 };
 
-// Retain exact recent snapshot provenance and the full current session's serial interval across wraparound.
-// Delayed current-session commits/preedit survive ring eviction; deletion requires a retained revision.
 class WaylandTextInputSerialTracker final{
 private:
     struct Record{

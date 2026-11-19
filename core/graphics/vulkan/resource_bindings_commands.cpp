@@ -297,7 +297,6 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
         return;
     }
 #if defined(NWB_DEBUG)
-    // Heap writes retain only exact, ready samplers, and a retained sampler keeps its native handle.
     for(u32 slot = 0u; slot < heap.m_samplerSlots.nextFresh; ++slot){
         const Sampler* const sampler = heap.m_samplerDescriptorResources[slot].get();
         FOUNDATION_ASSERT(!sampler || (&sampler->m_context == &m_context && sampler->m_sampler != VK_NULL_HANDLE));
@@ -391,7 +390,6 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
 
     ensureDescriptorBuffersBound(*manager, *managerSnapshot);
 
-    // Resource, sampler, and TLAS heap sets are contiguous at 0/1/2.
     const Array<u32, DescriptorBufferManager::s_DescriptorBufferCountWithAccelStruct> bufferIndices = {{
         DescriptorBufferManager::s_ResourceDescriptorBufferIndex,
         DescriptorBufferManager::s_SamplerDescriptorBufferIndex,

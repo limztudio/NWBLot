@@ -747,7 +747,6 @@ void GpuAnalysis_ExpectDagAnalysis(
         }
     }
 
-    // A plain Floyd-Warshall matrix gives an independent reference for strict reachability and reduction.
     for(usize intermediate = 0u; intermediate < taskCount; ++intermediate){
         for(usize producer = 0u; producer < taskCount; ++producer){
             if(reachable[producer * taskCount + intermediate] == 0u)
@@ -1045,7 +1044,6 @@ void VerifyGpuAnalysis_MatchesIndependentReferenceForPermutedDagsAndDuplicateDep
             expectedEdges.reserve(taskCount * taskCount / 2u);
             for(usize consumerIndex = 0u; consumerIndex < taskCount; ++consumerIndex){
                 dependencies.clear();
-                // Reverse producer declaration order deliberately differs from the shuffled topological order.
                 for(usize remaining = taskCount; remaining > 0u; --remaining){
                     const usize producerIndex = remaining - 1u;
                     randomState = randomState * 1664525u + 1013904223u;

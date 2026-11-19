@@ -10,7 +10,6 @@
 
 type EditBoundaryVector = Vector<usize>;
 
-// General segmentation accepts controls; single-line editing rejects line breaks and NUL.
 Expected<EditBoundaryVector> BuildEditGraphemeBoundaries(in StringView text, in b8 singleLine){
     if(!ValidateGraphemeText(text, singleLine) || text.size() == usize.max)
         return MakeUnexpected(Failure());

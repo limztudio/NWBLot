@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Exercise the visual acceptance oracle with displaced, tinted, and corrupted frames."""
 
 from pathlib import Path
 import sys

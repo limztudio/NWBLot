@@ -67,7 +67,6 @@ b8 CommandListResourceSelection::addResource(void* const resource, const usize i
     if(m_storage)
         InsertIndex(m_storage, m_capacity, m_size);
     else if(texture){
-        // Keep each kind contiguous for small lookups without changing the first-occurrence entry order.
         for(usize index = m_size; index > m_textureCount; --index)
             m_inlineIdentities[index] = m_inlineIdentities[index - 1u];
         m_inlineIdentities[m_textureCount] = resource;
@@ -123,7 +122,6 @@ b8 CommandListResourceSelection::grow()noexcept{
     if(!storage)
         return false;
 
-    // Entries pack the prefix and survive moves. Growing moves buckets only, rebuilt before publish; reallocate frees the old top.
     for(usize index = 0u; index < m_size; ++index){
         Entry entry;
         const void* const source = m_storage ? static_cast<const void*>(static_cast<const u8*>(storage) + index * sizeof(Entry)) : &m_inlineEntries[index];

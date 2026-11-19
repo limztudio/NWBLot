@@ -51,9 +51,6 @@ template<typename ScopeId, typename ScopeVector, typename ScopeMap, typename Cre
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Generation-stamped scope lookup.
-
-
 template<typename ScopeId, typename ScopeRecord>
 [[nodiscard]] auto FindNamedScope(const Span<const ScopeRecord> scopes, const ScopeId scope)noexcept(
     noexcept(DeclVal<ScopeId&>().~ScopeId()) && noexcept(static_cast<b8>(!scope.valid() || scope.index >= scopes.size())) &&

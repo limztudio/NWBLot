@@ -20,7 +20,6 @@ UiSkinSelectionState MakeUiSkinSelectionState(in AssetRef<UiSkin> requested){
     return state;
 }
 
-// Commits a skin identity only after its complete asset and GPU binding succeeds.
 UiSkinSelectionResult EnsureUiSkinSelection<TTryBind>(
     mut UiSkinSelectionState state,
     in AssetRef<UiSkin> basicSkin,

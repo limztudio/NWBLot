@@ -192,7 +192,6 @@ void VerifyCpuTaskMpmcTests_ExternalProducersCanWaitForMainThreadTasksWhileTheOw
             break;
         }
         scheduler.pumpMainThread();
-        // Yield lets dependent producers publish the next batch without pacing every handoff to a timer tick.
         YieldThread();
     }
     for(usize index = 0u; index < producers.size(); ++index){
@@ -270,7 +269,6 @@ void VerifyCpuTaskMpmcTests_CanceledCompletionCannotLoseConcurrentHandleScopeOrS
             start.store(true, MemoryOrder::release);
             ASSERT_TRUE(WaitUntilCount(entered, joinKinds, s_MpmcGateTimeoutMS));
         }
-        // Alternate retirement racing wait registration with retirement completed before any join starts.
         scope.cancel();
         scheduler.pumpMainThread();
         start.store(true, MemoryOrder::release);
@@ -348,7 +346,6 @@ void VerifyCpuTaskProgressTests_ScopeJoinWakesForANewlyReadyUnscopedMainThreadPr
             release.store(true, MemoryOrder::release);
             release.notify_one();
         });
-        // No handle waiter or completed scope can provide the prerequisite's readiness notification.
         joining.store(true, MemoryOrder::release);
         joining.notify_one();
         scope.wait();
@@ -427,7 +424,6 @@ void VerifyCpuTaskProgressTests_ConcurrentSameScopeJoinsRetainLatePublishedDesce
         scheduler.wait();
         EXPECT_EQ(joined.load(MemoryOrder::acquire), workers);
         EXPECT_EQ(visits.load(MemoryOrder::acquire), rootCount + 1u);
-        // This scope keeps its identity after completion, while publication invalidates its old contribution proofs.
         const auto laterTaskAdmission = scheduler.submit(lambda[mut visits]() -> void{
             visits.fetch_add(1u, MemoryOrder::relaxed);
         });

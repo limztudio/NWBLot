@@ -17,7 +17,6 @@ namespace SIMDVectorDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Comparison masks contain canonical all-zero or all-one lanes.
 FOUNDATION_INLINE b8 FOUNDATION_SIMD_CALL AllComparisonMask(SIMDVectorSingle value)noexcept{
 #if defined(FOUNDATION_HAS_NEON64)
     return vminvq_u32(vreinterpretq_u32_f32(value)) != 0u;
@@ -53,7 +52,6 @@ FOUNDATION_INLINE NativeUIntPair EqualBitsPair(NativeUIntPair v0, NativeUIntPair
 }
 #endif
 
-// Comparison masks contain canonical all-zero or all-one lanes; inactive lanes are neutralized only after the comparison.
 template<u32 ActiveMask>
 FOUNDATION_INLINE b8 FOUNDATION_SIMD_CALL AllComparisonMask(SIMDVectorDouble value)noexcept{
     static_assert(ActiveMask == VectorDoubleComponentMask::s_DoubleXYZ || ActiveMask == VectorDoubleComponentMask::s_DoubleXYZW);

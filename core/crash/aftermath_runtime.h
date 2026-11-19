@@ -17,7 +17,6 @@ NWB_CRASH_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Vendored Aftermath runtime name; single source shared by capture and decode.
 #if defined(FOUNDATION_PLATFORM_WINDOWS)
 inline constexpr TStringView s_AftermathRuntimeName = FOUNDATION_TEXT("GFSDK_Aftermath_Lib.x64.dll");
 #else

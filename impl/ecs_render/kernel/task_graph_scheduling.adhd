@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// These buffers return to Common at packet close. The first consumer owns the transition to its read state.
 [cpp_unwind]
 b8 AppendImmutableBufferUpload(mut GpuTaskGraph graph, in GpuUploadBlobId blob, in GpuGraphResourceId destination, in Name identity, in StringView label, mut GpuTaskId dependency, in b8 mergeWithPrevious){
     GpuTaskSchedulingHint scheduling;
@@ -119,9 +118,6 @@ SharedComputeEmulationPhaseTable AvboitAccumulationSharedComputeEmulationPhases(
     return table;
 }
 
-
-// Shared alternating generate/raster compute-emulation chain scheduling: keep the full chain in one packet so a single list owns timing and handoff.
-// Occupancy, extinction, and accumulation share this policy and differ only in their downstream consumers.
 GpuTaskSchedulingHint SharedComputeEmulationChainScheduling(){
     GpuTaskSchedulingHint scheduling;
     scheduling.cost = GpuTaskCostHint::Medium;
@@ -132,7 +128,6 @@ GpuTaskSchedulingHint SharedComputeEmulationChainScheduling(){
     return scheduling;
 }
 
-// Shared phase descriptors retain one ordered recording group while the compiler selects its compatible physical queue.
 void MakeSharedComputeEmulationPhaseTaskDesc(
     in Name identity,
     in StringView markerLabel,

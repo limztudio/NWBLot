@@ -10,8 +10,6 @@
 
 groupshared uint g_NwbRefractionTileActive;
 
-// Capture already evaluated every optical surface at full resolution.
-// OR its depth validity across the tile; alpha and low-resolution texture samples cannot hide clear glass.
 [numthreads(NWB_REFRACTION_GROUP_SIZE, NWB_REFRACTION_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_GroupID, uint groupIndex : SV_GroupIndex){
     if(groupIndex == 0u)

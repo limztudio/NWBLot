@@ -39,7 +39,7 @@ Use `.error()` only after a failure. Log diagnostics at the failure boundary. Fo
 | `Telemetry::DecodeEvent(arena, bytes, count)` | `Expected<DecodedEvent, DecodeResult>` | The aggregate contains the event and consumed byte count. |
 | `IGpuTaskGraphOutputLayerContributor::declareTaskGraphOutputLayer(graph)` | `Expected<GpuTaskGraphOutputLayer>` | An admitted empty layer may represent no work. |
 | `Device::executeCommandLists(..., queue, submitDesc)` | `Expected<QueueSubmissionReceipt>` | The receipt carries the accepted token and emitted timeline-wait count. |
-| `CsgDeformPipeline::RebuildSequentialCuts(..., vertices, triangles)` | `Expected<CsgDeformStats, CsgDeformFailure>` | Failure carries its reason and original diagnostic statistics. |
+| `CsgDeformRebuild::build`, `PreviewCsgDeformCuts`, `CommitCsgDeformCuts` | `Expected<CsgDeformStats, CsgDeformFailure>` | Failure carries its reason and original diagnostic statistics. |
 
 Host filesystem operations belong to `global/filesystem`; mounted runtime storage belongs to `Core::Filesystem::IFilesystem`. Their error types and interfaces are distinct. `IFilesystem::fileExists` remains a direct predicate, while byte count, file size and cursor producers return expected values.
 

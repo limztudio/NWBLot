@@ -26,8 +26,6 @@ namespace GpuTaskTelemetryDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Command queue identity maps one-to-one onto the frame-graph telemetry queue class.
-// Unknown and sentinel values fail closed so unmapped classes cannot silently join a queue bucket.
 [[nodiscard]] inline Expected<Telemetry::FrameGraphQueueClass::Enum> TranslateQueueClass(const CommandQueue::Enum queueClass)noexcept{
     switch(queueClass){
     case CommandQueue::Graphics:

@@ -336,7 +336,6 @@ void CaptureAvboitEmulationPlans(
     mut OpaqueCsgIntervalSampleComputeEmulationGraphPlan csgPlan,
     mut FrameGraphAvboitMaterialUploadResult result
 ){
-    // A phase owns one alias-free stream; mixed work keeps local interleaving.
     result.regularComputeEmulationPlanCaptured = CanCaptureRegularAvboitComputeEmulation(drawItems.csg.computeDrawItems.empty(), geometryOwned, sampledTexturesCollected) && plan.capture(drawItems.regular, false);
     result.csgComputeEmulationPlanCaptured = CanCaptureCsgAvboitComputeEmulation(
         drawItems.regular.computeDrawItems.empty(),
@@ -345,7 +344,6 @@ void CaptureAvboitEmulationPlans(
         geometryOwned,
         sampledTexturesCollected
     ) && csgPlan.capture(drawItems.csg, frame);
-    // All-compute draws share one output only as an explicit D/R sequence; mixed raster routes keep their main callback.
     result.sharedComputeEmulationPlanCaptured = CanCaptureSharedAvboitComputeEmulation(
         result.regularComputeEmulationPlanCaptured,
         drawItems.regular.meshDrawItems.empty(),

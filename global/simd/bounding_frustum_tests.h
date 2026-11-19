@@ -19,7 +19,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Stateless frustum math shared by the frustum bounding types. Inputs are the loaded origin, orientation, four slopes, and near/far planes.
 namespace FrustumTests{
 
 
@@ -67,7 +66,6 @@ inline void FOUNDATION_SIMD_CALL Transform(
         return bounds;
     }();
     if(!fitted){
-        // A reflected or collapsed cone may cross the chosen forward plane; enclose its transformed corners with a forward axis-aligned cone.
         const SIMDVectorSingle center = VectorScale(VectorAdd(minBounds, maxBounds), CollisionDetail::s_Half);
         const SIMDVectorSingle extents = VectorScale(VectorSubtract(maxBounds, minBounds), CollisionDetail::s_Half);
         const SIMDVectorSingle depth = VectorSubtract(VectorSplatZ(maxBounds), VectorSplatZ(minBounds));
@@ -342,7 +340,6 @@ inline void FOUNDATION_SIMD_CALL Transform(
         return bounds;
     }();
     if(!fitted){
-        // A reflected or collapsed cone may cross the chosen forward plane; enclose its transformed corners with a forward axis-aligned cone.
         const SIMDVectorDouble center = VectorDoubleScale(VectorDoubleAdd(minBounds, maxBounds), CollisionDoubleDetail::s_DoubleHalf);
         const SIMDVectorDouble extents = VectorDoubleScale(VectorDoubleSubtract(maxBounds, minBounds), CollisionDoubleDetail::s_DoubleHalf);
         const SIMDVectorDouble depth = VectorDoubleSubtract(VectorDoubleSplatZ(maxBounds), VectorDoubleSplatZ(minBounds));

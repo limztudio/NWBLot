@@ -29,7 +29,6 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Command operation labels shared by command-list recording paths.
 inline constexpr TStringView s_CloseCommandListOperation = FOUNDATION_TEXT("close command list");
 inline constexpr TStringView s_OwnershipReleaseBarriersOperation = FOUNDATION_TEXT("append ownership-release barriers");
 inline constexpr TStringView s_DispatchRaysOperation = FOUNDATION_TEXT("dispatch rays");
@@ -40,7 +39,6 @@ inline constexpr TStringView s_SetPushConstantsOperation = FOUNDATION_TEXT("set 
 inline constexpr TStringView s_SetGraphicsStateOperation = FOUNDATION_TEXT("set graphics state");
 inline constexpr TStringView s_SetMeshletStateOperation = FOUNDATION_TEXT("set meshlet state");
 
-// Rejection reasons shared by command-list recording paths.
 inline constexpr TStringView s_DataIsNullReason = FOUNDATION_TEXT("data is null");
 inline constexpr TStringView s_StagingAllocationFailedReason = FOUNDATION_TEXT("staging allocation failed");
 inline constexpr TStringView s_NativeBufferAliasReason = FOUNDATION_TEXT("distinct buffer objects alias the same native buffer");
@@ -48,7 +46,6 @@ inline constexpr TStringView s_TextureNotReadyForQueueReason = FOUNDATION_TEXT("
 inline constexpr TStringView s_BufferNotReadyForQueueReason = FOUNDATION_TEXT("buffer is not ready for this exact command queue");
 inline constexpr TStringView s_MeshShaderUnavailableReason = FOUNDATION_TEXT("mesh shader feature or entry point is unavailable");
 
-// Index buffer and indirect-argument buffer states tracked next to the vertex buffers.
 inline constexpr u32 s_GraphicsExtraBufferStateCount = 2u;
 
 
@@ -182,29 +179,22 @@ public:
 
 
 public:
-    // Optional initial-state handoff; its producer must execute first.
     void open(const CommandListResourceStateHandoff* initialStates = nullptr);
     void open(const CommandListResourceStateHandoff& initialStates){ open(&initialStates); }
-    // Final state snapshot follows keepInitialState restoration.
     void close(CommandListResourceStateHandoff* finalStates = nullptr);
     void close(CommandListResourceStateHandoff& finalStates){ close(&finalStates); }
-    // False when no submit-ready command buffer is owned.
     [[nodiscard]] b8 hasCommandBuffer()const noexcept{
         const GraphPublicationReadOwnership ownership(*this);
         return ownership.m_readable && matchesNativeLeaseIdentity();
     }
-    // `hasCommandBuffer` remains true after close so queues can submit it.
-    // Tooling that emits commands must use this predicate instead of treating ownership as an active recording scope.
     [[nodiscard]] b8 isRecording()const noexcept{
         const GraphPublicationReadOwnership ownership(*this);
         return ownership.m_readable && isRecordingUnchecked();
     }
-    // Sticky per attempt: any failed check invalidates the list; close drops its buffer, only open starts fresh.
     [[nodiscard]] b8 commandRecordingFailed()const noexcept{
         const GraphPublicationReadOwnership ownership(*this);
         return ownership.m_readable && commandRecordingFailedUnchecked();
     }
-    // Every open starts a distinct lease. Recorders capture it before lowering; a thunk that swaps the buffer while claiming success is rejected.
     [[nodiscard]] u64 recordingLeaseSerial()const noexcept{
         const GraphPublicationReadOwnership ownership(*this);
         return ownership.m_readable ? m_recordingLeaseSerial : 0u;
@@ -238,7 +228,6 @@ public:
     void setAccelStructState(RayTracingAccelStruct& accelStructResource, ResourceStates::Mask stateBits, b8 forceMemoryDependency = false){
         setAccelStructState(&accelStructResource, stateBits, forceMemoryDependency);
     }
-    // Exports an exclusive resource to an ordered physical consumer queue.
     void releaseTextureOwnership(Texture* textureResource, TextureSubresourceSet subresources, CommandQueue::Enum destinationQueue);
     void releaseTextureOwnership(Texture& textureResource, TextureSubresourceSet subresources, CommandQueue::Enum destinationQueue){
         releaseTextureOwnership(&textureResource, subresources, destinationQueue);
@@ -301,7 +290,6 @@ public:
     void copyTexture(Texture& dest, const TextureSlice& destSlice, Texture& src, const TextureSlice& srcSlice);
     void copyTexture(StagingTexture& dest, const TextureSlice& destSlice, Texture& src, const TextureSlice& srcSlice);
     void copyTexture(Texture& dest, const TextureSlice& destSlice, StagingTexture& src, const TextureSlice& srcSlice);
-    // Fallible variants let graph recorders reject a packet instead of claiming a lifecycle when staging or preflight fails.
     [[nodiscard]] b8 tryWriteBuffer(Buffer& buffer, const void* data, usize dataSize, u64 destOffsetBytes = 0);
     template<GpuPodValue T>
     [[nodiscard]] b8 tryWriteBuffer(Buffer& buffer, const T& data, u64 destOffsetBytes = 0){
@@ -392,15 +380,12 @@ public:
     [[nodiscard]] b8 canResetTimerQueryHere()const noexcept;
     [[nodiscard]] Expected<TimerQueryRecordingToken> beginTimerQuery(TimerQuery& query);
     [[nodiscard]] b8 endTimerQuery(TimerQuery& query, const TimerQueryRecordingToken& token);
-    // Claim closure consumes only the beginTimerQuery() claim from this same command buffer; no retention, diagnostics, or observers.
     [[nodiscard]] b8 endTimerQueryFromExistingClaim(TimerQuery& query, const TimerQueryRecordingToken& token)noexcept;
     void beginMarker(const AStringView name);
     void endMarker();
     void abandonMarker()noexcept;
 
 #if defined(NWB_DEBUG)
-    // Task-graph recording opens one scope around each record thunk.
-    // Command methods report the capabilities they actually consume so the packet recorder can reject a declaration that is incompatible with that task.
     void beginTaskCapabilityTracking(GpuQueueCapability::Mask declaredCapabilities)noexcept;
     [[nodiscard]] GpuQueueCapability::Mask endTaskCapabilityTracking()noexcept;
     void cancelTaskCapabilityTracking()noexcept;
@@ -470,21 +455,15 @@ private:
     }
     [[nodiscard]] b8 canRecordTimerQueryHereUnchecked()const noexcept;
     [[nodiscard]] b8 canResetTimerQueryHereUnchecked()const noexcept;
-    // False only when graph publication blocks inspection.
-    // True reports whether this exact native lease holds the requested cycle's begin and end claims.
     [[nodiscard]] Expected<TimerQueryRecordingEndpoints> inspectExactTimerQueryRecordingEndpoints(const TimerQueryRecordingToken& token, u64 recordingLeaseSerial)const noexcept;
     [[nodiscard]] b8 beginGraphRecordingOwnership(u64 recordingLeaseSerial);
     void publishGraphRecordingOwnership(u64 recordingLeaseSerial)noexcept;
     void cancelGraphRecordingOwnership(u64 recordingLeaseSerial)noexcept;
-    // A recorded graph may outlive its strong reference via a task-retained handle.
-    // Revoke only that graph's still-unsubmitted publication.
     void revokeGraphRecordingPublication(u64 recordingLeaseSerial)noexcept;
     [[nodiscard]] Expected<u64> beginGraphSubmissionOwnership()noexcept;
     void acceptGraphSubmissionOwnership(u64 recordingLeaseSerial)noexcept;
     void endGraphSubmissionOwnership(u64 recordingLeaseSerial)noexcept;
     void closeInternal(CommandListResourceStateHandoff* finalStates);
-    // Reusable attempt cancellation leaves publication and crash-tracker ownership to the enclosing capability.
-    // It never logs, invokes observers, polls a queue, or archives crash-marker strings.
     void abortRecordingAttemptWithoutCallbacks()noexcept;
     void clearStateInternal();
     [[nodiscard]] b8 descriptionMatchesCreation()const noexcept;
@@ -550,7 +529,6 @@ private:
     [[nodiscard]] Expected<BufferSuballocation> prepareUploadStaging(usize dataSize, TStringView operationName, u32 alignment = s_DefaultUploadSuballocationAlignment);
     [[nodiscard]] Expected<BufferSuballocation> prepareUploadStaging(const void* data, usize dataSize, TStringView operationName, u32 alignment = s_DefaultUploadSuballocationAlignment);
     [[nodiscard]] Expected<VkDeviceAddress> suballocateBuildScratchAddress(u64 buildScratchSize, u64 scratchAlignment, TStringView operationName);
-    // Returns mapped CPU-written build-input bytes whose device address is aligned. The pool reuses them only after the owning queue completes.
     [[nodiscard]] Expected<BufferSuballocation> suballocateBuildInput(u64 byteCount, u64 deviceAddressAlignment, TStringView operationName);
     [[nodiscard]] Expected<b8> validateAccelStructBuildSignature(
         AccelStruct& accelStruct,

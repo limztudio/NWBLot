@@ -9,7 +9,6 @@ static const half NWB_SMOKE_CSG_CAUSTIC_EXPOSURE_SCALE = 0.1h;
 
 
 half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
-    // Casters stay behind the camera; the visible plane exposes only actual deposited photon irradiance.
     return nwbBxdfCausticIrradiance(pixel) * NWB_SMOKE_CSG_CAUSTIC_EXPOSURE_SCALE;
 }
 

@@ -52,8 +52,6 @@ void VisitPointerDependency(const usize index, const Span<const T* const> items,
 
 };
 
-
-// State must contain at least one zero for each item.
 template<typename T, typename Predicate, typename State, typename Output>
 void TopologicallySortPointers(const Span<const T* const> items, const Predicate& dependsOn, State& state, Output& outSorted){
     outSorted.clear();
@@ -64,8 +62,6 @@ void TopologicallySortPointers(const Span<const T* const> items, const Predicate
         AlgorithmDetail::VisitPointerDependency(i, items, dependsOn, state, outSorted);
 }
 
-
-// The mask must contain one entry for each element.
 template<typename Container>
 void CompactByMask(const Span<const u8> selected, Container& values)noexcept(
     noexcept(values.size()) && noexcept(values[usize{}] = Move(values[usize{}])) && noexcept(values.erase(values.begin() + usize{}, values.end()))
@@ -265,7 +261,6 @@ constexpr T AlignUp(const T value, const T alignment)noexcept(IsArithmetic_V<T>)
     return value + (alignment - (value % alignment)) % alignment;
 }
 
-// Uses wrapping numerator arithmetic and requires a nonzero divisor.
 template<typename ValueT, typename DivisorT>
     requires(IsIntegral_V<ValueT> && IsIntegral_V<DivisorT>)
 [[nodiscard]] constexpr auto DivideUpWrapping(const ValueT value, const DivisorT divisor)noexcept -> decltype((value + divisor - 1u) / divisor){

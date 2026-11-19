@@ -237,11 +237,6 @@ inline constexpr usize s_ChildNameOverhead = 2u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Unwind cleanup uses no C++ dynamic storage or allocating path operations; native/libc resource failures remain explicit errors.
-// Removes named trees and links without traversing child links; missing paths succeed, and roots or a final dot/dotdot are rejected.
-// Windows uses one 32K UTF-16 stack buffer and iterative traversal; POSIX uses relative descriptors and stack frames proportional to depth.
-// Windows accepts DOS/UNC paths, including their extended spellings; other device namespaces are rejected without opening them.
-// Native failures can leave a partially removed tree; callers must own the tree and exclude concurrent renames/reparse replacement.
 [[nodiscard]] FOUNDATION_INLINE Expected<void, ErrorCode> RemoveAllForCleanupText(const BasicStringView<typename Path<::ArenaBase>::value_type> text, [[maybe_unused]] const typename Path<::ArenaBase>::value_type* const cstr)noexcept{
     if(text.empty())
         return {};

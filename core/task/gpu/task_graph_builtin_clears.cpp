@@ -48,7 +48,6 @@ namespace __hidden_gpu_task_graph_builtin_clears{
 }
 
 [[nodiscard]] static b8 IncludeHookCommandRequirements(GpuTaskCommandRequirements& commands, const GpuTaskCommandRequirements& hookCommands)noexcept{
-    // A hook declares one alternative clause; the additional clause belongs to the composed built-in contract.
     if(hookCommands.additionalAlternativeCapabilities != GpuQueueCapability::None)
         return false;
     commands.requiredCapabilities |= hookCommands.requiredCapabilities;
@@ -255,7 +254,6 @@ Expected<GpuTaskId> GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, c
     payload->destinationResource = clearDesc.destination;
     payload->destination = destinationResource.texture;
     payload->clearDesc = clearDesc;
-    // Capture and lowering keep the exact declared range, not an all-subresources alias needing the TextureDesc later.
     payload->clearDesc.subresources = resolvedSubresources;
 
     const GpuTaskResourceUse resourceUse{ .resource = clearDesc.destination, .range = GpuTaskResourceRange{ .textureSubresources = resolvedSubresources, }, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write, };
@@ -282,8 +280,6 @@ Expected<GpuTaskId> GpuTaskGraph::addClearTextureRectUIntTask(const GpuTaskDesc&
     if(
         destinationResource.type != GpuGraphResourceType::Texture
         || !destinationResource.texture
-        // Bounded multisample clears require an active attachment.
-        // Graph recording ends rendering before this primitive and has no framebuffer lowering, so every multisample rectangle remains unsupported.
         || destinationResource.texture->getCreationDescription().sampleCount != 1u
         || !GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(destinationResource.texture->getCreationDescription(), destinationResource.initialState, destinationResource.externalFinalState)
     )

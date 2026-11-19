@@ -1,5 +1,3 @@
-"""Decode font builder packages independently for integration checks."""
-
 import hashlib
 import struct
 
@@ -72,11 +70,9 @@ class FontPackageEvidence:
             raise AssertionError("trailing FON2 bytes")
         return {LIT_SFNT: sfnt, LIT_GROUPS: groups, LIT_FONT_HASH: digest, LIT_FACE_INDEX: face_index}
 
-
     @staticmethod
     def source_bytes(path):
         return FontPackageEvidence.read_prepared_font(path)[LIT_SFNT]
-
 
     @staticmethod
     def sfnt_tables(data):
@@ -86,7 +82,6 @@ class FontPackageEvidence:
             tag, _checksum, offset, length = struct.unpack_from(">4sIII", data, 12 + index * 16)
             tables[tag.decode("ascii")] = data[offset:offset + length]
         return tables
-
 
     @staticmethod
     def read_atlas(data):
@@ -130,4 +125,3 @@ class FontPackageEvidence:
             raise AssertionError("trailing FTA1 bytes")
         return {LIT_FONT_HASH: font_hash, "identity": identity, LIT_FACE_INDEX: face_index, LIT_UNITS_PER_EM: units_per_em, LIT_PPEM: ppem, "spread": spread, LIT_GUARD: guard, "raster": raster, "ascender": ascender, "descender": descender, "line_gap": line_gap,
                 LIT_GLYPHS: glyphs, LIT_GROUPS: groups, LIT_TABLES: tables}
-

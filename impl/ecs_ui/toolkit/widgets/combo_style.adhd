@@ -156,7 +156,6 @@ b8 MatchesComboFrameStateValues(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Hosts own the committed selection; the popup list keeps navigation separate until an explicit activation.
 class ComboState : NoCopy{
     public ListState m_list;
     public PopupState m_popup;
@@ -196,7 +195,6 @@ class ComboState : NoCopy{
         return this.m_list;
     }
 
-    // Explicit application changes renew the field input lifetime even when the value is unchanged.
     public void select(in u64 key){
         this.m_inputGeneration = AllocateServiceIdentity();
         this.m_selectedKey = key;
@@ -229,7 +227,6 @@ void CloseComboState(mut ComboState state){
     state.m_popup.close();
 }
 
-// Rebinding after omission or to another field retires popup interaction while preserving committed selection.
 b8 BindComboState(mut ComboState state, in WidgetId owner, in u64 declarationGeneration){
     const Expected<b8> shouldClose = TryBindComboOwner(owner, declarationGeneration, state.m_owner, state.m_ownerDeclaration);
     if(!shouldClose.has_value())

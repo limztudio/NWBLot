@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Picks the caustic light for this photon. Round-robin across lights with a caustic slot, so each gets a fair share. Returns false when none exists.
 bool nwbCausticPickLight(const uint photonIndex, out NwbSceneLight outLight){
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
     uint causticLightCount = 0u;

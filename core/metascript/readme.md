@@ -8,7 +8,7 @@ The public API lives in `NWB::Core::Metascript`. Include [parser.h](parser.h) fo
 target_link_libraries(your_target PRIVATE nwb_metascript)
 ```
 
-The target publicly depends on `nwb_alloc` and `nwb::tbb`.
+The target publicly depends on `nwb_alloc` and `nwb::tbb`, and privately links vendored static `nwb::libclang` (`../../3rd_parties/libclang`, consuming `../../3rd_parties/llvm`) for C++ header ingestion in the `.adhd` compiler.
 
 ## Authoring metadata
 
@@ -190,17 +190,19 @@ MetaScript handles syntax and generic value operations. File access, UTF-8 BOM r
 | `preprocessor_macro_expander.h`, `preprocessor_macro_expander.cpp` | Macro expansion and defined-operand handling. |
 | `preprocessor_includes.h`, `preprocessor_includes.cpp` | Include resolution, deduplication, and source-range tracking. |
 | `attribute_parser.h`, `attribute_parser.cpp` | Shared single-bracket attribute list parser (`[name("arg"), flag]`). |
+| `literal_decoder.h` | Integer and floating-point literal decoding shared across parsers and validators. |
 | `parser.h`, `parser.cpp` | `Document`, parse entry points, and reader buffering. |
 | `parser_cursor.*` | Shared token cursor and diagnostics. |
 | `expression_parser.*`, `operation_validator.*` | Literal/reference expressions and operand validation. |
 | `statement_parser.*` | Variable declarations, assignments, attributes, and independent struct descriptions. |
-| `adhd/` | `adhd` language AST (`ast/`), parser (`parser/`), semantic analyzer (`sema/`), C++/reflection emitters (`codegen/`), and `Compiler` pipeline (`compiler.*`). |
+| `adhd/` | `adhd` language AST (`ast/`), parser (`parser/`), semantic analyzer (`sema/`), C++ header importer (`clang/`), C++/reflection emitters (`codegen/`), split compiler-contract export tables (`export_{contracts,functions,keywords,operators,types}.h` -> `export_global_*` + `export_core_*`), built-in extern umbrella preludes (`export_global_prelude.adhd` collecting `global/**/*.adhd` and `export_core_prelude.adhd` collecting `core/**/*.adhd`), and `Compiler` pipeline (`compiler.*`). |
 | `adhd/ast/contract_semantics.h` | Class role contracts (`asset`/`system`/`component`/`subsystem`), asset codec/subsystem contracts, and preamble/naming conventions. |
 | `adhd/ast/operator_semantics.h` | Operator tokens, precedence, overload rules, and symbol mappings used by the compiler. |
 | `adhd/ast/builtin_type_semantics.h` | Builtin scalar properties, type names, and scalar limit rules. |
 | `adhd/ast/keyword_semantics.h` | Keyword classification and parsing rules. |
-| `adhd/clang/export_cpp_importer.h` | C++ header importer type mappings, filters, libclang arguments, and extern formatter symbols. |
+| `adhd/clang/` | Vendored static `libclang` C++ header importer (`cpp_header_importer.*`, `_internal.h`, `_formatter.cpp`, `_record_builder.cpp`, `_type_mapper.cpp`) and `export_cpp_importer.h` rules/filters. |
 | `adhd/codegen/codegen_symbols.h` | Emitted C++ runtime helper, synthetic identifier, and SIMD codegen symbol constants. |
+| `*.adhd`, `adhd/**/*.adhd` | Per-header `.adhd` `extern` mirror declarations collected by `export_core_prelude.adhd`. |
 
 ## Build and tests
 

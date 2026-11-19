@@ -264,7 +264,6 @@ b8 RendererRayTracingSystem::prepareCausticOpticalReadTracking(in MeshViewBuffer
 void RendererRayTracingSystem::confirmRayTraceContextReadSubmission(in QueueSubmissionToken token){
     if(!token.valid() || (!this.m_lightSpaceShadow.m_csg.snapshot.hasCsg && !this.m_opticalCausticReaderAdmitted))
         return;
-    // Every physical reader protects the next upload, including accepted prefixes of partially rejected graphs.
     mut Vector<QueueSubmissionToken> readTokens = this.m_rayTracingState.shadow.m_rayTraceContextReadSubmissionTokens;
     assert(token.hasPhysicalQueueIdentity() && token.physicalQueueIndex < readTokens.size());
     mut QueueSubmissionToken previous = readTokens[token.physicalQueueIndex];
@@ -280,7 +279,6 @@ b8 RendererRayTracingSystem::ensureRayTraceContextReadTracking(in b8 opticalCaus
         return true;
 
     mut Device device = this.m_graphics.getDevice();
-    // Keep pending readers when a later frame stops using their optical or CSG inputs.
     b8 readersPending = false;
     for(mut QueueSubmissionToken token : readTokens){
         if(!token.valid())
@@ -309,7 +307,6 @@ b8 RendererRayTracingSystem::ensureRayTraceContextReadTracking(in b8 opticalCaus
     const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
     if(topology.queueSpan().empty())
         return false;
-    // Acceptance only updates these preallocated physical queue slots.
     readTokens.resize(topology.queueCount);
     return true;
 }
@@ -355,7 +352,6 @@ b8 RendererRayTracingSystem::ensureCsgTraceContextResources(){
     RetireDescriptor(heap, handle);
     buffer = replacement;
     handle = replacementHandle.value();
-    // Prior readers retain the old buffer, but also read the persistent selector; its next upload must drain them.
     retireReplacement.release();
     return true;
 }

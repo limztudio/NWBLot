@@ -249,7 +249,6 @@ void AddReportOwner(mut ReportFixture fixture, in u32 packetCount, in u16 firstQ
         }
     }
 
-    // Deliberately unsorted producer input exercises canonical owner and packet ordering.
     for(u32 remaining = packetCount; remaining != 0u; --remaining){
         const u32 packetIndex = remaining - 1u;
         FrameGraphPacketSubmissionStatisticsRecord packet = FrameGraphPacketSubmissionStatisticsRecord();
@@ -367,7 +366,6 @@ b8 AppendFixtureStatistics(in u32 packetCount, in u32 ownerCount, mut TelemetryT
             return false;
     }
 
-    // Odd multiplication permutes the power-of-two workload, interleaving owners and physical queues.
     for(u32 index = 0u; index < packetCount; ++index){
         const u32 shuffled = (index * 2053u + 7u) % packetCount;
         const u32 ownerIndex = shuffled / packetsPerOwner;
@@ -1053,7 +1051,6 @@ void VerifyTelemetry_FrameGraphPayloadRejectsInvalidInput(){
 }
 
 void VerifyTelemetry_FrameGraphDurationTailsRejectInvalidValuesAndPreserveSignedZeroSubnormals(){
-    // The final submission durations are scalar tails after four-lane validation blocks.
     const f64 minimumSubnormal = bit_cast<f64>(1uLL);
     Array<f64, 5> invalidDurations = Array<f64, 5>();
     invalidDurations[0u] = -1.0;
@@ -1384,7 +1381,6 @@ void VerifyGpuPassTimingProbe_GrowthPreservesAccumulationAndWatermarksAcrossInte
     EXPECT_EQ(logger.messageCount(), 2u);
     EXPECT_FALSE(SawCapturedMessage(logger, "published_windows=2"));
 
-    // The old publication remains visible, but the next interval must not count it again.
     probe.recordFrame(0.25f, view);
     probe.recordFrame(0.25f, view);
     EXPECT_EQ(logger.messageCount(), 3u);

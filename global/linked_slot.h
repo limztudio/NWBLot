@@ -13,7 +13,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A pair follows its endpoints through moves. Copies own only the copied value.
 template<typename T>
 class LinkedSlot final{
     static_assert(IsNothrowMoveConstructible_V<T> && IsNothrowDestructible_V<T>);

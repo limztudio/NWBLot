@@ -26,10 +26,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// HW and SW share medium replay, interface physics and deposition; backend hooks supply geometric queries.
-
-
-// Several ordinary refractors or CSG retained spans require more than four interfaces before deposition.
 #define NWB_CAUSTIC_MAX_BOUNCES 16u
 
 #define NWB_CAUSTIC_FLUX_EPSILON 1e-6
@@ -40,7 +36,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// With normalized rays, t is world distance and instance selects the current material record.
 struct NwbCausticHit{
     bool hit;
 #if NWB_RT_CSG_ENABLED

@@ -140,11 +140,7 @@ private:
     void transitionCommandBufferState(TrackedCommandBuffer& commandBuffer, TrackedCommandBufferArenaState::Enum nextState);
     void commitCommandBufferStateTransition(TrackedCommandBuffer& commandBuffer, TrackedCommandBufferArenaState::Enum nextState)noexcept;
     void unregisterCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept;
-    // Requires m_mutex.
-    // Needs m_mutex. Releases buffer refs only after the timeline completes them; worker leases pool per worker.
     void collectCompletedCommandBuffers();
-    // Default/direct lease zero stays private per command buffer because external callers may record it from unrelated threads.
-    // Explicit graph workers use one Vulkan pool shard per physical queue and worker identity.
     [[nodiscard]] Expected<TrackedCommandBufferPtr, VkResult> createCommandBuffer(VkCommandPool commandPool, Futex* sharedCommandPoolMutex, u64 recordingWorkerDomain, u32 recordingWorkerIndex);
     [[nodiscard]] WorkerCommandArena* findWorkerCommandArena(u64 recordingWorkerDomain, u32 recordingWorkerIndex)const noexcept;
     [[nodiscard]] Expected<NotNull<WorkerCommandArena*>, VkResult> getOrCreateWorkerCommandArena(u64 recordingWorkerDomain, u32 recordingWorkerIndex);
@@ -163,16 +159,10 @@ private:
     GpuPhysicalQueueId m_physicalQueue;
     u32 m_queueFamilyIndex;
     CommandQueue::Enum m_queueID;
-    // Serializes reusable Device::executeCommandLists workspace through accepted post-submit publication.
-    // Acquire before m_mutex when both are required.
     Futex m_submissionWorkspaceMutex;
-    // Always acquire before m_nativeQueue.hostMutex when both are required.
     Futex m_mutex;
     Futex m_workerCommandArenasMutex;
-    // Successful ALL_COMMANDS waits cover later commands on this exact queue.
-    // Zero-valued entries only reserve owned tracking-semaphore identity before the native call; coverage advances solely on acceptance.
     Vector<SubmissionWait, Alloc::GlobalArena> m_acceptedTimelineWaits;
-    // Queue::submit holds m_mutex throughout, so this workspace reuses without alloc once vkQueueSubmit2 accepts.
     Vector<DescriptorHeapUseCommitTicket, Alloc::GlobalArena> m_submitDescriptorHeapUseCommitTickets;
     Vector<NotNull<TrackedCommandBuffer*>, Alloc::GlobalArena> m_submitValidatedTimerQueryCommandBuffers;
     Vector<VkSemaphoreSubmitInfo, Alloc::GlobalArena> m_submitWaitInfos;
@@ -188,8 +178,6 @@ private:
     CommandBufferList m_commandBuffersInFlight;
     CommandBufferList m_commandBuffersPool;
     Vector<NotNull<WorkerCommandArena*>, Alloc::GlobalArena> m_workerCommandArenas;
-    // Published worker nodes are append-only while the queue is usable.
-    // Device teardown joins recording clients before destroyWorkerCommandArenas() clears the head and reclaims the stable nodes.
     Atomic<WorkerCommandArena*> m_workerCommandArenaHead = nullptr;
     Atomic<u64> m_explicitWorkerArenaCount = 0u;
     Atomic<u64> m_directCommandBufferCount = 0u;

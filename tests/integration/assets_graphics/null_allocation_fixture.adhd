@@ -44,7 +44,6 @@ class NullAllocatedBucket : ICookEntryBucket, NullAllocation{
     public usize size()const override{ return 0u; }
     public b8 parseDocument(in GlobalPath root, in StringView virtualRoot, in GlobalPath path, in MetascriptDocument document, mut CookEntryParseContext context)override{ return false; }
     public b8 parseValue(in Name path, in GlobalPath file, in MetascriptValue value, mut CookEntryParseContext context)override{ return false; }
-    public b8 appendCachedEntry(in CookEntrySourceLocation source, in Name path, in Span<u8> bytes, mut CookEntryParseContext context)override{ return false; }
     public b8 writeCookedAssets(mut CookEntryWriteContext context)override{ return false; }
 }
 

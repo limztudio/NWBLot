@@ -76,7 +76,6 @@ b8 DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, con
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: offset {} + size {} exceeds segment capacity {}."), dstOffsetBytes, descriptorSize, storage.capacityBytes);
         return false;
     }
-    // Validate full live-allocation identity to reject stale recycled ranges.
     const b8 ownsLiveAllocation = storage.allocations.ownsAt(allocation, dstOffsetBytes);
     if(!ownsLiveAllocation){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: allocation is not live for offset {}."), dstOffsetBytes);
@@ -243,7 +242,6 @@ b8 DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, con
             break;
         }
         case ResourceType::RayTracingAccelStruct:{
-            // TLAS descriptor directly encodes the generation's device address.
             auto& as = *MakeNotNull(checked_cast<AccelStruct*>(item.resourceHandle));
             if(!m_device.isAccelStructReadyForGpuUse(&as)){
                 NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected a foreign or unready AccelStruct."));

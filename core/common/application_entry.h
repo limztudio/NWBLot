@@ -35,7 +35,6 @@ using AnsiEntryPointFn = int(*)(isize, char**, void*);
 inline constexpr int s_ApplicationEntryFailure = -1;
 inline constexpr int s_EmptyArgCount = 0;
 #if defined(NWB_BUILDMODE)
-// Build-mode failure exits also write the allocating name-symbol file.
 inline constexpr b8 s_TerminalFailureNoThrow = noexcept(!NameSymbols::WriteDefaultFile());
 #else
 inline constexpr b8 s_TerminalFailureNoThrow = true;
@@ -45,7 +44,6 @@ inline constexpr b8 s_TerminalFailureNoThrow = true;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// RAII detach of Name callbacks on exit; WriteDefaultFile still works after uninstall.
 class ScopedNameSymbolRegistry final : NoCopy{
 public:
     ScopedNameSymbolRegistry(){ NameSymbols::InstallRuntimeRegistry(); }

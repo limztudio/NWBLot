@@ -16,7 +16,6 @@ class ObjectGeometryCacheState{
     public b8 initialized = false;
 }
 
-// The declaration retains the buffer and current content generation; acceptance validates them against the mesh owner.
 class ObjectGeometryCacheSnapshot{
     public BufferHandle buffer;
     public ComputePipelineHandle decoderPipeline;

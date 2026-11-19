@@ -1,4 +1,3 @@
-"""Read frozen popup metadata and compare it with accepted presentation pixels."""
 from __future__ import annotations
 
 import re
@@ -29,8 +28,6 @@ SENTINEL_COLOR = (0.12, 0.52, 0.86)
 
 def snapshot_from_logs(text):
     return snapshot_from_patterns(text, STATE, DISPLAY, SKIN, GEOMETRY, FIELDS, RECTANGLES, fixture=LIT_POPUP)
-
-
 
 
 def expected_placement(snapshot):
@@ -67,7 +64,6 @@ def observe_popup(frame, snapshot, expected, *, extent=None, skin="default"):
         geometry_matches = geometry_matches and snapshot["side"] == side
         viewport = (0.0, 0.0, *snapshot[LIT_LOGICAL_EXTENT])
         geometry_matches = geometry_matches and snapshot[LIT_RECTANGLES]["viewport"] == viewport
-        # Check that deferred popup chrome paints over the red base rectangle.
         probe("popup_skin_over_later_root", (bx + bw - 16.0, by + bh - 16.0), (26, 34, 45), 8)
     else:
         if bw <= 0.0:

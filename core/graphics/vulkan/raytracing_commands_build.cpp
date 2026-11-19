@@ -205,7 +205,6 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         geometrySignatures[i] = VulkanDetail::MakeAccelStructGeometryBuildSignature(blasScratch.geometries[i], &blasScratch.spheresData[i], &blasScratch.lssData[i], blasScratch.primitiveCounts[i], geometries[i].useTransform);
     }
 
-    // OMM update details are not in the AS signature, so this path stays fail-closed: micromap geometry updates unsupported.
     if(performUpdate && hasOpacityMicromap){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to update BLAS: opacity-micromap geometry updates are unsupported"));
         return;
@@ -339,7 +338,6 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         return;
     buildInfo.scratchData.deviceAddress = *scratchAddressResult;
 
-    // Reused acceleration structures need build-write ordering.
     if(hasPriorBuild){
         auto reuseBarrier = VulkanDetail::MakeVkStruct<VkMemoryBarrier2>(VK_STRUCTURE_TYPE_MEMORY_BARRIER_2);
         reuseBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;

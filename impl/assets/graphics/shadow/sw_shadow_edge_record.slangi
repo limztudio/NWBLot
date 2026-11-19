@@ -16,9 +16,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Stage-3 compacted-edge record packing: word0 packs 16-bit (x, y) pixel coordinates and word1 stores the light-loop index.
-
-
 uint nwbSwShadowPackPixel(const uint2 pixel){
     return (pixel.x << NWB_SW_SHADOW_EDGE_PIXEL_BITS) | (pixel.y & NWB_SW_SHADOW_EDGE_PIXEL_MASK);
 }

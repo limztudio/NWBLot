@@ -108,7 +108,6 @@ NwbHardwareTransparentCrossingOptics nwbHwShadowShadeCrossing(const RayDesc ray,
     hit.surfaceDispatchId = material.surfaceDispatchId;
     hit.materialConstantByteOffset = material.materialConstantByteOffset;
     hit.uv0 = a0.uv0 * bary.x + a1.uv0 * bary.y + a2.uv0 * bary.z;
-    // Inverse transpose preserves outward orientation under nonuniform and mirrored instance scales.
     hit.worldNormal = nwbSafeNormalize(nwbRotateVectorByQuaternion(objectNormal / instance.scale.xyz, instance.rotation), float3(0.0, 0.0, 1.0));
     hit.worldPosition = ray.Origin + ray.Direction * crossing.distance;
     hit.rayDirection = ray.Direction;
@@ -117,7 +116,6 @@ NwbHardwareTransparentCrossingOptics nwbHwShadowShadeCrossing(const RayDesc ray,
     const float3 worldGeometricNormal = nwbRotateVectorByQuaternion(geometricNormal / instance.scale.xyz, instance.rotation);
     const half cosine = lerp(nwbShadowCosineToRay(worldGeometricNormal, ray.Direction), nwbShadowCosineToRay(hit.worldNormal, ray.Direction), smoothWeight);
     NwbHardwareTransparentCrossingOptics optics;
-    // Bounded (0, 1) optics factors stay half; geometry chord/distances below remain float for precision.
     optics.absorption = nwbShadowAbsorptionCoefficient(surface.shadowAbsorptionTint);
     optics.transmission = nwbShadowFresnelTransmittedFraction(surface.refractionIor, cosine);
     optics.facing = nwbHwShadowFacing(geometricNormal, objectDirection);
@@ -146,7 +144,6 @@ void nwbHwShadowFinishCluster(inout NwbHardwareTransparentStream stream){
         return;
     stream.hasCluster = false;
     const bool closed = nwbHwShadowClosedBoundary(stream.boundaryMode);
-    // At a closed silhouette, adjacent faces can report both signs at the same distance without entering the volume.
     if(closed && (stream.clusterOptics.facing == NWB_SHADOW_FACING_BOTH || stream.clusterOptics.facing == 0u))
         return;
     const float distance = stream.clusterDistance;
@@ -177,10 +174,8 @@ void nwbHwShadowFinishInstance(inout NwbHardwareTransparentStream stream, const 
             chord += max(ray.TMax - stream.intervalStart, 0.0);
     }
     else if((stream.crossingCount & 1u) != 0u){
-        // Unspecified materials use singleton/odd-boundary admission.
         chord = stream.crossingCount > 1u ? stream.lastDistance - stream.firstDistance : 0.0;
     }
-    // Bounded (0, 1) visibility math stays half; the chord product stays FP32 so long chords do not turn into inf * 0.
     stream.opticalDepth += half3(float3(stream.instanceAbsorption) * chord);
     stream.transmission *= lerp(half(1.0h), stream.instanceTransmission, half(smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, chord)));
 }
@@ -216,8 +211,6 @@ half3 nwbHwShadowEvaluateGathered(const RayDesc ray, const uint pixel, const uin
     const uint count = g_NwbHardwareTransparentCrossings[pixel];
     NwbHardwareTransparentStream stream = nwbHwShadowStreamBegin();
     uint remaining = (1u << count) - 1u;
-    // Selection reads only the three ordering planes until the chosen record needs its full-precision barycentrics.
-    // Keeping records in scratch avoids a dynamically indexed private hit array in the material evaluator.
     for(uint accepted = 0u; accepted < count; ++accepted){
         bool found = false;
         uint selected = 0u;

@@ -2,8 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Hard bands, hard shadows and flat ambient make per-material BXDF dispatch visible.
-// The cook supplies a unique NWB_DEFERRED_BXDF_FUNCTION; deferred lighting types and accessors are in scope.
 static const half3 NWB_TESTBED_TOON_AMBIENT_FLOOR = half3(0.22h, 0.24h, 0.30h);
 static const half NWB_TESTBED_TOON_BRIGHT_BAND_THRESHOLD = 0.6h;
 static const half NWB_TESTBED_TOON_MIDDLE_BAND_THRESHOLD = 0.25h;

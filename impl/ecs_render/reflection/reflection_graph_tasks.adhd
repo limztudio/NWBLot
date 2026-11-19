@@ -68,7 +68,6 @@ ReflectionSceneContentStamp ResolveReflectionSceneContentStamp(in ReflectionScen
     ReflectionSceneContentStamp stamp = baseStamp;
     stamp.geometry = geometryStamp;
     stamp.material = materialStamp;
-    // CSG evaluation and lagged screen lighting do not have a matching content stamp for this first history policy.
     stamp.trusted = IsTrustedReflectionContentStamp(sceneStampTrusted, csgEmpty, useLaggedLightingHistory);
     return stamp;
 }
@@ -270,7 +269,6 @@ class ReflectionCsgHardwareSliceTask{
     public void accepted(in QueueSubmissionToken token){
         if(!this.hardwarePreparationReady)
             return;
-        // An accepted prefix already reads the frozen context when a later packet fails.
         this.raytracingSystem.confirmRayTraceContextReadSubmission(token);
         mut GpuTimingFrameTransaction timing = this.dispatch.deref().timing.value();
         if(this.slice == 0u && !timing.confirmBeginSubmission(token)){
@@ -346,7 +344,6 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
     const b8 feedbackWrites = ShouldWriteReflectionFeedback(feedbackReserved, resources.feedback.plan.eligible, resources.parameters.hardwareEnabled);
     const b8 buildArguments = resources.hasHardwareWork();
     const ReflectionDispatchStage feedbackPublicationStage = ResolveReflectionFeedbackPublicationStage(buildArguments);
-    // A stale feedback lease disables this optimization; rendering remains available.
     GpuGraphResourceId feedbackCurrent;
     GpuGraphResourceId feedbackPrevious;
     if(feedbackWrites){
@@ -455,7 +452,6 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
                 return MakeUnexpected(Failure());
             const u32 rayCapacity = ResolveReflectionHardwareRayCapacity(resources.parameters.maxHardwareRays, resources.parameters.queueCapacity);
             const u32 sliceCount = ResolveReflectionIndirectArgumentCount(rayCapacity, true);
-            // Separate native packets let the driver retire bounded work; shared UAV state also orders CPU recording.
             for(u32 slice = 0u; slice < sliceCount; ++slice){
                 const auto sliceIdentity = ReflectionCsgHardwareSliceIdentity(slice);
                 if(!sliceIdentity.has_value()){
@@ -539,7 +535,6 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
         ReadUse(inputs.currentBindlessSlots, ResourceStates::ConstantBuffer)
     );
     Vector<GpuTaskResourceUse> reflectionHardwareReads;
-    // Scene shading and lights follow the scene reads.
     reflectionHardwareReads.reserve(sceneReads.uses.size() + sceneReads.csgUses.size() + s_ReflectionExtraHardwareReadCapacity);
     if(sceneReads.valid()){
         for(in GpuTaskResourceUse read : sceneReads.uses)

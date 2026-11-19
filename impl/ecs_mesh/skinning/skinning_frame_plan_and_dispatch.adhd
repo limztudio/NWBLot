@@ -138,7 +138,6 @@ b8 MeshSkinningFramePlanBuilder::declare(in EntityID entity, in SkinnedMeshBindi
     const auto jointPalette = FindSkinningComponent<SkeletonJointPaletteComponent>(this.m_system.m_world, skeletonEntity);
     const auto skeletonPose = FindSkinningComponent<SkeletonPoseComponent>(this.m_system.m_world, skeletonEntity);
     RuntimeSkinPayloadScratch payload;
-    // Preserve the direct path's per-mesh retry semantics: an invalid pose never prevents another ready mesh from declaring its immutable packet plan.
     if(!BuildRuntimeSkinPayload(instance, jointPalette, skeletonPose, payload)){
         instance.deformationState.invalidateCurrent();
         return true;
@@ -338,7 +337,6 @@ b8 MeshSkinningSystem::recordGraphOwnedSkinningDeformation(in MeshSkinningGraphD
     if(!heap.isInitialized())
         return false;
 
-    // Graph establishes inputs and declares UAV outputs; callback records dispatch only.
     ComputeState computeState;
     computeState.setPipeline(skinningPipeline.value());
     commandList.setComputeState(computeState);
@@ -376,7 +374,6 @@ b8 MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(in MeshSkinningGraph
     if(!heap.isInitialized())
         return false;
 
-    // Bounds consumes declared skinned positions and writes declared bounds output.
     ComputeState computeState;
     computeState.setPipeline(boundsPipeline.value());
     commandList.setComputeState(computeState);
@@ -398,7 +395,6 @@ b8 MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(in MeshSkinningGraph
         if(!skinnedNormal || !meshletAttributeRefDeltas || !attributeBuffer || !repackPipeline.has_value())
             return false;
 
-        // Graph lowers the handoff before repack; publishes packed attributes as output.
         computeState.setPipeline(repackPipeline.value());
         commandList.setComputeState(computeState);
         heap.bindCompute(commandList, repackPipeline.value());

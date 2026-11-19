@@ -1119,7 +1119,6 @@ void VerifyMath_DoubleRefractionDistinguishesCriticalAngleOnEitherSideOfBinary64
     EXPECT_EQ(critical.x, 1.0);
     EXPECT_EQ(critical.y, 0.0);
     EXPECT_EQ(below.x, belowIndex);
-    // The squared index rounds before the subtraction.
     EXPECT_NEAR(below.y, -Sqrt(powNeg40 + powNeg40), 1.0e-20);
     EXPECT_LT(below.y, 0.0);
     for(usize lane = 0u; lane < 4u; ++lane)

@@ -826,8 +826,6 @@ void VerifyMesh_RejectsDegenerateTangentFrameTriangle(){
 }
 
 void VerifyMesh_RebuildTangentFramesPreservesSmallScaleAndLeftHandedFrame(){
-
-    // Default 3-arg epsilon still rejects triangles at the 1e-8 area-normal length-squared boundary.
     Vector<TangentFrameRebuildVertex> cmTriangle = Vector<TangentFrameRebuildVertex>();
     cmTriangle.reserve(3u);
     cmTriangle.push_back(MakeTangentVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f));
@@ -835,7 +833,6 @@ void VerifyMesh_RebuildTangentFramesPreservesSmallScaleAndLeftHandedFrame(){
     cmTriangle.push_back(MakeTangentVertex(0.0f, 0.01f, 0.0f, 0.0f, 1.0f));
     EXPECT_FALSE(RebuildTestTangentFrames(s_TriangleIndices, cmTriangle, cast<f64>(s_FrameDirectionEpsilon)).has_value());
 
-    // Explicit small epsilon preserves unit normals, tangents, and handedness on tiny meshes.
     Vector<TangentFrameRebuildVertex> rightHanded = Vector<TangentFrameRebuildVertex>();
     rightHanded.reserve(3u);
     rightHanded.push_back(MakeTangentVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f));

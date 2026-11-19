@@ -39,7 +39,6 @@ static void AccumulatePacketRecordingCounts(const GpuRecordedPacket& recordedPac
     inOutStatistics.barrierCount += recordedPacket.barrierCount;
     if(recordedPacket.recordingWorkerIndex != 0u)
         ++inOutStatistics.workerRoutedPacketCount;
-    // Overlap is graph-wide even when accumulating only one physical queue.
     if(overlaps)
         ++inOutStatistics.parallelPacketCount;
     inOutRecordingSeconds = VectorDoubleAdd(inOutRecordingSeconds, VectorDoubleSet(recordedPacket.commandListAcquisitionSeconds, recordedPacket.graphBarrierRecordingSeconds, recordedPacket.taskRecordSeconds, recordedPacket.recordingSeconds));

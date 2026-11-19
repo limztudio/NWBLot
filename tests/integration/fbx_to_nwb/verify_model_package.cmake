@@ -1,7 +1,6 @@
 include("${CMAKE_CURRENT_LIST_DIR}/fbx_to_nwb_test_helpers.cmake")
 
 file(MAKE_DIRECTORY "${OUTPUT_DIR}")
-# Semantic argument failures remain actionable on stderr when ordinary logger diagnostics are compiled out.
 function(nwb_require_cli_rejection case_name diagnostic)
     set(rejected_output "${OUTPUT_DIR}/rejected_${case_name}.nwb")
     set(destination_before "CLI validation must preserve this destination")
@@ -57,7 +56,6 @@ if(link_result STREQUAL "0")
     endif()
 endif()
 
-# Removed CLI aliases fail without replacing the destination, and the canonical spelling recovers.
 foreach(asset_type_alias IN ITEMS asset_bunch asset-bunch)
     set(alias_output "${OUTPUT_DIR}/rejected_${asset_type_alias}.nwb")
     set(destination_before "asset type rejection must preserve this destination")

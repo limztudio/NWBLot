@@ -1,4 +1,3 @@
-"""Check searchable combo source/query snapshots against the composed GPU layer."""
 from __future__ import annotations
 
 from combo_probe_common import ComboProbe

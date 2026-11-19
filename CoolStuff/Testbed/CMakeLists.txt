@@ -15,7 +15,6 @@ nwb_target_link_libraries_whole_archive(testbed
 )
 target_link_libraries(testbed PRIVATE nwb_common nwb_alloc nwb_loader nwb_ecs_scene nwb_ecs_mesh nwb_ecs_skeleton nwb_ecs_model nwb_ecs_mesh_skinning nwb_ecs_render nwb_ecs_model_renderer nwb_ecs_physics nwb_ecs_ui nwb_ui_widgets)
 
-# Place the NVIDIA Aftermath runtime next to testbed so the device-side dynamic load resolves it.
 nwb_copy_aftermath_runtime(testbed)
 
 if(TARGET nwb_logserver)

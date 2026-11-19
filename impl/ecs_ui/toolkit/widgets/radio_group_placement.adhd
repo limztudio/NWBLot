@@ -237,12 +237,10 @@ void CommitRadioGroupReconcileState(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// An optional guard is borrowed only during reconciliation to stop source calls when its declaration context fails.
 interface IRadioGroupReconcileGuard{
     b8 current()const;
 }
 
-// Application state is borrowed through its enclosing Builder scope; accepted public intents retire copied input.
 class RadioGroupState : NoCopy{
     public u64 m_instanceGeneration = AllocateServiceIdentity();
     public u64 m_inputGeneration = AllocateServiceIdentity();

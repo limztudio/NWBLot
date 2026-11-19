@@ -21,10 +21,8 @@ NWB_CORE_BEGIN
 
 class GpuTaskGraphCompiler final : NoCopy{
 public:
-    // Validation and hazards stay independent of queue policy, so later stages share one analysis result.
     [[nodiscard]] b8 analyze(const GpuTaskGraph::DeclarationReadView& graph, Alloc::ScratchArena& scratchArena, GpuTaskGraphAnalysis& outAnalysis)const;
 
-    // Queue decision only. No command lists, no submission; the scheduler supplies the device topology.
     [[nodiscard]] b8 assignQueues(
         const GpuTaskGraph::DeclarationReadView& graph,
         const GpuTaskGraphAnalysis& analysis,
@@ -34,8 +32,6 @@ public:
         GpuTaskGraphQueueAssignments& outAssignments
     )const;
 
-    // The packet compiler reuses the analysis and queue-assignment results shared by scheduler admission, telemetry, and packet creation.
-    // Tasks retain one packet by default.
     [[nodiscard]] b8 compile(
         const GpuTaskGraph::DeclarationReadView& graph,
         const GpuPhysicalQueueTopology& topology,
@@ -184,11 +180,9 @@ private:
 
 
 private:
-    // Symmetric ancestor/descendant/self masks; topological ranks retain directed reachability.
     Vector<u64, Alloc::ScratchArena> m_words;
     Vector<u32, Alloc::ScratchArena> m_topologicalRanks;
     Vector<WordRange, Alloc::ScratchArena> m_relatedWordRanges;
-    // Empty for dense rows; compact rows retain global bit positions within their exact word spans.
     Vector<usize, Alloc::ScratchArena> m_rowOffsets;
     u64 m_graphGeneration = 0u;
     usize m_taskCount = 0u;
@@ -209,7 +203,6 @@ struct GpuTaskQueueScoringData{
     Vector<usize, Alloc::ScratchArena> ownershipEdgeOffsets;
     Vector<NotNull<const GpuTaskDependencyEdge*>, Alloc::ScratchArena> ownershipEdges;
     Vector<GpuTaskQueueLoad, Alloc::ScratchArena> assignedQueueLoads;
-    // Cost-group bitsets: all assigned tasks first, then one block per topology queue, never sparse queue IDs.
     Vector<u64, Alloc::ScratchArena> assignedCostWords;
     usize costWordsPerGroup = 0u;
     u64 totalAssignedCost = 0u;

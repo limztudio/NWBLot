@@ -1,5 +1,3 @@
-"""Launcher build command boundary tests."""
-
 import importlib.util
 import subprocess
 import tempfile
@@ -84,7 +82,6 @@ class LauncherBuildBoundaryTests(unittest.TestCase):
         result = patcher.start()
         self.addCleanup(patcher.stop)
         return result
-
 
     def test_relative_cold_directory_is_resolved_against_the_foreign_repository_root(self):
         relative = Path(f"{LIT_COLD_CUSTOM_BUILD}-{self.root.name}")
@@ -198,7 +195,6 @@ class LauncherBuildBoundaryTests(unittest.TestCase):
         self.query.assert_not_called()
         self.process.assert_not_called()
         self.popen.assert_not_called()
-
 
 
 if __name__ == "__main__":

@@ -295,7 +295,6 @@ b8 GpuTaskGraphDeclarationReadView::appendFrameGraphTelemetry(const GpuTaskGraph
             annotation.value() |= flags;
     }
     for(const GpuTaskDependencyEdge& edge : analysis.edges()){
-        // Analysis keeps one raw edge per pair and gives explicit dependencies precedence over inferred hazards.
         u8 flags = edge.hazard == GpuTaskHazardType::Explicit ? GpuTaskGraphTelemetryEdgeFlag::ExplicitDependency : GpuTaskGraphTelemetryEdgeFlag::None;
         const auto annotation = inferredFlags.find(PackGpuTaskDependencyPairKey(edge.producer.index, edge.consumer.index));
         if(annotation != inferredFlags.end())

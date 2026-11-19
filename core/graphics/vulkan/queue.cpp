@@ -393,8 +393,6 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateWorkerCommandBuffe
         return MakeUnexpected(arenaResult.error());
     const auto arena = *arenaResult;
 
-    // Each explicit worker owns this native pool shard.
-    // No m_mutex here: submission stays serialized there, while alloc/reset stay independent for recording workers.
     ScopedLock lock(arena->mutex);
 
     if(!arena->commandBuffersPool.empty()){
@@ -423,8 +421,6 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateWorkerCommandBuffe
         return Move(cmdBuf);
     }
 
-    // Queue timeline polling/reclamation occurs in Device::runGarbageCollection().
-    // An empty worker shard grows instead of taking the queue submission lock and serializing parallel ready-frontier recording.
     return createCommandBuffer(arena->commandPool, &arena->mutex, recordingWorkerDomain, recordingWorkerIndex);
 }
 

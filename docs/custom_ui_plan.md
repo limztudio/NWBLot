@@ -19,15 +19,16 @@ core/
   frame/                      native window/event-loop owner; hosts OS services
 impl/
   ecs_ui/                     nwb_ecs_ui: world callbacks and runtime adapter
-    toolkit/                  nwb_ui: CPU toolkit, no ECS or GPU dependency
+    toolkit/                  nwb_ui: CPU toolkit core (no ECS or GPU dependency)
       context.adhd            identity, state, frame lifecycle, actions
+      state/                  retained control/focus/capture stores
       layout/                 measure/arrange, containers, scrolling
       input/                  hit testing, focus, capture, navigation
-      text/                   fonts, shaping, text layout
-      edit/                   Unicode model, commands, navigation, history, composition
+      text/                   nwb_ui_text: fonts, shaping, text layout
+      edit/                   nwb_ui_edit: Unicode model, commands, navigation, history, composition
       paint*.adhd             primitives and immutable paint output
-      widgets/                controls composed from the above services
-      images/                 immutable owned texture sources
+      widgets/                nwb_ui_widgets: controls composed from the above services
+      images/                 nwb_ui_images: immutable owned texture sources
       widgets/*_style.adhd     skin region resolution, metrics, control states
       gpu/                    nwb_ui_gpu: uploads, atlases, raster, resources
   assets_ui_skin/             typed skin/atlas asset, author fields, cook, runtime load
@@ -41,7 +42,7 @@ tests/
   smoke/                      interactive gallery and GPU captures
 ```
 
-`nwb_ecs_ui` depends on `nwb_ui`, `nwb_ui_gpu`, the OS service interfaces, and the existing ECS/input/runtime modules. `nwb_ui_gpu` depends on the CPU paint contract and existing graphics, asset, and task modules. The renderer consumes a generic prepared presentation layer, never widget classes. `nwb_os` has no dependency on `impl/`, ECS, or graphics. Widget/layout policy stays in `impl/`.
+`nwb_ecs_ui` links `nwb_ui_edit`, `nwb_ui_gpu`, `nwb_ui_text`, and `nwb_ui_widgets` (`nwb_ui` and `nwb_ui_images` are linked transitively), plus the OS service interfaces and the existing ECS/input/runtime modules. `nwb_ui_gpu` depends on the CPU paint contract and existing graphics, asset, and task modules. The renderer consumes a generic prepared presentation layer, never widget classes. `nwb_os` has no dependency on `impl/`, ECS, or graphics. Widget/layout policy stays in `impl/`.
 
 `core/os/` provides clipboard/native-selection and text-input/IME services; broader window services can extend that module separately. `Frame` owns native windows and event pumping, constructs the OS service implementations using borrowed native window/display handles, and forwards required native messages. Keep those handles private to platform adapters. Required service references flow through `ProjectRuntimeContext` (`loader/project_entry.adhd`) and are borrowed by `UiLayerSystem` and `UiPaintContext`; avoid global lookups and a reverse dependency from `nwb_os` to `nwb_frame`. Native resources outlive their service objects, and service objects outlive borrowers.
 
@@ -49,7 +50,7 @@ Use an immediate/declarative builder over retained state. Application callbacks 
 
 Core contracts:
 
-- `Ui::Context` owns a context-local state store using an explicit caller-owned arena. IDs include the UI root/entity generation, parent scope, and a stable application key. List item IDs follow model keys rather than row numbers. Diagnose duplicate IDs; retire removed state and release its focus/capture safely.
+- `Ui::Context` owns a context-local state store using compiler-managed mother-arena ownership in `.adhd` (`public Context()`, with a hidden leading `::ArenaBase&` in generated C++). IDs include the UI root/entity generation, parent scope, and a stable application key. List item IDs follow model keys rather than row numbers. Diagnose duplicate IDs; retire removed state and release its focus/capture safely.
 - `Ui::Builder` declares controls and layout. `UiPaintContext` exposes the builder, paint and text services; application models remain application-owned. Define action timing: process queued input against the last committed layout, commit typed actions/model changes on the owning thread, then build/layout/paint the next frame. Do not imply that a newly laid-out control was hit-tested before it existed.
 - `Ui::PaintBuilder` emits ordered solid rectangles, skin/image quads, glyph quads and clip operations. Rounded paths and arbitrary line primitives remain proposed capabilities. Controls never record graphics commands. Initial clipping can use intersected rectangular scissors; complex path/stencil clipping is a later feature.
 - `Ui::DrawSnapshot` owns immutable geometry, ordered draw commands, retained glyph/SDF/image sources, typed skin/texture identities, copied metadata, clip bounds, display metrics, and a generation. Its GPU owner retains resolved texture/font resource versions through completion; typed asset identities alone provide no lifetime retention. GPU work reads this snapshot, never live widgets, ECS data, or user callbacks.
@@ -233,7 +234,7 @@ Progress and images are passive declarations with optional passive annotations. 
 
 ## General textures and GPU image admission
 
-`MakeImageSource()` copies a valid depth-one static `Texture2D`, exact typed identity, mip records, compressed linear payload, and alpha transport metadata into a caller arena and creates a nonzero immutable generation. `SharedImageSource` exposes const metadata; its arena outlives every retained reference. `LoadImageSource()` uses typed loading and releases the temporary asset after copying. Invalid references, mismatched identities, unsupported shapes, and malformed payloads fail explicitly. Existing linear UASTC LDR/HDR and alpha transport validation remains authoritative. Source encoding is resolved by `tex_conv` before its raw `.tex` sidecar reaches cooking; GPU format support belongs to the texture loader.
+`MakeImageSource(pool, texture)` (`impl/ecs_ui/toolkit/images/image_source.adhd`) copies a valid depth-one static `Texture2D`, exact typed identity, mip records, compressed linear payload, and alpha transport metadata into the supplied `SharedPool` and creates a nonzero immutable generation. `SharedImageSource` exposes const metadata; `pool` (and its backing arena) outlives every retained reference. `LoadImageSource(pool, assets, identity)` (`impl/ecs_ui/toolkit/images/image_loader.adhd`) uses typed loading and releases the temporary asset after copying. Invalid references, mismatched identities, unsupported shapes, and malformed payloads fail explicitly. Existing linear UASTC LDR/HDR and alpha transport validation remains authoritative. Source encoding is resolved by `tex_conv` before its raw `.tex` sidecar reaches cooking; GPU format support belongs to the texture loader.
 
 `Builder::image()` accepts either a named skin region or an owned source. It copies the source/options into the deferred frame, preserves passive annotations/popup/clipping rules, derives engine Content size from texture texels in logical units, and samples full normalized UVs. The gallery can retain the source without borrowing an asset manager.
 
@@ -241,7 +242,7 @@ Progress and images are passive declarations with optional passive annotations. 
 
 GPU image resources own CPU source plus `TextureGpuResource`; frame references survive cache eviction and live through final consumption. Imports depend on exact upload completion, successful earlier preparation survives a later failure, and shared eviction waits for safe retirement. Views support float sampling of normalized/floating color and exclude depth/stencil. Prepared texture RGB is linear; premultiply straight alpha once into the linear layer.
 
-`TextureAssetLoader::Create()` allocates/writes its descriptor before static upload. A scope lease frees it on write failure, rejection, or unwind. After accepted upload, only ownership/descriptor/format/readiness publication remains before releasing the lease. This preserves atomic output without resubmitting accepted uploads on descriptor retry.
+`CreateTextureGpuResource()` / `LoadTextureGpuResource()` (`impl/assets_texture/loader.adhd`) allocates/writes its descriptor before static upload. A scope lease frees it on write failure, rejection, or unwind. After accepted upload, only ownership/descriptor/format/readiness publication remains before releasing the lease. This preserves atomic output without resubmitting accepted uploads on descriptor retry.
 
 ## Targeted skin packaging dependencies
 
@@ -256,7 +257,7 @@ Use [the test guide](../tests/README.md) and each domain's launcher instructions
 - CPU unit tests: ID/state retirement, layout constraints and clipping, scaled hit tests, focus traversal, capture cancellation, modal routing, selection across list reorder/removal, visible-row limits, and text edit transactions. Use a controllable clock for repeat, caret blink, and double-click behavior.
 - OS service contracts: borrowed lifetimes, window/session identity, capability reporting, asynchronous clipboard cancellation, stale completions, composition cancellation, native selection ownership loss, duplicate commit prevention, and event-thread delivery. Verify `nwb_os` builds without UI/ECS and toolkit edit tests run with no native window.
 - Skin asset tests: `.nwb` cook/load round trip, typed texture dependency invalidation, region bounds, duplicate/missing parts, state fallback rules, nine-slice insets, DPI metrics, malformed schema rejection, and atomic skin version changes. Gallery captures compare default and replacement skins, very small/large controls, transparent edges, thin borders, and atlas region bleed.
-- GPU/task integration: uploads precede reads, the UI branch has no accidental scene-output dependency, the final output waits on both branches and acquisition, correct target transitions, retained descriptors/snapshots, rejected submission, safe retry, and no double presentation. Explicitly test accepted UI raster followed by rejected final composition, and timing that includes a UI branch scheduled before scene shadow preparation. Add future GPU/task integration coverage through the selected public contracts in `tests/smoke/ui_layer/` and their analysis under `tests/integration/`; keep executable timing regressions in `tests/unit/ecs_graphics/ecs_graphics_shadow_and_surfel_cases.adhd`.
+- GPU/task integration: uploads precede reads, the UI branch has no accidental scene-output dependency, the final output waits on both branches and acquisition, correct target transitions, retained descriptors/snapshots, rejected submission, safe retry, and no double presentation. Explicitly test accepted UI raster followed by rejected final composition, and timing that includes a UI branch scheduled before scene shadow preparation. Add future GPU/task integration coverage through the selected public contracts in `tests/smoke/ui_layer/` and their analysis under `tests/integration/`; keep UI `OutputLayer`/`OutputLayerColor` regressions in `tests/unit/ecs_graphics/ecs_graphics_mesh_and_optics_cases.adhd` (alongside `RendererTaskTimingFeedbackState` tests in `tests/unit/ecs_graphics/ecs_graphics_shadow_and_surfel_cases.adhd`).
 - Image captures: transparent/opaque overlaps, glyph edges on light/dark backgrounds, clipped controls, popups, sRGB source preparation and linear texture sampling, multiple DPI values, odd framebuffer dimensions, and SDR/HDR paper-white behavior. Use tolerances and bundled fonts; validate numeric color transformations independently of monitor screenshots.
 - Runtime smoke: scene plus UI, UI-only frame, empty UI with and without pending uploads, frame-slot pressure, atlas growth, destruction during interaction, rapid resize, minimize/restore, focus loss, and supported recreation paths. Exercise supported Windows/Linux backends rather than inferring cross-platform success.
 - Input scenarios: keyboard-only navigation, mouse drag outside bounds, first-click capture, no camera movement while editing, clipboard round trips, Korean preedit/commit/cancel, combining marks, emoji/non-BMP input, undo/redo, and external model updates during editing.

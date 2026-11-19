@@ -21,24 +21,14 @@ NWB_CORE_BEGIN
 
 class GpuTaskGraph;
 
-
-// A presentation contributor records final graphics work ordered after scene output and before swap-chain signal.
-// The contributor owns payload and acceptance; Graphics keeps only the non-owning registration seam.
 interface IGpuTaskGraphPresentationContributor{
 public:
     virtual ~IGpuTaskGraphPresentationContributor()noexcept = default;
 
 
 public:
-    // Called during ordinary renderer preparation, before graph compilation and native recording.
-    // A false return leaves this frame's scene presentation usable without the optional contributor.
     [[nodiscard]] virtual b8 prepareTaskGraphPresentation(const AcquiredPresentationFrame& frame) = 0;
-    // Preparation may succeed while there is no visible overlay work (for example, an empty overlay snapshot).
-    // Such a frame deliberately skips declaration instead of manufacturing an empty presentation packet.
     [[nodiscard]] virtual b8 hasTaskGraphPresentationWork()const = 0;
-    // `previousTask` is the scene-output endpoint and `backbuffer` is the exact typed acquired texture imported by the renderer.
-    // The returned task must be Graphics-capable and ordered after that endpoint.
-    // A task that writes the backbuffer must declare that same resource; an upload-only contributor may instead return a terminal completion packet.
     [[nodiscard]] virtual Expected<GpuTaskId> declareTaskGraphPresentation(GpuTaskGraph& graph, const AcquiredPresentationFrame& frame, GpuGraphResourceId backbuffer, GpuTaskId previousTask) = 0;
 };
 

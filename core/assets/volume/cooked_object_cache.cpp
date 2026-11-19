@@ -11,8 +11,6 @@
 #include "cooked_object_cache.h"
 
 #include "arena_names.h"
-#include "built_asset.h"
-#include "nwb_file_asset_cache_writer.h"
 
 #include <core/assets/module.h>
 #include <core/common/log.h>
@@ -36,6 +34,19 @@ namespace CookedObjectCacheDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct RegistryObjectBucketManifest{
+    AssetsVolumeCookDetail::AssetVolumePackManifest manifest;
+
+
+public:
+    explicit RegistryObjectBucketManifest(Core::Assets::AssetArena& arena)noexcept
+        : manifest(arena)
+    {}
+};
+
+using RegistryObjectBucketManifestVector = Vector<RegistryObjectBucketManifest, ScratchArena>;
+
+
 [[nodiscard]] static u64 BuildCookedAssetKeyHash(const Core::Assets::IAssetCodec& codec, const Span<const u8> payload, const AStringView configurationSafeName)noexcept{
     static constexpr u32 s_ObjectCookKeyVersion = 1u;
 
@@ -57,12 +68,10 @@ public:
     AssetVolumeObjectCacheWriter(
         Core::Assets::AssetArena& arena,
         const AStringView configurationSafeName,
-        AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
-        CookedNwbAssetCacheItemVector& cookedCacheItems
+        AssetsVolumeCookDetail::AssetVolumePackManifest& manifest
     )noexcept
         : m_configurationSafeName(configurationSafeName)
         , m_manifest(manifest)
-        , m_cookedCacheItems(cookedCacheItems)
         , m_payloadBinary(arena)
     {}
 
@@ -81,36 +90,14 @@ public:
             return false;
         }
 
-        if(!writeSerializedPayload(virtualPath, codec, m_payloadBinary))
-            return false;
-
-        if(location.nwbFileIndex != Limit<usize>::s_Max){
-            m_cookedCacheItems.push_back(CookedNwbAssetCacheItem{
-                .nwbFileIndex = location.nwbFileIndex,
-                .nwbSubIndex = location.nwbSubIndex,
-                .assetTypeHash = codec.assetType().hash(),
-                .manifestEntryIndex = m_manifest.entries.size() - 1u,
-            });
-        }
-        return true;
-    }
-
-    virtual b8 writeCachedCookedAsset(const TStringView, const Name& virtualPath, const Core::Assets::IAssetCodec& codec, const Span<const u8> payloadBytes)override{
-        return writeSerializedPayload(virtualPath, codec, payloadBytes);
-    }
-
-
-private:
-    b8 writeSerializedPayload(const Name& virtualPath, const Core::Assets::IAssetCodec& codec, const Span<const u8> payloadBytes){
-        const u64 cookKeyHash = BuildCookedAssetKeyHash(codec, payloadBytes, m_configurationSafeName);
-        return AssetsVolumeCookDetail::AppendPayloadBytesToManifest(virtualPath, payloadBytes, m_manifest, cookKeyHash);
+        const u64 cookKeyHash = BuildCookedAssetKeyHash(codec, m_payloadBinary, m_configurationSafeName);
+        return AssetsVolumeCookDetail::AppendPayloadBytesToManifest(virtualPath, m_payloadBinary, m_manifest, cookKeyHash, location, codec.assetType().hash());
     }
 
 
 private:
     AStringView m_configurationSafeName;
     AssetsVolumeCookDetail::AssetVolumePackManifest& m_manifest;
-    CookedNwbAssetCacheItemVector& m_cookedCacheItems;
     Core::Assets::AssetBytes m_payloadBinary;
 };
 
@@ -123,7 +110,7 @@ static b8 BuildRegistryObjectBucketManifestEntries(
     RegistryObjectBucketManifest& bucketManifest
 ){
     Core::Assets::CookEntryPathHashSet bucketSeenVirtualPathHashes(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
-    AssetVolumeObjectCacheWriter cookedAssetWriter(arena, configurationSafeName, bucketManifest.manifest, bucketManifest.cookedCacheItems);
+    AssetVolumeObjectCacheWriter cookedAssetWriter(arena, configurationSafeName, bucketManifest.manifest);
     Core::Assets::CookEntryWriteContext cookEntryWriteContext{ cookedAssetWriter, bucketSeenVirtualPathHashes, scratchArena };
     return entryRegistry.writeBucket(bucketIndex, cookEntryWriteContext);
 }
@@ -143,9 +130,6 @@ static b8 RegisterMergedManifestVirtualPath(const Name& virtualPath, Core::Asset
 
 static b8 MergeRegistryObjectBucketManifests(const Span<RegistryObjectBucketManifest> bucketManifests, AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, Core::Assets::CookEntryPathHashSet& seenVirtualPathHashes){
     for(RegistryObjectBucketManifest& bucketManifest : bucketManifests){
-        const usize baseEntryIndex = manifest.entries.size();
-        for(CookedNwbAssetCacheItem& item : bucketManifest.cookedCacheItems)
-            item.manifestEntryIndex += baseEntryIndex;
         for(AssetsVolumeCookDetail::AssetVolumePackEntry& entry : bucketManifest.manifest.entries){
             if(!RegisterMergedManifestVirtualPath(entry.virtualPath, seenVirtualPathHashes))
                 return false;
@@ -183,10 +167,8 @@ b8 BuildRegistryObjectManifestEntries(
     CookEntryPathHashSet& seenVirtualPathHashes
 ){
     const usize bucketCount = parsedMetadata.entryRegistry.bucketCount();
-    if(bucketCount == 0u){
-        const Span<const CookedObjectCacheDetail::RegistryObjectBucketManifest> emptyBuckets;
-        return CookedObjectCacheDetail::NwbFileAssetCacheWriter::Write(parsedMetadata.fileCacheRecords, emptyBuckets, manifest, scratchArena);
-    }
+    if(bucketCount == 0u)
+        return true;
 
     CookedObjectCacheDetail::RegistryObjectBucketManifestVector bucketManifests(scratchArena);
     bucketManifests.reserve(bucketCount);
@@ -212,10 +194,7 @@ b8 BuildRegistryObjectManifestEntries(
     if(failed.load(MemoryOrder::acquire))
         return false;
 
-    if(!CookedObjectCacheDetail::MergeRegistryObjectBucketManifests(bucketManifests, manifest, seenVirtualPathHashes))
-        return false;
-
-    return CookedObjectCacheDetail::NwbFileAssetCacheWriter::Write(parsedMetadata.fileCacheRecords, bucketManifests, manifest, scratchArena);
+    return CookedObjectCacheDetail::MergeRegistryObjectBucketManifests(bucketManifests, manifest, seenVirtualPathHashes);
 }
 
 

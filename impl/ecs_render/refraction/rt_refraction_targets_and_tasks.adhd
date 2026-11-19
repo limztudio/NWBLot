@@ -98,7 +98,6 @@ b8 RefractionTargetBuilder::createImages(
         .addColorAttachment(avboitTargets.refractionNormalIor.deref(), s_FramebufferSubresources)
         .addColorAttachment(avboitTargets.refractionTintCoverage.deref(), s_FramebufferSubresources)
         .addColorAttachment(avboitTargets.refractionInstance.deref(), s_FramebufferSubresources)
-        // Fourth output carries reflection inputs; keep it off foreground extinction.
         .addColorAttachment(avboitTargets.refractionSpecularRoughness.deref(), s_FramebufferSubresources)
         .setDepthAttachment(avboitTargets.refractionDepth.deref(), s_FramebufferSubresources)
     ;
@@ -282,7 +281,6 @@ Expected<GpuTaskId> FrameGraphRefractionResolve::declare(in FrameGraphRefraction
         avboitForegroundColor,
         avboitForegroundExtinction
     );
-    // Mesh view, bindless slots, scene shading, lights, the resolve output, and tile scheduling buffers.
     refractionUses.reserve(ComputeRefractionResolveResourceUseCapacity(refractionInputs.size(), sceneReads.uses.size(), sceneReads.csgUses.size()));
     for(in GpuGraphResourceId input : refractionInputs)
         refractionUses.push_back(ReadUse(input));
@@ -321,7 +319,6 @@ Expected<GpuTaskId> FrameGraphRefractionResolve::declare(in FrameGraphRefraction
         return MakeUnexpected(Failure());
     if(refractionCounters.valid()){
         RefractionStatisticsReadbackGraphTask payload(refractionResources.statistics, inputs.hardwarePreparationReady, refractionResources.usesHardwareTrace);
-        // All slots may still be in flight; diagnostic collection is lossy rather than blocking rendering.
         if(payload.reservation.valid()){
             in BufferHandle readback = refractionResources.statistics.buffers[payload.reservation.slotIndex()];
             if(!readback.valid())

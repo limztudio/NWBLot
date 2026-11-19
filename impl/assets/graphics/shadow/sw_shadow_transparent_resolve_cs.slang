@@ -2,24 +2,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Stage-2 adaptive resolve: blend where coarse agrees, re-trace where not. Fallback when compaction is off.
-
-
 #include "sw_binding_slots.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// TRANSPARENT occluder class: the edge re-trace casts colored transmittance.
 #define NWB_SW_SHADOW_OCCLUDER NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
 
 #include "sw_shadow_gbuffer.slangi"
 
-// The coarse concern declares the COARSE input (read here) and pulls the tracing engine for the edge re-trace.
 #include "sw_shadow_coarse.slangi"
 
-// The full-res visibility array: read the opaque mask, fold the transmittance onto it, write back.
 #define g_NwbSwShadowVisibility nwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.visibilityStorageSlot)
 
 #include "sw_shadow_coarse_samples.slangi"
@@ -35,7 +29,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     const int3 texel = int3(int2(pixel), 0);
 
-    // Background: the opaque pass already left it white; nothing to multiply, and it casts no candidate rays.
     if(nwbSwShadowIsBackground(texel))
         return;
 
@@ -55,11 +48,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
         half3 transmittance;
         if(coarseLight.isEdge){
-            // Edge block: re-trace this exact full-res pixel.
             transmittance = nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i], float2(0.0, 0.0));
         }
         else{
-            // Flat interior: bilinearly interpolate the coarse transmittance.
             transmittance = nwbSwShadowInterpolateCoarse(coarseLight.samples, coarseLocation.weights);
         }
 

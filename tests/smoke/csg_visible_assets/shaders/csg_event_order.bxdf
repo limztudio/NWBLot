@@ -34,7 +34,6 @@ half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
     const float frontDepth = asfloat(firstFront ? firstEvent.z : secondEvent.z);
     const float backDepth = asfloat(firstFront ? secondEvent.z : firstEvent.z);
     const bool validatedPair = matchingPair && isfinite(frontDepth) && isfinite(backDepth) && backDepth > frontDepth;
-    // Arrival order is exposed only after the same-frame pair passes every receiver, face, and depth check.
     const half firstFace = validatedPair ? (firstFront ? 1.0h : 0.5h) : 0.0h;
     const half secondFace = validatedPair ? (secondFront ? 1.0h : 0.5h) : 0.0h;
     return half3(half(spanState), firstFace, secondFace);

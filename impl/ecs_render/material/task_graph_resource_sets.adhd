@@ -83,7 +83,6 @@ b8 AppendMaterialGeometrySources(
 [cpp_unwind]
 Expected<Vector<GpuTaskResourceUse>> GatherPreparedMaterialGeometryUses(in Span<MaterialPassDrawItemsView> drawItemSets, mut GpuTaskGraph graph){
     Vector<GpuTaskResourceUse> uses;
-    // Indexed draws consume their generated cache. Only mesh and compute draws read the source streams.
     const usize maxDrawCount = usize.max / cast<usize>(s_MeshInstanceGeometrySlotCount);
     usize drawCount = 0u;
     for(in MaterialPassDrawItemsView draws : drawItemSets){
@@ -176,7 +175,6 @@ Expected<GpuGraphResourceId> GatherRegularSharedComputeEmulationResource(mut Gpu
     return FindOrImportBuffer(graph, plan.outputBuffer, label);
 }
 
-// A failure preserves earlier imports. The returned members follow the input order.
 [cpp_unwind]
 Expected<Vector<GpuGraphResourceId>, SampledTextureImportFailure> ImportMaterialSampledTextureResources(
     in Span<TextureHandle> textures,

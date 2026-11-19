@@ -11,7 +11,7 @@
 const u32 s_FontAtlasMaxGlyphCount = 65535u;
 const u32 s_FontAtlasMaxGroupCount = 8u;
 const u32 s_FontAtlasMaxChannelCount = 4u;
-const u32 s_FontAtlasMaxPositioningTableCount = 3u; // kern, GPOS and GDEF.
+const u32 s_FontAtlasMaxPositioningTableCount = 3u;
 const u32 s_FontAtlasMinUnitsPerEm = 16u;
 const u32 s_FontAtlasMaxUnitsPerEm = 16384u;
 const u32 s_FontAtlasMaxExtent = 2048u;
@@ -31,7 +31,7 @@ const u32 s_FontAtlasDefaultGuardTexels = 1u;
 const u32 s_FontAtlasKernTag = 0x6b65726eu;
 const u32 s_FontAtlasGposTag = 0x47504f53u;
 const u32 s_FontAtlasGdefTag = 0x47444546u;
-const u32 s_FontAtlasBinaryMagic = 0x31415446u; // FTA1, explicitly encoded little endian.
+const u32 s_FontAtlasBinaryMagic = 0x31415446u;
 const u32 s_FontAtlasBinaryVersion = 3u;
 const usize s_FontAtlasIdentityLaneCount = 8u;
 const u32 s_FontAtlasBinaryHeaderBytes = 164u;

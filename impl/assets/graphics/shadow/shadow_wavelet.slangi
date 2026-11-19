@@ -30,7 +30,6 @@ struct NwbShadowWavelet{
 
         const uint momentsValid = g_NwbShadowResolvePushConstants.momentsValid;
 
-        // Every thread must reach the LDS barriers before the next slot reload.
         if(step <= NWB_SHADOW_RESOLVE_LDS_MAX_STEP){
             const int tileW = NWB_SHADOW_RESOLVE_GROUP_SIZE + NWB_SHADOW_RESOLVE_KERNEL_HALO * step;
             const int2 tileOrigin = int2(groupID.xy) * NWB_SHADOW_RESOLVE_GROUP_SIZE - int2(NWB_SHADOW_RESOLVE_KERNEL_RADIUS * step, NWB_SHADOW_RESOLVE_KERNEL_RADIUS * step);
@@ -70,7 +69,6 @@ struct NwbShadowWavelet{
                         const NwbShadowResolveVisVec centerVis = g_NwbShadowResolveTileVis[centerIdx];
                         const float sigmaLum = nwbShadowResolveCenterSigmaLum(texel, slot, hw, hh, momentsValid);
                         NwbShadowResolveVisFVec sum = (NwbShadowResolveVisFVec)0.0;
-                        // The bilateral weight sum is a bounded filter factor, so half arithmetic is sufficient here.
                         half weightSum = half(0.0h);
                         [unroll] for(int ky = -NWB_SHADOW_RESOLVE_KERNEL_RADIUS; ky <= NWB_SHADOW_RESOLVE_KERNEL_RADIUS; ++ky){
                             [unroll] for(int kx = -NWB_SHADOW_RESOLVE_KERNEL_RADIUS; kx <= NWB_SHADOW_RESOLVE_KERNEL_RADIUS; ++kx){
@@ -79,7 +77,6 @@ struct NwbShadowWavelet{
                                     continue;
                                 const NwbShadowResolveVisVec tapVis = g_NwbShadowResolveTileVis[idx];
                                 const float dDist = float(g_NwbShadowResolveTileDist[idx]) - centerGeomDistance;
-                                // Every filter weight is a (0, 1) bounded factor, so half arithmetic is sufficient here.
                                 const half distWeight = half(exp(-dDist * dDist * invTwoSigmaDistSq));
                                 const half normalWeight = nwbShadowResolveNormalWeightVec(centerNormalWavelet, g_NwbShadowResolveTileNormal[idx]);
                                 const half valueWeight = nwbShadowResolveValueWeightVec(centerVis, tapVis, sigmaLum);
@@ -97,7 +94,6 @@ struct NwbShadowWavelet{
             return;
         }
 
-        // Large dilations access textures directly.
         if(!inBounds)
             return;
         for(uint slot = slotStart; slot < slotEnd; ++slot){

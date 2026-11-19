@@ -10,7 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Drainable ledger for submission resolution and sample completion; callbacks stay allocation-free.
 class RendererTaskTimingFeedbackState : NoCopy{
     private Vector<RendererTaskTimingPendingSample> m_pendingSamples;
 

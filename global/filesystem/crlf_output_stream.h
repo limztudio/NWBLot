@@ -13,7 +13,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Normalize each written text chunk to CRLF without buffering the full output.
 class CrlfOutputFileStream final : NoCopy{
 public:
     explicit CrlfOutputFileStream(BasicOutputFileStream<char>& stream)noexcept

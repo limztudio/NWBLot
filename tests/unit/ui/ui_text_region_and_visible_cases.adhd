@@ -44,7 +44,6 @@ Expected<f64> UiTextRegionGlyphCoverageArea(in DrawSnapshot snapshot){
                 return MakeUnexpected(Failure());
             in Vertex first = snapshot.vertices()[snapshot.indices()[index]];
             in Vertex last = snapshot.vertices()[snapshot.indices()[index + 2u]];
-            // Lanes are left, top, right, bottom in texels.
             const VectorDouble texel = VectorDouble(first.texCoord.x, first.texCoord.y, last.texCoord.x, last.texCoord.y) * textureSize;
             const f64 left = texel.x;
             const f64 top = texel.y;
@@ -479,7 +478,6 @@ class TextVisibleCoverageTests : TextVisibleFixture{
         mut FontAtlasGroup group = payload.groups.back();
         group.width = 64u;
         group.height = 64u;
-        // Other channels are fully opaque: measurement must follow the selected glyph channel.
         group.pixels.resize(64u * 64u * 4u, 255u);
         for(u32 y = 0u; y < group.height; ++y){
             for(u32 x = 0u; x < group.width; ++x){
@@ -1145,7 +1143,6 @@ void VerifyTextVisibleBakedTests_PaddedSdfPlaneIntersectingClipSurvivesWhenShapi
     const f32 clipX = outline.x - 4.0f;
     const f32 clipY = outline.height * 0.5f + outline.y;
     const Rect clip = Rect(clipX, clipY, 2.0f, 1.0f);
-    // Lanes are clip right, clip bottom, plane right, plane bottom.
     const VectorSingle ends = VectorSingle(clip.x, clip.y, plane.x, plane.y) + VectorSingle(clip.width, clip.height, plane.width, plane.height);
     ASSERT_LT(ends.x, outline.x);
     ASSERT_GE(clip.x, plane.x);
@@ -1707,7 +1704,6 @@ void VerifyTextVisibleCoverageTests_NaturalSdfMeasurementExcludesTransparentSpre
                         const f32 current = SampleUiMeasuredSdfDistance(page, record.channel, recordStart + ((centerCur - planeStart) * recordSize) / planeSize);
                         const f32 partnerX = SampleUiMeasuredSdfDistance(page, record.channel, recordStart + ((centerPartnerX - planeStart) * recordSize) / planeSize);
                         const f32 partnerY = SampleUiMeasuredSdfDistance(page, record.channel, recordStart + ((centerPartnerY - planeStart) * recordSize) / planeSize);
-                        // Quad lanes share a finite difference with their horizontal and vertical partners, including helpers outside the plane.
                         const f32 derivative = Abs(partnerX - current) + Abs(partnerY - current);
                         if(0.5f + current / Max(derivative, 0.001f) <= 0.0f)
                             continue;

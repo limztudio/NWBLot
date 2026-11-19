@@ -47,19 +47,6 @@ struct CookEntrySourceLocation{
     u32 nwbSubIndex = 0u;
 };
 
-struct CachedCookedBucketEntry{
-    Name virtualPath = s_NameNone;
-    AssetBytes payloadBytes;
-    usize nwbFileIndex = Limit<usize>::s_Max;
-    u32 nwbSubIndex = 0u;
-
-
-public:
-    explicit CachedCookedBucketEntry(CookArena& arena)noexcept
-        : payloadBytes(arena)
-    {}
-};
-
 struct CookEntryParseContext{
     CookArena& cookArena;
     Core::CpuTaskScheduler& cpuScheduler;
@@ -86,10 +73,8 @@ public:
 
 public:
     virtual b8 writeCookedAsset(TStringView assetKind, const Name& virtualPath, const IAsset& asset, const IAssetCodec& codec, const CookEntrySourceLocation& location) = 0;
-    virtual b8 writeCachedCookedAsset(TStringView assetKind, const Name& virtualPath, const IAssetCodec& codec, Span<const u8> payloadBytes) = 0;
 #if defined(FOUNDATION_UNICODE)
     [[nodiscard]] b8 writeCookedAsset(AStringView assetKind, const Name& virtualPath, const IAsset& asset, const IAssetCodec& codec, const CookEntrySourceLocation& location);
-    [[nodiscard]] b8 writeCachedCookedAsset(AStringView assetKind, const Name& virtualPath, const IAssetCodec& codec, Span<const u8> payloadBytes);
 #endif
 };
 
@@ -109,7 +94,6 @@ public:
 public:
     virtual b8 parseDocument(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, CookEntryParseContext& context) = 0;
     virtual b8 parseValue(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, CookEntryParseContext& context) = 0;
-    virtual b8 appendCachedEntry(const CookEntrySourceLocation& location, const Name& virtualPath, Span<const u8> payloadBytes, CookEntryParseContext& context) = 0;
     virtual b8 writeCookedAssets(CookEntryWriteContext& context) = 0;
 };
 
@@ -130,7 +114,6 @@ namespace CookEntryRegistryDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Resolves a cook entry's virtualPath to a Name; strings hash on demand.
 [[nodiscard]] constexpr Expected<Optional<Name>, NameTextError::Enum> ToCookEntryName(const Name& virtualPath)noexcept{
     if(!virtualPath)
         return Optional<Name>{};
@@ -186,7 +169,6 @@ public:
     CookEntryBucket(CookArena& arena, const Name& assetType, const TStringView assetKindText, DocumentParseFunction parseDocument, ValueParseFunction parseValue, const NotNull<BuildAssetFunction> buildAsset, const b8 logBuildFailure)
         : m_entries(arena)
         , m_entryLocations(arena)
-        , m_cachedEntries(arena)
         , m_assetKindText(assetKindText, arena)
         , m_parseDocument(parseDocument)
         , m_parseValue(parseValue)
@@ -197,7 +179,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual usize size()const noexcept override{ return m_entries.size() + m_cachedEntries.size(); }
+    [[nodiscard]] virtual usize size()const noexcept override{ return m_entries.size(); }
 
     [[nodiscard]] virtual CookVector<EntryT>& entries()noexcept override{ return m_entries; }
 
@@ -231,60 +213,15 @@ public:
         return appendParsedEntry(Move(*entry), context);
     }
 
-    virtual b8 appendCachedEntry(const CookEntrySourceLocation& location, const Name& virtualPath, const Span<const u8> payloadBytes, CookEntryParseContext& context)override{
-        Core::Assets::AssetArena& assetArena = m_entries.get_allocator().arena();
-        CachedCookedBucketEntry cachedEntry(assetArena);
-        cachedEntry.nwbFileIndex = location.nwbFileIndex;
-        cachedEntry.nwbSubIndex = location.nwbSubIndex;
-        cachedEntry.virtualPath = virtualPath;
-        if(!payloadBytes.empty())
-            cachedEntry.payloadBytes.assign(payloadBytes.begin(), payloadBytes.end());
-        m_cachedEntries.reserve(m_cachedEntries.size() + 1u);
-
-        if(!CookEntryRegistryDetail::RegisterParsedVirtualPath(m_assetKindText, virtualPath, context.seenVirtualPathHashes))
-            return false;
-        ScopeExit rollbackSeenPath([&]()noexcept{
-            if(virtualPath)
-                context.seenVirtualPathHashes.erase(virtualPath.hash());
-        });
-
-        m_cachedEntries.push_back(Move(cachedEntry));
-        rollbackSeenPath.release();
-        return true;
-    }
-
     virtual b8 writeCookedAssets(CookEntryWriteContext& context)override{
         FOUNDATION_ASSERT(m_entryLocations.size() == m_entries.size());
 
         CodecT codec;
         Core::Assets::AssetArena& assetArena = m_entries.get_allocator().arena();
 
-        usize entryIndex = 0u;
-        usize cachedIndex = 0u;
-        while(entryIndex < m_entries.size() || cachedIndex < m_cachedEntries.size()){
-            const b8 takeCached = [&]()noexcept{
-                if(cachedIndex >= m_cachedEntries.size())
-                    return false;
-                if(entryIndex >= m_entries.size())
-                    return true;
-                const CookEntrySourceLocation& entryLocation = m_entryLocations[entryIndex];
-                const CachedCookedBucketEntry& cachedEntry = m_cachedEntries[cachedIndex];
-                if(cachedEntry.nwbFileIndex != entryLocation.nwbFileIndex)
-                    return cachedEntry.nwbFileIndex < entryLocation.nwbFileIndex;
-                return cachedEntry.nwbSubIndex < entryLocation.nwbSubIndex;
-            }();
-
-            if(takeCached){
-                const CachedCookedBucketEntry& cachedEntry = m_cachedEntries[cachedIndex++];
-                if(!CookEntryRegistryDetail::RegisterCookedVirtualPath(m_assetKindText, cachedEntry.virtualPath, context.seenVirtualPathHashes))
-                    return false;
-                if(!context.writer.writeCachedCookedAsset(m_assetKindText, cachedEntry.virtualPath, codec, cachedEntry.payloadBytes))
-                    return false;
-                continue;
-            }
-
+        for(usize entryIndex = 0u; entryIndex < m_entries.size(); ++entryIndex){
             const CookEntrySourceLocation entryLocation = m_entryLocations[entryIndex];
-            EntryT& entry = m_entries[entryIndex++];
+            EntryT& entry = m_entries[entryIndex];
             const auto virtualPath = CookEntryRegistryDetail::ToCookEntryName(entry.virtualPath);
             if(!virtualPath){
                 NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: {} virtual path contains an embedded null"), m_assetKindText);
@@ -339,7 +276,6 @@ private:
 private:
     CookVector<EntryT> m_entries;
     CookVector<CookEntrySourceLocation> m_entryLocations;
-    CookVector<CachedCookedBucketEntry> m_cachedEntries;
     TString<CookArena> m_assetKindText;
     DocumentParseFunction m_parseDocument = nullptr;
     ValueParseFunction m_parseValue = nullptr;
@@ -381,7 +317,6 @@ public:
 
 
 public:
-    // The asset label's backing text must outlive this registry.
     template<typename EntryT, typename AssetT, typename CodecT>
     b8 registerType(
         const Name& assetType,
@@ -427,7 +362,6 @@ public:
     [[nodiscard]] FOUNDATION_INLINE b8 parseValue(const Name& assetType, const Name virtualPath, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Value& asset, CookEntryParseContext& context){
         return parseValue(assetType, virtualPath, Path(context.cookArena, nwbFilePath), asset, context);
     }
-    [[nodiscard]] b8 appendCachedEntry(const Name& assetType, const CookEntrySourceLocation& location, const Name& virtualPath, Span<const u8> payloadBytes, CookEntryParseContext& context);
     [[nodiscard]] usize bucketCount()const noexcept;
     [[nodiscard]] b8 writeBucket(usize bucketIndex, CookEntryWriteContext& context);
     [[nodiscard]] u64 entryCount()const noexcept;

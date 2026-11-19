@@ -97,19 +97,15 @@ public:
     void setTelemetryCapture(const Telemetry::CaptureOptions& options);
     void setTelemetryUploadCallback(TelemetryUploadCallback callback, void* userData)noexcept;
     [[nodiscard]] b8 flushTelemetryUpload(b8 clearAfterUpload = false);
-    // Toggle perf capture without telemetry; flips both halves of the GPU-timing gate.
     void setPerfCapture(const Perf::CaptureOptions& options);
-    // Available after startup; the native window and its OS service outlive project borrowers.
     [[nodiscard]] IClipboardService& clipboard()noexcept;
 
-    // Native startup/teardown callbacks may arrive while the platform service is not attached.
     [[nodiscard]] inline IClipboardService* tryClipboard()noexcept{ return m_clipboard.get(); }
 
     [[nodiscard]] ITextInputService& textInput()noexcept;
 
     [[nodiscard]] inline ITextInputService* tryTextInput()noexcept{ return m_textInput.get(); }
 
-    // Read-only captured timing data; Session owns the per-scope stats.
     [[nodiscard]] inline const Perf::Session& perfSession()const noexcept{ return m_perfSession; }
 
     [[nodiscard]] inline Telemetry::FrameGraphRegistry& frameGraphRegistry()noexcept{ return m_frameGraphRegistry; }
@@ -153,7 +149,6 @@ private:
     TelemetryUploadCallback m_telemetryUploadCallback = nullptr;
     void* m_telemetryUploadUserData = nullptr;
     b8 m_quitRequested = false;
-    // Timing scope registered during startup and retained across capture enable/clear, never per frame in updateFrame().
     Perf::TimingScopeId m_projectUpdateTimingScope;
 };
 

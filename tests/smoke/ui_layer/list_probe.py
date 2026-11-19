@@ -1,4 +1,3 @@
-"""Compare frozen virtual-list metadata with numeric GPU marker pixels."""
 from __future__ import annotations
 
 import math
@@ -29,8 +28,6 @@ def snapshot_from_logs(text):
     return snapshot_from_patterns(text, STATE, DISPLAY, SKIN, GEOMETRY, FIELDS, RECTANGLES, fixture=LIT_LIST)
 
 
-
-
 def observe_list(frame, snapshot, expected, *, extent=None, skin="default", extra=None):
     width, height, rows = frame
     scale_x, scale_y = snapshot["scale"]
@@ -45,7 +42,6 @@ def observe_list(frame, snapshot, expected, *, extent=None, skin="default", extr
         error = max(abs(actual - reference) for actual, reference in zip(observed, color))
         probes.append({"name": name, "position": [x, y], LIT_EXPECTED: list(color), "observed": list(observed), "error": error, LIT_PASSED: error <= tolerance})
 
-    # Every scalar is represented by two 12-bit RGB markers, retaining all 100000 row keys and indices.
     for index, value in enumerate((*snapshot["values"], snapshot["sequence"])):
         for part in range(2):
             marker = index * 2 + part
@@ -56,7 +52,6 @@ def observe_list(frame, snapshot, expected, *, extent=None, skin="default", extr
     if snapshot["visible"]:
         row_height = snapshot[LIT_RECTANGLES]["first_row"][3]
         bounded = bounded and (past == first == 0 if snapshot[LIT_COUNT] == 0 else row_height > 0.0 and past - first <= math.ceil(viewport[3] / row_height) + 2)
-        # A dark textured frame and its clear outer gutter verify clipping independently of model markers.
         bx, by, bw, bh = snapshot[LIT_RECTANGLES][LIT_LIST]
         if bw > 12.0 and bh > 12.0:
             probe("list_skin_gutter", (bx + 4.0, by + bh / 2.0), (17, 23, 31), 8)

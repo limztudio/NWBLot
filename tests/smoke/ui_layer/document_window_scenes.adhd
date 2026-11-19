@@ -69,8 +69,6 @@ class UiTextSmokeSamples{
     public b8 paint(mut UiPaintContext context);
 }
 
-
-// Scene fixture for primitive and Builder texture image declarations.
 class UiTextureImageSmokeScene : IUiSmokeInputScene{
     private SharedImageSource m_default = SharedImageSource();
     private SharedImageSource m_alternate = SharedImageSource();
@@ -907,7 +905,6 @@ b8 UiTextureImageSmokeScene::paintPopups(mut UiPaintContext context, in f32 righ
         const VectorSingle childRow = VectorSingle(childBounds.x, childBounds.y, childBounds.width, 0.0f) + VectorSingle(8.0f, 8.0f, -16.0f, 64.0f);
         this.m_declared.rectangles[13u] = Rect(childRow.x, childRow.y, childRow.z, childRow.w);
     }
-    // Both late base commands must remain beneath the actual deferred Builder popup chrome and source images.
     context.paint.fillRect(this.m_declared.rectangles[12u], Color(0.8f, 0.0f, 0.0f, 1.0f));
     if(this.m_child.isOpen())
         context.paint.fillRect(this.m_declared.rectangles[13u], Color(0.0f, 0.0f, 0.8f, 1.0f));

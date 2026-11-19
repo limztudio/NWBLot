@@ -1,5 +1,3 @@
-"""Capture, validate and resize rendered desktop windows."""
-
 import time
 from types import SimpleNamespace
 

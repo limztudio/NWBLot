@@ -154,7 +154,6 @@ Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const Path& assetRoot, co
 
     assets.reserve(list.size());
 
-    // Debug iterator proxies allocate during moves; release temporaries before transferring the result.
     {
         auto baseVirtualPathText = Core::Assets::AssetPathsDetail::BuildDerivedAssetVirtualPathText(assetRoot, virtualRoot, nwbFilePath, scratchArena, scratchArena);
         if(!baseVirtualPathText)

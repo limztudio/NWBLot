@@ -90,7 +90,6 @@ void RouteRouterCommand(
         sourceIndex = commandSources.size() - 1u;
     }
     CommandSource source = commandSources[sourceIndex];
-    // Blurred and orphan repeat sequences remain inert until released and pressed again.
     inOutResult.commandConsumed = inOutResult.commandConsumed || source.consumed;
     if(!windowFocused || (!alreadyPressed && event.repeat))
         return;

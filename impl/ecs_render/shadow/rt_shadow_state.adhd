@@ -56,7 +56,6 @@ static_assert(offset_of<SoftwareTransparentSamplingPush>(prevWorldToClip) == s_S
 type RtMeshHeapHandleCache = HashMap<usize, RtMeshHeapHandleCacheEntry>;
 
 class RtShadowState{
-    // HW and SW context hashes distinguish descriptor-slot encodings of the shared buffer.
     public u64 m_hwShadowMaterialContextHash = 0u;
     public u64 m_swShadowMaterialContextHash = 0u;
     public usize m_shadowInstanceMaterialCapacity = 0u;
@@ -66,12 +65,9 @@ class RtShadowState{
     public BindingLayoutHandle m_shadowBindingLayout;
     public ShaderHandle m_shadowShader;
     public ComputePipelineHandle m_shadowPipeline;
-    // Shared HW/SW per-instance material table; indices match trace instance IDs.
     public BufferHandle m_shadowInstanceMaterialBuffer;
-    // All-occluder trace material context; draw buffers contain one transparency class.
     public BufferHandle m_shadowInstanceBuffer;
     public BufferHandle m_shadowMaterialTypedBuffer;
-    // Software shadow layout is push-only; resources use the global heap.
     public BindingLayoutHandle m_swShadowBindingLayout;
     public ShaderHandle m_swShadowOpaquePrepassShader;
     public ComputePipelineHandle m_swShadowOpaquePrepassPipeline;
@@ -88,36 +84,29 @@ class RtShadowState{
     public ShaderHandle m_swShadowTransparentIndirectShader;
     public ComputePipelineHandle m_swShadowTransparentIndirectPipeline;
     public SoftwareTransparentSamplingState m_softwareTransparentSampling;
-    // Scalar and RGB wavelet/upsample pipelines share one push-constant layout.
     public SoftShadowResolveState m_softShadowResolve;
-    // Compaction buffers get fresh heap views after target recreation.
     public BufferHandle m_swShadowEdgeCounterBuffer;
     public BufferHandle m_swShadowEdgeListBuffer;
     public BufferHandle m_swShadowIndirectArgsBuffer;
 
-    // Shared selector and optical readers may occupy several physical transports in one queue class.
     public Vector<QueueSubmissionToken> m_rayTraceContextReadSubmissionTokens;
-    // HW distinct meshes and heap views shared with caustic/GI.
     public Vector<mut Buffer> m_shadowMeshIndexBuffers;
     public Vector<mut Buffer> m_shadowMeshAttributeBuffers;
     public Vector<mut Buffer> m_shadowMeshPositionBuffers;
     public Vector<GpuDescriptorHandle> m_shadowMeshIndexHandles;
     public Vector<GpuDescriptorHandle> m_shadowMeshAttributeHandles;
     public Vector<GpuDescriptorHandle> m_shadowMeshPositionHandles;
-    // SW distinct-mesh tables; matching entries share an index.
     public Vector<mut Buffer> m_swShadowMeshNodeBuffers;
     public Vector<mut Buffer> m_swShadowMeshPositionBuffers;
     public Vector<mut Buffer> m_swShadowMeshIndexBuffers;
-    public Vector<mut Buffer> m_swShadowMeshAttributeBuffers; // Packed normal/uv0.
+    public Vector<mut Buffer> m_swShadowMeshAttributeBuffers;
     public Vector<GpuDescriptorHandle> m_swShadowMeshNodeHandles;
     public Vector<GpuDescriptorHandle> m_swShadowMeshPositionHandles;
     public Vector<GpuDescriptorHandle> m_swShadowMeshIndexHandles;
     public Vector<GpuDescriptorHandle> m_swShadowMeshAttributeHandles;
-    // Separate HW/SW caches avoid cross-gather eviction.
     public RtMeshHeapHandleCache m_hwMeshHeapHandleCache;
     public RtMeshHeapHandleCache m_swMeshHeapHandleCache;
 
-    // Fresh heap views preserve old buffers for in-flight work.
     public GpuDescriptorHandle m_shadowInstanceMaterialHeapHandle = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle m_shadowInstanceHeapHandle = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle m_shadowMaterialTypedHeapHandle = GpuDescriptorHandleInvalid();
@@ -140,12 +129,9 @@ class RtShadowState{
 }
 
 class RtSoftShadowState{
-    // Previous-frame transform for soft-shadow reprojection; invalid after target recreation.
     public f32x4x4 m_prevWorldToClip(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
-    // HW half-resolution soft trace shares the temporal resolve chain.
     public ShaderHandle m_shadowSoftShader;
     public ComputePipelineHandle m_shadowSoftPipeline;
-    // Half-resolution geometry cache for edge-aware resolves.
     public BindingLayoutHandle m_shadowGeometryDownsampleBindingLayout;
     public ShaderHandle m_shadowGeometryDownsampleShader;
     public ComputePipelineHandle m_shadowGeometryDownsamplePipeline;
@@ -153,25 +139,17 @@ class RtSoftShadowState{
     public ShaderHandle m_shadowReprojectMergeShader;
     public ComputePipelineHandle m_shadowReprojectMergePipeline;
 
-    // Bits identify populated shadow slots; dispatches handle sparse assignments.
     public u32 m_softShadowSlotMask = 0u;
-    // Primary shadow producer's temporal sample index.
     public u32 m_softShadowFrameIndex = 0u;
-    // 1: A is history input; 0: B is history input.
     public u32 m_softShadowHistoryFrontIsA = 1u;
-    // Transparent temporal gates; coarse/adaptive fallback remains available.
     public TransparentShadowSamplingHistory m_transparentShadowSamplingHistory;
 
     public b8 m_prevWorldToClipValid = false;
     public b8 m_shadowSoftPipelineFailed = false;
     public b8 m_shadowGeometryDownsamplePipelineFailed = false;
-    // Nonfatal soft-shadow resource gate.
     public b8 m_softShadowReady = false;
-    // Enables temporal soft-shadow merge; falls back to non-temporal mode.
     public b8 m_softShadowTemporalReady = false;
-    // Set after the first temporal merge; reset when targets are recreated.
     public b8 m_softShadowTemporalSeeded = false;
-    // Defer the history swap until the ordered submission succeeds.
     public b8 m_softShadowTemporalHistoryAdvancePending = false;
     public b8 m_shadowReprojectMergePipelineFailed = false;
     public b8 m_softTransparentTemporalReady = false;

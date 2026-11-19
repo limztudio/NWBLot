@@ -16,7 +16,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Both traversals share this ray: direction, extent, bias, back-face early-out. Keeps coverage in lockstep.
 bool nwbShadowBuildLightRay(const float3 worldPosition, const float3 normal, const NwbSceneLight light, const float2 jitter, out float3 outDirection, out float outTMin, out float outTEnd){
     outDirection = float3(0.0, 1.0, 0.0);
     outTMin = NWB_SHADOW_RAY_MIN_DISTANCE;
@@ -24,7 +23,6 @@ bool nwbShadowBuildLightRay(const float3 worldPosition, const float3 normal, con
 
     float tMax;
     if(light.params.y < NWB_SCENE_LIGHT_TYPE_DIRECTIONAL_MAX){
-        // Directional lights use their constant angular source radius; zero keeps the exact hard-shadow axis.
         outDirection = nwbShadowJitterCone(normalize(light.direction.xyz), light.params2.x, jitter);
         tMax = NWB_SHADOW_DIRECTIONAL_RAY_MAX_DISTANCE;
     }
@@ -32,13 +30,10 @@ bool nwbShadowBuildLightRay(const float3 worldPosition, const float3 normal, con
         const float3 delta = light.position.xyz - worldPosition;
         tMax = length(delta);
         const float3 centerDir = (tMax > NWB_SHADOW_LIGHT_DIRECTION_EPSILON) ? (delta / tMax) : float3(0.0, 1.0, 0.0);
-        // A punctual source sphere subtends asin(radius / distance); the center distance remains the trace extent.
-        // Punctual-source sine half-angle is a (0, 1) bounded factor; half math is sufficient here; widen only at asin.
         const half sinHalf = (tMax > NWB_SHADOW_LIGHT_DIRECTION_EPSILON) ? half(min(light.params2.y / tMax, NWB_SHADOW_POINT_LIGHT_SINE_HALF_ANGLE_MAX)) : half(0.0h);
         outDirection = nwbShadowJitterCone(centerDir, asin(float(sinHalf)), jitter);
     }
 
-    // Deferred lighting already clamps NdotL, so a back-facing receiver is unshadowed without a trace.
     if(dot(normal, outDirection) <= 0.0)
         return false;
 

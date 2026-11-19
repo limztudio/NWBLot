@@ -74,7 +74,6 @@ void VerifyAllocationOwnerConcurrency_CapturesLiveAndRetiringArenasWithoutLosing
                             failed.store(true, MemoryOrder::relaxed);
                         if(first.address() != 0u)
                             FreeBytes(arena, first, 8u, 64u);
-                        // Out-of-order free defers release until arena destruction.
                     }
                     {
                         PersistentStorage arena(owner, poolBytes);
@@ -84,7 +83,6 @@ void VerifyAllocationOwnerConcurrency_CapturesLiveAndRetiringArenasWithoutLosing
                             failed.store(true, MemoryOrder::relaxed);
                         if(first.address() != 0u)
                             FreeBytes(arena, first, 8u, 64u);
-                        // One explicit free and one bulk free must contribute exactly two retired deallocations.
                     }
                 }
                 completed.fetch_add(1u, MemoryOrder::release);
@@ -190,7 +188,6 @@ void VerifyAllocationOwnerConcurrency_CrossThreadRawReallocationAndFreeKeepSettl
             WaitForFlag(releaseWorkers);
         });
 
-        // Keep thread closures outside the measured allocation interval.
         WaitForFlag(producerReady);
         WaitForFlag(consumerReady);
         before = HeapBackingMemoryStats();

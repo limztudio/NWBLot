@@ -157,7 +157,6 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
         }
 
         if(!releaseDestinationQueue.valid()){
-            // Ownership belongs to a family, not one queue. Same-family handoff is valid once its token waits; reject only a true crossing without the pair.
             if(ownerQueue.valid() && sourceQueueFamily != destinationQueueFamily){
                 NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Exclusive texture handoff changes queue family without a release/acquire transfer"));
                 return false;
@@ -207,7 +206,6 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
         }
 
         if(!releaseDestinationQueue.valid()){
-            // A timeline wait is sufficient within one queue family.
             if(ownerQueue.valid() && sourceQueueFamily != destinationQueueFamily){
                 NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Exclusive buffer handoff changes queue family without a release/acquire transfer"));
                 return false;
@@ -227,8 +225,6 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
         return true;
     };
 
-    // Validate the complete handoff before publishing any state.
-    // Permanent state survives clearState(), so a progressive import would otherwise poison later recording attempts when a later entry is incompatible.
     for(const CommandListResourceStateHandoff::TextureState& state : states.m_textureStates){
         if(!state.texture)
             continue;
@@ -372,7 +368,6 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         return buffer.m_bufferInfo.sharingMode != VK_SHARING_MODE_CONCURRENT ? m_creationDesc.physicalQueue : GpuPhysicalQueueId{};
     };
 
-    // State ledgers only key live resources: tracking inserts references and handoff import skips null entries.
     states.m_textureStates.reserve(m_stateTracker.m_textureStates.size());
     for(auto it = m_stateTracker.m_textureStates.begin(); it != m_stateTracker.m_textureStates.end(); ++it){
         const TextureSubresourceStateKey& key = it->first;
@@ -444,7 +439,6 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
         return;
     }
 
-    // Validate all pending releases first so a late failure never partially mutates the transaction.
     for(auto it = m_bufferOwnershipReleaseDestinations.begin(); it != m_bufferOwnershipReleaseDestinations.end(); ++it){
         auto& buffer = *MakeNotNull(it->first.get());
         if(buffer.m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT || m_stateTracker.isPermanentBuffer(buffer)){

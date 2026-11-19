@@ -193,7 +193,6 @@ b8 BackendContext::pickPhysicalDevice(Alloc::ScratchArena& scratchArena){
         m_instanceDispatch.vkGetPhysicalDeviceProperties(dev, &prop);
 
         errorStream << "\n" << prop.deviceName << ":";
-        // Borrow enabled names; the device extension map does not change during adapter selection.
         HashSet<AStringView, Alloc::ScratchArena, ExtensionNameHasher, ExtensionNameEqualTo> requiredExtensions(0, ExtensionNameHasher(), ExtensionNameEqualTo(), scratchArena);
         requiredExtensions.reserve(m_enabledExtensions.device.size());
         for(const auto& [name, _] : m_enabledExtensions.device)
@@ -303,7 +302,6 @@ b8 BackendContext::pickPhysicalDevice(Alloc::ScratchArena& scratchArena){
             return true;
         }
 
-        // Enumeration order must never let a software device hide a compatible integrated or virtual GPU.
         DeviceSelection& fallbackSelection = prop.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU ? softwareFallbackSelection : hardwareFallbackSelection;
         if(fallbackSelection.device == VK_NULL_HANDLE)
             fallbackSelection = captureCurrentSelection(dev);
@@ -375,8 +373,6 @@ b8 BackendContext::findQueueFamilies(Alloc::ScratchArena& scratchArena, VkPhysic
     if(m_graphicsQueueFamily == s_InvalidQueueFamilyIndex || m_computeQueueFamily == s_InvalidQueueFamilyIndex || (m_presentQueueFamily == s_InvalidQueueFamilyIndex && requirePresentQueue))
         return false;
 
-    // Every active primary family may expose its extra queues through the low-overhead same-class route.
-    // Cross-family opt-in may also register one alternate family per class; tasks still opt in before routing crosses it.
     if(m_deviceParams.enableSameClassMultiQueue && m_deviceParams.enableCrossFamilySameClassQueueRouting){
         for(i32 i = 0; i < static_cast<i32>(props.size()); ++i){
             const VkQueueFamilyProperties& queueFamily = props[i];

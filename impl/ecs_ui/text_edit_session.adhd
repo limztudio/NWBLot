@@ -30,8 +30,6 @@ b8 IsStaleUiTextEditSurroundingRevision(
     return expectedSurroundingRevision == 0u || eventSurroundingRevision != expectedSurroundingRevision || !matchesPublishedModel;
 }
 
-// The host validates token, sequence and owner before lending a model to a copied event.
-// Surrounding deletion additionally requires the exact native publication that the event addressed.
 UiTextEditStatus ApplyUiTextEditEvent(
     mut EditModel model,
     in TextInputEvent event,
@@ -125,11 +123,6 @@ UiTextEditStatus ApplyUiTextEditEvent(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Owned OS events are applied only during a host call that lends the matching model.
-// No model pointer is retained.
-// Drain before host edits.
-// End before a local edit/selection change, then begin again to fence queued old-selection events.
-// End with the old owner/model before removal or replacement so its transient preedit is cleared as well.
 [modular]
 class UiTextEditSession : NoCopy{
     private mut ITextInputService m_service;
@@ -174,7 +167,6 @@ class UiTextEditSession : NoCopy{
         return TextInputAdmission::Accepted;
     }
 
-    // Only a model matching the last applied event can refresh the native snapshot; external edits require a new session.
     public TextInputAdmission refresh(in UiTextEditOwner owner, in EditModel model, in TextInputRect caret){
         return this.syncSession(owner, model, caret, TextInputChangeCause::InputMethod, false);
     }
@@ -235,7 +227,6 @@ class UiTextEditSession : NoCopy{
         return result;
     }
 
-    // Collects an owned event without lending a model. The ordered host queue validates token and sequence.
     public TextInputPollResult pollOwned(mut TextInputEvent event){
         if(!this.m_service.isOwnerThread())
             return TextInputPollResult::WrongThread;
@@ -244,7 +235,6 @@ class UiTextEditSession : NoCopy{
         return this.m_service.poll(this.m_token, event);
     }
 
-    // Explicitly trusts a synchronous local/ordered edit; refresh remains strict for ordinary callers.
     public TextInputAdmission adoptLocal(in UiTextEditOwner owner, in EditModel model, in TextInputRect caret, in TextInputChangeCause cause){
         return this.syncSession(owner, model, caret, cause, true);
     }
@@ -261,7 +251,6 @@ class UiTextEditSession : NoCopy{
         return this.cancel();
     }
 
-    // Releases native state without a model pointer. The host clears transient preedit on its next synchronous lend.
     public b8 cancel(){
         if(!this.m_token.valid())
             return true;

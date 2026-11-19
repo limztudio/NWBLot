@@ -45,7 +45,6 @@ class LayoutSize{
     }
 
     public LayoutSizePolicy policy;
-    // Fixed logical size, or a positive stretch weight. Content ignores this finite, nonnegative value.
     public f32 value;
 }
 

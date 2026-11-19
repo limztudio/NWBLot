@@ -52,8 +52,6 @@ static constexpr TStringView s_NativeImageNotDistinctReason = FOUNDATION_TEXT("s
     return true;
 }
 
-// Buffer-image copies address exactly one image aspect.
-// Lower the selected upload plane into its own Vulkan aspect and byte layout.
 struct TextureUploadCopyAspect{
     VkImageAspectFlags aspectMask = 0u;
     VulkanDetail::TextureFormatBlockLayout formatLayout;

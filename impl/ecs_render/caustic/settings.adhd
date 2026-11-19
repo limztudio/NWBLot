@@ -13,7 +13,6 @@ b8 ValidateCausticQualitySettings(in CausticQualitySettings settings){
     return settings.photonGridDivisor == 1u || settings.photonGridDivisor == s_CausticHalfPhotonGridDivisor || settings.photonGridDivisor == s_CausticQuarterPhotonGridDivisor;
 }
 
-// Callers supply validated settings, a supported base grid, and the current 1/2 temporal phase count.
 CausticPhotonBudget MakeCausticPhotonBudget(in CausticQualitySettings settings, in u32 baseGridSide, in u32 temporalPhaseCount){
     assert(ValidateCausticQualitySettings(settings));
     assert(baseGridSide == s_CausticReducedBaseGridSide || baseGridSide == s_CausticFullBaseGridSide);

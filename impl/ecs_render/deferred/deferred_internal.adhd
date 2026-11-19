@@ -132,7 +132,6 @@ class DeferredBindlessDescriptorSources{
     }
 }
 
-// Registers every deferred frame target in the global descriptor heap, in the fixed order the slot table expects.
 [modular]
 class DeferredBindlessDescriptorRegistrar : NoCopy{
     private mut GpuDescriptorHeap m_heap;

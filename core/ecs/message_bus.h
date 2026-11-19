@@ -235,7 +235,6 @@ private:
         }
     }
 
-    // Destruction requires joined task producers and stopped external producers.
     void discardForDestruction()noexcept{
         forEachChannel([](IMessageChannel& channel)noexcept{ channel.discardForDestruction(); });
     }

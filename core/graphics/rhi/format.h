@@ -20,8 +20,6 @@ NWB_CORE_BEGIN
 
 
 namespace Format{
-    // Every ASTC block footprint has these three consecutive storage variants in Enum: UNORM, UNORM_SRGB, and HDR float.
-    // Keep the classifier tied to those semantic layout values instead of the raw enum offsets.
     inline constexpr u32 s_AstcVariantsPerBlockFootprint = 3u;
     inline constexpr u32 s_AstcHdrVariantOffset = 2u;
 
@@ -188,7 +186,6 @@ namespace FormatKind{
 struct FormatInfo{
     static constexpr usize s_ByteSize = 16u;
 
-    // Literal backing and a bounded length preserve the compact format metadata layout.
     NotNull<const char*> name;
     Format::Enum format;
     u8 bytesPerBlock;
@@ -298,8 +295,6 @@ const FormatInfo& GetFormatInfo(Format::Enum format)noexcept;
     }
 }
 
-// Combined depth/stencil copies address one aspect plane at a time.
-// Automatic infers single-aspect formats; a combined format requires an explicit Depth or Stencil selection.
 namespace TextureUploadAspect{
     enum Enum : u8{
         Automatic,

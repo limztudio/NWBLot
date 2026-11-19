@@ -503,7 +503,6 @@ void VerifyGpuDecl_PreservesReaderJoinAcrossPartialTaskInternalStateEpoch(){
     const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(compilation.compiledGraph);
     ASSERT_FALSE(GpuDecl_HasPacketDependency(plan, internalReader, computeReader));
     ASSERT_FALSE(GpuDecl_HasPacketDependency(plan, spanningReader, computeReader));
-    // The second-half task's internal transition does not dominate the independent first-half Compute reader.
     EXPECT_TRUE(GpuDecl_HasPacketDependency(plan, transitionReader, computeReader));
     EXPECT_TRUE(GpuDecl_HasPacketDependency(plan, transitionReader, spanningReader));
 }
@@ -635,7 +634,6 @@ void VerifyGpuDecl_KeepsSingleLaneAlternatingReadStateScratchGrowthLinear(){
     ASSERT_NE(largeScratchPeak, 0u);
     RecordUnsignedTestProperty("small_read_state_scratch_peak_bytes", cast<u64>(smallScratchPeak));
     RecordUnsignedTestProperty("large_read_state_scratch_peak_bytes", cast<u64>(largeScratchPeak));
-    // Four times as many serial readers must not produce all historical reader pairs or a dense packet closure.
     EXPECT_LE(largeScratchPeak, smallScratchPeak * 6u);
 }
 
@@ -1497,7 +1495,6 @@ void VerifyGpuDecl_UsesTheFullExplicitOrderToOrientInferredHazards(){
     thirdUses[0u].requiredState = ResourceStates::ShaderResource;
     thirdUses[0u].access = GpuTaskResourceAccess::Read;
 
-    // Explicit third-to-first ordering reverses declaration order without creating a cycle.
     u64 graphGeneration = 0u;
     {
         const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);

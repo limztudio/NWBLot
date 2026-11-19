@@ -61,7 +61,6 @@ class MeshSkinningRuntimeResources{
     }
 }
 
-// Graph tasks retain immutable dispatch inputs; publish commits only after packet accepts.
 class MeshSkinningGraphDispatchPlan{
     public RuntimeMeshHandle handle;
     public u64 deformationCandidate = 0u;
@@ -96,7 +95,6 @@ class MeshSkinningGraphDispatchPlan{
     public u32 bindlessResourceSlots = 0u;
     public GpuDescriptorHandle bindlessResourceSlotsDescriptor = GpuDescriptorHandleInvalid();
     public MeshSkinningSubmissionCommit submissionCommit;
-    // Acceptance validates this exact selector generation before setting its residency bit.
     public MeshSkinningBindlessResourceSlots bindlessResourceSlotsPayload;
     public b8 hasActiveSkin = false;
     public b8 copiedRestStreams = false;
@@ -104,7 +102,6 @@ class MeshSkinningGraphDispatchPlan{
     public b8 repacksNormals = false;
 }
 
-// Graph declarations retain resources; this snapshot keeps only the reduction dispatch contract.
 class MeshSkinningLocalBoundsDispatch{
     public GpuGraphResourceId bindlessResourceSlotsResource;
     public GpuGraphResourceId meshletLocalBoundsResource;

@@ -12,7 +12,6 @@
 type GlyphPagePixels = Vector<u8>;
 type SharedGlyphPage = Shared<GlyphPage>;
 
-// Each published version holds an immutable linear R8 coverage image.
 class GlyphPage : NoCopy{
     private GlyphPageBindingRecord<Font> m_binding;
     private GlyphPagePixels m_pixels;

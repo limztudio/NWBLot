@@ -2,8 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Testbed-owned deferred lighting BXDF: smooth diffuse + spec + rim.
-// The engine supplies only scene-light and visibility/caustic transport; this project asset owns the complete BRDF, light loop, and tone-map policy.
 static const half NWB_TESTBED_LAMBERT_TONEMAP_KNEE = 0.65h;
 static const half NWB_TESTBED_LAMBERT_RIM_EXPONENT = 3.0h;
 static const half NWB_TESTBED_LAMBERT_SPECULAR_TIGHT_EXPONENT = 72.0h;

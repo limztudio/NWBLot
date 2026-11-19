@@ -67,7 +67,6 @@ b8 CanPublishAvboitReusableGeometryProducer(in b8 captured, in b8 taskValid){
     return captured && taskValid;
 }
 
-// Reuse is local to one declared graph and requires a published producer.
 [modular]
 class AvboitGeneratedGeometryReuse : NoCopy{
     private Vector<MaterialPassDrawItem> m_draws;

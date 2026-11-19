@@ -37,7 +37,6 @@ class UiEditSelectionRelease : NoCopy{
     }
 }
 
-// The navigation loan ends with the current declaration. Entries and events retain only owned state.
 class UiEditNavigationBorrow{
     public mut EditNavigationState state;
     public mut IEditNavigationResolver resolver;

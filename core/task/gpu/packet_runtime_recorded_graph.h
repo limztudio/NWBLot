@@ -57,29 +57,22 @@ struct GpuRecordedPacket{
     static constexpr usize s_MaxCommandLists = 12u;
 
     GpuSubmissionPacketId packet;
-    // Native recording retains its acquired lists through submission.
     Array<CommandListHandle, s_MaxCommandLists> ownedCommandLists{};
     Array<CommandList*, s_MaxCommandLists> commandLists{};
-    // Exact identities let reset/destruction revoke an unsubmitted list without touching a later reuse of the same object.
     Array<u64, s_MaxCommandLists> commandListRecordingLeaseSerials{};
-    // Written before commandListCount publishes the slot. They describe post-lowering packet work for compile tooling.
     u32 taskCount = 0u;
     u32 barrierCount = 0u;
     f64 commandListAcquisitionSeconds = 0.0;
     f64 graphBarrierRecordingSeconds = 0.0;
     f64 taskRecordSeconds = 0.0;
-    // Steady-clock endpoints show real CPU recording overlap. Both publish before commandListCount exposes the slot.
     u64 recordingBeginNanoseconds = 0u;
     u64 recordingEndNanoseconds = 0u;
     f64 recordingSeconds = 0.0;
-    // Worker zero is serial/default recording; ready-frontier workers retain a process-unique CpuTaskScheduler domain and scheduler-local index.
     u64 recordingWorkerDomain = 0u;
     u32 recordingWorkerIndex = 0u;
     u8 commandListCount = 0u;
 };
 
-
-// Snapshot of published packet slots. recordingSeconds sums per-packet spans (slot occupancy, not CPU).
 struct GpuTaskGraphRecordingStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
@@ -89,18 +82,14 @@ struct GpuTaskGraphRecordingStatistics{
     usize taskCount = 0u;
     usize commandListCount = 0u;
     usize barrierCount = 0u;
-    // workerRoutedPacketCount includes one-packet worker batches; parallelPacketCount requires overlapping intervals.
     usize workerRoutedPacketCount = 0u;
     usize parallelPacketCount = 0u;
     f64 commandListAcquisitionSeconds = 0.0;
     f64 graphBarrierRecordingSeconds = 0.0;
     f64 taskRecordSeconds = 0.0;
     f64 recordingSeconds = 0.0;
-    // Sum of successful recorder-operation wall spans; separate range calls exclude intervening caller work.
     f64 recordingElapsedSeconds = 0.0;
     f64 readyFrontierElapsedSeconds = 0.0;
-    // Busy is summed packet-span occupancy across logical recording slots, not operating-system CPU time.
-    // Capacity is readyFrontierElapsedSeconds weighted per call by every callable CpuTaskScheduler slot, including its caller.
     f64 readyFrontierWorkerBusySeconds = 0.0;
     f64 readyFrontierWorkerCapacitySeconds = 0.0;
 
@@ -110,8 +99,6 @@ public:
     [[nodiscard]] b8 valid()const noexcept{ return graphGeneration != 0u && planGeneration != 0u; }
 };
 
-
-// Native recording telemetry for one queue in one attempt. Queue identity carries the device generation.
 struct GpuTaskGraphPhysicalQueueRecordingStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
@@ -187,8 +174,6 @@ private:
         b8 m_exclusive = false;
         b8 m_ownsAdmission = false;
     };
-    // Every ready-frontier worker receives isolated state-handoff scratch.
-    // Separate from per-packet final-state slots, which are written only by the packet's own recording worker and read by later frontiers.
     struct PacketRecordingScratch final : NoCopy{
         struct CachedCommandList{
             CommandListParameters parameters;
@@ -238,18 +223,13 @@ public:
 
 
 public:
-    // A live record/submit operation leases every packet, timing ticket, state seed, and command-list handle in this artifact.
-    // Failed reset leaves all storage and exact publication identities unchanged so the operation can finish or unwind safely.
     [[nodiscard]] b8 tryReset(const GpuCompiledGraph& compiledGraph);
     void reset(const GpuCompiledGraph& compiledGraph);
-    // Join graph/native work before releasing device-bound cached recording objects.
     [[nodiscard]] b8 releaseCommandListCache()noexcept;
     [[nodiscard]] b8 validFor(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept;
     [[nodiscard]] b8 validFor(const GpuTaskGraph& graph, const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept;
     [[nodiscard]] u64 recordingAttemptGeneration()const noexcept;
-    // Owned aggregate from packet slots under artifact admission. The plan proof guards metadata and rejects foreign artifacts.
     [[nodiscard]] GpuTaskGraphRecordingStatistics recordingStatistics(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept;
-    // Owned per-queue aggregate. Bad queue IDs or a foreign artifact give an empty result.
     [[nodiscard]] GpuTaskGraphPhysicalQueueRecordingStatistics physicalQueueRecordingStatistics(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] Optional<GpuRecordedPacket> packetSnapshot(const GpuSubmissionPacketId& packet)const noexcept;
 
@@ -299,7 +279,6 @@ private:
     GraphicsArena& m_arena;
     GlobalUniquePtr<ArtifactStorage> m_activeStorage;
     GlobalUniquePtr<ArtifactStorage> m_candidateStorage;
-    // Readers may overlap on independent queues. Conflicting admission is nonblocking; only destruction joins owners.
     mutable Atomic<u32> m_operationState{ 0u };
 };
 

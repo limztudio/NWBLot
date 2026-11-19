@@ -50,8 +50,6 @@ template<typename ArenaT>
     return { true, false, {} };
 }
 
-
-// Returns true when published and false when identical bytes already existed.
 template<typename ArenaT>
 [[nodiscard]] Expected<b8, ErrorCode> PublishUniqueFileIfAbsentOrIdentical(const ::Path<ArenaT>& destination, const Span<const u8> bytes){
     Vector<u8, ArenaT> scratch(destination.arena());

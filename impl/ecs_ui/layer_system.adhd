@@ -42,7 +42,6 @@ type UiGpuCommandRecordingMode = GpuCommandRecordingMode;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// ECS owns callback execution; the independent GPU renderer receives only frozen paint snapshots.
 [arena, ordered, system("ui_layer"), friend(UiLayerPaintGuard)]
 class UiLayerSystem : IRenderPass, IInputEventHandler{
     private mut World m_world;
@@ -70,7 +69,6 @@ class UiLayerSystem : IRenderPass, IInputEventHandler{
     private u32 m_pressedButtons = 0u;
     private u32 m_width = 0u;
     private u32 m_height = 0u;
-    // Native-key ownership survives focus transfer; the CPU router retains each resolved held intention.
     private Array<u8, s_UiNativeKeySlotCount> m_nativeKeyOwners;
     private UiLayerPresentation m_presentation;
     private u8 m_pointerOwner = 0u;
@@ -131,7 +129,6 @@ class UiLayerSystem : IRenderPass, IInputEventHandler{
     public void render(in FramebufferPtr framebuffer)override;
     public void displayScaleChanged(in f32 scaleX, in f32 scaleY)override;
 
-    // Main-thread profile replacement copies bindings; an empty profile disables every default shortcut.
     public b8 setInputBindings(in Span<UiInputKeyBinding> bindings);
     public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override;
     public b8 keyboardCharInput(in u32 unicode, in i32 mods)override;
@@ -467,7 +464,6 @@ void UiLayerSystem::routeInput(in UiInputEvent event, mut b8 outBlockText){
     const b8 submit = this.m_editHost.prepareSubmit(normalized.value());
     const InputRoutingResult result = this.m_context.input().process();
     this.m_editHost.input(normalized.value(), previousCapture, submit);
-    // Core captures this policy only if the native handler owns the physical sequence, including inert repeats.
     outBlockText = ShouldBlockRoutedCommandText(normalized.value().type == InputEventType::CommandDown, normalized.value().command != InputCommand::None, normalized.value().allowText);
     LogUiInputRoutingOverflows(result.activationOverflow, result.gestureOverflow);
 }
@@ -495,7 +491,6 @@ void UiLayerSystem::routePointerInput(in UiPointerInput input, mut b8 outConsume
 }
 
 void UiLayerSystem::synchronizeNativeInput(){
-    // Native dispatch occurs outside world system execution; use its joined boundary before reading host roots.
     this.m_world.taskScope().wait();
     this.synchronizeInput();
 }
@@ -594,11 +589,9 @@ b8 UiLayerSystem::prepareResources(in FramebufferPtr framebuffer){
 }
 
 void UiLayerSystem::render(in FramebufferPtr framebuffer){
-    // The project chooses the final-output owner explicitly; optional layer failures cannot replace scene output.
     if(!IsValidFramebufferPtr(framebuffer) || !this.m_resourcesReady || this.m_presentation == UiLayerPresentation::Scene)
         return;
     if(!this.m_renderer.renderStandalone(this.m_graphics.acquiredPresentationFrame())){
-        // The void render-pass API cannot abort presentation; recreation prevents presenting an unwritten acquired image.
         error("UiLayerSystem: standalone UI presentation failed");
         this.m_graphics.requestDeviceRecreation();
     }
@@ -633,7 +626,6 @@ b8 UiLayerSystem::loadFonts(){
         assets[index] = font.value();
         sources.push_back(FontSource(fontRef, assets[index].deref(), 1u, atlas));
     }
-    // TextService owns the exact font bytes and immutable baked atlas versions; loaded asset objects can be released here.
     this.m_fontsReady = this.m_text.setFonts(sources);
     return this.m_fontsReady;
 }

@@ -103,7 +103,6 @@ void ApplySkinPaletteToPopupStyle(in UiSkinPalette palette, mut PopupStyle style
     style.backdrop = ResolveUiSkinColor(palette, UiSkinColorRole::PopupBackdrop);
 }
 
-// Anchored placement flips on its requested axis; oversized content shrinks to the logical viewport.
 Expected<PopupPlacement> PlacePopup(in PopupOptions options, in DisplayMetrics display){
     PopupPlacement outPlacement;
     if(!IsValidPopupOptions(options, display))

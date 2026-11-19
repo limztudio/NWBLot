@@ -16,7 +16,6 @@
 
 template<typename T, typename ArenaT>
 [[nodiscard]] inline T* AllocateArenaTyped(ArenaT& arena, const usize count)noexcept([]()consteval noexcept{
-    // Throwing arenas decide first, so friend NewArenaObject declarations do not need a complete T.
     if constexpr(!noexcept(DeclVal<ArenaT&>().allocate(1u, DeclVal<const usize&>())))
         return false;
     else

@@ -17,7 +17,6 @@ class MeshGeometryBufferPolicy{
             return MakeUnexpected(Failure());
         const u64 indexByteOffset = vertexCount * s_MeshEmulationVertexByteSize;
         const u64 indexedByteSize = indexByteOffset + cast<u64>(primitiveIndexCount) * 4ull;
-        // Every raw index store must fit its uint byte address, including the final four-byte element.
         if(indexedByteSize > s_MeshAddressableBytes)
             return MakeUnexpected(Failure());
         const u64 alignedIndexedByteSize = AlignUp(indexedByteSize, s_MeshEmulationVertexByteSize);
@@ -38,7 +37,6 @@ class MeshGeometryBufferPolicy{
         const u64 indexedByteSize = indexByteOffset + cast<u64>(primitiveIndexCount) * 4ull;
         if(indexedByteSize > s_MeshAddressableBytes)
             return MakeUnexpected(Failure());
-        // The structured vertex view includes the allocation; raw index stores address the disjoint trailing region.
         const u64 bufferByteSize = AlignUp(indexedByteSize, s_MeshObjectVertexByteSize);
         if(bufferByteSize > s_MeshAddressableBytes)
             return MakeUnexpected(Failure());

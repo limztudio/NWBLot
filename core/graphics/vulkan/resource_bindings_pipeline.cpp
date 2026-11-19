@@ -45,7 +45,6 @@ Expected<CreatedPipelineLayout> Device::createPipelineLayoutForBindingLayouts(co
             return MakeUnexpected(Failure{});
         }
 
-        // Layout factories publish only descriptor-buffer layouts; a bindless layout owns one set with an explicit index.
         FOUNDATION_ASSERT(layout->isDescriptorBufferCompatible());
         FOUNDATION_ASSERT(layout->m_descriptorSetLayouts.size() == (layout->getBindlessDesc() ? 1u : 0u));
         FOUNDATION_ASSERT(!layout->getBindlessDesc() || layout->getBindlessDesc()->descriptorSetIndex != Limit<u32>::s_Max);

@@ -29,7 +29,6 @@ static const float NWB_SCENE_BVH_REFIT_ROUNDOFF_EPSILON_SCALE = 16.0;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The interval encloses the affine transform, including FP32 product, sum and subnormal rounding.
 bool nwbSceneRefitAxis(const float4 row, const float3 localMin, const float3 localMax, out float minimum, out float maximum){
     const float3 first = row.xyz * localMin;
     const float3 second = row.xyz * localMax;
@@ -37,7 +36,6 @@ bool nwbSceneRefitAxis(const float4 row, const float3 localMin, const float3 loc
     const float3 high = max(first, second);
     const float3 terms = max(abs(first), abs(second));
     const float magnitude = abs(row.w) + terms.x + terms.y + terms.z + 1.0;
-    // A subnormal local endpoint may flush before multiplication by a large affine scale.
     const float3 inputFlush = abs(row.xyz) * NWB_FLOAT_MIN_NORMAL;
     const float relativeError = NWB_SCENE_BVH_REFIT_ROUNDOFF_EPSILON_SCALE * NWB_FLOAT_EPSILON;
     const float flushError = (inputFlush.x + inputFlush.y + inputFlush.z) * (1.0 + relativeError);
@@ -84,7 +82,6 @@ void main(const uint3 threadId : SV_GroupThreadID){
         g_NwbHeapBvhWritableNodeBuffers[sceneSlot][index] = node;
     }
     DeviceMemoryBarrierWithGroupSync();
-    // CPU scene topology is preorder: both children always follow their parent.
     if(threadId.x == 0u){
         for(uint remaining = nodeCount; remaining > 0u; --remaining){
             const uint index = remaining - 1u;

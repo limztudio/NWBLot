@@ -172,8 +172,6 @@ Expected<GpuTaskId> GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, co
             if(existing.resource != resource)
                 continue;
 
-            // A primitive copy cannot safely read and write the same imported image inside one task.
-            // Keep that sequencing explicit in separate tasks instead of silently weakening its graph declarations.
             if(existing.requiredState != state || existing.access != access)
                 return false;
         }
@@ -259,7 +257,6 @@ Expected<GpuTaskId> GpuTaskGraph::addResolveTextureTask(const GpuTaskDesc& desc,
         for(const GpuTaskResourceUse& existing : resourceUses){
             if(existing.resource != resource)
                 continue;
-            // A resolve source cannot also be a destination in one task; that needs an inter-task boundary.
             if(existing.requiredState != state || existing.access != access)
                 return false;
         }

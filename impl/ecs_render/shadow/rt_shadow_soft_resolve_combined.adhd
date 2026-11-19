@@ -86,7 +86,6 @@ b8 RendererRayTracingSystem::renderSoftShadowCombinedTemporalMerge(mut CommandLi
         return false;
 
     const b8 frontIsA = this.m_rayTracingState.softShadow.m_softShadowHistoryFrontIsA != 0u;
-    // The graph provides both input textures and the four selected history and moment outputs.
     if(frontIsA){
         commandList.setEnableUavBarriersForTexture(targets.shadowHistB.deref(), true);
         commandList.setEnableUavBarriersForTexture(targets.shadowMomentsB.deref(), true);
@@ -163,7 +162,6 @@ b8 RendererRayTracingSystem::renderSoftShadowCombinedWavelet(mut CommandList com
     )
         return false;
 
-    // This graph-only phase inherits both history/moments reads and both distinct output UAV states.
     commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfB.deref(), true);
     commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfA.deref(), true);
     commandList.commitBarriers();
@@ -259,7 +257,6 @@ b8 RendererRayTracingSystem::renderSoftShadowTerminalUpsample(mut CommandList co
     this.m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, pipeline.deref());
     commandList.setPushConstants(push);
     commandList.dispatch(DivideUp(targets.width, cast<u32>(s_ShaderShadowResolveGroupSize)), DivideUp(targets.height, cast<u32>(s_ShaderShadowResolveGroupSize)), 1u);
-    // The original terminal fold is the only successful history-advance endpoint. Opaque recovery does not advance it.
     if(transparentReady && this.m_rayTracingState.softShadow.m_softShadowTemporalReady)
         this.m_rayTracingState.softShadow.m_softShadowTemporalHistoryAdvancePending = true;
     return true;

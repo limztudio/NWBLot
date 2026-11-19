@@ -59,8 +59,6 @@ public:
 
 public:
     [[nodiscard]] b8 valid()const noexcept{ return m_recorder != nullptr; }
-    // Views are intended for quiescent export/readback points.
-    // Individual reads are serialized, but callers should not clear the recorder while iterating a view.
     [[nodiscard]] usize eventCount()const noexcept;
     [[nodiscard]] const EventRecord* eventAt(usize index)const noexcept;
     [[nodiscard]] Optional<NotNull<const EventRecord*>> borrowEventAt(const usize index)const noexcept{
@@ -145,7 +143,6 @@ public:
 
 public:
     void setCaptureOptions(const CaptureOptions& options);
-    // Enabled capture retains slots and payload capacity for the next frame. Disabling capture releases them.
     void clear()noexcept;
     [[nodiscard]] TelemetryBytes createByteBuffer(){ return TelemetryBytes(m_arena); }
 
@@ -156,7 +153,6 @@ public:
     [[nodiscard]] b8 enabled()const noexcept;
     [[nodiscard]] b8 enabled(EventKind::Enum kind)const noexcept;
     [[nodiscard]] usize eventCount()const noexcept;
-    // Cumulative observer drops include contention, exhausted storage, and oversized payloads. Filtered events are excluded.
     [[nodiscard]] u64 droppedDiagnosticCount()const noexcept{ return m_droppedDiagnosticCount.load(MemoryOrder::relaxed); }
 
     [[nodiscard]] EventView view()const noexcept{ return EventView(*this); }
@@ -181,7 +177,6 @@ private:
         if(!lease.m_slot)
             return BuiltPayloadResult::Failed;
 
-        // The callback can reenter or change options while this destination remains exclusively leased.
         lease.m_lock.unlock();
         if(!buildPayload(m_arena, lease.m_slot->record.payload))
             return BuiltPayloadResult::Failed;

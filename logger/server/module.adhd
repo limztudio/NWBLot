@@ -330,7 +330,6 @@ inline constexpr SHORT s_ControlKeyDownMask = 0x8000;
 inline constexpr WPARAM s_CopyControlKey = static_cast<WPARAM>('C');
 inline constexpr UINT s_SynchronizeMessageRows = WM_APP + 1u;
 
-// Keep the store inside Frame so it tears down before the allocator runtime; late prints are safe no-ops.
 struct MessageStore{
     LogArena arena;
     MessageDeque messages;
@@ -347,7 +346,6 @@ static Frame* s_Frame = nullptr;
 static HFONT s_Font = nullptr;
 static HWND s_ListHwnd = nullptr;
 
-// Points at the live Frame store; null outside Frame lifetime. Guarded by s_ListMutex.
 static UniquePtr<MessageStore> s_Store;
 
 static Futex s_ListMutex;
@@ -366,7 +364,6 @@ static void ReleaseLogFont()noexcept{
     s_Font = nullptr;
 }
 
-// This runs on the UI thread; native row queries and additions cannot interleave with a resize rebuild.
 [[nodiscard]] static Expected<void> SynchronizeMessageRows(const HWND listHwnd)noexcept{
     usize messageCount = 0u;
     {
@@ -386,7 +383,6 @@ static void ReleaseLogFont()noexcept{
     return {};
 }
 
-// Callers must already hold s_ListMutex; validates the item index against the live store.
 static b8 IsMessageIndexValid(const UINT itemID)noexcept{
     return s_Store && IsDisplayedMessageIndexValid(static_cast<usize>(itemID), s_Store->messages.size());
 }

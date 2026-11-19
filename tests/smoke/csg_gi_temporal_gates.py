@@ -1,5 +1,3 @@
-"""Apply quality and geometry gates to temporal CSG evidence."""
-
 from csg_gi_temporal_contract import (
     CAP_STATE_REQUIRED_PROBES,
     GEOMETRY_LIMITS,

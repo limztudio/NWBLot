@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// These tests change owned records after freeze to exercise the validation boundary.
 class TextLayoutFaultFixture{
     public void invalidateGlyphPosition(mut TextLayout layout)const{
         layout.m_glyphs[1u].position.x = bit_cast<f32>(0x7f800000u);

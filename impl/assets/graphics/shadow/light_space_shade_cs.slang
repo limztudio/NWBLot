@@ -24,7 +24,6 @@ void nwbLightSpaceInvalidateCrossing(const uint address, const uint instance, co
     g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(address + NWB_LIGHT_SPACE_EVENT_TAIL_OFFSET, 0u);
 }
 
-// Receiver threads consume instance ASC, depth DESC, primitive ASC records after both shading and cap conversion.
 void nwbLightSpaceSortEvents(const uint pixelIndex, const uint count){
     for(uint index = 1u; index < count; ++index){
         const uint address = (pixelIndex * NWB_LIGHT_SPACE_EVENTS_PER_TEXEL + index) * NWB_LIGHT_SPACE_EVENT_BYTES;
@@ -50,7 +49,6 @@ void nwbLightSpaceSortEvents(const uint pixelIndex, const uint count){
     }
 }
 
-// Capture and shading use the same bounded records. The graph orders raw crossing writes before this in-place optical conversion.
 [numthreads(NWB_LIGHT_SPACE_SHADE_GROUP_SIZE, 1, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint pixelIndex = dispatchThreadID.x + dispatchThreadID.y * (NWB_LIGHT_SPACE_SHADE_MAX_GROUPS_X * NWB_LIGHT_SPACE_SHADE_GROUP_SIZE);
@@ -145,7 +143,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const half fresnel = nwbShadowFresnelTransmittedFraction(surface.refractionIor, lerp(cosI, smoothCosI, half(smoothstep(NWB_SHADOW_SMOOTH_NORMAL_SPREAD_MIN, NWB_SHADOW_SMOOTH_NORMAL_SPREAD_MAX, spread))));
         const half3 absorption = nwbShadowAbsorptionCoefficient(surface.shadowAbsorptionTint);
         const bool valid = all(isfinite(world)) && isfinite(depth) && all(isfinite(float3(absorption))) && isfinite(float(fresnel));
-        // A nonfinite depth invalidates this texel at resolve, with the same software fallback as capture overflow.
         const uint facing = dot(geometric, objectDirection) < 0.0 ? NWB_LIGHT_SPACE_EVENT_ENTERING : 0u;
         g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(address, uint4(valid ? asuint(depth) : NWB_FLOAT_QUIET_NAN_BITS, instanceIndex | facing, primitive, f32tof16(float(absorption.x)) | (f32tof16(float(absorption.y)) << NWB_HALF_BIT_COUNT)));
         g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(address + NWB_LIGHT_SPACE_EVENT_TAIL_OFFSET, f32tof16(float(absorption.z)) | (f32tof16(float(fresnel)) << NWB_HALF_BIT_COUNT));

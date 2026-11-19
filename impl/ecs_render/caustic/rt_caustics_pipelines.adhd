@@ -155,11 +155,9 @@ b8 EnsureCausticRtPipelineVariant(
     }
 
     RayTracingPipelineDesc pipelineDesc = RayTracingPipelineDesc();
-    // The iterative bounce loop needs no shader recursion.
     pipelineDesc.setMaxPayloadSize(s_CausticHwMaxPayloadBytes);
     pipelineDesc.setMaxRecursionDepth(1u);
     pipelineDesc.addBindingLayout(inOutBindingLayout);
-    // Preserve global resource, sampler, and TLAS heap sets.
     pipelineDesc.addBindingLayout(heap.getResourceLayout());
     pipelineDesc.addBindingLayout(heap.getSamplerLayout());
     pipelineDesc.addBindingLayout(heap.getAccelStructLayout());
@@ -377,19 +375,16 @@ void RendererRayTracingSystem::releaseCausticEmissionTargetHeapHandle(){
 
 [cpp_unwind]
 b8 RendererRayTracingSystem::createCausticTargets(mut DeferredFrameTargets targets){
-    // Full-res additive targets with half-res temporal resolve ping-pong.
     targets.causticIrradianceFormat = Format::RGBA16_FLOAT;
     targets.causticAccumulatorFormat = Format::R32_UINT;
     targets.causticHistoryFormat = Format::RGBA16_FLOAT;
 
-    // Fresh accumulators reseed the temporal EMA.
     this.m_rayTracingState.caustics.m_causticAccumulatorInitialized = false;
 
     const u32 halfWidth = ComputeCausticHalfTargetExtent(targets.width);
     const u32 halfHeight = ComputeCausticHalfTargetExtent(targets.height);
 
     TextureDesc irradianceDesc = TextureDesc();
-    // Graphics/async production and the graph-owned lagged-history transfer copy share this target concurrently.
     irradianceDesc.setWidth(targets.width).setHeight(targets.height).setFormat(targets.causticIrradianceFormat).setIsUAV(true).setQueueSharing(ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setName(Name("engine/caustic/irradiance"));
     auto causticIrradianceResult = this.m_graphics.createTexture(irradianceDesc);
     if(causticIrradianceResult.has_value())
@@ -437,7 +432,6 @@ b8 RendererRayTracingSystem::createCausticTargets(mut DeferredFrameTargets targe
         return false;
     }
 
-    // Half-resolution geometry cache for edge-aware resolve.
     TextureDesc geometryDesc = TextureDesc();
     geometryDesc.setWidth(halfWidth).setHeight(halfHeight).setFormat(targets.causticHistoryFormat).setIsUAV(true).setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).setName(Name("engine/caustic/resolve_geometry"));
     auto causticResolveGeometryResult = this.m_graphics.createTexture(geometryDesc);
@@ -457,7 +451,6 @@ b8 RendererRayTracingSystem::createCausticTargets(mut DeferredFrameTargets targe
 
 [cpp_unwind]
 b8 RendererRayTracingSystem::prepareGpuBvhCausticResources(mut DeferredFrameTargets targets){
-    // Prepare heap-only software pipelines once geometry and emission targets exist.
     if(this.m_graphics.queryFeatureSupport(Feature::RayTracingAccelStruct) && this.m_graphics.queryFeatureSupport(Feature::RayQuery))
         return true;
     if(this.m_rayTracingState.caustics.m_causticRefractiveInstanceCount == 0u || this.m_rayTracingState.sceneBvh.m_sceneBvhInstanceCount == 0u || this.m_rayTracingState.shadow.m_swShadowMeshCount == 0u
@@ -469,7 +462,6 @@ b8 RendererRayTracingSystem::prepareGpuBvhCausticResources(mut DeferredFrameTarg
 
 [cpp_unwind]
 b8 RendererRayTracingSystem::prepareHwCausticResources(mut DeferredFrameTargets targets){
-    // Prepare hardware resources once geometry and emission targets exist.
     if(!this.m_graphics.queryFeatureSupport(Feature::RayTracingAccelStruct))
         return true;
     if(this.m_rayTracingState.caustics.m_causticRefractiveInstanceCount == 0u || !this.m_rayTracingState.sceneBvh.m_tlas.valid() || this.m_rayTracingState.shadow.m_shadowMeshCount == 0u
@@ -492,7 +484,6 @@ b8 RendererRayTracingSystem::hasHwCausticWork()const{
 }
 
 b8 RendererRayTracingSystem::hasHwCausticWork(in MeshViewBufferSnapshot meshView)const{
-    // Hardware photons require a caustic light, refractor, TLAS, and tracked mesh.
     in RtCausticState caustics = this.m_rayTracingState.caustics;
     b8 pipelineReady = caustics.m_hwCausticPipeline.valid() && caustics.m_hwCausticShaderTable.valid();
     if(this.m_lightSpaceShadow.m_csg.snapshot.hasCsg)
@@ -531,7 +522,6 @@ b8 RendererRayTracingSystem::prepareCausticResources(in MeshViewBufferSnapshot m
         else
             producerReady = pipelines.ensureSwCausticPipeline();
     }
-    // Prepare shared resolve and temporal resources even when the producer is unavailable.
     const b8 resolveReady = pipelines.ensureCausticGeometryDownsamplePipeline() && pipelines.ensureCausticResolvePipeline();
     const b8 temporalReady = pipelines.ensureCausticAccumulatorDecayPipeline();
     return producerReady && resolveReady && temporalReady;

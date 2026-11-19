@@ -378,7 +378,6 @@ void VerifyShadowQualitySettings_RgbHistoryRequiresAcceptedWritesForEveryRequest
     EXPECT_FALSE(history.covers(1u));
     history.accept();
     EXPECT_EQ(ResolveTransparentShadowSampleCount(settings, history.covers(1u)), 1u);
-    // Existing history for light zero does not initialize a newly assigned shadow slot.
     EXPECT_EQ(ResolveTransparentShadowSampleCount(settings, history.covers(3u)), 3u);
     history.record(3u);
     history.accept();
@@ -390,7 +389,6 @@ void VerifyShadowQualitySettings_OpaqueOnlyAcceptedFramesInvalidateRgbQualificat
     history.record(3u);
     history.accept();
     ASSERT_TRUE(history.covers(3u));
-    // The shared selector swaps on an opaque-only frame, without any RGB merge being recorded.
     history.accept();
     EXPECT_FALSE(history.covers(1u));
     history.record(3u);
@@ -707,7 +705,6 @@ void VerifySoftwareTransparentSampling_MovingCasterWithStationaryReceiverCannotR
     history.prepareScene(MakeRtSceneStamp(10u, 20u, true));
     history.prepareLighting(lights);
     history.accept();
-    // No camera/receiver input changes: the caster transform is part of the independently gathered scene identity.
     history.prepareScene(MakeRtSceneStamp(11u, 20u, true));
     history.prepareLighting(lights);
     EXPECT_FALSE(history.usable());
@@ -794,7 +791,6 @@ void VerifySurfelCoverage_MissingAndPartialTapsRetainFractionalAlpha(){
     EXPECT_FLOAT_EQ(partial, 0.125f);
     EXPECT_FLOAT_EQ(full, 0.25f);
 
-    // A fully covered tap and a missing compatible tap have half coverage, not a renormalized 1.0.
     const SurfelCoverageFloat4 result = nwbSurfelUpsampleFinalize(SurfelCoverageFloat3(0.5f, 0.25f, 0.125f), full, weight * 2.0f);
     EXPECT_FLOAT_EQ(result.x, 2.0f);
     EXPECT_FLOAT_EQ(result.y, 1.0f);

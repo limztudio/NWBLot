@@ -79,7 +79,6 @@ def verify_publication_failure_preserves_outputs(executable: str, source_path: p
         kernel32.CreateFileW.restype = wintypes.HANDLE
         kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
         kernel32.CloseHandle.restype = wintypes.BOOL
-        # Deny deletion of the second destination so the first backup must be restored.
         handle = kernel32.CreateFileW(str(metadata_path), 0x80000000, 0x1 | 0x2, None, 3, 0x80, None)
         if handle == ctypes.c_void_p(-1).value:
             raise OSError(ctypes.get_last_error(), "could not lock publication fixture")
@@ -198,7 +197,6 @@ def main() -> int:
     for level, count in ((1, 2), (2, 1)):
         require_pixels(decode_pixels(args.prepared_decode, pulse, level), ((0.2, 0.2, 0.2, 1.0),) * count)
 
-    # Equivalent RGBA references distinguish original alpha, mask red, constants, and absent input alpha.
     colors = tuple(((19 + x * 43 + y * 7) & 255, (71 + x * 11 + y * 59) & 255, (137 + x * 29 + y * 17) & 255) for y in range(4) for x in range(4))
     original_alpha = (255, 0, 71, 19, 168, 253, 3, 110, 47, 202, 88, 144, 30, 226, 62, 180)
     mask_alpha = (12, 46, 91, 153, 218, 33, 76, 129, 182, 241, 65, 112, 168, 205, 28, 187)
@@ -223,7 +221,6 @@ def main() -> int:
     opaque = run_conversion(args.tex_conv, output_dir, "rgb_only", (opaque_source,))
     require_matching_payloads(opaque, output_dir / "white_reference.tex", "missing original alpha")
 
-    # Uniform planes make cube face and volume slice ordering observable without depending on lossy edge fitting.
     for dimension, count, width, height in ((LIT_CUBE, 6, 2, 2), (LIT_VOLUME, 3, 4, 2)):
         inputs, expected = [], []
         for plane in range(count):
@@ -265,7 +262,6 @@ def main() -> int:
             raise AssertionError(f"HDR {dimension} lost its HDR payload")
         require_pixels(decode_pixels(args.prepared_decode, result), tuple(expected), absolute=0.025, relative=0.05)
 
-    # Actual EXR channel declarations distinguish real equal-valued RGBA alpha from single-channel luminance.
     equal = tuple((value,) * 4 for value in (0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 0.25))
     exr_cases = (("equal_rgba_constant", ((0.5,) * 4,) * 8, (LIT_A, LIT_B, LIT_G, LIT_R), 2), ("equal_rgba_varying", equal, (LIT_A, LIT_B, LIT_G, LIT_R), 3), ("single_luminance", equal, (LIT_Y,), 0))
     for name, pixels, channels, alpha_mode in exr_cases:
@@ -277,7 +273,6 @@ def main() -> int:
         expected = tuple((*pixel[:3], 1.0) for pixel in pixels) if len(channels) == 1 else pixels
         require_pixels(decode_pixels(args.prepared_decode, result), expected, absolute=0.04, relative=0.05)
 
-    # Mixed EXR planes must decode each channel using its own declared type.
     uint_exr_cases = (
         ("uint_rgba", (7, 3, 11, 1), (EXR_UINT,) * 4, 0),
         ("uint_rgb_float_alpha", (7, 0.25, 11, 0.5), (EXR_FLOAT, EXR_UINT, EXR_FLOAT, EXR_UINT), 2),
@@ -293,7 +288,6 @@ def main() -> int:
             raise AssertionError(f"EXR integer channel types changed HDR or alpha transport: {name}")
         require_pixels(decode_pixels(args.prepared_decode, result), pixels, absolute=0.04, relative=0.05)
 
-    # Invalid float pixels must fail before forced publication replaces either accepted output.
     original_pair = (prepared.with_suffix(LIT_METADATA_SUFFIX).read_bytes(), prepared.read_bytes())
     invalid_path = output_dir / "invalid.exr"
     valid_pixels = ((9.0, 0.5, 2.0, 0.375),) * 8

@@ -25,7 +25,6 @@ namespace GpuCommandIrDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Semantic preflight admitted the destination, and the graph stays caller-stable.
 GpuCommandIrReplayError::Enum ValidateUploadBackendOperand(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, const GpuPhysicalQueueInfo& queue, CommandList& commandList)noexcept{
     if(record.opcode == GpuCommandIrOpcode::UploadBuffer){
         auto& destination = *MakeNotNull(graph.bufferForResource(record.destination));
@@ -48,7 +47,6 @@ GpuCommandIrReplayError::Enum ValidateUploadBackendOperand(const GpuCommandIrBui
     return GpuCommandIrReplayError::StreamChangedDuringReplay;
 }
 
-// The stream reader admitted this blob range and backend operand preflight admitted its destination on the same stable stream and graph.
 b8 LowerUploadOperation(const GpuCommandIrBuiltinTaskRecord& record, const BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph, CommandList& commandList){
     FOUNDATION_ASSERT(blobBytes.data() && record.blobSizeBytes != 0u && record.blobOffsetBytes <= static_cast<u64>(blobBytes.size()) && record.blobSizeBytes <= static_cast<u64>(blobBytes.size()) - record.blobOffsetBytes);
     const auto bytes = MakeNotNull(static_cast<const void*>(blobBytes.data() + static_cast<usize>(record.blobOffsetBytes)));

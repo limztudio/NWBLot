@@ -46,26 +46,6 @@ b8 DeclareCounterLabel(mut Builder ui, in u32 count){
     return ui.label("count", StringView(text));
 }
 
-usize WriteVirtualListRowLabelBytes(in u64 rowKey, mut Array<u8, s_VirtualListLabelCapacity> outLabel){
-    if(rowKey == 0u)
-        return 0u;
-    outLabel[0u] = 82u;
-    outLabel[1u] = 111u;
-    outLabel[2u] = 119u;
-    outLabel[3u] = 32u;
-    Array<u8, s_VirtualListMaxDecimalDigits> digits;
-    usize digitCount = 0u;
-    u64 remaining = rowKey;
-    while(remaining > 0u && digitCount < s_VirtualListMaxDecimalDigits){
-        digits[digitCount] = cast<u8>(48u + (remaining % 10u));
-        remaining /= 10u;
-        ++digitCount;
-    }
-    for(usize offset = 0u; offset < digitCount; ++offset)
-        outLabel[s_VirtualListRowPrefixLength + offset] = digits[(digitCount - 1u) - offset];
-    return s_VirtualListRowPrefixLength + digitCount;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

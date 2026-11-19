@@ -9,6 +9,7 @@ extern class CpuTaskScheduler{
     u64 domainIdentity(...)const;
     void drain(...);
     b8 isParallelEnabled(...)const;
+    Expected<void, CpuTaskAdmissionError> parallelFor(...);
     void pumpMainThread(...);
     CpuTaskProfileLabel registerProfileLabel(...);
     void setProfiling(...);
@@ -21,6 +22,7 @@ extern class CpuTaskScheduler{
 extern class CpuTaskScope{
     void cancel(...);
     void drain(...);
+    Expected<void, CpuTaskAdmissionError> parallelFor(...);
     mut CpuTaskScheduler scheduler(...)const;
     void wait(...);
 };

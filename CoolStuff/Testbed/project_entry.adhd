@@ -1,0 +1,41 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <loader/project_entry.adhd>
+#include <impl/assets_graphics/bindless/runtime_abi.adhd>
+#include "project.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_unwind]
+ProjectFrameClientSize QueryProjectFrameClientSize(){
+    const ProjectFrameClientSize size = ProjectFrameClientSize();
+    return size;
+}
+
+PlatformStringView QueryProjectWindowTitle(){
+    const PlatformStringView title = PlatformTextLiteral("NWB Testbed");
+    return title;
+}
+
+b8 ConfigureProjectRuntime(mut ProjectStartupContext context){
+    const b8 configured = context.graphics.setBindlessHeapAbi(MakeGpuDescriptorHeapAbi())
+        && context.graphics.setHDR10OutputEnabled(true);
+    return configured;
+}
+
+[cpp_unwind]
+UniquePtr<IProjectEntryCallbacks> CreateProjectEntryCallbacks(mut ProjectRuntimeContext context){
+    auto world = CreateInitialProjectWorld(context);
+    if(!world.has_value())
+        return UniquePtr<IProjectEntryCallbacks>();
+    mut NotNullUniquePtr<World> ownedWorld = world.value();
+    return MakeUnique<Project>(ownedWorld, context);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

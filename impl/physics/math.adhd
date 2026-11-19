@@ -1,0 +1,314 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/physics/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsFiniteVec3(in VectorSingle v){
+    return IsFinite(v.x) && IsFinite(v.y) && IsFinite(v.z);
+}
+
+b8 IsFiniteQuat(in VectorSingle q){
+    return IsFinite(q.x) && IsFinite(q.y) && IsFinite(q.z) && IsFinite(q.w);
+}
+
+b8 IsValidPositionVec3(in VectorSingle v){
+    if(!IsFiniteVec3(v))
+        return false;
+    return Abs(v.x) <= s_HugeCoordinate && Abs(v.y) <= s_HugeCoordinate && Abs(v.z) <= s_HugeCoordinate;
+}
+
+VectorSingle SafeNormalizeVec3(in VectorSingle v, in VectorSingle fallback){
+    const VectorSingle zeroW = VectorSingle(v, 0.0f);
+    const f32 lenSq = Vector3LengthSq(zeroW).x;
+    if(IsFinite(lenSq) && lenSq > s_NormalizeEpsilonSq)
+        return VectorSingle(zeroW * Rsqrt(VectorSingle(lenSq)), 0.0f);
+    return VectorSingle(fallback, 0.0f);
+}
+
+VectorSingle SafeNormalizeQuat(in VectorSingle q){
+    if(!IsFiniteQuat(q))
+        return QuaternionIdentity();
+    const f32 lenSq = Vector4LengthSq(q).x;
+    if(IsFinite(lenSq) && lenSq > s_NormalizeEpsilonSq)
+        return q * Rsqrt(VectorSingle(lenSq));
+    return QuaternionIdentity();
+}
+
+VectorSingle TransformPoint(in Transform3D xf, in VectorSingle localPoint){
+    const VectorSingle q = VectorSingle(xf.rotation);
+    const VectorSingle p = VectorSingle(xf.position);
+    return VectorSingle(p + Vector3Rotate(VectorSingle(localPoint, 0.0f), q), 0.0f);
+}
+
+VectorSingle InverseTransformPoint(in Transform3D xf, in VectorSingle worldPoint){
+    const VectorSingle q = VectorSingle(xf.rotation);
+    const VectorSingle p = VectorSingle(xf.position);
+    return VectorSingle(Vector3InverseRotate(VectorSingle(worldPoint - p, 0.0f), q), 0.0f);
+}
+
+Transform3D ComposeTransform(in Transform3D outerXf, in Transform3D innerXf){
+    const VectorSingle qOuter = VectorSingle(outerXf.rotation);
+    const VectorSingle qInner = VectorSingle(innerXf.rotation);
+    const VectorSingle pOuter = VectorSingle(outerXf.position);
+    const VectorSingle pInner = VectorSingle(innerXf.position);
+    const VectorSingle rot = SafeNormalizeQuat(QuaternionMultiply(qOuter, qInner));
+    const VectorSingle pos = pOuter + Vector3Rotate(VectorSingle(pInner, 0.0f), qOuter);
+    return Transform3D(pos, rot);
+}
+
+Transform3D RelativeTransform(in Transform3D frameA, in Transform3D frameB){
+    const VectorSingle qA = VectorSingle(frameA.rotation);
+    const VectorSingle qB = VectorSingle(frameB.rotation);
+    const VectorSingle pA = VectorSingle(frameA.position);
+    const VectorSingle pB = VectorSingle(frameB.position);
+    const VectorSingle qAInv = QuaternionConjugate(qA);
+    const VectorSingle relQ = SafeNormalizeQuat(QuaternionMultiply(qAInv, qB));
+    const VectorSingle relP = Vector3InverseRotate(VectorSingle(pB - pA, 0.0f), qA);
+    return Transform3D(relP, relQ);
+}
+
+VectorSingle IntegrateDeltaQuaternion(in VectorSingle q, in VectorSingle omega, in f32 h){
+    const VectorSingle dq = VectorSingle(omega * (0.5f * h), 0.0f);
+    const VectorSingle prod = QuaternionMultiply(dq, q);
+    return SafeNormalizeQuat(q + prod);
+}
+
+Mat3 ZeroMat3(){
+    return Mat3(VectorSingle(0.0f), VectorSingle(0.0f), VectorSingle(0.0f));
+}
+
+Mat3 Mat3FromQuaternion(in VectorSingle q){
+    const f32 x = q.x;
+    const f32 y = q.y;
+    const f32 z = q.z;
+    const f32 w = q.w;
+    const f32 xx = x * x;
+    const f32 yy = y * y;
+    const f32 zz = z * z;
+    const f32 xy = x * y;
+    const f32 xz = x * z;
+    const f32 yz = y * z;
+    const f32 wx = w * x;
+    const f32 wy = w * y;
+    const f32 wz = w * z;
+
+    return Mat3(
+        VectorSingle(1.0f - 2.0f * (yy + zz), 2.0f * (xy - wz), 2.0f * (xz + wy), 0.0f),
+        VectorSingle(2.0f * (xy + wz), 1.0f - 2.0f * (xx + zz), 2.0f * (yz - wx), 0.0f),
+        VectorSingle(2.0f * (xz - wy), 2.0f * (yz + wx), 1.0f - 2.0f * (xx + yy), 0.0f)
+    );
+}
+
+VectorSingle MulMat3Vec(in Mat3 m, in VectorSingle v){
+    const VectorSingle v0 = VectorSingle(v, 0.0f);
+    const f32 x = Vector3Dot(VectorSingle(m.row0), v0).x;
+    const f32 y = Vector3Dot(VectorSingle(m.row1), v0).x;
+    const f32 z = Vector3Dot(VectorSingle(m.row2), v0).x;
+    return VectorSingle(x, y, z, 0.0f);
+}
+
+VectorSingle MulMat3TransposeVec(in Mat3 m, in VectorSingle v){
+    const VectorSingle r0 = VectorSingle(m.row0);
+    const VectorSingle r1 = VectorSingle(m.row1);
+    const VectorSingle r2 = VectorSingle(m.row2);
+    return VectorSingle(r0 * v.x + r1 * v.y + r2 * v.z, 0.0f);
+}
+
+Mat3 MulMat3(in Mat3 a, in Mat3 b){
+    const VectorSingle b0 = VectorSingle(b.row0);
+    const VectorSingle b1 = VectorSingle(b.row1);
+    const VectorSingle b2 = VectorSingle(b.row2);
+
+    const VectorSingle a0 = VectorSingle(a.row0);
+    const VectorSingle a1 = VectorSingle(a.row1);
+    const VectorSingle a2 = VectorSingle(a.row2);
+
+    return Mat3(
+        b0 * a0.x + b1 * a0.y + b2 * a0.z,
+        b0 * a1.x + b1 * a1.y + b2 * a1.z,
+        b0 * a2.x + b1 * a2.y + b2 * a2.z
+    );
+}
+
+Mat3 TransposeMat3(in Mat3 m){
+    const VectorSingle r0 = VectorSingle(m.row0);
+    const VectorSingle r1 = VectorSingle(m.row1);
+    const VectorSingle r2 = VectorSingle(m.row2);
+    return Mat3(
+        VectorSingle(r0.x, r1.x, r2.x, 0.0f),
+        VectorSingle(r0.y, r1.y, r2.y, 0.0f),
+        VectorSingle(r0.z, r1.z, r2.z, 0.0f)
+    );
+}
+
+Mat3 RotateSymmetricMat3(in VectorSingle q, in Mat3 localMat){
+    const Mat3 r = Mat3FromQuaternion(q);
+    const Mat3 rt = TransposeMat3(r);
+    return MulMat3(r, MulMat3(localMat, rt));
+}
+
+Mat3 InvertSymmetricMat3(in Mat3 a){
+    const f32 a11 = a.row0.x;
+    const f32 a12 = a.row0.y;
+    const f32 a13 = a.row0.z;
+    const f32 a22 = a.row1.y;
+    const f32 a23 = a.row1.z;
+    const f32 a33 = a.row2.z;
+
+    const f32 c11 = a22 * a33 - a23 * a23;
+    const f32 c12 = a13 * a23 - a12 * a33;
+    const f32 c13 = a12 * a23 - a13 * a22;
+    const f32 det = a11 * c11 + a12 * c12 + a13 * c13;
+
+    if(!IsFinite(det) || Abs(det) <= 1.0e-18f)
+        return ZeroMat3();
+
+    const f32 invDet = 1.0f / det;
+    const f32 c22 = a11 * a33 - a13 * a13;
+    const f32 c23 = a12 * a13 - a11 * a23;
+    const f32 c33 = a11 * a22 - a12 * a12;
+
+    return Mat3(
+        VectorSingle(c11 * invDet, c12 * invDet, c13 * invDet, 0.0f),
+        VectorSingle(c12 * invDet, c22 * invDet, c23 * invDet, 0.0f),
+        VectorSingle(c13 * invDet, c23 * invDet, c33 * invDet, 0.0f)
+    );
+}
+
+Softness MakeSoftness(in f32 hertz, in f32 zeta, in f32 h){
+    Softness s;
+    if(hertz <= 0.0f){
+        s.biasRate = 0.0f;
+        s.massScale = 0.0f;
+        s.impulseScale = 0.0f;
+        return s;
+    }
+
+    const f32 omega = 2.0f * s_PI * hertz;
+    const f32 a1 = 2.0f * zeta + h * omega;
+    const f32 a2 = h * omega * a1;
+    const f32 a3 = 1.0f / (1.0f + a2);
+    s.biasRate = omega / a1;
+    s.massScale = a2 * a3;
+    s.impulseScale = a3;
+    return s;
+}
+
+void ComputeTangentBasis(in VectorSingle normal, mut VectorSingle outT1, mut VectorSingle outT2){
+    const VectorSingle n = SafeNormalizeVec3(normal, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    VectorSingle up = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
+    if(Abs(n.y) > 0.9f)
+        up = VectorSingle(1.0f, 0.0f, 0.0f, 0.0f);
+    outT1 = SafeNormalizeVec3(Cross(up, n), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+    outT2 = SafeNormalizeVec3(Cross(n, outT1), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+}
+
+Aabb3D AabbUnion(in Aabb3D a, in Aabb3D b){
+    return Aabb3D(Min(VectorSingle(a.lowerBound), VectorSingle(b.lowerBound)), Max(VectorSingle(a.upperBound), VectorSingle(b.upperBound)));
+}
+
+b8 AabbOverlaps(in Aabb3D a, in Aabb3D b){
+    const VectorSingle minA = VectorSingle(a.lowerBound);
+    const VectorSingle maxA = VectorSingle(a.upperBound);
+    const VectorSingle minB = VectorSingle(b.lowerBound);
+    const VectorSingle maxB = VectorSingle(b.upperBound);
+    return minA.x <= maxB.x && minA.y <= maxB.y && minA.z <= maxB.z && minB.x <= maxA.x && minB.y <= maxA.y && minB.z <= maxA.z;
+}
+
+b8 AabbContains(in Aabb3D outerBox, in Aabb3D innerBox){
+    const VectorSingle oMin = VectorSingle(outerBox.lowerBound);
+    const VectorSingle oMax = VectorSingle(outerBox.upperBound);
+    const VectorSingle iMin = VectorSingle(innerBox.lowerBound);
+    const VectorSingle iMax = VectorSingle(innerBox.upperBound);
+    return oMin.x <= iMin.x && oMin.y <= iMin.y && oMin.z <= iMin.z && oMax.x >= iMax.x && oMax.y >= iMax.y && oMax.z >= iMax.z;
+}
+
+f32 AabbPerimeter(in Aabb3D box){
+    const VectorSingle d = VectorSingle(box.upperBound) - VectorSingle(box.lowerBound);
+    return 2.0f * (d.x * d.y + d.y * d.z + d.z * d.x);
+}
+
+f32 ComputeAabbMargin(in Aabb3D box){
+    const VectorSingle extent = (VectorSingle(box.upperBound) - VectorSingle(box.lowerBound)) * 0.5f;
+    const f32 maxExtent = Max(extent.x, Max(extent.y, extent.z));
+    return Clamp(maxExtent * s_AabbMarginFraction, s_SpeculativeDistance, s_MaxAabbMargin);
+}
+
+Aabb3D FattenAabb(in Aabb3D box, in f32 margin){
+    const VectorSingle m = VectorSingle(margin, margin, margin, 0.0f);
+    return Aabb3D(VectorSingle(box.lowerBound) - m, VectorSingle(box.upperBound) + m);
+}
+
+b8 AabbRayCast(in Aabb3D box, in VectorSingle origin, in VectorSingle translation, in f32 maxFraction, mut f32 outMinFraction){
+    f32 tMin = 0.0f;
+    f32 tMax = maxFraction;
+
+    const VectorSingle bMin = VectorSingle(box.lowerBound);
+    const VectorSingle bMax = VectorSingle(box.upperBound);
+
+    for(usize axis = 0u; axis < 3u; ++axis){
+        const f32 o = VectorGetByIndex(origin, cast<isize>(axis));
+        const f32 d = VectorGetByIndex(translation, cast<isize>(axis));
+        const f32 minV = VectorGetByIndex(bMin, cast<isize>(axis));
+        const f32 maxV = VectorGetByIndex(bMax, cast<isize>(axis));
+
+        if(Abs(d) <= 1.0e-12f){
+            if(o < minV || o > maxV)
+                return false;
+        }
+        else{
+            const f32 invD = 1.0f / d;
+            f32 t1 = (minV - o) * invD;
+            f32 t2 = (maxV - o) * invD;
+            if(t1 > t2){
+                const f32 tmp = t1;
+                t1 = t2;
+                t2 = tmp;
+            }
+            if(t1 > tMin)
+                tMin = t1;
+            if(t2 < tMax)
+                tMax = t2;
+            if(tMin > tMax)
+                return false;
+        }
+    }
+
+    outMinFraction = tMin;
+    return true;
+}
+
+VectorSingle ApplyLinearLocks(in VectorSingle v, in u32 flags){
+    f32 x = v.x;
+    f32 y = v.y;
+    f32 z = v.z;
+    if((flags & cast<u32>(BodyFlags::LockLinearX)) != 0u)
+        x = 0.0f;
+    if((flags & cast<u32>(BodyFlags::LockLinearY)) != 0u)
+        y = 0.0f;
+    if((flags & cast<u32>(BodyFlags::LockLinearZ)) != 0u)
+        z = 0.0f;
+    return VectorSingle(x, y, z, 0.0f);
+}
+
+VectorSingle ApplyAngularLocks(in VectorSingle w, in u32 flags){
+    f32 x = w.x;
+    f32 y = w.y;
+    f32 z = w.z;
+    if((flags & cast<u32>(BodyFlags::LockAngularX)) != 0u)
+        x = 0.0f;
+    if((flags & cast<u32>(BodyFlags::LockAngularY)) != 0u)
+        y = 0.0f;
+    if((flags & cast<u32>(BodyFlags::LockAngularZ)) != 0u)
+        z = 0.0f;
+    return VectorSingle(x, y, z, 0.0f);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,299 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/physics/constants.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+enum<u8> BodyType{
+    Static = 0u,
+    Kinematic = 1u,
+    Dynamic = 2u,
+    kCount
+}
+
+[reflect]
+enum<u8> ShapeType{
+    Sphere = 0u,
+    Capsule = 1u,
+    Hull = 2u,
+    kCount
+}
+
+[reflect]
+enum<u8> PhysicsBackendMode{
+    Auto = 0u,
+    CpuOnly = 1u,
+    GpuPreferred = 2u,
+    kCount
+}
+
+[reflect]
+enum<u8> ExecutionBackendUsed{
+    None = 0u,
+    Cpu = 1u,
+    Gpu = 2u,
+    kCount
+}
+
+flag<u32> BodyFlags{
+    None = 0u,
+    LockLinearX = 0x00000001u,
+    LockLinearY = 0x00000002u,
+    LockLinearZ = 0x00000004u,
+    LockAngularX = 0x00000008u,
+    LockAngularY = 0x00000010u,
+    LockAngularZ = 0x00000020u,
+    IsFast = 0x00000040u,
+    IsBullet = 0x00000080u,
+    IsSpeedCapped = 0x00000100u,
+    HadTimeOfImpact = 0x00000200u,
+    AllowFastRotation = 0x00000400u,
+    EnlargeBulletBounds = 0x00000800u,
+    Dynamic = 0x00001000u,
+    EnableSleep = 0x00002000u,
+    EnableContactRecycling = 0x00004000u,
+    DirtyMass = 0x00008000u,
+    EnableGyroscopicTorque = 0x00010000u,
+}
+
+const u32 s_BodyFixedRotationFlags =
+    cast<u32>(BodyFlags::LockAngularX)
+    | cast<u32>(BodyFlags::LockAngularY)
+    | cast<u32>(BodyFlags::LockAngularZ)
+;
+
+class BodyId{
+    public u32 index = s_NullIndex;
+    public u16 generation = 0u;
+    public u16 worldIndex = 0u;
+
+    public b8 valid()const{
+        return this.index != s_NullIndex && this.generation != 0u && this.worldIndex != 0u;
+    }
+
+    public b8 operator==(in BodyId rhs)const{
+        return this.index == rhs.index && this.generation == rhs.generation && this.worldIndex == rhs.worldIndex;
+    }
+}
+
+class ShapeId{
+    public u32 index = s_NullIndex;
+    public u16 generation = 0u;
+    public u16 worldIndex = 0u;
+
+    public b8 valid()const{
+        return this.index != s_NullIndex && this.generation != 0u && this.worldIndex != 0u;
+    }
+
+    public b8 operator==(in ShapeId rhs)const{
+        return this.index == rhs.index && this.generation == rhs.generation && this.worldIndex == rhs.worldIndex;
+    }
+}
+
+class Transform3D{
+    public f32x4 position;
+    public f32x4 rotation;
+
+    public Transform3D(){
+        this.position = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        this.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+    }
+
+    public Transform3D(in VectorSingle pos, in VectorSingle rot){
+        this.position = f32x4(pos, 0.0f);
+        this.rotation = f32x4(rot);
+    }
+}
+
+class Aabb3D{
+    public f32x4 lowerBound;
+    public f32x4 upperBound;
+
+    public Aabb3D(){
+        this.lowerBound = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        this.upperBound = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    }
+
+    public Aabb3D(in VectorSingle lower, in VectorSingle upper){
+        this.lowerBound = f32x4(lower, 0.0f);
+        this.upperBound = f32x4(upper, 0.0f);
+    }
+}
+
+class Mat3{
+    public f32x4 row0;
+    public f32x4 row1;
+    public f32x4 row2;
+
+    public Mat3(){
+        this.row0 = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+        this.row1 = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+        this.row2 = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+    }
+
+    public Mat3(in VectorSingle r0, in VectorSingle r1, in VectorSingle r2){
+        this.row0 = f32x4(r0, 0.0f);
+        this.row1 = f32x4(r1, 0.0f);
+        this.row2 = f32x4(r2, 0.0f);
+    }
+}
+
+class Plane3D{
+    public f32x4 normalOffset;
+
+    public Plane3D(){
+        this.normalOffset = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+    }
+
+    public Plane3D(in VectorSingle normal, in f32 offset){
+        this.normalOffset = f32x4(normal, offset);
+    }
+}
+
+class Softness{
+    public f32 biasRate = 0.0f;
+    public f32 massScale = 1.0f;
+    public f32 impulseScale = 0.0f;
+}
+
+class Filter{
+    public u32 categoryBits = 0x00000001u;
+    public u32 maskBits = u32.max;
+    public i32 groupIndex = 0;
+}
+
+class SurfaceMaterial{
+    public f32 friction = 0.6f;
+    public f32 restitution = 0.0f;
+    public f32 rollingResistance = 0.0f;
+    public f32 tangentSpeed = 0.0f;
+}
+
+class MassData{
+    public f32 mass = 0.0f;
+    public f32x4 center(0.0f, 0.0f, 0.0f, 0.0f);
+    public Mat3 inertia;
+}
+
+class WorldDef{
+    public f32x4 gravity(0.0f, -9.81f, 0.0f, 0.0f);
+    public f32 restitutionThreshold = s_RestitutionThreshold;
+    public f32 hitEventThreshold = s_DefaultHitEventThreshold;
+    public f32 contactHertz = s_MaxContactHertz;
+    public f32 contactDampingRatio = s_DefaultContactDampingRatio;
+    public f32 maxLinearVelocity = s_DefaultMaxLinearVelocity;
+    public b8 enableSleep = true;
+    public b8 enableContinuous = true;
+    public b8 enableContactSoftening = false;
+}
+
+class BodyDef{
+    public BodyType type = BodyType::Static;
+    public f32x4 position(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 rotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 linearVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 angularVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32 linearDamping = 0.0f;
+    public f32 angularDamping = 0.01f;
+    public f32 gravityScale = 1.0f;
+    public f32 sleepThreshold = s_DefaultSleepThreshold;
+    public u32 motionLocks = 0u;
+    public b8 enableSleep = true;
+    public b8 isAwake = true;
+    public b8 isBullet = false;
+    public b8 isEnabled = true;
+    public b8 allowFastRotation = false;
+    public b8 enableGyroscopicTorque = false;
+    public u64 userData = 0u;
+}
+
+class ShapeDef{
+    public SurfaceMaterial material;
+    public Filter filter;
+    public f32 density = 1.0f;
+    public b8 isSensor = false;
+    public b8 enableContactEvents = false;
+    public b8 enableHitEvents = false;
+    public b8 enableSensorEvents = false;
+    public b8 enablePreSolveEvents = false;
+    public b8 invokeContactCreation = false;
+    public b8 updateBodyMass = true;
+    public u64 userData = 0u;
+}
+
+class RayCastInput{
+    public f32x4 origin(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 translation(0.0f, 0.0f, 0.0f, 0.0f);
+    public Filter filter;
+    public b8 hitSensors = false;
+}
+
+class RayCastHit{
+    public ShapeId shapeId;
+    public f32x4 point(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32 fraction = 1.0f;
+    public b8 hit = false;
+}
+
+class ShapeCastInput{
+    public Transform3D originTransform;
+    public f32x4 translation(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32 radius = 0.0f;
+    public Filter filter;
+    public b8 hitSensors = false;
+}
+
+class ShapeCastHit{
+    public ShapeId shapeId;
+    public f32x4 point(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32 fraction = 1.0f;
+    public b8 hit = false;
+}
+
+class BodyMoveEvent{
+    public Transform3D transform;
+    public BodyId bodyId;
+    public u64 userData = 0u;
+    public b8 fellAsleep = false;
+}
+
+class ContactBeginTouchEvent{
+    public ShapeId shapeIdA;
+    public ShapeId shapeIdB;
+}
+
+class ContactEndTouchEvent{
+    public ShapeId shapeIdA;
+    public ShapeId shapeIdB;
+}
+
+class ContactHitEvent{
+    public ShapeId shapeIdA;
+    public ShapeId shapeIdB;
+    public f32x4 point(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32 approachSpeed = 0.0f;
+}
+
+class WorldStepStats{
+    public u32 bodyCount = 0u;
+    public u32 awakeBodyCount = 0u;
+    public u32 sleepingBodyCount = 0u;
+    public u32 shapeCount = 0u;
+    public u32 contactCount = 0u;
+    public u32 islandCount = 0u;
+    public u32 overflowContactCount = 0u;
+    public u32 broadphasePairCount = 0u;
+    public ExecutionBackendUsed backendUsed = ExecutionBackendUsed::None;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

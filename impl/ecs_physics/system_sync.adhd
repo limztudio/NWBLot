@@ -1,0 +1,298 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_physics/components.adhd>
+#include <impl/physics/gpu/gpu_dispatcher.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ResolvePhysicsConfigSettings(
+    mut World world,
+    mut PhysicsWorld physicsWorld,
+    mut f32 outFixedDt,
+    mut u32 outSubSteps,
+    mut u32 outMaxSubSteps,
+    mut b8 outPaused
+){
+    outFixedDt = 1.0f / 60.0f;
+    outSubSteps = 4u;
+    outMaxSubSteps = 4u;
+    outPaused = false;
+
+    b8 found = false;
+    world.view<PhysicsWorldConfigComponent>().each(
+        lambda[mut physicsWorld, mut outFixedDt, mut outSubSteps, mut outMaxSubSteps, mut outPaused, mut found](
+            in EntityID entity,
+            mut PhysicsWorldConfigComponent cfg
+        ) -> void{
+            if(found)
+                return;
+            found = true;
+
+            if(IsFinite(cfg.fixedDeltaTime) && cfg.fixedDeltaTime > 0.0f)
+                outFixedDt = Max(cfg.fixedDeltaTime, 1.0f / 240.0f);
+            outSubSteps = Max(cfg.subStepCount, 1u);
+            outMaxSubSteps = Max(cfg.maxSubStepsPerFrame, 1u);
+            outPaused = cfg.paused;
+
+            if(cfg.dirty){
+                WorldDef wd = physicsWorld.worldDef();
+                wd.gravity = cfg.gravity;
+                wd.enableSleep = cfg.enableSleep;
+                physicsWorld.setWorldDef(wd);
+                physicsWorld.setBackendMode(cfg.backendMode);
+                physicsWorld.setGpuDispatchThreshold(cfg.gpuDispatchThreshold);
+                physicsWorld.setWarmStarting(cfg.enableWarmStarting);
+                cfg.dirty = false;
+            }
+        }
+    );
+}
+
+Expected<ShapeId> AttachEcsColliderShape(
+    mut PhysicsWorld physicsWorld,
+    in BodyId bodyId,
+    in ColliderComponent col,
+    in VectorSingle scale
+){
+    ShapeDef sd;
+    sd.density = Max(col.density, 0.0f);
+    sd.material.friction = Max(col.friction, 0.0f);
+    sd.material.restitution = Max(col.restitution, 0.0f);
+    sd.material.rollingResistance = Max(col.rollingResistance, 0.0f);
+    sd.filter.categoryBits = col.categoryBits;
+    sd.filter.maskBits = col.maskBits;
+    sd.filter.groupIndex = col.groupIndex;
+    sd.isSensor = col.isSensor;
+    sd.enableContactEvents = col.enableContactEvents;
+    sd.enableHitEvents = col.enableHitEvents;
+    sd.updateBodyMass = true;
+
+    const f32 sx = Max(Abs(scale.x), 1.0e-4f);
+    const f32 sy = Max(Abs(scale.y), 1.0e-4f);
+    const f32 sz = Max(Abs(scale.z), 1.0e-4f);
+    const f32 maxS = Max(sx, Max(sy, sz));
+
+    if(col.shapeType == ShapeType::Sphere){
+        SphereShape sp;
+        sp.center = f32x4(col.center.x * sx, col.center.y * sy, col.center.z * sz, 0.0f);
+        sp.radius = Max(col.radius * maxS, 1.0e-3f);
+        return physicsWorld.createSphereShape(bodyId, sd, sp);
+    }
+
+    if(col.shapeType == ShapeType::Capsule){
+        CapsuleShape cap;
+        cap.center1 = f32x4(col.center.x * sx, col.center.y * sy, col.center.z * sz, 0.0f);
+        cap.center2 = f32x4(col.center2.x * sx, col.center2.y * sy, col.center2.z * sz, 0.0f);
+        cap.radius = Max(col.radius * maxS, 1.0e-3f);
+        return physicsWorld.createCapsuleShape(bodyId, sd, cap);
+    }
+
+    const f32 hx = Max(col.halfExtents.x * sx, 1.0e-3f);
+    const f32 hy = Max(col.halfExtents.y * sy, 1.0e-3f);
+    const f32 hz = Max(col.halfExtents.z * sz, 1.0e-3f);
+    Expected<HullShape> boxHull = MakeBoxHull(hx, hy, hz, 0.0f);
+    if(!boxHull.has_value())
+        return MakeUnexpected(Failure());
+
+    const VectorSingle scaledOffset(col.center.x * sx, col.center.y * sy, col.center.z * sz, 0.0f);
+    if(Vector3LengthSq(scaledOffset).x > 1.0e-10f){
+        mut HullShape h = boxHull.value();
+        h.centroid = f32x4(VectorSingle(h.centroid) + scaledOffset, 0.0f);
+        for(usize vi = 0u; vi < h.vertices.size(); ++vi)
+            h.vertices[vi] = f32x4(VectorSingle(h.vertices[vi]) + scaledOffset, 0.0f);
+        for(usize fi = 0u; fi < h.faces.size(); ++fi){
+            const VectorSingle n = VectorSingle(h.faces[fi].plane.normalOffset);
+            const f32 d = h.faces[fi].plane.normalOffset.w + Vector3Dot(n, scaledOffset).x;
+            h.faces[fi].plane = Plane3D(n, d);
+        }
+        return physicsWorld.createHullShape(bodyId, sd, h);
+    }
+
+    return physicsWorld.createHullShape(bodyId, sd, boxHull.value());
+}
+
+void PruneRemovedPhysicsEntities(
+    in World world,
+    mut PhysicsWorld physicsWorld,
+    mut HashMap<EntityID, BodyId> entityBodies,
+    mut HashMap<EntityID, ShapeId> entityShapes
+){
+    Vector<EntityID> deadShapes;
+    for(in auto kv : entityShapes){
+        const EntityID e = kv.first;
+        const b8 keepShape = world.alive(e) && world.hasComponent<ColliderComponent>(e);
+        if(!keepShape)
+            deadShapes.push_back(e);
+    }
+    for(usize i = 0u; i < deadShapes.size(); ++i){
+        const EntityID e = deadShapes[i];
+        const ShapeId sId = entityShapes.at(e);
+        if(physicsWorld.isValidShape(sId))
+            physicsWorld.destroyShape(sId, true);
+        entityShapes.erase(e);
+    }
+
+    Vector<EntityID> deadBodies;
+    for(in auto kv : entityBodies){
+        const EntityID e = kv.first;
+        const b8 hasBody = world.alive(e) && (world.hasComponent<RigidBodyComponent>(e) || world.hasComponent<ColliderComponent>(e));
+        if(!hasBody)
+            deadBodies.push_back(e);
+    }
+    for(usize i = 0u; i < deadBodies.size(); ++i){
+        const EntityID e = deadBodies[i];
+        const BodyId bId = entityBodies.at(e);
+        if(physicsWorld.isValidBody(bId))
+            physicsWorld.destroyBody(bId);
+        entityBodies.erase(e);
+    }
+}
+
+void SyncEcsEntitiesToPhysicsWorld(
+    mut World world,
+    mut PhysicsWorld physicsWorld,
+    mut HashMap<EntityID, BodyId> entityBodies,
+    mut HashMap<EntityID, ShapeId> entityShapes
+){
+    PruneRemovedPhysicsEntities(world, physicsWorld, entityBodies, entityShapes);
+
+    // 1. Ensure bodies for entities with RigidBodyComponent.
+    world.view<RigidBodyComponent, TransformComponent>().each(
+        lambda[mut physicsWorld, mut entityBodies](
+            in EntityID entity,
+            mut RigidBodyComponent rb,
+            in TransformComponent xf
+        ) -> void{
+            const auto found = entityBodies.find(entity);
+            const b8 hasValidBody = found != entityBodies.end() && physicsWorld.isValidBody(found.value());
+            if(!hasValidBody || !rb.runtimeBodyId.valid()){
+                if(found != entityBodies.end() && physicsWorld.isValidBody(found.value()))
+                    physicsWorld.destroyBody(found.value());
+
+                BodyDef bd;
+                bd.type = rb.type;
+                bd.position = xf.position;
+                bd.rotation = xf.rotation;
+                bd.linearVelocity = rb.linearVelocity;
+                bd.angularVelocity = rb.angularVelocity;
+                bd.linearDamping = rb.linearDamping;
+                bd.angularDamping = rb.angularDamping;
+                bd.gravityScale = rb.gravityScale;
+                bd.sleepThreshold = rb.sleepThreshold;
+                bd.motionLocks = rb.motionLocks;
+                bd.enableSleep = rb.enableSleep;
+                bd.isAwake = rb.isAwake;
+                bd.isBullet = rb.isBullet;
+                bd.isEnabled = rb.isEnabled;
+                bd.allowFastRotation = rb.allowFastRotation;
+                bd.enableGyroscopicTorque = rb.enableGyroscopicTorque;
+                const Expected<BodyId> created = physicsWorld.createBody(bd);
+                if(created.has_value()){
+                    rb.runtimeBodyId = created.value();
+                    rb.dirty = false;
+                    entityBodies.insert_or_assign(entity, created.value());
+                }
+                return;
+            }
+
+            if(rb.dirty){
+                const BodyId bodyId = found.value();
+                physicsWorld.setBodyTransform(bodyId, VectorSingle(xf.position), VectorSingle(xf.rotation));
+                if(rb.type != BodyType::Static){
+                    physicsWorld.setLinearVelocity(bodyId, VectorSingle(rb.linearVelocity));
+                    physicsWorld.setAngularVelocity(bodyId, VectorSingle(rb.angularVelocity));
+                }
+                rb.runtimeBodyId = bodyId;
+                rb.dirty = false;
+            }
+        }
+    );
+
+    // 2. Ensure static bodies for standalone ColliderComponent entities without RigidBodyComponent.
+    world.view<ColliderComponent, TransformComponent>().each(
+        lambda[mut world, mut physicsWorld, mut entityBodies, mut entityShapes](
+            in EntityID entity,
+            mut ColliderComponent col,
+            in TransformComponent xf
+        ) -> void{
+            BodyId targetBodyId;
+            if(world.hasComponent<RigidBodyComponent>(entity)){
+                in RigidBodyComponent rb = world.getComponent<RigidBodyComponent>(entity);
+                targetBodyId = rb.runtimeBodyId;
+            }
+            else{
+                const auto foundBody = entityBodies.find(entity);
+                if(foundBody != entityBodies.end() && physicsWorld.isValidBody(foundBody.value())){
+                    targetBodyId = foundBody.value();
+                }
+                else{
+                    BodyDef bd;
+                    bd.type = BodyType::Static;
+                    bd.position = xf.position;
+                    bd.rotation = xf.rotation;
+                    const Expected<BodyId> created = physicsWorld.createBody(bd);
+                    if(!created.has_value())
+                        return;
+                    targetBodyId = created.value();
+                    entityBodies.insert_or_assign(entity, targetBodyId);
+                }
+            }
+
+            if(!physicsWorld.isValidBody(targetBodyId))
+                return;
+
+            const b8 bodyChanged = !(col.boundBodyId == targetBodyId);
+            const auto foundShape = entityShapes.find(entity);
+            const b8 hasValidShape = foundShape != entityShapes.end() && physicsWorld.isValidShape(foundShape.value());
+
+            if(!hasValidShape || col.dirty || bodyChanged){
+                if(hasValidShape)
+                    physicsWorld.destroyShape(foundShape.value(), true);
+                const Expected<ShapeId> createdShape = AttachEcsColliderShape(physicsWorld, targetBodyId, col, VectorSingle(xf.scale));
+                if(createdShape.has_value()){
+                    col.runtimeShapeId = createdShape.value();
+                    col.boundBodyId = targetBodyId;
+                    col.dirty = false;
+                    entityShapes.insert_or_assign(entity, createdShape.value());
+                }
+            }
+        }
+    );
+}
+
+void WriteBackPhysicsTransformsToEcs(mut World world, in PhysicsWorld physicsWorld){
+    world.view<RigidBodyComponent, TransformComponent>().each(
+        lambda[in physicsWorld](
+            in EntityID entity,
+            mut RigidBodyComponent rb,
+            mut TransformComponent xf
+        ) -> void{
+            if(rb.type != BodyType::Dynamic || !physicsWorld.isValidBody(rb.runtimeBodyId))
+                return;
+
+            const Expected<Transform3D> physXf = physicsWorld.tryGetBodyTransform(rb.runtimeBodyId);
+            if(physXf.has_value()){
+                xf.position = physXf.value().position;
+                xf.rotation = physXf.value().rotation;
+            }
+
+            const Expected<f32x4> linVel = physicsWorld.tryGetLinearVelocity(rb.runtimeBodyId);
+            if(linVel.has_value())
+                rb.linearVelocity = linVel.value();
+
+            const Expected<f32x4> angVel = physicsWorld.tryGetAngularVelocity(rb.runtimeBodyId);
+            if(angVel.has_value())
+                rb.angularVelocity = angVel.value();
+
+            rb.isAwake = physicsWorld.isBodyAwake(rb.runtimeBodyId);
+        }
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

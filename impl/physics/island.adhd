@@ -1,0 +1,372 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/physics/solver_set.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u32 CreateIslandInWorld(mut Vector<Island> islands, mut Vector<u32> freeIslandIds, mut Vector<SolverSet> sets, in u32 setIndex){
+    u32 islandId = s_NullIndex;
+    if(!freeIslandIds.empty()){
+        islandId = freeIslandIds[freeIslandIds.size() - 1u];
+        freeIslandIds.pop_back();
+    }
+    else{
+        islandId = cast<u32>(islands.size());
+        islands.push_back(Island());
+    }
+
+    mut Island island = islands[islandId];
+    island.setIndex = setIndex;
+    island.localIndex = cast<u32>(sets[setIndex].islands.size());
+    island.islandId = islandId;
+    island.constraintRemoveCount = 0u;
+    island.bodies.clear();
+    island.contacts.clear();
+    island.alive = true;
+    sets[setIndex].islands.push_back(islandId);
+    return islandId;
+}
+
+void DestroyIslandInWorld(mut Vector<Island> islands, mut Vector<u32> freeIslandIds, mut Vector<SolverSet> sets, in u32 islandId){
+    if(islandId >= islands.size() || !islands[islandId].alive)
+        return;
+
+    in Island island = islands[islandId];
+    const u32 setIndex = island.setIndex;
+    const u32 localIdx = island.localIndex;
+    if(setIndex < sets.size() && localIdx < sets[setIndex].islands.size()){
+        mut Vector<u32> setIslands = sets[setIndex].islands;
+        const u32 lastIdx = cast<u32>(setIslands.size() - 1u);
+        if(localIdx != lastIdx){
+            const u32 movedIslandId = setIslands[lastIdx];
+            setIslands[localIdx] = movedIslandId;
+            islands[movedIslandId].localIndex = localIdx;
+        }
+        setIslands.pop_back();
+    }
+
+    islands[islandId].setIndex = s_NullIndex;
+    islands[islandId].localIndex = s_NullIndex;
+    islands[islandId].constraintRemoveCount = 0u;
+    islands[islandId].bodies.clear();
+    islands[islandId].contacts.clear();
+    islands[islandId].alive = false;
+    freeIslandIds.push_back(islandId);
+}
+
+void AddBodyToIsland(mut Vector<Body> bodies, mut Vector<Island> islands, in u32 bodyId, in u32 islandId){
+    mut Body body = bodies[bodyId];
+    mut Island island = islands[islandId];
+    body.islandId = islandId;
+    body.islandIndex = cast<u32>(island.bodies.size());
+    island.bodies.push_back(bodyId);
+}
+
+void RemoveBodyFromIsland(mut Vector<Body> bodies, mut Vector<Island> islands, in u32 bodyId){
+    mut Body body = bodies[bodyId];
+    const u32 islandId = body.islandId;
+    if(islandId == s_NullIndex || islandId >= islands.size() || !islands[islandId].alive)
+        return;
+
+    mut Island island = islands[islandId];
+    const u32 idx = body.islandIndex;
+    const u32 lastIdx = cast<u32>(island.bodies.size() - 1u);
+    if(idx < island.bodies.size()){
+        if(idx != lastIdx){
+            const u32 movedBodyId = island.bodies[lastIdx];
+            island.bodies[idx] = movedBodyId;
+            bodies[movedBodyId].islandIndex = idx;
+        }
+        island.bodies.pop_back();
+    }
+    body.islandId = s_NullIndex;
+    body.islandIndex = s_NullIndex;
+}
+
+void WakeIslandInSets(
+    mut Vector<Body> bodies,
+    mut Vector<Island> islands,
+    mut Vector<SolverSet> sets,
+    mut Vector<Contact> contacts,
+    in u32 islandId
+){
+    if(islandId == s_NullIndex || islandId >= islands.size() || !islands[islandId].alive)
+        return;
+    const u32 oldSetIndex = islands[islandId].setIndex;
+    if(oldSetIndex == s_AwakeSetIndex || oldSetIndex < 3u)
+        return;
+
+    const u32 bodyCount = cast<u32>(islands[islandId].bodies.size());
+    for(u32 i = 0u; i < bodyCount; ++i){
+        const u32 bodyId = islands[islandId].bodies[i];
+        mut Body body = bodies[bodyId];
+        if(body.setIndex != oldSetIndex || body.localIndex >= sets[oldSetIndex].sims.size())
+            continue;
+
+        const BodySim sim = sets[oldSetIndex].sims[body.localIndex];
+        BodyState state;
+        state.flags = sim.flags;
+        body.sleepTime = 0.0f;
+        RemoveBodyFromSolverSet(bodies, contacts, sets[oldSetIndex], body.localIndex);
+        AddBodyToSolverSet(bodies, sets[s_AwakeSetIndex], sim, state);
+    }
+
+    // Move island ownership from oldSet to s_AwakeSetIndex.
+    const u32 oldLocal = islands[islandId].localIndex;
+    if(oldLocal < sets[oldSetIndex].islands.size()){
+        const u32 lastIdx = cast<u32>(sets[oldSetIndex].islands.size() - 1u);
+        if(oldLocal != lastIdx){
+            const u32 movedId = sets[oldSetIndex].islands[lastIdx];
+            sets[oldSetIndex].islands[oldLocal] = movedId;
+            islands[movedId].localIndex = oldLocal;
+        }
+        sets[oldSetIndex].islands.pop_back();
+    }
+    islands[islandId].setIndex = s_AwakeSetIndex;
+    islands[islandId].localIndex = cast<u32>(sets[s_AwakeSetIndex].islands.size());
+    sets[s_AwakeSetIndex].islands.push_back(islandId);
+}
+
+void WakeBodyWithIsland(
+    mut Vector<Body> bodies,
+    mut Vector<Island> islands,
+    mut Vector<SolverSet> sets,
+    mut Vector<Contact> contacts,
+    in u32 bodyId
+){
+    if(bodyId >= bodies.size() || !bodies[bodyId].alive)
+        return;
+    const u32 setIdx = bodies[bodyId].setIndex;
+    if(setIdx == s_StaticSetIndex || setIdx == s_DisabledSetIndex || setIdx == s_AwakeSetIndex)
+        return;
+
+    bodies[bodyId].sleepTime = 0.0f;
+    if(bodies[bodyId].islandId != s_NullIndex){
+        WakeIslandInSets(bodies, islands, sets, contacts, bodies[bodyId].islandId);
+        return;
+    }
+
+    if(bodies[bodyId].localIndex < sets[setIdx].sims.size()){
+        const BodySim sim = sets[setIdx].sims[bodies[bodyId].localIndex];
+        BodyState state;
+        state.flags = sim.flags;
+        RemoveBodyFromSolverSet(bodies, contacts, sets[setIdx], bodies[bodyId].localIndex);
+        AddBodyToSolverSet(bodies, sets[s_AwakeSetIndex], sim, state);
+    }
+}
+
+u32 MergeIslandsInWorld(
+    mut Vector<Body> bodies,
+    mut Vector<Island> islands,
+    mut Vector<u32> freeIslandIds,
+    mut Vector<SolverSet> sets,
+    mut Vector<Contact> contacts,
+    in u32 islandIdA,
+    in u32 islandIdB
+){
+    if(islandIdA == islandIdB)
+        return islandIdA;
+    if(islandIdA == s_NullIndex)
+        return islandIdB;
+    if(islandIdB == s_NullIndex)
+        return islandIdA;
+
+    WakeIslandInSets(bodies, islands, sets, contacts, islandIdA);
+    WakeIslandInSets(bodies, islands, sets, contacts, islandIdB);
+
+    u32 bigId = islandIdA;
+    u32 smallId = islandIdB;
+    if(islands[smallId].bodies.size() > islands[bigId].bodies.size()){
+        bigId = islandIdB;
+        smallId = islandIdA;
+    }
+
+    mut Island big = islands[bigId];
+    mut Island small = islands[smallId];
+
+    for(usize i = 0u; i < small.bodies.size(); ++i){
+        const u32 bodyId = small.bodies[i];
+        bodies[bodyId].islandId = bigId;
+        bodies[bodyId].islandIndex = cast<u32>(big.bodies.size());
+        big.bodies.push_back(bodyId);
+    }
+
+    for(usize i = 0u; i < small.contacts.size(); ++i){
+        const ContactLink link = small.contacts[i];
+        contacts[link.contactId].islandId = bigId;
+        contacts[link.contactId].islandIndex = cast<u32>(big.contacts.size());
+        big.contacts.push_back(link);
+    }
+
+    big.constraintRemoveCount += small.constraintRemoveCount;
+    small.bodies.clear();
+    small.contacts.clear();
+    DestroyIslandInWorld(islands, freeIslandIds, sets, smallId);
+    return bigId;
+}
+
+void LinkContactToIsland(
+    mut Vector<Body> bodies,
+    mut Vector<Island> islands,
+    mut Vector<u32> freeIslandIds,
+    mut Vector<SolverSet> sets,
+    mut Vector<Contact> contacts,
+    in u32 contactId
+){
+    mut Contact contact = contacts[contactId];
+    if(contact.islandId != s_NullIndex)
+        return;
+
+    const u32 bodyIdA = contact.edges[0u].bodyId;
+    const u32 bodyIdB = contact.edges[1u].bodyId;
+    WakeBodyWithIsland(bodies, islands, sets, contacts, bodyIdA);
+    WakeBodyWithIsland(bodies, islands, sets, contacts, bodyIdB);
+
+    const u32 islandA = bodies[bodyIdA].islandId;
+    const u32 islandB = bodies[bodyIdB].islandId;
+
+    u32 targetIsland = s_NullIndex;
+    if(islandA != s_NullIndex && islandB != s_NullIndex)
+        targetIsland = MergeIslandsInWorld(bodies, islands, freeIslandIds, sets, contacts, islandA, islandB);
+    else if(islandA != s_NullIndex)
+        targetIsland = islandA;
+    else if(islandB != s_NullIndex)
+        targetIsland = islandB;
+
+    if(targetIsland == s_NullIndex)
+        return;
+
+    ContactLink link;
+    link.contactId = contactId;
+    link.bodyIdA = bodyIdA;
+    link.bodyIdB = bodyIdB;
+
+    mut Island island = islands[targetIsland];
+    contact.islandId = targetIsland;
+    contact.islandIndex = cast<u32>(island.contacts.size());
+    island.contacts.push_back(link);
+}
+
+void UnlinkContactFromIsland(mut Vector<Island> islands, mut Vector<Contact> contacts, in u32 contactId){
+    mut Contact contact = contacts[contactId];
+    const u32 islandId = contact.islandId;
+    if(islandId == s_NullIndex || islandId >= islands.size() || !islands[islandId].alive){
+        contact.islandId = s_NullIndex;
+        contact.islandIndex = s_NullIndex;
+        return;
+    }
+
+    mut Island island = islands[islandId];
+    const u32 idx = contact.islandIndex;
+    if(idx < island.contacts.size()){
+        const u32 lastIdx = cast<u32>(island.contacts.size() - 1u);
+        if(idx != lastIdx){
+            const ContactLink movedLink = island.contacts[lastIdx];
+            island.contacts[idx] = movedLink;
+            contacts[movedLink.contactId].islandIndex = idx;
+        }
+        island.contacts.pop_back();
+    }
+
+    ++island.constraintRemoveCount;
+    contact.islandId = s_NullIndex;
+    contact.islandIndex = s_NullIndex;
+}
+
+void SplitIslandInWorld(
+    mut Vector<Body> bodies,
+    mut Vector<Island> islands,
+    mut Vector<u32> freeIslandIds,
+    mut Vector<SolverSet> sets,
+    mut Vector<Contact> contacts,
+    in u32 baseIslandId
+){
+    if(baseIslandId >= islands.size() || !islands[baseIslandId].alive)
+        return;
+    if(islands[baseIslandId].constraintRemoveCount == 0u || islands[baseIslandId].bodies.size() <= 1u){
+        islands[baseIslandId].constraintRemoveCount = 0u;
+        return;
+    }
+
+    const u32 setIndex = islands[baseIslandId].setIndex;
+    Vector<u32> islandBodies = islands[baseIslandId].bodies;
+    Vector<ContactLink> islandContacts = islands[baseIslandId].contacts;
+
+    HashMap<u32, usize> bodyLocalMap;
+    bodyLocalMap.reserve(islandBodies.size());
+    for(usize i = 0u; i < islandBodies.size(); ++i)
+        bodyLocalMap.emplace(islandBodies[i], i);
+
+    Vector<u32> dsuParents;
+    dsuParents.resize(islandBodies.size());
+    for(usize i = 0u; i < islandBodies.size(); ++i)
+        dsuParents[i] = cast<u32>(i);
+    Vector<u8> dsuRanks;
+    dsuRanks.resize(islandBodies.size(), 0u);
+
+    for(usize i = 0u; i < islandContacts.size(); ++i){
+        in ContactLink link = islandContacts[i];
+        const auto itA = bodyLocalMap.find(link.bodyIdA);
+        const auto itB = bodyLocalMap.find(link.bodyIdB);
+        if(itA != bodyLocalMap.end() && itB != bodyLocalMap.end())
+            JoinDisjointSets(cast<isize>(itA.value()), cast<isize>(itB.value()), dsuParents, dsuRanks);
+    }
+
+    HashMap<usize, u32> rootToIsland;
+    u32 firstIsland = baseIslandId;
+    b8 usedBase = false;
+    Vector<u32> bodyAssignedIsland;
+    bodyAssignedIsland.resize(islandBodies.size(), s_NullIndex);
+
+    islands[baseIslandId].bodies.clear();
+    islands[baseIslandId].contacts.clear();
+    islands[baseIslandId].constraintRemoveCount = 0u;
+
+    for(usize i = 0u; i < islandBodies.size(); ++i){
+        const usize root = cast<usize>(FindDisjointRoot(cast<isize>(i), dsuParents));
+        u32 targetIslandId = s_NullIndex;
+        const auto found = rootToIsland.find(root);
+        if(found != rootToIsland.end()){
+            targetIslandId = found.value();
+        }
+        else{
+            if(!usedBase){
+                targetIslandId = firstIsland;
+                usedBase = true;
+            }
+            else{
+                targetIslandId = CreateIslandInWorld(islands, freeIslandIds, sets, setIndex);
+            }
+            rootToIsland.emplace(root, targetIslandId);
+        }
+        bodyAssignedIsland[i] = targetIslandId;
+        AddBodyToIsland(bodies, islands, islandBodies[i], targetIslandId);
+    }
+
+    for(usize i = 0u; i < islandContacts.size(); ++i){
+        const ContactLink link = islandContacts[i];
+        u32 targetIslandId = s_NullIndex;
+        const auto itA = bodyLocalMap.find(link.bodyIdA);
+        if(itA != bodyLocalMap.end())
+            targetIslandId = bodyAssignedIsland[itA.value()];
+        else{
+            const auto itB = bodyLocalMap.find(link.bodyIdB);
+            if(itB != bodyLocalMap.end())
+                targetIslandId = bodyAssignedIsland[itB.value()];
+        }
+        if(targetIslandId != s_NullIndex){
+            mut Island dst = islands[targetIslandId];
+            contacts[link.contactId].islandId = targetIslandId;
+            contacts[link.contactId].islandIndex = cast<u32>(dst.contacts.size());
+            dst.contacts.push_back(link);
+        }
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,496 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/physics/distance.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class FeaturePair{
+    public u8 owner1 = 0u;
+    public u8 index1 = 0u;
+    public u8 owner2 = 0u;
+    public u8 index2 = 0u;
+}
+
+class ManifoldPoint{
+    public f32x4 point(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 anchorA(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 anchorB(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32 separation = 0.0f;
+    public f32 normalImpulse = 0.0f;
+    public f32 totalNormalImpulse = 0.0f;
+    public u32 id = 0u;
+    public b8 persisted = false;
+}
+
+class Manifold{
+    public Array<ManifoldPoint, s_MaxManifoldPoints> points;
+    public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32x4 rollingImpulse(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 frictionImpulse(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32 twistImpulse = 0.0f;
+    public u32 pointCount = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u32 MakeFeatureId(in u8 owner1, in u8 index1, in u8 owner2, in u8 index2){
+    return (cast<u32>(owner1) << 24u) | (cast<u32>(index1) << 16u) | (cast<u32>(owner2) << 8u) | cast<u32>(index2);
+}
+
+VectorSingle ClosestPointOnSegmentVec(in VectorSingle a, in VectorSingle b, in VectorSingle p){
+    const VectorSingle ab = VectorSingle(b - a, 0.0f);
+    const f32 lenSq = Vector3LengthSq(ab).x;
+    if(lenSq <= s_NormalizeEpsilonSq)
+        return a;
+    const f32 t = Clamp(Vector3Dot(VectorSingle(p - a, 0.0f), ab).x / lenSq, 0.0f, 1.0f);
+    return a + ab * t;
+}
+
+void ClosestPointsBetweenSegments(
+    in VectorSingle p1,
+    in VectorSingle q1,
+    in VectorSingle p2,
+    in VectorSingle q2,
+    mut f32 outS,
+    mut f32 outT,
+    mut VectorSingle outC1,
+    mut VectorSingle outC2
+){
+    const VectorSingle d1 = VectorSingle(q1 - p1, 0.0f);
+    const VectorSingle d2 = VectorSingle(q2 - p2, 0.0f);
+    const VectorSingle r = VectorSingle(p1 - p2, 0.0f);
+    const f32 a = Vector3Dot(d1, d1).x;
+    const f32 e = Vector3Dot(d2, d2).x;
+    const f32 f = Vector3Dot(d2, r).x;
+
+    f32 s = 0.0f;
+    f32 t = 0.0f;
+
+    if(a <= s_NormalizeEpsilonSq && e <= s_NormalizeEpsilonSq){
+        s = 0.0f;
+        t = 0.0f;
+    }
+    else if(a <= s_NormalizeEpsilonSq){
+        s = 0.0f;
+        t = Clamp(f / e, 0.0f, 1.0f);
+    }
+    else{
+        const f32 c = Vector3Dot(d1, r).x;
+        if(e <= s_NormalizeEpsilonSq){
+            t = 0.0f;
+            s = Clamp(-c / a, 0.0f, 1.0f);
+        }
+        else{
+            const f32 b = Vector3Dot(d1, d2).x;
+            const f32 denom = a * e - b * b;
+            if(denom > s_NormalizeEpsilonSq)
+                s = Clamp((b * f - c * e) / denom, 0.0f, 1.0f);
+            else
+                s = 0.0f;
+
+            t = (b * s + f) / e;
+            if(t < 0.0f){
+                t = 0.0f;
+                s = Clamp(-c / a, 0.0f, 1.0f);
+            }
+            else if(t > 1.0f){
+                t = 1.0f;
+                s = Clamp((b - c) / a, 0.0f, 1.0f);
+            }
+        }
+    }
+
+    outS = s;
+    outT = t;
+    outC1 = p1 + d1 * s;
+    outC2 = p2 + d2 * t;
+}
+
+Manifold CollideSpheres(in SphereShape sphereA, in Transform3D xfA, in SphereShape sphereB, in Transform3D xfB, in f32 maxDistance){
+    Manifold m;
+    const VectorSingle pA = TransformPoint(xfA, VectorSingle(sphereA.center));
+    const VectorSingle pB = TransformPoint(xfB, VectorSingle(sphereB.center));
+    const VectorSingle d = VectorSingle(pB - pA, 0.0f);
+    const f32 distSq = Vector3LengthSq(d).x;
+    const f32 totalR = sphereA.radius + sphereB.radius;
+    const f32 maxD = totalR + maxDistance;
+    if(distSq > maxD * maxD)
+        return m;
+
+    const f32 dist = Sqrt(distSq);
+    const VectorSingle n = SafeNormalizeVec3(d, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    const VectorSingle wA = pA + n * sphereA.radius;
+    const VectorSingle wB = pB - n * sphereB.radius;
+
+    m.normal = f32x4(n, 0.0f);
+    m.pointCount = 1u;
+    m.points[0u].point = f32x4((wA + wB) * 0.5f, 0.0f);
+    m.points[0u].anchorA = f32x4(wA - VectorSingle(xfA.position), 0.0f);
+    m.points[0u].anchorB = f32x4(wB - VectorSingle(xfB.position), 0.0f);
+    m.points[0u].separation = dist - totalR;
+    m.points[0u].id = MakeFeatureId(0u, 0u, 1u, 0u);
+    return m;
+}
+
+Manifold CollideSphereAndCapsule(in SphereShape sphereA, in Transform3D xfA, in CapsuleShape capsuleB, in Transform3D xfB, in f32 maxDistance){
+    Manifold m;
+    const VectorSingle pA = TransformPoint(xfA, VectorSingle(sphereA.center));
+    const VectorSingle b1 = TransformPoint(xfB, VectorSingle(capsuleB.center1));
+    const VectorSingle b2 = TransformPoint(xfB, VectorSingle(capsuleB.center2));
+    const VectorSingle qB = ClosestPointOnSegmentVec(b1, b2, pA);
+
+    const VectorSingle d = VectorSingle(qB - pA, 0.0f);
+    const f32 distSq = Vector3LengthSq(d).x;
+    const f32 totalR = sphereA.radius + capsuleB.radius;
+    const f32 maxD = totalR + maxDistance;
+    if(distSq > maxD * maxD)
+        return m;
+
+    const f32 dist = Sqrt(distSq);
+    const VectorSingle n = SafeNormalizeVec3(d, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    const VectorSingle wA = pA + n * sphereA.radius;
+    const VectorSingle wB = qB - n * capsuleB.radius;
+
+    m.normal = f32x4(n, 0.0f);
+    m.pointCount = 1u;
+    m.points[0u].point = f32x4((wA + wB) * 0.5f, 0.0f);
+    m.points[0u].anchorA = f32x4(wA - VectorSingle(xfA.position), 0.0f);
+    m.points[0u].anchorB = f32x4(wB - VectorSingle(xfB.position), 0.0f);
+    m.points[0u].separation = dist - totalR;
+    m.points[0u].id = MakeFeatureId(0u, 0u, 1u, 1u);
+    return m;
+}
+
+Manifold CollideCapsules(in CapsuleShape capsuleA, in Transform3D xfA, in CapsuleShape capsuleB, in Transform3D xfB, in f32 maxDistance){
+    Manifold m;
+    const VectorSingle a1 = TransformPoint(xfA, VectorSingle(capsuleA.center1));
+    const VectorSingle a2 = TransformPoint(xfA, VectorSingle(capsuleA.center2));
+    const VectorSingle b1 = TransformPoint(xfB, VectorSingle(capsuleB.center1));
+    const VectorSingle b2 = TransformPoint(xfB, VectorSingle(capsuleB.center2));
+
+    const VectorSingle dirA = VectorSingle(a2 - a1, 0.0f);
+    const VectorSingle dirB = VectorSingle(b2 - b1, 0.0f);
+    const f32 lenSqA = Vector3LengthSq(dirA).x;
+    const f32 lenSqB = Vector3LengthSq(dirB).x;
+
+    f32 s = 0.0f;
+    f32 t = 0.0f;
+    VectorSingle cA(0.0f);
+    VectorSingle cB(0.0f);
+    ClosestPointsBetweenSegments(a1, a2, b1, b2, s, t, cA, cB);
+
+    const VectorSingle d = VectorSingle(cB - cA, 0.0f);
+    const f32 distSq = Vector3LengthSq(d).x;
+    const f32 totalR = capsuleA.radius + capsuleB.radius;
+    const f32 maxD = totalR + maxDistance;
+    if(distSq > maxD * maxD)
+        return m;
+
+    const f32 dist = Sqrt(distSq);
+    VectorSingle fallback = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
+    if(lenSqA > s_NormalizeEpsilonSq){
+        VectorSingle t1(0.0f);
+        VectorSingle t2(0.0f);
+        ComputeTangentBasis(dirA, t1, t2);
+        fallback = t1;
+    }
+    const VectorSingle n = SafeNormalizeVec3(d, fallback);
+    m.normal = f32x4(n, 0.0f);
+
+    // Parallel segments emit two contact points across the overlapping interval.
+    if(lenSqA > s_NormalizeEpsilonSq && lenSqB > s_NormalizeEpsilonSq){
+        const VectorSingle uA = dirA / Sqrt(lenSqA);
+        const VectorSingle uB = dirB / Sqrt(lenSqB);
+        if(Abs(Vector3Dot(uA, uB).x) > 0.9995f){
+            const f32 pB1 = Vector3Dot(VectorSingle(b1 - a1, 0.0f), uA).x;
+            const f32 pB2 = Vector3Dot(VectorSingle(b2 - a1, 0.0f), uA).x;
+            const f32 lenA = Sqrt(lenSqA);
+            const f32 minB = Min(pB1, pB2);
+            const f32 maxB = Max(pB1, pB2);
+            const f32 overlapMin = Max(0.0f, minB);
+            const f32 overlapMax = Min(lenA, maxB);
+            if(overlapMax - overlapMin > s_MinCapsuleLength){
+                const VectorSingle pA0 = a1 + uA * overlapMin;
+                const VectorSingle pA1 = a1 + uA * overlapMax;
+                const VectorSingle qB0 = pA0 + (cB - cA);
+                const VectorSingle qB1 = pA1 + (cB - cA);
+                const f32 sep = dist - totalR;
+                m.pointCount = 2u;
+                m.points[0u].point = f32x4((pA0 + n * capsuleA.radius + qB0 - n * capsuleB.radius) * 0.5f, 0.0f);
+                m.points[0u].anchorA = f32x4(pA0 + n * capsuleA.radius - VectorSingle(xfA.position), 0.0f);
+                m.points[0u].anchorB = f32x4(qB0 - n * capsuleB.radius - VectorSingle(xfB.position), 0.0f);
+                m.points[0u].separation = sep;
+                m.points[0u].id = MakeFeatureId(0u, 0u, 1u, 0u);
+
+                m.points[1u].point = f32x4((pA1 + n * capsuleA.radius + qB1 - n * capsuleB.radius) * 0.5f, 0.0f);
+                m.points[1u].anchorA = f32x4(pA1 + n * capsuleA.radius - VectorSingle(xfA.position), 0.0f);
+                m.points[1u].anchorB = f32x4(qB1 - n * capsuleB.radius - VectorSingle(xfB.position), 0.0f);
+                m.points[1u].separation = sep;
+                m.points[1u].id = MakeFeatureId(0u, 1u, 1u, 1u);
+                return m;
+            }
+        }
+    }
+
+    const VectorSingle wA = cA + n * capsuleA.radius;
+    const VectorSingle wB = cB - n * capsuleB.radius;
+    m.pointCount = 1u;
+    m.points[0u].point = f32x4((wA + wB) * 0.5f, 0.0f);
+    m.points[0u].anchorA = f32x4(wA - VectorSingle(xfA.position), 0.0f);
+    m.points[0u].anchorB = f32x4(wB - VectorSingle(xfB.position), 0.0f);
+    m.points[0u].separation = dist - totalR;
+    m.points[0u].id = MakeFeatureId(0u, 2u, 1u, 2u);
+    return m;
+}
+
+Manifold CollideSphereAndHull(in SphereShape sphereA, in Transform3D xfA, in HullShape hullB, in Transform3D xfB, in f32 maxDistance){
+    Manifold m;
+    if(hullB.faces.empty())
+        return m;
+
+    const VectorSingle worldSphereC = TransformPoint(xfA, VectorSingle(sphereA.center));
+    const VectorSingle localSphereC = InverseTransformPoint(xfB, worldSphereC);
+    const f32 totalR = sphereA.radius + hullB.radius;
+
+    // Fast exact plane check first to detect deep inside / outside quickly.
+    f32 maxPlaneDist = -s_MaxF32;
+    usize bestFace = 0u;
+    for(usize i = 0u; i < hullB.faces.size(); ++i){
+        const VectorSingle faceN = VectorSingle(hullB.faces[i].plane.normalOffset, 0.0f);
+        const f32 d = Vector3Dot(faceN, localSphereC).x - hullB.faces[i].plane.normalOffset.w;
+        if(d > totalR + maxDistance)
+            return m;
+        if(d > maxPlaneDist){
+            maxPlaneDist = d;
+            bestFace = i;
+        }
+    }
+
+    if(maxPlaneDist <= 0.0f){
+        // Sphere center is strictly inside the polyhedron. Push outward through shallowest face.
+        const VectorSingle localOutward = VectorSingle(hullB.faces[bestFace].plane.normalOffset, 0.0f);
+        const VectorSingle worldOutward = SafeNormalizeVec3(Vector3Rotate(localOutward, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        const VectorSingle nAtoB = -worldOutward;
+        const VectorSingle wB = worldSphereC + worldOutward * (hullB.radius - maxPlaneDist);
+        const VectorSingle wA = worldSphereC + nAtoB * sphereA.radius;
+        m.normal = f32x4(nAtoB, 0.0f);
+        m.pointCount = 1u;
+        m.points[0u].point = f32x4((wA + wB) * 0.5f, 0.0f);
+        m.points[0u].anchorA = f32x4(wA - VectorSingle(xfA.position), 0.0f);
+        m.points[0u].anchorB = f32x4(wB - VectorSingle(xfB.position), 0.0f);
+        m.points[0u].separation = maxPlaneDist - totalR;
+        m.points[0u].id = MakeFeatureId(0u, 0u, 1u, cast<u8>(bestFace));
+        return m;
+    }
+
+    // Outside: use GJK between point sphere center and hull polyhedron.
+    DistanceInput input;
+    input.proxyA = MakePointProxy(VectorSingle(sphereA.center), sphereA.radius);
+    input.proxyB = MakeHullProxy(hullB);
+    input.transformA = xfA;
+    input.transformB = xfB;
+    input.useRadii = false;
+    SimplexCache cache;
+    const DistanceOutput dist = ShapeDistance(input, cache);
+    if(dist.distance > totalR + maxDistance)
+        return m;
+
+    VectorSingle nAtoB = VectorSingle(dist.normal);
+    if(dist.distance <= 1.0e-6f){
+        const VectorSingle localOutward = VectorSingle(hullB.faces[bestFace].plane.normalOffset, 0.0f);
+        nAtoB = -SafeNormalizeVec3(Vector3Rotate(localOutward, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    }
+    const VectorSingle wA = VectorSingle(dist.pointA) + nAtoB * sphereA.radius;
+    const VectorSingle wB = VectorSingle(dist.pointB) - nAtoB * hullB.radius;
+    m.normal = f32x4(nAtoB, 0.0f);
+    m.pointCount = 1u;
+    m.points[0u].point = f32x4((wA + wB) * 0.5f, 0.0f);
+    m.points[0u].anchorA = f32x4(wA - VectorSingle(xfA.position), 0.0f);
+    m.points[0u].anchorB = f32x4(wB - VectorSingle(xfB.position), 0.0f);
+    m.points[0u].separation = dist.distance - totalR;
+    m.points[0u].id = MakeFeatureId(0u, 0u, 1u, cast<u8>(bestFace));
+    return m;
+}
+
+Manifold CollideCapsuleAndHull(in CapsuleShape capsuleA, in Transform3D xfA, in HullShape hullB, in Transform3D xfB, in f32 maxDistance){
+    Manifold m;
+    if(hullB.faces.empty())
+        return m;
+
+    const VectorSingle w1 = TransformPoint(xfA, VectorSingle(capsuleA.center1));
+    const VectorSingle w2 = TransformPoint(xfA, VectorSingle(capsuleA.center2));
+    const VectorSingle l1 = InverseTransformPoint(xfB, w1);
+    const VectorSingle l2 = InverseTransformPoint(xfB, w2);
+    const f32 totalR = capsuleA.radius + hullB.radius;
+
+    // Check GJK distance between capsule segment and hull polyhedron.
+    DistanceInput input;
+    input.proxyA = MakeCapsuleProxy(capsuleA);
+    input.proxyB = MakeHullProxy(hullB);
+    input.transformA = xfA;
+    input.transformB = xfB;
+    input.useRadii = false;
+    SimplexCache cache;
+    const DistanceOutput gjk = ShapeDistance(input, cache);
+    if(gjk.distance > totalR + maxDistance)
+        return m;
+
+    // Find deepest separating hull face against capsule endpoints (handles overlap & face alignment).
+    f32 maxFaceSep = -s_MaxF32;
+    usize bestFace = 0u;
+    for(usize i = 0u; i < hullB.faces.size(); ++i){
+        const VectorSingle faceN = VectorSingle(hullB.faces[i].plane.normalOffset, 0.0f);
+        const f32 offset = hullB.faces[i].plane.normalOffset.w;
+        const f32 d1 = Vector3Dot(faceN, l1).x - offset;
+        const f32 d2 = Vector3Dot(faceN, l2).x - offset;
+        const f32 sep = Min(d1, d2);
+        if(sep > totalR + maxDistance)
+            return m;
+        if(sep > maxFaceSep){
+            maxFaceSep = sep;
+            bestFace = i;
+        }
+    }
+
+    if(gjk.distance > 1.0e-5f){
+        const VectorSingle nAtoB = VectorSingle(gjk.normal);
+        const VectorSingle localN = Vector3InverseRotate(-nAtoB, VectorSingle(xfB.rotation));
+        // If capsule segment is nearly parallel to the best hull face, clip the segment against face side planes for 2-point stability.
+        const VectorSingle faceN = VectorSingle(hullB.faces[bestFace].plane.normalOffset, 0.0f);
+        if(Vector3Dot(localN, faceN).x > 0.995f && maxFaceSep <= totalR + maxDistance){
+            VectorSingle clip0 = l1;
+            VectorSingle clip1 = l2;
+            in HullFace face = hullB.faces[bestFace];
+            u8 eIdx = face.edge;
+            b8 clippedOut = false;
+            for(u8 vi = 0u; vi < face.vertexCount; ++vi){
+                in HalfEdge he = hullB.halfEdges[eIdx];
+                const VectorSingle v0 = VectorSingle(hullB.vertices[he.tail]);
+                const VectorSingle v1 = VectorSingle(hullB.vertices[hullB.halfEdges[he.next].tail]);
+                const VectorSingle sideN = SafeNormalizeVec3(Cross(VectorSingle(v1 - v0, 0.0f), faceN), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+                const f32 sideOff = Vector3Dot(sideN, v0).x;
+                const f32 d0 = Vector3Dot(sideN, clip0).x - sideOff;
+                const f32 d1 = Vector3Dot(sideN, clip1).x - sideOff;
+                if(d0 > 0.0f && d1 > 0.0f){
+                    clippedOut = true;
+                    break;
+                }
+                if(d0 > 0.0f){
+                    const f32 t = d0 / (d0 - d1);
+                    clip0 = Lerp(clip0, clip1, VectorSingle(t));
+                }
+                else if(d1 > 0.0f){
+                    const f32 t = d0 / (d0 - d1);
+                    clip1 = Lerp(clip0, clip1, VectorSingle(t));
+                }
+                eIdx = he.next;
+            }
+            if(!clippedOut){
+                const f32 faceOff = face.plane.normalOffset.w;
+                const VectorSingle worldN = SafeNormalizeVec3(-Vector3Rotate(faceN, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                const f32 sep0 = Vector3Dot(faceN, clip0).x - faceOff - totalR;
+                const f32 sep1 = Vector3Dot(faceN, clip1).x - faceOff - totalR;
+                m.normal = f32x4(worldN, 0.0f);
+                if(sep0 <= maxDistance){
+                    const VectorSingle wpA = TransformPoint(xfB, clip0) + worldN * capsuleA.radius;
+                    const VectorSingle wpB = TransformPoint(xfB, clip0 - faceN * (sep0 + capsuleA.radius));
+                    m.points[m.pointCount].point = f32x4((wpA + wpB) * 0.5f, 0.0f);
+                    m.points[m.pointCount].anchorA = f32x4(wpA - VectorSingle(xfA.position), 0.0f);
+                    m.points[m.pointCount].anchorB = f32x4(wpB - VectorSingle(xfB.position), 0.0f);
+                    m.points[m.pointCount].separation = sep0;
+                    m.points[m.pointCount].id = MakeFeatureId(0u, 0u, 1u, cast<u8>(bestFace));
+                    ++m.pointCount;
+                }
+                if(sep1 <= maxDistance && Vector3LengthSq(VectorSingle(clip1 - clip0, 0.0f)).x > s_MinCapsuleLength * s_MinCapsuleLength){
+                    const VectorSingle wpA = TransformPoint(xfB, clip1) + worldN * capsuleA.radius;
+                    const VectorSingle wpB = TransformPoint(xfB, clip1 - faceN * (sep1 + capsuleA.radius));
+                    m.points[m.pointCount].point = f32x4((wpA + wpB) * 0.5f, 0.0f);
+                    m.points[m.pointCount].anchorA = f32x4(wpA - VectorSingle(xfA.position), 0.0f);
+                    m.points[m.pointCount].anchorB = f32x4(wpB - VectorSingle(xfB.position), 0.0f);
+                    m.points[m.pointCount].separation = sep1;
+                    m.points[m.pointCount].id = MakeFeatureId(0u, 1u, 1u, cast<u8>(bestFace));
+                    ++m.pointCount;
+                }
+                if(m.pointCount > 0u)
+                    return m;
+            }
+        }
+
+        const VectorSingle wA = VectorSingle(gjk.pointA) + nAtoB * capsuleA.radius;
+        const VectorSingle wB = VectorSingle(gjk.pointB) - nAtoB * hullB.radius;
+        m.normal = f32x4(nAtoB, 0.0f);
+        m.pointCount = 1u;
+        m.points[0u].point = f32x4((wA + wB) * 0.5f, 0.0f);
+        m.points[0u].anchorA = f32x4(wA - VectorSingle(xfA.position), 0.0f);
+        m.points[0u].anchorB = f32x4(wB - VectorSingle(xfB.position), 0.0f);
+        m.points[0u].separation = gjk.distance - totalR;
+        m.points[0u].id = MakeFeatureId(0u, 2u, 1u, cast<u8>(bestFace));
+        return m;
+    }
+
+    // Overlapped segment: push out along bestFace.
+    const VectorSingle faceN = VectorSingle(hullB.faces[bestFace].plane.normalOffset, 0.0f);
+    const f32 faceOff = hullB.faces[bestFace].plane.normalOffset.w;
+    const f32 d1 = Vector3Dot(faceN, l1).x - faceOff;
+    const f32 d2 = Vector3Dot(faceN, l2).x - faceOff;
+    const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(faceN, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    const VectorSingle nAtoB = -worldOut;
+    m.normal = f32x4(nAtoB, 0.0f);
+    const f32 sep = Min(d1, d2) - totalR;
+    VectorSingle deepLocal = l1;
+    if(d2 < d1)
+        deepLocal = l2;
+    const VectorSingle deepWorld = TransformPoint(xfB, deepLocal);
+    const VectorSingle wA = deepWorld + nAtoB * capsuleA.radius;
+    const VectorSingle wB = deepWorld + worldOut * (hullB.radius - Min(d1, d2));
+    m.pointCount = 1u;
+    m.points[0u].point = f32x4((wA + wB) * 0.5f, 0.0f);
+    m.points[0u].anchorA = f32x4(wA - VectorSingle(xfA.position), 0.0f);
+    m.points[0u].anchorB = f32x4(wB - VectorSingle(xfB.position), 0.0f);
+    m.points[0u].separation = sep;
+    m.points[0u].id = MakeFeatureId(0u, 3u, 1u, cast<u8>(bestFace));
+    return m;
+}
+
+Manifold FlipManifoldNormalAndAnchors(in Manifold source){
+    Manifold flipped;
+    flipped.normal = f32x4(-VectorSingle(source.normal), 0.0f);
+    flipped.pointCount = source.pointCount;
+    for(usize i = 0u; i < cast<usize>(source.pointCount); ++i){
+        flipped.points[i] = source.points[i];
+        flipped.points[i].anchorA = source.points[i].anchorB;
+        flipped.points[i].anchorB = source.points[i].anchorA;
+    }
+    return flipped;
+}
+
+void MatchManifoldImpulses(in Manifold oldManifold, mut Manifold newManifold, in b8 enableWarmStarting){
+    if(!enableWarmStarting || newManifold.pointCount == 0u || oldManifold.pointCount == 0u)
+        return;
+
+    newManifold.frictionImpulse = oldManifold.frictionImpulse;
+    newManifold.twistImpulse = oldManifold.twistImpulse;
+    newManifold.rollingImpulse = oldManifold.rollingImpulse;
+
+    for(usize i = 0u; i < cast<usize>(newManifold.pointCount); ++i){
+        const u32 newId = newManifold.points[i].id;
+        for(usize j = 0u; j < cast<usize>(oldManifold.pointCount); ++j){
+            if(oldManifold.points[j].id == newId){
+                newManifold.points[i].normalImpulse = oldManifold.points[j].normalImpulse;
+                newManifold.points[i].totalNormalImpulse = oldManifold.points[j].totalNormalImpulse;
+                newManifold.points[i].persisted = true;
+                break;
+            }
+        }
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

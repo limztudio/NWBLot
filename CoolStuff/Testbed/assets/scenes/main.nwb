@@ -9,10 +9,16 @@ asset.subsystems = [
     "engine/subsystems/gi",
     "engine/subsystems/reflection",
     "engine/subsystems/skinning",
-    "engine/subsystems/ui"
+    "engine/subsystems/ui",
+    "engine/subsystems/physics"
 ];
 
 asset.entities = [
     "project/entities/female",
     "project/entities/ground_plane"
 ];
+
+asset.assets = {
+    "physics_box": "project/meshes/physics_box/model",
+    "physics_sphere": "project/meshes/physics_sphere/model",
+};

@@ -1,0 +1,256 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/physics/manifold_hull.adhd>
+#include <impl/physics/broad_phase.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+flag<u32> ContactFlags{
+    None = 0u,
+    Touching = 0x00000001u,
+    WasTouching = 0x00000002u,
+    IslandDisabled = 0x00000004u,
+    Sensor = 0x00000008u,
+    EnableContactEvents = 0x00000010u,
+    EnableHitEvents = 0x00000020u,
+    EnableSensorEvents = 0x00000040u,
+    Enlarged = 0x00000080u,
+    Alive = 0x00000100u,
+}
+
+class Body{
+    public u64 userData = 0u;
+    public u32 setIndex = s_StaticSetIndex;
+    public u32 localIndex = s_NullIndex;
+    public u32 headContactKey = s_NullIndex;
+    public u32 contactCount = 0u;
+    public u32 headShapeId = s_NullIndex;
+    public u32 shapeCount = 0u;
+    public u32 islandId = s_NullIndex;
+    public u32 islandIndex = s_NullIndex;
+    public f32 sleepThreshold = s_DefaultSleepThreshold;
+    public f32 sleepTime = 0.0f;
+    public f32 mass = 0.0f;
+    public u32 bodyMoveIndex = s_NullIndex;
+    public u32 id = s_NullIndex;
+    public u32 flags = 0u;
+    public BodyType type = BodyType::Static;
+    public u16 generation = 0u;
+    public b8 alive = false;
+}
+
+class BodyState{
+    public f32x4 linearVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 angularVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 deltaPosition(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 deltaRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public u32 flags = 0u;
+}
+
+class BodySim{
+    public Transform3D transform;
+    public f32x4 center(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localCenter(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 rotation0(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 center0(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 force(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 torque(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 maxExtent(0.0f, 0.0f, 0.0f, 0.0f);
+    public Mat3 inertia;
+    public Mat3 invInertiaLocal;
+    public Mat3 invInertiaWorld;
+    public f32 invMass = 0.0f;
+    public f32 linearDamping = 0.0f;
+    public f32 angularDamping = 0.01f;
+    public f32 gravityScale = 1.0f;
+    public f32 minExtent = 0.0f;
+    public u32 flags = 0u;
+    public u32 bodyId = s_NullIndex;
+}
+
+class Shape{
+    public u32 bodyId = s_NullIndex;
+    public u32 id = s_NullIndex;
+    public u32 nextShapeId = s_NullIndex;
+    public u32 proxyKey = s_NullIndex;
+    public ShapeType type = ShapeType::Sphere;
+    public SphereShape sphere;
+    public CapsuleShape capsule;
+    public HullShape hull;
+    public Aabb3D localAabb;
+    public Aabb3D aabb;
+    public SurfaceMaterial material;
+    public Filter filter;
+    public f32 density = 1.0f;
+    public u64 userData = 0u;
+    public u16 generation = 0u;
+    public b8 isSensor = false;
+    public b8 enableContactEvents = false;
+    public b8 enableHitEvents = false;
+    public b8 enableSensorEvents = false;
+    public b8 enablePreSolveEvents = false;
+    public b8 enlargeAabb = false;
+    public b8 alive = false;
+}
+
+class ContactEdge{
+    public u32 bodyId = s_NullIndex;
+    public u32 prevKey = s_NullIndex;
+    public u32 nextKey = s_NullIndex;
+}
+
+class Contact{
+    public u32 contactId = s_NullIndex;
+    public u64 pairKey = 0u;
+    public u32 shapeIdA = s_NullIndex;
+    public u32 shapeIdB = s_NullIndex;
+    public Array<ContactEdge, 2u> edges;
+    public u32 colorIndex = s_NullIndex;
+    public u32 localIndex = s_NullIndex;
+    public u32 islandId = s_NullIndex;
+    public u32 islandIndex = s_NullIndex;
+    public Manifold manifold;
+    public f32 friction = 0.6f;
+    public f32 restitution = 0.0f;
+    public f32 rollingResistance = 0.0f;
+    public f32 tangentSpeed = 0.0f;
+    public u32 flags = 0u;
+    public b8 isMarked = false;
+}
+
+class ContactLink{
+    public u32 contactId = s_NullIndex;
+    public u32 bodyIdA = s_NullIndex;
+    public u32 bodyIdB = s_NullIndex;
+}
+
+class Island{
+    public u32 setIndex = s_NullIndex;
+    public u32 localIndex = s_NullIndex;
+    public u32 islandId = s_NullIndex;
+    public u32 constraintRemoveCount = 0u;
+    public Vector<u32> bodies;
+    public Vector<ContactLink> contacts;
+    public b8 alive = false;
+}
+
+class SolverSet{
+    public u32 setIndex = s_NullIndex;
+    public Vector<BodySim> sims;
+    public Vector<BodyState> states;
+    public Vector<u32> islands;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ShouldCollideFilters(in Filter filterA, in Filter filterB){
+    if(filterA.groupIndex == filterB.groupIndex && filterA.groupIndex != 0)
+        return filterA.groupIndex > 0;
+    return ((filterA.categoryBits & filterB.maskBits) != 0u) && ((filterB.categoryBits & filterA.maskBits) != 0u);
+}
+
+Aabb3D ComputeShapeLocalAabb(in Shape shape){
+    if(shape.type == ShapeType::Sphere)
+        return ComputeSphereAabb(shape.sphere, Transform3D());
+    if(shape.type == ShapeType::Capsule)
+        return ComputeCapsuleAabb(shape.capsule, Transform3D());
+    return ComputeHullAabb(shape.hull, Transform3D());
+}
+
+Aabb3D ComputeShapeWorldAabb(in Shape shape, in Transform3D xf){
+    if(shape.type == ShapeType::Sphere)
+        return ComputeSphereAabb(shape.sphere, xf);
+    if(shape.type == ShapeType::Capsule)
+        return ComputeCapsuleAabb(shape.capsule, xf);
+    return ComputeHullAabb(shape.hull, xf);
+}
+
+ShapeProxy MakeShapeProxyFromShape(in Shape shape){
+    if(shape.type == ShapeType::Sphere)
+        return MakeSphereProxy(shape.sphere);
+    if(shape.type == ShapeType::Capsule)
+        return MakeCapsuleProxy(shape.capsule);
+    return MakeHullProxy(shape.hull);
+}
+
+Manifold CollideShapePair(in Shape shapeA, in Transform3D xfA, in Shape shapeB, in Transform3D xfB, in f32 maxDistance){
+    if(shapeA.type == ShapeType::Sphere){
+        if(shapeB.type == ShapeType::Sphere)
+            return CollideSpheres(shapeA.sphere, xfA, shapeB.sphere, xfB, maxDistance);
+        if(shapeB.type == ShapeType::Capsule)
+            return CollideSphereAndCapsule(shapeA.sphere, xfA, shapeB.capsule, xfB, maxDistance);
+        return CollideSphereAndHull(shapeA.sphere, xfA, shapeB.hull, xfB, maxDistance);
+    }
+    if(shapeA.type == ShapeType::Capsule){
+        if(shapeB.type == ShapeType::Sphere)
+            return FlipManifoldNormalAndAnchors(CollideSphereAndCapsule(shapeB.sphere, xfB, shapeA.capsule, xfA, maxDistance));
+        if(shapeB.type == ShapeType::Capsule)
+            return CollideCapsules(shapeA.capsule, xfA, shapeB.capsule, xfB, maxDistance);
+        return CollideCapsuleAndHull(shapeA.capsule, xfA, shapeB.hull, xfB, maxDistance);
+    }
+    if(shapeB.type == ShapeType::Sphere)
+        return FlipManifoldNormalAndAnchors(CollideSphereAndHull(shapeB.sphere, xfB, shapeA.hull, xfA, maxDistance));
+    if(shapeB.type == ShapeType::Capsule)
+        return FlipManifoldNormalAndAnchors(CollideCapsuleAndHull(shapeB.capsule, xfB, shapeA.hull, xfA, maxDistance));
+    return CollideHulls(shapeA.hull, xfA, shapeB.hull, xfB, maxDistance);
+}
+
+f32 CombineMaterialFriction(in f32 a, in f32 b){
+    return Sqrt(Max(a, 0.0f) * Max(b, 0.0f));
+}
+
+f32 CombineMaterialRestitution(in f32 a, in f32 b){
+    return Max(a, b);
+}
+
+f32 CombineMaterialRollingResistance(in f32 a, in f32 b){
+    return Max(a, b);
+}
+
+u32 EncodeContactKey(in u32 contactId, in u32 edgeIndex){
+    return (contactId << 1u) | (edgeIndex & 1u);
+}
+
+u32 DecodeContactKeyId(in u32 key){
+    return key >> 1u;
+}
+
+u32 DecodeContactKeyEdge(in u32 key){
+    return key & 1u;
+}
+
+void AddBodyToSolverSet(mut Vector<Body> bodies, mut SolverSet set, in BodySim sim, in BodyState state){
+    const u32 localIdx = cast<u32>(set.sims.size());
+    set.sims.push_back(sim);
+    set.states.push_back(state);
+    bodies[sim.bodyId].setIndex = set.setIndex;
+    bodies[sim.bodyId].localIndex = localIdx;
+}
+
+void RemoveBodyFromSolverSet(mut Vector<Body> bodies, mut Vector<Contact> contacts, mut SolverSet set, in u32 localIndex){
+    if(localIndex >= set.sims.size())
+        return;
+
+    const u32 lastIdx = cast<u32>(set.sims.size() - 1u);
+    const u32 removedBodyId = set.sims[localIndex].bodyId;
+    if(localIndex != lastIdx){
+        set.sims[localIndex] = set.sims[lastIdx];
+        set.states[localIndex] = set.states[lastIdx];
+        const u32 movedBodyId = set.sims[localIndex].bodyId;
+        bodies[movedBodyId].localIndex = localIndex;
+    }
+    set.sims.pop_back();
+    set.states.pop_back();
+    bodies[removedBodyId].setIndex = s_NullIndex;
+    bodies[removedBodyId].localIndex = s_NullIndex;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

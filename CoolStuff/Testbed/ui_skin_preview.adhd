@@ -76,7 +76,15 @@ b8 ConfigureKoreanLabel(mut Label outLabel){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class UiListSource : IListDataSource{
+[ordered]
+class UiListSource : IListDataSource, NoCopy{
+    private CompactString m_buffer;
+    private mut CompactString m_label;
+
+    public UiListSource(){
+        this.m_label = this.m_buffer;
+    }
+
     public u64 instanceGeneration()const override{ return 1u; }
     public u64 revision()const override{ return 1u; }
     public u64 rowCount()const override{ return s_VirtualListRowCount; }
@@ -85,8 +93,6 @@ class UiListSource : IListDataSource{
     public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{ return FindEnabledImmutableListSourceRow(start, reverse, cast<usize>(s_VirtualListRowCount), 0u); }
     public StringView text(in u64 index)const override{ return FormatVirtualListRowLabel(this.key(index), this.m_label); }
     public b8 enabled(in u64 index)const override{ return IsImmutableListSourceRowEnabled(index, cast<usize>(s_VirtualListRowCount), 0u); }
-
-    private Array<u8, s_VirtualListLabelCapacity> m_label;
 }
 
 class UiPopupToolsSource : IListDataSource{
@@ -190,7 +196,7 @@ class UiEditGallery{
 
 class UiImageGallery{
     public b8 loadAssets(mut ProjectRuntimeContext context, in ActiveSceneSubsystems sceneSubsystems){
-        Expected<SharedImageSource> source = LoadUiGallerySkinImageSource(context, sceneSubsystems);
+        Expected<SharedImageSource> source = LoadUiGallerySkinImageSource(this.m_imagePool, context, sceneSubsystems);
         if(!source.has_value())
             return false;
         this.m_source = source.value();
@@ -222,12 +228,12 @@ class UiImageGallery{
             error("Testbed: custom image declaration failed");
     }
 
+    private SharedPool m_imagePool = SharedPool();
     private SharedImageSource m_source = SharedImageSource();
 }
 
 class UiNestedPopupGallery{
     public UiNestedPopupGallery(){
-        this.m_source = UiNestedPopupSource();
         this.m_search = SearchComboState();
         this.m_beforeText = EditModel();
         this.m_afterText = EditModel();
@@ -323,7 +329,7 @@ class UiNestedPopupGallery{
         return result.valid && ui.endPopup();
     }
 
-    private UiNestedPopupSource m_source;
+    private UiNestedPopupSource m_source = UiNestedPopupSource();
     private PopupState m_parent = PopupState();
     private PopupState m_child = PopupState();
     private ListState m_beforeList = ListState();
@@ -479,11 +485,6 @@ class UiRadioGroupGallery{
 }
 
 class UiSearchComboGallery{
-    public UiSearchComboGallery(){
-        this.m_source = UiSearchComboSource();
-        this.m_state = SearchComboState();
-    }
-
     public void paint(mut UiPaintContext context, in f32 x, in f32 y){
         if(!context.ui.beginPanel("search_combo_gallery", Rect(x, y, s_OrdinaryGalleryWidth, s_SearchComboPanelHeight)))
             return;
@@ -501,8 +502,8 @@ class UiSearchComboGallery{
             error("Testbed: custom searchable combo declaration failed");
     }
 
-    private UiSearchComboSource m_source;
-    private SearchComboState m_state;
+    private UiSearchComboSource m_source = UiSearchComboSource();
+    private SearchComboState m_state = SearchComboState();
 }
 
 class UiSliderGallery{

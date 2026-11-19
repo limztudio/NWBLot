@@ -18,6 +18,7 @@ nwb_target_link_libraries_whole_archive(nwb_dependency_computer
     nwb_assets_model_volume_entry
     nwb_assets_scene_volume_entry
     nwb_assets_graphics_volume_entry
+    nwb_assets_physics_volume_entry
     nwb_assets_ui_skin_volume_entry
 )
 target_link_libraries(nwb_dependency_computer PRIVATE

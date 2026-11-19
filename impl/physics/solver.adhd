@@ -287,7 +287,6 @@ void CollideContactsCpu(mut PhysicsWorld world, mut CpuTaskScheduler cpuSchedule
         }
     }
 
-    // Ensure every touching/speculative contact of any newly woken island is registered in the graph.
     for(usize idx = 0u; idx < count; ++idx){
         const u32 cId = activeContactIds[idx];
         mut Contact c = world.m_contacts[cId];
@@ -479,7 +478,6 @@ void SolveStepCpu(mut PhysicsWorld world, in f32 dt, in u32 subStepCount, mut Cp
     UpdateBroadPhasePairsCpu(world, cpuScheduler, pairCount);
     CollideContactsCpu(world, cpuScheduler);
 
-    // Split any awake islands that lost contacts.
     const usize awakeIslandSnapshotCount = world.m_solverSets[s_AwakeSetIndex].islands.size();
     Vector<u32> candidateSplitIslands;
     for(usize i = 0u; i < awakeIslandSnapshotCount; ++i){
@@ -522,7 +520,6 @@ void SolveStepCpu(mut PhysicsWorld world, in f32 dt, in u32 subStepCount, mut Cp
     const Softness staticSoftness = MakeSoftness(2.0f * world.m_def.contactHertz, world.m_def.contactDampingRatio, h);
     const VectorSingle gravity = VectorSingle(world.m_def.gravity);
 
-    // Prepare contact constraints per graph color.
     Array<Vector<ContactConstraint>, s_GraphColorCount> colorConstraints;
     for(usize c = 0u; c < s_GraphColorCount; ++c){
         const usize cCount = world.m_graph.colors[c].contactIds.size();
@@ -575,7 +572,6 @@ void SolveStepCpu(mut PhysicsWorld world, in f32 dt, in u32 subStepCount, mut Cp
     mut Vector<BodyState> states = world.m_solverSets[s_AwakeSetIndex].states;
 
     for(u32 subStep = 0u; subStep < subStepCount; ++subStep){
-        // 1. Integrate velocities.
         if(cpuScheduler.isParallelEnabled() && awakeCount >= s_CpuParallelThreshold){
             const usize grain = Max(cast<usize>(1u), awakeCount / 16u);
             const auto res = cpuScheduler.parallelFor(
@@ -595,7 +591,6 @@ void SolveStepCpu(mut PhysicsWorld world, in f32 dt, in u32 subStepCount, mut Cp
                 IntegrateBodyVelocitiesRange(sims, states, gravity, h, maxLinVel, idx);
         }
 
-        // 2. Warm start (or clear per-substep impulses when warm-starting is disabled).
         if(world.m_enableWarmStarting){
             for(usize c = 0u; c < s_OverflowColorIndex; ++c){
                 const usize cCount = colorConstraints[c].size();
@@ -630,7 +625,6 @@ void SolveStepCpu(mut PhysicsWorld world, in f32 dt, in u32 subStepCount, mut Cp
             }
         }
 
-        // 3. Solve with bias.
         for(usize c = 0u; c < s_OverflowColorIndex; ++c){
             const usize cCount = colorConstraints[c].size();
             if(cCount == 0u)
@@ -657,7 +651,6 @@ void SolveStepCpu(mut PhysicsWorld world, in f32 dt, in u32 subStepCount, mut Cp
         for(usize idx = 0u; idx < colorConstraints[s_OverflowColorIndex].size(); ++idx)
             SolveContactConstraint(states, colorConstraints[s_OverflowColorIndex][idx], invH, true);
 
-        // 4. Integrate positions.
         if(cpuScheduler.isParallelEnabled() && awakeCount >= s_CpuParallelThreshold){
             const usize grain = Max(cast<usize>(1u), awakeCount / 16u);
             const auto res = cpuScheduler.parallelFor(
@@ -677,7 +670,6 @@ void SolveStepCpu(mut PhysicsWorld world, in f32 dt, in u32 subStepCount, mut Cp
                 IntegrateBodyPositionsAt(states, h, idx);
         }
 
-        // 5. Relax without bias.
         for(usize c = 0u; c < s_OverflowColorIndex; ++c){
             const usize cCount = colorConstraints[c].size();
             if(cCount == 0u)
@@ -705,7 +697,6 @@ void SolveStepCpu(mut PhysicsWorld world, in f32 dt, in u32 subStepCount, mut Cp
             SolveContactConstraint(states, colorConstraints[s_OverflowColorIndex][idx], invH, false);
     }
 
-    // 6. Restitution pass.
     const f32 restThresh = world.m_def.restitutionThreshold;
     for(usize c = 0u; c < s_OverflowColorIndex; ++c){
         const usize cCount = colorConstraints[c].size();
@@ -733,7 +724,6 @@ void SolveStepCpu(mut PhysicsWorld world, in f32 dt, in u32 subStepCount, mut Cp
     for(usize idx = 0u; idx < colorConstraints[s_OverflowColorIndex].size(); ++idx)
         ApplyRestitutionContactConstraint(states, colorConstraints[s_OverflowColorIndex][idx], restThresh);
 
-    // 7. Store impulses back to contacts & emit hit events.
     for(usize c = 0u; c < s_GraphColorCount; ++c){
         for(usize idx = 0u; idx < colorConstraints[c].size(); ++idx){
             in ContactConstraint cc = colorConstraints[c][idx];
@@ -758,7 +748,6 @@ void SolveStepCpu(mut PhysicsWorld world, in f32 dt, in u32 subStepCount, mut Cp
         }
     }
 
-    // 8. Finalize awake body transforms, inertia, sleep timers, broadphase & move events.
     if(cpuScheduler.isParallelEnabled() && awakeCount >= s_CpuParallelThreshold){
         const usize grain = Max(cast<usize>(1u), awakeCount / 16u);
         const auto res = cpuScheduler.parallelFor(

@@ -86,13 +86,6 @@ Expected<HullShape> MakeBoxHull(in f32 halfX, in f32 halfY, in f32 halfZ, in f32
     hull.vertices.push_back(f32x4( halfX,  halfY,  halfZ, 0.0f));
     hull.vertices.push_back(f32x4(-halfX,  halfY,  halfZ, 0.0f));
 
-    // Faces ordered so every loop is CCW from outside.
-    // Face 0 (+X): 1 -> 2 -> 6 -> 5 (edges 0..3)
-    // Face 1 (-X): 0 -> 4 -> 7 -> 3 (edges 4..7)
-    // Face 2 (+Y): 3 -> 7 -> 6 -> 2 (edges 8..11)
-    // Face 3 (-Y): 0 -> 1 -> 5 -> 4 (edges 12..15)
-    // Face 4 (+Z): 4 -> 5 -> 6 -> 7 (edges 16..19)
-    // Face 5 (-Z): 0 -> 3 -> 2 -> 1 (edges 20..23)
     AppendBoxFace(hull, VectorSingle( 1.0f,  0.0f,  0.0f, 0.0f), halfX, 0u);
     AppendBoxFace(hull, VectorSingle(-1.0f,  0.0f,  0.0f, 0.0f), halfX, 4u);
     AppendBoxFace(hull, VectorSingle( 0.0f,  1.0f,  0.0f, 0.0f), halfY, 8u);
@@ -100,37 +93,31 @@ Expected<HullShape> MakeBoxHull(in f32 halfX, in f32 halfY, in f32 halfZ, in f32
     AppendBoxFace(hull, VectorSingle( 0.0f,  0.0f,  1.0f, 0.0f), halfZ, 16u);
     AppendBoxFace(hull, VectorSingle( 0.0f,  0.0f, -1.0f, 0.0f), halfZ, 20u);
 
-    // 0:1->2, 1:2->6, 2:6->5, 3:5->1
     AppendBoxHalfEdge(hull, 1u, 0u, 1u, 22u);
     AppendBoxHalfEdge(hull, 2u, 0u, 2u, 10u);
     AppendBoxHalfEdge(hull, 6u, 0u, 3u, 17u);
     AppendBoxHalfEdge(hull, 5u, 0u, 0u, 13u);
 
-    // 4:0->4, 5:4->7, 6:7->3, 7:3->0
     AppendBoxHalfEdge(hull, 0u, 1u, 5u, 15u);
     AppendBoxHalfEdge(hull, 4u, 1u, 6u, 19u);
     AppendBoxHalfEdge(hull, 7u, 1u, 7u, 8u);
     AppendBoxHalfEdge(hull, 3u, 1u, 4u, 20u);
 
-    // 8:3->7, 9:7->6, 10:6->2, 11:2->3
     AppendBoxHalfEdge(hull, 3u, 2u, 9u, 6u);
     AppendBoxHalfEdge(hull, 7u, 2u, 10u, 18u);
     AppendBoxHalfEdge(hull, 6u, 2u, 11u, 1u);
     AppendBoxHalfEdge(hull, 2u, 2u, 8u, 21u);
 
-    // 12:0->1, 13:1->5, 14:5->4, 15:4->0
     AppendBoxHalfEdge(hull, 0u, 3u, 13u, 23u);
     AppendBoxHalfEdge(hull, 1u, 3u, 14u, 3u);
     AppendBoxHalfEdge(hull, 5u, 3u, 15u, 16u);
     AppendBoxHalfEdge(hull, 4u, 3u, 12u, 4u);
 
-    // 16:4->5, 17:5->6, 18:6->7, 19:7->4
     AppendBoxHalfEdge(hull, 4u, 4u, 17u, 14u);
     AppendBoxHalfEdge(hull, 5u, 4u, 18u, 2u);
     AppendBoxHalfEdge(hull, 6u, 4u, 19u, 9u);
     AppendBoxHalfEdge(hull, 7u, 4u, 16u, 5u);
 
-    // 20:0->3, 21:3->2, 22:2->1, 23:1->0
     AppendBoxHalfEdge(hull, 0u, 5u, 21u, 7u);
     AppendBoxHalfEdge(hull, 3u, 5u, 22u, 11u);
     AppendBoxHalfEdge(hull, 2u, 5u, 23u, 0u);
@@ -222,7 +209,6 @@ MassData ComputeCapsuleMass(in CapsuleShape capsule, in f32 density){
     const VectorSingle axis = SafeNormalizeVec3(d, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     const f32 deltaI = iAxis - iPerp;
 
-    // Inertia around capsule midpoint: I_perp * E + (I_axis - I_perp) * (axis * axis^T)
     const f32 c00 = iPerp + deltaI * axis.x * axis.x + totalMass * (c.y * c.y + c.z * c.z);
     const f32 c11 = iPerp + deltaI * axis.y * axis.y + totalMass * (c.x * c.x + c.z * c.z);
     const f32 c22 = iPerp + deltaI * axis.z * axis.z + totalMass * (c.x * c.x + c.y * c.y);
@@ -311,7 +297,6 @@ MassData ComputeHullMass(in HullShape hull, in f32 density){
     const VectorSingle localCom = comAccum / volume6;
     const VectorSingle worldCom = refPoint + localCom;
 
-    // Shift inertia from refPoint -> localCom, then parallel-axis to body origin.
     const f32 rxx = density * ixx - mass * (localCom.y * localCom.y + localCom.z * localCom.z);
     const f32 ryy = density * iyy - mass * (localCom.x * localCom.x + localCom.z * localCom.z);
     const f32 rzz = density * izz - mass * (localCom.x * localCom.x + localCom.y * localCom.y);

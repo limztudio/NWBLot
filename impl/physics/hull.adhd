@@ -73,7 +73,6 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
     if(uniquePts.size() < 4u)
         return MakeUnexpected(Failure());
 
-    // Find 6 axis extremes and initial non-degenerate tetrahedron.
     usize minIdx = 0u;
     usize maxIdx = 0u;
     for(usize axis = 0u; axis < 3u; ++axis){
@@ -159,7 +158,6 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
             faces[bestFace].conflicts.push_back(cast<u32>(i));
     }
 
-    // Expand hull iteratively.
     while(true){
         usize chosenFace = s_NullIndex;
         u32 apexIdx = s_NullIndex;
@@ -196,7 +194,6 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
         if(visibleFaces.empty())
             break;
 
-        // Collect directed horizon edges (tail, head) whose opposite face is not visible.
         Vector<u64> horizonEdges;
         for(usize v = 0u; v < visibleFaces.size(); ++v){
             const u32 fIdx = visibleFaces[v];
@@ -263,7 +260,6 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
         }
     }
 
-    // Compact live faces and build vertices & half-edges.
     HullShape result;
     result.radius = radius;
     Vector<u32> vertRemap;
@@ -318,7 +314,6 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
         result.faces.push_back(outFace);
     }
 
-    // Link twins.
     for(usize e0 = 0u; e0 < result.halfEdges.size(); ++e0){
         if(result.halfEdges[e0].twin != 255u)
             continue;

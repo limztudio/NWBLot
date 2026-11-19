@@ -160,7 +160,6 @@ void SyncEcsEntitiesToPhysicsWorld(
 ){
     PruneRemovedPhysicsEntities(world, physicsWorld, entityBodies, entityShapes);
 
-    // 1. Ensure bodies for entities with RigidBodyComponent.
     world.view<RigidBodyComponent, TransformComponent>().each(
         lambda[mut physicsWorld, mut entityBodies](
             in EntityID entity,
@@ -212,7 +211,6 @@ void SyncEcsEntitiesToPhysicsWorld(
         }
     );
 
-    // 2. Ensure static bodies for standalone ColliderComponent entities without RigidBodyComponent.
     world.view<ColliderComponent, TransformComponent>().each(
         lambda[mut world, mut physicsWorld, mut entityBodies, mut entityShapes](
             in EntityID entity,

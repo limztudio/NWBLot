@@ -178,7 +178,6 @@ void SolveSimplex3(mut Simplex s){
     const f32 dBC_1 = Vector3Dot(c, bc).x;
     const f32 dBC_2 = -Vector3Dot(b, bc).x;
 
-    // Vertex regions.
     if(dAB_2 <= 0.0f && dAC_2 <= 0.0f){
         s.v[0u].u = 1.0f;
         s.count = 1u;
@@ -206,7 +205,6 @@ void SolveSimplex3(mut Simplex s){
     const f32 dABC_B = Vector3Dot(n, nb).x;
     const f32 dABC_C = Vector3Dot(n, nc).x;
 
-    // Edge regions.
     if(dAB_1 > 0.0f && dAB_2 > 0.0f && dABC_C <= 0.0f){
         const f32 inv = 1.0f / (dAB_1 + dAB_2);
         s.v[0u].u = dAB_1 * inv;
@@ -262,13 +260,11 @@ void SolveSimplex4(mut Simplex s){
     if(signDet >= 0.0f)
         sign = 1.0f;
 
-    // Signed sub-tetrahedron volumes with origin.
     const f32 dABCD_D = sign * Vector3Dot(a, Cross(b, c)).x;
     const f32 dABCD_C = sign * Vector3Dot(d, Cross(b, a)).x;
     const f32 dABCD_B = sign * Vector3Dot(c, Cross(d, a)).x;
     const f32 dABCD_A = sign * Vector3Dot(b, Cross(d, c)).x;
 
-    // Actually check outward half-spaces for each of the 4 faces directly.
     const f32 testABC = Vector3Dot(VectorSingle(d - a, 0.0f), Cross(VectorSingle(b - a, 0.0f), VectorSingle(c - a, 0.0f))).x;
     const f32 oriABC = Vector3Dot(VectorSingle(-a, 0.0f), Cross(VectorSingle(b - a, 0.0f), VectorSingle(c - a, 0.0f))).x;
 
@@ -305,7 +301,6 @@ void SolveSimplex4(mut Simplex s){
         return;
     }
 
-    // Evaluate visible faces and pick the triangle with smallest closest-point distance.
     Simplex bestSimplex;
     bestSimplex.count = 1u;
     bestSimplex.v[0u] = vd;
@@ -457,7 +452,6 @@ DistanceOutput ShapeDistance(in DistanceInput input, mut SimplexCache cache){
         const VectorSingle wB = TransformPoint(xfB, VectorSingle(input.proxyB.points[idxB]));
         const VectorSingle w = VectorSingle(wB - wA, 0.0f);
 
-        // Terminate when support progress falls below precision floor.
         if(Vector3Dot(p - w, p).x <= 1.0e-6f * pLenSq)
             break;
 
@@ -570,7 +564,6 @@ LocalRayHit RayCastCapsule(in CapsuleShape capsule, in Transform3D xf, in Vector
     const f32 r = capsule.radius;
     const VectorSingle m = VectorSingle(origin - a, 0.0f);
 
-    // Check initial overlap with capsule segment.
     const f32 proj = Clamp(Vector3Dot(m, ab).x / abLenSq, 0.0f, 1.0f);
     const VectorSingle closest0 = a + ab * proj;
     if(Vector3LengthSq(VectorSingle(origin - closest0, 0.0f)).x <= r * r){
@@ -581,7 +574,6 @@ LocalRayHit RayCastCapsule(in CapsuleShape capsule, in Transform3D xf, in Vector
         return hit;
     }
 
-    // Ray vs infinite cylinder.
     const f32 md = Vector3Dot(m, ab).x;
     const f32 nd = Vector3Dot(d, ab).x;
     const f32 dd = Vector3Dot(d, d).x;
@@ -610,7 +602,6 @@ LocalRayHit RayCastCapsule(in CapsuleShape capsule, in Transform3D xf, in Vector
         }
     }
 
-    // Test endcap spheres at a and b.
     SphereShape capA;
     capA.center = capsule.center1;
     capA.radius = r;
@@ -742,7 +733,6 @@ LocalRayHit ShapeCastProxies(
             return hit;
         }
 
-        // Rate at which B approaches A along separating normal n (from A to B).
         const f32 approach = -Vector3Dot(VectorSingle(dist.normal), relMove).x;
         if(approach <= 1.0e-8f)
             return hit;

@@ -233,7 +233,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         nwbPhysicsApplyPointImpulse(P, rA, rB, invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, vA, wA, vB, wB);
     }
 
-    // 2D tangent friction at manifold center.
     {
         const float3 centerA = c.centerATwistMass.xyz;
         const float3 centerB = c.centerBTwistImpulse.xyz;
@@ -262,7 +261,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         nwbPhysicsApplyPointImpulse(P, centerA, centerB, invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, vA, wA, vB, wB);
     }
 
-    // Twist friction around contact normal.
     const float twistMass = c.centerATwistMass.w;
     if(twistMass > 0.0f && maxLeverArm > 0.0f){
         const float dwN = dot(wB - wA, normal);
@@ -277,7 +275,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, angP);
     }
 
-    // Rolling resistance.
     if(rollingResistance > 0.0f && totalNormalImpulse > 0.0f){
         const float3 dw = wB - wA;
         const float3 deltaR = -nwbPhysicsMulSymmetric3(c.rollingMass0, c.rollingMass1, dw);

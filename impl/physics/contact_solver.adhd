@@ -236,13 +236,11 @@ void PrepareContactConstraint(
     outConstraint.centerA = f32x4(centerA, 0.0f);
     outConstraint.centerB = f32x4(centerB, 0.0f);
 
-    // Compute lever arms from weighted friction center for twist friction.
     for(u32 i = 0u; i < outConstraint.pointCount; ++i){
         const VectorSingle dA = VectorSingle(outConstraint.points[i].rA) - centerA;
         outConstraint.points[i].leverArm = Vector3Length(VectorSingle(dA, 0.0f)).x;
     }
 
-    // 2x2 tangent inverse effective mass matrix at friction center.
     const VectorSingle rt1A = Cross(centerA, t1);
     const VectorSingle rt1B = Cross(centerB, t1);
     const VectorSingle rt2A = Cross(centerA, t2);
@@ -396,7 +394,6 @@ void SolveContactConstraint(mut Vector<BodyState> states, mut ContactConstraint 
         wB = wB + MulMat3Vec(c.invIB, Cross(rB, p));
     }
 
-    // 2D Coulomb friction at manifold center.
     {
         const VectorSingle centerA = VectorSingle(c.centerA);
         const VectorSingle centerB = VectorSingle(c.centerB);
@@ -432,7 +429,6 @@ void SolveContactConstraint(mut Vector<BodyState> states, mut ContactConstraint 
         wB = wB + MulMat3Vec(c.invIB, Cross(centerB, p));
     }
 
-    // Twist friction.
     if(c.twistMass > 0.0f && maxLeverArm > 0.0f){
         const f32 dwN = Vector3Dot(VectorSingle(wB - wA, 0.0f), n).x;
         const f32 deltaT = -c.twistMass * dwN;
@@ -445,7 +441,6 @@ void SolveContactConstraint(mut Vector<BodyState> states, mut ContactConstraint 
         wB = wB + MulMat3Vec(c.invIB, angP);
     }
 
-    // Rolling resistance.
     if(c.rollingResistance > 0.0f && totalNormalImpulse > 0.0f){
         const VectorSingle dw = VectorSingle(wB - wA, 0.0f);
         const VectorSingle deltaR = -MulMat3Vec(c.rollingMass, dw);

@@ -479,7 +479,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         }
 
         if(bestAxis >= 6){
-            // Edge-edge single representative midpoint.
             float3 pA = cA;
             float3 pB = cB;
             for(int k = 0; k < 3; ++k){

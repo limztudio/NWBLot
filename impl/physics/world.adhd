@@ -440,7 +440,6 @@ class PhysicsWorld{
         const u32 idx = shapeId.index;
         const u32 bodyIdx = this.m_shapes[idx].bodyId;
 
-        // Destroy any contacts involving this shape.
         if(bodyIdx < this.m_bodies.size()){
             u32 edgeKey = this.m_bodies[bodyIdx].headContactKey;
             while(edgeKey != s_NullIndex){
@@ -553,7 +552,6 @@ class PhysicsWorld{
                 r2 = r2 + VectorSingle(shapeMasses[i].inertia.row2);
             }
 
-            // Shift origin inertia back to combined localCom via Steiner parallel axis theorem.
             const f32 cxx = r0.x - totalMass * (localCom.y * localCom.y + localCom.z * localCom.z);
             const f32 cyy = r1.y - totalMass * (localCom.x * localCom.x + localCom.z * localCom.z);
             const f32 czz = r2.z - totalMass * (localCom.x * localCom.x + localCom.y * localCom.y);

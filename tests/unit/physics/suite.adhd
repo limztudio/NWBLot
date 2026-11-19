@@ -36,7 +36,6 @@ void VerifyPhysicsEdgeCases_GenerationalHandleInvalidationAndReuse(){
     EXPECT_FALSE(physWorld.tryGetBodyTransform(firstBody).has_value());
     EXPECT_FALSE(physWorld.createSphereShape(firstBody, sd, sphereRes.value()).has_value());
 
-    // Reallocating into the freed slot must bump generation and keep old handles stale.
     const Expected<BodyId> secondBodyRes = physWorld.createBody(bd);
     ASSERT_TRUE(secondBodyRes.has_value());
     const BodyId secondBody = secondBodyRes.value();
@@ -57,7 +56,6 @@ void VerifyPhysicsEdgeCases_GenerationalHandleInvalidationAndReuse(){
 void VerifyPhysicsEdgeCases_DegenerateAndInvalidGeometryRejection(){
     PhysicsWorld physWorld;
 
-    // Invalid body positions & non-finite vectors must fail cleanly.
     const f32 nanVal = 0.0f / 0.0f;
     BodyDef nanBody;
     nanBody.type = BodyType::Dynamic;
@@ -76,7 +74,6 @@ void VerifyPhysicsEdgeCases_DegenerateAndInvalidGeometryRejection(){
     EXPECT_FALSE(MakeBoxHull(1.0f, -0.5f, 1.0f, 0.0f).has_value());
     EXPECT_FALSE(MakeBoxHull(1.0f, 1.0f, 1.0f, -0.1f).has_value());
 
-    // Coplanar and under-populated point clouds must be rejected by Quickhull.
     Array<f32x4, 4u> coplanarPts;
     coplanarPts[0u] = f32x4(-1.0f, 0.0f, -1.0f, 0.0f);
     coplanarPts[1u] = f32x4( 1.0f, 0.0f, -1.0f, 0.0f);
@@ -90,7 +87,6 @@ void VerifyPhysicsEdgeCases_DegenerateAndInvalidGeometryRejection(){
     tooFewPts[2u] = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
     EXPECT_FALSE(BuildConvexHull(tooFewPts, 0.0f).has_value());
 
-    // Valid body rejects negative density / friction materials.
     BodyDef validBd;
     validBd.type = BodyType::Dynamic;
     const Expected<BodyId> bodyRes = physWorld.createBody(validBd);
@@ -106,7 +102,6 @@ void VerifyPhysicsEdgeCases_BoxStackStabilityAndSleeping(){
     PhysicsWorld physWorld;
     CpuTaskScheduler scheduler(2u);
 
-    // Static floor with top surface at y = 0.
     BodyDef floorDef;
     floorDef.type = BodyType::Static;
     floorDef.position = f32x4(0.0f, -0.5f, 0.0f, 0.0f);
@@ -115,7 +110,6 @@ void VerifyPhysicsEdgeCases_BoxStackStabilityAndSleeping(){
     floorShapeDef.material.friction = 0.7f;
     ASSERT_TRUE(physWorld.createHullShape(floorId, floorShapeDef, MakeBoxHull(5.0f, 0.5f, 5.0f, 0.0f).value()).has_value());
 
-    // 5-box vertical tower (half-extent 0.5m, spacing 1.01m).
     Array<BodyId, 5u> boxes;
     ShapeDef boxShapeDef;
     boxShapeDef.density = 1.0f;
@@ -135,7 +129,6 @@ void VerifyPhysicsEdgeCases_BoxStackStabilityAndSleeping(){
     for(u32 step = 0u; step < 180u; ++step)
         StepPhysicsWorld(physWorld, dt, 4u, scheduler);
 
-    // All 5 boxes must settle near their stacked rest heights and sleep.
     for(u32 i = 0u; i < 5u; ++i){
         const Expected<Transform3D> xf = physWorld.tryGetBodyTransform(boxes[i]);
         ASSERT_TRUE(xf.has_value());
@@ -148,7 +141,6 @@ void VerifyPhysicsEdgeCases_BoxStackStabilityAndSleeping(){
     EXPECT_GT(physWorld.lastStepStats().sleepingBodyCount, 0u);
     EXPECT_FALSE(physWorld.isBodyAwake(boxes[4u]));
 
-    // External impulse on the top box wakes the island cleanly.
     EXPECT_TRUE(physWorld.applyLinearImpulse(boxes[4u], VectorSingle(2.0f, 0.0f, 0.0f, 0.0f), true));
     EXPECT_TRUE(physWorld.isBodyAwake(boxes[4u]));
 }
@@ -192,10 +184,8 @@ void VerifyPhysicsEdgeCases_IslandSplitOnContactBreak(){
     for(u32 i = 0u; i < 6u; ++i)
         StepPhysicsWorld(physWorld, 1.0f / 60.0f, 4u, scheduler);
 
-    // Bridge connects A and B into a single dynamic island.
     EXPECT_EQ(physWorld.lastStepStats().islandCount, 1u);
 
-    // Lifting bridge away breaks both contacts and must split into 3 isolated islands.
     EXPECT_TRUE(physWorld.setBodyTransform(bridge, VectorSingle(0.0f, 12.0f, 0.0f, 0.0f), QuaternionIdentity()));
     StepPhysicsWorld(physWorld, 1.0f / 60.0f, 4u, scheduler);
     StepPhysicsWorld(physWorld, 1.0f / 60.0f, 4u, scheduler);
@@ -212,7 +202,6 @@ void VerifyPhysicsEdgeCases_ConstraintGraphOverflowColor23(){
     wd.enableSleep = false;
     physWorld.setWorldDef(wd);
 
-    // Central dynamic hub contacted simultaneously by 28 surrounding dynamic spheres (> 20 dynamic graph colors).
     BodyDef hubDef;
     hubDef.type = BodyType::Dynamic;
     hubDef.position = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -263,7 +252,6 @@ void VerifyPhysicsEdgeCases_SpeculativeContactAndFastImpact(){
     PhysicsWorld physWorld;
     CpuTaskScheduler scheduler(1u);
 
-    // Thin static floor top at y = 0.
     BodyDef floorDef;
     floorDef.type = BodyType::Static;
     floorDef.position = f32x4(0.0f, -0.05f, 0.0f, 0.0f);
@@ -271,7 +259,6 @@ void VerifyPhysicsEdgeCases_SpeculativeContactAndFastImpact(){
     ShapeDef floorSd;
     ASSERT_TRUE(physWorld.createHullShape(floorId, floorSd, MakeBoxHull(5.0f, 0.05f, 5.0f, 0.0f).value()).has_value());
 
-    // Fast-moving sphere starting just above floor with high downward velocity within speculative reach.
     BodyDef bulletDef;
     bulletDef.type = BodyType::Dynamic;
     bulletDef.isBullet = true;
@@ -317,7 +304,6 @@ void VerifyPhysicsEdgeCases_RayCastAndShapeCastEdgeCases(){
     sensorSd.isSensor = true;
     ASSERT_TRUE(physWorld.createSphereShape(sensorBody, sensorSd, MakeSphereShape(VectorSingle(0.0f), 0.75f).value()).has_value());
 
-    // 1. Ray starting inside box yields hit with fraction == 0.
     RayCastInput insideRay;
     insideRay.origin = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
     insideRay.translation = f32x4(5.0f, 0.0f, 0.0f, 0.0f);
@@ -327,13 +313,11 @@ void VerifyPhysicsEdgeCases_RayCastAndShapeCastEdgeCases(){
     EXPECT_FLOAT_EQ(insideHit.fraction, 0.0f);
     EXPECT_TRUE(insideHit.shapeId == boxShape);
 
-    // 2. Category mask exclusion skips the box.
     RayCastInput maskedRay = insideRay;
     maskedRay.origin = f32x4(-3.0f, 1.0f, 0.0f, 0.0f);
     maskedRay.filter.maskBits = 0x0001u;
     EXPECT_FALSE(physWorld.rayCastClosest(maskedRay).hit);
 
-    // 3. Sensor skipped when hitSensors is false and hit when true.
     RayCastInput sensorRay;
     sensorRay.origin = f32x4(-2.0f, 4.0f, 0.0f, 0.0f);
     sensorRay.translation = f32x4(4.0f, 0.0f, 0.0f, 0.0f);
@@ -342,13 +326,11 @@ void VerifyPhysicsEdgeCases_RayCastAndShapeCastEdgeCases(){
     sensorRay.hitSensors = true;
     EXPECT_TRUE(physWorld.rayCastClosest(sensorRay).hit);
 
-    // 4. Parallel ray missing outside box.
     RayCastInput missRay;
     missRay.origin = f32x4(-3.0f, 2.5f, 0.0f, 0.0f);
     missRay.translation = f32x4(6.0f, 0.0f, 0.0f, 0.0f);
     EXPECT_FALSE(physWorld.rayCastClosest(missRay).hit);
 
-    // 5. GJK shape cast of sphere hitting box cleanly.
     ShapeCastInput sc;
     sc.originTransform = Transform3D(VectorSingle(-3.0f, 1.0f, 0.0f, 0.0f), QuaternionIdentity());
     sc.translation = f32x4(5.0f, 0.0f, 0.0f, 0.0f);
@@ -361,7 +343,6 @@ void VerifyPhysicsEdgeCases_RayCastAndShapeCastEdgeCases(){
 }
 
 void VerifyPhysicsEdgeCases_GpuLayoutAndEcsCpuFallbackContract(){
-    // 1. Validate GPU std430 struct sizes match shader constants.
     EXPECT_EQ(size_of<GpuPhysicsPushConstants>(), 80u);
     EXPECT_EQ(size_of<GpuPhysicsBodyState>(), 64u);
     EXPECT_EQ(size_of<GpuPhysicsBodySim>(), 176u);
@@ -371,7 +352,6 @@ void VerifyPhysicsEdgeCases_GpuLayoutAndEcsCpuFallbackContract(){
     EXPECT_EQ(size_of<GpuPhysicsContactPoint>(), 64u);
     EXPECT_EQ(size_of<GpuPhysicsContactConstraint>(), 528u);
 
-    // 2. GpuPreferred without graphics runtime must fall back cleanly to CPU.
     {
         PhysicsWorld gpuFallbackWorld;
         gpuFallbackWorld.setBackendMode(PhysicsBackendMode::GpuPreferred);
@@ -390,7 +370,6 @@ void VerifyPhysicsEdgeCases_GpuLayoutAndEcsCpuFallbackContract(){
         EXPECT_LT(gpuFallbackWorld.tryGetBodyTransform(bId).value().position.y, 5.0f);
     }
 
-    // 3. ECS PhysicsSystem headless CPU mode syncs RigidBodyComponent + ColliderComponent -> TransformComponent.
     {
         EcsTestWorld testWorld;
         testWorld.world.addSystem<PhysicsSystem>(testWorld.world);

@@ -88,7 +88,6 @@ void AddContactToGraph(mut ConstraintGraph graph, in Vector<Body> bodies, mut Co
         }
     }
     else{
-        // Dynamic-static/kinematic contacts prefer the upper priority colors (20..22), falling back to 0..19 before overflow.
         b8 found = false;
         for(usize c = s_DynamicColorCount; c < s_OverflowColorIndex; ++c){
             if((staticA || !graph.colors[c].bodySet.getBit(bodyIdA)) && (staticB || !graph.colors[c].bodySet.getBit(bodyIdB))){

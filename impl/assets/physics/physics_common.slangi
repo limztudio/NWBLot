@@ -122,7 +122,6 @@ struct NwbPhysicsGpuContactConstraint{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Hamilton quaternion multiplication matching global/simd/quaternion_arithmetic.h.
 float4 nwbPhysicsQuatMul(const float4 a, const float4 b){
     return float4(
         a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,

@@ -669,7 +669,6 @@ class PhysicsSolverTask{
             commands.commitBarriers();
         }
 
-        // Dispatch overflow color 23 items one by one so shared dynamic bodies remain race-free.
         const u32 overflowCount = this.colorSlices[s_OverflowColorIndex].count;
         const u32 overflowOffset = this.colorSlices[s_OverflowColorIndex].offset;
         for(u32 k = 0u; k < overflowCount; ++k){
@@ -725,7 +724,6 @@ class PhysicsSolverTask{
         const f32 invH = 1.0f / h;
 
         for(u32 subStep = 0u; subStep < this.subStepCount; ++subStep){
-            // 1. Integrate velocities.
             {
                 ComputeState velState;
                 velState.setPipeline(this.pipeIntegrateVel.deref());
@@ -746,16 +744,13 @@ class PhysicsSolverTask{
                 commands.commitBarriers();
             }
 
-            // 2. Warm start (or clear per-substep impulses when disabled).
             if(this.enableWarmStarting)
                 this.dispatchContactPass(commands, s_GpuSolverModeWarmStart, invH, 1u);
             else if(subStep > 0u)
                 this.dispatchContactPass(commands, s_GpuSolverModeWarmStart, invH, 0u);
 
-            // 3. Solve with bias.
             this.dispatchContactPass(commands, s_GpuSolverModeSolveBias, invH, 0u);
 
-            // 4. Integrate positions.
             {
                 ComputeState posState;
                 posState.setPipeline(this.pipeIntegratePos.deref());
@@ -774,14 +769,11 @@ class PhysicsSolverTask{
                 commands.commitBarriers();
             }
 
-            // 5. Relax without bias.
             this.dispatchContactPass(commands, s_GpuSolverModeRelax, invH, 0u);
         }
 
-        // 6. Restitution pass.
         this.dispatchContactPass(commands, s_GpuSolverModeRestitution, invH, 0u);
 
-        // 7. Finalize awake body transforms, inertia & sleep timer.
         {
             ComputeState finState;
             finState.setPipeline(this.pipeFinalize.deref());
@@ -797,7 +789,6 @@ class PhysicsSolverTask{
             commands.dispatch(bodyGroups, 1u, 1u);
         }
 
-        // 8. Copy results back to readback buffers.
         commands.setBufferState(this.buffers.bodySimBuffer.deref(), ResourceStates::CopySource);
         commands.setBufferState(this.buffers.bodyStateBuffer.deref(), ResourceStates::CopySource);
         commands.setBufferState(this.buffers.bodySimReadback.deref(), ResourceStates::CopyDest);
@@ -1211,7 +1202,6 @@ class PhysicsGpuDispatcher{
         if(!heap.isInitialized())
             return false;
 
-        // 1. Pack body sims (awake [0 .. awakeCount) first so solver/finalize index 1:1) & shape proxies.
         Vector<u32> bodyToGpuSim(world.m_bodies.size(), s_GpuInvalidIndex);
         Vector<GpuPhysicsBodySim> gpuSims;
         Vector<GpuPhysicsBodyState> gpuStates;
@@ -1274,7 +1264,6 @@ class PhysicsGpuDispatcher{
         if(!EnsurePhysicsGpuReadbackBuffer(graphics, Name("physics/gpu/counters_rb"), size_of<u32>(), 4u, this.m_counterSlot))
             return false;
 
-        // 2. GPU Broadphase + Narrowphase when shapes exist.
         if(shapeCount > 0u){
             u32 maxPairs = Max(shapeCount * 8u, 1024u);
             if(!EnsurePhysicsGpuStorageBuffer(graphics, heap, Name("physics/gpu/shapes"), s_GpuShapeProxyBytes, shapeCount, this.m_shapeSlot))
@@ -1434,7 +1423,6 @@ class PhysicsGpuDispatcher{
                 }
             }
 
-            // Prune stale awake contacts that were not emitted by broadphase this step.
             Vector<u32> staleIds;
             for(u32 cId = 0u; cId < world.m_contacts.size(); ++cId){
                 in Contact c = world.m_contacts[cId];
@@ -1454,7 +1442,6 @@ class PhysicsGpuDispatcher{
             for(usize i = 0u; i < staleIds.size(); ++i)
                 world.destroyContactInternal(staleIds[i]);
 
-            // Register any active contacts belonging to newly woken islands.
             for(u32 cId = 0u; cId < world.m_contacts.size(); ++cId){
                 mut Contact c = world.m_contacts[cId];
                 if((c.flags & cast<u32>(ContactFlags::Alive)) == 0u || (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u)
@@ -1469,7 +1456,6 @@ class PhysicsGpuDispatcher{
         }
         world.m_broadPhase.clearMoves();
 
-        // Split any awake islands whose contacts broke.
         const usize awakeIslandSnapshotCount = world.m_solverSets[s_AwakeSetIndex].islands.size();
         Vector<u32> candidateSplitIslands;
         for(usize i = 0u; i < awakeIslandSnapshotCount; ++i){
@@ -1488,7 +1474,6 @@ class PhysicsGpuDispatcher{
             );
         }
 
-        // 3. Prepare colored constraints on CPU (parallel across contacts per color) and pack for GPU.
         const f32 h = dt / cast<f32>(subStepCount);
         const Softness dynamicSoftness = MakeSoftness(world.m_def.contactHertz, world.m_def.contactDampingRatio, h);
         const Softness staticSoftness = MakeSoftness(2.0f * world.m_def.contactHertz, world.m_def.contactDampingRatio, h);
@@ -1564,7 +1549,6 @@ class PhysicsGpuDispatcher{
                 return false;
         }
 
-        // Repack awake body sims/states fresh after any island wakeups triggered during manifold reconciliation.
         const u32 currentAwakeCount = world.awakeBodyCount();
         if(currentAwakeCount == 0u)
             return false;
@@ -1629,7 +1613,6 @@ class PhysicsGpuDispatcher{
         ))
             return false;
 
-        // 4. Write GPU solver outputs back into awake BodySim / BodyState and contact impulses.
         mut SolverSet awakeOut = world.m_solverSets[s_AwakeSetIndex];
         for(u32 idx = 0u; idx < currentAwakeCount; ++idx){
             mut BodySim sim = awakeOut.sims[idx];

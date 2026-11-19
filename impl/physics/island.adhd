@@ -115,7 +115,6 @@ void WakeIslandInSets(
         AddBodyToSolverSet(bodies, sets[s_AwakeSetIndex], sim, state);
     }
 
-    // Move island ownership from oldSet to s_AwakeSetIndex.
     const u32 oldLocal = islands[islandId].localIndex;
     if(oldLocal < sets[oldSetIndex].islands.size()){
         const u32 lastIdx = cast<u32>(sets[oldSetIndex].islands.size() - 1u);

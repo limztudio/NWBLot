@@ -50,7 +50,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const float3 row0 = sim.invInertiaLocalRow0.xyz;
         const float3 row1 = sim.invInertiaLocalRow1.xyz;
         const float3 row2 = sim.invInertiaLocalRow2.xyz;
-        // Approximate diagonal inertia from inverse local inertia when non-zero.
         const float3 invDiag = float3(row0.x, row1.y, row2.z);
         const float3 diag = float3(
             invDiag.x > 1.0e-12f ? (1.0f / invDiag.x) : 0.0f,

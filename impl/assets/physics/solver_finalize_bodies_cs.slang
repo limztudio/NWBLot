@@ -62,7 +62,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float3 l1 = sim.invInertiaLocalRow1.xyz;
     const float3 l2 = sim.invInertiaLocalRow2.xyz;
 
-    // R * L * R^T, where columns of R^T are r0, r1, r2.
     const float3 lr0 = float3(dot(l0, r0), dot(l0, r1), dot(l0, r2));
     const float3 lr1 = float3(dot(l1, r0), dot(l1, r1), dot(l1, r2));
     const float3 lr2 = float3(dot(l2, r0), dot(l2, r1), dot(l2, r2));

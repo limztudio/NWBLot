@@ -203,7 +203,6 @@ Manifold CollideCapsules(in CapsuleShape capsuleA, in Transform3D xfA, in Capsul
     const VectorSingle n = SafeNormalizeVec3(d, fallback);
     m.normal = f32x4(n, 0.0f);
 
-    // Parallel segments emit two contact points across the overlapping interval.
     if(lenSqA > s_NormalizeEpsilonSq && lenSqB > s_NormalizeEpsilonSq){
         const VectorSingle uA = dirA / Sqrt(lenSqA);
         const VectorSingle uB = dirB / Sqrt(lenSqB);
@@ -258,7 +257,6 @@ Manifold CollideSphereAndHull(in SphereShape sphereA, in Transform3D xfA, in Hul
     const VectorSingle localSphereC = InverseTransformPoint(xfB, worldSphereC);
     const f32 totalR = sphereA.radius + hullB.radius;
 
-    // Fast exact plane check first to detect deep inside / outside quickly.
     f32 maxPlaneDist = -s_MaxF32;
     usize bestFace = 0u;
     for(usize i = 0u; i < hullB.faces.size(); ++i){
@@ -273,7 +271,6 @@ Manifold CollideSphereAndHull(in SphereShape sphereA, in Transform3D xfA, in Hul
     }
 
     if(maxPlaneDist <= 0.0f){
-        // Sphere center is strictly inside the polyhedron. Push outward through shallowest face.
         const VectorSingle localOutward = VectorSingle(hullB.faces[bestFace].plane.normalOffset, 0.0f);
         const VectorSingle worldOutward = SafeNormalizeVec3(Vector3Rotate(localOutward, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
         const VectorSingle nAtoB = -worldOutward;
@@ -289,7 +286,6 @@ Manifold CollideSphereAndHull(in SphereShape sphereA, in Transform3D xfA, in Hul
         return m;
     }
 
-    // Outside: use GJK between point sphere center and hull polyhedron.
     DistanceInput input;
     input.proxyA = MakePointProxy(VectorSingle(sphereA.center), sphereA.radius);
     input.proxyB = MakeHullProxy(hullB);
@@ -329,7 +325,6 @@ Manifold CollideCapsuleAndHull(in CapsuleShape capsuleA, in Transform3D xfA, in 
     const VectorSingle l2 = InverseTransformPoint(xfB, w2);
     const f32 totalR = capsuleA.radius + hullB.radius;
 
-    // Check GJK distance between capsule segment and hull polyhedron.
     DistanceInput input;
     input.proxyA = MakeCapsuleProxy(capsuleA);
     input.proxyB = MakeHullProxy(hullB);
@@ -341,7 +336,6 @@ Manifold CollideCapsuleAndHull(in CapsuleShape capsuleA, in Transform3D xfA, in 
     if(gjk.distance > totalR + maxDistance)
         return m;
 
-    // Find deepest separating hull face against capsule endpoints (handles overlap & face alignment).
     f32 maxFaceSep = -s_MaxF32;
     usize bestFace = 0u;
     for(usize i = 0u; i < hullB.faces.size(); ++i){
@@ -361,7 +355,6 @@ Manifold CollideCapsuleAndHull(in CapsuleShape capsuleA, in Transform3D xfA, in 
     if(gjk.distance > 1.0e-5f){
         const VectorSingle nAtoB = VectorSingle(gjk.normal);
         const VectorSingle localN = Vector3InverseRotate(-nAtoB, VectorSingle(xfB.rotation));
-        // If capsule segment is nearly parallel to the best hull face, clip the segment against face side planes for 2-point stability.
         const VectorSingle faceN = VectorSingle(hullB.faces[bestFace].plane.normalOffset, 0.0f);
         if(Vector3Dot(localN, faceN).x > 0.995f && maxFaceSep <= totalR + maxDistance){
             VectorSingle clip0 = l1;
@@ -434,7 +427,6 @@ Manifold CollideCapsuleAndHull(in CapsuleShape capsuleA, in Transform3D xfA, in 
         return m;
     }
 
-    // Overlapped segment: push out along bestFace.
     const VectorSingle faceN = VectorSingle(hullB.faces[bestFace].plane.normalOffset, 0.0f);
     const f32 faceOff = hullB.faces[bestFace].plane.normalOffset.w;
     const f32 d1 = Vector3Dot(faceN, l1).x - faceOff;

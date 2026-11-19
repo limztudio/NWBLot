@@ -22,11 +22,17 @@ type SmokeMaterialRef = AssetRef<Material>;
 type SmokeMeshRef = AssetRef<Mesh>;
 
 Expected<SmokeMeshRef, NameTextError> SmokeMeshRefFromText(in StringView path){
-    return SmokeMeshRef::FromText(path);
+    const Expected<Name, NameTextError> name = NameFromText(path);
+    if(!name.has_value())
+        return MakeUnexpected(name.error());
+    return SmokeMeshRef(name.value());
 }
 
 Expected<SmokeMaterialRef, NameTextError> SmokeMaterialRefFromText(in StringView path){
-    return SmokeMaterialRef::FromText(path);
+    const Expected<Name, NameTextError> name = NameFromText(path);
+    if(!name.has_value())
+        return MakeUnexpected(name.error());
+    return SmokeMaterialRef(name.value());
 }
 
 mut RendererSystem SmokeRendererSystemRef(mut World world){

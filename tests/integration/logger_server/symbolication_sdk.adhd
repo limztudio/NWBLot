@@ -2,30 +2,23 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <logger/server/crash_symbolicate.adhd>
+#include <logger/server/crash_report_composer.adhd>
 #include <tests/common/memory.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<logger/server/crash_symbolicate.adhd.h>"), cpp_name("::NWB::Log::CrashSymbolicationConfig"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<logger/server/crash_symbolicate.h>"), cpp_name("::NWB::Log::CrashSymbolicationConfig"), cpp_flags(no_copy, no_assign)]
 extern class DumpSymbolicationConfig;
 
-[cpp_header("<logger/server/crash_symbolicate.adhd.h>"), cpp_name("::NWB::Log::CrashPackageSummary"), cpp_flags(no_copy, no_assign)]
-extern class CrashPackageSummary{
-    String triggerMessage;
-    String platform;
-    u64 threadId;
-};
-
-[cpp_header("<logger/server/crash_symbolicate.adhd.h>"), cpp_name("::NWB::Log::CrashScratchPath")]
+[cpp_header("<logger/server/crash_symbolicate.h>"), cpp_name("::NWB::Log::CrashScratchPath")]
 extern class DumpScratchPath;
 
-[cpp_header("<logger/server/crash_symbolicate.adhd.h>"), cpp_name("::NWB::Log::CrashReportText")]
+[cpp_header("<logger/server/crash_symbolicate.h>"), cpp_name("::NWB::Log::CrashReportText")]
 extern class DumpReportText;
 
-[cpp_header("<logger/server/crash_symbolicate.adhd.h>"), cpp_name("::NWB::Log::BuildCrashSymbolicationReport")]
+[cpp_header("<logger/server/crash_symbolicate.h>"), cpp_name("::NWB::Log::BuildCrashSymbolicationReport")]
 extern DumpReportText SymbolicateDump(in DumpScratchPath directory, in CrashPackageSummary summary, in DumpSymbolicationConfig config, mut HeapStorage storage, mut ScratchStorage scratch);
 
 

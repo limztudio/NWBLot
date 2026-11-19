@@ -42,8 +42,6 @@ b8 ParallelGraphValidator::validateBlock(const Span<const Stmt* const> statement
         validateExprLambdas(validateExprLambdas, stmt->stepExpr);
         for(const Expr* arg : stmt->arguments)
             validateExprLambdas(validateExprLambdas, arg);
-        for(const NativeBinding& nb : stmt->nativeBindings)
-            validateExprLambdas(validateExprLambdas, nb.sourceExpr);
 
         switch(stmt->kind){
         case StmtKind::ParallelBlock:{

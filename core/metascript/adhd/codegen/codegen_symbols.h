@@ -31,10 +31,8 @@ public:
     inline static constexpr MStringView s_ScratchArenaVar           = "__adhd_scratch";
     inline static constexpr MStringView s_MotherArenaVar            = "__adhd_mother_arena";
     inline static constexpr MStringView s_MemberArenaVar            = "__adhd_arena";
-    inline static constexpr MStringView s_NativeShadowPtrPrefix     = "__adhd_native_ptr_";
     inline static constexpr MStringView s_AssetCodecRegPrefix       = "__adhd_asset_codec_registrar_";
 
-    inline static constexpr MStringView s_PragmaDirectivePrefix     = "#pragma";
     inline static constexpr MStringView s_IncludePrefix             = "#include ";
 
     inline static constexpr MStringView s_ForwardTemplate           = "::Forward";

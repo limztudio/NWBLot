@@ -108,10 +108,6 @@ namespace __hidden_adhd_source_emitter{
                 || StatementsNeedSimdFloatingPointEnv(sc.statements, symbols, hasSimdScalarLocal))
                 return true;
         }
-        for(const NativeBinding& nb : stmt->nativeBindings){
-            if(ExprNeedsSimdFloatingPointEnv(nb.sourceExpr, symbols, hasSimdScalarLocal))
-                return true;
-        }
     }
     return false;
 }
@@ -160,21 +156,6 @@ namespace __hidden_adhd_source_emitter{
         for(const SwitchCase& sc : stmt->switchCases){
             if(ExprReferencesIdentifier(sc.matchExpr, name) || StmtsReferenceIdentifier(sc.statements, name))
                 return true;
-        }
-        for(const NativeBinding& nb : stmt->nativeBindings){
-            if(ExprReferencesIdentifier(nb.sourceExpr, name))
-                return true;
-        }
-        if(stmt->kind == StmtKind::NativeBlock && !name.empty()){
-            usize pos = 0u;
-            while((pos = stmt->nativeCode.find(name, pos)) != MStringView::npos){
-                const b8 leftOk = pos == 0u || !IsAsciiIdentifierChar(stmt->nativeCode[pos - 1u]);
-                const usize endPos = pos + name.size();
-                const b8 rightOk = endPos >= stmt->nativeCode.size() || !IsAsciiIdentifierChar(stmt->nativeCode[endPos]);
-                if(leftOk && rightOk)
-                    return true;
-                pos = endPos;
-            }
         }
     }
     return false;
@@ -249,8 +230,6 @@ template<typename IsReadyField>
         && unit.staticAssertions.empty()
         && unit.assetRegistrations.empty()
         && unit.registrationCalls.empty()
-        && unit.topLevelNativeBlocks.empty()
-        && unit.sourceNativeBlocks.empty()
         && unit.includedAdhdFiles.empty()
         && unit.resolvedIncludedFiles.empty()
         && unit.importedCppHeaders.empty()
@@ -340,19 +319,7 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
             return false;
         if(assetTypes.findImplementedAssetInterface(classDecl) != nullptr)
             return false;
-        if(assetTypes.findAssetLoadBinaryMethod(classDecl, true) == nullptr)
-            return false;
-        if(unit.sourceNativeBlocks.empty())
-            return true;
-        MString codecName(m_arena);
-        codecName.append(classDecl.name.data(), classDecl.name.size());
-        const MStringView codecSuffix = ContractSemantics::ResolveAssetCodecSuffix(classDecl.name);
-        codecName.append(codecSuffix.data(), codecSuffix.size());
-        for(const MStringView& rawBlock : unit.sourceNativeBlocks){
-            if(rawBlock.find(codecName) != MStringView::npos)
-                return false;
-        }
-        return true;
+        return assetTypes.findAssetLoadBinaryMethod(classDecl, true) != nullptr;
     };
     b8 hasAutoCodecRegistrar = false;
     for(const ClassDecl* classDecl : unit.classes){
@@ -460,19 +427,6 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
 
     if(!namespacePath.empty()){
         out.append("};\r\n\r\n\r\n");
-    }
-
-    if(!unit.sourceNativeBlocks.empty()){
-        if(!namespacePath.empty()){
-            out.append("using namespace ");
-            out.append(namespacePath.data(), namespacePath.size());
-            out.append(";\r\n\r\n");
-        }
-        for(const MStringView& rawBlock : unit.sourceNativeBlocks){
-            AppendTextDiscardCrAndExpandLf(out, rawBlock);
-            out.append("\r\n");
-        }
-        out.append("\r\n");
     }
 
     out.append("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n");

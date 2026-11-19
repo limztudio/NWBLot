@@ -1,0 +1,78 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class LogRowColorPair{
+    public u32 text = 0u;
+    public u32 background = 0u;
+}
+
+u32 PackWin32RgbColor(in u8 red, in u8 green, in u8 blue){
+    return cast<u32>(red) | (cast<u32>(green) << 8u) | (cast<u32>(blue) << 16u);
+}
+
+LogRowColorPair MakeLogRowColorPair(in u8 textRed, in u8 textGreen, in u8 textBlue, in u8 bgRed, in u8 bgGreen, in u8 bgBlue){
+    LogRowColorPair pair;
+    pair.text = PackWin32RgbColor(textRed, textGreen, textBlue);
+    pair.background = PackWin32RgbColor(bgRed, bgGreen, bgBlue);
+    return pair;
+}
+
+LogRowColorPair SelectAlternateLogRowColorPair(in b8 alternate, in LogRowColorPair even, in LogRowColorPair odd){
+    if(alternate)
+        return odd;
+    return even;
+}
+
+LogRowColorPair ResolveLogRowColorsByType(in u8 logType, in b8 alternate){
+    if(logType == 2u){
+        return SelectAlternateLogRowColorPair(
+            alternate,
+            MakeLogRowColorPair(0u, 0u, 0u, 170u, 170u, 0u),
+            MakeLogRowColorPair(60u, 60u, 60u, 200u, 200u, 0u)
+        );
+    }
+    if(logType == 3u){
+        return SelectAlternateLogRowColorPair(
+            alternate,
+            MakeLogRowColorPair(240u, 240u, 240u, 170u, 80u, 0u),
+            MakeLogRowColorPair(255u, 255u, 255u, 200u, 100u, 0u)
+        );
+    }
+    if(logType == 6u){
+        return SelectAlternateLogRowColorPair(
+            alternate,
+            MakeLogRowColorPair(200u, 200u, 200u, 120u, 0u, 160u),
+            MakeLogRowColorPair(255u, 255u, 255u, 145u, 20u, 190u)
+        );
+    }
+    if(logType == 4u){
+        return SelectAlternateLogRowColorPair(
+            alternate,
+            MakeLogRowColorPair(200u, 200u, 200u, 170u, 0u, 0u),
+            MakeLogRowColorPair(255u, 255u, 255u, 200u, 0u, 0u)
+        );
+    }
+    if(logType == 5u){
+        return SelectAlternateLogRowColorPair(
+            alternate,
+            MakeLogRowColorPair(200u, 200u, 0u, 220u, 0u, 0u),
+            MakeLogRowColorPair(255u, 255u, 0u, 250u, 0u, 0u)
+        );
+    }
+    return SelectAlternateLogRowColorPair(
+        alternate,
+        MakeLogRowColorPair(0u, 0u, 0u, 230u, 230u, 230u),
+        MakeLogRowColorPair(80u, 80u, 80u, 255u, 255u, 255u)
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

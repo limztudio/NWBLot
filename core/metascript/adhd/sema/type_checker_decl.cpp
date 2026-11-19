@@ -92,12 +92,6 @@ void CollectAssignedThisMembers(const Span<const Stmt* const> stmts, MVector<MSt
             return false;
         if(IsThisMemberSimpleAssignStmt(*stmt, fieldName))
             return true;
-        else if(stmt->kind == StmtKind::NativeBlock){
-            for(const NativeBinding& binding : stmt->nativeBindings){
-                if(binding.mode == ParamPassingMode::Mut && binding.sourceExpr && binding.sourceExpr->kind == ExprKind::ThisMember && binding.sourceExpr->text == fieldName)
-                    return true;
-            }
-        }
         else if(stmt->kind == StmtKind::Block || stmt->kind == StmtKind::ParallelBlock){
             if(IsMemberDefinitelyInitializedInStmts(stmt->statements, fieldName))
                 return true;
@@ -658,7 +652,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
             const BuiltinObjectTypeInfo* builtinObj = FindBuiltinObjectType(ifaceName);
             const b8 isBuiltinInterface = IsNonCopyableBaseInterfaceName(ifaceName) || (builtinObj && builtinObj->isPolymorphicBase);
             if(
-                (!classDecl.isExtern && !isBuiltinInterface && !m_hasTopLevelNativeBlocks)
+                (!classDecl.isExtern && !isBuiltinInterface)
                 || m_symbols.findEnum(ifaceName)
                 || FindBuiltinEnum(ifaceName)
                 || BuiltinTypeSemantics::IsScalarType(ifaceName)

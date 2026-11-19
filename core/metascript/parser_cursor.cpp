@@ -150,19 +150,6 @@ b8 ParserCursor::expect(TokenType::Enum type, MStringView expected){
     return false;
 }
 
-b8 ParserCursor::consumeBalancedBracesRaw(MStringView& outInnerCode){
-    if(m_current.type != TokenType::LeftBrace){
-        errorExpected("expected '{' to start native block");
-        return false;
-    }
-    if(!m_lexer.consumeBalancedBracesRaw(outInnerCode)){
-        error("unterminated 'native' block; expected '}'");
-        return false;
-    }
-    advance();
-    return true;
-}
-
 void ParserCursor::error(const u32 line, const u32 column, const MStringView message){
     m_errors.push_back(ParseError{line, column, MString(message.data(), message.size(), m_arena)});
 }

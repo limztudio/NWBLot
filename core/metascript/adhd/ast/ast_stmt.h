@@ -35,7 +35,6 @@ namespace StmtKind{
         ParallelForIndex,
         ParallelBlock,
         ParallelCall,
-        NativeBlock,
         Diagnostic,
     };
 };
@@ -69,18 +68,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct NativeBinding{
-    ParamPassingMode::Enum mode = ParamPassingMode::None;
-    MStringView aliasName;
-    Expr* sourceExpr = nullptr;
-    SourceSpan span;
-    b8 needsConstShadow = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct Stmt{
     StmtKind::Enum kind = StmtKind::Block;
     SourceSpan span;
@@ -100,8 +87,6 @@ struct Stmt{
     ParamPassingMode::Enum rangeMode = ParamPassingMode::None;
     MVector<SwitchCase> switchCases;
     MVector<MStringView> parallelDependencies;
-    MVector<NativeBinding> nativeBindings;
-    MStringView nativeCode;
     MStringView cppNamespace;
     MStringView cppExportName;
     MStringView requiredHeader;
@@ -128,7 +113,6 @@ public:
         , arguments(arena)
         , switchCases(arena)
         , parallelDependencies(arena)
-        , nativeBindings(arena)
     {}
 };
 

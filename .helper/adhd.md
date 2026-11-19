@@ -30,7 +30,7 @@ When using `--depfile`, paths must be safe for both Ninja and Make depfiles. The
     - Wrong: `public u32 count() const{`, `public b8 evaluate() const override{`
 - **Canonical Top-to-Bottom Section Order**:
   1. `.adhd` `#include` directives (`#include <...>` or `#include "..."` for other `.adhd` files)
-  2. Declarations from a C++ SDK use its typed prelude. For implementation, utility, asset pipeline, and test code under `impl/`, `utilities/`, `pipeline/` (outside `adhd_compiler`), and `tests/` (outside compiler string fixtures), include the owning `.adhd` file directly and write declarations, control flow, and implementations in pure ADHD without `native{}` blocks. The ADHD compiler (`core/metascript/adhd/`, `pipeline/adhd_compiler/`) and its command-line bootstrap use C++ so they can build before ADHD sources. This also applies to shared types and cross-module calls.
+  2. Declarations from a C++ SDK use its typed prelude. For implementation, utility, asset pipeline, and test code under `impl/`, `utilities/`, `pipeline/` (outside `adhd_compiler`), and `tests/` (outside compiler string fixtures), include the owning `.adhd` file directly and write declarations, control flow, and implementations in pure ADHD (`native{}` blocks are retired and prohibited). The ADHD compiler (`core/metascript/adhd/`, `pipeline/adhd_compiler/`) and its command-line bootstrap use C++ so they can build before ADHD sources. This also applies to shared types and cross-module calls.
   3. File-scope `const` compile-time constants (`const u32 s_MaxItems = 64u;`) and `type` aliases (`type ItemId = u64;`)
   4. `enum<SizeType>` and `flag<SizeType>` declarations
   5. `interface` declarations
@@ -122,7 +122,9 @@ f32 ComputePaddedWidth(in ElementBox box){
    - Use `flag<SizeType>` instead of C bitfields.
 9. **No Explicit `*Arena` Types (`ArenaBase`, `AssetArena`, `CookArena`, `GlobalArena`, `GraphicsArena`, `MetaArena`, `PersistentArena`, `ScratchArena`, `TelemetryArena`)**:
    - Arenas are managed **exclusively and automatically by the `adhd` compiler** (`[arena]` mother-arena propagation and local `__adhd_scratch` borrowing).
-   - Referencing any of these explicit `*Arena` types in non-native `.adhd` parameters, variables, class fields, type aliases, or expressions is a compile-time error. For explicit C++ arena or third-party SDK interop outside `loader/`, `logger/`, and project interop (`CoolStuff/Testbed/project_world_interop.adhd`), keep C++ adapters in domain-owned `.h`/`.cpp` files paired with typed `extern` `.adhd` declarations (such as `pipeline/cook_workspace.{h,adhd}`, `pipeline/volume_workspace.{h,adhd}`, `pipeline/dependency_computer/dependency_workspace.{h,adhd}`, `utilities/cli/tool_cli.{h,adhd}`, or domain `*_sdk.{h,adhd}` wrappers).
+   - Referencing any of these explicit `*Arena` types in `.adhd` parameters, variables, class fields, type aliases, or expressions is a compile-time error. For explicit C++ arena or third-party SDK interop (such as `loader/`, `logger/`, `CoolStuff/Testbed/project_world_interop.adhd`, `pipeline/cook_workspace.{h,adhd}`, `pipeline/volume_workspace.{h,adhd}`, `pipeline/dependency_computer/dependency_workspace.{h,adhd}`, `utilities/cli/tool_cli.{h,adhd}`, or domain `*_sdk.{h,adhd}` wrappers), keep C++ adapters in domain-owned `.h`/`.cpp` files paired with typed `extern` `.adhd` declarations.
+10. **No `native` Blocks (`native{...}`, `[header] native{...}`, `[source] native{...}`, `native(...){...}`)**:
+    - Raw C++ `native` interop blocks are retired and prohibited at both file scope and statement scope. Put C++ code in separate `.h`/`.cpp` files and bind only typed APIs into `.adhd` via `extern` declarations.
 
 ---
 
@@ -239,7 +241,7 @@ Use `is_cpp_constructible<Owner, in Arg>()` to check constructibility without co
 
 A framework can declare a namespace-scope registration macro with `[cpp_header("<owner/registration.h>"), cpp_name("OWNER_REGISTER")]` and `extern registration Register(label, callback);`. A call such as `registration Register(Label, Verify);` supplies identifiers and emits the registration once in the owning source. Keep the macro and its binding with the framework. GoogleTest suites include `tests/common/gtest_macros.adhd` and use `NWB_ADHD_GTEST(Suite, Case, Verify)` or `NWB_ADHD_GTEST_F(Fixture, Case, Verify)`. Ordinary fixtures can declare public `setup()` and `teardown()` hooks. A fixture can also use an existing GoogleTest base class.
 
-## 6. Attributes (`[...]`), `extern`, and `native` Interop
+## 6. Attributes (`[...]`) and `extern` Interop
 
 - **Single-Bracket Attribute Rule**:
   - Combine multiple attributes in a single comma-separated bracket (`[arena, asset("foo")]`); stacked `[...][...]` blocks on the same declaration are prohibited.
@@ -255,10 +257,6 @@ A framework can declare a namespace-scope registration macro with `[cpp_header("
   - `extern const` / `extern type` / `extern interface` / `extern registration`: `[cpp_name("...")]`, `[cpp_header("<...>")]`
   - `parallel` / `parallel_for`: `[core(Any|Heavy|Light|MainThread)]`, `[priority(Normal|Critical|Background)]`
   - `assert` / `info` / `warning` / `error`: `[essential]`
-  - top-level `native` (file scope): `[header]` or `[source]` (**mandatory**; omitting `[header]` / `[source]` on a top-level `native` block is a compile error)
-- **C++ Interop (`native` Blocks)**:
-  - **Top-level `[header] native{ ... }` / `[source] native{ ... }`**: Mandatory explicit target attribute on every file-scope `native` block — `[header]` emits into `.adhd.h` and `[source]` emits into `.adhd.cpp` (automatic header/source guessing is retired). Frame both the outside and inside of every top-level `native{ ... }` block with two blank lines, a 128-slash separator, and two blank lines (and when the entire `native{}` body is wrapped in an outer `#if ...` / `#endif`, place two blank lines + 128-slash + two blank lines inside `#if ...` and before `#endif` as well).
-  - **Statement-level `native(in x, mut y = this.member){ ... }`**: Binds `.adhd` variables/fields into a scoped C++ block (`in` as `const` reference/value, `mut` as mutable reference). The compiler checks the declared capture modes, but it does not analyze the C++ body. C++ constness can be shallow, so the author must keep data reached through an `in` capture read-only and uphold parallel safety.
 
 ---
 
@@ -279,7 +277,7 @@ Cook modules use typed free functions and ordinary ADHD includes for asset reade
 ## 7. Compiler Export Tables (`core/metascript/adhd/export_*.h`, `export_global_prelude.adhd` & `export_core_prelude.adhd`)
 
 - All built-in `.adhd` language and preprocessor tables live in centralized headers and the built-in `global/` and `core/` `extern` preludes under `core/metascript/` and `core/metascript/adhd/`, split between `global/` (`export_global_*.h` + `export_global_prelude.adhd` collecting `global/**/*.adhd`) and `core/` (`export_core_*.h` + `export_core_prelude.adhd` collecting `core/**/*.adhd`) with self-guarding umbrella headers (`export_*.h`):
-  - `core/metascript/export_preprocessor.h`: Preprocessor `#` directive names, bool literals (`true`/`false`), raw-brace/raw-string tokens, and include file extension rules queried via `PreprocessorSemantics` (`core/metascript/preprocessor_semantics.h`).
+  - `core/metascript/export_preprocessor.h`: Preprocessor `#` directive names, bool literals (`true`/`false`), raw-string tokens, and include file extension rules queried via `PreprocessorSemantics` (`core/metascript/preprocessor_semantics.h`).
   - `export_keywords.h` (`export_global_keywords.h` + `export_core_keywords.h`): Access specifiers, parameter passing modes, method qualifiers, nested/prohibited/grammar/postfix keywords, `extern` attributes (`cpp_name`, `cpp_header`, `cpp_flags`) and `cpp_flags` entries (`NWB_ADHD_EXPORT_EXTERN_TYPE_FLAG`, `NWB_ADHD_EXPORT_EXTERN_CALLABLE_FLAG`), bool/enum/enum-sentry/cast/unresolved-arena keywords, parallel core/priority kinds, class/interface `asset`/`system`/`subsystem`/`component` attributes, and diagnostic kinds.
   - `export_operators.h` (`export_global_operators.h` + `export_core_operators.h`): Operator tokens, symbols, bracket operators (`"[]"`), overloadability, assignment/boolean/bitwise classifications, binary precedence, member arity rules/diagnostics, and prohibited operator diagnostics.
   - `export_contracts.h` (`export_global_contracts.h` + `export_core_contracts.h`): Class role contracts (`Asset`, `System`, `Component`, `Subsystem`), auto-override method lists, interface constructor forward rules, asset codec contracts, subsystem codegen contracts, preamble header groups, namespace preambles, and file/scope conventions (including `GlobalExternPreludePath`, `CoreExternPreludePath`, and `MaskScopeSuffix`) queried via `ContractSemantics` (`ast/contract_semantics.h`).

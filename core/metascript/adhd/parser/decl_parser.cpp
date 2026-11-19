@@ -296,49 +296,6 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         }
     }
 
-    if(m_cursor.matchIdentifier(KeywordSemantics::s_Native)){
-        if(isExtern){
-            m_cursor.error(span.line, span.column, "'extern' cannot be applied to 'native' blocks");
-            return false;
-        }
-        b8 hasExplicitTarget = false;
-        b8 explicitIsSource = false;
-        for(const ParsedAttribute& attr : attributes){
-            b8 attrIsSource = false;
-            if(!KeywordSemantics::TryParseTopLevelNativeAttribute(attr.name, attrIsSource)){
-                m_cursor.error(attr.line, attr.column, "unsupported attribute on top-level 'native' block; only '[header]' or '[source]' is permitted");
-                return false;
-            }
-            if(!attr.arguments.empty()){
-                m_cursor.error(attr.line, attr.column, "top-level 'native' target attribute does not accept arguments");
-                return false;
-            }
-            if(hasExplicitTarget){
-                m_cursor.error(attr.line, attr.column, "duplicate or conflicting target attribute on top-level 'native' block");
-                return false;
-            }
-            hasExplicitTarget = true;
-            explicitIsSource = attrIsSource;
-        }
-        if(!hasExplicitTarget){
-            m_cursor.error(span.line, span.column, "top-level 'native' block must specify '[header]' or '[source]'");
-            return false;
-        }
-        MStringView code;
-        if(!m_cursor.consumeBalancedBracesRaw(code))
-            return false;
-        if(!isImported){
-            if(explicitIsSource)
-                outUnit.sourceNativeBlocks.push_back(code);
-            else
-                outUnit.topLevelNativeBlocks.push_back(code);
-        }
-        else if(!explicitIsSource){
-            outUnit.hasImportedNativeBlocks = true;
-        }
-        return true;
-    }
-
     if(m_cursor.matchIdentifier(KeywordSemantics::s_Const)){
         MStringView extCppExportName;
         MStringView extRequiredHeader;

@@ -7,7 +7,6 @@
 #include <tests/common/value_storage.adhd>
 #include <tests/unit/telemetry/perf_case_types.adhd>
 #include <tests/unit/telemetry/telemetry_sdk.adhd>
-#include <logger/telemetry/report.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

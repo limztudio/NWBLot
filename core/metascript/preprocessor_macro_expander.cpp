@@ -23,10 +23,10 @@ usize PreprocessorMacroExpander::AppendDefinedOperand(const MStringView source, 
 }
 
 
-b8 PreprocessorMacroExpander::expand(const MStringView lineText, const u32 line, MString& outExpanded, const b8 initialPendingNativeBrace, const u32 initialNativeBraceDepth){
+b8 PreprocessorMacroExpander::expand(const MStringView lineText, const u32 line, MString& outExpanded){
     MString storage(m_arena);
     MStringView expanded;
-    if(!expandToView(lineText, line, storage, expanded, initialPendingNativeBrace, initialNativeBraceDepth))
+    if(!expandToView(lineText, line, storage, expanded))
         return false;
     if(expanded.data() == storage.data())
         outExpanded = Move(storage);
@@ -39,7 +39,7 @@ b8 PreprocessorMacroExpander::expand(const MStringView lineText, const u32 line,
     return true;
 }
 
-b8 PreprocessorMacroExpander::expandToView(const MStringView lineText, const u32 line, MString& outStorage, MStringView& outView, const b8 initialPendingNativeBrace, const u32 initialNativeBraceDepth){
+b8 PreprocessorMacroExpander::expandToView(const MStringView lineText, const u32 line, MString& outStorage, MStringView& outView){
     constexpr u32 s_MaxMacroExpansionPasses = 16u;
 
     MString current(m_arena);
@@ -48,8 +48,6 @@ b8 PreprocessorMacroExpander::expandToView(const MStringView lineText, const u32
 
     for(u32 pass = 0u; pass < s_MaxMacroExpansionPasses; ++pass){
         b8 anyReplaced = false;
-        b8 pendingNativeBrace = initialPendingNativeBrace;
-        u32 nativeBraceDepth = initialNativeBraceDepth;
         MString next(m_arena);
         usize copiedUntil = 0u;
 
@@ -59,28 +57,6 @@ b8 PreprocessorMacroExpander::expandToView(const MStringView lineText, const u32
             if(PreprocessorSemantics::AdvancePreprocessorScanStep(currentView, i, 0u, true, hitTerminator)){
                 if(hitTerminator)
                     break;
-                continue;
-            }
-
-            if(nativeBraceDepth > 0u){
-                if(currentView[i] == '{')
-                    ++nativeBraceDepth;
-                else if(currentView[i] == '}')
-                    --nativeBraceDepth;
-                ++i;
-                continue;
-            }
-
-            if(currentView[i] == '{' && pendingNativeBrace){
-                nativeBraceDepth = 1u;
-                pendingNativeBrace = false;
-                ++i;
-                continue;
-            }
-
-            if(currentView[i] == ';'){
-                pendingNativeBrace = false;
-                ++i;
                 continue;
             }
 
@@ -98,8 +74,6 @@ b8 PreprocessorMacroExpander::expandToView(const MStringView lineText, const u32
                 if(it == m_macros.end()){
                     if(ident == PreprocessorSemantics::s_DefinedOperator)
                         i = PreprocessorSemantics::SkipDefinedOperand(currentView, i);
-                    else if(PreprocessorSemantics::IsRawBraceBlockKeyword(ident))
-                        pendingNativeBrace = true;
                     continue;
                 }
 

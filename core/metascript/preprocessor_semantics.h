@@ -59,14 +59,6 @@ public:
         return false;
     }
 
-    [[nodiscard]] static constexpr b8 IsRawBraceBlockKeyword(const MStringView text)noexcept{
-#define NWB_META_EXPORT_PREPROCESSOR_RAW_BRACE_KEYWORD(keywordText) \
-        if(text == keywordText) return true;
-#include "export_preprocessor.h"
-#undef NWB_META_EXPORT_PREPROCESSOR_RAW_BRACE_KEYWORD
-        return false;
-    }
-
     [[nodiscard]] static constexpr b8 IsValidRawStringEncodingPrefix(const MStringView prefix)noexcept{
         if(prefix.empty())
             return true;

@@ -42,7 +42,7 @@ extern class TelemetryLabelString{
     void assign(in StringView text);
 };
 
-[cpp_header("<logger/telemetry/report.adhd.h>"), cpp_name("::NWB::Log::TelemetryReport")]
+[cpp_header("<logger/telemetry/report.h>"), cpp_name("::NWB::Log::TelemetryReport")]
 extern class TelemetryReport{
     TelemetryReportSummary summary;
     String json;
@@ -50,7 +50,7 @@ extern class TelemetryReport{
     String perfCsv;
 };
 
-[cpp_header("<logger/telemetry/report.adhd.h>"), cpp_name("::NWB::Log::BuildTelemetryReport")]
+[cpp_header("<logger/telemetry/report.h>"), cpp_name("::NWB::Log::BuildTelemetryReport")]
 extern Expected<TelemetryReport> BuildTestTelemetryReport(in EventView events, mut HeapStorage arena, mut ScratchStorage scratch);
 
 [cpp_header("<core/telemetry/recorder.h>"), cpp_name("::NWB::Core::Telemetry::TelemetryArena"), cpp_flags(no_copy, no_assign)]

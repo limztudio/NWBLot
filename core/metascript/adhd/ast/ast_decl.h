@@ -392,8 +392,6 @@ struct TranslationUnit{
     MVector<RegistrationBinding> registrationBindings;
     MVector<RegistrationCall> registrationCalls;
     MVector<MStringView> registrationHeaders;
-    MVector<MStringView> topLevelNativeBlocks;
-    MVector<MStringView> sourceNativeBlocks;
     MVector<MStringView> requiredGlobalHeaders;
     MVector<MStringView> extraPreambleHeaders;
     MVector<MString> includedAdhdFiles;
@@ -407,7 +405,6 @@ struct TranslationUnit{
     MVector<MethodDecl*> freeFunctions;
     MVector<MethodDecl*> outOfLineMethods;
     MVector<ImportedCppHeader> importedCppHeaders;
-    b8 hasImportedNativeBlocks = false;
 
 
 public:
@@ -418,8 +415,6 @@ public:
         , registrationBindings(arena)
         , registrationCalls(arena)
         , registrationHeaders(arena)
-        , topLevelNativeBlocks(arena)
-        , sourceNativeBlocks(arena)
         , requiredGlobalHeaders(arena)
         , extraPreambleHeaders(arena)
         , includedAdhdFiles(arena)

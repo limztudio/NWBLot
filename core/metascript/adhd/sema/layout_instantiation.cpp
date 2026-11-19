@@ -116,10 +116,6 @@ void TemplateInstantiationCollector::collectTemplateInstantiationsInStmt(const S
         if(arg)
             collectTemplateInstantiationsInExpr(*arg, unit);
     }
-    for(const NativeBinding& nb : stmt.nativeBindings){
-        if(nb.sourceExpr)
-            collectTemplateInstantiationsInExpr(*nb.sourceExpr, unit);
-    }
     if(stmt.initStmt)
         collectTemplateInstantiationsInStmt(*stmt.initStmt, unit);
     for(const Stmt* sub : stmt.statements){

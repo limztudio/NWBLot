@@ -47,17 +47,14 @@ const StringView s_SimdSpecInvalidNestedSerializeSource =
 const StringView s_SimdSpecMismatchedTemplatedInterfaceSource =
     "interface ISink<T> {\r\n    void send(in T item);\r\n}\r\nclass BadSink : ISink<i32> {\r\n    public void send(in f32 item)override {}\r\n}\r\n";
 
-const StringView s_SimdSpecNativeBraceCharSource =
-    "void InspectNative(mut String text) {\r\n    native(mut s = text) {\r\n        if(!s.empty() && s[0] == '{') {\r\n            s[0] = '}';\r\n        }\r\n    }\r\n}\r\n";
-
-const StringView s_SimdSpecVariadicNativeMacroSource =
-    "#define EXPECTED_COUNT 1u\r\n#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }\r\n#define EXPECT_NEAR_VAL(val, ...) native{ EXPECT_NEAR(val, __VA_ARGS__) }\r\nvoid FillBytes(mut Span<u8> bytes) {\r\n    for(usize i = 0u; i < bytes.size(); ++i)\r\n        bytes[i] = cast<u8>(i);\r\n}\r\nvoid ConsumeVec(in Vector<i32> items) {}\r\nvoid VerifyItems(in f32 sample) {\r\n    Vector<i32> items;\r\n    items.push_back(42);\r\n    ConsumeVec(items);\r\n    if(!items.empty())\r\n        EXPECT_EQ(items.size(), EXPECTED_COUNT);\r\n    else\r\n        EXPECT_NEAR_VAL(sample, 0.0f, 1e-4f);\r\n}\r\n";
+const StringView s_SimdSpecVariadicMacroSource =
+    "[cpp_header(\"<tests/unit/sample_check.h>\"), cpp_name(\"EXPECT_EQ\")]\r\nextern void ExpectEq(in usize a0, in u32 a1);\r\n[cpp_header(\"<tests/unit/sample_check.h>\"), cpp_name(\"EXPECT_NEAR\")]\r\nextern void ExpectNear(in f32 a0, in f32 a1, in f32 a2);\r\n#define EXPECTED_COUNT 1u\r\n#define EXPECT_EQ(...) ExpectEq(__VA_ARGS__)\r\n#define EXPECT_NEAR_VAL(val, ...) ExpectNear(val, __VA_ARGS__)\r\nvoid FillBytes(mut Span<u8> bytes) {\r\n    for(usize i = 0u; i < bytes.size(); ++i)\r\n        bytes[i] = cast<u8>(i);\r\n}\r\nvoid ConsumeVec(in Vector<i32> items) {}\r\nvoid VerifyItems(in f32 sample) {\r\n    Vector<i32> items;\r\n    items.push_back(42);\r\n    ConsumeVec(items);\r\n    if(!items.empty())\r\n        EXPECT_EQ(items.size(), EXPECTED_COUNT);\r\n    else\r\n        EXPECT_NEAR_VAL(sample, 0.0f, 1e-4f);\r\n}\r\n";
 
 const StringView s_SimdSpecCtorMemberLiftSource =
     "class Child {\r\n    private mut i32 m_target;\r\n    public Child(mut i32 target) {\r\n        this.m_target = target;\r\n    }\r\n}\r\nclass Parent {\r\n    private Child m_child;\r\n    public Parent(mut i32 target) {\r\n        this.m_child = Child(target);\r\n    }\r\n}\r\n";
 
-const StringView s_SimdSpecExternalIfaceAndTrailingNativeSource =
-    "[header]\r\nnative{\r\ninterface IExternalCallback;\r\n}\r\nclass CallbackRunner : IExternalCallback {\r\n    public ~CallbackRunner() {}\r\n    public b8 onTick(in f32 dt)override {\r\n        RegisterSelf(this);\r\n        return dt > 0.0f && ExternalEnum::Active != 0;\r\n    }\r\n}\r\n[source]\r\nnative{\r\nvoid RegisterRunner(CallbackRunner& runner);\r\n}\r\n";
+const StringView s_SimdSpecExternalIfaceSource =
+    "[cpp_header(\"<ext/callback.h>\")]\r\nextern enum ExternalEnum : u32{\r\n    Active\r\n};\r\n[cpp_header(\"<ext/callback.h>\")]\r\nextern interface IExternalCallback{\r\n    b8 onTick(in f32 a0);\r\n};\r\n[cpp_header(\"<ext/callback.h>\")]\r\nextern void RegisterSelf(in IExternalCallback a0);\r\nclass CallbackRunner : IExternalCallback {\r\n    public ~CallbackRunner() {}\r\n    public b8 onTick(in f32 dt)override {\r\n        RegisterSelf(this);\r\n        return dt > 0.0f && ExternalEnum::Active == ExternalEnum::Active;\r\n    }\r\n}\r\n";
 
 const StringView s_SimdSpecStorageOnlySimdParamSource =
     "VectorSingle CombinePlane(in VectorSingle rawNormal, in VectorSingle cameraPosition) {\r\n    return rawNormal + cameraPosition;\r\n}\r\nVectorSingle BuildSidePlane(in VectorSingle forward, in VectorSingle side, in VectorSingle tanHalfAngle, in VectorSingle cameraPosition) {\r\n    const VectorSingle rawNormal = forward * tanHalfAngle + side;\r\n    return CombinePlane(VectorSingle(rawNormal.x, rawNormal.y, rawNormal.z, 0.0f), cameraPosition);\r\n}\r\n";
@@ -76,9 +73,6 @@ const StringView s_SimdSpecOptSource =
 
 const StringView s_SimdSpecJobNodeReflectionSource =
     "[reflect]\r\nclass JobNode {\r\n    public i32 visibleId = 1;\r\n    private i32 hiddenState = 2;\r\n    [reflect]\r\n    private i32 reflectedSecret = 3;\r\n    private void internalHelper() {}\r\n    [reflect]\r\n    private void reflectedHelper() {}\r\n    public void run() {}\r\n}\r\n";
-
-const StringView s_SimdSpecUnsafeParallelNativeMutContainerSource =
-    "type IntVec = Vector<i32>;\r\nvoid BadParallelNative(mut IntVec items) {\r\n    parallel_for(u32 i = 0u; i < 8u; ++i) {\r\n        native(mut v = items, in i) {\r\n            v.push_back(static_cast<i32>(i));\r\n        }\r\n    }\r\n}\r\n";
 
 const StringView s_SimdSpecUncapturedThisInLambdaSource =
     "class BadNode {\r\n    public i32 x = 1;\r\n    public i32 test()const {\r\n        auto fn = lambda() -> i32 {\r\n            return this.x;\r\n        };\r\n        return fn();\r\n    }\r\n}\r\n";
@@ -166,14 +160,11 @@ void VerifyAdhdCompiler_RejectsMismatchedTemplatedInterfaceOverrideSignature(){
     ExpectCompileFails(arena, s_SimdSpecMismatchedTemplatedInterfaceSource, "impl/net/bad_sink.adhd");
 }
 
-void VerifyAdhdCompiler_HandlesBraceCharacterLiteralsInsideNativeBlockAndRejectsDuplicateCallableSignatures(){
+void VerifyAdhdCompiler_ExpandsVariadicMacrosLiftsCtorsAndRejectsDuplicateSignatures(){
     AdhdTestArena arena = AdhdTestArena();
 
-    CompileResult res = CompileResult(arena.arena);
-    EXPECT_TRUE(Compile(s_SimdSpecNativeBraceCharSource, "impl/data/indexed_bucket.adhd", arena.arena, res));
-
     CompileResult variadicMacroRes = CompileResult(arena.arena);
-    ASSERT_TRUE(Compile(s_SimdSpecVariadicNativeMacroSource, "tests/unit/sample_check.adhd", arena.arena, variadicMacroRes));
+    ASSERT_TRUE(Compile(s_SimdSpecVariadicMacroSource, "tests/unit/sample_check.adhd", arena.arena, variadicMacroRes));
     const StringView variadicHdrView = GeneratedHeaderView(variadicMacroRes);
     const StringView variadicSrcView = GeneratedSourceView(variadicMacroRes);
     EXPECT_NE(variadicHdrView.find("void FillBytes(const Span<u8> bytes)noexcept;"), usize.max);
@@ -194,7 +185,7 @@ void VerifyAdhdCompiler_HandlesBraceCharacterLiteralsInsideNativeBlockAndRejects
     EXPECT_EQ(ctorLiftSrcView.find("this->m_child = Child(target)"), usize.max);
 
     CompileResult extIfaceRes = CompileResult(arena.arena);
-    ASSERT_TRUE(Compile(s_SimdSpecExternalIfaceAndTrailingNativeSource, "impl/data/ext_iface.adhd", arena.arena, extIfaceRes));
+    ASSERT_TRUE(Compile(s_SimdSpecExternalIfaceSource, "impl/data/ext_iface.adhd", arena.arena, extIfaceRes));
     const StringView extIfaceHdrView = GeneratedHeaderView(extIfaceRes);
     const StringView extIfaceSrcView = GeneratedSourceView(extIfaceRes);
     EXPECT_NE(extIfaceHdrView.find("class CallbackRunner final : public IExternalCallback{"), usize.max);
@@ -202,8 +193,6 @@ void VerifyAdhdCompiler_HandlesBraceCharacterLiteralsInsideNativeBlockAndRejects
     EXPECT_NE(extIfaceHdrView.find("virtual b8 onTick(const f32 dt)noexcept override"), usize.max);
     EXPECT_NE(extIfaceSrcView.find("RegisterSelf((*this));"), usize.max);
     EXPECT_NE(extIfaceSrcView.find("ExternalEnum::Active"), usize.max);
-    EXPECT_EQ(extIfaceHdrView.find("void RegisterRunner(CallbackRunner& runner);"), usize.max);
-    EXPECT_NE(extIfaceSrcView.find("void RegisterRunner(CallbackRunner& runner);"), usize.max);
 
     ExpectCompileFails(arena, "#define BAD_VARIADIC(..., x) (x)\r\nconst i32 kVal = 1;\r\n", "impl/data/bad_variadic.adhd");
     ExpectCompileFails(arena, "i32 DupFn(in i32 x) { return x; }\r\ni32 DupFn(in i32 x) { return x + 1; }\r\n", "impl/data/dup_fn.adhd");
@@ -343,7 +332,7 @@ void VerifyAdhdCompiler_OptimizesSimdConstantsMasksSwizzlesReductionsTransformsA
     EXPECT_EQ(optView.find("::Vector3Equal(a, b)"), usize.max);
 }
 
-void VerifyAdhdCompiler_ExcludesUnannotatedPrivateMembersFromReflectionAndRejectsParallelNativeContainerMutation(){
+void VerifyAdhdCompiler_ExcludesUnannotatedPrivateMembersFromReflection(){
     AdhdTestArena arena = AdhdTestArena();
 
     CompileResult res = CompileResult(arena.arena);
@@ -358,8 +347,6 @@ void VerifyAdhdCompiler_ExcludesUnannotatedPrivateMembersFromReflectionAndReject
     EXPECT_NE(hdrView.find("inMap.findField(\"reflectedSecret\")"), usize.max);
     EXPECT_EQ(cppView.find("return \"hiddenState\";"), usize.max);
     EXPECT_EQ(cppView.find("return \"internalHelper\";"), usize.max);
-
-    ExpectCompileFails(arena, s_SimdSpecUnsafeParallelNativeMutContainerSource, "impl/job/bad_par_native.adhd");
 }
 
 void VerifyAdhdCompiler_RejectsUninitializedLocalReferencesAndUnknownLambdaCaptures(){
@@ -589,10 +576,10 @@ void VerifyAdhdCompiler_VisitorContractsRejectMutableOrWrongCallbacks(){
 NWB_ADHD_GTEST(AdhdCompiler, VisitorContractsRejectMutableOrWrongCallbacks, VerifyAdhdCompiler_VisitorContractsRejectMutableOrWrongCallbacks)
 NWB_ADHD_GTEST(AdhdCompiler, RejectsNonPodNestedSerializeArrayAndUnknownWaitTarget, VerifyAdhdCompiler_RejectsNonPodNestedSerializeArrayAndUnknownWaitTarget)
 NWB_ADHD_GTEST(AdhdCompiler, RejectsMismatchedTemplatedInterfaceOverrideSignature, VerifyAdhdCompiler_RejectsMismatchedTemplatedInterfaceOverrideSignature)
-NWB_ADHD_GTEST(AdhdCompiler, HandlesBraceCharacterLiteralsInsideNativeBlockAndRejectsDuplicateCallableSignatures, VerifyAdhdCompiler_HandlesBraceCharacterLiteralsInsideNativeBlockAndRejectsDuplicateCallableSignatures)
+NWB_ADHD_GTEST(AdhdCompiler, ExpandsVariadicMacrosLiftsCtorsAndRejectsDuplicateSignatures, VerifyAdhdCompiler_ExpandsVariadicMacrosLiftsCtorsAndRejectsDuplicateSignatures)
 NWB_ADHD_GTEST(AdhdCompiler, RejectsMixedSimdSplatAndIndexInvalidVectorArityAndNonCanonicalParallelFor, VerifyAdhdCompiler_RejectsMixedSimdSplatAndIndexInvalidVectorArityAndNonCanonicalParallelFor)
 NWB_ADHD_GTEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLogicChains, VerifyAdhdCompiler_OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLogicChains)
-NWB_ADHD_GTEST(AdhdCompiler, ExcludesUnannotatedPrivateMembersFromReflectionAndRejectsParallelNativeContainerMutation, VerifyAdhdCompiler_ExcludesUnannotatedPrivateMembersFromReflectionAndRejectsParallelNativeContainerMutation)
+NWB_ADHD_GTEST(AdhdCompiler, ExcludesUnannotatedPrivateMembersFromReflection, VerifyAdhdCompiler_ExcludesUnannotatedPrivateMembersFromReflection)
 NWB_ADHD_GTEST(AdhdCompiler, RejectsUninitializedLocalReferencesAndUnknownLambdaCaptures, VerifyAdhdCompiler_RejectsUninitializedLocalReferencesAndUnknownLambdaCaptures)
 NWB_ADHD_GTEST(AdhdCompiler, RejectsUncapturedOrConstThisLambdaMutationsDuplicateSwitchDefaultsAndBodylessOolMethods, VerifyAdhdCompiler_RejectsUncapturedOrConstThisLambdaMutationsDuplicateSwitchDefaultsAndBodylessOolMethods)
 NWB_ADHD_GTEST(AdhdCompiler, RejectsOutOfBoundsSwizzleAndWrongBuiltinArity, VerifyAdhdCompiler_RejectsOutOfBoundsSwizzleAndWrongBuiltinArity)

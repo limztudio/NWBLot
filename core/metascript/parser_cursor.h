@@ -52,7 +52,6 @@ public:
 
     void advance();
     b8 expect(TokenType::Enum type, MStringView expected);
-    b8 consumeBalancedBracesRaw(MStringView& outInnerCode);
 
     void error(MStringView message){ error(m_current.line, m_current.column, message); }
     void error(u32 line, u32 column, MStringView message);

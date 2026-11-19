@@ -22,7 +22,6 @@ NWB_ADHD_EXPORT_UNATTRIBUTED_STMT_KEYWORD("switch", parseSwitchStatement,  "attr
 NWB_ADHD_EXPORT_UNATTRIBUTED_STMT_KEYWORD("while",  parseWhileStatement,   "attributes are not permitted on 'while' statements")
 NWB_ADHD_EXPORT_UNATTRIBUTED_STMT_KEYWORD("do",     parseDoWhileStatement, "attributes are not permitted on 'do-while' statements")
 NWB_ADHD_EXPORT_UNATTRIBUTED_STMT_KEYWORD("return", parseReturnStatement,  "attributes are not permitted on 'return' statements")
-NWB_ADHD_EXPORT_UNATTRIBUTED_STMT_KEYWORD("native", parseNativeStatement,  "attributes are not permitted on 'native' blocks")
 NWB_ADHD_EXPORT_UNATTRIBUTED_STMT_KEYWORD("const",  parseConstDeclaration, "attributes are not permitted on local 'const' declarations")
 
 NWB_ADHD_EXPORT_FOR_STMT_KEYWORD("for",          false)
@@ -82,9 +81,6 @@ NWB_ADHD_EXPORT_INTERFACE_FLAG_ATTRIBUTE("reflect")
 
 NWB_ADHD_EXPORT_ENUM_FLAG_ATTRIBUTE("reflect")
 
-NWB_ADHD_EXPORT_TOP_LEVEL_NATIVE_ATTRIBUTE("header", false)
-NWB_ADHD_EXPORT_TOP_LEVEL_NATIVE_ATTRIBUTE("source", true)
-
 NWB_ADHD_EXPORT_DIAGNOSTIC_ATTRIBUTE("essential", isEssential)
 
 NWB_ADHD_EXPORT_PROHIBITED_TEMPLATE_PARAM_KEYWORD("typename", "do not write 'typename' or 'class' inside '<...>' template parameters in adhd")
@@ -102,6 +98,7 @@ NWB_ADHD_EXPORT_PROHIBITED_TOP_LEVEL_KEYWORD("static",    "'static' is prohibite
 NWB_ADHD_EXPORT_PROHIBITED_TOP_LEVEL_KEYWORD("template",  "C++ 'template' keyword is prohibited in adhd; write '<T>' directly on declarations")
 NWB_ADHD_EXPORT_PROHIBITED_TOP_LEVEL_KEYWORD("inline",    "'inline' is prohibited in adhd; inlining is decided automatically by the adhd compiler")
 NWB_ADHD_EXPORT_PROHIBITED_TOP_LEVEL_KEYWORD("noinline",  "'noinline' is prohibited in adhd; inlining is decided automatically by the adhd compiler")
+NWB_ADHD_EXPORT_PROHIBITED_TOP_LEVEL_KEYWORD("native",    "'native' blocks are prohibited in adhd; bind C++ headers via typed 'extern' declarations and separate '.h'/'.cpp' files")
 
 NWB_ADHD_EXPORT_PROHIBITED_EXPR_KEYWORD("null",             "'null' and 'nullptr' are prohibited in adhd; use Optional<T>")
 NWB_ADHD_EXPORT_PROHIBITED_EXPR_KEYWORD("nullptr",          "'null' and 'nullptr' are prohibited in adhd; use Optional<T>")
@@ -118,6 +115,7 @@ NWB_ADHD_EXPORT_PROHIBITED_STMT_KEYWORD("catch",  "C++ exceptions ('try'/'catch'
 NWB_ADHD_EXPORT_PROHIBITED_STMT_KEYWORD("throw",  "C++ exceptions ('try'/'catch'/'throw') are prohibited in adhd; use Optional<T> or Expected<T, E>")
 NWB_ADHD_EXPORT_PROHIBITED_STMT_KEYWORD("goto",   "'goto' is prohibited in adhd")
 NWB_ADHD_EXPORT_PROHIBITED_STMT_KEYWORD("static", "'static' variables are prohibited in adhd")
+NWB_ADHD_EXPORT_PROHIBITED_STMT_KEYWORD("native", "'native' blocks are prohibited in adhd; bind C++ headers via typed 'extern' declarations and separate '.h'/'.cpp' files")
 
 NWB_ADHD_EXPORT_NESTED_TYPE_KEYWORD("class",     true)
 NWB_ADHD_EXPORT_NESTED_TYPE_KEYWORD("struct",    true)
@@ -157,7 +155,6 @@ NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(NamespaceWrapper, "namespace_wrapper")
 NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(StaticAssert, "static_assert")
 NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(Const,     "const")
 NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(Static,    "static")
-NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(Native,    "native")
 NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(Operator,  "operator")
 NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(Auto,      "auto")
 NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(This,      "this")

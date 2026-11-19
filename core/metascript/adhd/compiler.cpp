@@ -48,7 +48,7 @@ b8 Compiler::Compile(const CompileOptions& options, MetaArena& arena, CompileRes
 
     for(const MString& inc : preprocessor.includedFiles()){
         if(!HasAdhdExtension(MStringView(inc.data(), inc.size()))){
-            outResult.errors.push_back(ParseError{1u, 1u, MString("outside 'native { ... }', '#include' in adhd may only include '.adhd' files; place C++ '#include' directives inside a 'native' block", arena)});
+            outResult.errors.push_back(ParseError{1u, 1u, MString("#include in adhd may only include '.adhd' files; bind C++ headers via typed 'extern' declarations and separate '.h'/'.cpp' files", arena)});
             return false;
         }
         outResult.unit.includedAdhdFiles.push_back(inc);

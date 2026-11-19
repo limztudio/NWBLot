@@ -26,6 +26,7 @@ u32 CreateIslandInWorld(mut Vector<Island> islands, mut Vector<u32> freeIslandId
     island.constraintRemoveCount = 0u;
     island.bodies.clear();
     island.contacts.clear();
+    island.joints.clear();
     island.alive = true;
     sets[setIndex].islands.push_back(islandId);
     return islandId;
@@ -54,6 +55,7 @@ void DestroyIslandInWorld(mut Vector<Island> islands, mut Vector<u32> freeIsland
     islands[islandId].constraintRemoveCount = 0u;
     islands[islandId].bodies.clear();
     islands[islandId].contacts.clear();
+    islands[islandId].joints.clear();
     islands[islandId].alive = false;
     freeIslandIds.push_back(islandId);
 }
@@ -164,6 +166,7 @@ u32 MergeIslandsInWorld(
     mut Vector<u32> freeIslandIds,
     mut Vector<SolverSet> sets,
     mut Vector<Contact> contacts,
+    mut Vector<Joint> joints,
     in u32 islandIdA,
     in u32 islandIdB
 ){
@@ -201,9 +204,17 @@ u32 MergeIslandsInWorld(
         big.contacts.push_back(link);
     }
 
+    for(usize i = 0u; i < small.joints.size(); ++i){
+        const JointLink link = small.joints[i];
+        joints[link.jointId].islandId = bigId;
+        joints[link.jointId].islandIndex = cast<u32>(big.joints.size());
+        big.joints.push_back(link);
+    }
+
     big.constraintRemoveCount += small.constraintRemoveCount;
     small.bodies.clear();
     small.contacts.clear();
+    small.joints.clear();
     DestroyIslandInWorld(islands, freeIslandIds, sets, smallId);
     return bigId;
 }
@@ -214,6 +225,7 @@ void LinkContactToIsland(
     mut Vector<u32> freeIslandIds,
     mut Vector<SolverSet> sets,
     mut Vector<Contact> contacts,
+    mut Vector<Joint> joints,
     in u32 contactId
 ){
     mut Contact contact = contacts[contactId];
@@ -230,7 +242,7 @@ void LinkContactToIsland(
 
     u32 targetIsland = s_NullIndex;
     if(islandA != s_NullIndex && islandB != s_NullIndex)
-        targetIsland = MergeIslandsInWorld(bodies, islands, freeIslandIds, sets, contacts, islandA, islandB);
+        targetIsland = MergeIslandsInWorld(bodies, islands, freeIslandIds, sets, contacts, joints, islandA, islandB);
     else if(islandA != s_NullIndex)
         targetIsland = islandA;
     else if(islandB != s_NullIndex)
@@ -276,12 +288,39 @@ void UnlinkContactFromIsland(mut Vector<Island> islands, mut Vector<Contact> con
     contact.islandIndex = s_NullIndex;
 }
 
+void UnlinkJointFromIsland(mut Vector<Island> islands, mut Vector<Joint> joints, in u32 jointId){
+    mut Joint joint = joints[jointId];
+    const u32 islandId = joint.islandId;
+    if(islandId == s_NullIndex || islandId >= islands.size() || !islands[islandId].alive){
+        joint.islandId = s_NullIndex;
+        joint.islandIndex = s_NullIndex;
+        return;
+    }
+
+    mut Island island = islands[islandId];
+    const u32 idx = joint.islandIndex;
+    if(idx < island.joints.size()){
+        const u32 lastIdx = cast<u32>(island.joints.size() - 1u);
+        if(idx != lastIdx){
+            const JointLink movedLink = island.joints[lastIdx];
+            island.joints[idx] = movedLink;
+            joints[movedLink.jointId].islandIndex = idx;
+        }
+        island.joints.pop_back();
+    }
+
+    ++island.constraintRemoveCount;
+    joint.islandId = s_NullIndex;
+    joint.islandIndex = s_NullIndex;
+}
+
 void SplitIslandInWorld(
     mut Vector<Body> bodies,
     mut Vector<Island> islands,
     mut Vector<u32> freeIslandIds,
     mut Vector<SolverSet> sets,
     mut Vector<Contact> contacts,
+    mut Vector<Joint> joints,
     in u32 baseIslandId
 ){
     if(baseIslandId >= islands.size() || !islands[baseIslandId].alive)
@@ -294,6 +333,7 @@ void SplitIslandInWorld(
     const u32 setIndex = islands[baseIslandId].setIndex;
     Vector<u32> islandBodies = islands[baseIslandId].bodies;
     Vector<ContactLink> islandContacts = islands[baseIslandId].contacts;
+    Vector<JointLink> islandJoints = islands[baseIslandId].joints;
 
     HashMap<u32, usize> bodyLocalMap;
     bodyLocalMap.reserve(islandBodies.size());
@@ -315,6 +355,14 @@ void SplitIslandInWorld(
             JoinDisjointSets(cast<isize>(itA.value()), cast<isize>(itB.value()), dsuParents, dsuRanks);
     }
 
+    for(usize i = 0u; i < islandJoints.size(); ++i){
+        in JointLink link = islandJoints[i];
+        const auto itA = bodyLocalMap.find(link.bodyIdA);
+        const auto itB = bodyLocalMap.find(link.bodyIdB);
+        if(itA != bodyLocalMap.end() && itB != bodyLocalMap.end())
+            JoinDisjointSets(cast<isize>(itA.value()), cast<isize>(itB.value()), dsuParents, dsuRanks);
+    }
+
     HashMap<usize, u32> rootToIsland;
     u32 firstIsland = baseIslandId;
     b8 usedBase = false;
@@ -323,6 +371,7 @@ void SplitIslandInWorld(
 
     islands[baseIslandId].bodies.clear();
     islands[baseIslandId].contacts.clear();
+    islands[baseIslandId].joints.clear();
     islands[baseIslandId].constraintRemoveCount = 0u;
 
     for(usize i = 0u; i < islandBodies.size(); ++i){
@@ -362,6 +411,25 @@ void SplitIslandInWorld(
             contacts[link.contactId].islandId = targetIslandId;
             contacts[link.contactId].islandIndex = cast<u32>(dst.contacts.size());
             dst.contacts.push_back(link);
+        }
+    }
+
+    for(usize i = 0u; i < islandJoints.size(); ++i){
+        const JointLink link = islandJoints[i];
+        u32 targetIslandId = s_NullIndex;
+        const auto itA = bodyLocalMap.find(link.bodyIdA);
+        if(itA != bodyLocalMap.end())
+            targetIslandId = bodyAssignedIsland[itA.value()];
+        else{
+            const auto itB = bodyLocalMap.find(link.bodyIdB);
+            if(itB != bodyLocalMap.end())
+                targetIslandId = bodyAssignedIsland[itB.value()];
+        }
+        if(targetIslandId != s_NullIndex){
+            mut Island dst = islands[targetIslandId];
+            joints[link.jointId].islandId = targetIslandId;
+            joints[link.jointId].islandIndex = cast<u32>(dst.joints.size());
+            dst.joints.push_back(link);
         }
     }
 }

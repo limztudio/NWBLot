@@ -82,6 +82,60 @@ Mat3 ZeroMat3(){
     return Mat3(VectorSingle(0.0f), VectorSingle(0.0f), VectorSingle(0.0f));
 }
 
+Mat3 AddMat3(in Mat3 a, in Mat3 b){
+    return Mat3(
+        VectorSingle(a.row0) + VectorSingle(b.row0),
+        VectorSingle(a.row1) + VectorSingle(b.row1),
+        VectorSingle(a.row2) + VectorSingle(b.row2)
+    );
+}
+
+Mat3 SubMat3(in Mat3 a, in Mat3 b){
+    return Mat3(
+        VectorSingle(a.row0) - VectorSingle(b.row0),
+        VectorSingle(a.row1) - VectorSingle(b.row1),
+        VectorSingle(a.row2) - VectorSingle(b.row2)
+    );
+}
+
+Mat3 ScaleMat3(in Mat3 a, in f32 s){
+    return Mat3(
+        VectorSingle(a.row0) * s,
+        VectorSingle(a.row1) * s,
+        VectorSingle(a.row2) * s
+    );
+}
+
+Mat3 SkewSymmetricMat3(in VectorSingle v){
+    return Mat3(
+        VectorSingle(0.0f, -v.z, v.y, 0.0f),
+        VectorSingle(v.z, 0.0f, -v.x, 0.0f),
+        VectorSingle(-v.y, v.x, 0.0f, 0.0f)
+    );
+}
+
+VectorSingle SolveMat3Linear(in Mat3 m, in VectorSingle b){
+    const VectorSingle r0 = VectorSingle(m.row0);
+    const VectorSingle r1 = VectorSingle(m.row1);
+    const VectorSingle r2 = VectorSingle(m.row2);
+
+    const VectorSingle c0 = Cross(r1, r2);
+    const f32 det = Vector3Dot(r0, c0).x;
+    if(!IsFinite(det) || Abs(det) <= 1.0e-30f)
+        return VectorSingle(0.0f);
+
+    const f32 invDet = 1.0f / det;
+    if(!IsFinite(invDet))
+        return VectorSingle(0.0f);
+
+    const VectorSingle c1 = Cross(r2, r0);
+    const VectorSingle c2 = Cross(r0, r1);
+    const f32 x = Vector3Dot(VectorSingle(b, 0.0f), VectorSingle(c0.x, c1.x, c2.x, 0.0f)).x * invDet;
+    const f32 y = Vector3Dot(VectorSingle(b, 0.0f), VectorSingle(c0.y, c1.y, c2.y, 0.0f)).x * invDet;
+    const f32 z = Vector3Dot(VectorSingle(b, 0.0f), VectorSingle(c0.z, c1.z, c2.z, 0.0f)).x * invDet;
+    return VectorSingle(x, y, z, 0.0f);
+}
+
 Mat3 Mat3FromQuaternion(in VectorSingle q){
     const f32 x = q.x;
     const f32 y = q.y;
@@ -165,10 +219,12 @@ Mat3 InvertSymmetricMat3(in Mat3 a){
     const f32 c13 = a12 * a23 - a13 * a22;
     const f32 det = a11 * c11 + a12 * c12 + a13 * c13;
 
-    if(!IsFinite(det) || Abs(det) <= 1.0e-18f)
+    if(!IsFinite(det) || Abs(det) <= 1.0e-30f)
         return ZeroMat3();
 
     const f32 invDet = 1.0f / det;
+    if(!IsFinite(invDet))
+        return ZeroMat3();
     const f32 c22 = a11 * a33 - a13 * a13;
     const f32 c23 = a12 * a13 - a11 * a23;
     const f32 c33 = a11 * a22 - a12 * a12;

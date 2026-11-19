@@ -8,6 +8,7 @@ class PhysicsSubsystem{
     public AssetRef<ComputeShader> narrowphaseCs;
     public AssetRef<ComputeShader> solverIntegrateVelocitiesCs;
     public AssetRef<ComputeShader> solverContactsCs;
+    public AssetRef<ComputeShader> solverJointsCs;
     public AssetRef<ComputeShader> solverIntegratePositionsCs;
     public AssetRef<ComputeShader> solverFinalizeBodiesCs;
 }

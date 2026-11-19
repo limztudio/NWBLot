@@ -33,11 +33,6 @@ u32 DecodeBroadPhaseTreeType(in u32 proxyKey){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class MovePair{
-    public u32 shapeId = s_NullIndex;
-    public u32 proxyKey = s_NullIndex;
-}
-
 class CandidatePair{
     public u32 shapeIdA = s_NullIndex;
     public u32 shapeIdB = s_NullIndex;
@@ -98,12 +93,25 @@ class BroadPhase{
     }
 
     public void unbufferMove(in u32 proxyKey){
-        this.moveSet.erase(proxyKey);
+        if(this.moveSet.erase(proxyKey) == 0u)
+            return;
+        for(usize i = 0u; i < this.moveArray.size(); ++i){
+            if(this.moveArray[i] == proxyKey)
+                this.moveArray[i] = s_NullIndex;
+        }
     }
 
     public void clearMoves(){
         this.moveArray.clear();
         this.moveSet.clear();
+    }
+
+    public Aabb3D fatAabb(in u32 proxyKey)const{
+        if(proxyKey == s_NullIndex)
+            return Aabb3D();
+        const u32 treeIdx = DecodeBroadPhaseTreeType(proxyKey);
+        const u32 proxyId = DecodeBroadPhaseProxyId(proxyKey);
+        return this.trees[treeIdx].fatAabb(proxyId);
     }
 }
 

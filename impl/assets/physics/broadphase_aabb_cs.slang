@@ -144,21 +144,32 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(mode == NWB_PHYSICS_BROADPHASE_MODE_GRID_INSERT){
         NwbPhysicsGpuShapeProxy proxy = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx];
         const float invCellSize = g_NwbPhysicsPushConstants.deltaTime;
-        const int3 cMin = int3(floor(proxy.aabbMinPad.xyz * invCellSize));
-        const int3 cMax = int3(floor(proxy.aabbMaxPad.xyz * invCellSize));
-        const int3 span = cMax - cMin + int3(1, 1, 1);
+        const float3 minScaled = proxy.aabbMinPad.xyz * invCellSize;
+        const float3 maxScaled = proxy.aabbMaxPad.xyz * invCellSize;
+        const bool finiteBounds = all(isfinite(minScaled)) && all(isfinite(maxScaled)) && all(abs(minScaled) < 1.0e6f) && all(abs(maxScaled) < 1.0e6f);
 
-        bool isLarge = (span.x <= 0 || span.y <= 0 || span.z <= 0 || span.x > 3 || span.y > 3 || span.z > 3);
+        bool isLarge = !finiteBounds;
+        int3 cMin = int3(0, 0, 0);
+        int3 span = int3(0, 0, 0);
         if(!isLarge){
-            const uint cellCount = uint(span.x) * uint(span.y) * uint(span.z);
-            if(cellCount > NWB_PHYSICS_GPU_GRID_MAX_CELLS_PER_SHAPE)
-                isLarge = true;
+            cMin = int3(floor(minScaled));
+            const int3 cMax = int3(floor(maxScaled));
+            span = cMax - cMin + int3(1, 1, 1);
+            isLarge = (span.x <= 0 || span.y <= 0 || span.z <= 0 || span.x > 3 || span.y > 3 || span.z > 3);
+            if(!isLarge){
+                const uint cellCount = uint(span.x) * uint(span.y) * uint(span.z);
+                if(cellCount > NWB_PHYSICS_GPU_GRID_MAX_CELLS_PER_SHAPE)
+                    isLarge = true;
+            }
         }
 
         if(!isLarge){
-            for(int cz = cMin.z; cz <= cMax.z; ++cz){
-                for(int cy = cMin.y; cy <= cMax.y; ++cy){
-                    for(int cx = cMin.x; cx <= cMax.x; ++cx){
+            for(int dz = 0; dz < span.z; ++dz){
+                const int cz = cMin.z + dz;
+                for(int dy = 0; dy < span.y; ++dy){
+                    const int cy = cMin.y + dy;
+                    for(int dx = 0; dx < span.x; ++dx){
+                        const int cx = cMin.x + dx;
                         const uint bucket = nwbPhysicsHashCell(int3(cx, cy, cz));
                         const uint base = bucket * NWB_PHYSICS_GPU_GRID_BUCKET_STRIDE;
                         uint slotIdx = 0u;
@@ -194,41 +205,55 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const bool isLargeA = (proxyA.aabbMinPad.w > 0.5f);
 
         if(!isLargeA){
-            const int3 cMinA = int3(floor(minA * invCellSize));
-            const int3 cMaxA = int3(floor(maxA * invCellSize));
-            for(int cz = cMinA.z; cz <= cMaxA.z; ++cz){
-                for(int cy = cMinA.y; cy <= cMaxA.y; ++cy){
-                    for(int cx = cMinA.x; cx <= cMaxA.x; ++cx){
-                        const uint bucket = nwbPhysicsHashCell(int3(cx, cy, cz));
-                        const uint base = bucket * NWB_PHYSICS_GPU_GRID_BUCKET_STRIDE;
-                        const uint count = min(g_NwbPhysicsUintBuffers[gridSlot][base], NWB_PHYSICS_GPU_GRID_BUCKET_CAPACITY);
-                        for(uint k = 0u; k < count; ++k){
-                            const uint idxB = g_NwbPhysicsUintBuffers[gridSlot][base + 1u + k];
-                            if(idxB <= idx)
-                                continue;
+            const float3 minScaledA = minA * invCellSize;
+            const float3 maxScaledA = maxA * invCellSize;
+            const bool finiteA = all(isfinite(minScaledA)) && all(isfinite(maxScaledA)) && all(abs(minScaledA) < 1.0e6f) && all(abs(maxScaledA) < 1.0e6f);
+            if(finiteA){
+                const int3 cMinA = int3(floor(minScaledA));
+                const int3 cMaxA = int3(floor(maxScaledA));
+                const int3 spanA = cMaxA - cMinA + int3(1, 1, 1);
+                if(spanA.x > 0 && spanA.y > 0 && spanA.z > 0 && spanA.x <= 3 && spanA.y <= 3 && spanA.z <= 3){
+                    for(int dz = 0; dz < spanA.z; ++dz){
+                        const int cz = cMinA.z + dz;
+                        for(int dy = 0; dy < spanA.y; ++dy){
+                            const int cy = cMinA.y + dy;
+                            for(int dx = 0; dx < spanA.x; ++dx){
+                                const int cx = cMinA.x + dx;
+                                const uint bucket = nwbPhysicsHashCell(int3(cx, cy, cz));
+                                const uint base = bucket * NWB_PHYSICS_GPU_GRID_BUCKET_STRIDE;
+                                const uint count = min(g_NwbPhysicsUintBuffers[gridSlot][base], NWB_PHYSICS_GPU_GRID_BUCKET_CAPACITY);
+                                for(uint k = 0u; k < count; ++k){
+                                    const uint idxB = g_NwbPhysicsUintBuffers[gridSlot][base + 1u + k];
+                                    if(idxB <= idx)
+                                        continue;
 
-                            bool seenInBucket = false;
-                            for(uint p = 0u; p < k; ++p){
-                                if(g_NwbPhysicsUintBuffers[gridSlot][base + 1u + p] == idxB){
-                                    seenInBucket = true;
-                                    break;
+                                    bool seenInBucket = false;
+                                    for(uint p = 0u; p < k; ++p){
+                                        if(g_NwbPhysicsUintBuffers[gridSlot][base + 1u + p] == idxB){
+                                            seenInBucket = true;
+                                            break;
+                                        }
+                                    }
+                                    if(seenInBucket)
+                                        continue;
+
+                                    const NwbPhysicsGpuShapeProxy proxyB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB];
+                                    if(proxyB.aabbMinPad.w > 0.5f)
+                                        continue;
+                                    const float3 minScaledB = proxyB.aabbMinPad.xyz * invCellSize;
+                                    if(!all(isfinite(minScaledB)) || any(abs(minScaledB) >= 1.0e6f))
+                                        continue;
+                                    const int3 cMinB = int3(floor(minScaledB));
+                                    const int3 canon = max(cMinA, cMinB);
+                                    if(cx != canon.x || cy != canon.y || cz != canon.z)
+                                        continue;
+                                    if(!nwbPhysicsShouldCollide(proxyA, proxyB))
+                                        continue;
+                                    if(!nwbPhysicsAabbOverlaps(minA, maxA, proxyB.aabbMinPad.xyz, proxyB.aabbMaxPad.xyz))
+                                        continue;
+                                    nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, idx, idxB, proxyA.bodyIndexTypeShape.x, proxyB.bodyIndexTypeShape.x);
                                 }
                             }
-                            if(seenInBucket)
-                                continue;
-
-                            const NwbPhysicsGpuShapeProxy proxyB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB];
-                            if(proxyB.aabbMinPad.w > 0.5f)
-                                continue;
-                            const int3 cMinB = int3(floor(proxyB.aabbMinPad.xyz * invCellSize));
-                            const int3 canon = max(cMinA, cMinB);
-                            if(cx != canon.x || cy != canon.y || cz != canon.z)
-                                continue;
-                            if(!nwbPhysicsShouldCollide(proxyA, proxyB))
-                                continue;
-                            if(!nwbPhysicsAabbOverlaps(minA, maxA, proxyB.aabbMinPad.xyz, proxyB.aabbMaxPad.xyz))
-                                continue;
-                            nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, idx, idxB, proxyA.bodyIndexTypeShape.x, proxyB.bodyIndexTypeShape.x);
                         }
                     }
                 }

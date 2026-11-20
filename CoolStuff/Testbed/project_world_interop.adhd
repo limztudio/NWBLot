@@ -40,6 +40,33 @@
 
 type CpuTaskAdmissionErrorCode = CpuTaskAdmissionError;
 
+enum<u8> TestbedPhysicsSceneMode{
+    Default = 0u,
+    Stress = 1u,
+    kCount
+}
+
+enum<u8> TestbedPhysicsBackendChoice{
+    Hybrid = 0u,
+    CpuOnly = 1u,
+    GpuFull = 2u,
+    kCount
+}
+
+class TestbedPhysicsHudStats{
+    public u32 bodyCount = 0u;
+    public u32 awakeBodyCount = 0u;
+    public u32 contactCount = 0u;
+    public u32 jointCount = 0u;
+    public u32 islandCount = 0u;
+    public u32 cpuSolvedBodyCount = 0u;
+    public u32 gpuSolvedBodyCount = 0u;
+    public u32 cpuSolvedIslandCount = 0u;
+    public u32 gpuSolvedIslandCount = 0u;
+    public u8 backendUsed = 0u;
+    public f64 stepMs = 0.0;
+}
+
 interface IProjectUiLayerPainter{
     void paintUiLayer(mut UiPaintContext context);
 }
@@ -249,8 +276,179 @@ b8 CreateStartupCameraAndLights(mut NotNullUniquePtr<World> worldHandle){
     return CreateStartupCameraAndLightsOnWorld(worldHandle.deref());
 }
 
-void CreateDefaultPhysicsScene(mut NotNullUniquePtr<World> worldHandle){
+void ApplyPhysicsBackendSettings(in TestbedPhysicsBackendChoice choice, mut PhysicsWorldConfigComponent cfg){
+    if(choice == TestbedPhysicsBackendChoice::CpuOnly){
+        cfg.backendMode = PhysicsBackendMode::CpuOnly;
+        cfg.gpuWorkloadFraction = 0.0f;
+    }
+    else if(choice == TestbedPhysicsBackendChoice::GpuFull){
+        cfg.backendMode = PhysicsBackendMode::GpuPreferred;
+        cfg.gpuWorkloadFraction = 1.0f;
+    }
+    else{
+        cfg.backendMode = PhysicsBackendMode::Auto;
+        cfg.gpuWorkloadFraction = s_DefaultGpuWorkloadFraction;
+    }
+    cfg.gpuDispatchThreshold = s_DefaultGpuBodyThreshold;
+    cfg.dirty = true;
+}
+
+EntityID SpawnPhysicsStaticBox(
+    mut World world,
+    in VectorSingle pos,
+    in VectorSingle scale,
+    in VectorSingle halfExtents,
+    in f32 friction,
+    in f32 restitution,
+    in b8 addRenderMesh,
+    in Name boxModelName,
+    in Name whiteMatName
+){
+    Entity entity = world.createEntity();
+    mut TransformComponent xf = entity.addComponent<TransformComponent>();
+    xf.position = f32x4(pos, 0.0f);
+    xf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+    xf.scale = f32x4(scale, 0.0f);
+
+    mut ColliderComponent col = entity.addComponent<ColliderComponent>();
+    col.shapeType = ShapeType::Hull;
+    col.halfExtents = f32x4(halfExtents, 0.0f);
+    col.friction = friction;
+    col.restitution = restitution;
+    col.dirty = true;
+
+    if(addRenderMesh){
+        mut RigidBodyComponent rb = entity.addComponent<RigidBodyComponent>();
+        rb.type = BodyType::Static;
+        rb.dirty = true;
+
+        mut ModelComponent mdl = entity.addComponent<ModelComponent>();
+        mdl.model = AssetRef<Model>(boxModelName);
+
+        mut RendererComponent rnd = entity.addComponent<RendererComponent>();
+        rnd.material = AssetRef<Material>(whiteMatName);
+    }
+    return entity.id();
+}
+
+EntityID SpawnPhysicsDynamicBox(
+    mut World world,
+    in VectorSingle pos,
+    in VectorSingle scale,
+    in f32 friction,
+    in f32 restitution,
+    in Name boxModelName,
+    in Name whiteMatName
+){
+    Entity boxEntity = world.createEntity();
+    mut TransformComponent xf = boxEntity.addComponent<TransformComponent>();
+    xf.position = f32x4(pos, 0.0f);
+    xf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+    xf.scale = f32x4(scale, 0.0f);
+
+    mut RigidBodyComponent rb = boxEntity.addComponent<RigidBodyComponent>();
+    rb.type = BodyType::Dynamic;
+    rb.dirty = true;
+
+    mut ColliderComponent col = boxEntity.addComponent<ColliderComponent>();
+    col.shapeType = ShapeType::Hull;
+    col.halfExtents = f32x4(0.5f, 0.5f, 0.5f, 0.0f);
+    col.density = 1.0f;
+    col.friction = friction;
+    col.restitution = restitution;
+    col.dirty = true;
+
+    mut ModelComponent mdl = boxEntity.addComponent<ModelComponent>();
+    mdl.model = AssetRef<Model>(boxModelName);
+
+    mut RendererComponent rnd = boxEntity.addComponent<RendererComponent>();
+    rnd.material = AssetRef<Material>(whiteMatName);
+    return boxEntity.id();
+}
+
+EntityID SpawnPhysicsDynamicSphere(
+    mut World world,
+    in VectorSingle pos,
+    in VectorSingle scale,
+    in VectorSingle linVel,
+    in f32 density,
+    in f32 friction,
+    in f32 restitution,
+    in Name sphereModelName,
+    in Name whiteMatName
+){
+    Entity sphereEntity = world.createEntity();
+    mut TransformComponent xf = sphereEntity.addComponent<TransformComponent>();
+    xf.position = f32x4(pos, 0.0f);
+    xf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+    xf.scale = f32x4(scale, 0.0f);
+
+    mut RigidBodyComponent rb = sphereEntity.addComponent<RigidBodyComponent>();
+    rb.type = BodyType::Dynamic;
+    rb.linearVelocity = f32x4(linVel, 0.0f);
+    rb.dirty = true;
+
+    mut ColliderComponent col = sphereEntity.addComponent<ColliderComponent>();
+    col.shapeType = ShapeType::Sphere;
+    col.radius = 0.5f;
+    col.density = density;
+    col.friction = friction;
+    col.restitution = restitution;
+    col.dirty = true;
+
+    mut ModelComponent mdl = sphereEntity.addComponent<ModelComponent>();
+    mdl.model = AssetRef<Model>(sphereModelName);
+
+    mut RendererComponent rnd = sphereEntity.addComponent<RendererComponent>();
+    rnd.material = AssetRef<Material>(whiteMatName);
+    return sphereEntity.id();
+}
+
+void DestroyPhysicsSceneEntities(mut NotNullUniquePtr<World> worldHandle, mut EntityID configEntity, mut Vector<EntityID> entities){
     mut World world = worldHandle.deref();
+    for(usize i = 0u; i < entities.size(); ++i){
+        const EntityID e = entities[i];
+        if(e.valid() && world.alive(e))
+            world.destroyEntity(e);
+    }
+    entities.clear();
+    if(configEntity.valid() && world.alive(configEntity))
+        world.destroyEntity(configEntity);
+    configEntity = EntityID();
+}
+
+void ApplyPhysicsBackendChoice(mut NotNullUniquePtr<World> worldHandle, in EntityID configEntity, in TestbedPhysicsBackendChoice choice){
+    mut World world = worldHandle.deref();
+    if(!configEntity.valid() || !world.alive(configEntity) || !world.hasComponent<PhysicsWorldConfigComponent>(configEntity))
+        return;
+    ApplyPhysicsBackendSettings(choice, world.getComponent<PhysicsWorldConfigComponent>(configEntity));
+}
+
+void ResetTestbedCameraForPhysicsScene(mut NotNullUniquePtr<World> worldHandle, in TestbedPhysicsSceneMode mode){
+    mut World world = worldHandle.deref();
+    const SceneCameraView cameraView = ResolveSceneCameraView(world);
+    if(!cameraView.valid())
+        return;
+    Entity cameraEntity = world.entity(cameraView.entity);
+    mut TransformComponent cameraTransform = cameraEntity.getComponent<TransformComponent>();
+    if(mode == TestbedPhysicsSceneMode::Stress){
+        cameraTransform.position = f32x4(0.0f, 3.8f, 4.5f, 0.0f);
+        cameraTransform.rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-0.28f, s_PI, 0.0f, 0.0f)));
+    }
+    else{
+        cameraTransform.position = f32x4(0.0f, s_CharacterCameraTargetY, s_CameraStartDepth, 0.0f);
+        cameraTransform.rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, s_PI, 0.0f, 0.0f)));
+    }
+}
+
+void CreateDefaultPhysicsScene(
+    mut NotNullUniquePtr<World> worldHandle,
+    in TestbedPhysicsBackendChoice backendChoice,
+    mut EntityID outConfigEntity,
+    mut Vector<EntityID> outEntities
+){
+    mut World world = worldHandle.deref();
+    outEntities.clear();
 
     {
         Entity cfgEntity = world.createEntity();
@@ -258,58 +456,43 @@ void CreateDefaultPhysicsScene(mut NotNullUniquePtr<World> worldHandle){
         cfg.gravity = f32x4(0.0f, -9.81f, 0.0f, 0.0f);
         cfg.fixedDeltaTime = 1.0f / 60.0f;
         cfg.subStepCount = 4u;
-        cfg.backendMode = PhysicsBackendMode::Auto;
-        cfg.dirty = true;
-    }
-
-    {
-        Entity groundEntity = world.createEntity();
-        mut TransformComponent xf = groundEntity.addComponent<TransformComponent>();
-        xf.position = f32x4(0.0f, -0.25f, 0.0f, 0.0f);
-        xf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
-        xf.scale = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
-
-        mut ColliderComponent col = groundEntity.addComponent<ColliderComponent>();
-        col.shapeType = ShapeType::Hull;
-        col.halfExtents = f32x4(3.0f, 0.25f, 3.0f, 0.0f);
-        col.friction = 0.7f;
-        col.restitution = 0.1f;
-        col.dirty = true;
+        ApplyPhysicsBackendSettings(backendChoice, cfg);
+        outConfigEntity = cfgEntity.id();
     }
 
     const Name boxModelName = Name("project/meshes/physics_box/model");
     const Name sphereModelName = Name("project/meshes/physics_sphere/model");
     const Name whiteMatName = Name("project/materials/mat_white_opaque");
 
+    outEntities.push_back(
+        SpawnPhysicsStaticBox(
+            world,
+            VectorSingle(0.0f, -0.25f, 0.0f, 0.0f),
+            VectorSingle(1.0f, 1.0f, 1.0f, 0.0f),
+            VectorSingle(3.0f, 0.25f, 3.0f, 0.0f),
+            0.7f,
+            0.1f,
+            false,
+            boxModelName,
+            whiteMatName
+        )
+    );
+
     for(u32 i = 0u; i < 4u; ++i){
-        Entity boxEntity = world.createEntity();
-        mut TransformComponent xf = boxEntity.addComponent<TransformComponent>();
-        xf.position = f32x4(1.05f, 0.155f + cast<f32>(i) * 0.31f, -0.50f, 0.0f);
-        xf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
-        xf.scale = f32x4(0.30f, 0.30f, 0.30f, 0.0f);
-
-        mut RigidBodyComponent rb = boxEntity.addComponent<RigidBodyComponent>();
-        rb.type = BodyType::Dynamic;
-        rb.dirty = true;
-
-        mut ColliderComponent col = boxEntity.addComponent<ColliderComponent>();
-        col.shapeType = ShapeType::Hull;
-        col.halfExtents = f32x4(0.5f, 0.5f, 0.5f, 0.0f);
-        col.density = 1.0f;
-        col.friction = 0.6f;
-        col.restitution = 0.05f;
-        col.dirty = true;
-
-        mut ModelComponent mdl = boxEntity.addComponent<ModelComponent>();
-        mdl.model = AssetRef<Model>(boxModelName);
-
-        mut RendererComponent rnd = boxEntity.addComponent<RendererComponent>();
-        rnd.material = AssetRef<Material>(whiteMatName);
+        outEntities.push_back(
+            SpawnPhysicsDynamicBox(
+                world,
+                VectorSingle(1.05f, 0.155f + cast<f32>(i) * 0.31f, -0.50f, 0.0f),
+                VectorSingle(0.30f, 0.30f, 0.30f, 0.0f),
+                0.6f,
+                0.05f,
+                boxModelName,
+                whiteMatName
+            )
+        );
     }
 
     for(u32 i = 0u; i < 2u; ++i){
-        Entity sphereEntity = world.createEntity();
-        mut TransformComponent xf = sphereEntity.addComponent<TransformComponent>();
         f32 sx = 0.96f;
         f32 sy = 1.55f;
         f32 sz = -0.44f;
@@ -318,41 +501,176 @@ void CreateDefaultPhysicsScene(mut NotNullUniquePtr<World> worldHandle){
             sy = 2.05f;
             sz = -0.56f;
         }
-        xf.position = f32x4(sx, sy, sz, 0.0f);
-        xf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
-        xf.scale = f32x4(0.28f, 0.28f, 0.28f, 0.0f);
-
-        mut RigidBodyComponent rb = sphereEntity.addComponent<RigidBodyComponent>();
-        rb.type = BodyType::Dynamic;
-        rb.dirty = true;
-
-        mut ColliderComponent col = sphereEntity.addComponent<ColliderComponent>();
-        col.shapeType = ShapeType::Sphere;
-        col.radius = 0.5f;
-        col.density = 1.2f;
-        col.friction = 0.4f;
-        col.restitution = 0.35f;
-        col.dirty = true;
-
-        mut ModelComponent mdl = sphereEntity.addComponent<ModelComponent>();
-        mdl.model = AssetRef<Model>(sphereModelName);
-
-        mut RendererComponent rnd = sphereEntity.addComponent<RendererComponent>();
-        rnd.material = AssetRef<Material>(whiteMatName);
+        outEntities.push_back(
+            SpawnPhysicsDynamicSphere(
+                world,
+                VectorSingle(sx, sy, sz, 0.0f),
+                VectorSingle(0.28f, 0.28f, 0.28f, 0.0f),
+                VectorSingle(0.0f, 0.0f, 0.0f, 0.0f),
+                1.2f,
+                0.4f,
+                0.35f,
+                sphereModelName,
+                whiteMatName
+            )
+        );
     }
 }
 
-void QueryPhysicsStats(mut NotNullUniquePtr<World> worldHandle, mut u32 outBodyCount, mut u32 outContactCount, mut u8 outBackend){
-    outBodyCount = 0u;
-    outContactCount = 0u;
-    outBackend = 0u;
+void CreateStressPhysicsScene(
+    mut NotNullUniquePtr<World> worldHandle,
+    in TestbedPhysicsBackendChoice backendChoice,
+    mut EntityID outConfigEntity,
+    mut Vector<EntityID> outEntities
+){
+    mut World world = worldHandle.deref();
+    outEntities.clear();
+
+    {
+        Entity cfgEntity = world.createEntity();
+        mut PhysicsWorldConfigComponent cfg = cfgEntity.addComponent<PhysicsWorldConfigComponent>();
+        cfg.gravity = f32x4(0.0f, -9.81f, 0.0f, 0.0f);
+        cfg.fixedDeltaTime = 1.0f / 60.0f;
+        cfg.subStepCount = 4u;
+        ApplyPhysicsBackendSettings(backendChoice, cfg);
+        outConfigEntity = cfgEntity.id();
+    }
+
+    const Name boxModelName = Name("project/meshes/physics_box/model");
+    const Name sphereModelName = Name("project/meshes/physics_sphere/model");
+    const Name whiteMatName = Name("project/materials/mat_white_opaque");
+    const VectorSingle unitHalf(0.5f, 0.5f, 0.5f, 0.0f);
+
+    outEntities.push_back(SpawnPhysicsStaticBox(world, VectorSingle(0.0f, -0.25f, -5.5f, 0.0f), VectorSingle(12.0f, 0.5f, 12.0f, 0.0f), unitHalf, 0.7f, 0.1f, true, boxModelName, whiteMatName));
+    outEntities.push_back(SpawnPhysicsStaticBox(world, VectorSingle(-6.25f, 1.25f, -5.5f, 0.0f), VectorSingle(0.5f, 2.5f, 12.5f, 0.0f), unitHalf, 0.5f, 0.2f, true, boxModelName, whiteMatName));
+    outEntities.push_back(SpawnPhysicsStaticBox(world, VectorSingle(6.25f, 1.25f, -5.5f, 0.0f), VectorSingle(0.5f, 2.5f, 12.5f, 0.0f), unitHalf, 0.5f, 0.2f, true, boxModelName, whiteMatName));
+    outEntities.push_back(SpawnPhysicsStaticBox(world, VectorSingle(0.0f, 1.25f, -11.75f, 0.0f), VectorSingle(12.5f, 2.5f, 0.5f, 0.0f), unitHalf, 0.5f, 0.2f, true, boxModelName, whiteMatName));
+    outEntities.push_back(SpawnPhysicsStaticBox(world, VectorSingle(0.0f, 0.30f, 0.75f, 0.0f), VectorSingle(12.5f, 0.6f, 0.5f, 0.0f), unitHalf, 0.5f, 0.2f, true, boxModelName, whiteMatName));
+
+    for(u32 row = 0u; row < 3u; ++row){
+        for(u32 col = 0u; col < 4u; ++col){
+            const f32 baseX = -3.6f + cast<f32>(col) * 2.4f;
+            const f32 baseZ = -8.6f + cast<f32>(row) * 2.6f;
+            for(u32 level = 0u; level < 3u; ++level){
+                for(u32 bz = 0u; bz < 2u; ++bz){
+                    for(u32 bx = 0u; bx < 2u; ++bx){
+                        const f32 px = baseX + (cast<f32>(bx) - 0.5f) * 0.38f;
+                        const f32 py = 0.175f + cast<f32>(level) * 0.35f;
+                        const f32 pz = baseZ + (cast<f32>(bz) - 0.5f) * 0.38f;
+                        outEntities.push_back(
+                            SpawnPhysicsDynamicBox(
+                                world,
+                                VectorSingle(px, py, pz, 0.0f),
+                                VectorSingle(0.34f, 0.34f, 0.34f, 0.0f),
+                                0.6f,
+                                0.05f,
+                                boxModelName,
+                                whiteMatName
+                            )
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    for(u32 i = 0u; i < 60u; ++i){
+        const u32 gx = i % 10u;
+        const u32 gz = i / 10u;
+        f32 jitterX = -0.18f;
+        if((gz & 1u) != 0u)
+            jitterX = 0.18f;
+        const f32 sx = -3.6f + cast<f32>(gx) * 0.8f + jitterX;
+        const f32 sy = 1.9f + cast<f32>(i % 5u) * 0.85f;
+        const f32 sz = -8.4f + cast<f32>(gz) * 1.0f;
+        const f32 vx = (cast<f32>(gx) - 4.5f) * -0.15f;
+        f32 vz = 0.25f;
+        if((i & 1u) != 0u)
+            vz = -0.25f;
+        outEntities.push_back(
+            SpawnPhysicsDynamicSphere(
+                world,
+                VectorSingle(sx, sy, sz, 0.0f),
+                VectorSingle(0.28f, 0.28f, 0.28f, 0.0f),
+                VectorSingle(vx, -1.5f, vz, 0.0f),
+                1.2f,
+                0.4f,
+                0.35f,
+                sphereModelName,
+                whiteMatName
+            )
+        );
+    }
+
+    for(u32 ci = 0u; ci < 6u; ++ci){
+        f32 ax = -4.8f;
+        if(ci >= 3u)
+            ax = 4.8f;
+        const f32 az = -3.5f - cast<f32>(ci % 3u) * 2.0f;
+        const EntityID anchorId = SpawnPhysicsStaticBox(
+            world,
+            VectorSingle(ax, 3.2f, az, 0.0f),
+            VectorSingle(0.24f, 0.24f, 0.24f, 0.0f),
+            unitHalf,
+            0.5f,
+            0.0f,
+            true,
+            boxModelName,
+            whiteMatName
+        );
+        outEntities.push_back(anchorId);
+
+        EntityID prevId = anchorId;
+        f32 signX = 1.0f;
+        if(ci >= 3u)
+            signX = -1.0f;
+        for(u32 linkIdx = 0u; linkIdx < 6u; ++linkIdx){
+            const f32 lx = ax + signX * cast<f32>(linkIdx + 1u) * 0.08f;
+            const f32 ly = 3.2f - cast<f32>(linkIdx + 1u) * 0.36f;
+            const EntityID linkId = SpawnPhysicsDynamicBox(
+                world,
+                VectorSingle(lx, ly, az, 0.0f),
+                VectorSingle(0.22f, 0.22f, 0.22f, 0.0f),
+                0.5f,
+                0.05f,
+                boxModelName,
+                whiteMatName
+            );
+            outEntities.push_back(linkId);
+
+            Entity jointEntity = world.createEntity();
+            mut JointComponent jc = jointEntity.addComponent<JointComponent>();
+            jc.bodyEntityA = prevId;
+            jc.bodyEntityB = linkId;
+            jc.type = JointType::Spherical;
+            jc.localAnchorA = f32x4(0.0f, -0.18f, 0.0f, 0.0f);
+            jc.localAnchorB = f32x4(0.0f, 0.18f, 0.0f, 0.0f);
+            jc.collideConnected = false;
+            jc.dirty = true;
+            outEntities.push_back(jointEntity.id());
+            prevId = linkId;
+        }
+    }
+}
+
+TestbedPhysicsHudStats QueryPhysicsStats(mut NotNullUniquePtr<World> worldHandle){
+    TestbedPhysicsHudStats outStats = TestbedPhysicsHudStats();
     const Optional<mut PhysicsSystem> physicsSystem = worldHandle.deref().borrowSystem<PhysicsSystem>();
     if(physicsSystem.has_value()){
         in WorldStepStats stats = physicsSystem.value().lastStepStats();
-        outBodyCount = stats.bodyCount;
-        outContactCount = stats.contactCount;
-        outBackend = cast<u8>(stats.backendUsed);
+        outStats.bodyCount = stats.bodyCount;
+        outStats.awakeBodyCount = stats.awakeBodyCount;
+        outStats.contactCount = stats.contactCount;
+        outStats.jointCount = stats.jointCount;
+        outStats.islandCount = stats.islandCount;
+        outStats.cpuSolvedBodyCount = stats.cpuSolvedBodyCount;
+        outStats.gpuSolvedBodyCount = stats.gpuSolvedBodyCount;
+        outStats.cpuSolvedIslandCount = stats.cpuSolvedIslandCount;
+        outStats.gpuSolvedIslandCount = stats.gpuSolvedIslandCount;
+        outStats.backendUsed = cast<u8>(stats.backendUsed);
+        outStats.stepMs = physicsSystem.value().lastStepMs();
     }
+    return outStats;
 }
 
 void SyncWorldModelRuntimes(mut NotNullUniquePtr<World> worldHandle){

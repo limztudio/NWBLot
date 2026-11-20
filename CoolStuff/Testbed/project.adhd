@@ -46,6 +46,28 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
     }
 
     public b8 onUpdate(in f32 delta)override{
+        if(this.m_pendingBackendSwitch){
+            this.m_pendingBackendSwitch = false;
+            this.m_physicsBackendChoice = this.m_pendingBackendChoice;
+            if(!this.m_pendingSceneSwitch)
+                ApplyPhysicsBackendChoice(this.m_world, this.m_physicsConfigEntity, this.m_physicsBackendChoice);
+        }
+        if(this.m_pendingSceneSwitch){
+            this.m_pendingSceneSwitch = false;
+            this.m_physicsSceneMode = this.m_pendingSceneMode;
+            DestroyPhysicsSceneEntities(this.m_world, this.m_physicsConfigEntity, this.m_physicsEntities);
+            if(this.m_physicsSceneMode == TestbedPhysicsSceneMode::Stress){
+                CreateStressPhysicsScene(this.m_world, this.m_physicsBackendChoice, this.m_physicsConfigEntity, this.m_physicsEntities);
+                [essential] info("ProjectTestbed: switched physics scene to stress (240 dynamic bodies, 36 joints)");
+            }
+            else{
+                CreateDefaultPhysicsScene(this.m_world, this.m_physicsBackendChoice, this.m_physicsConfigEntity, this.m_physicsEntities);
+                [essential] info("ProjectTestbed: switched physics scene to default");
+            }
+            SyncWorldModelRuntimes(this.m_world);
+            ResetTestbedCameraForPhysicsScene(this.m_world, this.m_physicsSceneMode);
+        }
+
         const f32 safeDelta = FlyCameraMotion().sanitizeDelta(delta);
         this.updateMainCamera(safeDelta);
         return TickProjectWorld(this.m_world, safeDelta);
@@ -99,7 +121,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
             return false;
         }
 
-        CreateDefaultPhysicsScene(this.m_world);
+        CreateDefaultPhysicsScene(this.m_world, this.m_physicsBackendChoice, this.m_physicsConfigEntity, this.m_physicsEntities);
         AttachProjectUiPaintEntity(this.m_world, this);
         [essential] info("ProjectTestbed: startup scene created ({})", "45-degree directional + point light, female skinned character, rigid-body tower + spheres on white ground plane");
         return true;
@@ -154,24 +176,56 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
             return;
         SeparatorOptions separator = SeparatorOptions();
         separator.thickness = 1.0f;
-        u32 physicsBodies = 0u;
-        u32 physicsContacts = 0u;
-        u8 physicsBackend = 0u;
-        QueryPhysicsStats(this.m_world, physicsBodies, physicsContacts, physicsBackend);
+        TestbedPhysicsHudStats stats = QueryPhysicsStats(this.m_world);
         StringView backendName = "CPU";
-        if(physicsBackend == 2u)
+        if(stats.backendUsed == 2u)
             backendName = "GPU";
-        else if(physicsBackend == 3u)
+        else if(stats.backendUsed == 3u)
             backendName = "CPU+GPU";
-        const String physicsLine = StringFormat("Physics: {} bodies, {} contacts ({})", physicsBodies, physicsContacts, backendName);
+        const String physicsLine = StringFormat("Physics: {} bodies ({} awake), {} contacts ({})", stats.bodyCount, stats.awakeBodyCount, stats.contactCount, backendName);
+        const String splitLine = StringFormat(
+            "Split: CPU {}b/{}i | GPU {}b/{}i | {:.2f} ms",
+            stats.cpuSolvedBodyCount,
+            stats.cpuSolvedIslandCount,
+            stats.gpuSolvedBodyCount,
+            stats.gpuSolvedIslandCount,
+            stats.stepMs
+        );
         if(context.ui.beginWindow("testbed_window", s_WindowTitleText, this.m_uiWindow, options)){
-            const b8 declared =
+            b8 declared =
                 context.ui.label("renderer", s_RendererLine)
                 && context.ui.separator("separator", separator)
                 && context.ui.label("character", s_CharacterLine)
                 && context.ui.separator("physics_sep", separator)
                 && context.ui.label("physics", StringView(physicsLine))
+                && context.ui.label("physics_split", StringView(splitLine))
             ;
+            WidgetOptions btnOpts = WidgetOptions();
+            btnOpts.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+            declared = context.ui.beginRow("physics_scene_row") && declared;
+            if(context.ui.button("scene_default", "Default", btnOpts)){
+                this.m_pendingSceneMode = TestbedPhysicsSceneMode::Default;
+                this.m_pendingSceneSwitch = true;
+            }
+            if(context.ui.button("scene_stress", "Stress (240)", btnOpts)){
+                this.m_pendingSceneMode = TestbedPhysicsSceneMode::Stress;
+                this.m_pendingSceneSwitch = true;
+            }
+            declared = context.ui.endContainer() && declared;
+            declared = context.ui.beginRow("physics_backend_row") && declared;
+            if(context.ui.button("backend_hybrid", "Hybrid", btnOpts)){
+                this.m_pendingBackendChoice = TestbedPhysicsBackendChoice::Hybrid;
+                this.m_pendingBackendSwitch = true;
+            }
+            if(context.ui.button("backend_cpu", "CPU", btnOpts)){
+                this.m_pendingBackendChoice = TestbedPhysicsBackendChoice::CpuOnly;
+                this.m_pendingBackendSwitch = true;
+            }
+            if(context.ui.button("backend_gpu", "GPU", btnOpts)){
+                this.m_pendingBackendChoice = TestbedPhysicsBackendChoice::GpuFull;
+                this.m_pendingBackendSwitch = true;
+            }
+            declared = context.ui.endContainer() && declared;
             [essential] assert(declared);
         }
         const b8 ended = context.ui.endWindow();
@@ -186,6 +240,14 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
     private FlyCameraInput m_cameraInput = FlyCameraInput();
     private b8 m_inputRegistered = false;
     private b8 m_worldDestroyed = false;
+    private EntityID m_physicsConfigEntity;
+    private Vector<EntityID> m_physicsEntities;
+    private TestbedPhysicsSceneMode m_physicsSceneMode = TestbedPhysicsSceneMode::Default;
+    private TestbedPhysicsBackendChoice m_physicsBackendChoice = TestbedPhysicsBackendChoice::Hybrid;
+    private TestbedPhysicsSceneMode m_pendingSceneMode = TestbedPhysicsSceneMode::Default;
+    private TestbedPhysicsBackendChoice m_pendingBackendChoice = TestbedPhysicsBackendChoice::Hybrid;
+    private b8 m_pendingSceneSwitch = false;
+    private b8 m_pendingBackendSwitch = false;
 }
 
 

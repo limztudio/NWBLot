@@ -78,12 +78,12 @@ void nwbPhysicsComputePointEffectiveMass(
     const float3 ibY = nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, bxY);
     const float3 ibZ = nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, bxZ);
 
-    const float s00 = sumM - dot(axX, iaX) - dot(bxX, ibX);
-    const float s01 = -dot(axX, iaY) - dot(bxX, ibY);
-    const float s02 = -dot(axX, iaZ) - dot(bxX, ibZ);
-    const float s11 = sumM - dot(axY, iaY) - dot(bxY, ibY);
-    const float s12 = -dot(axY, iaZ) - dot(bxY, ibZ);
-    const float s22 = sumM - dot(axZ, iaZ) - dot(bxZ, ibZ);
+    const float s00 = sumM + dot(axX, iaX) + dot(bxX, ibX);
+    const float s01 = dot(axX, iaY) + dot(bxX, ibY);
+    const float s02 = dot(axX, iaZ) + dot(bxX, ibZ);
+    const float s11 = sumM + dot(axY, iaY) + dot(bxY, ibY);
+    const float s12 = dot(axY, iaZ) + dot(bxY, ibZ);
+    const float s22 = sumM + dot(axZ, iaZ) + dot(bxZ, ibZ);
 
     const float3 sym0 = float3(s00, s01, s02);
     const float3 sym1 = float3(s01, s11, s12);

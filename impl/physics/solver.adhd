@@ -44,6 +44,7 @@ void UpdateBroadPhasePairsCpu(mut PhysicsWorld world, mut CpuTaskScheduler cpuSc
                 in Shape shapeA = world.m_shapes[shapeIdA];
                 in Aabb3D queryBox = world.m_broadPhase.trees[treeType].fatAabb(proxyId);
                 mut Vector<CandidatePair> bucket = world.m_broadPhase.workerBuckets[moveIdx];
+                in PhysicsWorld worldRef = world;
 
                 for(usize t = 0u; t < s_TreeCount; ++t){
                     if(treeType == s_TreeStatic && t == s_TreeStatic)
@@ -53,10 +54,10 @@ void UpdateBroadPhasePairsCpu(mut PhysicsWorld world, mut CpuTaskScheduler cpuSc
                     world.m_broadPhase.trees[t].queryAabb(
                         queryBox,
                         shapeA.filter.maskBits,
-                        lambda[in world, in shapeIdA, in shapeA, mut bucket](in u32 otherProxyId, in u32 shapeIdB) -> b8{
-                            if(shapeIdB == shapeIdA || shapeIdB >= world.m_shapes.size() || !world.m_shapes[shapeIdB].alive)
+                        lambda[in worldRef, in shapeIdA, in shapeA, mut bucket](in u32 otherProxyId, in u32 shapeIdB) -> b8{
+                            if(shapeIdB == shapeIdA || shapeIdB >= worldRef.m_shapes.size() || !worldRef.m_shapes[shapeIdB].alive)
                                 return true;
-                            in Shape shapeB = world.m_shapes[shapeIdB];
+                            in Shape shapeB = worldRef.m_shapes[shapeIdB];
                             if(shapeA.bodyId == shapeB.bodyId)
                                 return true;
                             if(!ShouldCollideFilters(shapeA.filter, shapeB.filter))
@@ -96,6 +97,7 @@ void UpdateBroadPhasePairsCpu(mut PhysicsWorld world, mut CpuTaskScheduler cpuSc
             in Shape shapeA = world.m_shapes[shapeIdA];
             in Aabb3D queryBox = world.m_broadPhase.trees[treeType].fatAabb(proxyId);
             mut Vector<CandidatePair> bucket = world.m_broadPhase.workerBuckets[moveIdx];
+            in PhysicsWorld worldRef = world;
 
             for(usize t = 0u; t < s_TreeCount; ++t){
                 if(treeType == s_TreeStatic && t == s_TreeStatic)
@@ -105,10 +107,10 @@ void UpdateBroadPhasePairsCpu(mut PhysicsWorld world, mut CpuTaskScheduler cpuSc
                 world.m_broadPhase.trees[t].queryAabb(
                     queryBox,
                     shapeA.filter.maskBits,
-                    lambda[in world, in shapeIdA, in shapeA, mut bucket](in u32 otherProxyId, in u32 shapeIdB) -> b8{
-                        if(shapeIdB == shapeIdA || shapeIdB >= world.m_shapes.size() || !world.m_shapes[shapeIdB].alive)
+                    lambda[in worldRef, in shapeIdA, in shapeA, mut bucket](in u32 otherProxyId, in u32 shapeIdB) -> b8{
+                        if(shapeIdB == shapeIdA || shapeIdB >= worldRef.m_shapes.size() || !worldRef.m_shapes[shapeIdB].alive)
                             return true;
-                        in Shape shapeB = world.m_shapes[shapeIdB];
+                        in Shape shapeB = worldRef.m_shapes[shapeIdB];
                         if(shapeA.bodyId == shapeB.bodyId)
                             return true;
                         if(!ShouldCollideFilters(shapeA.filter, shapeB.filter))
@@ -501,21 +503,23 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
 
     if(cpuScheduler.isParallelEnabled() && count >= s_CpuParallelThreshold){
         const usize grain = Max(cast<usize>(1u), count / 16u);
+        in PhysicsWorld worldRef = world;
+        const Span<u32> activeContactSpan = Span<u32>(activeContactIds);
         const auto res = cpuScheduler.parallelFor(
             0u,
             count,
             grain,
-            lambda[in world, in activeContactIds, in gravity, in dt, in enableContinuous, mut evaluatedManifolds](in usize idx) -> void{
-                const u32 cId = activeContactIds[idx];
-                in Contact c = world.m_contacts[cId];
-                in Shape sA = world.m_shapes[c.shapeIdA];
-                in Shape sB = world.m_shapes[c.shapeIdB];
-                in Body bA = world.m_bodies[c.edges[0u].bodyId];
-                in Body bB = world.m_bodies[c.edges[1u].bodyId];
-                in Transform3D xfA = world.m_solverSets[bA.setIndex].sims[bA.localIndex].transform;
-                in Transform3D xfB = world.m_solverSets[bB.setIndex].sims[bB.localIndex].transform;
-                const VectorSingle dispA = ComputePredictedBodyDisplacement(bA, world.m_solverSets, gravity, dt);
-                const VectorSingle dispB = ComputePredictedBodyDisplacement(bB, world.m_solverSets, gravity, dt);
+            lambda[in worldRef, in activeContactSpan, in gravity, in dt, in enableContinuous, mut evaluatedManifolds](in usize idx) -> void{
+                const u32 cId = activeContactSpan[idx];
+                in Contact c = worldRef.m_contacts[cId];
+                in Shape sA = worldRef.m_shapes[c.shapeIdA];
+                in Shape sB = worldRef.m_shapes[c.shapeIdB];
+                in Body bA = worldRef.m_bodies[c.edges[0u].bodyId];
+                in Body bB = worldRef.m_bodies[c.edges[1u].bodyId];
+                in Transform3D xfA = worldRef.m_solverSets[bA.setIndex].sims[bA.localIndex].transform;
+                in Transform3D xfB = worldRef.m_solverSets[bB.setIndex].sims[bB.localIndex].transform;
+                const VectorSingle dispA = ComputePredictedBodyDisplacement(bA, worldRef.m_solverSets, gravity, dt);
+                const VectorSingle dispB = ComputePredictedBodyDisplacement(bB, worldRef.m_solverSets, gravity, dt);
                 const b8 isSensor = (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u;
                 const b8 isBulletPair = ((bA.flags | bB.flags) & cast<u32>(BodyFlags::IsBullet)) != 0u;
                 evaluatedManifolds[idx] = CollideContactPairWithSweep(sA, xfA, dispA, sB, xfB, dispB, isSensor, enableContinuous, isBulletPair);
@@ -721,23 +725,25 @@ void SolveBulletContinuousCpu(mut PhysicsWorld world, in f32 dt){
         VectorSingle bestNormal(0.0f, 1.0f, 0.0f, 0.0f);
         VectorSingle bestPoint(0.0f);
 
+        in PhysicsWorld worldRef = world;
+
         for(usize t = 0u; t < s_TreeCount; ++t){
             world.m_broadPhase.trees[t].queryAabb(
                 queryBox,
                 0xffffffffu,
-                lambda[in world, in bodyIdA, in bodyInit, in sweepA, mut bestT, mut foundToi, mut bestShapeIdxA, mut bestShapeIdxB, mut bestNormal, mut bestPoint](in u32 proxyId, in u32 shapeIdxB) -> b8{
-                    if(shapeIdxB >= world.m_shapes.size() || !world.m_shapes[shapeIdxB].alive)
+                lambda[in worldRef, in bodyIdA, in bodyInit, in sweepA, mut bestT, mut foundToi, mut bestShapeIdxA, mut bestShapeIdxB, mut bestNormal, mut bestPoint](in u32 proxyId, in u32 shapeIdxB) -> b8{
+                    if(shapeIdxB >= worldRef.m_shapes.size() || !worldRef.m_shapes[shapeIdxB].alive)
                         return true;
-                    in Shape sB = world.m_shapes[shapeIdxB];
+                    in Shape sB = worldRef.m_shapes[shapeIdxB];
                     if(sB.isSensor || sB.bodyId == bodyIdA)
                         return true;
-                    in Body bB = world.m_bodies[sB.bodyId];
+                    in Body bB = worldRef.m_bodies[sB.bodyId];
                     if(!bB.alive || bB.setIndex == s_DisabledSetIndex)
                         return true;
-                    if(world.areBodiesConnectedNonColliding(bodyIdA, sB.bodyId))
+                    if(worldRef.areBodiesConnectedNonColliding(bodyIdA, sB.bodyId))
                         return true;
 
-                    in BodySim simB = world.m_solverSets[bB.setIndex].sims[bB.localIndex];
+                    in BodySim simB = worldRef.m_solverSets[bB.setIndex].sims[bB.localIndex];
                     Sweep3D sweepB;
                     if(bB.type != BodyType::Static && bB.setIndex == s_AwakeSetIndex){
                         sweepB.c0 = simB.center0;
@@ -755,17 +761,17 @@ void SolveBulletContinuousCpu(mut PhysicsWorld world, in f32 dt){
 
                     u32 shapeIdxA = bodyInit.headShapeId;
                     while(shapeIdxA != s_NullIndex){
-                        in Shape sA = world.m_shapes[shapeIdxA];
+                        in Shape sA = worldRef.m_shapes[shapeIdxA];
                         if(sA.alive && !sA.isSensor && sA.type != ShapeType::Mesh && ShouldCollideFilters(sA.filter, sB.filter)){
                             b8 customAllow = true;
-                            if(world.m_customFilterCallback.has_value()){
+                            if(worldRef.m_customFilterCallback.has_value()){
                                 u32 ordA = shapeIdxA;
                                 u32 ordB = shapeIdxB;
                                 if(shapeIdxB < shapeIdxA){
                                     ordA = shapeIdxB;
                                     ordB = shapeIdxA;
                                 }
-                                customAllow = world.m_customFilterCallback.value()(world.makeShapeId(ordA), world.makeShapeId(ordB));
+                                customAllow = worldRef.m_customFilterCallback.value()(worldRef.makeShapeId(ordA), worldRef.makeShapeId(ordB));
                             }
                             if(customAllow){
                                 const ShapeProxy proxyA = MakeShapeProxyFromShape(sA);
@@ -1038,6 +1044,8 @@ b8 PrepareColorContactConstraints(
     const Softness dynamicSoftness = MakeSoftness(contactHertz, contactDampingRatio, h);
     const Softness staticSoftness = MakeSoftness(2.0f * contactHertz, contactDampingRatio, h);
 
+    in PhysicsWorld worldRef = world;
+
     for(usize c = 0u; c < s_GraphColorCount; ++c){
         const usize cCount = colorContactIds[c].size();
         outConstraints[c].resize(cCount);
@@ -1046,23 +1054,24 @@ b8 PrepareColorContactConstraints(
 
         if(cpuScheduler.isParallelEnabled() && cCount >= s_CpuParallelThreshold){
             const usize grain = Max(cast<usize>(1u), cCount / 16u);
+            const Span<u32> colorContactSpan = Span<u32>(colorContactIds[c]);
             const auto res = cpuScheduler.parallelFor(
                 0u,
                 cCount,
                 grain,
-                lambda[in world, in colorContactIds, in dynamicSoftness, in staticSoftness, in contactHertz, in contactDampingRatio, in h, in enableContactSoftening, in c, mut outConstraints](in usize idx) -> void{
-                    const u32 contactId = colorContactIds[c][idx];
+                lambda[in worldRef, in colorContactSpan, in dynamicSoftness, in staticSoftness, in contactHertz, in contactDampingRatio, in h, in enableContactSoftening, in c, mut outConstraints](in usize idx) -> void{
+                    const u32 contactId = colorContactSpan[idx];
                     PrepareContactConstraint(
-                        world.m_bodies,
-                        world.m_solverSets,
-                        world.m_contacts[contactId],
+                        worldRef.m_bodies,
+                        worldRef.m_solverSets,
+                        worldRef.m_contacts[contactId],
                         dynamicSoftness,
                         staticSoftness,
                         contactHertz,
                         contactDampingRatio,
                         h,
                         enableContactSoftening,
-                        world.m_enableWarmStarting,
+                        worldRef.m_enableWarmStarting,
                         outConstraints[c][idx]
                     );
                 },
@@ -1343,11 +1352,12 @@ void BuildSolverWorkPartition(
         for(usize ci = 0u; ci < components.size(); ++ci)
             order[ci] = ci;
 
+        const Span<SolverComponentInfo> compSpan = Span<SolverComponentInfo>(components);
         SortSequence<usize>(
             order,
-            lambda[in components](in usize lhs, in usize rhs) -> b8{
-                in SolverComponentInfo a = components[lhs];
-                in SolverComponentInfo b = components[rhs];
+            lambda[in compSpan](in usize lhs, in usize rhs) -> b8{
+                in SolverComponentInfo a = compSpan[lhs];
+                in SolverComponentInfo b = compSpan[rhs];
                 const b8 tinyA = IsTinyBulletComponent(a);
                 const b8 tinyB = IsTinyBulletComponent(b);
                 if(tinyA != tinyB)
@@ -1520,6 +1530,7 @@ b8 SolvePartitionSubStepsCpu(
     const f32 restThresh = world.m_def.restitutionThreshold;
     mut Vector<BodySim> sims = world.m_solverSets[s_AwakeSetIndex].sims;
     mut Vector<BodyState> states = world.m_solverSets[s_AwakeSetIndex].states;
+    const Span<u32> awakeSpan = Span<u32>(awakeIndices);
 
     for(u32 subStep = 0u; subStep < subStepCount; ++subStep){
         if(cpuScheduler.isParallelEnabled() && bodyCount >= s_CpuParallelThreshold){
@@ -1528,8 +1539,8 @@ b8 SolvePartitionSubStepsCpu(
                 0u,
                 bodyCount,
                 grain,
-                lambda[mut sims, mut states, in awakeIndices, in gravity, in h, in maxLinVel](in usize idx) -> void{
-                    IntegrateBodyVelocitiesRange(sims, states, gravity, h, maxLinVel, cast<usize>(awakeIndices[idx]));
+                lambda[mut sims, mut states, in awakeSpan, in gravity, in h, in maxLinVel](in usize idx) -> void{
+                    IntegrateBodyVelocitiesRange(sims, states, gravity, h, maxLinVel, cast<usize>(awakeSpan[idx]));
                 },
                 CpuTaskOptions()
             );
@@ -1548,12 +1559,13 @@ b8 SolvePartitionSubStepsCpu(
                     continue;
                 if(cpuScheduler.isParallelEnabled() && cCount >= s_CpuParallelThreshold){
                     const usize grain = Max(cast<usize>(1u), cCount / 16u);
+                    const Span<ContactConstraint> colorSpan = Span<ContactConstraint>(colorConstraints[c]);
                     const auto res = cpuScheduler.parallelFor(
                         0u,
                         cCount,
                         grain,
-                        lambda[mut states, in colorConstraints, in c](in usize idx) -> void{
-                            WarmStartContactConstraint(states, colorConstraints[c][idx]);
+                        lambda[mut states, in colorSpan](in usize idx) -> void{
+                            WarmStartContactConstraint(states, colorSpan[idx]);
                         },
                         CpuTaskOptions()
                     );
@@ -1615,8 +1627,8 @@ b8 SolvePartitionSubStepsCpu(
                 0u,
                 bodyCount,
                 grain,
-                lambda[mut states, in awakeIndices, in h](in usize idx) -> void{
-                    IntegrateBodyPositionsAt(states, h, cast<usize>(awakeIndices[idx]));
+                lambda[mut states, in awakeSpan, in h](in usize idx) -> void{
+                    IntegrateBodyPositionsAt(states, h, cast<usize>(awakeSpan[idx]));
                 },
                 CpuTaskOptions()
             );
@@ -1690,8 +1702,8 @@ b8 SolvePartitionSubStepsCpu(
             0u,
             bodyCount,
             grain,
-            lambda[mut world, in awakeIndices, in dt](in usize idx) -> void{
-                FinalizeAwakeBodyAt(world, dt, cast<usize>(awakeIndices[idx]));
+            lambda[mut world, in awakeSpan, in dt](in usize idx) -> void{
+                FinalizeAwakeBodyAt(world, dt, cast<usize>(awakeSpan[idx]));
             },
             CpuTaskOptions()
         );

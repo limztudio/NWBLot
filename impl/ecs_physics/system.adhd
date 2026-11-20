@@ -18,11 +18,10 @@ class PhysicsSystem{
     private HashMap<EntityID, JointId> m_entityJoints;
     private f32 m_accumulator = 0.0f;
     private WorldStepStats m_lastStepStats;
-    private b8 m_hasGpu;
+    private f64 m_lastStepMs = 0.0;
 
     public PhysicsSystem(mut World world){
         this.m_world = world;
-        this.m_hasGpu = false;
         this.registerDefaultAccesses();
     }
 
@@ -34,7 +33,6 @@ class PhysicsSystem{
     ){
         this.m_world = world;
         this.m_gpuDispatcher.attachRuntime(graphics, assetManager, shaderPathResolver);
-        this.m_hasGpu = true;
         this.registerDefaultAccesses();
     }
 
@@ -49,14 +47,13 @@ class PhysicsSystem{
     public mut PhysicsWorld physicsWorld(){ return this.m_physicsWorld; }
     public in PhysicsWorld physicsWorld()const{ return this.m_physicsWorld; }
     public in WorldStepStats lastStepStats()const{ return this.m_lastStepStats; }
+    public f64 lastStepMs()const{ return this.m_lastStepMs; }
 
     public void setActiveSceneSubsystems(in ActiveSceneSubsystemsRef subsystems){
         this.m_gpuDispatcher.setActiveSceneSubsystems(subsystems);
     }
 
     public b8 validateResources(){
-        if(!this.m_hasGpu)
-            return true;
         if(!this.m_gpuDispatcher.validateResources())
             warning("PhysicsSystem: GPU physics pipelines unavailable; falling back to CPU solver");
         return true;
@@ -89,10 +86,9 @@ class PhysicsSystem{
             else
                 this.m_accumulator = 0.0f;
 
-            if(this.m_hasGpu)
-                StepWorldWithGpu(this.m_physicsWorld, this.m_gpuDispatcher, fixedDt, subStepCount, scheduler);
-            else
-                StepPhysicsWorld(this.m_physicsWorld, fixedDt, subStepCount, scheduler);
+            const Timer stepStart = TimerNow();
+            StepWorldWithGpu(this.m_physicsWorld, this.m_gpuDispatcher, fixedDt, subStepCount, scheduler);
+            this.m_lastStepMs = DurationInMS<f64>(TimerNow(), stepStart);
 
             this.m_lastStepStats = this.m_physicsWorld.lastStepStats();
             ++stepsExecuted;

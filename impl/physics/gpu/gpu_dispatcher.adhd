@@ -1295,7 +1295,7 @@ class PhysicsGpuDispatcher{
                     uses.resize(11u);
                 else
                     uses.resize(9u);
-                if(!ImportBufferUse(graph, bufGroup.bodySimBuffer, "Physics body sims", ResourceStates::Common, GpuTaskResourceAccess::Read, uses[0u]))
+                if(!ImportBufferUse(graph, bufGroup.bodySimBuffer, "Physics body sims", ResourceStates::Common, GpuTaskResourceAccess::ReadWrite, uses[0u]))
                     return MakeUnexpected(Failure());
                 if(!ImportBufferUse(graph, bufGroup.shapeBuffer, "Physics shape proxies", ResourceStates::Common, GpuTaskResourceAccess::ReadWrite, uses[1u]))
                     return MakeUnexpected(Failure());
@@ -1492,6 +1492,8 @@ class PhysicsGpuDispatcher{
         if(world.m_backendMode == PhysicsBackendMode::CpuOnly)
             return false;
         if(dt <= 0.0f || subStepCount == 0u || world.m_gpuWorkloadFraction <= 0.0f)
+            return false;
+        if(!this.m_graphics.has_value() || !this.m_assetManager.has_value())
             return false;
         world.flushDirtyBodyMasses();
 
@@ -1711,21 +1713,23 @@ class PhysicsGpuDispatcher{
             if(precompCount > 0u){
                 if(cpuScheduler.isParallelEnabled() && precompCount >= s_CpuParallelThreshold){
                     const usize grain = Max(cast<usize>(1u), precompCount / 16u);
+                    in PhysicsWorld worldRef = world;
+                    const Span<u32> precompSpan = Span<u32>(precompContactIds);
                     const auto preRes = cpuScheduler.parallelFor(
                         0u,
                         precompCount,
                         grain,
-                        lambda[in world, in precompContactIds, in gravVec, in dt, in enableContinuous, mut precompManifolds](in usize idx) -> void{
-                            const u32 cId = precompContactIds[idx];
-                            in Contact c = world.m_contacts[cId];
-                            in Shape sA = world.m_shapes[c.shapeIdA];
-                            in Shape sB = world.m_shapes[c.shapeIdB];
-                            in Body bA = world.m_bodies[c.edges[0u].bodyId];
-                            in Body bB = world.m_bodies[c.edges[1u].bodyId];
-                            in Transform3D xfA = world.m_solverSets[bA.setIndex].sims[bA.localIndex].transform;
-                            in Transform3D xfB = world.m_solverSets[bB.setIndex].sims[bB.localIndex].transform;
-                            const VectorSingle dispA = ComputePredictedBodyDisplacement(bA, world.m_solverSets, gravVec, dt);
-                            const VectorSingle dispB = ComputePredictedBodyDisplacement(bB, world.m_solverSets, gravVec, dt);
+                        lambda[in worldRef, in precompSpan, in gravVec, in dt, in enableContinuous, mut precompManifolds](in usize idx) -> void{
+                            const u32 cId = precompSpan[idx];
+                            in Contact c = worldRef.m_contacts[cId];
+                            in Shape sA = worldRef.m_shapes[c.shapeIdA];
+                            in Shape sB = worldRef.m_shapes[c.shapeIdB];
+                            in Body bA = worldRef.m_bodies[c.edges[0u].bodyId];
+                            in Body bB = worldRef.m_bodies[c.edges[1u].bodyId];
+                            in Transform3D xfA = worldRef.m_solverSets[bA.setIndex].sims[bA.localIndex].transform;
+                            in Transform3D xfB = worldRef.m_solverSets[bB.setIndex].sims[bB.localIndex].transform;
+                            const VectorSingle dispA = ComputePredictedBodyDisplacement(bA, worldRef.m_solverSets, gravVec, dt);
+                            const VectorSingle dispB = ComputePredictedBodyDisplacement(bB, worldRef.m_solverSets, gravVec, dt);
                             const b8 isSensor = (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u;
                             const b8 isBulletPair = ((bA.flags | bB.flags) & cast<u32>(BodyFlags::IsBullet)) != 0u;
                             precompManifolds[idx] = CollideContactPairWithSweep(sA, xfA, dispA, sB, xfB, dispB, isSensor, enableContinuous && dt > 0.0f, isBulletPair);
@@ -1867,22 +1871,25 @@ class PhysicsGpuDispatcher{
                 if(fbCount > 0u){
                     if(cpuScheduler.isParallelEnabled() && fbCount >= s_CpuParallelThreshold){
                         const usize grain = Max(cast<usize>(1u), fbCount / 16u);
+                        in PhysicsWorld worldRef = world;
+                        const Span<usize> fbSpan = Span<usize>(fallbackManifoldIndices);
+                        const Span<u32> manifoldContactSpan = Span<u32>(manifoldContactIds);
                         const auto fbRes = cpuScheduler.parallelFor(
                             0u,
                             fbCount,
                             grain,
-                            lambda[in world, in fallbackManifoldIndices, in manifoldContactIds, in gravVec, in dt, in enableContinuous, mut resolvedManifolds](in usize idx) -> void{
-                                const usize mi = fallbackManifoldIndices[idx];
-                                const u32 cId = manifoldContactIds[mi];
-                                in Contact c = world.m_contacts[cId];
-                                in Shape sA = world.m_shapes[c.shapeIdA];
-                                in Shape sB = world.m_shapes[c.shapeIdB];
-                                in Body bA = world.m_bodies[c.edges[0u].bodyId];
-                                in Body bB = world.m_bodies[c.edges[1u].bodyId];
-                                in Transform3D xfA = world.m_solverSets[bA.setIndex].sims[bA.localIndex].transform;
-                                in Transform3D xfB = world.m_solverSets[bB.setIndex].sims[bB.localIndex].transform;
-                                const VectorSingle dispA = ComputePredictedBodyDisplacement(bA, world.m_solverSets, gravVec, dt);
-                                const VectorSingle dispB = ComputePredictedBodyDisplacement(bB, world.m_solverSets, gravVec, dt);
+                            lambda[in worldRef, in fbSpan, in manifoldContactSpan, in gravVec, in dt, in enableContinuous, mut resolvedManifolds](in usize idx) -> void{
+                                const usize mi = fbSpan[idx];
+                                const u32 cId = manifoldContactSpan[mi];
+                                in Contact c = worldRef.m_contacts[cId];
+                                in Shape sA = worldRef.m_shapes[c.shapeIdA];
+                                in Shape sB = worldRef.m_shapes[c.shapeIdB];
+                                in Body bA = worldRef.m_bodies[c.edges[0u].bodyId];
+                                in Body bB = worldRef.m_bodies[c.edges[1u].bodyId];
+                                in Transform3D xfA = worldRef.m_solverSets[bA.setIndex].sims[bA.localIndex].transform;
+                                in Transform3D xfB = worldRef.m_solverSets[bB.setIndex].sims[bB.localIndex].transform;
+                                const VectorSingle dispA = ComputePredictedBodyDisplacement(bA, worldRef.m_solverSets, gravVec, dt);
+                                const VectorSingle dispB = ComputePredictedBodyDisplacement(bB, worldRef.m_solverSets, gravVec, dt);
                                 const b8 isSensor = (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u;
                                 const b8 isBulletPair = ((bA.flags | bB.flags) & cast<u32>(BodyFlags::IsBullet)) != 0u;
                                 resolvedManifolds[mi] = CollideContactPairWithSweep(sA, xfA, dispA, sB, xfB, dispB, isSensor, enableContinuous && dt > 0.0f, isBulletPair);

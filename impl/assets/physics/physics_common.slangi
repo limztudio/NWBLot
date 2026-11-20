@@ -105,7 +105,6 @@ struct NwbPhysicsGpuContactConstraint{
     uint4 indicesCountFlags;
     float4 normalFriction;
     float4 tangent1Restitution;
-    float4 tangent2Rolling;
     float4 centerATwistMass;
     float4 centerBTwistImpulse;
     float4 softnessTangent00;
@@ -115,8 +114,6 @@ struct NwbPhysicsGpuContactConstraint{
     float4 invIA1RollX;
     float4 invIB0;
     float4 invIB1RollYZ;
-    float4 rollingMass0;
-    float4 rollingMass1;
     NwbPhysicsGpuContactPoint points[NWB_PHYSICS_MAX_MANIFOLD_POINTS];
 };
 

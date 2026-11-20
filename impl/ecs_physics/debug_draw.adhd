@@ -23,6 +23,108 @@ class PhysicsDebugLine{
     public f32x4 color(1.0f, 1.0f, 1.0f, 1.0f);
 }
 
+class PhysicsDebugScreenProjector{
+    private f32x4 m_right(1.0f, 0.0f, 0.0f, 0.0f);
+    private f32x4 m_up(0.0f, 1.0f, 0.0f, 0.0f);
+    private f32x4 m_forward(0.0f, 0.0f, 1.0f, 0.0f);
+    private f32x4 m_camPos(0.0f, 0.0f, 0.0f, 0.0f);
+    private f32 m_projX = 1.0f;
+    private f32 m_projY = 1.0f;
+    private f32 m_zMin = 0.01f;
+    private f32 m_halfWidth = 0.0f;
+    private f32 m_halfHeight = 0.0f;
+    private b8 m_valid = false;
+
+    public PhysicsDebugScreenProjector(){}
+
+    public PhysicsDebugScreenProjector(
+        in TransformComponent cameraTransform,
+        in CameraProjection projection,
+        in f32 viewportWidth,
+        in f32 viewportHeight
+    ){
+        this.init(cameraTransform, projection, viewportWidth, viewportHeight);
+    }
+
+    public void init(
+        in TransformComponent cameraTransform,
+        in CameraProjection projection,
+        in f32 viewportWidth,
+        in f32 viewportHeight
+    ){
+        this.m_valid = viewportWidth > 0.0f && viewportHeight > 0.0f;
+        if(!this.m_valid)
+            return;
+        const MatrixSingle basis = BuildSceneViewBasis(VectorSingle(cameraTransform.position), SafeNormalizeQuat(VectorSingle(cameraTransform.rotation)));
+        this.m_right = f32x4(basis[0u], 0.0f);
+        this.m_up = f32x4(basis[1u], 0.0f);
+        this.m_forward = f32x4(basis[2u], 0.0f);
+        this.m_camPos = f32x4(basis[3u], 0.0f);
+        this.m_projX = projection.projectionParams.x;
+        this.m_projY = projection.projectionParams.y;
+        this.m_zMin = Max(projection.nearPlane, 0.01f);
+        this.m_halfWidth = 0.5f * viewportWidth;
+        this.m_halfHeight = 0.5f * viewportHeight;
+    }
+
+    public b8 projectSegment(
+        in VectorSingle worldP0,
+        in VectorSingle worldP1,
+        mut VectorSingle outScreenSegment
+    )const{
+        if(!this.m_valid)
+            return false;
+
+        const VectorSingle camPos = VectorSingle(this.m_camPos);
+        const VectorSingle right = VectorSingle(this.m_right);
+        const VectorSingle up = VectorSingle(this.m_up);
+        const VectorSingle forward = VectorSingle(this.m_forward);
+        const VectorSingle d0 = VectorSingle(worldP0 - camPos, 0.0f);
+        const VectorSingle d1 = VectorSingle(worldP1 - camPos, 0.0f);
+        VectorSingle v0(Vector3Dot(d0, right).x, Vector3Dot(d0, up).x, Vector3Dot(d0, forward).x, 0.0f);
+        VectorSingle v1(Vector3Dot(d1, right).x, Vector3Dot(d1, up).x, Vector3Dot(d1, forward).x, 0.0f);
+
+        if(v0.z <= this.m_zMin && v1.z <= this.m_zMin)
+            return false;
+
+        if(v0.z < this.m_zMin){
+            const f32 denom = v1.z - v0.z;
+            if(Abs(denom) <= 1.0e-8f)
+                return false;
+            const f32 t = Clamp((this.m_zMin - v0.z) / denom, 0.0f, 1.0f);
+            v0 = v0 + (v1 - v0) * t;
+        }
+        else if(v1.z < this.m_zMin){
+            const f32 denom = v0.z - v1.z;
+            if(Abs(denom) <= 1.0e-8f)
+                return false;
+            const f32 t = Clamp((this.m_zMin - v1.z) / denom, 0.0f, 1.0f);
+            v1 = v1 + (v0 - v1) * t;
+        }
+
+        const f32 invZ0 = 1.0f / v0.z;
+        const f32 invZ1 = 1.0f / v1.z;
+        const f32 ndcX0 = v0.x * this.m_projX * invZ0;
+        const f32 ndcY0 = v0.y * this.m_projY * invZ0;
+        const f32 ndcX1 = v1.x * this.m_projX * invZ1;
+        const f32 ndcY1 = v1.y * this.m_projY * invZ1;
+        if(!IsFinite(VectorSingle(ndcX0, ndcY0, ndcX1, ndcY1)))
+            return false;
+
+        if((ndcX0 < -1.5f && ndcX1 < -1.5f) || (ndcX0 > 1.5f && ndcX1 > 1.5f))
+            return false;
+        if((ndcY0 < -1.5f && ndcY1 < -1.5f) || (ndcY0 > 1.5f && ndcY1 > 1.5f))
+            return false;
+
+        const f32 sx0 = (1.0f + ndcX0) * this.m_halfWidth;
+        const f32 sy0 = (1.0f - ndcY0) * this.m_halfHeight;
+        const f32 sx1 = (1.0f + ndcX1) * this.m_halfWidth;
+        const f32 sy1 = (1.0f - ndcY1) * this.m_halfHeight;
+        outScreenSegment = VectorSingle(sx0, sy0, sx1, sy1);
+        return true;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -52,15 +154,28 @@ void AppendPhysicsDebugCircle(
     in VectorSingle color,
     mut Vector<PhysicsDebugLine> outLines
 ){
+    if(outLines.size() >= cast<usize>(maxLines))
+        return;
     const u32 segments = 12u;
     const f32 step = (2.0f * s_PI) / cast<f32>(segments);
-    VectorSingle prev = center + axisU * radius;
-    for(u32 i = 1u; i <= segments; ++i){
-        const f32 angle = cast<f32>(i) * step;
-        const VectorSingle cur = center + (axisU * Cos(angle) + axisV * Sin(angle)) * radius;
+    const f32 dc = Cos(step);
+    const f32 ds = Sin(step);
+    const VectorSingle uR = axisU * radius;
+    const VectorSingle vR = axisV * radius;
+    const VectorSingle firstPt = center + uR;
+    VectorSingle prev = firstPt;
+    f32 c = 1.0f;
+    f32 s = 0.0f;
+    for(u32 i = 1u; i < segments; ++i){
+        const f32 cNext = c * dc - s * ds;
+        const f32 sNext = s * dc + c * ds;
+        c = cNext;
+        s = sNext;
+        const VectorSingle cur = center + uR * c + vR * s;
         AppendPhysicsDebugLine(maxLines, prev, cur, color, outLines);
         prev = cur;
     }
+    AppendPhysicsDebugLine(maxLines, prev, firstPt, color, outLines);
 }
 
 void ComputePhysicsDebugBasis(
@@ -87,15 +202,83 @@ void AppendPhysicsDebugArc(
     in VectorSingle color,
     mut Vector<PhysicsDebugLine> outLines
 ){
+    if(outLines.size() >= cast<usize>(maxLines))
+        return;
     const u32 segments = 8u;
     const f32 step = (endAngle - startAngle) / cast<f32>(segments);
-    VectorSingle prev = center + (axisU * Cos(startAngle) + axisV * Sin(startAngle)) * radius;
+    const f32 dc = Cos(step);
+    const f32 ds = Sin(step);
+    f32 c = Cos(startAngle);
+    f32 s = Sin(startAngle);
+    const VectorSingle uR = axisU * radius;
+    const VectorSingle vR = axisV * radius;
+    VectorSingle prev = center + uR * c + vR * s;
     for(u32 i = 1u; i <= segments; ++i){
-        const f32 angle = startAngle + cast<f32>(i) * step;
-        const VectorSingle cur = center + (axisU * Cos(angle) + axisV * Sin(angle)) * radius;
+        const f32 cNext = c * dc - s * ds;
+        const f32 sNext = s * dc + c * ds;
+        c = cNext;
+        s = sNext;
+        const VectorSingle cur = center + uR * c + vR * s;
         AppendPhysicsDebugLine(maxLines, prev, cur, color, outLines);
         prev = cur;
     }
+}
+
+void AppendPhysicsDebugOrientedBoxEdges(
+    in u32 maxLines,
+    in VectorSingle center,
+    in VectorSingle ex,
+    in VectorSingle ey,
+    in VectorSingle ez,
+    in VectorSingle color,
+    mut Vector<PhysicsDebugLine> outLines
+){
+    if(outLines.size() >= cast<usize>(maxLines))
+        return;
+
+    const VectorSingle c0 = center - ex - ey - ez;
+    const VectorSingle c1 = center + ex - ey - ez;
+    const VectorSingle c2 = center - ex + ey - ez;
+    const VectorSingle c3 = center + ex + ey - ez;
+    const VectorSingle c4 = center - ex - ey + ez;
+    const VectorSingle c5 = center + ex - ey + ez;
+    const VectorSingle c6 = center - ex + ey + ez;
+    const VectorSingle c7 = center + ex + ey + ez;
+
+    AppendPhysicsDebugLine(maxLines, c0, c1, color, outLines);
+    AppendPhysicsDebugLine(maxLines, c2, c3, color, outLines);
+    AppendPhysicsDebugLine(maxLines, c4, c5, color, outLines);
+    AppendPhysicsDebugLine(maxLines, c6, c7, color, outLines);
+    AppendPhysicsDebugLine(maxLines, c0, c2, color, outLines);
+    AppendPhysicsDebugLine(maxLines, c1, c3, color, outLines);
+    AppendPhysicsDebugLine(maxLines, c4, c6, color, outLines);
+    AppendPhysicsDebugLine(maxLines, c5, c7, color, outLines);
+    AppendPhysicsDebugLine(maxLines, c0, c4, color, outLines);
+    AppendPhysicsDebugLine(maxLines, c1, c5, color, outLines);
+    AppendPhysicsDebugLine(maxLines, c2, c6, color, outLines);
+    AppendPhysicsDebugLine(maxLines, c3, c7, color, outLines);
+}
+
+void AppendPhysicsDebugAabbEdges(
+    in u32 maxLines,
+    in VectorSingle lo,
+    in VectorSingle hi,
+    in VectorSingle color,
+    mut Vector<PhysicsDebugLine> outLines
+){
+    if(outLines.size() >= cast<usize>(maxLines))
+        return;
+    const VectorSingle center = (lo + hi) * 0.5f;
+    const VectorSingle half = (hi - lo) * 0.5f;
+    AppendPhysicsDebugOrientedBoxEdges(
+        maxLines,
+        center,
+        VectorSingle(half.x, 0.0f, 0.0f, 0.0f),
+        VectorSingle(0.0f, half.y, 0.0f, 0.0f),
+        VectorSingle(0.0f, 0.0f, half.z, 0.0f),
+        color,
+        outLines
+    );
 }
 
 void AppendPhysicsDebugBoxEdges(
@@ -107,33 +290,14 @@ void AppendPhysicsDebugBoxEdges(
     in VectorSingle color,
     mut Vector<PhysicsDebugLine> outLines
 ){
-    Array<f32x4, 8u> corners;
-    for(u32 ci = 0u; ci < 8u; ++ci){
-        f32 sx = -halfExtents.x;
-        if((ci & 1u) != 0u)
-            sx = halfExtents.x;
-        f32 sy = -halfExtents.y;
-        if((ci & 2u) != 0u)
-            sy = halfExtents.y;
-        f32 sz = -halfExtents.z;
-        if((ci & 4u) != 0u)
-            sz = halfExtents.z;
-        const VectorSingle localPt = localCenter + Vector3Rotate(VectorSingle(sx, sy, sz, 0.0f), boxRotation);
-        corners[ci] = f32x4(TransformPoint(xf, localPt), 0.0f);
-    }
-
-    AppendPhysicsDebugLine(maxLines, VectorSingle(corners[0u]), VectorSingle(corners[1u]), color, outLines);
-    AppendPhysicsDebugLine(maxLines, VectorSingle(corners[2u]), VectorSingle(corners[3u]), color, outLines);
-    AppendPhysicsDebugLine(maxLines, VectorSingle(corners[4u]), VectorSingle(corners[5u]), color, outLines);
-    AppendPhysicsDebugLine(maxLines, VectorSingle(corners[6u]), VectorSingle(corners[7u]), color, outLines);
-    AppendPhysicsDebugLine(maxLines, VectorSingle(corners[0u]), VectorSingle(corners[2u]), color, outLines);
-    AppendPhysicsDebugLine(maxLines, VectorSingle(corners[1u]), VectorSingle(corners[3u]), color, outLines);
-    AppendPhysicsDebugLine(maxLines, VectorSingle(corners[4u]), VectorSingle(corners[6u]), color, outLines);
-    AppendPhysicsDebugLine(maxLines, VectorSingle(corners[5u]), VectorSingle(corners[7u]), color, outLines);
-    AppendPhysicsDebugLine(maxLines, VectorSingle(corners[0u]), VectorSingle(corners[4u]), color, outLines);
-    AppendPhysicsDebugLine(maxLines, VectorSingle(corners[1u]), VectorSingle(corners[5u]), color, outLines);
-    AppendPhysicsDebugLine(maxLines, VectorSingle(corners[2u]), VectorSingle(corners[6u]), color, outLines);
-    AppendPhysicsDebugLine(maxLines, VectorSingle(corners[3u]), VectorSingle(corners[7u]), color, outLines);
+    if(outLines.size() >= cast<usize>(maxLines))
+        return;
+    const VectorSingle worldCenter = TransformPoint(xf, localCenter);
+    const VectorSingle worldRot = SafeNormalizeQuat(QuaternionMultiply(SafeNormalizeQuat(VectorSingle(xf.rotation)), boxRotation));
+    const VectorSingle ex = Vector3Rotate(VectorSingle(halfExtents.x, 0.0f, 0.0f, 0.0f), worldRot);
+    const VectorSingle ey = Vector3Rotate(VectorSingle(0.0f, halfExtents.y, 0.0f, 0.0f), worldRot);
+    const VectorSingle ez = Vector3Rotate(VectorSingle(0.0f, 0.0f, halfExtents.z, 0.0f), worldRot);
+    AppendPhysicsDebugOrientedBoxEdges(maxLines, worldCenter, ex, ey, ez, color, outLines);
 }
 
 void AppendPhysicsDebugHull(
@@ -185,11 +349,20 @@ void BuildPhysicsDebugLines(
     if(options.maxLines == 0u)
         return;
 
+    usize estimatedLines = 0u;
+    if(options.drawShapes)
+        estimatedLines += world.m_shapes.size() * 24u;
+    if(options.drawAabbs)
+        estimatedLines += world.m_shapes.size() * 12u;
+    if(options.drawContacts)
+        estimatedLines += world.m_contacts.size() * 6u;
+    if(options.drawJoints)
+        estimatedLines += world.m_joints.size() * 16u;
+    outLines.reserve(Min(cast<usize>(options.maxLines), estimatedLines));
+
     const VectorSingle aabbColor(0.45f, 0.90f, 0.90f, 0.65f);
     const VectorSingle contactColor(1.0f, 0.22f, 0.22f, 1.0f);
     const VectorSingle jointColor(1.0f, 0.58f, 0.12f, 1.0f);
-    const VectorSingle identQuat(0.0f, 0.0f, 0.0f, 1.0f);
-    const Transform3D identXf = Transform3D();
 
     if(options.drawShapes || options.drawAabbs){
         for(usize si = 0u; si < world.m_shapes.size(); ++si){
@@ -203,11 +376,8 @@ void BuildPhysicsDebugLines(
                 continue;
             in Transform3D xf = world.m_solverSets[body.setIndex].sims[body.localIndex].transform;
 
-            if(options.drawAabbs){
-                const VectorSingle lo = VectorSingle(shape.aabb.lowerBound);
-                const VectorSingle hi = VectorSingle(shape.aabb.upperBound);
-                AppendPhysicsDebugBoxEdges(options.maxLines, identXf, (lo + hi) * 0.5f, (hi - lo) * 0.5f, identQuat, aabbColor, outLines);
-            }
+            if(options.drawAabbs)
+                AppendPhysicsDebugAabbEdges(options.maxLines, VectorSingle(shape.aabb.lowerBound), VectorSingle(shape.aabb.upperBound), aabbColor, outLines);
 
             if(!options.drawShapes)
                 continue;
@@ -228,11 +398,9 @@ void BuildPhysicsDebugLines(
                 const VectorSingle p0 = TransformPoint(xf, capsule.center1());
                 const VectorSingle p1 = TransformPoint(xf, capsule.center2Vec());
                 const VectorSingle axis = SafeNormalizeVec3(VectorSingle(p1 - p0, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-                VectorSingle refAxis(1.0f, 0.0f, 0.0f, 0.0f);
-                if(Abs(Vector3Dot(axis, refAxis).x) > 0.9f)
-                    refAxis = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
-                const VectorSingle u = SafeNormalizeVec3(Cross(refAxis, axis), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
-                const VectorSingle v = SafeNormalizeVec3(Cross(axis, u), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+                VectorSingle u(0.0f);
+                VectorSingle v(0.0f);
+                ComputePhysicsDebugBasis(axis, u, v);
                 const f32 r = capsule.radius();
                 AppendPhysicsDebugCircle(options.maxLines, p0, u, v, r, color, outLines);
                 AppendPhysicsDebugCircle(options.maxLines, p1, u, v, r, color, outLines);
@@ -417,57 +585,8 @@ b8 ProjectPhysicsWorldSegmentToScreen(
     in VectorSingle worldP1,
     mut VectorSingle outScreenSegment
 ){
-    if(viewportWidth <= 0.0f || viewportHeight <= 0.0f)
-        return false;
-
-    const MatrixSingle basis = BuildSceneViewBasis(VectorSingle(cameraTransform.position), SafeNormalizeQuat(VectorSingle(cameraTransform.rotation)));
-    const VectorSingle right = basis[0u];
-    const VectorSingle up = basis[1u];
-    const VectorSingle forward = basis[2u];
-    const VectorSingle camPos = basis[3u];
-
-    const VectorSingle d0 = VectorSingle(worldP0 - camPos, 0.0f);
-    const VectorSingle d1 = VectorSingle(worldP1 - camPos, 0.0f);
-    VectorSingle v0(Vector3Dot(d0, right).x, Vector3Dot(d0, up).x, Vector3Dot(d0, forward).x, 0.0f);
-    VectorSingle v1(Vector3Dot(d1, right).x, Vector3Dot(d1, up).x, Vector3Dot(d1, forward).x, 0.0f);
-
-    const f32 zMin = Max(projection.nearPlane, 0.01f);
-    if(v0.z <= zMin && v1.z <= zMin)
-        return false;
-
-    if(v0.z < zMin){
-        const f32 denom = v1.z - v0.z;
-        if(Abs(denom) <= 1.0e-8f)
-            return false;
-        const f32 t = Clamp((zMin - v0.z) / denom, 0.0f, 1.0f);
-        v0 = v0 + (v1 - v0) * t;
-    }
-    else if(v1.z < zMin){
-        const f32 denom = v0.z - v1.z;
-        if(Abs(denom) <= 1.0e-8f)
-            return false;
-        const f32 t = Clamp((zMin - v1.z) / denom, 0.0f, 1.0f);
-        v1 = v1 + (v0 - v1) * t;
-    }
-
-    const f32 ndcX0 = (v0.x * projection.projectionParams.x) / v0.z;
-    const f32 ndcY0 = (v0.y * projection.projectionParams.y) / v0.z;
-    const f32 ndcX1 = (v1.x * projection.projectionParams.x) / v1.z;
-    const f32 ndcY1 = (v1.y * projection.projectionParams.y) / v1.z;
-    if(!IsFinite(VectorSingle(ndcX0, ndcY0, ndcX1, ndcY1)))
-        return false;
-
-    if((ndcX0 < -1.5f && ndcX1 < -1.5f) || (ndcX0 > 1.5f && ndcX1 > 1.5f))
-        return false;
-    if((ndcY0 < -1.5f && ndcY1 < -1.5f) || (ndcY0 > 1.5f && ndcY1 > 1.5f))
-        return false;
-
-    const f32 sx0 = (0.5f + 0.5f * ndcX0) * viewportWidth;
-    const f32 sy0 = (0.5f - 0.5f * ndcY0) * viewportHeight;
-    const f32 sx1 = (0.5f + 0.5f * ndcX1) * viewportWidth;
-    const f32 sy1 = (0.5f - 0.5f * ndcY1) * viewportHeight;
-    outScreenSegment = VectorSingle(sx0, sy0, sx1, sy1);
-    return true;
+    const PhysicsDebugScreenProjector projector(cameraTransform, projection, viewportWidth, viewportHeight);
+    return projector.projectSegment(worldP0, worldP1, outScreenSegment);
 }
 
 

@@ -66,53 +66,71 @@ class PhysicsComponentBinaryCodec{
         return true;
     }
 
-    private b8 validColliderEntryData(in ColliderShapeEntry e)const{
-        if(cast<u8>(e.shapeType) > cast<u8>(ShapeType::Mesh))
+    private b8 validColliderEntryFields(
+        in ShapeType shapeType,
+        in VectorSingle center,
+        in VectorSingle center2,
+        in VectorSingle halfExtents,
+        in VectorSingle localRotation,
+        in f32 radius,
+        in f32 skinRadius,
+        in f32 density,
+        in f32 friction,
+        in f32 restitution,
+        in f32 rollingResistance,
+        in f32 tangentSpeed,
+        in b8 isBox,
+        in Vector<f32x4> hullPoints,
+        in Vector<f32x4> meshVertices,
+        in Vector<u32> meshIndices,
+        in AssetRef<Mesh> meshAsset
+    )const{
+        if(cast<u8>(shapeType) > cast<u8>(ShapeType::Mesh))
             return false;
-        if(!IsValidPositionVec3(VectorSingle(e.center)) || !IsFinite(VectorSingle(e.center2)) || !IsFinite(VectorSingle(e.halfExtents)) || !IsFinite(VectorSingle(e.localRotation)))
+        if(!IsValidPositionVec3(center) || !IsFinite(center2) || !IsFinite(halfExtents) || !IsFinite(localRotation))
             return false;
-        if(LengthSq(VectorSingle(e.localRotation)) <= s_NormalizeEpsilonSq)
+        if(LengthSq(localRotation) <= s_NormalizeEpsilonSq)
             return false;
-        if(!IsFinite(VectorSingle(e.radius, e.skinRadius, e.density, e.friction)))
+        if(!IsFinite(VectorSingle(radius, skinRadius, density, friction)))
             return false;
-        if(!IsFinite(VectorSingle(e.restitution, e.rollingResistance, e.tangentSpeed, 0.0f)))
+        if(!IsFinite(VectorSingle(restitution, rollingResistance, tangentSpeed, 0.0f)))
             return false;
-        if((e.shapeType == ShapeType::Sphere || e.shapeType == ShapeType::Capsule) && e.radius <= 0.0f)
+        if((shapeType == ShapeType::Sphere || shapeType == ShapeType::Capsule) && radius <= 0.0f)
             return false;
-        if(e.radius < 0.0f || e.skinRadius < 0.0f || e.density < 0.0f || e.friction < 0.0f || e.restitution < 0.0f || e.rollingResistance < 0.0f)
+        if(radius < 0.0f || skinRadius < 0.0f || density < 0.0f || friction < 0.0f || restitution < 0.0f || rollingResistance < 0.0f)
             return false;
-        if(e.shapeType == ShapeType::Capsule){
-            if(!IsValidPositionVec3(VectorSingle(e.center2)))
+        if(shapeType == ShapeType::Capsule){
+            if(!IsValidPositionVec3(center2))
                 return false;
-            const f32 lenSq = Vector3LengthSq(VectorSingle(e.center2) - VectorSingle(e.center)).x;
+            const f32 lenSq = Vector3LengthSq(center2 - center).x;
             if(!IsFinite(lenSq) || lenSq < s_MinCapsuleLength * s_MinCapsuleLength)
                 return false;
         }
-        if(e.shapeType == ShapeType::Hull){
-            if(e.isBox && (e.halfExtents.x <= 0.0f || e.halfExtents.y <= 0.0f || e.halfExtents.z <= 0.0f))
+        if(shapeType == ShapeType::Hull){
+            if(isBox && (halfExtents.x <= 0.0f || halfExtents.y <= 0.0f || halfExtents.z <= 0.0f))
                 return false;
-            if(!e.isBox){
-                if(e.hullPoints.size() < 4u)
+            if(!isBox){
+                if(hullPoints.size() < 4u)
                     return false;
-                for(usize i = 0u; i < e.hullPoints.size(); ++i){
-                    if(!IsValidPositionVec3(VectorSingle(e.hullPoints[i])))
+                for(usize i = 0u; i < hullPoints.size(); ++i){
+                    if(!IsValidPositionVec3(VectorSingle(hullPoints[i])))
                         return false;
                 }
             }
         }
-        else if(e.shapeType == ShapeType::Mesh){
-            if(!e.meshAsset.valid() && (e.meshVertices.empty() || e.meshIndices.empty()))
+        else if(shapeType == ShapeType::Mesh){
+            if(!meshAsset.valid() && (meshVertices.empty() || meshIndices.empty()))
                 return false;
-            if((e.meshIndices.size() % 3u) != 0u)
+            if((meshIndices.size() % 3u) != 0u)
                 return false;
-            for(usize i = 0u; i < e.meshVertices.size(); ++i){
-                if(!IsValidPositionVec3(VectorSingle(e.meshVertices[i])))
+            for(usize i = 0u; i < meshVertices.size(); ++i){
+                if(!IsValidPositionVec3(VectorSingle(meshVertices[i])))
                     return false;
             }
-            if(!e.meshVertices.empty()){
-                const usize vCount = e.meshVertices.size();
-                for(usize i = 0u; i < e.meshIndices.size(); ++i){
-                    if(cast<usize>(e.meshIndices[i]) >= vCount)
+            if(!meshVertices.empty()){
+                const usize vCount = meshVertices.size();
+                for(usize i = 0u; i < meshIndices.size(); ++i){
+                    if(cast<usize>(meshIndices[i]) >= vCount)
                         return false;
                 }
             }
@@ -120,66 +138,33 @@ class PhysicsComponentBinaryCodec{
         return true;
     }
 
-    private ColliderShapeEntry buildPrimaryEntry(in ColliderComponent c)const{
-        ColliderShapeEntry e;
-        e.shapeType = c.shapeType;
-        e.center = c.center;
-        e.center2 = c.center2;
-        e.halfExtents = c.halfExtents;
-        e.localRotation = c.localRotation;
-        e.radius = c.radius;
-        e.skinRadius = c.skinRadius;
-        e.density = c.density;
-        e.friction = c.friction;
-        e.restitution = c.restitution;
-        e.rollingResistance = c.rollingResistance;
-        e.tangentSpeed = c.tangentSpeed;
-        e.categoryBits = c.categoryBits;
-        e.maskBits = c.maskBits;
-        e.groupIndex = c.groupIndex;
-        e.userData = c.userData;
-        e.isBox = c.isBox;
-        e.isSensor = c.isSensor;
-        e.enableContactEvents = c.enableContactEvents;
-        e.enableHitEvents = c.enableHitEvents;
-        e.enableSensorEvents = c.enableSensorEvents;
-        e.enablePreSolveEvents = c.enablePreSolveEvents;
-        e.invokeContactCreation = c.invokeContactCreation;
-        e.hullPoints = c.hullPoints;
-        e.meshVertices = c.meshVertices;
-        e.meshIndices = c.meshIndices;
-        e.meshAsset = c.meshAsset;
-        return e;
+    private b8 validColliderEntryData(in ColliderShapeEntry e)const{
+        return this.validColliderEntryFields(
+            e.shapeType,
+            VectorSingle(e.center),
+            VectorSingle(e.center2),
+            VectorSingle(e.halfExtents),
+            VectorSingle(e.localRotation),
+            e.radius,
+            e.skinRadius,
+            e.density,
+            e.friction,
+            e.restitution,
+            e.rollingResistance,
+            e.tangentSpeed,
+            e.isBox,
+            e.hullPoints,
+            e.meshVertices,
+            e.meshIndices,
+            e.meshAsset
+        );
     }
 
-    private void assignPrimaryEntry(in ColliderShapeEntry e, mut ColliderComponent outComp)const{
-        outComp.shapeType = e.shapeType;
-        outComp.center = e.center;
-        outComp.center2 = e.center2;
-        outComp.halfExtents = e.halfExtents;
-        outComp.localRotation = e.localRotation;
-        outComp.radius = e.radius;
-        outComp.skinRadius = e.skinRadius;
-        outComp.density = e.density;
-        outComp.friction = e.friction;
-        outComp.restitution = e.restitution;
-        outComp.rollingResistance = e.rollingResistance;
-        outComp.tangentSpeed = e.tangentSpeed;
-        outComp.categoryBits = e.categoryBits;
-        outComp.maskBits = e.maskBits;
-        outComp.groupIndex = e.groupIndex;
-        outComp.userData = e.userData;
-        outComp.isBox = e.isBox;
-        outComp.isSensor = e.isSensor;
-        outComp.enableContactEvents = e.enableContactEvents;
-        outComp.enableHitEvents = e.enableHitEvents;
-        outComp.enableSensorEvents = e.enableSensorEvents;
-        outComp.enablePreSolveEvents = e.enablePreSolveEvents;
-        outComp.invokeContactCreation = e.invokeContactCreation;
-        outComp.hullPoints = e.hullPoints;
-        outComp.meshVertices = e.meshVertices;
-        outComp.meshIndices = e.meshIndices;
-        outComp.meshAsset = e.meshAsset;
+    private usize colliderEntrySerializedBytes(in usize hullCount, in usize vertCount, in usize idxCount)const{
+        return size_of<ColliderShapeEntryHeaderBinary>()
+            + hullCount * size_of<PhysicsVec4Binary>()
+            + vertCount * size_of<PhysicsVec4Binary>()
+            + idxCount * size_of<PhysicsU32Binary>();
     }
 
     private b8 validJointData(in JointComponent j)const{
@@ -255,6 +240,7 @@ class PhysicsComponentBinaryCodec{
         bin.customInertiaDiag = c.customInertiaDiag;
         bin.customInertiaOffDiag = c.customInertiaOffDiag;
         outPayload.clear();
+        outPayload.reserve(size_of<RigidBodyComponentPayloadBinary>());
         AppendPOD(outPayload, bin);
         return true;
     }
@@ -267,7 +253,7 @@ class PhysicsComponentBinaryCodec{
             return false;
         }
         in RigidBodyComponentPayloadBinary bin = res.value();
-        if(bin.version != s_PhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || bin.reserved3 != 0u){
+        if(bin.version != s_PhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || bin.reserved3 != 0u || bin.reserved4 != 0u){
             error("RigidBodyComponentAsset::loadComponentPayload failed: unsupported version or flags");
             return false;
         }
@@ -306,66 +292,158 @@ class PhysicsComponentBinaryCodec{
         return true;
     }
 
-    private b8 serializeColliderEntry(in ColliderShapeEntry e, mut Vector<u8> outPayload)const{
-        if(!this.validColliderEntryData(e))
+    private b8 serializeColliderEntryFields(
+        in ShapeType shapeType,
+        in VectorSingle center,
+        in VectorSingle center2,
+        in VectorSingle halfExtents,
+        in VectorSingle localRotation,
+        in f32 radius,
+        in f32 skinRadius,
+        in f32 density,
+        in f32 friction,
+        in f32 restitution,
+        in f32 rollingResistance,
+        in f32 tangentSpeed,
+        in i32 groupIndex,
+        in u32 categoryBits,
+        in u32 maskBits,
+        in u64 userData,
+        in b8 isBox,
+        in b8 isSensor,
+        in b8 enableContactEvents,
+        in b8 enableHitEvents,
+        in b8 enableSensorEvents,
+        in b8 enablePreSolveEvents,
+        in b8 invokeContactCreation,
+        in Vector<f32x4> hullPoints,
+        in Vector<f32x4> meshVertices,
+        in Vector<u32> meshIndices,
+        in AssetRef<Mesh> meshAsset,
+        mut Vector<u8> outPayload
+    )const{
+        if(!this.validColliderEntryFields(shapeType, center, center2, halfExtents, localRotation, radius, skinRadius, density, friction, restitution, rollingResistance, tangentSpeed, isBox, hullPoints, meshVertices, meshIndices, meshAsset))
             return false;
         ColliderShapeEntryHeaderBinary hdr;
         hdr.version = s_PhysicsComponentBinaryVersion;
-        hdr.shapeType = cast<u8>(e.shapeType);
+        hdr.shapeType = cast<u8>(shapeType);
         u8 flags = 0u;
-        if(e.isBox) flags |= s_ColliderFlagIsBox;
-        if(e.isSensor) flags |= s_ColliderFlagIsSensor;
-        if(e.enableContactEvents) flags |= s_ColliderFlagContactEvents;
-        if(e.enableHitEvents) flags |= s_ColliderFlagHitEvents;
-        if(e.enableSensorEvents) flags |= s_ColliderFlagSensorEvents;
-        if(e.enablePreSolveEvents) flags |= s_ColliderFlagPreSolveEvents;
-        if(e.invokeContactCreation) flags |= s_ColliderFlagInvokeCreation;
+        if(isBox) flags |= s_ColliderFlagIsBox;
+        if(isSensor) flags |= s_ColliderFlagIsSensor;
+        if(enableContactEvents) flags |= s_ColliderFlagContactEvents;
+        if(enableHitEvents) flags |= s_ColliderFlagHitEvents;
+        if(enableSensorEvents) flags |= s_ColliderFlagSensorEvents;
+        if(enablePreSolveEvents) flags |= s_ColliderFlagPreSolveEvents;
+        if(invokeContactCreation) flags |= s_ColliderFlagInvokeCreation;
         hdr.flags = flags;
-        hdr.groupIndex = e.groupIndex;
-        hdr.categoryBits = e.categoryBits;
-        hdr.maskBits = e.maskBits;
-        hdr.center = e.center;
-        hdr.center2 = e.center2;
-        hdr.halfExtents = e.halfExtents;
-        hdr.localRotation = e.localRotation;
-        hdr.radius = e.radius;
-        hdr.skinRadius = e.skinRadius;
-        hdr.density = e.density;
-        hdr.friction = e.friction;
-        hdr.restitution = e.restitution;
-        hdr.rollingResistance = e.rollingResistance;
-        hdr.tangentSpeed = e.tangentSpeed;
-        hdr.meshAssetHash = e.meshAsset.name().hash();
-        hdr.hullPointCount = cast<u32>(e.hullPoints.size());
-        hdr.meshVertexCount = cast<u32>(e.meshVertices.size());
-        hdr.meshIndexCount = cast<u32>(e.meshIndices.size());
-        hdr.userData = e.userData;
+        hdr.groupIndex = groupIndex;
+        hdr.categoryBits = categoryBits;
+        hdr.maskBits = maskBits;
+        hdr.center = f32x4(center);
+        hdr.center2 = f32x4(center2);
+        hdr.halfExtents = f32x4(halfExtents);
+        hdr.localRotation = f32x4(localRotation);
+        hdr.radius = radius;
+        hdr.skinRadius = skinRadius;
+        hdr.density = density;
+        hdr.friction = friction;
+        hdr.restitution = restitution;
+        hdr.rollingResistance = rollingResistance;
+        hdr.tangentSpeed = tangentSpeed;
+        hdr.meshAssetHash = meshAsset.name().hash();
+        hdr.hullPointCount = cast<u32>(hullPoints.size());
+        hdr.meshVertexCount = cast<u32>(meshVertices.size());
+        hdr.meshIndexCount = cast<u32>(meshIndices.size());
+        hdr.userData = userData;
         AppendPOD(outPayload, hdr);
 
-        for(usize i = 0u; i < e.hullPoints.size(); ++i){
+        for(usize i = 0u; i < hullPoints.size(); ++i){
             PhysicsVec4Binary v;
-            v.value = e.hullPoints[i];
+            v.value = hullPoints[i];
             AppendPOD(outPayload, v);
         }
-        for(usize i = 0u; i < e.meshVertices.size(); ++i){
+        for(usize i = 0u; i < meshVertices.size(); ++i){
             PhysicsVec4Binary v;
-            v.value = e.meshVertices[i];
+            v.value = meshVertices[i];
             AppendPOD(outPayload, v);
         }
-        for(usize i = 0u; i < e.meshIndices.size(); ++i){
+        for(usize i = 0u; i < meshIndices.size(); ++i){
             PhysicsU32Binary idx;
-            idx.value = e.meshIndices[i];
+            idx.value = meshIndices[i];
             AppendPOD(outPayload, idx);
         }
         return true;
     }
 
-    private b8 deserializeColliderEntry(in Span<u8> payload, mut usize inOutCursor, mut ColliderShapeEntry outEntry)const{
+    private b8 serializeColliderEntry(in ColliderShapeEntry e, mut Vector<u8> outPayload)const{
+        return this.serializeColliderEntryFields(
+            e.shapeType,
+            VectorSingle(e.center),
+            VectorSingle(e.center2),
+            VectorSingle(e.halfExtents),
+            VectorSingle(e.localRotation),
+            e.radius,
+            e.skinRadius,
+            e.density,
+            e.friction,
+            e.restitution,
+            e.rollingResistance,
+            e.tangentSpeed,
+            e.groupIndex,
+            e.categoryBits,
+            e.maskBits,
+            e.userData,
+            e.isBox,
+            e.isSensor,
+            e.enableContactEvents,
+            e.enableHitEvents,
+            e.enableSensorEvents,
+            e.enablePreSolveEvents,
+            e.invokeContactCreation,
+            e.hullPoints,
+            e.meshVertices,
+            e.meshIndices,
+            e.meshAsset,
+            outPayload
+        );
+    }
+
+    private b8 deserializeColliderEntryFields(
+        in Span<u8> payload,
+        mut usize inOutCursor,
+        mut ShapeType outShapeType,
+        mut VectorSingle outCenter,
+        mut VectorSingle outCenter2,
+        mut VectorSingle outHalfExtents,
+        mut VectorSingle outLocalRotation,
+        mut f32 outRadius,
+        mut f32 outSkinRadius,
+        mut f32 outDensity,
+        mut f32 outFriction,
+        mut f32 outRestitution,
+        mut f32 outRollingResistance,
+        mut f32 outTangentSpeed,
+        mut i32 outGroupIndex,
+        mut u32 outCategoryBits,
+        mut u32 outMaskBits,
+        mut u64 outUserData,
+        mut b8 outIsBox,
+        mut b8 outIsSensor,
+        mut b8 outEnableContactEvents,
+        mut b8 outEnableHitEvents,
+        mut b8 outEnableSensorEvents,
+        mut b8 outEnablePreSolveEvents,
+        mut b8 outInvokeContactCreation,
+        mut Vector<f32x4> outHullPoints,
+        mut Vector<f32x4> outMeshVertices,
+        mut Vector<u32> outMeshIndices,
+        mut AssetRef<Mesh> outMeshAsset
+    )const{
         const Expected<ColliderShapeEntryHeaderBinary> hdrRes = ReadPOD<ColliderShapeEntryHeaderBinary>(payload, inOutCursor);
         if(!hdrRes.has_value())
             return false;
         in ColliderShapeEntryHeaderBinary hdr = hdrRes.value();
-        if(hdr.version != s_PhysicsComponentBinaryVersion || hdr.reserved0 != 0u || hdr.reserved1 != 0u || hdr.reserved2 != 0u || hdr.reserved3 != 0u || hdr.reserved4 != 0u || (hdr.flags & 0x80u) != 0u)
+        if(hdr.version != s_PhysicsComponentBinaryVersion || hdr.reserved0 != 0u || hdr.reserved1 != 0u || hdr.reserved2 != 0u || hdr.reserved3 != 0u || hdr.reserved4 != 0u || hdr.reserved5 != 0u || (hdr.flags & 0x80u) != 0u)
             return false;
 
         const u64 remaining = cast<u64>(payload.size() - inOutCursor);
@@ -373,62 +451,105 @@ class PhysicsComponentBinaryCodec{
         if(vecBytes > remaining)
             return false;
 
-        ColliderShapeEntry e;
-        e.shapeType = cast<ShapeType>(hdr.shapeType);
-        e.isBox = (hdr.flags & s_ColliderFlagIsBox) != 0u;
-        e.isSensor = (hdr.flags & s_ColliderFlagIsSensor) != 0u;
-        e.enableContactEvents = (hdr.flags & s_ColliderFlagContactEvents) != 0u;
-        e.enableHitEvents = (hdr.flags & s_ColliderFlagHitEvents) != 0u;
-        e.enableSensorEvents = (hdr.flags & s_ColliderFlagSensorEvents) != 0u;
-        e.enablePreSolveEvents = (hdr.flags & s_ColliderFlagPreSolveEvents) != 0u;
-        e.invokeContactCreation = (hdr.flags & s_ColliderFlagInvokeCreation) != 0u;
-        e.groupIndex = hdr.groupIndex;
-        e.categoryBits = hdr.categoryBits;
-        e.maskBits = hdr.maskBits;
-        e.center = hdr.center;
-        e.center2 = hdr.center2;
-        e.halfExtents = hdr.halfExtents;
-        e.localRotation = hdr.localRotation;
-        e.radius = hdr.radius;
-        e.skinRadius = hdr.skinRadius;
-        e.density = hdr.density;
-        e.friction = hdr.friction;
-        e.restitution = hdr.restitution;
-        e.rollingResistance = hdr.rollingResistance;
-        e.tangentSpeed = hdr.tangentSpeed;
-        e.userData = hdr.userData;
-        e.meshAsset.virtualPath = Name(hdr.meshAssetHash);
+        outShapeType = cast<ShapeType>(hdr.shapeType);
+        outIsBox = (hdr.flags & s_ColliderFlagIsBox) != 0u;
+        outIsSensor = (hdr.flags & s_ColliderFlagIsSensor) != 0u;
+        outEnableContactEvents = (hdr.flags & s_ColliderFlagContactEvents) != 0u;
+        outEnableHitEvents = (hdr.flags & s_ColliderFlagHitEvents) != 0u;
+        outEnableSensorEvents = (hdr.flags & s_ColliderFlagSensorEvents) != 0u;
+        outEnablePreSolveEvents = (hdr.flags & s_ColliderFlagPreSolveEvents) != 0u;
+        outInvokeContactCreation = (hdr.flags & s_ColliderFlagInvokeCreation) != 0u;
+        outGroupIndex = hdr.groupIndex;
+        outCategoryBits = hdr.categoryBits;
+        outMaskBits = hdr.maskBits;
+        outCenter = VectorSingle(hdr.center);
+        outCenter2 = VectorSingle(hdr.center2);
+        outHalfExtents = VectorSingle(hdr.halfExtents);
+        outLocalRotation = VectorSingle(hdr.localRotation);
+        outRadius = hdr.radius;
+        outSkinRadius = hdr.skinRadius;
+        outDensity = hdr.density;
+        outFriction = hdr.friction;
+        outRestitution = hdr.restitution;
+        outRollingResistance = hdr.rollingResistance;
+        outTangentSpeed = hdr.tangentSpeed;
+        outUserData = hdr.userData;
+        outMeshAsset.virtualPath = Name(hdr.meshAssetHash);
 
-        e.hullPoints.resize(hdr.hullPointCount);
+        outHullPoints.clear();
+        outHullPoints.reserve(hdr.hullPointCount);
         for(u32 i = 0u; i < hdr.hullPointCount; ++i){
             const Expected<PhysicsVec4Binary> v = ReadPOD<PhysicsVec4Binary>(payload, inOutCursor);
             if(!v.has_value())
                 return false;
-            e.hullPoints[i] = v.value().value;
+            outHullPoints.push_back(v.value().value);
         }
-        e.meshVertices.resize(hdr.meshVertexCount);
+        outMeshVertices.clear();
+        outMeshVertices.reserve(hdr.meshVertexCount);
         for(u32 i = 0u; i < hdr.meshVertexCount; ++i){
             const Expected<PhysicsVec4Binary> v = ReadPOD<PhysicsVec4Binary>(payload, inOutCursor);
             if(!v.has_value())
                 return false;
-            e.meshVertices[i] = v.value().value;
+            outMeshVertices.push_back(v.value().value);
         }
-        e.meshIndices.resize(hdr.meshIndexCount);
+        outMeshIndices.clear();
+        outMeshIndices.reserve(hdr.meshIndexCount);
         for(u32 i = 0u; i < hdr.meshIndexCount; ++i){
             const Expected<PhysicsU32Binary> idx = ReadPOD<PhysicsU32Binary>(payload, inOutCursor);
             if(!idx.has_value())
                 return false;
-            e.meshIndices[i] = idx.value().value;
+            outMeshIndices.push_back(idx.value().value);
         }
 
-        if(!this.validColliderEntryData(e))
+        return this.validColliderEntryFields(outShapeType, outCenter, outCenter2, outHalfExtents, outLocalRotation, outRadius, outSkinRadius, outDensity, outFriction, outRestitution, outRollingResistance, outTangentSpeed, outIsBox, outHullPoints, outMeshVertices, outMeshIndices, outMeshAsset);
+    }
+
+    private b8 deserializeColliderEntry(in Span<u8> payload, mut usize inOutCursor, mut ColliderShapeEntry outEntry)const{
+        VectorSingle centerVec(0.0f);
+        VectorSingle center2Vec(0.0f);
+        VectorSingle halfExtentsVec(0.0f);
+        VectorSingle localRotVec(0.0f);
+        if(!this.deserializeColliderEntryFields(
+            payload,
+            inOutCursor,
+            outEntry.shapeType,
+            centerVec,
+            center2Vec,
+            halfExtentsVec,
+            localRotVec,
+            outEntry.radius,
+            outEntry.skinRadius,
+            outEntry.density,
+            outEntry.friction,
+            outEntry.restitution,
+            outEntry.rollingResistance,
+            outEntry.tangentSpeed,
+            outEntry.groupIndex,
+            outEntry.categoryBits,
+            outEntry.maskBits,
+            outEntry.userData,
+            outEntry.isBox,
+            outEntry.isSensor,
+            outEntry.enableContactEvents,
+            outEntry.enableHitEvents,
+            outEntry.enableSensorEvents,
+            outEntry.enablePreSolveEvents,
+            outEntry.invokeContactCreation,
+            outEntry.hullPoints,
+            outEntry.meshVertices,
+            outEntry.meshIndices,
+            outEntry.meshAsset
+        ))
             return false;
-        outEntry = e;
+        outEntry.center = f32x4(centerVec);
+        outEntry.center2 = f32x4(center2Vec);
+        outEntry.halfExtents = f32x4(halfExtentsVec);
+        outEntry.localRotation = f32x4(localRotVec);
         return true;
     }
 
     public b8 validateCollider(in ColliderComponent c, in Name virtualPath)const{
-        if(!this.validColliderEntryData(this.buildPrimaryEntry(c))){
+        if(!this.validColliderEntryFields(c.shapeType, VectorSingle(c.center), VectorSingle(c.center2), VectorSingle(c.halfExtents), VectorSingle(c.localRotation), c.radius, c.skinRadius, c.density, c.friction, c.restitution, c.rollingResistance, c.tangentSpeed, c.isBox, c.hullPoints, c.meshVertices, c.meshIndices, c.meshAsset)){
             error("ColliderComponentAsset::validatePayload failed: invalid primary collider entry for '{}'", virtualPath.resolvedText());
             return false;
         }
@@ -446,9 +567,14 @@ class PhysicsComponentBinaryCodec{
         rootHdr.version = s_PhysicsComponentBinaryVersion;
         rootHdr.extraShapeCount = cast<u32>(c.extraShapes.size());
         rootHdr.entityTagHash = c.entityTag.hash();
+        usize totalBytes = size_of<ColliderComponentPayloadHeaderBinary>()
+            + this.colliderEntrySerializedBytes(c.hullPoints.size(), c.meshVertices.size(), c.meshIndices.size());
+        for(usize i = 0u; i < c.extraShapes.size(); ++i)
+            totalBytes += this.colliderEntrySerializedBytes(c.extraShapes[i].hullPoints.size(), c.extraShapes[i].meshVertices.size(), c.extraShapes[i].meshIndices.size());
         outPayload.clear();
+        outPayload.reserve(totalBytes);
         AppendPOD(outPayload, rootHdr);
-        if(!this.serializeColliderEntry(this.buildPrimaryEntry(c), outPayload))
+        if(!this.serializeColliderEntryFields(c.shapeType, VectorSingle(c.center), VectorSingle(c.center2), VectorSingle(c.halfExtents), VectorSingle(c.localRotation), c.radius, c.skinRadius, c.density, c.friction, c.restitution, c.rollingResistance, c.tangentSpeed, c.groupIndex, c.categoryBits, c.maskBits, c.userData, c.isBox, c.isSensor, c.enableContactEvents, c.enableHitEvents, c.enableSensorEvents, c.enablePreSolveEvents, c.invokeContactCreation, c.hullPoints, c.meshVertices, c.meshIndices, c.meshAsset, outPayload))
             return false;
         for(usize i = 0u; i < c.extraShapes.size(); ++i){
             if(!this.serializeColliderEntry(c.extraShapes[i], outPayload))
@@ -475,14 +601,20 @@ class PhysicsComponentBinaryCodec{
             return false;
         }
 
-        ColliderShapeEntry primary;
-        if(!this.deserializeColliderEntry(payload, cursor, primary)){
+        ColliderComponent c;
+        VectorSingle cCenter(0.0f);
+        VectorSingle cCenter2(0.0f);
+        VectorSingle cHalfExtents(0.0f);
+        VectorSingle cLocalRot(0.0f);
+        if(!this.deserializeColliderEntryFields(payload, cursor, c.shapeType, cCenter, cCenter2, cHalfExtents, cLocalRot, c.radius, c.skinRadius, c.density, c.friction, c.restitution, c.rollingResistance, c.tangentSpeed, c.groupIndex, c.categoryBits, c.maskBits, c.userData, c.isBox, c.isSensor, c.enableContactEvents, c.enableHitEvents, c.enableSensorEvents, c.enablePreSolveEvents, c.invokeContactCreation, c.hullPoints, c.meshVertices, c.meshIndices, c.meshAsset)){
             error("ColliderComponentAsset::loadComponentPayload failed: invalid primary shape");
             return false;
         }
+        c.center = f32x4(cCenter);
+        c.center2 = f32x4(cCenter2);
+        c.halfExtents = f32x4(cHalfExtents);
+        c.localRotation = f32x4(cLocalRot);
 
-        ColliderComponent c;
-        this.assignPrimaryEntry(primary, c);
         if(rootHdr.entityTagHash == s_NameNone.hash())
             c.entityTag = s_NameNone;
         else
@@ -549,6 +681,7 @@ class PhysicsComponentBinaryCodec{
         bin.bodyEntityNameBHash = j.bodyEntityNameB.hash();
         bin.userData = j.userData;
         outPayload.clear();
+        outPayload.reserve(size_of<JointComponentPayloadBinary>());
         AppendPOD(outPayload, bin);
         return true;
     }
@@ -561,7 +694,7 @@ class PhysicsComponentBinaryCodec{
             return false;
         }
         in JointComponentPayloadBinary bin = res.value();
-        if(bin.version != s_PhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || (bin.flags & 0xe0u) != 0u){
+        if(bin.version != s_PhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || (bin.flags & 0xe0u) != 0u){
             error("JointComponentAsset::loadComponentPayload failed: unsupported version or flags");
             return false;
         }
@@ -644,6 +777,7 @@ class PhysicsComponentBinaryCodec{
         bin.fixedDeltaTime = w.fixedDeltaTime;
         bin.gpuWorkloadFraction = w.gpuWorkloadFraction;
         outPayload.clear();
+        outPayload.reserve(size_of<PhysicsWorldConfigComponentPayloadBinary>());
         AppendPOD(outPayload, bin);
         return true;
     }
@@ -656,7 +790,7 @@ class PhysicsComponentBinaryCodec{
             return false;
         }
         in PhysicsWorldConfigComponentPayloadBinary bin = res.value();
-        if(bin.version != s_PhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || (bin.flags & 0xe0u) != 0u){
+        if(bin.version != s_PhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || bin.reserved3 != 0u || (bin.flags & 0xe0u) != 0u){
             error("PhysicsWorldConfigComponentAsset::loadComponentPayload failed: unsupported version or flags");
             return false;
         }
@@ -704,6 +838,7 @@ class PhysicsComponentBinaryCodec{
         bin.flags = flags;
         bin.parentEntityNameHash = p.parentEntityName.hash();
         outPayload.clear();
+        outPayload.reserve(size_of<PhysicsParentComponentPayloadBinary>());
         AppendPOD(outPayload, bin);
         return true;
     }

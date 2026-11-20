@@ -37,12 +37,10 @@ class ContactConstraint{
     public Array<ManifoldConstraintPoint, s_MaxManifoldPoints> points;
     public f32x4 normalFriction(0.0f, 1.0f, 0.0f, 0.6f);
     public f32x4 tangent1Restitution(1.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 tangent2Rolling(0.0f, 0.0f, 1.0f, 0.0f);
     public f32x4 centerATwistMass(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 centerBTwistImpulse(0.0f, 0.0f, 0.0f, 0.0f);
     public SymMat3 invIA;
     public SymMat3 invIB;
-    public SymMat3 rollingMass;
     public Softness softness;
     public u32 contactId = s_NullIndex;
     public u32 pointCount = 0u;
@@ -51,7 +49,7 @@ class ContactConstraint{
     public f32 invMassA = 0.0f;
     public f32 invMassB = 0.0f;
     public f32 tangentVelocity1 = 0.0f;
-    public f32 tangentVelocity2 = 0.0f;
+    public f32 rollingResistance = 0.0f;
     public f32 tangentMass00 = 0.0f;
     public f32 tangentMass01 = 0.0f;
     public f32 tangentMass11 = 0.0f;
@@ -78,14 +76,6 @@ class ContactConstraint{
 
     public f32 restitution()const{
         return this.tangent1Restitution.w;
-    }
-
-    public VectorSingle tangent2()const{
-        return VectorSingle(this.tangent2Rolling, 0.0f);
-    }
-
-    public f32 rollingResistance()const{
-        return this.tangent2Rolling.w;
     }
 
     public VectorSingle centerA()const{
@@ -296,7 +286,7 @@ void PrepareContactConstraint(
     outConstraint.invIA = effInvIA;
     outConstraint.invIB = effInvIB;
     outConstraint.tangentVelocity1 = contact.tangentSpeed;
-    outConstraint.tangentVelocity2 = 0.0f;
+    outConstraint.rollingResistance = contact.rollingResistance;
 
     if(indexA == s_NullIndex || indexB == s_NullIndex || invMassA == 0.0f || invMassB == 0.0f){
         outConstraint.softness = staticSoftness;
@@ -316,7 +306,6 @@ void PrepareContactConstraint(
     ComputeTangentBasis(n, t1, t2);
     outConstraint.normalFriction = f32x4(n, contact.friction);
     outConstraint.tangent1Restitution = f32x4(t1, contact.restitution);
-    outConstraint.tangent2Rolling = f32x4(t2, contact.rollingResistance);
 
     f32 warmTwistImpulse = 0.0f;
     if(enableWarmStarting){
@@ -335,6 +324,7 @@ void PrepareContactConstraint(
 
     const VectorSingle originToComA = VectorSingle(simA.transform.position) - VectorSingle(simA.centerInvMass, 0.0f);
     const VectorSingle originToComB = VectorSingle(simB.transform.position) - VectorSingle(simB.centerInvMass, 0.0f);
+    const f32 baseLinearKN = LinearInvMassDot(n, n, invMassA, flagsA) + LinearInvMassDot(n, n, invMassB, flagsB);
 
     for(u32 i = 0u; i < outConstraint.pointCount; ++i){
         in ManifoldPoint mp = contact.manifold.points[i];
@@ -344,8 +334,7 @@ void PrepareContactConstraint(
         const VectorSingle rnA = Cross(rA, n);
         const VectorSingle rnB = Cross(rB, n);
         const f32 kN =
-            LinearInvMassDot(n, n, invMassA, flagsA)
-            + LinearInvMassDot(n, n, invMassB, flagsB)
+            baseLinearKN
             + Vector3Dot(rnA, ApplySymMat3Local(effInvIA, rnA)).x
             + Vector3Dot(rnB, ApplySymMat3Local(effInvIB, rnB)).x
         ;
@@ -386,11 +375,12 @@ void PrepareContactConstraint(
         centerB = sumCenterB / totalWeight;
     }
 
-    f32 maxLeverArm = 0.0f;
+    f32 maxLeverArmSq = 0.0f;
     for(u32 i = 0u; i < outConstraint.pointCount; ++i){
         const VectorSingle dA = VectorSingle(outConstraint.points[i].rABaseSep, 0.0f) - centerA;
-        maxLeverArm = Max(maxLeverArm, Vector3Length(VectorSingle(dA, 0.0f)).x);
+        maxLeverArmSq = Max(maxLeverArmSq, Vector3LengthSq(VectorSingle(dA, 0.0f)).x);
     }
+    const f32 maxLeverArm = Sqrt(maxLeverArmSq);
     outConstraint.maxLeverArm = maxLeverArm;
 
     const VectorSingle rt1A = Cross(centerA, t1);
@@ -451,21 +441,6 @@ void PrepareContactConstraint(
     }
     outConstraint.centerATwistMass = f32x4(centerA, twistMassVal);
     outConstraint.centerBTwistImpulse = f32x4(centerB, warmTwistImpulse);
-
-    if(contact.rollingResistance > 0.0f){
-        const SymMat3 sumInvI(
-            effInvIA.m00 + effInvIB.m00,
-            effInvIA.m01 + effInvIB.m01,
-            effInvIA.m02 + effInvIB.m02,
-            effInvIA.m11 + effInvIB.m11,
-            effInvIA.m12 + effInvIB.m12,
-            effInvIA.m22 + effInvIB.m22
-        );
-        outConstraint.rollingMass = InvertSymMat3(sumInvI);
-    }
-    else{
-        outConstraint.rollingMass = SymMat3();
-    }
 }
 
 void WarmStartContactConstraint(mut Vector<BodyState> states, in ContactConstraint c){
@@ -500,13 +475,13 @@ void WarmStartContactConstraint(mut Vector<BodyState> states, in ContactConstrai
         return;
 
     const VectorSingle n = VectorSingle(c.normalFriction, 0.0f);
-    const VectorSingle t1 = VectorSingle(c.tangent1Restitution, 0.0f);
-    const VectorSingle t2 = VectorSingle(c.tangent2Rolling, 0.0f);
+    b8 anyWarmApplied = false;
 
     for(u32 i = 0u; i < c.pointCount; ++i){
         in ManifoldConstraintPoint pt = c.points[i];
         if(pt.normalImpulse == 0.0f)
             continue;
+        anyWarmApplied = true;
         const VectorSingle p = n * pt.normalImpulse;
         if(dynA){
             const VectorSingle rA = VectorSingle(pt.rABaseSep, 0.0f);
@@ -521,6 +496,9 @@ void WarmStartContactConstraint(mut Vector<BodyState> states, in ContactConstrai
     }
 
     if(c.frictionImpulse.x != 0.0f || c.frictionImpulse.y != 0.0f){
+        anyWarmApplied = true;
+        const VectorSingle t1 = VectorSingle(c.tangent1Restitution, 0.0f);
+        const VectorSingle t2 = Cross(n, t1);
         const VectorSingle fP = t1 * c.frictionImpulse.x + t2 * c.frictionImpulse.y;
         if(dynA){
             vA = vA - fP * c.invMassA;
@@ -533,6 +511,7 @@ void WarmStartContactConstraint(mut Vector<BodyState> states, in ContactConstrai
     }
 
     if(c.centerBTwistImpulse.w != 0.0f){
+        anyWarmApplied = true;
         const VectorSingle twistP = n * c.centerBTwistImpulse.w;
         if(dynA)
             wA = wA - ApplySymMat3Local(c.invIA, twistP);
@@ -541,6 +520,7 @@ void WarmStartContactConstraint(mut Vector<BodyState> states, in ContactConstrai
     }
 
     if(c.rollingImpulse.x != 0.0f || c.rollingImpulse.y != 0.0f || c.rollingImpulse.z != 0.0f){
+        anyWarmApplied = true;
         const VectorSingle rollP(c.rollingImpulse.x, c.rollingImpulse.y, c.rollingImpulse.z, 0.0f);
         if(dynA)
             wA = wA - ApplySymMat3Local(c.invIA, rollP);
@@ -548,13 +528,24 @@ void WarmStartContactConstraint(mut Vector<BodyState> states, in ContactConstrai
             wB = wB + ApplySymMat3Local(c.invIB, rollP);
     }
 
+    if(!anyWarmApplied)
+        return;
+
     if(dynA){
-        states[c.indexA].linearVelocity = f32x4(ApplyLinearLocks(vA, flagsA), 0.0f);
-        states[c.indexA].angularVelocity = f32x4(ApplyAngularLocks(wA, flagsA), 0.0f);
+        if((flagsA & 0x3Fu) != 0u){
+            vA = ApplyLinearLocks(vA, flagsA);
+            wA = ApplyAngularLocks(wA, flagsA);
+        }
+        states[c.indexA].linearVelocity = f32x4(vA, 0.0f);
+        states[c.indexA].angularVelocity = f32x4(wA, 0.0f);
     }
     if(dynB){
-        states[c.indexB].linearVelocity = f32x4(ApplyLinearLocks(vB, flagsB), 0.0f);
-        states[c.indexB].angularVelocity = f32x4(ApplyAngularLocks(wB, flagsB), 0.0f);
+        if((flagsB & 0x3Fu) != 0u){
+            vB = ApplyLinearLocks(vB, flagsB);
+            wB = ApplyAngularLocks(wB, flagsB);
+        }
+        states[c.indexB].linearVelocity = f32x4(vB, 0.0f);
+        states[c.indexB].angularVelocity = f32x4(wB, 0.0f);
     }
 }
 
@@ -572,7 +563,6 @@ void SolveContactConstraint(mut Vector<BodyState> states, mut ContactConstraint 
 
     const VectorSingle n = VectorSingle(c.normalFriction, 0.0f);
     const VectorSingle t1 = VectorSingle(c.tangent1Restitution, 0.0f);
-    const VectorSingle t2 = VectorSingle(c.tangent2Rolling, 0.0f);
 
     const b8 hasA = (c.indexA != s_NullIndex);
     const b8 hasB = (c.indexB != s_NullIndex);
@@ -608,6 +598,15 @@ void SolveContactConstraint(mut Vector<BodyState> states, mut ContactConstraint 
     const b8 dynA = hasA && ((flagsA & dynBit) != 0u);
     const b8 dynB = hasB && ((flagsB & dynBit) != 0u);
 
+    const f32 baseDeltaPosN = Vector3Dot(VectorSingle(deltaPosB - deltaPosA, 0.0f), n).x;
+    VectorSingle rotDeltaNA(0.0f);
+    if(hasA && (deltaRotA.x * deltaRotA.x + deltaRotA.y * deltaRotA.y + deltaRotA.z * deltaRotA.z) > 1.0e-12f)
+        rotDeltaNA = Vector3InverseRotate(n, deltaRotA) - n;
+    VectorSingle rotDeltaNB(0.0f);
+    if(hasB && (deltaRotB.x * deltaRotB.x + deltaRotB.y * deltaRotB.y + deltaRotB.z * deltaRotB.z) > 1.0e-12f)
+        rotDeltaNB = Vector3InverseRotate(n, deltaRotB) - n;
+
+    b8 anyApplied = false;
     f32 totalNormalImpulse = 0.0f;
 
     for(u32 i = 0u; i < c.pointCount; ++i){
@@ -615,13 +614,7 @@ void SolveContactConstraint(mut Vector<BodyState> states, mut ContactConstraint 
         const VectorSingle rA = VectorSingle(pt.rABaseSep, 0.0f);
         const VectorSingle rB = VectorSingle(pt.rBRelVel, 0.0f);
 
-        VectorSingle dcA(0.0f);
-        if(hasA)
-            dcA = deltaPosA + (Vector3Rotate(rA, deltaRotA) - rA);
-        VectorSingle dcB(0.0f);
-        if(hasB)
-            dcB = deltaPosB + (Vector3Rotate(rB, deltaRotB) - rB);
-        const f32 currentSep = pt.rABaseSep.w + Vector3Dot(VectorSingle(dcB - dcA, 0.0f), n).x;
+        const f32 currentSep = pt.rABaseSep.w + baseDeltaPosN + Vector3Dot(rB, rotDeltaNB).x - Vector3Dot(rA, rotDeltaNA).x;
 
         f32 bias = 0.0f;
         f32 massScale = 1.0f;
@@ -637,14 +630,13 @@ void SolveContactConstraint(mut Vector<BodyState> states, mut ContactConstraint 
             impulseScale = c.softness.impulseScale;
         }
 
-        VectorSingle velA(0.0f);
+        VectorSingle rnA(0.0f);
         if(hasA)
-            velA = vA + Cross(wA, rA);
-        VectorSingle velB(0.0f);
+            rnA = Cross(rA, n);
+        VectorSingle rnB(0.0f);
         if(hasB)
-            velB = vB + Cross(wB, rB);
-        const VectorSingle dv = velB - velA;
-        const f32 vn = Vector3Dot(dv, n).x;
+            rnB = Cross(rB, n);
+        const f32 vn = Vector3Dot(VectorSingle(vB - vA, 0.0f), n).x + Vector3Dot(wB, rnB).x - Vector3Dot(wA, rnA).x;
         const f32 oldImpulse = pt.normalImpulse;
         const f32 impulse = -pt.normalMass * massScale * (vn + bias) - impulseScale * oldImpulse;
         const f32 newImpulse = Max(oldImpulse + impulse, 0.0f);
@@ -655,10 +647,11 @@ void SolveContactConstraint(mut Vector<BodyState> states, mut ContactConstraint 
         totalNormalImpulse += newImpulse;
 
         if(delta != 0.0f){
+            anyApplied = true;
             const VectorSingle p = n * delta;
             if(dynA){
                 vA = vA - p * c.invMassA;
-                wA = wA - ApplySymMat3Local(c.invIA, Cross(rA, p));
+                wA = wA - ApplySymMat3Local(c.invIA, rnA * delta);
                 if((flagsA & 0x3Fu) != 0u){
                     vA = ApplyLinearLocks(vA, flagsA);
                     wA = ApplyAngularLocks(wA, flagsA);
@@ -666,7 +659,7 @@ void SolveContactConstraint(mut Vector<BodyState> states, mut ContactConstraint 
             }
             if(dynB){
                 vB = vB + p * c.invMassB;
-                wB = wB + ApplySymMat3Local(c.invIB, Cross(rB, p));
+                wB = wB + ApplySymMat3Local(c.invIB, rnB * delta);
                 if((flagsB & 0x3Fu) != 0u){
                     vB = ApplyLinearLocks(vB, flagsB);
                     wB = ApplyAngularLocks(wB, flagsB);
@@ -676,7 +669,8 @@ void SolveContactConstraint(mut Vector<BodyState> states, mut ContactConstraint 
     }
 
     const f32 friction = c.normalFriction.w;
-    {
+    if((friction > 0.0f && totalNormalImpulse > 0.0f) || c.frictionImpulse.x != 0.0f || c.frictionImpulse.y != 0.0f){
+        const VectorSingle t2 = Cross(n, t1);
         const VectorSingle centerA = VectorSingle(c.centerATwistMass, 0.0f);
         const VectorSingle centerB = VectorSingle(c.centerBTwistImpulse, 0.0f);
         VectorSingle velA(0.0f);
@@ -687,7 +681,7 @@ void SolveContactConstraint(mut Vector<BodyState> states, mut ContactConstraint 
             velB = vB + Cross(wB, centerB);
         const VectorSingle dv = velB - velA;
         const f32 vt1 = Vector3Dot(dv, t1).x - c.tangentVelocity1;
-        const f32 vt2 = Vector3Dot(dv, t2).x - c.tangentVelocity2;
+        const f32 vt2 = Vector3Dot(dv, t2).x;
 
         const f32 deltaFx = -(c.tangentMass00 * vt1 + c.tangentMass01 * vt2);
         const f32 deltaFy = -(c.tangentMass01 * vt1 + c.tangentMass11 * vt2);
@@ -711,6 +705,7 @@ void SolveContactConstraint(mut Vector<BodyState> states, mut ContactConstraint 
         c.frictionImpulse = f32x2u(newFx, newFy);
 
         if(appliedFx != 0.0f || appliedFy != 0.0f){
+            anyApplied = true;
             const VectorSingle p = t1 * appliedFx + t2 * appliedFy;
             if(dynA){
                 vA = vA - p * c.invMassA;
@@ -732,7 +727,7 @@ void SolveContactConstraint(mut Vector<BodyState> states, mut ContactConstraint 
     }
 
     const f32 twistMass = c.centerATwistMass.w;
-    if(twistMass > 0.0f && c.maxLeverArm > 0.0f){
+    if(twistMass > 0.0f && c.maxLeverArm > 0.0f && ((friction > 0.0f && totalNormalImpulse > 0.0f) || c.centerBTwistImpulse.w != 0.0f)){
         const f32 dwN = Vector3Dot(VectorSingle(wB - wA, 0.0f), n).x;
         const f32 deltaT = -twistMass * dwN;
         const f32 maxT = friction * c.maxLeverArm * totalNormalImpulse;
@@ -741,6 +736,7 @@ void SolveContactConstraint(mut Vector<BodyState> states, mut ContactConstraint 
         const f32 appliedT = newT - oldT;
         c.centerBTwistImpulse.w = newT;
         if(appliedT != 0.0f){
+            anyApplied = true;
             const VectorSingle angP = n * appliedT;
             if(dynA){
                 wA = wA - ApplySymMat3Local(c.invIA, angP);
@@ -755,13 +751,20 @@ void SolveContactConstraint(mut Vector<BodyState> states, mut ContactConstraint 
         }
     }
 
-    const f32 rollingResistance = c.tangent2Rolling.w;
-    if(rollingResistance > 0.0f){
+    if(c.rollingResistance > 0.0f && (totalNormalImpulse > 0.0f || c.rollingImpulse.x != 0.0f || c.rollingImpulse.y != 0.0f || c.rollingImpulse.z != 0.0f)){
+        const SymMat3 rollingMass = InvertSymMat3(SymMat3(
+            c.invIA.m00 + c.invIB.m00,
+            c.invIA.m01 + c.invIB.m01,
+            c.invIA.m02 + c.invIB.m02,
+            c.invIA.m11 + c.invIB.m11,
+            c.invIA.m12 + c.invIB.m12,
+            c.invIA.m22 + c.invIB.m22
+        ));
         const VectorSingle dw = VectorSingle(wB - wA, 0.0f);
-        const VectorSingle deltaR = -ApplySymMat3Local(c.rollingMass, dw);
+        const VectorSingle deltaR = -ApplySymMat3Local(rollingMass, dw);
         const VectorSingle oldR(c.rollingImpulse.x, c.rollingImpulse.y, c.rollingImpulse.z, 0.0f);
         VectorSingle newR = oldR + deltaR;
-        const f32 maxR = rollingResistance * totalNormalImpulse;
+        const f32 maxR = c.rollingResistance * totalNormalImpulse;
         if(maxR <= 0.0f){
             newR = VectorSingle(0.0f);
         }
@@ -773,6 +776,7 @@ void SolveContactConstraint(mut Vector<BodyState> states, mut ContactConstraint 
         const VectorSingle appliedR = newR - oldR;
         c.rollingImpulse = f32x3u(newR.x, newR.y, newR.z);
         if(appliedR.x != 0.0f || appliedR.y != 0.0f || appliedR.z != 0.0f){
+            anyApplied = true;
             if(dynA){
                 wA = wA - ApplySymMat3Local(c.invIA, appliedR);
                 if((flagsA & 0x38u) != 0u)
@@ -786,13 +790,24 @@ void SolveContactConstraint(mut Vector<BodyState> states, mut ContactConstraint 
         }
     }
 
+    if(!anyApplied)
+        return;
+
     if(dynA){
-        states[c.indexA].linearVelocity = f32x4(ApplyLinearLocks(vA, flagsA), 0.0f);
-        states[c.indexA].angularVelocity = f32x4(ApplyAngularLocks(wA, flagsA), 0.0f);
+        if((flagsA & 0x3Fu) != 0u){
+            vA = ApplyLinearLocks(vA, flagsA);
+            wA = ApplyAngularLocks(wA, flagsA);
+        }
+        states[c.indexA].linearVelocity = f32x4(vA, 0.0f);
+        states[c.indexA].angularVelocity = f32x4(wA, 0.0f);
     }
     if(dynB){
-        states[c.indexB].linearVelocity = f32x4(ApplyLinearLocks(vB, flagsB), 0.0f);
-        states[c.indexB].angularVelocity = f32x4(ApplyAngularLocks(wB, flagsB), 0.0f);
+        if((flagsB & 0x3Fu) != 0u){
+            vB = ApplyLinearLocks(vB, flagsB);
+            wB = ApplyAngularLocks(wB, flagsB);
+        }
+        states[c.indexB].linearVelocity = f32x4(vB, 0.0f);
+        states[c.indexB].angularVelocity = f32x4(wB, 0.0f);
     }
 }
 

@@ -108,6 +108,34 @@ void QueryEdgeAxes(in HullShape hullA, in HullShape hullB, in Transform3D xfBtoA
     const VectorSingle cA = hullA.centroid();
     const VectorSingle qB = VectorSingle(xfBtoA.rotation);
 
+    Array<f32x4, s_MaxHullEdges> bP0;
+    Array<f32x4, s_MaxHullEdges> bDir;
+    Array<f32x4, s_MaxHullEdges> bN0;
+    Array<f32x4, s_MaxHullEdges> bN1;
+    Array<f32x4, s_MaxHullEdges> bEdgeDC;
+    Array<f32, s_MaxHullEdges> bDirLenSq;
+    Array<u32, s_MaxHullEdges> bEdgeIds;
+    usize bCount = 0u;
+    for(usize eB = 0u; eB < hullB.halfEdges.size() && bCount < s_MaxHullEdges; ++eB){
+        in HalfEdge heB = hullB.halfEdges[eB];
+        if(cast<usize>(heB.twin) < eB)
+            continue;
+        in HalfEdge twinB = hullB.halfEdges[heB.twin];
+        const VectorSingle pB0 = TransformPoint(xfBtoA, Vec3FromU(hullB.vertices[heB.tail]));
+        const VectorSingle pB1 = TransformPoint(xfBtoA, Vec3FromU(hullB.vertices[twinB.tail]));
+        const VectorSingle dirB = VectorSingle(pB1 - pB0, 0.0f);
+        const VectorSingle nB0 = Vector3Rotate(VectorSingle(hullB.facePlanes[heB.face].normalOffset, 0.0f), qB);
+        const VectorSingle nB1 = Vector3Rotate(VectorSingle(hullB.facePlanes[twinB.face].normalOffset, 0.0f), qB);
+        bP0[bCount] = f32x4(pB0, 0.0f);
+        bDir[bCount] = f32x4(dirB, 0.0f);
+        bN0[bCount] = f32x4(nB0, 0.0f);
+        bN1[bCount] = f32x4(nB1, 0.0f);
+        bEdgeDC[bCount] = f32x4(Cross(nB0, nB1), 0.0f);
+        bDirLenSq[bCount] = Vector3LengthSq(dirB).x;
+        bEdgeIds[bCount] = cast<u32>(eB);
+        ++bCount;
+    }
+
     for(usize eA = 0u; eA < hullA.halfEdges.size(); ++eA){
         in HalfEdge heA = hullA.halfEdges[eA];
         if(cast<usize>(heA.twin) < eA)
@@ -117,29 +145,20 @@ void QueryEdgeAxes(in HullShape hullA, in HullShape hullB, in Transform3D xfBtoA
         const VectorSingle pA0 = Vec3FromU(hullA.vertices[heA.tail]);
         const VectorSingle pA1 = Vec3FromU(hullA.vertices[twinA.tail]);
         const VectorSingle dirA = VectorSingle(pA1 - pA0, 0.0f);
+        const f32 lenSqA = Vector3LengthSq(dirA).x;
         const VectorSingle nA0 = VectorSingle(hullA.facePlanes[heA.face].normalOffset, 0.0f);
         const VectorSingle nA1 = VectorSingle(hullA.facePlanes[twinA.face].normalOffset, 0.0f);
         const VectorSingle edgeBA = Cross(nA0, nA1);
 
-        for(usize eB = 0u; eB < hullB.halfEdges.size(); ++eB){
-            in HalfEdge heB = hullB.halfEdges[eB];
-            if(cast<usize>(heB.twin) < eB)
+        for(usize bi = 0u; bi < bCount; ++bi){
+            const VectorSingle nB0 = VectorSingle(bN0[bi]);
+            const VectorSingle nB1 = VectorSingle(bN1[bi]);
+            if(!IsMinkowskiFace(nA0, nA1, edgeBA, -nB0, -nB1, VectorSingle(bEdgeDC[bi])))
                 continue;
 
-            in HalfEdge twinB = hullB.halfEdges[heB.twin];
-            const VectorSingle pB0 = TransformPoint(xfBtoA, Vec3FromU(hullB.vertices[heB.tail]));
-            const VectorSingle pB1 = TransformPoint(xfBtoA, Vec3FromU(hullB.vertices[twinB.tail]));
-            const VectorSingle dirB = VectorSingle(pB1 - pB0, 0.0f);
-            const VectorSingle nB0 = Vector3Rotate(VectorSingle(hullB.facePlanes[heB.face].normalOffset, 0.0f), qB);
-            const VectorSingle nB1 = Vector3Rotate(VectorSingle(hullB.facePlanes[twinB.face].normalOffset, 0.0f), qB);
-            const VectorSingle edgeDC = Cross(nB0, nB1);
-
-            if(!IsMinkowskiFace(nA0, nA1, edgeBA, -nB0, -nB1, edgeDC))
-                continue;
-
-            const VectorSingle rawCross = Cross(dirA, dirB);
+            const VectorSingle rawCross = Cross(dirA, VectorSingle(bDir[bi]));
             const f32 lenSq = Vector3LengthSq(rawCross).x;
-            const f32 normTol = s_ParallelEdgeTol * s_ParallelEdgeTol * Max(Vector3LengthSq(dirA).x * Vector3LengthSq(dirB).x, 1.0e-12f);
+            const f32 normTol = s_ParallelEdgeTol * s_ParallelEdgeTol * Max(lenSqA * bDirLenSq[bi], 1.0e-12f);
             if(lenSq <= normTol)
                 continue;
 
@@ -147,11 +166,11 @@ void QueryEdgeAxes(in HullShape hullA, in HullShape hullB, in Transform3D xfBtoA
             if(Vector3Dot(axis, VectorSingle(pA0 - cA, 0.0f)).x < 0.0f)
                 axis = -axis;
 
-            const f32 sep = Vector3Dot(axis, VectorSingle(pB0 - pA0, 0.0f)).x;
+            const f32 sep = Vector3Dot(axis, VectorSingle(VectorSingle(bP0[bi]) - pA0, 0.0f)).x;
             if(sep > outBest.separation){
                 outBest.separation = sep;
                 outBest.indexA = cast<u32>(eA);
-                outBest.indexB = cast<u32>(eB);
+                outBest.indexB = bEdgeIds[bi];
                 outBest.normal = f32x4(axis, 0.0f);
             }
         }
@@ -345,17 +364,27 @@ Manifold CollideHullFaces(
 
     in HullFaceTopology refFace = refHull.faceTopologies[refFaceIdx];
     u8 refEdge = refFace.edge;
+    b8 useA = true;
     for(u8 i = 0u; i < refFace.vertexCount; ++i){
         in HalfEdge he = refHull.halfEdges[refEdge];
         const VectorSingle v0 = Vec3FromU(refHull.vertices[he.tail]);
         const VectorSingle v1 = Vec3FromU(refHull.vertices[refHull.halfEdges[he.next].tail]);
         const VectorSingle sideNormal = SafeNormalizeVec3(Cross(VectorSingle(v1 - v0, 0.0f), refLocalN), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
         const f32 sideOffset = Vector3Dot(sideNormal, v0).x;
-        if(ClipPolygonAgainstPlane(polyA, sideNormal, sideOffset, refEdge, polyB) == 0u)
-            return m;
-        polyA = polyB;
+        if(useA){
+            if(ClipPolygonAgainstPlane(polyA, sideNormal, sideOffset, refEdge, polyB) == 0u)
+                return m;
+            useA = false;
+        }
+        else{
+            if(ClipPolygonAgainstPlane(polyB, sideNormal, sideOffset, refEdge, polyA) == 0u)
+                return m;
+            useA = true;
+        }
         refEdge = he.next;
     }
+    if(!useA)
+        polyA = polyB;
 
     FixedVector<ClipVertex, s_MaxClipPoints> validPoints;
     const f32 refR = refHull.radius();
@@ -1036,7 +1065,7 @@ class MeshContactCandidate{
 
 void ReduceMeshCandidatesAndWriteManifold(
     in VectorSingle normal,
-    in Vector<MeshContactCandidate> candidates,
+    in FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates,
     mut Manifold outManifold
 ){
     if(candidates.empty())
@@ -1093,7 +1122,7 @@ void PushMeshCandidate(
     in VectorSingle normal,
     in f32 sep,
     in u32 featureId,
-    mut Vector<MeshContactCandidate> candidates
+    mut FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates
 ){
     MeshContactCandidate c;
     c.pointSep = f32x4(pt, sep);
@@ -1129,17 +1158,16 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
     const ShapeProxy hullProxy = MakeHullProxy(hullA);
     const b8 closedMesh = meshB.isClosed();
 
-    Vector<MeshContactCandidate> candidates;
-    candidates.reserve(s_MaxClipPoints);
+    FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
     VectorSingle chosenNormal(0.0f, -1.0f, 0.0f, 0.0f);
     f32 deepestSep = s_MaxF32;
 
-    Vector<u32> stack;
-    stack.reserve(64u);
-    stack.push_back(0u);
-    while(!stack.empty()){
-        const u32 nodeIdx = stack[stack.size() - 1u];
-        stack.pop_back();
+    Array<u32, 256u> stack;
+    stack[0u] = 0u;
+    u32 stackCount = 1u;
+    while(stackCount > 0u){
+        --stackCount;
+        const u32 nodeIdx = stack[stackCount];
         in MeshBvhNode node = meshB.nodes[nodeIdx];
         if(!AabbOverlaps(node.aabb(), queryBox))
             continue;
@@ -1366,19 +1394,34 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
 
                     in HullFaceTopology fTopo = hullA.faceTopologies[bestHullFace];
                     u8 hEdge = fTopo.edge;
+                    b8 useA = true;
+                    b8 clipEmpty = false;
                     for(u8 ei = 0u; ei < fTopo.vertexCount; ++ei){
                         in HalfEdge he = hullA.halfEdges[hEdge];
                         const VectorSingle fv0 = TransformPoint(localHullXf, Vec3FromU(hullA.vertices[he.tail]));
                         const VectorSingle fv1 = TransformPoint(localHullXf, Vec3FromU(hullA.vertices[hullA.halfEdges[he.next].tail]));
                         const VectorSingle sideN = SafeNormalizeVec3(Cross(VectorSingle(fv1 - fv0, 0.0f), bestHullN), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
                         const f32 sideOff = Vector3Dot(sideN, fv0).x;
-                        if(ClipPolygonAgainstPlane(polyA, sideN, sideOff, hEdge, polyB) == 0u){
-                            polyA.clear();
-                            break;
+                        if(useA){
+                            if(ClipPolygonAgainstPlane(polyA, sideN, sideOff, hEdge, polyB) == 0u){
+                                clipEmpty = true;
+                                break;
+                            }
+                            useA = false;
                         }
-                        polyA = polyB;
+                        else{
+                            if(ClipPolygonAgainstPlane(polyB, sideN, sideOff, hEdge, polyA) == 0u){
+                                clipEmpty = true;
+                                break;
+                            }
+                            useA = true;
+                        }
                         hEdge = he.next;
                     }
+                    if(clipEmpty)
+                        polyA.clear();
+                    else if(!useA)
+                        polyA = polyB;
 
                     for(usize k = 0u; k < polyA.size(); ++k){
                         const VectorSingle ptB = Vec3FromU(polyA[k].position);
@@ -1449,8 +1492,14 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
             }
         }
         else{
-            stack.push_back(node.leftOrFirst());
-            stack.push_back(node.rightOrCount());
+            if(stackCount < 256u){
+                stack[stackCount] = node.leftOrFirst();
+                ++stackCount;
+            }
+            if(stackCount < 256u){
+                stack[stackCount] = node.rightOrCount();
+                ++stackCount;
+            }
         }
     }
 
@@ -1508,18 +1557,17 @@ Manifold CollideMeshes(
     const f32 pad = totalR + maxDistance;
     const VectorSingle padVec(pad, pad, pad, 0.0f);
 
-    Vector<MeshContactCandidate> candidates;
-    candidates.reserve(s_MaxClipPoints);
+    FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
     VectorSingle chosenNormal(0.0f, 1.0f, 0.0f, 0.0f);
     f32 deepestSep = s_MaxF32;
 
-    Vector<u32x2u> stack;
-    stack.reserve(128u);
-    stack.push_back(u32x2u(0u, 0u));
+    Array<u32x2u, 256u> stack;
+    stack[0u] = u32x2u(0u, 0u);
+    u32 stackCount = 1u;
 
-    while(!stack.empty()){
-        const u32x2u pair = stack[stack.size() - 1u];
-        stack.pop_back();
+    while(stackCount > 0u){
+        --stackCount;
+        const u32x2u pair = stack[stackCount];
         in MeshBvhNode nodeA = meshA.nodes[pair.x];
         in MeshBvhNode nodeB = meshB.nodes[pair.y];
 
@@ -1736,23 +1784,47 @@ Manifold CollideMeshes(
             }
         }
         else if(nodeA.isLeaf()){
-            stack.push_back(u32x2u(pair.x, nodeB.leftOrFirst()));
-            stack.push_back(u32x2u(pair.x, nodeB.rightOrCount()));
+            if(stackCount < 256u){
+                stack[stackCount] = u32x2u(pair.x, nodeB.leftOrFirst());
+                ++stackCount;
+            }
+            if(stackCount < 256u){
+                stack[stackCount] = u32x2u(pair.x, nodeB.rightOrCount());
+                ++stackCount;
+            }
         }
         else if(nodeB.isLeaf()){
-            stack.push_back(u32x2u(nodeA.leftOrFirst(), pair.y));
-            stack.push_back(u32x2u(nodeA.rightOrCount(), pair.y));
+            if(stackCount < 256u){
+                stack[stackCount] = u32x2u(nodeA.leftOrFirst(), pair.y);
+                ++stackCount;
+            }
+            if(stackCount < 256u){
+                stack[stackCount] = u32x2u(nodeA.rightOrCount(), pair.y);
+                ++stackCount;
+            }
         }
         else{
             const f32 areaA = AabbPerimeter(nodeA.aabb());
             const f32 areaB = AabbPerimeter(nodeB.aabb());
             if(areaA >= areaB){
-                stack.push_back(u32x2u(nodeA.leftOrFirst(), pair.y));
-                stack.push_back(u32x2u(nodeA.rightOrCount(), pair.y));
+                if(stackCount < 256u){
+                    stack[stackCount] = u32x2u(nodeA.leftOrFirst(), pair.y);
+                    ++stackCount;
+                }
+                if(stackCount < 256u){
+                    stack[stackCount] = u32x2u(nodeA.rightOrCount(), pair.y);
+                    ++stackCount;
+                }
             }
             else{
-                stack.push_back(u32x2u(pair.x, nodeB.leftOrFirst()));
-                stack.push_back(u32x2u(pair.x, nodeB.rightOrCount()));
+                if(stackCount < 256u){
+                    stack[stackCount] = u32x2u(pair.x, nodeB.leftOrFirst());
+                    ++stackCount;
+                }
+                if(stackCount < 256u){
+                    stack[stackCount] = u32x2u(pair.x, nodeB.rightOrCount());
+                    ++stackCount;
+                }
             }
         }
     }

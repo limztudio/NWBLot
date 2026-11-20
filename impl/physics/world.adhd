@@ -8,6 +8,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class CpuContactSlotRef{
+    public u32 color = 0u;
+    public u32 index = 0u;
+}
+
 class PhysicsWorldCpuScratch{
     public Vector<u64> candidateKeys;
     public Vector<u32> activeContactIds;
@@ -21,6 +26,31 @@ class PhysicsWorldCpuScratch{
     public Vector<JointConstraint> jointConstraints;
     public Vector<u32> awakeIndices;
     public Vector<u32> brokenJointIds;
+    public Vector<u32> islandsToSleep;
+    public Vector<u32> candidateSplitIslands;
+    public Vector<u32> parAwakeToLocal;
+    public Vector<u32> parDynAwakeIndices;
+    public Vector<u32> parKinAwakeIndices;
+    public Vector<u32> parDsuParents;
+    public Vector<u8> parDsuRanks;
+    public Vector<u32> parRootToComp;
+    public Vector<u32> parDynBodyComps;
+    public Vector<u32> parCompBodyOffsets;
+    public Vector<u32> parCompBodyCursors;
+    public Vector<u32> parCompBodyIndices;
+    public Vector<CpuContactSlotRef> parFlatContactSlots;
+    public Vector<u32> parFlatContactComps;
+    public Vector<u32> parCompContactOffsets;
+    public Vector<CpuContactSlotRef> parCompContactSlots;
+    public Vector<u32> parFlatJointIds;
+    public Vector<u32> parFlatJointComps;
+    public Vector<u32> parCompJointOffsets;
+    public Vector<u32> parCompJointIndices;
+    public Vector<u32> parCursors;
+    public Vector<u32> parCompScores;
+    public Vector<usize> parCompOrder;
+    public Vector<Vector<usize>> parBuckets;
+    public Vector<u64> parBucketLoads;
 
     public void clear(){
         this.candidateKeys.clear();
@@ -36,6 +66,32 @@ class PhysicsWorldCpuScratch{
         this.jointConstraints.clear();
         this.awakeIndices.clear();
         this.brokenJointIds.clear();
+        this.islandsToSleep.clear();
+        this.candidateSplitIslands.clear();
+        this.parAwakeToLocal.clear();
+        this.parDynAwakeIndices.clear();
+        this.parKinAwakeIndices.clear();
+        this.parDsuParents.clear();
+        this.parDsuRanks.clear();
+        this.parRootToComp.clear();
+        this.parDynBodyComps.clear();
+        this.parCompBodyOffsets.clear();
+        this.parCompBodyCursors.clear();
+        this.parCompBodyIndices.clear();
+        this.parFlatContactSlots.clear();
+        this.parFlatContactComps.clear();
+        this.parCompContactOffsets.clear();
+        this.parCompContactSlots.clear();
+        this.parFlatJointIds.clear();
+        this.parFlatJointComps.clear();
+        this.parCompJointOffsets.clear();
+        this.parCompJointIndices.clear();
+        this.parCursors.clear();
+        this.parCompScores.clear();
+        this.parCompOrder.clear();
+        for(usize b = 0u; b < this.parBuckets.size(); ++b)
+            this.parBuckets[b].clear();
+        this.parBucketLoads.clear();
     }
 }
 
@@ -80,6 +136,7 @@ class PhysicsWorld{
     public u64 m_topologyVersion = 1u;
     public u64 m_worldGeneration = 1u;
     public b8 m_inStep = false;
+    private b8 m_hasDirtyBodyMass = false;
     public Vector<ContactEndTouchEvent> m_pendingContactEndEvents;
     public Vector<SensorEndTouchEvent> m_pendingSensorEndEvents;
 
@@ -130,6 +187,7 @@ class PhysicsWorld{
         this.m_pendingContactEndEvents.clear();
         this.m_pendingSensorEndEvents.clear();
         this.m_inStep = false;
+        this.m_hasDirtyBodyMass = false;
         ++this.m_worldGeneration;
         this.m_lastStats = WorldStepStats();
         this.m_customFilterCallback.reset();
@@ -728,7 +786,6 @@ class PhysicsWorld{
         ++body.shapeCount;
 
         in BodySim bodySim = this.m_solverSets[body.setIndex].sims[body.localIndex];
-        shape.localAabb = ComputeShapeLocalAabb(shape, this.m_hullShapes, this.m_meshShapes);
         shape.aabb = ComputeShapeWorldAabb(shape, bodySim.transform, this.m_hullShapes, this.m_meshShapes);
 
         if(body.setIndex != s_DisabledSetIndex){
@@ -763,8 +820,10 @@ class PhysicsWorld{
 
         if(def.updateBodyMass)
             this.updateBodyMassInternal(bodyId.index);
-        else
+        else{
             this.m_bodies[bodyId.index].flags |= cast<u32>(BodyFlags::DirtyMass);
+            this.m_hasDirtyBodyMass = true;
+        }
 
         ++this.m_topologyVersion;
         return this.makeShapeId(shapeIdx);
@@ -862,6 +921,7 @@ class PhysicsWorld{
             }
             else{
                 this.m_bodies[bodyIdx].flags |= cast<u32>(BodyFlags::DirtyMass);
+                this.m_hasDirtyBodyMass = true;
                 this.syncBodyFlagsToSimAndState(bodyIdx);
             }
         }
@@ -914,8 +974,9 @@ class PhysicsWorld{
                     shapeMasses.push_back(md);
                 }
             }
-            minLocal = Min(minLocal, VectorSingle(shape.localAabb.lowerBound));
-            maxLocal = Max(maxLocal, VectorSingle(shape.localAabb.upperBound));
+            const Aabb3D localBox = ComputeShapeLocalAabb(shape, this.m_hullShapes, this.m_meshShapes);
+            minLocal = Min(minLocal, VectorSingle(localBox.lowerBound));
+            maxLocal = Max(maxLocal, VectorSingle(localBox.upperBound));
             shapeIdx = shape.nextShapeId;
         }
 
@@ -1249,10 +1310,13 @@ class PhysicsWorld{
     }
 
     public void flushDirtyBodyMasses(){
+        if(!this.m_hasDirtyBodyMass)
+            return;
         for(u32 i = 0u; i < this.m_bodies.size(); ++i){
             if(this.m_bodies[i].alive && (this.m_bodies[i].flags & cast<u32>(BodyFlags::DirtyMass)) != 0u)
                 this.updateBodyMassInternal(i);
         }
+        this.m_hasDirtyBodyMass = false;
     }
 
     public b8 setBodyMassData(in BodyId bodyId, in MassData massData){
@@ -1571,6 +1635,8 @@ class PhysicsWorld{
     public b8 setShapeEnableContactEvents(in ShapeId shapeId, in b8 enabled){
         if(!this.isValidShape(shapeId))
             return false;
+        if(this.m_shapes[shapeId.index].enableContactEvents() == enabled)
+            return true;
         this.m_shapes[shapeId.index].setFlag(ShapeFlags::EnableContactEvents, enabled);
         this.refreshShapeContactEventFlags(shapeId.index);
         return true;
@@ -1579,6 +1645,8 @@ class PhysicsWorld{
     public b8 setShapeEnableHitEvents(in ShapeId shapeId, in b8 enabled){
         if(!this.isValidShape(shapeId))
             return false;
+        if(this.m_shapes[shapeId.index].enableHitEvents() == enabled)
+            return true;
         this.m_shapes[shapeId.index].setFlag(ShapeFlags::EnableHitEvents, enabled);
         this.refreshShapeContactEventFlags(shapeId.index);
         return true;
@@ -1587,6 +1655,8 @@ class PhysicsWorld{
     public b8 setShapeEnableSensorEvents(in ShapeId shapeId, in b8 enabled){
         if(!this.isValidShape(shapeId))
             return false;
+        if(this.m_shapes[shapeId.index].enableSensorEvents() == enabled)
+            return true;
         this.m_shapes[shapeId.index].setFlag(ShapeFlags::EnableSensorEvents, enabled);
         this.refreshShapeContactEventFlags(shapeId.index);
         return true;
@@ -1595,6 +1665,8 @@ class PhysicsWorld{
     public b8 setShapeEnablePreSolveEvents(in ShapeId shapeId, in b8 enabled){
         if(!this.isValidShape(shapeId))
             return false;
+        if(this.m_shapes[shapeId.index].enablePreSolveEvents() == enabled)
+            return true;
         this.m_shapes[shapeId.index].setFlag(ShapeFlags::EnablePreSolveEvents, enabled);
         return true;
     }
@@ -1627,6 +1699,14 @@ class PhysicsWorld{
             return false;
 
         const u32 shapeIdx = shapeId.index;
+        in SurfaceMaterial curMat = this.m_shapes[shapeIdx].material;
+        if(
+            curMat.friction == material.friction
+            && curMat.restitution == material.restitution
+            && curMat.rollingResistance == material.rollingResistance
+            && curMat.tangentSpeed == material.tangentSpeed
+        )
+            return true;
         this.m_shapes[shapeIdx].material = material;
         const u32 bodyIdx = this.m_shapes[shapeIdx].bodyId;
         if(bodyIdx < this.m_bodies.size()){
@@ -1655,6 +1735,9 @@ class PhysicsWorld{
             return false;
 
         const u32 shapeIdx = shapeId.index;
+        in Filter curFilter = this.m_shapes[shapeIdx].filter;
+        if(curFilter.categoryBits == filter.categoryBits && curFilter.maskBits == filter.maskBits && curFilter.groupIndex == filter.groupIndex)
+            return true;
         this.m_shapes[shapeIdx].filter = filter;
         const u32 bodyIdx = this.m_shapes[shapeIdx].bodyId;
         if(bodyIdx < this.m_bodies.size() && this.m_bodies[bodyIdx].alive){
@@ -1738,13 +1821,20 @@ class PhysicsWorld{
         if(!this.isValidShape(shapeId) || !IsFinite(density) || density < 0.0f)
             return false;
         const u32 shapeIdx = shapeId.index;
-        this.m_shapes[shapeIdx].density = density;
         const u32 bodyIdx = this.m_shapes[shapeIdx].bodyId;
+        if(this.m_shapes[shapeIdx].density == density){
+            if(!updateBodyMass || bodyIdx >= this.m_bodies.size() || !this.m_bodies[bodyIdx].alive || (this.m_bodies[bodyIdx].flags & cast<u32>(BodyFlags::DirtyMass)) == 0u)
+                return true;
+        }
+        this.m_shapes[shapeIdx].density = density;
         if(bodyIdx < this.m_bodies.size() && this.m_bodies[bodyIdx].alive){
-            if(updateBodyMass)
+            if(updateBodyMass){
                 this.updateBodyMassInternal(bodyIdx);
-            else
+            }
+            else{
                 this.m_bodies[bodyIdx].flags |= cast<u32>(BodyFlags::DirtyMass);
+                this.m_hasDirtyBodyMass = true;
+            }
         }
         return true;
     }
@@ -1760,17 +1850,19 @@ class PhysicsWorld{
 
         in Body body = this.m_bodies[bodyIdx];
         in Transform3D xf = this.m_solverSets[body.setIndex].sims[body.localIndex].transform;
-        this.m_shapes[shapeIdx].localAabb = ComputeShapeLocalAabb(this.m_shapes[shapeIdx], this.m_hullShapes, this.m_meshShapes);
         this.m_shapes[shapeIdx].aabb = ComputeShapeWorldAabb(this.m_shapes[shapeIdx], xf, this.m_hullShapes, this.m_meshShapes);
         if(this.m_shapes[shapeIdx].proxyKey != s_NullIndex)
             this.m_broadPhase.moveProxy(this.m_shapes[shapeIdx].proxyKey, this.m_shapes[shapeIdx].aabb, VectorSingle(0.0f));
         if(body.type == BodyType::Static)
             this.wakeOverlappingSleepingBodies(this.m_shapes[shapeIdx].aabb, bodyIdx);
 
-        if(updateBodyMass)
+        if(updateBodyMass){
             this.updateBodyMassInternal(bodyIdx);
-        else
+        }
+        else{
             this.m_bodies[bodyIdx].flags |= cast<u32>(BodyFlags::DirtyMass);
+            this.m_hasDirtyBodyMass = true;
+        }
         ++this.m_topologyVersion;
     }
 
@@ -2933,8 +3025,25 @@ class PhysicsWorld{
     }
 
     public u32 createContactInternal(in u32 shapeIdA, in u32 shapeIdB){
-        if(shapeIdA >= this.m_shapes.size() || shapeIdB >= this.m_shapes.size())
+        if(shapeIdA >= this.m_shapes.size() || shapeIdB >= this.m_shapes.size() || shapeIdA == shapeIdB)
             return s_NullIndex;
+
+        const u64 pairKey = PackUnorderedU32Pair(cast<isize>(shapeIdA), cast<isize>(shapeIdB));
+        const auto existing = this.m_pairContactMap.find(pairKey);
+        if(existing != this.m_pairContactMap.end()){
+            if(!this.m_customFilterCallback.has_value())
+                return existing.value();
+            u32 ordA = shapeIdA;
+            u32 ordB = shapeIdB;
+            if(shapeIdB < shapeIdA){
+                ordA = shapeIdB;
+                ordB = shapeIdA;
+            }
+            if(this.m_customFilterCallback.value()(this.makeShapeId(ordA), this.makeShapeId(ordB)))
+                return existing.value();
+            return s_NullIndex;
+        }
+
         in Shape sA = this.m_shapes[shapeIdA];
         in Shape sB = this.m_shapes[shapeIdB];
         if(!sA.alive() || !sB.alive() || sA.bodyId == sB.bodyId)
@@ -2962,11 +3071,6 @@ class PhysicsWorld{
             if(!this.m_customFilterCallback.value()(this.makeShapeId(orderedA), this.makeShapeId(orderedB)))
                 return s_NullIndex;
         }
-
-        const u64 pairKey = PackUnorderedU32Pair(cast<isize>(shapeIdA), cast<isize>(shapeIdB));
-        const auto existing = this.m_pairContactMap.find(pairKey);
-        if(existing != this.m_pairContactMap.end())
-            return existing.value();
 
         u32 cId = s_NullIndex;
         if(!this.m_freeContactIds.empty()){
@@ -3402,12 +3506,12 @@ class PhysicsWorld{
                 return false;
             const f32 r = Max(mesh.radius(), 1.0e-4f);
             const f32 rSq = r * r;
-            Vector<u32> stack;
-            stack.reserve(64u);
-            stack.push_back(0u);
-            while(!stack.empty()){
-                const u32 nodeIdx = stack[stack.size() - 1u];
-                stack.pop_back();
+            Array<u32, 256u> stack;
+            stack[0u] = 0u;
+            u32 stackCount = 1u;
+            while(stackCount > 0u){
+                --stackCount;
+                const u32 nodeIdx = stack[stackCount];
                 in MeshBvhNode node = mesh.nodes[nodeIdx];
                 if(!AabbContains(FattenAabb(node.aabb(), r), Aabb3D(localPt, localPt)))
                     continue;
@@ -3421,8 +3525,14 @@ class PhysicsWorld{
                     }
                 }
                 else{
-                    stack.push_back(node.leftOrFirst());
-                    stack.push_back(node.rightOrCount());
+                    if(stackCount < 256u){
+                        stack[stackCount] = node.leftOrFirst();
+                        ++stackCount;
+                    }
+                    if(stackCount < 256u){
+                        stack[stackCount] = node.rightOrCount();
+                        ++stackCount;
+                    }
                 }
             }
             if(mesh.isClosed() && IsPointInsideClosedMesh(mesh, localPt))
@@ -3536,12 +3646,12 @@ class PhysicsWorld{
                         const VectorSingle crVec(combR, combR, combR, 0.0f);
                         const Aabb3D localBox(lMin - crVec, lMax + crVec);
 
-                        Vector<u32> stack;
-                        stack.reserve(64u);
-                        stack.push_back(0u);
-                        while(!stack.empty()){
-                            const u32 nodeIdx = stack[stack.size() - 1u];
-                            stack.pop_back();
+                        Array<u32, 256u> stack;
+                        stack[0u] = 0u;
+                        u32 stackCount = 1u;
+                        while(stackCount > 0u){
+                            --stackCount;
+                            const u32 nodeIdx = stack[stackCount];
                             in MeshBvhNode node = mesh.nodes[nodeIdx];
                             if(!AabbOverlaps(node.aabb(), localBox))
                                 continue;
@@ -3564,8 +3674,14 @@ class PhysicsWorld{
                                 }
                             }
                             else{
-                                stack.push_back(node.leftOrFirst());
-                                stack.push_back(node.rightOrCount());
+                                if(stackCount < 256u){
+                                    stack[stackCount] = node.leftOrFirst();
+                                    ++stackCount;
+                                }
+                                if(stackCount < 256u){
+                                    stack[stackCount] = node.rightOrCount();
+                                    ++stackCount;
+                                }
                             }
                         }
                         if(mesh.isClosed()){

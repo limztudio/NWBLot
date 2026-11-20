@@ -59,7 +59,7 @@ class DynamicTree{
         this.m_nodes[proxyId].aabbMinUser = f32x3_u32(fat.lowerBound.x, fat.lowerBound.y, fat.lowerBound.z, userData);
         this.m_nodes[proxyId].aabbMaxCategory = f32x3_u32(fat.upperBound.x, fat.upperBound.y, fat.upperBound.z, categoryBits);
         this.m_nodes[proxyId].height = 0;
-        this.m_nodes[proxyId].moved = true;
+        this.m_nodes[proxyId].moved = false;
         this.insertLeaf(proxyId);
         return proxyId;
     }
@@ -101,8 +101,18 @@ class DynamicTree{
         this.removeLeaf(proxyId);
         this.m_nodes[proxyId].setAabb(Aabb3D(lower, upper));
         this.insertLeaf(proxyId);
-        this.m_nodes[proxyId].moved = true;
         return true;
+    }
+
+    public b8 isMoved(in u32 proxyId)const{
+        if(proxyId >= this.m_nodes.size())
+            return false;
+        return this.m_nodes[proxyId].moved;
+    }
+
+    public void setMoved(in u32 proxyId, in b8 moved){
+        if(proxyId < this.m_nodes.size())
+            this.m_nodes[proxyId].moved = moved;
     }
 
     public Aabb3D fatAabb(in u32 proxyId)const{
@@ -124,20 +134,12 @@ class DynamicTree{
         if(this.m_root == s_NullIndex)
             return;
 
-        Array<u32, 128u> fixedStack;
+        Array<u32, 256u> fixedStack;
         fixedStack[0u] = this.m_root;
         u32 fixedCount = 1u;
-        Vector<u32> overflowStack;
-        while(fixedCount > 0u || !overflowStack.empty()){
-            u32 nodeId = s_NullIndex;
-            if(!overflowStack.empty()){
-                nodeId = overflowStack[overflowStack.size() - 1u];
-                overflowStack.pop_back();
-            }
-            else{
-                --fixedCount;
-                nodeId = fixedStack[fixedCount];
-            }
+        while(fixedCount > 0u){
+            --fixedCount;
+            const u32 nodeId = fixedStack[fixedCount];
             if(nodeId == s_NullIndex)
                 continue;
 
@@ -152,19 +154,13 @@ class DynamicTree{
                 }
             }
             else{
-                if(fixedCount < 128u){
+                if(fixedCount < 256u){
                     fixedStack[fixedCount] = node.child1;
                     ++fixedCount;
                 }
-                else{
-                    overflowStack.push_back(node.child1);
-                }
-                if(fixedCount < 128u){
+                if(fixedCount < 256u){
                     fixedStack[fixedCount] = node.child2;
                     ++fixedCount;
-                }
-                else{
-                    overflowStack.push_back(node.child2);
                 }
             }
         }
@@ -180,20 +176,12 @@ class DynamicTree{
             return;
 
         f32 maxFraction = 1.0f;
-        Array<u32, 128u> fixedStack;
+        Array<u32, 256u> fixedStack;
         fixedStack[0u] = this.m_root;
         u32 fixedCount = 1u;
-        Vector<u32> overflowStack;
-        while(fixedCount > 0u || !overflowStack.empty()){
-            u32 nodeId = s_NullIndex;
-            if(!overflowStack.empty()){
-                nodeId = overflowStack[overflowStack.size() - 1u];
-                overflowStack.pop_back();
-            }
-            else{
-                --fixedCount;
-                nodeId = fixedStack[fixedCount];
-            }
+        while(fixedCount > 0u){
+            --fixedCount;
+            const u32 nodeId = fixedStack[fixedCount];
             if(nodeId == s_NullIndex)
                 continue;
 
@@ -210,19 +198,13 @@ class DynamicTree{
                 }
             }
             else{
-                if(fixedCount < 128u){
+                if(fixedCount < 256u){
                     fixedStack[fixedCount] = node.child1;
                     ++fixedCount;
                 }
-                else{
-                    overflowStack.push_back(node.child1);
-                }
-                if(fixedCount < 128u){
+                if(fixedCount < 256u){
                     fixedStack[fixedCount] = node.child2;
                     ++fixedCount;
-                }
-                else{
-                    overflowStack.push_back(node.child2);
                 }
             }
         }

@@ -295,6 +295,10 @@ Mat3 InvertSymmetricMat3(in Mat3 a){
 }
 
 SymMat3 RotateSymMat3(in VectorSingle q, in SymMat3 localMat){
+    if(localMat.m01 == 0.0f && localMat.m02 == 0.0f && localMat.m12 == 0.0f && localMat.m00 == localMat.m11 && localMat.m11 == localMat.m22)
+        return localMat;
+    if(q.x * q.x + q.y * q.y + q.z * q.z <= 1.0e-12f)
+        return localMat;
     const Mat3 m = RotateSymmetricMat3(q, Mat3FromSymMat3(localMat));
     return SymMat3FromMat3(m);
 }

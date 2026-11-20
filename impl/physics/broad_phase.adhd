@@ -41,7 +41,6 @@ class CandidatePair{
 class BroadPhase{
     public Array<DynamicTree, s_TreeCount> trees;
     public Vector<u32> moveArray;
-    public HashSet<u32> moveSet;
     public Vector<Vector<CandidatePair>> workerBuckets;
     public Vector<CandidatePair> discoveredPairs;
 
@@ -49,7 +48,6 @@ class BroadPhase{
         for(usize i = 0u; i < s_TreeCount; ++i)
             this.trees[i].clear();
         this.moveArray.clear();
-        this.moveSet.clear();
         this.workerBuckets.clear();
         this.discoveredPairs.clear();
     }
@@ -88,13 +86,24 @@ class BroadPhase{
     }
 
     public void bufferMove(in u32 proxyKey){
-        if(this.moveSet.insert(proxyKey).second)
+        if(proxyKey == s_NullIndex)
+            return;
+        const u32 treeIdx = DecodeBroadPhaseTreeType(proxyKey);
+        const u32 proxyId = DecodeBroadPhaseProxyId(proxyKey);
+        if(!this.trees[treeIdx].isMoved(proxyId)){
+            this.trees[treeIdx].setMoved(proxyId, true);
             this.moveArray.push_back(proxyKey);
+        }
     }
 
     public void unbufferMove(in u32 proxyKey){
-        if(this.moveSet.erase(proxyKey) == 0u)
+        if(proxyKey == s_NullIndex)
             return;
+        const u32 treeIdx = DecodeBroadPhaseTreeType(proxyKey);
+        const u32 proxyId = DecodeBroadPhaseProxyId(proxyKey);
+        if(!this.trees[treeIdx].isMoved(proxyId))
+            return;
+        this.trees[treeIdx].setMoved(proxyId, false);
         for(usize i = 0u; i < this.moveArray.size(); ++i){
             if(this.moveArray[i] == proxyKey)
                 this.moveArray[i] = s_NullIndex;
@@ -102,8 +111,15 @@ class BroadPhase{
     }
 
     public void clearMoves(){
+        for(usize i = 0u; i < this.moveArray.size(); ++i){
+            const u32 proxyKey = this.moveArray[i];
+            if(proxyKey == s_NullIndex)
+                continue;
+            const u32 treeIdx = DecodeBroadPhaseTreeType(proxyKey);
+            const u32 proxyId = DecodeBroadPhaseProxyId(proxyKey);
+            this.trees[treeIdx].setMoved(proxyId, false);
+        }
         this.moveArray.clear();
-        this.moveSet.clear();
     }
 
     public Aabb3D fatAabb(in u32 proxyKey)const{

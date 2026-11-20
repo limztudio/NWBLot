@@ -183,7 +183,6 @@ class BodySim{
 class Shape{
     public f32x4 geom0(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 geom1(0.0f, 0.0f, 0.0f, 0.0f);
-    public Aabb3D localAabb;
     public Aabb3D aabb;
     public u64 userData = 0u;
     public SurfaceMaterial material;

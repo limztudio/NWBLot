@@ -1387,11 +1387,13 @@ void SolveJointConstraint(mut Vector<BodyState> states, mut JointConstraint jc, 
         }
     }
 
-    VectorSingle curLinP(0.0f);
-    VectorSingle curAngL(0.0f);
-    ComputeJointConstraintTotalImpulses(jc, curLinP, curAngL);
-    jc.setMaxLinearImpulseMag(Max(jc.maxLinearImpulseMag(), Vector3Length(curLinP).x));
-    jc.setMaxAngularImpulseMag(Max(jc.maxAngularImpulseMag(), Vector3Length(curAngL).x));
+    if(jc.breakForce > 0.0f || jc.breakTorque > 0.0f){
+        VectorSingle curLinP(0.0f);
+        VectorSingle curAngL(0.0f);
+        ComputeJointConstraintTotalImpulses(jc, curLinP, curAngL);
+        jc.setMaxLinearImpulseMag(Max(jc.maxLinearImpulseMag(), Vector3Length(curLinP).x));
+        jc.setMaxAngularImpulseMag(Max(jc.maxAngularImpulseMag(), Vector3Length(curAngL).x));
+    }
 
     if(jc.indexA != s_NullIndex && (flagsA & cast<u32>(BodyFlags::Dynamic)) != 0u){
         states[jc.indexA].linearVelocity = f32x4(ApplyLinearLocks(vA, flagsA), 0.0f);

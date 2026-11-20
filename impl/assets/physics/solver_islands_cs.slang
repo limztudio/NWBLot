@@ -45,30 +45,31 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
         if(warmStart){
             for(uint c = 0u; c < contactCount; ++c)
-                nwbPhysicsSolveSingleContact(contactOffset + c, NWB_PHYSICS_SOLVER_MODE_WARM_START, bodyStateSlot, constraintSlot, invH, NWB_PHYSICS_SOLVER_FLAG_WARM_START);
+                nwbPhysicsWarmStartContact(contactOffset + c, bodyStateSlot, constraintSlot, NWB_PHYSICS_SOLVER_FLAG_WARM_START);
         }
         else if(subStep > 0u){
             for(uint c = 0u; c < contactCount; ++c)
-                nwbPhysicsSolveSingleContact(contactOffset + c, NWB_PHYSICS_SOLVER_MODE_WARM_START, bodyStateSlot, constraintSlot, invH, 0u);
+                nwbPhysicsClearContactWarmStart(contactOffset + c, constraintSlot);
         }
 
         for(uint c = 0u; c < contactCount; ++c)
-            nwbPhysicsSolveSingleContact(contactOffset + c, NWB_PHYSICS_SOLVER_MODE_SOLVE_BIAS, bodyStateSlot, constraintSlot, invH, 0u);
+            nwbPhysicsSolveContactVelocity(contactOffset + c, true, bodyStateSlot, constraintSlot, invH);
 
         for(uint b = 0u; b < bodyCount; ++b)
             nwbPhysicsIntegrateBodyPosition(bodyStateSlot, bodyOffset + b, h);
 
         for(uint c = 0u; c < contactCount; ++c)
-            nwbPhysicsSolveSingleContact(contactOffset + c, NWB_PHYSICS_SOLVER_MODE_RELAX, bodyStateSlot, constraintSlot, invH, 0u);
+            nwbPhysicsSolveContactVelocity(contactOffset + c, false, bodyStateSlot, constraintSlot, invH);
     }
 
     if((islandFlags & NWB_PHYSICS_ISLAND_FLAG_HAS_RESTITUTION) != 0u){
         for(uint c = 0u; c < contactCount; ++c)
-            nwbPhysicsSolveSingleContact(contactOffset + c, NWB_PHYSICS_SOLVER_MODE_RESTITUTION, bodyStateSlot, constraintSlot, invH, 0u);
+            nwbPhysicsRestitutionContact(contactOffset + c, bodyStateSlot, constraintSlot);
     }
 
+    const uint impulseOutSlot = g_NwbPhysicsPushConstants.slots1.y;
     for(uint c = 0u; c < contactCount; ++c)
-        nwbPhysicsSolveSingleContact(contactOffset + c, NWB_PHYSICS_SOLVER_MODE_EXPORT_IMPULSES, bodyStateSlot, constraintSlot, invH, 0u);
+        nwbPhysicsExportContactImpulses(contactOffset + c, constraintSlot, impulseOutSlot);
 
     for(uint b = 0u; b < bodyCount; ++b)
         nwbPhysicsFinalizeBodyToOut(bodySimSlot, bodyStateSlot, bodyOutSlot, bodyOffset + b, dt);

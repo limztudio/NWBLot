@@ -4,6 +4,10 @@
 
 #include "physics_common.slangi"
 
+#ifndef NWB_PHYSICS_NP_PROFILE
+#define NWB_PHYSICS_NP_PROFILE 0
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -143,6 +147,414 @@ void nwbPhysicsGetBoxFace(
     outVerts[3] = fc - eu + ev;
 }
 
+float nwbPhysicsClipIntervalAxis(const float p0, const float d, const float hExt, inout float tMin, inout float tMax){
+    if(abs(d) < 1.0e-8f){
+        if(p0 < -hExt || p0 > hExt){
+            tMin = 1.0f;
+            tMax = 0.0f;
+        }
+        return 0.0f;
+    }
+    float t0 = (-hExt - p0) / d;
+    float t1 = (hExt - p0) / d;
+    if(t0 > t1){
+        const float tmp = t0;
+        t0 = t1;
+        t1 = tmp;
+    }
+    tMin = max(tMin, t0);
+    tMax = min(tMax, t1);
+    return 1.0f;
+}
+
+void nwbPhysicsComputeBasis(const float3 n, out float3 outU1, out float3 outU2){
+    const float3 up = abs(n.y) < 0.9f ? float3(0.0f, 1.0f, 0.0f) : float3(1.0f, 0.0f, 0.0f);
+    outU1 = nwbPhysicsSafeNormal(cross(up, n), float3(1.0f, 0.0f, 0.0f));
+    outU2 = cross(n, outU1);
+}
+
+#if NWB_PHYSICS_NP_PROFILE == 0
+uint nwbPhysicsClipBoxQuadPlane8(
+    const float3 inPts[8],
+    const uint inCount,
+    const float3 planeNormal,
+    const float planeOffset,
+    out float3 outPts[8]
+){
+    for(uint k = 0u; k < 8u; ++k)
+        outPts[k] = float3(0.0f, 0.0f, 0.0f);
+    uint outCount = 0u;
+    if(inCount == 0u)
+        return 0u;
+
+    float3 prevPt = inPts[inCount - 1u];
+    float prevDist = dot(planeNormal, prevPt) - planeOffset;
+
+    for(uint i = 0u; i < inCount; ++i){
+        const float3 curPt = inPts[i];
+        const float curDist = dot(planeNormal, curPt) - planeOffset;
+
+        if(curDist <= 0.0f){
+            if(prevDist > 0.0f){
+                const float denom = prevDist - curDist;
+                const float t = abs(denom) > 1.0e-12f ? (prevDist / denom) : 0.0f;
+                if(outCount < 8u){
+                    outPts[outCount] = lerp(prevPt, curPt, clamp(t, 0.0f, 1.0f));
+                    ++outCount;
+                }
+            }
+            if(outCount < 8u){
+                outPts[outCount] = curPt;
+                ++outCount;
+            }
+        }
+        else if(prevDist <= 0.0f){
+            const float denom = prevDist - curDist;
+            const float t = abs(denom) > 1.0e-12f ? (prevDist / denom) : 0.0f;
+            if(outCount < 8u){
+                outPts[outCount] = lerp(prevPt, curPt, clamp(t, 0.0f, 1.0f));
+                ++outCount;
+            }
+        }
+
+        prevPt = curPt;
+        prevDist = curDist;
+    }
+    return outCount;
+}
+
+void nwbPhysicsReduceBoxManifoldTo4(
+    const float3 clipRefN,
+    const float3 candWRef[8],
+    const float3 candWInc[8],
+    const float3 candPos[8],
+    const float candSep[8],
+    const uint candFeat[8],
+    const uint candCount,
+    const bool refIsA,
+    const float3 bodyPosA,
+    const float3 bodyPosB,
+    inout NwbPhysicsGpuNarrowphaseManifold result
+){
+    uint outIndices[4] = { 0u, 1u, 2u, 3u };
+    uint outCount = candCount;
+    if(candCount > NWB_PHYSICS_MAX_MANIFOLD_POINTS){
+        uint idx0 = 0u;
+        for(uint i = 1u; i < candCount; ++i){
+            if(candSep[i] < candSep[idx0])
+                idx0 = i;
+        }
+
+        uint idx1 = 0u;
+        float bestDistSq1 = -1.0f;
+        const float3 p0 = candPos[idx0];
+        for(uint i = 0u; i < candCount; ++i){
+            const float3 diff = candPos[i] - p0;
+            const float dSq = dot(diff, diff);
+            if(dSq > bestDistSq1){
+                bestDistSq1 = dSq;
+                idx1 = i;
+            }
+        }
+
+        uint idx2 = 0u;
+        float bestArea2 = -1.0f;
+        const float3 p1 = candPos[idx1];
+        const float3 e01 = p1 - p0;
+        for(uint i = 0u; i < candCount; ++i){
+            if(i == idx0 || i == idx1)
+                continue;
+            const float area = abs(dot(cross(e01, candPos[i] - p0), clipRefN));
+            if(area > bestArea2){
+                bestArea2 = area;
+                idx2 = i;
+            }
+        }
+
+        uint idx3 = 0u;
+        float bestOutsideArea = -1.0f;
+        uint fallbackIdx3 = 0u;
+        float bestFallbackArea = -1.0f;
+        const float3 p2 = candPos[idx2];
+        const float baseSign = dot(cross(e01, p2 - p0), clipRefN);
+        for(uint i = 0u; i < candCount; ++i){
+            if(i == idx0 || i == idx1 || i == idx2)
+                continue;
+            const float3 pi = candPos[i];
+            const float a0 = dot(cross(p1 - p0, pi - p0), clipRefN);
+            const float a1 = dot(cross(p2 - p1, pi - p1), clipRefN);
+            const float a2 = dot(cross(p0 - p2, pi - p2), clipRefN);
+            const float maxAbs = max(abs(a0), max(abs(a1), abs(a2)));
+            if(maxAbs > bestFallbackArea){
+                bestFallbackArea = maxAbs;
+                fallbackIdx3 = i;
+            }
+            float outsideArea = -1.0f;
+            if(baseSign >= 0.0f){
+                if(a0 < 0.0f && -a0 > outsideArea) outsideArea = -a0;
+                if(a1 < 0.0f && -a1 > outsideArea) outsideArea = -a1;
+                if(a2 < 0.0f && -a2 > outsideArea) outsideArea = -a2;
+            }
+            else{
+                if(a0 > 0.0f && a0 > outsideArea) outsideArea = a0;
+                if(a1 > 0.0f && a1 > outsideArea) outsideArea = a1;
+                if(a2 > 0.0f && a2 > outsideArea) outsideArea = a2;
+            }
+            if(outsideArea > bestOutsideArea){
+                bestOutsideArea = outsideArea;
+                idx3 = i;
+            }
+        }
+        if(bestOutsideArea < 0.0f)
+            idx3 = fallbackIdx3;
+
+        outIndices[0] = idx0;
+        outIndices[1] = idx1;
+        outIndices[2] = idx2;
+        outIndices[3] = idx3;
+        outCount = NWB_PHYSICS_MAX_MANIFOLD_POINTS;
+    }
+
+    for(uint k = 0u; k < outCount; ++k){
+        const uint ci = outIndices[k];
+        const float3 wA = refIsA ? candWRef[ci] : candWInc[ci];
+        const float3 wB = refIsA ? candWInc[ci] : candWRef[ci];
+        result.anchorAFeature[k] = float4(wA - bodyPosA, asfloat(candFeat[ci]));
+        result.anchorBSeparation[k] = float4(wB - bodyPosB, candSep[ci]);
+    }
+    result.pairInfo.z = outCount;
+}
+
+void nwbPhysicsCollideBoxes(
+    const NwbPhysicsGpuShapeProxy proxyA,
+    const float3 originA,
+    const float4 rotA,
+    const float3 bodyPosA,
+    const NwbPhysicsGpuShapeProxy proxyB,
+    const float3 originB,
+    const float4 rotB,
+    const float3 bodyPosB,
+    const float maxDist,
+    inout NwbPhysicsGpuNarrowphaseManifold result
+){
+    const float3 cA = originA + nwbPhysicsQuatRotate(proxyA.localCenterRadius.xyz, rotA);
+    const float4 qA = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rotA, proxyA.localRotation));
+    const float3 hA = proxyA.localExtentOrP1.xyz;
+    const float rA = proxyA.localCenterRadius.w;
+
+    const float3 cB = originB + nwbPhysicsQuatRotate(proxyB.localCenterRadius.xyz, rotB);
+    const float4 qB = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rotB, proxyB.localRotation));
+    const float3 hB = proxyB.localExtentOrP1.xyz;
+    const float rB = proxyB.localCenterRadius.w;
+
+    const float3 axA = nwbPhysicsQuatRotate(float3(1.0f, 0.0f, 0.0f), qA);
+    const float3 ayA = nwbPhysicsQuatRotate(float3(0.0f, 1.0f, 0.0f), qA);
+    const float3 azA = nwbPhysicsQuatRotate(float3(0.0f, 0.0f, 1.0f), qA);
+    const float3 axB = nwbPhysicsQuatRotate(float3(1.0f, 0.0f, 0.0f), qB);
+    const float3 ayB = nwbPhysicsQuatRotate(float3(0.0f, 1.0f, 0.0f), qB);
+    const float3 azB = nwbPhysicsQuatRotate(float3(0.0f, 0.0f, 1.0f), qB);
+
+    const float3 axesA[3] = { axA, ayA, azA };
+    const float3 axesB[3] = { axB, ayB, azB };
+    const float halfA[3] = { hA.x, hA.y, hA.z };
+    const float halfB[3] = { hB.x, hB.y, hB.z };
+
+    const float3 dCenter = cB - cA;
+    const float totalR = rA + rB;
+
+    const float3 tVec = float3(dot(dCenter, axA), dot(dCenter, ayA), dot(dCenter, azA));
+    const float r00 = dot(axA, axB);
+    const float r01 = dot(axA, ayB);
+    const float r02 = dot(axA, azB);
+    const float r10 = dot(ayA, axB);
+    const float r11 = dot(ayA, ayB);
+    const float r12 = dot(ayA, azB);
+    const float r20 = dot(azA, axB);
+    const float r21 = dot(azA, ayB);
+    const float r22 = dot(azA, azB);
+
+    const float R[3][3] = {
+        { r00, r01, r02 },
+        { r10, r11, r12 },
+        { r20, r21, r22 }
+    };
+    const float absR[3][3] = {
+        { abs(r00), abs(r01), abs(r02) },
+        { abs(r10), abs(r11), abs(r12) },
+        { abs(r20), abs(r21), abs(r22) }
+    };
+    const float tArr[3] = { tVec.x, tVec.y, tVec.z };
+
+    int bestAxis = -1;
+    float bestSep = -1.0e20f;
+    float3 bestNormal = float3(0.0f, 1.0f, 0.0f);
+
+    for(int i = 0; i < 3; ++i){
+        const float signedProj = tArr[i];
+        const float rBProj = hB.x * absR[i][0] + hB.y * absR[i][1] + hB.z * absR[i][2];
+        const float sep = abs(signedProj) - (halfA[i] + rBProj) - totalR;
+        if(sep > maxDist)
+            return;
+        if(sep > bestSep){
+            bestSep = sep;
+            bestAxis = i;
+            bestNormal = (signedProj < 0.0f) ? -axesA[i] : axesA[i];
+        }
+    }
+
+    for(int j = 0; j < 3; ++j){
+        const float signedProj = tVec.x * R[0][j] + tVec.y * R[1][j] + tVec.z * R[2][j];
+        const float rAProj = hA.x * absR[0][j] + hA.y * absR[1][j] + hA.z * absR[2][j];
+        const float sep = abs(signedProj) - (rAProj + halfB[j]) - totalR;
+        if(sep > maxDist)
+            return;
+        if(sep > bestSep + 1.0e-4f){
+            bestSep = sep;
+            bestAxis = 3 + j;
+            bestNormal = (signedProj < 0.0f) ? -axesB[j] : axesB[j];
+        }
+    }
+
+    for(int i = 0; i < 3; ++i){
+        const int i1 = (i + 1) % 3;
+        const int i2 = (i + 2) % 3;
+        for(int j = 0; j < 3; ++j){
+            const int j1 = (j + 1) % 3;
+            const int j2 = (j + 2) % 3;
+            const float c1 = R[i1][j];
+            const float c2 = R[i2][j];
+            const float lenSq = c1 * c1 + c2 * c2;
+            if(lenSq < 1.0e-5f)
+                continue;
+            const float invLen = rsqrt(lenSq);
+            const float signedProj = tArr[i2] * c1 - tArr[i1] * c2;
+            const float rAU = halfA[i1] * absR[i2][j] + halfA[i2] * absR[i1][j];
+            const float rBU = halfB[j1] * absR[i][j2] + halfB[j2] * absR[i][j1];
+            const float sep = (abs(signedProj) - (rAU + rBU)) * invLen - totalR;
+            if(sep > maxDist)
+                return;
+            if(sep > bestSep + 5.0e-4f){
+                bestSep = sep;
+                bestAxis = 6 + i * 3 + j;
+                float3 n = (axesA[i2] * c1 - axesA[i1] * c2) * invLen;
+                if(signedProj < 0.0f)
+                    n = -n;
+                bestNormal = n;
+            }
+        }
+    }
+
+    if(bestAxis >= 6){
+        float3 pA = cA;
+        float3 pB = cB;
+        for(int k = 0; k < 3; ++k){
+            if(k != (bestAxis - 6) / 3)
+                pA += axesA[k] * ((dot(axesA[k], bestNormal) >= 0.0f ? 1.0f : -1.0f) * halfA[k]);
+            if(k != (bestAxis - 6) % 3)
+                pB += axesB[k] * ((dot(axesB[k], bestNormal) <= 0.0f ? 1.0f : -1.0f) * halfB[k]);
+        }
+        const float3 eA = axesA[(bestAxis - 6) / 3];
+        const float3 eB = axesB[(bestAxis - 6) % 3];
+        const float hEA = halfA[(bestAxis - 6) / 3];
+        const float hEB = halfB[(bestAxis - 6) % 3];
+        float s = 0.0f;
+        float t = 0.0f;
+        float3 cEdgeA;
+        float3 cEdgeB;
+        nwbPhysicsClosestPointsSegments(pA - eA * hEA, pA + eA * hEA, pB - eB * hEB, pB + eB * hEB, s, t, cEdgeA, cEdgeB);
+        result.pairInfo.z = 1u;
+        result.normalPad = float4(bestNormal, 0.0f);
+        result.anchorAFeature[0] = float4(cEdgeA + bestNormal * rA - bodyPosA, asfloat(uint(100 + bestAxis)));
+        result.anchorBSeparation[0] = float4(cEdgeB - bestNormal * rB - bodyPosB, bestSep);
+        return;
+    }
+
+    const bool refIsA = (bestAxis < 3);
+    const float3 refNormal = refIsA ? bestNormal : -bestNormal;
+    const float3 refCenter = refIsA ? cA : cB;
+    const float3 incCenter = refIsA ? cB : cA;
+    const float3 refAxes[3] = { refIsA ? axA : axB, refIsA ? ayA : ayB, refIsA ? azA : azB };
+    const float3 incAxes[3] = { refIsA ? axB : axA, refIsA ? ayB : ayA, refIsA ? azB : azA };
+    const float refH[3] = { refIsA ? hA.x : hB.x, refIsA ? hA.y : hB.y, refIsA ? hA.z : hB.z };
+    const float incH[3] = { refIsA ? hB.x : hA.x, refIsA ? hB.y : hA.y, refIsA ? hB.z : hA.z };
+
+    int refFace = 0;
+    float bestRefDot = -2.0f;
+    for(int k = 0; k < 3; ++k){
+        const float d = dot(refAxes[k], refNormal);
+        if(d > bestRefDot){
+            bestRefDot = d;
+            refFace = k * 2;
+        }
+        if(-d > bestRefDot){
+            bestRefDot = -d;
+            refFace = k * 2 + 1;
+        }
+    }
+
+    int incFace = 0;
+    float bestIncDot = 2.0f;
+    for(int k = 0; k < 3; ++k){
+        const float d = dot(incAxes[k], refNormal);
+        if(d < bestIncDot){
+            bestIncDot = d;
+            incFace = k * 2;
+        }
+        if(-d < bestIncDot){
+            bestIncDot = -d;
+            incFace = k * 2 + 1;
+        }
+    }
+
+    float3 poly0[8];
+    float3 poly1[8];
+    for(uint p = 0u; p < 8u; ++p){
+        poly0[p] = float3(0.0f, 0.0f, 0.0f);
+        poly1[p] = float3(0.0f, 0.0f, 0.0f);
+    }
+    float3 incVerts[4];
+    nwbPhysicsGetBoxFace(incCenter, incAxes[0], incAxes[1], incAxes[2], float3(incH[0], incH[1], incH[2]), incFace, incVerts);
+    for(uint p = 0u; p < 4u; ++p)
+        poly0[p] = incVerts[p];
+    uint polyCount = 4u;
+
+    const int refAxisIdx = refFace / 2;
+    const int uIdx = (refAxisIdx + 1) % 3;
+    const int vIdx = (refAxisIdx + 2) % 3;
+    const float3 uAxis = refAxes[uIdx];
+    const float3 vAxis = refAxes[vIdx];
+    const float3 clipRefN = refAxes[refAxisIdx] * ((refFace % 2 == 0) ? 1.0f : -1.0f);
+    const float refPlaneDist = dot(clipRefN, refCenter) + refH[refAxisIdx];
+
+    polyCount = nwbPhysicsClipBoxQuadPlane8(poly0, polyCount, uAxis, dot(uAxis, refCenter) + refH[uIdx], poly1);
+    polyCount = nwbPhysicsClipBoxQuadPlane8(poly1, polyCount, -uAxis, dot(-uAxis, refCenter) + refH[uIdx], poly0);
+    polyCount = nwbPhysicsClipBoxQuadPlane8(poly0, polyCount, vAxis, dot(vAxis, refCenter) + refH[vIdx], poly1);
+    polyCount = nwbPhysicsClipBoxQuadPlane8(poly1, polyCount, -vAxis, dot(-vAxis, refCenter) + refH[vIdx], poly0);
+
+    float3 candWRef[8];
+    float3 candWInc[8];
+    float3 candPos[8];
+    float candSep[8];
+    uint candFeat[8];
+    uint candCount = 0u;
+    for(uint p = 0u; p < polyCount && candCount < 8u; ++p){
+        const float sep = dot(clipRefN, poly0[p]) - refPlaneDist - totalR;
+        if(sep <= maxDist){
+            candWRef[candCount] = poly0[p] - clipRefN * (sep + totalR - (refIsA ? rA : rB));
+            candWInc[candCount] = poly0[p] - clipRefN * (refIsA ? rB : rA);
+            candPos[candCount] = poly0[p];
+            candSep[candCount] = sep;
+            candFeat[candCount] = uint(200u + p);
+            ++candCount;
+        }
+    }
+
+    result.normalPad = float4(bestNormal, 0.0f);
+    nwbPhysicsReduceBoxManifoldTo4(clipRefN, candWRef, candWInc, candPos, candSep, candFeat, candCount, refIsA, bodyPosA, bodyPosB, result);
+}
+#endif
+
+#if NWB_PHYSICS_NP_PROFILE == 1
 uint nwbPhysicsClipPolygonPlane(
     const float3 inPts[16],
     const uint inCount,
@@ -191,26 +603,9 @@ uint nwbPhysicsClipPolygonPlane(
     }
     return outCount;
 }
+#endif
 
-float nwbPhysicsClipIntervalAxis(const float p0, const float d, const float hExt, inout float tMin, inout float tMax){
-    if(abs(d) < 1.0e-8f){
-        if(p0 < -hExt || p0 > hExt){
-            tMin = 1.0f;
-            tMax = 0.0f;
-        }
-        return 0.0f;
-    }
-    float t0 = (-hExt - p0) / d;
-    float t1 = (hExt - p0) / d;
-    if(t0 > t1){
-        const float tmp = t0;
-        t0 = t1;
-        t1 = tmp;
-    }
-    tMin = max(tMin, t0);
-    tMax = min(tMax, t1);
-    return 1.0f;
-}
+#if NWB_PHYSICS_NP_PROFILE != 0
 
 void nwbPhysicsSolveSimplex2(inout float3 sW[4], inout float3 sWA[4], inout float3 sWB[4], inout uint sIdxA[4], inout uint sIdxB[4], inout float sU[4], inout uint count){
     const float3 a = sW[0];
@@ -408,79 +803,50 @@ void nwbPhysicsSolveSimplex4(
     uint bestCount = 1u;
     float bestDistSq = dot(d, d);
 
-    if(outABD){
-        float3 cW[4] = { a, b, d, float3(0.0f, 0.0f, 0.0f) };
-        float3 cWA[4] = { wAA, wAB, wAD, float3(0.0f, 0.0f, 0.0f) };
-        float3 cWB[4] = { wBA, wBB, wBD, float3(0.0f, 0.0f, 0.0f) };
-        uint cIdxA[4] = { iAA, iAB, iAD, 0u };
-        uint cIdxB[4] = { iBA, iBB, iBD, 0u };
-        float cU[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-        uint cCount = 3u;
-        nwbPhysicsSolveSimplex3(cW, cWA, cWB, cIdxA, cIdxB, cU, cCount);
-        float3 p = float3(0.0f, 0.0f, 0.0f);
-        for(uint k = 0u; k < cCount; ++k)
-            p += cW[k] * cU[k];
-        const float dSq = dot(p, p);
-        if(dSq < bestDistSq){
-            bestDistSq = dSq;
-            bestCount = cCount;
-            for(uint k = 0u; k < 4u; ++k){
-                bestW[k] = cW[k]; bestWA[k] = cWA[k]; bestWB[k] = cWB[k];
-                bestIdxA[k] = cIdxA[k]; bestIdxB[k] = cIdxB[k]; bestU[k] = cU[k];
-            }
+    float3 cW[4];
+    float3 cWA[4];
+    float3 cWB[4];
+    uint cIdxA[4];
+    uint cIdxB[4];
+    float cU[4];
+    const bool faceActive[4] = { outABD, outACD, outBCD, abs(signDet) <= 1.0e-10f && outABC };
+    for(uint face = 0u; face < 4u; ++face){
+        if(!faceActive[face])
+            continue;
+        if(face == 0u){
+            cW[0] = a; cW[1] = b; cW[2] = d;
+            cWA[0] = wAA; cWA[1] = wAB; cWA[2] = wAD;
+            cWB[0] = wBA; cWB[1] = wBB; cWB[2] = wBD;
+            cIdxA[0] = iAA; cIdxA[1] = iAB; cIdxA[2] = iAD;
+            cIdxB[0] = iBA; cIdxB[1] = iBB; cIdxB[2] = iBD;
         }
-    }
-    if(outACD){
-        float3 cW[4] = { a, c, d, float3(0.0f, 0.0f, 0.0f) };
-        float3 cWA[4] = { wAA, wAC, wAD, float3(0.0f, 0.0f, 0.0f) };
-        float3 cWB[4] = { wBA, wBC, wBD, float3(0.0f, 0.0f, 0.0f) };
-        uint cIdxA[4] = { iAA, iAC, iAD, 0u };
-        uint cIdxB[4] = { iBA, iBC, iBD, 0u };
-        float cU[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-        uint cCount = 3u;
-        nwbPhysicsSolveSimplex3(cW, cWA, cWB, cIdxA, cIdxB, cU, cCount);
-        float3 p = float3(0.0f, 0.0f, 0.0f);
-        for(uint k = 0u; k < cCount; ++k)
-            p += cW[k] * cU[k];
-        const float dSq = dot(p, p);
-        if(dSq < bestDistSq){
-            bestDistSq = dSq;
-            bestCount = cCount;
-            for(uint k = 0u; k < 4u; ++k){
-                bestW[k] = cW[k]; bestWA[k] = cWA[k]; bestWB[k] = cWB[k];
-                bestIdxA[k] = cIdxA[k]; bestIdxB[k] = cIdxB[k]; bestU[k] = cU[k];
-            }
+        else if(face == 1u){
+            cW[0] = a; cW[1] = c; cW[2] = d;
+            cWA[0] = wAA; cWA[1] = wAC; cWA[2] = wAD;
+            cWB[0] = wBA; cWB[1] = wBC; cWB[2] = wBD;
+            cIdxA[0] = iAA; cIdxA[1] = iAC; cIdxA[2] = iAD;
+            cIdxB[0] = iBA; cIdxB[1] = iBC; cIdxB[2] = iBD;
         }
-    }
-    if(outBCD){
-        float3 cW[4] = { b, c, d, float3(0.0f, 0.0f, 0.0f) };
-        float3 cWA[4] = { wAB, wAC, wAD, float3(0.0f, 0.0f, 0.0f) };
-        float3 cWB[4] = { wBB, wBC, wBD, float3(0.0f, 0.0f, 0.0f) };
-        uint cIdxA[4] = { iAB, iAC, iAD, 0u };
-        uint cIdxB[4] = { iBB, iBC, iBD, 0u };
-        float cU[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-        uint cCount = 3u;
-        nwbPhysicsSolveSimplex3(cW, cWA, cWB, cIdxA, cIdxB, cU, cCount);
-        float3 p = float3(0.0f, 0.0f, 0.0f);
-        for(uint k = 0u; k < cCount; ++k)
-            p += cW[k] * cU[k];
-        const float dSq = dot(p, p);
-        if(dSq < bestDistSq){
-            bestDistSq = dSq;
-            bestCount = cCount;
-            for(uint k = 0u; k < 4u; ++k){
-                bestW[k] = cW[k]; bestWA[k] = cWA[k]; bestWB[k] = cWB[k];
-                bestIdxA[k] = cIdxA[k]; bestIdxB[k] = cIdxB[k]; bestU[k] = cU[k];
-            }
+        else if(face == 2u){
+            cW[0] = b; cW[1] = c; cW[2] = d;
+            cWA[0] = wAB; cWA[1] = wAC; cWA[2] = wAD;
+            cWB[0] = wBB; cWB[1] = wBC; cWB[2] = wBD;
+            cIdxA[0] = iAB; cIdxA[1] = iAC; cIdxA[2] = iAD;
+            cIdxB[0] = iBB; cIdxB[1] = iBC; cIdxB[2] = iBD;
         }
-    }
-    if(abs(signDet) <= 1.0e-10f && outABC){
-        float3 cW[4] = { a, b, c, float3(0.0f, 0.0f, 0.0f) };
-        float3 cWA[4] = { wAA, wAB, wAC, float3(0.0f, 0.0f, 0.0f) };
-        float3 cWB[4] = { wBA, wBB, wBC, float3(0.0f, 0.0f, 0.0f) };
-        uint cIdxA[4] = { iAA, iAB, iAC, 0u };
-        uint cIdxB[4] = { iBA, iBB, iBC, 0u };
-        float cU[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+        else{
+            cW[0] = a; cW[1] = b; cW[2] = c;
+            cWA[0] = wAA; cWA[1] = wAB; cWA[2] = wAC;
+            cWB[0] = wBA; cWB[1] = wBB; cWB[2] = wBC;
+            cIdxA[0] = iAA; cIdxA[1] = iAB; cIdxA[2] = iAC;
+            cIdxB[0] = iBA; cIdxB[1] = iBB; cIdxB[2] = iBC;
+        }
+        cW[3] = float3(0.0f, 0.0f, 0.0f);
+        cWA[3] = float3(0.0f, 0.0f, 0.0f);
+        cWB[3] = float3(0.0f, 0.0f, 0.0f);
+        cIdxA[3] = 0u;
+        cIdxB[3] = 0u;
+        cU[0] = 0.0f; cU[1] = 0.0f; cU[2] = 0.0f; cU[3] = 0.0f;
         uint cCount = 3u;
         nwbPhysicsSolveSimplex3(cW, cWA, cWB, cIdxA, cIdxB, cU, cCount);
         float3 p = float3(0.0f, 0.0f, 0.0f);
@@ -563,6 +929,7 @@ float3 nwbPhysicsSupportWorld(
     return origin + nwbPhysicsQuatRotate(bestLocal, rot);
 }
 
+#if NWB_PHYSICS_NP_PROFILE == 1
 void nwbPhysicsReduceManifoldTo4(
     const float3 clipRefN,
     const float3 candWRef[16],
@@ -701,13 +1068,9 @@ float3 nwbPhysicsClosestPointOnTriangle(const float3 p, const float3 a, const fl
     const float denom = 1.0f / (va + vb + vc);
     return a + ab * (vb * denom) + ac * (vc * denom);
 }
+#endif
 
-void nwbPhysicsComputeBasis(const float3 n, out float3 outU1, out float3 outU2){
-    const float3 up = abs(n.y) < 0.9f ? float3(0.0f, 1.0f, 0.0f) : float3(1.0f, 0.0f, 0.0f);
-    outU1 = nwbPhysicsSafeNormal(cross(up, n), float3(1.0f, 0.0f, 0.0f));
-    outU2 = cross(n, outU1);
-}
-
+#if NWB_PHYSICS_NP_PROFILE == 1
 void nwbPhysicsPushCandPoint(
     const float3 wA,
     const float3 wB,
@@ -738,6 +1101,7 @@ void nwbPhysicsPushCandPoint(
         }
     }
 }
+#endif
 
 void nwbPhysicsSupportProxyOrTri(
     const NwbPhysicsGpuShapeProxy proxy,
@@ -816,7 +1180,7 @@ bool nwbPhysicsRunGjkDistanceEx(
     sU[0] = 1.0f;
 
     outHitDeep = false;
-    for(uint iter = 0u; iter < 24u; ++iter){
+    for(uint iter = 0u; iter < 25u; ++iter){
         if(sCount == 2u)
             nwbPhysicsSolveSimplex2(sW, sWA, sWB, sIdxA, sIdxB, sU, sCount);
         else if(sCount == 3u)
@@ -828,6 +1192,8 @@ bool nwbPhysicsRunGjkDistanceEx(
             outHitDeep = true;
             break;
         }
+        if(iter == 24u)
+            break;
 
         float3 pClosest = float3(0.0f, 0.0f, 0.0f);
         for(uint k = 0u; k < sCount; ++k)
@@ -868,12 +1234,6 @@ bool nwbPhysicsRunGjkDistanceEx(
         sW[sCount] = wNew;
         sU[sCount] = 0.0f;
         ++sCount;
-
-        if(iter + 1u == 24u && sCount == 4u){
-            nwbPhysicsSolveSimplex4(sW, sWA, sWB, sIdxA, sIdxB, sU, sCount);
-            if(sCount == 4u)
-                outHitDeep = true;
-        }
     }
 
     float3 pA = float3(0.0f, 0.0f, 0.0f);
@@ -928,6 +1288,7 @@ bool nwbPhysicsRunGjkDistance(
     );
 }
 
+#if NWB_PHYSICS_NP_PROFILE == 1
 uint nwbPhysicsHullVertexCount(const NwbPhysicsGpuShapeProxy proxy){
     if((proxy.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u)
         return 8u;
@@ -2892,7 +3253,9 @@ void nwbPhysicsCollideMeshPair(
             nwbPhysicsFinalizeMeshCand16(candWA, candWB, candPos, candNorm, candSep, candFeat, candCount, chosenWorldN, bodyPosA, bodyPosB, result);
     }
 }
+#endif
 
+#if NWB_PHYSICS_NP_PROFILE == 2
 void nwbPhysicsEvalBulletSweep(
     const NwbPhysicsGpuBodySim body,
     const float t,
@@ -3126,6 +3489,8 @@ void nwbPhysicsSolveBulletToi(
     }
     g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][pairIdx] = result;
 }
+#endif
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3141,7 +3506,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(idx >= pairCount)
         return;
 
-    const uint mode = g_NwbPhysicsPushConstants.modeOrSecondaryCount;
     const uint bodySimSlot = g_NwbPhysicsPushConstants.slots0.x;
     const uint meshNodeSlot = g_NwbPhysicsPushConstants.slots0.y;
     const uint shapeSlot = g_NwbPhysicsPushConstants.slots0.z;
@@ -3150,16 +3514,28 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint hullVertexSlot = g_NwbPhysicsPushConstants.slots1.y;
     const uint manifoldSlot = g_NwbPhysicsPushConstants.slots1.z;
 
-    if(mode == NWB_PHYSICS_NARROWPHASE_MODE_BULLET_TOI){
-        nwbPhysicsSolveBulletToi(idx, bodySimSlot, shapeSlot, pairSlot, hullVertexSlot, manifoldSlot, meshNodeSlot, meshTriSlot, g_NwbPhysicsPushConstants.linearSlop);
-        return;
-    }
-
-    const float speculativeDist = g_NwbPhysicsPushConstants.gravitySpeculative.w;
-
+#if NWB_PHYSICS_NP_PROFILE == 2
+    nwbPhysicsSolveBulletToi(idx, bodySimSlot, shapeSlot, pairSlot, hullVertexSlot, manifoldSlot, meshNodeSlot, meshTriSlot, g_NwbPhysicsPushConstants.linearSlop);
+#else
     const NwbPhysicsGpuBroadphasePair pair = g_NwbPhysicsBroadphasePairBuffers[pairSlot][idx];
     const NwbPhysicsGpuShapeProxy proxyA = g_NwbPhysicsShapeProxyBuffers[shapeSlot][pair.indices.x];
     const NwbPhysicsGpuShapeProxy proxyB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][pair.indices.y];
+
+    const uint typeA = proxyA.bodyIndexTypeShape.y;
+    const uint typeB = proxyB.bodyIndexTypeShape.y;
+    const bool isBoxA = (typeA == NWB_PHYSICS_SHAPE_TYPE_HULL) && ((proxyA.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u);
+    const bool isBoxB = (typeB == NWB_PHYSICS_SHAPE_TYPE_HULL) && ((proxyB.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u);
+    const bool isComplexPair = (typeA == NWB_PHYSICS_SHAPE_TYPE_MESH) || (typeB == NWB_PHYSICS_SHAPE_TYPE_MESH) || (typeA == NWB_PHYSICS_SHAPE_TYPE_HULL && !isBoxA) || (typeB == NWB_PHYSICS_SHAPE_TYPE_HULL && !isBoxB);
+
+#if NWB_PHYSICS_NP_PROFILE == 0
+    if(isComplexPair)
+        return;
+#else
+    if(!isComplexPair)
+        return;
+#endif
+
+    const float speculativeDist = g_NwbPhysicsPushConstants.gravitySpeculative.w;
     const NwbPhysicsGpuBodySim bodyA = g_NwbPhysicsBodySimBuffers[bodySimSlot][pair.indices.z];
     const NwbPhysicsGpuBodySim bodyB = g_NwbPhysicsBodySimBuffers[bodySimSlot][pair.indices.w];
 
@@ -3181,24 +3557,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         result.anchorBSeparation[k] = float4(0.0f, 0.0f, 0.0f, 0.0f);
     }
 
-    const uint typeA = proxyA.bodyIndexTypeShape.y;
-    const uint typeB = proxyB.bodyIndexTypeShape.y;
+#if NWB_PHYSICS_NP_PROFILE == 1
     if(typeA == NWB_PHYSICS_SHAPE_TYPE_MESH || typeB == NWB_PHYSICS_SHAPE_TYPE_MESH){
         nwbPhysicsCollideMeshPair(proxyA, originA, rotA, bodyA.positionInvMass.xyz, proxyB, originB, rotB, bodyB.positionInvMass.xyz, meshNodeSlot, meshTriSlot, hullVertexSlot, maxDist, result);
-        g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][idx] = result;
-        return;
     }
-
-    const bool isBoxA = (typeA == NWB_PHYSICS_SHAPE_TYPE_HULL) && ((proxyA.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u);
-    const bool isBoxB = (typeB == NWB_PHYSICS_SHAPE_TYPE_HULL) && ((proxyB.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u);
-
-    if((typeA == NWB_PHYSICS_SHAPE_TYPE_HULL && !isBoxA) || (typeB == NWB_PHYSICS_SHAPE_TYPE_HULL && !isBoxB)){
-        if(typeA == NWB_PHYSICS_SHAPE_TYPE_HULL && typeB == NWB_PHYSICS_SHAPE_TYPE_HULL){
-            nwbPhysicsSolveHullDeep(proxyA, originA, rotA, bodyA.positionInvMass.xyz, proxyB, originB, rotB, bodyB.positionInvMass.xyz, hullVertexSlot, maxDist, result);
-            g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][idx] = result;
-            return;
-        }
-
+    else if(typeA == NWB_PHYSICS_SHAPE_TYPE_HULL && typeB == NWB_PHYSICS_SHAPE_TYPE_HULL){
+        nwbPhysicsSolveHullDeep(proxyA, originA, rotA, bodyA.positionInvMass.xyz, proxyB, originB, rotB, bodyB.positionInvMass.xyz, hullVertexSlot, maxDist, result);
+    }
+    else{
         const float totalR = proxyA.localCenterRadius.w + proxyB.localCenterRadius.w;
         float3 pA = float3(0.0f, 0.0f, 0.0f);
         float3 pB = float3(0.0f, 0.0f, 0.0f);
@@ -3208,38 +3574,40 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
         if(hitDeep || dist <= 1.0e-5f){
             nwbPhysicsSolveHullDeep(proxyA, originA, rotA, bodyA.positionInvMass.xyz, proxyB, originB, rotB, bodyB.positionInvMass.xyz, hullVertexSlot, maxDist, result);
-            g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][idx] = result;
-            return;
         }
-
-        const float sep = dist - totalR;
-        if(sep <= maxDist){
-            const float3 n = (pB - pA) / dist;
-            if(typeA == NWB_PHYSICS_SHAPE_TYPE_CAPSULE || typeB == NWB_PHYSICS_SHAPE_TYPE_CAPSULE){
-                const bool hullIsB = (typeB == NWB_PHYSICS_SHAPE_TYPE_HULL);
-                const NwbPhysicsGpuShapeProxy pH = hullIsB ? proxyB : proxyA;
-                const float4 qH = hullIsB ? rotB : rotA;
-                const float3 worldOut = hullIsB ? -n : n;
-                const uint fCount = nwbPhysicsHullFaceCount(pH);
-                for(uint fi = 0u; fi < fCount; ++fi){
-                    const float4 lp = nwbPhysicsHullLocalFacePlane(pH, hullVertexSlot, fi);
-                    const float3 worldFaceN = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(lp.xyz, qH), float3(0.0f, 1.0f, 0.0f));
-                    if(dot(worldFaceN, worldOut) > 0.995f){
-                        nwbPhysicsSolveHullDeep(proxyA, originA, rotA, bodyA.positionInvMass.xyz, proxyB, originB, rotB, bodyB.positionInvMass.xyz, hullVertexSlot, maxDist, result);
-                        g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][idx] = result;
-                        return;
+        else{
+            const float sep = dist - totalR;
+            if(sep <= maxDist){
+                const float3 n = (pB - pA) / dist;
+                bool useDeepCap = false;
+                if(typeA == NWB_PHYSICS_SHAPE_TYPE_CAPSULE || typeB == NWB_PHYSICS_SHAPE_TYPE_CAPSULE){
+                    const bool hullIsB = (typeB == NWB_PHYSICS_SHAPE_TYPE_HULL);
+                    const NwbPhysicsGpuShapeProxy pH = hullIsB ? proxyB : proxyA;
+                    const float4 qH = hullIsB ? rotB : rotA;
+                    const float3 worldOut = hullIsB ? -n : n;
+                    const uint fCount = nwbPhysicsHullFaceCount(pH);
+                    for(uint fi = 0u; fi < fCount; ++fi){
+                        const float4 lp = nwbPhysicsHullLocalFacePlane(pH, hullVertexSlot, fi);
+                        const float3 worldFaceN = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(lp.xyz, qH), float3(0.0f, 1.0f, 0.0f));
+                        if(dot(worldFaceN, worldOut) > 0.995f){
+                            useDeepCap = true;
+                            break;
+                        }
                     }
                 }
+                if(useDeepCap){
+                    nwbPhysicsSolveHullDeep(proxyA, originA, rotA, bodyA.positionInvMass.xyz, proxyB, originB, rotB, bodyB.positionInvMass.xyz, hullVertexSlot, maxDist, result);
+                }
+                else{
+                    result.pairInfo.z = 1u;
+                    result.normalPad = float4(n, 0.0f);
+                    result.anchorAFeature[0] = float4(pA + n * proxyA.localCenterRadius.w - bodyA.positionInvMass.xyz, asfloat(20u));
+                    result.anchorBSeparation[0] = float4(pB - n * proxyB.localCenterRadius.w - bodyB.positionInvMass.xyz, sep);
+                }
             }
-            result.pairInfo.z = 1u;
-            result.normalPad = float4(n, 0.0f);
-            result.anchorAFeature[0] = float4(pA + n * proxyA.localCenterRadius.w - bodyA.positionInvMass.xyz, asfloat(20u));
-            result.anchorBSeparation[0] = float4(pB - n * proxyB.localCenterRadius.w - bodyB.positionInvMass.xyz, sep);
         }
-        g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][idx] = result;
-        return;
     }
-
+#else
     if(typeA == NWB_PHYSICS_SHAPE_TYPE_SPHERE && typeB == NWB_PHYSICS_SHAPE_TYPE_SPHERE){
         const float3 cA = originA + nwbPhysicsQuatRotate(proxyA.localCenterRadius.xyz, rotA);
         const float3 cB = originB + nwbPhysicsQuatRotate(proxyB.localCenterRadius.xyz, rotB);
@@ -3412,226 +3780,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         }
     }
     else if(isBoxA && isBoxB){
-        const float3 cA = originA + nwbPhysicsQuatRotate(proxyA.localCenterRadius.xyz, rotA);
-        const float4 qA = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rotA, proxyA.localRotation));
-        const float3 hA = proxyA.localExtentOrP1.xyz;
-        const float rA = proxyA.localCenterRadius.w;
-
-        const float3 cB = originB + nwbPhysicsQuatRotate(proxyB.localCenterRadius.xyz, rotB);
-        const float4 qB = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rotB, proxyB.localRotation));
-        const float3 hB = proxyB.localExtentOrP1.xyz;
-        const float rB = proxyB.localCenterRadius.w;
-
-        const float3 axA = nwbPhysicsQuatRotate(float3(1.0f, 0.0f, 0.0f), qA);
-        const float3 ayA = nwbPhysicsQuatRotate(float3(0.0f, 1.0f, 0.0f), qA);
-        const float3 azA = nwbPhysicsQuatRotate(float3(0.0f, 0.0f, 1.0f), qA);
-        const float3 axB = nwbPhysicsQuatRotate(float3(1.0f, 0.0f, 0.0f), qB);
-        const float3 ayB = nwbPhysicsQuatRotate(float3(0.0f, 1.0f, 0.0f), qB);
-        const float3 azB = nwbPhysicsQuatRotate(float3(0.0f, 0.0f, 1.0f), qB);
-
-        const float3 axesA[3] = { axA, ayA, azA };
-        const float3 axesB[3] = { axB, ayB, azB };
-        const float halfA[3] = { hA.x, hA.y, hA.z };
-        const float halfB[3] = { hB.x, hB.y, hB.z };
-
-        const float3 dCenter = cB - cA;
-        const float totalR = rA + rB;
-
-        const float3 tVec = float3(dot(dCenter, axA), dot(dCenter, ayA), dot(dCenter, azA));
-        const float r00 = dot(axA, axB);
-        const float r01 = dot(axA, ayB);
-        const float r02 = dot(axA, azB);
-        const float r10 = dot(ayA, axB);
-        const float r11 = dot(ayA, ayB);
-        const float r12 = dot(ayA, azB);
-        const float r20 = dot(azA, axB);
-        const float r21 = dot(azA, ayB);
-        const float r22 = dot(azA, azB);
-
-        const float R[3][3] = {
-            { r00, r01, r02 },
-            { r10, r11, r12 },
-            { r20, r21, r22 }
-        };
-        const float absR[3][3] = {
-            { abs(r00), abs(r01), abs(r02) },
-            { abs(r10), abs(r11), abs(r12) },
-            { abs(r20), abs(r21), abs(r22) }
-        };
-        const float tArr[3] = { tVec.x, tVec.y, tVec.z };
-
-        int bestAxis = -1;
-        float bestSep = -1.0e20f;
-        float3 bestNormal = float3(0.0f, 1.0f, 0.0f);
-
-        for(int i = 0; i < 3; ++i){
-            const float signedProj = tArr[i];
-            const float rBProj = hB.x * absR[i][0] + hB.y * absR[i][1] + hB.z * absR[i][2];
-            const float sep = abs(signedProj) - (halfA[i] + rBProj) - totalR;
-            if(sep > maxDist){
-                g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][idx] = result;
-                return;
-            }
-            if(sep > bestSep){
-                bestSep = sep;
-                bestAxis = i;
-                bestNormal = (signedProj < 0.0f) ? -axesA[i] : axesA[i];
-            }
-        }
-
-        for(int j = 0; j < 3; ++j){
-            const float signedProj = tVec.x * R[0][j] + tVec.y * R[1][j] + tVec.z * R[2][j];
-            const float rAProj = hA.x * absR[0][j] + hA.y * absR[1][j] + hA.z * absR[2][j];
-            const float sep = abs(signedProj) - (rAProj + halfB[j]) - totalR;
-            if(sep > maxDist){
-                g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][idx] = result;
-                return;
-            }
-            if(sep > bestSep + 1.0e-4f){
-                bestSep = sep;
-                bestAxis = 3 + j;
-                bestNormal = (signedProj < 0.0f) ? -axesB[j] : axesB[j];
-            }
-        }
-
-        for(int i = 0; i < 3; ++i){
-            const int i1 = (i + 1) % 3;
-            const int i2 = (i + 2) % 3;
-            for(int j = 0; j < 3; ++j){
-                const int j1 = (j + 1) % 3;
-                const int j2 = (j + 2) % 3;
-                const float c1 = R[i1][j];
-                const float c2 = R[i2][j];
-                const float lenSq = c1 * c1 + c2 * c2;
-                if(lenSq < 1.0e-5f)
-                    continue;
-                const float invLen = rsqrt(lenSq);
-                const float signedProj = tArr[i2] * c1 - tArr[i1] * c2;
-                const float rAU = halfA[i1] * absR[i2][j] + halfA[i2] * absR[i1][j];
-                const float rBU = halfB[j1] * absR[i][j2] + halfB[j2] * absR[i][j1];
-                const float sep = (abs(signedProj) - (rAU + rBU)) * invLen - totalR;
-                if(sep > maxDist){
-                    g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][idx] = result;
-                    return;
-                }
-                if(sep > bestSep + 5.0e-4f){
-                    bestSep = sep;
-                    bestAxis = 6 + i * 3 + j;
-                    float3 n = (axesA[i2] * c1 - axesA[i1] * c2) * invLen;
-                    if(signedProj < 0.0f)
-                        n = -n;
-                    bestNormal = n;
-                }
-            }
-        }
-
-        if(bestAxis >= 6){
-            float3 pA = cA;
-            float3 pB = cB;
-            for(int k = 0; k < 3; ++k){
-                if(k != (bestAxis - 6) / 3)
-                    pA += axesA[k] * ((dot(axesA[k], bestNormal) >= 0.0f ? 1.0f : -1.0f) * halfA[k]);
-                if(k != (bestAxis - 6) % 3)
-                    pB += axesB[k] * ((dot(axesB[k], bestNormal) <= 0.0f ? 1.0f : -1.0f) * halfB[k]);
-            }
-            const float3 eA = axesA[(bestAxis - 6) / 3];
-            const float3 eB = axesB[(bestAxis - 6) % 3];
-            const float hEA = halfA[(bestAxis - 6) / 3];
-            const float hEB = halfB[(bestAxis - 6) % 3];
-            float s = 0.0f;
-            float t = 0.0f;
-            float3 cEdgeA;
-            float3 cEdgeB;
-            nwbPhysicsClosestPointsSegments(pA - eA * hEA, pA + eA * hEA, pB - eB * hEB, pB + eB * hEB, s, t, cEdgeA, cEdgeB);
-            result.pairInfo.z = 1u;
-            result.normalPad = float4(bestNormal, 0.0f);
-            result.anchorAFeature[0] = float4(cEdgeA + bestNormal * rA - bodyA.positionInvMass.xyz, asfloat(uint(100 + bestAxis)));
-            result.anchorBSeparation[0] = float4(cEdgeB - bestNormal * rB - bodyB.positionInvMass.xyz, bestSep);
-        }
-        else{
-            const bool refIsA = (bestAxis < 3);
-            const float3 refNormal = refIsA ? bestNormal : -bestNormal;
-            const float3 refCenter = refIsA ? cA : cB;
-            const float3 incCenter = refIsA ? cB : cA;
-            const float3 refAxes[3] = { refIsA ? axA : axB, refIsA ? ayA : ayB, refIsA ? azA : azB };
-            const float3 incAxes[3] = { refIsA ? axB : axA, refIsA ? ayB : ayA, refIsA ? azB : azA };
-            const float refH[3] = { refIsA ? hA.x : hB.x, refIsA ? hA.y : hB.y, refIsA ? hA.z : hB.z };
-            const float incH[3] = { refIsA ? hB.x : hA.x, refIsA ? hB.y : hA.y, refIsA ? hB.z : hA.z };
-
-            int refFace = 0;
-            float bestRefDot = -2.0f;
-            for(int k = 0; k < 3; ++k){
-                const float d = dot(refAxes[k], refNormal);
-                if(d > bestRefDot){
-                    bestRefDot = d;
-                    refFace = k * 2;
-                }
-                if(-d > bestRefDot){
-                    bestRefDot = -d;
-                    refFace = k * 2 + 1;
-                }
-            }
-
-            int incFace = 0;
-            float bestIncDot = 2.0f;
-            for(int k = 0; k < 3; ++k){
-                const float d = dot(incAxes[k], refNormal);
-                if(d < bestIncDot){
-                    bestIncDot = d;
-                    incFace = k * 2;
-                }
-                if(-d < bestIncDot){
-                    bestIncDot = -d;
-                    incFace = k * 2 + 1;
-                }
-            }
-
-            float3 poly0[16];
-            float3 poly1[16];
-            for(uint p = 0u; p < 16u; ++p){
-                poly0[p] = float3(0.0f, 0.0f, 0.0f);
-                poly1[p] = float3(0.0f, 0.0f, 0.0f);
-            }
-            float3 incVerts[4];
-            nwbPhysicsGetBoxFace(incCenter, incAxes[0], incAxes[1], incAxes[2], float3(incH[0], incH[1], incH[2]), incFace, incVerts);
-            for(uint p = 0u; p < 4u; ++p)
-                poly0[p] = incVerts[p];
-            uint polyCount = 4u;
-
-            const int refAxisIdx = refFace / 2;
-            const int uIdx = (refAxisIdx + 1) % 3;
-            const int vIdx = (refAxisIdx + 2) % 3;
-            const float3 uAxis = refAxes[uIdx];
-            const float3 vAxis = refAxes[vIdx];
-            const float refPlaneDist = dot(refAxes[refAxisIdx] * ((refFace % 2 == 0) ? 1.0f : -1.0f), refCenter) + refH[refAxisIdx];
-            const float3 clipRefN = refAxes[refAxisIdx] * ((refFace % 2 == 0) ? 1.0f : -1.0f);
-
-            polyCount = nwbPhysicsClipPolygonPlane(poly0, polyCount, uAxis, dot(uAxis, refCenter) + refH[uIdx], poly1);
-            polyCount = nwbPhysicsClipPolygonPlane(poly1, polyCount, -uAxis, dot(-uAxis, refCenter) + refH[uIdx], poly0);
-            polyCount = nwbPhysicsClipPolygonPlane(poly0, polyCount, vAxis, dot(vAxis, refCenter) + refH[vIdx], poly1);
-            polyCount = nwbPhysicsClipPolygonPlane(poly1, polyCount, -vAxis, dot(-vAxis, refCenter) + refH[vIdx], poly0);
-
-            float3 candWRef[16];
-            float3 candWInc[16];
-            float3 candPos[16];
-            float candSep[16];
-            uint candFeat[16];
-            uint candCount = 0u;
-            for(uint p = 0u; p < polyCount && candCount < 16u; ++p){
-                const float sep = dot(clipRefN, poly0[p]) - refPlaneDist - totalR;
-                if(sep <= maxDist){
-                    candWRef[candCount] = poly0[p] - clipRefN * (sep + totalR - (refIsA ? rA : rB));
-                    candWInc[candCount] = poly0[p] - clipRefN * (refIsA ? rB : rA);
-                    candPos[candCount] = poly0[p];
-                    candSep[candCount] = sep;
-                    candFeat[candCount] = uint(200u + p);
-                    ++candCount;
-                }
-            }
-
-            result.normalPad = float4(bestNormal, 0.0f);
-            nwbPhysicsReduceManifoldTo4(clipRefN, candWRef, candWInc, candPos, candSep, candFeat, candCount, refIsA, bodyA.positionInvMass.xyz, bodyB.positionInvMass.xyz, result);
-        }
+        nwbPhysicsCollideBoxes(proxyA, originA, rotA, bodyA.positionInvMass.xyz, proxyB, originB, rotB, bodyB.positionInvMass.xyz, maxDist, result);
     }
     else if((typeA == NWB_PHYSICS_SHAPE_TYPE_CAPSULE && isBoxB) || (isBoxA && typeB == NWB_PHYSICS_SHAPE_TYPE_CAPSULE)){
         const bool capIsA = (typeA == NWB_PHYSICS_SHAPE_TYPE_CAPSULE);
@@ -3838,8 +3987,21 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     else{
         result.pairInfo.w = 1u;
     }
+#endif
 
-    g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][idx] = result;
+    const bool keepManifold = (result.pairInfo.z > 0u) || (result.pairInfo.w != 0u) || (((proxyA.bodyIndexTypeShape.w | proxyB.bodyIndexTypeShape.w) & NWB_PHYSICS_SHAPE_FLAG_FAST_OR_BULLET) != 0u);
+    if(keepManifold){
+        if(counterSlot != NWB_PHYSICS_INVALID_INDEX){
+            uint outIdx = 0u;
+            InterlockedAdd(g_NwbPhysicsUintBuffers[counterSlot][2u], 1u, outIdx);
+            if(outIdx < pairCount)
+                g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][outIdx] = result;
+        }
+        else{
+            g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][idx] = result;
+        }
+    }
+#endif
 }
 
 

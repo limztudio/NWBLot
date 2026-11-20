@@ -263,11 +263,10 @@ void nwbPhysicsSolveSingleJoint(
     const float maxBias = 10.0f;
 
     if(mode == NWB_PHYSICS_SOLVER_MODE_EXPORT_IMPULSES){
-        const NwbPhysicsGpuJointConstraint jc = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx];
         NwbPhysicsGpuJointImpulseOut outImp;
-        outImp.linearImpulseMax = jc.linearImpulse;
-        outImp.angularImpulseMax = jc.angularImpulse;
-        outImp.limitImpulses = jc.limitImpulses;
+        outImp.linearImpulseMax = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].linearImpulse;
+        outImp.angularImpulseMax = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].angularImpulse;
+        outImp.limitImpulses = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].limitImpulses;
         const uint outSlot = g_NwbPhysicsPushConstants.slots1.z;
         g_NwbPhysicsJointImpulseOutBuffers[outSlot][jointIdx] = outImp;
         return;
@@ -951,37 +950,39 @@ void nwbPhysicsSolveSingleJoint(
         }
     }
 
-    const float4 qA0n = jc.qA0;
-    const float3 axisA0Tot = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(jc.localAxisALowerLimit.xyz, qA0n), float3(0.0f, 1.0f, 0.0f));
-    float3 totalLinP = jc.linearImpulse.xyz;
-    float3 totalAngL = jc.angularImpulse.xyz;
-    if(jType == NWB_PHYSICS_JOINT_TYPE_DISTANCE){
-        const float3 d0 = jc.baseCenterDeltaMaxMotor.xyz + jc.rB0InvMassB.xyz - jc.rA0InvMassA.xyz;
-        const float3 u0 = nwbPhysicsSafeNormal(d0, float3(0.0f, 1.0f, 0.0f));
-        totalLinP = u0 * (jc.linearImpulse.x + jc.limitImpulses.x + jc.limitImpulses.y);
+    if((jFlags & NWB_PHYSICS_JOINT_FLAG_BREAKABLE) != 0u){
+        const float4 qA0n = jc.qA0;
+        const float3 axisA0Tot = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(jc.localAxisALowerLimit.xyz, qA0n), float3(0.0f, 1.0f, 0.0f));
+        float3 totalLinP = jc.linearImpulse.xyz;
+        float3 totalAngL = jc.angularImpulse.xyz;
+        if(jType == NWB_PHYSICS_JOINT_TYPE_DISTANCE){
+            const float3 d0 = jc.baseCenterDeltaMaxMotor.xyz + jc.rB0InvMassB.xyz - jc.rA0InvMassA.xyz;
+            const float3 u0 = nwbPhysicsSafeNormal(d0, float3(0.0f, 1.0f, 0.0f));
+            totalLinP = u0 * (jc.linearImpulse.x + jc.limitImpulses.x + jc.limitImpulses.y);
+        }
+        else if(jType == NWB_PHYSICS_JOINT_TYPE_PRISMATIC){
+            totalLinP += axisA0Tot * (jc.limitImpulses.z + jc.limitImpulses.x + jc.limitImpulses.y);
+        }
+        else if(jType == NWB_PHYSICS_JOINT_TYPE_WHEEL){
+            totalLinP += axisA0Tot * (jc.limitImpulses.w + jc.limitImpulses.x + jc.limitImpulses.y);
+            const float4 qTarget = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(qA0n, jc.referenceRotation));
+            const float3 axleA = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(jc.localAxisBUpperLimit.xyz, qTarget), float3(0.0f, 0.0f, 1.0f));
+            totalAngL += axleA * jc.limitImpulses.z;
+        }
+        else if(jType == NWB_PHYSICS_JOINT_TYPE_REVOLUTE){
+            totalAngL += axisA0Tot * (jc.limitImpulses.z + jc.limitImpulses.x + jc.limitImpulses.y);
+        }
+        else if(jType == NWB_PHYSICS_JOINT_TYPE_SPHERICAL){
+            const float3 axisB0Tot = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(jc.localAxisBUpperLimit.xyz, jc.qB0), float3(0.0f, 1.0f, 0.0f));
+            float3 fU1;
+            float3 fU2;
+            nwbPhysicsComputeTangentBasis(axisA0Tot, fU1, fU2);
+            const float3 swingAxis = nwbPhysicsSafeNormal(cross(axisA0Tot, axisB0Tot), fU1);
+            totalAngL += axisB0Tot * (jc.limitImpulses.x + jc.limitImpulses.y) + swingAxis * jc.limitImpulses.w;
+        }
+        jc.linearImpulse.w = max(jc.linearImpulse.w, length(totalLinP));
+        jc.angularImpulse.w = max(jc.angularImpulse.w, length(totalAngL));
     }
-    else if(jType == NWB_PHYSICS_JOINT_TYPE_PRISMATIC){
-        totalLinP += axisA0Tot * (jc.limitImpulses.z + jc.limitImpulses.x + jc.limitImpulses.y);
-    }
-    else if(jType == NWB_PHYSICS_JOINT_TYPE_WHEEL){
-        totalLinP += axisA0Tot * (jc.limitImpulses.w + jc.limitImpulses.x + jc.limitImpulses.y);
-        const float4 qTarget = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(qA0n, jc.referenceRotation));
-        const float3 axleA = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(jc.localAxisBUpperLimit.xyz, qTarget), float3(0.0f, 0.0f, 1.0f));
-        totalAngL += axleA * jc.limitImpulses.z;
-    }
-    else if(jType == NWB_PHYSICS_JOINT_TYPE_REVOLUTE){
-        totalAngL += axisA0Tot * (jc.limitImpulses.z + jc.limitImpulses.x + jc.limitImpulses.y);
-    }
-    else if(jType == NWB_PHYSICS_JOINT_TYPE_SPHERICAL){
-        const float3 axisB0Tot = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(jc.localAxisBUpperLimit.xyz, jc.qB0), float3(0.0f, 1.0f, 0.0f));
-        float3 fU1;
-        float3 fU2;
-        nwbPhysicsComputeTangentBasis(axisA0Tot, fU1, fU2);
-        const float3 swingAxis = nwbPhysicsSafeNormal(cross(axisA0Tot, axisB0Tot), fU1);
-        totalAngL += axisB0Tot * (jc.limitImpulses.x + jc.limitImpulses.y) + swingAxis * jc.limitImpulses.w;
-    }
-    jc.linearImpulse.w = max(jc.linearImpulse.w, length(totalLinP));
-    jc.angularImpulse.w = max(jc.angularImpulse.w, length(totalAngL));
 
     g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].linearImpulse = jc.linearImpulse;
     g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].angularImpulse = jc.angularImpulse;

@@ -120,6 +120,7 @@ class RigidBodyComponentPayloadBinary{
     public f32 customMass = 1.0f;
     public u32 reserved2 = 0u;
     public u64 reserved3 = 0u;
+    public u64 reserved4 = 0u;
     public f32x4 customCenterOfMass(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 customInertiaDiag(1.0f, 1.0f, 1.0f, 0.0f);
     public f32x4 customInertiaOffDiag(0.0f, 0.0f, 0.0f, 0.0f);
@@ -135,6 +136,7 @@ class ColliderShapeEntryHeaderBinary{
     public u32 categoryBits = 1u;
     public u32 maskBits = u32.max;
     public u32 reserved1 = 0u;
+    public u64 reserved5 = 0u;
     public f32x4 center(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 center2(0.0f, 0.5f, 0.0f, 0.0f);
     public f32x4 halfExtents(0.5f, 0.5f, 0.5f, 0.0f);
@@ -196,6 +198,7 @@ class JointComponentPayloadBinary{
     public NameHash bodyEntityNameAHash;
     public NameHash bodyEntityNameBHash;
     public u64 userData = 0u;
+    public u64 reserved2 = 0u;
 }
 
 [serialize]
@@ -217,6 +220,7 @@ class PhysicsWorldConfigComponentPayloadBinary{
     public u32 maxSubStepsPerFrame = 4u;
     public u32 gpuDispatchThreshold = s_DefaultGpuBodyThreshold;
     public u32 reserved1 = 0u;
+    public u64 reserved3 = 0u;
     public f32x4 gravity(0.0f, -9.81f, 0.0f, 0.0f);
     public f32 restitutionThreshold = s_RestitutionThreshold;
     public f32 hitEventThreshold = s_DefaultHitEventThreshold;

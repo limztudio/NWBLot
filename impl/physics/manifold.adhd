@@ -1055,12 +1055,12 @@ Manifold CollideSphereAndMesh(in SphereShape sphereA, in Transform3D xfA, in Mes
     u32 bestTriIdx = 0u;
     b8 foundHit = false;
 
-    Vector<u32> stack;
-    stack.reserve(64u);
-    stack.push_back(0u);
-    while(!stack.empty()){
-        const u32 nodeIdx = stack[stack.size() - 1u];
-        stack.pop_back();
+    Array<u32, 256u> stack;
+    stack[0u] = 0u;
+    u32 stackCount = 1u;
+    while(stackCount > 0u){
+        --stackCount;
+        const u32 nodeIdx = stack[stackCount];
         in MeshBvhNode node = meshB.nodes[nodeIdx];
         if(!AabbOverlaps(node.aabb(), queryBox))
             continue;
@@ -1120,8 +1120,14 @@ Manifold CollideSphereAndMesh(in SphereShape sphereA, in Transform3D xfA, in Mes
             }
         }
         else{
-            stack.push_back(node.leftOrFirst());
-            stack.push_back(node.rightOrCount());
+            if(stackCount < 256u){
+                stack[stackCount] = node.leftOrFirst();
+                ++stackCount;
+            }
+            if(stackCount < 256u){
+                stack[stackCount] = node.rightOrCount();
+                ++stackCount;
+            }
         }
     }
 
@@ -1177,12 +1183,12 @@ Manifold CollideCapsuleAndMesh(in CapsuleShape capA, in Transform3D xfA, in Mesh
     u32 bestTriIdx = 0u;
     b8 foundHit = false;
 
-    Vector<u32> stack;
-    stack.reserve(64u);
-    stack.push_back(0u);
-    while(!stack.empty()){
-        const u32 nodeIdx = stack[stack.size() - 1u];
-        stack.pop_back();
+    Array<u32, 256u> stack;
+    stack[0u] = 0u;
+    u32 stackCount = 1u;
+    while(stackCount > 0u){
+        --stackCount;
+        const u32 nodeIdx = stack[stackCount];
         in MeshBvhNode node = meshB.nodes[nodeIdx];
         if(!AabbOverlaps(node.aabb(), queryBox))
             continue;
@@ -1288,8 +1294,14 @@ Manifold CollideCapsuleAndMesh(in CapsuleShape capA, in Transform3D xfA, in Mesh
             }
         }
         else{
-            stack.push_back(node.leftOrFirst());
-            stack.push_back(node.rightOrCount());
+            if(stackCount < 256u){
+                stack[stackCount] = node.leftOrFirst();
+                ++stackCount;
+            }
+            if(stackCount < 256u){
+                stack[stackCount] = node.rightOrCount();
+                ++stackCount;
+            }
         }
     }
 
@@ -1438,19 +1450,37 @@ void MatchManifoldImpulses(in Manifold oldManifold, mut Manifold newManifold, in
     if(!anyMatched)
         return;
 
+    const b8 hasFriction = (oldManifold.frictionImpulse.x != 0.0f || oldManifold.frictionImpulse.y != 0.0f);
+    const f32 twistImp = oldManifold.twistImpulse();
+    const VectorSingle rollImp = oldManifold.rollingImpulse();
+    const b8 hasTwist = (twistImp != 0.0f);
+    const b8 hasRoll = (rollImp.x != 0.0f || rollImp.y != 0.0f || rollImp.z != 0.0f);
+    if(!hasFriction && !hasTwist && !hasRoll)
+        return;
+
     const VectorSingle oldN = SafeNormalizeVec3(oldManifold.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     const VectorSingle newN = SafeNormalizeVec3(newManifold.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-    if(Vector3Dot(oldN, newN).x > 0.9f){
-        VectorSingle oldT1(0.0f);
-        VectorSingle oldT2(0.0f);
-        ComputeTangentBasis(oldN, oldT1, oldT2);
-        VectorSingle newT1(0.0f);
-        VectorSingle newT2(0.0f);
-        ComputeTangentBasis(newN, newT1, newT2);
-        const VectorSingle worldF = oldT1 * oldManifold.frictionImpulse.x + oldT2 * oldManifold.frictionImpulse.y;
-        newManifold.frictionImpulse = f32x2u(Vector3Dot(worldF, newT1).x, Vector3Dot(worldF, newT2).x);
-        newManifold.setTwistImpulse(oldManifold.twistImpulse());
-        newManifold.setRollingImpulse(oldManifold.rollingImpulse());
+    const f32 nDot = Vector3Dot(oldN, newN).x;
+    if(nDot > 0.9f){
+        if(hasFriction){
+            if(nDot > 0.99999f){
+                newManifold.frictionImpulse = oldManifold.frictionImpulse;
+            }
+            else{
+                VectorSingle oldT1(0.0f);
+                VectorSingle oldT2(0.0f);
+                ComputeTangentBasis(oldN, oldT1, oldT2);
+                VectorSingle newT1(0.0f);
+                VectorSingle newT2(0.0f);
+                ComputeTangentBasis(newN, newT1, newT2);
+                const VectorSingle worldF = oldT1 * oldManifold.frictionImpulse.x + oldT2 * oldManifold.frictionImpulse.y;
+                newManifold.frictionImpulse = f32x2u(Vector3Dot(worldF, newT1).x, Vector3Dot(worldF, newT2).x);
+            }
+        }
+        if(hasTwist)
+            newManifold.setTwistImpulse(twistImp);
+        if(hasRoll)
+            newManifold.setRollingImpulse(rollImp);
     }
 }
 

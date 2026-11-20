@@ -541,22 +541,25 @@ DistanceOutput ShapeDistanceProxies(
 
     const VectorSingle delta = VectorSingle(pB - pA, 0.0f);
     const f32 dist = Vector3Length(delta).x;
-    VectorSingle n = SafeNormalizeVec3(delta, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    VectorSingle n(0.0f, 1.0f, 0.0f, 0.0f);
     f32 outDist = dist;
 
-    if(useRadii && dist > 1.0e-6f){
-        const f32 rA = proxyA.radius;
-        const f32 rB = proxyB.radius;
-        if(dist > rA + rB){
-            pA = pA + n * rA;
-            pB = pB - n * rB;
-            outDist = dist - (rA + rB);
-        }
-        else{
-            const VectorSingle mid = (pA + n * rA + pB - n * rB) * 0.5f;
-            pA = mid;
-            pB = mid;
-            outDist = 0.0f;
+    if(dist > 1.0e-6f){
+        n = delta * (1.0f / dist);
+        if(useRadii){
+            const f32 rA = proxyA.radius;
+            const f32 rB = proxyB.radius;
+            if(dist > rA + rB){
+                pA = pA + n * rA;
+                pB = pB - n * rB;
+                outDist = dist - (rA + rB);
+            }
+            else{
+                const VectorSingle mid = (pA + n * rA + pB - n * rB) * 0.5f;
+                pA = mid;
+                pB = mid;
+                outDist = 0.0f;
+            }
         }
     }
 
@@ -1041,20 +1044,12 @@ b8 IsPointInsideClosedMesh(in MeshShape mesh, in VectorSingle localPoint){
     const f32 rayLen = Max(Vector3Length(boxExt).x * 2.0f, 10.0f);
     const VectorSingle rayDir = SafeNormalizeVec3(VectorSingle(1.0f, 0.37139067f, 0.21821789f, 0.0f), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f)) * rayLen;
     u32 parityHits = 0u;
-    Array<u32, 128u> fixedStack;
+    Array<u32, 256u> fixedStack;
     fixedStack[0u] = 0u;
     u32 fixedCount = 1u;
-    Vector<u32> overflowStack;
-    while(fixedCount > 0u || !overflowStack.empty()){
-        u32 nodeIdx = 0u;
-        if(!overflowStack.empty()){
-            nodeIdx = overflowStack[overflowStack.size() - 1u];
-            overflowStack.pop_back();
-        }
-        else{
-            --fixedCount;
-            nodeIdx = fixedStack[fixedCount];
-        }
+    while(fixedCount > 0u){
+        --fixedCount;
+        const u32 nodeIdx = fixedStack[fixedCount];
         in MeshBvhNode node = mesh.nodes[nodeIdx];
         f32 tBox = 0.0f;
         if(!AabbRayCast(node.aabb(), localPoint, rayDir, 1.0f, tBox))
@@ -1078,19 +1073,13 @@ b8 IsPointInsideClosedMesh(in MeshShape mesh, in VectorSingle localPoint){
         else{
             const u32 leftIdx = node.leftOrFirst();
             const u32 rightIdx = node.rightOrCount();
-            if(fixedCount < 128u){
+            if(fixedCount < 256u){
                 fixedStack[fixedCount] = leftIdx;
                 ++fixedCount;
             }
-            else{
-                overflowStack.push_back(leftIdx);
-            }
-            if(fixedCount < 128u){
+            if(fixedCount < 256u){
                 fixedStack[fixedCount] = rightIdx;
                 ++fixedCount;
-            }
-            else{
-                overflowStack.push_back(rightIdx);
             }
         }
     }
@@ -1108,20 +1097,12 @@ b8 FindClosestPointOnClosedMesh(
         return false;
     f32 bestDistSq = s_MaxF32;
     b8 found = false;
-    Array<u32, 128u> fixedStack;
+    Array<u32, 256u> fixedStack;
     fixedStack[0u] = 0u;
     u32 fixedCount = 1u;
-    Vector<u32> overflowStack;
-    while(fixedCount > 0u || !overflowStack.empty()){
-        u32 nodeIdx = 0u;
-        if(!overflowStack.empty()){
-            nodeIdx = overflowStack[overflowStack.size() - 1u];
-            overflowStack.pop_back();
-        }
-        else{
-            --fixedCount;
-            nodeIdx = fixedStack[fixedCount];
-        }
+    while(fixedCount > 0u){
+        --fixedCount;
+        const u32 nodeIdx = fixedStack[fixedCount];
         in MeshBvhNode node = mesh.nodes[nodeIdx];
         const VectorSingle boxClamped = Max(VectorSingle(node.aabbMinLeft, 0.0f), Min(localPoint, VectorSingle(node.aabbMaxRight, 0.0f)));
         if(Vector3LengthSq(VectorSingle(localPoint - boxClamped, 0.0f)).x > bestDistSq)
@@ -1150,19 +1131,13 @@ b8 FindClosestPointOnClosedMesh(
         else{
             const u32 leftIdx = node.aabbMinLeft.w;
             const u32 rightIdx = node.aabbMaxRight.w & 0x7fffffffu;
-            if(fixedCount < 128u){
+            if(fixedCount < 256u){
                 fixedStack[fixedCount] = leftIdx;
                 ++fixedCount;
             }
-            else{
-                overflowStack.push_back(leftIdx);
-            }
-            if(fixedCount < 128u){
+            if(fixedCount < 256u){
                 fixedStack[fixedCount] = rightIdx;
                 ++fixedCount;
-            }
-            else{
-                overflowStack.push_back(rightIdx);
             }
         }
     }
@@ -1186,20 +1161,12 @@ LocalRayHit RayCastMesh(in MeshShape mesh, in Transform3D xf, in VectorSingle or
     const Transform3D identMeshXf = Transform3D();
 
     f32 curMax = maxFraction;
-    Array<u32, 128u> fixedStack;
+    Array<u32, 256u> fixedStack;
     fixedStack[0u] = 0u;
     u32 fixedCount = 1u;
-    Vector<u32> overflowStack;
-    while(fixedCount > 0u || !overflowStack.empty()){
-        u32 nodeIdx = 0u;
-        if(!overflowStack.empty()){
-            nodeIdx = overflowStack[overflowStack.size() - 1u];
-            overflowStack.pop_back();
-        }
-        else{
-            --fixedCount;
-            nodeIdx = fixedStack[fixedCount];
-        }
+    while(fixedCount > 0u){
+        --fixedCount;
+        const u32 nodeIdx = fixedStack[fixedCount];
         in MeshBvhNode node = mesh.nodes[nodeIdx];
         f32 tBox = 0.0f;
         Aabb3D testBox(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f));
@@ -1246,19 +1213,13 @@ LocalRayHit RayCastMesh(in MeshShape mesh, in Transform3D xf, in VectorSingle or
         else{
             const u32 leftIdx = node.aabbMinLeft.w;
             const u32 rightIdx = node.aabbMaxRight.w & 0x7fffffffu;
-            if(fixedCount < 128u){
+            if(fixedCount < 256u){
                 fixedStack[fixedCount] = leftIdx;
                 ++fixedCount;
             }
-            else{
-                overflowStack.push_back(leftIdx);
-            }
-            if(fixedCount < 128u){
+            if(fixedCount < 256u){
                 fixedStack[fixedCount] = rightIdx;
                 ++fixedCount;
-            }
-            else{
-                overflowStack.push_back(rightIdx);
             }
         }
     }
@@ -1299,20 +1260,12 @@ LocalRayHit ShapeCastMesh(
     );
 
     f32 curMax = maxFraction;
-    Array<u32, 128u> fixedStack;
+    Array<u32, 256u> fixedStack;
     fixedStack[0u] = 0u;
     u32 fixedCount = 1u;
-    Vector<u32> overflowStack;
-    while(fixedCount > 0u || !overflowStack.empty()){
-        u32 nodeIdx = 0u;
-        if(!overflowStack.empty()){
-            nodeIdx = overflowStack[overflowStack.size() - 1u];
-            overflowStack.pop_back();
-        }
-        else{
-            --fixedCount;
-            nodeIdx = fixedStack[fixedCount];
-        }
+    while(fixedCount > 0u){
+        --fixedCount;
+        const u32 nodeIdx = fixedStack[fixedCount];
         in MeshBvhNode node = mesh.nodes[nodeIdx];
         if(!AabbOverlaps(Aabb3D(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f)), sweepLocalBox))
             continue;
@@ -1338,19 +1291,13 @@ LocalRayHit ShapeCastMesh(
         else{
             const u32 leftIdx = node.aabbMinLeft.w;
             const u32 rightIdx = node.aabbMaxRight.w & 0x7fffffffu;
-            if(fixedCount < 128u){
+            if(fixedCount < 256u){
                 fixedStack[fixedCount] = leftIdx;
                 ++fixedCount;
             }
-            else{
-                overflowStack.push_back(leftIdx);
-            }
-            if(fixedCount < 128u){
+            if(fixedCount < 256u){
                 fixedStack[fixedCount] = rightIdx;
                 ++fixedCount;
-            }
-            else{
-                overflowStack.push_back(rightIdx);
             }
         }
     }
@@ -1436,20 +1383,12 @@ TimeOfImpactOutput ComputeMeshTimeOfImpact(
     const f32 meshRadius = meshB.radius();
 
     f32 curMax = tMax;
-    Array<u32, 128u> fixedStack;
+    Array<u32, 256u> fixedStack;
     fixedStack[0u] = 0u;
     u32 fixedCount = 1u;
-    Vector<u32> overflowStack;
-    while(fixedCount > 0u || !overflowStack.empty()){
-        u32 nodeIdx = 0u;
-        if(!overflowStack.empty()){
-            nodeIdx = overflowStack[overflowStack.size() - 1u];
-            overflowStack.pop_back();
-        }
-        else{
-            --fixedCount;
-            nodeIdx = fixedStack[fixedCount];
-        }
+    while(fixedCount > 0u){
+        --fixedCount;
+        const u32 nodeIdx = fixedStack[fixedCount];
         in MeshBvhNode node = meshB.nodes[nodeIdx];
         if(!AabbOverlaps(node.aabb(), queryBox))
             continue;
@@ -1480,19 +1419,13 @@ TimeOfImpactOutput ComputeMeshTimeOfImpact(
         else{
             const u32 leftIdx = node.leftOrFirst();
             const u32 rightIdx = node.rightOrCount();
-            if(fixedCount < 128u){
+            if(fixedCount < 256u){
                 fixedStack[fixedCount] = leftIdx;
                 ++fixedCount;
             }
-            else{
-                overflowStack.push_back(leftIdx);
-            }
-            if(fixedCount < 128u){
+            if(fixedCount < 256u){
                 fixedStack[fixedCount] = rightIdx;
                 ++fixedCount;
-            }
-            else{
-                overflowStack.push_back(rightIdx);
             }
         }
     }

@@ -11,6 +11,24 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void nwbPhysicsLoadBodyVelocity(
+    const uint bodyStateSlot,
+    const uint bodyIdx,
+    out float3 outV,
+    out float3 outW,
+    out uint outFlags
+){
+    if(bodyIdx == NWB_PHYSICS_INVALID_INDEX){
+        outV = float3(0.0f, 0.0f, 0.0f);
+        outW = float3(0.0f, 0.0f, 0.0f);
+        outFlags = 0u;
+        return;
+    }
+    outV = g_NwbPhysicsBodyStateBuffers[bodyStateSlot][bodyIdx].linearVelocityPad.xyz;
+    outW = g_NwbPhysicsBodyStateBuffers[bodyStateSlot][bodyIdx].angularVelocityPad.xyz;
+    outFlags = asuint(g_NwbPhysicsBodyStateBuffers[bodyStateSlot][bodyIdx].deltaPositionFlags.w);
+}
+
 void nwbPhysicsLoadBodyState(
     const uint bodyStateSlot,
     const uint bodyIdx,
@@ -45,16 +63,21 @@ void nwbPhysicsStoreBodyVelocity(const uint bodyStateSlot, const uint bodyIdx, c
     g_NwbPhysicsBodyStateBuffers[bodyStateSlot][bodyIdx].angularVelocityPad = float4(maskedW, 0.0f);
 }
 
-void nwbPhysicsApplyGyroscopicStep(const NwbPhysicsGpuBodySim sim, const float h, inout float3 w){
-    const float4 q = sim.rotation;
+void nwbPhysicsApplyGyroscopicStep(
+    const float4 q,
+    const float4 invInertiaLocal0,
+    const float2 invInertiaLocal1,
+    const float h,
+    inout float3 w
+){
     const float3 wLocal = nwbPhysicsQuatInvRotate(w, q);
 
-    const float a11 = sim.invInertiaLocal0.x;
-    const float a12 = sim.invInertiaLocal0.y;
-    const float a13 = sim.invInertiaLocal0.z;
-    const float a22 = sim.invInertiaLocal0.w;
-    const float a23 = sim.invInertiaLocal1.x;
-    const float a33 = sim.invInertiaLocal1.y;
+    const float a11 = invInertiaLocal0.x;
+    const float a12 = invInertiaLocal0.y;
+    const float a13 = invInertiaLocal0.z;
+    const float a22 = invInertiaLocal0.w;
+    const float a23 = invInertiaLocal1.x;
+    const float a33 = invInertiaLocal1.y;
     const float c11 = a22 * a33 - a23 * a23;
     const float c12 = a13 * a23 - a12 * a33;
     const float c13 = a12 * a23 - a13 * a22;
@@ -119,10 +142,11 @@ void nwbPhysicsIntegrateBodyVelocityValues(
     v += (h * invMass) * force + (h * gravityScale) * gravity;
     v *= 1.0f / (1.0f + h * linearDamping);
 
-    w += h * nwbPhysicsMulSymmetric3(sim.invInertiaWorld0, sim.invInertiaWorld1, torque);
+    if(any(torque != float3(0.0f, 0.0f, 0.0f)))
+        w += h * nwbPhysicsMulSymmetric3(sim.invInertiaWorld0, sim.invInertiaWorld1, torque);
 
     if((flags & NWB_PHYSICS_BODY_FLAG_GYROSCOPIC) != 0u)
-        nwbPhysicsApplyGyroscopicStep(sim, h, w);
+        nwbPhysicsApplyGyroscopicStep(sim.rotation, sim.invInertiaLocal0, sim.invInertiaLocal1.xy, h, w);
 
     w *= 1.0f / (1.0f + h * angularDamping);
 
@@ -157,6 +181,37 @@ void nwbPhysicsIntegrateBodyPositionValues(
     deltaRot = nwbPhysicsIntegrateDeltaQuat(deltaRot, maskedW, h);
 }
 
+NwbPhysicsGpuBodyOut nwbPhysicsBuildBodyOutFields(
+    const float3 pos,
+    const float4 rot,
+    const float minExtentRaw,
+    const float prevSleepTime,
+    const float sleepThreshold,
+    const float3 deltaPos,
+    const float4 deltaRot,
+    const float3 v,
+    const float3 w,
+    const uint bodyFlags,
+    const float dt
+){
+    const float3 newCenter = pos + deltaPos;
+    const float4 newRotation = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(deltaRot, rot));
+
+    const float minExtent = max(minExtentRaw, 1.0e-3f);
+    const float linSpeedSq = dot(v, v);
+    const float angSpeedSq = dot(w, w) * minExtent * minExtent;
+    float sleepTime = 0.0f;
+    if((bodyFlags & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && linSpeedSq + angSpeedSq <= sleepThreshold * sleepThreshold)
+        sleepTime = prevSleepTime + dt;
+
+    NwbPhysicsGpuBodyOut outBody;
+    outBody.positionSleepTime = float4(newCenter, sleepTime);
+    outBody.rotation = newRotation;
+    outBody.linearVelocityFlags = float4(v, asfloat(bodyFlags));
+    outBody.angularVelocityPad = float4(w, 0.0f);
+    return outBody;
+}
+
 NwbPhysicsGpuBodyOut nwbPhysicsBuildBodyOut(
     const NwbPhysicsGpuBodySim sim,
     const float3 deltaPos,
@@ -166,23 +221,19 @@ NwbPhysicsGpuBodyOut nwbPhysicsBuildBodyOut(
     const uint bodyFlags,
     const float dt
 ){
-    const float3 newCenter = sim.positionInvMass.xyz + deltaPos;
-    const float4 newRotation = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(deltaRot, sim.rotation));
-
-    const float minExtent = max(sim.localCenterMinExtent.w, 1.0e-3f);
-    const float linSpeedSq = dot(v, v);
-    const float angSpeedSq = dot(w, w) * minExtent * minExtent;
-    const float sleepThreshold = sim.invInertiaLocal1.z;
-    float sleepTime = 0.0f;
-    if((bodyFlags & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && linSpeedSq + angSpeedSq <= sleepThreshold * sleepThreshold)
-        sleepTime = sim.invInertiaWorld1.w + dt;
-
-    NwbPhysicsGpuBodyOut outBody;
-    outBody.positionSleepTime = float4(newCenter, sleepTime);
-    outBody.rotation = newRotation;
-    outBody.linearVelocityFlags = float4(v, asfloat(bodyFlags));
-    outBody.angularVelocityPad = float4(w, 0.0f);
-    return outBody;
+    return nwbPhysicsBuildBodyOutFields(
+        sim.positionInvMass.xyz,
+        sim.rotation,
+        sim.localCenterMinExtent.w,
+        sim.invInertiaWorld1.w,
+        sim.invInertiaLocal1.z,
+        deltaPos,
+        deltaRot,
+        v,
+        w,
+        bodyFlags,
+        dt
+    );
 }
 
 void nwbPhysicsIntegrateBodyVelocity(
@@ -193,35 +244,65 @@ void nwbPhysicsIntegrateBodyVelocity(
     const float maxLinearVelocity,
     const float3 gravity
 ){
-    NwbPhysicsGpuBodyState state = g_NwbPhysicsBodyStateBuffers[bodyStateSlot][idx];
-    uint flags = asuint(state.deltaPositionFlags.w);
+    float4 deltaPosFlags = g_NwbPhysicsBodyStateBuffers[bodyStateSlot][idx].deltaPositionFlags;
+    uint flags = asuint(deltaPosFlags.w);
     if((flags & NWB_PHYSICS_BODY_FLAG_DYNAMIC) == 0u)
         return;
 
-    const NwbPhysicsGpuBodySim sim = g_NwbPhysicsBodySimBuffers[bodySimSlot][idx];
-    if(sim.positionInvMass.w <= 0.0f)
+    const float4 posInvMass = g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].positionInvMass;
+    const float invMass = posInvMass.w;
+    if(invMass <= 0.0f)
         return;
 
-    float3 v = state.linearVelocityPad.xyz;
-    float3 w = state.angularVelocityPad.xyz;
-    nwbPhysicsIntegrateBodyVelocityValues(sim, h, maxLinearVelocity, gravity, v, w, flags);
+    const float4 forceLin = g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].forceLinearDamping;
+    const float4 torqueAng = g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].torqueAngularDamping;
+    const float4 invW0 = g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].invInertiaWorld0;
+    const float4 invW1 = g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].invInertiaWorld1;
 
-    state.linearVelocityPad = float4(v, 0.0f);
-    state.angularVelocityPad = float4(w, 0.0f);
-    state.deltaPositionFlags.w = asfloat(flags);
-    g_NwbPhysicsBodyStateBuffers[bodyStateSlot][idx] = state;
+    float3 v = g_NwbPhysicsBodyStateBuffers[bodyStateSlot][idx].linearVelocityPad.xyz;
+    float3 w = g_NwbPhysicsBodyStateBuffers[bodyStateSlot][idx].angularVelocityPad.xyz;
+
+    v += (h * invMass) * forceLin.xyz + (h * invW1.z) * gravity;
+    v *= 1.0f / (1.0f + h * forceLin.w);
+
+    const float3 torque = torqueAng.xyz;
+    if(any(torque != float3(0.0f, 0.0f, 0.0f)))
+        w += h * nwbPhysicsMulSymmetric3(invW0, invW1, torque);
+
+    if((flags & NWB_PHYSICS_BODY_FLAG_GYROSCOPIC) != 0u){
+        const float4 rot = g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].rotation;
+        const float4 invL0 = g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].invInertiaLocal0;
+        const float2 invL1 = g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].invInertiaLocal1.xy;
+        nwbPhysicsApplyGyroscopicStep(rot, invL0, invL1, h, w);
+    }
+
+    w *= 1.0f / (1.0f + h * torqueAng.w);
+
+    v = nwbPhysicsApplyLinearLocks(v, flags);
+    w = nwbPhysicsApplyAngularLocks(w, flags);
+
+    const float vLenSq = dot(v, v);
+    if(vLenSq > maxLinearVelocity * maxLinearVelocity && vLenSq > 1.0e-12f){
+        v *= maxLinearVelocity * rsqrt(vLenSq);
+        flags |= NWB_PHYSICS_BODY_FLAG_IS_SPEED_CAPPED;
+        g_NwbPhysicsBodyStateBuffers[bodyStateSlot][idx].deltaPositionFlags.w = asfloat(flags);
+    }
+
+    g_NwbPhysicsBodyStateBuffers[bodyStateSlot][idx].linearVelocityPad = float4(v, 0.0f);
+    g_NwbPhysicsBodyStateBuffers[bodyStateSlot][idx].angularVelocityPad = float4(w, 0.0f);
 }
 
 void nwbPhysicsIntegrateBodyPosition(const uint bodyStateSlot, const uint idx, const float h){
-    NwbPhysicsGpuBodyState state = g_NwbPhysicsBodyStateBuffers[bodyStateSlot][idx];
-    const uint flags = asuint(state.deltaPositionFlags.w);
-    float3 deltaPos = state.deltaPositionFlags.xyz;
-    float4 deltaRot = state.deltaRotation;
-    nwbPhysicsIntegrateBodyPositionValues(state.linearVelocityPad.xyz, state.angularVelocityPad.xyz, flags, h, deltaPos, deltaRot);
+    const float3 v = g_NwbPhysicsBodyStateBuffers[bodyStateSlot][idx].linearVelocityPad.xyz;
+    const float3 w = g_NwbPhysicsBodyStateBuffers[bodyStateSlot][idx].angularVelocityPad.xyz;
+    const float4 deltaPosFlags = g_NwbPhysicsBodyStateBuffers[bodyStateSlot][idx].deltaPositionFlags;
+    const uint flags = asuint(deltaPosFlags.w);
+    float3 deltaPos = deltaPosFlags.xyz;
+    float4 deltaRot = g_NwbPhysicsBodyStateBuffers[bodyStateSlot][idx].deltaRotation;
+    nwbPhysicsIntegrateBodyPositionValues(v, w, flags, h, deltaPos, deltaRot);
 
-    state.deltaPositionFlags = float4(deltaPos, state.deltaPositionFlags.w);
-    state.deltaRotation = deltaRot;
-    g_NwbPhysicsBodyStateBuffers[bodyStateSlot][idx] = state;
+    g_NwbPhysicsBodyStateBuffers[bodyStateSlot][idx].deltaPositionFlags.xyz = deltaPos;
+    g_NwbPhysicsBodyStateBuffers[bodyStateSlot][idx].deltaRotation = deltaRot;
 }
 
 void nwbPhysicsFinalizeBodyToOut(
@@ -231,10 +312,18 @@ void nwbPhysicsFinalizeBodyToOut(
     const uint idx,
     const float dt
 ){
-    const NwbPhysicsGpuBodySim sim = g_NwbPhysicsBodySimBuffers[bodySimSlot][idx];
+    const float3 pos = g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].positionInvMass.xyz;
+    const float4 rot = g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].rotation;
+    const float minExtent = g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].localCenterMinExtent.w;
+    const float prevSleepTime = g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].invInertiaWorld1.w;
+    const float sleepThreshold = g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].invInertiaLocal1.z;
     const NwbPhysicsGpuBodyState state = g_NwbPhysicsBodyStateBuffers[bodyStateSlot][idx];
-    const NwbPhysicsGpuBodyOut outBody = nwbPhysicsBuildBodyOut(
-        sim,
+    const NwbPhysicsGpuBodyOut outBody = nwbPhysicsBuildBodyOutFields(
+        pos,
+        rot,
+        minExtent,
+        prevSleepTime,
+        sleepThreshold,
         state.deltaPositionFlags.xyz,
         state.deltaRotation,
         state.linearVelocityPad.xyz,

@@ -13,6 +13,9 @@
 
 const StringView s_PhysicsGpuAssetOwnerName = "PhysicsGpuDispatcher";
 const StringView s_PhysicsShaderDefaultVariant = "default";
+const StringView s_PhysicsShaderNpPrimVariant = "NWB_PHYSICS_NP_PROFILE=0";
+const StringView s_PhysicsShaderNpComplexVariant = "NWB_PHYSICS_NP_PROFILE=1";
+const StringView s_PhysicsShaderNpBulletToiVariant = "NWB_PHYSICS_NP_PROFILE=2";
 const usize s_GpuJointColorCount = s_GraphColorCount;
 const usize s_GpuJointOverflowColorIndex = s_OverflowColorIndex;
 
@@ -38,6 +41,8 @@ u32 PackGpuShapeFlags(in Shape shape, in Body body, in Vector<HullShape> hullSha
         flags |= s_GpuShapeFlagKinematicBody;
     if(body.setIndex == s_AwakeSetIndex)
         flags |= s_GpuShapeFlagAwakeBody;
+    if((body.flags & (cast<u32>(BodyFlags::IsFast) | cast<u32>(BodyFlags::IsBullet))) != 0u)
+        flags |= s_GpuShapeFlagFastOrBullet;
     return flags;
 }
 
@@ -103,8 +108,9 @@ GpuPhysicsShapeProxy PackGpuShapeProxy(
         else{
             filterW = dataOffset;
             metaW = dataMeta;
-            const VectorSingle localMin = VectorSingle(shape.localAabb.lowerBound);
-            const VectorSingle localMax = VectorSingle(shape.localAabb.upperBound);
+            const Aabb3D localBox = ComputeHullAabb(hull, Transform3D());
+            const VectorSingle localMin = VectorSingle(localBox.lowerBound);
+            const VectorSingle localMax = VectorSingle(localBox.upperBound);
             const VectorSingle centroid = hull.centroid();
             const f32 r = hull.centroidRadius.w;
             const VectorSingle extents = Max(
@@ -120,8 +126,9 @@ GpuPhysicsShapeProxy PackGpuShapeProxy(
         in MeshShape mesh = meshShapes[shape.geometryIndex];
         filterW = dataOffset;
         metaW = dataMeta;
-        const VectorSingle localMin = VectorSingle(shape.localAabb.lowerBound);
-        const VectorSingle localMax = VectorSingle(shape.localAabb.upperBound);
+        const Aabb3D localBox = mesh.localAabb();
+        const VectorSingle localMin = VectorSingle(localBox.lowerBound);
+        const VectorSingle localMax = VectorSingle(localBox.upperBound);
         const VectorSingle center = (localMin + localMax) * 0.5f;
         const f32 r = mesh.localAabbMinRadius.w;
         const VectorSingle extents = Max((localMax - localMin) * 0.5f - VectorSingle(r), VectorSingle(0.0f));
@@ -153,18 +160,15 @@ GpuPhysicsContactConstraint PackGpuContactConstraint(in ContactConstraint c, in 
     );
     gc.normalFriction = c.normalFriction;
     gc.tangent1Restitution = c.tangent1Restitution;
-    gc.tangent2Rolling = c.tangent2Rolling;
     gc.centerATwistMass = c.centerATwistMass;
     gc.centerBTwistImpulse = c.centerBTwistImpulse;
     gc.softnessTangent00 = f32x4(c.softness.biasRate, c.softness.massScale, c.softness.impulseScale, c.tangentMass00);
     gc.tangentMassFriction = f32x4(c.tangentMass01, c.tangentMass11, c.frictionImpulse.x, c.frictionImpulse.y);
-    gc.invMassTangentVel = f32x4(c.invMassA, c.invMassB, c.tangentVelocity1, c.tangentVelocity2);
+    gc.invMassTangentVel = f32x4(c.invMassA, c.invMassB, c.tangentVelocity1, c.rollingResistance);
     gc.invIA0 = f32x4(c.invIA.m00, c.invIA.m01, c.invIA.m02, c.invIA.m11);
     gc.invIA1RollX = f32x4(c.invIA.m12, c.invIA.m22, c.rollingImpulse.x, c.maxLeverArm);
     gc.invIB0 = f32x4(c.invIB.m00, c.invIB.m01, c.invIB.m02, c.invIB.m11);
     gc.invIB1RollYZ = f32x4(c.invIB.m12, c.invIB.m22, c.rollingImpulse.y, c.rollingImpulse.z);
-    gc.rollingMass0 = f32x4(c.rollingMass.m00, c.rollingMass.m01, c.rollingMass.m02, c.rollingMass.m11);
-    gc.rollingMass1 = f32x4(c.rollingMass.m12, c.rollingMass.m22, 0.0f, 0.0f);
     for(u32 i = 0u; i < c.pointCount; ++i){
         in ManifoldConstraintPoint p = c.points[i];
         mut GpuPhysicsContactPoint gp = gc.points[i];
@@ -185,6 +189,8 @@ GpuPhysicsJointConstraint PackGpuJointConstraint(in JointConstraint jc, in Span<
         jFlags |= s_GpuJointFlagEnableMotor;
     if((jcFlags & cast<u32>(JointFlags::EnableSpring)) != 0u)
         jFlags |= s_GpuJointFlagEnableSpring;
+    if(jc.breakForce > 0.0f || jc.breakTorque > 0.0f)
+        jFlags |= s_GpuJointFlagBreakable;
 
     gjc.indicesTypeFlags = u32x4(
         RemapAwakeIndexToGpu(jc.indexA, awakeToGpuSlot),
@@ -474,6 +480,7 @@ b8 LoadPhysicsComputePipeline(
     mut ShaderArchivePathResolver shaderPathResolver,
     in BindingLayoutHandle bindingLayout,
     in Name shaderName,
+    in StringView variantName,
     in Name debugName,
     mut ShaderHandle outShader,
     mut ComputePipelineHandle outPipeline
@@ -485,7 +492,7 @@ b8 LoadPhysicsComputePipeline(
 
     if(!Load<ComputeShader, ShaderArchivePathResolver>(
         shaderName,
-        s_PhysicsShaderDefaultVariant,
+        variantName,
         debugName,
         s_PhysicsGpuAssetOwnerName,
         graphics,
@@ -520,7 +527,8 @@ class PhysicsCollisionTask{
     public mut GpuDescriptorHeap heap;
     public PhysicsGpuBufferGroup buffers;
     public ComputePipelineHandle broadphasePipeline;
-    public ComputePipelineHandle narrowphasePipeline;
+    public ComputePipelineHandle narrowphasePrimPipeline;
+    public ComputePipelineHandle narrowphaseComplexPipeline;
     public Span<GpuPhysicsBodySim> bodySims;
     public Span<GpuPhysicsShapeProxy> shapes;
     public Span<f32x4> hullVertices;
@@ -530,12 +538,14 @@ class PhysicsCollisionTask{
     public u32 maxPairs;
     public f32 invCellSize;
     public b8 uploadStaticGeom;
+    public b8 hasComplexShapes;
 
     public PhysicsCollisionTask(
         mut GpuDescriptorHeap descriptorHeap,
         in PhysicsGpuBufferGroup bufGroup,
         in ComputePipelineHandle bpPipe,
-        in ComputePipelineHandle npPipe,
+        in ComputePipelineHandle npPrimPipe,
+        in ComputePipelineHandle npComplexPipe,
         in Span<GpuPhysicsBodySim> sims,
         in Span<GpuPhysicsShapeProxy> shapeProxies,
         in Span<f32x4> vertices,
@@ -544,12 +554,14 @@ class PhysicsCollisionTask{
         in u32 numShapes,
         in u32 pairLimit,
         in f32 invCell,
-        in b8 uploadStatic
+        in b8 uploadStatic,
+        in b8 hasComplex
     ){
         this.heap = descriptorHeap;
         this.buffers = bufGroup;
         this.broadphasePipeline = bpPipe;
-        this.narrowphasePipeline = npPipe;
+        this.narrowphasePrimPipeline = npPrimPipe;
+        this.narrowphaseComplexPipeline = npComplexPipe;
         this.bodySims = sims;
         this.shapes = shapeProxies;
         this.hullVertices = vertices;
@@ -559,6 +571,7 @@ class PhysicsCollisionTask{
         this.maxPairs = pairLimit;
         this.invCellSize = invCell;
         this.uploadStaticGeom = uploadStatic;
+        this.hasComplexShapes = hasComplex;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{
@@ -567,7 +580,9 @@ class PhysicsCollisionTask{
 
     [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
-        if(this.shapeCount == 0u || this.maxPairs == 0u || !this.broadphasePipeline.valid() || !this.narrowphasePipeline.valid())
+        if(this.shapeCount == 0u || this.maxPairs == 0u || !this.broadphasePipeline.valid() || !this.narrowphasePrimPipeline.valid())
+            return false;
+        if(this.hasComplexShapes && !this.narrowphaseComplexPipeline.valid())
             return false;
 
         const b8 useSpatialHash = (this.shapeCount > 64u);
@@ -575,15 +590,15 @@ class PhysicsCollisionTask{
         const b8 uploadNodes = this.uploadStaticGeom && !this.meshNodes.empty();
         const b8 uploadTris = this.uploadStaticGeom && !this.meshTris.empty();
 
-        commands.setEnableUavBarriersForBuffer(this.buffers.bodySimBuffer.deref(), true);
+        commands.setEnableUavBarriersForBuffer(this.buffers.bodySimBuffer.deref(), false);
         commands.setEnableUavBarriersForBuffer(this.buffers.shapeBuffer.deref(), true);
         commands.setEnableUavBarriersForBuffer(this.buffers.pairBuffer.deref(), true);
         commands.setEnableUavBarriersForBuffer(this.buffers.counterBuffer.deref(), true);
         commands.setEnableUavBarriersForBuffer(this.buffers.indirectArgsBuffer.deref(), true);
-        commands.setEnableUavBarriersForBuffer(this.buffers.hullVertexBuffer.deref(), true);
-        commands.setEnableUavBarriersForBuffer(this.buffers.meshNodeBuffer.deref(), true);
-        commands.setEnableUavBarriersForBuffer(this.buffers.meshTriBuffer.deref(), true);
-        commands.setEnableUavBarriersForBuffer(this.buffers.manifoldBuffer.deref(), true);
+        commands.setEnableUavBarriersForBuffer(this.buffers.hullVertexBuffer.deref(), false);
+        commands.setEnableUavBarriersForBuffer(this.buffers.meshNodeBuffer.deref(), false);
+        commands.setEnableUavBarriersForBuffer(this.buffers.meshTriBuffer.deref(), false);
+        commands.setEnableUavBarriersForBuffer(this.buffers.manifoldBuffer.deref(), this.hasComplexShapes);
         if(useSpatialHash){
             commands.setEnableUavBarriersForBuffer(this.buffers.gridBuffer.deref(), true);
             commands.setEnableUavBarriersForBuffer(this.buffers.largeListBuffer.deref(), true);
@@ -700,9 +715,7 @@ class PhysicsCollisionTask{
             commands.dispatch(groups, 1u, 1u);
         }
 
-        commands.setBufferState(this.buffers.pairBuffer.deref(), ResourceStates::UnorderedAccess);
         commands.setBufferState(this.buffers.counterBuffer.deref(), ResourceStates::UnorderedAccess);
-        commands.setBufferState(this.buffers.indirectArgsBuffer.deref(), ResourceStates::UnorderedAccess);
         commands.commitBarriers();
 
         GpuPhysicsPushConstants pushInd;
@@ -720,9 +733,8 @@ class PhysicsCollisionTask{
         commands.commitBarriers();
 
         ComputeState npState;
-        npState.setPipeline(this.narrowphasePipeline.deref()).setIndirectParams(this.buffers.indirectArgsBuffer.deref());
+        npState.setPipeline(this.narrowphasePrimPipeline.deref()).setIndirectParams(this.buffers.indirectArgsBuffer.deref());
         commands.setComputeState(npState);
-        this.heap.bindCompute(commands, this.narrowphasePipeline.deref());
 
         GpuPhysicsPushConstants pushNp;
         pushNp.itemCount = this.maxPairs;
@@ -733,11 +745,23 @@ class PhysicsCollisionTask{
         commands.setPushConstants(pushNp);
         commands.dispatchIndirect(0u);
 
+        if(this.hasComplexShapes){
+            commands.setBufferState(this.buffers.counterBuffer.deref(), ResourceStates::UnorderedAccess);
+            commands.setBufferState(this.buffers.manifoldBuffer.deref(), ResourceStates::UnorderedAccess);
+            commands.commitBarriers();
+
+            ComputeState npComplexState;
+            npComplexState.setPipeline(this.narrowphaseComplexPipeline.deref()).setIndirectParams(this.buffers.indirectArgsBuffer.deref());
+            commands.setComputeState(npComplexState);
+            commands.setPushConstants(pushNp);
+            commands.dispatchIndirect(0u);
+        }
+
         commands.setBufferState(this.buffers.counterBuffer.deref(), ResourceStates::CopySource);
         commands.setBufferState(this.buffers.counterReadback.deref(), ResourceStates::CopyDest);
         commands.commitBarriers();
 
-        commands.copyBuffer(this.buffers.counterReadback.deref(), 0u, this.buffers.counterBuffer.deref(), 0u, cast<u64>(2u) * cast<u64>(size_of<u32>()));
+        commands.copyBuffer(this.buffers.counterReadback.deref(), 0u, this.buffers.counterBuffer.deref(), 0u, cast<u64>(3u) * cast<u64>(size_of<u32>()));
 
         commands.setBufferState(this.buffers.bodySimBuffer.deref(), ResourceStates::Common);
         commands.setBufferState(this.buffers.shapeBuffer.deref(), ResourceStates::Common);
@@ -793,12 +817,12 @@ class PhysicsBulletToiTask{
         if(this.pairCount == 0u || !this.narrowphasePipeline.valid())
             return false;
 
-        commands.setEnableUavBarriersForBuffer(this.buffers.bodySimBuffer.deref(), true);
-        commands.setEnableUavBarriersForBuffer(this.buffers.shapeBuffer.deref(), true);
-        commands.setEnableUavBarriersForBuffer(this.buffers.pairBuffer.deref(), true);
-        commands.setEnableUavBarriersForBuffer(this.buffers.hullVertexBuffer.deref(), true);
-        commands.setEnableUavBarriersForBuffer(this.buffers.meshNodeBuffer.deref(), true);
-        commands.setEnableUavBarriersForBuffer(this.buffers.meshTriBuffer.deref(), true);
+        commands.setEnableUavBarriersForBuffer(this.buffers.bodySimBuffer.deref(), false);
+        commands.setEnableUavBarriersForBuffer(this.buffers.shapeBuffer.deref(), false);
+        commands.setEnableUavBarriersForBuffer(this.buffers.pairBuffer.deref(), false);
+        commands.setEnableUavBarriersForBuffer(this.buffers.hullVertexBuffer.deref(), false);
+        commands.setEnableUavBarriersForBuffer(this.buffers.meshNodeBuffer.deref(), false);
+        commands.setEnableUavBarriersForBuffer(this.buffers.meshTriBuffer.deref(), false);
         commands.setEnableUavBarriersForBuffer(this.buffers.manifoldBuffer.deref(), true);
 
         commands.setBufferState(this.buffers.bodySimBuffer.deref(), ResourceStates::CopyDest);
@@ -954,14 +978,17 @@ class PhysicsSolverTask{
         return GpuTaskCommandRequirements(GpuQueueCapability::Compute | GpuQueueCapability::Transfer);
     }
 
-    private void dispatchContactPass(mut CommandList commands, in u32 mode, in f32 invH, in u32 flags)const{
+    private void dispatchContactPass(mut CommandList commands, in u32 mode, in f32 invH, in u32 flags, mut b8 heapBound)const{
         if(this.totalConstraintCount <= this.colorContactOffset)
             return;
         const u32 colorConstraintCount = this.totalConstraintCount - this.colorContactOffset;
         ComputeState state;
         state.setPipeline(this.pipeContacts.deref());
         commands.setComputeState(state);
-        this.heap.bindCompute(commands, this.pipeContacts.deref());
+        if(!heapBound){
+            this.heap.bindCompute(commands, this.pipeContacts.deref());
+            heapBound = true;
+        }
 
         if(mode == s_GpuSolverModeExportImpulses){
             GpuPhysicsPushConstants push;
@@ -1060,14 +1087,17 @@ class PhysicsSolverTask{
         }
     }
 
-    private void dispatchJointPass(mut CommandList commands, in u32 mode, in f32 h, in u32 flags)const{
+    private void dispatchJointPass(mut CommandList commands, in u32 mode, in f32 h, in u32 flags, mut b8 heapBound)const{
         if(this.totalJointCount <= this.colorJointOffset || !this.pipeJoints.valid())
             return;
         const u32 colorJointCount = this.totalJointCount - this.colorJointOffset;
         ComputeState state;
         state.setPipeline(this.pipeJoints.deref());
         commands.setComputeState(state);
-        this.heap.bindCompute(commands, this.pipeJoints.deref());
+        if(!heapBound){
+            this.heap.bindCompute(commands, this.pipeJoints.deref());
+            heapBound = true;
+        }
 
         if(mode == s_GpuSolverModeExportImpulses){
             GpuPhysicsPushConstants push;
@@ -1170,11 +1200,11 @@ class PhysicsSolverTask{
         const u32 totalIslandCount = this.contactIslandCount + this.jointIslandCount;
         const u32 colorBodyCount = this.awakeCount - this.colorBodyOffset;
 
-        commands.setEnableUavBarriersForBuffer(this.buffers.bodySimBuffer.deref(), true);
+        commands.setEnableUavBarriersForBuffer(this.buffers.bodySimBuffer.deref(), false);
         commands.setEnableUavBarriersForBuffer(this.buffers.bodyStateBuffer.deref(), true);
         commands.setEnableUavBarriersForBuffer(this.buffers.bodyOutBuffer.deref(), true);
         if(totalIslandCount > 0u)
-            commands.setEnableUavBarriersForBuffer(this.buffers.islandSliceBuffer.deref(), true);
+            commands.setEnableUavBarriersForBuffer(this.buffers.islandSliceBuffer.deref(), false);
         if(this.totalConstraintCount > 0u){
             commands.setEnableUavBarriersForBuffer(this.buffers.constraintBuffer.deref(), true);
             commands.setEnableUavBarriersForBuffer(this.buffers.contactImpulseOutBuffer.deref(), true);
@@ -1231,12 +1261,14 @@ class PhysicsSolverTask{
         u32 warmFlag = 0u;
         if(this.enableWarmStarting)
             warmFlag = s_GpuSolverFlagWarmStart;
+        b8 heapBound = false;
 
         if(this.freeBodyCount > 0u){
             ComputeState freeState;
             freeState.setPipeline(this.pipeFinalize.deref());
             commands.setComputeState(freeState);
             this.heap.bindCompute(commands, this.pipeFinalize.deref());
+            heapBound = true;
 
             GpuPhysicsPushConstants push;
             push.itemCount = this.freeBodyCount;
@@ -1252,15 +1284,13 @@ class PhysicsSolverTask{
         }
 
         if(this.contactIslandCount > 0u){
-            if(this.freeBodyCount > 0u){
-                commands.setBufferState(this.buffers.bodyOutBuffer.deref(), ResourceStates::UnorderedAccess);
-                commands.commitBarriers();
-            }
-
             ComputeState islState;
             islState.setPipeline(this.pipeIslands.deref());
             commands.setComputeState(islState);
-            this.heap.bindCompute(commands, this.pipeIslands.deref());
+            if(!heapBound){
+                this.heap.bindCompute(commands, this.pipeIslands.deref());
+                heapBound = true;
+            }
 
             GpuPhysicsPushConstants push;
             push.itemCount = this.contactIslandCount;
@@ -1279,22 +1309,13 @@ class PhysicsSolverTask{
         }
 
         if(this.jointIslandCount > 0u){
-            if(this.freeBodyCount > 0u || this.contactIslandCount > 0u){
-                commands.setBufferState(this.buffers.bodyOutBuffer.deref(), ResourceStates::UnorderedAccess);
-                if(this.contactIslandCount > 0u){
-                    commands.setBufferState(this.buffers.bodyStateBuffer.deref(), ResourceStates::UnorderedAccess);
-                    if(this.totalConstraintCount > 0u){
-                        commands.setBufferState(this.buffers.constraintBuffer.deref(), ResourceStates::UnorderedAccess);
-                        commands.setBufferState(this.buffers.contactImpulseOutBuffer.deref(), ResourceStates::UnorderedAccess);
-                    }
-                }
-                commands.commitBarriers();
-            }
-
             ComputeState jIslState;
             jIslState.setPipeline(this.pipeJointIslands.deref());
             commands.setComputeState(jIslState);
-            this.heap.bindCompute(commands, this.pipeJointIslands.deref());
+            if(!heapBound){
+                this.heap.bindCompute(commands, this.pipeJointIslands.deref());
+                heapBound = true;
+            }
 
             GpuPhysicsPushConstants push;
             push.itemCount = this.jointIslandCount;
@@ -1313,27 +1334,14 @@ class PhysicsSolverTask{
         }
 
         if(colorBodyCount > 0u){
-            if(this.freeBodyCount > 0u || totalIslandCount > 0u){
-                commands.setBufferState(this.buffers.bodyOutBuffer.deref(), ResourceStates::UnorderedAccess);
-                if(totalIslandCount > 0u){
-                    commands.setBufferState(this.buffers.bodyStateBuffer.deref(), ResourceStates::UnorderedAccess);
-                    if(this.totalConstraintCount > 0u){
-                        commands.setBufferState(this.buffers.constraintBuffer.deref(), ResourceStates::UnorderedAccess);
-                        commands.setBufferState(this.buffers.contactImpulseOutBuffer.deref(), ResourceStates::UnorderedAccess);
-                    }
-                    if(this.totalJointCount > 0u){
-                        commands.setBufferState(this.buffers.jointConstraintBuffer.deref(), ResourceStates::UnorderedAccess);
-                        commands.setBufferState(this.buffers.jointImpulseOutBuffer.deref(), ResourceStates::UnorderedAccess);
-                    }
-                }
-                commands.commitBarriers();
-            }
-
             if(this.totalConstraintCount == this.colorContactOffset && this.totalJointCount == this.colorJointOffset){
                 ComputeState freeColorState;
                 freeColorState.setPipeline(this.pipeFinalize.deref());
                 commands.setComputeState(freeColorState);
-                this.heap.bindCompute(commands, this.pipeFinalize.deref());
+                if(!heapBound){
+                    this.heap.bindCompute(commands, this.pipeFinalize.deref());
+                    heapBound = true;
+                }
 
                 GpuPhysicsPushConstants push;
                 push.itemCount = colorBodyCount;
@@ -1354,7 +1362,10 @@ class PhysicsSolverTask{
                         ComputeState velState;
                         velState.setPipeline(this.pipeIntegrateVel.deref());
                         commands.setComputeState(velState);
-                        this.heap.bindCompute(commands, this.pipeIntegrateVel.deref());
+                        if(!heapBound){
+                            this.heap.bindCompute(commands, this.pipeIntegrateVel.deref());
+                            heapBound = true;
+                        }
 
                         GpuPhysicsPushConstants push;
                         push.itemCount = colorBodyCount;
@@ -1372,22 +1383,21 @@ class PhysicsSolverTask{
                     }
 
                     if(this.enableWarmStarting){
-                        this.dispatchContactPass(commands, s_GpuSolverModeWarmStart, invH, s_GpuSolverFlagWarmStart);
-                        this.dispatchJointPass(commands, s_GpuSolverModeWarmStart, h, s_GpuSolverFlagWarmStart);
+                        this.dispatchContactPass(commands, s_GpuSolverModeWarmStart, invH, s_GpuSolverFlagWarmStart, heapBound);
+                        this.dispatchJointPass(commands, s_GpuSolverModeWarmStart, h, s_GpuSolverFlagWarmStart, heapBound);
                     }
                     else if(subStep > 0u){
-                        this.dispatchContactPass(commands, s_GpuSolverModeWarmStart, invH, 0u);
-                        this.dispatchJointPass(commands, s_GpuSolverModeWarmStart, h, 0u);
+                        this.dispatchContactPass(commands, s_GpuSolverModeWarmStart, invH, 0u, heapBound);
+                        this.dispatchJointPass(commands, s_GpuSolverModeWarmStart, h, 0u, heapBound);
                     }
 
-                    this.dispatchContactPass(commands, s_GpuSolverModeSolveBias, invH, 0u);
-                    this.dispatchJointPass(commands, s_GpuSolverModeSolveBias, h, 0u);
+                    this.dispatchContactPass(commands, s_GpuSolverModeSolveBias, invH, 0u, heapBound);
+                    this.dispatchJointPass(commands, s_GpuSolverModeSolveBias, h, 0u, heapBound);
 
                     {
                         ComputeState posState;
                         posState.setPipeline(this.pipeIntegratePos.deref());
                         commands.setComputeState(posState);
-                        this.heap.bindCompute(commands, this.pipeIntegratePos.deref());
 
                         GpuPhysicsPushConstants push;
                         push.itemCount = colorBodyCount;
@@ -1402,22 +1412,21 @@ class PhysicsSolverTask{
                         commands.commitBarriers();
                     }
 
-                    this.dispatchContactPass(commands, s_GpuSolverModeRelax, invH, 0u);
-                    this.dispatchJointPass(commands, s_GpuSolverModeRelax, h, 0u);
+                    this.dispatchContactPass(commands, s_GpuSolverModeRelax, invH, 0u, heapBound);
+                    this.dispatchJointPass(commands, s_GpuSolverModeRelax, h, 0u, heapBound);
                 }
 
-                this.dispatchContactPass(commands, s_GpuSolverModeRestitution, invH, 0u);
+                this.dispatchContactPass(commands, s_GpuSolverModeRestitution, invH, 0u, heapBound);
 
                 if(this.totalConstraintCount > this.colorContactOffset)
-                    this.dispatchContactPass(commands, s_GpuSolverModeExportImpulses, invH, 0u);
+                    this.dispatchContactPass(commands, s_GpuSolverModeExportImpulses, invH, 0u, heapBound);
                 if(this.totalJointCount > this.colorJointOffset)
-                    this.dispatchJointPass(commands, s_GpuSolverModeExportImpulses, h, 0u);
+                    this.dispatchJointPass(commands, s_GpuSolverModeExportImpulses, h, 0u, heapBound);
 
                 {
                     ComputeState finState;
                     finState.setPipeline(this.pipeFinalize.deref());
                     commands.setComputeState(finState);
-                    this.heap.bindCompute(commands, this.pipeFinalize.deref());
 
                     GpuPhysicsPushConstants push;
                     push.itemCount = colorBodyCount;
@@ -1588,8 +1597,12 @@ class PhysicsGpuDispatcher{
     private BindingLayoutHandle m_bindingLayout;
     private ShaderHandle m_broadphaseShader;
     private ComputePipelineHandle m_broadphasePipeline;
-    private ShaderHandle m_narrowphaseShader;
-    private ComputePipelineHandle m_narrowphasePipeline;
+    private ShaderHandle m_narrowphasePrimShader;
+    private ComputePipelineHandle m_narrowphasePrimPipeline;
+    private ShaderHandle m_narrowphaseComplexShader;
+    private ComputePipelineHandle m_narrowphaseComplexPipeline;
+    private ShaderHandle m_bulletToiShader;
+    private ComputePipelineHandle m_bulletToiPipeline;
     private ShaderHandle m_integrateVelShader;
     private ComputePipelineHandle m_integrateVelPipeline;
     private ShaderHandle m_contactsShader;
@@ -1667,6 +1680,26 @@ class PhysicsGpuDispatcher{
     private Array<Vector<ContactConstraint>, s_GraphColorCount> m_cpuColorConstraintsScratch;
     private Vector<JointConstraint> m_cpuJointConstraintsScratch;
     private Vector<u32> m_brokenJointIdsScratch;
+    private Vector<u32> m_sharedKinAwakeIndicesScratch;
+    private Vector<BodySim> m_sharedKinPreSimsScratch;
+    private Vector<BodyState> m_sharedKinPreStatesScratch;
+    private Vector<u32> m_toiBulletAwakeIndicesScratch;
+    private Vector<u32> m_toiBulletBodyIdsScratch;
+    private Vector<f32x4> m_toiBulletSweepMinScratch;
+    private Vector<f32x4> m_toiBulletSweepMaxScratch;
+    private Vector<usize> m_toiPairBulletIdxScratch;
+    private Vector<u32> m_toiPairShapeAScratch;
+    private Vector<u32> m_toiPairShapeBScratch;
+    private Vector<u32> m_toiBodyToSlotScratch;
+    private Vector<u32> m_toiShapeToSlotScratch;
+    private Vector<GpuPhysicsBroadphasePair> m_toiPairsScratch;
+    private Vector<f32> m_toiBestTScratch;
+    private Vector<b8> m_toiFoundScratch;
+    private Vector<u32> m_toiBestShapeAScratch;
+    private Vector<u32> m_toiBestShapeBScratch;
+    private Vector<f32x4> m_toiBestNormalScratch;
+    private Vector<f32x4> m_toiBestPointScratch;
+    private Vector<f32> m_toiBestRestitutionScratch;
 
     private u32 m_lastBroadphasePairCount = 0u;
     private u16 m_deviceGeneration = 0u;
@@ -1801,9 +1834,31 @@ class PhysicsGpuDispatcher{
             this.m_cpuColorConstraintsScratch[cc].clear();
         this.m_cpuJointConstraintsScratch.clear();
         this.m_brokenJointIdsScratch.clear();
+        this.m_sharedKinAwakeIndicesScratch.clear();
+        this.m_sharedKinPreSimsScratch.clear();
+        this.m_sharedKinPreStatesScratch.clear();
+        this.m_toiBulletAwakeIndicesScratch.clear();
+        this.m_toiBulletBodyIdsScratch.clear();
+        this.m_toiBulletSweepMinScratch.clear();
+        this.m_toiBulletSweepMaxScratch.clear();
+        this.m_toiPairBulletIdxScratch.clear();
+        this.m_toiPairShapeAScratch.clear();
+        this.m_toiPairShapeBScratch.clear();
+        this.m_toiBodyToSlotScratch.clear();
+        this.m_toiShapeToSlotScratch.clear();
+        this.m_toiPairsScratch.clear();
+        this.m_toiBestTScratch.clear();
+        this.m_toiFoundScratch.clear();
+        this.m_toiBestShapeAScratch.clear();
+        this.m_toiBestShapeBScratch.clear();
+        this.m_toiBestNormalScratch.clear();
+        this.m_toiBestPointScratch.clear();
+        this.m_toiBestRestitutionScratch.clear();
 
         this.m_broadphasePipeline.reset();
-        this.m_narrowphasePipeline.reset();
+        this.m_narrowphasePrimPipeline.reset();
+        this.m_narrowphaseComplexPipeline.reset();
+        this.m_bulletToiPipeline.reset();
         this.m_integrateVelPipeline.reset();
         this.m_contactsPipeline.reset();
         this.m_jointsPipeline.reset();
@@ -1813,7 +1868,9 @@ class PhysicsGpuDispatcher{
         this.m_jointIslandsPipeline.reset();
 
         this.m_broadphaseShader.reset();
-        this.m_narrowphaseShader.reset();
+        this.m_narrowphasePrimShader.reset();
+        this.m_narrowphaseComplexShader.reset();
+        this.m_bulletToiShader.reset();
         this.m_integrateVelShader.reset();
         this.m_contactsShader.reset();
         this.m_jointsShader.reset();
@@ -1861,23 +1918,27 @@ class PhysicsGpuDispatcher{
         }
 
         mut AssetManager assets = this.m_assetManager.value();
-        if(!LoadPhysicsComputePipeline(graphics, assets, this.m_shaderPathResolver, this.m_bindingLayout, this.resolveShaderAssetName(0u), Name("physics/broadphase_aabb_cs"), this.m_broadphaseShader, this.m_broadphasePipeline))
+        if(!LoadPhysicsComputePipeline(graphics, assets, this.m_shaderPathResolver, this.m_bindingLayout, this.resolveShaderAssetName(0u), s_PhysicsShaderDefaultVariant, Name("physics/broadphase_aabb_cs"), this.m_broadphaseShader, this.m_broadphasePipeline))
             return false;
-        if(!LoadPhysicsComputePipeline(graphics, assets, this.m_shaderPathResolver, this.m_bindingLayout, this.resolveShaderAssetName(1u), Name("physics/narrowphase_cs"), this.m_narrowphaseShader, this.m_narrowphasePipeline))
+        if(!LoadPhysicsComputePipeline(graphics, assets, this.m_shaderPathResolver, this.m_bindingLayout, this.resolveShaderAssetName(1u), s_PhysicsShaderNpPrimVariant, Name("physics/narrowphase_cs_prim"), this.m_narrowphasePrimShader, this.m_narrowphasePrimPipeline))
             return false;
-        if(!LoadPhysicsComputePipeline(graphics, assets, this.m_shaderPathResolver, this.m_bindingLayout, this.resolveShaderAssetName(2u), Name("physics/solver_integrate_velocities_cs"), this.m_integrateVelShader, this.m_integrateVelPipeline))
+        if(!LoadPhysicsComputePipeline(graphics, assets, this.m_shaderPathResolver, this.m_bindingLayout, this.resolveShaderAssetName(1u), s_PhysicsShaderNpComplexVariant, Name("physics/narrowphase_cs_complex"), this.m_narrowphaseComplexShader, this.m_narrowphaseComplexPipeline))
             return false;
-        if(!LoadPhysicsComputePipeline(graphics, assets, this.m_shaderPathResolver, this.m_bindingLayout, this.resolveShaderAssetName(3u), Name("physics/solver_contacts_cs"), this.m_contactsShader, this.m_contactsPipeline))
+        if(!LoadPhysicsComputePipeline(graphics, assets, this.m_shaderPathResolver, this.m_bindingLayout, this.resolveShaderAssetName(1u), s_PhysicsShaderNpBulletToiVariant, Name("physics/narrowphase_cs_toi"), this.m_bulletToiShader, this.m_bulletToiPipeline))
             return false;
-        if(!LoadPhysicsComputePipeline(graphics, assets, this.m_shaderPathResolver, this.m_bindingLayout, this.resolveShaderAssetName(4u), Name("physics/solver_integrate_positions_cs"), this.m_integratePosShader, this.m_integratePosPipeline))
+        if(!LoadPhysicsComputePipeline(graphics, assets, this.m_shaderPathResolver, this.m_bindingLayout, this.resolveShaderAssetName(2u), s_PhysicsShaderDefaultVariant, Name("physics/solver_integrate_velocities_cs"), this.m_integrateVelShader, this.m_integrateVelPipeline))
             return false;
-        if(!LoadPhysicsComputePipeline(graphics, assets, this.m_shaderPathResolver, this.m_bindingLayout, this.resolveShaderAssetName(5u), Name("physics/solver_finalize_bodies_cs"), this.m_finalizeShader, this.m_finalizePipeline))
+        if(!LoadPhysicsComputePipeline(graphics, assets, this.m_shaderPathResolver, this.m_bindingLayout, this.resolveShaderAssetName(3u), s_PhysicsShaderDefaultVariant, Name("physics/solver_contacts_cs"), this.m_contactsShader, this.m_contactsPipeline))
             return false;
-        if(!LoadPhysicsComputePipeline(graphics, assets, this.m_shaderPathResolver, this.m_bindingLayout, this.resolveShaderAssetName(6u), Name("physics/solver_joints_cs"), this.m_jointsShader, this.m_jointsPipeline))
+        if(!LoadPhysicsComputePipeline(graphics, assets, this.m_shaderPathResolver, this.m_bindingLayout, this.resolveShaderAssetName(4u), s_PhysicsShaderDefaultVariant, Name("physics/solver_integrate_positions_cs"), this.m_integratePosShader, this.m_integratePosPipeline))
             return false;
-        if(!LoadPhysicsComputePipeline(graphics, assets, this.m_shaderPathResolver, this.m_bindingLayout, this.resolveShaderAssetName(7u), Name("physics/solver_islands_cs"), this.m_islandsShader, this.m_islandsPipeline))
+        if(!LoadPhysicsComputePipeline(graphics, assets, this.m_shaderPathResolver, this.m_bindingLayout, this.resolveShaderAssetName(5u), s_PhysicsShaderDefaultVariant, Name("physics/solver_finalize_bodies_cs"), this.m_finalizeShader, this.m_finalizePipeline))
             return false;
-        if(!LoadPhysicsComputePipeline(graphics, assets, this.m_shaderPathResolver, this.m_bindingLayout, this.resolveShaderAssetName(8u), Name("physics/solver_joint_islands_cs"), this.m_jointIslandsShader, this.m_jointIslandsPipeline))
+        if(!LoadPhysicsComputePipeline(graphics, assets, this.m_shaderPathResolver, this.m_bindingLayout, this.resolveShaderAssetName(6u), s_PhysicsShaderDefaultVariant, Name("physics/solver_joints_cs"), this.m_jointsShader, this.m_jointsPipeline))
+            return false;
+        if(!LoadPhysicsComputePipeline(graphics, assets, this.m_shaderPathResolver, this.m_bindingLayout, this.resolveShaderAssetName(7u), s_PhysicsShaderDefaultVariant, Name("physics/solver_islands_cs"), this.m_islandsShader, this.m_islandsPipeline))
+            return false;
+        if(!LoadPhysicsComputePipeline(graphics, assets, this.m_shaderPathResolver, this.m_bindingLayout, this.resolveShaderAssetName(8u), s_PhysicsShaderDefaultVariant, Name("physics/solver_joint_islands_cs"), this.m_jointIslandsShader, this.m_jointIslandsPipeline))
             return false;
 
         this.m_pipelinesReady = true;
@@ -1897,14 +1958,16 @@ class PhysicsGpuDispatcher{
         in u32 shapeCount,
         in u32 maxPairs,
         in f32 invCellSize,
-        in b8 uploadStaticGeom
+        in b8 uploadStaticGeom,
+        in b8 hasComplexShapes
     ){
         const b8 useSpatialHash = (shapeCount > 64u);
         const PhysicsCollisionTask payload(
             heap,
             bufGroup,
             this.m_broadphasePipeline,
-            this.m_narrowphasePipeline,
+            this.m_narrowphasePrimPipeline,
+            this.m_narrowphaseComplexPipeline,
             bodySims,
             shapes,
             hullVertices,
@@ -1913,7 +1976,8 @@ class PhysicsGpuDispatcher{
             shapeCount,
             maxPairs,
             invCellSize,
-            uploadStaticGeom
+            uploadStaticGeom,
+            hasComplexShapes
         );
         return graphics.standaloneGraph().submitStandaloneTaskGraph(
             lambda[in bufGroup, in payload, in useSpatialHash](mut GpuTaskGraph graph) -> Expected<GpuTaskId>{
@@ -1974,7 +2038,7 @@ class PhysicsGpuDispatcher{
         const PhysicsBulletToiTask payload(
             heap,
             bufGroup,
-            this.m_narrowphasePipeline,
+            this.m_bulletToiPipeline,
             bodySims,
             shapes,
             pairs,
@@ -2026,7 +2090,7 @@ class PhysicsGpuDispatcher{
         if(!device.waitForSubmissionToken(token))
             return false;
 
-        Array<u32, 2u> counterWords;
+        Array<u32, 3u> counterWords;
         if(!device.readMappedBuffer(this.m_counterSlot.readback.deref(), counterWords))
             return false;
         outRawPairCount = counterWords[0u];
@@ -2034,7 +2098,11 @@ class PhysicsGpuDispatcher{
         if(outRawPairCount > maxPairs || outClampedPairCount == 0u)
             return true;
 
-        outManifolds.resize(outClampedPairCount);
+        const u32 emittedCount = Min(counterWords[2u], outClampedPairCount);
+        if(emittedCount == 0u)
+            return true;
+
+        outManifolds.resize(emittedCount);
         return device.readMappedBuffer(this.m_manifoldSlot.buffer.deref(), outManifolds);
     }
 
@@ -2388,10 +2456,14 @@ class PhysicsGpuDispatcher{
         const u32 toiBit = cast<u32>(BodyFlags::HadTimeOfImpact);
         const usize awakeCount = world.m_solverSets[s_AwakeSetIndex].sims.size();
 
-        Vector<u32> bulletAwakeIndices;
-        Vector<u32> bulletBodyIds;
-        Vector<f32x4> bulletSweepMin;
-        Vector<f32x4> bulletSweepMax;
+        mut Vector<u32> bulletAwakeIndices = this.m_toiBulletAwakeIndicesScratch;
+        mut Vector<u32> bulletBodyIds = this.m_toiBulletBodyIdsScratch;
+        mut Vector<f32x4> bulletSweepMin = this.m_toiBulletSweepMinScratch;
+        mut Vector<f32x4> bulletSweepMax = this.m_toiBulletSweepMaxScratch;
+        bulletAwakeIndices.clear();
+        bulletBodyIds.clear();
+        bulletSweepMin.clear();
+        bulletSweepMax.clear();
         for(usize idx = 0u; idx < awakeCount; ++idx){
             in BodySim simInit = world.m_solverSets[s_AwakeSetIndex].sims[idx];
             const u32 bodyIdA = simInit.bodyId;
@@ -2437,9 +2509,12 @@ class PhysicsGpuDispatcher{
         if(bulletCount == 0u)
             return true;
 
-        Vector<usize> pairBulletIdx;
-        Vector<u32> pairShapeA;
-        Vector<u32> pairShapeB;
+        mut Vector<usize> pairBulletIdx = this.m_toiPairBulletIdxScratch;
+        mut Vector<u32> pairShapeA = this.m_toiPairShapeAScratch;
+        mut Vector<u32> pairShapeB = this.m_toiPairShapeBScratch;
+        pairBulletIdx.clear();
+        pairShapeA.clear();
+        pairShapeB.clear();
         in PhysicsWorld worldRef = world;
         for(usize bi = 0u; bi < bulletCount; ++bi){
             const u32 bodyIdA = bulletBodyIds[bi];
@@ -2492,12 +2567,19 @@ class PhysicsGpuDispatcher{
         const usize totalPairCount = pairBulletIdx.size();
         if(totalPairCount == 0u)
             return true;
+        if(totalPairCount < 64u)
+            return false;
 
-        Vector<u32> bodyToToiSlot(world.m_bodies.size(), s_GpuInvalidIndex);
-        Vector<u32> shapeToToiSlot(world.m_shapes.size(), s_GpuInvalidIndex);
+        mut Vector<u32> bodyToToiSlot = this.m_toiBodyToSlotScratch;
+        mut Vector<u32> shapeToToiSlot = this.m_toiShapeToSlotScratch;
+        bodyToToiSlot.clear();
+        bodyToToiSlot.resize(world.m_bodies.size(), s_GpuInvalidIndex);
+        shapeToToiSlot.clear();
+        shapeToToiSlot.resize(world.m_shapes.size(), s_GpuInvalidIndex);
         this.m_gpuSimsScratch.clear();
         this.m_gpuShapesScratch.clear();
-        Vector<GpuPhysicsBroadphasePair> toiPairs;
+        mut Vector<GpuPhysicsBroadphasePair> toiPairs = this.m_toiPairsScratch;
+        toiPairs.clear();
         toiPairs.reserve(totalPairCount);
 
         for(usize pi = 0u; pi < totalPairCount; ++pi){
@@ -2618,13 +2700,27 @@ class PhysicsGpuDispatcher{
         if(!device.readMappedBuffer(this.m_manifoldSlot.buffer.deref(), this.m_gpuManifoldsScratch))
             return false;
 
-        Vector<f32> bestT(bulletCount, 1.0f);
-        Vector<b8> foundToi(bulletCount, false);
-        Vector<u32> bestShapeA(bulletCount, s_NullIndex);
-        Vector<u32> bestShapeB(bulletCount, s_NullIndex);
-        Vector<f32x4> bestNormal(bulletCount, f32x4(0.0f, 1.0f, 0.0f, 0.0f));
-        Vector<f32x4> bestPoint(bulletCount, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
-        Vector<f32> bestRestitution(bulletCount, -1.0f);
+        mut Vector<f32> bestT = this.m_toiBestTScratch;
+        mut Vector<b8> foundToi = this.m_toiFoundScratch;
+        mut Vector<u32> bestShapeA = this.m_toiBestShapeAScratch;
+        mut Vector<u32> bestShapeB = this.m_toiBestShapeBScratch;
+        mut Vector<f32x4> bestNormal = this.m_toiBestNormalScratch;
+        mut Vector<f32x4> bestPoint = this.m_toiBestPointScratch;
+        mut Vector<f32> bestRestitution = this.m_toiBestRestitutionScratch;
+        bestT.clear();
+        bestT.resize(bulletCount, 1.0f);
+        foundToi.clear();
+        foundToi.resize(bulletCount, false);
+        bestShapeA.clear();
+        bestShapeA.resize(bulletCount, s_NullIndex);
+        bestShapeB.clear();
+        bestShapeB.resize(bulletCount, s_NullIndex);
+        bestNormal.clear();
+        bestNormal.resize(bulletCount, f32x4(0.0f, 1.0f, 0.0f, 0.0f));
+        bestPoint.clear();
+        bestPoint.resize(bulletCount, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
+        bestRestitution.clear();
+        bestRestitution.resize(bulletCount, -1.0f);
 
         for(usize pi = 0u; pi < totalPairCount; ++pi){
             const usize bi = pairBulletIdx[pi];
@@ -3052,6 +3148,7 @@ class PhysicsGpuDispatcher{
             const f32 baseGrav = Vector3Length(VectorSingle(world.m_def.gravity, 0.0f)).x * dt;
             f32 cellExtentAccum = 0.0f;
             u32 cellExtentCount = 0u;
+            b8 hasComplexShapes = false;
             for(u32 sId = 0u; sId < world.m_shapes.size(); ++sId){
                 in Shape shape = world.m_shapes[sId];
                 if(!shape.alive() || shape.bodyId >= world.m_bodies.size())
@@ -3071,11 +3168,16 @@ class PhysicsGpuDispatcher{
                         maxSweep = s_MaxBulletSweepDistance;
                     sweepMargin = Clamp((speed + gravBoost) * dt * 1.5f + s_MaxAabbMargin, s_MaxAabbMargin, maxSweep);
                 }
-                const VectorSingle localSpan = VectorSingle(shape.localAabb.upperBound) - VectorSingle(shape.localAabb.lowerBound);
+                const Aabb3D localBox = ComputeShapeLocalAabb(shape, world.m_hullShapes, world.m_meshShapes);
+                const VectorSingle localSpan = VectorSingle(localBox.upperBound) - VectorSingle(localBox.lowerBound);
                 const f32 shapeExtent = Max(localSpan.x, Max(localSpan.y, localSpan.z)) * 0.5f;
                 if(shapeExtent <= 10.0f){
                     cellExtentAccum += Max(shapeExtent, 0.25f);
                     ++cellExtentCount;
+                }
+                if(!hasComplexShapes){
+                    if(shape.type == ShapeType::Mesh || (shape.type == ShapeType::Hull && world.m_hullShapes[shape.geometryIndex].halfExtentsFlags.w == 0u))
+                        hasComplexShapes = true;
                 }
                 u32 dataOffset = 0u;
                 u32 dataMeta = 0u;
@@ -3103,7 +3205,7 @@ class PhysicsGpuDispatcher{
                 return false;
 
             if(shapeCount > 0u){
-                u32 maxPairs = Max(Max(shapeCount * 2u, this.m_lastBroadphasePairCount + this.m_lastBroadphasePairCount / 4u + 128u), 256u);
+                u32 maxPairs = Max(Max(shapeCount * 4u, this.m_lastBroadphasePairCount + this.m_lastBroadphasePairCount / 4u + 128u), 256u);
                 if(!EnsurePhysicsGpuStorageBuffer(graphics, heap, Name("physics/gpu/shapes"), s_GpuShapeProxyBytes, shapeCount, false, false, this.m_shapeSlot))
                     return false;
                 if(!EnsurePhysicsGpuStorageBuffer(graphics, heap, Name("physics/gpu/pairs"), s_GpuBroadphasePairBytes, maxPairs, false, false, this.m_pairSlot))
@@ -3116,6 +3218,7 @@ class PhysicsGpuDispatcher{
                 }
                 if(!EnsurePhysicsGpuStorageBuffer(graphics, heap, Name("physics/gpu/manifolds"), s_GpuNarrowphaseManifoldBytes, maxPairs, false, true, this.m_manifoldSlot))
                     return false;
+                maxPairs = Min(this.m_pairSlot.capacity, this.m_manifoldSlot.capacity);
 
                 PhysicsGpuBufferGroup colBufs;
                 colBufs.bodySimBuffer = this.m_bodySimSlot.buffer;
@@ -3177,7 +3280,8 @@ class PhysicsGpuDispatcher{
                     shapeCount,
                     maxPairs,
                     invCellSize,
-                    this.m_staticGeomDirtyUpload
+                    this.m_staticGeomDirtyUpload,
+                    hasComplexShapes
                 );
                 if(!colToken.has_value())
                     return false;
@@ -3224,7 +3328,8 @@ class PhysicsGpuDispatcher{
                         shapeCount,
                         maxPairs,
                         invCellSize,
-                        false
+                        false,
+                        hasComplexShapes
                     );
                     if(!retryToken.has_value())
                         return false;
@@ -3833,9 +3938,12 @@ class PhysicsGpuDispatcher{
         if(totalIslandCount > 0u)
             islUploadSpan = Span<GpuPhysicsIslandSlice>(this.m_gpuIslandSlicesScratch.data(), this.m_gpuIslandSlicesScratch.size());
 
-        Vector<u32> sharedKinAwakeIndices;
-        Vector<BodySim> sharedKinPreSims;
-        Vector<BodyState> sharedKinPreStates;
+        mut Vector<u32> sharedKinAwakeIndices = this.m_sharedKinAwakeIndicesScratch;
+        mut Vector<BodySim> sharedKinPreSims = this.m_sharedKinPreSimsScratch;
+        mut Vector<BodyState> sharedKinPreStates = this.m_sharedKinPreStatesScratch;
+        sharedKinAwakeIndices.clear();
+        sharedKinPreSims.clear();
+        sharedKinPreStates.clear();
         if(!this.m_partitionScratch.cpuAwakeIndices.empty()){
             for(u32 g = 0u; g < gpuUploadCount; ++g){
                 if(this.m_partitionScratch.gpuAwakeWriteBack[g] != 0u)

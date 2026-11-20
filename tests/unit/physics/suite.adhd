@@ -353,7 +353,7 @@ static_assert(size_of<HullShape>() <= 224u, "HullShape size");
 static_assert(size_of<MeshTriangle>() == 48u, "MeshTriangle size");
 static_assert(size_of<MeshBvhNode>() == 32u, "MeshBvhNode size");
 static_assert(size_of<MeshShape>() <= 128u, "MeshShape size");
-static_assert(size_of<Shape>() == 160u, "Shape size");
+static_assert(size_of<Shape>() == 128u, "Shape size");
 static_assert(size_of<SymMat3>() == 24u, "SymMat3 size");
 static_assert(size_of<MassData>() == 64u, "MassData size");
 static_assert(size_of<BodyMoveEvent>() == 48u, "BodyMoveEvent size");
@@ -365,7 +365,7 @@ static_assert(size_of<ManifoldPoint>() == 48u, "ManifoldPoint size");
 static_assert(size_of<Manifold>() == 256u, "Manifold size");
 static_assert(size_of<Contact>() == 336u, "Contact size");
 static_assert(size_of<ManifoldConstraintPoint>() == 48u, "ManifoldConstraintPoint size");
-static_assert(size_of<ContactConstraint>() == 432u, "ContactConstraint size");
+static_assert(size_of<ContactConstraint>() == 384u, "ContactConstraint size");
 static_assert(size_of<Joint>() == 256u, "Joint size");
 static_assert(size_of<JointConstraint>() == 336u, "JointConstraint size");
 static_assert(size_of<DistanceOutput>() == 48u, "DistanceOutput size");
@@ -383,7 +383,7 @@ void VerifyPhysicsEdgeCases_GpuLayoutAndEcsCpuFallbackContract(){
     EXPECT_EQ(size_of<GpuPhysicsBroadphasePair>(), 16u);
     EXPECT_EQ(size_of<GpuPhysicsNarrowphaseManifold>(), 160u);
     EXPECT_EQ(size_of<GpuPhysicsContactPoint>(), 48u);
-    EXPECT_EQ(size_of<GpuPhysicsContactConstraint>(), 432u);
+    EXPECT_EQ(size_of<GpuPhysicsContactConstraint>(), 384u);
     EXPECT_EQ(size_of<GpuPhysicsContactImpulseOut>(), 64u);
     EXPECT_EQ(size_of<GpuPhysicsJointConstraint>(), 320u);
     EXPECT_EQ(size_of<GpuPhysicsJointImpulseOut>(), 48u);
@@ -393,7 +393,7 @@ void VerifyPhysicsEdgeCases_GpuLayoutAndEcsCpuFallbackContract(){
     EXPECT_EQ(offset_of<GpuPhysicsNarrowphaseManifold>(pairInfo), 0u);
     EXPECT_EQ(offset_of<GpuPhysicsNarrowphaseManifold>(anchorAFeature), 32u);
     EXPECT_EQ(offset_of<GpuPhysicsContactConstraint>(indicesCountFlags), 0u);
-    EXPECT_EQ(offset_of<GpuPhysicsContactConstraint>(points), 240u);
+    EXPECT_EQ(offset_of<GpuPhysicsContactConstraint>(points), 192u);
     EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(indicesTypeFlags), 0u);
     EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(qA0), 32u);
     EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(linearOffsetMaxTorque), 160u);
@@ -3033,6 +3033,196 @@ void VerifyPhysicsEdgeCases_EcsLifecycleHierarchyAndDebugDraw(){
     EXPECT_GT(dbgLines.size(), cast<usize>(80u));
 }
 
+void VerifyPhysicsEdgeCases_BinaryPaddingMotorScaleAndFilterNoOp(){
+    EXPECT_EQ(size_of<RigidBodyComponentPayloadBinary>(), 208u);
+    EXPECT_EQ(offset_of<RigidBodyComponentPayloadBinary>(reserved4), 152u);
+    EXPECT_EQ(offset_of<RigidBodyComponentPayloadBinary>(customCenterOfMass), 160u);
+    EXPECT_EQ(size_of<ColliderShapeEntryHeaderBinary>(), 224u);
+    EXPECT_EQ(offset_of<ColliderShapeEntryHeaderBinary>(reserved5), 24u);
+    EXPECT_EQ(offset_of<ColliderShapeEntryHeaderBinary>(center), 32u);
+    EXPECT_EQ(size_of<JointComponentPayloadBinary>(), 320u);
+    EXPECT_EQ(offset_of<JointComponentPayloadBinary>(reserved2), 312u);
+    EXPECT_EQ(size_of<PhysicsWorldConfigComponentPayloadBinary>(), 80u);
+    EXPECT_EQ(offset_of<PhysicsWorldConfigComponentPayloadBinary>(reserved3), 24u);
+    EXPECT_EQ(offset_of<PhysicsWorldConfigComponentPayloadBinary>(gravity), 32u);
+
+    {
+        CapturingLogger logger = CapturingLogger();
+        LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+
+        RigidBodyComponentAsset rbAsset(Name("physics/pad_rb"));
+        Vector<u8> rb0;
+        Vector<u8> rb1;
+        ASSERT_TRUE(rbAsset.serializeComponentPayload(rb0));
+        ASSERT_TRUE(rbAsset.serializeComponentPayload(rb1));
+        EXPECT_EQ(rb0.size(), size_of<RigidBodyComponentPayloadBinary>());
+        ASSERT_EQ(rb0.size(), rb1.size());
+        for(usize i = 0u; i < rb0.size(); ++i)
+            EXPECT_EQ(rb0[i], rb1[i]);
+        Vector<u8> rbCorrupt = rb0;
+        const usize rbPadOffset = offset_of<RigidBodyComponentPayloadBinary>(reserved4);
+        rbCorrupt[rbPadOffset] = 1u;
+        RigidBodyComponentAsset rbBad(Name("physics/pad_rb"));
+        EXPECT_FALSE(rbBad.loadComponentPayload(rbCorrupt));
+
+        ColliderComponentAsset colAsset(Name("physics/pad_col"));
+        Vector<u8> col0;
+        Vector<u8> col1;
+        ASSERT_TRUE(colAsset.serializeComponentPayload(col0));
+        ASSERT_TRUE(colAsset.serializeComponentPayload(col1));
+        EXPECT_EQ(col0.size(), size_of<ColliderComponentPayloadHeaderBinary>() + size_of<ColliderShapeEntryHeaderBinary>());
+        ASSERT_EQ(col0.size(), col1.size());
+        for(usize i = 0u; i < col0.size(); ++i)
+            EXPECT_EQ(col0[i], col1[i]);
+        Vector<u8> colCorrupt = col0;
+        const usize colPadOffset = size_of<ColliderComponentPayloadHeaderBinary>() + offset_of<ColliderShapeEntryHeaderBinary>(reserved5);
+        colCorrupt[colPadOffset] = 1u;
+        ColliderComponentAsset colBad(Name("physics/pad_col"));
+        EXPECT_FALSE(colBad.loadComponentPayload(colCorrupt));
+
+        JointComponentAsset jAsset(Name("physics/pad_joint"));
+        Vector<u8> j0;
+        Vector<u8> j1;
+        ASSERT_TRUE(jAsset.serializeComponentPayload(j0));
+        ASSERT_TRUE(jAsset.serializeComponentPayload(j1));
+        EXPECT_EQ(j0.size(), size_of<JointComponentPayloadBinary>());
+        ASSERT_EQ(j0.size(), j1.size());
+        for(usize i = 0u; i < j0.size(); ++i)
+            EXPECT_EQ(j0[i], j1[i]);
+        Vector<u8> jCorrupt = j0;
+        const usize jPadOffset = offset_of<JointComponentPayloadBinary>(reserved2);
+        jCorrupt[jPadOffset] = 1u;
+        JointComponentAsset jBad(Name("physics/pad_joint"));
+        EXPECT_FALSE(jBad.loadComponentPayload(jCorrupt));
+
+        PhysicsWorldConfigComponentAsset cfgAsset(Name("physics/pad_cfg"));
+        Vector<u8> cfg0;
+        Vector<u8> cfg1;
+        ASSERT_TRUE(cfgAsset.serializeComponentPayload(cfg0));
+        ASSERT_TRUE(cfgAsset.serializeComponentPayload(cfg1));
+        EXPECT_EQ(cfg0.size(), size_of<PhysicsWorldConfigComponentPayloadBinary>());
+        ASSERT_EQ(cfg0.size(), cfg1.size());
+        for(usize i = 0u; i < cfg0.size(); ++i)
+            EXPECT_EQ(cfg0[i], cfg1[i]);
+        Vector<u8> cfgCorrupt = cfg0;
+        const usize cfgPadOffset = offset_of<PhysicsWorldConfigComponentPayloadBinary>(reserved3);
+        cfgCorrupt[cfgPadOffset] = 1u;
+        PhysicsWorldConfigComponentAsset cfgBad(Name("physics/pad_cfg"));
+        EXPECT_FALSE(cfgBad.loadComponentPayload(cfgCorrupt));
+    }
+
+    {
+        EcsTestWorld tw;
+        mut PhysicsSystem physSys = tw.world.addSystem<PhysicsSystem>(tw.world);
+
+        Entity cfgEnt = tw.world.createEntity();
+        mut PhysicsWorldConfigComponent cfg = cfgEnt.addComponent<PhysicsWorldConfigComponent>();
+        cfg.gravity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        cfg.subStepCount = 2u;
+
+        Entity bodyA = tw.world.createEntity();
+        mut TransformComponent xfA = bodyA.addComponent<TransformComponent>();
+        xfA.scale = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
+        mut RigidBodyComponent rbA = bodyA.addComponent<RigidBodyComponent>();
+        rbA.type = BodyType::Static;
+        rbA.entityTag = Name("motor_scale_a");
+
+        Entity bodyB = tw.world.createEntity();
+        mut TransformComponent xfB = bodyB.addComponent<TransformComponent>();
+        xfB.position = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+        mut RigidBodyComponent rbB = bodyB.addComponent<RigidBodyComponent>();
+        rbB.type = BodyType::Dynamic;
+        rbB.entityTag = Name("motor_scale_b");
+        mut ColliderComponent colB = bodyB.addComponent<ColliderComponent>();
+        colB.shapeType = ShapeType::Sphere;
+        colB.radius = 0.4f;
+
+        Entity motorEnt = tw.world.createEntity();
+        mut JointComponent jc = motorEnt.addComponent<JointComponent>();
+        jc.type = JointType::Motor;
+        jc.bodyEntityA = bodyA.id();
+        jc.bodyEntityB = bodyB.id();
+        jc.linearOffset = f32x4(1.5f, 0.0f, 0.0f, 0.0f);
+        jc.maxMotorForce = 100.0f;
+
+        ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
+        in JointComponent syncedBefore = motorEnt.getComponent<JointComponent>();
+        const JointId initialJointId = syncedBefore.runtimeJointId;
+        ASSERT_TRUE(initialJointId.valid());
+        ASSERT_LT(cast<usize>(initialJointId.index), physSys.physicsWorld().m_joints.size());
+        EXPECT_NEAR(physSys.physicsWorld().m_joints[initialJointId.index].linearOffset().x, 1.5f, 1.0e-4f);
+
+        mut TransformComponent xfAMut = bodyA.getComponent<TransformComponent>();
+        xfAMut.scale = f32x4(2.0f, 1.0f, 1.0f, 0.0f);
+        ASSERT_FALSE(motorEnt.getComponent<JointComponent>().dirty);
+
+        ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
+        in JointComponent syncedAfter = motorEnt.getComponent<JointComponent>();
+        EXPECT_TRUE(syncedAfter.runtimeJointId == initialJointId);
+        EXPECT_NEAR(physSys.physicsWorld().m_joints[initialJointId.index].linearOffset().x, 3.0f, 1.0e-4f);
+    }
+
+    {
+        PhysicsWorld sleepWorld;
+        CpuTaskScheduler scheduler(1u);
+
+        BodyDef floorBd;
+        floorBd.type = BodyType::Static;
+        floorBd.position = f32x4(0.0f, -0.5f, 0.0f, 0.0f);
+        const BodyId floorId = sleepWorld.createBody(floorBd).value();
+        ASSERT_TRUE(sleepWorld.createHullShape(floorId, ShapeDef(), MakeBoxHull(5.0f, 0.5f, 5.0f, 0.0f).value()).has_value());
+
+        BodyDef boxBd;
+        boxBd.type = BodyType::Dynamic;
+        boxBd.position = f32x4(0.0f, 0.49f, 0.0f, 0.0f);
+        boxBd.enableSleep = true;
+        const BodyId boxId = sleepWorld.createBody(boxBd).value();
+        const ShapeDef boxSd = ShapeDef();
+        const ShapeId boxShapeId = sleepWorld.createHullShape(boxId, boxSd, MakeBoxHull(0.5f, 0.5f, 0.5f, 0.0f).value()).value();
+
+        for(u32 step = 0u; step < 180u; ++step)
+            StepPhysicsWorld(sleepWorld, 1.0f / 60.0f, 4u, scheduler);
+
+        ASSERT_FALSE(sleepWorld.isBodyAwake(boxId));
+        u32 contactCountBefore = 0u;
+        u32 trackedContactIdx = s_NullIndex;
+        u64 trackedPairKey = 0u;
+        f32 trackedImpulse = 0.0f;
+        for(usize ci = 0u; ci < sleepWorld.m_contacts.size(); ++ci){
+            in Contact c = sleepWorld.m_contacts[ci];
+            if((c.flags & cast<u32>(ContactFlags::Alive)) == 0u)
+                continue;
+            ++contactCountBefore;
+            if(trackedContactIdx == s_NullIndex && (c.shapeIdA == boxShapeId.index || c.shapeIdB == boxShapeId.index)){
+                trackedContactIdx = cast<u32>(ci);
+                trackedPairKey = c.pairKey;
+                if(c.manifold.pointCount() > 0u)
+                    trackedImpulse = c.manifold.points[0u].normalImpulse();
+            }
+        }
+        ASSERT_GE(contactCountBefore, 1u);
+        ASSERT_NE(trackedContactIdx, s_NullIndex);
+
+        EXPECT_TRUE(sleepWorld.setShapeFilter(boxShapeId, boxSd.filter));
+        EXPECT_FALSE(sleepWorld.isBodyAwake(boxId));
+        u32 contactCountAfter = 0u;
+        for(usize ci = 0u; ci < sleepWorld.m_contacts.size(); ++ci){
+            if((sleepWorld.m_contacts[ci].flags & cast<u32>(ContactFlags::Alive)) != 0u)
+                ++contactCountAfter;
+        }
+        EXPECT_EQ(contactCountAfter, contactCountBefore);
+        EXPECT_NE(sleepWorld.m_contacts[trackedContactIdx].flags & cast<u32>(ContactFlags::Alive), 0u);
+        EXPECT_EQ(sleepWorld.m_contacts[trackedContactIdx].pairKey, trackedPairKey);
+        if(sleepWorld.m_contacts[trackedContactIdx].manifold.pointCount() > 0u)
+            EXPECT_NEAR(sleepWorld.m_contacts[trackedContactIdx].manifold.points[0u].normalImpulse(), trackedImpulse, 1.0e-5f);
+
+        Filter changedFilter = boxSd.filter;
+        changedFilter.categoryBits = 2u;
+        EXPECT_TRUE(sleepWorld.setShapeFilter(boxShapeId, changedFilter));
+        EXPECT_TRUE(sleepWorld.isBodyAwake(boxId));
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -3064,6 +3254,7 @@ NWB_ADHD_GTEST(PhysicsEdgeCases, EcsHierarchyInterpolationNamedJointsAndQueries,
 NWB_ADHD_GTEST(PhysicsEdgeCases, CoreCollisionLocksJointsAndEvents, VerifyPhysicsEdgeCases_CoreCollisionLocksJointsAndEvents)
 NWB_ADHD_GTEST(PhysicsEdgeCases, GpuStructParityAndAssetParentCodec, VerifyPhysicsEdgeCases_GpuStructParityAndAssetParentCodec)
 NWB_ADHD_GTEST(PhysicsEdgeCases, EcsLifecycleHierarchyAndDebugDraw, VerifyPhysicsEdgeCases_EcsLifecycleHierarchyAndDebugDraw)
+NWB_ADHD_GTEST(PhysicsEdgeCases, BinaryPaddingMotorScaleAndFilterNoOp, VerifyPhysicsEdgeCases_BinaryPaddingMotorScaleAndFilterNoOp)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -31,7 +31,9 @@ public:
         const Span<const u32> packetIndices,
         const u64 recordingAttemptGeneration,
         GpuRecordedGraph& recordedGraph,
-        const Span<GpuPacketRecordingAbort> aborts
+        const Span<GpuPacketRecordingAbort> aborts,
+        const u32* const serialAbortPacketIndex = nullptr,
+        GpuPacketRecordingAbort* const serialAbort = nullptr
     )noexcept
         : m_graph(graph)
         , m_compiledGraph(compiledGraph)
@@ -40,12 +42,21 @@ public:
         , m_artifactOperation(artifactOperation)
         , m_packetIndices(packetIndices)
         , m_aborts(aborts)
+        , m_serialAbortPacketIndex(serialAbortPacketIndex)
+        , m_serialAbort(serialAbort)
         , m_recordingAttemptGeneration(recordingAttemptGeneration)
     {}
     ~ReadyFrontierRecordingUnwindScope()noexcept{
         if(!m_active)
             return;
 
+        if(m_serialAbort && m_serialAbort->valid()){
+            FOUNDATION_ASSERT(m_serialAbortPacketIndex && *m_serialAbortPacketIndex != Limit<u32>::s_Max);
+            const GpuSubmissionPacketId packet = m_planAccess.packetIdAt(*m_serialAbortPacketIndex);
+            m_recordedGraph.abandonPacketTimingTicketWithoutCallbacks(packet, m_artifactOperation);
+            const b8 abortAbandoned = m_graph.abandonPacketRecordingAbortWithoutCallbacks(m_compiledGraph, m_planAccess, *m_serialAbort);
+            FOUNDATION_FATAL_ASSERT_MSG(abortAbandoned, "joined packet unwind must consume every deferred serial recording abort");
+        }
         for(usize parallelIndex = 0u; parallelIndex < m_aborts.size(); ++parallelIndex){
             GpuPacketRecordingAbort& abort = m_aborts[parallelIndex];
             if(!abort.valid())
@@ -72,6 +83,8 @@ private:
     const GpuRecordedGraph::ArtifactOperation& m_artifactOperation;
     Span<const u32> m_packetIndices;
     Span<GpuPacketRecordingAbort> m_aborts;
+    const u32* m_serialAbortPacketIndex = nullptr;
+    GpuPacketRecordingAbort* m_serialAbort = nullptr;
     u64 m_recordingAttemptGeneration = 0u;
     b8 m_active = true;
 };
@@ -200,6 +213,7 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     const usize rangeEnd = rangeBegin + range.packetCount;
     const Timer recordingOperationBegin = TimerNow();
     Vector<RecordingEntry, Alloc::ScratchArena> recordingEntries(scratchArena);
+    Vector<u32, Alloc::ScratchArena> serialPacketIndices(scratchArena);
     Vector<u32, Alloc::ScratchArena> parallelPacketIndices(scratchArena);
     Vector<u8, Alloc::ScratchArena> parallelResults(scratchArena);
     Vector<GpuPacketRecordingAbort, Alloc::ScratchArena> parallelAborts(scratchArena);
@@ -264,6 +278,7 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     }
     const b8 usesParallelRecording = mightUseParallelRecording && parallelPacketCount != 0u;
     if(usesParallelRecording){
+        serialPacketIndices.reserve(range.packetCount - parallelPacketCount);
         parallelPacketIndices.reserve(parallelPacketCount);
         parallelResults.reserve(parallelPacketCount);
         parallelAborts.reserve(parallelPacketCount);
@@ -332,6 +347,7 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         while(frontierEnd < recordingEntries.size() && recordingEntries[frontierEnd].frontier == recordingEntries[frontierBegin].frontier)
             ++frontierEnd;
 
+        serialPacketIndices.clear();
         parallelPacketIndices.clear();
         for(usize recordingIndex = frontierBegin; recordingIndex < frontierEnd; ++recordingIndex){
             const GpuSubmissionPacketId packet = recordingEntries[recordingIndex].packet;
@@ -342,54 +358,114 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
             }
             if(recordingEntries[recordingIndex].allowsParallelRecording)
                 parallelPacketIndices.push_back(packet.index);
-            else if(!recordPacket(graph, declarationAccess, compiledGraph, planAccess, artifactOperation, packet, 0u, 0u, serialStateFanInScratchArena, *serialScratch, outRecordedGraph)){
-                if(outFailedPacket)
-                    *outFailedPacket = packet;
-                return false;
-            }
+            else
+                serialPacketIndices.push_back(packet.index);
         }
 
-        if(parallelPacketIndices.size() == 1u){
-            const GpuSubmissionPacketId packet = planAccess.packetIdAt(parallelPacketIndices[0u]);
-            const usize workerSlot = cpuScheduler.currentWorkerIndex();
-            GpuRecordedGraph::PacketRecordingScratch* const scratch = outRecordedGraph.workerRecordingScratch(workerSlot, artifactOperation);
-            if(
-                !scratch
-                || !scratch->stateFanInScratchArena
-                || !recordPacket(
-                    graph,
-                    declarationAccess,
-                    compiledGraph,
-                    planAccess,
-                    artifactOperation,
-                    packet,
-                    cpuScheduler.domainIdentity(),
-                    static_cast<u32>(workerSlot + 1u),
-                    *scratch->stateFanInScratchArena,
-                    *scratch,
-                    outRecordedGraph
-                )
-            ){
-                if(outFailedPacket)
-                    *outFailedPacket = packet;
-                return false;
+        if(parallelPacketIndices.empty()){
+            for(const u32 packetIndex : serialPacketIndices){
+                const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
+                if(!recordPacket(graph, declarationAccess, compiledGraph, planAccess, artifactOperation, packet, 0u, 0u, serialStateFanInScratchArena, *serialScratch, outRecordedGraph)){
+                    if(outFailedPacket)
+                        *outFailedPacket = packet;
+                    return false;
+                }
             }
         }
-        else if(!parallelPacketIndices.empty()){
-            parallelResults.resize(parallelPacketIndices.size());
-            parallelAborts.resize(parallelPacketIndices.size());
-            const u64 recordingAttemptGeneration = outRecordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactOperation);
-            ReadyFrontierRecordingUnwindScope recordingUnwind(graph, compiledGraph, planAccess, artifactOperation, parallelPacketIndices, recordingAttemptGeneration, outRecordedGraph, parallelAborts);
+        else if(serialPacketIndices.empty()){
+            if(parallelPacketIndices.size() == 1u){
+                const GpuSubmissionPacketId packet = planAccess.packetIdAt(parallelPacketIndices[0u]);
+                const usize workerSlot = cpuScheduler.currentWorkerIndex();
+                GpuRecordedGraph::PacketRecordingScratch* const scratch = outRecordedGraph.workerRecordingScratch(workerSlot, artifactOperation);
+                if(
+                    !scratch
+                    || !scratch->stateFanInScratchArena
+                    || !recordPacket(
+                        graph,
+                        declarationAccess,
+                        compiledGraph,
+                        planAccess,
+                        artifactOperation,
+                        packet,
+                        cpuScheduler.domainIdentity(),
+                        static_cast<u32>(workerSlot + 1u),
+                        *scratch->stateFanInScratchArena,
+                        *scratch,
+                        outRecordedGraph
+                    )
+                ){
+                    if(outFailedPacket)
+                        *outFailedPacket = packet;
+                    return false;
+                }
+            }
+            else{
+                parallelResults.resize(parallelPacketIndices.size());
+                parallelAborts.resize(parallelPacketIndices.size());
+                const u64 recordingAttemptGeneration = outRecordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactOperation);
+                ReadyFrontierRecordingUnwindScope recordingUnwind(graph, compiledGraph, planAccess, artifactOperation, parallelPacketIndices, recordingAttemptGeneration, outRecordedGraph, parallelAborts);
 
-            const auto parallelWork = cpuScheduler.parallelFor(0u, parallelPacketIndices.size(), [&](const usize parallelIndex){
+                const auto parallelWork = cpuScheduler.parallelFor(0u, parallelPacketIndices.size(), [&](const usize parallelIndex){
+                    const GpuSubmissionPacketId packet = planAccess.packetIdAt(parallelPacketIndices[parallelIndex]);
+                    const usize workerSlot = cpuScheduler.currentWorkerIndex();
+                    GpuRecordedGraph::PacketRecordingScratch* const scratch = outRecordedGraph.workerRecordingScratch(workerSlot, artifactOperation);
+                    if(!scratch || !scratch->stateFanInScratchArena){
+                        parallelResults[parallelIndex] = 0u;
+                        return;
+                    }
+                    parallelResults[parallelIndex] = recordPacket(
+                        graph,
+                        declarationAccess,
+                        compiledGraph,
+                        planAccess,
+                        artifactOperation,
+                        packet,
+                        cpuScheduler.domainIdentity(),
+                        static_cast<u32>(workerSlot + 1u),
+                        *scratch->stateFanInScratchArena,
+                        *scratch,
+                        outRecordedGraph,
+                        nullptr,
+                        &parallelAborts[parallelIndex]
+                    ) ? 1u : 0u;
+                });
+                for(usize parallelIndex = 0u; parallelIndex < parallelAborts.size(); ++parallelIndex){
+                    GpuPacketRecordingAbort& abort = parallelAborts[parallelIndex];
+                    if(!abort.valid())
+                        continue;
+                    const GpuSubmissionPacketId packet = planAccess.packetIdAt(parallelPacketIndices[parallelIndex]);
+                    outRecordedGraph.discardPacketTimingTicket(packet, artifactOperation);
+                    const b8 abortCompleted = graph.completePacketRecordingAbort(compiledGraph, planAccess, abort);
+                    FOUNDATION_FATAL_ASSERT_MSG(abortCompleted, "joined packet drain must consume every deferred recording abort");
+                }
+                const b8 recordingAttemptResolved = graph.resolveRecordingAttemptIfTerminal(compiledGraph, recordingAttemptGeneration);
+                FOUNDATION_FATAL_ASSERT_MSG(recordingAttemptResolved, "joined packet drain must preserve or resolve its exact recording-plan lease");
+                recordingUnwind.release();
+                if(!parallelWork){
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("GpuNativePacketRecorder: packet recording rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
+                    if(outFailedPacket)
+                        *outFailedPacket = planAccess.packetIdAt(parallelPacketIndices.front());
+                    return false;
+                }
+                outRecordedGraph.cachePacketRecordingOverlaps(compiledGraph, planAccess, parallelPacketIndices, artifactOperation, scratchArena);
+                for(usize parallelIndex = 0u; parallelIndex < parallelResults.size(); ++parallelIndex){
+                    if(parallelResults[parallelIndex] != 0u)
+                        continue;
+                    if(outFailedPacket)
+                        *outFailedPacket = planAccess.packetIdAt(parallelPacketIndices[parallelIndex]);
+                    return false;
+                }
+            }
+        }
+        else{
+            const usize parallelCount = parallelPacketIndices.size();
+            const auto recordParallelPacket = [&](const usize parallelIndex, GpuPacketRecordingAbort* const deferredAbort)noexcept(false){
                 const GpuSubmissionPacketId packet = planAccess.packetIdAt(parallelPacketIndices[parallelIndex]);
                 const usize workerSlot = cpuScheduler.currentWorkerIndex();
                 GpuRecordedGraph::PacketRecordingScratch* const scratch = outRecordedGraph.workerRecordingScratch(workerSlot, artifactOperation);
-                if(!scratch || !scratch->stateFanInScratchArena){
-                    parallelResults[parallelIndex] = 0u;
-                    return;
-                }
-                parallelResults[parallelIndex] = recordPacket(
+                if(!scratch || !scratch->stateFanInScratchArena)
+                    return false;
+                return recordPacket(
                     graph,
                     declarationAccess,
                     compiledGraph,
@@ -402,34 +478,115 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                     *scratch,
                     outRecordedGraph,
                     nullptr,
-                    &parallelAborts[parallelIndex]
-                ) ? 1u : 0u;
-            });
-            for(usize parallelIndex = 0u; parallelIndex < parallelAborts.size(); ++parallelIndex){
-                GpuPacketRecordingAbort& abort = parallelAborts[parallelIndex];
-                if(!abort.valid())
-                    continue;
-                const GpuSubmissionPacketId packet = planAccess.packetIdAt(parallelPacketIndices[parallelIndex]);
-                outRecordedGraph.discardPacketTimingTicket(packet, artifactOperation);
-                const b8 abortCompleted = graph.completePacketRecordingAbort(compiledGraph, planAccess, abort);
-                FOUNDATION_FATAL_ASSERT_MSG(abortCompleted, "joined packet drain must consume every deferred recording abort");
+                    deferredAbort
+                );
+            };
+            if(cpuScheduler.workerThreadCount() == 0u){
+                for(const u32 packetIndex : serialPacketIndices){
+                    const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
+                    if(!recordPacket(graph, declarationAccess, compiledGraph, planAccess, artifactOperation, packet, 0u, 0u, serialStateFanInScratchArena, *serialScratch, outRecordedGraph)){
+                        if(outFailedPacket)
+                            *outFailedPacket = packet;
+                        return false;
+                    }
+                }
+                for(usize parallelIndex = 0u; parallelIndex < parallelCount; ++parallelIndex){
+                    if(!recordParallelPacket(parallelIndex, nullptr)){
+                        if(outFailedPacket)
+                            *outFailedPacket = planAccess.packetIdAt(parallelPacketIndices[parallelIndex]);
+                        return false;
+                    }
+                }
             }
-            const b8 recordingAttemptResolved = graph.resolveRecordingAttemptIfTerminal(compiledGraph, recordingAttemptGeneration);
-            FOUNDATION_FATAL_ASSERT_MSG(recordingAttemptResolved, "joined packet drain must preserve or resolve its exact recording-plan lease");
-            recordingUnwind.release();
-            if(!parallelWork){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("GpuNativePacketRecorder: packet recording rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
-                if(outFailedPacket)
-                    *outFailedPacket = planAccess.packetIdAt(parallelPacketIndices.front());
-                return false;
-            }
-            outRecordedGraph.cachePacketRecordingOverlaps(compiledGraph, planAccess, parallelPacketIndices, artifactOperation, scratchArena);
-            for(usize parallelIndex = 0u; parallelIndex < parallelResults.size(); ++parallelIndex){
-                if(parallelResults[parallelIndex] != 0u)
-                    continue;
-                if(outFailedPacket)
-                    *outFailedPacket = planAccess.packetIdAt(parallelPacketIndices[parallelIndex]);
-                return false;
+            else{
+                parallelResults.assign(parallelCount, 0u);
+                parallelAborts.resize(parallelCount);
+                const u64 recordingAttemptGeneration = outRecordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactOperation);
+                GpuPacketRecordingAbort serialAbort;
+                u32 serialAbortPacketIndex = Limit<u32>::s_Max;
+                ReadyFrontierRecordingUnwindScope recordingUnwind(graph, compiledGraph, planAccess, artifactOperation, parallelPacketIndices, recordingAttemptGeneration, outRecordedGraph, parallelAborts, &serialAbortPacketIndex, &serialAbort);
+
+                alignas(64) Atomic<usize> nextParallelIndex{ 0u };
+                Optional<CpuTaskAdmissionError::Enum> parallelSubmitError;
+                GpuSubmissionPacketId serialFailedPacket;
+                {
+                    CpuTaskScope parallelScope(cpuScheduler);
+                    const auto runParallelWork = [&]()noexcept(false){
+                        for(;;){
+                            const usize parallelIndex = nextParallelIndex.fetch_add(1u, MemoryOrder::relaxed);
+                            if(parallelIndex >= parallelCount)
+                                break;
+                            parallelResults[parallelIndex] = recordParallelPacket(parallelIndex, &parallelAborts[parallelIndex]) ? 1u : 0u;
+                        }
+                    };
+                    const usize workerTaskCount = Min<usize>(parallelCount, static_cast<usize>(cpuScheduler.workerThreadCount()));
+                    for(usize taskIndex = 0u; taskIndex < workerTaskCount; ++taskIndex){
+                        const auto submitted = parallelScope.submit([&runParallelWork](){ runParallelWork(); });
+                        if(!submitted){
+                            parallelSubmitError = submitted.error();
+                            nextParallelIndex.store(parallelCount, MemoryOrder::release);
+                            break;
+                        }
+                    }
+                    if(!parallelSubmitError){
+                        try{
+                            for(const u32 packetIndex : serialPacketIndices){
+                                const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
+                                serialAbortPacketIndex = packetIndex;
+                                if(!recordPacket(graph, declarationAccess, compiledGraph, planAccess, artifactOperation, packet, 0u, 0u, serialStateFanInScratchArena, *serialScratch, outRecordedGraph, nullptr, &serialAbort)){
+                                    serialFailedPacket = packet;
+                                    nextParallelIndex.store(parallelCount, MemoryOrder::release);
+                                    break;
+                                }
+                            }
+                            if(!serialFailedPacket.valid())
+                                runParallelWork();
+                        }
+                        catch(...){
+                            nextParallelIndex.store(parallelCount, MemoryOrder::release);
+                            parallelScope.wait();
+                            throw;
+                        }
+                    }
+                    parallelScope.wait();
+                }
+                if(serialAbort.valid()){
+                    const GpuSubmissionPacketId packet = planAccess.packetIdAt(serialAbortPacketIndex);
+                    outRecordedGraph.discardPacketTimingTicket(packet, artifactOperation);
+                    const b8 abortCompleted = graph.completePacketRecordingAbort(compiledGraph, planAccess, serialAbort);
+                    FOUNDATION_FATAL_ASSERT_MSG(abortCompleted, "joined packet drain must consume every deferred serial recording abort");
+                }
+                for(usize parallelIndex = 0u; parallelIndex < parallelAborts.size(); ++parallelIndex){
+                    GpuPacketRecordingAbort& abort = parallelAborts[parallelIndex];
+                    if(!abort.valid())
+                        continue;
+                    const GpuSubmissionPacketId packet = planAccess.packetIdAt(parallelPacketIndices[parallelIndex]);
+                    outRecordedGraph.discardPacketTimingTicket(packet, artifactOperation);
+                    const b8 abortCompleted = graph.completePacketRecordingAbort(compiledGraph, planAccess, abort);
+                    FOUNDATION_FATAL_ASSERT_MSG(abortCompleted, "joined packet drain must consume every deferred recording abort");
+                }
+                const b8 recordingAttemptResolved = graph.resolveRecordingAttemptIfTerminal(compiledGraph, recordingAttemptGeneration);
+                FOUNDATION_FATAL_ASSERT_MSG(recordingAttemptResolved, "joined packet drain must preserve or resolve its exact recording-plan lease");
+                recordingUnwind.release();
+                if(parallelSubmitError){
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("GpuNativePacketRecorder: packet recording rejected CPU work: {}"), static_cast<u32>(*parallelSubmitError));
+                    if(outFailedPacket)
+                        *outFailedPacket = planAccess.packetIdAt(parallelPacketIndices.front());
+                    return false;
+                }
+                if(serialFailedPacket.valid()){
+                    if(outFailedPacket)
+                        *outFailedPacket = serialFailedPacket;
+                    return false;
+                }
+                outRecordedGraph.cachePacketRecordingOverlaps(compiledGraph, planAccess, parallelPacketIndices, artifactOperation, scratchArena);
+                for(usize parallelIndex = 0u; parallelIndex < parallelResults.size(); ++parallelIndex){
+                    if(parallelResults[parallelIndex] != 0u)
+                        continue;
+                    if(outFailedPacket)
+                        *outFailedPacket = planAccess.packetIdAt(parallelPacketIndices[parallelIndex]);
+                    return false;
+                }
             }
         }
         parallelAborts.clear();

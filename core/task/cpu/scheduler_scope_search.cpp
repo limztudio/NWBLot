@@ -17,6 +17,7 @@ NWB_CORE_BEGIN
 
 
 u32 CpuTaskScheduler::findScopeReadyLocked(const usize queue, ScopeWait& wait, u32& previous)noexcept{
+    m_scopeSearchActive = true;
     previous = TaskHandle::s_InvalidIndex;
     if(m_nodes[m_ready[queue].head].scope == &wait.scope)
         return m_ready[queue].head;

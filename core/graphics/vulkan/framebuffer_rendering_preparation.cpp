@@ -250,24 +250,16 @@ b8 FramebufferRenderingPreparation::prepareFramebuffer(Framebuffer* const frameb
     if(!framebuffer)
         return true;
 
-    const auto prepareAttachment = [this, operationName](const FramebufferAttachment& attachment) -> b8{
-        if(!attachment.texture)
-            return true;
-        const TextureSubresourceSet resolved = attachment.subresources.resolve(attachment.texture->m_creationDesc, TextureSubresourceMipResolve::Range);
-        const TextureDimension::Enum viewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(attachment.texture->m_creationDesc, resolved);
-        if(!attachment.texture->getView(attachment.subresources, viewDimension, attachment.format)){
+    for(u32 i = 0u; i < static_cast<u32>(framebuffer->m_desc.colorAttachments.size()); ++i){
+        if(framebuffer->m_desc.colorAttachments[i].texture && !framebuffer->resolveColorAttachmentView(i)){
             m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment view could not be created"));
             return false;
         }
-        return true;
-    };
-
-    for(const FramebufferAttachment& attachment : framebuffer->m_desc.colorAttachments){
-        if(!prepareAttachment(attachment))
-            return false;
     }
-    if(!prepareAttachment(framebuffer->m_desc.depthAttachment))
+    if(framebuffer->m_desc.depthAttachment.texture && !framebuffer->resolveDepthAttachmentView()){
+        m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment view could not be created"));
         return false;
+    }
     return true;
 }
 

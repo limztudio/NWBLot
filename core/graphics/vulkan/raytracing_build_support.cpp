@@ -127,8 +127,7 @@ Expected<VkDeviceAddress> CommandList::suballocateBuildScratchAddress(const u64 
     const u64 scratchAllocationSize = buildScratchSize + scratchPadding;
 
     const GpuPhysicalQueueId physicalQueue = m_currentCmdBuf->m_queue.m_physicalQueue;
-    const Expected<u64> completedVersion = m_device.queueGetCompletedInstance(physicalQueue);
-    const auto allocation = m_device.m_scratchManager.suballocateBuffer(scratchAllocationSize, m_currentCmdBuf.get(), m_nativeRecordingID, physicalQueue, completedVersion ? *completedVersion : 0u, 1u);
+    const auto allocation = m_device.m_scratchManager.suballocateBuffer(scratchAllocationSize, m_currentCmdBuf.get(), m_nativeRecordingID, physicalQueue, 1u);
     if(!allocation){
         invalidateCommandRecording();
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: scratch-buffer suballocation failed"), operationName);
@@ -172,8 +171,7 @@ Expected<BufferSuballocation> CommandList::suballocateBuildInput(const u64 byteC
     const u64 inputAllocationSize = byteCount + inputPadding;
 
     const GpuPhysicalQueueId physicalQueue = m_currentCmdBuf->m_queue.m_physicalQueue;
-    const Expected<u64> completedVersion = m_device.queueGetCompletedInstance(physicalQueue);
-    const auto allocation = m_device.m_accelStructInputManager.suballocateBuffer(inputAllocationSize, m_currentCmdBuf.get(), m_nativeRecordingID, physicalQueue, completedVersion ? *completedVersion : 0u, 1u);
+    const auto allocation = m_device.m_accelStructInputManager.suballocateBuffer(inputAllocationSize, m_currentCmdBuf.get(), m_nativeRecordingID, physicalQueue, 1u);
     if(!allocation){
         invalidateCommandRecording();
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: build-input suballocation failed"), operationName);

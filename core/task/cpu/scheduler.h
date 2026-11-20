@@ -231,6 +231,7 @@ private:
     [[nodiscard]] b8 isScopeCanceledLocked(const CpuTaskScope* scope)const noexcept;
     [[nodiscard]] b8 isRangeCanceled(const CpuTaskScope* scope)const noexcept;
     void enqueueLocked(u32 index)noexcept;
+    [[nodiscard]] u16 eligibleQueueMaskLocked(CpuAffinity::Enum affinity, b8 mainThread, b8 cooperative)const noexcept;
     [[nodiscard]] TaskHandle claimLocked(CpuAffinity::Enum affinity, b8 mainThread, b8 cooperative, ScopeWait* preferredScope = nullptr)noexcept;
     [[nodiscard]] b8 hasReadyLocked(CpuAffinity::Enum affinity, b8 mainThread, b8 cooperative, ScopeWait* preferredScope = nullptr)noexcept;
     [[nodiscard]] u32 findScopeReadyLocked(usize queue, ScopeWait& wait, u32& previous)noexcept;
@@ -270,6 +271,7 @@ private:
     CpuTaskProfileBuffer m_profileBuffer;
     Vector<ReadyProfile, Alloc::GlobalArena> m_readyProfiles;
     Array<ReadyQueue, s_QueueCount> m_ready;
+    u16 m_nonEmptyReadyMask = 0u;
     Array<u32, s_CostValueCount> m_readyWorkerCosts{};
     Array<u32, s_AffinitySlotCount> m_sleepingWorkers{};
     Array<u32, s_AffinitySlotCount> m_wakingWorkers{};
@@ -294,9 +296,10 @@ private:
     u64 m_profileEpoch = 0u;
     u64 m_profileFrameIndex = 0u;
     b8 m_aborting = false;
-    Atomic<b8> m_abortingAtomic{ false };
-    Atomic<b8> m_profileEnabled{ false };
+    b8 m_scopeSearchActive = false;
     Vector<JoiningThread, Alloc::GlobalArena> m_workers;
+    alignas(64) Atomic<b8> m_abortingAtomic{ false };
+    Atomic<b8> m_profileEnabled{ false };
 };
 
 

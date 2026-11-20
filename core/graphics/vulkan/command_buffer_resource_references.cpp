@@ -50,30 +50,39 @@ CommandBufferResourceReferences::CommandBufferResourceReferences(Alloc::GlobalAr
 
 void CommandBufferResourceReferences::retainResource(GraphicsResource& resource){
     using namespace __hidden_command_buffer_resource_references;
+    if(m_lastRetainedResource == &resource)
+        return;
     if(!m_membership){
         for(const Handle<GraphicsResource>& retainedResource : m_resources){
-            if(retainedResource.get() == &resource)
+            if(retainedResource.get() == &resource){
+                m_lastRetainedResource = &resource;
                 return;
+            }
         }
         if(m_resources.size() < s_LinearCapacity){
             m_resources.emplace_back(&resource, Handle<GraphicsResource>::deleter_type(&m_arena));
+            m_lastRetainedResource = &resource;
             return;
         }
         promoteMembershipIndex();
     }
 
     u8& membership = m_membership->try_emplace(MakeNotNull<GraphicsResource*>(&resource), 0u).first.value();
-    if((membership & s_Owned) != 0u)
-        return;
-    m_resources.emplace_back(&resource, Handle<GraphicsResource>::deleter_type(&m_arena));
-    membership |= s_Owned;
+    if((membership & s_Owned) == 0u){
+        m_resources.emplace_back(&resource, Handle<GraphicsResource>::deleter_type(&m_arena));
+        membership |= s_Owned;
+    }
+    m_lastRetainedResource = &resource;
 }
 
 void CommandBufferResourceReferences::retainBuffer(Buffer& buffer){
     using namespace __hidden_command_buffer_resource_references;
+    if(m_lastRetainedBuffer == &buffer)
+        return;
     if(!m_membership){
         retainResource(buffer);
         trackRetainedBuffer(buffer);
+        m_lastRetainedBuffer = &buffer;
         return;
     }
 
@@ -86,6 +95,8 @@ void CommandBufferResourceReferences::retainBuffer(Buffer& buffer){
         m_buffers.push_back(MakeNotNull(&buffer));
         membership |= s_Buffer;
     }
+    m_lastRetainedResource = &buffer;
+    m_lastRetainedBuffer = &buffer;
 }
 
 void CommandBufferResourceReferences::trackRetainedBuffer(Buffer& buffer){
@@ -154,9 +165,12 @@ void CommandBufferResourceReferences::discardBufferStateCommits()noexcept{
 
 void CommandBufferResourceReferences::retainTexture(Texture& texture){
     using namespace __hidden_command_buffer_resource_references;
+    if(m_lastRetainedTexture == &texture)
+        return;
     if(!m_membership){
         retainResource(texture);
         trackRetainedTexture(texture);
+        m_lastRetainedTexture = &texture;
         return;
     }
 
@@ -169,6 +183,8 @@ void CommandBufferResourceReferences::retainTexture(Texture& texture){
         m_textures.push_back(MakeNotNull(&texture));
         membership |= s_Texture;
     }
+    m_lastRetainedResource = &texture;
+    m_lastRetainedTexture = &texture;
 }
 
 void CommandBufferResourceReferences::trackRetainedTexture(Texture& texture){
@@ -193,6 +209,9 @@ void CommandBufferResourceReferences::trackRetainedTexture(Texture& texture){
 }
 
 void CommandBufferResourceReferences::clear()noexcept{
+    m_lastRetainedResource = nullptr;
+    m_lastRetainedBuffer = nullptr;
+    m_lastRetainedTexture = nullptr;
     m_bufferStateCommits.clear();
     if(m_membership)
         m_membership->clear();

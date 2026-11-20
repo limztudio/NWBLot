@@ -120,7 +120,41 @@ GpuCommandIrReplayError::Enum ValidateRasterGraphOperation(const GpuCommandIrRas
 
     switch(record.opcode){
     case GpuCommandIrWireOpcode::SetGraphicsState:{
-        const GpuCommandIrReplayError::Enum error = __hidden_gpu_command_ir_raster_preflight::ValidateGraphicsState(record, graph, task);
+        b8 matchesCachedState = state.active
+            && state.graphicsState.pipeline == record.pipeline
+            && state.graphicsState.colorAttachment == record.colorAttachment
+            && state.graphicsState.indexResource == record.indexResource
+            && state.graphicsState.indexFormat == record.indexFormat
+            && state.graphicsState.indexOffset == record.indexOffset
+            && state.graphicsState.vertexBuffers.size() == record.vertexBuffers.size()
+        ;
+        if(matchesCachedState){
+            for(usize bindingIndex = 0u; bindingIndex < record.vertexBuffers.size(); ++bindingIndex){
+                if(
+                    state.graphicsState.vertexBuffers[bindingIndex].slot != record.vertexBuffers[bindingIndex].slot
+                    || state.graphicsState.vertexBuffers[bindingIndex].resource != record.vertexBuffers[bindingIndex].resource
+                ){
+                    matchesCachedState = false;
+                    break;
+                }
+            }
+        }
+        GpuCommandIrReplayError::Enum error = GpuCommandIrReplayError::None;
+        if(matchesCachedState){
+            if(!__hidden_gpu_command_ir_raster_preflight::ViewportIsValid(record.viewport))
+                error = GpuCommandIrReplayError::InvalidRasterState;
+            else if(record.hasScissor ? !record.scissor.validScissor() : !__hidden_gpu_command_ir_raster_preflight::ImplicitScissorIsValid(record.viewport))
+                error = GpuCommandIrReplayError::InvalidRasterState;
+            else if(
+                !IsFinite(record.blendConstantColor.r)
+                || !IsFinite(record.blendConstantColor.g)
+                || !IsFinite(record.blendConstantColor.b)
+                || !IsFinite(record.blendConstantColor.a)
+            )
+                error = GpuCommandIrReplayError::InvalidRasterState;
+        }
+        else
+            error = __hidden_gpu_command_ir_raster_preflight::ValidateGraphicsState(record, graph, task);
         if(error != GpuCommandIrReplayError::None)
             return error;
         state.graphicsState = record;

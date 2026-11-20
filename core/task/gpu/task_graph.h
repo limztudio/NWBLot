@@ -438,9 +438,31 @@ private:
 
 
 private:
+    static constexpr u64 s_AdmissionReaderMask = (1ull << 31u) - 1ull;
+    static constexpr u32 s_AdmissionWriterShift = 31u;
+    static constexpr u64 s_AdmissionWriterUnit = 1ull << s_AdmissionWriterShift;
+    static constexpr u64 s_AdmissionWriterMask = ((1ull << 31u) - 1ull) << s_AdmissionWriterShift;
+    static constexpr u64 s_AdmissionPlanActiveBit = 1ull << 62u;
+    static constexpr u64 s_AdmissionTeardownBit = 1ull << 63u;
+
+
+private:
+    [[nodiscard]] b8 isTeardownInProgress(const MemoryOrder order = MemoryOrder::acquire)const noexcept{
+        return (m_declarationAdmissionState.load(order) & s_AdmissionTeardownBit) != 0u;
+    }
+
+    [[nodiscard]] b8 tryBeginTeardownWithinLock()const noexcept{
+        u64 state = m_declarationAdmissionState.load(MemoryOrder::acquire);
+        while((state & (s_AdmissionTeardownBit | s_AdmissionWriterMask | s_AdmissionReaderMask)) == 0u){
+            if(m_declarationAdmissionState.compare_exchange_weak(state, state | s_AdmissionTeardownBit, MemoryOrder::acq_rel, MemoryOrder::acquire))
+                return true;
+        }
+        return false;
+    }
+
     [[nodiscard]] b8 matchesPacketAttemptWithinLock(const GpuCompiledGraph& compiledGraph, const u64 planGeneration, const u64 recordingAttemptGeneration)const noexcept{
         return
-            !m_teardownInProgress.load(MemoryOrder::relaxed)
+            !isTeardownInProgress(MemoryOrder::relaxed)
             && m_activeCompiledGraph == &compiledGraph
             && m_activeRecordingPlanGeneration.load(MemoryOrder::relaxed) == planGeneration
             && m_activeRecordingAttemptGeneration.load(MemoryOrder::relaxed) == recordingAttemptGeneration
@@ -649,15 +671,13 @@ private:
     mutable u64 m_activeRecordingPreparationSerial = 0u;
     mutable const GpuCompiledGraph* m_activeCompiledGraph = nullptr;
     mutable GpuGraphSubmissionBinding m_activeSubmissionBinding;
-    mutable u32 m_activeDeclarationAccessCount = 0u;
-    mutable u32 m_activeDeclarationReadCount = 0u;
+    mutable Atomic<u64> m_declarationAdmissionState{ 0u };
     mutable u32 m_activeDiscardNotificationCount = 0u;
     mutable Atomic<u32> m_activePacketRecordingClaimCount{ 0u };
     mutable SubmissionBindingState::Enum m_submissionBindingState = SubmissionBindingState::None;
     u16 m_externalCompletionDeviceGeneration = 0u;
     b8 m_hasPresentEndpoint = false;
     b8 m_hasTaskPayloads = false;
-    mutable Atomic<b8> m_teardownInProgress{ false };
 };
 
 

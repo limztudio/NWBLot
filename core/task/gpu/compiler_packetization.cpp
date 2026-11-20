@@ -160,6 +160,8 @@ namespace GpuTaskGraphCompilerDetail{
 [[nodiscard]] const GpuPhysicalQueueInfo* FindCompiledQueueInfo(const GpuTaskGraphCompiledPlanStorage& compiledPlan, const GpuPhysicalQueueId& queue)noexcept{
     if(!queue.valid() || queue.deviceGeneration != compiledPlan.deviceGeneration)
         return nullptr;
+    if(queue.index < compiledPlan.queueTopology.size() && compiledPlan.queueTopology[queue.index].id == queue)
+        return &compiledPlan.queueTopology[queue.index];
     for(const GpuPhysicalQueueInfo& info : compiledPlan.queueTopology){
         if(info.id == queue)
             return &info;

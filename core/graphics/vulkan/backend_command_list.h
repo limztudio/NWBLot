@@ -209,6 +209,9 @@ public:
         const GraphPublicationReadOwnership ownership(*this);
         return ownership.m_readable && m_renderPassActive;
     }
+    [[nodiscard]] const GpuPhysicalQueueInfo* getCachedPhysicalQueueInfo()const noexcept{
+        return m_hasCachedPhysicalQueueInfo ? &m_cachedPhysicalQueueInfo : nullptr;
+    }
     void clearState();
     void beginRenderPass(Framebuffer& framebuffer, const RenderPassParameters& params);
     void endRenderPass();
@@ -512,7 +515,7 @@ private:
     void bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const RayTracingPipeline& pipeline, GpuDescriptorHandle accelStructHandle);
     void bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, VkPipelineBindPoint bindPoint, const PipelineBindingState& pipelineBindings, GpuDescriptorHandle accelStructHandle, TStringView operationName);
     void ensureDescriptorBuffersBound(DescriptorBufferManager& manager, const DescriptorBufferManager::BindingSnapshot& snapshot);
-    void setViewportState(const ViewportState& viewportState);
+    void setViewportState(const ViewportState& viewportState, b8 updateViewport = true, b8 updateScissor = true);
 
     b8 beginDynamicRendering(Framebuffer& framebuffer, const RenderPassParameters& params);
     void endDynamicRendering();
@@ -585,7 +588,9 @@ private:
     b8 m_hasCachedPhysicalQueueInfo = false;
     b8 m_universalGraphicsCompute = false;
     b8 m_hasBoundGraphicsState = false;
+    b8 m_graphicsBuffersValidatedInPass = false;
     b8 m_hasBoundComputeState = false;
+    u64 m_lastSubmitBatchStamp = 0u;
     u64 m_nativeRecordingID = 0u;
     u64 m_nextMarkerSerial = 0u;
     GraphicsVector<MarkerStackEntry> m_markerStack;

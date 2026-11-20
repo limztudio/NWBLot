@@ -58,7 +58,6 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
     static_assert(IsTriviallyCopyable_V<SubmissionCommandListIdentity>, "accepted submission identities must remain scalar-only");
     auto& descriptorHeapUseCommitTickets = m_submitDescriptorHeapUseCommitTickets;
     auto& validatedTimerQueryCommandBuffers = m_submitValidatedTimerQueryCommandBuffers;
-    auto& uniqueCommandLists = m_submitBatchUniqueCommandLists;
     auto& batchEntries = m_submitBatchEntries;
     auto& submitInfos = m_submitBatchInfos;
     auto& waitInfos = m_submitWaitInfos;
@@ -66,7 +65,6 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
     auto& cmdBufInfos = m_submitCommandBufferInfos;
     descriptorHeapUseCommitTickets.clear();
     validatedTimerQueryCommandBuffers.clear();
-    uniqueCommandLists.clear();
     batchEntries.clear();
     submitInfos.clear();
     waitInfos.clear();
@@ -128,25 +126,15 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
     if(entries.size() > static_cast<usize>(Limit<u32>::s_Max))
         return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
 
-    uniqueCommandLists.reserve(totalCmdCount);
+    static Atomic<u64> s_NextSubmitBatchStamp{ 1u };
+    const u64 batchStamp = s_NextSubmitBatchStamp.fetch_add(1u, MemoryOrder::relaxed);
     validatedTimerQueryCommandBuffers.reserve(totalCmdCount);
     const SubmissionValidator validator(*this);
     for(const BatchSubmitEntry& entry : entries){
         if(entry.numCmd == 0u)
             continue;
-        if(!validator.validate(entry.ppCmd, entry.numCmd, entry.expectedCommandLists))
+        if(!validator.validate(entry.ppCmd, entry.numCmd, entry.expectedCommandLists, batchStamp))
             return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
-        const usize priorCount = uniqueCommandLists.size();
-        for(usize i = 0u; i < entry.numCmd; ++i){
-            CommandList* const cmdList = entry.ppCmd[i];
-            for(usize priorIndex = 0u; priorIndex < priorCount; ++priorIndex){
-                if(uniqueCommandLists[priorIndex] == cmdList){
-                    NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: command list is duplicated in batch"));
-                    return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
-                }
-            }
-            uniqueCommandLists.push_back(cmdList);
-        }
 
         const Span<const SubmissionWait> entryWaits = entry.localWaits ? Span<const SubmissionWait>(entry.localWaits, entry.localWaitCount) : Span<const SubmissionWait>{};
         for(usize i = 0u; i < entry.numCmd; ++i){
@@ -189,7 +177,8 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
     submitInfos.reserve(entries.size());
     descriptorHeapUseCommitTickets.reserve(totalCmdCount);
 
-    m_submitBatchAcceptedTimelineWaits.assign(m_acceptedTimelineWaits.begin(), m_acceptedTimelineWaits.end());
+    if(totalWaitCount > 0u)
+        m_submitBatchAcceptedTimelineWaits.assign(m_acceptedTimelineWaits.begin(), m_acceptedTimelineWaits.end());
 
     for(usize entryIndex = 0u; entryIndex < entries.size(); ++entryIndex){
         const BatchSubmitEntry& entry = entries[entryIndex];
@@ -375,7 +364,8 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
     }
 
     m_lastSubmittedID = batchEntries.back().submissionID;
-    Swap(m_acceptedTimelineWaits, m_submitBatchAcceptedTimelineWaits);
+    if(totalWaitCount > 0u)
+        Swap(m_acceptedTimelineWaits, m_submitBatchAcceptedTimelineWaits);
 
     descriptorSubmission.commitAndRelease();
     finalizeDetachedRecordingAttempts(true);

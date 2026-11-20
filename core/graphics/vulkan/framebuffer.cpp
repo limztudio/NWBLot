@@ -5,6 +5,8 @@
 #include "backend_framebuffer.h"
 
 #include "backend.h"
+#include "command_validation.h"
+#include "texture_resource_detail.h"
 
 #include <core/common/log.h>
 
@@ -23,6 +25,40 @@ Framebuffer::Framebuffer(const VulkanContext& context)noexcept
     , m_resources(context.objectArena)
     , m_context(context)
 {}
+
+Expected<VkImageView> Framebuffer::resolveAttachmentView(const FramebufferAttachment& attachment, CachedAttachmentView& cached){
+    static_assert(Atomic<VkImageView>::is_always_lock_free, "Cached VkImageView atomic must remain lock-free");
+
+    if(!attachment.texture)
+        return MakeUnexpected(Failure{});
+    Texture& tex = *attachment.texture;
+    const b8 canUseCache = tex.m_managed || tex.m_gpuReady.load(MemoryOrder::acquire);
+    if(canUseCache){
+        const VkImageView cachedView = cached.view.load(MemoryOrder::acquire);
+        if(cachedView != VK_NULL_HANDLE)
+            return cachedView;
+    }
+
+    const TextureSubresourceSet resolvedSubresources = attachment.subresources.resolve(tex.m_creationDesc, TextureSubresourceMipResolve::Range);
+    const TextureDimension::Enum viewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(tex.m_creationDesc, resolvedSubresources);
+    const auto view = tex.getView(attachment.subresources, viewDimension, attachment.format);
+    if(!view)
+        return MakeUnexpected(view.error());
+
+    if(tex.m_managed || tex.m_gpuReady.load(MemoryOrder::acquire))
+        cached.view.store(*view, MemoryOrder::release);
+    return *view;
+}
+
+Expected<VkImageView> Framebuffer::resolveColorAttachmentView(const u32 index){
+    if(index >= m_desc.colorAttachments.size() || index >= m_cachedColorViews.size())
+        return MakeUnexpected(Failure{});
+    return resolveAttachmentView(m_desc.colorAttachments[index], m_cachedColorViews[index]);
+}
+
+Expected<VkImageView> Framebuffer::resolveDepthAttachmentView(){
+    return resolveAttachmentView(m_desc.depthAttachment, m_cachedDepthView);
+}
 
 Framebuffer::~Framebuffer()noexcept{
     if(m_framebuffer != VK_NULL_HANDLE){

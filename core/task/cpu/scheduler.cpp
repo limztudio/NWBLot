@@ -6,6 +6,7 @@
 #include "arena_names.h"
 
 #include <global/atomic_identity.h>
+#include <global/bit.h>
 #include <global/exception.h>
 
 
@@ -319,7 +320,8 @@ Expected<CpuTaskScheduler::TaskHandle, CpuTaskAdmissionError::Enum> CpuTaskSched
         m_statistics.peakOutstandingTasks = Max(m_statistics.peakOutstandingTasks, m_outstanding);
         if(scope)
             scope->m_pending.fetch_add(1u, MemoryOrder::release);
-        invalidateScopeSearchLocked(true);
+        if(m_scopeSearchActive)
+            invalidateScopeSearchLocked(true);
         node.state = TaskState::Waiting;
         if(node.dependencies == 0u)
             enqueueLocked(handle.index);
@@ -377,7 +379,9 @@ b8 CpuTaskScheduler::isRangeCanceled(const CpuTaskScope* scope)const noexcept{
 
 void CpuTaskScheduler::enqueueLocked(const u32 index)noexcept{
     TaskNode& node = m_nodes[index];
-    ReadyQueue& queue = m_ready[QueueIndex(node.options)];
+    const usize queueIndex = QueueIndex(node.options);
+    ReadyQueue& queue = m_ready[queueIndex];
+    m_nonEmptyReadyMask |= static_cast<u16>(1u << queueIndex);
     node.state = TaskState::Ready;
     if(m_profileEnabled.load(MemoryOrder::relaxed))
         profileReadyLocked(index);
@@ -391,7 +395,22 @@ void CpuTaskScheduler::enqueueLocked(const u32 index)noexcept{
     queue.tail = index;
 }
 
+u16 CpuTaskScheduler::eligibleQueueMaskLocked(const CpuAffinity::Enum affinity, const b8 mainThread, const b8 cooperative)const noexcept{
+    u16 costMask = mainThread ? static_cast<u16>(1u << s_MainThreadTargetSlot) : 0u;
+    if(!(mainThread && m_workerCount != 0u && !cooperative) && (mainThread || isExecuting())){
+        costMask |= static_cast<u16>(1u << CpuTaskCost::Any);
+        if(cooperative || affinity == CpuAffinity::Any || affinity == CpuAffinity::Performance || m_busyPerformance >= m_statistics.performanceWorkers)
+            costMask |= static_cast<u16>(1u << CpuTaskCost::Heavy);
+        if(cooperative || affinity == CpuAffinity::Any || affinity == CpuAffinity::Efficiency || m_busyEfficiency >= m_statistics.efficiencyWorkers)
+            costMask |= static_cast<u16>(1u << CpuTaskCost::Light);
+    }
+    return static_cast<u16>(costMask | (costMask << s_CostSlotCount) | (costMask << (2u * s_CostSlotCount)));
+}
+
 CpuTaskScheduler::TaskHandle CpuTaskScheduler::claimLocked(const CpuAffinity::Enum affinity, const b8 mainThread, const b8 cooperative, ScopeWait* const preferredScope)noexcept{
+    const u16 candidateMask = static_cast<u16>(m_nonEmptyReadyMask & eligibleQueueMaskLocked(affinity, mainThread, cooperative));
+    if(candidateMask == 0u)
+        return {};
     const u64 dispatch = m_dispatchCount;
     const usize firstPriority = dispatch % __hidden_cpu_task_scheduler::s_BackgroundAdmissionPeriod == __hidden_cpu_task_scheduler::s_BackgroundAdmissionTick
         ? static_cast<usize>(CpuTaskPriority::Background)
@@ -401,11 +420,15 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::claimLocked(const CpuAffinity::En
     const Array<usize, s_CostSlotCount> costs = { s_MainThreadTargetSlot, preferredCost, 0u, preferredCost == CpuTaskCost::Heavy ? static_cast<usize>(CpuTaskCost::Light) : static_cast<usize>(CpuTaskCost::Heavy) };
     for(usize pass = 0u; pass < s_PrioritySlotCount; ++pass){
         const usize priority = pass == 0u ? firstPriority : (pass <= firstPriority ? pass - 1u : pass);
+        const u16 priorityBits = static_cast<u16>((candidateMask >> (priority * s_CostSlotCount)) & 0xFu);
+        if(priorityBits == 0u)
+            continue;
         for(const usize cost : costs){
+            if((priorityBits & static_cast<u16>(1u << cost)) == 0u)
+                continue;
             const usize index = priority * s_CostSlotCount + cost;
             ReadyQueue& queue = m_ready[index];
-            if(queue.head == TaskHandle::s_InvalidIndex || !queueEligible(index, affinity, mainThread, cooperative))
-                continue;
+            FOUNDATION_ASSERT(queue.head != TaskHandle::s_InvalidIndex);
             u32 previous = TaskHandle::s_InvalidIndex;
             const u32 nodeIndex = preferredScope ? findScopeReadyLocked(index, *preferredScope, previous) : queue.head;
             if(nodeIndex == TaskHandle::s_InvalidIndex)
@@ -417,6 +440,8 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::claimLocked(const CpuAffinity::En
                 m_nodes[previous].next = node.next;
             if(queue.tail == nodeIndex)
                 queue.tail = previous;
+            if(queue.head == TaskHandle::s_InvalidIndex)
+                m_nonEmptyReadyMask &= static_cast<u16>(~(1u << index));
             node.next = TaskHandle::s_InvalidIndex;
             node.state = TaskState::Running;
             if(node.options.target == CpuTaskTarget::Worker)
@@ -429,11 +454,15 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::claimLocked(const CpuAffinity::En
 }
 
 b8 CpuTaskScheduler::hasReadyLocked(const CpuAffinity::Enum affinity, const b8 mainThread, const b8 cooperative, ScopeWait* const preferredScope)noexcept{
-    for(usize index = 0u; index < s_QueueCount; ++index){
-        if(m_ready[index].head == TaskHandle::s_InvalidIndex || !queueEligible(index, affinity, mainThread, cooperative))
-            continue;
+    const u16 candidateMask = static_cast<u16>(m_nonEmptyReadyMask & eligibleQueueMaskLocked(affinity, mainThread, cooperative));
+    if(candidateMask == 0u)
+        return false;
+    if(!preferredScope)
+        return true;
+    for(u32 bits = candidateMask; bits != 0u; bits &= bits - 1u){
+        const usize index = static_cast<usize>(CountTrailingZeros(bits));
         u32 previous = TaskHandle::s_InvalidIndex;
-        if(!preferredScope || findScopeReadyLocked(index, *preferredScope, previous) != TaskHandle::s_InvalidIndex)
+        if(findScopeReadyLocked(index, *preferredScope, previous) != TaskHandle::s_InvalidIndex)
             return true;
     }
     return false;
@@ -612,7 +641,10 @@ void CpuTaskScheduler::retireNodeLocked(const TaskHandle handle, TaskNode& node,
     else
         ++m_statistics.completedTasks;
     FOUNDATION_ASSERT(m_outstanding > 0u);
-    --m_outstanding;
+    if(--m_outstanding == 0u)
+        m_scopeSearchActive = false;
+    else if(m_scopeSearchActive)
+        invalidateScopeSearchLocked(true);
     node.dependents.clear();
     node.scope = nullptr;
     node.parent = {};

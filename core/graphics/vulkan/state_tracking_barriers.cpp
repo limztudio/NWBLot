@@ -250,6 +250,8 @@ void CommandList::executePipelineBarrier(const Span<VkMemoryBarrier2> memoryBarr
     if(!validateCommandRecordingScope(s_OperationName))
         return;
 
+    m_graphicsBuffersValidatedInPass = false;
+
     auto depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
     depInfo.memoryBarrierCount = static_cast<u32>(memoryBarriers.size());
     depInfo.pMemoryBarriers = memoryBarriers.data();

@@ -215,10 +215,6 @@ Expected<GpuGraphResourceId> GpuTaskGraph::importAccelStruct(const RayTracingAcc
 }
 
 Expected<GpuGraphResourceId> GpuTaskGraph::importHazardDomain(const GpuGraphResourceDesc& desc){
-    DeclarationMutationScope mutation(*this);
-    if(!mutation.valid())
-        return MakeUnexpected(Failure{});
-
     if(desc.type != GpuGraphResourceType::HazardDomain)
         return MakeUnexpected(Failure{});
     return importResource(desc);

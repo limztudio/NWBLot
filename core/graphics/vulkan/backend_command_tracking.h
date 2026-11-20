@@ -61,6 +61,7 @@ class TrackedCommandBuffer final : public RefCounter<GraphicsResource>{
     friend class Queue;
     friend class StateTracker;
     friend class GpuDescriptorHeap;
+    friend class UploadManager;
     friend class TimerQueryClaimJournal;
     friend class AccelStructBuildJournal;
 
@@ -132,6 +133,7 @@ private:
     AccelStructBuildJournal m_accelStructJournal;
     Vector<PendingOpacityMicromapBuildCommit, Alloc::GlobalArena> m_pendingOpacityMicromapBuildCommits;
     TimerQueryClaimJournal m_timerQueryClaims;
+    Array<UploadManagerChunk*, 3u> m_activeUploadChunks{};
     DescriptorBufferManager* m_descriptorBufferManager = nullptr;
     u64 m_descriptorBufferGeneration = 0u;
 

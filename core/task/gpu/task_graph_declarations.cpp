@@ -34,23 +34,24 @@ GpuTaskGraph::~GpuTaskGraph()noexcept(false){
     b8 teardownValid = true;
     {
         ScopedLock lock(m_lifecycleMutex);
-        teardownValid = !m_teardownInProgress.load(MemoryOrder::relaxed)
-            && m_activeDeclarationAccessCount == 0u
-            && m_activeDeclarationReadCount == 0u
-            && m_activeDiscardNotificationCount == 0u
+        teardownValid = m_activeDiscardNotificationCount == 0u
             && m_activePacketRecordingClaimCount.load(MemoryOrder::acquire) == 0u
             && m_activeRecordingPreparationSerial == 0u
             && m_submissionBindingState != SubmissionBindingState::Active
             && m_submissionBindingState != SubmissionBindingState::ExceptionClosing
         ;
-        for(const GpuTaskNode& task : m_tasks){
-            const TaskLifecycleState::Enum state = task.lifecycleState();
-            if(state == TaskLifecycleState::Recording || state == TaskLifecycleState::Submitting || state == TaskLifecycleState::Accepting)
-                teardownValid = false;
-        }
+        if(teardownValid)
+            teardownValid = tryBeginTeardownWithinLock();
         if(teardownValid){
-            m_teardownInProgress.store(true, MemoryOrder::release);
-            resetCompletion.activateWithinLock();
+            for(const GpuTaskNode& task : m_tasks){
+                const TaskLifecycleState::Enum state = task.lifecycleState();
+                if(state == TaskLifecycleState::Recording || state == TaskLifecycleState::Submitting || state == TaskLifecycleState::Accepting)
+                    teardownValid = false;
+            }
+            if(teardownValid)
+                resetCompletion.activateWithinLock();
+            else
+                m_declarationAdmissionState.fetch_and(~s_AdmissionTeardownBit, MemoryOrder::acq_rel);
         }
     }
     FOUNDATION_FATAL_ASSERT_MSG(teardownValid, "GpuTaskGraph destruction requires in-flight task work to resolve first");

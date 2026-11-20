@@ -395,8 +395,7 @@ void CommandList::copyBuffer(Buffer& dest, u64 destOffsetBytes, Buffer& src, u64
 Expected<BufferSuballocation> CommandList::prepareUploadStaging(const usize dataSize, TStringView operationName, const u32 alignment){
     UploadManager& uploadMgr = m_device.m_uploadManager;
 
-    const Expected<u64> completedUploadVersion = m_device.queueGetCompletedInstance(m_creationDesc.physicalQueue);
-    const auto staging = uploadMgr.suballocateBuffer(static_cast<u64>(dataSize), m_currentCmdBuf.get(), m_nativeRecordingID, m_creationDesc.physicalQueue, completedUploadVersion ? *completedUploadVersion : 0u, alignment);
+    const auto staging = uploadMgr.suballocateBuffer(static_cast<u64>(dataSize), m_currentCmdBuf.get(), m_nativeRecordingID, m_creationDesc.physicalQueue, alignment);
     if(!staging){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to suballocate staging buffer for {}"), operationName);
         FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Failed to suballocate staging buffer"));

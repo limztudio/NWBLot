@@ -26,7 +26,7 @@ GpuTaskGraph::ResetCompletionScope::~ResetCompletionScope()noexcept{
 }
 
 void GpuTaskGraph::ResetCompletionScope::activateWithinLock()noexcept{
-    const b8 activationValid = !m_active && m_graph.m_teardownInProgress.load(MemoryOrder::relaxed);
+    const b8 activationValid = !m_active && m_graph.isTeardownInProgress(MemoryOrder::relaxed);
     FOUNDATION_FATAL_ASSERT_MSG(activationValid, "GPU task graph reset completion requires fresh teardown ownership");
     m_active = true;
 }
@@ -47,21 +47,22 @@ b8 GpuTaskGraph::tryReset(){
     {
         ScopedLock lock(m_lifecycleMutex);
         if(
-            m_teardownInProgress.load(MemoryOrder::relaxed)
-            || m_activeDeclarationAccessCount != 0u
-            || m_activeDiscardNotificationCount != 0u
+            m_activeDiscardNotificationCount != 0u
             || m_activePacketRecordingClaimCount.load(MemoryOrder::acquire) != 0u
             || m_activeRecordingPreparationSerial != 0u
             || m_submissionBindingState == SubmissionBindingState::Active
             || m_submissionBindingState == SubmissionBindingState::ExceptionClosing
         )
             return false;
+        if(!tryBeginTeardownWithinLock())
+            return false;
         for(const GpuTaskNode& task : m_tasks){
             const TaskLifecycleState::Enum state = task.lifecycleState();
-            if(state == TaskLifecycleState::Recording || state == TaskLifecycleState::Submitting || state == TaskLifecycleState::Accepting)
+            if(state == TaskLifecycleState::Recording || state == TaskLifecycleState::Submitting || state == TaskLifecycleState::Accepting){
+                m_declarationAdmissionState.fetch_and(~s_AdmissionTeardownBit, MemoryOrder::acq_rel);
                 return false;
+            }
         }
-        m_teardownInProgress.store(true, MemoryOrder::release);
         resetCompletion.activateWithinLock();
     }
 
@@ -136,7 +137,7 @@ void GpuTaskGraph::completeResetWithoutCallbacks()noexcept{
         m_activeDiscardNotificationCount = 0u;
         m_hasPresentEndpoint = false;
         m_hasTaskPayloads = false;
-        m_teardownInProgress.store(false, MemoryOrder::release);
+        m_declarationAdmissionState.fetch_and(~(s_AdmissionTeardownBit | s_AdmissionPlanActiveBit), MemoryOrder::acq_rel);
     }
 }
 

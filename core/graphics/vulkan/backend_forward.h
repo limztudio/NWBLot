@@ -24,6 +24,8 @@ class TrackedCommandBuffer;
 class StateTracker;
 class GpuDescriptorHeap;
 class DescriptorBufferManager;
+class UploadManager;
+struct UploadManagerChunk;
 
 class Buffer;
 class Texture;

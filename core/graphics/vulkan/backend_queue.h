@@ -200,8 +200,9 @@ private:
     Vector<SubmissionWait, Alloc::GlobalArena> m_acceptedTimelineWaits;
     Vector<SubmissionWait, Alloc::GlobalArena> m_submitBatchAcceptedTimelineWaits;
     Vector<DescriptorHeapUseCommitTicket, Alloc::GlobalArena> m_submitDescriptorHeapUseCommitTickets;
+    Vector<u32, Alloc::GlobalArena> m_submitDescriptorHeapUseStamps;
     Vector<NotNull<TrackedCommandBuffer*>, Alloc::GlobalArena> m_submitValidatedTimerQueryCommandBuffers;
-    Vector<CommandList*, Alloc::GlobalArena> m_submitBatchUniqueCommandLists;
+    u32 m_submitDescriptorHeapUseStamp = 0u;
     Vector<BatchPreparedEntry, Alloc::GlobalArena> m_submitBatchEntries;
     Vector<VkSubmitInfo2, Alloc::GlobalArena> m_submitBatchInfos;
     Vector<VkSemaphoreSubmitInfo, Alloc::GlobalArena> m_submitWaitInfos;

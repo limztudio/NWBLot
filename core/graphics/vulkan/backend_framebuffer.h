@@ -7,6 +7,8 @@
 
 #include "backend_forward.h"
 
+#include <global/atomic.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -35,11 +37,25 @@ public:
 
 
 private:
+    struct CachedAttachmentView{
+        Atomic<VkImageView> view{ VK_NULL_HANDLE };
+    };
+
+
+private:
+    [[nodiscard]] Expected<VkImageView> resolveAttachmentView(const FramebufferAttachment& attachment, CachedAttachmentView& cached);
+    [[nodiscard]] Expected<VkImageView> resolveColorAttachmentView(u32 index);
+    [[nodiscard]] Expected<VkImageView> resolveDepthAttachmentView();
+
+
+private:
     FramebufferDesc m_desc;
     FramebufferInfoEx m_framebufferInfo;
 
     VkFramebuffer m_framebuffer = VK_NULL_HANDLE;
     VkRenderPass m_renderPass = VK_NULL_HANDLE;
+    Array<CachedAttachmentView, s_MaxRenderTargets> m_cachedColorViews{};
+    CachedAttachmentView m_cachedDepthView{};
 
     Vector<TextureHandle, Alloc::GlobalArena> m_resources;
 

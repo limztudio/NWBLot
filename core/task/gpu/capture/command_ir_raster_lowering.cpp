@@ -168,6 +168,50 @@ GpuCommandIrReplayError::Enum ValidateRasterBackendOperand(
         const GpuCommandIrRasterStateOwner* const owner = owners.rasterStateOwner(record.framebufferOwnerIndex);
         if(!owner)
             return GpuCommandIrReplayError::InvalidRasterOwner;
+        Device& device = commandList.getDevice();
+        const GpuCommandIrRasterStateOwner* const previousOwner = state.active && state.task == record.task ? state.cachedValidatedOwner : nullptr;
+        b8 matchesCachedOwner = previousOwner != nullptr
+            && owner->recordIndex == recordIndex
+            && owner->pipeline.get() == previousOwner->pipeline.get()
+            && owner->framebuffer.get() == previousOwner->framebuffer.get()
+            && owner->colorAttachment == previousOwner->colorAttachment
+            && record.colorAttachment == state.graphicsState.colorAttachment
+            && record.pipeline == state.graphicsState.pipeline
+            && owner->indexBuffer.get() == previousOwner->indexBuffer.get()
+            && record.indexResource == state.graphicsState.indexResource
+            && owner->vertexBuffers.size() == record.vertexBuffers.size()
+            && owner->vertexBuffers.size() == previousOwner->vertexBuffers.size()
+        ;
+        if(matchesCachedOwner){
+            for(usize bindingIndex = 0u; bindingIndex < record.vertexBuffers.size(); ++bindingIndex){
+                if(
+                    owner->vertexBuffers[bindingIndex].get() != previousOwner->vertexBuffers[bindingIndex].get()
+                    || record.vertexBuffers[bindingIndex].resource != state.graphicsState.vertexBuffers[bindingIndex].resource
+                    || record.vertexBuffers[bindingIndex].slot != state.graphicsState.vertexBuffers[bindingIndex].slot
+                ){
+                    matchesCachedOwner = false;
+                    break;
+                }
+            }
+        }
+        if(matchesCachedOwner){
+            if(!GraphicsBackend::IsViewportValid(record.viewport, device) || (!record.hasScissor && !GraphicsBackend::IsImplicitScissorValid(record.viewport)))
+                return GpuCommandIrReplayError::InvalidRasterState;
+            for(usize bindingIndex = 0u; bindingIndex < record.vertexBuffers.size(); ++bindingIndex){
+                if(record.vertexBuffers[bindingIndex].offset >= owner->vertexBuffers[bindingIndex]->getDescription().byteSize)
+                    return GpuCommandIrReplayError::BackendResourceNotReady;
+            }
+            if(record.indexResource.valid() && record.indexOffset >= owner->indexBuffer->getDescription().byteSize)
+                return GpuCommandIrReplayError::BackendResourceNotReady;
+            state.graphicsState = record;
+            state.task = record.task;
+            state.active = true;
+            state.heapBound = false;
+            state.pushConstantsSet = false;
+            state.cachedValidatedOwner = owner;
+            return GpuCommandIrReplayError::None;
+        }
+
         const GpuCommandIrReplayError::Enum error = __hidden_gpu_command_ir_raster_lowering::ValidateStateOwner(record, *owner, graph, queue, recordIndex, commandList);
         if(error != GpuCommandIrReplayError::None)
             return error;
@@ -223,6 +267,7 @@ GpuCommandIrReplayError::Enum ValidateRasterBackendOperand(
                 });
             }
         }
+        state.cachedValidatedOwner = owner;
         return GpuCommandIrReplayError::None;
     }
     case GpuCommandIrWireOpcode::BindGraphicsHeap:{
@@ -264,6 +309,7 @@ GpuCommandIrReplayError::Enum ValidateRasterBackendOperand(
         state.active = false;
         state.heapBound = false;
         state.pushConstantsSet = false;
+        state.cachedValidatedOwner = nullptr;
         state.cachedVertexValidations.clear();
         state.cachedInputLayoutError = GpuCommandIrReplayError::None;
         return GpuCommandIrReplayError::None;

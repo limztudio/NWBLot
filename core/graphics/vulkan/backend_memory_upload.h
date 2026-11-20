@@ -130,6 +130,7 @@ class Texture final : public RefCounter<GraphicsResource>{
     friend class BackendContext;
     friend class Device;
     friend class CommandList;
+    friend class Framebuffer;
     friend class FramebufferRenderingPreparation;
     friend class DescriptorBufferManager;
     friend class GpuDescriptorHeap;

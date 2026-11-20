@@ -11,20 +11,19 @@
 NWB_VULKAN_BEGIN
 
 
-b8 Queue::SubmissionValidator::validate(CommandList* const* ppCmd, const usize numCmd, const SubmissionCommandListIdentity* const expectedCommandLists)const{
+b8 Queue::SubmissionValidator::validate(CommandList* const* ppCmd, const usize numCmd, const SubmissionCommandListIdentity* const expectedCommandLists, const u64 batchStamp)const{
     for(usize i = 0u; i < numCmd; ++i){
         auto* cmdList = ppCmd[i];
         const SubmissionCommandListIdentity& expected = expectedCommandLists[i];
-        for(usize previous = 0u; previous < i; ++previous){
-            if(ppCmd[previous] == cmdList){
-                NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: command list {} is duplicated"), i);
-                return false;
-            }
-        }
         if(!cmdList || &cmdList->m_device != &m_queue.m_device){
             NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: command list {} is null or foreign"), i);
             return false;
         }
+        if(cmdList->m_lastSubmitBatchStamp == batchStamp){
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: command list {} is duplicated"), i);
+            return false;
+        }
+        cmdList->m_lastSubmitBatchStamp = batchStamp;
         if(!cmdList->matchesSubmissionLease(m_queue.m_physicalQueue, m_queue.m_queueID, expected.graphSubmissionAuthorized)){
             NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Command-list lease provenance does not match execution queue"));
             return false;

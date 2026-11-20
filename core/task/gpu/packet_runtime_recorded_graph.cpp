@@ -45,7 +45,9 @@ Expected<CommandListHandle> GpuRecordedGraph::PacketRecordingScratch::acquireCom
     for(usize index = 0u; index < commandLists.size();){
         CachedCommandList& cached = commandLists[index];
         if(cached.parameters.physicalQueue.deviceGeneration != device.getDeviceGeneration()){
-            commandLists.erase(commandLists.begin() + static_cast<isize>(index));
+            if(index + 1u < commandLists.size())
+                cached = Move(commandLists.back());
+            commandLists.pop_back();
             continue;
         }
         if(
@@ -282,7 +284,6 @@ b8 GpuRecordedGraph::prepareStorageCandidateLayout(const GpuCompiledGraph& compi
 
         candidate.packets[packetIndex].packet = packetID;
         candidate.packetRecordingOverlaps[packetIndex] = 0u;
-        candidate.packetStateSeeds[packetIndex].reset();
     }
 
     candidate.timingRecorder = nullptr;

@@ -24,6 +24,8 @@ namespace GpuTaskGraphCompilerDetail{
 
 
 const GpuPhysicalQueueInfo* FindPhysicalQueueInfo(const GpuPhysicalQueueTopology& topology, const GpuPhysicalQueueId& queueID)noexcept{
+    if(queueID.index < topology.queueCount && topology.queues[queueID.index].id == queueID)
+        return &topology.queues[queueID.index];
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
         const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
         if(queue.id == queueID)

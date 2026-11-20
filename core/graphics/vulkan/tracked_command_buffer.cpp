@@ -188,6 +188,7 @@ void TrackedCommandBuffer::clearTrackedReferences()noexcept{
     }
     m_referencedDescriptorHeaps.clear();
     m_trackedDescriptorHeapQueue = {};
+    m_activeUploadChunks = {};
     m_descriptorBufferManager = nullptr;
     m_descriptorBufferGeneration = 0u;
 

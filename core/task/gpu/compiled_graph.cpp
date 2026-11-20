@@ -387,6 +387,8 @@ GpuTaskGraphPhysicalQueueCompileStatistics GpuCompiledGraph::physicalQueueCompil
 const GpuPhysicalQueueInfo* GpuCompiledGraph::queueInfo(const GpuPhysicalQueueId& queue)const noexcept{
     if(!queue.valid() || queue.deviceGeneration != m_deviceGeneration)
         return nullptr;
+    if(queue.index < m_queueTopology.size() && m_queueTopology[queue.index].id == queue)
+        return &m_queueTopology[queue.index];
     for(const GpuPhysicalQueueInfo& info : m_queueTopology){
         if(info.id == queue)
             return &info;

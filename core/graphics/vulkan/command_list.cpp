@@ -376,6 +376,7 @@ void CommandList::abortRecordingAttemptWithoutCallbacks()noexcept{
     m_commandRecordingFailed = true;
     m_nativeRecordingID = 0u;
     m_renderPassActive = false;
+    m_graphicsBuffersValidatedInPass = false;
     m_renderPassFramebuffer = nullptr;
     m_hostReadbackBarrierTracker.clear();
 #if defined(NWB_DEBUG)
@@ -400,6 +401,7 @@ void CommandList::clearStateInternal(){
     m_currentMeshletState = {};
     m_currentRayTracingState = {};
     m_hasBoundGraphicsState = false;
+    m_graphicsBuffersValidatedInPass = false;
     m_hasBoundComputeState = false;
     m_renderPassActive = false;
     m_descriptorBuffersBound = false;

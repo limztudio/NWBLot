@@ -171,7 +171,9 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacketStream(
             const CommandListParameters commandListDescription = commandList->getResolvedDescription();
             commandListError = ValidateReplayCommandListQueue(commandListDescription, packetView.plan->queue, queue->queueClass);
             if(commandListError == GpuCommandIrReplayError::None){
-                backendCommandQueue = commandList->getDevice().getPhysicalQueueInfo(commandListDescription.physicalQueue);
+                backendCommandQueue = commandList->getCachedPhysicalQueueInfo();
+                if(!backendCommandQueue || backendCommandQueue->id != commandListDescription.physicalQueue)
+                    backendCommandQueue = commandList->getDevice().getPhysicalQueueInfo(commandListDescription.physicalQueue);
                 if(!backendCommandQueue)
                     commandListError = GpuCommandIrReplayError::BackendResourceNotReady;
             }
@@ -180,6 +182,8 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacketStream(
 
     u32 previousTaskOrder = 0u;
     b8 hasPreviousTask = false;
+    GpuTaskId cachedRecordTask;
+    GpuTaskGraphTaskView cachedTaskView;
     u64 recordIndex = 0u;
     RasterReplayState graphRasterState;
     RasterReplayState backendRasterState;
@@ -211,22 +215,26 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacketStream(
 
         const GpuTaskId recordTask = raster ? decoded.raster.task : decoded.builtin.task;
         const GpuPhysicalQueueId recordQueue = raster ? decoded.raster.queue : decoded.builtin.queue;
-        const GpuCommandIrReplayError::Enum contextError = __hidden_gpu_command_ir_replay_preflight::ValidateRecordContext(
-            recordTask,
-            recordPacket,
-            recordQueue,
-            graph,
-            compiledGraph,
-            packet,
-            packetView,
-            *queue,
-            previousTaskOrder,
-            hasPreviousTask
-        );
-        if(contextError != GpuCommandIrReplayError::None)
-            return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(reader, contextError, recordIndex);
+        if(!hasPreviousTask || recordTask != cachedRecordTask || recordQueue != queue->id){
+            const GpuCommandIrReplayError::Enum contextError = __hidden_gpu_command_ir_replay_preflight::ValidateRecordContext(
+                recordTask,
+                recordPacket,
+                recordQueue,
+                graph,
+                compiledGraph,
+                packet,
+                packetView,
+                *queue,
+                previousTaskOrder,
+                hasPreviousTask
+            );
+            if(contextError != GpuCommandIrReplayError::None)
+                return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(reader, contextError, recordIndex);
+            cachedRecordTask = recordTask;
+            cachedTaskView = graph.taskAt(recordTask.index);
+        }
 
-        const GpuTaskGraphTaskView task = graph.taskAt(recordTask.index);
+        const GpuTaskGraphTaskView& task = cachedTaskView;
         GpuCommandIrReplayError::Enum operationError = GpuCommandIrReplayError::None;
         if(raster){
             if(!__hidden_gpu_command_ir_replay_preflight::QueueHasGraphicsCapability(*queue))

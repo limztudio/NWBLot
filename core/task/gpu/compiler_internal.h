@@ -269,6 +269,7 @@ public:
 
 
 public:
+    [[nodiscard]] usize findAssignedQueueIndex(const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] u64 externalQueueLoad(const GpuPhysicalQueueId& queue)const noexcept;
     void rebuildAssignmentLoads(Span<const GpuTaskQueueAssignment> assignments, const GpuPhysicalQueueTopology& topology);
     void updateAssignmentLoads(const GpuTaskId& task, const GpuPhysicalQueueId& previousQueue, const GpuPhysicalQueueId& selectedQueue)noexcept;

@@ -146,6 +146,7 @@ public:
 struct RasterReplayState{
     GpuCommandIrRasterTaskRecord graphicsState;
     FixedVector<CachedRasterVertexValidation, s_MaxVertexAttributes> cachedVertexValidations;
+    const GpuCommandIrRasterStateOwner* cachedValidatedOwner = nullptr;
     GpuCommandIrReplayError::Enum cachedInputLayoutError = GpuCommandIrReplayError::None;
     GpuTaskId task;
     b8 active = false;

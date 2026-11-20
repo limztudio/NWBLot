@@ -56,6 +56,9 @@ private:
     Vector<NotNull<Texture*>, Alloc::GlobalArena> m_textures;
     Vector<RetainedBufferStateCommit, Alloc::GlobalArena> m_bufferStateCommits;
     Optional<MembershipIndex> m_membership;
+    GraphicsResource* m_lastRetainedResource = nullptr;
+    Buffer* m_lastRetainedBuffer = nullptr;
+    Texture* m_lastRetainedTexture = nullptr;
     Alloc::GlobalArena& m_arena;
 };
 

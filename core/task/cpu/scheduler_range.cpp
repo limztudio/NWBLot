@@ -28,7 +28,7 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
         : (runFirstInline ? static_cast<usize>(1u) + static_cast<usize>(m_workerCount) : static_cast<usize>(m_workerCount))
     ;
     const usize taskCount = Min(chunkCount, workerCapacity);
-    Atomic<usize> nextChunk{ 0u };
+    alignas(64) Atomic<usize> nextChunk{ 0u };
 
     b8 callerScopePending = false;
     ScopeExit releaseCallerScope([&]()noexcept{
@@ -44,7 +44,7 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
         }
         notifyProgress(wakePlan, wakeJoiners);
     });
-    CpuTaskScope chunks(*this, callerScope ? callerScope->m_profileLabel : CpuTaskProfileLabel{});
+    alignas(64) CpuTaskScope chunks(*this, callerScope ? callerScope->m_profileLabel : CpuTaskProfileLabel{});
     chunks.m_allowCallerWork = true;
     chunks.m_parentScope = callerScope;
 
@@ -133,7 +133,8 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
             callerScope->m_pending.fetch_add(1u, MemoryOrder::release);
             callerScopePending = true;
         }
-        invalidateScopeSearchLocked(true);
+        if(m_scopeSearchActive)
+            invalidateScopeSearchLocked(true);
         chunks.m_pending.fetch_add(taskCount, MemoryOrder::release);
         m_outstanding = outstanding;
         m_statistics.peakOutstandingTasks = Max(m_statistics.peakOutstandingTasks, m_outstanding);

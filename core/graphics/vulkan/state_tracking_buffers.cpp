@@ -231,6 +231,8 @@ void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask st
         return;
     }
 
+    m_graphicsBuffersValidatedInPass = false;
+
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(&buffer);
     const ResourceStates::Mask fallbackState = buffer.isRetainedStateKnown() ? buffer.m_creationDesc.initialState : ResourceStates::Unknown;
     const b8 uavBarrierEnabled = ResourceStates::HasUnorderedAccess(stateBits) && m_stateTracker.isUavBarrierEnabledForBuffer(buffer);

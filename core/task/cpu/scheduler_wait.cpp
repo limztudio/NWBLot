@@ -163,6 +163,7 @@ void CpuTaskScheduler::waitScope(CpuTaskScope& scope){
                         TerminateInvariant();
                 }
                 wait.scopeIdentity = scope.m_searchIdentity;
+                m_scopeSearchActive = true;
                 validateWaitLocked({}, &scope);
                 lastValidatedPublicationGeneration = m_scopePublicationGeneration;
                 initialized = true;

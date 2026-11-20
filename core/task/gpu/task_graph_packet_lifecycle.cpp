@@ -183,7 +183,7 @@ Expected<void, GpuTaskGraph::RecordTaskFailure> GpuTaskGraph::recordTask(const G
         || lease.m_packet != context.packet
         || lease.m_planGeneration != planGeneration
         || lease.m_recordingAttemptGeneration != context.recordingAttemptGeneration
-        || m_teardownInProgress.load(MemoryOrder::acquire)
+        || isTeardownInProgress(MemoryOrder::acquire)
         || m_activeRecordingPlanGeneration.load(MemoryOrder::acquire) != planGeneration
         || m_activeRecordingAttemptGeneration.load(MemoryOrder::acquire) != context.recordingAttemptGeneration
     )
@@ -196,7 +196,7 @@ Expected<void, GpuTaskGraph::RecordTaskFailure> GpuTaskGraph::recordTask(const G
         return MakeUnexpected(RecordTaskFailure{ .recordThunkInvoked = false });
 
     if(
-        m_teardownInProgress.load(MemoryOrder::acquire)
+        isTeardownInProgress(MemoryOrder::acquire)
         || m_activeRecordingPlanGeneration.load(MemoryOrder::acquire) != planGeneration
         || m_activeRecordingAttemptGeneration.load(MemoryOrder::acquire) != context.recordingAttemptGeneration
         || task.lifecycleAttemptGeneration != context.recordingAttemptGeneration
@@ -220,7 +220,7 @@ Expected<void, GpuTaskGraph::RecordTaskFailure> GpuTaskGraph::recordTask(const G
         recorded = recordPayload(payload, commandList, context);
     }
 
-    const b8 recordingAttemptValid = !m_teardownInProgress.load(MemoryOrder::acquire)
+    const b8 recordingAttemptValid = !isTeardownInProgress(MemoryOrder::acquire)
         && context.compiledPlan.validFor(context.declarations)
         && m_activeRecordingPlanGeneration.load(MemoryOrder::acquire) == planGeneration
         && m_activeRecordingAttemptGeneration.load(MemoryOrder::acquire) == context.recordingAttemptGeneration

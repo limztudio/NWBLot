@@ -38,8 +38,14 @@ b8 Queue::DescriptorSubmission::prepareBatch(const Span<const Queue::BatchSubmit
         }
     }
 
-    if(m_submissionDescriptorHeap)
+    if(m_submissionDescriptorHeap){
         m_descriptorHeapLock = UniqueLock<Futex>(m_submissionDescriptorHeap->m_mutex);
+        if(++m_queue.m_submitDescriptorHeapUseStamp == 0u){
+            m_queue.m_submitDescriptorHeapUseStamp = 1u;
+            for(u32& stamp : m_queue.m_submitDescriptorHeapUseStamps)
+                stamp = 0u;
+        }
+    }
     if(requiresDescriptorBufferLifecycle && m_descriptorBufferManager)
         m_descriptorBufferLifecycleLock = UniqueLock<Futex>(m_descriptorBufferManager->m_lifecycleMutex);
 
@@ -76,14 +82,27 @@ b8 Queue::DescriptorSubmission::prepareBatch(const Span<const Queue::BatchSubmit
 
 b8 Queue::DescriptorSubmission::validateHeapUses(TrackedCommandBuffer& tracked, const QueueSubmissionToken& submissionToken){
     auto& descriptorHeapUseCommitTickets = m_queue.m_submitDescriptorHeapUseCommitTickets;
+    auto& descriptorHeapUseStamps = m_queue.m_submitDescriptorHeapUseStamps;
+    const u32 currentStamp = m_queue.m_submitDescriptorHeapUseStamp;
     for(const auto heap : tracked.m_referencedDescriptorHeaps){
         const auto heapUseIndex = heap->validateCommandBufferUseSubmissionLocked(tracked, submissionToken);
         if(!heapUseIndex)
             return false;
-        for(const DescriptorHeapUseCommitTicket& ticket : descriptorHeapUseCommitTickets){
-            if(ticket.heap == heap && ticket.heapUseIndex == *heapUseIndex){
+        if(heap.get() == m_submissionDescriptorHeap){
+            if(*heapUseIndex >= descriptorHeapUseStamps.size())
+                descriptorHeapUseStamps.resize(*heapUseIndex + 1u, 0u);
+            if(descriptorHeapUseStamps[*heapUseIndex] == currentStamp){
                 NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Native submission contains a duplicate descriptor-heap use."));
                 return false;
+            }
+            descriptorHeapUseStamps[*heapUseIndex] = currentStamp;
+        }
+        else{
+            for(const DescriptorHeapUseCommitTicket& ticket : descriptorHeapUseCommitTickets){
+                if(ticket.heap == heap && ticket.heapUseIndex == *heapUseIndex){
+                    NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Native submission contains a duplicate descriptor-heap use."));
+                    return false;
+                }
             }
         }
         descriptorHeapUseCommitTickets.push_back(DescriptorHeapUseCommitTicket{ .heap = heap, .commandBuffer = MakeNotNull(&tracked), .submissionToken = submissionToken, .heapUseIndex = *heapUseIndex, });

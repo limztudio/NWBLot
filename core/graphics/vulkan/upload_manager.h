@@ -30,6 +30,29 @@ struct BufferSuballocation{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct UploadManagerChunk final : public RefCounter<GraphicsResource>{
+    BufferHandle buffer;
+    UploadManager* manager = nullptr;
+    TrackedCommandBuffer* owner = nullptr;
+    UploadManagerChunk* previousListChunk = nullptr;
+    UploadManagerChunk* nextListChunk = nullptr;
+    usize chunkVectorIndex = 0u;
+    u64 nativeRecordingID = 0u;
+    u64 size = 0u;
+    u64 allocated = 0u;
+    u64 version = 0u;
+    GpuPhysicalQueueId physicalQueue;
+
+
+public:
+    UploadManagerChunk(CpuTaskScheduler& pool, BufferHandle buf, UploadManager* chunkManager, TrackedCommandBuffer& chunkOwner, u64 chunkNativeRecordingID, GpuPhysicalQueueId queue, u64 sz)noexcept;
+    ~UploadManagerChunk()noexcept;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class UploadManager final : NoCopy{
     friend class Device;
 
@@ -43,27 +66,12 @@ private:
         };
     };
 
-    struct BufferChunk final : public RefCounter<GraphicsResource>{
-        BufferHandle buffer;
-        TrackedCommandBuffer* owner;
-        BufferChunk* previousActiveChunk;
-        BufferChunk* nextActiveChunk;
-        u64 nativeRecordingID;
-        u64 size;
-        u64 allocated;
-        u64 version;
-        GpuPhysicalQueueId physicalQueue;
-
-
-    public:
-        BufferChunk(CpuTaskScheduler& pool, BufferHandle buf, TrackedCommandBuffer& chunkOwner, u64 chunkNativeRecordingID, GpuPhysicalQueueId queue, u64 sz)noexcept;
-        ~BufferChunk()noexcept;
-    };
+    using BufferChunk = UploadManagerChunk;
 
 
 private:
     using BufferChunkPtr = RefCountPtr<BufferChunk>;
-    using BufferChunkList = List<BufferChunkPtr, Alloc::GlobalArena>;
+    using BufferChunkList = Vector<BufferChunkPtr, Alloc::GlobalArena>;
 
 
 private:
@@ -71,6 +79,8 @@ private:
         GpuPhysicalQueueId queue;
         BufferChunkList chunks;
         BufferChunk* firstActiveChunk = nullptr;
+        BufferChunk* firstRetiredChunk = nullptr;
+        u64 lastKnownCompletedVersion = 0u;
 
 
     public:
@@ -88,18 +98,22 @@ public:
 
 public:
     void clear()noexcept;
-    [[nodiscard]] Expected<BufferSuballocation> suballocateBuffer(u64 size, TrackedCommandBuffer* owner, u64 nativeRecordingID, GpuPhysicalQueueId queue, u64 completedVersion, u32 alignment = s_DefaultUploadSuballocationAlignment);
+    [[nodiscard]] Expected<BufferSuballocation> suballocateBuffer(u64 size, TrackedCommandBuffer* owner, u64 nativeRecordingID, GpuPhysicalQueueId queue, u32 alignment = s_DefaultUploadSuballocationAlignment);
     void submitChunks(GpuPhysicalQueueId queue, u64 submittedVersion, Span<const Queue::SubmissionCommandListIdentity> submittedCommandLists, const VulkanDetail::SubmittedCommandBufferOwnerLookup& submittedOwners)noexcept;
     void discardChunks(GpuPhysicalQueueId queue, TrackedCommandBuffer* owner, u64 nativeRecordingID, u64 reusableVersion)noexcept;
     void abandonChunks(GpuPhysicalQueueId queue, TrackedCommandBuffer* owner, u64 nativeRecordingID)noexcept;
 
 
 private:
+    [[nodiscard]] static Expected<BufferSuballocation> trySuballocateFromChunk(BufferChunk& chunk, u64 size, u32 alignment)noexcept;
     void collectCompletedChunks();
     void trimRetiredChunksLocked(GpuPhysicalQueueId queue, u64 completedVersion)noexcept;
     [[nodiscard]] QueueChunkLedger* findQueueLedgerLocked(GpuPhysicalQueueId queue)noexcept;
     [[nodiscard]] QueueChunkLedger& findOrCreateQueueLedgerLocked(GpuPhysicalQueueId queue);
     void linkActiveChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk)noexcept;
+    void unlinkActiveChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk)noexcept;
+    void linkRetiredChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk)noexcept;
+    void unlinkRetiredChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk)noexcept;
     void retireChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk, u64 version, b8 resetAllocated)noexcept;
     void retireSubmittedChunksLocked(GpuPhysicalQueueId queue, u64 version, Span<const Queue::SubmissionCommandListIdentity> submittedCommandLists, const VulkanDetail::SubmittedCommandBufferOwnerLookup& submittedOwners)noexcept;
     void retireOwnerChunksLocked(GpuPhysicalQueueId queue, u64 version, b8 resetAllocated, u64 nativeRecordingID, TrackedCommandBuffer& owner)noexcept;

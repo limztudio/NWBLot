@@ -1,0 +1,524 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <loader/project_entry.adhd>
+#include <loader/runtime_constants.adhd>
+#include <impl/assets_scene/asset.adhd>
+#include <impl/physics/gpu/gpu_dispatcher.adhd>
+#include "smoke_environment.adhd"
+#include "smoke_project_helpers.adhd"
+#include "physics_stress_scene.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class PhysicsStressUnfocusedPass : IRenderPass{
+    public PhysicsStressUnfocusedPass(mut GraphicsRuntime graphics){}
+    public b8 shouldRenderUnfocused()override{ return true; }
+}
+
+StringView ResolveBackendLabel(in ExecutionBackendUsed backend){
+    if(backend == ExecutionBackendUsed::Cpu)
+        return "Cpu";
+    if(backend == ExecutionBackendUsed::Gpu)
+        return "Gpu";
+    if(backend == ExecutionBackendUsed::Hybrid)
+        return "Hybrid";
+    return "None";
+}
+
+void SortPhysicsStepSamples(mut Vector<f64> values){
+    const usize count = values.size();
+    usize gap = count / 2u;
+    while(gap > 0u){
+        for(usize i = gap; i < count; ++i){
+            const f64 current = values[i];
+            usize j = i;
+            while(j >= gap && values[j - gap] > current){
+                values[j] = values[j - gap];
+                j -= gap;
+            }
+            values[j] = current;
+        }
+        gap /= 2u;
+    }
+}
+
+b8 VerifyExpectedPhysicsBackend(
+    in StringView caseName,
+    in b8 useGpuDispatcher,
+    in PhysicsBackendMode backendMode,
+    in f32 gpuWorkloadFraction,
+    in WorldStepStats stats
+){
+    if(stats.awakeBodyCount == 0u){
+        error("PhysicsStressSmoke: case '{}' has 0 awake bodies", caseName);
+        return false;
+    }
+
+    if(!useGpuDispatcher || backendMode == PhysicsBackendMode::CpuOnly || gpuWorkloadFraction <= 0.0f){
+        if(stats.backendUsed != ExecutionBackendUsed::Cpu || stats.gpuSolvedBodyCount != 0u){
+            error(
+                "PhysicsStressSmoke: case '{}' expected Cpu backend, got backend={} gpu_bodies={}"
+                , caseName
+                , cast<u32>(stats.backendUsed)
+                , stats.gpuSolvedBodyCount
+            );
+            return false;
+        }
+        return true;
+    }
+
+    if(gpuWorkloadFraction >= 1.0f){
+        if(stats.backendUsed != ExecutionBackendUsed::Gpu || stats.gpuSolvedBodyCount == 0u){
+            error(
+                "PhysicsStressSmoke: case '{}' expected Gpu backend, got backend={} cpu_bodies={} gpu_bodies={}"
+                , caseName
+                , cast<u32>(stats.backendUsed)
+                , stats.cpuSolvedBodyCount
+                , stats.gpuSolvedBodyCount
+            );
+            return false;
+        }
+        return true;
+    }
+
+    if(stats.islandCount > 1u){
+        if(stats.backendUsed != ExecutionBackendUsed::Hybrid || stats.cpuSolvedBodyCount == 0u || stats.gpuSolvedBodyCount == 0u){
+            error(
+                "PhysicsStressSmoke: case '{}' expected Hybrid backend split, got backend={} cpu_bodies={} gpu_bodies={} islands={}"
+                , caseName
+                , cast<u32>(stats.backendUsed)
+                , stats.cpuSolvedBodyCount
+                , stats.gpuSolvedBodyCount
+                , stats.islandCount
+            );
+            return false;
+        }
+    }
+    else if(stats.gpuSolvedBodyCount == 0u){
+        error("PhysicsStressSmoke: case '{}' expected GPU participation for single island", caseName);
+        return false;
+    }
+
+    return true;
+}
+
+b8 RunPhysicsStressCase(
+    in StringView caseName,
+    in u32 dynamicCount,
+    in u32 warmupSteps,
+    in u32 measureSteps,
+    in b8 useGpuDispatcher,
+    in PhysicsBackendMode backendMode,
+    in f32 gpuWorkloadFraction,
+    mut PhysicsGpuDispatcher gpuDispatcher,
+    mut CpuTaskScheduler scheduler
+){
+    if(measureSteps == 0u)
+        return false;
+
+    PhysicsWorld physWorld;
+    Vector<BodyId> dynBodies;
+    if(!BuildPhysicsStressScene(physWorld, dynamicCount, 0x51a7beefu, dynBodies)){
+        error("PhysicsStressSmoke: failed to build scene for case '{}'", caseName);
+        return false;
+    }
+
+    physWorld.setBackendMode(backendMode);
+    physWorld.setGpuDispatchThreshold(s_DefaultGpuBodyThreshold);
+    physWorld.setGpuWorkloadFraction(gpuWorkloadFraction);
+
+    const f32 dt = 1.0f / 60.0f;
+    const u32 subSteps = 4u;
+
+    for(u32 s = 0u; s < warmupSteps; ++s){
+        if(useGpuDispatcher)
+            StepWorldWithGpu(physWorld, gpuDispatcher, dt, subSteps, scheduler);
+        else
+            StepPhysicsWorld(physWorld, dt, subSteps, scheduler);
+    }
+
+    Vector<f64> samplesMs;
+    samplesMs.resize(measureSteps);
+    f64 totalMs = 0.0;
+
+    for(u32 s = 0u; s < measureSteps; ++s){
+        const Timer stepStart = TimerNow();
+        if(useGpuDispatcher)
+            StepWorldWithGpu(physWorld, gpuDispatcher, dt, subSteps, scheduler);
+        else
+            StepPhysicsWorld(physWorld, dt, subSteps, scheduler);
+        const f64 stepMs = DurationInMS<f64>(TimerNow(), stepStart);
+        samplesMs[s] = stepMs;
+        totalMs += stepMs;
+
+        if(!VerifyExpectedPhysicsBackend(caseName, useGpuDispatcher, backendMode, gpuWorkloadFraction, physWorld.lastStepStats()))
+            return false;
+    }
+
+    if(!VerifyPhysicsStressWorldState(physWorld, Span<BodyId>(dynBodies))){
+        error("PhysicsStressSmoke: numerical state validation failed for case '{}'", caseName);
+        return false;
+    }
+
+    SortPhysicsStepSamples(samplesMs);
+    usize p50Idx = (samplesMs.size() * 50u) / 100u;
+    if(p50Idx >= samplesMs.size())
+        p50Idx = samplesMs.size() - 1u;
+    usize p95Idx = (samplesMs.size() * 95u) / 100u;
+    if(p95Idx >= samplesMs.size())
+        p95Idx = samplesMs.size() - 1u;
+
+    const f64 avgMs = totalMs / cast<f64>(measureSteps);
+    const f64 p50Ms = samplesMs[p50Idx];
+    const f64 p95Ms = samplesMs[p95Idx];
+    const f64 maxMs = samplesMs[samplesMs.size() - 1u];
+    f64 stepsPerSec = 0.0;
+    if(avgMs > 0.0)
+        stepsPerSec = 1000.0 / avgMs;
+
+    in WorldStepStats stats = physWorld.lastStepStats();
+    [essential] info(
+        "PhysicsStressSmoke: case={} dyn_bodies={} total_bodies={} awake={} contacts={} pairs={} joints={} islands={} backend={} cpu_bodies={} gpu_bodies={} cpu_islands={} gpu_islands={} avg_ms={:.3f} p50_ms={:.3f} p95_ms={:.3f} max_ms={:.3f} steps_per_sec={:.1f}"
+        , caseName
+        , dynamicCount
+        , stats.bodyCount
+        , stats.awakeBodyCount
+        , stats.contactCount
+        , stats.broadphasePairCount
+        , stats.jointCount
+        , stats.islandCount
+        , ResolveBackendLabel(stats.backendUsed)
+        , stats.cpuSolvedBodyCount
+        , stats.gpuSolvedBodyCount
+        , stats.cpuSolvedIslandCount
+        , stats.gpuSolvedIslandCount
+        , avgMs
+        , p50Ms
+        , p95Ms
+        , maxMs
+        , stepsPerSec
+    );
+    return true;
+}
+
+b8 RunPhysicsGpuParitySmoke(
+    mut PhysicsGpuDispatcher gpuDispatcher,
+    mut CpuTaskScheduler scheduler
+){
+    PhysicsWorld physWorld;
+    physWorld.setBackendMode(PhysicsBackendMode::GpuPreferred);
+    physWorld.setGpuDispatchThreshold(1u);
+    physWorld.setGpuWorkloadFraction(1.0f);
+
+    ShapeDef sd;
+    sd.density = 1.0f;
+
+    BodyDef meshBodyDef;
+    meshBodyDef.type = BodyType::Static;
+    meshBodyDef.position = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    const BodyId meshBody = physWorld.createBody(meshBodyDef).value();
+    Vector<f32x4> meshVerts;
+    meshVerts.push_back(f32x4(-12.0f, 0.0f, -12.0f, 0.0f));
+    meshVerts.push_back(f32x4(12.0f, 0.0f, -12.0f, 0.0f));
+    meshVerts.push_back(f32x4(12.0f, 0.0f, 12.0f, 0.0f));
+    meshVerts.push_back(f32x4(-12.0f, 0.0f, 12.0f, 0.0f));
+    Vector<u32> meshIndices;
+    meshIndices.push_back(0u);
+    meshIndices.push_back(1u);
+    meshIndices.push_back(2u);
+    meshIndices.push_back(0u);
+    meshIndices.push_back(2u);
+    meshIndices.push_back(3u);
+    const Expected<MeshShape> meshRes = MakeMeshShape(Span<f32x4>(meshVerts), Span<u32>(meshIndices), 0.02f);
+    if(!meshRes.has_value() || !physWorld.createMeshShape(meshBody, sd, meshRes.value()).has_value()){
+        error("PhysicsStressSmoke: failed to create GPU parity mesh floor");
+        return false;
+    }
+
+    Vector<f32x4> hullPts;
+    hullPts.push_back(f32x4(-0.5f, -0.5f, -0.5f, 0.0f));
+    hullPts.push_back(f32x4(0.5f, -0.5f, -0.5f, 0.0f));
+    hullPts.push_back(f32x4(0.5f, -0.5f, 0.5f, 0.0f));
+    hullPts.push_back(f32x4(-0.5f, -0.5f, 0.5f, 0.0f));
+    hullPts.push_back(f32x4(-0.35f, 0.5f, -0.35f, 0.0f));
+    hullPts.push_back(f32x4(0.35f, 0.5f, -0.35f, 0.0f));
+    hullPts.push_back(f32x4(0.35f, 0.5f, 0.35f, 0.0f));
+    hullPts.push_back(f32x4(-0.35f, 0.5f, 0.35f, 0.0f));
+    const Expected<HullShape> hullRes = BuildConvexHull(Span<f32x4>(hullPts), 0.01f);
+    if(!hullRes.has_value()){
+        error("PhysicsStressSmoke: failed to build non-box hull");
+        return false;
+    }
+
+    BodyDef hullBodyDef;
+    hullBodyDef.type = BodyType::Dynamic;
+    hullBodyDef.position = f32x4(-4.0f, 0.45f, 0.0f, 0.0f);
+    hullBodyDef.enableSleep = false;
+    const BodyId hullBody = physWorld.createBody(hullBodyDef).value();
+    if(!physWorld.createHullShape(hullBody, sd, hullRes.value()).has_value())
+        return false;
+
+    ShapeDef sensorDef;
+    sensorDef.isSensor = true;
+    sensorDef.enableSensorEvents = true;
+    const Expected<SphereShape> sensorSph = MakeSphereShape(VectorSingle(0.0f), 1.0f);
+    BodyDef sensorHostDef;
+    sensorHostDef.type = BodyType::Static;
+    sensorHostDef.position = f32x4(-4.0f, 0.45f, 0.0f, 0.0f);
+    const BodyId sensorHost = physWorld.createBody(sensorHostDef).value();
+    if(!sensorSph.has_value() || !physWorld.createSphereShape(sensorHost, sensorDef, sensorSph.value()).has_value())
+        return false;
+
+    BodyDef bulletWallDef;
+    bulletWallDef.type = BodyType::Static;
+    bulletWallDef.position = f32x4(4.0f, 2.0f, 0.0f, 0.0f);
+    const BodyId bulletWall = physWorld.createBody(bulletWallDef).value();
+    const Expected<HullShape> wallBox = MakeBoxHull(1.5f, 0.05f, 1.5f, 0.0f);
+    if(!wallBox.has_value() || !physWorld.createHullShape(bulletWall, sd, wallBox.value()).has_value())
+        return false;
+
+    BodyDef bulletDef;
+    bulletDef.type = BodyType::Dynamic;
+    bulletDef.isBullet = true;
+    bulletDef.enableSleep = false;
+    bulletDef.position = f32x4(4.0f, 3.0f, 0.0f, 0.0f);
+    bulletDef.linearVelocity = f32x4(0.0f, -150.0f, 0.0f, 0.0f);
+    const BodyId bulletBody = physWorld.createBody(bulletDef).value();
+    const Expected<SphereShape> bulletSph = MakeSphereShape(VectorSingle(0.0f), 0.25f);
+    if(!bulletSph.has_value() || !physWorld.createSphereShape(bulletBody, sd, bulletSph.value()).has_value())
+        return false;
+
+    BodyDef hubDef;
+    hubDef.type = BodyType::Dynamic;
+    hubDef.position = f32x4(0.0f, 3.0f, 6.0f, 0.0f);
+    hubDef.enableSleep = false;
+    const BodyId hubBody = physWorld.createBody(hubDef).value();
+    const Expected<SphereShape> hubSph = MakeSphereShape(VectorSingle(0.0f), 0.35f);
+    if(!hubSph.has_value() || !physWorld.createSphereShape(hubBody, sd, hubSph.value()).has_value())
+        return false;
+
+    for(u32 ji = 0u; ji < 26u; ++ji){
+        const f32 ang = cast<f32>(ji) * (2.0f * s_PI / 26.0f);
+        BodyDef leafDef;
+        leafDef.type = BodyType::Dynamic;
+        leafDef.position = f32x4(Cos(ang) * 1.5f, 3.0f, 6.0f + Sin(ang) * 1.5f, 0.0f);
+        leafDef.enableSleep = false;
+        const BodyId leaf = physWorld.createBody(leafDef).value();
+        if(!physWorld.createSphereShape(leaf, sd, hubSph.value()).has_value())
+            return false;
+
+        JointDef jd;
+        jd.type = JointType::Distance;
+        jd.bodyIdA = hubBody;
+        jd.bodyIdB = leaf;
+        jd.length = 1.5f;
+        jd.enableSpring = true;
+        jd.hertz = 6.0f;
+        jd.dampingRatio = 0.7f;
+        if(!physWorld.createJoint(jd).has_value())
+            return false;
+    }
+
+    b8 sawSensorBegin = false;
+    b8 sawGpuBackend = false;
+    for(u32 step = 0u; step < 6u; ++step){
+        StepWorldWithGpu(physWorld, gpuDispatcher, 1.0f / 60.0f, 4u, scheduler);
+        if(physWorld.lastStepStats().backendUsed == ExecutionBackendUsed::Gpu)
+            sawGpuBackend = true;
+        if(!physWorld.sensorBeginEvents().empty())
+            sawSensorBegin = true;
+    }
+
+    const Transform3D hullXf = physWorld.tryGetBodyTransform(hullBody).value();
+    const Transform3D bulletXf = physWorld.tryGetBodyTransform(bulletBody).value();
+    const Transform3D hubXf = physWorld.tryGetBodyTransform(hubBody).value();
+    if(!sawGpuBackend || !sawSensorBegin){
+        error("PhysicsStressSmoke: GPU parity check failed (gpu={} sensor={})", cast<u32>(sawGpuBackend), cast<u32>(sawSensorBegin));
+        return false;
+    }
+    if(hullXf.position.y < 0.25f || bulletXf.position.y < 2.0f || !IsFinite(VectorSingle(hubXf.position))){
+        error("PhysicsStressSmoke: GPU parity geometry failed (hullY={} bulletY={})", hullXf.position.y, bulletXf.position.y);
+        return false;
+    }
+    [essential] info("PhysicsStressSmoke: gpu_parity_passed hull_y={:.3f} bullet_y={:.3f}", hullXf.position.y, bulletXf.position.y);
+    return true;
+}
+
+b8 RunPhysicsStressTier(
+    in u32 dynamicCount,
+    in u32 warmupSteps,
+    in u32 measureSteps,
+    in b8 includeSingleThreadAndHybridSweep,
+    mut PhysicsGpuDispatcher gpuDispatcher,
+    mut CpuTaskScheduler mtScheduler,
+    mut CpuTaskScheduler serialScheduler,
+    mut u32 inOutCaseCount
+){
+    if(includeSingleThreadAndHybridSweep){
+        const String n1 = StringFormat("cpu_1t_{}", dynamicCount);
+        if(!RunPhysicsStressCase(StringView(n1), dynamicCount, warmupSteps, measureSteps, false, PhysicsBackendMode::CpuOnly, 0.0f, gpuDispatcher, serialScheduler))
+            return false;
+        ++inOutCaseCount;
+    }
+
+    const String nMt = StringFormat("cpu_mt_{}", dynamicCount);
+    if(!RunPhysicsStressCase(StringView(nMt), dynamicCount, warmupSteps, measureSteps, false, PhysicsBackendMode::CpuOnly, 0.0f, gpuDispatcher, mtScheduler))
+        return false;
+    ++inOutCaseCount;
+
+    const String nGpu = StringFormat("gpu100_{}", dynamicCount);
+    if(!RunPhysicsStressCase(StringView(nGpu), dynamicCount, warmupSteps, measureSteps, true, PhysicsBackendMode::GpuPreferred, 1.0f, gpuDispatcher, mtScheduler))
+        return false;
+    ++inOutCaseCount;
+
+    const String nH70 = StringFormat("hybrid70_{}", dynamicCount);
+    if(!RunPhysicsStressCase(StringView(nH70), dynamicCount, warmupSteps, measureSteps, true, PhysicsBackendMode::GpuPreferred, 0.7f, gpuDispatcher, mtScheduler))
+        return false;
+    ++inOutCaseCount;
+
+    if(includeSingleThreadAndHybridSweep){
+        const String nH50 = StringFormat("hybrid50_{}", dynamicCount);
+        if(!RunPhysicsStressCase(StringView(nH50), dynamicCount, warmupSteps, measureSteps, true, PhysicsBackendMode::GpuPreferred, 0.5f, gpuDispatcher, mtScheduler))
+            return false;
+        ++inOutCaseCount;
+
+        const String nH30 = StringFormat("hybrid30_{}", dynamicCount);
+        if(!RunPhysicsStressCase(StringView(nH30), dynamicCount, warmupSteps, measureSteps, true, PhysicsBackendMode::GpuPreferred, 0.3f, gpuDispatcher, mtScheduler))
+            return false;
+        ++inOutCaseCount;
+    }
+
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[arena]
+class PhysicsStressProject : IProjectEntryCallbacks{
+    public PhysicsStressProject(mut ProjectRuntimeContext context){
+        this.m_context = context;
+        this.m_sceneSubsystems = ActiveSceneSubsystems();
+        this.m_gpuDispatcher = PhysicsGpuDispatcher();
+        this.m_unfocusedPass = PhysicsStressUnfocusedPass(context.graphics);
+    }
+
+    public b8 onStartup()override{
+        if(!this.m_context.graphics.getDevice().getDescriptorHeap().isInitialized()){
+            error("PhysicsStressSmoke: bindless descriptor heap is unavailable");
+            return false;
+        }
+        if(!this.m_sceneSubsystems.loadProjectStartScene(this.m_context.assetManager)){
+            error("PhysicsStressSmoke: failed to load project start scene subsystems");
+            return false;
+        }
+
+        this.m_gpuDispatcher.attachRuntime(this.m_context.graphics, this.m_context.assetManager, this.m_context.shaderPathResolver);
+        this.m_gpuDispatcher.setActiveSceneSubsystems(ActiveSceneSubsystemsRef(this.m_sceneSubsystems));
+        if(!this.m_gpuDispatcher.validateResources() || !this.m_gpuDispatcher.isReady()){
+            error("PhysicsStressSmoke: GPU physics compute pipelines failed validation");
+            return false;
+        }
+
+        [essential] info(
+            "PhysicsStressSmoke: device='{}' cpu_workers={}"
+            , this.m_context.graphics.getRendererString()
+            , this.m_context.cpuTasks.workerThreadCount()
+        );
+
+        mut GraphicsRuntime graphics = this.m_context.graphics;
+        graphics.addRenderPassToBack(this.m_unfocusedPass);
+        this.m_unfocusedPassRegistered = true;
+        return true;
+    }
+
+    public b8 onUpdate(in f32 delta)override{
+        if(this.m_completed)
+            return true;
+
+        String modeText = String("smoke");
+        const Expected<String> modeEnv = ReadSmokeEnvironmentString("NWB_PHYSICS_STRESS_MODE");
+        if(modeEnv.has_value() && !modeEnv.value().empty())
+            modeText = modeEnv.value();
+
+        const StringView mode = StringView(modeText);
+        if(mode != "smoke" && mode != "benchmark"){
+            error("PhysicsStressSmoke: invalid NWB_PHYSICS_STRESS_MODE='{}'", mode);
+            return false;
+        }
+
+        CpuTaskScheduler serialScheduler(0u);
+        u32 completedCases = 0u;
+
+        if(mode == "smoke"){
+            if(!RunPhysicsGpuParitySmoke(this.m_gpuDispatcher, this.m_context.cpuTasks))
+                return false;
+            if(!RunPhysicsStressTier(256u, 10u, 20u, false, this.m_gpuDispatcher, this.m_context.cpuTasks, serialScheduler, completedCases))
+                return false;
+        }
+        else{
+            Array<u32, 4u> tiers;
+            tiers[0u] = 256u;
+            tiers[1u] = 512u;
+            tiers[2u] = 1024u;
+            tiers[3u] = 2048u;
+            for(usize ti = 0u; ti < tiers.size(); ++ti){
+                if(!RunPhysicsStressTier(tiers[ti], 15u, 60u, true, this.m_gpuDispatcher, this.m_context.cpuTasks, serialScheduler, completedCases))
+                    return false;
+            }
+        }
+
+        this.m_completed = true;
+        [essential] info("PhysicsStressSmoke: completed mode={} cases={}", mode, completedCases);
+        RequestSmokeQuit(this.m_context);
+        return true;
+    }
+
+    public void onShutdown()override{
+        this.m_gpuDispatcher.invalidateResources();
+        if(this.m_unfocusedPassRegistered){
+            mut GraphicsRuntime graphics = this.m_context.graphics;
+            graphics.removeRenderPass(this.m_unfocusedPass);
+            this.m_unfocusedPassRegistered = false;
+        }
+        if(!this.m_context.graphics.waitForIdle())
+            error("PhysicsStressSmoke: shutdown waitForIdle failed");
+        u32 completedVal = 0u;
+        if(this.m_completed)
+            completedVal = 1u;
+        [essential] info("PhysicsStressSmoke: shutdown completed={}", completedVal);
+    }
+
+    private mut ProjectRuntimeContext m_context;
+    private ActiveSceneSubsystems m_sceneSubsystems;
+    private PhysicsGpuDispatcher m_gpuDispatcher;
+    private PhysicsStressUnfocusedPass m_unfocusedPass;
+    private b8 m_unfocusedPassRegistered = false;
+    private b8 m_completed = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ProjectFrameClientSize GetProjectFrameClientSize(){
+    return ProjectFrameClientSize(320u, 240u);
+}
+
+PlatformStringView GetProjectWindowTitle(){
+    return PlatformTextLiteral("NWB Physics Stress Smoke");
+}
+
+[cpp_unwind]
+UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
+    return MakeUnique<PhysicsStressProject>(context);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

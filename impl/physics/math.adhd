@@ -8,6 +8,81 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+f32x3_u32 PackVec3U32(in VectorSingle v, in u32 w){
+    return f32x3_u32(v.x, v.y, v.z, w);
+}
+
+VectorSingle Vec3FromU(in f32x3u v){
+    return VectorSingle(v.x, v.y, v.z, 0.0f);
+}
+
+f32x3u PackVec3U(in VectorSingle v){
+    return f32x3u(v.x, v.y, v.z);
+}
+
+SymMat3 ZeroSymMat3(){
+    return SymMat3();
+}
+
+SymMat3 SymMat3FromMat3(in Mat3 m){
+    return SymMat3(m.row0.x, m.row0.y, m.row0.z, m.row1.y, m.row1.z, m.row2.z);
+}
+
+Mat3 Mat3FromSymMat3(in SymMat3 m){
+    return Mat3(
+        VectorSingle(m.m00, m.m01, m.m02, 0.0f),
+        VectorSingle(m.m01, m.m11, m.m12, 0.0f),
+        VectorSingle(m.m02, m.m12, m.m22, 0.0f)
+    );
+}
+
+SymMat3 AddSymMat3(in SymMat3 a, in SymMat3 b){
+    return SymMat3(
+        a.m00 + b.m00,
+        a.m01 + b.m01,
+        a.m02 + b.m02,
+        a.m11 + b.m11,
+        a.m12 + b.m12,
+        a.m22 + b.m22
+    );
+}
+
+VectorSingle MulSymMat3Vec(in SymMat3 m, in VectorSingle v){
+    const VectorSingle v0 = VectorSingle(v, 0.0f);
+    const f32 x = m.m00 * v0.x + m.m01 * v0.y + m.m02 * v0.z;
+    const f32 y = m.m01 * v0.x + m.m11 * v0.y + m.m12 * v0.z;
+    const f32 z = m.m02 * v0.x + m.m12 * v0.y + m.m22 * v0.z;
+    return VectorSingle(x, y, z, 0.0f);
+}
+
+SymMat3 InvertSymMat3(in SymMat3 a){
+    const f32 c11 = a.m11 * a.m22 - a.m12 * a.m12;
+    const f32 c12 = a.m02 * a.m12 - a.m01 * a.m22;
+    const f32 c13 = a.m01 * a.m12 - a.m02 * a.m11;
+    const f32 det = a.m00 * c11 + a.m01 * c12 + a.m02 * c13;
+
+    if(!IsFinite(det) || Abs(det) <= 1.0e-30f)
+        return ZeroSymMat3();
+
+    const f32 invDet = 1.0f / det;
+    if(!IsFinite(invDet))
+        return ZeroSymMat3();
+
+    const f32 c22 = a.m00 * a.m22 - a.m02 * a.m02;
+    const f32 c23 = a.m01 * a.m02 - a.m00 * a.m12;
+    const f32 c33 = a.m00 * a.m11 - a.m01 * a.m01;
+
+    return SymMat3(
+        c11 * invDet,
+        c12 * invDet,
+        c13 * invDet,
+        c22 * invDet,
+        c23 * invDet,
+        c33 * invDet
+    );
+}
+
+
 b8 IsFiniteVec3(in VectorSingle v){
     return IsFinite(v.x) && IsFinite(v.y) && IsFinite(v.z);
 }
@@ -217,6 +292,15 @@ Mat3 InvertSymmetricMat3(in Mat3 a){
         VectorSingle(c12 * invDet, c22 * invDet, c23 * invDet, 0.0f),
         VectorSingle(c13 * invDet, c23 * invDet, c33 * invDet, 0.0f)
     );
+}
+
+SymMat3 RotateSymMat3(in VectorSingle q, in SymMat3 localMat){
+    if(localMat.m01 == 0.0f && localMat.m02 == 0.0f && localMat.m12 == 0.0f && localMat.m00 == localMat.m11 && localMat.m11 == localMat.m22)
+        return localMat;
+    if(q.x * q.x + q.y * q.y + q.z * q.z <= 1.0e-12f)
+        return localMat;
+    const Mat3 m = RotateSymmetricMat3(q, Mat3FromSymMat3(localMat));
+    return SymMat3FromMat3(m);
 }
 
 Softness MakeSoftness(in f32 hertz, in f32 zeta, in f32 h){

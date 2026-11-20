@@ -111,7 +111,7 @@ void WakeIslandInSets(
 
         const BodySim sim = sets[oldSetIndex].sims[body.localIndex];
         BodyState state;
-        state.flags = sim.flags;
+        state.setFlags(sim.flags);
         body.sleepTime = 0.0f;
         RemoveBodyFromSolverSet(bodies, sets[oldSetIndex], body.localIndex);
         AddBodyToSolverSet(bodies, sets[s_AwakeSetIndex], sim, state);
@@ -154,7 +154,7 @@ void WakeBodyWithIsland(
     if(bodies[bodyId].localIndex < sets[setIdx].sims.size()){
         const BodySim sim = sets[setIdx].sims[bodies[bodyId].localIndex];
         BodyState state;
-        state.flags = sim.flags;
+        state.setFlags(sim.flags);
         RemoveBodyFromSolverSet(bodies, sets[setIdx], bodies[bodyId].localIndex);
         AddBodyToSolverSet(bodies, sets[s_AwakeSetIndex], sim, state);
     }
@@ -288,57 +288,63 @@ void SplitIslandInWorld(
     }
 
     const u32 setIndex = islands[baseIslandId].setIndex;
+    const usize bodyCount = islands[baseIslandId].bodies.size();
+    const usize contactCount = islands[baseIslandId].contacts.size();
+    const usize jointCount = islands[baseIslandId].joints.size();
+
+    Vector<u32> dsuParents;
+    dsuParents.resize(bodyCount);
+    for(usize i = 0u; i < bodyCount; ++i)
+        dsuParents[i] = cast<u32>(i);
+    Vector<u8> dsuRanks;
+    dsuRanks.resize(bodyCount, 0u);
+
+    in Vector<ContactLink> baseContacts = islands[baseIslandId].contacts;
+    for(usize i = 0u; i < contactCount; ++i){
+        in ContactLink link = baseContacts[i];
+        in Body bA = bodies[link.bodyIdA];
+        in Body bB = bodies[link.bodyIdB];
+        if(bA.islandId == baseIslandId && bB.islandId == baseIslandId)
+            JoinDisjointSets(cast<isize>(bA.islandIndex), cast<isize>(bB.islandIndex), dsuParents, dsuRanks);
+    }
+
+    in Vector<JointLink> baseJoints = islands[baseIslandId].joints;
+    for(usize i = 0u; i < jointCount; ++i){
+        in JointLink link = baseJoints[i];
+        in Body bA = bodies[link.bodyIdA];
+        in Body bB = bodies[link.bodyIdB];
+        if(bA.islandId == baseIslandId && bB.islandId == baseIslandId)
+            JoinDisjointSets(cast<isize>(bA.islandIndex), cast<isize>(bB.islandIndex), dsuParents, dsuRanks);
+    }
+
+    const usize root0 = cast<usize>(FindDisjointRoot(0, dsuParents));
+    b8 allConnected = true;
+    for(usize i = 1u; i < bodyCount; ++i){
+        if(cast<usize>(FindDisjointRoot(cast<isize>(i), dsuParents)) != root0){
+            allConnected = false;
+            break;
+        }
+    }
+    if(allConnected){
+        islands[baseIslandId].constraintRemoveCount = 0u;
+        return;
+    }
+
     Vector<u32> islandBodies = islands[baseIslandId].bodies;
     Vector<ContactLink> islandContacts = islands[baseIslandId].contacts;
     Vector<JointLink> islandJoints = islands[baseIslandId].joints;
 
-    HashMap<u32, usize> bodyLocalMap;
-    bodyLocalMap.reserve(islandBodies.size());
-    for(usize i = 0u; i < islandBodies.size(); ++i)
-        bodyLocalMap.emplace(islandBodies[i], i);
-
-    Vector<u32> dsuParents;
-    dsuParents.resize(islandBodies.size());
-    for(usize i = 0u; i < islandBodies.size(); ++i)
-        dsuParents[i] = cast<u32>(i);
-    Vector<u8> dsuRanks;
-    dsuRanks.resize(islandBodies.size(), 0u);
-
-    for(usize i = 0u; i < islandContacts.size(); ++i){
-        in ContactLink link = islandContacts[i];
-        const auto itA = bodyLocalMap.find(link.bodyIdA);
-        const auto itB = bodyLocalMap.find(link.bodyIdB);
-        if(itA != bodyLocalMap.end() && itB != bodyLocalMap.end())
-            JoinDisjointSets(cast<isize>(itA.value()), cast<isize>(itB.value()), dsuParents, dsuRanks);
-    }
-
-    for(usize i = 0u; i < islandJoints.size(); ++i){
-        in JointLink link = islandJoints[i];
-        const auto itA = bodyLocalMap.find(link.bodyIdA);
-        const auto itB = bodyLocalMap.find(link.bodyIdB);
-        if(itA != bodyLocalMap.end() && itB != bodyLocalMap.end())
-            JoinDisjointSets(cast<isize>(itA.value()), cast<isize>(itB.value()), dsuParents, dsuRanks);
-    }
-
-    HashMap<usize, u32> rootToIsland;
+    Vector<u32> rootToIsland;
+    rootToIsland.resize(bodyCount, s_NullIndex);
     u32 firstIsland = baseIslandId;
     b8 usedBase = false;
     Vector<u32> bodyAssignedIsland;
-    bodyAssignedIsland.resize(islandBodies.size(), s_NullIndex);
+    bodyAssignedIsland.resize(bodyCount, s_NullIndex);
 
-    islands[baseIslandId].bodies.clear();
-    islands[baseIslandId].contacts.clear();
-    islands[baseIslandId].joints.clear();
-    islands[baseIslandId].constraintRemoveCount = 0u;
-
-    for(usize i = 0u; i < islandBodies.size(); ++i){
+    for(usize i = 0u; i < bodyCount; ++i){
         const usize root = cast<usize>(FindDisjointRoot(cast<isize>(i), dsuParents));
-        u32 targetIslandId = s_NullIndex;
-        const auto found = rootToIsland.find(root);
-        if(found != rootToIsland.end()){
-            targetIslandId = found.value();
-        }
-        else{
+        u32 targetIslandId = rootToIsland[root];
+        if(targetIslandId == s_NullIndex){
             if(!usedBase){
                 targetIslandId = firstIsland;
                 usedBase = true;
@@ -346,44 +352,65 @@ void SplitIslandInWorld(
             else{
                 targetIslandId = CreateIslandInWorld(islands, freeIslandIds, sets, setIndex);
             }
-            rootToIsland.emplace(root, targetIslandId);
+            rootToIsland[root] = targetIslandId;
         }
         bodyAssignedIsland[i] = targetIslandId;
-        AddBodyToIsland(bodies, islands, islandBodies[i], targetIslandId);
     }
 
-    for(usize i = 0u; i < islandContacts.size(); ++i){
-        const ContactLink link = islandContacts[i];
-        u32 targetIslandId = s_NullIndex;
-        const auto itA = bodyLocalMap.find(link.bodyIdA);
-        if(itA != bodyLocalMap.end())
-            targetIslandId = bodyAssignedIsland[itA.value()];
-        else{
-            const auto itB = bodyLocalMap.find(link.bodyIdB);
-            if(itB != bodyLocalMap.end())
-                targetIslandId = bodyAssignedIsland[itB.value()];
+    Vector<u32> contactTargetIslands;
+    contactTargetIslands.resize(contactCount, s_NullIndex);
+    for(usize i = 0u; i < contactCount; ++i){
+        in ContactLink link = islandContacts[i];
+        in Body bA = bodies[link.bodyIdA];
+        if(bA.islandId == baseIslandId){
+            contactTargetIslands[i] = bodyAssignedIsland[bA.islandIndex];
         }
+        else{
+            in Body bB = bodies[link.bodyIdB];
+            if(bB.islandId == baseIslandId)
+                contactTargetIslands[i] = bodyAssignedIsland[bB.islandIndex];
+        }
+    }
+
+    Vector<u32> jointTargetIslands;
+    jointTargetIslands.resize(jointCount, s_NullIndex);
+    for(usize i = 0u; i < jointCount; ++i){
+        in JointLink link = islandJoints[i];
+        in Body bA = bodies[link.bodyIdA];
+        if(bA.islandId == baseIslandId){
+            jointTargetIslands[i] = bodyAssignedIsland[bA.islandIndex];
+        }
+        else{
+            in Body bB = bodies[link.bodyIdB];
+            if(bB.islandId == baseIslandId)
+                jointTargetIslands[i] = bodyAssignedIsland[bB.islandIndex];
+        }
+    }
+
+    islands[baseIslandId].bodies.clear();
+    islands[baseIslandId].contacts.clear();
+    islands[baseIslandId].joints.clear();
+    islands[baseIslandId].constraintRemoveCount = 0u;
+
+    for(usize i = 0u; i < bodyCount; ++i)
+        AddBodyToIsland(bodies, islands, islandBodies[i], bodyAssignedIsland[i]);
+
+    for(usize i = 0u; i < contactCount; ++i){
+        const u32 targetIslandId = contactTargetIslands[i];
         if(targetIslandId != s_NullIndex){
             mut Island dst = islands[targetIslandId];
+            in ContactLink link = islandContacts[i];
             contacts[link.contactId].islandId = targetIslandId;
             contacts[link.contactId].islandIndex = cast<u32>(dst.contacts.size());
             dst.contacts.push_back(link);
         }
     }
 
-    for(usize i = 0u; i < islandJoints.size(); ++i){
-        const JointLink link = islandJoints[i];
-        u32 targetIslandId = s_NullIndex;
-        const auto itA = bodyLocalMap.find(link.bodyIdA);
-        if(itA != bodyLocalMap.end())
-            targetIslandId = bodyAssignedIsland[itA.value()];
-        else{
-            const auto itB = bodyLocalMap.find(link.bodyIdB);
-            if(itB != bodyLocalMap.end())
-                targetIslandId = bodyAssignedIsland[itB.value()];
-        }
+    for(usize i = 0u; i < jointCount; ++i){
+        const u32 targetIslandId = jointTargetIslands[i];
         if(targetIslandId != s_NullIndex){
             mut Island dst = islands[targetIslandId];
+            in JointLink link = islandJoints[i];
             joints[link.jointId].islandId = targetIslandId;
             joints[link.jointId].islandIndex = cast<u32>(dst.joints.size());
             dst.joints.push_back(link);

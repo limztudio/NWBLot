@@ -7,3 +7,5 @@ asset.solver_contacts_cs = "engine/physics/solver_contacts_cs";
 asset.solver_joints_cs = "engine/physics/solver_joints_cs";
 asset.solver_integrate_positions_cs = "engine/physics/solver_integrate_positions_cs";
 asset.solver_finalize_bodies_cs = "engine/physics/solver_finalize_bodies_cs";
+asset.solver_islands_cs = "engine/physics/solver_islands_cs";
+asset.solver_joint_islands_cs = "engine/physics/solver_joint_islands_cs";

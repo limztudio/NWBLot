@@ -2,3 +2,7 @@ compute_shader asset;
 
 asset.entry_point = "main";
 asset.include_roots = ["engine/graphics", "engine/physics"];
+asset.optimization_level = "maximal";
+asset.defines = {
+    "NWB_PHYSICS_NP_PROFILE": ["0", "1", "2"],
+};

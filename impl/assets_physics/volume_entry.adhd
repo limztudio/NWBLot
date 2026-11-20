@@ -2,7 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_physics/cook_components.adhd>
 #include <impl/assets_physics/physics_subsystem.adhd>
+#include <impl/assets_scene/component_asset_binary_codec.adhd>
 #include <impl/assets_subsystem/cook.adhd>
 
 
@@ -10,6 +12,75 @@
 
 
 register_asset PhysicsSubsystem using SubsystemCookRegistration<PhysicsSubsystem>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cook_entry("component", s_RigidBodyComponentDiagnosticPrefix, ParseRigidBodyComponentCookMetadata, document_and_value, log_failure, RigidBodyComponentCodec)]
+Expected<RigidBodyComponentAsset> CookRigidBodyComponentVolumeEntry(in RigidBodyComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<RigidBodyComponentAsset, RigidBodyComponentCookEntry>(entry);
+}
+
+b8 ExtractRigidBodyComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<RigidBodyComponentCookEntry>(context, s_RigidBodyComponentDiagnosticPrefix, ParseRigidBodyComponentCookMetadata).has_value();
+}
+
+[cook_entry("component", s_ColliderComponentDiagnosticPrefix, ParseColliderComponentCookMetadata, document_and_value, log_failure, ColliderComponentCodec)]
+Expected<ColliderComponentAsset> CookColliderComponentVolumeEntry(in ColliderComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<ColliderComponentAsset, ColliderComponentCookEntry>(entry);
+}
+
+b8 ExtractColliderComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    const Expected<ColliderComponentCookEntry> entry = ReadCookDependencyEntry<ColliderComponentCookEntry>(context, s_ColliderComponentDiagnosticPrefix, ParseColliderComponentCookMetadata);
+    if(!entry.has_value())
+        return false;
+    in ColliderComponent comp = entry.value().component;
+    if(comp.meshAsset.valid() && !collector.addAssetDependency(comp.meshAsset.name(), Mesh::AssetTypeName()))
+        return false;
+    for(usize i = 0u; i < comp.extraShapes.size(); ++i){
+        in AssetRef<Mesh> extraMesh = comp.extraShapes[i].meshAsset;
+        if(extraMesh.valid() && !collector.addAssetDependency(extraMesh.name(), Mesh::AssetTypeName()))
+            return false;
+    }
+    return true;
+}
+
+[cook_entry("component", s_JointComponentDiagnosticPrefix, ParseJointComponentCookMetadata, document_and_value, log_failure, JointComponentCodec)]
+Expected<JointComponentAsset> CookJointComponentVolumeEntry(in JointComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<JointComponentAsset, JointComponentCookEntry>(entry);
+}
+
+b8 ExtractJointComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<JointComponentCookEntry>(context, s_JointComponentDiagnosticPrefix, ParseJointComponentCookMetadata).has_value();
+}
+
+[cook_entry("component", s_PhysicsWorldConfigComponentDiagnosticPrefix, ParsePhysicsWorldConfigComponentCookMetadata, document_and_value, log_failure, PhysicsWorldConfigComponentCodec)]
+Expected<PhysicsWorldConfigComponentAsset> CookPhysicsWorldConfigComponentVolumeEntry(in PhysicsWorldConfigComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<PhysicsWorldConfigComponentAsset, PhysicsWorldConfigComponentCookEntry>(entry);
+}
+
+b8 ExtractPhysicsWorldConfigComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<PhysicsWorldConfigComponentCookEntry>(context, s_PhysicsWorldConfigComponentDiagnosticPrefix, ParsePhysicsWorldConfigComponentCookMetadata).has_value();
+}
+
+[cook_entry("component", s_PhysicsParentComponentDiagnosticPrefix, ParsePhysicsParentComponentCookMetadata, document_and_value, log_failure, PhysicsParentComponentCodec)]
+Expected<PhysicsParentComponentAsset> CookPhysicsParentComponentVolumeEntry(in PhysicsParentComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<PhysicsParentComponentAsset, PhysicsParentComponentCookEntry>(entry);
+}
+
+b8 ExtractPhysicsParentComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<PhysicsParentComponentCookEntry>(context, s_PhysicsParentComponentDiagnosticPrefix, ParsePhysicsParentComponentCookMetadata).has_value();
+}
+
+[cook_registrar]
+b8 RegisterPhysicsComponentCookDependencies(mut CookDependencyRegistry registry){
+    return registry.registerType(RigidBodyComponentAsset::AssetTypeName(), ExtractRigidBodyComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(ColliderComponentAsset::AssetTypeName(), ExtractColliderComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(JointComponentAsset::AssetTypeName(), ExtractJointComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(PhysicsWorldConfigComponentAsset::AssetTypeName(), ExtractPhysicsWorldConfigComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(PhysicsParentComponentAsset::AssetTypeName(), ExtractPhysicsParentComponentDependencies, IComponent::AssetTypeName());
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

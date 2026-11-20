@@ -8,25 +8,33 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool nwbPhysicsShouldCollide(const NwbPhysicsGpuShapeProxy a, const NwbPhysicsGpuShapeProxy b){
-    const uint bodyIdxA = a.bodyIndexTypeShape.x;
-    const uint bodyIdxB = b.bodyIndexTypeShape.x;
+bool nwbPhysicsShouldCollideFields(const uint4 metaA, const uint4 filterA, const uint4 metaB, const uint4 filterB){
+    const uint bodyIdxA = metaA.x;
+    const uint bodyIdxB = metaB.x;
     if(bodyIdxA == bodyIdxB)
         return false;
 
-    const uint flagsUnion = a.bodyIndexTypeShape.w | b.bodyIndexTypeShape.w;
+    const uint flagsUnion = metaA.w | metaB.w;
+    const bool anyAwake = (flagsUnion & NWB_PHYSICS_SHAPE_FLAG_AWAKE_BODY) != 0u;
+    if(!anyAwake)
+        return false;
+
     const bool anyDynamic = (flagsUnion & NWB_PHYSICS_SHAPE_FLAG_DYNAMIC_BODY) != 0u;
     const bool anySensor = (flagsUnion & NWB_PHYSICS_SHAPE_FLAG_SENSOR) != 0u;
     const bool anyKinematic = (flagsUnion & NWB_PHYSICS_SHAPE_FLAG_KINEMATIC_BODY) != 0u;
     if(!anyDynamic && !(anySensor && anyKinematic))
         return false;
 
-    const int groupA = asint(a.filterData.z);
-    const int groupB = asint(b.filterData.z);
+    const int groupA = asint(filterA.z);
+    const int groupB = asint(filterB.z);
     if(groupA == groupB && groupA != 0)
         return groupA > 0;
 
-    return ((a.filterData.x & b.filterData.y) != 0u) && ((b.filterData.x & a.filterData.y) != 0u);
+    return ((filterA.x & filterB.y) != 0u) && ((filterB.x & filterA.y) != 0u);
+}
+
+bool nwbPhysicsShouldCollide(const NwbPhysicsGpuShapeProxy a, const NwbPhysicsGpuShapeProxy b){
+    return nwbPhysicsShouldCollideFields(a.bodyIndexTypeShape, a.filterData, b.bodyIndexTypeShape, b.filterData);
 }
 
 bool nwbPhysicsAabbOverlaps(const float3 minA, const float3 maxA, const float3 minB, const float3 maxB){
@@ -73,7 +81,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(mode == NWB_PHYSICS_BROADPHASE_MODE_GRID_CLEAR){
         if(idx >= NWB_PHYSICS_GPU_GRID_TABLE_SIZE)
             return;
-        g_NwbPhysicsUintBuffers[gridSlot][idx * NWB_PHYSICS_GPU_GRID_BUCKET_STRIDE] = 0u;
+        g_NwbPhysicsUintBuffers[gridSlot][idx] = 0u;
         if(idx == 0u)
             g_NwbPhysicsUintBuffers[largeListSlot][0u] = 0u;
         return;
@@ -97,74 +105,89 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
 
     if(mode == NWB_PHYSICS_BROADPHASE_MODE_UPDATE_AABBS){
-        NwbPhysicsGpuShapeProxy proxy = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx];
-        const NwbPhysicsGpuBodySim bodySim = g_NwbPhysicsBodySimBuffers[bodySimSlot][proxy.bodyIndexTypeShape.x];
-        const float4 bodyQ = bodySim.rotation;
-        const float3 bodyLocalCenter = float3(bodySim.invInertiaWorldRow0.w, bodySim.invInertiaWorldRow1.w, bodySim.invInertiaWorldRow2.w);
-        const float3 bodyOrigin = bodySim.positionInvMass.xyz - nwbPhysicsQuatRotate(bodyLocalCenter, bodyQ);
+        const uint4 bodyMeta = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx].bodyIndexTypeShape;
+        const float4 localCenterRadius = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx].localCenterRadius;
+        const float4 localExtentOrP1 = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx].localExtentOrP1;
+        const float4 localRotation = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx].localRotation;
 
-        const uint shapeType = proxy.bodyIndexTypeShape.y;
-        const float radius = proxy.localCenterRadius.w;
-        const float margin = proxy.localExtentOrP1.w;
+        const uint bodySlotIdx = bodyMeta.x;
+        const float3 bodyCenter = g_NwbPhysicsBodySimBuffers[bodySimSlot][bodySlotIdx].positionInvMass.xyz;
+        const float4 bodyQ = g_NwbPhysicsBodySimBuffers[bodySimSlot][bodySlotIdx].rotation;
+        const float3 bodyLocalCenter = g_NwbPhysicsBodySimBuffers[bodySimSlot][bodySlotIdx].localCenterMinExtent.xyz;
+        const float3 bodyOrigin = bodyCenter - nwbPhysicsQuatRotate(bodyLocalCenter, bodyQ);
+
+        const uint shapeType = bodyMeta.y;
+        const float radius = localCenterRadius.w;
+        const float margin = localExtentOrP1.w;
 
         float3 minOut = float3(0.0f, 0.0f, 0.0f);
         float3 maxOut = float3(0.0f, 0.0f, 0.0f);
 
         if(shapeType == NWB_PHYSICS_SHAPE_TYPE_SPHERE){
-            const float3 worldCenter = bodyOrigin + nwbPhysicsQuatRotate(proxy.localCenterRadius.xyz, bodyQ);
+            const float3 worldCenter = bodyOrigin + nwbPhysicsQuatRotate(localCenterRadius.xyz, bodyQ);
             const float r = radius + margin;
             minOut = worldCenter - float3(r, r, r);
             maxOut = worldCenter + float3(r, r, r);
         }
         else if(shapeType == NWB_PHYSICS_SHAPE_TYPE_CAPSULE){
-            const float3 p0 = bodyOrigin + nwbPhysicsQuatRotate(proxy.localCenterRadius.xyz, bodyQ);
-            const float3 p1 = bodyOrigin + nwbPhysicsQuatRotate(proxy.localExtentOrP1.xyz, bodyQ);
+            const float3 p0 = bodyOrigin + nwbPhysicsQuatRotate(localCenterRadius.xyz, bodyQ);
+            const float3 p1 = bodyOrigin + nwbPhysicsQuatRotate(localExtentOrP1.xyz, bodyQ);
             const float r = radius + margin;
             minOut = min(p0, p1) - float3(r, r, r);
             maxOut = max(p0, p1) + float3(r, r, r);
         }
         else{
-            const float4 worldQ = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(bodyQ, proxy.localRotation));
-            const float3 worldCenter = bodyOrigin + nwbPhysicsQuatRotate(proxy.localCenterRadius.xyz, bodyQ);
+            const float4 worldQ = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(bodyQ, localRotation));
+            const float3 worldCenter = bodyOrigin + nwbPhysicsQuatRotate(localCenterRadius.xyz, bodyQ);
             const float3 axisX = abs(nwbPhysicsQuatRotate(float3(1.0f, 0.0f, 0.0f), worldQ));
             const float3 axisY = abs(nwbPhysicsQuatRotate(float3(0.0f, 1.0f, 0.0f), worldQ));
             const float3 axisZ = abs(nwbPhysicsQuatRotate(float3(0.0f, 0.0f, 1.0f), worldQ));
-            const float3 h = proxy.localExtentOrP1.xyz;
+            const float3 h = localExtentOrP1.xyz;
             const float3 extent = axisX * h.x + axisY * h.y + axisZ * h.z + float3(radius + margin, radius + margin, radius + margin);
             minOut = worldCenter - extent;
             maxOut = worldCenter + extent;
         }
 
-        proxy.aabbMinPad = float4(minOut, 0.0f);
-        proxy.aabbMaxPad = float4(maxOut, proxy.aabbMaxPad.w);
-        g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx] = proxy;
+        g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx].aabbMinPad = float4(minOut, 0.0f);
+        g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx].aabbMaxPad.xyz = maxOut;
         return;
     }
 
     if(mode == NWB_PHYSICS_BROADPHASE_MODE_GRID_INSERT){
-        NwbPhysicsGpuShapeProxy proxy = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx];
+        const float3 aabbMin = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx].aabbMinPad.xyz;
+        const float3 aabbMax = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx].aabbMaxPad.xyz;
         const float invCellSize = g_NwbPhysicsPushConstants.deltaTime;
-        const int3 cMin = int3(floor(proxy.aabbMinPad.xyz * invCellSize));
-        const int3 cMax = int3(floor(proxy.aabbMaxPad.xyz * invCellSize));
-        const int3 span = cMax - cMin + int3(1, 1, 1);
+        const float3 minScaled = aabbMin * invCellSize;
+        const float3 maxScaled = aabbMax * invCellSize;
+        const bool finiteBounds = all(isfinite(minScaled)) && all(isfinite(maxScaled)) && all(abs(minScaled) < 1.0e6f) && all(abs(maxScaled) < 1.0e6f);
 
-        bool isLarge = (span.x <= 0 || span.y <= 0 || span.z <= 0 || span.x > 3 || span.y > 3 || span.z > 3);
+        bool isLarge = !finiteBounds;
+        int3 cMin = int3(0, 0, 0);
+        int3 span = int3(0, 0, 0);
         if(!isLarge){
-            const uint cellCount = uint(span.x) * uint(span.y) * uint(span.z);
-            if(cellCount > NWB_PHYSICS_GPU_GRID_MAX_CELLS_PER_SHAPE)
-                isLarge = true;
+            cMin = int3(floor(minScaled));
+            const int3 cMax = int3(floor(maxScaled));
+            span = cMax - cMin + int3(1, 1, 1);
+            isLarge = (span.x <= 0 || span.y <= 0 || span.z <= 0 || span.x > 3 || span.y > 3 || span.z > 3);
+            if(!isLarge){
+                const uint cellCount = uint(span.x) * uint(span.y) * uint(span.z);
+                if(cellCount > NWB_PHYSICS_GPU_GRID_MAX_CELLS_PER_SHAPE)
+                    isLarge = true;
+            }
         }
 
         if(!isLarge){
-            for(int cz = cMin.z; cz <= cMax.z; ++cz){
-                for(int cy = cMin.y; cy <= cMax.y; ++cy){
-                    for(int cx = cMin.x; cx <= cMax.x; ++cx){
+            for(int dz = 0; dz < span.z; ++dz){
+                const int cz = cMin.z + dz;
+                for(int dy = 0; dy < span.y; ++dy){
+                    const int cy = cMin.y + dy;
+                    for(int dx = 0; dx < span.x; ++dx){
+                        const int cx = cMin.x + dx;
                         const uint bucket = nwbPhysicsHashCell(int3(cx, cy, cz));
-                        const uint base = bucket * NWB_PHYSICS_GPU_GRID_BUCKET_STRIDE;
                         uint slotIdx = 0u;
-                        InterlockedAdd(g_NwbPhysicsUintBuffers[gridSlot][base], 1u, slotIdx);
+                        InterlockedAdd(g_NwbPhysicsUintBuffers[gridSlot][bucket], 1u, slotIdx);
                         if(slotIdx < NWB_PHYSICS_GPU_GRID_BUCKET_CAPACITY)
-                            g_NwbPhysicsUintBuffers[gridSlot][base + 1u + slotIdx] = idx;
+                            g_NwbPhysicsUintBuffers[gridSlot][NWB_PHYSICS_GPU_GRID_TABLE_SIZE + bucket * NWB_PHYSICS_GPU_GRID_BUCKET_CAPACITY + slotIdx] = idx;
                         else
                             isLarge = true;
                     }
@@ -179,91 +202,150 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 g_NwbPhysicsUintBuffers[largeListSlot][1u + largePos] = idx;
         }
 
-        proxy.aabbMinPad.w = isLarge ? 1.0f : 0.0f;
-        g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx] = proxy;
+        g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx].aabbMinPad.w = isLarge ? 1.0f : 0.0f;
         return;
     }
 
     const uint maxPairs = g_NwbPhysicsPushConstants.flags;
-    const NwbPhysicsGpuShapeProxy proxyA = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx];
-    const float3 minA = proxyA.aabbMinPad.xyz;
-    const float3 maxA = proxyA.aabbMaxPad.xyz;
+    const float4 minPadA = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx].aabbMinPad;
+    const float3 minA = minPadA.xyz;
+    const float3 maxA = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx].aabbMaxPad.xyz;
+    const uint4 metaA = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx].bodyIndexTypeShape;
+    const uint4 filterA = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx].filterData;
 
     if(mode == NWB_PHYSICS_BROADPHASE_MODE_GRID_EMIT_PAIRS){
+        if((metaA.w & NWB_PHYSICS_SHAPE_FLAG_AWAKE_BODY) == 0u)
+            return;
+
         const float invCellSize = g_NwbPhysicsPushConstants.deltaTime;
-        const bool isLargeA = (proxyA.aabbMinPad.w > 0.5f);
+        const bool isLargeA = (minPadA.w > 0.5f);
 
         if(!isLargeA){
-            const int3 cMinA = int3(floor(minA * invCellSize));
-            const int3 cMaxA = int3(floor(maxA * invCellSize));
-            for(int cz = cMinA.z; cz <= cMaxA.z; ++cz){
-                for(int cy = cMinA.y; cy <= cMaxA.y; ++cy){
-                    for(int cx = cMinA.x; cx <= cMaxA.x; ++cx){
-                        const uint bucket = nwbPhysicsHashCell(int3(cx, cy, cz));
-                        const uint base = bucket * NWB_PHYSICS_GPU_GRID_BUCKET_STRIDE;
-                        const uint count = min(g_NwbPhysicsUintBuffers[gridSlot][base], NWB_PHYSICS_GPU_GRID_BUCKET_CAPACITY);
-                        for(uint k = 0u; k < count; ++k){
-                            const uint idxB = g_NwbPhysicsUintBuffers[gridSlot][base + 1u + k];
-                            if(idxB <= idx)
-                                continue;
+            const float3 minScaledA = minA * invCellSize;
+            const float3 maxScaledA = maxA * invCellSize;
+            const bool finiteA = all(isfinite(minScaledA)) && all(isfinite(maxScaledA)) && all(abs(minScaledA) < 1.0e6f) && all(abs(maxScaledA) < 1.0e6f);
+            if(finiteA){
+                const int3 cMinA = int3(floor(minScaledA));
+                const int3 cMaxA = int3(floor(maxScaledA));
+                const int3 spanA = cMaxA - cMinA + int3(1, 1, 1);
+                if(spanA.x > 0 && spanA.y > 0 && spanA.z > 0 && spanA.x <= 3 && spanA.y <= 3 && spanA.z <= 3){
+                    uint bucketEntries[NWB_PHYSICS_GPU_GRID_BUCKET_CAPACITY];
+                    for(int dz = 0; dz < spanA.z; ++dz){
+                        const int cz = cMinA.z + dz;
+                        for(int dy = 0; dy < spanA.y; ++dy){
+                            const int cy = cMinA.y + dy;
+                            for(int dx = 0; dx < spanA.x; ++dx){
+                                const int cx = cMinA.x + dx;
+                                const uint bucket = nwbPhysicsHashCell(int3(cx, cy, cz));
+                                const uint entryBase = NWB_PHYSICS_GPU_GRID_TABLE_SIZE + bucket * NWB_PHYSICS_GPU_GRID_BUCKET_CAPACITY;
+                                const uint count = min(g_NwbPhysicsUintBuffers[gridSlot][bucket], NWB_PHYSICS_GPU_GRID_BUCKET_CAPACITY);
+                                for(uint k = 0u; k < count; ++k)
+                                    bucketEntries[k] = g_NwbPhysicsUintBuffers[gridSlot][entryBase + k];
 
-                            bool seenInBucket = false;
-                            for(uint p = 0u; p < k; ++p){
-                                if(g_NwbPhysicsUintBuffers[gridSlot][base + 1u + p] == idxB){
-                                    seenInBucket = true;
-                                    break;
+                                for(uint k = 0u; k < count; ++k){
+                                    const uint idxB = bucketEntries[k];
+                                    if(idxB == idx)
+                                        continue;
+
+                                    bool seenInBucket = false;
+                                    for(uint p = 0u; p < k; ++p){
+                                        if(bucketEntries[p] == idxB){
+                                            seenInBucket = true;
+                                            break;
+                                        }
+                                    }
+                                    if(seenInBucket)
+                                        continue;
+
+                                    const float4 minPadB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].aabbMinPad;
+                                    if(minPadB.w > 0.5f)
+                                        continue;
+                                    const uint4 metaB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].bodyIndexTypeShape;
+                                    const bool awakeB = (metaB.w & NWB_PHYSICS_SHAPE_FLAG_AWAKE_BODY) != 0u;
+                                    if(awakeB && idxB <= idx)
+                                        continue;
+                                    const float3 minScaledB = minPadB.xyz * invCellSize;
+                                    if(!all(isfinite(minScaledB)) || any(abs(minScaledB) >= 1.0e6f))
+                                        continue;
+                                    const int3 cMinB = int3(floor(minScaledB));
+                                    const int3 canon = max(cMinA, cMinB);
+                                    if(cx != canon.x || cy != canon.y || cz != canon.z)
+                                        continue;
+                                    const uint4 filterB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].filterData;
+                                    if(!nwbPhysicsShouldCollideFields(metaA, filterA, metaB, filterB))
+                                        continue;
+                                    const float3 maxB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].aabbMaxPad.xyz;
+                                    if(!nwbPhysicsAabbOverlaps(minA, maxA, minPadB.xyz, maxB))
+                                        continue;
+                                    const uint outA = idx < idxB ? idx : idxB;
+                                    const uint outB = idx < idxB ? idxB : idx;
+                                    const uint bodyOutA = idx < idxB ? metaA.x : metaB.x;
+                                    const uint bodyOutB = idx < idxB ? metaB.x : metaA.x;
+                                    nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, outA, outB, bodyOutA, bodyOutB);
                                 }
                             }
-                            if(seenInBucket)
-                                continue;
-
-                            const NwbPhysicsGpuShapeProxy proxyB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB];
-                            if(proxyB.aabbMinPad.w > 0.5f)
-                                continue;
-                            const int3 cMinB = int3(floor(proxyB.aabbMinPad.xyz * invCellSize));
-                            const int3 canon = max(cMinA, cMinB);
-                            if(cx != canon.x || cy != canon.y || cz != canon.z)
-                                continue;
-                            if(!nwbPhysicsShouldCollide(proxyA, proxyB))
-                                continue;
-                            if(!nwbPhysicsAabbOverlaps(minA, maxA, proxyB.aabbMinPad.xyz, proxyB.aabbMaxPad.xyz))
-                                continue;
-                            nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, idx, idxB, proxyA.bodyIndexTypeShape.x, proxyB.bodyIndexTypeShape.x);
                         }
                     }
                 }
             }
-        }
 
-        const uint largeCount = min(g_NwbPhysicsUintBuffers[largeListSlot][0u], shapeCount);
-        for(uint j = 0u; j < largeCount; ++j){
-            const uint otherIdx = g_NwbPhysicsUintBuffers[largeListSlot][1u + j];
-            if(otherIdx == idx)
-                continue;
-            if(isLargeA && otherIdx <= idx)
-                continue;
-            const NwbPhysicsGpuShapeProxy proxyB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx];
-            if(!nwbPhysicsShouldCollide(proxyA, proxyB))
-                continue;
-            if(!nwbPhysicsAabbOverlaps(minA, maxA, proxyB.aabbMinPad.xyz, proxyB.aabbMaxPad.xyz))
-                continue;
-            const uint outA = idx < otherIdx ? idx : otherIdx;
-            const uint outB = idx < otherIdx ? otherIdx : idx;
-            const uint bodyOutA = idx < otherIdx ? proxyA.bodyIndexTypeShape.x : proxyB.bodyIndexTypeShape.x;
-            const uint bodyOutB = idx < otherIdx ? proxyB.bodyIndexTypeShape.x : proxyA.bodyIndexTypeShape.x;
-            nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, outA, outB, bodyOutA, bodyOutB);
+            const uint largeCount = min(g_NwbPhysicsUintBuffers[largeListSlot][0u], shapeCount);
+            for(uint j = 0u; j < largeCount; ++j){
+                const uint otherIdx = g_NwbPhysicsUintBuffers[largeListSlot][1u + j];
+                if(otherIdx == idx)
+                    continue;
+                const uint4 metaB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx].bodyIndexTypeShape;
+                const uint4 filterB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx].filterData;
+                if(!nwbPhysicsShouldCollideFields(metaA, filterA, metaB, filterB))
+                    continue;
+                const float3 minB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx].aabbMinPad.xyz;
+                const float3 maxB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx].aabbMaxPad.xyz;
+                if(!nwbPhysicsAabbOverlaps(minA, maxA, minB, maxB))
+                    continue;
+                const uint outA = idx < otherIdx ? idx : otherIdx;
+                const uint outB = idx < otherIdx ? otherIdx : idx;
+                const uint bodyOutA = idx < otherIdx ? metaA.x : metaB.x;
+                const uint bodyOutB = idx < otherIdx ? metaB.x : metaA.x;
+                nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, outA, outB, bodyOutA, bodyOutB);
+            }
+        }
+        else{
+            for(uint otherIdx = 0u; otherIdx < shapeCount; ++otherIdx){
+                if(otherIdx == idx)
+                    continue;
+                const float4 minPadB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx].aabbMinPad;
+                const uint4 metaB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx].bodyIndexTypeShape;
+                const bool awakeB = (metaB.w & NWB_PHYSICS_SHAPE_FLAG_AWAKE_BODY) != 0u;
+                const bool isLargeB = (minPadB.w > 0.5f);
+                if(awakeB && (!isLargeB || otherIdx <= idx))
+                    continue;
+                const uint4 filterB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx].filterData;
+                if(!nwbPhysicsShouldCollideFields(metaA, filterA, metaB, filterB))
+                    continue;
+                const float3 maxB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][otherIdx].aabbMaxPad.xyz;
+                if(!nwbPhysicsAabbOverlaps(minA, maxA, minPadB.xyz, maxB))
+                    continue;
+                const uint outA = idx < otherIdx ? idx : otherIdx;
+                const uint outB = idx < otherIdx ? otherIdx : idx;
+                const uint bodyOutA = idx < otherIdx ? metaA.x : metaB.x;
+                const uint bodyOutB = idx < otherIdx ? metaB.x : metaA.x;
+                nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, outA, outB, bodyOutA, bodyOutB);
+            }
         }
         return;
     }
 
     if(mode == NWB_PHYSICS_BROADPHASE_MODE_EMIT_PAIRS){
         for(uint idxB = idx + 1u; idxB < shapeCount; ++idxB){
-            const NwbPhysicsGpuShapeProxy proxyB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB];
-            if(!nwbPhysicsShouldCollide(proxyA, proxyB))
+            const uint4 metaB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].bodyIndexTypeShape;
+            const uint4 filterB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].filterData;
+            if(!nwbPhysicsShouldCollideFields(metaA, filterA, metaB, filterB))
                 continue;
-            if(!nwbPhysicsAabbOverlaps(minA, maxA, proxyB.aabbMinPad.xyz, proxyB.aabbMaxPad.xyz))
+            const float3 minB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].aabbMinPad.xyz;
+            const float3 maxB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].aabbMaxPad.xyz;
+            if(!nwbPhysicsAabbOverlaps(minA, maxA, minB, maxB))
                 continue;
-            nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, idx, idxB, proxyA.bodyIndexTypeShape.x, proxyB.bodyIndexTypeShape.x);
+            nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, idx, idxB, metaA.x, metaB.x);
         }
     }
 }

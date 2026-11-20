@@ -11,8 +11,7 @@
 class QuickhullFace{
     public FixedVector<u32, 32u> vertices;
     public Vector<u32> conflicts;
-    public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
-    public f32 offset = 0.0f;
+    public Plane3D plane;
     public b8 alive = true;
 }
 
@@ -44,9 +43,210 @@ QuickhullFace MakeTriangleFace(in Span<f32x4> points, in u32 i0, in u32 i1, in u
         n = -n;
         d = -d;
     }
-    f.normal = f32x4(n, 0.0f);
-    f.offset = d;
+    f.plane = Plane3D(n, d);
     return f;
+}
+
+b8 TryMergeCoplanarHullFaces(
+    in Vector<QuickhullFace> faces,
+    in Vector<u32> liveFaces,
+    in Span<f32x4> uniquePts,
+    in VectorSingle interior,
+    mut Vector<QuickhullFace> outMergedFaces
+){
+    outMergedFaces.clear();
+    const usize faceCount = liveFaces.size();
+    if(faceCount < 4u)
+        return false;
+
+    for(usize i = 0u; i < faceCount; ++i){
+        if(faces[liveFaces[i]].vertices.size() != 3u)
+            return false;
+    }
+
+    Vector<u32> twinTri(faceCount * 3u, s_NullIndex);
+    for(usize i = 0u; i < faceCount; ++i){
+        in QuickhullFace fi = faces[liveFaces[i]];
+        for(usize k = 0u; k < 3u; ++k){
+            if(twinTri[i * 3u + k] != s_NullIndex)
+                continue;
+            const u32 a = fi.vertices[k];
+            const u32 b = fi.vertices[(k + 1u) % 3u];
+            b8 foundTwin = false;
+            for(usize j = i + 1u; j < faceCount; ++j){
+                in QuickhullFace fj = faces[liveFaces[j]];
+                for(usize m = 0u; m < 3u; ++m){
+                    if(fj.vertices[m] == b && fj.vertices[(m + 1u) % 3u] == a){
+                        twinTri[i * 3u + k] = cast<u32>(j);
+                        twinTri[j * 3u + m] = cast<u32>(i);
+                        foundTwin = true;
+                        break;
+                    }
+                }
+                if(foundTwin)
+                    break;
+            }
+            if(!foundTwin)
+                return false;
+        }
+    }
+
+    Vector<u32> compId(faceCount, s_NullIndex);
+    u32 compCount = 0u;
+    Vector<u32> bfsQueue;
+    bfsQueue.reserve(faceCount);
+
+    for(usize seed = 0u; seed < faceCount; ++seed){
+        if(compId[seed] != s_NullIndex)
+            continue;
+        const u32 cid = compCount;
+        ++compCount;
+        compId[seed] = cid;
+        bfsQueue.clear();
+        bfsQueue.push_back(cast<u32>(seed));
+
+        const VectorSingle nSeed = VectorSingle(faces[liveFaces[seed]].plane.normalOffset, 0.0f);
+        const f32 offSeed = faces[liveFaces[seed]].plane.normalOffset.w;
+
+        usize head = 0u;
+        while(head < bfsQueue.size()){
+            const u32 cur = bfsQueue[head];
+            ++head;
+            for(usize k = 0u; k < 3u; ++k){
+                const u32 nbr = twinTri[cur * 3u + k];
+                if(nbr == s_NullIndex || compId[nbr] != s_NullIndex)
+                    continue;
+                const VectorSingle nNbr = VectorSingle(faces[liveFaces[nbr]].plane.normalOffset, 0.0f);
+                const f32 offNbr = faces[liveFaces[nbr]].plane.normalOffset.w;
+                if(Vector3Dot(nSeed, nNbr).x >= 0.9999f && Abs(offSeed - offNbr) <= 1.0e-4f){
+                    compId[nbr] = cid;
+                    bfsQueue.push_back(nbr);
+                }
+            }
+        }
+    }
+
+    if(compCount == cast<u32>(faceCount) || compCount < 4u || compCount > s_MaxHullFaces)
+        return false;
+
+    outMergedFaces.reserve(compCount);
+    usize totalHalfEdges = 0u;
+    for(u32 cid = 0u; cid < compCount; ++cid){
+        Vector<u32> edgeStart;
+        Vector<u32> edgeEnd;
+        for(usize t = 0u; t < faceCount; ++t){
+            if(compId[t] != cid)
+                continue;
+            in QuickhullFace qt = faces[liveFaces[t]];
+            for(usize k = 0u; k < 3u; ++k){
+                const u32 nbr = twinTri[t * 3u + k];
+                if(compId[nbr] != cid){
+                    edgeStart.push_back(qt.vertices[k]);
+                    edgeEnd.push_back(qt.vertices[(k + 1u) % 3u]);
+                }
+            }
+        }
+
+        if(edgeStart.size() < 3u || edgeStart.size() > 32u)
+            return false;
+
+        FixedVector<u32, 32u> loop;
+        u32 curStart = edgeStart[0u];
+        u32 curNext = edgeEnd[0u];
+        Vector<u8> usedEdge(edgeStart.size(), 0u);
+        usedEdge[0u] = 1u;
+        loop.push_back(curStart);
+
+        for(usize step = 1u; step < edgeStart.size(); ++step){
+            if(curNext == curStart)
+                return false;
+            loop.push_back(curNext);
+            b8 foundNext = false;
+            for(usize e = 0u; e < edgeStart.size(); ++e){
+                if(usedEdge[e] != 0u)
+                    continue;
+                if(edgeStart[e] == curNext){
+                    usedEdge[e] = 1u;
+                    curNext = edgeEnd[e];
+                    foundNext = true;
+                    break;
+                }
+            }
+            if(!foundNext)
+                return false;
+        }
+        if(curNext != curStart)
+            return false;
+
+        VectorSingle newellN(0.0f);
+        for(usize vi = 0u; vi < loop.size(); ++vi){
+            const VectorSingle a = VectorSingle(uniquePts[loop[vi]]);
+            const VectorSingle b = VectorSingle(uniquePts[loop[(vi + 1u) % loop.size()]]);
+            newellN = newellN + VectorSingle(
+                (a.y - b.y) * (a.z + b.z),
+                (a.z - b.z) * (a.x + b.x),
+                (a.x - b.x) * (a.y + b.y),
+                0.0f
+            );
+        }
+        const f32 nLenSq = Vector3LengthSq(newellN).x;
+        if(!IsFinite(nLenSq) || nLenSq <= 1.0e-12f)
+            return false;
+        VectorSingle planeN = newellN * Rsqrt(VectorSingle(nLenSq));
+        if(Vector3Dot(planeN, VectorSingle(VectorSingle(uniquePts[loop[0u]]) - interior, 0.0f)).x < 0.0f)
+            return false;
+
+        f32 maxOff = -s_MaxF32;
+        for(usize vi = 0u; vi < loop.size(); ++vi){
+            const f32 d = Vector3Dot(planeN, VectorSingle(uniquePts[loop[vi]], 0.0f)).x;
+            if(d > maxOff)
+                maxOff = d;
+        }
+        for(usize vi = 0u; vi < loop.size(); ++vi){
+            const VectorSingle vPrev = VectorSingle(uniquePts[loop[(vi + loop.size() - 1u) % loop.size()]]);
+            const VectorSingle vCur = VectorSingle(uniquePts[loop[vi]]);
+            const VectorSingle vNext = VectorSingle(uniquePts[loop[(vi + 1u) % loop.size()]]);
+            const VectorSingle turn = Cross(VectorSingle(vCur - vPrev, 0.0f), VectorSingle(vNext - vCur, 0.0f));
+            if(Vector3Dot(turn, planeN).x < -1.0e-5f)
+                return false;
+        }
+
+        QuickhullFace merged;
+        merged.vertices = loop;
+        merged.plane = Plane3D(planeN, maxOff);
+        merged.alive = true;
+        outMergedFaces.push_back(merged);
+        totalHalfEdges += loop.size();
+    }
+
+    if(totalHalfEdges > 255u || (totalHalfEdges / 2u) > s_MaxHullEdges)
+        return false;
+
+    for(usize f0 = 0u; f0 < outMergedFaces.size(); ++f0){
+        in QuickhullFace mf0 = outMergedFaces[f0];
+        for(usize e0 = 0u; e0 < mf0.vertices.size(); ++e0){
+            const u32 a0 = mf0.vertices[e0];
+            const u32 b0 = mf0.vertices[(e0 + 1u) % mf0.vertices.size()];
+            b8 hasTwin = false;
+            for(usize f1 = 0u; f1 < outMergedFaces.size(); ++f1){
+                if(f1 == f0)
+                    continue;
+                in QuickhullFace mf1 = outMergedFaces[f1];
+                for(usize e1 = 0u; e1 < mf1.vertices.size(); ++e1){
+                    if(mf1.vertices[e1] == b0 && mf1.vertices[(e1 + 1u) % mf1.vertices.size()] == a0){
+                        hasTwin = true;
+                        break;
+                    }
+                }
+                if(hasTwin)
+                    break;
+            }
+            if(!hasTwin)
+                return false;
+        }
+    }
+
+    return true;
 }
 
 Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
@@ -148,7 +348,7 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
         for(usize f = 0u; f < faces.size(); ++f){
             if(!faces[f].alive)
                 continue;
-            const f32 dist = Vector3Dot(VectorSingle(faces[f].normal), VectorSingle(uniquePts[i], 0.0f)).x - faces[f].offset;
+            const f32 dist = Vector3Dot(VectorSingle(faces[f].plane.normalOffset, 0.0f), VectorSingle(uniquePts[i], 0.0f)).x - faces[f].plane.normalOffset.w;
             if(dist > maxDist){
                 maxDist = dist;
                 bestFace = f;
@@ -167,7 +367,7 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
                 continue;
             for(usize c = 0u; c < faces[f].conflicts.size(); ++c){
                 const u32 pIdx = faces[f].conflicts[c];
-                const f32 dist = Vector3Dot(VectorSingle(faces[f].normal), VectorSingle(uniquePts[pIdx], 0.0f)).x - faces[f].offset;
+                const f32 dist = Vector3Dot(VectorSingle(faces[f].plane.normalOffset, 0.0f), VectorSingle(uniquePts[pIdx], 0.0f)).x - faces[f].plane.normalOffset.w;
                 if(dist > maxDist){
                     maxDist = dist;
                     chosenFace = f;
@@ -185,7 +385,7 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
         for(usize f = 0u; f < faces.size(); ++f){
             if(!faces[f].alive)
                 continue;
-            const f32 dist = Vector3Dot(VectorSingle(faces[f].normal), VectorSingle(apex, 0.0f)).x - faces[f].offset;
+            const f32 dist = Vector3Dot(VectorSingle(faces[f].plane.normalOffset, 0.0f), VectorSingle(apex, 0.0f)).x - faces[f].plane.normalOffset.w;
             if(dist > 1.0e-5f){
                 isVisible[f] = 1u;
                 visibleFaces.push_back(cast<u32>(f));
@@ -249,7 +449,7 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
             for(usize nf = newFaceBegin; nf < faces.size(); ++nf){
                 if(!faces[nf].alive)
                     continue;
-                const f32 dist = Vector3Dot(VectorSingle(faces[nf].normal), VectorSingle(uniquePts[cp], 0.0f)).x - faces[nf].offset;
+                const f32 dist = Vector3Dot(VectorSingle(faces[nf].plane.normalOffset, 0.0f), VectorSingle(uniquePts[cp], 0.0f)).x - faces[nf].plane.normalOffset.w;
                 if(dist > bestD){
                     bestD = dist;
                     bestNew = nf;
@@ -261,7 +461,6 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
     }
 
     HullShape result;
-    result.radius = radius;
     Vector<u32> vertRemap;
     vertRemap.resize(uniquePts.size(), s_NullIndex);
 
@@ -273,20 +472,33 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
     if(liveFaces.size() < 4u || liveFaces.size() > s_MaxHullFaces)
         return MakeUnexpected(Failure());
 
+    Vector<QuickhullFace> mergedFaces;
+    const b8 useMergedFaces = TryMergeCoplanarHullFaces(faces, liveFaces, Span<f32x4>(uniquePts), interior, mergedFaces);
+
+    usize finalFaceCount = liveFaces.size();
+    if(useMergedFaces)
+        finalFaceCount = mergedFaces.size();
+
+    result.facePlanes.reserve(finalFaceCount);
+    result.faceTopologies.reserve(finalFaceCount);
+
     VectorSingle minB = VectorSingle(s_MaxF32);
     VectorSingle maxB = VectorSingle(-s_MaxF32);
     VectorSingle sumVerts = VectorSingle(0.0f);
 
-    for(usize lf = 0u; lf < liveFaces.size(); ++lf){
-        in QuickhullFace qf = faces[liveFaces[lf]];
+    for(usize lf = 0u; lf < finalFaceCount; ++lf){
+        QuickhullFace qf;
+        if(useMergedFaces)
+            qf = mergedFaces[lf];
+        else
+            qf = faces[liveFaces[lf]];
         if(qf.vertices.size() < 3u)
             return MakeUnexpected(Failure());
 
-        HullFace outFace;
-        outFace.plane = Plane3D(VectorSingle(qf.normal), qf.offset);
-        outFace.edge = cast<u8>(result.halfEdges.size());
-        outFace.vertexCount = cast<u8>(qf.vertices.size());
-        const u8 faceOutIdx = cast<u8>(result.faces.size());
+        HullFaceTopology outTopo;
+        outTopo.edge = cast<u8>(result.halfEdges.size());
+        outTopo.vertexCount = cast<u8>(qf.vertices.size());
+        const u8 faceOutIdx = cast<u8>(result.faceTopologies.size());
         const usize edgeBase = result.halfEdges.size();
 
         for(usize vi = 0u; vi < qf.vertices.size(); ++vi){
@@ -297,7 +509,7 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
                 const u32 newIdx = cast<u32>(result.vertices.size());
                 vertRemap[rawVert] = newIdx;
                 const VectorSingle vp = VectorSingle(uniquePts[rawVert]);
-                result.vertices.push_back(f32x4(vp, 0.0f));
+                result.vertices.push_back(PackVec3U(vp));
                 minB = Min(minB, vp);
                 maxB = Max(maxB, vp);
                 sumVerts = sumVerts + vp;
@@ -306,39 +518,48 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
             he.tail = cast<u8>(vertRemap[rawVert]);
             he.face = faceOutIdx;
             he.next = cast<u8>(edgeBase + ((vi + 1u) % qf.vertices.size()));
-            he.twin = 255u;
+            he.twin = 0u;
             if(result.halfEdges.size() >= 256u)
                 return MakeUnexpected(Failure());
             result.halfEdges.push_back(he);
         }
-        result.faces.push_back(outFace);
+        result.facePlanes.push_back(qf.plane);
+        result.faceTopologies.push_back(outTopo);
     }
 
+    Array<u16, 256u> twinIndices;
+    for(usize ti = 0u; ti < 256u; ++ti)
+        twinIndices[ti] = 0xffffu;
+
     for(usize e0 = 0u; e0 < result.halfEdges.size(); ++e0){
-        if(result.halfEdges[e0].twin != 255u)
+        if(twinIndices[e0] != 0xffffu)
             continue;
         const u8 a0 = result.halfEdges[e0].tail;
         const u8 b0 = result.halfEdges[result.halfEdges[e0].next].tail;
         for(usize e1 = e0 + 1u; e1 < result.halfEdges.size(); ++e1){
-            if(result.halfEdges[e1].twin != 255u)
+            if(twinIndices[e1] != 0xffffu)
                 continue;
             const u8 a1 = result.halfEdges[e1].tail;
             const u8 b1 = result.halfEdges[result.halfEdges[e1].next].tail;
             if(a0 == b1 && b0 == a1){
+                twinIndices[e0] = cast<u16>(e1);
+                twinIndices[e1] = cast<u16>(e0);
                 result.halfEdges[e0].twin = cast<u8>(e1);
                 result.halfEdges[e1].twin = cast<u8>(e0);
                 break;
             }
         }
-        if(result.halfEdges[e0].twin == 255u)
+        if(twinIndices[e0] == 0xffffu)
             return MakeUnexpected(Failure());
     }
 
     if(result.halfEdges.size() / 2u > s_MaxHullEdges)
         return MakeUnexpected(Failure());
 
-    result.centroid = f32x4(sumVerts / cast<f32>(result.vertices.size()), 0.0f);
-    result.halfExtents = f32x4((maxB - minB) * 0.5f, 0.0f);
+    const VectorSingle centroid = sumVerts / cast<f32>(result.vertices.size());
+    const VectorSingle halfExt = (maxB - minB) * 0.5f;
+    result.centroidRadius = f32x4(centroid, radius);
+    result.halfExtentsFlags = PackVec3U32(halfExt, 0u);
     return result;
 }
 

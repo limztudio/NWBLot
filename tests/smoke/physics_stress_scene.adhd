@@ -1,0 +1,253 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/physics/world.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u32 NextStressRandU32(mut u32 state){
+    state = state * 1664525u + 1013904223u;
+    return state;
+}
+
+f32 NextStressRandRange(mut u32 state, in f32 minVal, in f32 maxVal){
+    const u32 r = NextStressRandU32(state);
+    const f32 t = cast<f32>(r >> 8u) / 16777216.0f;
+    return minVal + (maxVal - minVal) * t;
+}
+
+b8 BuildPhysicsStressScene(mut PhysicsWorld world, in u32 targetDynamicBodies, in u32 seed, mut Vector<BodyId> outDynamicBodies){
+    world.clear();
+    outDynamicBodies.clear();
+
+    WorldDef wd = WorldDef();
+    wd.gravity = f32x4(0.0f, -9.81f, 0.0f, 0.0f);
+    wd.enableSleep = true;
+    wd.enableContinuous = true;
+    world.setWorldDef(wd);
+
+    const HullShape floorHull = MakeBoxHull(24.0f, 0.5f, 24.0f, 0.0f).value();
+    const HullShape wallX = MakeBoxHull(0.5f, 6.0f, 24.5f, 0.0f).value();
+    const HullShape wallZ = MakeBoxHull(24.5f, 6.0f, 0.5f, 0.0f).value();
+    ShapeDef staticSd = ShapeDef();
+    staticSd.density = 0.0f;
+    staticSd.material.friction = 0.7f;
+    staticSd.material.restitution = 0.1f;
+
+    {
+        BodyDef bd = BodyDef();
+        bd.type = BodyType::Static;
+        bd.position = f32x4(0.0f, -0.5f, 0.0f, 0.0f);
+        const Expected<BodyId> floorRes = world.createBody(bd);
+        if(!floorRes.has_value() || !world.createHullShape(floorRes.value(), staticSd, floorHull).has_value())
+            return false;
+
+        bd.position = f32x4(-24.0f, 5.5f, 0.0f, 0.0f);
+        const Expected<BodyId> leftRes = world.createBody(bd);
+        if(!leftRes.has_value() || !world.createHullShape(leftRes.value(), staticSd, wallX).has_value())
+            return false;
+
+        bd.position = f32x4(24.0f, 5.5f, 0.0f, 0.0f);
+        const Expected<BodyId> rightRes = world.createBody(bd);
+        if(!rightRes.has_value() || !world.createHullShape(rightRes.value(), staticSd, wallX).has_value())
+            return false;
+
+        bd.position = f32x4(0.0f, 5.5f, -24.0f, 0.0f);
+        const Expected<BodyId> backRes = world.createBody(bd);
+        if(!backRes.has_value() || !world.createHullShape(backRes.value(), staticSd, wallZ).has_value())
+            return false;
+
+        bd.position = f32x4(0.0f, 5.5f, 24.0f, 0.0f);
+        const Expected<BodyId> frontRes = world.createBody(bd);
+        if(!frontRes.has_value() || !world.createHullShape(frontRes.value(), staticSd, wallZ).has_value())
+            return false;
+    }
+
+    const u32 boxTarget = (targetDynamicBodies * 60u) / 100u;
+    const u32 towerCount = boxTarget / 16u;
+    const u32 chainTarget = (targetDynamicBodies * 12u) / 100u;
+    const u32 chainCount = chainTarget / 6u;
+    u32 bulletCount = 0u;
+    if(targetDynamicBodies >= 64u)
+        bulletCount = Max(2u, (targetDynamicBodies * 3u) / 100u);
+    const u32 usedCount = towerCount * 16u + chainCount * 6u + bulletCount;
+    u32 sphereCount = 0u;
+    if(targetDynamicBodies > usedCount)
+        sphereCount = targetDynamicBodies - usedCount;
+
+    outDynamicBodies.reserve(targetDynamicBodies);
+
+    const HullShape unitBox = MakeBoxHull(0.32f, 0.32f, 0.32f, 0.0f).value();
+    ShapeDef boxSd = ShapeDef();
+    boxSd.density = 1.0f;
+    boxSd.material.friction = 0.6f;
+    boxSd.material.restitution = 0.05f;
+
+    u32 gridCols = 1u;
+    while(gridCols * gridCols < Max(towerCount, 1u))
+        ++gridCols;
+    const u32 gridRows = (towerCount + gridCols - 1u) / gridCols;
+    const f32 towerPitch = 2.6f;
+
+    for(u32 ti = 0u; ti < towerCount; ++ti){
+        const u32 col = ti % gridCols;
+        const u32 row = ti / gridCols;
+        const f32 baseX = (cast<f32>(col) - cast<f32>(gridCols - 1u) * 0.5f) * towerPitch;
+        const f32 baseZ = (cast<f32>(row) - cast<f32>(gridRows - 1u) * 0.5f) * towerPitch;
+        for(u32 level = 0u; level < 4u; ++level){
+            for(u32 bz = 0u; bz < 2u; ++bz){
+                for(u32 bx = 0u; bx < 2u; ++bx){
+                    BodyDef bd = BodyDef();
+                    bd.type = BodyType::Dynamic;
+                    bd.position = f32x4(
+                        baseX + (cast<f32>(bx) - 0.5f) * 0.68f,
+                        0.325f + cast<f32>(level) * 0.65f,
+                        baseZ + (cast<f32>(bz) - 0.5f) * 0.68f,
+                        0.0f
+                    );
+                    const Expected<BodyId> bRes = world.createBody(bd);
+                    if(!bRes.has_value() || !world.createHullShape(bRes.value(), boxSd, unitBox).has_value())
+                        return false;
+                    outDynamicBodies.push_back(bRes.value());
+                }
+            }
+        }
+    }
+
+    const HullShape linkBox = MakeBoxHull(0.18f, 0.18f, 0.18f, 0.0f).value();
+    ShapeDef linkSd = ShapeDef();
+    linkSd.density = 1.0f;
+    linkSd.material.friction = 0.5f;
+    linkSd.material.restitution = 0.05f;
+
+    const u32 perSide = (chainCount + 1u) / 2u;
+    for(u32 ci = 0u; ci < chainCount; ++ci){
+        const u32 side = ci % 2u;
+        const u32 sideIdx = ci / 2u;
+        f32 az = 16.5f;
+        if(side == 1u)
+            az = -16.5f;
+        f32 ax = 0.0f;
+        if(perSide > 1u)
+            ax = -18.0f + (36.0f * cast<f32>(sideIdx)) / cast<f32>(perSide - 1u);
+
+        BodyDef anchorBd = BodyDef();
+        anchorBd.type = BodyType::Static;
+        anchorBd.position = f32x4(ax, 6.5f, az, 0.0f);
+        const Expected<BodyId> anchorRes = world.createBody(anchorBd);
+        if(!anchorRes.has_value() || !world.createHullShape(anchorRes.value(), linkSd, linkBox).has_value())
+            return false;
+
+        BodyId prevBody = anchorRes.value();
+        f32 swingSign = 1.0f;
+        if(side == 1u)
+            swingSign = -1.0f;
+        for(u32 linkIdx = 0u; linkIdx < 6u; ++linkIdx){
+            BodyDef linkBd = BodyDef();
+            linkBd.type = BodyType::Dynamic;
+            linkBd.position = f32x4(
+                ax + swingSign * cast<f32>(linkIdx + 1u) * 0.14f,
+                6.5f - cast<f32>(linkIdx + 1u) * 0.55f,
+                az,
+                0.0f
+            );
+            const Expected<BodyId> linkRes = world.createBody(linkBd);
+            if(!linkRes.has_value() || !world.createHullShape(linkRes.value(), linkSd, linkBox).has_value())
+                return false;
+            outDynamicBodies.push_back(linkRes.value());
+
+            JointDef jd = JointDef();
+            jd.type = JointType::Spherical;
+            jd.bodyIdA = prevBody;
+            jd.bodyIdB = linkRes.value();
+            jd.localAnchorA = f32x4(0.0f, -0.275f, 0.0f, 0.0f);
+            jd.localAnchorB = f32x4(0.0f, 0.275f, 0.0f, 0.0f);
+            jd.collideConnected = false;
+            if(!world.createJoint(jd).has_value())
+                return false;
+            prevBody = linkRes.value();
+        }
+    }
+
+    u32 rng = seed;
+    const SphereShape dynSphere = MakeSphereShape(VectorSingle(0.0f), 0.24f).value();
+    ShapeDef sphereSd = ShapeDef();
+    sphereSd.density = 1.2f;
+    sphereSd.material.friction = 0.4f;
+    sphereSd.material.restitution = 0.35f;
+
+    const f32 scatterSpan = Max(6.0f, cast<f32>(gridCols) * towerPitch * 0.45f);
+    for(u32 si = 0u; si < sphereCount; ++si){
+        const f32 sx = NextStressRandRange(rng, -scatterSpan, scatterSpan);
+        const f32 sy = NextStressRandRange(rng, 4.0f, 11.5f);
+        const f32 sz = NextStressRandRange(rng, -scatterSpan, scatterSpan);
+        const f32 vx = NextStressRandRange(rng, -1.5f, 1.5f);
+        const f32 vy = NextStressRandRange(rng, -3.0f, -0.5f);
+        const f32 vz = NextStressRandRange(rng, -1.5f, 1.5f);
+
+        BodyDef bd = BodyDef();
+        bd.type = BodyType::Dynamic;
+        bd.position = f32x4(sx, sy, sz, 0.0f);
+        bd.linearVelocity = f32x4(vx, vy, vz, 0.0f);
+        const Expected<BodyId> bRes = world.createBody(bd);
+        if(!bRes.has_value() || !world.createSphereShape(bRes.value(), sphereSd, dynSphere).has_value())
+            return false;
+        outDynamicBodies.push_back(bRes.value());
+    }
+
+    const SphereShape bulletSphere = MakeSphereShape(VectorSingle(0.0f), 0.22f).value();
+    ShapeDef bulletSd = ShapeDef();
+    bulletSd.density = 2.0f;
+    bulletSd.material.friction = 0.3f;
+    bulletSd.material.restitution = 0.4f;
+
+    for(u32 bi = 0u; bi < bulletCount; ++bi){
+        const f32 angle = (2.0f * s_PI * cast<f32>(bi)) / cast<f32>(bulletCount);
+        const f32 dirX = Cos(VectorSingle(angle)).x;
+        const f32 dirZ = Sin(VectorSingle(angle)).x;
+        const f32 radius = 19.5f;
+        const f32 px = dirX * radius;
+        const f32 pz = dirZ * radius;
+        const f32 py = 1.1f + cast<f32>(bi % 3u) * 0.65f;
+
+        BodyDef bd = BodyDef();
+        bd.type = BodyType::Dynamic;
+        bd.isBullet = true;
+        bd.position = f32x4(px, py, pz, 0.0f);
+        bd.linearVelocity = f32x4(-dirX * 18.0f, 0.0f, -dirZ * 18.0f, 0.0f);
+        const Expected<BodyId> bRes = world.createBody(bd);
+        if(!bRes.has_value() || !world.createSphereShape(bRes.value(), bulletSd, bulletSphere).has_value())
+            return false;
+        outDynamicBodies.push_back(bRes.value());
+    }
+
+    return true;
+}
+
+b8 VerifyPhysicsStressWorldState(in PhysicsWorld world, in Span<BodyId> dynamicBodies){
+    for(usize i = 0u; i < dynamicBodies.size(); ++i){
+        const BodyId bId = dynamicBodies[i];
+        if(!world.isValidBody(bId))
+            return false;
+        const Expected<Transform3D> xf = world.tryGetBodyTransform(bId);
+        const Expected<f32x4> lv = world.tryGetLinearVelocity(bId);
+        const Expected<f32x4> av = world.tryGetAngularVelocity(bId);
+        if(!xf.has_value() || !lv.has_value() || !av.has_value())
+            return false;
+
+        const VectorSingle pos = VectorSingle(xf.value().position);
+        const VectorSingle rot = VectorSingle(xf.value().rotation);
+        if(!IsValidPositionVec3(pos) || !IsFiniteQuat(rot) || !IsFiniteVec3(VectorSingle(lv.value())) || !IsFiniteVec3(VectorSingle(av.value())))
+            return false;
+        if(Abs(pos.x) > 40.0f || Abs(pos.z) > 40.0f || pos.y < -5.0f || pos.y > 80.0f)
+            return false;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

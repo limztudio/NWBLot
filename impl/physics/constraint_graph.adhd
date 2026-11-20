@@ -178,7 +178,7 @@ void WakeIslandWithGraph(
             in Contact wokenContact = contacts[cId];
             const b8 isAlive = (wokenContact.flags & cast<u32>(ContactFlags::Alive)) != 0u;
             const b8 isSensor = (wokenContact.flags & cast<u32>(ContactFlags::Sensor)) != 0u;
-            if(isAlive && !isSensor && wokenContact.manifold.pointCount > 0u)
+            if(isAlive && !isSensor && wokenContact.manifold.pointCount() > 0u)
                 AddContactToGraph(graph, bodies, contacts[cId]);
         }
     }
@@ -357,10 +357,10 @@ void SleepIslandWithGraph(
         if(body.setIndex != s_AwakeSetIndex || body.localIndex >= sets[s_AwakeSetIndex].sims.size())
             continue;
         BodySim sim = sets[s_AwakeSetIndex].sims[body.localIndex];
-        sim.force = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-        sim.torque = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        sim.setForce(VectorSingle(0.0f));
+        sim.setTorque(VectorSingle(0.0f));
         BodyState emptyState;
-        emptyState.flags = sim.flags;
+        emptyState.setFlags(sim.flags);
         RemoveBodyFromSolverSet(bodies, sets[s_AwakeSetIndex], body.localIndex);
         AddBodyToSolverSet(bodies, sets[sleepSetIndex], sim, emptyState);
     }

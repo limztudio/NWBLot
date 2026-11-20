@@ -42,13 +42,11 @@ struct NwbPhysicsGpuBodySim{
     float4 rotation;
     float4 forceLinearDamping;
     float4 torqueAngularDamping;
-    float4 gravityScaleFlags;
-    float4 invInertiaWorldRow0;
-    float4 invInertiaWorldRow1;
-    float4 invInertiaWorldRow2;
-    float4 invInertiaLocalRow0;
-    float4 invInertiaLocalRow1;
-    float4 invInertiaLocalRow2;
+    float4 localCenterMinExtent;
+    float4 invInertiaWorld0;
+    float4 invInertiaWorld1;
+    float4 invInertiaLocal0;
+    float4 invInertiaLocal1;
 };
 
 struct NwbPhysicsGpuShapeProxy{
@@ -68,62 +66,75 @@ struct NwbPhysicsGpuBroadphasePair{
 struct NwbPhysicsGpuNarrowphaseManifold{
     uint4 pairInfo;
     float4 normalPad;
-    float4 anchorA[NWB_PHYSICS_MAX_MANIFOLD_POINTS];
+    float4 anchorAFeature[NWB_PHYSICS_MAX_MANIFOLD_POINTS];
     float4 anchorBSeparation[NWB_PHYSICS_MAX_MANIFOLD_POINTS];
-    uint4 featureIds;
 };
 
 struct NwbPhysicsGpuContactPoint{
     float4 rABaseSep;
     float4 rBRelVel;
     float4 impulsesMass;
-    float4 anchorLever;
+};
+
+struct NwbPhysicsGpuBodyOut{
+    float4 positionSleepTime;
+    float4 rotation;
+    float4 linearVelocityFlags;
+    float4 angularVelocityPad;
+};
+
+struct NwbPhysicsGpuContactImpulseOut{
+    float4 frictionTwistRollX;
+    float4 rollYZMaxApproach;
+    float4 normalImpulses;
+    float4 totalNormalImpulses;
+};
+
+struct NwbPhysicsGpuJointImpulseOut{
+    float4 linearImpulseMax;
+    float4 angularImpulseMax;
+    float4 limitImpulses;
+};
+
+struct NwbPhysicsGpuIslandSlice{
+    uint4 bodyContact;
+    uint4 jointFlags;
 };
 
 struct NwbPhysicsGpuContactConstraint{
     uint4 indicesCountFlags;
     float4 normalFriction;
     float4 tangent1Restitution;
-    float4 tangent2Rolling;
     float4 centerATwistMass;
     float4 centerBTwistImpulse;
     float4 softnessTangent00;
     float4 tangentMassFriction;
     float4 invMassTangentVel;
     float4 invIA0;
-    float4 invIA1;
-    float4 invIA2;
+    float4 invIA1RollX;
     float4 invIB0;
-    float4 invIB1;
-    float4 invIB2;
-    float4 rollingMass0;
-    float4 rollingMass1;
+    float4 invIB1RollYZ;
     NwbPhysicsGpuContactPoint points[NWB_PHYSICS_MAX_MANIFOLD_POINTS];
 };
 
 struct NwbPhysicsGpuJointConstraint{
     uint4 indicesTypeFlags;
     float4 params0;
-    float4 params1;
-    float4 params2;
     float4 qA0;
     float4 qB0;
-    float4 rA0;
-    float4 rB0;
-    float4 baseCenterDelta;
-    float4 localAxisA;
-    float4 localAxisB;
+    float4 rA0InvMassA;
+    float4 rB0InvMassB;
+    float4 baseCenterDeltaMaxMotor;
+    float4 localAxisALowerLimit;
+    float4 localAxisBUpperLimit;
     float4 referenceRotation;
-    float4 linearOffset;
-    float4 linearSoftness;
-    float4 angularSoftness;
+    float4 linearOffsetMaxTorque;
+    float4 linearSoftnessMotorSpeed;
+    float4 angularSoftnessSwingLimit;
     float4 suspensionSoftness;
     float4 invIA0;
-    float4 invIA1;
-    float4 invIA2;
-    float4 invIB0;
+    float4 invIA1B0;
     float4 invIB1;
-    float4 invIB2;
     float4 linearImpulse;
     float4 angularImpulse;
     float4 limitImpulses;
@@ -146,6 +157,10 @@ struct NwbPhysicsGpuJointConstraint{
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuNarrowphaseManifold, Std430DataLayout> g_NwbPhysicsNarrowphaseManifoldBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuContactConstraint, Std430DataLayout> g_NwbPhysicsContactConstraintBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuJointConstraint, Std430DataLayout> g_NwbPhysicsJointConstraintBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuBodyOut, Std430DataLayout> g_NwbPhysicsBodyOutBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuContactImpulseOut, Std430DataLayout> g_NwbPhysicsContactImpulseOutBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuJointImpulseOut, Std430DataLayout> g_NwbPhysicsJointImpulseOutBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuIslandSlice, Std430DataLayout> g_NwbPhysicsIslandSliceBuffers[];
 #pragma warning(pop)
 
 

@@ -534,6 +534,27 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         unset(_nwb_csg_gi_lighting_args)
         unset(_nwb_gi_runtime_root)
 
+        if(TARGET testbed AND TARGET nwb_physics AND TARGET nwb_physics_gpu)
+            set(_nwb_physics_stress_runtime_root "${CMAKE_BINARY_DIR}/Testing/testbed_runtime/$<CONFIG>")
+            nwb_declare_executable(nwb_physics_stress_smoke)
+            nwb_target_adhd_sources(nwb_physics_stress_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
+                "${CMAKE_CURRENT_LIST_DIR}/physics_stress_scene.adhd"
+                "${CMAKE_CURRENT_LIST_DIR}/physics_stress_smoke.adhd"
+            )
+            nwb_configure_runtime_smoke_target(nwb_physics_stress_smoke "${_nwb_physics_stress_runtime_root}" physics_stress_smoke nwb_physics nwb_physics_gpu)
+            nwb_target_link_libraries_whole_archive(nwb_physics_stress_smoke nwb_assets_physics nwb_assets_ui_skin nwb_assets_font nwb_assets_font_atlas)
+            add_dependencies(nwb_physics_stress_smoke nwb_testbed_smoke_assets)
+            if(TARGET nwb_logserver)
+                add_test(NAME nwb_physics_stress_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/physics_stress_smoke.py"
+                        --executable "$<TARGET_FILE:nwb_physics_stress_smoke>" --working-directory "${_nwb_physics_stress_runtime_root}"
+                        --logserver-executable "$<TARGET_FILE:nwb_logserver>" --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/physics_stress_smoke"
+                        --mode smoke "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" CONFIGURATIONS dbg opt)
+                set_tests_properties(nwb_physics_stress_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE}
+                    TIMEOUT 180 LABELS "physics;gpu_validation")
+            endif()
+            unset(_nwb_physics_stress_runtime_root)
+        endif()
+
         unset(_nwb_skinning_culling_asset_root)
         unset(_nwb_skinning_culling_asset_stamp)
         unset(_nwb_skinning_culling_model_nwb)

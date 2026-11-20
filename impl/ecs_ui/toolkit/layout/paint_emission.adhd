@@ -173,6 +173,99 @@ void EmitPaintQuad(
     commands.push_back(command);
 }
 
+void EmitPaintLine(
+    in b8 recording,
+    in Rect clip,
+    in Point start,
+    in Point end,
+    in f32 thickness,
+    in Color color,
+    in u32 layer,
+    mut Vector<Vertex> vertices,
+    mut Vector<u32> indices,
+    mut Vector<DrawCommand> commands,
+    mut b8 inOutCommandsOrdered
+){
+    if(!recording){
+        error("PaintSystem: paint line emitted while recording is off");
+        return;
+    }
+    if(!IsValidPaintColor(color)){
+        error("PaintSystem: paint line color is invalid");
+        return;
+    }
+    if(!HasUiRectArea(clip) || color.a <= 0.0f || !IsFinite(thickness) || thickness <= 0.0f)
+        return;
+    if(!IsFinite(VectorSingle(start.x, start.y, end.x, end.y)))
+        return;
+
+    const f32 dx = end.x - start.x;
+    const f32 dy = end.y - start.y;
+    const f32 lenSq = dx * dx + dy * dy;
+    if(!IsFinite(lenSq) || lenSq <= 1.0e-8f)
+        return;
+
+    const f32 halfW = 0.5f * thickness;
+    const f32 invLen = 1.0f / Sqrt(lenSq);
+    const f32 nx = -dy * invLen * halfW;
+    const f32 ny = dx * invLen * halfW;
+    const f32 absNx = Abs(nx);
+    const f32 absNy = Abs(ny);
+    const f32 minX = Min(start.x, end.x) - absNx;
+    const f32 maxX = Max(start.x, end.x) + absNx;
+    const f32 minY = Min(start.y, end.y) - absNy;
+    const f32 maxY = Max(start.y, end.y) + absNy;
+    if(maxX <= clip.x || maxY <= clip.y || minX >= clip.x + clip.width || minY >= clip.y + clip.height)
+        return;
+
+    if(vertices.size() > cast<usize>(u32.max - s_PaintQuadVertexCount) || indices.size() > cast<usize>(u32.max - s_PaintQuadIndexCount)){
+        assert(false);
+        return;
+    }
+
+    const Color premultiplied = PremultiplyPaintColor(color);
+    const u32 vertexBase = cast<u32>(vertices.size());
+    const u32 firstIndex = cast<u32>(indices.size());
+    vertices.push_back(Vertex(Point(start.x + nx, start.y + ny), Point(0.0f, 0.0f), premultiplied));
+    vertices.push_back(Vertex(Point(end.x + nx, end.y + ny), Point(0.0f, 0.0f), premultiplied));
+    vertices.push_back(Vertex(Point(end.x - nx, end.y - ny), Point(0.0f, 0.0f), premultiplied));
+    vertices.push_back(Vertex(Point(start.x - nx, start.y - ny), Point(0.0f, 0.0f), premultiplied));
+    indices.push_back(vertexBase);
+    indices.push_back(vertexBase + 1u);
+    indices.push_back(vertexBase + 2u);
+    indices.push_back(vertexBase);
+    indices.push_back(vertexBase + 2u);
+    indices.push_back(vertexBase + 3u);
+
+    if(!commands.empty()){
+        const usize lastIndex = commands.size() - 1u;
+        const DrawCommand previous = commands[lastIndex];
+        if(
+            previous.layer == layer && previous.material == PaintMaterial::Solid && previous.glyphPageIndex == u32.max
+            && previous.sdfPageIndex == u32.max && previous.sdfChannel == 0u
+            && previous.textureImageIndex == u32.max
+            && EqualUiRect(previous.clip, clip)
+        ){
+            commands[lastIndex].indexCount += s_PaintQuadIndexCount;
+            return;
+        }
+        if(previous.layer > layer)
+            inOutCommandsOrdered = false;
+    }
+
+    DrawCommand command;
+    command.firstIndex = firstIndex;
+    command.indexCount = s_PaintQuadIndexCount;
+    command.clip = clip;
+    command.material = PaintMaterial::Solid;
+    command.glyphPageIndex = u32.max;
+    command.sdfPageIndex = u32.max;
+    command.sdfChannel = 0u;
+    command.layer = layer;
+    command.textureImageIndex = u32.max;
+    commands.push_back(command);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

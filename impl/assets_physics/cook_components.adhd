@@ -204,6 +204,60 @@ b8 ReadPhysicsU32ArrayField(
     return ok;
 }
 
+b8 ReadPhysicsOptionalU64Field(
+    in Path file,
+    in MetascriptValue value,
+    in StringView prefix,
+    in StringView field,
+    mut u64 inOutVal
+){
+    b8 ok = true;
+    u64 parsed = inOutVal;
+    const b8 found = value.visitField(
+        field,
+        lambda[in file, in prefix, in field, mut ok, mut parsed](in MetascriptValue fieldVal) -> void{
+            if(!fieldVal.isNumeric()){
+                error("{} '{}': field '{}' must be a non-negative integer", prefix, PathToString(file), field);
+                ok = false;
+                return;
+            }
+            const f64 num = fieldVal.toDouble();
+            if(!IsFinite(num) || num < 0.0 || num > 9007199254740991.0 || Floor(num) != num){
+                error("{} '{}': field '{}' must be a u64 integer", prefix, PathToString(file), field);
+                ok = false;
+                return;
+            }
+            parsed = cast<u64>(num);
+        }
+    );
+    if(!ok)
+        return false;
+    if(found)
+        inOutVal = parsed;
+    return true;
+}
+
+b8 ReadPhysicsOptionalNameField(
+    in Path file,
+    in MetascriptValue value,
+    in StringView prefix,
+    in StringView field,
+    mut Name inOutName
+){
+    if(!value.hasField(field))
+        return true;
+    const Expected<MetadataStringField> f = ReadMetadataStringField(file, value, prefix, field, true);
+    if(!f.has_value())
+        return false;
+    const Expected<Name> parsed = ParseName(f.value().text);
+    if(!parsed.has_value() || parsed.value() == s_NameNone){
+        error("{} '{}': field '{}' must be a non-empty name", prefix, PathToString(file), field);
+        return false;
+    }
+    inOutName = parsed.value();
+    return true;
+}
+
 b8 IsAllowedRigidBodyMetadataField(in StringView key){
     return
         key == "type" || key == "linear_velocity" || key == "angular_velocity"
@@ -212,6 +266,10 @@ b8 IsAllowedRigidBodyMetadataField(in StringView key){
         || key == "is_awake" || key == "is_bullet" || key == "is_enabled"
         || key == "allow_fast_rotation" || key == "enable_gyroscopic_torque"
         || key == "drive_kinematic_from_transform"
+        || key == "user_data" || key == "entity_tag"
+        || key == "use_custom_mass" || key == "custom_mass"
+        || key == "custom_center_of_mass" || key == "custom_inertia_diag"
+        || key == "custom_inertia_off_diag"
     ;
 }
 
@@ -238,6 +296,9 @@ Expected<RigidBodyComponentCookEntry> ParseRigidBodyComponentCookMetadata(in Nam
 
     VectorSingle linVel = VectorSingle(c.linearVelocity);
     VectorSingle angVel = VectorSingle(c.angularVelocity);
+    VectorSingle customCom = VectorSingle(c.customCenterOfMass);
+    VectorSingle customInertiaD = VectorSingle(c.customInertiaDiag);
+    VectorSingle customInertiaO = VectorSingle(c.customInertiaOffDiag);
     if(!ReadPhysicsOptionalFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "linear_velocity", linVel)
         || !ReadPhysicsOptionalFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "angular_velocity", angVel)
         || !ReadOptionalFiniteF32Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "linear_damping", c.linearDamping)
@@ -245,6 +306,13 @@ Expected<RigidBodyComponentCookEntry> ParseRigidBodyComponentCookMetadata(in Nam
         || !ReadOptionalFiniteF32Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "gravity_scale", c.gravityScale)
         || !ReadOptionalFiniteF32Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "sleep_threshold", c.sleepThreshold)
         || !ReadPhysicsOptionalU32Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "motion_locks", c.motionLocks)
+        || !ReadPhysicsOptionalU64Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "user_data", c.userData)
+        || !ReadPhysicsOptionalNameField(file, value, s_RigidBodyComponentDiagnosticPrefix, "entity_tag", c.entityTag)
+        || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "use_custom_mass", c.useCustomMass)
+        || !ReadOptionalFiniteF32Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "custom_mass", c.customMass)
+        || !ReadPhysicsOptionalFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "custom_center_of_mass", customCom)
+        || !ReadPhysicsOptionalFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "custom_inertia_diag", customInertiaD)
+        || !ReadPhysicsOptionalFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "custom_inertia_off_diag", customInertiaO)
         || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "enable_sleep", c.enableSleep)
         || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "is_awake", c.isAwake)
         || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "is_bullet", c.isBullet)
@@ -255,6 +323,9 @@ Expected<RigidBodyComponentCookEntry> ParseRigidBodyComponentCookMetadata(in Nam
         return MakeUnexpected(Failure());
     c.linearVelocity = f32x4(linVel, 0.0f);
     c.angularVelocity = f32x4(angVel, 0.0f);
+    c.customCenterOfMass = f32x4(customCom, 0.0f);
+    c.customInertiaDiag = f32x4(customInertiaD, 0.0f);
+    c.customInertiaOffDiag = f32x4(customInertiaO, 0.0f);
 
     entry.component = c;
     if(!BuildComponentAssetFromEntry<RigidBodyComponentAsset, RigidBodyComponentCookEntry>(entry).has_value())
@@ -263,14 +334,14 @@ Expected<RigidBodyComponentCookEntry> ParseRigidBodyComponentCookMetadata(in Nam
 }
 
 b8 IsAllowedColliderShapeMetadataField(in StringView key, in b8 allowExtraShapes){
-    if(allowExtraShapes && key == "extra_shapes")
+    if(allowExtraShapes && (key == "extra_shapes" || key == "entity_tag"))
         return true;
     return
         key == "shape_type" || key == "center" || key == "center2" || key == "half_extents"
         || key == "local_rotation" || key == "local_rotation_euler" || key == "local_rotation_euler_degrees"
         || key == "radius" || key == "skin_radius" || key == "density" || key == "friction"
         || key == "restitution" || key == "rolling_resistance" || key == "tangent_speed"
-        || key == "category_bits" || key == "mask_bits" || key == "group_index"
+        || key == "category_bits" || key == "mask_bits" || key == "group_index" || key == "user_data"
         || key == "is_box" || key == "is_sensor"
         || key == "enable_contact_events" || key == "enable_hit_events" || key == "enable_sensor_events"
         || key == "enable_pre_solve_events" || key == "invoke_contact_creation"
@@ -316,6 +387,7 @@ b8 ParseColliderShapeEntryMap(in Path file, in MetascriptValue mapVal, in b8 all
         || !ReadPhysicsOptionalU32Field(file, mapVal, s_ColliderComponentDiagnosticPrefix, "category_bits", outEntry.categoryBits)
         || !ReadPhysicsOptionalU32Field(file, mapVal, s_ColliderComponentDiagnosticPrefix, "mask_bits", outEntry.maskBits)
         || !ReadOptionalI32Field(file, mapVal, s_ColliderComponentDiagnosticPrefix, "group_index", outEntry.groupIndex)
+        || !ReadPhysicsOptionalU64Field(file, mapVal, s_ColliderComponentDiagnosticPrefix, "user_data", outEntry.userData)
         || !ReadOptionalMetadataBoolField(file, mapVal, s_ColliderComponentDiagnosticPrefix, "is_box", outEntry.isBox)
         || !ReadOptionalMetadataBoolField(file, mapVal, s_ColliderComponentDiagnosticPrefix, "is_sensor", outEntry.isSensor)
         || !ReadOptionalMetadataBoolField(file, mapVal, s_ColliderComponentDiagnosticPrefix, "enable_contact_events", outEntry.enableContactEvents)
@@ -370,6 +442,7 @@ Expected<ColliderComponentCookEntry> ParseColliderComponentCookMetadata(in Name 
     c.categoryBits = primary.categoryBits;
     c.maskBits = primary.maskBits;
     c.groupIndex = primary.groupIndex;
+    c.userData = primary.userData;
     c.isBox = primary.isBox;
     c.isSensor = primary.isSensor;
     c.enableContactEvents = primary.enableContactEvents;
@@ -381,6 +454,9 @@ Expected<ColliderComponentCookEntry> ParseColliderComponentCookMetadata(in Name 
     c.meshVertices = primary.meshVertices;
     c.meshIndices = primary.meshIndices;
     c.meshAsset = primary.meshAsset;
+
+    if(!ReadPhysicsOptionalNameField(file, value, s_ColliderComponentDiagnosticPrefix, "entity_tag", c.entityTag))
+        return MakeUnexpected(Failure());
 
     if(value.hasField("extra_shapes")){
         b8 extrasOk = true;
@@ -434,6 +510,7 @@ b8 IsAllowedJointMetadataField(in StringView key){
         || key == "correction_factor" || key == "max_torque" || key == "swing_limit"
         || key == "suspension_hertz" || key == "suspension_damping_ratio"
         || key == "break_force" || key == "break_torque" || key == "collide_connected"
+        || key == "body_entity_a" || key == "body_entity_b" || key == "user_data"
     ;
 }
 
@@ -494,7 +571,10 @@ Expected<JointComponentCookEntry> ParseJointComponentCookMetadata(in Name virtua
         || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "suspension_damping_ratio", j.suspensionDampingRatio)
         || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "break_force", j.breakForce)
         || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "break_torque", j.breakTorque)
-        || !ReadOptionalMetadataBoolField(file, value, s_JointComponentDiagnosticPrefix, "collide_connected", j.collideConnected))
+        || !ReadOptionalMetadataBoolField(file, value, s_JointComponentDiagnosticPrefix, "collide_connected", j.collideConnected)
+        || !ReadPhysicsOptionalNameField(file, value, s_JointComponentDiagnosticPrefix, "body_entity_a", j.bodyEntityNameA)
+        || !ReadPhysicsOptionalNameField(file, value, s_JointComponentDiagnosticPrefix, "body_entity_b", j.bodyEntityNameB)
+        || !ReadPhysicsOptionalU64Field(file, value, s_JointComponentDiagnosticPrefix, "user_data", j.userData))
         return MakeUnexpected(Failure());
     j.localAnchorA = f32x4(anchorA, 0.0f);
     j.localAnchorB = f32x4(anchorB, 0.0f);

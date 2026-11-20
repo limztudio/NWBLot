@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const u32 s_PhysicsComponentBinaryVersion = 1u;
+const u32 s_PhysicsComponentBinaryVersion = 2u;
 const u8 s_RigidBodyFlagEnableSleep = 0x01u;
 const u8 s_RigidBodyFlagIsAwake = 0x02u;
 const u8 s_RigidBodyFlagIsBullet = 0x04u;
@@ -16,6 +16,7 @@ const u8 s_RigidBodyFlagIsEnabled = 0x08u;
 const u8 s_RigidBodyFlagAllowFastRotation = 0x10u;
 const u8 s_RigidBodyFlagEnableGyroscopic = 0x20u;
 const u8 s_RigidBodyFlagDriveKinematic = 0x40u;
+const u8 s_RigidBodyFlagUseCustomMass = 0x80u;
 
 const u8 s_ColliderFlagIsBox = 0x01u;
 const u8 s_ColliderFlagIsSensor = 0x02u;
@@ -46,7 +47,19 @@ class PhysicsComponentBinaryCodec{
             return false;
         if(!IsFinite(VectorSingle(c.linearDamping, c.angularDamping, c.gravityScale, c.sleepThreshold)))
             return false;
-        return c.linearDamping >= 0.0f && c.angularDamping >= 0.0f && c.sleepThreshold >= 0.0f;
+        if(c.linearDamping < 0.0f || c.angularDamping < 0.0f || c.sleepThreshold < 0.0f)
+            return false;
+        if(c.useCustomMass){
+            if(!IsFinite(c.customMass) || c.customMass <= 0.0f)
+                return false;
+            if(!IsFinite(VectorSingle(c.customCenterOfMass))
+                || !IsFinite(VectorSingle(c.customInertiaDiag))
+                || !IsFinite(VectorSingle(c.customInertiaOffDiag)))
+                return false;
+            if(c.customInertiaDiag.x < 0.0f || c.customInertiaDiag.y < 0.0f || c.customInertiaDiag.z < 0.0f)
+                return false;
+        }
+        return true;
     }
 
     private b8 validColliderEntryData(in ColliderShapeEntry e)const{
@@ -60,7 +73,9 @@ class PhysicsComponentBinaryCodec{
             return false;
         if(!IsFinite(VectorSingle(e.restitution, e.rollingResistance, e.tangentSpeed, 0.0f)))
             return false;
-        if(e.radius <= 0.0f || e.skinRadius < 0.0f || e.density < 0.0f || e.friction < 0.0f || e.restitution < 0.0f || e.rollingResistance < 0.0f)
+        if((e.shapeType == ShapeType::Sphere || e.shapeType == ShapeType::Capsule) && e.radius <= 0.0f)
+            return false;
+        if(e.radius < 0.0f || e.skinRadius < 0.0f || e.density < 0.0f || e.friction < 0.0f || e.restitution < 0.0f || e.rollingResistance < 0.0f)
             return false;
         if(e.shapeType == ShapeType::Hull){
             if(e.isBox && (e.halfExtents.x <= 0.0f || e.halfExtents.y <= 0.0f || e.halfExtents.z <= 0.0f))
@@ -111,6 +126,7 @@ class PhysicsComponentBinaryCodec{
         e.categoryBits = c.categoryBits;
         e.maskBits = c.maskBits;
         e.groupIndex = c.groupIndex;
+        e.userData = c.userData;
         e.isBox = c.isBox;
         e.isSensor = c.isSensor;
         e.enableContactEvents = c.enableContactEvents;
@@ -141,6 +157,7 @@ class PhysicsComponentBinaryCodec{
         outComp.categoryBits = e.categoryBits;
         outComp.maskBits = e.maskBits;
         outComp.groupIndex = e.groupIndex;
+        outComp.userData = e.userData;
         outComp.isBox = e.isBox;
         outComp.isSensor = e.isSensor;
         outComp.enableContactEvents = e.enableContactEvents;
@@ -171,7 +188,7 @@ class PhysicsComponentBinaryCodec{
             return false;
         if(!IsFinite(VectorSingle(j.suspensionHertz, j.suspensionDampingRatio, j.breakForce, j.breakTorque)))
             return false;
-        return j.minLength >= 0.0f && j.maxLength >= j.minLength && j.hertz >= 0.0f && j.dampingRatio >= 0.0f && j.suspensionHertz >= 0.0f && j.suspensionDampingRatio >= 0.0f && j.breakForce >= 0.0f && j.breakTorque >= 0.0f;
+        return j.length >= 0.0f && j.minLength >= 0.0f && j.maxLength >= j.minLength && j.maxMotorForce >= 0.0f && j.hertz >= 0.0f && j.dampingRatio >= 0.0f && j.correctionFactor >= 0.0f && j.correctionFactor <= 1.0f && j.maxTorque >= 0.0f && j.swingLimit >= 0.0f && j.suspensionHertz >= 0.0f && j.suspensionDampingRatio >= 0.0f && j.breakForce >= 0.0f && j.breakTorque >= 0.0f;
     }
 
     private b8 validWorldConfigData(in PhysicsWorldConfigComponent w)const{
@@ -207,6 +224,7 @@ class PhysicsComponentBinaryCodec{
         if(c.allowFastRotation) flags |= s_RigidBodyFlagAllowFastRotation;
         if(c.enableGyroscopicTorque) flags |= s_RigidBodyFlagEnableGyroscopic;
         if(c.driveKinematicFromTransform) flags |= s_RigidBodyFlagDriveKinematic;
+        if(c.useCustomMass) flags |= s_RigidBodyFlagUseCustomMass;
         bin.flags = flags;
         bin.motionLocks = c.motionLocks;
         bin.linearVelocity = c.linearVelocity;
@@ -215,6 +233,12 @@ class PhysicsComponentBinaryCodec{
         bin.angularDamping = c.angularDamping;
         bin.gravityScale = c.gravityScale;
         bin.sleepThreshold = c.sleepThreshold;
+        bin.userData = c.userData;
+        bin.entityTagHash = c.entityTag.hash();
+        bin.customMass = c.customMass;
+        bin.customCenterOfMass = c.customCenterOfMass;
+        bin.customInertiaDiag = c.customInertiaDiag;
+        bin.customInertiaOffDiag = c.customInertiaOffDiag;
         outPayload.clear();
         AppendPOD(outPayload, bin);
         return true;
@@ -228,7 +252,7 @@ class PhysicsComponentBinaryCodec{
             return false;
         }
         in RigidBodyComponentPayloadBinary bin = res.value();
-        if(bin.version != s_PhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || (bin.flags & 0x80u) != 0u){
+        if(bin.version != s_PhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || bin.reserved3 != 0u){
             error("RigidBodyComponentAsset::loadComponentPayload failed: unsupported version or flags");
             return false;
         }
@@ -241,6 +265,7 @@ class PhysicsComponentBinaryCodec{
         c.allowFastRotation = (bin.flags & s_RigidBodyFlagAllowFastRotation) != 0u;
         c.enableGyroscopicTorque = (bin.flags & s_RigidBodyFlagEnableGyroscopic) != 0u;
         c.driveKinematicFromTransform = (bin.flags & s_RigidBodyFlagDriveKinematic) != 0u;
+        c.useCustomMass = (bin.flags & s_RigidBodyFlagUseCustomMass) != 0u;
         c.motionLocks = bin.motionLocks;
         c.linearVelocity = bin.linearVelocity;
         c.angularVelocity = bin.angularVelocity;
@@ -248,6 +273,15 @@ class PhysicsComponentBinaryCodec{
         c.angularDamping = bin.angularDamping;
         c.gravityScale = bin.gravityScale;
         c.sleepThreshold = bin.sleepThreshold;
+        c.userData = bin.userData;
+        if(bin.entityTagHash == s_NameNone.hash())
+            c.entityTag = s_NameNone;
+        else
+            c.entityTag = Name(bin.entityTagHash);
+        c.customMass = bin.customMass;
+        c.customCenterOfMass = bin.customCenterOfMass;
+        c.customInertiaDiag = bin.customInertiaDiag;
+        c.customInertiaOffDiag = bin.customInertiaOffDiag;
         c.dirty = true;
         if(!this.validRigidBodyData(c)){
             error("RigidBodyComponentAsset::loadComponentPayload failed: invalid rigid body fields");
@@ -290,6 +324,7 @@ class PhysicsComponentBinaryCodec{
         hdr.hullPointCount = cast<u32>(e.hullPoints.size());
         hdr.meshVertexCount = cast<u32>(e.meshVertices.size());
         hdr.meshIndexCount = cast<u32>(e.meshIndices.size());
+        hdr.userData = e.userData;
         AppendPOD(outPayload, hdr);
 
         for(usize i = 0u; i < e.hullPoints.size(); ++i){
@@ -315,7 +350,7 @@ class PhysicsComponentBinaryCodec{
         if(!hdrRes.has_value())
             return false;
         in ColliderShapeEntryHeaderBinary hdr = hdrRes.value();
-        if(hdr.version != s_PhysicsComponentBinaryVersion || hdr.reserved0 != 0u || hdr.reserved1 != 0u || hdr.reserved2 != 0u || hdr.reserved3 != 0u || (hdr.flags & 0x80u) != 0u)
+        if(hdr.version != s_PhysicsComponentBinaryVersion || hdr.reserved0 != 0u || hdr.reserved1 != 0u || hdr.reserved2 != 0u || hdr.reserved3 != 0u || hdr.reserved4 != 0u || (hdr.flags & 0x80u) != 0u)
             return false;
 
         const u64 remaining = cast<u64>(payload.size() - inOutCursor);
@@ -346,6 +381,7 @@ class PhysicsComponentBinaryCodec{
         e.restitution = hdr.restitution;
         e.rollingResistance = hdr.rollingResistance;
         e.tangentSpeed = hdr.tangentSpeed;
+        e.userData = hdr.userData;
         e.meshAsset.virtualPath = Name(hdr.meshAssetHash);
 
         e.hullPoints.resize(hdr.hullPointCount);
@@ -394,6 +430,7 @@ class PhysicsComponentBinaryCodec{
         ColliderComponentPayloadHeaderBinary rootHdr;
         rootHdr.version = s_PhysicsComponentBinaryVersion;
         rootHdr.extraShapeCount = cast<u32>(c.extraShapes.size());
+        rootHdr.entityTagHash = c.entityTag.hash();
         outPayload.clear();
         AppendPOD(outPayload, rootHdr);
         if(!this.serializeColliderEntry(this.buildPrimaryEntry(c), outPayload))
@@ -431,6 +468,10 @@ class PhysicsComponentBinaryCodec{
 
         ColliderComponent c;
         this.assignPrimaryEntry(primary, c);
+        if(rootHdr.entityTagHash == s_NameNone.hash())
+            c.entityTag = s_NameNone;
+        else
+            c.entityTag = Name(rootHdr.entityTagHash);
         c.extraShapes.resize(rootHdr.extraShapeCount);
         for(u32 i = 0u; i < rootHdr.extraShapeCount; ++i){
             if(!this.deserializeColliderEntry(payload, cursor, c.extraShapes[i])){
@@ -489,6 +530,9 @@ class PhysicsComponentBinaryCodec{
         bin.suspensionDampingRatio = j.suspensionDampingRatio;
         bin.breakForce = j.breakForce;
         bin.breakTorque = j.breakTorque;
+        bin.bodyEntityNameAHash = j.bodyEntityNameA.hash();
+        bin.bodyEntityNameBHash = j.bodyEntityNameB.hash();
+        bin.userData = j.userData;
         outPayload.clear();
         AppendPOD(outPayload, bin);
         return true;
@@ -535,6 +579,15 @@ class PhysicsComponentBinaryCodec{
         j.suspensionDampingRatio = bin.suspensionDampingRatio;
         j.breakForce = bin.breakForce;
         j.breakTorque = bin.breakTorque;
+        if(bin.bodyEntityNameAHash == s_NameNone.hash())
+            j.bodyEntityNameA = s_NameNone;
+        else
+            j.bodyEntityNameA = Name(bin.bodyEntityNameAHash);
+        if(bin.bodyEntityNameBHash == s_NameNone.hash())
+            j.bodyEntityNameB = s_NameNone;
+        else
+            j.bodyEntityNameB = Name(bin.bodyEntityNameBHash);
+        j.userData = bin.userData;
         j.dirty = true;
         if(!this.validJointData(j)){
             error("JointComponentAsset::loadComponentPayload failed: invalid joint parameters");

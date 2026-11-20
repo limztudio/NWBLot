@@ -344,6 +344,8 @@ class ExplosionDef{
     public f32 falloff = 1.0f;
     public f32 impulsePerLength = 1.0f;
     public Filter filter;
+    public b8 checkOcclusion = false;
+    public Filter occlusionFilter;
 }
 
 class RayCastInput{
@@ -432,6 +434,23 @@ class SensorBeginTouchEvent{
 class SensorEndTouchEvent{
     public ShapeId sensorShapeId;
     public ShapeId visitorShapeId;
+}
+
+class JointBreakEvent{
+    public JointId jointId;
+    public BodyId bodyIdA;
+    public BodyId bodyIdB;
+    public u64 userData = 0u;
+    public f32 peakForce = 0.0f;
+    public f32 peakTorque = 0.0f;
+}
+
+class ContactPairInfo{
+    public ShapeId shapeIdA;
+    public ShapeId shapeIdB;
+    public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
+    public u32 pointCount = 0u;
+    public b8 touching = false;
 }
 
 class WorldStepStats{

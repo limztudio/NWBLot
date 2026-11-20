@@ -19,13 +19,21 @@ class PhysicsSystem{
     private HashMap<EntityID, JointId> m_entityJoints;
     private HashMap<u32, EntityID> m_bodyIndexToEntity;
     private HashMap<u32, EntityID> m_shapeIndexToEntity;
+    private HashMap<u32, EntityID> m_jointIndexToEntity;
+    private HashMap<Name, EntityID> m_namedEntities;
+    private HashMap<EntityID, EcsWorldPose> m_syncedBodyPoses;
+    private HashMap<EntityID, f32x4> m_syncedColliderScales;
+    private HashMap<EntityID, Transform3D> m_prevBodyTransforms;
+    private HashMap<EntityID, Transform3D> m_currBodyTransforms;
     private Vector<BodyMoveEvent> m_frameBodyMoveEvents;
     private Vector<ContactBeginTouchEvent> m_frameContactBeginEvents;
     private Vector<ContactEndTouchEvent> m_frameContactEndEvents;
     private Vector<ContactHitEvent> m_frameContactHitEvents;
     private Vector<SensorBeginTouchEvent> m_frameSensorBeginEvents;
     private Vector<SensorEndTouchEvent> m_frameSensorEndEvents;
+    private Vector<JointBreakEvent> m_frameJointBreakEvents;
     private f32 m_accumulator = 0.0f;
+    private f32 m_interpolationAlpha = 1.0f;
     private WorldStepStats m_lastStepStats;
     private f64 m_lastStepMs = 0.0;
 
@@ -52,6 +60,7 @@ class PhysicsSystem{
         this.writeAccess<ColliderComponent>();
         this.writeAccess<JointComponent>();
         this.writeAccess<TransformComponent>();
+        this.readAccess<PhysicsParentComponent>();
     }
 
     private void clearFrameEvents(){
@@ -61,6 +70,7 @@ class PhysicsSystem{
         this.m_frameContactHitEvents.clear();
         this.m_frameSensorBeginEvents.clear();
         this.m_frameSensorEndEvents.clear();
+        this.m_frameJointBreakEvents.clear();
     }
 
     private void appendLastStepEvents(){
@@ -87,18 +97,24 @@ class PhysicsSystem{
         const Span<SensorEndTouchEvent> sEnds = this.m_physicsWorld.sensorEndEvents();
         for(usize i = 0u; i < sEnds.size(); ++i)
             this.m_frameSensorEndEvents.push_back(sEnds[i]);
+
+        const Span<JointBreakEvent> jBreaks = this.m_physicsWorld.jointBreakEvents();
+        for(usize i = 0u; i < jBreaks.size(); ++i)
+            this.m_frameJointBreakEvents.push_back(jBreaks[i]);
     }
 
     public mut PhysicsWorld physicsWorld(){ return this.m_physicsWorld; }
     public in PhysicsWorld physicsWorld()const{ return this.m_physicsWorld; }
     public in WorldStepStats lastStepStats()const{ return this.m_lastStepStats; }
     public f64 lastStepMs()const{ return this.m_lastStepMs; }
+    public f32 interpolationAlpha()const{ return this.m_interpolationAlpha; }
     public Span<BodyMoveEvent> bodyMoveEvents()const{ return this.m_frameBodyMoveEvents; }
     public Span<ContactBeginTouchEvent> contactBeginEvents()const{ return this.m_frameContactBeginEvents; }
     public Span<ContactEndTouchEvent> contactEndEvents()const{ return this.m_frameContactEndEvents; }
     public Span<ContactHitEvent> contactHitEvents()const{ return this.m_frameContactHitEvents; }
     public Span<SensorBeginTouchEvent> sensorBeginEvents()const{ return this.m_frameSensorBeginEvents; }
     public Span<SensorEndTouchEvent> sensorEndEvents()const{ return this.m_frameSensorEndEvents; }
+    public Span<JointBreakEvent> jointBreakEvents()const{ return this.m_frameJointBreakEvents; }
 
     public void setAssetManager(mut AssetManager assetManager){
         this.m_assetManager = Optional<mut AssetManager>(assetManager);
@@ -138,6 +154,190 @@ class PhysicsSystem{
         return found.value();
     }
 
+    public EntityID entityForJoint(in JointId jointId)const{
+        if(!jointId.valid())
+            return s_InvalidEntityId;
+        const auto found = this.m_jointIndexToEntity.find(jointId.index);
+        if(found == this.m_jointIndexToEntity.end())
+            return s_InvalidEntityId;
+        return found.value();
+    }
+
+    public Expected<Transform3D> tryGetInterpolatedTransform(in EntityID entity)const{
+        if(!entity.valid())
+            return MakeUnexpected(Failure());
+        const auto foundCurr = this.m_currBodyTransforms.find(entity);
+        if(foundCurr == this.m_currBodyTransforms.end()){
+            const auto foundBody = this.m_entityBodies.find(entity);
+            if(foundBody == this.m_entityBodies.end())
+                return MakeUnexpected(Failure());
+            return this.m_physicsWorld.tryGetBodyTransform(foundBody.value());
+        }
+        const Transform3D currXf = foundCurr.value();
+        const auto foundPrev = this.m_prevBodyTransforms.find(entity);
+        if(foundPrev == this.m_prevBodyTransforms.end())
+            return currXf;
+        const Transform3D prevXf = foundPrev.value();
+        const f32 alpha = Clamp(this.m_interpolationAlpha, 0.0f, 1.0f);
+        VectorSingle q0 = SafeNormalizeQuat(VectorSingle(prevXf.rotation));
+        VectorSingle q1 = SafeNormalizeQuat(VectorSingle(currXf.rotation));
+        if(Vector4Dot(q0, q1).x < 0.0f)
+            q1 = -q1;
+        const VectorSingle tVec(alpha);
+        const VectorSingle pos = Lerp(VectorSingle(prevXf.position), VectorSingle(currXf.position), tVec);
+        const VectorSingle rot = SafeNormalizeQuat(Lerp(q0, q1, tVec));
+        return Transform3D(pos, rot);
+    }
+
+    public void registerNamedEntity(in Name tag, in EntityID entity){
+        if(tag != s_NameNone && entity.valid())
+            this.m_namedEntities.insert_or_assign(tag, entity);
+    }
+
+    public void unregisterNamedEntity(in Name tag){
+        if(tag != s_NameNone)
+            this.m_namedEntities.erase(tag);
+    }
+
+    public EntityID findNamedEntity(in Name tag)const{
+        if(tag == s_NameNone)
+            return s_InvalidEntityId;
+        const auto found = this.m_namedEntities.find(tag);
+        if(found == this.m_namedEntities.end())
+            return s_InvalidEntityId;
+        return found.value();
+    }
+
+    public EcsRayCastHit rayCastClosest(in RayCastInput input)const{
+        EcsRayCastHit outHit;
+        outHit.hit = this.m_physicsWorld.rayCastClosest(input);
+        if(outHit.hit.hit)
+            outHit.entity = this.entityForShape(outHit.hit.shapeId);
+        return outHit;
+    }
+
+    public void rayCastAll(in RayCastInput input, mut Vector<EcsRayCastHit> outHits)const{
+        outHits.clear();
+        Vector<RayCastHit> rawHits;
+        this.m_physicsWorld.rayCastAll(input, rawHits);
+        outHits.reserve(rawHits.size());
+        for(usize i = 0u; i < rawHits.size(); ++i){
+            EcsRayCastHit entry;
+            entry.hit = rawHits[i];
+            entry.entity = this.entityForShape(rawHits[i].shapeId);
+            outHits.push_back(entry);
+        }
+    }
+
+    public EcsShapeCastHit shapeCastClosest(in ShapeProxy queryProxy, in ShapeCastInput input)const{
+        EcsShapeCastHit outHit;
+        outHit.hit = this.m_physicsWorld.shapeCastClosest(queryProxy, input);
+        if(outHit.hit.hit)
+            outHit.entity = this.entityForShape(outHit.hit.shapeId);
+        return outHit;
+    }
+
+    public void shapeCastAll(in ShapeProxy queryProxy, in ShapeCastInput input, mut Vector<EcsShapeCastHit> outHits)const{
+        outHits.clear();
+        Vector<ShapeCastHit> rawHits;
+        this.m_physicsWorld.shapeCastAll(queryProxy, input, rawHits);
+        outHits.reserve(rawHits.size());
+        for(usize i = 0u; i < rawHits.size(); ++i){
+            EcsShapeCastHit entry;
+            entry.hit = rawHits[i];
+            entry.entity = this.entityForShape(rawHits[i].shapeId);
+            outHits.push_back(entry);
+        }
+    }
+
+    public void overlapAabb(in Aabb3D queryBox, in Filter filter, in b8 hitSensors, mut Vector<EntityID> outEntities)const{
+        outEntities.clear();
+        Vector<ShapeId> rawShapes;
+        this.m_physicsWorld.overlapAabb(queryBox, filter, hitSensors, rawShapes);
+        outEntities.reserve(rawShapes.size());
+        for(usize i = 0u; i < rawShapes.size(); ++i){
+            const EntityID ent = this.entityForShape(rawShapes[i]);
+            if(!ent.valid())
+                continue;
+            b8 seen = false;
+            for(usize j = 0u; j < outEntities.size(); ++j){
+                if(outEntities[j] == ent){
+                    seen = true;
+                    break;
+                }
+            }
+            if(!seen)
+                outEntities.push_back(ent);
+        }
+    }
+
+    public void overlapPoint(in VectorSingle worldPoint, in Filter filter, in b8 hitSensors, mut Vector<EntityID> outEntities)const{
+        outEntities.clear();
+        Vector<ShapeId> rawShapes;
+        this.m_physicsWorld.overlapPoint(worldPoint, filter, hitSensors, rawShapes);
+        outEntities.reserve(rawShapes.size());
+        for(usize i = 0u; i < rawShapes.size(); ++i){
+            const EntityID ent = this.entityForShape(rawShapes[i]);
+            if(!ent.valid())
+                continue;
+            b8 seen = false;
+            for(usize j = 0u; j < outEntities.size(); ++j){
+                if(outEntities[j] == ent){
+                    seen = true;
+                    break;
+                }
+            }
+            if(!seen)
+                outEntities.push_back(ent);
+        }
+    }
+
+    public b8 applyForce(in EntityID entity, in VectorSingle force, in b8 wake){
+        const auto found = this.m_entityBodies.find(entity);
+        if(found == this.m_entityBodies.end())
+            return false;
+        return this.m_physicsWorld.applyForce(found.value(), force, wake);
+    }
+
+    public b8 applyForceAtPoint(in EntityID entity, in VectorSingle force, in VectorSingle worldPoint, in b8 wake){
+        const auto found = this.m_entityBodies.find(entity);
+        if(found == this.m_entityBodies.end())
+            return false;
+        return this.m_physicsWorld.applyForceAtPoint(found.value(), force, worldPoint, wake);
+    }
+
+    public b8 applyTorque(in EntityID entity, in VectorSingle torque, in b8 wake){
+        const auto found = this.m_entityBodies.find(entity);
+        if(found == this.m_entityBodies.end())
+            return false;
+        return this.m_physicsWorld.applyTorque(found.value(), torque, wake);
+    }
+
+    public b8 applyLinearImpulse(in EntityID entity, in VectorSingle impulse, in b8 wake){
+        const auto found = this.m_entityBodies.find(entity);
+        if(found == this.m_entityBodies.end())
+            return false;
+        return this.m_physicsWorld.applyLinearImpulse(found.value(), impulse, wake);
+    }
+
+    public b8 applyLinearImpulseAtPoint(in EntityID entity, in VectorSingle impulse, in VectorSingle worldPoint, in b8 wake){
+        const auto found = this.m_entityBodies.find(entity);
+        if(found == this.m_entityBodies.end())
+            return false;
+        return this.m_physicsWorld.applyLinearImpulseAtPoint(found.value(), impulse, worldPoint, wake);
+    }
+
+    public b8 applyAngularImpulse(in EntityID entity, in VectorSingle impulse, in b8 wake){
+        const auto found = this.m_entityBodies.find(entity);
+        if(found == this.m_entityBodies.end())
+            return false;
+        return this.m_physicsWorld.applyAngularImpulse(found.value(), impulse, wake);
+    }
+
+    public void explode(in ExplosionDef def){
+        this.m_physicsWorld.explode(def);
+    }
+
     public b8 setKinematicTarget(in EntityID entity, in Transform3D targetTransform, in f32 dt){
         const auto found = this.m_entityBodies.find(entity);
         if(found == this.m_entityBodies.end())
@@ -169,14 +369,20 @@ class PhysicsSystem{
         ResolvePhysicsConfigSettings(this.m_world, this.m_physicsWorld, fixedDt, subStepCount, maxSubStepsPerFrame, paused);
 
         SyncEcsEntitiesToPhysicsWorld(
+            this.m_assetManager,
             this.m_world,
             this.m_physicsWorld,
-            this.m_assetManager,
             this.m_entityBodies,
             this.m_entityShapes,
             this.m_entityJoints,
             this.m_bodyIndexToEntity,
-            this.m_shapeIndexToEntity
+            this.m_shapeIndexToEntity,
+            this.m_jointIndexToEntity,
+            this.m_namedEntities,
+            this.m_syncedBodyPoses,
+            this.m_syncedColliderScales,
+            this.m_prevBodyTransforms,
+            this.m_currBodyTransforms
         );
 
         if(paused || !IsFinite(delta) || delta <= 0.0f)
@@ -193,6 +399,7 @@ class PhysicsSystem{
             else
                 this.m_accumulator = 0.0f;
 
+            SnapshotEcsBodyTransforms(this.m_physicsWorld, this.m_entityBodies, this.m_prevBodyTransforms);
             ApplyKinematicTargetsFromEcs(this.m_world, this.m_physicsWorld, fixedDt);
 
             const Timer stepStart = TimerNow();
@@ -204,8 +411,11 @@ class PhysicsSystem{
             ++stepsExecuted;
         }
 
-        if(stepsExecuted > 0u)
+        if(stepsExecuted > 0u){
+            SnapshotEcsBodyTransforms(this.m_physicsWorld, this.m_entityBodies, this.m_currBodyTransforms);
             WriteBackPhysicsTransformsToEcs(this.m_world, this.m_physicsWorld);
+        }
+        this.m_interpolationAlpha = Clamp(this.m_accumulator / fixedDt, 0.0f, 1.0f);
 
         return Expected<void, CpuTaskAdmissionError>();
     }

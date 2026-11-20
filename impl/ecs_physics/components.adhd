@@ -10,6 +10,22 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[arena, component("physics_parent")]
+class PhysicsParentComponent{
+    public EntityID parent = s_InvalidEntityId;
+    public b8 inheritScale = true;
+}
+
+class EcsRayCastHit{
+    public RayCastHit hit;
+    public EntityID entity = s_InvalidEntityId;
+}
+
+class EcsShapeCastHit{
+    public ShapeCastHit hit;
+    public EntityID entity = s_InvalidEntityId;
+}
+
 [arena, component("rigid_body")]
 class RigidBodyComponent{
     public BodyType type = BodyType::Dynamic;
@@ -20,6 +36,13 @@ class RigidBodyComponent{
     public f32 gravityScale = 1.0f;
     public f32 sleepThreshold = s_DefaultSleepThreshold;
     public u32 motionLocks = 0u;
+    public u64 userData = 0u;
+    public b8 useCustomMass = false;
+    public f32 customMass = 1.0f;
+    public f32x4 customCenterOfMass(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 customInertiaDiag(1.0f, 1.0f, 1.0f, 0.0f);
+    public f32x4 customInertiaOffDiag(0.0f, 0.0f, 0.0f, 0.0f);
+    public Name entityTag = s_NameNone;
     public b8 enableSleep = true;
     public b8 isAwake = true;
     public b8 isBullet = false;
@@ -48,6 +71,7 @@ class ColliderShapeEntry{
     public u32 categoryBits = 0x00000001u;
     public u32 maskBits = u32.max;
     public i32 groupIndex = 0;
+    public u64 userData = 0u;
     public b8 isBox = true;
     public b8 isSensor = false;
     public b8 enableContactEvents = false;
@@ -78,6 +102,8 @@ class ColliderComponent{
     public u32 categoryBits = 0x00000001u;
     public u32 maskBits = u32.max;
     public i32 groupIndex = 0;
+    public u64 userData = 0u;
+    public Name entityTag = s_NameNone;
     public b8 isBox = true;
     public b8 isSensor = false;
     public b8 enableContactEvents = false;
@@ -100,6 +126,9 @@ class ColliderComponent{
 class JointComponent{
     public EntityID bodyEntityA;
     public EntityID bodyEntityB;
+    public Name bodyEntityNameA = s_NameNone;
+    public Name bodyEntityNameB = s_NameNone;
+    public u64 userData = 0u;
     public JointType type = JointType::Distance;
     public f32x4 localAnchorA(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 localAnchorB(0.0f, 0.0f, 0.0f, 0.0f);
@@ -150,7 +179,7 @@ class PhysicsWorldConfigComponent{
     public f32 gpuWorkloadFraction = s_DefaultGpuWorkloadFraction;
     public b8 enableSleep = true;
     public b8 enableContinuous = true;
-    public b8 enableContactSoftening = true;
+    public b8 enableContactSoftening = false;
     public b8 enableWarmStarting = true;
     public b8 paused = false;
     public b8 dirty = true;

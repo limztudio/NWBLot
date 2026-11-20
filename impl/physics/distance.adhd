@@ -1102,6 +1102,113 @@ LocalRayHit ShapeCastMesh(
     return best;
 }
 
+TimeOfImpactOutput ComputeMeshTimeOfImpact(
+    in ShapeProxy proxyA,
+    in Sweep3D sweepA,
+    in MeshShape meshB,
+    in Sweep3D sweepB,
+    in f32 tMax
+){
+    TimeOfImpactOutput bestOut;
+    if(meshB.nodes.empty() || meshB.triangles.empty() || proxyA.points.empty() || tMax <= 0.0f)
+        return bestOut;
+
+    VectorSingle pMin(s_MaxF32);
+    VectorSingle pMax(-s_MaxF32);
+    for(usize i = 0u; i < proxyA.points.size(); ++i){
+        const f32x3u pt = proxyA.points[i];
+        const VectorSingle pv(pt.x, pt.y, pt.z, 0.0f);
+        pMin = Min(pMin, pv);
+        pMax = Max(pMax, pv);
+    }
+
+    const f32 angA = ComputeSweepAngularAngle(VectorSingle(sweepA.q0), VectorSingle(sweepA.q1));
+    const f32 angB = ComputeSweepAngularAngle(VectorSingle(sweepB.q0), VectorSingle(sweepB.q1));
+    const f32 radA = ComputeProxyBoundingRadius(proxyA, VectorSingle(sweepA.localCenter));
+    const Aabb3D meshLocalBox = meshB.localAabb();
+    VectorSingle meshExt(0.0f);
+    for(u32 mask = 0u; mask < 8u; ++mask){
+        f32 cx = meshLocalBox.lowerBound.x;
+        f32 cy = meshLocalBox.lowerBound.y;
+        f32 cz = meshLocalBox.lowerBound.z;
+        if((mask & 1u) != 0u) cx = meshLocalBox.upperBound.x;
+        if((mask & 2u) != 0u) cy = meshLocalBox.upperBound.y;
+        if((mask & 4u) != 0u) cz = meshLocalBox.upperBound.z;
+        meshExt = Max(meshExt, Abs(VectorSingle(cx, cy, cz, 0.0f) - VectorSingle(sweepB.localCenter)));
+    }
+    const f32 meshRad = Vector3Length(meshExt).x;
+
+    VectorSingle queryMin(s_MaxF32);
+    VectorSingle queryMax(-s_MaxF32);
+    Array<f32, 3u> sampleTs;
+    sampleTs[0u] = 0.0f;
+    sampleTs[1u] = 0.5f * tMax;
+    sampleTs[2u] = tMax;
+    for(usize si = 0u; si < 3u; ++si){
+        const f32 t = sampleTs[si];
+        const Transform3D xfA = EvalSweepTransform(sweepA, t);
+        const Transform3D xfB = EvalSweepTransform(sweepB, t);
+        const Transform3D relXf = RelativeTransform(xfB, xfA);
+        for(u32 mask = 0u; mask < 8u; ++mask){
+            f32 cx = pMin.x;
+            f32 cy = pMin.y;
+            f32 cz = pMin.z;
+            if((mask & 1u) != 0u) cx = pMax.x;
+            if((mask & 2u) != 0u) cy = pMax.y;
+            if((mask & 4u) != 0u) cz = pMax.z;
+            const VectorSingle lp = TransformPoint(relXf, VectorSingle(cx, cy, cz, 0.0f));
+            queryMin = Min(queryMin, lp);
+            queryMax = Max(queryMax, lp);
+        }
+    }
+
+    const f32 arcPad = angA * radA * 0.25f + angB * meshRad * 0.25f + proxyA.radius + meshB.radius() + s_LinearSlop;
+    const VectorSingle padVec(arcPad, arcPad, arcPad, 0.0f);
+    const Aabb3D queryBox(queryMin - padVec, queryMax + padVec);
+    const f32 meshRadius = meshB.radius();
+
+    f32 curMax = tMax;
+    Vector<u32> stack;
+    stack.reserve(64u);
+    stack.push_back(0u);
+    while(!stack.empty()){
+        const u32 nodeIdx = stack[stack.size() - 1u];
+        stack.pop_back();
+        in MeshBvhNode node = meshB.nodes[nodeIdx];
+        if(!AabbOverlaps(node.aabb(), queryBox))
+            continue;
+
+        if(node.isLeaf()){
+            const u32 firstTri = node.leftOrFirst();
+            const u32 endTri = firstTri + node.rightOrCount();
+            for(u32 ti = firstTri; ti < endTri; ++ti){
+                in MeshTriangle tri = meshB.triangles[ti];
+                const VectorSingle tv0(tri.v0.x, tri.v0.y, tri.v0.z, 0.0f);
+                const VectorSingle tv1(tri.v1.x, tri.v1.y, tri.v1.z, 0.0f);
+                const VectorSingle tv2(tri.v2.x, tri.v2.y, tri.v2.z, 0.0f);
+                if(!AabbOverlaps(Aabb3D(Min(tv0, Min(tv1, tv2)), Max(tv0, Max(tv1, tv2))), queryBox))
+                    continue;
+                const ShapeProxy triProxy = MakeTriangleProxy(tv0, tv1, tv2, meshRadius);
+                const TimeOfImpactOutput toi = ComputeTimeOfImpact(proxyA, sweepA, triProxy, sweepB, curMax);
+                if(toi.hit()){
+                    if(!toi.initialOverlap() && toi.fraction() < curMax){
+                        curMax = toi.fraction();
+                        bestOut = toi;
+                    }
+                    else if(!bestOut.hit()){
+                        bestOut = toi;
+                    }
+                }
+            }
+        }
+        else{
+            stack.push_back(node.leftOrFirst());
+            stack.push_back(node.rightOrCount());
+        }
+    }
+    return bestOut;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

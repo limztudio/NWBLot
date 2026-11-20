@@ -636,6 +636,8 @@ Manifold CollideShapePair(
                 return FlipManifoldNormalAndAnchors(CollideHullAndMesh(hullShapes[shapeB.geometryIndex], xfB, meshA, xfA, maxDistance));
             return Manifold();
         }
+        if(shapeB.geometryIndex < meshShapes.size())
+            return CollideMeshes(meshA, xfA, meshShapes[shapeB.geometryIndex], xfB, maxDistance);
         return Manifold();
     }
     if(shapeA.geometryIndex >= hullShapes.size())

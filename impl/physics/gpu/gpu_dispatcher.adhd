@@ -32,10 +32,12 @@ u32 PackGpuShapeFlags(in Shape shape, in Body body, in Vector<HullShape> hullSha
         flags |= s_GpuShapeFlagIsBox;
     if((cast<u32>(shape.flags) & cast<u32>(ShapeFlags::IsSensor)) != 0u)
         flags |= s_GpuShapeFlagSensor;
-    if(body.type == BodyType::Dynamic && body.setIndex == s_AwakeSetIndex)
+    if(body.type == BodyType::Dynamic)
         flags |= s_GpuShapeFlagDynamicBody;
-    else if(body.type == BodyType::Kinematic && body.setIndex == s_AwakeSetIndex)
+    else if(body.type == BodyType::Kinematic)
         flags |= s_GpuShapeFlagKinematicBody;
+    if(body.setIndex == s_AwakeSetIndex)
+        flags |= s_GpuShapeFlagAwakeBody;
     return flags;
 }
 
@@ -2037,16 +2039,51 @@ class PhysicsGpuDispatcher{
                             this.m_cachedHullData.push_back(f32x4(hull.vertices[i].x, hull.vertices[i].y, hull.vertices[i].z, 0.0f));
                         for(u32 i = 0u; i < fCount; ++i)
                             this.m_cachedHullData.push_back(hull.facePlanes[i].normalOffset);
+
+                        Vector<u32> uniqueEdges;
+                        const usize heCount = hull.halfEdges.size();
+                        uniqueEdges.reserve(heCount / 2u);
+                        for(usize ei = 0u; ei < heCount; ++ei){
+                            in HalfEdge he = hull.halfEdges[ei];
+                            const usize twinIdx = cast<usize>(he.twin);
+                            if(twinIdx < heCount && ei < twinIdx && cast<usize>(he.next) < heCount){
+                                in HalfEdge nextHe = hull.halfEdges[he.next];
+                                in HalfEdge twinHe = hull.halfEdges[twinIdx];
+                                const u32 v0 = cast<u32>(he.tail);
+                                const u32 v1 = cast<u32>(nextHe.tail);
+                                const u32 f0 = cast<u32>(he.face);
+                                const u32 f1 = cast<u32>(twinHe.face);
+                                if(v0 < vCount && v1 < vCount && f0 < fCount && f1 < fCount && v0 < 256u && v1 < 256u && f0 < 256u && f1 < 256u){
+                                    const u32 packed = (v0 & 0xffu) | ((v1 & 0xffu) << 8u) | ((f0 & 0xffu) << 16u) | ((f1 & 0xffu) << 24u);
+                                    uniqueEdges.push_back(packed);
+                                }
+                            }
+                        }
+                        const u32 eCount = cast<u32>(uniqueEdges.size());
+                        for(usize wi = 0u; wi < uniqueEdges.size(); wi += 4u){
+                            const u32 w0 = uniqueEdges[wi];
+                            u32 w1 = 0u;
+                            u32 w2 = 0u;
+                            u32 w3 = 0u;
+                            if(wi + 1u < uniqueEdges.size())
+                                w1 = uniqueEdges[wi + 1u];
+                            if(wi + 2u < uniqueEdges.size())
+                                w2 = uniqueEdges[wi + 2u];
+                            if(wi + 3u < uniqueEdges.size())
+                                w3 = uniqueEdges[wi + 3u];
+                            this.m_cachedHullData.push_back(f32x4(bit_cast<f32>(w0), bit_cast<f32>(w1), bit_cast<f32>(w2), bit_cast<f32>(w3)));
+                        }
                         this.m_shapeDataOffset[sId] = vOffset;
-                        this.m_shapeDataMeta[sId] = (vCount & 0xffffu) | ((fCount & 0xffffu) << 16u);
+                        this.m_shapeDataMeta[sId] = (vCount & 0xffu) | ((fCount & 0xffu) << 8u) | ((eCount & 0xffffu) << 16u);
                     }
                 }
                 else if(shape.type == ShapeType::Mesh){
                     in MeshShape mesh = world.m_meshShapes[shape.geometryIndex];
-                    if(!mesh.nodes.empty() && !mesh.triangles.empty()){
+                    const u32 bvhCount = mesh.bvhNodeCount();
+                    if(bvhCount > 0u && !mesh.triangles.empty()){
                         const u32 nodeBase = cast<u32>(this.m_cachedMeshNodes.size() / 2u);
                         const u32 triBase = cast<u32>(this.m_cachedMeshTris.size() / 3u);
-                        for(usize ni = 0u; ni < mesh.nodes.size(); ++ni){
+                        for(u32 ni = 0u; ni < bvhCount; ++ni){
                             in MeshBvhNode node = mesh.nodes[ni];
                             const Aabb3D nodeAabb = node.aabb();
                             u32 metaBits = node.rightOrCount() & 0x7fffffffu;
@@ -2055,10 +2092,14 @@ class PhysicsGpuDispatcher{
                             this.m_cachedMeshNodes.push_back(f32x4(nodeAabb.lowerBound.x, nodeAabb.lowerBound.y, nodeAabb.lowerBound.z, bit_cast<f32>(node.leftOrFirst())));
                             this.m_cachedMeshNodes.push_back(f32x4(nodeAabb.upperBound.x, nodeAabb.upperBound.y, nodeAabb.upperBound.z, bit_cast<f32>(metaBits)));
                         }
+                        f32 isClosedF = 0.0f;
+                        if(mesh.isClosed())
+                            isClosedF = 1.0f;
                         for(usize ti = 0u; ti < mesh.triangles.size(); ++ti){
                             in MeshTriangle tri = mesh.triangles[ti];
-                            this.m_cachedMeshTris.push_back(f32x4(tri.v0.x, tri.v0.y, tri.v0.z, tri.normal.x));
-                            this.m_cachedMeshTris.push_back(f32x4(tri.v1.x, tri.v1.y, tri.v1.z, tri.normal.y));
+                            const u32 edgeFlags = cast<u32>(mesh.triangleEdgeFlag(cast<u32>(ti)));
+                            this.m_cachedMeshTris.push_back(f32x4(tri.v0.x, tri.v0.y, tri.v0.z, bit_cast<f32>(edgeFlags)));
+                            this.m_cachedMeshTris.push_back(f32x4(tri.v1.x, tri.v1.y, tri.v1.z, isClosedF));
                             this.m_cachedMeshTris.push_back(f32x4(tri.v2.x, tri.v2.y, tri.v2.z, tri.normal.z));
                         }
                         this.m_shapeDataOffset[sId] = nodeBase;
@@ -2406,17 +2447,14 @@ class PhysicsGpuDispatcher{
 
                 const ShapeProxy proxyA = MakeShapeProxyFromShape(sA, world.m_hullShapes, world.m_meshShapes);
                 if(sB.type == ShapeType::Mesh){
-                    const Transform3D startXfA = EvalSweepTransform(sweepA, 0.0f);
-                    const Transform3D endXfA = EvalSweepTransform(sweepA, 1.0f);
-                    const VectorSingle relDisp = VectorSingle(VectorSingle(endXfA.position) - VectorSingle(startXfA.position), 0.0f) - VectorSingle(VectorSingle(sweepB.c1) - VectorSingle(sweepB.c0), 0.0f);
-                    const LocalRayHit mHit = ShapeCastMesh(proxyA, startXfA, relDisp, world.m_meshShapes[sB.geometryIndex], simB.transform, bestT[bi]);
-                    if(mHit.hit() && mHit.fraction() > 1.0e-5f && mHit.fraction() < bestT[bi]){
+                    const TimeOfImpactOutput toi = ComputeMeshTimeOfImpact(proxyA, sweepA, world.m_meshShapes[sB.geometryIndex], sweepB, bestT[bi]);
+                    if(toi.hit() && !toi.initialOverlap() && toi.fraction() > 1.0e-5f && toi.fraction() < bestT[bi]){
                         foundToi[bi] = true;
-                        bestT[bi] = mHit.fraction();
+                        bestT[bi] = toi.fraction();
                         bestShapeA[bi] = shapeIdxA;
                         bestShapeB[bi] = shapeIdxB;
-                        bestNormal[bi] = f32x4(SafeNormalizeVec3(mHit.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
-                        bestPoint[bi] = f32x4(mHit.point(), 0.0f);
+                        bestNormal[bi] = f32x4(SafeNormalizeVec3(toi.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
+                        bestPoint[bi] = f32x4(toi.point(), 0.0f);
                     }
                 }
                 else{
@@ -2588,6 +2626,7 @@ class PhysicsGpuDispatcher{
         world.m_contactHitEvents.clear();
         world.m_sensorBeginEvents.clear();
         world.m_sensorEndEvents.clear();
+        world.m_jointBreakEvents.clear();
 
         const b8 useGpuCollision = (world.m_gpuWorkloadFraction >= 1.0f);
         u32 pairCount = 0u;

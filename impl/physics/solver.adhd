@@ -379,10 +379,14 @@ void ApplyContactManifoldAndEvents(mut PhysicsWorld world, in u32 cId, in Manifo
     Manifold newM = evaluatedManifold;
     MatchManifoldImpulses(oldM, newM, world.m_enableWarmStarting);
     const b8 isSensor = (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u;
-    if(!isSensor && newM.pointCount() > 0u && world.m_preSolveCallback.has_value()){
-        in Shape sA = world.m_shapes[c.shapeIdA];
-        in Shape sB = world.m_shapes[c.shapeIdB];
-        if(sA.enablePreSolveEvents() || sB.enablePreSolveEvents()){
+    in Shape sA = world.m_shapes[c.shapeIdA];
+    in Shape sB = world.m_shapes[c.shapeIdB];
+    if(!isSensor){
+        c.friction = CombineMaterialFriction(sA.material.friction, sB.material.friction);
+        c.restitution = CombineMaterialRestitution(sA.material.restitution, sB.material.restitution);
+        c.rollingResistance = CombineMaterialRollingResistance(sA.material.rollingResistance, sB.material.rollingResistance);
+        c.tangentSpeed = sB.material.tangentSpeed - sA.material.tangentSpeed;
+        if(newM.pointCount() > 0u && world.m_preSolveCallback.has_value() && (sA.enablePreSolveEvents() || sB.enablePreSolveEvents())){
             PreSolveContext ctx;
             ctx.shapeIdA = world.makeShapeId(c.shapeIdA);
             ctx.shapeIdB = world.makeShapeId(c.shapeIdB);
@@ -397,6 +401,9 @@ void ApplyContactManifoldAndEvents(mut PhysicsWorld world, in u32 cId, in Manifo
                 newM.setPointCount(0u);
             }
             else{
+                const VectorSingle ctxN = VectorSingle(ctx.normal);
+                if(IsFiniteVec3(ctxN) && Vector3LengthSq(VectorSingle(ctxN, 0.0f)).x > s_NormalizeEpsilonSq)
+                    newM.setNormal(SafeNormalizeVec3(ctxN, newM.normal()));
                 if(IsFinite(ctx.friction) && ctx.friction >= 0.0f)
                     c.friction = ctx.friction;
                 if(IsFinite(ctx.restitution) && ctx.restitution >= 0.0f)
@@ -434,6 +441,16 @@ void ApplyContactManifoldAndEvents(mut PhysicsWorld world, in u32 cId, in Manifo
 
     if(!isSensor){
         if(ptCount > 0u){
+            if(isTouching){
+                const u32 bodyIdA = c.edges[0u].bodyId;
+                const u32 bodyIdB = c.edges[1u].bodyId;
+                const b8 awakeA = world.m_bodies[bodyIdA].setIndex == s_AwakeSetIndex;
+                const b8 awakeB = world.m_bodies[bodyIdB].setIndex == s_AwakeSetIndex;
+                if(awakeA && world.m_bodies[bodyIdB].setIndex >= 3u)
+                    WakeBodyWithGraph(world.m_graph, world.m_bodies, world.m_islands, world.m_solverSets, world.m_freeSolverSetIds, world.m_contacts, bodyIdB);
+                else if(awakeB && world.m_bodies[bodyIdA].setIndex >= 3u)
+                    WakeBodyWithGraph(world.m_graph, world.m_bodies, world.m_islands, world.m_solverSets, world.m_freeSolverSetIds, world.m_contacts, bodyIdA);
+            }
             if(c.islandId == s_NullIndex && isTouching){
                 LinkContactToIslandWithGraph(
                     world.m_graph,
@@ -1022,19 +1039,15 @@ void SolveBulletContinuousCpu(mut PhysicsWorld world, in f32 dt){
                                 const ShapeProxy proxyA = MakeShapeProxyFromShape(sA, worldRef.m_hullShapes, worldRef.m_meshShapes);
                                 if(sB.type == ShapeType::Mesh){
                                     if(sB.geometryIndex < worldRef.m_meshShapes.size()){
-                                        const Transform3D startXfA = EvalSweepTransform(sweepA, 0.0f);
-                                        const Transform3D endXfA = EvalSweepTransform(sweepA, 1.0f);
-                                        const VectorSingle relDisp = VectorSingle(VectorSingle(endXfA.position) - VectorSingle(startXfA.position), 0.0f)
-                                            - VectorSingle(VectorSingle(sweepB.c1) - VectorSingle(sweepB.c0), 0.0f);
-                                        const LocalRayHit mHit = ShapeCastMesh(proxyA, startXfA, relDisp, worldRef.m_meshShapes[sB.geometryIndex], simB.transform, bestT);
-                                        const f32 hitFrac = mHit.fraction();
-                                        if(mHit.hit() && hitFrac > 1.0e-5f && hitFrac < bestT){
+                                        const TimeOfImpactOutput toi = ComputeMeshTimeOfImpact(proxyA, sweepA, worldRef.m_meshShapes[sB.geometryIndex], sweepB, bestT);
+                                        const f32 hitFrac = toi.fraction();
+                                        if(toi.hit() && !toi.initialOverlap() && hitFrac > 1.0e-5f && hitFrac < bestT){
                                             foundToi = true;
                                             bestT = hitFrac;
                                             bestShapeIdxA = shapeIdxA;
                                             bestShapeIdxB = shapeIdxB;
-                                            bestNormal = SafeNormalizeVec3(mHit.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-                                            bestPoint = mHit.point();
+                                            bestNormal = SafeNormalizeVec3(toi.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                                            bestPoint = toi.point();
                                         }
                                     }
                                 }
@@ -1410,8 +1423,17 @@ void StoreJointImpulsesAndCollectBroken(
     const f32 peakTorque = Max(Vector3Length(joint.lastConstraintTorque()).x, jc.maxAngularImpulseMag() * invH);
     const b8 brokeForce = joint.breakForce > 0.0f && peakForce > joint.breakForce;
     const b8 brokeTorque = joint.breakTorque > 0.0f && peakTorque > joint.breakTorque;
-    if(brokeForce || brokeTorque)
+    if(brokeForce || brokeTorque){
+        JointBreakEvent ev;
+        ev.jointId = world.makeJointId(jc.jointId);
+        ev.bodyIdA = world.makeBodyId(joint.edges[0u].bodyId);
+        ev.bodyIdB = world.makeBodyId(joint.edges[1u].bodyId);
+        ev.userData = joint.userData;
+        ev.peakForce = peakForce;
+        ev.peakTorque = peakTorque;
+        world.m_jointBreakEvents.push_back(ev);
         outBrokenJointIds.push_back(jc.jointId);
+    }
 }
 
 void RecordWorldStepStats(
@@ -2591,6 +2613,7 @@ void SolveStepCpu(mut PhysicsWorld world, in f32 dt, in u32 subStepCount, mut Cp
     world.m_contactHitEvents.clear();
     world.m_sensorBeginEvents.clear();
     world.m_sensorEndEvents.clear();
+    world.m_jointBreakEvents.clear();
     world.flushDirtyBodyMasses();
 
     WakeJointConnectedIslands(world);

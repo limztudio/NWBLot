@@ -131,19 +131,38 @@ class MeshShape{
     public Vector<MeshTriangle> triangles;
     public Vector<MeshBvhNode> nodes;
     public f32x4 localAabbMinRadius(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 localAabbMax(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x3_u32 localAabbMaxMeta(0.0f, 0.0f, 0.0f, 0u);
 
     public f32 radius()const{
         return this.localAabbMinRadius.w;
     }
 
+    public b8 isClosed()const{
+        return (this.localAabbMaxMeta.w & 0x80000000u) != 0u;
+    }
+
+    public u32 bvhNodeCount()const{
+        return this.localAabbMaxMeta.w & 0x7fffffffu;
+    }
+
+    public u8 triangleEdgeFlag(in u32 triIdx)const{
+        const u32 bvhCount = this.bvhNodeCount();
+        const usize slot = cast<usize>(bvhCount + (triIdx >> 3u));
+        if(slot >= this.nodes.size())
+            return 0u;
+        const u32 shift = (triIdx & 3u) * 8u;
+        if(((triIdx >> 2u) & 1u) == 0u)
+            return cast<u8>((this.nodes[slot].aabbMinLeft.w >> shift) & 0xffu);
+        return cast<u8>((this.nodes[slot].aabbMaxRight.w >> shift) & 0xffu);
+    }
+
     public Aabb3D localAabb()const{
-        return Aabb3D(VectorSingle(this.localAabbMinRadius, 0.0f), VectorSingle(this.localAabbMax, 0.0f));
+        return Aabb3D(VectorSingle(this.localAabbMinRadius, 0.0f), VectorSingle(this.localAabbMaxMeta, 0.0f));
     }
 
     public void setLocalAabb(in Aabb3D box){
         this.localAabbMinRadius = f32x4(VectorSingle(box.lowerBound), this.localAabbMinRadius.w);
-        this.localAabbMax = f32x4(VectorSingle(box.upperBound), 0.0f);
+        this.localAabbMaxMeta = f32x3_u32(box.upperBound.x, box.upperBound.y, box.upperBound.z, this.localAabbMaxMeta.w);
     }
 }
 
@@ -515,6 +534,13 @@ u32 BuildMeshBvhRecursive(mut MeshShape mesh, in Span<Aabb3D> triAabbs, mut Vect
     return nodeIdx;
 }
 
+class MeshEdgeAdjacency{
+    public Array<u32, 2u> triIdx;
+    public Array<u8, 2u> edgeIdx;
+    public Array<u8, 2u> forward;
+    public u32 count = 0u;
+}
+
 Expected<MeshShape> MakeMeshShape(in Span<f32x4> vertices, in Span<u32> indices, in f32 radius){
     if(vertices.empty() || indices.empty() || (indices.size() % 3u) != 0u || !IsFinite(radius) || radius < 0.0f)
         return MakeUnexpected(Failure());
@@ -526,8 +552,10 @@ Expected<MeshShape> MakeMeshShape(in Span<f32x4> vertices, in Span<u32> indices,
 
     Vector<MeshTriangle> rawTriangles;
     Vector<Aabb3D> rawTriAabbs;
+    Vector<u32x4> rawTriIndices;
     rawTriangles.reserve(indices.size() / 3u);
     rawTriAabbs.reserve(indices.size() / 3u);
+    rawTriIndices.reserve(indices.size() / 3u);
     for(usize i = 0u; i < indices.size(); i += 3u){
         const u32 i0 = indices[i];
         const u32 i1 = indices[i + 1u];
@@ -549,10 +577,118 @@ Expected<MeshShape> MakeMeshShape(in Span<f32x4> vertices, in Span<u32> indices,
         tri.normal = PackVec3U(SafeNormalizeVec3(cr, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)));
         rawTriangles.push_back(tri);
         rawTriAabbs.push_back(Aabb3D(Min(p0, Min(p1, p2)), Max(p0, Max(p1, p2))));
+        rawTriIndices.push_back(u32x4(i0, i1, i2, 0u));
     }
 
     if(rawTriangles.empty())
         return MakeUnexpected(Failure());
+
+    HashMap<u64, MeshEdgeAdjacency> edgeMap;
+    edgeMap.reserve(rawTriangles.size() * 2u);
+    for(usize ti = 0u; ti < rawTriangles.size(); ++ti){
+        const u32x4 iv = rawTriIndices[ti];
+        Array<u32, 3u> vIds;
+        vIds[0u] = iv.x;
+        vIds[1u] = iv.y;
+        vIds[2u] = iv.z;
+        for(u32 e = 0u; e < 3u; ++e){
+            const u32 a = vIds[e];
+            const u32 b = vIds[(e + 1u) % 3u];
+            if(a == b)
+                continue;
+            const u32 lo = Min(a, b);
+            const u32 hi = Max(a, b);
+            const u64 key = (cast<u64>(lo) << 32u) | cast<u64>(hi);
+            const auto foundEdge = edgeMap.find(key);
+            if(foundEdge == edgeMap.end()){
+                MeshEdgeAdjacency rec;
+                rec.triIdx[0u] = cast<u32>(ti);
+                rec.edgeIdx[0u] = cast<u8>(e);
+                if(a < b)
+                    rec.forward[0u] = 1u;
+                else
+                    rec.forward[0u] = 0u;
+                rec.count = 1u;
+                edgeMap.emplace(key, rec);
+            }
+            else{
+                mut MeshEdgeAdjacency rec = foundEdge.value();
+                if(rec.count < 2u){
+                    rec.triIdx[rec.count] = cast<u32>(ti);
+                    rec.edgeIdx[rec.count] = cast<u8>(e);
+                    if(a < b)
+                        rec.forward[rec.count] = 1u;
+                    else
+                        rec.forward[rec.count] = 0u;
+                }
+                ++rec.count;
+            }
+        }
+    }
+
+    Vector<u8> rawEdgeFlags(rawTriangles.size(), 0u);
+    b8 closedMesh = true;
+    for(in auto kv : edgeMap){
+        in MeshEdgeAdjacency rec = kv.second;
+        if(rec.count != 2u || rec.forward[0u] == rec.forward[1u]){
+            closedMesh = false;
+            continue;
+        }
+        const u32 tA = rec.triIdx[0u];
+        const u32 tB = rec.triIdx[1u];
+        const u8 eA = rec.edgeIdx[0u];
+        const u8 eB = rec.edgeIdx[1u];
+        const VectorSingle nA = Vec3FromU(rawTriangles[tA].normal);
+        const VectorSingle nB = Vec3FromU(rawTriangles[tB].normal);
+
+        const u32x4 ivA = rawTriIndices[tA];
+        u32 edgeVertA = ivA.x;
+        if(eA == 1u)
+            edgeVertA = ivA.y;
+        else if(eA == 2u)
+            edgeVertA = ivA.z;
+
+        const u32x4 ivB = rawTriIndices[tB];
+        u32 oppVertB = ivB.z;
+        if(eB == 1u)
+            oppVertB = ivB.x;
+        else if(eB == 2u)
+            oppVertB = ivB.y;
+
+        const VectorSingle pEdgeA = VectorSingle(vertices[edgeVertA]);
+        const VectorSingle pOppB = VectorSingle(vertices[oppVertB]);
+        const b8 coplanar = Vector3Dot(nA, nB).x >= 0.999f;
+        const b8 concave = Vector3Dot(nA, VectorSingle(pOppB - pEdgeA, 0.0f)).x > 1.0e-5f;
+        if(coplanar || concave){
+            rawEdgeFlags[tA] |= cast<u8>(1u << eA);
+            rawEdgeFlags[tB] |= cast<u8>(1u << eB);
+        }
+    }
+
+    Vector<u8> vertexHasSharpEdge(vertices.size(), 0u);
+    for(usize ti = 0u; ti < rawTriangles.size(); ++ti){
+        const u32x4 iv = rawTriIndices[ti];
+        const u8 ef = rawEdgeFlags[ti];
+        Array<u32, 3u> vIds;
+        vIds[0u] = iv.x;
+        vIds[1u] = iv.y;
+        vIds[2u] = iv.z;
+        for(u32 c = 0u; c < 3u; ++c){
+            const u32 ePrev = (c + 2u) % 3u;
+            const u32 eNext = c;
+            if((ef & (1u << ePrev)) == 0u || (ef & (1u << eNext)) == 0u)
+                vertexHasSharpEdge[vIds[c]] = 1u;
+        }
+    }
+    for(usize ti = 0u; ti < rawTriangles.size(); ++ti){
+        const u32x4 iv = rawTriIndices[ti];
+        if(vertexHasSharpEdge[iv.x] == 0u)
+            rawEdgeFlags[ti] |= 0x08u;
+        if(vertexHasSharpEdge[iv.y] == 0u)
+            rawEdgeFlags[ti] |= 0x10u;
+        if(vertexHasSharpEdge[iv.z] == 0u)
+            rawEdgeFlags[ti] |= 0x20u;
+    }
 
     MeshShape mesh;
     mesh.localAabbMinRadius = f32x4(0.0f, 0.0f, 0.0f, radius);
@@ -565,10 +701,28 @@ Expected<MeshShape> MakeMeshShape(in Span<f32x4> vertices, in Span<u32> indices,
 
     BuildMeshBvhRecursive(mesh, Span<Aabb3D>(rawTriAabbs), triOrder, 0u, triOrder.size());
 
+    const u32 bvhCount = cast<u32>(mesh.nodes.size());
+    u32 meta = bvhCount & 0x7fffffffu;
+    if(closedMesh)
+        meta |= 0x80000000u;
+    mesh.localAabbMaxMeta = f32x3_u32(0.0f, 0.0f, 0.0f, meta);
+
+    const usize extraFlagSlots = (triOrder.size() + 7u) >> 3u;
+    for(usize s = 0u; s < extraFlagSlots; ++s)
+        mesh.nodes.push_back(MeshBvhNode());
+
     Vector<MeshTriangle> orderedTris;
     orderedTris.reserve(mesh.triangles.size());
-    for(usize i = 0u; i < triOrder.size(); ++i)
+    for(usize i = 0u; i < triOrder.size(); ++i){
         orderedTris.push_back(mesh.triangles[triOrder[i]]);
+        const u32 flag = cast<u32>(rawEdgeFlags[triOrder[i]]);
+        const usize slotIdx = cast<usize>(bvhCount) + (i >> 3u);
+        const u32 shift = cast<u32>((i & 3u) * 8u);
+        if(((i >> 2u) & 1u) == 0u)
+            mesh.nodes[slotIdx].aabbMinLeft.w |= (flag << shift);
+        else
+            mesh.nodes[slotIdx].aabbMaxRight.w |= (flag << shift);
+    }
     mesh.triangles.swap(orderedTris);
     Aabb3D localBox = mesh.nodes[0u].aabb();
     if(radius > 0.0f)

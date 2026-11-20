@@ -37,6 +37,7 @@ class PhysicsWorld{
     public Vector<ContactHitEvent> m_contactHitEvents;
     public Vector<SensorBeginTouchEvent> m_sensorBeginEvents;
     public Vector<SensorEndTouchEvent> m_sensorEndEvents;
+    public Vector<JointBreakEvent> m_jointBreakEvents;
     public WorldStepStats m_lastStats;
     public PhysicsBackendMode m_backendMode = PhysicsBackendMode::Auto;
     public u32 m_gpuDispatchThreshold = s_DefaultGpuBodyThreshold;
@@ -88,6 +89,7 @@ class PhysicsWorld{
         this.m_contactHitEvents.clear();
         this.m_sensorBeginEvents.clear();
         this.m_sensorEndEvents.clear();
+        this.m_jointBreakEvents.clear();
         this.m_lastStats = WorldStepStats();
         this.m_customFilterCallback.reset();
         this.m_preSolveCallback.reset();
@@ -95,16 +97,164 @@ class PhysicsWorld{
         this.initDefaultSets();
     }
 
+    private void wakeAllSleepingIslands(){
+        for(u32 i = 0u; i < this.m_bodies.size(); ++i){
+            if(this.m_bodies[i].alive && this.m_bodies[i].type == BodyType::Dynamic && this.m_bodies[i].setIndex >= 3u)
+                this.wakeBody(this.makeBodyId(i));
+        }
+    }
+
+    private void wakeBodyNeighbors(in u32 bodyIdx){
+        if(bodyIdx >= this.m_bodies.size() || !this.m_bodies[bodyIdx].alive)
+            return;
+
+        Vector<u32> wakeTargets;
+        u32 cKey = this.m_bodies[bodyIdx].headContactKey;
+        while(cKey != s_NullIndex){
+            const u32 cId = DecodeContactKeyId(cKey);
+            const u32 edgeIdx = DecodeContactKeyEdge(cKey);
+            in Contact c = this.m_contacts[cId];
+            const u32 otherBody = c.edges[edgeIdx ^ 1u].bodyId;
+            if(otherBody < this.m_bodies.size() && this.m_bodies[otherBody].alive && this.m_bodies[otherBody].type == BodyType::Dynamic && this.m_bodies[otherBody].setIndex >= 3u)
+                wakeTargets.push_back(otherBody);
+            cKey = c.edges[edgeIdx].nextKey;
+        }
+
+        u32 jKey = this.m_bodies[bodyIdx].headJointKey;
+        while(jKey != s_NullIndex){
+            const u32 jId = DecodeJointKeyId(jKey);
+            const u32 edgeIdx = DecodeJointKeyEdge(jKey);
+            in Joint j = this.m_joints[jId];
+            const u32 otherBody = j.edges[edgeIdx ^ 1u].bodyId;
+            if(otherBody < this.m_bodies.size() && this.m_bodies[otherBody].alive && this.m_bodies[otherBody].type == BodyType::Dynamic && this.m_bodies[otherBody].setIndex >= 3u)
+                wakeTargets.push_back(otherBody);
+            jKey = j.edges[edgeIdx].nextKey;
+        }
+
+        for(usize wi = 0u; wi < wakeTargets.size(); ++wi)
+            this.wakeBody(this.makeBodyId(wakeTargets[wi]));
+    }
+
+    private void wakeShapeNeighbors(in u32 shapeIdx){
+        if(shapeIdx >= this.m_shapes.size() || !this.m_shapes[shapeIdx].alive())
+            return;
+        const u32 bodyIdx = this.m_shapes[shapeIdx].bodyId;
+        if(bodyIdx >= this.m_bodies.size() || !this.m_bodies[bodyIdx].alive)
+            return;
+
+        Vector<u32> wakeTargets;
+        u32 cKey = this.m_bodies[bodyIdx].headContactKey;
+        while(cKey != s_NullIndex){
+            const u32 cId = DecodeContactKeyId(cKey);
+            const u32 edgeIdx = DecodeContactKeyEdge(cKey);
+            in Contact c = this.m_contacts[cId];
+            if(c.shapeIdA == shapeIdx || c.shapeIdB == shapeIdx){
+                const u32 otherBody = c.edges[edgeIdx ^ 1u].bodyId;
+                if(otherBody < this.m_bodies.size() && this.m_bodies[otherBody].alive && this.m_bodies[otherBody].type == BodyType::Dynamic && this.m_bodies[otherBody].setIndex >= 3u)
+                    wakeTargets.push_back(otherBody);
+            }
+            cKey = c.edges[edgeIdx].nextKey;
+        }
+
+        for(usize wi = 0u; wi < wakeTargets.size(); ++wi)
+            this.wakeBody(this.makeBodyId(wakeTargets[wi]));
+    }
+
+    private void zeroShapeContactWarmStart(in u32 shapeIdx){
+        if(shapeIdx >= this.m_shapes.size() || !this.m_shapes[shapeIdx].alive())
+            return;
+        const u32 bodyIdx = this.m_shapes[shapeIdx].bodyId;
+        if(bodyIdx >= this.m_bodies.size() || !this.m_bodies[bodyIdx].alive)
+            return;
+
+        u32 cKey = this.m_bodies[bodyIdx].headContactKey;
+        while(cKey != s_NullIndex){
+            const u32 cId = DecodeContactKeyId(cKey);
+            const u32 edgeIdx = DecodeContactKeyEdge(cKey);
+            mut Contact c = this.m_contacts[cId];
+            if(c.shapeIdA == shapeIdx || c.shapeIdB == shapeIdx){
+                c.manifold.frictionImpulse = f32x2u(0.0f, 0.0f);
+                c.manifold.setTwistImpulse(0.0f);
+                c.manifold.setRollingImpulse(VectorSingle(0.0f));
+                const u32 ptCount = c.manifold.pointCount();
+                for(u32 p = 0u; p < ptCount; ++p){
+                    c.manifold.points[p].setNormalImpulse(0.0f);
+                    c.manifold.points[p].setTotalNormalImpulse(0.0f);
+                    c.manifold.setPersisted(p, false);
+                }
+            }
+            cKey = c.edges[edgeIdx].nextKey;
+        }
+    }
+
+    private void refreshShapeContactEventFlags(in u32 shapeIdx){
+        if(shapeIdx >= this.m_shapes.size() || !this.m_shapes[shapeIdx].alive())
+            return;
+        const u32 bodyIdx = this.m_shapes[shapeIdx].bodyId;
+        if(bodyIdx >= this.m_bodies.size() || !this.m_bodies[bodyIdx].alive)
+            return;
+
+        u32 cKey = this.m_bodies[bodyIdx].headContactKey;
+        while(cKey != s_NullIndex){
+            const u32 cId = DecodeContactKeyId(cKey);
+            const u32 edgeIdx = DecodeContactKeyEdge(cKey);
+            mut Contact c = this.m_contacts[cId];
+            if(c.shapeIdA == shapeIdx || c.shapeIdB == shapeIdx){
+                in Shape sA = this.m_shapes[c.shapeIdA];
+                in Shape sB = this.m_shapes[c.shapeIdB];
+                const u32 cEvtMask =
+                    cast<u32>(ContactFlags::EnableContactEvents)
+                    | cast<u32>(ContactFlags::EnableHitEvents)
+                    | cast<u32>(ContactFlags::EnableSensorEvents)
+                ;
+                c.flags &= ~cEvtMask;
+                if(sA.enableContactEvents() || sB.enableContactEvents())
+                    c.flags |= cast<u32>(ContactFlags::EnableContactEvents);
+                if(sA.enableHitEvents() || sB.enableHitEvents())
+                    c.flags |= cast<u32>(ContactFlags::EnableHitEvents);
+                if((sA.isSensor() && sA.enableSensorEvents()) || (sB.isSensor() && sB.enableSensorEvents()))
+                    c.flags |= cast<u32>(ContactFlags::EnableSensorEvents);
+            }
+            cKey = c.edges[edgeIdx].nextKey;
+        }
+    }
+
     public void setCustomFilterCallback(in CustomFilterCallback cb){ this.m_customFilterCallback = cb; }
     public void clearCustomFilterCallback(){ this.m_customFilterCallback.reset(); }
     public void setPreSolveCallback(in PreSolveCallback cb){ this.m_preSolveCallback = cb; }
     public void clearPreSolveCallback(){ this.m_preSolveCallback.reset(); }
 
-    public void setWorldDef(in WorldDef def){ this.m_def = def; }
+    public b8 setWorldDef(in WorldDef def){
+        if(
+            !IsFiniteVec3(VectorSingle(def.gravity))
+            || !IsFinite(def.restitutionThreshold)
+            || !IsFinite(def.hitEventThreshold)
+            || !IsFinite(def.contactHertz)
+            || !IsFinite(def.contactDampingRatio)
+            || !IsFinite(def.maxLinearVelocity)
+            || def.restitutionThreshold < 0.0f
+            || def.hitEventThreshold < 0.0f
+            || def.contactHertz <= 0.0f
+            || def.contactDampingRatio < 0.0f
+            || def.maxLinearVelocity <= 0.0f
+        )
+            return false;
+        const WorldDef oldDef = this.m_def;
+        this.m_def = def;
+        const VectorSingle gravDelta = VectorSingle(oldDef.gravity) - VectorSingle(def.gravity);
+        if((oldDef.enableSleep && !def.enableSleep) || Vector3LengthSq(VectorSingle(gravDelta, 0.0f)).x > 1.0e-12f)
+            this.wakeAllSleepingIslands();
+        return true;
+    }
     public in WorldDef worldDef()const{ return this.m_def; }
-    public void setGravity(in VectorSingle gravity){
-        if(IsFiniteVec3(gravity))
-            this.m_def.gravity = f32x4(gravity, 0.0f);
+    public b8 setGravity(in VectorSingle gravity){
+        if(!IsFiniteVec3(gravity))
+            return false;
+        const VectorSingle gravDelta = VectorSingle(this.m_def.gravity) - gravity;
+        this.m_def.gravity = f32x4(gravity, 0.0f);
+        if(Vector3LengthSq(VectorSingle(gravDelta, 0.0f)).x > 1.0e-12f)
+            this.wakeAllSleepingIslands();
+        return true;
     }
     public VectorSingle gravity()const{ return VectorSingle(this.m_def.gravity); }
     public void setBackendMode(in PhysicsBackendMode mode){ this.m_backendMode = mode; }
@@ -124,6 +274,7 @@ class PhysicsWorld{
     public Span<ContactHitEvent> contactHitEvents()const{ return this.m_contactHitEvents; }
     public Span<SensorBeginTouchEvent> sensorBeginEvents()const{ return this.m_sensorBeginEvents; }
     public Span<SensorEndTouchEvent> sensorEndEvents()const{ return this.m_sensorEndEvents; }
+    public Span<JointBreakEvent> jointBreakEvents()const{ return this.m_jointBreakEvents; }
 
     public u32 activeBodyCount()const{
         u32 count = 0u;
@@ -344,6 +495,7 @@ class PhysicsWorld{
             return false;
 
         const u32 idx = bodyId.index;
+        this.wakeBodyNeighbors(idx);
         while(this.m_bodies[idx].headJointKey != s_NullIndex){
             const u32 jointId = DecodeJointKeyId(this.m_bodies[idx].headJointKey);
             this.destroyJointInternal(jointId);
@@ -593,6 +745,7 @@ class PhysicsWorld{
 
         const u32 idx = shapeId.index;
         const u32 bodyIdx = this.m_shapes[idx].bodyId;
+        this.wakeShapeNeighbors(idx);
 
         if(bodyIdx < this.m_bodies.size()){
             u32 edgeKey = this.m_bodies[bodyIdx].headContactKey;
@@ -760,6 +913,7 @@ class PhysicsWorld{
         const VectorSingle normQ = SafeNormalizeQuat(rotation);
         const u32 idx = bodyId.index;
         this.wakeBody(bodyId);
+        this.wakeBodyNeighbors(idx);
         mut Body body = this.m_bodies[idx];
         mut BodySim sim = this.m_solverSets[body.setIndex].sims[body.localIndex];
         const VectorSingle prevCenter = sim.center();
@@ -771,14 +925,33 @@ class PhysicsWorld{
         sim.invInertiaWorld = RotateSymMat3(normQ, sim.invInertiaLocal);
 
         const VectorSingle displacement = VectorSingle(newCenter - prevCenter, 0.0f);
+        Vector<u32> overlapWakeTargets;
         u32 shapeIdx = body.headShapeId;
         while(shapeIdx != s_NullIndex){
             mut Shape shape = this.m_shapes[shapeIdx];
             shape.aabb = ComputeShapeWorldAabb(shape, sim.transform, this.m_hullShapes, this.m_meshShapes);
-            if(shape.proxyKey != s_NullIndex)
+            if(shape.proxyKey != s_NullIndex){
                 this.m_broadPhase.moveProxy(shape.proxyKey, shape.aabb, displacement);
+                if(body.type != BodyType::Dynamic){
+                    in PhysicsWorld worldRef = this;
+                    this.m_broadPhase.trees[s_TreeDynamic].queryAabb(
+                        shape.aabb,
+                        0xffffffffu,
+                        lambda[in worldRef, in idx, mut overlapWakeTargets](in u32 proxyId, in u32 otherShapeIdx) -> b8{
+                            if(otherShapeIdx < worldRef.m_shapes.size() && worldRef.m_shapes[otherShapeIdx].alive()){
+                                const u32 otherBody = worldRef.m_shapes[otherShapeIdx].bodyId;
+                                if(otherBody != idx && otherBody < worldRef.m_bodies.size() && worldRef.m_bodies[otherBody].alive && worldRef.m_bodies[otherBody].setIndex >= 3u)
+                                    overlapWakeTargets.push_back(otherBody);
+                            }
+                            return true;
+                        }
+                    );
+                }
+            }
             shapeIdx = shape.nextShapeId;
         }
+        for(usize wi = 0u; wi < overlapWakeTargets.size(); ++wi)
+            this.wakeBody(this.makeBodyId(overlapWakeTargets[wi]));
         if(body.type == BodyType::Static)
             ++this.m_topologyVersion;
         return true;
@@ -876,8 +1049,11 @@ class PhysicsWorld{
         const u32 idx = bodyId.index;
         if(this.m_bodies[idx].type == BodyType::Static)
             return false;
-        if(Vector3LengthSq(VectorSingle(velocity, 0.0f)).x > 0.0f)
+        if(Vector3LengthSq(VectorSingle(velocity, 0.0f)).x > 0.0f){
             this.wakeBody(bodyId);
+            if(this.m_bodies[idx].type == BodyType::Kinematic)
+                this.wakeBodyNeighbors(idx);
+        }
         mut Body body = this.m_bodies[idx];
         if(body.setIndex == s_AwakeSetIndex && body.localIndex < this.m_solverSets[s_AwakeSetIndex].states.size()){
             this.m_solverSets[s_AwakeSetIndex].states[body.localIndex].linearVelocity = f32x4(ApplyLinearLocks(velocity, body.flags), 0.0f);
@@ -892,8 +1068,11 @@ class PhysicsWorld{
         const u32 idx = bodyId.index;
         if(this.m_bodies[idx].type == BodyType::Static)
             return false;
-        if(Vector3LengthSq(VectorSingle(velocity, 0.0f)).x > 0.0f)
+        if(Vector3LengthSq(VectorSingle(velocity, 0.0f)).x > 0.0f){
             this.wakeBody(bodyId);
+            if(this.m_bodies[idx].type == BodyType::Kinematic)
+                this.wakeBodyNeighbors(idx);
+        }
         mut Body body = this.m_bodies[idx];
         if(body.setIndex == s_AwakeSetIndex && body.localIndex < this.m_solverSets[s_AwakeSetIndex].states.size()){
             this.m_solverSets[s_AwakeSetIndex].states[body.localIndex].angularVelocity = f32x4(ApplyAngularLocks(velocity, body.flags), 0.0f);
@@ -1139,6 +1318,79 @@ class PhysicsWorld{
         return true;
     }
 
+    public b8 isBodyEnabled(in BodyId bodyId)const{
+        if(!this.isValidBody(bodyId))
+            return false;
+        return this.m_bodies[bodyId.index].setIndex != s_DisabledSetIndex;
+    }
+
+    public Expected<b8> tryGetBodyAllowFastRotation(in BodyId bodyId)const{
+        if(!this.isValidBody(bodyId))
+            return MakeUnexpected(Failure());
+        return (this.m_bodies[bodyId.index].flags & cast<u32>(BodyFlags::AllowFastRotation)) != 0u;
+    }
+
+    public Expected<b8> tryGetBodyGyroscopicTorque(in BodyId bodyId)const{
+        if(!this.isValidBody(bodyId))
+            return MakeUnexpected(Failure());
+        return (this.m_bodies[bodyId.index].flags & cast<u32>(BodyFlags::EnableGyroscopicTorque)) != 0u;
+    }
+
+    public Expected<f32> tryGetSleepThreshold(in BodyId bodyId)const{
+        if(!this.isValidBody(bodyId))
+            return MakeUnexpected(Failure());
+        return this.m_bodies[bodyId.index].sleepThreshold;
+    }
+
+    public void bodyShapes(in BodyId bodyId, mut Vector<ShapeId> outShapes)const{
+        outShapes.clear();
+        if(!this.isValidBody(bodyId))
+            return;
+        u32 shapeIdx = this.m_bodies[bodyId.index].headShapeId;
+        while(shapeIdx != s_NullIndex){
+            if(this.m_shapes[shapeIdx].alive())
+                outShapes.push_back(this.makeShapeId(shapeIdx));
+            shapeIdx = this.m_shapes[shapeIdx].nextShapeId;
+        }
+    }
+
+    public void bodyJoints(in BodyId bodyId, mut Vector<JointId> outJoints)const{
+        outJoints.clear();
+        if(!this.isValidBody(bodyId))
+            return;
+        u32 key = this.m_bodies[bodyId.index].headJointKey;
+        while(key != s_NullIndex){
+            const u32 jId = DecodeJointKeyId(key);
+            const u32 edgeIdx = DecodeJointKeyEdge(key);
+            in Joint j = this.m_joints[jId];
+            if(j.alive())
+                outJoints.push_back(this.makeJointId(jId));
+            key = j.edges[edgeIdx].nextKey;
+        }
+    }
+
+    public void bodyContacts(in BodyId bodyId, mut Vector<ContactPairInfo> outContacts)const{
+        outContacts.clear();
+        if(!this.isValidBody(bodyId))
+            return;
+        u32 key = this.m_bodies[bodyId.index].headContactKey;
+        while(key != s_NullIndex){
+            const u32 cId = DecodeContactKeyId(key);
+            const u32 edgeIdx = DecodeContactKeyEdge(key);
+            in Contact c = this.m_contacts[cId];
+            if((c.flags & cast<u32>(ContactFlags::Alive)) != 0u){
+                ContactPairInfo pairInfo;
+                pairInfo.shapeIdA = this.makeShapeId(c.shapeIdA);
+                pairInfo.shapeIdB = this.makeShapeId(c.shapeIdB);
+                pairInfo.normal = f32x4(c.manifold.normal(), 0.0f);
+                pairInfo.pointCount = c.manifold.pointCount();
+                pairInfo.touching = (c.flags & cast<u32>(ContactFlags::Touching)) != 0u;
+                outContacts.push_back(pairInfo);
+            }
+            key = c.edges[edgeIdx].nextKey;
+        }
+    }
+
     public b8 isBodySpeedCapped(in BodyId bodyId)const{
         if(!this.isValidBody(bodyId))
             return false;
@@ -1191,6 +1443,91 @@ class PhysicsWorld{
         if(!this.isValidShape(shapeId))
             return MakeUnexpected(Failure());
         return this.m_shapes[shapeId.index].aabb;
+    }
+
+    public Expected<SphereShape> tryGetSphereShape(in ShapeId shapeId)const{
+        if(!this.isValidShape(shapeId) || this.m_shapes[shapeId.index].type != ShapeType::Sphere)
+            return MakeUnexpected(Failure());
+        return this.m_shapes[shapeId.index].sphereShape();
+    }
+
+    public Expected<CapsuleShape> tryGetCapsuleShape(in ShapeId shapeId)const{
+        if(!this.isValidShape(shapeId) || this.m_shapes[shapeId.index].type != ShapeType::Capsule)
+            return MakeUnexpected(Failure());
+        return this.m_shapes[shapeId.index].capsuleShape();
+    }
+
+    public Expected<HullShape> tryGetHullShape(in ShapeId shapeId)const{
+        if(!this.isValidShape(shapeId) || this.m_shapes[shapeId.index].type != ShapeType::Hull)
+            return MakeUnexpected(Failure());
+        const u32 gIdx = this.m_shapes[shapeId.index].geometryIndex;
+        if(gIdx >= this.m_hullShapes.size())
+            return MakeUnexpected(Failure());
+        return this.m_hullShapes[gIdx];
+    }
+
+    public Expected<MeshShape> tryGetMeshShape(in ShapeId shapeId)const{
+        if(!this.isValidShape(shapeId) || this.m_shapes[shapeId.index].type != ShapeType::Mesh)
+            return MakeUnexpected(Failure());
+        const u32 gIdx = this.m_shapes[shapeId.index].geometryIndex;
+        if(gIdx >= this.m_meshShapes.size())
+            return MakeUnexpected(Failure());
+        return this.m_meshShapes[gIdx];
+    }
+
+    public Expected<b8> tryGetShapeEnableContactEvents(in ShapeId shapeId)const{
+        if(!this.isValidShape(shapeId))
+            return MakeUnexpected(Failure());
+        return this.m_shapes[shapeId.index].enableContactEvents();
+    }
+
+    public Expected<b8> tryGetShapeEnableHitEvents(in ShapeId shapeId)const{
+        if(!this.isValidShape(shapeId))
+            return MakeUnexpected(Failure());
+        return this.m_shapes[shapeId.index].enableHitEvents();
+    }
+
+    public Expected<b8> tryGetShapeEnableSensorEvents(in ShapeId shapeId)const{
+        if(!this.isValidShape(shapeId))
+            return MakeUnexpected(Failure());
+        return this.m_shapes[shapeId.index].enableSensorEvents();
+    }
+
+    public Expected<b8> tryGetShapeEnablePreSolveEvents(in ShapeId shapeId)const{
+        if(!this.isValidShape(shapeId))
+            return MakeUnexpected(Failure());
+        return this.m_shapes[shapeId.index].enablePreSolveEvents();
+    }
+
+    public b8 setShapeEnableContactEvents(in ShapeId shapeId, in b8 enabled){
+        if(!this.isValidShape(shapeId))
+            return false;
+        this.m_shapes[shapeId.index].setFlag(ShapeFlags::EnableContactEvents, enabled);
+        this.refreshShapeContactEventFlags(shapeId.index);
+        return true;
+    }
+
+    public b8 setShapeEnableHitEvents(in ShapeId shapeId, in b8 enabled){
+        if(!this.isValidShape(shapeId))
+            return false;
+        this.m_shapes[shapeId.index].setFlag(ShapeFlags::EnableHitEvents, enabled);
+        this.refreshShapeContactEventFlags(shapeId.index);
+        return true;
+    }
+
+    public b8 setShapeEnableSensorEvents(in ShapeId shapeId, in b8 enabled){
+        if(!this.isValidShape(shapeId))
+            return false;
+        this.m_shapes[shapeId.index].setFlag(ShapeFlags::EnableSensorEvents, enabled);
+        this.refreshShapeContactEventFlags(shapeId.index);
+        return true;
+    }
+
+    public b8 setShapeEnablePreSolveEvents(in ShapeId shapeId, in b8 enabled){
+        if(!this.isValidShape(shapeId))
+            return false;
+        this.m_shapes[shapeId.index].setFlag(ShapeFlags::EnablePreSolveEvents, enabled);
+        return true;
     }
 
     public Expected<u64> tryGetShapeUserData(in ShapeId shapeId)const{
@@ -1253,6 +1590,7 @@ class PhysicsWorld{
         const u32 bodyIdx = this.m_shapes[shapeIdx].bodyId;
         if(bodyIdx < this.m_bodies.size() && this.m_bodies[bodyIdx].alive){
             this.wakeBody(this.makeBodyId(bodyIdx));
+            this.wakeShapeNeighbors(shapeIdx);
 
             u32 edgeKey = this.m_bodies[bodyIdx].headContactKey;
             while(edgeKey != s_NullIndex){
@@ -1295,6 +1633,7 @@ class PhysicsWorld{
         const u32 shapeIdx = shapeId.index;
         if(this.m_shapes[shapeIdx].isSensor() == isSensor)
             return true;
+        this.wakeShapeNeighbors(shapeIdx);
         this.m_shapes[shapeIdx].setFlag(ShapeFlags::IsSensor, isSensor);
         const u32 bodyIdx = this.m_shapes[shapeIdx].bodyId;
         if(bodyIdx < this.m_bodies.size() && this.m_bodies[bodyIdx].alive){
@@ -1341,6 +1680,10 @@ class PhysicsWorld{
         const u32 bodyIdx = this.m_shapes[shapeIdx].bodyId;
         if(bodyIdx >= this.m_bodies.size() || !this.m_bodies[bodyIdx].alive)
             return;
+
+        this.wakeBody(this.makeBodyId(bodyIdx));
+        this.wakeShapeNeighbors(shapeIdx);
+        this.zeroShapeContactWarmStart(shapeIdx);
 
         in Body body = this.m_bodies[bodyIdx];
         in Transform3D xf = this.m_solverSets[body.setIndex].sims[body.localIndex].transform;
@@ -1673,6 +2016,7 @@ class PhysicsWorld{
 
         if(this.m_bodies[idx].setIndex >= 3u)
             this.wakeBody(bodyId);
+        this.wakeBodyNeighbors(idx);
 
         this.destroyBodyContactsInternal(idx);
 
@@ -1745,6 +2089,7 @@ class PhysicsWorld{
         if(!enabled){
             if(this.m_bodies[idx].setIndex >= 3u)
                 this.wakeBody(bodyId);
+            this.wakeBodyNeighbors(idx);
 
             this.destroyBodyContactsInternal(idx);
             this.rebuildBodyShapesBroadphase(idx, false);
@@ -2233,6 +2578,90 @@ class PhysicsWorld{
         if(!this.isValidJoint(jointId))
             return false;
         return this.m_joints[jointId.index].collideConnected();
+    }
+
+    public Expected<JointType> tryGetJointType(in JointId jointId)const{
+        if(!this.isValidJoint(jointId))
+            return MakeUnexpected(Failure());
+        return this.m_joints[jointId.index].type;
+    }
+
+    public Expected<BodyId> tryGetJointBodyA(in JointId jointId)const{
+        if(!this.isValidJoint(jointId))
+            return MakeUnexpected(Failure());
+        return this.makeBodyId(this.m_joints[jointId.index].edges[0u].bodyId);
+    }
+
+    public Expected<BodyId> tryGetJointBodyB(in JointId jointId)const{
+        if(!this.isValidJoint(jointId))
+            return MakeUnexpected(Failure());
+        return this.makeBodyId(this.m_joints[jointId.index].edges[1u].bodyId);
+    }
+
+    public Expected<b8> tryGetJointEnableLimit(in JointId jointId)const{
+        if(!this.isValidJoint(jointId))
+            return MakeUnexpected(Failure());
+        return this.m_joints[jointId.index].enableLimit();
+    }
+
+    public Expected<b8> tryGetJointEnableMotor(in JointId jointId)const{
+        if(!this.isValidJoint(jointId))
+            return MakeUnexpected(Failure());
+        return this.m_joints[jointId.index].enableMotor();
+    }
+
+    public Expected<b8> tryGetJointEnableSpring(in JointId jointId)const{
+        if(!this.isValidJoint(jointId))
+            return MakeUnexpected(Failure());
+        return this.m_joints[jointId.index].enableSpring();
+    }
+
+    public Expected<f32> tryGetJointLowerLimit(in JointId jointId)const{
+        if(!this.isValidJoint(jointId))
+            return MakeUnexpected(Failure());
+        return this.m_joints[jointId.index].lowerLimit();
+    }
+
+    public Expected<f32> tryGetJointUpperLimit(in JointId jointId)const{
+        if(!this.isValidJoint(jointId))
+            return MakeUnexpected(Failure());
+        return this.m_joints[jointId.index].upperLimit();
+    }
+
+    public Expected<f32> tryGetJointMotorSpeed(in JointId jointId)const{
+        if(!this.isValidJoint(jointId))
+            return MakeUnexpected(Failure());
+        return this.m_joints[jointId.index].motorSpeed();
+    }
+
+    public Expected<f32> tryGetJointMaxMotorForce(in JointId jointId)const{
+        if(!this.isValidJoint(jointId))
+            return MakeUnexpected(Failure());
+        return this.m_joints[jointId.index].maxMotorForce;
+    }
+
+    public Expected<f32> tryGetJointSwingLimit(in JointId jointId)const{
+        if(!this.isValidJoint(jointId))
+            return MakeUnexpected(Failure());
+        return this.m_joints[jointId.index].swingLimit;
+    }
+
+    public Expected<f32> tryGetJointSpringHertz(in JointId jointId)const{
+        if(!this.isValidJoint(jointId))
+            return MakeUnexpected(Failure());
+        return this.m_joints[jointId.index].hertz;
+    }
+
+    public Expected<f32> tryGetJointSpringDampingRatio(in JointId jointId)const{
+        if(!this.isValidJoint(jointId))
+            return MakeUnexpected(Failure());
+        return this.m_joints[jointId.index].dampingRatio;
+    }
+
+    public Expected<f32x4> tryGetJointLinearOffset(in JointId jointId)const{
+        if(!this.isValidJoint(jointId))
+            return MakeUnexpected(Failure());
+        return f32x4(this.m_joints[jointId.index].linearOffset(), 0.0f);
     }
 
     public Expected<u64> tryGetJointUserData(in JointId jointId)const{
@@ -2826,6 +3255,36 @@ class PhysicsWorld{
                     stack.push_back(node.rightOrCount());
                 }
             }
+            if(mesh.isClosed() && AabbContains(mesh.localAabb(), Aabb3D(localPt, localPt))){
+                const VectorSingle boxExt = VectorSingle(mesh.localAabb().upperBound) - VectorSingle(mesh.localAabb().lowerBound);
+                const f32 rayLen = Max(Vector3Length(boxExt).x * 2.0f, 10.0f);
+                const VectorSingle rayDir = SafeNormalizeVec3(VectorSingle(1.0f, 0.37139067f, 0.21821789f, 0.0f), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f)) * rayLen;
+                u32 parityHits = 0u;
+                stack.clear();
+                stack.push_back(0u);
+                while(!stack.empty()){
+                    const u32 nodeIdx = stack[stack.size() - 1u];
+                    stack.pop_back();
+                    in MeshBvhNode node = mesh.nodes[nodeIdx];
+                    f32 tBox = 0.0f;
+                    if(!AabbRayCast(node.aabb(), localPt, rayDir, 1.0f, tBox))
+                        continue;
+                    if(node.isLeaf()){
+                        const u32 endTri = node.leftOrFirst() + node.rightOrCount();
+                        for(u32 ti = node.leftOrFirst(); ti < endTri; ++ti){
+                            in MeshTriangle tri = mesh.triangles[ti];
+                            const LocalRayHit h = RayCastTriangle(Vec3FromU(tri.v0), Vec3FromU(tri.v1), Vec3FromU(tri.v2), localPt, rayDir, 1.0f);
+                            if(h.hit() && h.fraction() > 1.0e-6f)
+                                ++parityHits;
+                        }
+                    }
+                    else{
+                        stack.push_back(node.leftOrFirst());
+                        stack.push_back(node.rightOrCount());
+                    }
+                }
+                return (parityHits & 1u) != 0u;
+            }
             return false;
         }
 
@@ -3066,6 +3525,20 @@ class PhysicsWorld{
 
         for(usize i = 0u; i < hitBodyIds.size(); ++i){
             const u32 bodyIdx = hitBodyIds[i];
+            if(def.checkOcclusion){
+                const VectorSingle targetPt = VectorSingle(bestBodyPoint[bodyIdx]);
+                const VectorSingle delta(targetPt - pos, 0.0f);
+                if(Vector3LengthSq(delta).x > s_LinearSlop * s_LinearSlop){
+                    RayCastInput occlIn;
+                    occlIn.origin = def.position;
+                    occlIn.translation = f32x4(delta, 0.0f);
+                    occlIn.filter = def.occlusionFilter;
+                    occlIn.hitSensors = false;
+                    const RayCastHit occlHit = this.rayCastClosest(occlIn);
+                    if(occlHit.hit && occlHit.fraction < 0.999f && this.isValidShape(occlHit.shapeId) && this.m_shapes[occlHit.shapeId.index].bodyId != bodyIdx)
+                        continue;
+                }
+            }
             const f32 dist = bestBodyDist[bodyIdx];
             f32 falloffScale = 1.0f;
             if(dist > def.radius){

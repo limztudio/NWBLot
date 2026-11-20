@@ -15,6 +15,7 @@ const u32 s_GpuShapeFlagIsBox = 0x00000001u;
 const u32 s_GpuShapeFlagSensor = 0x00000002u;
 const u32 s_GpuShapeFlagDynamicBody = 0x00010000u;
 const u32 s_GpuShapeFlagKinematicBody = 0x00020000u;
+const u32 s_GpuShapeFlagAwakeBody = 0x00040000u;
 
 const u32 s_GpuBroadphaseModeUpdateAabbs = 0u;
 const u32 s_GpuBroadphaseModeEmitPairs = 1u;

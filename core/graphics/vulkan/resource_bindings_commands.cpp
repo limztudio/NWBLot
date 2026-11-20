@@ -217,7 +217,7 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
         return;
 
     DescriptorBufferManager* const manager = m_context.descriptorBufferManager;
-    const GpuPhysicalQueueInfo* const exactQueueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
+    const GpuPhysicalQueueInfo* const exactQueueInfo = cachedPhysicalQueueInfo();
     FOUNDATION_ASSERT(!m_commandRecordingFailed && exactQueueInfo && matchesActiveNativeLeaseIdentity());
     FOUNDATION_ASSERT(pipelineBindings.pipelineLayout != VK_NULL_HANDLE);
     if(
@@ -373,16 +373,6 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
     if(!heap.trackCommandBufferUseLocked(trackedCommandBuffer, m_creationDesc.physicalQueue)){
         rejectCommandRecording(operationName, FOUNDATION_TEXT("descriptor-heap command-buffer use identity is exhausted"));
         return;
-    }
-    for(u32 slot = 0u; slot < heap.m_resourceSlots.nextFresh; ++slot){
-        const BufferHandle& retainedBuffer = heap.m_resourceDescriptorBuffers[slot];
-        if(retainedBuffer)
-            trackedCommandBuffer.m_resourceReferences.trackRetainedBuffer(*retainedBuffer);
-    }
-    for(u32 slot = 0u; slot < heap.m_resourceSlots.nextFresh; ++slot){
-        const TextureHandle& retainedTexture = heap.m_resourceDescriptorTextures[slot];
-        if(retainedTexture)
-            trackedCommandBuffer.m_resourceReferences.trackRetainedTexture(*retainedTexture);
     }
 
     if(bindAccelStruct)

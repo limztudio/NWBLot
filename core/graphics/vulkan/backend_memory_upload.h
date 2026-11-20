@@ -32,6 +32,7 @@ class Buffer final : public RefCounter<GraphicsResource>{
     friend class Device;
     friend class CommandList;
     friend class DescriptorBufferManager;
+    friend class GpuDescriptorHeap;
     friend class StateTracker;
     friend class TrackedCommandBuffer;
     friend class VulkanAllocator;
@@ -85,6 +86,8 @@ private:
     VulkanDetail::HeapBindingRange m_heapBindingRange;
     Futex m_memoryBindingMutex;
     Atomic<b8> m_retainedStateKnown = false;
+    Atomic<b8> m_nativeIdentityRegistered{ false };
+    Atomic<b8> m_gpuReady{ false };
 
     Vector<u64, Alloc::GlobalArena> m_versionTracking;
 
@@ -129,6 +132,7 @@ class Texture final : public RefCounter<GraphicsResource>{
     friend class CommandList;
     friend class FramebufferRenderingPreparation;
     friend class DescriptorBufferManager;
+    friend class GpuDescriptorHeap;
     friend class StateTracker;
     friend class VulkanAllocator;
     friend class Queue;
@@ -184,11 +188,13 @@ private:
     HeapHandle m_boundHeap;
     VulkanDetail::HeapBindingRange m_heapBindingRange;
     Futex m_memoryBindingMutex;
+    Atomic<b8> m_nativeIdentityRegistered{ false };
+    Atomic<b8> m_gpuReady{ false };
 
     Futex m_viewsMutex;
     HashMap<TextureViewKey, VkImageView, Alloc::GlobalArena, TextureViewKeyHasher, EqualTo<TextureViewKey>> m_views;
-    Vector<u8, Alloc::GlobalArena> m_retainedSubresourceStates;
-    mutable Futex m_retainedSubresourceStatesMutex;
+    Atomic<u64> m_retainedSubresourceInlineMask{ 0u };
+    mutable Vector<u64, Alloc::GlobalArena> m_retainedSubresourceOverflowWords;
 
     const b8 m_creationInitialStateKnown;
     b8 m_managed = true;

@@ -170,6 +170,17 @@ b8 CaptureOutputState(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class GpuCommandIrCaptureResetGuard : NoCopy{
+    private mut GpuCommandIrCapture m_capture;
+
+    public GpuCommandIrCaptureResetGuard(mut GpuCommandIrCapture capture){
+        this.m_capture = capture;
+    }
+    public ~GpuCommandIrCaptureResetGuard(){
+        this.m_capture.reset();
+    }
+}
+
 [cpp_unwind]
 b8 RecordRasterCommandIr(in GpuRasterTask payload, in GpuTaskRecordContext context, mut CommandList commands){
     if(context.hasCommandIrCapture())
@@ -187,7 +198,11 @@ b8 RecordRasterCommandIr(in GpuRasterTask payload, in GpuTaskRecordContext conte
         || !GpuBufferMatches(context.declarations, payload.indices, frame.deref().m_indices)
     )
         return false;
-    GpuCommandIrCapture capture(frame.deref().m_resources.deref().graphics().allocator());
+    if(!frame.deref().m_rasterCommandIrCapture.valid())
+        return false;
+    mut GpuCommandIrCapture capture = frame.deref().m_rasterCommandIrCapture.deref();
+    capture.reset();
+    GpuCommandIrCaptureResetGuard captureResetGuard(capture);
     if(!capture.beginRecordingAttempt(context.recordingAttemptGeneration))
         return false;
     mut GpuDescriptorHeap heap = frame.deref().m_resources.deref().graphics().getDevice().getDescriptorHeap();
@@ -239,7 +254,11 @@ b8 RecordOutputCommandIr(in GpuOutputTask payload, in GpuTaskRecordContext conte
     in GpuFrame frame = payload.frame;
     if(!frame.valid() || !frame.deref().m_target.valid() || !frame.deref().m_resources.valid() || !payload.graphPipeline.valid() || !GpuPipelineMatches(context.declarations, payload.graphPipeline, payload.pipeline))
         return false;
-    GpuCommandIrCapture capture(frame.deref().m_resources.deref().graphics().allocator());
+    if(!frame.deref().m_outputCommandIrCapture.valid())
+        return false;
+    mut GpuCommandIrCapture capture = frame.deref().m_outputCommandIrCapture.deref();
+    capture.reset();
+    GpuCommandIrCaptureResetGuard captureResetGuard(capture);
     if(!capture.beginRecordingAttempt(context.recordingAttemptGeneration))
         return false;
     mut GpuDescriptorHeap heap = frame.deref().m_resources.deref().graphics().getDevice().getDescriptorHeap();

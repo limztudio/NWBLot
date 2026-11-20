@@ -231,6 +231,9 @@ private:
     FixedTable<GpuDescriptorHandle> m_pendingRecording;
     FixedTable<RetiredSlot> m_retired;
     Vector<HeapUse, Alloc::GlobalArena> m_heapUses;
+    Vector<GpuDescriptorHandle, Alloc::GlobalArena> m_dynamicReadinessSlots;
+    Vector<GpuDescriptorHandle, Alloc::GlobalArena> m_concurrentAdmissionSlots;
+    mutable u64 m_verifiedConcurrentQueueMask = 0u;
     usize m_pendingRecordingCount = 0u;
     usize m_retiredCount = 0u;
     usize m_activePendingRecordingLeaseCount = 0u;

@@ -39,6 +39,9 @@ b8 CommandListResourceStateHandoff::buildFanIn(const CommandListResourceStateHan
         }
     }
 
+    if(branchCount == 0u)
+        return copyFrom(base);
+
     usize textureStateCapacity = base.m_textureStates.size();
     usize bufferStateCapacity = base.m_bufferStates.size();
     usize permanentTextureStateCapacity = base.m_permanentTextureStates.size();
@@ -68,22 +71,29 @@ b8 CommandListResourceStateHandoff::buildFanIn(const CommandListResourceStateHan
     reset();
     m_deviceGeneration = base.m_deviceGeneration;
 
-    m_textureStates.reserve(textureStateCapacity);
-    m_bufferStates.reserve(bufferStateCapacity + bufferStateCapacity);
-    m_permanentTextureStates.reserve(permanentTextureStateCapacity);
-    m_permanentBufferStates.reserve(permanentBufferStateCapacity);
+    if(textureStateCapacity != 0u){
+        m_textureStates.reserve(textureStateCapacity);
+        if(!GpuTextureStateFanIn::MergeTransient(*this, base, branches, branchCount, textureStateCapacity, scratchArena))
+            return false;
+    }
 
-    if(!GpuTextureStateFanIn::MergeTransient(*this, base, branches, branchCount, textureStateCapacity, scratchArena))
-        return false;
+    if(bufferStateCapacity != 0u){
+        m_bufferStates.reserve(bufferStateCapacity + bufferStateCapacity);
+        if(!GpuBufferStateFanIn::Merge(*this, base, branches, branchCount, bufferStateCapacity, scratchArena))
+            return false;
+    }
 
-    if(!GpuBufferStateFanIn::Merge(*this, base, branches, branchCount, bufferStateCapacity, scratchArena))
-        return false;
+    if(permanentTextureStateCapacity != 0u){
+        m_permanentTextureStates.reserve(permanentTextureStateCapacity);
+        if(!GpuTextureStateFanIn::MergePermanent(*this, base, branches, branchCount, permanentTextureStateCapacity, scratchArena))
+            return false;
+    }
 
-    if(!GpuTextureStateFanIn::MergePermanent(*this, base, branches, branchCount, permanentTextureStateCapacity, scratchArena))
-        return false;
-
-    if(!GpuBufferStateFanIn::MergePermanent(*this, base, branches, branchCount, permanentBufferStateCapacity, scratchArena))
-        return false;
+    if(permanentBufferStateCapacity != 0u){
+        m_permanentBufferStates.reserve(permanentBufferStateCapacity);
+        if(!GpuBufferStateFanIn::MergePermanent(*this, base, branches, branchCount, permanentBufferStateCapacity, scratchArena))
+            return false;
+    }
 
     m_valid = true;
     return true;

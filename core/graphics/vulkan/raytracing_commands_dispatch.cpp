@@ -87,6 +87,8 @@ void CommandList::setRayTracingState(const RayTracingState& state){
     m_currentGraphicsState = {};
     m_currentComputeState = {};
     m_currentMeshletState = {};
+    m_hasBoundGraphicsState = false;
+    m_hasBoundComputeState = false;
     m_currentRayTracingState = state;
 
     if(!shaderTable)

@@ -103,35 +103,6 @@ b8 CommandListResourceStateHandoff::buildResourceSubset(const CommandListResourc
         }
     }
     else{
-        usize textureStateCount = 0u;
-        usize permanentTextureStateCount = 0u;
-        if(hasTextures){
-            for(const TextureState& state : source.m_textureStates){
-                if(selection.containsTexture(state.texture))
-                    ++textureStateCount;
-            }
-            for(const PermanentTextureState& state : source.m_permanentTextureStates){
-                if(selection.containsTexture(state.texture))
-                    ++permanentTextureStateCount;
-            }
-        }
-        usize bufferStateCount = 0u;
-        usize permanentBufferStateCount = 0u;
-        if(hasBuffers){
-            for(const BufferState& state : source.m_bufferStates){
-                if(selection.containsBuffer(state.buffer))
-                    ++bufferStateCount;
-            }
-            for(const BufferState& state : source.m_permanentBufferStates){
-                if(selection.containsBuffer(state.buffer))
-                    ++permanentBufferStateCount;
-            }
-        }
-
-        m_textureStates.reserve(textureStateCount);
-        m_bufferStates.reserve(bufferStateCount);
-        m_permanentTextureStates.reserve(permanentTextureStateCount);
-        m_permanentBufferStates.reserve(permanentBufferStateCount);
         m_textureStates.clear();
         m_bufferStates.clear();
         m_permanentTextureStates.clear();

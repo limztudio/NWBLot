@@ -35,7 +35,7 @@ b8 GpuTaskGraph::retireTaskPayloads(){
     {
         NothrowScopedLock lock(m_lifecycleMutex);
         if(
-            m_teardownInProgress
+            m_teardownInProgress.load(MemoryOrder::relaxed)
             || m_activeDeclarationAccessCount != 0u
             || m_activeDeclarationReadCount != 0u
             || m_activeDiscardNotificationCount != 0u
@@ -46,15 +46,16 @@ b8 GpuTaskGraph::retireTaskPayloads(){
         )
             return false;
         for(const GpuTaskNode& task : m_tasks){
-            if(task.lifecycleState == TaskLifecycleState::Recording || task.lifecycleState == TaskLifecycleState::Submitting || task.lifecycleState == TaskLifecycleState::Accepting)
+            const TaskLifecycleState::Enum state = task.lifecycleState();
+            if(state == TaskLifecycleState::Recording || state == TaskLifecycleState::Submitting || state == TaskLifecycleState::Accepting)
                 return false;
         }
-        m_teardownInProgress = true;
+        m_teardownInProgress.store(true, MemoryOrder::release);
     }
 
     ScopeExit reopenDeclarations([this]()noexcept{
         NothrowScopedLock lock(m_lifecycleMutex);
-        m_teardownInProgress = false;
+        m_teardownInProgress.store(false, MemoryOrder::release);
     });
     return UncaughtExceptionCount() != 0 ? destroyTaskPayloadsWithoutCallbacks() : destroyTaskPayloads();
 }
@@ -66,16 +67,18 @@ b8 GpuTaskGraph::destroyTaskPayloads(){
     u64 notificationGeneration = 0u;
     {
         ScopedLock lock(m_lifecycleMutex);
-        if(!m_teardownInProgress || m_activeDeclarationAccessCount != 0u || m_activeDiscardNotificationCount != 0u || m_submissionBindingState == SubmissionBindingState::Active)
+        if(!m_teardownInProgress.load(MemoryOrder::relaxed) || m_activeDeclarationAccessCount != 0u || m_activeDiscardNotificationCount != 0u || m_submissionBindingState == SubmissionBindingState::Active)
             return false;
         for(const GpuTaskNode& task : m_tasks){
-            if(task.lifecycleState == TaskLifecycleState::Submitting || task.lifecycleState == TaskLifecycleState::Accepting || task.lifecycleState == TaskLifecycleState::Recording){
+            const TaskLifecycleState::Enum state = task.lifecycleState();
+            if(state == TaskLifecycleState::Submitting || state == TaskLifecycleState::Accepting || state == TaskLifecycleState::Recording){
                 return false;
             }
         }
         b8 hasUnacceptedTask = false;
         for(const GpuTaskNode& task : m_tasks){
-            if(task.lifecycleState == TaskLifecycleState::Declared || task.lifecycleState == TaskLifecycleState::Recorded)
+            const TaskLifecycleState::Enum state = task.lifecycleState();
+            if(state == TaskLifecycleState::Declared || state == TaskLifecycleState::Recorded)
                 hasUnacceptedTask = true;
         }
         if(hasUnacceptedTask){
@@ -83,13 +86,12 @@ b8 GpuTaskGraph::destroyTaskPayloads(){
             notification.activateWithinLock();
         }
         for(GpuTaskNode& task : m_tasks){
-            if(task.lifecycleState == TaskLifecycleState::Declared || task.lifecycleState == TaskLifecycleState::Recorded){
-                task.lifecycleState = TaskLifecycleState::Discarded;
+            const TaskLifecycleState::Enum state = task.lifecycleState();
+            if(state == TaskLifecycleState::Declared || state == TaskLifecycleState::Recorded){
                 task.recordingClaimGeneration = 0u;
                 task.submissionClaimGeneration = 0u;
                 task.discardNotificationGeneration = notificationGeneration;
-                task.recordThunkInProgress = false;
-                task.recordThunkCompleted = false;
+                task.setLifecycle(TaskLifecycleState::Discarded);
             }
         }
         payloadDestroy.activateWithinLock();
@@ -105,20 +107,21 @@ b8 GpuTaskGraph::destroyTaskPayloads(){
 b8 GpuTaskGraph::destroyTaskPayloadsWithoutCallbacks()noexcept{
     {
         NothrowScopedLock lock(m_lifecycleMutex);
-        if(!m_teardownInProgress || m_activeDeclarationAccessCount != 0u || m_activeDiscardNotificationCount != 0u || m_submissionBindingState == SubmissionBindingState::Active)
+        if(!m_teardownInProgress.load(MemoryOrder::relaxed) || m_activeDeclarationAccessCount != 0u || m_activeDiscardNotificationCount != 0u || m_submissionBindingState == SubmissionBindingState::Active)
             return false;
         for(const GpuTaskNode& task : m_tasks){
-            if(task.lifecycleState == TaskLifecycleState::Submitting || task.lifecycleState == TaskLifecycleState::Accepting || task.lifecycleState == TaskLifecycleState::Recording)
+            const TaskLifecycleState::Enum state = task.lifecycleState();
+            if(state == TaskLifecycleState::Submitting || state == TaskLifecycleState::Accepting || state == TaskLifecycleState::Recording)
                 return false;
         }
         for(GpuTaskNode& task : m_tasks){
-            if(task.lifecycleState == TaskLifecycleState::Declared || task.lifecycleState == TaskLifecycleState::Recorded)
-                task.lifecycleState = TaskLifecycleState::Discarded;
+            const TaskLifecycleState::Enum state = task.lifecycleState();
+            if(state == TaskLifecycleState::Declared || state == TaskLifecycleState::Recorded)
+                task.setLifecycle(TaskLifecycleState::Discarded);
             task.recordingClaimGeneration = 0u;
             task.submissionClaimGeneration = 0u;
             task.discardNotificationGeneration = 0u;
-            task.recordThunkInProgress = false;
-            task.recordThunkCompleted = false;
+            task.setLifecycle(task.lifecycleState(MemoryOrder::relaxed));
         }
     }
 

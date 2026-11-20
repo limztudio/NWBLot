@@ -344,6 +344,7 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
     allLitClearScheduling.forceSubmissionBoundary = false;
     allLitClearScheduling.allowPacketMerge = true;
     allLitClearScheduling.mergeWithPrevious = adaptivePrimitivePrecedesVisibility;
+    allLitClearScheduling.allowParallelRecording = true;
     ConfigureComputeEffectRoutingHint(adaptivePrimitivePrecedesVisibility, allLitClearScheduling);
     const Array<GpuTaskResourceUse, 1u> allLitClearUses(WriteTextureUse(shadowVisibility, s_ShadowVisibilitySubresources, ResourceStates::CopyDest));
     GpuTaskDesc allLitClearDesc;

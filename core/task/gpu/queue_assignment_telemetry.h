@@ -95,6 +95,7 @@ private:
     u64 m_generation = 0u;
     u64 m_declarationRevision = 0u;
     u64 m_planGeneration = 0u;
+    u64 m_assignmentRevision = 0u;
     u64 m_recordingAttemptGeneration = 0u;
     u64 m_acceptanceRevision = 0u;
     u16 m_deviceGeneration = 0u;

@@ -20,6 +20,17 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_vulkan_descriptor_buffer{
+    void EnsureDescriptorSlotCapacity(Vector<GpuDescriptorHandle, Alloc::GlobalArena>& slots){
+        if(slots.size() == slots.capacity())
+            slots.reserve(slots.capacity() == 0u ? 16u : slots.capacity() * 2u);
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWriteItem& item){
     ScopedLock lock(m_mutex);
 
@@ -92,14 +103,25 @@ b8 GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWr
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap::write: cannot replace a live AccelStruct descriptor slot; allocate a fresh handle."));
             return false;
         }
+        const ResourceQueueAdmissionSnapshot& admission = backingBuffer->getQueueAdmissionSnapshot();
+        const b8 needsConcurrentAdmission = !admission.valid() || admission.usesConcurrentSharing;
         RayTracingAccelStructHandle candidate(nullptr, RayTracingAccelStructHandle::deleter_type(&m_context.objectArena));
         if(!retained){
             candidate = RayTracingAccelStructHandle(accelStruct, RayTracingAccelStructHandle::deleter_type(&m_context.objectArena));
+            __hidden_vulkan_descriptor_buffer::EnsureDescriptorSlotCapacity(m_dynamicReadinessSlots);
+            if(needsConcurrentAdmission)
+                __hidden_vulkan_descriptor_buffer::EnsureDescriptorSlotCapacity(m_concurrentAdmissionSlots);
         }
         if(!DescriptorBufferWriter(*this).write(writeItem, descriptorClass))
             return false;
-        if(!retained)
+        if(!retained){
             retained = Move(candidate);
+            m_dynamicReadinessSlots.push_back(handle);
+            if(needsConcurrentAdmission){
+                m_concurrentAdmissionSlots.push_back(handle);
+                m_verifiedConcurrentQueueMask = 0u;
+            }
+        }
         return true;
     }
 
@@ -152,13 +174,28 @@ b8 GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWr
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap::write: live Texture replacement requires a fresh handle."));
             return false;
         }
+        const ResourceQueueAdmissionSnapshot& admission = texture->getQueueAdmissionSnapshot();
+        const b8 needsDynamicReadiness = !texture->m_managed || texture->m_creationDesc.isVirtual;
+        const b8 needsConcurrentAdmission = !admission.valid() || admission.usesConcurrentSharing;
         TextureHandle candidate(nullptr, TextureHandle::deleter_type(&m_context.objectArena));
-        if(!retained)
+        if(!retained){
             candidate = TextureHandle(texture, TextureHandle::deleter_type(&m_context.objectArena));
+            if(needsDynamicReadiness)
+                __hidden_vulkan_descriptor_buffer::EnsureDescriptorSlotCapacity(m_dynamicReadinessSlots);
+            if(needsConcurrentAdmission)
+                __hidden_vulkan_descriptor_buffer::EnsureDescriptorSlotCapacity(m_concurrentAdmissionSlots);
+        }
         if(!DescriptorBufferWriter(*this).write(writeItem, descriptorClass))
             return false;
-        if(!retained)
+        if(!retained){
             retained = Move(candidate);
+            if(needsDynamicReadiness)
+                m_dynamicReadinessSlots.push_back(handle);
+            if(needsConcurrentAdmission){
+                m_concurrentAdmissionSlots.push_back(handle);
+                m_verifiedConcurrentQueueMask = 0u;
+            }
+        }
         return true;
     }
 
@@ -201,14 +238,29 @@ b8 GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWr
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap::write: live Buffer replacement requires a fresh handle."));
         return false;
     }
+    const ResourceQueueAdmissionSnapshot& admission = buffer->getQueueAdmissionSnapshot();
+    const b8 needsDynamicReadiness = !buffer->m_managed || buffer->m_creationDesc.isVirtual;
+    const b8 needsConcurrentAdmission = !admission.valid() || admission.usesConcurrentSharing;
     BufferHandle candidate(nullptr, BufferHandle::deleter_type(&m_context.objectArena));
-    if(!retained)
+    if(!retained){
         candidate = BufferHandle(buffer, BufferHandle::deleter_type(&m_context.objectArena));
+        if(needsDynamicReadiness)
+            __hidden_vulkan_descriptor_buffer::EnsureDescriptorSlotCapacity(m_dynamicReadinessSlots);
+        if(needsConcurrentAdmission)
+            __hidden_vulkan_descriptor_buffer::EnsureDescriptorSlotCapacity(m_concurrentAdmissionSlots);
+    }
 
     if(!DescriptorBufferWriter(*this).write(writeItem, descriptorClass))
         return false;
-    if(!retained)
+    if(!retained){
         retained = Move(candidate);
+        if(needsDynamicReadiness)
+            m_dynamicReadinessSlots.push_back(handle);
+        if(needsConcurrentAdmission){
+            m_concurrentAdmissionSlots.push_back(handle);
+            m_verifiedConcurrentQueueMask = 0u;
+        }
+    }
     return true;
 }
 

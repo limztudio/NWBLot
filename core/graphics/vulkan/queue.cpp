@@ -22,6 +22,18 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_vulkan_queue{
+    void EnsureCommandBufferPoolCapacity(Vector<TrackedCommandBufferPtr, Alloc::GlobalArena>& pool, const u64 liveCount){
+        const usize targetCapacity = static_cast<usize>(liveCount) + 1u;
+        if(pool.capacity() < targetCapacity)
+            pool.reserve(Max(targetCapacity, pool.capacity() * 2u));
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Queue::Queue(const VulkanContext& context, Device& device, const GpuPhysicalQueueInfo& info, NativeQueueState& nativeQueue)
     : m_context(context)
     , m_device(device)
@@ -39,7 +51,6 @@ Queue::Queue(const VulkanContext& context, Device& device, const GpuPhysicalQueu
     , m_submitWaitInfos(context.objectArena)
     , m_submitSignalInfos(context.objectArena)
     , m_submitCommandBufferInfos(context.objectArena)
-    , m_submitPreparedCommandBuffers(context.objectArena)
     , m_executeLocalWaits(context.objectArena)
     , m_executeExpectedCommandLists(context.objectArena)
     , m_executeSubmittedOwners(context.objectArena)
@@ -66,7 +77,6 @@ Queue::Queue(const VulkanContext& context, Device& device, const GpuPhysicalQueu
 }
 
 Queue::~Queue()noexcept{
-    m_submitPreparedCommandBuffers.clear();
     m_executeExpectedCommandLists.clear();
     m_commandBuffersInFlight.clear();
     m_commandBuffersPool.clear();
@@ -251,13 +261,14 @@ void Queue::unregisterCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept
 
 
 void Queue::collectCompletedCommandBuffers(){
-    auto it = m_commandBuffersInFlight.begin();
-    while(it != m_commandBuffersInFlight.end()){
-        auto& cmdBuf = *MakeNotNull(it->get());
+    while(!m_commandBuffersInFlight.empty()){
+        auto& cmdBuf = *MakeNotNull(m_commandBuffersInFlight.front().get());
         if(cmdBuf.m_submissionID > m_lastFinishedID)
             break;
 
-        it = recycleCommandBuffer(m_commandBuffersInFlight, it);
+        TrackedCommandBufferPtr completed = Move(m_commandBuffersInFlight.front());
+        m_commandBuffersInFlight.pop_front();
+        recycleCommandBuffer(Move(completed));
     }
 }
 
@@ -359,21 +370,25 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateDirectCommandBuffe
     collectCompletedCommandBuffers();
 
     auto available = m_commandBuffersPool.end();
-    for(auto it = m_commandBuffersPool.begin(); it != m_commandBuffersPool.end(); ++it){
-        FOUNDATION_ASSERT(*it);
-        if((*it)->m_recordingWorkerIndex == 0u){
-            available = it;
+    for(usize index = m_commandBuffersPool.size(); index > 0u; --index){
+        auto& entry = m_commandBuffersPool[index - 1u];
+        FOUNDATION_ASSERT(entry);
+        if(entry->m_recordingWorkerIndex == 0u){
+            available = m_commandBuffersPool.begin() + static_cast<isize>(index - 1u);
             break;
         }
     }
     if(available != m_commandBuffersPool.end()){
         TrackedCommandBufferPtr cmdBuf = Move(*available);
-        m_commandBuffersPool.erase(available);
+        if(available + 1 != m_commandBuffersPool.end())
+            *available = Move(m_commandBuffersPool.back());
+        m_commandBuffersPool.pop_back();
         FOUNDATION_ASSERT(cmdBuf && cmdBuf->m_cmdBuf != VK_NULL_HANDLE);
 
         const VkResult res = m_context.deviceDispatch.vkResetCommandBuffer(cmdBuf->m_cmdBuf, 0);
         if(res != VK_SUCCESS){
             NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to reset command buffer, creating a new one: {}"), ResultToString(res));
+            __hidden_vulkan_queue::EnsureCommandBufferPoolCapacity(m_commandBuffersPool, m_currentCommandBufferCount.load(MemoryOrder::relaxed));
             return createCommandBuffer(VK_NULL_HANDLE, nullptr, 0u, 0u);
         }
 
@@ -387,6 +402,7 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateDirectCommandBuffe
         return Move(cmdBuf);
     }
 
+    __hidden_vulkan_queue::EnsureCommandBufferPoolCapacity(m_commandBuffersPool, m_currentCommandBufferCount.load(MemoryOrder::relaxed));
     return createCommandBuffer(VK_NULL_HANDLE, nullptr, 0u, 0u);
 }
 
@@ -400,11 +416,10 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateWorkerCommandBuffe
     ScopedLock lock(arena->mutex);
 
     if(!arena->commandBuffersPool.empty()){
-        auto available = arena->commandBuffersPool.begin();
-        TrackedCommandBufferPtr cmdBuf = Move(*available);
+        TrackedCommandBufferPtr cmdBuf = Move(arena->commandBuffersPool.back());
         FOUNDATION_ASSERT(cmdBuf && cmdBuf->m_cmdBuf != VK_NULL_HANDLE);
         cmdBuf->m_sharedCommandPoolMutex = nullptr;
-        arena->commandBuffersPool.erase(available);
+        arena->commandBuffersPool.pop_back();
 
         const VkResult res = m_context.deviceDispatch.vkResetCommandBuffer(cmdBuf->m_cmdBuf, 0);
         if(res != VK_SUCCESS){
@@ -412,6 +427,7 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateWorkerCommandBuffe
             m_context.deviceDispatch.vkFreeCommandBuffers(m_context.device, arena->commandPool, 1u, &cmdBuf->m_cmdBuf);
             cmdBuf->m_cmdBuf = VK_NULL_HANDLE;
             cmdBuf.reset();
+            __hidden_vulkan_queue::EnsureCommandBufferPoolCapacity(arena->commandBuffersPool, arena->currentCommandBufferCount.load(MemoryOrder::relaxed));
             return createCommandBuffer(arena->commandPool, &arena->mutex, recordingWorkerDomain, recordingWorkerIndex);
         }
 
@@ -425,6 +441,7 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateWorkerCommandBuffe
         return Move(cmdBuf);
     }
 
+    __hidden_vulkan_queue::EnsureCommandBufferPoolCapacity(arena->commandBuffersPool, arena->currentCommandBufferCount.load(MemoryOrder::relaxed));
     return createCommandBuffer(arena->commandPool, &arena->mutex, recordingWorkerDomain, recordingWorkerIndex);
 }
 

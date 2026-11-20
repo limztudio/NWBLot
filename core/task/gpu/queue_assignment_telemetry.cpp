@@ -55,6 +55,7 @@ void GpuTaskGraphQueueAssignmentTelemetryTracker::reset()noexcept{
     m_generation = 0u;
     m_declarationRevision = 0u;
     m_planGeneration = 0u;
+    m_assignmentRevision = 0u;
     m_recordingAttemptGeneration = 0u;
     m_acceptanceRevision = 0u;
     m_deviceGeneration = 0u;
@@ -83,6 +84,7 @@ b8 GpuTaskGraphQueueAssignmentTelemetryTracker::update(
     m_generation = 0u;
     m_declarationRevision = 0u;
     m_planGeneration = 0u;
+    m_assignmentRevision = 0u;
     m_recordingAttemptGeneration = 0u;
     m_acceptanceRevision = 0u;
     m_valid = false;
@@ -176,6 +178,7 @@ b8 GpuTaskGraphQueueAssignmentTelemetryTracker::update(
     m_generation = declarations.generation();
     m_declarationRevision = declarations.declarationRevision();
     m_planGeneration = compiledPlan.planGeneration();
+    m_assignmentRevision = assignments.assignmentRevision();
     m_recordingAttemptGeneration = acceptanceSnapshot->recordingAttemptGeneration;
     m_acceptanceRevision = acceptanceSnapshot->acceptanceRevision;
     m_valid = true;
@@ -196,6 +199,9 @@ b8 GpuTaskGraphQueueAssignmentTelemetryTracker::validFor(const GpuTaskGraph::Dec
         || m_current.size() != declarations.taskCount()
     )
         return false;
+
+    if(m_assignmentRevision != 0u && m_assignmentRevision == assignments.assignmentRevision())
+        return true;
 
     for(usize taskIndex = 0u; taskIndex < declarations.taskCount(); ++taskIndex){
         const GpuTaskGraphTaskView task = declarations.taskAt(taskIndex);

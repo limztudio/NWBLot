@@ -59,7 +59,13 @@ class GpuRendererState : NoCopy{
 
     [cpp_unwind]
     public Expected<GpuFrame> makeFrame(){
+        auto rasterCapture = this.m_versions.make<GpuCommandIrCapture>(this.m_graphics.allocator());
+        auto outputCapture = this.m_versions.make<GpuCommandIrCapture>(this.m_graphics.allocator());
+        if(!rasterCapture.has_value() || !outputCapture.has_value())
+            return MakeUnexpected(Failure());
         GpuFrameData prepared = this.emptyFrame();
+        prepared.m_rasterCommandIrCapture = rasterCapture.value();
+        prepared.m_outputCommandIrCapture = outputCapture.value();
         return this.m_versions.makePrepared<GpuFrameData>(prepared);
     }
     [cpp_unwind]

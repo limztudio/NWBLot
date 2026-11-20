@@ -179,6 +179,13 @@ private:
             CommandListParameters parameters;
             CommandListHandle commandList;
         };
+        struct PreflightCachedResource{
+            u64 stamp = 0u;
+            ResourceStates::Mask permanentState = ResourceStates::Unknown;
+            ResourceStates::Mask lastValidatedState = ResourceStates::Unknown;
+            b8 baseValidated = false;
+            b8 hasLastValidatedState = false;
+        };
 
         GlobalUniquePtr<Alloc::ScratchArena> stateFanInScratchArena;
         CommandListResourceStateHandoff initialStateSeed;
@@ -188,6 +195,8 @@ private:
         CommandListResourceStateHandoff externalMergedStateSeed;
         GraphicsVector<CachedCommandList> commandLists;
         GraphicsVector<CommandListResourceStateHandoff> seedSubsetBatch;
+        GraphicsVector<PreflightCachedResource> preflightResourceCache;
+        u64 preflightCacheStamp = 0u;
 
 
     public:
@@ -199,6 +208,7 @@ private:
             , externalMergedStateSeed(arena)
             , commandLists(arena)
             , seedSubsetBatch(arena)
+            , preflightResourceCache(arena)
         {}
 
 

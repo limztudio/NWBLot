@@ -105,7 +105,7 @@ Expected<TimerQueryRecordingToken> CommandList::beginTimerQuery(TimerQuery& quer
         return MakeUnexpected(Failure{});
     const b8 recordsInlineReset = canResetTimerQueryHereUnchecked();
 
-    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
+    const GpuPhysicalQueueInfo* const queueInfo = cachedPhysicalQueueInfo();
     if(!queueInfo || queueInfo->timestampValidBits == 0u || queueInfo->timestampValidBits > Device::s_CompleteTimestampValidBits){
         NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to begin timer query on a queue without timestamp support"));
         invalidateCommandRecording();
@@ -211,7 +211,7 @@ b8 CommandList::endTimerQuery(TimerQuery& query, const TimerQueryRecordingToken&
         return false;
     }
 
-    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
+    const GpuPhysicalQueueInfo* const queueInfo = cachedPhysicalQueueInfo();
     b8 matchingActiveCycle = false;
     {
         ScopedLock queryLock(query.m_mutex);
@@ -257,7 +257,7 @@ b8 CommandList::endTimerQueryFromExistingClaim(TimerQuery& query, const TimerQue
     if(!publicCommandStateAccessible())
         return false;
 
-    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
+    const GpuPhysicalQueueInfo* const queueInfo = cachedPhysicalQueueInfo();
     if(
         query.m_queryPool == VK_NULL_HANDLE
         || &query.m_context != &m_context
@@ -306,7 +306,7 @@ b8 CommandList::endTimerQueryFromExistingClaim(TimerQuery& query, const TimerQue
 }
 
 b8 CommandList::canRecordTimerQueryHereUnchecked()const noexcept{
-    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
+    const GpuPhysicalQueueInfo* const queueInfo = cachedPhysicalQueueInfo();
     return
         !m_commandRecordingFailed
         && matchesActiveNativeLeaseIdentity()
@@ -324,7 +324,7 @@ b8 CommandList::canResetTimerQueryHereUnchecked()const noexcept{
     if(m_renderPassActive || !canRecordTimerQueryHereUnchecked())
         return false;
 
-    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
+    const GpuPhysicalQueueInfo* const queueInfo = cachedPhysicalQueueInfo();
     constexpr u8 s_ResetCapableBits = static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute);
     return (static_cast<u8>(queueInfo->capabilities) & s_ResetCapableBits) != 0u;
 }

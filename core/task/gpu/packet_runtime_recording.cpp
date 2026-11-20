@@ -224,7 +224,7 @@ b8 GpuNativePacketRecorder::recordPacket(
     }
     packetStateSeed->reset();
 
-    if(!preflightPacketResources(graph, declarationAccess, compiledGraph, planAccess, recordingAccess, packetID, initialStates, stateFanInScratchArena)){
+    if(!preflightPacketResources(graph, declarationAccess, compiledGraph, planAccess, recordingAccess, packetID, initialStates, stateFanInScratchArena, scratch)){
         packetStateSeed->reset();
         abortPacketRecording();
         return false;
@@ -302,22 +302,39 @@ b8 GpuNativePacketRecorder::recordPacket(
         const GpuCompiledBarrier* const prologueBarriers = compiledTaskView.prologueBarriers;
         barrierCount += compiledTask->prologueBarrierCount;
         const Timer graphPrologueRecordingBegin = TimerNow();
-        for(u32 barrierIndex = 0u; recorded && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
-            const GpuCompiledBarrier& barrier = prologueBarriers[barrierIndex];
-            if(barrier.isGraphInitialState && barrier.before == ResourceStates::Unknown){
-                if(!GpuPacketRecordingDetail::HasExplicitKnownInitialState(declarationAccess, barrier, *commandList)){
-                    const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(barrier.resource.index);
-                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Gpu task graph: rejecting task '{}' because first-read resource '{}' has no explicit initial native state source"), ConvertString(taskView.markerLabel), ConvertString(resource.markerLabel));
-                    recorded = false;
+        if(recorded && compiledTask->prologueBarrierCount != 0u){
+            b8 hasUnknownInitialBarrier = false;
+            for(u32 barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+                if(prologueBarriers[barrierIndex].isGraphInitialState && prologueBarriers[barrierIndex].before == ResourceStates::Unknown){
+                    hasUnknownInitialBarrier = true;
                     break;
                 }
-
-                GpuCompiledBarrier loweredBarrier = barrier;
-                loweredBarrier.isGraphInitialState = false;
-                recorded = graph.applyCompiledBarrier(compiledGraph, planAccess, recordingAccess, task, loweredBarrier, *commandList);
             }
-            else
-                recorded = graph.applyCompiledBarrier(compiledGraph, planAccess, recordingAccess, task, barrier, *commandList);
+            if(!hasUnknownInitialBarrier){
+                recorded = graph.applyCompiledBarriers(compiledGraph, planAccess, recordingAccess, task, Span<const GpuCompiledBarrier>(prologueBarriers, compiledTask->prologueBarrierCount), *commandList);
+            }
+            else if(!recordingAccess.validForTask(graph, compiledGraph, planAccess, task)){
+                recorded = false;
+            }
+            else{
+                for(u32 barrierIndex = 0u; recorded && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+                    const GpuCompiledBarrier& barrier = prologueBarriers[barrierIndex];
+                    if(barrier.isGraphInitialState && barrier.before == ResourceStates::Unknown){
+                        if(!GpuPacketRecordingDetail::HasExplicitKnownInitialState(declarationAccess, barrier, *commandList)){
+                            const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(barrier.resource.index);
+                            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Gpu task graph: rejecting task '{}' because first-read resource '{}' has no explicit initial native state source"), ConvertString(taskView.markerLabel), ConvertString(resource.markerLabel));
+                            recorded = false;
+                            break;
+                        }
+
+                        GpuCompiledBarrier loweredBarrier = barrier;
+                        loweredBarrier.isGraphInitialState = false;
+                        recorded = graph.applyCompiledBarrierValidated(planAccess, loweredBarrier, *commandList);
+                    }
+                    else
+                        recorded = graph.applyCompiledBarrierValidated(planAccess, barrier, *commandList);
+                }
+            }
         }
         if(recorded)
             recorded = graph.seedTaskRetainedResourceStates(compiledGraph, planAccess, recordingAccess, task, *commandList);
@@ -430,8 +447,8 @@ b8 GpuNativePacketRecorder::recordPacket(
         }
         const GpuCompiledBarrier* const epilogueBarriers = compiledTaskView.epilogueBarriers;
         const Timer graphEpilogueRecordingBegin = TimerNow();
-        for(u32 barrierIndex = 0u; recorded && barrierIndex < compiledTask->epilogueBarrierCount; ++barrierIndex)
-            recorded = graph.applyCompiledBarrier(compiledGraph, planAccess, recordingAccess, task, epilogueBarriers[barrierIndex], *commandList);
+        if(recorded && compiledTask->epilogueBarrierCount != 0u)
+            recorded = graph.applyCompiledBarriers(compiledGraph, planAccess, recordingAccess, task, Span<const GpuCompiledBarrier>(epilogueBarriers, compiledTask->epilogueBarrierCount), *commandList);
         barrierCount += compiledTask->epilogueBarrierCount;
         if(recorded)
             commandList->commitBarriers();

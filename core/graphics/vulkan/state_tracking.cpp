@@ -95,7 +95,7 @@ void StateTracker::setPermanentBufferState(Buffer& buffer, ResourceStates::Mask 
 }
 
 ResourceStates::Mask StateTracker::getPermanentTextureState(Texture* texture)const noexcept{
-    if(!texture)
+    if(!texture || m_permanentTextureStates.empty())
         return ResourceStates::Unknown;
 
     const auto existing = m_permanentTextureStates.find(MakeNotNull(texture));
@@ -103,7 +103,7 @@ ResourceStates::Mask StateTracker::getPermanentTextureState(Texture* texture)con
 }
 
 ResourceStates::Mask StateTracker::getPermanentBufferState(Buffer* buffer)const noexcept{
-    if(!buffer)
+    if(!buffer || m_permanentBufferStates.empty())
         return ResourceStates::Unknown;
 
     const auto existing = m_permanentBufferStates.find(MakeNotNull(buffer));
@@ -114,9 +114,11 @@ ResourceStates::Mask StateTracker::getTextureState(Texture* texture, ArraySlice 
     if(!texture)
         return ResourceStates::Unknown;
 
-    auto permIt = m_permanentTextureStates.find(MakeNotNull(texture));
-    if(permIt != m_permanentTextureStates.end())
-        return permIt.value().state;
+    if(!m_permanentTextureStates.empty()){
+        auto permIt = m_permanentTextureStates.find(MakeNotNull(texture));
+        if(permIt != m_permanentTextureStates.end())
+            return permIt.value().state;
+    }
 
     const auto state = getTransientTextureState(*texture, arraySlice, mipLevel);
     return state ? *state : ResourceStates::Unknown;
@@ -125,13 +127,13 @@ ResourceStates::Mask StateTracker::getTextureState(Texture* texture, ArraySlice 
 b8 StateTracker::hasExplicitTextureSubresourceState(Texture* const texture, const ArraySlice arraySlice, const MipLevel mipLevel)const noexcept{
     if(!texture)
         return false;
-    if(m_permanentTextureStates.find(MakeNotNull(texture)) != m_permanentTextureStates.end())
+    if(!m_permanentTextureStates.empty() && m_permanentTextureStates.find(MakeNotNull(texture)) != m_permanentTextureStates.end())
         return true;
-    return m_textureStates.find(TextureSubresourceStateKey{ texture, mipLevel, arraySlice }) != m_textureStates.end();
+    return !m_textureStates.empty() && m_textureStates.find(TextureSubresourceStateKey{ texture, mipLevel, arraySlice }) != m_textureStates.end();
 }
 
 void StateTracker::beginTrackingTexture(Texture& texture, TextureSubresourceSet subresources, ResourceStates::Mask state){
-    if(m_permanentTextureStates.find(MakeNotNull(&texture)) != m_permanentTextureStates.end())
+    if(isPermanentTexture(texture))
         return;
 
     beginTrackingTransientTexture(texture, subresources, state);
@@ -166,6 +168,8 @@ void StateTracker::appendKeepInitialStateBarriers(TrackedCommandBuffer& commandB
     }
 
     for(auto it = m_bufferStates.begin(); it != m_bufferStates.end(); ++it){
+        if(it.value().empty())
+            continue;
         auto& buffer = *MakeNotNull(it->first.get());
         if(!buffer.m_creationDesc.keepInitialState)
             continue;
@@ -183,11 +187,15 @@ void StateTracker::appendKeepInitialStateBarriers(TrackedCommandBuffer& commandB
 }
 
 b8 StateTracker::isUavBarrierEnabledForTexture(Texture& texture)const noexcept{
+    if(m_textureUavBarriers.empty())
+        return true;
     const auto found = m_textureUavBarriers.find(MakeNotNull(&texture));
     return found == m_textureUavBarriers.end() || found.value().enableBarriers;
 }
 
 b8 StateTracker::isUavBarrierEnabledForBuffer(Buffer& buffer)const noexcept{
+    if(m_bufferUavBarriers.empty())
+        return true;
     const auto found = m_bufferUavBarriers.find(MakeNotNull(&buffer));
     return found == m_bufferUavBarriers.end() || found.value().enableBarriers;
 }
@@ -223,10 +231,12 @@ Expected<ResourceStates::Mask> StateTracker::getTransientTextureState(Texture& t
 }
 
 ResourceStates::Mask StateTracker::getResolvedTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel)const noexcept{
-    const TextureSubresourceStateKey key{ &texture, mipLevel, arraySlice };
-    const auto existing = m_textureStates.find(key);
-    if(existing != m_textureStates.end())
-        return existing.value();
+    if(!m_textureStates.empty()){
+        const TextureSubresourceStateKey key{ &texture, mipLevel, arraySlice };
+        const auto existing = m_textureStates.find(key);
+        if(existing != m_textureStates.end())
+            return existing.value();
+    }
 
     return texture.isRetainedSubresourceStateKnown(arraySlice, mipLevel) ? texture.m_creationDesc.initialState : ResourceStates::Unknown;
 }
@@ -247,6 +257,24 @@ void StateTracker::beginTrackingResolvedTransientTexture(Texture& texture, const
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
             const TextureSubresourceStateKey key{ &texture, mipLevel, arraySlice };
             m_textureStates.insert_or_assign(key, state);
+        }
+    }
+}
+
+void StateTracker::seedResolvedTransientTexture(Texture& texture, const TextureSubresourceSet& resolvedSubresources, ResourceStates::Mask state){
+    if(isPermanentTexture(texture))
+        return;
+
+    const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
+    const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
+    const usize subresourceCount = static_cast<usize>(resolvedSubresources.numMipLevels) * static_cast<usize>(resolvedSubresources.numArraySlices);
+
+    ::ContainerDetail::ReserveAdditionalCapacity(m_textureStates, subresourceCount);
+
+    for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
+        for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
+            const TextureSubresourceStateKey key{ &texture, mipLevel, arraySlice };
+            m_textureStates.emplace(key, state);
         }
     }
 }
@@ -281,26 +309,41 @@ void CommandList::setEnableUavBarriersForBuffer(Buffer* buffer, b8 enableBarrier
     m_stateTracker.setEnableUavBarriersForBuffer(*buffer, enableBarriers);
 }
 
-void CommandList::beginTrackingTextureState(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits){
+b8 CommandList::resolveTrackedTextureSubresources(Texture* const texture, TextureSubresourceSet subresources, const ResourceStates::Mask stateBits, const TStringView operationName, TextureSubresourceSet& outResolvedSubresources){
     if(!texture)
-        return;
-    constexpr TStringView s_OperationName = FOUNDATION_TEXT("begin tracking texture state");
-    if(!validateCommandRecordingScope(s_OperationName))
-        return;
+        return false;
+    if(!validateCommandRecordingScope(operationName))
+        return false;
     if(stateBits == ResourceStates::Unknown){
-        rejectCommandRecording(s_OperationName, VulkanStateTrackingDetail::s_InitialStateUnknownReason);
-        return;
+        rejectCommandRecording(operationName, VulkanStateTrackingDetail::s_InitialStateUnknownReason);
+        return false;
     }
-    if(!validateTextureForGpuState(texture, stateBits, s_OperationName))
-        return;
+    if(!validateTextureForGpuState(texture, stateBits, operationName))
+        return false;
 
-    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture->m_creationDesc, TextureSubresourceMipResolve::Range);
-    if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
-        rejectCommandRecording(s_OperationName, VulkanStateTrackingDetail::s_SubresourceRangeOutsideTextureReason);
-        return;
+    outResolvedSubresources = subresources.resolve(texture->m_creationDesc, TextureSubresourceMipResolve::Range);
+    if(!VulkanDetail::IsTextureSubresourceRangeValid(outResolvedSubresources)){
+        rejectCommandRecording(operationName, VulkanStateTrackingDetail::s_SubresourceRangeOutsideTextureReason);
+        return false;
     }
+    return true;
+}
+
+void CommandList::beginTrackingTextureState(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits){
+    TextureSubresourceSet resolvedSubresources{};
+    if(!resolveTrackedTextureSubresources(texture, subresources, stateBits, FOUNDATION_TEXT("begin tracking texture state"), resolvedSubresources))
+        return;
 
     m_stateTracker.beginTrackingTexture(*texture, resolvedSubresources, stateBits);
+    retainResource(texture);
+}
+
+void CommandList::seedTextureState(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits){
+    TextureSubresourceSet resolvedSubresources{};
+    if(!resolveTrackedTextureSubresources(texture, subresources, stateBits, FOUNDATION_TEXT("seed texture state"), resolvedSubresources))
+        return;
+
+    m_stateTracker.seedResolvedTransientTexture(*texture, resolvedSubresources, stateBits);
     retainResource(texture);
 }
 

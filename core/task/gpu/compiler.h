@@ -265,6 +265,7 @@ public:
     void reset()noexcept;
 
     [[nodiscard]] b8 valid()const noexcept{ return m_valid; }
+    [[nodiscard]] u64 assignmentRevision()const noexcept{ return m_assignmentRevision; }
     [[nodiscard]] b8 validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept;
     [[nodiscard]] b8 validFor(const GpuTaskGraph::DeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledPlan)const noexcept;
     [[nodiscard]] const GpuTaskQueueAssignmentDiagnostic& diagnostic()const noexcept{ return m_diagnostic; }
@@ -283,6 +284,7 @@ private:
     u64 m_generation = 0u;
     u64 m_declarationRevision = 0u;
     u64 m_compiledPlanGeneration = 0u;
+    u64 m_assignmentRevision = 0u;
     usize m_taskCount = 0u;
     b8 m_valid = false;
 };

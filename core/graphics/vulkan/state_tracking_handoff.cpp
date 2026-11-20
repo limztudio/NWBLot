@@ -53,6 +53,8 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
         return false;
     }
     FOUNDATION_ASSERT(states.m_valid);
+    if(states.empty())
+        return true;
 
     for(const CommandListResourceStateHandoff::TextureState& state : states.m_textureStates){
         if(state.texture && (!VulkanTextureDetail::IsTextureResourceStateMaskValid(state.state) || !isTextureReadyForCommandQueue(state.texture, VulkanTextureDetail::TextureImagePolicy::RequiredImageUsageForResourceStates(state.state))))
@@ -87,8 +89,8 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
             return false;
     }
 
-    Vector<NotNull<const CommandListResourceStateHandoff::BufferState*>, Alloc::ScratchArena> orderedBufferStates{scratchArena};
-    orderedBufferStates.reserve(states.m_bufferStates.size());
+    b8 bufferStatesSorted = true;
+    const CommandListResourceStateHandoff::BufferState* previousBufferState = nullptr;
     for(const CommandListResourceStateHandoff::BufferState& state : states.m_bufferStates){
         if(!state.buffer)
             continue;
@@ -96,17 +98,37 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Imported buffer byte range is empty or invalid"));
             return false;
         }
-        orderedBufferStates.push_back(MakeNotNull(&state));
+        if(previousBufferState){
+            if(previousBufferState->buffer == state.buffer){
+                if(state.range.byteOffset < previousBufferState->range.byteOffset)
+                    bufferStatesSorted = false;
+                else if(previousBufferState->range.overlaps(state.range)){
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Imported buffer state contains overlapping byte intervals"));
+                    return false;
+                }
+            }
+            else if(!LessThan<Buffer*>()(previousBufferState->buffer, state.buffer))
+                bufferStatesSorted = false;
+        }
+        previousBufferState = &state;
     }
-    Sort(orderedBufferStates.begin(), orderedBufferStates.end(), [](const auto lhs, const auto rhs)noexcept{
-        return lhs->buffer != rhs->buffer ? LessThan<Buffer*>()(lhs->buffer, rhs->buffer) : lhs->range.byteOffset < rhs->range.byteOffset;
-    });
-    for(usize index = 1u; index < orderedBufferStates.size(); ++index){
-        const auto& previous = *orderedBufferStates[index - 1u];
-        const auto& current = *orderedBufferStates[index];
-        if(previous.buffer == current.buffer && previous.range.overlaps(current.range)){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Imported buffer state contains overlapping byte intervals"));
-            return false;
+    if(!bufferStatesSorted){
+        Vector<NotNull<const CommandListResourceStateHandoff::BufferState*>, Alloc::ScratchArena> orderedBufferStates{scratchArena};
+        orderedBufferStates.reserve(states.m_bufferStates.size());
+        for(const CommandListResourceStateHandoff::BufferState& state : states.m_bufferStates){
+            if(state.buffer)
+                orderedBufferStates.push_back(MakeNotNull(&state));
+        }
+        Sort(orderedBufferStates.begin(), orderedBufferStates.end(), [](const auto lhs, const auto rhs)noexcept{
+            return lhs->buffer != rhs->buffer ? LessThan<Buffer*>()(lhs->buffer, rhs->buffer) : lhs->range.byteOffset < rhs->range.byteOffset;
+        });
+        for(usize index = 1u; index < orderedBufferStates.size(); ++index){
+            const auto& previous = *orderedBufferStates[index - 1u];
+            const auto& current = *orderedBufferStates[index];
+            if(previous.buffer == current.buffer && previous.range.overlaps(current.range)){
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Imported buffer state contains overlapping byte intervals"));
+                return false;
+            }
         }
     }
     for(const CommandListResourceStateHandoff::BufferState& state : states.m_permanentBufferStates){
@@ -150,7 +172,7 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
         }
 
         const u32 sourceQueueFamily = ownerQueue.valid() ? m_device.getQueueFamilyIndex(ownerQueue) : VK_QUEUE_FAMILY_IGNORED;
-        const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(m_creationDesc.physicalQueue);
+        const u32 destinationQueueFamily = m_hasCachedPhysicalQueueInfo ? m_cachedPhysicalQueueInfo.familyIndex : VK_QUEUE_FAMILY_IGNORED;
         if(ownerQueue.valid() && (sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED || destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED)){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Exclusive texture handoff references an unavailable queue family"));
             return false;
@@ -199,7 +221,7 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
         }
 
         const u32 sourceQueueFamily = ownerQueue.valid() ? m_device.getQueueFamilyIndex(ownerQueue) : VK_QUEUE_FAMILY_IGNORED;
-        const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(m_creationDesc.physicalQueue);
+        const u32 destinationQueueFamily = m_hasCachedPhysicalQueueInfo ? m_cachedPhysicalQueueInfo.familyIndex : VK_QUEUE_FAMILY_IGNORED;
         if(ownerQueue.valid() && (sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED || destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED)){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Exclusive buffer handoff references an unavailable queue family"));
             return false;
@@ -225,6 +247,56 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
         return true;
     };
 
+    HashMap<NotNull<Texture*>, ResourceStates::Mask, Alloc::ScratchArena, Hasher<NotNull<Texture*>>, EqualTo<NotNull<Texture*>>> importedPermanentTextures(
+        0u,
+        Hasher<NotNull<Texture*>>(),
+        EqualTo<NotNull<Texture*>>(),
+        scratchArena
+    );
+    Texture* singlePermanentTexture = nullptr;
+    ResourceStates::Mask singlePermanentTextureState = ResourceStates::Unknown;
+    if(states.m_permanentTextureStates.size() > 1u){
+        ::ContainerDetail::ReserveAdditionalCapacity(importedPermanentTextures, states.m_permanentTextureStates.size());
+        for(const CommandListResourceStateHandoff::PermanentTextureState& state : states.m_permanentTextureStates){
+            if(!state.texture)
+                continue;
+            const auto [it, inserted] = importedPermanentTextures.emplace(MakeNotNull(state.texture), state.state);
+            if(!inserted && it.value() != state.state){
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Resource-state handoff contains conflicting permanent texture states"));
+                return false;
+            }
+        }
+    }
+    else if(states.m_permanentTextureStates.size() == 1u && states.m_permanentTextureStates[0u].texture){
+        singlePermanentTexture = states.m_permanentTextureStates[0u].texture;
+        singlePermanentTextureState = states.m_permanentTextureStates[0u].state;
+    }
+
+    HashMap<NotNull<Buffer*>, ResourceStates::Mask, Alloc::ScratchArena, Hasher<NotNull<Buffer*>>, EqualTo<NotNull<Buffer*>>> importedPermanentBuffers(
+        0u,
+        Hasher<NotNull<Buffer*>>(),
+        EqualTo<NotNull<Buffer*>>(),
+        scratchArena
+    );
+    Buffer* singlePermanentBuffer = nullptr;
+    ResourceStates::Mask singlePermanentBufferState = ResourceStates::Unknown;
+    if(states.m_permanentBufferStates.size() > 1u){
+        ::ContainerDetail::ReserveAdditionalCapacity(importedPermanentBuffers, states.m_permanentBufferStates.size());
+        for(const CommandListResourceStateHandoff::BufferState& state : states.m_permanentBufferStates){
+            if(!state.buffer)
+                continue;
+            const auto [it, inserted] = importedPermanentBuffers.emplace(MakeNotNull(state.buffer), state.state);
+            if(!inserted && it.value() != state.state){
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Resource-state handoff contains conflicting permanent buffer states"));
+                return false;
+            }
+        }
+    }
+    else if(states.m_permanentBufferStates.size() == 1u && states.m_permanentBufferStates[0u].buffer){
+        singlePermanentBuffer = states.m_permanentBufferStates[0u].buffer;
+        singlePermanentBufferState = states.m_permanentBufferStates[0u].state;
+    }
+
     for(const CommandListResourceStateHandoff::TextureState& state : states.m_textureStates){
         if(!state.texture)
             continue;
@@ -233,6 +305,19 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
         if(existingPermanentState != ResourceStates::Unknown && existingPermanentState != state.state){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Imported texture state conflicts with an existing permanent state"));
             return false;
+        }
+        if(singlePermanentTexture == state.texture){
+            if(singlePermanentTextureState != state.state){
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Imported transient texture state conflicts with its permanent state"));
+                return false;
+            }
+        }
+        else if(!importedPermanentTextures.empty()){
+            const auto permFound = importedPermanentTextures.find(MakeNotNull(state.texture));
+            if(permFound != importedPermanentTextures.end() && permFound.value() != state.state){
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Imported transient texture state conflicts with its permanent state"));
+                return false;
+            }
         }
 
         if(!appendTextureAcquire(*state.texture, TextureSubresourceSet(state.mipLevel, 1u, state.arraySlice, 1u), state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
@@ -248,6 +333,19 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Imported buffer state conflicts with an existing permanent state"));
             return false;
         }
+        if(singlePermanentBuffer == state.buffer){
+            if(singlePermanentBufferState != state.state){
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Imported transient buffer state conflicts with its permanent state"));
+                return false;
+            }
+        }
+        else if(!importedPermanentBuffers.empty()){
+            const auto permFound = importedPermanentBuffers.find(MakeNotNull(state.buffer));
+            if(permFound != importedPermanentBuffers.end() && permFound.value() != state.state){
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Imported transient buffer state conflicts with its permanent state"));
+                return false;
+            }
+        }
 
         if(!appendBufferAcquire(*state.buffer, state.range.resolve(state.buffer->m_creationDesc), state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
             return false;
@@ -262,18 +360,6 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Imported permanent texture state conflicts with the command-list contract"));
             return false;
         }
-        for(const CommandListResourceStateHandoff::TextureState& transientState : states.m_textureStates){
-            if(transientState.texture == state.texture && transientState.state != state.state){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Imported transient texture state conflicts with its permanent state"));
-                return false;
-            }
-        }
-        for(const CommandListResourceStateHandoff::PermanentTextureState& otherState : states.m_permanentTextureStates){
-            if(otherState.texture == state.texture && otherState.state != state.state){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Resource-state handoff contains conflicting permanent texture states"));
-                return false;
-            }
-        }
 
         if(!appendTextureAcquire(*state.texture, s_AllSubresources, state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
             return false;
@@ -287,18 +373,6 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
         if(existingPermanentState != ResourceStates::Unknown && existingPermanentState != state.state){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Imported permanent buffer state conflicts with the command-list contract"));
             return false;
-        }
-        for(const CommandListResourceStateHandoff::BufferState& transientState : states.m_bufferStates){
-            if(transientState.buffer == state.buffer && transientState.state != state.state){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Imported transient buffer state conflicts with its permanent state"));
-                return false;
-            }
-        }
-        for(const CommandListResourceStateHandoff::BufferState& otherState : states.m_permanentBufferStates){
-            if(otherState.buffer == state.buffer && otherState.state != state.state){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Resource-state handoff contains conflicting permanent buffer states"));
-                return false;
-            }
         }
 
         if(!appendBufferAcquire(*state.buffer, state.range.resolve(state.buffer->m_creationDesc), state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
@@ -433,7 +507,7 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
     if(m_textureOwnershipReleaseDestinations.empty() && m_bufferOwnershipReleaseDestinations.empty())
         return;
 
-    const u32 sourceQueueFamily = m_device.getQueueFamilyIndex(m_creationDesc.physicalQueue);
+    const u32 sourceQueueFamily = m_hasCachedPhysicalQueueInfo ? m_cachedPhysicalQueueInfo.familyIndex : VK_QUEUE_FAMILY_IGNORED;
     if(sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED){
         rejectCommandRecording(s_OwnershipReleaseBarriersOperation, FOUNDATION_TEXT("source queue family is unavailable"));
         return;

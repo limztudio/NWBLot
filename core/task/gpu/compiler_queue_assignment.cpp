@@ -4,6 +4,7 @@
 
 #include "compiler_internal.h"
 
+#include <global/atomic_identity.h>
 #include <global/bit.h>
 #include <global/overflow.h>
 
@@ -27,6 +28,7 @@ void GpuTaskGraphQueueAssignments::reset()noexcept{
     m_generation = 0u;
     m_declarationRevision = 0u;
     m_compiledPlanGeneration = 0u;
+    m_assignmentRevision = 0u;
     m_taskCount = 0u;
     m_valid = false;
 }
@@ -380,7 +382,9 @@ b8 GpuTaskGraphCompiler::assignQueues(
         auto& selectedQueue = *MakeNotNull(FindPhysicalQueueInfo(topology, assignment.queue));
         assignment.score = BuildQueueAssignmentScore(graph, analysis, outAssignments.m_assignments, outAssignments.m_assignmentIndicesByTask, topology, schedulingReachability, scoringData, task, selectedQueue);
     }
+    static Atomic<u64> s_NextAssignmentRevision{ 0u };
     outAssignments.m_diagnostic.status = GpuTaskGraphQueueAssignmentStatus::Success;
+    outAssignments.m_assignmentRevision = NextAtomicWrappingNonzero(s_NextAssignmentRevision);
     outAssignments.m_valid = true;
     return true;
 }

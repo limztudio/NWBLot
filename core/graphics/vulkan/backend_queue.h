@@ -42,7 +42,8 @@ private:
 
 
 private:
-    using CommandBufferList = List<TrackedCommandBufferPtr, Alloc::GlobalArena>;
+    using InFlightCommandBufferQueue = Deque<TrackedCommandBufferPtr, Alloc::GlobalArena>;
+    using CommandBufferPoolList = Vector<TrackedCommandBufferPtr, Alloc::GlobalArena>;
 
 
 private:
@@ -128,7 +129,7 @@ private:
         Atomic<u64> pendingCommandBufferCount = 0u;
         Atomic<u64> growthEventCount = 0u;
         Atomic<u64> resetEventCount = 0u;
-        CommandBufferList commandBuffersPool;
+        CommandBufferPoolList commandBuffersPool;
 
 
     public:
@@ -181,7 +182,7 @@ private:
     [[nodiscard]] Expected<TrackedCommandBufferPtr, VkResult> getOrCreateDirectCommandBuffer();
     [[nodiscard]] Expected<TrackedCommandBufferPtr, VkResult> getOrCreateWorkerCommandBuffer(u64 recordingWorkerDomain, u32 recordingWorkerIndex);
     void destroyWorkerCommandArenas()noexcept;
-    [[nodiscard]] CommandBufferList::iterator recycleCommandBuffer(CommandBufferList& source, CommandBufferList::iterator commandBuffer);
+    void recycleCommandBuffer(TrackedCommandBufferPtr cmdBuf);
     [[nodiscard]] b8 coversTimerQueryPrerequisite(const QueueSubmissionToken& prerequisite, b8 prerequisiteObservedComplete, Span<const SubmissionWait> localWaits)const noexcept;
 
 
@@ -206,15 +207,14 @@ private:
     Vector<VkSemaphoreSubmitInfo, Alloc::GlobalArena> m_submitWaitInfos;
     Vector<VkSemaphoreSubmitInfo, Alloc::GlobalArena> m_submitSignalInfos;
     Vector<VkCommandBufferSubmitInfo, Alloc::GlobalArena> m_submitCommandBufferInfos;
-    CommandBufferList m_submitPreparedCommandBuffers;
     Vector<SubmissionWait, Alloc::GlobalArena> m_executeLocalWaits;
     Vector<SubmissionCommandListIdentity, Alloc::GlobalArena> m_executeExpectedCommandLists;
     VulkanDetail::SubmittedCommandBufferOwnerLookup m_executeSubmittedOwners;
     Atomic<u64> m_lastRecordingID = 0u;
     u64 m_lastSubmittedID = 0;
     u64 m_lastFinishedID = 0;
-    CommandBufferList m_commandBuffersInFlight;
-    CommandBufferList m_commandBuffersPool;
+    InFlightCommandBufferQueue m_commandBuffersInFlight;
+    CommandBufferPoolList m_commandBuffersPool;
     Vector<NotNull<WorkerCommandArena*>, Alloc::GlobalArena> m_workerCommandArenas;
     Atomic<WorkerCommandArena*> m_workerCommandArenaHead = nullptr;
     Atomic<u64> m_explicitWorkerArenaCount = 0u;

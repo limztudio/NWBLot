@@ -1400,7 +1400,7 @@ void RunCoreCppHeaderImportVerification(){
     EXPECT_TRUE(descHeap.value().isExtern);
     EXPECT_FALSE(descHeap.value().isAbstract);
     EXPECT_FALSE(descHeap.value().isCopyConstructible);
-    EXPECT_EQ(descHeap.value().totalSize, 1008u);
+    EXPECT_EQ(descHeap.value().totalSize, 1080u);
     EXPECT_EQ(descHeap.value().totalAlign, 8u);
     EXPECT_TRUE(FindAstDeclaration(unit.classes, "GpuDescriptorHeapPendingRecordingLease").has_value());
 

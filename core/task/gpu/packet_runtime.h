@@ -441,6 +441,7 @@ private:
     void rejectTaskWithinSubmissionOperation(GpuTaskGraph& graph, const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuTaskId task, u64 recordingAttemptGeneration);
 
     [[nodiscard]] b8 beginPacketSubmission(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, GpuSubmissionPacketId packetID, u64 recordingAttemptGeneration, GpuPacketSubmissionLease& outLease)noexcept;
+    [[nodiscard]] usize beginPacketSubmissionBatch(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, Span<const GpuSubmissionPacketId> packets, u64 recordingAttemptGeneration, GpuPacketSubmissionLease* const* outLeases)noexcept;
     [[nodiscard]] b8 acceptSubmittingPacket(
         GpuTaskGraph& graph,
         GpuPacketSubmissionLease& lease,
@@ -452,7 +453,21 @@ private:
         usize timingTicketCount,
         const GpuTaskSubmissionDetail::TaskCallbackBindings<GpuTaskGraphTaskAcceptedCallback>& taskAcceptedCallbacks
     );
+    [[nodiscard]] b8 acceptSubmittingPacketBatch(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        Span<const GpuSubmissionPacketId> packets,
+        const QueueSubmissionReceipt* receipts,
+        GpuPacketSubmissionLease* const* leases,
+        const NativeSubmissionInfo* nativeSubmissionInfos,
+        const NotNull<GpuTimingSubmissionTicket*>* allTimingTickets,
+        const usize* timingTicketOffsets,
+        const usize* timingTicketCounts,
+        const GpuTaskSubmissionDetail::TaskCallbackBindings<GpuTaskGraphTaskAcceptedCallback>& taskAcceptedCallbacks,
+        GpuSubmissionPacketId* outFailedPacket = nullptr
+    );
     void commitAcceptedPacket(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, GpuSubmissionPacketId packetID, const QueueSubmissionToken& token, const NativeSubmissionInfo& nativeSubmissionInfo)noexcept;
+    void commitAcceptedPacketBatch(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, Span<const GpuSubmissionPacketId> packets, const QueueSubmissionReceipt* receipts, const NativeSubmissionInfo* nativeSubmissionInfos)noexcept;
     void abandonTimingTicketsWithoutCallbacks(const NotNull<GpuTimingSubmissionTicket*>* timingTickets, usize timingTicketCount)noexcept;
     void rejectPacket(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packetID, u64 recordingAttemptGeneration);
     void rejectSubmittingPacket(GpuTaskGraph& graph, GpuPacketSubmissionLease& lease, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packetID);

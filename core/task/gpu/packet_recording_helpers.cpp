@@ -64,18 +64,22 @@ b8 PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& declara
     if(!timingRecorder)
         return false;
 
-    HashMap<Name, u32, Alloc::ScratchArena, Hasher<Name>, EqualTo<Name>> scopeOccurrences(0, Hasher<Name>(), EqualTo<Name>(), scratchArena);
+    struct ScopeCount{
+        Name name = s_NameNone;
+        u32 count = 0u;
+    };
+    HashMap<Name, usize, Alloc::ScratchArena, Hasher<Name>, EqualTo<Name>> scopeIndices(0, Hasher<Name>(), EqualTo<Name>(), scratchArena);
     const usize maxScopeCount = declarationAccess.taskCount() + planAccess.packetCount();
-    scopeOccurrences.reserve(maxScopeCount);
-    Vector<Name, Alloc::ScratchArena> scopeOrder(scratchArena);
-    scopeOrder.reserve(maxScopeCount);
+    scopeIndices.reserve(maxScopeCount);
+    Vector<ScopeCount, Alloc::ScratchArena> scopeEntries(scratchArena);
+    scopeEntries.reserve(maxScopeCount);
     const auto countScopeOccurrence = [&](const Name& scopeName){
         if(!scopeName)
             return false;
-        auto [it, inserted] = scopeOccurrences.try_emplace(scopeName, 0u);
+        auto [it, inserted] = scopeIndices.try_emplace(scopeName, scopeEntries.size());
         if(inserted)
-            scopeOrder.push_back(scopeName);
-        u32& occurrenceCount = it.value();
+            scopeEntries.push_back(ScopeCount{ .name = scopeName, .count = 0u, });
+        u32& occurrenceCount = scopeEntries[it.value()].count;
         if(occurrenceCount >= Limit<u32>::s_Max / s_MaxFramesInFlight)
             return false;
         ++occurrenceCount;
@@ -115,9 +119,8 @@ b8 PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& declara
         if(packet.recordsTiming != packetRecordsTiming)
             return false;
     }
-    for(const Name& scopeName : scopeOrder){
-        const u32 occurrenceCount = scopeOccurrences.find(scopeName).value();
-        if(!timingRecorder->requestScopeQueries(scopeName, occurrenceCount * s_MaxFramesInFlight))
+    for(const ScopeCount& scopeEntry : scopeEntries){
+        if(!timingRecorder->requestScopeQueries(scopeEntry.name, scopeEntry.count * s_MaxFramesInFlight))
             return false;
     }
     return true;

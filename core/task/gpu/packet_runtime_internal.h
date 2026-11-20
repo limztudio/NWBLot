@@ -148,7 +148,8 @@ private:
         const GpuPacketRecordingAccess& recordingAccess,
         GpuSubmissionPacketId packetID,
         const CommandListResourceStateHandoff* initialStates,
-        Alloc::ScratchArena& stateFanInScratchArena
+        Alloc::ScratchArena& stateFanInScratchArena,
+        GpuRecordedGraph::PacketRecordingScratch& scratch
     )const;
 
 

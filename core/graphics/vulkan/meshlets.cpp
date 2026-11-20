@@ -171,6 +171,8 @@ void CommandList::setMeshletState(const MeshletState& state){
     m_currentGraphicsState = {};
     m_currentComputeState = {};
     m_currentRayTracingState = {};
+    m_hasBoundGraphicsState = false;
+    m_hasBoundComputeState = false;
     m_currentMeshletState = state;
 
     if(state.pipeline){

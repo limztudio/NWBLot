@@ -9,6 +9,7 @@
 
 #include <core/common/log.h>
 
+#include <global/scope_exit.h>
 #include <global/termination.h>
 
 
@@ -63,7 +64,6 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
     auto& waitInfos = m_submitWaitInfos;
     auto& signalInfos = m_submitSignalInfos;
     auto& cmdBufInfos = m_submitCommandBufferInfos;
-    auto& preparedCommandBuffers = m_submitPreparedCommandBuffers;
     descriptorHeapUseCommitTickets.clear();
     validatedTimerQueryCommandBuffers.clear();
     uniqueCommandLists.clear();
@@ -72,7 +72,6 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
     waitInfos.clear();
     signalInfos.clear();
     cmdBufInfos.clear();
-    preparedCommandBuffers.clear();
     if(m_device.submissionsBlocked() || entries.empty() || outReceipts.size() != entries.size())
         return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
 
@@ -319,22 +318,22 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
             }
         }
     };
-    FOUNDATION_ASSERT(preparedCommandBuffers.get_allocator() == m_commandBuffersInFlight.get_allocator());
-    auto submittedBatchBegin = m_commandBuffersInFlight.end();
+    const usize batchStartIndex = m_commandBuffersInFlight.size();
     if(totalCmdCount > 0u){
+        ScopeExit rollbackInFlightPush([&]()noexcept{ m_commandBuffersInFlight.resize(batchStartIndex); });
         for(const BatchSubmitEntry& entry : entries){
             for(usize i = 0u; i < entry.numCmd; ++i)
-                preparedCommandBuffers.push_back(entry.ppCmd[i]->m_currentCmdBuf);
+                m_commandBuffersInFlight.push_back(entry.ppCmd[i]->m_currentCmdBuf);
         }
-        submittedBatchBegin = preparedCommandBuffers.begin();
-        m_commandBuffersInFlight.splice(m_commandBuffersInFlight.end(), preparedCommandBuffers);
-        auto detachedCommandBuffer = submittedBatchBegin;
+        rollbackInFlightPush.release();
+
+        usize cmdCursor = batchStartIndex;
         for(usize entryIndex = 0u; entryIndex < entries.size(); ++entryIndex){
             const BatchSubmitEntry& entry = entries[entryIndex];
             const u64 entrySubmissionID = batchEntries[entryIndex].submissionID;
-            for(usize i = 0u; i < entry.numCmd; ++i, ++detachedCommandBuffer){
+            for(usize i = 0u; i < entry.numCmd; ++i, ++cmdCursor){
                 auto& commandList = *MakeNotNull(entry.ppCmd[i]);
-                TrackedCommandBufferPtr& tracked = *detachedCommandBuffer;
+                TrackedCommandBufferPtr& tracked = m_commandBuffersInFlight[cmdCursor];
                 tracked->m_submissionID = entrySubmissionID;
                 commandList.m_currentCmdBuf = nullptr;
                 commandList.m_nativeRecordingID = 0u;
@@ -356,9 +355,11 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
         if(res == VK_ERROR_DEVICE_LOST)
             m_device.markDeviceLost();
         finalizeDetachedRecordingAttempts(false);
-        auto rejectedCommandBuffer = submittedBatchBegin;
-        for(usize i = 0u; i < totalCmdCount; ++i)
-            rejectedCommandBuffer = recycleCommandBuffer(m_commandBuffersInFlight, rejectedCommandBuffer);
+        for(usize i = 0u; i < totalCmdCount; ++i){
+            TrackedCommandBufferPtr rejected = Move(m_commandBuffersInFlight.back());
+            m_commandBuffersInFlight.pop_back();
+            recycleCommandBuffer(Move(rejected));
+        }
 
         if(submissionSuppressed){
             NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Queue submission was suppressed because the device requires recreation."));
@@ -379,13 +380,13 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
     descriptorSubmission.commitAndRelease();
     finalizeDetachedRecordingAttempts(true);
 
-    auto acceptedCommandBuffer = submittedBatchBegin;
+    usize cmdCursor = batchStartIndex;
     for(usize entryIndex = 0u; entryIndex < entries.size(); ++entryIndex){
         const BatchSubmitEntry& entry = entries[entryIndex];
         const BatchPreparedEntry& prepared = batchEntries[entryIndex];
         const QueueSubmissionToken entryToken{ .value = prepared.submissionID, .physicalQueueIndex = m_physicalQueue.index, .deviceGeneration = m_physicalQueue.deviceGeneration, .queue = m_queueID, };
-        for(usize i = 0u; i < entry.numCmd; ++i, ++acceptedCommandBuffer){
-            TrackedCommandBufferPtr& tracked = *acceptedCommandBuffer;
+        for(usize i = 0u; i < entry.numCmd; ++i, ++cmdCursor){
+            TrackedCommandBufferPtr& tracked = m_commandBuffersInFlight[cmdCursor];
             tracked->commitTimerQueryRecordingClaims(entryToken);
             tracked->commitRetainedBufferStateCommits();
             tracked->commitRetainedTextureStateCommits();
@@ -435,40 +436,31 @@ void Queue::waitForIdle(){
         NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Queue wait-for-idle failed: {}"), ResultToString(res));
 }
 
-Queue::CommandBufferList::iterator Queue::recycleCommandBuffer(CommandBufferList& source, const CommandBufferList::iterator commandBuffer){
-    auto next = commandBuffer;
-    ++next;
-
-    TrackedCommandBufferPtr& cmdBuf = *commandBuffer;
+void Queue::recycleCommandBuffer(TrackedCommandBufferPtr cmdBuf){
     FOUNDATION_ASSERT(cmdBuf);
     if(&cmdBuf->m_queue != this || &cmdBuf->m_context != &m_context){
         NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Cannot recycle a command buffer through a foreign queue"));
         FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Command buffer recycle owner mismatch"));
-        return next;
+        return;
     }
 
     cmdBuf->clearTrackedReferences();
     transitionCommandBufferState(*cmdBuf, TrackedCommandBufferArenaState::Reusable);
     if(cmdBuf->m_recordingWorkerIndex == 0u){
-        FOUNDATION_ASSERT(source.get_allocator() == m_commandBuffersPool.get_allocator());
-        m_commandBuffersPool.splice(m_commandBuffersPool.end(), source, commandBuffer);
-        return next;
+        m_commandBuffersPool.push_back(Move(cmdBuf));
+        return;
     }
 
     WorkerCommandArena* const workerArena = findWorkerCommandArena(cmdBuf->m_recordingWorkerDomain, cmdBuf->m_recordingWorkerIndex);
     if(!workerArena){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Cannot recycle command buffer because physical queue {} worker {}:{} no longer has a command arena"), m_physicalQueue.index, cmdBuf->m_recordingWorkerDomain, cmdBuf->m_recordingWorkerIndex);
         FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Worker command buffer lost its owning command arena"));
-        FOUNDATION_ASSERT(source.get_allocator() == m_commandBuffersPool.get_allocator());
-        m_commandBuffersPool.splice(m_commandBuffersPool.end(), source, commandBuffer);
-        return next;
+        m_commandBuffersPool.push_back(Move(cmdBuf));
+        return;
     }
 
     ScopedLock lock(workerArena->mutex);
-
-    FOUNDATION_ASSERT(source.get_allocator() == workerArena->commandBuffersPool.get_allocator());
-    workerArena->commandBuffersPool.splice(workerArena->commandBuffersPool.end(), source, commandBuffer);
-    return next;
+    workerArena->commandBuffersPool.push_back(Move(cmdBuf));
 }
 
 b8 Queue::coversTimerQueryPrerequisite(const QueueSubmissionToken& prerequisite, const b8 prerequisiteObservedComplete, const Span<const SubmissionWait> localWaits)const noexcept{

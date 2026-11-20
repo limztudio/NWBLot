@@ -140,10 +140,12 @@ private:
         TaskHandle task;
         usize workerIndex;
         CpuAffinity::Enum affinity;
+        b8* spawnedOut = nullptr;
+        b8 spawnedChildren = false;
 
 
     public:
-        Execution(CpuTaskScheduler& owner, TaskHandle handle, usize index, CpuAffinity::Enum workerAffinity)noexcept;
+        Execution(CpuTaskScheduler& owner, TaskHandle handle, usize index, CpuAffinity::Enum workerAffinity, b8* spawned = nullptr)noexcept;
         ~Execution()noexcept;
     };
 
@@ -223,11 +225,11 @@ private:
     [[nodiscard]] Expected<TaskReservation, CpuTaskAdmissionError::Enum> reserveTaskLocked();
     [[nodiscard]] Expected<TaskHandle, CpuTaskAdmissionError::Enum> submitTask(TaskFunction&& function, CpuTaskScope* scope, CpuTaskOptions options, const TaskHandle* dependencies, usize dependencyCount);
     [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> parallelRange(usize begin, usize end, usize grainSize, CpuTaskOptions options, NotNull<const void*> context, NotNull<RangeFunction> invoke, CpuTaskScope* callerScope = nullptr);
-    void releaseReservation(TaskHandle handle)noexcept;
     [[nodiscard]] TaskNode* resolveLocked(TaskHandle handle)noexcept;
     [[nodiscard]] const TaskNode* resolveLocked(TaskHandle handle)const noexcept;
     [[nodiscard]] b8 wasCanceledLocked(TaskHandle handle)const noexcept;
     [[nodiscard]] b8 isScopeCanceledLocked(const CpuTaskScope* scope)const noexcept;
+    [[nodiscard]] b8 isRangeCanceled(const CpuTaskScope* scope)const noexcept;
     void enqueueLocked(u32 index)noexcept;
     [[nodiscard]] TaskHandle claimLocked(CpuAffinity::Enum affinity, b8 mainThread, b8 cooperative, ScopeWait* preferredScope = nullptr)noexcept;
     [[nodiscard]] b8 hasReadyLocked(CpuAffinity::Enum affinity, b8 mainThread, b8 cooperative, ScopeWait* preferredScope = nullptr)noexcept;
@@ -235,8 +237,9 @@ private:
     void invalidateScopeSearchLocked(b8 publication)noexcept;
     [[nodiscard]] b8 contributesToScopeLocked(u32 index, const ScopeWait& wait)noexcept;
     [[nodiscard]] b8 queueEligible(usize queue, CpuAffinity::Enum affinity, b8 mainThread, b8 cooperative)const noexcept;
-    [[nodiscard]] ClaimedExecution beginClaimedLocked(TaskHandle handle, usize workerIndex, CpuAffinity::Enum affinity, b8 cooperative)noexcept;
-    void executeClaimed(ClaimedExecution& claimed, usize workerIndex, CpuAffinity::Enum affinity);
+    [[nodiscard]] ClaimedExecution beginClaimedLocked(TaskHandle handle, usize workerIndex, CpuAffinity::Enum affinity, b8 cooperative, b8 computeWakePlan = true)noexcept;
+    void executeClaimed(ClaimedExecution& claimed, usize workerIndex, CpuAffinity::Enum affinity, ClaimedExecution* nextClaim = nullptr, const StopToken* stop = nullptr);
+    void retireNodeLocked(TaskHandle handle, TaskNode& node, TaskHandle& outParentHandle, TaskNode*& outParentToRetire, b8& outMadeReady, b8& outScopeCompleted)noexcept;
     void retire(TaskHandle handle, TaskNode& first)noexcept;
     void workerLoop(const StopToken& stop, usize workerIndex);
     [[nodiscard]] b8 executeOne(b8 cooperative, ScopeWait* preferredScope = nullptr);
@@ -245,7 +248,7 @@ private:
     void waitScope(CpuTaskScope& scope);
     [[nodiscard]] b8 isMainThread()const noexcept;
     [[nodiscard]] b8 isExecuting()const noexcept{ return s_Execution && &s_Execution->scheduler == this; }
-    [[nodiscard]] WorkerWakePlan workerWakePlanLocked()const noexcept;
+    [[nodiscard]] WorkerWakePlan takeWorkerWakePlanLocked()noexcept;
     void notifyWorkers(const WorkerWakePlan& wakePlan)noexcept;
     void notifyProgress(const WorkerWakePlan& wakePlan, b8 wakeJoiners)noexcept;
     void notifyProgress()noexcept;
@@ -269,6 +272,7 @@ private:
     Array<ReadyQueue, s_QueueCount> m_ready;
     Array<u32, s_CostValueCount> m_readyWorkerCosts{};
     Array<u32, s_AffinitySlotCount> m_sleepingWorkers{};
+    Array<u32, s_AffinitySlotCount> m_wakingWorkers{};
     u32 m_freeNode = TaskHandle::s_InvalidIndex;
     u32 m_workerCount = 0u;
     u32 m_busyPerformance = 0u;
@@ -290,6 +294,7 @@ private:
     u64 m_profileEpoch = 0u;
     u64 m_profileFrameIndex = 0u;
     b8 m_aborting = false;
+    Atomic<b8> m_abortingAtomic{ false };
     Atomic<b8> m_profileEnabled{ false };
     Vector<JoiningThread, Alloc::GlobalArena> m_workers;
 };
@@ -380,7 +385,7 @@ private:
     const CpuTaskProfileLabel m_profileLabel;
     Atomic<usize> m_pending{ 0u };
     u64 m_searchIdentity = 0u;
-    b8 m_canceled = false;
+    Atomic<b8> m_canceled{ false };
     b8 m_allowCallerWork = false;
 };
 

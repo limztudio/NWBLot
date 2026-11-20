@@ -181,14 +181,29 @@ Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator, const
     , m_imageQueueFamilyIndices(__hidden_texture::CopyImageQueueFamilyIndices(context, imageInfo))
     , m_imageInfo(__hidden_texture::RetainImageCreateInfo(imageInfo, m_imageQueueFamilyIndices))
     , m_views(0, TextureViewKeyHasher(), EqualTo<TextureViewKey>(), context.objectArena)
-    , m_retainedSubresourceStates(context.objectArena)
+    , m_retainedSubresourceOverflowWords(context.objectArena)
     , m_creationInitialStateKnown(initialStateKnown)
     , m_context(context)
     , m_allocator(allocator)
 {
+    static_assert(AtomicRef<u64>::is_always_lock_free, "Texture subresource overflow bitmask must be lock-free");
+
     const usize subresourceCount = static_cast<usize>(m_creationDesc.mipLevels) * static_cast<usize>(m_creationDesc.arraySize);
     const b8 retainedInitialStateKnown = m_creationDesc.keepInitialState && initialStateKnown;
-    m_retainedSubresourceStates.assign(subresourceCount, retainedInitialStateKnown ? 1u : 0u);
+    if(!m_creationDesc.keepInitialState)
+        return;
+
+    if(subresourceCount <= 64u){
+        const u64 mask = subresourceCount == 64u ? ~0ull : (subresourceCount == 0u ? 0ull : ((1ull << subresourceCount) - 1ull));
+        m_retainedSubresourceInlineMask.store(retainedInitialStateKnown ? mask : 0ull, MemoryOrder::relaxed);
+        return;
+    }
+
+    const usize wordCount = (subresourceCount + 63u) / 64u;
+    m_retainedSubresourceOverflowWords.assign(wordCount, retainedInitialStateKnown ? ~0ull : 0ull);
+    const usize trailingBits = subresourceCount & 63u;
+    if(retainedInitialStateKnown && trailingBits != 0u)
+        m_retainedSubresourceOverflowWords.back() = (1ull << trailingBits) - 1ull;
 }
 
 Texture::~Texture()noexcept{
@@ -200,6 +215,7 @@ Texture::~Texture()noexcept{
 
     {
         ScopedLock bindingLock(m_memoryBindingMutex);
+        m_gpuReady.store(false, MemoryOrder::release);
         if(m_boundHeap){
             auto& boundHeap = *MakeNotNull(m_boundHeap.get());
             {
@@ -241,17 +257,27 @@ ResourceStates::Mask Texture::resolveTaskGraphImportInitialState()const noexcept
     const usize subresourceCount = static_cast<usize>(m_creationDesc.mipLevels) * static_cast<usize>(m_creationDesc.arraySize);
     FOUNDATION_ASSERT(subresourceCount != 0u);
 
-    ScopedLock lock(m_retainedSubresourceStatesMutex);
-    FOUNDATION_ASSERT(subresourceCount == m_retainedSubresourceStates.size());
-    b8 hasKnownState = false;
-    b8 hasUnknownState = false;
-    for(usize subresourceIndex = 0u; subresourceIndex < subresourceCount; ++subresourceIndex){
-        if(m_retainedSubresourceStates[subresourceIndex] != 0u)
-            hasKnownState = true;
-        else
-            hasUnknownState = true;
+    b8 allKnown = true;
+    b8 anyKnown = false;
+    if(subresourceCount <= 64u){
+        const u64 validMask = subresourceCount == 64u ? ~0ull : ((1ull << subresourceCount) - 1ull);
+        const u64 bits = m_retainedSubresourceInlineMask.load(MemoryOrder::acquire) & validMask;
+        allKnown = bits == validMask;
+        anyKnown = bits != 0u;
     }
-    return !hasUnknownState || (!hasKnownState && m_managed) ? m_creationDesc.initialState : ResourceStates::Unknown;
+    else{
+        const usize wordCount = m_retainedSubresourceOverflowWords.size();
+        FOUNDATION_ASSERT(wordCount == (subresourceCount + 63u) / 64u);
+        for(usize wordIndex = 0u; wordIndex < wordCount; ++wordIndex){
+            const u64 fullMask = (wordIndex + 1u == wordCount && (subresourceCount & 63u) != 0u) ? ((1ull << (subresourceCount & 63u)) - 1ull) : ~0ull;
+            const u64 word = AtomicRef<u64>(m_retainedSubresourceOverflowWords[wordIndex]).load(MemoryOrder::acquire) & fullMask;
+            if(word != fullMask)
+                allKnown = false;
+            if(word != 0u)
+                anyKnown = true;
+        }
+    }
+    return allKnown || (!anyKnown && m_managed) ? m_creationDesc.initialState : ResourceStates::Unknown;
 }
 
 Object Texture::getNativeHandle(ObjectType objectType)noexcept{
@@ -350,6 +376,7 @@ void Texture::commitRevokeUnmanagedNativeImage(const VkImage expectedNativeImage
     if(expectedNativeImage == VK_NULL_HANDLE || m_managed || m_image != expectedNativeImage || m_preparedRevokedNativeImage != expectedNativeImage)
         TerminateInvariant();
 
+    m_gpuReady.store(false, MemoryOrder::release);
     NothrowScopedLock viewsLock(m_viewsMutex);
     static_assert(noexcept(m_views.clear()), "prepared swapchain view release must remain non-throwing");
     for(const auto& [_, view] : m_views)
@@ -372,9 +399,14 @@ b8 Texture::isRetainedSubresourceStateKnown(const ArraySlice arraySlice, const M
         return false;
 
     const usize index = static_cast<usize>(arraySlice) * static_cast<usize>(m_creationDesc.mipLevels) + static_cast<usize>(mipLevel);
-    NothrowScopedLock lock(m_retainedSubresourceStatesMutex);
-    FOUNDATION_ASSERT(index < m_retainedSubresourceStates.size());
-    return m_retainedSubresourceStates[index] != 0u;
+    const usize subresourceCount = static_cast<usize>(m_creationDesc.mipLevels) * static_cast<usize>(m_creationDesc.arraySize);
+    if(subresourceCount <= 64u)
+        return (m_retainedSubresourceInlineMask.load(MemoryOrder::acquire) & (1ull << index)) != 0u;
+
+    const usize wordIndex = index >> 6u;
+    const u64 bitMask = 1ull << (index & 63u);
+    FOUNDATION_ASSERT(wordIndex < m_retainedSubresourceOverflowWords.size());
+    return (AtomicRef<u64>(m_retainedSubresourceOverflowWords[wordIndex]).load(MemoryOrder::acquire) & bitMask) != 0u;
 }
 
 void Texture::setRetainedSubresourceStateKnown(const ArraySlice arraySlice, const MipLevel mipLevel, const b8 known)noexcept{
@@ -382,9 +414,24 @@ void Texture::setRetainedSubresourceStateKnown(const ArraySlice arraySlice, cons
         return;
 
     const usize index = static_cast<usize>(arraySlice) * static_cast<usize>(m_creationDesc.mipLevels) + static_cast<usize>(mipLevel);
-    NothrowScopedLock lock(m_retainedSubresourceStatesMutex);
-    FOUNDATION_ASSERT(index < m_retainedSubresourceStates.size());
-    m_retainedSubresourceStates[index] = known ? 1u : 0u;
+    const usize subresourceCount = static_cast<usize>(m_creationDesc.mipLevels) * static_cast<usize>(m_creationDesc.arraySize);
+    if(subresourceCount <= 64u){
+        const u64 bitMask = 1ull << index;
+        if(known)
+            m_retainedSubresourceInlineMask.fetch_or(bitMask, MemoryOrder::acq_rel);
+        else
+            m_retainedSubresourceInlineMask.fetch_and(~bitMask, MemoryOrder::acq_rel);
+        return;
+    }
+
+    const usize wordIndex = index >> 6u;
+    const u64 bitMask = 1ull << (index & 63u);
+    FOUNDATION_ASSERT(wordIndex < m_retainedSubresourceOverflowWords.size());
+    AtomicRef<u64> wordRef(m_retainedSubresourceOverflowWords[wordIndex]);
+    if(known)
+        wordRef.fetch_or(bitMask, MemoryOrder::acq_rel);
+    else
+        wordRef.fetch_and(~bitMask, MemoryOrder::acq_rel);
 }
 
 

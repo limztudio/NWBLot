@@ -17,7 +17,7 @@ NWB_CORE_BEGIN
 
 u64 GpuTaskGraph::recordingAttemptGeneration()const noexcept{
     NothrowScopedLock lock(m_lifecycleMutex);
-    return m_activeRecordingAttemptGeneration;
+    return m_activeRecordingAttemptGeneration.load(MemoryOrder::relaxed);
 }
 
 b8 GpuTaskGraph::beginRecordingAttempt(const GpuCompiledGraph& compiledGraph, const GpuSubmissionPacketId packet, const DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, GpuRecordingAttemptScope& outAttempt)const noexcept{
@@ -25,9 +25,11 @@ b8 GpuTaskGraph::beginRecordingAttempt(const GpuCompiledGraph& compiledGraph, co
         return false;
 
     NothrowScopedLock lock(m_lifecycleMutex);
-    const b8 continuingPreparation = outAttempt.validPreparationWithinLock(*this, compiledGraph, m_activeRecordingAttemptGeneration, m_activeRecordingPreparationSerial);
+    const u64 activeAttemptGeneration = m_activeRecordingAttemptGeneration.load(MemoryOrder::relaxed);
+    const u64 activePlanGeneration = m_activeRecordingPlanGeneration.load(MemoryOrder::relaxed);
+    const b8 continuingPreparation = outAttempt.validPreparationWithinLock(*this, compiledGraph, activeAttemptGeneration, m_activeRecordingPreparationSerial);
     if(
-        m_teardownInProgress
+        m_teardownInProgress.load(MemoryOrder::relaxed)
         || m_activeDeclarationAccessCount != m_activeDeclarationReadCount
         || m_activeDiscardNotificationCount != 0u
         || m_submissionBindingState == SubmissionBindingState::ExceptionClosing
@@ -48,25 +50,26 @@ b8 GpuTaskGraph::beginRecordingAttempt(const GpuCompiledGraph& compiledGraph, co
     }
 
     const u64 requestedPlanGeneration = packet.generation;
-    const b8 samePlan = m_activeCompiledGraph == &compiledGraph && m_activeRecordingPlanGeneration == requestedPlanGeneration;
+    const b8 samePlan = m_activeCompiledGraph == &compiledGraph && activePlanGeneration == requestedPlanGeneration;
     if(samePlan && m_submissionBindingState != SubmissionBindingState::Resolved){
-        if(!compiledGraph.beginRecordingAttempt(*this, declarationAccess, packet, requestedPlanGeneration, m_activeRecordingAttemptGeneration, 0u, planAccess))
+        if(!compiledGraph.beginRecordingAttempt(*this, declarationAccess, packet, requestedPlanGeneration, activeAttemptGeneration, 0u, planAccess))
             return false;
 
         b8 selectedTaskWasDiscarded = false;
         for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
             const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-            if(task.lifecycleAttemptGeneration != m_activeRecordingAttemptGeneration)
+            if(task.lifecycleAttemptGeneration != activeAttemptGeneration)
                 return false;
+            const TaskLifecycleState::Enum state = task.lifecycleState();
             if(
-                task.lifecycleState == TaskLifecycleState::Recording
-                || task.lifecycleState == TaskLifecycleState::Recorded
-                || task.lifecycleState == TaskLifecycleState::Submitting
-                || task.lifecycleState == TaskLifecycleState::Accepting
-                || task.lifecycleState == TaskLifecycleState::Accepted
+                state == TaskLifecycleState::Recording
+                || state == TaskLifecycleState::Recorded
+                || state == TaskLifecycleState::Submitting
+                || state == TaskLifecycleState::Accepting
+                || state == TaskLifecycleState::Accepted
             )
                 return false;
-            if(task.lifecycleState == TaskLifecycleState::Discarded)
+            if(state == TaskLifecycleState::Discarded)
                 selectedTaskWasDiscarded = true;
         }
         if(!selectedTaskWasDiscarded)
@@ -79,29 +82,30 @@ b8 GpuTaskGraph::beginRecordingAttempt(const GpuCompiledGraph& compiledGraph, co
         return false;
 
     for(const GpuTaskNode& task : m_tasks){
+        const TaskLifecycleState::Enum state = task.lifecycleState();
         if(
-            task.lifecycleAttemptGeneration != m_activeRecordingAttemptGeneration
-            || task.lifecycleState == TaskLifecycleState::Recording
-            || task.lifecycleState == TaskLifecycleState::Recorded
-            || task.lifecycleState == TaskLifecycleState::Submitting
-            || task.lifecycleState == TaskLifecycleState::Accepting
-            || task.lifecycleState == TaskLifecycleState::Accepted
+            task.lifecycleAttemptGeneration != activeAttemptGeneration
+            || state == TaskLifecycleState::Recording
+            || state == TaskLifecycleState::Recorded
+            || state == TaskLifecycleState::Submitting
+            || state == TaskLifecycleState::Accepting
+            || state == TaskLifecycleState::Accepted
         )
             return false;
-        if(m_activeRecordingPlanGeneration != 0u && task.lifecycleState != TaskLifecycleState::Discarded)
+        if(activePlanGeneration != 0u && state != TaskLifecycleState::Discarded)
             return false;
     }
 
-    const b8 previousPlanWasActive = m_activeRecordingPlanGeneration != 0u;
+    const b8 previousPlanWasActive = activePlanGeneration != 0u;
     const u64 nextRecordingAttemptGeneration = AllocateGeneration();
     const u64 preparationSerial = AllocateGeneration();
     FOUNDATION_ASSERT(nextRecordingAttemptGeneration != 0u && preparationSerial != 0u);
-    const u64 previousRecordingAttemptGeneration = samePlan && m_submissionBindingState == SubmissionBindingState::None ? m_activeRecordingAttemptGeneration : 0u;
+    const u64 previousRecordingAttemptGeneration = samePlan && m_submissionBindingState == SubmissionBindingState::None ? activeAttemptGeneration : 0u;
     if(!compiledGraph.beginRecordingAttempt(*this, declarationAccess, packet, requestedPlanGeneration, nextRecordingAttemptGeneration, previousRecordingAttemptGeneration, planAccess))
         return false;
 
     if(m_activeCompiledGraph && m_activeCompiledGraph != &compiledGraph && m_submissionBindingState == SubmissionBindingState::None){
-        const b8 previousAttemptResolved = m_activeCompiledGraph->resolveRecordingAttempt(*this, m_activeRecordingPlanGeneration, m_activeRecordingAttemptGeneration);
+        const b8 previousAttemptResolved = m_activeCompiledGraph->resolveRecordingAttempt(*this, activePlanGeneration, activeAttemptGeneration);
         if(!previousAttemptResolved){
             const b8 candidateResolved = compiledGraph.resolveRecordingAttempt(*this, requestedPlanGeneration, nextRecordingAttemptGeneration);
             FOUNDATION_FATAL_ASSERT_MSG(candidateResolved, "Failed plan switch must release its candidate exact-plan lease");
@@ -110,19 +114,17 @@ b8 GpuTaskGraph::beginRecordingAttempt(const GpuCompiledGraph& compiledGraph, co
     }
 
     m_activeCompiledGraph = &compiledGraph;
-    m_activeRecordingPlanGeneration = requestedPlanGeneration;
-    m_activeRecordingAttemptGeneration = nextRecordingAttemptGeneration;
+    m_activeRecordingPlanGeneration.store(requestedPlanGeneration, MemoryOrder::release);
+    m_activeRecordingAttemptGeneration.store(nextRecordingAttemptGeneration, MemoryOrder::release);
     m_activeRecordingPreparationSerial = preparationSerial;
     m_activeSubmissionBinding = {};
     m_submissionBindingState = SubmissionBindingState::None;
     for(const GpuTaskNode& task : m_tasks){
-        task.lifecycleState = TaskLifecycleState::Declared;
-        task.lifecycleAttemptGeneration = m_activeRecordingAttemptGeneration;
+        task.lifecycleAttemptGeneration = nextRecordingAttemptGeneration;
         task.recordingClaimGeneration = 0u;
         task.submissionClaimGeneration = 0u;
         task.discardNotificationGeneration = 0u;
-        task.recordThunkInProgress = false;
-        task.recordThunkCompleted = false;
+        task.setLifecycle(TaskLifecycleState::Declared);
     }
     outAttempt.activateWithinLock(*this, compiledGraph, nextRecordingAttemptGeneration, preparationSerial, previousPlanWasActive);
     return true;
@@ -131,10 +133,12 @@ b8 GpuTaskGraph::beginRecordingAttempt(const GpuCompiledGraph& compiledGraph, co
 
 void GpuTaskGraph::cancelRecordingAttempt(GpuRecordingAttemptScope& attempt)const noexcept{
     NothrowScopedLock lock(m_lifecycleMutex);
+    const u64 activePlanGeneration = m_activeRecordingPlanGeneration.load(MemoryOrder::relaxed);
+    const u64 activeAttemptGeneration = m_activeRecordingAttemptGeneration.load(MemoryOrder::relaxed);
     const b8 attemptValid = attempt.m_graph == this
         && attempt.m_compiledGraph
         && m_activeCompiledGraph == attempt.m_compiledGraph
-        && m_activeRecordingAttemptGeneration == attempt.m_recordingAttemptGeneration
+        && activeAttemptGeneration == attempt.m_recordingAttemptGeneration
         && m_activeRecordingPreparationSerial == attempt.m_preparationSerial
         && m_submissionBindingState == SubmissionBindingState::None
         && !m_activeSubmissionBinding.valid()
@@ -142,35 +146,35 @@ void GpuTaskGraph::cancelRecordingAttempt(GpuRecordingAttemptScope& attempt)cons
     ;
     b8 tasksUnclaimed = attemptValid;
     for(const GpuTaskNode& task : m_tasks){
+        const u16 lifecycleWord = task.loadLifecycleWord();
         tasksUnclaimed = tasksUnclaimed
             && task.lifecycleAttemptGeneration == attempt.m_recordingAttemptGeneration
-            && task.lifecycleState == TaskLifecycleState::Declared
+            && GpuTaskNode::DecodeLifecycleState(lifecycleWord) == TaskLifecycleState::Declared
             && task.recordingClaimGeneration == 0u
             && task.submissionClaimGeneration == 0u
-            && !task.recordThunkInProgress
-            && !task.recordThunkCompleted
+            && !GpuTaskNode::DecodeRecordThunkInProgress(lifecycleWord)
+            && !GpuTaskNode::DecodeRecordThunkCompleted(lifecycleWord)
         ;
     }
     FOUNDATION_FATAL_ASSERT_MSG(tasksUnclaimed, "provisional recording attempt cancellation requires unclaimed graph tasks");
 
-    const b8 candidateResolved = attempt.m_compiledGraph->resolveRecordingAttempt(*this, m_activeRecordingPlanGeneration, attempt.m_recordingAttemptGeneration);
+    const b8 candidateResolved = attempt.m_compiledGraph->resolveRecordingAttempt(*this, activePlanGeneration, attempt.m_recordingAttemptGeneration);
     FOUNDATION_FATAL_ASSERT_MSG(candidateResolved, "provisional recording attempt cancellation must release its exact plan lease");
 
     const b8 restoreDiscardedTasks = attempt.m_previousPlanWasActive;
+    const u64 restoredAttemptGeneration = AllocateGeneration();
     m_activeCompiledGraph = nullptr;
-    m_activeRecordingPlanGeneration = 0u;
-    m_activeRecordingAttemptGeneration = AllocateGeneration();
+    m_activeRecordingPlanGeneration.store(0u, MemoryOrder::release);
+    m_activeRecordingAttemptGeneration.store(restoredAttemptGeneration, MemoryOrder::release);
     m_activeRecordingPreparationSerial = 0u;
     m_activeSubmissionBinding = {};
     m_submissionBindingState = SubmissionBindingState::None;
     for(const GpuTaskNode& task : m_tasks){
-        task.lifecycleState = restoreDiscardedTasks ? TaskLifecycleState::Discarded : TaskLifecycleState::Declared;
-        task.lifecycleAttemptGeneration = m_activeRecordingAttemptGeneration;
+        task.lifecycleAttemptGeneration = restoredAttemptGeneration;
         task.recordingClaimGeneration = 0u;
         task.submissionClaimGeneration = 0u;
         task.discardNotificationGeneration = 0u;
-        task.recordThunkInProgress = false;
-        task.recordThunkCompleted = false;
+        task.setLifecycle(restoreDiscardedTasks ? TaskLifecycleState::Discarded : TaskLifecycleState::Declared);
     }
     attempt.completeWithinLock();
 }
@@ -178,7 +182,7 @@ void GpuTaskGraph::cancelRecordingAttempt(GpuRecordingAttemptScope& attempt)cons
 
 void GpuTaskGraph::completeRecordingPreparation(GpuRecordingAttemptScope& attempt)const noexcept{
     NothrowScopedLock lock(m_lifecycleMutex);
-    const b8 preparationValid = attempt.m_compiledGraph && attempt.validPreparationWithinLock(*this, *attempt.m_compiledGraph, m_activeRecordingAttemptGeneration, m_activeRecordingPreparationSerial);
+    const b8 preparationValid = attempt.m_compiledGraph && attempt.validPreparationWithinLock(*this, *attempt.m_compiledGraph, m_activeRecordingAttemptGeneration.load(MemoryOrder::relaxed), m_activeRecordingPreparationSerial);
     FOUNDATION_FATAL_ASSERT_MSG(preparationValid, "Recording preparation completion requires its exact active capability");
 
     m_activeRecordingPreparationSerial = 0u;
@@ -187,31 +191,33 @@ void GpuTaskGraph::completeRecordingPreparation(GpuRecordingAttemptScope& attemp
 
 b8 GpuTaskGraph::matchesRecordingAttempt(const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration)const noexcept{
     NothrowScopedLock lock(m_lifecycleMutex);
+    const u64 activePlanGeneration = m_activeRecordingPlanGeneration.load(MemoryOrder::relaxed);
     return
         recordingAttemptGeneration != 0u
-        && !m_teardownInProgress
+        && !m_teardownInProgress.load(MemoryOrder::relaxed)
         && m_activeCompiledGraph == &compiledGraph
-        && m_activeRecordingPlanGeneration != 0u
-        && m_activeRecordingAttemptGeneration == recordingAttemptGeneration
+        && activePlanGeneration != 0u
+        && m_activeRecordingAttemptGeneration.load(MemoryOrder::relaxed) == recordingAttemptGeneration
         && m_activeRecordingPreparationSerial == 0u
-        && compiledGraph.matchesRecordingAttempt(*this, m_activeRecordingPlanGeneration, recordingAttemptGeneration)
+        && compiledGraph.matchesRecordingAttempt(*this, activePlanGeneration, recordingAttemptGeneration)
     ;
 }
 
 
 b8 GpuTaskGraph::resolveRecordingAttemptIfTerminal(const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration)const noexcept{
     NothrowScopedLock lock(m_lifecycleMutex);
-    if(m_teardownInProgress || m_activeCompiledGraph != &compiledGraph || m_activeRecordingPlanGeneration == 0u || m_activeRecordingAttemptGeneration != recordingAttemptGeneration || m_activeRecordingPreparationSerial != 0u)
+    const u64 activePlanGeneration = m_activeRecordingPlanGeneration.load(MemoryOrder::relaxed);
+    if(m_teardownInProgress.load(MemoryOrder::relaxed) || m_activeCompiledGraph != &compiledGraph || activePlanGeneration == 0u || m_activeRecordingAttemptGeneration.load(MemoryOrder::relaxed) != recordingAttemptGeneration || m_activeRecordingPreparationSerial != 0u)
         return false;
     if(m_submissionBindingState != SubmissionBindingState::None)
         return true;
     if(m_activeDiscardNotificationCount != 0u)
         return true;
     for(const GpuTaskNode& task : m_tasks){
-        if(task.lifecycleAttemptGeneration != recordingAttemptGeneration || task.lifecycleState != TaskLifecycleState::Discarded)
+        if(task.lifecycleAttemptGeneration != recordingAttemptGeneration || task.lifecycleState() != TaskLifecycleState::Discarded)
             return true;
     }
-    if(!compiledGraph.resolveRecordingAttempt(*this, m_activeRecordingPlanGeneration, recordingAttemptGeneration))
+    if(!compiledGraph.resolveRecordingAttempt(*this, activePlanGeneration, recordingAttemptGeneration))
         return false;
     m_submissionBindingState = SubmissionBindingState::Resolved;
     return true;
@@ -223,7 +229,8 @@ b8 GpuTaskGraph::bindSubmissionTransaction(const GpuCompiledGraph& compiledGraph
         return false;
 
     NothrowScopedLock lock(m_lifecycleMutex);
-    if(m_teardownInProgress || m_activeCompiledGraph != &compiledGraph || m_activeRecordingAttemptGeneration != recordingAttemptGeneration)
+    const u64 activePlanGeneration = m_activeRecordingPlanGeneration.load(MemoryOrder::relaxed);
+    if(m_teardownInProgress.load(MemoryOrder::relaxed) || m_activeCompiledGraph != &compiledGraph || m_activeRecordingAttemptGeneration.load(MemoryOrder::relaxed) != recordingAttemptGeneration)
         return false;
     if(m_activeRecordingPreparationSerial != 0u){
         if(!preparationAttempt || !preparationAttempt->validPreparationWithinLock(*this, compiledGraph, recordingAttemptGeneration, m_activeRecordingPreparationSerial))
@@ -234,11 +241,11 @@ b8 GpuTaskGraph::bindSubmissionTransaction(const GpuCompiledGraph& compiledGraph
     if(m_submissionBindingState == SubmissionBindingState::Resolved || m_submissionBindingState == SubmissionBindingState::ExceptionClosing)
         return false;
     if(m_submissionBindingState == SubmissionBindingState::Active){
-        return m_activeSubmissionBinding == submissionBinding && compiledGraph.matchesSubmissionTransaction(*this, m_activeRecordingPlanGeneration, recordingAttemptGeneration, submissionBinding);
+        return m_activeSubmissionBinding == submissionBinding && compiledGraph.matchesSubmissionTransaction(*this, activePlanGeneration, recordingAttemptGeneration, submissionBinding);
     }
     if(m_submissionBindingState != SubmissionBindingState::None || m_activeSubmissionBinding.valid())
         return false;
-    if(!compiledGraph.bindSubmissionTransaction(*this, m_activeRecordingPlanGeneration, recordingAttemptGeneration, submissionBinding))
+    if(!compiledGraph.bindSubmissionTransaction(*this, activePlanGeneration, recordingAttemptGeneration, submissionBinding))
         return false;
     m_activeSubmissionBinding = submissionBinding;
     m_submissionBindingState = SubmissionBindingState::Active;
@@ -250,13 +257,13 @@ b8 GpuTaskGraph::matchesSubmissionTransaction(const GpuCompiledGraph& compiledGr
     NothrowScopedLock lock(m_lifecycleMutex);
     return
         submissionBinding.valid()
-        && !m_teardownInProgress
+        && !m_teardownInProgress.load(MemoryOrder::relaxed)
         && m_activeCompiledGraph == &compiledGraph
-        && m_activeRecordingAttemptGeneration == recordingAttemptGeneration
+        && m_activeRecordingAttemptGeneration.load(MemoryOrder::relaxed) == recordingAttemptGeneration
         && m_activeRecordingPreparationSerial == 0u
         && m_submissionBindingState != SubmissionBindingState::None
         && m_activeSubmissionBinding == submissionBinding
-        && compiledGraph.matchesSubmissionTransaction(*this, m_activeRecordingPlanGeneration, recordingAttemptGeneration, submissionBinding)
+        && compiledGraph.matchesSubmissionTransaction(*this, m_activeRecordingPlanGeneration.load(MemoryOrder::relaxed), recordingAttemptGeneration, submissionBinding)
     ;
 }
 
@@ -265,9 +272,9 @@ b8 GpuTaskGraph::resolveSubmissionTransaction(const GpuCompiledGraph& compiledGr
     NothrowScopedLock lock(m_lifecycleMutex);
     if(
         !submissionBinding.valid()
-        || m_teardownInProgress
+        || m_teardownInProgress.load(MemoryOrder::relaxed)
         || m_activeCompiledGraph != &compiledGraph
-        || m_activeRecordingAttemptGeneration != recordingAttemptGeneration
+        || m_activeRecordingAttemptGeneration.load(MemoryOrder::relaxed) != recordingAttemptGeneration
         || m_activeRecordingPreparationSerial != 0u
         || m_activeSubmissionBinding != submissionBinding
     )
@@ -276,7 +283,7 @@ b8 GpuTaskGraph::resolveSubmissionTransaction(const GpuCompiledGraph& compiledGr
         return true;
     if(m_submissionBindingState != SubmissionBindingState::Active && m_submissionBindingState != SubmissionBindingState::ExceptionClosing)
         return false;
-    if(!compiledGraph.resolveSubmissionTransaction(*this, m_activeRecordingPlanGeneration, recordingAttemptGeneration, submissionBinding))
+    if(!compiledGraph.resolveSubmissionTransaction(*this, m_activeRecordingPlanGeneration.load(MemoryOrder::relaxed), recordingAttemptGeneration, submissionBinding))
         return false;
     m_submissionBindingState = SubmissionBindingState::Resolved;
     return true;
@@ -287,10 +294,11 @@ b8 GpuTaskGraph::beginSubmissionExceptionClosing(const GpuCompiledGraph& compile
         return false;
 
     NothrowScopedLock lock(m_lifecycleMutex);
-    const b8 exactBinding = !m_teardownInProgress
+    const u64 activePlanGeneration = m_activeRecordingPlanGeneration.load(MemoryOrder::relaxed);
+    const b8 exactBinding = !m_teardownInProgress.load(MemoryOrder::relaxed)
         && m_activeCompiledGraph == &compiledGraph
-        && m_activeRecordingPlanGeneration != 0u
-        && m_activeRecordingAttemptGeneration == recordingAttemptGeneration
+        && activePlanGeneration != 0u
+        && m_activeRecordingAttemptGeneration.load(MemoryOrder::relaxed) == recordingAttemptGeneration
         && m_activeRecordingPreparationSerial == 0u
         && m_activeSubmissionBinding == submissionBinding
     ;
@@ -300,7 +308,7 @@ b8 GpuTaskGraph::beginSubmissionExceptionClosing(const GpuCompiledGraph& compile
         return true;
     if(m_submissionBindingState != SubmissionBindingState::Active)
         return false;
-    if(!compiledGraph.matchesSubmissionTransaction(*this, m_activeRecordingPlanGeneration, recordingAttemptGeneration, submissionBinding))
+    if(!compiledGraph.matchesSubmissionTransaction(*this, activePlanGeneration, recordingAttemptGeneration, submissionBinding))
         return false;
     m_submissionBindingState = SubmissionBindingState::ExceptionClosing;
     return true;
@@ -314,7 +322,7 @@ b8 GpuTaskGraph::waitForSubmissionExceptionRecordingClaims(const GpuCompiledGrap
         u32 activeClaimCount = 0u;
         {
             NothrowScopedLock lock(m_lifecycleMutex);
-            const b8 exactBinding = !m_teardownInProgress && m_activeCompiledGraph == &compiledGraph && m_activeRecordingAttemptGeneration == recordingAttemptGeneration && m_activeSubmissionBinding == submissionBinding;
+            const b8 exactBinding = !m_teardownInProgress.load(MemoryOrder::relaxed) && m_activeCompiledGraph == &compiledGraph && m_activeRecordingAttemptGeneration.load(MemoryOrder::relaxed) == recordingAttemptGeneration && m_activeSubmissionBinding == submissionBinding;
             if(!exactBinding)
                 return false;
             if(m_submissionBindingState == SubmissionBindingState::Resolved)

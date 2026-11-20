@@ -240,6 +240,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
     surfelIrradianceClearScheduling.allowPacketMerge = true;
     surfelIrradianceClearScheduling.mergeWithPrevious = !useLaggedLightingHistory;
     surfelIrradianceClearScheduling.allowMergeAcrossConsumerFrontier = !useLaggedLightingHistory;
+    surfelIrradianceClearScheduling.allowParallelRecording = true;
     ConfigureComputeEffectRoutingHint(false, surfelIrradianceClearScheduling);
     const Array<GpuTaskResourceUse, 1u> surfelIrradianceClearResourceUse(WriteTextureUse(surfelIrradiance, s_FramebufferSubresources, ResourceStates::CopyDest));
     GpuTaskDesc surfelIrradianceClearDesc;
@@ -291,11 +292,13 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
         }
         this.m_deferredSurfelGiAgeFreeTask = deferredSurfelGiAgeFreeTaskResult.value();
 
+        GpuTaskSchedulingHint cellHeadClearScheduling = surfelGiScheduling;
+        cellHeadClearScheduling.allowParallelRecording = true;
         GpuTaskDesc cellHeadClearDesc;
         cellHeadClearDesc
             .setIdentity(Name(s_SurfelGraphCellHeadClear))
             .setMarkerLabel(s_SurfelCellHeadClearMarkerLabel)
-            .setScheduling(surfelGiScheduling)
+            .setScheduling(cellHeadClearScheduling)
             .setDependency(this.m_deferredSurfelGiAgeFreeTask)
             .setExternalStateSources(Span<GpuTaskExternalStateSource>(computeStates).first(cast<usize>(surfelGiComputeStateSource.hasState())))
         ;
@@ -509,6 +512,7 @@ Expected<SurfelGiLifecycleResult> SurfelGiLifecycleBuilder::declare(in SurfelGiL
         GpuTaskSchedulingHint initializationScheduling;
         initializationScheduling.cost = GpuTaskCostHint::Medium;
         initializationScheduling.allowPacketMerge = true;
+        initializationScheduling.allowParallelRecording = true;
         GpuTaskDesc poolClearDesc;
         poolClearDesc
             .setIdentity(Name(s_SurfelGraphInitializePoolClear))
@@ -557,8 +561,10 @@ Expected<SurfelGiLifecycleResult> SurfelGiLifecycleBuilder::declare(in SurfelGiL
             return MakeUnexpected(Failure());
         }
 
+        GpuTaskSchedulingHint initializationLifecycleScheduling = chainedInitializationScheduling;
+        initializationLifecycleScheduling.allowParallelRecording = false;
         GpuTaskDesc initializationLifecycleDesc;
-        initializationLifecycleDesc.setIdentity(Name(s_SurfelGraphInitializeLifecycle)).setMarkerLabel(s_SurfelInitLifecycleMarkerLabel).setScheduling(chainedInitializationScheduling).setDependency(initializationDependency);
+        initializationLifecycleDesc.setIdentity(Name(s_SurfelGraphInitializeLifecycle)).setMarkerLabel(s_SurfelInitLifecycleMarkerLabel).setScheduling(initializationLifecycleScheduling).setDependency(initializationDependency);
         const auto initializationLifecycleTaskResult = DeclareSurfelInitializationTask(this.m_raytracingSystem, this.m_graph, initializationLifecycleDesc);
         if(!initializationLifecycleTaskResult.has_value()){
             warning("RendererSystem: could not declare deferred surfel-GI initialization lifecycle");

@@ -134,15 +134,19 @@ void CommandList::setComputeState(const ComputeState& state){
     if(m_commandRecordingFailed)
         return;
 
+    const b8 bindPipeline = !m_hasBoundComputeState || m_currentComputeState.pipeline != state.pipeline;
     m_currentGraphicsState = {};
     m_currentMeshletState = {};
     m_currentRayTracingState = {};
+    m_hasBoundGraphicsState = false;
     m_currentComputeState = state;
+    m_hasBoundComputeState = true;
     retainResource(state.indirectParams);
 
     auto& pipeline = *MakeNotNull(state.pipeline);
-    m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.m_pipeline);
     retainResource(&pipeline);
+    if(bindPipeline)
+        m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.m_pipeline);
 }
 
 void CommandList::dispatch(u32 groupsX, u32 groupsY, u32 groupsZ){

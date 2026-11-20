@@ -26,7 +26,7 @@ GpuTaskGraph::ResetCompletionScope::~ResetCompletionScope()noexcept{
 }
 
 void GpuTaskGraph::ResetCompletionScope::activateWithinLock()noexcept{
-    const b8 activationValid = !m_active && m_graph.m_teardownInProgress;
+    const b8 activationValid = !m_active && m_graph.m_teardownInProgress.load(MemoryOrder::relaxed);
     FOUNDATION_FATAL_ASSERT_MSG(activationValid, "GPU task graph reset completion requires fresh teardown ownership");
     m_active = true;
 }
@@ -47,7 +47,7 @@ b8 GpuTaskGraph::tryReset(){
     {
         ScopedLock lock(m_lifecycleMutex);
         if(
-            m_teardownInProgress
+            m_teardownInProgress.load(MemoryOrder::relaxed)
             || m_activeDeclarationAccessCount != 0u
             || m_activeDiscardNotificationCount != 0u
             || m_activePacketRecordingClaimCount.load(MemoryOrder::acquire) != 0u
@@ -57,10 +57,11 @@ b8 GpuTaskGraph::tryReset(){
         )
             return false;
         for(const GpuTaskNode& task : m_tasks){
-            if(task.lifecycleState == TaskLifecycleState::Recording || task.lifecycleState == TaskLifecycleState::Submitting || task.lifecycleState == TaskLifecycleState::Accepting)
+            const TaskLifecycleState::Enum state = task.lifecycleState();
+            if(state == TaskLifecycleState::Recording || state == TaskLifecycleState::Submitting || state == TaskLifecycleState::Accepting)
                 return false;
         }
-        m_teardownInProgress = true;
+        m_teardownInProgress.store(true, MemoryOrder::release);
         resetCompletion.activateWithinLock();
     }
 
@@ -87,8 +88,10 @@ void GpuTaskGraph::completeResetWithoutCallbacks()noexcept{
     destroyResourceStateSnapshots();
     {
         NothrowScopedLock lock(m_lifecycleMutex);
-        if(m_activeCompiledGraph && m_activeRecordingPlanGeneration != 0u && m_submissionBindingState == SubmissionBindingState::None){
-            const b8 recordingAttemptResolved = m_activeCompiledGraph->resolveRecordingAttempt(*this, m_activeRecordingPlanGeneration, m_activeRecordingAttemptGeneration);
+        const u64 activePlanGeneration = m_activeRecordingPlanGeneration.load(MemoryOrder::relaxed);
+        const u64 activeAttemptGeneration = m_activeRecordingAttemptGeneration.load(MemoryOrder::relaxed);
+        if(m_activeCompiledGraph && activePlanGeneration != 0u && m_submissionBindingState == SubmissionBindingState::None){
+            const b8 recordingAttemptResolved = m_activeCompiledGraph->resolveRecordingAttempt(*this, activePlanGeneration, activeAttemptGeneration);
             FOUNDATION_FATAL_ASSERT_MSG(recordingAttemptResolved, "GPU task graph reset cleanup must release its exact recording-plan lease");
         }
         m_tasks.clear();
@@ -123,8 +126,8 @@ void GpuTaskGraph::completeResetWithoutCallbacks()noexcept{
         m_presentEndpoint = {};
         m_generation = AllocateGeneration();
         bumpDeclarationRevision();
-        m_activeRecordingAttemptGeneration = AllocateGeneration();
-        m_activeRecordingPlanGeneration = 0u;
+        m_activeRecordingAttemptGeneration.store(AllocateGeneration(), MemoryOrder::release);
+        m_activeRecordingPlanGeneration.store(0u, MemoryOrder::release);
         m_activeRecordingPreparationSerial = 0u;
         FOUNDATION_FATAL_ASSERT_MSG(m_activePacketRecordingClaimCount.load(MemoryOrder::relaxed) == 0u, "GPU task graph reset publication requires every packet recording claim to drain");
         m_activeCompiledGraph = nullptr;
@@ -133,7 +136,7 @@ void GpuTaskGraph::completeResetWithoutCallbacks()noexcept{
         m_activeDiscardNotificationCount = 0u;
         m_hasPresentEndpoint = false;
         m_hasTaskPayloads = false;
-        m_teardownInProgress = false;
+        m_teardownInProgress.store(false, MemoryOrder::release);
     }
 }
 

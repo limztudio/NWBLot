@@ -233,7 +233,7 @@ b8 GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph,
         const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
         expectedEdgeCount += task.dependencyCount + task.resourceUseCount;
     }
-    edgeCollector.reserve(expectedEdgeCount);
+    edgeCollector.reserve(expectedEdgeCount, graph.taskCount());
     Vector<u32, Alloc::ScratchArena> externalDependencyConsumerMarkers(graph.externalCompletionCount(), scratchArena);
     for(usize completionIndex = 0u; completionIndex < graph.externalCompletionCount(); ++completionIndex)
         externalDependencyConsumerMarkers[completionIndex] = Limit<u32>::s_Max;

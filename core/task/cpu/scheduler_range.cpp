@@ -22,20 +22,13 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
     const usize chunkCount = Min(DivideUp(count, grain), Max(static_cast<usize>(m_workerCount), static_cast<usize>(1u)) * s_ChunksPerWorker);
     const usize chunkSize = count / chunkCount;
     const usize remainder = count % chunkCount;
-    u32 reservedHead = TaskHandle::s_InvalidIndex;
-    u32 reservedTail = TaskHandle::s_InvalidIndex;
-    ScopeExit releaseReservations([&]()noexcept{
-        while(reservedHead != TaskHandle::s_InvalidIndex){
-            TaskHandle handle;
-            {
-                ScopedLock lock(m_mutex);
-                const TaskNode& node = m_nodes[reservedHead];
-                handle = { m_domainIdentity, reservedHead, node.generation };
-                reservedHead = node.next;
-            }
-            releaseReservation(handle);
-        }
-    });
+    const b8 runFirstInline = (isMainThread() || isExecuting()) && (options.target != CpuTaskTarget::MainThread || isMainThread());
+    const usize workerCapacity = (options.target == CpuTaskTarget::MainThread || m_workerCount == 0u)
+        ? static_cast<usize>(1u)
+        : (runFirstInline ? static_cast<usize>(1u) + static_cast<usize>(m_workerCount) : static_cast<usize>(m_workerCount))
+    ;
+    const usize taskCount = Min(chunkCount, workerCapacity);
+    Atomic<usize> nextChunk{ 0u };
 
     b8 callerScopePending = false;
     ScopeExit releaseCallerScope([&]()noexcept{
@@ -46,7 +39,7 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
         {
             ScopedLock lock(m_mutex);
             const b8 completed = callerScope->m_pending.fetch_sub(1u, MemoryOrder::acq_rel) == 1u;
-            wakePlan = workerWakePlanLocked();
+            wakePlan = takeWorkerWakePlanLocked();
             wakeJoiners = m_joinWaiters != 0u && completed;
         }
         notifyProgress(wakePlan, wakeJoiners);
@@ -68,7 +61,19 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
             return MakeUnexpected(CpuTaskAdmissionError::InvalidOptions);
         if(callerScope && isScopeCanceledLocked(callerScope))
             return {};
-        for(usize chunk = 0u; chunk < chunkCount; ++chunk){
+        u32 reservedHead = TaskHandle::s_InvalidIndex;
+        u32 reservedTail = TaskHandle::s_InvalidIndex;
+        ScopeExit releaseReservations([&]()noexcept{
+            while(reservedHead != TaskHandle::s_InvalidIndex){
+                TaskNode& node = m_nodes[reservedHead];
+                const u32 next = node.next;
+                node.state = TaskState::Free;
+                node.next = m_freeNode;
+                m_freeNode = reservedHead;
+                reservedHead = next;
+            }
+        });
+        for(usize task = 0u; task < taskCount; ++task){
             const auto reserved = reserveTaskLocked();
             if(!reserved)
                 return MakeUnexpected(reserved.error());
@@ -81,22 +86,30 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
             TaskNode& node = reserved->node;
             if(node.latestCanceledGeneration != 0u)
                 ContainerDetail::ReserveGrowingCapacity(node.olderCanceledGenerations, AddSize(node.olderCanceledGenerations.size(), 1u));
-            const BalancedPartitionRange range = ComputeBalancedPartitionRange(begin, chunk, chunkSize, remainder);
-            const usize first = range.first;
-            const usize last = range.last;
-            node.function = [context, invoke, first, last](){ invoke.get()(context, first, last); };
         }
-        const usize outstanding = AddSize(m_outstanding, chunkCount);
+        const usize outstanding = AddSize(m_outstanding, taskCount);
         const TaskHandle parentHandle = s_Execution && &s_Execution->scheduler == this ? s_Execution->task : TaskHandle{};
         TaskNode* const parent = resolveLocked(parentHandle);
-        const usize children = parent ? AddSize(parent->children, chunkCount) : 0u;
-        const b8 runFirstInline = (isMainThread() || isExecuting()) && (options.target != CpuTaskTarget::MainThread || isMainThread());
-        if(parent)
+        const usize children = parent ? AddSize(parent->children, taskCount) : 0u;
+        if(parent){
             parent->children = children;
+            s_Execution->spawnedChildren = true;
+        }
         TaskHandle inlineHandle;
         for(u32 index = reservedHead; index != TaskHandle::s_InvalidIndex;){
             TaskNode& node = m_nodes[index];
             const u32 next = node.next;
+            node.function = [this, &nextChunk, &chunks, begin, chunkCount, chunkSize, remainder, context, invoke](){
+                for(;;){
+                    if(isRangeCanceled(&chunks))
+                        break;
+                    const usize chunk = nextChunk.fetch_add(1u, MemoryOrder::relaxed);
+                    if(chunk >= chunkCount)
+                        break;
+                    const BalancedPartitionRange range = ComputeBalancedPartitionRange(begin, chunk, chunkSize, remainder);
+                    invoke.get()(context, range.first, range.last);
+                }
+            };
             node.scope = &chunks;
             node.options = options;
             node.parent = parent ? parentHandle : TaskHandle{};
@@ -115,24 +128,20 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
                 enqueueLocked(index);
             index = next;
         }
+        releaseReservations.release();
         if(callerScope){
             callerScope->m_pending.fetch_add(1u, MemoryOrder::release);
             callerScopePending = true;
         }
         invalidateScopeSearchLocked(true);
-        chunks.m_pending.fetch_add(chunkCount, MemoryOrder::release);
+        chunks.m_pending.fetch_add(taskCount, MemoryOrder::release);
         m_outstanding = outstanding;
         m_statistics.peakOutstandingTasks = Max(m_statistics.peakOutstandingTasks, m_outstanding);
-        if(inlineHandle.valid()){
-            inlineClaimed = beginClaimedLocked(inlineHandle, workerIndex, affinity, true);
-            wakePlan = inlineClaimed.wakePlan;
-            inlineClaimed.wakePlan = {};
-        }
-        else
-            wakePlan = workerWakePlanLocked();
+        if(inlineHandle.valid())
+            inlineClaimed = beginClaimedLocked(inlineHandle, workerIndex, affinity, true, false);
+        wakePlan = takeWorkerWakePlanLocked();
         wakeJoiners = m_joinWaiters != 0u;
     }
-    releaseReservations.release();
     notifyProgress(wakePlan, wakeJoiners);
     if(inlineClaimed.node)
         executeClaimed(inlineClaimed, workerIndex, affinity);

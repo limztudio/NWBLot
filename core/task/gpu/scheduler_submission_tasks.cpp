@@ -80,9 +80,11 @@ b8 GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
             return false;
         const GpuSubmissionPacket& packetPlan = *packetView.plan;
         GpuTimingSubmissionTicket* const ownedTimingTicket = recordedGraph.packetTimingTicket(packet, artifactOperation);
-        if(packetPlan.recordsTiming != static_cast<b8>(ownedTimingTicket) || !graph.packetReadyForSubmission(compiledGraph, planAccess, packet, recordingAttemptGeneration))
+        if(packetPlan.recordsTiming != static_cast<b8>(ownedTimingTicket))
             return false;
     }
+    if(!graph.packetsReadyForSubmission(compiledGraph, planAccess, range, recordingAttemptGeneration))
+        return false;
     Vector<NotNull<GpuTimingSubmissionTicket*>, Alloc::ScratchArena> resolvedTimingTickets{ scratchArena };
     resolvedTimingTickets.reserve(bindings.timingTickets.size());
     preflightExceptionScope.complete();

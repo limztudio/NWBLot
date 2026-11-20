@@ -48,7 +48,6 @@ private:
     class BatchEntryBuffer;
     class BatchPreparedTimingTicketsUnwindScope;
     class BatchSubmittingPacketsUnwindScope;
-    class AcceptedBatchUnwindScope;
 
     class SubmissionAttemptExceptionFinalizer final : NoCopy{
     private:

@@ -31,6 +31,8 @@ class GpuFrameData{
     public GpuCommandRecordingMode m_recordingMode = GpuCommandRecordingMode::Direct;
     public b8 m_prepared = false;
     public u32 m_presentationMode = s_ShaderUiPresentationSdr;
+    public GpuVersion<GpuCommandIrCapture> m_rasterCommandIrCapture;
+    public GpuVersion<GpuCommandIrCapture> m_outputCommandIrCapture;
 
     public void reset(mut DrawSnapshot snapshot, in GpuVersion<GpuSkinVersion> skin){
         MoveInto<DrawSnapshot>(this.m_snapshot, snapshot);
@@ -52,6 +54,10 @@ class GpuFrameData{
         this.m_recordingMode = GpuCommandRecordingMode::Direct;
         this.m_presentationMode = s_ShaderUiPresentationSdr;
         this.m_prepared = false;
+        if(this.m_rasterCommandIrCapture.valid())
+            this.m_rasterCommandIrCapture.deref().reset();
+        if(this.m_outputCommandIrCapture.valid())
+            this.m_outputCommandIrCapture.deref().reset();
     }
 
     [cpp_unwind]

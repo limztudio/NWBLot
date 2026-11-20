@@ -11,6 +11,7 @@
 #include "task_graph_declaration_view.h"
 
 #include <global/arena_object.h>
+#include <global/atomic.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -117,9 +118,66 @@ struct GpuTaskNode{
     mutable u64 submissionClaimGeneration = 0u;
     mutable u64 discardNotificationGeneration = 0u;
     GpuTaskTimingMetadata timing;
-    mutable TaskLifecycleState::Enum lifecycleState = TaskLifecycleState::Declared;
-    mutable b8 recordThunkInProgress = false;
-    mutable b8 recordThunkCompleted = false;
+    alignas(alignof(u16)) mutable u16 lifecycleWord = 0u;
+
+    static constexpr u16 s_LifecycleStateMask = 0x00ffu;
+    static constexpr u16 s_RecordThunkInProgressBit = 0x0100u;
+    static constexpr u16 s_RecordThunkCompletedBit = 0x0200u;
+
+    static_assert(AtomicRef<u16>::is_always_lock_free, "GpuTaskNode lifecycle word must be lock-free");
+
+    [[nodiscard]] static constexpr u16 MakeLifecycleWord(
+        const TaskLifecycleState::Enum state,
+        const b8 inProgress = false,
+        const b8 completed = false
+    )noexcept{
+        return static_cast<u16>(
+            static_cast<u16>(state)
+            | (inProgress ? s_RecordThunkInProgressBit : 0u)
+            | (completed ? s_RecordThunkCompletedBit : 0u)
+        );
+    }
+
+    [[nodiscard]] static constexpr TaskLifecycleState::Enum DecodeLifecycleState(const u16 word)noexcept{
+        return static_cast<TaskLifecycleState::Enum>(word & s_LifecycleStateMask);
+    }
+
+    [[nodiscard]] static constexpr b8 DecodeRecordThunkInProgress(const u16 word)noexcept{
+        return (word & s_RecordThunkInProgressBit) != 0u;
+    }
+
+    [[nodiscard]] static constexpr b8 DecodeRecordThunkCompleted(const u16 word)noexcept{
+        return (word & s_RecordThunkCompletedBit) != 0u;
+    }
+
+    [[nodiscard]] u16 loadLifecycleWord(const MemoryOrder order = MemoryOrder::acquire)const noexcept{
+        return AtomicRef<u16>(lifecycleWord).load(order);
+    }
+
+    [[nodiscard]] TaskLifecycleState::Enum lifecycleState(const MemoryOrder order = MemoryOrder::acquire)const noexcept{
+        return DecodeLifecycleState(loadLifecycleWord(order));
+    }
+
+    [[nodiscard]] b8 recordThunkInProgress(const MemoryOrder order = MemoryOrder::acquire)const noexcept{
+        return DecodeRecordThunkInProgress(loadLifecycleWord(order));
+    }
+
+    [[nodiscard]] b8 recordThunkCompleted(const MemoryOrder order = MemoryOrder::acquire)const noexcept{
+        return DecodeRecordThunkCompleted(loadLifecycleWord(order));
+    }
+
+    void setLifecycle(const TaskLifecycleState::Enum state, const b8 inProgress = false, const b8 completed = false)const noexcept{
+        AtomicRef<u16>(lifecycleWord).store(MakeLifecycleWord(state, inProgress, completed), MemoryOrder::release);
+    }
+
+    [[nodiscard]] b8 compareExchangeLifecycleWord(
+        u16& expected,
+        const u16 desired,
+        const MemoryOrder successOrder = MemoryOrder::acq_rel,
+        const MemoryOrder failureOrder = MemoryOrder::acquire
+    )const noexcept{
+        return AtomicRef<u16>(lifecycleWord).compare_exchange_strong(expected, desired, successOrder, failureOrder);
+    }
 };
 
 struct GpuGraphResourceNode{

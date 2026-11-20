@@ -10,6 +10,7 @@
 
 #include <core/common/log.h>
 
+#include <global/algorithm.h>
 #include <global/simd/vector.h>
 
 
@@ -29,6 +30,31 @@ namespace __hidden_graphics_pipeline{
 
 
 static constexpr TStringView s_DynamicRenderingBeginFailedReason = FOUNDATION_TEXT("dynamic rendering could not begin");
+
+
+b8 ViewportStatesEqual(const ViewportState& lhs, const ViewportState& rhs)noexcept{
+    if(lhs.viewports.size() != rhs.viewports.size() || lhs.scissorRects.size() != rhs.scissorRects.size())
+        return false;
+    for(usize i = 0u; i < lhs.viewports.size(); ++i){
+        if(!(lhs.viewports[i] == rhs.viewports[i]))
+            return false;
+    }
+    for(usize i = 0u; i < lhs.scissorRects.size(); ++i){
+        if(!(lhs.scissorRects[i] == rhs.scissorRects[i]))
+            return false;
+    }
+    return true;
+}
+
+b8 VertexBufferBindingsEqual(const FixedVector<VertexBufferBinding, s_MaxVertexAttributes>& lhs, const FixedVector<VertexBufferBinding, s_MaxVertexAttributes>& rhs)noexcept{
+    if(lhs.size() != rhs.size())
+        return false;
+    for(usize i = 0u; i < lhs.size(); ++i){
+        if(!(lhs[i] == rhs[i]))
+            return false;
+    }
+    return true;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -100,6 +126,8 @@ void CommandList::beginRenderPass(Framebuffer& framebuffer, const RenderPassPara
     m_currentComputeState = {};
     m_currentMeshletState = {};
     m_currentRayTracingState = {};
+    m_hasBoundGraphicsState = false;
+    m_hasBoundComputeState = false;
     m_renderPassActive = true;
     m_renderPassFramebuffer = &framebuffer;
 }
@@ -137,32 +165,88 @@ void CommandList::setGraphicsState(const GraphicsState& state){
     commitBarriers();
     if(m_commandRecordingFailed)
         return;
+    const b8 hasPreviousGraphicsState = m_hasBoundGraphicsState;
+    const b8 pipelineChanged = !hasPreviousGraphicsState || m_currentGraphicsState.pipeline != state.pipeline;
+    const b8 blendConstantsChanged = !(m_currentGraphicsState.blendConstantColor == state.blendConstantColor);
+    const b8 dynamicStencilRefChanged = m_currentGraphicsState.dynamicStencilRefValue != state.dynamicStencilRefValue;
+    const b8 viewportChanged = !hasPreviousGraphicsState || !__hidden_graphics_pipeline::ViewportStatesEqual(m_currentGraphicsState.viewport, state.viewport);
+    const b8 vertexBuffersEqual = hasPreviousGraphicsState && __hidden_graphics_pipeline::VertexBufferBindingsEqual(m_currentGraphicsState.vertexBuffers, state.vertexBuffers);
+    const b8 indexBufferChanged = !hasPreviousGraphicsState || !(m_currentGraphicsState.indexBuffer == state.indexBuffer);
+
     m_currentComputeState = {};
     m_currentMeshletState = {};
     m_currentRayTracingState = {};
+    m_hasBoundComputeState = false;
     m_currentGraphicsState = state;
+    m_hasBoundGraphicsState = true;
 
     if(state.pipeline){
         auto& pipeline = *MakeNotNull(state.pipeline);
-        m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipeline);
         retainResource(&pipeline);
-        VulkanDetail::SetGraphicsDynamicState(m_context.deviceDispatch, m_currentCmdBuf->m_cmdBuf, pipeline.m_desc, state);
+        if(pipelineChanged){
+            m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipeline);
+            VulkanDetail::SetGraphicsDynamicState(m_context.deviceDispatch, m_currentCmdBuf->m_cmdBuf, pipeline.m_desc, state);
+        }
+        else{
+            if(blendConstantsChanged){
+                const Array<f32, 4> blendConstants = {{ state.blendConstantColor.r, state.blendConstantColor.g, state.blendConstantColor.b, state.blendConstantColor.a }};
+                m_context.deviceDispatch.vkCmdSetBlendConstants(m_currentCmdBuf->m_cmdBuf, blendConstants.data());
+            }
+            const DepthStencilState& depthStencilState = pipeline.m_desc.renderState.depthStencilState;
+            if(depthStencilState.dynamicStencilRef && dynamicStencilRefChanged)
+                m_context.deviceDispatch.vkCmdSetStencilReference(m_currentCmdBuf->m_cmdBuf, VK_STENCIL_FACE_FRONT_AND_BACK, state.dynamicStencilRefValue);
+        }
     }
 
-    setViewportState(state.viewport);
+    if(viewportChanged)
+        setViewportState(state.viewport);
 
-    for(const VertexBufferBinding& binding : state.vertexBuffers){
-        VkBuffer vertexBuffer = binding.buffer->m_buffer;
-        VkDeviceSize offset = binding.offset;
-        m_context.deviceDispatch.vkCmdBindVertexBuffers(m_currentCmdBuf->m_cmdBuf, binding.slot, 1, &vertexBuffer, &offset);
-        retainResource(binding.buffer);
+    if(!state.vertexBuffers.empty()){
+        for(const VertexBufferBinding& binding : state.vertexBuffers)
+            retainResource(binding.buffer);
+        if(!vertexBuffersEqual){
+            b8 alreadyAscending = true;
+            for(usize i = 1u; i < state.vertexBuffers.size(); ++i){
+                if(state.vertexBuffers[i].slot <= state.vertexBuffers[i - 1u].slot){
+                    alreadyAscending = false;
+                    break;
+                }
+            }
+            const VertexBufferBinding* orderedData = state.vertexBuffers.data();
+            const usize orderedCount = state.vertexBuffers.size();
+            FixedVector<VertexBufferBinding, s_MaxVertexAttributes> sortedBindings;
+            if(!alreadyAscending){
+                sortedBindings = state.vertexBuffers;
+                Sort(sortedBindings.begin(), sortedBindings.end(), [](const VertexBufferBinding& lhs, const VertexBufferBinding& rhs)noexcept{
+                    return lhs.slot < rhs.slot;
+                });
+                orderedData = sortedBindings.data();
+            }
+
+            usize startIndex = 0u;
+            while(startIndex < orderedCount){
+                const u32 firstSlot = orderedData[startIndex].slot;
+                Array<VkBuffer, s_MaxVertexAttributes> nativeBuffers{};
+                Array<VkDeviceSize, s_MaxVertexAttributes> offsets{};
+                u32 count = 0u;
+                while(startIndex + count < orderedCount && orderedData[startIndex + count].slot == firstSlot + count){
+                    nativeBuffers[count] = orderedData[startIndex + count].buffer->m_buffer;
+                    offsets[count] = orderedData[startIndex + count].offset;
+                    ++count;
+                }
+                m_context.deviceDispatch.vkCmdBindVertexBuffers(m_currentCmdBuf->m_cmdBuf, firstSlot, count, nativeBuffers.data(), offsets.data());
+                startIndex += count;
+            }
+        }
     }
 
     if(state.indexBuffer.buffer){
         auto& ib = *MakeNotNull(state.indexBuffer.buffer);
-        const VkIndexType indexType = state.indexBuffer.format == Format::R16_UINT ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
-        m_context.deviceDispatch.vkCmdBindIndexBuffer(m_currentCmdBuf->m_cmdBuf, ib.m_buffer, state.indexBuffer.offset, indexType);
         retainResource(&ib);
+        if(indexBufferChanged){
+            const VkIndexType indexType = state.indexBuffer.format == Format::R16_UINT ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
+            m_context.deviceDispatch.vkCmdBindIndexBuffer(m_currentCmdBuf->m_cmdBuf, ib.m_buffer, state.indexBuffer.offset, indexType);
+        }
     }
     retainResource(state.indirectParams);
 }

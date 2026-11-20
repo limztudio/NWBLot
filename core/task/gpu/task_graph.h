@@ -439,7 +439,12 @@ private:
 
 private:
     [[nodiscard]] b8 matchesPacketAttemptWithinLock(const GpuCompiledGraph& compiledGraph, const u64 planGeneration, const u64 recordingAttemptGeneration)const noexcept{
-        return !m_teardownInProgress && m_activeCompiledGraph == &compiledGraph && m_activeRecordingPlanGeneration == planGeneration && m_activeRecordingAttemptGeneration == recordingAttemptGeneration;
+        return
+            !m_teardownInProgress.load(MemoryOrder::relaxed)
+            && m_activeCompiledGraph == &compiledGraph
+            && m_activeRecordingPlanGeneration.load(MemoryOrder::relaxed) == planGeneration
+            && m_activeRecordingAttemptGeneration.load(MemoryOrder::relaxed) == recordingAttemptGeneration
+        ;
     }
 
     [[nodiscard]] Expected<void, RecordTaskFailure> recordTask(const GpuTaskId& taskID, CommandList& commandList, const GpuTaskRecordContext& context, const GpuPacketRecordingLease& lease)const;
@@ -454,6 +459,7 @@ private:
     [[nodiscard]] b8 abandonPacketRecordingAbortWithoutCallbacks(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuPacketRecordingAbort& abort)const noexcept;
     void abortPacketRecording(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketRecordingLease& lease)const;
     [[nodiscard]] b8 packetReadyForSubmission(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, u64 recordingAttemptGeneration)const noexcept;
+    [[nodiscard]] b8 packetsReadyForSubmission(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketRange range, u64 recordingAttemptGeneration)const noexcept;
 
 
 private:
@@ -465,9 +471,19 @@ private:
         const GpuGraphSubmissionBinding& submissionBinding,
         GpuPacketSubmissionLease& outLease
     )const noexcept;
+    [[nodiscard]] usize beginPacketSubmissionBatch(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        Span<const GpuSubmissionPacketId> packets,
+        u64 recordingAttemptGeneration,
+        const GpuGraphSubmissionBinding& submissionBinding,
+        GpuPacketSubmissionLease* const* outLeases
+    )const noexcept;
     void beginPacketSubmissionAcceptance(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, const QueueSubmissionToken& token, GpuPacketSubmissionLease& lease)const noexcept;
+    void beginPacketSubmissionAcceptanceBatch(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, Span<const GpuSubmissionPacketId> packets, const QueueSubmissionReceipt* receipts, GpuPacketSubmissionLease* const* leases)const noexcept;
     void notifyPacketSubmissionAccepted(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, const QueueSubmissionToken& token, const GpuPacketSubmissionLease& lease)const;
     void completePacketSubmissionAcceptance(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketSubmissionLease& lease)const noexcept;
+    void completePacketSubmissionAcceptanceBatch(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, Span<const GpuSubmissionPacketId> packets, GpuPacketSubmissionLease* const* leases)const noexcept;
     void abortPacketSubmission(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketSubmissionLease& lease)const;
     [[nodiscard]] b8 abandonPacketSubmissionWithoutCallbacks(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketSubmissionLease& lease)const noexcept;
     [[nodiscard]] b8 discardUnacceptedPacket(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const;
@@ -486,6 +502,19 @@ private:
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuPacketRecordingAccess& recordingAccess,
         const GpuTaskId& task,
+        const GpuCompiledBarrier& barrier,
+        CommandList& commandList
+    )const;
+    [[nodiscard]] b8 applyCompiledBarriers(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        const GpuPacketRecordingAccess& recordingAccess,
+        const GpuTaskId& task,
+        Span<const GpuCompiledBarrier> barriers,
+        CommandList& commandList
+    )const;
+    [[nodiscard]] b8 applyCompiledBarrierValidated(
+        const GpuCompiledGraph::ReadView& planAccess,
         const GpuCompiledBarrier& barrier,
         CommandList& commandList
     )const;
@@ -615,8 +644,8 @@ private:
     usize m_uploadBlobStorageByteSize = 0u;
     u64 m_generation = 0u;
     u64 m_declarationRevision = 0u;
-    mutable u64 m_activeRecordingAttemptGeneration = 0u;
-    mutable u64 m_activeRecordingPlanGeneration = 0u;
+    mutable Atomic<u64> m_activeRecordingAttemptGeneration{ 0u };
+    mutable Atomic<u64> m_activeRecordingPlanGeneration{ 0u };
     mutable u64 m_activeRecordingPreparationSerial = 0u;
     mutable const GpuCompiledGraph* m_activeCompiledGraph = nullptr;
     mutable GpuGraphSubmissionBinding m_activeSubmissionBinding;
@@ -628,7 +657,7 @@ private:
     u16 m_externalCompletionDeviceGeneration = 0u;
     b8 m_hasPresentEndpoint = false;
     b8 m_hasTaskPayloads = false;
-    mutable b8 m_teardownInProgress = false;
+    mutable Atomic<b8> m_teardownInProgress{ false };
 };
 
 

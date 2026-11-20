@@ -144,25 +144,55 @@ b8 GpuDescriptorHeap::isResourceAdmittedToActiveUsesLocked(const ResourceQueueAd
 }
 
 b8 GpuDescriptorHeap::retainedResourcesReadyForQueueLocked(const GpuPhysicalQueueInfo& queue)const noexcept{
-    for(u32 slot = 0u; slot < m_resourceSlots.nextFresh; ++slot){
+    for(const GpuDescriptorHandle handle : m_dynamicReadinessSlots){
+        const u32 slot = handle.slot();
+        if(handle.descriptorClass() == GpuDescriptorClass::AccelStruct){
+            const RayTracingAccelStructHandle& retainedAccelStruct = m_accelStructResources[slot];
+            if(!retainedAccelStruct)
+                continue;
+
+            Buffer* const backingBuffer = retainedAccelStruct->getBackingBuffer();
+            if(!m_device.isAccelStructReadyForGpuUse(retainedAccelStruct.get()) || !backingBuffer || !ResourceQueueAdmissionAdmitsQueue(backingBuffer->getQueueAdmissionSnapshot(), queue))
+                return false;
+            continue;
+        }
+
         const BufferHandle& retainedBuffer = m_resourceDescriptorBuffers[slot];
         if(retainedBuffer && (!m_device.isBufferReadyForGpuUse(retainedBuffer.get()) || !ResourceQueueAdmissionAdmitsQueue(retainedBuffer->getQueueAdmissionSnapshot(), queue)))
             return false;
-    }
-    for(u32 slot = 0u; slot < m_resourceSlots.nextFresh; ++slot){
+
         const TextureHandle& retainedTexture = m_resourceDescriptorTextures[slot];
         if(retainedTexture && (!m_device.isTextureReadyForGpuUse(retainedTexture.get()) || !ResourceQueueAdmissionAdmitsQueue(retainedTexture->getQueueAdmissionSnapshot(), queue)))
             return false;
     }
-    for(u32 slot = 0u; slot < m_accelStructSlots.nextFresh; ++slot){
-        const RayTracingAccelStructHandle& retainedAccelStruct = m_accelStructResources[slot];
-        if(!retainedAccelStruct)
-            continue;
 
-        Buffer* const backingBuffer = retainedAccelStruct->getBackingBuffer();
-        if(!m_device.isAccelStructReadyForGpuUse(retainedAccelStruct.get()) || !backingBuffer || !ResourceQueueAdmissionAdmitsQueue(backingBuffer->getQueueAdmissionSnapshot(), queue))
-            return false;
+    const u64 queueBit = queue.id.valid() && queue.id.index < 64u ? (1ull << queue.id.index) : 0u;
+    if(!m_concurrentAdmissionSlots.empty() && (queueBit == 0u || (m_verifiedConcurrentQueueMask & queueBit) == 0u)){
+        for(const GpuDescriptorHandle handle : m_concurrentAdmissionSlots){
+            const u32 slot = handle.slot();
+            if(handle.descriptorClass() == GpuDescriptorClass::AccelStruct){
+                const RayTracingAccelStructHandle& retainedAccelStruct = m_accelStructResources[slot];
+                if(!retainedAccelStruct)
+                    continue;
+
+                Buffer* const backingBuffer = retainedAccelStruct->getBackingBuffer();
+                if(!backingBuffer || !ResourceQueueAdmissionAdmitsQueue(backingBuffer->getQueueAdmissionSnapshot(), queue))
+                    return false;
+                continue;
+            }
+
+            const BufferHandle& retainedBuffer = m_resourceDescriptorBuffers[slot];
+            if(retainedBuffer && !ResourceQueueAdmissionAdmitsQueue(retainedBuffer->getQueueAdmissionSnapshot(), queue))
+                return false;
+
+            const TextureHandle& retainedTexture = m_resourceDescriptorTextures[slot];
+            if(retainedTexture && !ResourceQueueAdmissionAdmitsQueue(retainedTexture->getQueueAdmissionSnapshot(), queue))
+                return false;
+        }
+        if(queueBit != 0u)
+            m_verifiedConcurrentQueueMask |= queueBit;
     }
+
     return true;
 }
 
@@ -183,11 +213,7 @@ b8 GpuDescriptorHeap::trackCommandBufferUseLocked(TrackedCommandBuffer& commandB
         if(trackedHeap.get() != this)
             continue;
 
-        for(const HeapUse& heapUse : m_heapUses){
-            if(heapUse.commandBuffer == &commandBuffer)
-                return heapUse.physicalQueue == physicalQueue;
-        }
-        return false;
+        return commandBuffer.m_trackedDescriptorHeapQueue == physicalQueue;
     }
     if(m_lastHeapUseID == UINT64_MAX)
         return false;
@@ -195,6 +221,7 @@ b8 GpuDescriptorHeap::trackCommandBufferUseLocked(TrackedCommandBuffer& commandB
     commandBuffer.m_referencedDescriptorHeaps.push_back(MakeNotNull(this));
     ScopeExit rollbackHeapReference([&commandBuffer]()noexcept{ commandBuffer.m_referencedDescriptorHeaps.pop_back(); });
     m_heapUses.push_back(HeapUse{ .commandBuffer = &commandBuffer, .submissionToken = {}, .id = ++m_lastHeapUseID, .physicalQueue = physicalQueue, });
+    commandBuffer.m_trackedDescriptorHeapQueue = physicalQueue;
     rollbackHeapReference.release();
     return true;
 }

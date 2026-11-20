@@ -97,6 +97,7 @@ Buffer::~Buffer()noexcept{
 
     {
         ScopedLock bindingLock(m_memoryBindingMutex);
+        m_gpuReady.store(false, MemoryOrder::release);
         if(m_boundHeap){
             auto& boundHeap = *MakeNotNull(m_boundHeap.get());
             {
@@ -255,6 +256,7 @@ Expected<BufferHandle> Device::createBuffer(const BufferDesc& d){
             addressInfo.buffer = buffer->m_buffer;
             buffer->m_deviceAddress = m_context.deviceDispatch.vkGetBufferDeviceAddress(m_context.device, &addressInfo);
         }
+        buffer->m_gpuReady.store(true, MemoryOrder::release);
     }
 
     return buffer;

@@ -26,7 +26,32 @@ b8 GpuTaskGraph::applyCompiledBarrier(
     const GpuCompiledBarrier& barrier,
     CommandList& commandList
 )const{
-    if(!recordingAccess.validForTask(*this, compiledGraph, planAccess, task) || !validResource(barrier.resource) || barrier.type >= GpuCompiledBarrierType::Count)
+    return applyCompiledBarriers(compiledGraph, planAccess, recordingAccess, task, Span<const GpuCompiledBarrier>(&barrier, 1u), commandList);
+}
+
+b8 GpuTaskGraph::applyCompiledBarriers(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuCompiledGraph::ReadView& planAccess,
+    const GpuPacketRecordingAccess& recordingAccess,
+    const GpuTaskId& task,
+    const Span<const GpuCompiledBarrier> barriers,
+    CommandList& commandList
+)const{
+    if(!recordingAccess.validForTask(*this, compiledGraph, planAccess, task))
+        return false;
+    for(const GpuCompiledBarrier& barrier : barriers){
+        if(!applyCompiledBarrierValidated(planAccess, barrier, commandList))
+            return false;
+    }
+    return true;
+}
+
+b8 GpuTaskGraph::applyCompiledBarrierValidated(
+    const GpuCompiledGraph::ReadView& planAccess,
+    const GpuCompiledBarrier& barrier,
+    CommandList& commandList
+)const{
+    if(!validResource(barrier.resource) || barrier.type >= GpuCompiledBarrierType::Count)
         return false;
 
     const GpuGraphResourceNode& resource = m_resources[barrier.resource.index];
@@ -46,16 +71,7 @@ b8 GpuTaskGraph::applyCompiledBarrier(
         if(barrier.isGraphInitialState){
             if(barrier.before == ResourceStates::Unknown)
                 return false;
-            const TextureSubresourceSet subresources = barrier.range.textureSubresources.resolve(resource.texture->getCreationDescription(), TextureSubresourceMipResolve::Range);
-            const MipLevel mipEnd = subresources.baseMipLevel + subresources.numMipLevels;
-            const ArraySlice arrayEnd = subresources.baseArraySlice + subresources.numArraySlices;
-            for(ArraySlice arraySlice = subresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
-                for(MipLevel mipLevel = subresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
-                    if(commandList.hasExplicitTextureSubresourceState(resource.texture.get(), arraySlice, mipLevel))
-                        continue;
-                    commandList.beginTrackingTextureState(resource.texture.get(), TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u), barrier.before);
-                }
-            }
+            commandList.seedTextureState(resource.texture.get(), barrier.range.textureSubresources, barrier.before);
         }
         commandList.setTextureState(resource.texture.get(), barrier.range.textureSubresources, barrier.after, barrier.forceMemoryDependency);
         return true;

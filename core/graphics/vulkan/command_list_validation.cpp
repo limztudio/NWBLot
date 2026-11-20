@@ -190,7 +190,7 @@ b8 CommandList::validateCommandRecordingScope(const TStringView operationName){
     if(m_commandRecordingFailed)
         return false;
 
-    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
+    const GpuPhysicalQueueInfo* const queueInfo = cachedPhysicalQueueInfo();
     const CommandQueue::Enum exactQueueClass = queueInfo ? queueInfo->queueClass : CommandQueue::kCount;
     const u8 exactCapabilityBits = queueInfo ? static_cast<u8>(queueInfo->capabilities) : 0u;
     const b8 validRecordingScope = matchesActiveNativeLeaseIdentity();
@@ -223,7 +223,7 @@ b8 CommandList::recordAndValidateCommandCapability(const GpuQueueCapability::Mas
     if(!validateCommandRecordingScope(operationName))
         return false;
 
-    auto& queueInfo = *MakeNotNull(m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue));
+    auto& queueInfo = *MakeNotNull(cachedPhysicalQueueInfo());
     const u8 availableBits = static_cast<u8>(queueInfo.capabilities);
     const CommandQueue::Enum exactQueueClass = queueInfo.queueClass;
     const b8 validRequiredMask = requiredBits != 0u && (requiredBits & ~GpuQueueCapability::s_KnownCapabilityBits) == 0u;
@@ -249,7 +249,7 @@ b8 CommandList::recordAndValidateAnyCommandCapability(const GpuQueueCapability::
     if(!publicCommandStateAccessible())
         return false;
     const u8 alternativeBits = static_cast<u8>(alternativeCapabilities);
-    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
+    const GpuPhysicalQueueInfo* const queueInfo = cachedPhysicalQueueInfo();
     const u8 availableBits = queueInfo ? static_cast<u8>(queueInfo->capabilities) : 0u;
     u8 selectableBits = availableBits & alternativeBits;
 #if defined(NWB_DEBUG)

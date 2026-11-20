@@ -52,7 +52,14 @@ CommandList::CommandList(Device& device, const CommandListParameters& params)
     , m_pendingBufferBarriers(device.m_context.objectArena)
     , m_textureOwnershipReleaseDestinations(0u, TextureSubresourceStateKeyHasher(), TextureSubresourceStateKeyEqualTo(), device.m_context.objectArena)
     , m_bufferOwnershipReleaseDestinations(0u, Hasher<NotNull<Buffer*>>(), EqualTo<NotNull<Buffer*>>(), device.m_context.objectArena)
-{}
+{
+    if(const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue)){
+        m_cachedPhysicalQueueInfo = *queueInfo;
+        m_hasCachedPhysicalQueueInfo = true;
+        const u8 capabilityBits = static_cast<u8>(queueInfo->capabilities);
+        m_universalGraphicsCompute = (capabilityBits & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u && (capabilityBits & static_cast<u8>(GpuQueueCapability::Compute)) != 0u;
+    }
+}
 
 CommandList::~CommandList()noexcept{
     abortRecordingAttemptWithoutCallbacks();
@@ -145,11 +152,20 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
     m_textureOwnershipReleaseDestinations.clear();
     m_bufferOwnershipReleaseDestinations.clear();
     if(initialStates){
-        Alloc::ScratchArena scratchArena(VulkanArenaScope::s_StateHandoffArena);
+        if(initialStates->empty()){
+            if(!initialStates->validForDeviceGeneration(m_context.deviceGeneration)){
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Resource-state handoff belongs to a retired device generation"));
+                rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("resource-state handoff is incompatible"));
+                discardInvalidCommandBuffer();
+            }
+        }
+        else{
+            Alloc::ScratchArena scratchArena(VulkanArenaScope::s_StateHandoffArena);
 
-        if(!importResourceStateHandoff(scratchArena, *initialStates)){
-            rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("resource-state handoff is incompatible"));
-            discardInvalidCommandBuffer();
+            if(!importResourceStateHandoff(scratchArena, *initialStates)){
+                rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("resource-state handoff is incompatible"));
+                discardInvalidCommandBuffer();
+            }
         }
     }
 }
@@ -383,6 +399,8 @@ void CommandList::clearStateInternal(){
     m_currentComputeState = {};
     m_currentMeshletState = {};
     m_currentRayTracingState = {};
+    m_hasBoundGraphicsState = false;
+    m_hasBoundComputeState = false;
     m_renderPassActive = false;
     m_descriptorBuffersBound = false;
     m_renderPassFramebuffer = nullptr;
@@ -442,7 +460,7 @@ b8 CommandList::matchesSubmissionLease(const GpuPhysicalQueueId executionQueue, 
 }
 
 b8 CommandList::isTextureAdmittedToCommandQueue(const Texture& texture)const noexcept{
-    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
+    const GpuPhysicalQueueInfo* const queueInfo = cachedPhysicalQueueInfo();
     return queueInfo && ResourceQueueAdmissionAdmitsQueue(texture.getQueueAdmissionSnapshot(), *queueInfo);
 }
 
@@ -451,7 +469,7 @@ b8 CommandList::isTextureReadyForCommandQueue(Texture* const texture, const VkIm
 }
 
 b8 CommandList::isBufferAdmittedToCommandQueue(const Buffer& buffer)const noexcept{
-    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
+    const GpuPhysicalQueueInfo* const queueInfo = cachedPhysicalQueueInfo();
     return queueInfo && ResourceQueueAdmissionAdmitsQueue(buffer.getQueueAdmissionSnapshot(), *queueInfo);
 }
 

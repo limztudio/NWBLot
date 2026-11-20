@@ -58,6 +58,17 @@ namespace __hidden_vulkan_descriptor_heap{
         }
         return abi.samplerBinding < s_MaxBindlessRegisterSpaces && abi.accelStructBinding < s_MaxBindlessRegisterSpaces;
     }
+
+    void RemoveDescriptorHandle(Vector<GpuDescriptorHandle, Alloc::GlobalArena>& handles, const GpuDescriptorHandle handle)noexcept{
+        for(usize i = 0u; i < handles.size(); ++i){
+            if(handles[i].value != handle.value)
+                continue;
+
+            handles[i] = handles.back();
+            handles.pop_back();
+            return;
+        }
+    }
 };
 
 
@@ -97,6 +108,8 @@ GpuDescriptorHeap::GpuDescriptorHeap(Device& device)noexcept
     : m_device(device)
     , m_context(device.m_context)
     , m_heapUses(device.m_context.objectArena)
+    , m_dynamicReadinessSlots(device.m_context.objectArena)
+    , m_concurrentAdmissionSlots(device.m_context.objectArena)
 {}
 
 GpuDescriptorHeap::~GpuDescriptorHeap()noexcept{
@@ -513,14 +526,17 @@ void GpuDescriptorHeap::releaseAccelStructDescriptorBlock(const u32 slot){
 }
 
 void GpuDescriptorHeap::releaseRetainedDescriptorResource(const GpuDescriptorHandle handle){
-    if(handle.descriptorClass() == GpuDescriptorClass::AccelStruct){
-        releaseAccelStructDescriptorBlock(handle.slot());
-        return;
-    }
-
     if(handle.descriptorClass() == GpuDescriptorClass::Sampler){
         if(handle.slot() < m_samplerDescriptorResources.size())
             m_samplerDescriptorResources[handle.slot()].reset();
+        return;
+    }
+
+    __hidden_vulkan_descriptor_heap::RemoveDescriptorHandle(m_dynamicReadinessSlots, handle);
+    __hidden_vulkan_descriptor_heap::RemoveDescriptorHandle(m_concurrentAdmissionSlots, handle);
+
+    if(handle.descriptorClass() == GpuDescriptorClass::AccelStruct){
+        releaseAccelStructDescriptorBlock(handle.slot());
         return;
     }
 
@@ -571,6 +587,7 @@ void GpuDescriptorHeap::resetStateForShutdownLocked()noexcept{
             referencedHeaps.erase(referencedHeaps.begin() + heapIndex);
             break;
         }
+        heapUse.commandBuffer->m_trackedDescriptorHeapQueue = {};
         heapUse.commandBuffer = nullptr;
     }
 
@@ -596,6 +613,9 @@ void GpuDescriptorHeap::resetStateForShutdownLocked()noexcept{
     m_retired.clear();
     m_storageArena.reset();
     m_heapUses.clear();
+    m_dynamicReadinessSlots.clear();
+    m_concurrentAdmissionSlots.clear();
+    m_verifiedConcurrentQueueMask = 0u;
     m_pendingRecordingCount = 0u;
     m_retiredCount = 0u;
     m_activePendingRecordingLeaseCount = 0u;

@@ -36,14 +36,20 @@ b8 GpuInferredDependencyCollector::InferredDependencyEqual::operator()(const usi
 
 GpuInferredDependencyCollector::GpuInferredDependencyCollector(Alloc::ScratchArena& arena, GraphicsVector<GpuTaskDependencyEdge>& edges, GraphicsVector<GpuTaskDependencyEdge>& inferredEdges, usize& explicitEdgeCount, usize& inferredEdgeCount, usize& resourceVersionEdgeCount)
     : m_edges(edges), m_inferredEdges(inferredEdges), m_explicitEdgeCount(explicitEdgeCount), m_inferredEdgeCount(inferredEdgeCount), m_resourceVersionEdgeCount(resourceVersionEdgeCount)
+    , m_flatDependencyPairs(arena)
     , m_dependencyPairs(0, GpuTaskDependencyPairHasher(), EqualTo<u64>(), arena)
     , m_nextInferredEdges(arena)
     , m_inferredEdgeIndices(0u, InferredDependencyHasher{ MakeNotNull(&inferredEdges) }, InferredDependencyEqual{ MakeNotNull(&inferredEdges) }, arena)
 {}
 
-void GpuInferredDependencyCollector::reserve(const usize expectedEdgeCount){
+void GpuInferredDependencyCollector::reserve(const usize expectedEdgeCount, const usize taskCount){
     m_expectedEdgeCount = expectedEdgeCount;
-    m_dependencyPairs.reserve(expectedEdgeCount);
+    if(taskCount != 0u && taskCount <= s_FlatMatrixMaxTasks && m_edges.empty() && m_dependencyPairs.empty()){
+        m_flatTaskCount = taskCount;
+        m_flatDependencyPairs.assign(taskCount * taskCount, DependencyPairIndices{ Limit<usize>::s_Max, Limit<usize>::s_Max });
+    }
+    else
+        m_dependencyPairs.reserve(expectedEdgeCount);
     m_nextInferredEdges.reserve(expectedEdgeCount);
     m_edges.reserve(expectedEdgeCount);
     m_inferredEdges.reserve(expectedEdgeCount);
@@ -54,21 +60,37 @@ void GpuInferredDependencyCollector::appendRaw(const GpuTaskDependencyEdge& edge
 }
 
 GpuInferredDependencyCollector::DependencyPairIndices& GpuInferredDependencyCollector::appendRawEdge(const GpuTaskDependencyEdge& edge){
-    const u64 pairKey = PackGpuTaskDependencyPairKey(edge.producer.index, edge.consumer.index);
-    auto [pair, inserted] = m_dependencyPairs.try_emplace(pairKey, DependencyPairIndices{ m_edges.size() });
+    DependencyPairIndices* pairPtr = nullptr;
+    b8 inserted = false;
+    if(m_flatTaskCount != 0u){
+        FOUNDATION_ASSERT(edge.producer.index < m_flatTaskCount && edge.consumer.index < m_flatTaskCount);
+        DependencyPairIndices& slot = m_flatDependencyPairs[static_cast<usize>(edge.producer.index) * m_flatTaskCount + static_cast<usize>(edge.consumer.index)];
+        if(slot.rawEdge == Limit<usize>::s_Max){
+            slot.rawEdge = m_edges.size();
+            inserted = true;
+        }
+        pairPtr = &slot;
+    }
+    else{
+        const u64 pairKey = PackGpuTaskDependencyPairKey(edge.producer.index, edge.consumer.index);
+        auto [pair, emplaced] = m_dependencyPairs.try_emplace(pairKey, DependencyPairIndices{ m_edges.size() });
+        pairPtr = &pair.value();
+        inserted = emplaced;
+    }
+
     if(inserted){
         m_edges.push_back(edge);
         if(edge.hazard == GpuTaskHazardType::Explicit)
             ++m_explicitEdgeCount;
     }
     else{
-        GpuTaskDependencyEdge& existing = m_edges[pair->second.rawEdge];
+        GpuTaskDependencyEdge& existing = m_edges[pairPtr->rawEdge];
         if(edge.hazard == GpuTaskHazardType::Explicit && existing.hazard != GpuTaskHazardType::Explicit){
             existing = edge;
             ++m_explicitEdgeCount;
         }
     }
-    return pair.value();
+    return *pairPtr;
 }
 
 void GpuInferredDependencyCollector::appendInferred(const GpuTaskDependencyEdge& edge){

@@ -201,7 +201,7 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
     task.acceptPayload = acceptPayload;
     task.discardPayload = discardPayload;
     task.destroyPayload = destroyPayload;
-    task.lifecycleAttemptGeneration = m_activeRecordingAttemptGeneration;
+    task.lifecycleAttemptGeneration = m_activeRecordingAttemptGeneration.load(MemoryOrder::relaxed);
 
     for(usize dependencyIndex = 0u; dependencyIndex < desc.dependencyCount; ++dependencyIndex)
         m_dependencies.push_back(desc.dependencies[dependencyIndex]);

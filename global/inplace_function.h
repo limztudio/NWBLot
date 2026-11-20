@@ -183,7 +183,7 @@ private:
 
 
 private:
-    mutable Storage m_storage = {};
+    mutable Storage m_storage;
     InvokeFn m_invoke = nullptr;
     DestroyFn m_destroy = nullptr;
     MoveFn m_move = nullptr;

@@ -139,6 +139,7 @@ private:
     u64 m_submissionID = 0;
     u64 m_recordingWorkerDomain = 0u;
     u32 m_recordingWorkerIndex = 0u;
+    GpuPhysicalQueueId m_trackedDescriptorHeapQueue{};
     TrackedCommandBufferArenaState::Enum m_arenaState = TrackedCommandBufferArenaState::Untracked;
     b8 m_ownsCmdPool = false;
 

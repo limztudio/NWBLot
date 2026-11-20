@@ -102,7 +102,7 @@ b8 GpuPacketRecordingLease::validFor(const GpuTaskGraph& graph, const GpuCompile
         if(!graph.validTask(tasks[taskIndex]))
             return false;
         const GpuTaskGraph::GpuTaskNode& task = graph.m_tasks[tasks[taskIndex].index];
-        if(task.lifecycleState != GpuTaskGraph::TaskLifecycleState::Recording || task.lifecycleAttemptGeneration != m_recordingAttemptGeneration || task.recordingClaimGeneration != m_claimGeneration)
+        if(task.lifecycleState() != GpuTaskGraph::TaskLifecycleState::Recording || task.lifecycleAttemptGeneration != m_recordingAttemptGeneration || task.recordingClaimGeneration != m_claimGeneration)
             return false;
     }
     return true;

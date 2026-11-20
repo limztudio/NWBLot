@@ -5,6 +5,8 @@
 #include "task_graph.h"
 #include "compiler.h"
 
+#include <global/termination.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -27,16 +29,15 @@ public:
         if(!m_active)
             return;
 
-        NothrowScopedLock lock(m_graph.m_lifecycleMutex);
+        u16 expectedWord = GpuTaskNode::MakeLifecycleWord(TaskLifecycleState::Recording, true, false);
+        const u16 restoredWord = GpuTaskNode::MakeLifecycleWord(TaskLifecycleState::Recording, false, false);
         const b8 claimValid = m_graph.validTask(m_task)
-            && m_graph.m_tasks[m_task.index].lifecycleState == TaskLifecycleState::Recording
             && m_graph.m_tasks[m_task.index].lifecycleAttemptGeneration == m_recordingAttemptGeneration
             && m_graph.m_tasks[m_task.index].recordingClaimGeneration == m_claimGeneration
-            && m_graph.m_tasks[m_task.index].recordThunkInProgress
+            && m_graph.m_tasks[m_task.index].compareExchangeLifecycleWord(expectedWord, restoredWord, MemoryOrder::acq_rel, MemoryOrder::acquire)
         ;
         if(!claimValid)
             FOUNDATION_FATAL_ASSERT_MSG(false, "record thunk unwind must retain its exact graph recording claim");
-        m_graph.m_tasks[m_task.index].recordThunkInProgress = false;
     }
 
 
@@ -168,6 +169,7 @@ Expected<GpuCompiledPacketView> GpuTaskGraph::ResolveAttemptPacketView(
 Expected<void, GpuTaskGraph::RecordTaskFailure> GpuTaskGraph::recordTask(const GpuTaskId& taskID, CommandList& commandList, const GpuTaskRecordContext& context, const GpuPacketRecordingLease& lease)const{
     const GpuCompiledTaskView compiledTaskView = context.compiledPlan.findTask(taskID);
     const GpuCompiledTask* const compiledTask = compiledTaskView.plan;
+    const u64 planGeneration = context.compiledPlan.planGeneration();
     if(
         !context.declarations.validFor(*this)
         || !context.declarations.validTask(taskID)
@@ -179,33 +181,36 @@ Expected<void, GpuTaskGraph::RecordTaskFailure> GpuTaskGraph::recordTask(const G
         || compiledTask->packet != context.packet
         || compiledTask->queue != context.queue
         || lease.m_packet != context.packet
+        || lease.m_planGeneration != planGeneration
+        || lease.m_recordingAttemptGeneration != context.recordingAttemptGeneration
+        || m_teardownInProgress.load(MemoryOrder::acquire)
+        || m_activeRecordingPlanGeneration.load(MemoryOrder::acquire) != planGeneration
+        || m_activeRecordingAttemptGeneration.load(MemoryOrder::acquire) != context.recordingAttemptGeneration
     )
         return MakeUnexpected(RecordTaskFailure{ .recordThunkInvoked = false });
 
-    const void* payload = nullptr;
-    GpuTaskRecordThunk recordPayload = nullptr;
-    {
-        ScopedLock lock(m_lifecycleMutex);
-        if(m_teardownInProgress)
-            return MakeUnexpected(RecordTaskFailure{ .recordThunkInvoked = false });
-        const GpuTaskNode& task = m_tasks[taskID.index];
-        if(
-            task.lifecycleState != TaskLifecycleState::Recording
-            || task.lifecycleAttemptGeneration != context.recordingAttemptGeneration
-            || task.recordingClaimGeneration != lease.m_claimGeneration
-            || task.recordThunkInProgress
-            || task.recordThunkCompleted
-            || !context.compiledPlan.validFor(context.declarations)
-            || m_activeRecordingPlanGeneration != context.compiledPlan.planGeneration()
-            || m_activeRecordingAttemptGeneration != context.recordingAttemptGeneration
-            || lease.m_planGeneration != context.compiledPlan.planGeneration()
-            || lease.m_recordingAttemptGeneration != context.recordingAttemptGeneration
-        )
-            return MakeUnexpected(RecordTaskFailure{ .recordThunkInvoked = false });
-        task.recordThunkInProgress = true;
-        payload = task.payload;
-        recordPayload = task.recordPayload;
+    const GpuTaskNode& task = m_tasks[taskID.index];
+    u16 expectedWord = GpuTaskNode::MakeLifecycleWord(TaskLifecycleState::Recording, false, false);
+    const u16 inProgressWord = GpuTaskNode::MakeLifecycleWord(TaskLifecycleState::Recording, true, false);
+    if(!task.compareExchangeLifecycleWord(expectedWord, inProgressWord, MemoryOrder::acq_rel, MemoryOrder::acquire))
+        return MakeUnexpected(RecordTaskFailure{ .recordThunkInvoked = false });
+
+    if(
+        m_teardownInProgress.load(MemoryOrder::acquire)
+        || m_activeRecordingPlanGeneration.load(MemoryOrder::acquire) != planGeneration
+        || m_activeRecordingAttemptGeneration.load(MemoryOrder::acquire) != context.recordingAttemptGeneration
+        || task.lifecycleAttemptGeneration != context.recordingAttemptGeneration
+        || task.recordingClaimGeneration != lease.m_claimGeneration
+        || !context.compiledPlan.validFor(context.declarations)
+    ){
+        u16 rollbackWord = inProgressWord;
+        if(!task.compareExchangeLifecycleWord(rollbackWord, expectedWord, MemoryOrder::acq_rel, MemoryOrder::acquire))
+            TerminateInvariant();
+        return MakeUnexpected(RecordTaskFailure{ .recordThunkInvoked = false });
     }
+
+    const void* const payload = task.payload;
+    const GpuTaskRecordThunk recordPayload = task.recordPayload;
     RecordThunkClaimGuard recordThunkClaim(*this, taskID, context.recordingAttemptGeneration, lease.m_claimGeneration);
 
     b8 recorded = false;
@@ -215,24 +220,22 @@ Expected<void, GpuTaskGraph::RecordTaskFailure> GpuTaskGraph::recordTask(const G
         recorded = recordPayload(payload, commandList, context);
     }
 
+    const b8 recordingAttemptValid = !m_teardownInProgress.load(MemoryOrder::acquire)
+        && context.compiledPlan.validFor(context.declarations)
+        && m_activeRecordingPlanGeneration.load(MemoryOrder::acquire) == planGeneration
+        && m_activeRecordingAttemptGeneration.load(MemoryOrder::acquire) == context.recordingAttemptGeneration
+    ;
+    u16 finishExpectedWord = inProgressWord;
+    const u16 finishedWord = GpuTaskNode::MakeLifecycleWord(TaskLifecycleState::Recording, false, recorded && recordingAttemptValid);
     b8 claimValid = false;
-    {
-        ScopedLock lock(m_lifecycleMutex);
-        if(validTask(taskID)){
-            const GpuTaskNode& task = m_tasks[taskID.index];
-            claimValid = task.lifecycleState == TaskLifecycleState::Recording && task.lifecycleAttemptGeneration == context.recordingAttemptGeneration && task.recordingClaimGeneration == lease.m_claimGeneration && task.recordThunkInProgress;
-            if(claimValid){
-                const b8 recordingAttemptValid = !m_teardownInProgress
-                    && context.compiledPlan.validFor(context.declarations)
-                    && m_activeRecordingPlanGeneration == context.compiledPlan.planGeneration()
-                    && m_activeRecordingAttemptGeneration == context.recordingAttemptGeneration
-                ;
-                task.recordThunkInProgress = false;
-                task.recordThunkCompleted = recorded && recordingAttemptValid;
-                claimValid = recordingAttemptValid;
-            }
-        }
-    }
+    if(
+        validTask(taskID)
+        && task.lifecycleAttemptGeneration == context.recordingAttemptGeneration
+        && task.recordingClaimGeneration == lease.m_claimGeneration
+        && task.compareExchangeLifecycleWord(finishExpectedWord, finishedWord, MemoryOrder::acq_rel, MemoryOrder::acquire)
+    )
+        claimValid = recordingAttemptValid;
+
     if(claimValid)
         recordThunkClaim.complete();
     if(!recorded || !claimValid)
@@ -247,12 +250,10 @@ Expected<void, GpuTaskGraph::RecordTaskFailure> GpuTaskGraph::recordTask(const G
 void GpuTaskGraph::discardPacketTasksWithinLock(const Span<const GpuTaskId> tasks, const u64 notificationGeneration)const noexcept{
     for(const GpuTaskId taskId : tasks){
         const GpuTaskNode& task = m_tasks[taskId.index];
-        task.lifecycleState = TaskLifecycleState::Discarded;
         task.recordingClaimGeneration = 0u;
         task.submissionClaimGeneration = 0u;
         task.discardNotificationGeneration = notificationGeneration;
-        task.recordThunkInProgress = false;
-        task.recordThunkCompleted = false;
+        task.setLifecycle(TaskLifecycleState::Discarded);
     }
 }
 
@@ -271,7 +272,7 @@ b8 GpuTaskGraph::beginPacketRecording(const GpuCompiledGraph& compiledGraph, con
         if(!validTask(tasks[taskIndex]))
             return false;
         const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-        if(task.lifecycleState != TaskLifecycleState::Declared || task.lifecycleAttemptGeneration != recordingAttemptGeneration)
+        if(task.lifecycleState() != TaskLifecycleState::Declared || task.lifecycleAttemptGeneration != recordingAttemptGeneration)
             return false;
     }
     const u64 claimGeneration = AllocateGeneration();
@@ -281,11 +282,10 @@ b8 GpuTaskGraph::beginPacketRecording(const GpuCompiledGraph& compiledGraph, con
         FOUNDATION_FATAL_ASSERT_MSG(false, "GPU packet recording claim count overflowed");
     m_activePacketRecordingClaimCount.store(activeClaimCount + 1u, MemoryOrder::release);
     for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-        m_tasks[tasks[taskIndex].index].lifecycleState = TaskLifecycleState::Recording;
-        m_tasks[tasks[taskIndex].index].recordingClaimGeneration = claimGeneration;
-        m_tasks[tasks[taskIndex].index].submissionClaimGeneration = 0u;
-        m_tasks[tasks[taskIndex].index].recordThunkInProgress = false;
-        m_tasks[tasks[taskIndex].index].recordThunkCompleted = false;
+        const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+        task.recordingClaimGeneration = claimGeneration;
+        task.submissionClaimGeneration = 0u;
+        task.setLifecycle(TaskLifecycleState::Recording);
     }
     outLease.m_packet = packet;
     outLease.m_planGeneration = planAccess.planGeneration();
@@ -309,20 +309,20 @@ b8 GpuTaskGraph::completePacketRecording(const GpuCompiledGraph& compiledGraph, 
         if(!validTask(tasks[taskIndex]))
             return false;
         const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+        const u16 lifecycleWord = task.loadLifecycleWord();
         if(
-            task.lifecycleState != TaskLifecycleState::Recording
+            GpuTaskNode::DecodeLifecycleState(lifecycleWord) != TaskLifecycleState::Recording
             || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration
             || task.recordingClaimGeneration != lease.m_claimGeneration
-            || task.recordThunkInProgress
-            || (task.recordPayload && !task.recordThunkCompleted)
+            || GpuTaskNode::DecodeRecordThunkInProgress(lifecycleWord)
+            || (task.recordPayload && !GpuTaskNode::DecodeRecordThunkCompleted(lifecycleWord))
         )
             return false;
     }
     for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-        m_tasks[tasks[taskIndex].index].lifecycleState = TaskLifecycleState::Recorded;
-        m_tasks[tasks[taskIndex].index].recordingClaimGeneration = 0u;
-        m_tasks[tasks[taskIndex].index].recordThunkInProgress = false;
-        m_tasks[tasks[taskIndex].index].recordThunkCompleted = false;
+        const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+        task.recordingClaimGeneration = 0u;
+        task.setLifecycle(TaskLifecycleState::Recorded);
     }
     lease.reset();
     releasePacketRecordingClaimWithinLock();
@@ -360,7 +360,8 @@ b8 GpuTaskGraph::completePacketRecordingAbort(const GpuCompiledGraph& compiledGr
             if(!validTask(tasks[taskIndex]))
                 return false;
             const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-            if(task.lifecycleState != TaskLifecycleState::Recording || task.lifecycleAttemptGeneration != abort.m_recordingAttemptGeneration || task.recordingClaimGeneration != abort.m_claimGeneration || task.recordThunkInProgress)
+            const u16 lifecycleWord = task.loadLifecycleWord();
+            if(GpuTaskNode::DecodeLifecycleState(lifecycleWord) != TaskLifecycleState::Recording || task.lifecycleAttemptGeneration != abort.m_recordingAttemptGeneration || task.recordingClaimGeneration != abort.m_claimGeneration || GpuTaskNode::DecodeRecordThunkInProgress(lifecycleWord))
                 return false;
         }
         notification.activateWithinLock();

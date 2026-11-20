@@ -19,7 +19,7 @@ GpuTaskGraph::DeclarationMutationScope::DeclarationMutationScope(GpuTaskGraph& g
     , m_declarationLock(graph.m_declarationMutex)
 {
     ScopedLock lock(m_graph.m_lifecycleMutex);
-    if(m_graph.m_teardownInProgress || m_graph.m_activeRecordingPlanGeneration != 0u || m_graph.m_activeDeclarationReadCount != 0u || m_graph.m_activeDeclarationAccessCount == Limit<u32>::s_Max)
+    if(m_graph.m_teardownInProgress.load(MemoryOrder::relaxed) || m_graph.m_activeRecordingPlanGeneration.load(MemoryOrder::relaxed) != 0u || m_graph.m_activeDeclarationReadCount != 0u || m_graph.m_activeDeclarationAccessCount == Limit<u32>::s_Max)
         return;
 
     ++m_graph.m_activeDeclarationAccessCount;
@@ -69,7 +69,7 @@ GpuTaskGraphDeclarationReadView::GpuTaskGraphDeclarationReadView(const GpuTaskGr
 
 void GpuTaskGraphDeclarationReadView::acquire(const GpuTaskGraph& graph)noexcept{
     NothrowScopedLock lock(graph.m_lifecycleMutex);
-    if(graph.m_teardownInProgress || graph.m_activeDeclarationAccessCount == Limit<u32>::s_Max || graph.m_activeDeclarationReadCount == Limit<u32>::s_Max || graph.m_activeDeclarationAccessCount != graph.m_activeDeclarationReadCount)
+    if(graph.m_teardownInProgress.load(MemoryOrder::relaxed) || graph.m_activeDeclarationAccessCount == Limit<u32>::s_Max || graph.m_activeDeclarationReadCount == Limit<u32>::s_Max || graph.m_activeDeclarationAccessCount != graph.m_activeDeclarationReadCount)
         return;
 
     ++graph.m_activeDeclarationAccessCount;

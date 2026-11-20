@@ -76,12 +76,16 @@ ResourceStates::Mask StateTracker::getBufferState(Buffer* buffer, const BufferRa
     if(!buffer || !VulkanStateTrackingDetail::IsBufferStateRangeValid(range, buffer->m_creationDesc))
         return ResourceStates::Unknown;
 
-    const auto permanent = m_permanentBufferStates.find(MakeNotNull(buffer));
-    if(permanent != m_permanentBufferStates.end())
-        return permanent.value().state;
+    if(!m_permanentBufferStates.empty()){
+        const auto permanent = m_permanentBufferStates.find(MakeNotNull(buffer));
+        if(permanent != m_permanentBufferStates.end())
+            return permanent.value().state;
+    }
 
     const BufferRange resolvedRange = range.resolve(buffer->m_creationDesc);
     const ResourceStates::Mask fallbackState = buffer->isRetainedStateKnown() ? buffer->m_creationDesc.initialState : ResourceStates::Unknown;
+    if(m_bufferStates.empty())
+        return fallbackState;
     const auto found = m_bufferStates.find(MakeNotNull(buffer));
     if(found == m_bufferStates.end())
         return fallbackState;
@@ -118,8 +122,10 @@ b8 StateTracker::hasExplicitBufferState(Buffer* buffer, const BufferRange range,
     const BufferRange resolvedRange = range.resolve(buffer->m_creationDesc);
     if(!resolvedRange.hasExtent())
         return false;
-    if(m_permanentBufferStates.find(MakeNotNull(buffer)) != m_permanentBufferStates.end())
+    if(!m_permanentBufferStates.empty() && m_permanentBufferStates.find(MakeNotNull(buffer)) != m_permanentBufferStates.end())
         return true;
+    if(m_bufferStates.empty())
+        return false;
     const auto found = m_bufferStates.find(MakeNotNull(buffer));
     if(found == m_bufferStates.end())
         return false;
@@ -138,7 +144,7 @@ b8 StateTracker::hasExplicitBufferState(Buffer* buffer, const BufferRange range,
 }
 
 void StateTracker::beginTrackingBuffer(Buffer* buffer, ResourceStates::Mask state, const BufferRange range){
-    if(!buffer || m_permanentBufferStates.find(MakeNotNull(buffer)) != m_permanentBufferStates.end())
+    if(!buffer || isPermanentBuffer(*buffer))
         return;
     beginTrackingTransientBuffer(*buffer, state, range);
 }

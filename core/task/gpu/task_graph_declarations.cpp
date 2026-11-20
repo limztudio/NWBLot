@@ -34,7 +34,7 @@ GpuTaskGraph::~GpuTaskGraph()noexcept(false){
     b8 teardownValid = true;
     {
         ScopedLock lock(m_lifecycleMutex);
-        teardownValid = !m_teardownInProgress
+        teardownValid = !m_teardownInProgress.load(MemoryOrder::relaxed)
             && m_activeDeclarationAccessCount == 0u
             && m_activeDeclarationReadCount == 0u
             && m_activeDiscardNotificationCount == 0u
@@ -44,11 +44,12 @@ GpuTaskGraph::~GpuTaskGraph()noexcept(false){
             && m_submissionBindingState != SubmissionBindingState::ExceptionClosing
         ;
         for(const GpuTaskNode& task : m_tasks){
-            if(task.lifecycleState == TaskLifecycleState::Recording || task.lifecycleState == TaskLifecycleState::Submitting || task.lifecycleState == TaskLifecycleState::Accepting)
+            const TaskLifecycleState::Enum state = task.lifecycleState();
+            if(state == TaskLifecycleState::Recording || state == TaskLifecycleState::Submitting || state == TaskLifecycleState::Accepting)
                 teardownValid = false;
         }
         if(teardownValid){
-            m_teardownInProgress = true;
+            m_teardownInProgress.store(true, MemoryOrder::release);
             resetCompletion.activateWithinLock();
         }
     }

@@ -36,9 +36,10 @@ b8 GpuTaskGraph::discardUnacceptedPacket(const GpuCompiledGraph& compiledGraph, 
             if(!validTask(tasks[taskIndex]))
                 return false;
             const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-            if((task.lifecycleState != TaskLifecycleState::Declared && task.lifecycleState != TaskLifecycleState::Recorded && task.lifecycleState != TaskLifecycleState::Discarded) || task.lifecycleAttemptGeneration != recordingAttemptGeneration)
+            const TaskLifecycleState::Enum state = task.lifecycleState();
+            if((state != TaskLifecycleState::Declared && state != TaskLifecycleState::Recorded && state != TaskLifecycleState::Discarded) || task.lifecycleAttemptGeneration != recordingAttemptGeneration)
                 return false;
-            if(task.lifecycleState != TaskLifecycleState::Discarded)
+            if(state != TaskLifecycleState::Discarded)
                 hasUnacceptedTask = true;
         }
         if(!hasUnacceptedTask)
@@ -48,13 +49,11 @@ b8 GpuTaskGraph::discardUnacceptedPacket(const GpuCompiledGraph& compiledGraph, 
         notification.activateWithinLock();
         for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
             const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-            if(task.lifecycleState != TaskLifecycleState::Discarded){
-                task.lifecycleState = TaskLifecycleState::Discarded;
+            if(task.lifecycleState() != TaskLifecycleState::Discarded){
                 task.recordingClaimGeneration = 0u;
                 task.submissionClaimGeneration = 0u;
                 task.discardNotificationGeneration = notificationGeneration;
-                task.recordThunkInProgress = false;
-                task.recordThunkCompleted = false;
+                task.setLifecycle(TaskLifecycleState::Discarded);
             }
         }
     }
@@ -89,10 +88,12 @@ b8 GpuTaskGraph::abandonUnacceptedPacketWithoutCallbacks(
         if(!validTask(tasks[taskIndex]))
             return false;
         const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+        const u16 lifecycleWord = task.loadLifecycleWord();
+        const TaskLifecycleState::Enum state = GpuTaskNode::DecodeLifecycleState(lifecycleWord);
         if(
-            (task.lifecycleState != TaskLifecycleState::Declared && task.lifecycleState != TaskLifecycleState::Recorded && task.lifecycleState != TaskLifecycleState::Discarded)
+            (state != TaskLifecycleState::Declared && state != TaskLifecycleState::Recorded && state != TaskLifecycleState::Discarded)
             || task.lifecycleAttemptGeneration != recordingAttemptGeneration
-            || task.recordThunkInProgress
+            || GpuTaskNode::DecodeRecordThunkInProgress(lifecycleWord)
         )
             return false;
     }

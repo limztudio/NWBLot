@@ -87,7 +87,8 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
     const GpuPacketRecordingAccess& recordingAccess,
     const GpuSubmissionPacketId packetID,
     const CommandListResourceStateHandoff* const initialStates,
-    Alloc::ScratchArena& stateFanInScratchArena
+    Alloc::ScratchArena& stateFanInScratchArena,
+    GpuRecordedGraph::PacketRecordingScratch& scratch
 )const{
     if(!declarationAccess.validFor(graph) || !planAccess.validFor(declarationAccess) || !recordingAccess.validFor(graph, compiledGraph, planAccess, packetID))
         return false;
@@ -198,13 +199,28 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
         }
     }
 
-    struct PreflightCachedResource{
-        ResourceStates::Mask permanentState = ResourceStates::Unknown;
-        ResourceStates::Mask lastValidatedState = ResourceStates::Unknown;
-        b8 baseValidated = false;
-        b8 hasLastValidatedState = false;
+    auto& cachedResources = scratch.preflightResourceCache;
+    const usize requiredResourceCount = declarationAccess.resourceCount();
+    if(cachedResources.size() < requiredResourceCount)
+        cachedResources.resize(requiredResourceCount);
+    ++scratch.preflightCacheStamp;
+    if(scratch.preflightCacheStamp == 0u){
+        for(auto& cached : cachedResources)
+            cached.stamp = 0u;
+        scratch.preflightCacheStamp = 1u;
+    }
+    const u64 preflightStamp = scratch.preflightCacheStamp;
+    const auto getCachedResource = [&](const usize resourceIndex)noexcept -> GpuRecordedGraph::PacketRecordingScratch::PreflightCachedResource&{
+        auto& cached = cachedResources[resourceIndex];
+        if(cached.stamp != preflightStamp){
+            cached.stamp = preflightStamp;
+            cached.permanentState = ResourceStates::Unknown;
+            cached.lastValidatedState = ResourceStates::Unknown;
+            cached.baseValidated = false;
+            cached.hasLastValidatedState = false;
+        }
+        return cached;
     };
-    Vector<PreflightCachedResource, Alloc::ScratchArena> cachedResources(declarationAccess.resourceCount(), stateFanInScratchArena);
 
     const auto validateTextureRange = [](Texture* const texture, const TextureSubresourceSet& sourceRange)noexcept{
         if(!texture)
@@ -228,7 +244,7 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
         if(!resource.hasBackendResource)
             return MakeUnexpected(Failure{});
 
-        PreflightCachedResource& cached = cachedResources[resourceID.index];
+        auto& cached = getCachedResource(resourceID.index);
         switch(resource.type){
         case GpuGraphResourceType::Texture:{
             Texture* const texture = declarationAccess.textureForResource(resourceID);
@@ -325,8 +341,9 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
         return (*permanentState) == ResourceStates::Unknown || (*permanentState) == requiredState;
     };
     const auto resourcePermanentState = [&](const GpuGraphResourceId resourceID)noexcept -> Expected<ResourceStates::Mask>{
-        if(cachedResources[resourceID.index].baseValidated)
-            return cachedResources[resourceID.index].permanentState;
+        const auto& cached = getCachedResource(resourceID.index);
+        if(cached.baseValidated)
+            return cached.permanentState;
         const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(resourceID.index);
         if(resource.type == GpuGraphResourceType::Texture)
             return permanentTextureState(declarationAccess.textureForResource(resourceID));

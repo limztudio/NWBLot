@@ -251,38 +251,65 @@ void GpuGraphSubmissionTransaction::resolveSubmissionBindingIfTerminalLocked(con
 }
 
 b8 GpuGraphSubmissionTransaction::beginPacketSubmission(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuSubmissionPacketId packetID, const u64 recordingAttemptGeneration, GpuPacketSubmissionLease& outLease)noexcept{
+    GpuPacketSubmissionLease* leasePtr = &outLease;
+    return beginPacketSubmissionBatch(graph, compiledGraph, Span<const GpuSubmissionPacketId>(&packetID, 1u), recordingAttemptGeneration, &leasePtr) == 1u;
+}
+
+usize GpuGraphSubmissionTransaction::beginPacketSubmissionBatch(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const Span<const GpuSubmissionPacketId> packets, const u64 recordingAttemptGeneration, GpuPacketSubmissionLease* const* const outLeases)noexcept{
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
-    if(
-        !planAccess.valid()
-        || !planAccess.validPacket(packetID)
-        || outLease.valid()
-        || !graph.packetReadyForSubmission(compiledGraph, planAccess, packetID, recordingAttemptGeneration)
-        || !bindRecordingAttemptWithinSubmissionOperation(graph, compiledGraph, recordingAttemptGeneration)
-    )
-        return false;
+    if(!planAccess.valid() || packets.empty() || !outLeases)
+        return 0u;
+
+    usize validPrefix = 0u;
+    while(validPrefix < packets.size()){
+        if(!planAccess.validPacket(packets[validPrefix]) || !outLeases[validPrefix] || outLeases[validPrefix]->valid())
+            break;
+        ++validPrefix;
+    }
+    if(validPrefix == 0u)
+        return 0u;
+
+    if(!graph.packetReadyForSubmission(compiledGraph, planAccess, packets[0u], recordingAttemptGeneration))
+        return 0u;
+    if(!bindRecordingAttemptWithinSubmissionOperation(graph, compiledGraph, recordingAttemptGeneration))
+        return 0u;
 
     GpuGraphSubmissionBinding submissionBinding;
+    usize txClaimedCount = 0u;
     {
         NothrowScopedLock lock(m_mutex);
-        if(!validForLocked(planAccess) || m_recordingAttemptGeneration != recordingAttemptGeneration || packetID.index >= m_packets.size())
-            return false;
-        PacketRuntime& runtime = m_packets[packetID.index];
-        if(runtime.state != PacketRuntimeState::Declared)
-            return false;
-        runtime.state = PacketRuntimeState::Submitting;
+        if(!validForLocked(planAccess) || m_recordingAttemptGeneration != recordingAttemptGeneration)
+            return 0u;
         submissionBinding = m_activeSubmissionBinding;
-    }
-
-    if(!graph.beginPacketSubmission(compiledGraph, planAccess, packetID, recordingAttemptGeneration, submissionBinding, outLease)){
-        NothrowScopedLock lock(m_mutex);
-        if(validForLocked(planAccess) && packetID.index < m_packets.size()){
+        while(txClaimedCount < validPrefix){
+            const GpuSubmissionPacketId packetID = packets[txClaimedCount];
+            if(packetID.index >= m_packets.size())
+                break;
             PacketRuntime& runtime = m_packets[packetID.index];
-            if(runtime.state == PacketRuntimeState::Submitting)
-                runtime.state = PacketRuntimeState::Declared;
+            if(runtime.state != PacketRuntimeState::Declared)
+                break;
+            runtime.state = PacketRuntimeState::Submitting;
+            ++txClaimedCount;
         }
-        return false;
     }
-    return true;
+    if(txClaimedCount == 0u)
+        return 0u;
+
+    const usize graphClaimedCount = graph.beginPacketSubmissionBatch(compiledGraph, planAccess, Span<const GpuSubmissionPacketId>(packets.data(), txClaimedCount), recordingAttemptGeneration, submissionBinding, outLeases);
+    if(graphClaimedCount < txClaimedCount){
+        NothrowScopedLock lock(m_mutex);
+        if(validForLocked(planAccess)){
+            for(usize rollbackIndex = graphClaimedCount; rollbackIndex < txClaimedCount; ++rollbackIndex){
+                const GpuSubmissionPacketId packetID = packets[rollbackIndex];
+                if(packetID.index < m_packets.size()){
+                    PacketRuntime& runtime = m_packets[packetID.index];
+                    if(runtime.state == PacketRuntimeState::Submitting)
+                        runtime.state = PacketRuntimeState::Declared;
+                }
+            }
+        }
+    }
+    return graphClaimedCount;
 }
 
 b8 GpuGraphSubmissionTransaction::acceptSubmittingPacket(
@@ -343,73 +370,251 @@ b8 GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     return callbacksAccepted;
 }
 
-void GpuGraphSubmissionTransaction::commitAcceptedPacket(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuSubmissionPacketId packetID, const QueueSubmissionToken& token, const NativeSubmissionInfo& nativeSubmissionInfo)noexcept{
+b8 GpuGraphSubmissionTransaction::acceptSubmittingPacketBatch(
+    GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const Span<const GpuSubmissionPacketId> packets,
+    const QueueSubmissionReceipt* const receipts,
+    GpuPacketSubmissionLease* const* const leases,
+    const NativeSubmissionInfo* const nativeSubmissionInfos,
+    const NotNull<GpuTimingSubmissionTicket*>* const allTimingTickets,
+    const usize* const timingTicketOffsets,
+    const usize* const timingTicketCounts,
+    const GpuTaskSubmissionDetail::TaskCallbackBindings<GpuTaskGraphTaskAcceptedCallback>& taskAcceptedCallbacks,
+    GpuSubmissionPacketId* const outFailedPacket
+){
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
-    const GpuCompiledPacketView packetView = planAccess.packet(packetID);
+    const b8 batchHeaderValid =
+        !packets.empty()
+        && planAccess.valid()
+        && validFor(planAccess)
+        && receipts != nullptr
+        && leases != nullptr
+        && nativeSubmissionInfos != nullptr
+        && timingTicketOffsets != nullptr
+        && timingTicketCounts != nullptr
+    ;
+    if(!batchHeaderValid)
+        FOUNDATION_FATAL_ASSERT_MSG(false, "native-accepted packet batch must retain its transaction submission leases");
+
+    {
+        NothrowScopedLock lock(m_mutex);
+        if(!validForLocked(planAccess) || m_recordingAttemptGeneration == 0u)
+            FOUNDATION_FATAL_ASSERT_MSG(false, "native-accepted packet batch must retain its transaction recording attempt");
+        for(usize packetIndex = 0u; packetIndex < packets.size(); ++packetIndex){
+            const GpuSubmissionPacketId packetID = packets[packetIndex];
+            const GpuCompiledPacketView packetView = planAccess.packet(packetID);
+            const QueueSubmissionToken& token = receipts[packetIndex].token;
+            const GpuPacketSubmissionLease* const leasePtr = leases[packetIndex];
+            const b8 submissionValid =
+                packetView.valid()
+                && token.valid()
+                && leasePtr != nullptr
+                && leasePtr->valid()
+                && leasePtr->m_packet == packetID
+                && leasePtr->m_planGeneration == planAccess.planGeneration()
+                && m_recordingAttemptGeneration == leasePtr->m_recordingAttemptGeneration
+                && m_activeSubmissionBinding == leasePtr->m_submissionBinding
+            ;
+            if(!submissionValid)
+                FOUNDATION_FATAL_ASSERT_MSG(false, "native-accepted packet must retain its transaction submission lease");
+            const GpuSubmissionPacket& packet = *packetView.plan;
+            const GpuPhysicalQueueInfo* const queueInfo = planAccess.queueInfo(packet.queue);
+            const b8 tokenValid = queueInfo && token.queue == queueInfo->queueClass && token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration);
+            if(!tokenValid)
+                FOUNDATION_FATAL_ASSERT_MSG(false, "native-accepted packet token must match its exact compiled physical queue");
+            if(timingTicketCounts[packetIndex] != 0u && !allTimingTickets)
+                FOUNDATION_FATAL_ASSERT_MSG(false, "native-accepted packet observer arrays must remain valid through publication");
+        }
+        const auto& firstLease = *leases[0u];
+        if(!graph.matchesSubmissionTransaction(compiledGraph, firstLease.m_recordingAttemptGeneration, firstLease.m_submissionBinding))
+            FOUNDATION_FATAL_ASSERT_MSG(false, "native-accepted packet batch must retain its exact graph submission binding");
+    }
+
+    graph.beginPacketSubmissionAcceptanceBatch(compiledGraph, planAccess, packets, receipts, leases);
+
+    class AcceptedBatchPublicationGuard final : NoCopy{
+    public:
+        AcceptedBatchPublicationGuard(
+            GpuGraphSubmissionTransaction& transaction,
+            GpuTaskGraph& graph,
+            const GpuCompiledGraph& compiledGraph,
+            const GpuCompiledGraph::ReadView& planAccess,
+            const Span<const GpuSubmissionPacketId> packets,
+            const QueueSubmissionReceipt* const receipts,
+            GpuPacketSubmissionLease* const* const leases,
+            const NativeSubmissionInfo* const nativeSubmissionInfos,
+            const NotNull<GpuTimingSubmissionTicket*>* const allTimingTickets,
+            const usize* const timingTicketOffsets,
+            const usize* const timingTicketCounts
+        )noexcept
+            : m_transaction(transaction)
+            , m_graph(graph)
+            , m_compiledGraph(compiledGraph)
+            , m_planAccess(planAccess)
+            , m_packets(packets)
+            , m_receipts(receipts)
+            , m_leases(leases)
+            , m_nativeSubmissionInfos(nativeSubmissionInfos)
+            , m_allTimingTickets(allTimingTickets)
+            , m_timingTicketOffsets(timingTicketOffsets)
+            , m_timingTicketCounts(timingTicketCounts)
+        {}
+        ~AcceptedBatchPublicationGuard()noexcept{
+            if(!m_active)
+                return;
+            for(usize index = m_cursor; index < m_packets.size(); ++index){
+                const usize count = m_timingTicketCounts[index];
+                m_transaction.abandonTimingTicketsWithoutCallbacks(count != 0u ? m_allTimingTickets + m_timingTicketOffsets[index] : nullptr, count);
+            }
+            publish();
+        }
+        void advance()noexcept{ ++m_cursor; }
+        void complete()noexcept{
+            if(!m_active)
+                FOUNDATION_FATAL_ASSERT_MSG(false, "accepted batch publication guard may complete exactly once");
+            publish();
+        }
+
+
+    private:
+        void publish()noexcept{
+            m_graph.completePacketSubmissionAcceptanceBatch(m_compiledGraph, m_planAccess, m_packets, m_leases);
+            m_transaction.commitAcceptedPacketBatch(m_graph, m_compiledGraph, m_packets, m_receipts, m_nativeSubmissionInfos);
+            m_active = false;
+        }
+
+
+    private:
+        GpuGraphSubmissionTransaction& m_transaction;
+        GpuTaskGraph& m_graph;
+        const GpuCompiledGraph& m_compiledGraph;
+        const GpuCompiledGraph::ReadView& m_planAccess;
+        Span<const GpuSubmissionPacketId> m_packets;
+        const QueueSubmissionReceipt* const m_receipts;
+        GpuPacketSubmissionLease* const* const m_leases;
+        const NativeSubmissionInfo* const m_nativeSubmissionInfos;
+        const NotNull<GpuTimingSubmissionTicket*>* const m_allTimingTickets;
+        const usize* const m_timingTicketOffsets;
+        const usize* const m_timingTicketCounts;
+        usize m_cursor = 0u;
+        b8 m_active = true;
+    };
+
+    AcceptedBatchPublicationGuard publicationGuard(*this, graph, compiledGraph, planAccess, packets, receipts, leases, nativeSubmissionInfos, allTimingTickets, timingTicketOffsets, timingTicketCounts);
+    b8 allCallbacksAccepted = true;
+    for(usize packetIndex = 0u; packetIndex < packets.size(); ++packetIndex){
+        const GpuSubmissionPacketId packetID = packets[packetIndex];
+        const GpuCompiledPacketView packetView = planAccess.packet(packetID);
+        const GpuSubmissionPacket& packet = *packetView.plan;
+        const GpuTaskId* const tasks = packetView.tasks;
+        const QueueSubmissionToken& token = receipts[packetIndex].token;
+        const usize ticketOffset = timingTicketOffsets[packetIndex];
+        const usize ticketCount = timingTicketCounts[packetIndex];
+
+        b8 timingResolved = true;
+        for(usize timingTicketIndex = 0u; timingTicketIndex < ticketCount; ++timingTicketIndex){
+            if(!allTimingTickets[ticketOffset + timingTicketIndex]->resolveSubmission(token))
+                timingResolved = false;
+        }
+        if(!timingResolved)
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("GPU task graph: Accepted packet quarantined invalid timing query ownership"));
+
+        graph.notifyPacketSubmissionAccepted(compiledGraph, planAccess, packetID, token, *leases[packetIndex]);
+        for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
+            const GpuTaskGraphTaskAcceptedCallback* const callback = taskAcceptedCallbacks.find(tasks[taskIndex]);
+            if(callback && !callback->invoke(callback->context, token)){
+                if(allCallbacksAccepted && outFailedPacket)
+                    *outFailedPacket = packetID;
+                allCallbacksAccepted = false;
+            }
+        }
+        publicationGuard.advance();
+    }
+    publicationGuard.complete();
+    return allCallbacksAccepted;
+}
+
+void GpuGraphSubmissionTransaction::commitAcceptedPacket(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuSubmissionPacketId packetID, const QueueSubmissionToken& token, const NativeSubmissionInfo& nativeSubmissionInfo)noexcept{
+    const QueueSubmissionReceipt receipt{ .token = token };
+    commitAcceptedPacketBatch(graph, compiledGraph, Span<const GpuSubmissionPacketId>(&packetID, 1u), &receipt, &nativeSubmissionInfo);
+}
+
+void GpuGraphSubmissionTransaction::commitAcceptedPacketBatch(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const Span<const GpuSubmissionPacketId> packets, const QueueSubmissionReceipt* const receipts, const NativeSubmissionInfo* const nativeSubmissionInfos)noexcept{
+    GpuCompiledGraph::ReadView planAccess(compiledGraph);
     NothrowScopedLock lock(m_mutex);
-    if(!validForLocked(planAccess) || !packetView.valid() || packetID.index >= m_packets.size())
-        FOUNDATION_FATAL_ASSERT_MSG(false, "accepted packet commit must retain its exact transaction and compiled packet");
-    const GpuSubmissionPacket& packet = *packetView.plan;
-    const GpuPhysicalQueueInfo* const queueInfo = planAccess.queueInfo(packet.queue);
-    if(!queueInfo || queueInfo->queueClass >= CommandQueue::kCount)
-        FOUNDATION_FATAL_ASSERT_MSG(false, "accepted packet commit must retain its compiled physical queue");
-    PacketRuntime& runtime = m_packets[packetID.index];
-    if(runtime.state != PacketRuntimeState::Submitting)
-        FOUNDATION_FATAL_ASSERT_MSG(false, "accepted packet commit requires the exact submitting transaction packet");
-    runtime.state = PacketRuntimeState::Accepted;
-    runtime.token = token;
-    ++m_terminalPacketCount;
-    runtime.nativeCommandListCount = nativeSubmissionInfo.commandListCount;
-    runtime.plannedWaitTokenCount = nativeSubmissionInfo.plannedWaitTokenCount;
-    runtime.sameQueueWaitElisionCount = nativeSubmissionInfo.sameQueueWaitElisionCount;
-    runtime.timelineWaitCount = nativeSubmissionInfo.timelineWaitCount;
-    runtime.mergedTimelineWaitCount = nativeSubmissionInfo.mergedTimelineWaitCount;
-    runtime.inheritedTimelineWaitElisionCount = nativeSubmissionInfo.inheritedTimelineWaitElisionCount;
-    runtime.submissionSeconds = nativeSubmissionInfo.submissionSeconds;
+    if(!validForLocked(planAccess) || packets.empty() || !receipts || !nativeSubmissionInfos)
+        FOUNDATION_FATAL_ASSERT_MSG(false, "accepted packet batch commit must retain its exact transaction and compiled packets");
 
-    if(m_acceptedSubmissionCount >= m_packets.size())
-        FOUNDATION_FATAL_ASSERT_MSG(false, "accepted packet count cannot exceed the transaction packet count");
-    ++m_acceptedSubmissionCount;
-    m_acceptanceRevision = GpuPacketRuntimeDetail::AllocateAcceptanceRevision();
+    for(usize packetIndex = 0u; packetIndex < packets.size(); ++packetIndex){
+        const GpuSubmissionPacketId packetID = packets[packetIndex];
+        const QueueSubmissionToken& token = receipts[packetIndex].token;
+        const NativeSubmissionInfo& nativeSubmissionInfo = nativeSubmissionInfos[packetIndex];
+        const GpuCompiledPacketView packetView = planAccess.packet(packetID);
+        if(!packetView.valid() || packetID.index >= m_packets.size())
+            FOUNDATION_FATAL_ASSERT_MSG(false, "accepted packet commit must retain its exact transaction and compiled packet");
+        const GpuSubmissionPacket& packet = *packetView.plan;
+        const GpuPhysicalQueueInfo* const queueInfo = planAccess.queueInfo(packet.queue);
+        if(!queueInfo || queueInfo->queueClass >= CommandQueue::kCount)
+            FOUNDATION_FATAL_ASSERT_MSG(false, "accepted packet commit must retain its compiled physical queue");
+        PacketRuntime& runtime = m_packets[packetID.index];
+        if(runtime.state != PacketRuntimeState::Submitting)
+            FOUNDATION_FATAL_ASSERT_MSG(false, "accepted packet commit requires the exact submitting transaction packet");
+        runtime.state = PacketRuntimeState::Accepted;
+        runtime.token = token;
+        ++m_terminalPacketCount;
+        runtime.nativeCommandListCount = nativeSubmissionInfo.commandListCount;
+        runtime.plannedWaitTokenCount = nativeSubmissionInfo.plannedWaitTokenCount;
+        runtime.sameQueueWaitElisionCount = nativeSubmissionInfo.sameQueueWaitElisionCount;
+        runtime.timelineWaitCount = nativeSubmissionInfo.timelineWaitCount;
+        runtime.mergedTimelineWaitCount = nativeSubmissionInfo.mergedTimelineWaitCount;
+        runtime.inheritedTimelineWaitElisionCount = nativeSubmissionInfo.inheritedTimelineWaitElisionCount;
+        runtime.submissionSeconds = nativeSubmissionInfo.submissionSeconds;
 
-    ++m_submissionStatistics.acceptedPacketCount;
-    m_submissionStatistics.acceptedTaskCount += packet.taskCount;
-    ++m_submissionStatistics.nativeSubmissionCount;
-    m_submissionStatistics.nativeCommandListCount += nativeSubmissionInfo.commandListCount;
-    m_submissionStatistics.plannedWaitTokenCount += nativeSubmissionInfo.plannedWaitTokenCount;
-    m_submissionStatistics.sameQueueWaitElisionCount += nativeSubmissionInfo.sameQueueWaitElisionCount;
-    m_submissionStatistics.timelineWaitCount += nativeSubmissionInfo.timelineWaitCount;
-    m_submissionStatistics.mergedTimelineWaitCount += nativeSubmissionInfo.mergedTimelineWaitCount;
-    m_submissionStatistics.inheritedTimelineWaitElisionCount += nativeSubmissionInfo.inheritedTimelineWaitElisionCount;
-    m_submissionStatistics.submissionSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_submissionStatistics.submissionSeconds), VectorDoubleReplicate(nativeSubmissionInfo.submissionSeconds)));
-    if(packet.joinsAcceptedQueueFrontier)
-        ++m_submissionStatistics.acceptedFrontierSubmissionCount;
-    if(packet.isRecoverySubmission)
-        ++m_submissionStatistics.recoverySubmissionCount;
+        if(m_acceptedSubmissionCount >= m_packets.size())
+            FOUNDATION_FATAL_ASSERT_MSG(false, "accepted packet count cannot exceed the transaction packet count");
+        ++m_acceptedSubmissionCount;
 
-    const usize queueClassIndex = static_cast<usize>(queueInfo->queueClass);
-    ++m_submissionStatistics.nativeSubmissionCountByQueueClass[queueClassIndex];
-    m_submissionStatistics.nativeCommandListCountByQueueClass[queueClassIndex] += nativeSubmissionInfo.commandListCount;
-    m_submissionStatistics.timelineWaitCountByQueueClass[queueClassIndex] += nativeSubmissionInfo.timelineWaitCount;
+        ++m_submissionStatistics.acceptedPacketCount;
+        m_submissionStatistics.acceptedTaskCount += packet.taskCount;
+        ++m_submissionStatistics.nativeSubmissionCount;
+        m_submissionStatistics.nativeCommandListCount += nativeSubmissionInfo.commandListCount;
+        m_submissionStatistics.plannedWaitTokenCount += nativeSubmissionInfo.plannedWaitTokenCount;
+        m_submissionStatistics.sameQueueWaitElisionCount += nativeSubmissionInfo.sameQueueWaitElisionCount;
+        m_submissionStatistics.timelineWaitCount += nativeSubmissionInfo.timelineWaitCount;
+        m_submissionStatistics.mergedTimelineWaitCount += nativeSubmissionInfo.mergedTimelineWaitCount;
+        m_submissionStatistics.inheritedTimelineWaitElisionCount += nativeSubmissionInfo.inheritedTimelineWaitElisionCount;
+        m_submissionStatistics.submissionSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_submissionStatistics.submissionSeconds), VectorDoubleReplicate(nativeSubmissionInfo.submissionSeconds)));
+        if(packet.joinsAcceptedQueueFrontier)
+            ++m_submissionStatistics.acceptedFrontierSubmissionCount;
+        if(packet.isRecoverySubmission)
+            ++m_submissionStatistics.recoverySubmissionCount;
 
-    b8 foundLatestQueue = false;
-    for(LatestAcceptedQueueToken& latest : m_latestAcceptedQueueTokens){
-        if(latest.queue == packet.queue){
-            const b8 latestMatchesQueue = latest.token.valid() && latest.token.queue == token.queue && latest.token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration);
-            if(!latestMatchesQueue)
-                FOUNDATION_FATAL_ASSERT_MSG(false, "accepted queue frontier token must preserve its exact physical queue identity");
-            if(token.value > latest.token.value)
-                latest.token = token;
-            foundLatestQueue = true;
-            break;
+        const usize queueClassIndex = static_cast<usize>(queueInfo->queueClass);
+        ++m_submissionStatistics.nativeSubmissionCountByQueueClass[queueClassIndex];
+        m_submissionStatistics.nativeCommandListCountByQueueClass[queueClassIndex] += nativeSubmissionInfo.commandListCount;
+        m_submissionStatistics.timelineWaitCountByQueueClass[queueClassIndex] += nativeSubmissionInfo.timelineWaitCount;
+
+        b8 foundLatestQueue = false;
+        for(LatestAcceptedQueueToken& latest : m_latestAcceptedQueueTokens){
+            if(latest.queue == packet.queue){
+                const b8 latestMatchesQueue = latest.token.valid() && latest.token.queue == token.queue && latest.token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration);
+                if(!latestMatchesQueue)
+                    FOUNDATION_FATAL_ASSERT_MSG(false, "accepted queue frontier token must preserve its exact physical queue identity");
+                if(token.value > latest.token.value)
+                    latest.token = token;
+                foundLatestQueue = true;
+                break;
+            }
+        }
+        if(!foundLatestQueue){
+            if(m_latestAcceptedQueueTokens.size() >= m_latestAcceptedQueueTokens.capacity())
+                FOUNDATION_FATAL_ASSERT_MSG(false, "accepted queue frontier storage must be reserved before native submission");
+            static_assert(IsNothrowMoveConstructible_V<LatestAcceptedQueueToken>);
+            m_latestAcceptedQueueTokens.push_back(LatestAcceptedQueueToken{ .queue = packet.queue, .token = token, });
         }
     }
-    if(!foundLatestQueue){
-        if(m_latestAcceptedQueueTokens.size() >= m_latestAcceptedQueueTokens.capacity())
-            FOUNDATION_FATAL_ASSERT_MSG(false, "accepted queue frontier storage must be reserved before native submission");
-        static_assert(IsNothrowMoveConstructible_V<LatestAcceptedQueueToken>);
-        m_latestAcceptedQueueTokens.push_back(LatestAcceptedQueueToken{ .queue = packet.queue, .token = token, });
-    }
+    m_acceptanceRevision = GpuPacketRuntimeDetail::AllocateAcceptanceRevision();
     resolveSubmissionBindingIfTerminalLocked(graph, compiledGraph);
 }
 

@@ -33,8 +33,12 @@ private:
     };
 
 public:
+    static constexpr usize s_FlatMatrixMaxTasks = 64u;
+
+
+public:
     GpuInferredDependencyCollector(Alloc::ScratchArena& arena, GraphicsVector<GpuTaskDependencyEdge>& edges, GraphicsVector<GpuTaskDependencyEdge>& inferredEdges, usize& explicitEdgeCount, usize& inferredEdgeCount, usize& resourceVersionEdgeCount);
-    void reserve(usize expectedEdgeCount);
+    void reserve(usize expectedEdgeCount, usize taskCount = 0u);
     void appendRaw(const GpuTaskDependencyEdge& edge);
     void appendInferred(const GpuTaskDependencyEdge& edge);
 
@@ -45,9 +49,11 @@ private:
     usize& m_explicitEdgeCount;
     usize& m_inferredEdgeCount;
     usize& m_resourceVersionEdgeCount;
+    Vector<DependencyPairIndices, Alloc::ScratchArena> m_flatDependencyPairs;
     HashMap<u64, DependencyPairIndices, Alloc::ScratchArena, GpuTaskDependencyPairHasher, EqualTo<u64>> m_dependencyPairs;
     Vector<usize, Alloc::ScratchArena> m_nextInferredEdges;
     HashSet<usize, Alloc::ScratchArena, InferredDependencyHasher, InferredDependencyEqual> m_inferredEdgeIndices;
+    usize m_flatTaskCount = 0u;
     usize m_expectedEdgeCount = 0u;
 };
 

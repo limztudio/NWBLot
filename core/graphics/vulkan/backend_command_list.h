@@ -411,6 +411,10 @@ public:
     void seedBufferState(Buffer& buffer, ResourceStates::Mask stateBits, BufferRange range = s_EntireBuffer){
         seedBufferState(&buffer, stateBits, range);
     }
+    void seedTextureState(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits);
+    void seedTextureState(Texture& texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits){
+        seedTextureState(&texture, subresources, stateBits);
+    }
     ResourceStates::Mask getTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)noexcept;
     ResourceStates::Mask getTextureSubresourceState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel)noexcept{
         return getTextureSubresourceState(&texture, arraySlice, mipLevel);
@@ -467,10 +471,14 @@ private:
     void abortRecordingAttemptWithoutCallbacks()noexcept;
     void clearStateInternal();
     [[nodiscard]] b8 descriptionMatchesCreation()const noexcept;
+    [[nodiscard]] const GpuPhysicalQueueInfo* cachedPhysicalQueueInfo()const noexcept{
+        return m_hasCachedPhysicalQueueInfo ? &m_cachedPhysicalQueueInfo : nullptr;
+    }
     [[nodiscard]] b8 matchesNativeLeaseIdentity()const noexcept;
     [[nodiscard]] b8 matchesActiveNativeLeaseIdentity()const noexcept;
     [[nodiscard]] b8 matchesSubmissionLease(GpuPhysicalQueueId executionQueue, CommandQueue::Enum executionQueueClass, b8 graphSubmissionAuthorized)const noexcept;
     [[nodiscard]] b8 validateViewportState(const ViewportState& viewportState, TStringView operationName);
+    [[nodiscard]] b8 resolveTrackedTextureSubresources(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits, TStringView operationName, TextureSubresourceSet& outResolvedSubresources);
     [[nodiscard]] b8 validateTextureForGpuState(Texture* texture, ResourceStates::Mask requiredState, TStringView operationName, VkImageUsageFlags explicitRequiredUsage = 0u);
     [[nodiscard]] b8 validateBufferForGpuState(Buffer* buffer, ResourceStates::Mask requiredState, TStringView operationName, VkBufferUsageFlags explicitRequiredUsage = 0u);
     [[nodiscard]] static b8 CollectGraphicsBufferStates(const GraphicsState& state, GraphicsBufferStateTable& outTable)noexcept;
@@ -562,6 +570,7 @@ private:
 private:
     const CommandListParameters m_creationDesc;
     CommandListParameters m_desc;
+    GpuPhysicalQueueInfo m_cachedPhysicalQueueInfo{};
     TrackedCommandBufferPtr m_currentCmdBuf;
     StateTracker m_stateTracker;
     VulkanDetail::HostReadbackBarrierTracker m_hostReadbackBarrierTracker;
@@ -573,6 +582,10 @@ private:
     b8 m_commandRecordingFailed = false;
     b8 m_renderPassActive = false;
     b8 m_descriptorBuffersBound = false;
+    b8 m_hasCachedPhysicalQueueInfo = false;
+    b8 m_universalGraphicsCompute = false;
+    b8 m_hasBoundGraphicsState = false;
+    b8 m_hasBoundComputeState = false;
     u64 m_nativeRecordingID = 0u;
     u64 m_nextMarkerSerial = 0u;
     GraphicsVector<MarkerStackEntry> m_markerStack;

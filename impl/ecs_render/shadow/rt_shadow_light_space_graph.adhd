@@ -395,10 +395,12 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(in LightSpaceShadowG
         return MakeUnexpected(Failure());
     }
     result.viewUpload = viewUploadResult.value();
+    GpuTaskSchedulingHint clearScheduling = scheduling;
+    clearScheduling.allowParallelRecording = true;
     GpuTaskDesc clearDesc;
     clearDesc.setIdentity(Name(s_LightSpaceGraphCountsClear))
         .setMarkerLabel("Light-Space Crossing Clear")
-        .setScheduling(scheduling)
+        .setScheduling(clearScheduling)
         .setDependency(result.viewUpload)
         .setExternalStateSources(inputs.stateSources);
     GpuClearBufferTaskDesc countsClearResultDesc;

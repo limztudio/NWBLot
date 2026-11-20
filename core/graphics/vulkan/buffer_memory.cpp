@@ -306,25 +306,30 @@ b8 Device::isBufferReadyForGpuUse(Buffer* bufferResource, const VkBufferUsageFla
         return false;
 
     Buffer& buffer = *bufferResource;
-    ScopedLock resourceLock(buffer.m_memoryBindingMutex);
-
     if(&buffer.m_context != &m_context || &buffer.m_allocator != &m_allocator)
         return false;
     FOUNDATION_ASSERT(buffer.descriptionMatchesCreation());
     FOUNDATION_ASSERT(VulkanBufferDetail::IsBufferUsageConsistent(m_context, buffer.m_creationDesc, buffer.m_managed, buffer.m_bufferInfo.usage));
     if((buffer.m_bufferInfo.usage & requiredUsage) != requiredUsage)
         return false;
+    if(buffer.m_managed && !buffer.m_creationDesc.isVirtual){
+        if(!buffer.m_gpuReady.load(MemoryOrder::acquire))
+            return false;
+        if((requiredUsage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) && buffer.m_deviceAddress == 0u)
+            return false;
+        return true;
+    }
+
+    ScopedLock resourceLock(buffer.m_memoryBindingMutex);
     if((requiredUsage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) && buffer.m_deviceAddress == 0u)
         return false;
     if(buffer.m_buffer == VK_NULL_HANDLE)
         return false;
-    if(!m_allocator.isBufferNativeIdentityRegistered(buffer))
+    if(!buffer.m_nativeIdentityRegistered.load(MemoryOrder::acquire))
         return false;
     if(!buffer.m_managed)
         return true;
 
-    if(!buffer.m_creationDesc.isVirtual)
-        return buffer.m_allocation != nullptr;
     if(buffer.m_allocation || !buffer.m_boundHeap || buffer.m_heapBindingRange.size == 0u)
         return false;
 

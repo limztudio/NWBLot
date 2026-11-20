@@ -20,21 +20,22 @@ NWB_CORE_BEGIN
 void CpuTaskScheduler::wait(const TaskHandle handle){
     if(!handle.valid())
         return;
+    if(handle.domainIdentity != m_domainIdentity)
+        throw RuntimeException("CPU task wait belongs to another scheduler");
     Optional<ProfileMeasure> profile;
     if(m_profileEnabled.load(MemoryOrder::relaxed))
         profile.emplace(*this, CpuTaskProfileKind::HandleJoin, handle);
-    {
-        ScopedLock lock(m_mutex);
-        if(handle.domainIdentity != m_domainIdentity)
-            throw RuntimeException("CPU task wait belongs to another scheduler");
-        validateWaitLocked(handle, nullptr);
-    }
     const usize workerIndex = currentWorkerIndex();
     const CpuAffinity::Enum affinity = currentWorkerAffinity();
+    b8 validated = false;
     for(;;){
         ClaimedExecution claimed;
         {
             UniqueLock lock(m_mutex);
+            if(!validated){
+                validateWaitLocked(handle, nullptr);
+                validated = true;
+            }
             if(!resolveLocked(handle))
                 return;
             const b8 mainThread = isMainThread();
@@ -98,6 +99,7 @@ void CpuTaskScheduler::drain()noexcept{
     {
         ScopedLock lock(m_mutex);
         m_aborting = true;
+        m_abortingAtomic.store(true, MemoryOrder::release);
     }
     notifyProgress();
     wait();
@@ -107,6 +109,7 @@ void CpuTaskScheduler::drainTask(const TaskHandle handle)noexcept{
     {
         ScopedLock lock(m_mutex);
         m_aborting = true;
+        m_abortingAtomic.store(true, MemoryOrder::release);
     }
     notifyProgress();
     wait(handle);
@@ -145,24 +148,25 @@ void CpuTaskScheduler::waitScope(CpuTaskScope& scope){
         return;
     ScopeWait wait{ scope };
     u64 lastValidatedPublicationGeneration = 0u;
-    {
-        ScopedLock lock(m_mutex);
-        if(scope.m_searchIdentity == 0u){
-            scope.m_searchIdentity = ++m_nextScopeIdentity;
-            if(scope.m_searchIdentity == 0u)
-                TerminateInvariant();
-        }
-        wait.scopeIdentity = scope.m_searchIdentity;
-        validateWaitLocked({}, &scope);
-        lastValidatedPublicationGeneration = m_scopePublicationGeneration;
-    }
     const usize workerIndex = currentWorkerIndex();
     const CpuAffinity::Enum affinity = currentWorkerAffinity();
+    b8 initialized = false;
     while(scope.m_pending.load(MemoryOrder::acquire) != 0u){
         ClaimedExecution claimed;
         const b8 cooperative = isExecuting() || scope.m_allowCallerWork;
         {
             UniqueLock lock(m_mutex);
+            if(!initialized){
+                if(scope.m_searchIdentity == 0u){
+                    scope.m_searchIdentity = ++m_nextScopeIdentity;
+                    if(scope.m_searchIdentity == 0u)
+                        TerminateInvariant();
+                }
+                wait.scopeIdentity = scope.m_searchIdentity;
+                validateWaitLocked({}, &scope);
+                lastValidatedPublicationGeneration = m_scopePublicationGeneration;
+                initialized = true;
+            }
             if(scope.m_pending.load(MemoryOrder::acquire) == 0u)
                 return;
             const b8 mainThread = isMainThread();

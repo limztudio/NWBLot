@@ -352,6 +352,8 @@ Expected<AvboitClearChainResult> DeclareAvboitClearChain(mut GpuTaskGraph graph,
         avboitClearScheduling.allowPacketMerge = true;
         avboitClearScheduling.mergeWithPrevious = true;
         avboitClearScheduling.allowMergeAcrossConsumerFrontier = true;
+        GpuTaskSchedulingHint avboitStatelessClearScheduling = avboitClearScheduling;
+        avboitStatelessClearScheduling.allowParallelRecording = true;
         auto makeAvboitFloatClearDesc = lambda[](in GpuGraphResourceId destination, in Color value, in GpuClearTextureTaskRecordHooks recordHooks) -> GpuClearTextureTaskDesc{
             GpuClearTextureTaskDesc clearDesc;
             clearDesc.destination = destination;
@@ -374,7 +376,7 @@ Expected<AvboitClearChainResult> DeclareAvboitClearChain(mut GpuTaskGraph graph,
         }
         avboitClearTask = avboitClearTaskResult.value();
         avboitSystem.taskGraphStage().m_clearFirstTask = avboitClearTask;
-        const auto avboitClearTaskResult2 = graph.addClearTextureTask(AvboitClearTaskDesc(avboitClearScheduling, s_AvboitClearAccumColorIdentity, s_AvboitClearAccumColorLabel, avboitClearTask),
+        const auto avboitClearTaskResult2 = graph.addClearTextureTask(AvboitClearTaskDesc(avboitStatelessClearScheduling, s_AvboitClearAccumColorIdentity, s_AvboitClearAccumColorLabel, avboitClearTask),
             makeAvboitFloatClearDesc(inputs.accumColor, transparentBlack, GpuClearTextureTaskRecordHooks()));
         if(!avboitClearTaskResult2.has_value()){
             avboitClearTask = GpuTaskId();
@@ -382,7 +384,7 @@ Expected<AvboitClearChainResult> DeclareAvboitClearChain(mut GpuTaskGraph graph,
         }
         avboitClearTask = avboitClearTaskResult2.value();
         const auto avboitClearTaskResult3 = graph.addClearTextureTask(
-            AvboitClearTaskDesc(avboitClearScheduling, s_AvboitClearAccumExtinctionIdentity, s_AvboitClearAccumExtinctionLabel, avboitClearTask),
+            AvboitClearTaskDesc(avboitStatelessClearScheduling, s_AvboitClearAccumExtinctionIdentity, s_AvboitClearAccumExtinctionLabel, avboitClearTask),
             makeAvboitFloatClearDesc(inputs.accumExtinction, transparentBlack, GpuClearTextureTaskRecordHooks())
         );
         if(!avboitClearTaskResult3.has_value()){
@@ -393,7 +395,7 @@ Expected<AvboitClearChainResult> DeclareAvboitClearChain(mut GpuTaskGraph graph,
         const Array<GpuGraphResourceId, 2u> foregroundClearTargets(inputs.foregroundColor, inputs.foregroundExtinction);
         for(in GpuGraphResourceId target : foregroundClearTargets){
             const auto avboitClearTaskResult4 = graph.addClearTextureTask(
-                AvboitClearTaskDesc(avboitClearScheduling, identityPolicy.selectForegroundClearIdentity(target == inputs.foregroundColor), s_AvboitClearForegroundLabel, avboitClearTask),
+                AvboitClearTaskDesc(avboitStatelessClearScheduling, identityPolicy.selectForegroundClearIdentity(target == inputs.foregroundColor), s_AvboitClearForegroundLabel, avboitClearTask),
                 makeAvboitFloatClearDesc(target, transparentBlack, GpuClearTextureTaskRecordHooks())
             );
             if(!avboitClearTaskResult4.has_value()){
@@ -402,11 +404,11 @@ Expected<AvboitClearChainResult> DeclareAvboitClearChain(mut GpuTaskGraph graph,
             }
             avboitClearTask = avboitClearTaskResult4.value();
         }
-        auto appendAvboitBufferClear = lambda[mut graph, mut avboitClearTask, in avboitClearScheduling](in Name identity, in StringView markerLabel, in GpuGraphResourceId destination, in u32 value) -> b8{
+        auto appendAvboitBufferClear = lambda[mut graph, mut avboitClearTask, in avboitStatelessClearScheduling](in Name identity, in StringView markerLabel, in GpuGraphResourceId destination, in u32 value) -> b8{
             GpuClearBufferTaskDesc clear;
             clear.destination = destination;
             clear.clearValue = value;
-            const auto producedTask = graph.addClearBufferTask(AvboitClearTaskDesc(avboitClearScheduling, identity, markerLabel, avboitClearTask), clear);
+            const auto producedTask = graph.addClearBufferTask(AvboitClearTaskDesc(avboitStatelessClearScheduling, identity, markerLabel, avboitClearTask), clear);
             if(!producedTask.has_value()){
                 avboitClearTask = GpuTaskId();
                 return false;

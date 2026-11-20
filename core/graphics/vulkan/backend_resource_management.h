@@ -236,11 +236,11 @@ public:
     void setPermanentBufferState(Buffer& buffer, ResourceStates::Mask state);
 
     [[nodiscard]] b8 isPermanentTexture(Texture& texture)const noexcept{
-        return m_permanentTextureStates.find(MakeNotNull(&texture)) != m_permanentTextureStates.end();
+        return !m_permanentTextureStates.empty() && m_permanentTextureStates.find(MakeNotNull(&texture)) != m_permanentTextureStates.end();
     }
 
     [[nodiscard]] b8 isPermanentBuffer(Buffer& buffer)const noexcept{
-        return m_permanentBufferStates.find(MakeNotNull(&buffer)) != m_permanentBufferStates.end();
+        return !m_permanentBufferStates.empty() && m_permanentBufferStates.find(MakeNotNull(&buffer)) != m_permanentBufferStates.end();
     }
     [[nodiscard]] ResourceStates::Mask getPermanentTextureState(Texture* texture)const noexcept;
     [[nodiscard]] ResourceStates::Mask getPermanentBufferState(Buffer* buffer)const noexcept;
@@ -265,6 +265,7 @@ private:
 
     void beginTrackingTransientTexture(Texture& texture, TextureSubresourceSet subresources, ResourceStates::Mask state);
     void beginTrackingResolvedTransientTexture(Texture& texture, const TextureSubresourceSet& resolvedSubresources, ResourceStates::Mask state);
+    void seedResolvedTransientTexture(Texture& texture, const TextureSubresourceSet& resolvedSubresources, ResourceStates::Mask state);
     void beginTrackingTransientBuffer(Buffer& buffer, ResourceStates::Mask state, BufferRange range = s_EntireBuffer, b8 seedOnly = false);
 
 

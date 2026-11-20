@@ -86,7 +86,7 @@ public:
             return;
 
         for(i32 i = 0; i < s_SpinCount; ++i){
-            if(try_lock())
+            if(m_state.load(MemoryOrder::relaxed) == s_Unlocked && try_lock())
                 return;
             MachinePause(1 << i);
         }
@@ -171,14 +171,11 @@ class MallocMutex : NoCopy{
 public:
     void lock()noexcept{
         AtomicBackOff backoff;
-        b8 locked = m_flag.testAndSet();
-        while(locked){
+        while(m_flag.test(MemoryOrder::relaxed) || m_flag.testAndSet(MemoryOrder::acquire))
             backoff.pause();
-            locked = m_flag.testAndSet();
-        }
     }
 
-    b8 try_lock()noexcept{ return (!m_flag.testAndSet()); }
+    b8 try_lock()noexcept{ return !m_flag.testAndSet(MemoryOrder::acquire); }
 
     void unlock()noexcept{ m_flag.clear(MemoryOrder::release); }
 

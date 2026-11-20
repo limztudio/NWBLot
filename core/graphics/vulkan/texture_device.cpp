@@ -68,6 +68,8 @@ Expected<TextureHandle> Device::createTexture(const TextureDesc& d){
         FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: A newly created texture duplicated a live native image identity"));
         return MakeUnexpected(Failure{});
     }
+    if(!d.isVirtual)
+        texture->m_gpuReady.store(true, MemoryOrder::release);
 
     return texture;
 }
@@ -176,23 +178,23 @@ b8 Device::isTextureReadyForGpuUse(Texture* textureResource, const VkImageUsageF
         return false;
 
     Texture& texture = *textureResource;
-    ScopedLock resourceLock(texture.m_memoryBindingMutex);
-
     if(&texture.m_context != &m_context || &texture.m_allocator != &m_allocator)
         return false;
     FOUNDATION_ASSERT(texture.descriptionMatchesCreation());
     FOUNDATION_ASSERT(VulkanTextureDetail::TextureImagePolicy::IsTextureImageInfoConsistent(texture.m_creationDesc, texture.m_imageInfo));
     if((texture.m_imageInfo.usage & requiredUsage) != requiredUsage)
         return false;
+    if(texture.m_managed && !texture.m_creationDesc.isVirtual)
+        return texture.m_gpuReady.load(MemoryOrder::acquire);
+
+    ScopedLock resourceLock(texture.m_memoryBindingMutex);
     if(texture.m_image == VK_NULL_HANDLE)
         return false;
-    if(!m_allocator.isTextureNativeIdentityRegistered(texture.m_image, texture))
+    if(!texture.m_nativeIdentityRegistered.load(MemoryOrder::acquire))
         return false;
     if(!texture.m_managed)
         return true;
 
-    if(!texture.m_creationDesc.isVirtual)
-        return texture.m_allocation != nullptr;
     if(texture.m_allocation || !texture.m_boundHeap || texture.m_heapBindingRange.size == 0u)
         return false;
 

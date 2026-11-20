@@ -29,7 +29,8 @@ b8 GpuTaskGraph::abandonPacketRecordingWithoutCallbacks(const GpuCompiledGraph& 
         return false;
     for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
         const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-        if(task.lifecycleState != TaskLifecycleState::Recording || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration || task.recordingClaimGeneration != lease.m_claimGeneration || task.recordThunkInProgress)
+        const u16 lifecycleWord = task.loadLifecycleWord();
+        if(GpuTaskNode::DecodeLifecycleState(lifecycleWord) != TaskLifecycleState::Recording || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration || task.recordingClaimGeneration != lease.m_claimGeneration || GpuTaskNode::DecodeRecordThunkInProgress(lifecycleWord))
             return false;
     }
     discardPacketTasksWithinLock(Span<const GpuTaskId>(tasks, packetPlan.taskCount));

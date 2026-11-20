@@ -452,10 +452,14 @@ void VulkanAllocator::destroyHostMappedBuffer(VkBuffer& buffer, VulkanAllocation
 }
 
 b8 VulkanAllocator::tryRegisterBufferNativeIdentity(Buffer& buffer){
-    return m_nativeResources.tryRegisterBuffer(buffer.m_buffer, buffer);
+    const b8 registered = m_nativeResources.tryRegisterBuffer(buffer.m_buffer, buffer);
+    if(registered)
+        buffer.m_nativeIdentityRegistered.store(true, MemoryOrder::release);
+    return registered;
 }
 
 void VulkanAllocator::unregisterBufferNativeIdentity(const VkBuffer nativeBuffer, Buffer& buffer)noexcept{
+    buffer.m_nativeIdentityRegistered.store(false, MemoryOrder::release);
     m_nativeResources.unregisterBuffer(nativeBuffer, buffer);
 }
 
@@ -464,10 +468,14 @@ b8 VulkanAllocator::isBufferNativeIdentityRegistered(const Buffer& buffer)const 
 }
 
 b8 VulkanAllocator::tryRegisterTextureNativeIdentity(Texture& texture){
-    return m_nativeResources.tryRegisterTexture(texture.m_image, texture);
+    const b8 registered = m_nativeResources.tryRegisterTexture(texture.m_image, texture);
+    if(registered)
+        texture.m_nativeIdentityRegistered.store(true, MemoryOrder::release);
+    return registered;
 }
 
 void VulkanAllocator::unregisterTextureNativeIdentity(const VkImage nativeImage, Texture& texture)noexcept{
+    texture.m_nativeIdentityRegistered.store(false, MemoryOrder::release);
     m_nativeResources.unregisterTexture(nativeImage, texture);
 }
 

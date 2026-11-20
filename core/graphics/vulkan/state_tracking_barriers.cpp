@@ -138,12 +138,39 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
     }
 
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentTextureState(&texture);
+    const b8 uavBarrierEnabled = ResourceStates::HasUnorderedAccess(stateBits) && m_stateTracker.isUavBarrierEnabledForTexture(texture);
+    if(permanentState == ResourceStates::Unknown && resolvedSubresources.numMipLevels == 1u && resolvedSubresources.numArraySlices == 1u){
+        const MipLevel mipLevel = resolvedSubresources.baseMipLevel;
+        const ArraySlice arraySlice = resolvedSubresources.baseArraySlice;
+        const TextureSubresourceStateKey key{ &texture, mipLevel, arraySlice };
+        auto existing = !m_stateTracker.m_textureStates.empty() ? m_stateTracker.m_textureStates.find(key) : m_stateTracker.m_textureStates.end();
+        const ResourceStates::Mask subresourceOldState = existing != m_stateTracker.m_textureStates.end()
+            ? existing.value()
+            : (texture.isRetainedSubresourceStateKnown(arraySlice, mipLevel) ? texture.m_creationDesc.initialState : ResourceStates::Unknown);
+
+        retainResource(&texture);
+        if(!VulkanStateTrackingDetail::NeedsResourceStateBarrier(subresourceOldState, stateBits, uavBarrierEnabled, forceMemoryDependency))
+            return;
+
+        if(existing != m_stateTracker.m_textureStates.end())
+            existing.value() = stateBits;
+        else
+            m_stateTracker.m_textureStates.emplace(key, stateBits);
+
+        VkImageMemoryBarrier2 barrier = VulkanStateTrackingDetail::BuildTextureStateBarrier(texture.m_image, texture.m_aspectMask, resolvedSubresources, subresourceOldState, stateBits, m_context.extensions.khrRayTracingPipeline);
+        if(!m_enableAutomaticBarriers){
+            m_pendingImageBarriers.push_back(barrier);
+            return;
+        }
+
+        executePipelineBarrier({}, { &barrier, 1u }, {});
+        return;
+    }
 
     ResourceStates::Mask oldState = ResourceStates::Unknown;
     b8 firstSubresource = true;
     b8 needsBarrier = false;
     b8 usePerSubresourceBarriers = false;
-    const b8 uavBarrierEnabled = ResourceStates::HasUnorderedAccess(stateBits) && m_stateTracker.isUavBarrierEnabledForTexture(texture);
     const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
     const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
     const usize subresourceCount = static_cast<usize>(resolvedSubresources.numMipLevels) * static_cast<usize>(resolvedSubresources.numArraySlices);
@@ -259,13 +286,8 @@ void CommandList::executePipelineBarrier(const Span<VkMemoryBarrier2> memoryBarr
         m_renderPassFramebuffer = nullptr;
     }
 
-    const GpuPhysicalQueueInfo* const exactQueueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
-    const GpuQueueCapability::Mask exactQueueCapabilities = exactQueueInfo ? exactQueueInfo->capabilities : GpuQueueCapability::None;
-    const u8 exactCapabilityBits = static_cast<u8>(exactQueueCapabilities);
-    const b8 graphicsCapable = (exactCapabilityBits & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
-    const b8 computeCapable = (exactCapabilityBits & static_cast<u8>(GpuQueueCapability::Compute)) != 0u;
-    const b8 universalGraphicsCompute = graphicsCapable && computeCapable;
-    if(!universalGraphicsCompute){
+    const GpuQueueCapability::Mask exactQueueCapabilities = m_hasCachedPhysicalQueueInfo ? m_cachedPhysicalQueueInfo.capabilities : GpuQueueCapability::None;
+    if(!m_universalGraphicsCompute){
         const auto normalizeBarrierScopes = [&](const auto barriers)noexcept{
             for(auto& barrier : barriers){
                 QueueBarrierScopePolicy::Normalize(exactQueueCapabilities, barrier.srcStageMask, barrier.srcAccessMask);

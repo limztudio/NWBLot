@@ -495,6 +495,143 @@ Manifold CollideSphereAndHull(in SphereShape sphereA, in Transform3D xfA, in Hul
     return m;
 }
 
+void ClosestPointSegmentToBoxLocal(
+    in VectorSingle l0,
+    in VectorSingle l1,
+    in VectorSingle hBox,
+    mut VectorSingle outSegPt,
+    mut VectorSingle outBoxPt,
+    mut f32 outDistSq
+){
+    const VectorSingle d = VectorSingle(l1 - l0, 0.0f);
+    const VectorSingle negH(-hBox.x, -hBox.y, -hBox.z, 0.0f);
+
+    Array<f32, 3u> l0Arr;
+    l0Arr[0u] = l0.x;
+    l0Arr[1u] = l0.y;
+    l0Arr[2u] = l0.z;
+    Array<f32, 3u> dArr;
+    dArr[0u] = d.x;
+    dArr[1u] = d.y;
+    dArr[2u] = d.z;
+    Array<f32, 3u> hArr;
+    hArr[0u] = hBox.x;
+    hArr[1u] = hBox.y;
+    hArr[2u] = hBox.z;
+
+    Array<f32, 8u> ts;
+    ts[0u] = 0.0f;
+    ts[1u] = 1.0f;
+    u32 tCount = 2u;
+
+    for(usize k = 0u; k < 3u; ++k){
+        const f32 dk = dArr[k];
+        if(Abs(dk) > 1.0e-8f){
+            const f32 tNeg = (-hArr[k] - l0Arr[k]) / dk;
+            const f32 tPos = (hArr[k] - l0Arr[k]) / dk;
+            if(tNeg > 1.0e-6f && tNeg < 1.0f - 1.0e-6f && tCount < 8u){
+                ts[tCount] = tNeg;
+                ++tCount;
+            }
+            if(tPos > 1.0e-6f && tPos < 1.0f - 1.0e-6f && tCount < 8u){
+                ts[tCount] = tPos;
+                ++tCount;
+            }
+        }
+    }
+
+    for(u32 i = 1u; i < tCount; ++i){
+        const f32 key = ts[i];
+        u32 j = i;
+        while(j > 0u && ts[j - 1u] > key){
+            ts[j] = ts[j - 1u];
+            --j;
+        }
+        ts[j] = key;
+    }
+
+    outSegPt = l0;
+    outBoxPt = Min(Max(l0, negH), hBox);
+    outDistSq = Vector3LengthSq(VectorSingle(outSegPt - outBoxPt, 0.0f)).x;
+
+    const VectorSingle bp1 = Min(Max(l1, negH), hBox);
+    const f32 dSq1 = Vector3LengthSq(VectorSingle(l1 - bp1, 0.0f)).x;
+    if(dSq1 < outDistSq){
+        outDistSq = dSq1;
+        outSegPt = l1;
+        outBoxPt = bp1;
+    }
+
+    for(u32 i = 0u; i + 1u < tCount; ++i){
+        const f32 ta = ts[i];
+        const f32 tb = ts[i + 1u];
+        if(tb - ta <= 1.0e-7f)
+            continue;
+
+        const f32 tMid = 0.5f * (ta + tb);
+        const VectorSingle mid = l0 + d * tMid;
+        f32 num = 0.0f;
+        f32 denom = 0.0f;
+
+        if(mid.x > hBox.x){
+            num += (l0.x - hBox.x) * d.x;
+            denom += d.x * d.x;
+        }
+        else if(mid.x < -hBox.x){
+            num += (l0.x + hBox.x) * d.x;
+            denom += d.x * d.x;
+        }
+        if(mid.y > hBox.y){
+            num += (l0.y - hBox.y) * d.y;
+            denom += d.y * d.y;
+        }
+        else if(mid.y < -hBox.y){
+            num += (l0.y + hBox.y) * d.y;
+            denom += d.y * d.y;
+        }
+        if(mid.z > hBox.z){
+            num += (l0.z - hBox.z) * d.z;
+            denom += d.z * d.z;
+        }
+        else if(mid.z < -hBox.z){
+            num += (l0.z + hBox.z) * d.z;
+            denom += d.z * d.z;
+        }
+
+        f32 candT = tMid;
+        if(denom > 1.0e-12f)
+            candT = Clamp(-num / denom, ta, tb);
+
+        const VectorSingle sp = l0 + d * candT;
+        const VectorSingle bp = Min(Max(sp, negH), hBox);
+        const f32 dSq = Vector3LengthSq(VectorSingle(sp - bp, 0.0f)).x;
+        if(dSq < outDistSq){
+            outDistSq = dSq;
+            outSegPt = sp;
+            outBoxPt = bp;
+        }
+    }
+}
+
+void ClipCapsuleIntervalAxis(in f32 p0, in f32 d, in f32 hExt, mut f32 tMin, mut f32 tMax){
+    if(Abs(d) < 1.0e-8f){
+        if(p0 < -hExt || p0 > hExt){
+            tMin = 1.0f;
+            tMax = 0.0f;
+        }
+        return;
+    }
+    f32 t0 = (-hExt - p0) / d;
+    f32 t1 = (hExt - p0) / d;
+    if(t0 > t1){
+        const f32 tmp = t0;
+        t0 = t1;
+        t1 = tmp;
+    }
+    tMin = Max(tMin, t0);
+    tMax = Min(tMax, t1);
+}
+
 Manifold CollideCapsuleAndHull(in CapsuleShape capsuleA, in Transform3D xfA, in HullShape hullB, in Transform3D xfB, in f32 maxDistance){
     Manifold m;
     if(hullB.facePlanes.empty())
@@ -504,9 +641,218 @@ Manifold CollideCapsuleAndHull(in CapsuleShape capsuleA, in Transform3D xfA, in 
     const f32 hullR = hullB.radius();
     const VectorSingle w1 = TransformPoint(xfA, capsuleA.center1());
     const VectorSingle w2 = TransformPoint(xfA, capsuleA.center2Vec());
+    const f32 totalR = capR + hullR;
+
+    if(hullB.isBox()){
+        const VectorSingle cBox = TransformPoint(xfB, hullB.centroid());
+        const VectorSingle qBox = SafeNormalizeQuat(QuaternionMultiply(VectorSingle(xfB.rotation), VectorSingle(hullB.boxRotation)));
+        const VectorSingle hBox = hullB.halfExtents();
+        const VectorSingle l0 = Vector3InverseRotate(VectorSingle(w1 - cBox, 0.0f), qBox);
+        const VectorSingle l1 = Vector3InverseRotate(VectorSingle(w2 - cBox, 0.0f), qBox);
+
+        VectorSingle bestSegPt(0.0f);
+        VectorSingle bestBoxPt(0.0f);
+        f32 bestDistSq = 0.0f;
+        ClosestPointSegmentToBoxLocal(l0, l1, hBox, bestSegPt, bestBoxPt, bestDistSq);
+
+        const f32 maxD = totalR + maxDistance;
+        if(bestDistSq > maxD * maxD)
+            return m;
+
+        VectorSingle localOutward(0.0f, 1.0f, 0.0f, 0.0f);
+        VectorSingle localBoxSurface = bestBoxPt;
+        f32 singleSep = 0.0f;
+        u8 bestFace = 0u;
+
+        if(bestDistSq > 1.0e-10f){
+            const f32 dist = Sqrt(bestDistSq);
+            localOutward = VectorSingle(bestSegPt - bestBoxPt, 0.0f) / dist;
+            singleSep = dist - totalR;
+            const f32 ax = Abs(localOutward.x);
+            const f32 ay = Abs(localOutward.y);
+            const f32 az = Abs(localOutward.z);
+            if(ax >= ay && ax >= az){
+                if(localOutward.x >= 0.0f)
+                    bestFace = 0u;
+                else
+                    bestFace = 1u;
+            }
+            else if(ay >= az){
+                if(localOutward.y >= 0.0f)
+                    bestFace = 2u;
+                else
+                    bestFace = 3u;
+            }
+            else{
+                if(localOutward.z >= 0.0f)
+                    bestFace = 4u;
+                else
+                    bestFace = 5u;
+            }
+        }
+        else{
+            const f32 sepX0 = Min(l0.x, l1.x) - hBox.x;
+            const f32 sepX1 = Min(-l0.x, -l1.x) - hBox.x;
+            const f32 sepY0 = Min(l0.y, l1.y) - hBox.y;
+            const f32 sepY1 = Min(-l0.y, -l1.y) - hBox.y;
+            const f32 sepZ0 = Min(l0.z, l1.z) - hBox.z;
+            const f32 sepZ1 = Min(-l0.z, -l1.z) - hBox.z;
+
+            f32 maxFaceSep = sepX0;
+            bestFace = 0u;
+            if(sepX1 > maxFaceSep){
+                maxFaceSep = sepX1;
+                bestFace = 1u;
+            }
+            if(sepY0 > maxFaceSep){
+                maxFaceSep = sepY0;
+                bestFace = 2u;
+            }
+            if(sepY1 > maxFaceSep){
+                maxFaceSep = sepY1;
+                bestFace = 3u;
+            }
+            if(sepZ0 > maxFaceSep){
+                maxFaceSep = sepZ0;
+                bestFace = 4u;
+            }
+            if(sepZ1 > maxFaceSep){
+                maxFaceSep = sepZ1;
+                bestFace = 5u;
+            }
+
+            if(bestFace == 0u){
+                localOutward = VectorSingle(1.0f, 0.0f, 0.0f, 0.0f);
+                if(l1.x < l0.x)
+                    bestSegPt = l1;
+                else
+                    bestSegPt = l0;
+                localBoxSurface = VectorSingle(hBox.x, bestSegPt.y, bestSegPt.z, 0.0f);
+            }
+            else if(bestFace == 1u){
+                localOutward = VectorSingle(-1.0f, 0.0f, 0.0f, 0.0f);
+                if(l1.x > l0.x)
+                    bestSegPt = l1;
+                else
+                    bestSegPt = l0;
+                localBoxSurface = VectorSingle(-hBox.x, bestSegPt.y, bestSegPt.z, 0.0f);
+            }
+            else if(bestFace == 2u){
+                localOutward = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
+                if(l1.y < l0.y)
+                    bestSegPt = l1;
+                else
+                    bestSegPt = l0;
+                localBoxSurface = VectorSingle(bestSegPt.x, hBox.y, bestSegPt.z, 0.0f);
+            }
+            else if(bestFace == 3u){
+                localOutward = VectorSingle(0.0f, -1.0f, 0.0f, 0.0f);
+                if(l1.y > l0.y)
+                    bestSegPt = l1;
+                else
+                    bestSegPt = l0;
+                localBoxSurface = VectorSingle(bestSegPt.x, -hBox.y, bestSegPt.z, 0.0f);
+            }
+            else if(bestFace == 4u){
+                localOutward = VectorSingle(0.0f, 0.0f, 1.0f, 0.0f);
+                if(l1.z < l0.z)
+                    bestSegPt = l1;
+                else
+                    bestSegPt = l0;
+                localBoxSurface = VectorSingle(bestSegPt.x, bestSegPt.y, hBox.z, 0.0f);
+            }
+            else{
+                localOutward = VectorSingle(0.0f, 0.0f, -1.0f, 0.0f);
+                if(l1.z > l0.z)
+                    bestSegPt = l1;
+                else
+                    bestSegPt = l0;
+                localBoxSurface = VectorSingle(bestSegPt.x, bestSegPt.y, -hBox.z, 0.0f);
+            }
+            singleSep = maxFaceSep - totalR;
+        }
+
+        const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(localOutward, qBox), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        const VectorSingle nAtoB = -worldOut;
+        m.normalTwist = f32x4(nAtoB, 0.0f);
+
+        const f32 ax = Abs(localOutward.x);
+        const f32 ay = Abs(localOutward.y);
+        const f32 az = Abs(localOutward.z);
+        const VectorSingle dSeg = VectorSingle(l1 - l0, 0.0f);
+        u32 emitted = 0u;
+        if(Max(ax, Max(ay, az)) > 0.995f){
+            f32 tMin = 0.0f;
+            f32 tMax = 1.0f;
+            if(ax >= ay && ax >= az){
+                ClipCapsuleIntervalAxis(l0.y, dSeg.y, hBox.y, tMin, tMax);
+                ClipCapsuleIntervalAxis(l0.z, dSeg.z, hBox.z, tMin, tMax);
+            }
+            else if(ay >= az){
+                ClipCapsuleIntervalAxis(l0.x, dSeg.x, hBox.x, tMin, tMax);
+                ClipCapsuleIntervalAxis(l0.z, dSeg.z, hBox.z, tMin, tMax);
+            }
+            else{
+                ClipCapsuleIntervalAxis(l0.x, dSeg.x, hBox.x, tMin, tMax);
+                ClipCapsuleIntervalAxis(l0.y, dSeg.y, hBox.y, tMin, tMax);
+            }
+
+            if(tMin <= tMax){
+                const f32 segLenSq = Vector3LengthSq(dSeg).x;
+                u32 candCount = 1u;
+                if((tMax - tMin) * (tMax - tMin) * segLenSq > s_MinCapsuleLength * s_MinCapsuleLength)
+                    candCount = 2u;
+                Array<f32, 2u> ts;
+                ts[0u] = tMin;
+                ts[1u] = tMax;
+                for(u32 ci = 0u; ci < candCount; ++ci){
+                    const VectorSingle lSeg = l0 + dSeg * ts[ci];
+                    VectorSingle lFace = lSeg;
+                    if(ax >= ay && ax >= az){
+                        if(localOutward.x >= 0.0f)
+                            lFace = VectorSingle(hBox.x, lSeg.y, lSeg.z, 0.0f);
+                        else
+                            lFace = VectorSingle(-hBox.x, lSeg.y, lSeg.z, 0.0f);
+                    }
+                    else if(ay >= az){
+                        if(localOutward.y >= 0.0f)
+                            lFace = VectorSingle(lSeg.x, hBox.y, lSeg.z, 0.0f);
+                        else
+                            lFace = VectorSingle(lSeg.x, -hBox.y, lSeg.z, 0.0f);
+                    }
+                    else{
+                        if(localOutward.z >= 0.0f)
+                            lFace = VectorSingle(lSeg.x, lSeg.y, hBox.z, 0.0f);
+                        else
+                            lFace = VectorSingle(lSeg.x, lSeg.y, -hBox.z, 0.0f);
+                    }
+                    const VectorSingle wSeg = cBox + Vector3Rotate(lSeg, qBox);
+                    const VectorSingle wFace = cBox + Vector3Rotate(lFace, qBox);
+                    const VectorSingle wA = wSeg + nAtoB * capR;
+                    const VectorSingle wB = wFace + worldOut * hullR;
+                    const f32 ptSep = Vector3Dot(VectorSingle(wA - wB, 0.0f), nAtoB).x;
+                    if(ptSep <= maxDistance){
+                        SetManifoldPoint(m, emitted, (wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), ptSep, MakeFeatureId(0u, cast<u8>(emitted), 1u, bestFace));
+                        ++emitted;
+                    }
+                }
+            }
+        }
+
+        if(emitted == 0u && singleSep <= maxDistance){
+            const VectorSingle wSeg = cBox + Vector3Rotate(bestSegPt, qBox);
+            const VectorSingle wBox = cBox + Vector3Rotate(localBoxSurface, qBox);
+            const VectorSingle wA = wSeg + nAtoB * capR;
+            const VectorSingle wB = wBox + worldOut * hullR;
+            SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), singleSep, MakeFeatureId(0u, 2u, 1u, bestFace));
+            emitted = 1u;
+        }
+        m.setPointCount(emitted);
+        return m;
+    }
+
     const VectorSingle l1 = InverseTransformPoint(xfB, w1);
     const VectorSingle l2 = InverseTransformPoint(xfB, w2);
-    const f32 totalR = capR + hullR;
 
     DistanceInput input;
     input.proxyA = MakeCapsuleProxy(capsuleA);

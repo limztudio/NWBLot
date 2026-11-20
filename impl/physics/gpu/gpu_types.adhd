@@ -57,8 +57,8 @@ const u32 s_GpuJointImpulseOutBytes = 48u;
 const u32 s_GpuIslandSliceBytes = 32u;
 
 const u32 s_GpuIslandFlagHasRestitution = 0x00000001u;
-const u32 s_GpuIslandMaxBodies = 4u;
-const u32 s_GpuIslandMaxContacts = 6u;
+const u32 s_GpuIslandMaxBodies = 8u;
+const u32 s_GpuIslandMaxContacts = 12u;
 const u32 s_GpuIslandMaxJoints = 8u;
 const u32 s_GpuIslandWorkgroupSize = 32u;
 

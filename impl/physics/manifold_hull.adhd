@@ -405,10 +405,559 @@ Manifold CollideHullFaces(
     return m;
 }
 
+void QuatToBasisAxes(in VectorSingle q, mut VectorSingle outX, mut VectorSingle outY, mut VectorSingle outZ){
+    const f32 x = q.x;
+    const f32 y = q.y;
+    const f32 z = q.z;
+    const f32 w = q.w;
+    const f32 xx = x + x;
+    const f32 yy = y + y;
+    const f32 zz = z + z;
+    const f32 x2 = x * xx;
+    const f32 y2 = y * yy;
+    const f32 z2 = z * zz;
+    const f32 xy = x * yy;
+    const f32 xz = x * zz;
+    const f32 yz = y * zz;
+    const f32 wx = w * xx;
+    const f32 wy = w * yy;
+    const f32 wz = w * zz;
+
+    outX = VectorSingle(1.0f - (y2 + z2), xy + wz, xz - wy, 0.0f);
+    outY = VectorSingle(xy - wz, 1.0f - (x2 + z2), yz + wx, 0.0f);
+    outZ = VectorSingle(xz + wy, yz - wx, 1.0f - (x2 + y2), 0.0f);
+}
+
+u32 ClipBoxQuadAgainstPlane(
+    in Array<ClipVertex, 8u> inVerts,
+    in u32 inCount,
+    in VectorSingle planeNormal,
+    in f32 planeOffset,
+    in u8 edgeTag,
+    mut Array<ClipVertex, 8u> outVerts
+){
+    u32 outCount = 0u;
+    if(inCount == 0u)
+        return 0u;
+
+    ClipVertex prev = inVerts[inCount - 1u];
+    f32 prevDist = Vector3Dot(planeNormal, Vec3FromU(prev.position)).x - planeOffset;
+
+    for(u32 i = 0u; i < inCount; ++i){
+        const ClipVertex cur = inVerts[i];
+        const f32 curDist = Vector3Dot(planeNormal, Vec3FromU(cur.position)).x - planeOffset;
+
+        if(curDist <= 0.0f){
+            if(prevDist > 0.0f){
+                const f32 denom = prevDist - curDist;
+                f32 t = 0.0f;
+                if(Abs(denom) > 1.0e-12f)
+                    t = Clamp(prevDist / denom, 0.0f, 1.0f);
+                if(outCount < 8u){
+                    ClipVertex interp;
+                    interp.position = PackVec3U(Lerp(Vec3FromU(prev.position), Vec3FromU(cur.position), VectorSingle(t)));
+                    interp.id0 = edgeTag;
+                    interp.id1 = cur.id1;
+                    outVerts[outCount] = interp;
+                    ++outCount;
+                }
+            }
+            if(outCount < 8u){
+                outVerts[outCount] = cur;
+                ++outCount;
+            }
+        }
+        else if(prevDist <= 0.0f){
+            const f32 denom = prevDist - curDist;
+            f32 t = 0.0f;
+            if(Abs(denom) > 1.0e-12f)
+                t = Clamp(prevDist / denom, 0.0f, 1.0f);
+            if(outCount < 8u){
+                ClipVertex interp;
+                interp.position = PackVec3U(Lerp(Vec3FromU(prev.position), Vec3FromU(cur.position), VectorSingle(t)));
+                interp.id0 = cur.id0;
+                interp.id1 = edgeTag;
+                outVerts[outCount] = interp;
+                ++outCount;
+            }
+        }
+
+        prev = cur;
+        prevDist = curDist;
+    }
+
+    return outCount;
+}
+
+void ReduceBoxCandidatesTo4(in VectorSingle refNormal, mut Array<ClipVertex, 8u> candidates, mut u32 inOutCount){
+    if(inOutCount <= s_MaxManifoldPoints)
+        return;
+
+    u32 idx0 = 0u;
+    for(u32 i = 1u; i < inOutCount; ++i){
+        if(candidates[i].separation < candidates[idx0].separation)
+            idx0 = i;
+    }
+
+    u32 idx1 = 0u;
+    f32 bestDistSq1 = -1.0f;
+    const VectorSingle p0 = Vec3FromU(candidates[idx0].position);
+    for(u32 i = 0u; i < inOutCount; ++i){
+        const f32 dSq = Vector3LengthSq(VectorSingle(Vec3FromU(candidates[i].position) - p0, 0.0f)).x;
+        if(dSq > bestDistSq1){
+            bestDistSq1 = dSq;
+            idx1 = i;
+        }
+    }
+
+    u32 idx2 = 0u;
+    f32 bestArea2 = -1.0f;
+    const VectorSingle p1 = Vec3FromU(candidates[idx1].position);
+    const VectorSingle e01 = VectorSingle(p1 - p0, 0.0f);
+    for(u32 i = 0u; i < inOutCount; ++i){
+        if(i == idx0 || i == idx1)
+            continue;
+        const VectorSingle c = Cross(e01, VectorSingle(Vec3FromU(candidates[i].position) - p0, 0.0f));
+        const f32 area = Abs(Vector3Dot(c, refNormal).x);
+        if(area > bestArea2){
+            bestArea2 = area;
+            idx2 = i;
+        }
+    }
+
+    u32 idx3 = 0u;
+    f32 bestOutsideArea = -1.0f;
+    u32 fallbackIdx3 = 0u;
+    f32 bestFallbackArea = -1.0f;
+    const VectorSingle p2 = Vec3FromU(candidates[idx2].position);
+    const f32 baseSign = Vector3Dot(Cross(e01, VectorSingle(p2 - p0, 0.0f)), refNormal).x;
+    for(u32 i = 0u; i < inOutCount; ++i){
+        if(i == idx0 || i == idx1 || i == idx2)
+            continue;
+        const VectorSingle pi = Vec3FromU(candidates[i].position);
+        const f32 a0 = Vector3Dot(Cross(VectorSingle(p1 - p0, 0.0f), VectorSingle(pi - p0, 0.0f)), refNormal).x;
+        const f32 a1 = Vector3Dot(Cross(VectorSingle(p2 - p1, 0.0f), VectorSingle(pi - p1, 0.0f)), refNormal).x;
+        const f32 a2 = Vector3Dot(Cross(VectorSingle(p0 - p2, 0.0f), VectorSingle(pi - p2, 0.0f)), refNormal).x;
+        const f32 maxAbs = Max(Abs(a0), Max(Abs(a1), Abs(a2)));
+        if(maxAbs > bestFallbackArea){
+            bestFallbackArea = maxAbs;
+            fallbackIdx3 = i;
+        }
+        f32 outsideArea = -1.0f;
+        if(baseSign >= 0.0f){
+            if(a0 < 0.0f && -a0 > outsideArea)
+                outsideArea = -a0;
+            if(a1 < 0.0f && -a1 > outsideArea)
+                outsideArea = -a1;
+            if(a2 < 0.0f && -a2 > outsideArea)
+                outsideArea = -a2;
+        }
+        else{
+            if(a0 > 0.0f && a0 > outsideArea)
+                outsideArea = a0;
+            if(a1 > 0.0f && a1 > outsideArea)
+                outsideArea = a1;
+            if(a2 > 0.0f && a2 > outsideArea)
+                outsideArea = a2;
+        }
+        if(outsideArea > bestOutsideArea){
+            bestOutsideArea = outsideArea;
+            idx3 = i;
+        }
+    }
+    if(bestOutsideArea < 0.0f)
+        idx3 = fallbackIdx3;
+
+    Array<ClipVertex, 4u> reduced;
+    reduced[0u] = candidates[idx0];
+    reduced[1u] = candidates[idx1];
+    reduced[2u] = candidates[idx2];
+    reduced[3u] = candidates[idx3];
+    for(u32 i = 0u; i < 4u; ++i)
+        candidates[i] = reduced[i];
+    inOutCount = 4u;
+}
+
+Manifold CollideBoxes(in HullShape hullA, in Transform3D xfA, in HullShape hullB, in Transform3D xfB, in f32 maxDistance){
+    Manifold m;
+    const VectorSingle cA = TransformPoint(xfA, hullA.centroid());
+    const VectorSingle qA = SafeNormalizeQuat(QuaternionMultiply(VectorSingle(xfA.rotation), VectorSingle(hullA.boxRotation)));
+    const VectorSingle hA = hullA.halfExtents();
+    const f32 rA = hullA.radius();
+
+    const VectorSingle cB = TransformPoint(xfB, hullB.centroid());
+    const VectorSingle qB = SafeNormalizeQuat(QuaternionMultiply(VectorSingle(xfB.rotation), VectorSingle(hullB.boxRotation)));
+    const VectorSingle hB = hullB.halfExtents();
+    const f32 rB = hullB.radius();
+    const f32 totalR = rA + rB;
+
+    VectorSingle axA(1.0f, 0.0f, 0.0f, 0.0f);
+    VectorSingle ayA(0.0f, 1.0f, 0.0f, 0.0f);
+    VectorSingle azA(0.0f, 0.0f, 1.0f, 0.0f);
+    VectorSingle axB(1.0f, 0.0f, 0.0f, 0.0f);
+    VectorSingle ayB(0.0f, 1.0f, 0.0f, 0.0f);
+    VectorSingle azB(0.0f, 0.0f, 1.0f, 0.0f);
+    QuatToBasisAxes(qA, axA, ayA, azA);
+    QuatToBasisAxes(qB, axB, ayB, azB);
+
+    const VectorSingle dCenter = VectorSingle(cB - cA, 0.0f);
+    Array<f32, 3u> tA;
+    tA[0u] = Vector3Dot(dCenter, axA).x;
+    tA[1u] = Vector3Dot(dCenter, ayA).x;
+    tA[2u] = Vector3Dot(dCenter, azA).x;
+
+    Array<f32, 3u> halfA;
+    halfA[0u] = hA.x;
+    halfA[1u] = hA.y;
+    halfA[2u] = hA.z;
+    Array<f32, 3u> halfB;
+    halfB[0u] = hB.x;
+    halfB[1u] = hB.y;
+    halfB[2u] = hB.z;
+
+    Array<f32, 9u> rMat;
+    Array<f32, 9u> aMat;
+    rMat[0u] = Vector3Dot(axA, axB).x;
+    rMat[1u] = Vector3Dot(axA, ayB).x;
+    rMat[2u] = Vector3Dot(axA, azB).x;
+    rMat[3u] = Vector3Dot(ayA, axB).x;
+    rMat[4u] = Vector3Dot(ayA, ayB).x;
+    rMat[5u] = Vector3Dot(ayA, azB).x;
+    rMat[6u] = Vector3Dot(azA, axB).x;
+    rMat[7u] = Vector3Dot(azA, ayB).x;
+    rMat[8u] = Vector3Dot(azA, azB).x;
+    for(u32 k = 0u; k < 9u; ++k)
+        aMat[k] = Abs(rMat[k]);
+
+    i32 bestAxis = -1;
+    f32 bestSep = -s_MaxF32;
+    f32 bestSign = 1.0f;
+
+    for(u32 i = 0u; i < 3u; ++i){
+        const u32 row = i * 3u;
+        const f32 rb = halfB[0u] * aMat[row] + halfB[1u] * aMat[row + 1u] + halfB[2u] * aMat[row + 2u];
+        const f32 sep = Abs(tA[i]) - (halfA[i] + rb) - totalR;
+        if(sep > maxDistance)
+            return m;
+        if(sep > bestSep){
+            bestSep = sep;
+            bestAxis = cast<i32>(i);
+            if(tA[i] >= 0.0f)
+                bestSign = 1.0f;
+            else
+                bestSign = -1.0f;
+        }
+    }
+
+    for(u32 j = 0u; j < 3u; ++j){
+        const f32 tb = tA[0u] * rMat[j] + tA[1u] * rMat[3u + j] + tA[2u] * rMat[6u + j];
+        const f32 ra = halfA[0u] * aMat[j] + halfA[1u] * aMat[3u + j] + halfA[2u] * aMat[6u + j];
+        const f32 sep = Abs(tb) - (ra + halfB[j]) - totalR;
+        if(sep > maxDistance)
+            return m;
+        if(sep > bestSep + 1.0e-4f){
+            bestSep = sep;
+            bestAxis = 3 + cast<i32>(j);
+            if(tb >= 0.0f)
+                bestSign = 1.0f;
+            else
+                bestSign = -1.0f;
+        }
+    }
+
+    for(u32 i = 0u; i < 3u; ++i){
+        const u32 i1 = (i + 1u) % 3u;
+        const u32 i2 = (i + 2u) % 3u;
+        for(u32 j = 0u; j < 3u; ++j){
+            const f32 rij = rMat[i * 3u + j];
+            const f32 lenSq = 1.0f - rij * rij;
+            if(lenSq < 1.0e-5f)
+                continue;
+            const u32 j1 = (j + 1u) % 3u;
+            const u32 j2 = (j + 2u) % 3u;
+            const f32 projRaw = tA[i2] * rMat[i1 * 3u + j] - tA[i1] * rMat[i2 * 3u + j];
+            const f32 ra = halfA[i1] * aMat[i2 * 3u + j] + halfA[i2] * aMat[i1 * 3u + j];
+            const f32 rb = halfB[j1] * aMat[i * 3u + j2] + halfB[j2] * aMat[i * 3u + j1];
+            const f32 invLen = Rsqrt(VectorSingle(lenSq)).x;
+            const f32 sep = (Abs(projRaw) - (ra + rb)) * invLen - totalR;
+            if(sep > maxDistance)
+                return m;
+            if(sep > bestSep + 5.0e-4f){
+                bestSep = sep;
+                bestAxis = 6 + cast<i32>(i * 3u + j);
+                if(projRaw >= 0.0f)
+                    bestSign = 1.0f;
+                else
+                    bestSign = -1.0f;
+            }
+        }
+    }
+
+    if(bestAxis >= 6){
+        const u32 ea = cast<u32>(bestAxis - 6) / 3u;
+        const u32 eb = cast<u32>(bestAxis - 6) % 3u;
+
+        VectorSingle axisA = axA;
+        if(ea == 1u)
+            axisA = ayA;
+        else if(ea == 2u)
+            axisA = azA;
+        VectorSingle axisB = axB;
+        if(eb == 1u)
+            axisB = ayB;
+        else if(eb == 2u)
+            axisB = azB;
+
+        const VectorSingle axis = SafeNormalizeVec3(Cross(axisA, axisB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)) * bestSign;
+
+        VectorSingle pA = cA;
+        if(ea != 0u){
+            if(Vector3Dot(axA, axis).x >= 0.0f)
+                pA = pA + axA * hA.x;
+            else
+                pA = pA - axA * hA.x;
+        }
+        if(ea != 1u){
+            if(Vector3Dot(ayA, axis).x >= 0.0f)
+                pA = pA + ayA * hA.y;
+            else
+                pA = pA - ayA * hA.y;
+        }
+        if(ea != 2u){
+            if(Vector3Dot(azA, axis).x >= 0.0f)
+                pA = pA + azA * hA.z;
+            else
+                pA = pA - azA * hA.z;
+        }
+
+        VectorSingle pB = cB;
+        if(eb != 0u){
+            if(Vector3Dot(axB, axis).x <= 0.0f)
+                pB = pB + axB * hB.x;
+            else
+                pB = pB - axB * hB.x;
+        }
+        if(eb != 1u){
+            if(Vector3Dot(ayB, axis).x <= 0.0f)
+                pB = pB + ayB * hB.y;
+            else
+                pB = pB - ayB * hB.y;
+        }
+        if(eb != 2u){
+            if(Vector3Dot(azB, axis).x <= 0.0f)
+                pB = pB + azB * hB.z;
+            else
+                pB = pB - azB * hB.z;
+        }
+
+        const f32 hea = halfA[ea];
+        const f32 heb = halfB[eb];
+        f32 segS = 0.0f;
+        f32 segT = 0.0f;
+        VectorSingle cEdgeA(0.0f);
+        VectorSingle cEdgeB(0.0f);
+        ClosestPointsBetweenSegments(pA - axisA * hea, pA + axisA * hea, pB - axisB * heb, pB + axisB * heb, segS, segT, cEdgeA, cEdgeB);
+
+        const VectorSingle wA = cEdgeA + axis * rA;
+        const VectorSingle wB = cEdgeB - axis * rB;
+        m.normalTwist = f32x4(axis, 0.0f);
+        m.setPointCount(1u);
+        SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), bestSep, MakeFeatureId(2u, cast<u8>(bestAxis), 0u, 0u));
+        return m;
+    }
+
+    const b8 refIsA = (bestAxis < 3);
+    u32 refAxisIdx = cast<u32>(bestAxis);
+    if(!refIsA)
+        refAxisIdx = cast<u32>(bestAxis - 3);
+
+    VectorSingle refX = axA;
+    VectorSingle refY = ayA;
+    VectorSingle refZ = azA;
+    VectorSingle refCenter = cA;
+    VectorSingle incX = axB;
+    VectorSingle incY = ayB;
+    VectorSingle incZ = azB;
+    VectorSingle incCenter = cB;
+    Array<f32, 3u> refH = halfA;
+    Array<f32, 3u> incH = halfB;
+    f32 refR = rA;
+    f32 incR = rB;
+    if(!refIsA){
+        refX = axB;
+        refY = ayB;
+        refZ = azB;
+        refCenter = cB;
+        incX = axA;
+        incY = ayA;
+        incZ = azA;
+        incCenter = cA;
+        refH = halfB;
+        incH = halfA;
+        refR = rB;
+        incR = rA;
+    }
+
+    VectorSingle refPrimary = refX;
+    VectorSingle uAxis = refY;
+    VectorSingle vAxis = refZ;
+    u32 uIdx = 1u;
+    u32 vIdx = 2u;
+    if(refAxisIdx == 1u){
+        refPrimary = refY;
+        uAxis = refZ;
+        vAxis = refX;
+        uIdx = 2u;
+        vIdx = 0u;
+    }
+    else if(refAxisIdx == 2u){
+        refPrimary = refZ;
+        uAxis = refX;
+        vAxis = refY;
+        uIdx = 0u;
+        vIdx = 1u;
+    }
+
+    const VectorSingle normalAtoB = refPrimary * bestSign;
+    VectorSingle refNormal = normalAtoB;
+    if(!refIsA)
+        refNormal = -normalAtoB;
+
+    u8 refFaceIdx = cast<u8>(refAxisIdx * 2u);
+    if(Vector3Dot(refPrimary, refNormal).x < 0.0f)
+        refFaceIdx = cast<u8>(refAxisIdx * 2u + 1u);
+
+    const f32 dIncX = Vector3Dot(incX, refNormal).x;
+    const f32 dIncY = Vector3Dot(incY, refNormal).x;
+    const f32 dIncZ = Vector3Dot(incZ, refNormal).x;
+    const f32 aIncX = Abs(dIncX);
+    const f32 aIncY = Abs(dIncY);
+    const f32 aIncZ = Abs(dIncZ);
+
+    u32 incAxisIdx = 0u;
+    f32 incSign = 1.0f;
+    VectorSingle incU = incY;
+    VectorSingle incV = incZ;
+    f32 incHu = incH[1u];
+    f32 incHv = incH[2u];
+    if(aIncX >= aIncY && aIncX >= aIncZ){
+        incAxisIdx = 0u;
+        if(dIncX > 0.0f)
+            incSign = -1.0f;
+        incU = incY * incSign;
+        incV = incZ;
+        incHu = incH[1u];
+        incHv = incH[2u];
+    }
+    else if(aIncY >= aIncZ){
+        incAxisIdx = 1u;
+        if(dIncY > 0.0f)
+            incSign = -1.0f;
+        incU = incZ * incSign;
+        incV = incX;
+        incHu = incH[2u];
+        incHv = incH[0u];
+    }
+    else{
+        incAxisIdx = 2u;
+        if(dIncZ > 0.0f)
+            incSign = -1.0f;
+        incU = incX * incSign;
+        incV = incY;
+        incHu = incH[0u];
+        incHv = incH[1u];
+    }
+
+    u8 incFaceIdx = cast<u8>(incAxisIdx * 2u);
+    if(incSign < 0.0f)
+        incFaceIdx = cast<u8>(incAxisIdx * 2u + 1u);
+
+    VectorSingle incNormal = incX;
+    if(incAxisIdx == 1u)
+        incNormal = incY;
+    else if(incAxisIdx == 2u)
+        incNormal = incZ;
+    incNormal = incNormal * incSign;
+
+    const VectorSingle fc = incCenter + incNormal * incH[incAxisIdx];
+    const VectorSingle eu = incU * incHu;
+    const VectorSingle ev = incV * incHv;
+
+    Array<ClipVertex, 8u> poly0;
+    Array<ClipVertex, 8u> poly1;
+    poly0[0u].position = PackVec3U(fc - eu - ev);
+    poly0[0u].id0 = 0u;
+    poly0[0u].id1 = incFaceIdx;
+    poly0[1u].position = PackVec3U(fc + eu - ev);
+    poly0[1u].id0 = 1u;
+    poly0[1u].id1 = incFaceIdx;
+    poly0[2u].position = PackVec3U(fc + eu + ev);
+    poly0[2u].id0 = 2u;
+    poly0[2u].id1 = incFaceIdx;
+    poly0[3u].position = PackVec3U(fc - eu + ev);
+    poly0[3u].id0 = 3u;
+    poly0[3u].id1 = incFaceIdx;
+
+    u32 polyCount = 4u;
+    polyCount = ClipBoxQuadAgainstPlane(poly0, polyCount, uAxis, Vector3Dot(uAxis, refCenter).x + refH[uIdx], 0u, poly1);
+    if(polyCount == 0u)
+        return m;
+    polyCount = ClipBoxQuadAgainstPlane(poly1, polyCount, -uAxis, Vector3Dot(-uAxis, refCenter).x + refH[uIdx], 1u, poly0);
+    if(polyCount == 0u)
+        return m;
+    polyCount = ClipBoxQuadAgainstPlane(poly0, polyCount, vAxis, Vector3Dot(vAxis, refCenter).x + refH[vIdx], 2u, poly1);
+    if(polyCount == 0u)
+        return m;
+    polyCount = ClipBoxQuadAgainstPlane(poly1, polyCount, -vAxis, Vector3Dot(-vAxis, refCenter).x + refH[vIdx], 3u, poly0);
+    if(polyCount == 0u)
+        return m;
+
+    const f32 refPlaneDist = Vector3Dot(refNormal, refCenter).x + refH[refAxisIdx];
+    Array<ClipVertex, 8u> validPoints;
+    u32 validCount = 0u;
+    for(u32 p = 0u; p < polyCount; ++p){
+        const VectorSingle pt = Vec3FromU(poly0[p].position);
+        const f32 sep = Vector3Dot(refNormal, pt).x - refPlaneDist - totalR;
+        if(sep <= maxDistance){
+            validPoints[validCount] = poly0[p];
+            validPoints[validCount].separation = sep;
+            ++validCount;
+        }
+    }
+    if(validCount == 0u)
+        return m;
+
+    ReduceBoxCandidatesTo4(refNormal, validPoints, validCount);
+
+    m.normalTwist = f32x4(normalAtoB, 0.0f);
+    m.setPointCount(validCount);
+    u8 ownerTag = 1u;
+    if(refIsA)
+        ownerTag = 0u;
+
+    for(u32 i = 0u; i < validCount; ++i){
+        const f32 sep = validPoints[i].separation;
+        const VectorSingle pt = Vec3FromU(validPoints[i].position);
+        const VectorSingle pIncWorld = pt - refNormal * incR;
+        const VectorSingle pRefWorld = pt - refNormal * (sep + totalR - refR);
+        VectorSingle wA = pIncWorld;
+        VectorSingle wB = pRefWorld;
+        if(refIsA){
+            wA = pRefWorld;
+            wB = pIncWorld;
+        }
+        SetManifoldPoint(m, i, (wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), sep, MakeFeatureId(ownerTag, refFaceIdx, validPoints[i].id0, validPoints[i].id1));
+    }
+    return m;
+}
+
 Manifold CollideHulls(in HullShape hullA, in Transform3D xfA, in HullShape hullB, in Transform3D xfB, in f32 maxDistance){
     Manifold m;
     if(hullA.facePlanes.empty() || hullB.facePlanes.empty())
         return m;
+
+    if(hullA.isBox() && hullB.isBox())
+        return CollideBoxes(hullA, xfA, hullB, xfB, maxDistance);
 
     const Transform3D xfBtoA = RelativeTransform(xfA, xfB);
     const f32 rA = hullA.radius();

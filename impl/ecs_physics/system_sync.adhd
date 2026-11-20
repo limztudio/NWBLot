@@ -31,8 +31,14 @@ EcsWorldPose ResolveEntityWorldPose(in World world, in EntityID entity){
     if(!entity.valid() || !world.alive(entity) || !world.hasComponent<TransformComponent>(entity))
         return pose;
 
-    Vector<EntityID> chain;
-    chain.reserve(8u);
+    if(!world.hasComponent<PhysicsParentComponent>(entity)){
+        in TransformComponent rootXf = world.getComponent<TransformComponent>(entity);
+        pose.transform = Transform3D(VectorSingle(rootXf.position), SafeNormalizeQuat(VectorSingle(rootXf.rotation)));
+        pose.scale = rootXf.scale;
+        return pose;
+    }
+
+    FixedVector<EntityID, 33u> chain;
     chain.push_back(entity);
     EntityID cur = entity;
     for(u32 depth = 0u; depth < 32u; ++depth){
@@ -104,7 +110,8 @@ void SnapshotEcsBodyTransforms(
     for(in auto kv : entityBodies){
         const EntityID entity = kv.first;
         const BodyId bodyId = kv.second;
-        if(!physicsWorld.isValidBody(bodyId))
+        const Expected<BodyType> bt = physicsWorld.tryGetBodyType(bodyId);
+        if(!bt.has_value() || bt.value() == BodyType::Static)
             continue;
         const Expected<Transform3D> xfRes = physicsWorld.tryGetBodyTransform(bodyId);
         if(xfRes.has_value())

@@ -2544,16 +2544,37 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const float3 dCenter = cB - cA;
         const float totalR = rA + rB;
 
+        const float3 tVec = float3(dot(dCenter, axA), dot(dCenter, ayA), dot(dCenter, azA));
+        const float r00 = dot(axA, axB);
+        const float r01 = dot(axA, ayB);
+        const float r02 = dot(axA, azB);
+        const float r10 = dot(ayA, axB);
+        const float r11 = dot(ayA, ayB);
+        const float r12 = dot(ayA, azB);
+        const float r20 = dot(azA, axB);
+        const float r21 = dot(azA, ayB);
+        const float r22 = dot(azA, azB);
+
+        const float R[3][3] = {
+            { r00, r01, r02 },
+            { r10, r11, r12 },
+            { r20, r21, r22 }
+        };
+        const float absR[3][3] = {
+            { abs(r00), abs(r01), abs(r02) },
+            { abs(r10), abs(r11), abs(r12) },
+            { abs(r20), abs(r21), abs(r22) }
+        };
+        const float tArr[3] = { tVec.x, tVec.y, tVec.z };
+
         int bestAxis = -1;
         float bestSep = -1.0e20f;
         float3 bestNormal = float3(0.0f, 1.0f, 0.0f);
 
         for(int i = 0; i < 3; ++i){
-            float3 n = axesA[i];
-            if(dot(n, dCenter) < 0.0f)
-                n = -n;
-            const float proj = abs(dot(n, dCenter));
-            const float sep = proj - (halfA[i] + nwbPhysicsProjectBoxHalfExtent(axB, ayB, azB, hB, n)) - totalR;
+            const float signedProj = tArr[i];
+            const float rBProj = hB.x * absR[i][0] + hB.y * absR[i][1] + hB.z * absR[i][2];
+            const float sep = abs(signedProj) - (halfA[i] + rBProj) - totalR;
             if(sep > maxDist){
                 g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][idx] = result;
                 return;
@@ -2561,38 +2582,41 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             if(sep > bestSep){
                 bestSep = sep;
                 bestAxis = i;
-                bestNormal = n;
+                bestNormal = (signedProj < 0.0f) ? -axesA[i] : axesA[i];
             }
         }
 
-        for(int i = 0; i < 3; ++i){
-            float3 n = axesB[i];
-            if(dot(n, dCenter) < 0.0f)
-                n = -n;
-            const float proj = abs(dot(n, dCenter));
-            const float sep = proj - (nwbPhysicsProjectBoxHalfExtent(axA, ayA, azA, hA, n) + halfB[i]) - totalR;
+        for(int j = 0; j < 3; ++j){
+            const float signedProj = tVec.x * R[0][j] + tVec.y * R[1][j] + tVec.z * R[2][j];
+            const float rAProj = hA.x * absR[0][j] + hA.y * absR[1][j] + hA.z * absR[2][j];
+            const float sep = abs(signedProj) - (rAProj + halfB[j]) - totalR;
             if(sep > maxDist){
                 g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][idx] = result;
                 return;
             }
             if(sep > bestSep + 1.0e-4f){
                 bestSep = sep;
-                bestAxis = 3 + i;
-                bestNormal = n;
+                bestAxis = 3 + j;
+                bestNormal = (signedProj < 0.0f) ? -axesB[j] : axesB[j];
             }
         }
 
         for(int i = 0; i < 3; ++i){
+            const int i1 = (i + 1) % 3;
+            const int i2 = (i + 2) % 3;
             for(int j = 0; j < 3; ++j){
-                const float3 rawCross = cross(axesA[i], axesB[j]);
-                const float lenSq = dot(rawCross, rawCross);
+                const int j1 = (j + 1) % 3;
+                const int j2 = (j + 2) % 3;
+                const float c1 = R[i1][j];
+                const float c2 = R[i2][j];
+                const float lenSq = c1 * c1 + c2 * c2;
                 if(lenSq < 1.0e-5f)
                     continue;
-                float3 n = rawCross * rsqrt(lenSq);
-                if(dot(n, dCenter) < 0.0f)
-                    n = -n;
-                const float proj = abs(dot(n, dCenter));
-                const float sep = proj - (nwbPhysicsProjectBoxHalfExtent(axA, ayA, azA, hA, n) + nwbPhysicsProjectBoxHalfExtent(axB, ayB, azB, hB, n)) - totalR;
+                const float invLen = rsqrt(lenSq);
+                const float signedProj = tArr[i2] * c1 - tArr[i1] * c2;
+                const float rAU = halfA[i1] * absR[i2][j] + halfA[i2] * absR[i1][j];
+                const float rBU = halfB[j1] * absR[i][j2] + halfB[j2] * absR[i][j1];
+                const float sep = (abs(signedProj) - (rAU + rBU)) * invLen - totalR;
                 if(sep > maxDist){
                     g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][idx] = result;
                     return;
@@ -2600,6 +2624,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 if(sep > bestSep + 5.0e-4f){
                     bestSep = sep;
                     bestAxis = 6 + i * 3 + j;
+                    float3 n = (axesA[i2] * c1 - axesA[i1] * c2) * invLen;
+                    if(signedProj < 0.0f)
+                        n = -n;
                     bestNormal = n;
                 }
             }
@@ -2728,45 +2755,92 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const float3 l1 = nwbPhysicsQuatInvRotate(wP1 - cBox, qBox);
         const float3 dSeg = l1 - l0;
 
-        float bestDistSq = 1.0e20f;
+        float ts[8];
+        ts[0] = 0.0f;
+        ts[1] = 1.0f;
+        uint tCount = 2u;
+
+        const float dArr[3] = { dSeg.x, dSeg.y, dSeg.z };
+        const float lArr[3] = { l0.x, l0.y, l0.z };
+        const float hArr[3] = { hBox.x, hBox.y, hBox.z };
+        for(uint c = 0u; c < 3u; ++c){
+            if(abs(dArr[c]) > 1.0e-8f){
+                const float invD = 1.0f / dArr[c];
+                const float tNeg = (-hArr[c] - lArr[c]) * invD;
+                if(tNeg > 0.0f && tNeg < 1.0f)
+                    ts[tCount++] = tNeg;
+                const float tPos = (hArr[c] - lArr[c]) * invD;
+                if(tPos > 0.0f && tPos < 1.0f)
+                    ts[tCount++] = tPos;
+            }
+        }
+
+        for(uint i = 1u; i < tCount; ++i){
+            const float key = ts[i];
+            uint j = i;
+            while(j > 0u && ts[j - 1u] > key){
+                ts[j] = ts[j - 1u];
+                --j;
+            }
+            ts[j] = key;
+        }
+
         float3 bestSegPt = l0;
         float3 bestBoxPt = clamp(l0, -hBox, hBox);
+        float3 diff0 = bestSegPt - bestBoxPt;
+        float bestDistSq = dot(diff0, diff0);
 
-        for(uint si = 0u; si < 5u; ++si){
-            const float t = float(si) * 0.25f;
-            const float3 sp = l0 + dSeg * t;
+        const float3 endBoxPt = clamp(l1, -hBox, hBox);
+        const float3 diff1 = l1 - endBoxPt;
+        const float endDistSq = dot(diff1, diff1);
+        if(endDistSq < bestDistSq){
+            bestDistSq = endDistSq;
+            bestSegPt = l1;
+            bestBoxPt = endBoxPt;
+        }
+
+        for(uint i = 0u; i + 1u < tCount; ++i){
+            const float ta = ts[i];
+            const float tb = ts[i + 1u];
+            if(tb - ta <= 1.0e-7f)
+                continue;
+            const float tMid = 0.5f * (ta + tb);
+            const float3 pMid = l0 + dSeg * tMid;
+            float aSum = 0.0f;
+            float bSum = 0.0f;
+            if(pMid.x > hBox.x){
+                aSum += dSeg.x * dSeg.x;
+                bSum += dSeg.x * (l0.x - hBox.x);
+            }
+            else if(pMid.x < -hBox.x){
+                aSum += dSeg.x * dSeg.x;
+                bSum += dSeg.x * (l0.x + hBox.x);
+            }
+            if(pMid.y > hBox.y){
+                aSum += dSeg.y * dSeg.y;
+                bSum += dSeg.y * (l0.y - hBox.y);
+            }
+            else if(pMid.y < -hBox.y){
+                aSum += dSeg.y * dSeg.y;
+                bSum += dSeg.y * (l0.y + hBox.y);
+            }
+            if(pMid.z > hBox.z){
+                aSum += dSeg.z * dSeg.z;
+                bSum += dSeg.z * (l0.z - hBox.z);
+            }
+            else if(pMid.z < -hBox.z){
+                aSum += dSeg.z * dSeg.z;
+                bSum += dSeg.z * (l0.z + hBox.z);
+            }
+
+            const float tCand = (aSum > 1.0e-12f) ? clamp(-bSum / aSum, ta, tb) : tMid;
+            const float3 sp = l0 + dSeg * tCand;
             const float3 bp = clamp(sp, -hBox, hBox);
             const float3 diff = sp - bp;
             const float dSq = dot(diff, diff);
             if(dSq < bestDistSq){
                 bestDistSq = dSq;
                 bestSegPt = sp;
-                bestBoxPt = bp;
-            }
-        }
-
-        const float3 edgeStarts[12] = {
-            float3(-hBox.x, -hBox.y, -hBox.z), float3(-hBox.x,  hBox.y, -hBox.z), float3(-hBox.x, -hBox.y,  hBox.z), float3(-hBox.x,  hBox.y,  hBox.z),
-            float3(-hBox.x, -hBox.y, -hBox.z), float3( hBox.x, -hBox.y, -hBox.z), float3(-hBox.x, -hBox.y,  hBox.z), float3( hBox.x, -hBox.y,  hBox.z),
-            float3(-hBox.x, -hBox.y, -hBox.z), float3( hBox.x, -hBox.y, -hBox.z), float3(-hBox.x,  hBox.y, -hBox.z), float3( hBox.x,  hBox.y, -hBox.z)
-        };
-        const float3 edgeEnds[12] = {
-            float3( hBox.x, -hBox.y, -hBox.z), float3( hBox.x,  hBox.y, -hBox.z), float3( hBox.x, -hBox.y,  hBox.z), float3( hBox.x,  hBox.y,  hBox.z),
-            float3(-hBox.x,  hBox.y, -hBox.z), float3( hBox.x,  hBox.y, -hBox.z), float3(-hBox.x,  hBox.y,  hBox.z), float3( hBox.x,  hBox.y,  hBox.z),
-            float3(-hBox.x, -hBox.y,  hBox.z), float3( hBox.x, -hBox.y,  hBox.z), float3(-hBox.x,  hBox.y,  hBox.z), float3( hBox.x,  hBox.y,  hBox.z)
-        };
-        for(uint ei = 0u; ei < 12u; ++ei){
-            float es = 0.0f;
-            float et = 0.0f;
-            float3 cSeg;
-            float3 cEdge;
-            nwbPhysicsClosestPointsSegments(l0, l1, edgeStarts[ei], edgeEnds[ei], es, et, cSeg, cEdge);
-            const float3 bp = clamp(cSeg, -hBox, hBox);
-            const float3 d1 = cSeg - bp;
-            const float dSq = dot(d1, d1);
-            if(dSq < bestDistSq){
-                bestDistSq = dSq;
-                bestSegPt = cSeg;
                 bestBoxPt = bp;
             }
         }

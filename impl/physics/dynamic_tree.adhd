@@ -124,12 +124,20 @@ class DynamicTree{
         if(this.m_root == s_NullIndex)
             return;
 
-        Vector<u32> stack;
-        stack.reserve(64u);
-        stack.push_back(this.m_root);
-        while(!stack.empty()){
-            const u32 nodeId = stack[stack.size() - 1u];
-            stack.pop_back();
+        Array<u32, 128u> fixedStack;
+        fixedStack[0u] = this.m_root;
+        u32 fixedCount = 1u;
+        Vector<u32> overflowStack;
+        while(fixedCount > 0u || !overflowStack.empty()){
+            u32 nodeId = s_NullIndex;
+            if(!overflowStack.empty()){
+                nodeId = overflowStack[overflowStack.size() - 1u];
+                overflowStack.pop_back();
+            }
+            else{
+                --fixedCount;
+                nodeId = fixedStack[fixedCount];
+            }
             if(nodeId == s_NullIndex)
                 continue;
 
@@ -144,8 +152,20 @@ class DynamicTree{
                 }
             }
             else{
-                stack.push_back(node.child1);
-                stack.push_back(node.child2);
+                if(fixedCount < 128u){
+                    fixedStack[fixedCount] = node.child1;
+                    ++fixedCount;
+                }
+                else{
+                    overflowStack.push_back(node.child1);
+                }
+                if(fixedCount < 128u){
+                    fixedStack[fixedCount] = node.child2;
+                    ++fixedCount;
+                }
+                else{
+                    overflowStack.push_back(node.child2);
+                }
             }
         }
     }
@@ -160,12 +180,20 @@ class DynamicTree{
             return;
 
         f32 maxFraction = 1.0f;
-        Vector<u32> stack;
-        stack.reserve(64u);
-        stack.push_back(this.m_root);
-        while(!stack.empty()){
-            const u32 nodeId = stack[stack.size() - 1u];
-            stack.pop_back();
+        Array<u32, 128u> fixedStack;
+        fixedStack[0u] = this.m_root;
+        u32 fixedCount = 1u;
+        Vector<u32> overflowStack;
+        while(fixedCount > 0u || !overflowStack.empty()){
+            u32 nodeId = s_NullIndex;
+            if(!overflowStack.empty()){
+                nodeId = overflowStack[overflowStack.size() - 1u];
+                overflowStack.pop_back();
+            }
+            else{
+                --fixedCount;
+                nodeId = fixedStack[fixedCount];
+            }
             if(nodeId == s_NullIndex)
                 continue;
 
@@ -182,8 +210,20 @@ class DynamicTree{
                 }
             }
             else{
-                stack.push_back(node.child1);
-                stack.push_back(node.child2);
+                if(fixedCount < 128u){
+                    fixedStack[fixedCount] = node.child1;
+                    ++fixedCount;
+                }
+                else{
+                    overflowStack.push_back(node.child1);
+                }
+                if(fixedCount < 128u){
+                    fixedStack[fixedCount] = node.child2;
+                    ++fixedCount;
+                }
+                else{
+                    overflowStack.push_back(node.child2);
+                }
             }
         }
     }

@@ -8,6 +8,37 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class PhysicsWorldCpuScratch{
+    public Vector<u64> candidateKeys;
+    public Vector<u32> activeContactIds;
+    public Vector<u32> pruneContactIds;
+    public Vector<u8> contactTransitionFlags;
+    public Vector<Manifold> evaluatedManifolds;
+    public Vector<u32> flatColors;
+    public Vector<u32> flatIndices;
+    public Vector<u32> flatContactIds;
+    public Array<Vector<ContactConstraint>, s_GraphColorCount> colorConstraints;
+    public Vector<JointConstraint> jointConstraints;
+    public Vector<u32> awakeIndices;
+    public Vector<u32> brokenJointIds;
+
+    public void clear(){
+        this.candidateKeys.clear();
+        this.activeContactIds.clear();
+        this.pruneContactIds.clear();
+        this.contactTransitionFlags.clear();
+        this.evaluatedManifolds.clear();
+        this.flatColors.clear();
+        this.flatIndices.clear();
+        this.flatContactIds.clear();
+        for(usize c = 0u; c < s_GraphColorCount; ++c)
+            this.colorConstraints[c].clear();
+        this.jointConstraints.clear();
+        this.awakeIndices.clear();
+        this.brokenJointIds.clear();
+    }
+}
+
 [arena]
 class PhysicsWorld{
     public WorldDef m_def;
@@ -31,6 +62,7 @@ class PhysicsWorld{
     public Vector<u32> m_freeIslandIds;
     public ConstraintGraph m_graph;
     public BroadPhase m_broadPhase;
+    public PhysicsWorldCpuScratch m_cpuScratch;
     public Vector<BodyMoveEvent> m_bodyMoveEvents;
     public Vector<ContactBeginTouchEvent> m_contactBeginEvents;
     public Vector<ContactEndTouchEvent> m_contactEndEvents;
@@ -83,6 +115,7 @@ class PhysicsWorld{
         this.m_freeIslandIds.clear();
         this.m_graph.clear();
         this.m_broadPhase.clear();
+        this.m_cpuScratch.clear();
         this.m_bodyMoveEvents.clear();
         this.m_contactBeginEvents.clear();
         this.m_contactEndEvents.clear();
@@ -277,21 +310,15 @@ class PhysicsWorld{
     public Span<JointBreakEvent> jointBreakEvents()const{ return this.m_jointBreakEvents; }
 
     public u32 activeBodyCount()const{
-        u32 count = 0u;
-        for(usize i = 0u; i < this.m_bodies.size(); ++i){
-            if(this.m_bodies[i].alive)
-                ++count;
-        }
-        return count;
+        if(this.m_bodies.size() >= this.m_freeBodyIds.size())
+            return cast<u32>(this.m_bodies.size() - this.m_freeBodyIds.size());
+        return 0u;
     }
 
     public u32 activeShapeCount()const{
-        u32 count = 0u;
-        for(usize i = 0u; i < this.m_shapes.size(); ++i){
-            if(this.m_shapes[i].alive())
-                ++count;
-        }
-        return count;
+        if(this.m_shapes.size() >= this.m_freeShapeIds.size())
+            return cast<u32>(this.m_shapes.size() - this.m_freeShapeIds.size());
+        return 0u;
     }
 
     public u32 awakeBodyCount()const{
@@ -299,12 +326,9 @@ class PhysicsWorld{
     }
 
     public u32 activeJointCount()const{
-        u32 count = 0u;
-        for(usize i = 0u; i < this.m_joints.size(); ++i){
-            if(this.m_joints[i].alive())
-                ++count;
-        }
-        return count;
+        if(this.m_joints.size() >= this.m_freeJointIds.size())
+            return cast<u32>(this.m_joints.size() - this.m_freeJointIds.size());
+        return 0u;
     }
 
     public b8 isValidBody(in BodyId id)const{
@@ -2775,13 +2799,13 @@ class PhysicsWorld{
         this.m_freeJointIds.push_back(jointIdx);
     }
 
-    public void createContactInternal(in u32 shapeIdA, in u32 shapeIdB){
+    public u32 createContactInternal(in u32 shapeIdA, in u32 shapeIdB){
         if(shapeIdA >= this.m_shapes.size() || shapeIdB >= this.m_shapes.size())
-            return;
+            return s_NullIndex;
         in Shape sA = this.m_shapes[shapeIdA];
         in Shape sB = this.m_shapes[shapeIdB];
         if(!sA.alive() || !sB.alive() || sA.bodyId == sB.bodyId)
-            return;
+            return s_NullIndex;
 
         in Body bA = this.m_bodies[sA.bodyId];
         in Body bB = this.m_bodies[sB.bodyId];
@@ -2789,11 +2813,11 @@ class PhysicsWorld{
         const b8 hasDynamic = (bA.type == BodyType::Dynamic) || (bB.type == BodyType::Dynamic);
         const b8 hasKinematic = (bA.type == BodyType::Kinematic) || (bB.type == BodyType::Kinematic);
         if(!hasDynamic && !(hasSensor && hasKinematic))
-            return;
+            return s_NullIndex;
         if(!ShouldCollideFilters(sA.filter, sB.filter))
-            return;
+            return s_NullIndex;
         if(!hasSensor && this.areBodiesConnectedNonColliding(sA.bodyId, sB.bodyId))
-            return;
+            return s_NullIndex;
 
         u32 orderedA = shapeIdA;
         u32 orderedB = shapeIdB;
@@ -2803,12 +2827,13 @@ class PhysicsWorld{
         }
         if(this.m_customFilterCallback.has_value()){
             if(!this.m_customFilterCallback.value()(this.makeShapeId(orderedA), this.makeShapeId(orderedB)))
-                return;
+                return s_NullIndex;
         }
 
         const u64 pairKey = PackUnorderedU32Pair(cast<isize>(shapeIdA), cast<isize>(shapeIdB));
-        if(this.m_pairContactMap.find(pairKey) != this.m_pairContactMap.end())
-            return;
+        const auto existing = this.m_pairContactMap.find(pairKey);
+        if(existing != this.m_pairContactMap.end())
+            return existing.value();
 
         u32 cId = s_NullIndex;
         if(!this.m_freeContactIds.empty()){
@@ -2866,6 +2891,7 @@ class PhysicsWorld{
         ++this.m_bodies[bodyIdB].contactCount;
 
         this.m_pairContactMap.emplace(pairKey, cId);
+        return cId;
     }
 
     public void destroyContactInternal(in u32 contactId){

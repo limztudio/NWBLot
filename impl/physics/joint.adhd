@@ -57,6 +57,8 @@ class JointConstraint{
     public f32 coneImpulse = 0.0f;
     public f32 motorImpulse = 0.0f;
     public f32 suspensionImpulse = 0.0f;
+    public f32 maxLinearImpulseMag = 0.0f;
+    public f32 maxAngularImpulseMag = 0.0f;
 }
 
 
@@ -295,8 +297,7 @@ void PrepareJointConstraint(
         outConstraint.suspensionImpulse = joint.suspensionImpulse;
         outConstraint.lowerLimitImpulse = Max(joint.limitImpulse, 0.0f);
         outConstraint.upperLimitImpulse = Min(joint.limitImpulse, 0.0f);
-        if(joint.type == JointType::Spherical && joint.swingLimit > 0.0f)
-            outConstraint.coneImpulse = Min(joint.limitImpulse, 0.0f);
+        outConstraint.coneImpulse = Min(joint.coneImpulse, 0.0f);
     }
 }
 
@@ -349,10 +350,16 @@ void WarmStartJointConstraint(mut Vector<BodyState> states, in JointConstraint j
     ApplyVelocityImpulseToBody(states, jc.indexB, jc.invMassB, jc.invIB, VectorSingle(jc.rB0), p, 1.0f);
 
     VectorSingle angP = VectorSingle(jc.angularImpulse);
-    if(jc.type == JointType::Revolute)
+    if(jc.type == JointType::Revolute){
         angP = angP + axisA0 * (jc.motorImpulse + jc.lowerLimitImpulse + jc.upperLimitImpulse);
-    else if(jc.type == JointType::Spherical)
-        angP = angP + axisB0 * (jc.lowerLimitImpulse + jc.upperLimitImpulse);
+    }
+    else if(jc.type == JointType::Spherical){
+        VectorSingle fU1(0.0f);
+        VectorSingle fU2(0.0f);
+        ComputeTangentBasis(axisA0, fU1, fU2);
+        const VectorSingle swingAxis0 = SafeNormalizeVec3(Cross(axisA0, axisB0), fU1);
+        angP = angP + axisB0 * (jc.lowerLimitImpulse + jc.upperLimitImpulse) + swingAxis0 * jc.coneImpulse;
+    }
 
     if(jc.type == JointType::Fixed || jc.type == JointType::Revolute || jc.type == JointType::Motor || jc.type == JointType::Spherical){
         ApplyAngularImpulseToBody(states, jc.indexA, jc.invIA, angP, -1.0f);
@@ -368,6 +375,42 @@ void ResetJointConstraintSubStepImpulses(mut JointConstraint jc){
     jc.coneImpulse = 0.0f;
     jc.motorImpulse = 0.0f;
     jc.suspensionImpulse = 0.0f;
+}
+
+void ComputeJointConstraintTotalImpulses(
+    in JointConstraint jc,
+    mut VectorSingle outLinP,
+    mut VectorSingle outAngL
+){
+    const VectorSingle qA = VectorSingle(jc.qA0);
+    const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(VectorSingle(jc.localAxisA), qA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    outLinP = VectorSingle(jc.linearImpulse);
+    outAngL = VectorSingle(jc.angularImpulse);
+    if(jc.type == JointType::Distance){
+        const VectorSingle d0 = VectorSingle(jc.baseCenterDelta) + VectorSingle(jc.rB0) - VectorSingle(jc.rA0);
+        const VectorSingle u0 = SafeNormalizeVec3(d0, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        outLinP = u0 * (jc.linearImpulse.x + jc.lowerLimitImpulse + jc.upperLimitImpulse);
+    }
+    else if(jc.type == JointType::Prismatic){
+        outLinP = outLinP + axisA * (jc.motorImpulse + jc.lowerLimitImpulse + jc.upperLimitImpulse);
+    }
+    else if(jc.type == JointType::Wheel){
+        outLinP = outLinP + axisA * (jc.suspensionImpulse + jc.lowerLimitImpulse + jc.upperLimitImpulse);
+        const VectorSingle qTarget = SafeNormalizeQuat(QuaternionMultiply(qA, VectorSingle(jc.referenceRotation)));
+        const VectorSingle axleA = SafeNormalizeVec3(Vector3Rotate(VectorSingle(jc.localAxisB), qTarget), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+        outAngL = outAngL + axleA * jc.motorImpulse;
+    }
+    else if(jc.type == JointType::Revolute){
+        outAngL = outAngL + axisA * (jc.motorImpulse + jc.lowerLimitImpulse + jc.upperLimitImpulse);
+    }
+    else if(jc.type == JointType::Spherical){
+        const VectorSingle axisB = SafeNormalizeVec3(Vector3Rotate(VectorSingle(jc.localAxisB), VectorSingle(jc.qB0)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        VectorSingle fU1(0.0f);
+        VectorSingle fU2(0.0f);
+        ComputeTangentBasis(axisA, fU1, fU2);
+        const VectorSingle swingAxis = SafeNormalizeVec3(Cross(axisA, axisB), fU1);
+        outAngL = outAngL + axisB * (jc.lowerLimitImpulse + jc.upperLimitImpulse) + swingAxis * jc.coneImpulse;
+    }
 }
 
 void SolveJointConstraint(mut Vector<BodyState> states, mut JointConstraint jc, in f32 h, in b8 useBias){
@@ -1014,6 +1057,12 @@ void SolveJointConstraint(mut Vector<BodyState> states, mut JointConstraint jc, 
         }
     }
 
+    VectorSingle curLinP(0.0f);
+    VectorSingle curAngL(0.0f);
+    ComputeJointConstraintTotalImpulses(jc, curLinP, curAngL);
+    jc.maxLinearImpulseMag = Max(jc.maxLinearImpulseMag, Vector3Length(curLinP).x);
+    jc.maxAngularImpulseMag = Max(jc.maxAngularImpulseMag, Vector3Length(curAngL).x);
+
     if(jc.indexA != s_NullIndex && (states[jc.indexA].flags & cast<u32>(BodyFlags::Dynamic)) != 0u){
         states[jc.indexA].linearVelocity = f32x4(ApplyLinearLocks(vA, states[jc.indexA].flags), 0.0f);
         states[jc.indexA].angularVelocity = f32x4(ApplyAngularLocks(wA, states[jc.indexA].flags), 0.0f);
@@ -1029,33 +1078,12 @@ void StoreJointConstraintImpulses(in JointConstraint jc, in f32 invDt, mut Joint
     joint.angularImpulse = jc.angularImpulse;
     joint.motorImpulse = jc.motorImpulse;
     joint.suspensionImpulse = jc.suspensionImpulse;
-    joint.limitImpulse = jc.lowerLimitImpulse + jc.upperLimitImpulse + jc.coneImpulse;
+    joint.limitImpulse = jc.lowerLimitImpulse + jc.upperLimitImpulse;
+    joint.coneImpulse = jc.coneImpulse;
 
-    const VectorSingle qA = VectorSingle(jc.qA0);
-    const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(VectorSingle(jc.localAxisA), qA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-    VectorSingle totalLinP = VectorSingle(jc.linearImpulse);
-    VectorSingle totalAngL = VectorSingle(jc.angularImpulse);
-    if(jc.type == JointType::Distance){
-        const VectorSingle d0 = VectorSingle(jc.baseCenterDelta) + VectorSingle(jc.rB0) - VectorSingle(jc.rA0);
-        const VectorSingle u0 = SafeNormalizeVec3(d0, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-        totalLinP = u0 * (jc.linearImpulse.x + jc.lowerLimitImpulse + jc.upperLimitImpulse);
-    }
-    else if(jc.type == JointType::Prismatic){
-        totalLinP = totalLinP + axisA * (jc.motorImpulse + jc.lowerLimitImpulse + jc.upperLimitImpulse);
-    }
-    else if(jc.type == JointType::Wheel){
-        totalLinP = totalLinP + axisA * (jc.suspensionImpulse + jc.lowerLimitImpulse + jc.upperLimitImpulse);
-        const VectorSingle qTarget = SafeNormalizeQuat(QuaternionMultiply(qA, VectorSingle(jc.referenceRotation)));
-        const VectorSingle axleA = SafeNormalizeVec3(Vector3Rotate(VectorSingle(jc.localAxisB), qTarget), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
-        totalAngL = totalAngL + axleA * jc.motorImpulse;
-    }
-    else if(jc.type == JointType::Revolute){
-        totalAngL = totalAngL + axisA * (jc.motorImpulse + jc.lowerLimitImpulse + jc.upperLimitImpulse);
-    }
-    else if(jc.type == JointType::Spherical){
-        const VectorSingle axisB = SafeNormalizeVec3(Vector3Rotate(VectorSingle(jc.localAxisB), VectorSingle(jc.qB0)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-        totalAngL = totalAngL + axisB * (jc.lowerLimitImpulse + jc.upperLimitImpulse);
-    }
+    VectorSingle totalLinP(0.0f);
+    VectorSingle totalAngL(0.0f);
+    ComputeJointConstraintTotalImpulses(jc, totalLinP, totalAngL);
 
     joint.lastConstraintForce = f32x4(totalLinP * invDt, 0.0f);
     joint.lastConstraintTorque = f32x4(totalAngL * invDt, 0.0f);

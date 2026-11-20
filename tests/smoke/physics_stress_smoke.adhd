@@ -205,6 +205,149 @@ b8 RunPhysicsStressCase(
     return true;
 }
 
+b8 RunPhysicsGpuParitySmoke(
+    mut PhysicsGpuDispatcher gpuDispatcher,
+    mut CpuTaskScheduler scheduler
+){
+    PhysicsWorld physWorld;
+    physWorld.setBackendMode(PhysicsBackendMode::GpuPreferred);
+    physWorld.setGpuDispatchThreshold(1u);
+    physWorld.setGpuWorkloadFraction(1.0f);
+
+    ShapeDef sd;
+    sd.density = 1.0f;
+
+    BodyDef meshBodyDef;
+    meshBodyDef.type = BodyType::Static;
+    meshBodyDef.position = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    const BodyId meshBody = physWorld.createBody(meshBodyDef).value();
+    Vector<f32x4> meshVerts;
+    meshVerts.push_back(f32x4(-12.0f, 0.0f, -12.0f, 0.0f));
+    meshVerts.push_back(f32x4(12.0f, 0.0f, -12.0f, 0.0f));
+    meshVerts.push_back(f32x4(12.0f, 0.0f, 12.0f, 0.0f));
+    meshVerts.push_back(f32x4(-12.0f, 0.0f, 12.0f, 0.0f));
+    Vector<u32> meshIndices;
+    meshIndices.push_back(0u);
+    meshIndices.push_back(1u);
+    meshIndices.push_back(2u);
+    meshIndices.push_back(0u);
+    meshIndices.push_back(2u);
+    meshIndices.push_back(3u);
+    const Expected<MeshShape> meshRes = MakeMeshShape(Span<f32x4>(meshVerts), Span<u32>(meshIndices), 0.02f);
+    if(!meshRes.has_value() || !physWorld.createMeshShape(meshBody, sd, meshRes.value()).has_value()){
+        error("PhysicsStressSmoke: failed to create GPU parity mesh floor");
+        return false;
+    }
+
+    Vector<f32x4> hullPts;
+    hullPts.push_back(f32x4(-0.5f, -0.5f, -0.5f, 0.0f));
+    hullPts.push_back(f32x4(0.5f, -0.5f, -0.5f, 0.0f));
+    hullPts.push_back(f32x4(0.5f, -0.5f, 0.5f, 0.0f));
+    hullPts.push_back(f32x4(-0.5f, -0.5f, 0.5f, 0.0f));
+    hullPts.push_back(f32x4(-0.35f, 0.5f, -0.35f, 0.0f));
+    hullPts.push_back(f32x4(0.35f, 0.5f, -0.35f, 0.0f));
+    hullPts.push_back(f32x4(0.35f, 0.5f, 0.35f, 0.0f));
+    hullPts.push_back(f32x4(-0.35f, 0.5f, 0.35f, 0.0f));
+    const Expected<HullShape> hullRes = BuildConvexHull(Span<f32x4>(hullPts), 0.01f);
+    if(!hullRes.has_value()){
+        error("PhysicsStressSmoke: failed to build non-box hull");
+        return false;
+    }
+
+    BodyDef hullBodyDef;
+    hullBodyDef.type = BodyType::Dynamic;
+    hullBodyDef.position = f32x4(-4.0f, 0.45f, 0.0f, 0.0f);
+    hullBodyDef.enableSleep = false;
+    const BodyId hullBody = physWorld.createBody(hullBodyDef).value();
+    if(!physWorld.createHullShape(hullBody, sd, hullRes.value()).has_value())
+        return false;
+
+    ShapeDef sensorDef;
+    sensorDef.isSensor = true;
+    sensorDef.enableSensorEvents = true;
+    const Expected<SphereShape> sensorSph = MakeSphereShape(VectorSingle(0.0f), 1.0f);
+    BodyDef sensorHostDef;
+    sensorHostDef.type = BodyType::Static;
+    sensorHostDef.position = f32x4(-4.0f, 0.45f, 0.0f, 0.0f);
+    const BodyId sensorHost = physWorld.createBody(sensorHostDef).value();
+    if(!sensorSph.has_value() || !physWorld.createSphereShape(sensorHost, sensorDef, sensorSph.value()).has_value())
+        return false;
+
+    BodyDef bulletWallDef;
+    bulletWallDef.type = BodyType::Static;
+    bulletWallDef.position = f32x4(4.0f, 2.0f, 0.0f, 0.0f);
+    const BodyId bulletWall = physWorld.createBody(bulletWallDef).value();
+    const Expected<HullShape> wallBox = MakeBoxHull(1.5f, 0.05f, 1.5f, 0.0f);
+    if(!wallBox.has_value() || !physWorld.createHullShape(bulletWall, sd, wallBox.value()).has_value())
+        return false;
+
+    BodyDef bulletDef;
+    bulletDef.type = BodyType::Dynamic;
+    bulletDef.isBullet = true;
+    bulletDef.enableSleep = false;
+    bulletDef.position = f32x4(4.0f, 3.0f, 0.0f, 0.0f);
+    bulletDef.linearVelocity = f32x4(0.0f, -150.0f, 0.0f, 0.0f);
+    const BodyId bulletBody = physWorld.createBody(bulletDef).value();
+    const Expected<SphereShape> bulletSph = MakeSphereShape(VectorSingle(0.0f), 0.25f);
+    if(!bulletSph.has_value() || !physWorld.createSphereShape(bulletBody, sd, bulletSph.value()).has_value())
+        return false;
+
+    BodyDef hubDef;
+    hubDef.type = BodyType::Dynamic;
+    hubDef.position = f32x4(0.0f, 3.0f, 6.0f, 0.0f);
+    hubDef.enableSleep = false;
+    const BodyId hubBody = physWorld.createBody(hubDef).value();
+    const Expected<SphereShape> hubSph = MakeSphereShape(VectorSingle(0.0f), 0.35f);
+    if(!hubSph.has_value() || !physWorld.createSphereShape(hubBody, sd, hubSph.value()).has_value())
+        return false;
+
+    for(u32 ji = 0u; ji < 26u; ++ji){
+        const f32 ang = cast<f32>(ji) * (2.0f * s_PI / 26.0f);
+        BodyDef leafDef;
+        leafDef.type = BodyType::Dynamic;
+        leafDef.position = f32x4(Cos(ang) * 1.5f, 3.0f, 6.0f + Sin(ang) * 1.5f, 0.0f);
+        leafDef.enableSleep = false;
+        const BodyId leaf = physWorld.createBody(leafDef).value();
+        if(!physWorld.createSphereShape(leaf, sd, hubSph.value()).has_value())
+            return false;
+
+        JointDef jd;
+        jd.type = JointType::Distance;
+        jd.bodyIdA = hubBody;
+        jd.bodyIdB = leaf;
+        jd.length = 1.5f;
+        jd.enableSpring = true;
+        jd.hertz = 6.0f;
+        jd.dampingRatio = 0.7f;
+        if(!physWorld.createJoint(jd).has_value())
+            return false;
+    }
+
+    b8 sawSensorBegin = false;
+    b8 sawGpuBackend = false;
+    for(u32 step = 0u; step < 6u; ++step){
+        StepWorldWithGpu(physWorld, gpuDispatcher, 1.0f / 60.0f, 4u, scheduler);
+        if(physWorld.lastStepStats().backendUsed == ExecutionBackendUsed::Gpu)
+            sawGpuBackend = true;
+        if(!physWorld.sensorBeginEvents().empty())
+            sawSensorBegin = true;
+    }
+
+    const Transform3D hullXf = physWorld.tryGetBodyTransform(hullBody).value();
+    const Transform3D bulletXf = physWorld.tryGetBodyTransform(bulletBody).value();
+    const Transform3D hubXf = physWorld.tryGetBodyTransform(hubBody).value();
+    if(!sawGpuBackend || !sawSensorBegin){
+        error("PhysicsStressSmoke: GPU parity check failed (gpu={} sensor={})", cast<u32>(sawGpuBackend), cast<u32>(sawSensorBegin));
+        return false;
+    }
+    if(hullXf.position.y < 0.25f || bulletXf.position.y < 2.0f || !IsFinite(VectorSingle(hubXf.position))){
+        error("PhysicsStressSmoke: GPU parity geometry failed (hullY={} bulletY={})", hullXf.position.y, bulletXf.position.y);
+        return false;
+    }
+    [essential] info("PhysicsStressSmoke: gpu_parity_passed hull_y={:.3f} bullet_y={:.3f}", hullXf.position.y, bulletXf.position.y);
+    return true;
+}
+
 b8 RunPhysicsStressTier(
     in u32 dynamicCount,
     in u32 warmupSteps,
@@ -313,6 +456,8 @@ class PhysicsStressProject : IProjectEntryCallbacks{
         u32 completedCases = 0u;
 
         if(mode == "smoke"){
+            if(!RunPhysicsGpuParitySmoke(this.m_gpuDispatcher, this.m_context.cpuTasks))
+                return false;
             if(!RunPhysicsStressTier(256u, 10u, 20u, false, this.m_gpuDispatcher, this.m_context.cpuTasks, serialScheduler, completedCases))
                 return false;
         }

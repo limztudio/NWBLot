@@ -23,6 +23,9 @@ const u32 s_GpuBroadphaseModeGridInsert = 3u;
 const u32 s_GpuBroadphaseModeGridEmitPairs = 4u;
 const u32 s_GpuBroadphaseModeFinalizeIndirect = 5u;
 
+const u32 s_GpuNarrowphaseModeContacts = 0u;
+const u32 s_GpuNarrowphaseModeBulletToi = 1u;
+
 const u32 s_GpuGridBucketStride = s_GpuGridBucketCapacity + 1u;
 
 const u32 s_GpuJointFlagEnableLimit = 0x00000001u;
@@ -33,6 +36,9 @@ const u32 s_GpuSolverModeWarmStart = 0u;
 const u32 s_GpuSolverModeSolveBias = 1u;
 const u32 s_GpuSolverModeRelax = 2u;
 const u32 s_GpuSolverModeRestitution = 3u;
+
+const u32 s_GpuSolverFlagWarmStart = 0x00000001u;
+const u32 s_GpuSolverFlagSerialLoop = 0x00000002u;
 
 const u32 s_GpuPushConstantsBytes = 80u;
 const u32 s_GpuBodyStateBytes = 64u;

@@ -170,6 +170,7 @@ class Joint{
     public f32x4 linearImpulse(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 angularImpulse(0.0f, 0.0f, 0.0f, 0.0f);
     public f32 limitImpulse = 0.0f;
+    public f32 coneImpulse = 0.0f;
     public f32 motorImpulse = 0.0f;
     public f32 suspensionImpulse = 0.0f;
     public f32x4 lastConstraintForce(0.0f, 0.0f, 0.0f, 0.0f);

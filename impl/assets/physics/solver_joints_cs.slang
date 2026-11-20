@@ -267,17 +267,14 @@ void nwbPhysicsSolve3DAngularLockRow(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[numthreads(NWB_PHYSICS_WORKGROUP_SIZE, 1, 1)]
-void main(uint3 dispatchThreadID : SV_DispatchThreadID){
-    const uint localIdx = dispatchThreadID.x;
-    if(localIdx >= g_NwbPhysicsPushConstants.itemCount)
-        return;
-
-    const uint jointIdx = g_NwbPhysicsPushConstants.itemOffset + localIdx;
-    const uint mode = g_NwbPhysicsPushConstants.modeOrSecondaryCount;
-    const uint bodyStateSlot = g_NwbPhysicsPushConstants.slots0.y;
-    const uint jointSlot = g_NwbPhysicsPushConstants.slots1.x;
-    const float h = g_NwbPhysicsPushConstants.deltaTime;
+void nwbPhysicsSolveSingleJoint(
+    const uint jointIdx,
+    const uint mode,
+    const uint bodyStateSlot,
+    const uint jointSlot,
+    const float h,
+    const uint flags
+){
     const float maxBias = 10.0f;
 
     NwbPhysicsGpuJointConstraint jc = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx];
@@ -286,9 +283,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint jType = jc.indicesTypeFlags.z;
     const uint jFlags = jc.indicesTypeFlags.w;
 
-    if(mode == NWB_PHYSICS_SOLVER_MODE_WARM_START && g_NwbPhysicsPushConstants.flags == 0u){
-        jc.linearImpulse = float4(0.0f, 0.0f, 0.0f, 0.0f);
-        jc.angularImpulse = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    if(mode == NWB_PHYSICS_SOLVER_MODE_WARM_START && (flags & NWB_PHYSICS_SOLVER_FLAG_WARM_START) == 0u){
+        jc.linearImpulse.xyz = float3(0.0f, 0.0f, 0.0f);
+        jc.angularImpulse.xyz = float3(0.0f, 0.0f, 0.0f);
         jc.limitImpulses = float4(0.0f, 0.0f, 0.0f, 0.0f);
         jc.suspensionSoftness.w = 0.0f;
         g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx] = jc;
@@ -347,10 +344,16 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             else{
                 nwbPhysicsApplyLinearImpulsePair(invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, jc.rA0.xyz, jc.rB0.xyz, jc.linearImpulse.xyz, vA, wA, vB, wB);
                 float3 angP = jc.angularImpulse.xyz;
-                if(jType == NWB_PHYSICS_JOINT_TYPE_REVOLUTE)
+                if(jType == NWB_PHYSICS_JOINT_TYPE_REVOLUTE){
                     angP += axisA0 * (jc.limitImpulses.z + jc.limitImpulses.x + jc.limitImpulses.y);
-                else if(jType == NWB_PHYSICS_JOINT_TYPE_SPHERICAL)
-                    angP += axisB0 * (jc.limitImpulses.x + jc.limitImpulses.y);
+                }
+                else if(jType == NWB_PHYSICS_JOINT_TYPE_SPHERICAL){
+                    float3 fU1;
+                    float3 fU2;
+                    nwbPhysicsComputeTangentBasis(axisA0, fU1, fU2);
+                    const float3 swingAxis0 = nwbPhysicsSafeNormal(cross(axisA0, axisB0), fU1);
+                    angP += axisB0 * (jc.limitImpulses.x + jc.limitImpulses.y) + swingAxis0 * jc.limitImpulses.w;
+                }
                 if(jType == NWB_PHYSICS_JOINT_TYPE_FIXED || jType == NWB_PHYSICS_JOINT_TYPE_REVOLUTE || jType == NWB_PHYSICS_JOINT_TYPE_MOTOR || jType == NWB_PHYSICS_JOINT_TYPE_SPHERICAL){
                     wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, angP);
                     wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, angP);
@@ -888,9 +891,69 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         }
     }
 
+    const float4 qA0n = jc.qA0;
+    const float3 axisA0Tot = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(jc.localAxisA.xyz, qA0n), float3(0.0f, 1.0f, 0.0f));
+    float3 totalLinP = jc.linearImpulse.xyz;
+    float3 totalAngL = jc.angularImpulse.xyz;
+    if(jType == NWB_PHYSICS_JOINT_TYPE_DISTANCE){
+        const float3 d0 = jc.baseCenterDelta.xyz + jc.rB0.xyz - jc.rA0.xyz;
+        const float3 u0 = nwbPhysicsSafeNormal(d0, float3(0.0f, 1.0f, 0.0f));
+        totalLinP = u0 * (jc.linearImpulse.x + jc.limitImpulses.x + jc.limitImpulses.y);
+    }
+    else if(jType == NWB_PHYSICS_JOINT_TYPE_PRISMATIC){
+        totalLinP += axisA0Tot * (jc.limitImpulses.z + jc.limitImpulses.x + jc.limitImpulses.y);
+    }
+    else if(jType == NWB_PHYSICS_JOINT_TYPE_WHEEL){
+        totalLinP += axisA0Tot * (jc.suspensionSoftness.w + jc.limitImpulses.x + jc.limitImpulses.y);
+        const float4 qTarget = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(qA0n, jc.referenceRotation));
+        const float3 axleA = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(jc.localAxisB.xyz, qTarget), float3(0.0f, 0.0f, 1.0f));
+        totalAngL += axleA * jc.limitImpulses.z;
+    }
+    else if(jType == NWB_PHYSICS_JOINT_TYPE_REVOLUTE){
+        totalAngL += axisA0Tot * (jc.limitImpulses.z + jc.limitImpulses.x + jc.limitImpulses.y);
+    }
+    else if(jType == NWB_PHYSICS_JOINT_TYPE_SPHERICAL){
+        const float3 axisB0Tot = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(jc.localAxisB.xyz, jc.qB0), float3(0.0f, 1.0f, 0.0f));
+        float3 fU1;
+        float3 fU2;
+        nwbPhysicsComputeTangentBasis(axisA0Tot, fU1, fU2);
+        const float3 swingAxis = nwbPhysicsSafeNormal(cross(axisA0Tot, axisB0Tot), fU1);
+        totalAngL += axisB0Tot * (jc.limitImpulses.x + jc.limitImpulses.y) + swingAxis * jc.limitImpulses.w;
+    }
+    jc.linearImpulse.w = max(jc.linearImpulse.w, length(totalLinP));
+    jc.angularImpulse.w = max(jc.angularImpulse.w, length(totalAngL));
+
     g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx] = jc;
     nwbPhysicsStoreBodyVelocity(bodyStateSlot, indexA, vA, wA, flagsA);
     nwbPhysicsStoreBodyVelocity(bodyStateSlot, indexB, vB, wB, flagsB);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[numthreads(NWB_PHYSICS_WORKGROUP_SIZE, 1, 1)]
+void main(uint3 dispatchThreadID : SV_DispatchThreadID){
+    const uint itemCount = g_NwbPhysicsPushConstants.itemCount;
+    const uint itemOffset = g_NwbPhysicsPushConstants.itemOffset;
+    const uint mode = g_NwbPhysicsPushConstants.modeOrSecondaryCount;
+    const uint flags = g_NwbPhysicsPushConstants.flags;
+    const uint bodyStateSlot = g_NwbPhysicsPushConstants.slots0.y;
+    const uint jointSlot = g_NwbPhysicsPushConstants.slots1.x;
+    const float h = g_NwbPhysicsPushConstants.deltaTime;
+
+    if((flags & NWB_PHYSICS_SOLVER_FLAG_SERIAL_LOOP) != 0u){
+        if(dispatchThreadID.x != 0u)
+            return;
+        for(uint k = 0u; k < itemCount; ++k)
+            nwbPhysicsSolveSingleJoint(itemOffset + k, mode, bodyStateSlot, jointSlot, h, flags);
+        return;
+    }
+
+    const uint localIdx = dispatchThreadID.x;
+    if(localIdx >= itemCount)
+        return;
+    nwbPhysicsSolveSingleJoint(itemOffset + localIdx, mode, bodyStateSlot, jointSlot, h, flags);
 }
 
 

@@ -13,9 +13,18 @@ class PhysicsSystem{
     private mut World m_world;
     private PhysicsWorld m_physicsWorld;
     private PhysicsGpuDispatcher m_gpuDispatcher;
+    private Optional<mut AssetManager> m_assetManager;
     private HashMap<EntityID, BodyId> m_entityBodies;
     private HashMap<EntityID, Vector<ShapeId>> m_entityShapes;
     private HashMap<EntityID, JointId> m_entityJoints;
+    private HashMap<u32, EntityID> m_bodyIndexToEntity;
+    private HashMap<u32, EntityID> m_shapeIndexToEntity;
+    private Vector<BodyMoveEvent> m_frameBodyMoveEvents;
+    private Vector<ContactBeginTouchEvent> m_frameContactBeginEvents;
+    private Vector<ContactEndTouchEvent> m_frameContactEndEvents;
+    private Vector<ContactHitEvent> m_frameContactHitEvents;
+    private Vector<SensorBeginTouchEvent> m_frameSensorBeginEvents;
+    private Vector<SensorEndTouchEvent> m_frameSensorEndEvents;
     private f32 m_accumulator = 0.0f;
     private WorldStepStats m_lastStepStats;
     private f64 m_lastStepMs = 0.0;
@@ -32,6 +41,7 @@ class PhysicsSystem{
         in ShaderArchivePathResolver shaderPathResolver
     ){
         this.m_world = world;
+        this.m_assetManager = Optional<mut AssetManager>(assetManager);
         this.m_gpuDispatcher.attachRuntime(graphics, assetManager, shaderPathResolver);
         this.registerDefaultAccesses();
     }
@@ -44,10 +54,96 @@ class PhysicsSystem{
         this.writeAccess<TransformComponent>();
     }
 
+    private void clearFrameEvents(){
+        this.m_frameBodyMoveEvents.clear();
+        this.m_frameContactBeginEvents.clear();
+        this.m_frameContactEndEvents.clear();
+        this.m_frameContactHitEvents.clear();
+        this.m_frameSensorBeginEvents.clear();
+        this.m_frameSensorEndEvents.clear();
+    }
+
+    private void appendLastStepEvents(){
+        const Span<BodyMoveEvent> moves = this.m_physicsWorld.bodyMoveEvents();
+        for(usize i = 0u; i < moves.size(); ++i)
+            this.m_frameBodyMoveEvents.push_back(moves[i]);
+
+        const Span<ContactBeginTouchEvent> cBegins = this.m_physicsWorld.contactBeginEvents();
+        for(usize i = 0u; i < cBegins.size(); ++i)
+            this.m_frameContactBeginEvents.push_back(cBegins[i]);
+
+        const Span<ContactEndTouchEvent> cEnds = this.m_physicsWorld.contactEndEvents();
+        for(usize i = 0u; i < cEnds.size(); ++i)
+            this.m_frameContactEndEvents.push_back(cEnds[i]);
+
+        const Span<ContactHitEvent> cHits = this.m_physicsWorld.contactHitEvents();
+        for(usize i = 0u; i < cHits.size(); ++i)
+            this.m_frameContactHitEvents.push_back(cHits[i]);
+
+        const Span<SensorBeginTouchEvent> sBegins = this.m_physicsWorld.sensorBeginEvents();
+        for(usize i = 0u; i < sBegins.size(); ++i)
+            this.m_frameSensorBeginEvents.push_back(sBegins[i]);
+
+        const Span<SensorEndTouchEvent> sEnds = this.m_physicsWorld.sensorEndEvents();
+        for(usize i = 0u; i < sEnds.size(); ++i)
+            this.m_frameSensorEndEvents.push_back(sEnds[i]);
+    }
+
     public mut PhysicsWorld physicsWorld(){ return this.m_physicsWorld; }
     public in PhysicsWorld physicsWorld()const{ return this.m_physicsWorld; }
     public in WorldStepStats lastStepStats()const{ return this.m_lastStepStats; }
     public f64 lastStepMs()const{ return this.m_lastStepMs; }
+    public Span<BodyMoveEvent> bodyMoveEvents()const{ return this.m_frameBodyMoveEvents; }
+    public Span<ContactBeginTouchEvent> contactBeginEvents()const{ return this.m_frameContactBeginEvents; }
+    public Span<ContactEndTouchEvent> contactEndEvents()const{ return this.m_frameContactEndEvents; }
+    public Span<ContactHitEvent> contactHitEvents()const{ return this.m_frameContactHitEvents; }
+    public Span<SensorBeginTouchEvent> sensorBeginEvents()const{ return this.m_frameSensorBeginEvents; }
+    public Span<SensorEndTouchEvent> sensorEndEvents()const{ return this.m_frameSensorEndEvents; }
+
+    public void setAssetManager(mut AssetManager assetManager){
+        this.m_assetManager = Optional<mut AssetManager>(assetManager);
+    }
+
+    public void setCustomFilterCallback(in CustomFilterCallback cb){
+        this.m_physicsWorld.setCustomFilterCallback(cb);
+    }
+
+    public void clearCustomFilterCallback(){
+        this.m_physicsWorld.clearCustomFilterCallback();
+    }
+
+    public void setPreSolveCallback(in PreSolveCallback cb){
+        this.m_physicsWorld.setPreSolveCallback(cb);
+    }
+
+    public void clearPreSolveCallback(){
+        this.m_physicsWorld.clearPreSolveCallback();
+    }
+
+    public EntityID entityForBody(in BodyId bodyId)const{
+        if(!bodyId.valid() || !this.m_physicsWorld.isValidBody(bodyId))
+            return s_InvalidEntityId;
+        const auto found = this.m_bodyIndexToEntity.find(bodyId.index);
+        if(found == this.m_bodyIndexToEntity.end())
+            return s_InvalidEntityId;
+        return found.value();
+    }
+
+    public EntityID entityForShape(in ShapeId shapeId)const{
+        if(!shapeId.valid() || !this.m_physicsWorld.isValidShape(shapeId))
+            return s_InvalidEntityId;
+        const auto found = this.m_shapeIndexToEntity.find(shapeId.index);
+        if(found == this.m_shapeIndexToEntity.end())
+            return s_InvalidEntityId;
+        return found.value();
+    }
+
+    public b8 setKinematicTarget(in EntityID entity, in Transform3D targetTransform, in f32 dt){
+        const auto found = this.m_entityBodies.find(entity);
+        if(found == this.m_entityBodies.end())
+            return false;
+        return this.m_physicsWorld.setKinematicTarget(found.value(), targetTransform, dt);
+    }
 
     public void setActiveSceneSubsystems(in ActiveSceneSubsystemsRef subsystems){
         this.m_gpuDispatcher.setActiveSceneSubsystems(subsystems);
@@ -64,13 +160,24 @@ class PhysicsSystem{
     }
 
     public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override{
+        this.clearFrameEvents();
+
         f32 fixedDt = 1.0f / 60.0f;
         u32 subStepCount = 4u;
         u32 maxSubStepsPerFrame = 4u;
         b8 paused = false;
         ResolvePhysicsConfigSettings(this.m_world, this.m_physicsWorld, fixedDt, subStepCount, maxSubStepsPerFrame, paused);
 
-        SyncEcsEntitiesToPhysicsWorld(this.m_world, this.m_physicsWorld, this.m_entityBodies, this.m_entityShapes, this.m_entityJoints);
+        SyncEcsEntitiesToPhysicsWorld(
+            this.m_world,
+            this.m_physicsWorld,
+            this.m_assetManager,
+            this.m_entityBodies,
+            this.m_entityShapes,
+            this.m_entityJoints,
+            this.m_bodyIndexToEntity,
+            this.m_shapeIndexToEntity
+        );
 
         if(paused || !IsFinite(delta) || delta <= 0.0f)
             return Expected<void, CpuTaskAdmissionError>();
@@ -86,10 +193,13 @@ class PhysicsSystem{
             else
                 this.m_accumulator = 0.0f;
 
+            ApplyKinematicTargetsFromEcs(this.m_world, this.m_physicsWorld, fixedDt);
+
             const Timer stepStart = TimerNow();
             StepWorldWithGpu(this.m_physicsWorld, this.m_gpuDispatcher, fixedDt, subStepCount, scheduler);
             this.m_lastStepMs = DurationInMS<f64>(TimerNow(), stepStart);
 
+            this.appendLastStepEvents();
             this.m_lastStepStats = this.m_physicsWorld.lastStepStats();
             ++stepsExecuted;
         }

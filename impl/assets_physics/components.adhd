@@ -1,0 +1,195 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_scene/components.adhd>
+#include <impl/ecs_physics/components.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[arena, asset("rigid_body_component")]
+class RigidBodyComponentAsset : IComponent{
+    public RigidBodyComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        mut RigidBodyComponent dst = entity.addComponent<RigidBodyComponent>();
+        dst = this.component;
+        dst.dirty = true;
+        dst.runtimeBodyId = BodyId();
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+}
+
+[arena, asset("collider_component")]
+class ColliderComponentAsset : IComponent{
+    public ColliderComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        mut ColliderComponent dst = entity.addComponent<ColliderComponent>();
+        dst = this.component;
+        dst.dirty = true;
+        dst.runtimeShapeId = ShapeId();
+        dst.runtimeExtraShapeIds.clear();
+        dst.boundBodyId = BodyId();
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+}
+
+[arena, asset("joint_component")]
+class JointComponentAsset : IComponent{
+    public JointComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        mut JointComponent dst = entity.addComponent<JointComponent>();
+        dst = this.component;
+        dst.dirty = true;
+        dst.runtimeJointId = JointId();
+        dst.boundBodyIdA = BodyId();
+        dst.boundBodyIdB = BodyId();
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+}
+
+[arena, asset("physics_world_config_component")]
+class PhysicsWorldConfigComponentAsset : IComponent{
+    public PhysicsWorldConfigComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        mut PhysicsWorldConfigComponent dst = entity.addComponent<PhysicsWorldConfigComponent>();
+        dst = this.component;
+        dst.dirty = true;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+}
+
+[serialize]
+class PhysicsVec4Binary{
+    public f32x4 value(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+[serialize]
+class PhysicsU32Binary{
+    public u32 value = 0u;
+}
+
+[serialize]
+class RigidBodyComponentPayloadBinary{
+    public u32 version = 1u;
+    public u8 bodyType = 2u;
+    public u8 flags = 0u;
+    public u16 reserved0 = 0u;
+    public u32 motionLocks = 0u;
+    public u32 reserved1 = 0u;
+    public f32x4 linearVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 angularVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32 linearDamping = 0.0f;
+    public f32 angularDamping = 0.01f;
+    public f32 gravityScale = 1.0f;
+    public f32 sleepThreshold = s_DefaultSleepThreshold;
+}
+
+[serialize]
+class ColliderShapeEntryHeaderBinary{
+    public u32 version = 1u;
+    public u8 shapeType = 2u;
+    public u8 flags = 0u;
+    public u16 reserved0 = 0u;
+    public i32 groupIndex = 0;
+    public u32 categoryBits = 1u;
+    public u32 maskBits = u32.max;
+    public u32 reserved1 = 0u;
+    public f32x4 center(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 center2(0.0f, 0.5f, 0.0f, 0.0f);
+    public f32x4 halfExtents(0.5f, 0.5f, 0.5f, 0.0f);
+    public f32x4 localRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32 radius = 0.5f;
+    public f32 skinRadius = 0.0f;
+    public f32 density = 1.0f;
+    public f32 friction = 0.6f;
+    public f32 restitution = 0.0f;
+    public f32 rollingResistance = 0.0f;
+    public f32 tangentSpeed = 0.0f;
+    public u32 reserved2 = 0u;
+    public NameHash meshAssetHash;
+    public u32 hullPointCount = 0u;
+    public u32 meshVertexCount = 0u;
+    public u32 meshIndexCount = 0u;
+    public u32 reserved3 = 0u;
+}
+
+[serialize]
+class ColliderComponentPayloadHeaderBinary{
+    public u32 version = 1u;
+    public u32 extraShapeCount = 0u;
+    public u64 reserved0 = 0u;
+}
+
+[serialize]
+class JointComponentPayloadBinary{
+    public u32 version = 1u;
+    public u8 jointType = 0u;
+    public u8 flags = 0u;
+    public u16 reserved0 = 0u;
+    public u64 reserved1 = 0u;
+    public f32x4 localAnchorA(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localAnchorB(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localAxisA(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32x4 localAxisB(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32x4 referenceRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 linearOffset(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32 length = 1.0f;
+    public f32 minLength = 0.0f;
+    public f32 maxLength = s_HugeCoordinate;
+    public f32 lowerLimit = 0.0f;
+    public f32 upperLimit = 0.0f;
+    public f32 motorSpeed = 0.0f;
+    public f32 maxMotorForce = 0.0f;
+    public f32 hertz = 0.0f;
+    public f32 dampingRatio = 1.0f;
+    public f32 correctionFactor = 0.3f;
+    public f32 maxTorque = 0.0f;
+    public f32 swingLimit = 0.0f;
+    public f32 suspensionHertz = 4.0f;
+    public f32 suspensionDampingRatio = 0.7f;
+    public f32 breakForce = 0.0f;
+    public f32 breakTorque = 0.0f;
+}
+
+[serialize]
+class PhysicsWorldConfigComponentPayloadBinary{
+    public u32 version = 1u;
+    public u8 backendMode = 0u;
+    public u8 flags = 0u;
+    public u16 reserved0 = 0u;
+    public u32 subStepCount = 4u;
+    public u32 maxSubStepsPerFrame = 4u;
+    public u32 gpuDispatchThreshold = s_DefaultGpuBodyThreshold;
+    public u32 reserved1 = 0u;
+    public f32x4 gravity(0.0f, -9.81f, 0.0f, 0.0f);
+    public f32 restitutionThreshold = s_RestitutionThreshold;
+    public f32 hitEventThreshold = s_DefaultHitEventThreshold;
+    public f32 contactHertz = s_MaxContactHertz;
+    public f32 contactDampingRatio = s_DefaultContactDampingRatio;
+    public f32 maxLinearVelocity = s_DefaultMaxLinearVelocity;
+    public f32 fixedDeltaTime = 1.0f / 60.0f;
+    public f32 gpuWorkloadFraction = s_DefaultGpuWorkloadFraction;
+    public u32 reserved2 = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

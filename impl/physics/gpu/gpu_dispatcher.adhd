@@ -13,8 +13,8 @@
 
 const StringView s_PhysicsGpuAssetOwnerName = "PhysicsGpuDispatcher";
 const StringView s_PhysicsShaderDefaultVariant = "default";
-const usize s_GpuJointColorCount = 8u;
-const usize s_GpuJointOverflowColorIndex = 7u;
+const usize s_GpuJointColorCount = s_GraphColorCount;
+const usize s_GpuJointOverflowColorIndex = s_OverflowColorIndex;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -80,11 +80,13 @@ GpuPhysicsShapeProxy PackGpuShapeProxy(
     in u32 gpuBodyIdx,
     in u32 shapeId,
     in f32 sweepMargin,
-    mut Vector<f32x4> hullVertices
+    in u32 dataOffset,
+    in u32 dataMeta
 ){
     GpuPhysicsShapeProxy outProxy;
     const f32 margin = Max(s_MaxAabbMargin, sweepMargin);
-    u32 hullVertexPack = 0u;
+    u32 filterW = 0u;
+    u32 metaW = 0u;
     if(shape.type == ShapeType::Sphere){
         outProxy.localCenterRadius = f32x4(shape.sphere.center.x, shape.sphere.center.y, shape.sphere.center.z, shape.sphere.radius);
         outProxy.localExtentOrP1 = f32x4(0.0f, 0.0f, 0.0f, margin);
@@ -101,11 +103,8 @@ GpuPhysicsShapeProxy PackGpuShapeProxy(
         outProxy.localRotation = shape.hull.boxRotation;
     }
     else if(shape.type == ShapeType::Hull){
-        const u32 vOffset = cast<u32>(hullVertices.size());
-        const u32 vCount = cast<u32>(Min(shape.hull.vertices.size(), cast<usize>(128u)));
-        for(u32 i = 0u; i < vCount; ++i)
-            hullVertices.push_back(shape.hull.vertices[i]);
-        hullVertexPack = ((vCount & 0xffu) << 24u) | (vOffset & 0x00ffffffu);
+        filterW = dataOffset;
+        metaW = dataMeta;
         const VectorSingle localMin = VectorSingle(shape.localAabb.lowerBound);
         const VectorSingle localMax = VectorSingle(shape.localAabb.upperBound);
         const VectorSingle center = (localMin + localMax) * 0.5f;
@@ -115,6 +114,8 @@ GpuPhysicsShapeProxy PackGpuShapeProxy(
         outProxy.localRotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
     }
     else{
+        filterW = dataOffset;
+        metaW = dataMeta;
         const VectorSingle localMin = VectorSingle(shape.localAabb.lowerBound);
         const VectorSingle localMax = VectorSingle(shape.localAabb.upperBound);
         const VectorSingle center = (localMin + localMax) * 0.5f;
@@ -125,9 +126,9 @@ GpuPhysicsShapeProxy PackGpuShapeProxy(
     }
 
     outProxy.aabbMinPad = f32x4(shape.aabb.lowerBound.x, shape.aabb.lowerBound.y, shape.aabb.lowerBound.z, 0.0f);
-    outProxy.aabbMaxPad = f32x4(shape.aabb.upperBound.x, shape.aabb.upperBound.y, shape.aabb.upperBound.z, 0.0f);
+    outProxy.aabbMaxPad = f32x4(shape.aabb.upperBound.x, shape.aabb.upperBound.y, shape.aabb.upperBound.z, bit_cast<f32>(metaW));
     outProxy.bodyIndexTypeShape = u32x4(gpuBodyIdx, cast<u32>(shape.type), shapeId, PackGpuShapeFlags(shape, body));
-    outProxy.filterData = u32x4(shape.filter.categoryBits, shape.filter.maskBits, bit_cast<u32>(shape.filter.groupIndex), hullVertexPack);
+    outProxy.filterData = u32x4(shape.filter.categoryBits, shape.filter.maskBits, bit_cast<u32>(shape.filter.groupIndex), filterW);
     return outProxy;
 }
 
@@ -221,8 +222,8 @@ GpuPhysicsJointConstraint PackGpuJointConstraint(in JointConstraint jc, in Vecto
     gjc.invIB0 = f32x4(jc.invIB.row0.x, jc.invIB.row0.y, jc.invIB.row0.z, 0.0f);
     gjc.invIB1 = f32x4(jc.invIB.row1.x, jc.invIB.row1.y, jc.invIB.row1.z, 0.0f);
     gjc.invIB2 = f32x4(jc.invIB.row2.x, jc.invIB.row2.y, jc.invIB.row2.z, 0.0f);
-    gjc.linearImpulse = jc.linearImpulse;
-    gjc.angularImpulse = jc.angularImpulse;
+    gjc.linearImpulse = f32x4(jc.linearImpulse.x, jc.linearImpulse.y, jc.linearImpulse.z, jc.maxLinearImpulseMag);
+    gjc.angularImpulse = f32x4(jc.angularImpulse.x, jc.angularImpulse.y, jc.angularImpulse.z, jc.maxAngularImpulseMag);
     gjc.limitImpulses = f32x4(jc.lowerLimitImpulse, jc.upperLimitImpulse, jc.motorImpulse, jc.coneImpulse);
     return gjc;
 }
@@ -235,6 +236,8 @@ void UnpackGpuJointConstraintImpulses(in GpuPhysicsJointConstraint gjc, mut Join
     jc.motorImpulse = gjc.limitImpulses.z;
     jc.coneImpulse = gjc.limitImpulses.w;
     jc.suspensionImpulse = gjc.suspensionSoftness.w;
+    jc.maxLinearImpulseMag = gjc.linearImpulse.w;
+    jc.maxAngularImpulseMag = gjc.angularImpulse.w;
 }
 
 void ConvertGpuManifoldToCpu(
@@ -317,6 +320,8 @@ class PhysicsGpuBufferGroup{
     public BufferHandle gridBuffer;
     public BufferHandle largeListBuffer;
     public BufferHandle hullVertexBuffer;
+    public BufferHandle meshNodeBuffer;
+    public BufferHandle meshTriBuffer;
     public BufferHandle manifoldBuffer;
     public BufferHandle manifoldReadback;
     public BufferHandle constraintBuffer;
@@ -523,9 +528,12 @@ class PhysicsCollisionTask{
     public Span<GpuPhysicsBodySim> bodySims;
     public Span<GpuPhysicsShapeProxy> shapes;
     public Span<f32x4> hullVertices;
+    public Span<f32x4> meshNodes;
+    public Span<f32x4> meshTris;
     public u32 shapeCount;
     public u32 maxPairs;
     public f32 invCellSize;
+    public b8 uploadStaticGeom;
 
     public PhysicsCollisionTask(
         mut GpuDescriptorHeap descriptorHeap,
@@ -535,9 +543,12 @@ class PhysicsCollisionTask{
         in Span<GpuPhysicsBodySim> sims,
         in Span<GpuPhysicsShapeProxy> shapeProxies,
         in Span<f32x4> vertices,
+        in Span<f32x4> nodes,
+        in Span<f32x4> tris,
         in u32 numShapes,
         in u32 pairLimit,
-        in f32 invCell
+        in f32 invCell,
+        in b8 uploadStatic
     ){
         this.heap = descriptorHeap;
         this.buffers = bufGroup;
@@ -546,9 +557,12 @@ class PhysicsCollisionTask{
         this.bodySims = sims;
         this.shapes = shapeProxies;
         this.hullVertices = vertices;
+        this.meshNodes = nodes;
+        this.meshTris = tris;
         this.shapeCount = numShapes;
         this.maxPairs = pairLimit;
         this.invCellSize = invCell;
+        this.uploadStaticGeom = uploadStatic;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{
@@ -561,6 +575,9 @@ class PhysicsCollisionTask{
             return false;
 
         const b8 useSpatialHash = (this.shapeCount > 64u);
+        const b8 uploadHulls = this.uploadStaticGeom && !this.hullVertices.empty();
+        const b8 uploadNodes = this.uploadStaticGeom && !this.meshNodes.empty();
+        const b8 uploadTris = this.uploadStaticGeom && !this.meshTris.empty();
 
         commands.setEnableUavBarriersForBuffer(this.buffers.bodySimBuffer.deref(), true);
         commands.setEnableUavBarriersForBuffer(this.buffers.shapeBuffer.deref(), true);
@@ -568,6 +585,8 @@ class PhysicsCollisionTask{
         commands.setEnableUavBarriersForBuffer(this.buffers.counterBuffer.deref(), true);
         commands.setEnableUavBarriersForBuffer(this.buffers.indirectArgsBuffer.deref(), true);
         commands.setEnableUavBarriersForBuffer(this.buffers.hullVertexBuffer.deref(), true);
+        commands.setEnableUavBarriersForBuffer(this.buffers.meshNodeBuffer.deref(), true);
+        commands.setEnableUavBarriersForBuffer(this.buffers.meshTriBuffer.deref(), true);
         commands.setEnableUavBarriersForBuffer(this.buffers.manifoldBuffer.deref(), true);
         if(useSpatialHash){
             commands.setEnableUavBarriersForBuffer(this.buffers.gridBuffer.deref(), true);
@@ -577,8 +596,12 @@ class PhysicsCollisionTask{
         commands.setBufferState(this.buffers.bodySimBuffer.deref(), ResourceStates::CopyDest);
         commands.setBufferState(this.buffers.shapeBuffer.deref(), ResourceStates::CopyDest);
         commands.setBufferState(this.buffers.counterBuffer.deref(), ResourceStates::CopyDest);
-        if(!this.hullVertices.empty())
+        if(uploadHulls)
             commands.setBufferState(this.buffers.hullVertexBuffer.deref(), ResourceStates::CopyDest);
+        if(uploadNodes)
+            commands.setBufferState(this.buffers.meshNodeBuffer.deref(), ResourceStates::CopyDest);
+        if(uploadTris)
+            commands.setBufferState(this.buffers.meshTriBuffer.deref(), ResourceStates::CopyDest);
         commands.commitBarriers();
 
         if(!commands.tryWriteBuffer(this.buffers.bodySimBuffer.deref(), this.bodySims, 0u))
@@ -586,8 +609,16 @@ class PhysicsCollisionTask{
         if(!commands.tryWriteBuffer(this.buffers.shapeBuffer.deref(), this.shapes, 0u))
             return false;
         commands.clearBufferUInt(this.buffers.counterBuffer.deref(), 0u);
-        if(!this.hullVertices.empty()){
+        if(uploadHulls){
             if(!commands.tryWriteBuffer(this.buffers.hullVertexBuffer.deref(), this.hullVertices, 0u))
+                return false;
+        }
+        if(uploadNodes){
+            if(!commands.tryWriteBuffer(this.buffers.meshNodeBuffer.deref(), this.meshNodes, 0u))
+                return false;
+        }
+        if(uploadTris){
+            if(!commands.tryWriteBuffer(this.buffers.meshTriBuffer.deref(), this.meshTris, 0u))
                 return false;
         }
 
@@ -597,6 +628,8 @@ class PhysicsCollisionTask{
         commands.setBufferState(this.buffers.counterBuffer.deref(), ResourceStates::UnorderedAccess);
         commands.setBufferState(this.buffers.indirectArgsBuffer.deref(), ResourceStates::UnorderedAccess);
         commands.setBufferState(this.buffers.hullVertexBuffer.deref(), ResourceStates::UnorderedAccess);
+        commands.setBufferState(this.buffers.meshNodeBuffer.deref(), ResourceStates::UnorderedAccess);
+        commands.setBufferState(this.buffers.meshTriBuffer.deref(), ResourceStates::UnorderedAccess);
         commands.setBufferState(this.buffers.manifoldBuffer.deref(), ResourceStates::UnorderedAccess);
         if(useSpatialHash){
             commands.setBufferState(this.buffers.gridBuffer.deref(), ResourceStates::UnorderedAccess);
@@ -696,6 +729,7 @@ class PhysicsCollisionTask{
 
         GpuPhysicsPushConstants pushNp;
         pushNp.itemCount = this.maxPairs;
+        pushNp.modeOrSecondaryCount = s_GpuNarrowphaseModeContacts;
         pushNp.gravitySpeculative = f32x4(0.0f, 0.0f, 0.0f, s_SpeculativeDistance);
         pushNp.slots0 = this.buffers.slots0;
         pushNp.slots1 = u32x4(this.buffers.slots1.x, this.buffers.slots2.y, this.buffers.slots2.z, this.buffers.slots1.y);
@@ -723,11 +757,116 @@ class PhysicsCollisionTask{
         commands.setBufferState(this.buffers.counterBuffer.deref(), ResourceStates::Common);
         commands.setBufferState(this.buffers.indirectArgsBuffer.deref(), ResourceStates::Common);
         commands.setBufferState(this.buffers.hullVertexBuffer.deref(), ResourceStates::Common);
+        commands.setBufferState(this.buffers.meshNodeBuffer.deref(), ResourceStates::Common);
+        commands.setBufferState(this.buffers.meshTriBuffer.deref(), ResourceStates::Common);
         commands.setBufferState(this.buffers.manifoldBuffer.deref(), ResourceStates::Common);
         if(useSpatialHash){
             commands.setBufferState(this.buffers.gridBuffer.deref(), ResourceStates::Common);
             commands.setBufferState(this.buffers.largeListBuffer.deref(), ResourceStates::Common);
         }
+        commands.commitBarriers();
+        return !commands.commandRecordingFailed();
+    }
+}
+
+class PhysicsBulletToiTask{
+    public mut GpuDescriptorHeap heap;
+    public PhysicsGpuBufferGroup buffers;
+    public ComputePipelineHandle narrowphasePipeline;
+    public Span<GpuPhysicsBodySim> bodySims;
+    public Span<GpuPhysicsShapeProxy> shapes;
+    public Span<GpuPhysicsBroadphasePair> pairs;
+    public u32 pairCount;
+
+    public PhysicsBulletToiTask(
+        mut GpuDescriptorHeap descriptorHeap,
+        in PhysicsGpuBufferGroup bufGroup,
+        in ComputePipelineHandle npPipe,
+        in Span<GpuPhysicsBodySim> sims,
+        in Span<GpuPhysicsShapeProxy> shapeProxies,
+        in Span<GpuPhysicsBroadphasePair> pairSpan,
+        in u32 numPairs
+    ){
+        this.heap = descriptorHeap;
+        this.buffers = bufGroup;
+        this.narrowphasePipeline = npPipe;
+        this.bodySims = sims;
+        this.shapes = shapeProxies;
+        this.pairs = pairSpan;
+        this.pairCount = numPairs;
+    }
+
+    public GpuTaskCommandRequirements commandRequirements()const{
+        return GpuTaskCommandRequirements(GpuQueueCapability::Compute | GpuQueueCapability::Transfer);
+    }
+
+    [cpp_unwind]
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
+        if(this.pairCount == 0u || !this.narrowphasePipeline.valid())
+            return false;
+
+        commands.setEnableUavBarriersForBuffer(this.buffers.bodySimBuffer.deref(), true);
+        commands.setEnableUavBarriersForBuffer(this.buffers.shapeBuffer.deref(), true);
+        commands.setEnableUavBarriersForBuffer(this.buffers.pairBuffer.deref(), true);
+        commands.setEnableUavBarriersForBuffer(this.buffers.hullVertexBuffer.deref(), true);
+        commands.setEnableUavBarriersForBuffer(this.buffers.meshNodeBuffer.deref(), true);
+        commands.setEnableUavBarriersForBuffer(this.buffers.meshTriBuffer.deref(), true);
+        commands.setEnableUavBarriersForBuffer(this.buffers.manifoldBuffer.deref(), true);
+
+        commands.setBufferState(this.buffers.bodySimBuffer.deref(), ResourceStates::CopyDest);
+        commands.setBufferState(this.buffers.shapeBuffer.deref(), ResourceStates::CopyDest);
+        commands.setBufferState(this.buffers.pairBuffer.deref(), ResourceStates::CopyDest);
+        commands.commitBarriers();
+
+        if(!commands.tryWriteBuffer(this.buffers.bodySimBuffer.deref(), this.bodySims, 0u))
+            return false;
+        if(!commands.tryWriteBuffer(this.buffers.shapeBuffer.deref(), this.shapes, 0u))
+            return false;
+        if(!commands.tryWriteBuffer(this.buffers.pairBuffer.deref(), this.pairs, 0u))
+            return false;
+
+        commands.setBufferState(this.buffers.bodySimBuffer.deref(), ResourceStates::UnorderedAccess);
+        commands.setBufferState(this.buffers.shapeBuffer.deref(), ResourceStates::UnorderedAccess);
+        commands.setBufferState(this.buffers.pairBuffer.deref(), ResourceStates::UnorderedAccess);
+        commands.setBufferState(this.buffers.hullVertexBuffer.deref(), ResourceStates::UnorderedAccess);
+        commands.setBufferState(this.buffers.meshNodeBuffer.deref(), ResourceStates::UnorderedAccess);
+        commands.setBufferState(this.buffers.meshTriBuffer.deref(), ResourceStates::UnorderedAccess);
+        commands.setBufferState(this.buffers.manifoldBuffer.deref(), ResourceStates::UnorderedAccess);
+        commands.commitBarriers();
+
+        ComputeState npState;
+        npState.setPipeline(this.narrowphasePipeline.deref());
+        commands.setComputeState(npState);
+        this.heap.bindCompute(commands, this.narrowphasePipeline.deref());
+
+        GpuPhysicsPushConstants push;
+        push.itemCount = this.pairCount;
+        push.modeOrSecondaryCount = s_GpuNarrowphaseModeBulletToi;
+        push.linearSlop = s_LinearSlop;
+        push.slots0 = this.buffers.slots0;
+        push.slots1 = u32x4(this.buffers.slots1.x, this.buffers.slots2.y, this.buffers.slots2.z, s_GpuInvalidIndex);
+        commands.setPushConstants(push);
+        commands.dispatch(ComputeDispatchGroups(this.pairCount), 1u, 1u);
+
+        commands.setBufferState(this.buffers.manifoldBuffer.deref(), ResourceStates::CopySource);
+        commands.setBufferState(this.buffers.manifoldReadback.deref(), ResourceStates::CopyDest);
+        commands.commitBarriers();
+
+        commands.copyBuffer(
+            this.buffers.manifoldReadback.deref(),
+            0u,
+            this.buffers.manifoldBuffer.deref(),
+            0u,
+            cast<u64>(this.pairCount) * cast<u64>(s_GpuNarrowphaseManifoldBytes)
+        );
+
+        commands.setBufferState(this.buffers.bodySimBuffer.deref(), ResourceStates::Common);
+        commands.setBufferState(this.buffers.shapeBuffer.deref(), ResourceStates::Common);
+        commands.setBufferState(this.buffers.pairBuffer.deref(), ResourceStates::Common);
+        commands.setBufferState(this.buffers.hullVertexBuffer.deref(), ResourceStates::Common);
+        commands.setBufferState(this.buffers.meshNodeBuffer.deref(), ResourceStates::Common);
+        commands.setBufferState(this.buffers.meshTriBuffer.deref(), ResourceStates::Common);
+        commands.setBufferState(this.buffers.manifoldBuffer.deref(), ResourceStates::Common);
         commands.commitBarriers();
         return !commands.commandRecordingFailed();
     }
@@ -841,12 +980,12 @@ class PhysicsSolverTask{
 
         const u32 overflowCount = this.colorSlices[s_OverflowColorIndex].count;
         const u32 overflowOffset = this.colorSlices[s_OverflowColorIndex].offset;
-        for(u32 k = 0u; k < overflowCount; ++k){
+        if(overflowCount > 0u){
             GpuPhysicsPushConstants push;
-            push.itemCount = 1u;
-            push.itemOffset = overflowOffset + k;
+            push.itemCount = overflowCount;
+            push.itemOffset = overflowOffset;
             push.modeOrSecondaryCount = mode;
-            push.flags = flags;
+            push.flags = flags | s_GpuSolverFlagSerialLoop;
             push.invDeltaTime = invH;
             push.linearSlop = this.restitutionThreshold;
             push.slots0 = this.buffers.slots0;
@@ -892,12 +1031,12 @@ class PhysicsSolverTask{
 
         const u32 overflowCount = this.jointColorSlices[s_GpuJointOverflowColorIndex].count;
         const u32 overflowOffset = this.jointColorSlices[s_GpuJointOverflowColorIndex].offset;
-        for(u32 k = 0u; k < overflowCount; ++k){
+        if(overflowCount > 0u){
             GpuPhysicsPushConstants push;
-            push.itemCount = 1u;
-            push.itemOffset = overflowOffset + k;
+            push.itemCount = overflowCount;
+            push.itemOffset = overflowOffset;
             push.modeOrSecondaryCount = mode;
-            push.flags = flags;
+            push.flags = flags | s_GpuSolverFlagSerialLoop;
             push.deltaTime = h;
             push.invDeltaTime = 1.0f / h;
             push.slots0 = this.buffers.slots0;
@@ -977,8 +1116,8 @@ class PhysicsSolverTask{
             }
 
             if(this.enableWarmStarting){
-                this.dispatchContactPass(commands, s_GpuSolverModeWarmStart, invH, 1u);
-                this.dispatchJointPass(commands, s_GpuSolverModeWarmStart, h, 1u);
+                this.dispatchContactPass(commands, s_GpuSolverModeWarmStart, invH, s_GpuSolverFlagWarmStart);
+                this.dispatchJointPass(commands, s_GpuSolverModeWarmStart, h, s_GpuSolverFlagWarmStart);
             }
             else if(subStep > 0u){
                 this.dispatchContactPass(commands, s_GpuSolverModeWarmStart, invH, 0u);
@@ -1095,9 +1234,28 @@ class PhysicsGpuDispatcher{
     private PhysicsGpuBufferSlot m_gridSlot;
     private PhysicsGpuBufferSlot m_largeListSlot;
     private PhysicsGpuBufferSlot m_hullVertexSlot;
+    private PhysicsGpuBufferSlot m_meshNodeSlot;
+    private PhysicsGpuBufferSlot m_meshTriSlot;
     private PhysicsGpuBufferSlot m_manifoldSlot;
     private PhysicsGpuBufferSlot m_constraintSlot;
     private PhysicsGpuBufferSlot m_jointConstraintSlot;
+
+    private u64 m_cachedTopologyVersion = 0u;
+    private b8 m_staticGeomValid = false;
+    private b8 m_staticGeomDirtyUpload = true;
+    private Vector<f32x4> m_cachedHullData;
+    private Vector<f32x4> m_cachedMeshNodes;
+    private Vector<f32x4> m_cachedMeshTris;
+    private Vector<u32> m_shapeDataOffset;
+    private Vector<u32> m_shapeDataMeta;
+
+    private Vector<GpuPhysicsBodySim> m_gpuSimsScratch;
+    private Vector<GpuPhysicsShapeProxy> m_gpuShapesScratch;
+    private Vector<GpuPhysicsNarrowphaseManifold> m_gpuManifoldsScratch;
+    private Vector<GpuPhysicsBodySim> m_solverSimsScratch;
+    private Vector<GpuPhysicsBodyState> m_solverStatesScratch;
+    private Vector<GpuPhysicsContactConstraint> m_gpuConstraintsScratch;
+    private Vector<GpuPhysicsJointConstraint> m_gpuJointsScratch;
 
     private u32 m_lastBroadphasePairCount = 0u;
     private u16 m_deviceGeneration = 0u;
@@ -1185,9 +1343,20 @@ class PhysicsGpuDispatcher{
         ReleasePhysicsGpuBufferSlot(heap, this.m_gridSlot);
         ReleasePhysicsGpuBufferSlot(heap, this.m_largeListSlot);
         ReleasePhysicsGpuBufferSlot(heap, this.m_hullVertexSlot);
+        ReleasePhysicsGpuBufferSlot(heap, this.m_meshNodeSlot);
+        ReleasePhysicsGpuBufferSlot(heap, this.m_meshTriSlot);
         ReleasePhysicsGpuBufferSlot(heap, this.m_manifoldSlot);
         ReleasePhysicsGpuBufferSlot(heap, this.m_constraintSlot);
         ReleasePhysicsGpuBufferSlot(heap, this.m_jointConstraintSlot);
+
+        this.m_cachedTopologyVersion = 0u;
+        this.m_staticGeomValid = false;
+        this.m_staticGeomDirtyUpload = true;
+        this.m_cachedHullData.clear();
+        this.m_cachedMeshNodes.clear();
+        this.m_cachedMeshTris.clear();
+        this.m_shapeDataOffset.clear();
+        this.m_shapeDataMeta.clear();
 
         this.m_broadphasePipeline.reset();
         this.m_narrowphasePipeline.reset();
@@ -1271,9 +1440,12 @@ class PhysicsGpuDispatcher{
         in Span<GpuPhysicsBodySim> bodySims,
         in Span<GpuPhysicsShapeProxy> shapes,
         in Span<f32x4> hullVertices,
+        in Span<f32x4> meshNodes,
+        in Span<f32x4> meshTris,
         in u32 shapeCount,
         in u32 maxPairs,
-        in f32 invCellSize
+        in f32 invCellSize,
+        in b8 uploadStaticGeom
     ){
         const b8 useSpatialHash = (shapeCount > 64u);
         const PhysicsCollisionTask payload(
@@ -1284,17 +1456,20 @@ class PhysicsGpuDispatcher{
             bodySims,
             shapes,
             hullVertices,
+            meshNodes,
+            meshTris,
             shapeCount,
             maxPairs,
-            invCellSize
+            invCellSize,
+            uploadStaticGeom
         );
         return graphics.standaloneGraph().submitStandaloneTaskGraph(
             lambda[in bufGroup, in payload, in useSpatialHash](mut GpuTaskGraph graph) -> Expected<GpuTaskId>{
                 Vector<GpuTaskResourceUse> uses;
                 if(useSpatialHash)
-                    uses.resize(11u);
+                    uses.resize(13u);
                 else
-                    uses.resize(9u);
+                    uses.resize(11u);
                 if(!ImportBufferUse(graph, bufGroup.bodySimBuffer, "Physics body sims", ResourceStates::Common, GpuTaskResourceAccess::ReadWrite, uses[0u]))
                     return MakeUnexpected(Failure());
                 if(!ImportBufferUse(graph, bufGroup.shapeBuffer, "Physics shape proxies", ResourceStates::Common, GpuTaskResourceAccess::ReadWrite, uses[1u]))
@@ -1309,20 +1484,76 @@ class PhysicsGpuDispatcher{
                     return MakeUnexpected(Failure());
                 if(!ImportBufferUse(graph, bufGroup.hullVertexBuffer, "Physics hull vertices", ResourceStates::Common, GpuTaskResourceAccess::ReadWrite, uses[6u]))
                     return MakeUnexpected(Failure());
-                if(!ImportBufferUse(graph, bufGroup.manifoldBuffer, "Physics narrowphase manifolds", ResourceStates::Common, GpuTaskResourceAccess::ReadWrite, uses[7u]))
+                if(!ImportBufferUse(graph, bufGroup.meshNodeBuffer, "Physics mesh bvh nodes", ResourceStates::Common, GpuTaskResourceAccess::ReadWrite, uses[7u]))
                     return MakeUnexpected(Failure());
-                if(!ImportBufferUse(graph, bufGroup.manifoldReadback, "Physics narrowphase readback", ResourceStates::CopyDest, GpuTaskResourceAccess::Write, uses[8u]))
+                if(!ImportBufferUse(graph, bufGroup.meshTriBuffer, "Physics mesh triangles", ResourceStates::Common, GpuTaskResourceAccess::ReadWrite, uses[8u]))
+                    return MakeUnexpected(Failure());
+                if(!ImportBufferUse(graph, bufGroup.manifoldBuffer, "Physics narrowphase manifolds", ResourceStates::Common, GpuTaskResourceAccess::ReadWrite, uses[9u]))
+                    return MakeUnexpected(Failure());
+                if(!ImportBufferUse(graph, bufGroup.manifoldReadback, "Physics narrowphase readback", ResourceStates::CopyDest, GpuTaskResourceAccess::Write, uses[10u]))
                     return MakeUnexpected(Failure());
                 if(useSpatialHash){
-                    if(!ImportBufferUse(graph, bufGroup.gridBuffer, "Physics spatial hash grid", ResourceStates::Common, GpuTaskResourceAccess::ReadWrite, uses[9u]))
+                    if(!ImportBufferUse(graph, bufGroup.gridBuffer, "Physics spatial hash grid", ResourceStates::Common, GpuTaskResourceAccess::ReadWrite, uses[11u]))
                         return MakeUnexpected(Failure());
-                    if(!ImportBufferUse(graph, bufGroup.largeListBuffer, "Physics broadphase large list", ResourceStates::Common, GpuTaskResourceAccess::ReadWrite, uses[10u]))
+                    if(!ImportBufferUse(graph, bufGroup.largeListBuffer, "Physics broadphase large list", ResourceStates::Common, GpuTaskResourceAccess::ReadWrite, uses[12u]))
                         return MakeUnexpected(Failure());
                 }
 
                 GpuTaskDesc desc;
                 desc.setIdentity(Name("physics/gpu/collision")).setMarkerLabel("Physics Broadphase + Narrowphase").setResourceUses(uses);
                 PhysicsCollisionTask recorded = payload;
+                const auto task = graph.addPayloadTask(desc, recorded);
+                if(!task.has_value() || !task.value().valid())
+                    return MakeUnexpected(Failure());
+                return task;
+            },
+            GpuPhysicalQueueId()
+        );
+    }
+
+    [cpp_unwind]
+    private Expected<QueueSubmissionToken> submitBulletToiAsync(
+        mut GraphicsRuntime graphics,
+        mut GpuDescriptorHeap heap,
+        in PhysicsGpuBufferGroup bufGroup,
+        in Span<GpuPhysicsBodySim> bodySims,
+        in Span<GpuPhysicsShapeProxy> shapes,
+        in Span<GpuPhysicsBroadphasePair> pairs,
+        in u32 pairCount
+    ){
+        const PhysicsBulletToiTask payload(
+            heap,
+            bufGroup,
+            this.m_narrowphasePipeline,
+            bodySims,
+            shapes,
+            pairs,
+            pairCount
+        );
+        return graphics.standaloneGraph().submitStandaloneTaskGraph(
+            lambda[in bufGroup, in payload](mut GpuTaskGraph graph) -> Expected<GpuTaskId>{
+                Vector<GpuTaskResourceUse> uses;
+                uses.resize(8u);
+                if(!ImportBufferUse(graph, bufGroup.bodySimBuffer, "Physics bullet sims", ResourceStates::Common, GpuTaskResourceAccess::ReadWrite, uses[0u]))
+                    return MakeUnexpected(Failure());
+                if(!ImportBufferUse(graph, bufGroup.shapeBuffer, "Physics bullet shapes", ResourceStates::Common, GpuTaskResourceAccess::ReadWrite, uses[1u]))
+                    return MakeUnexpected(Failure());
+                if(!ImportBufferUse(graph, bufGroup.pairBuffer, "Physics bullet pairs", ResourceStates::Common, GpuTaskResourceAccess::ReadWrite, uses[2u]))
+                    return MakeUnexpected(Failure());
+                if(!ImportBufferUse(graph, bufGroup.hullVertexBuffer, "Physics hull vertices", ResourceStates::Common, GpuTaskResourceAccess::ReadWrite, uses[3u]))
+                    return MakeUnexpected(Failure());
+                if(!ImportBufferUse(graph, bufGroup.meshNodeBuffer, "Physics mesh bvh nodes", ResourceStates::Common, GpuTaskResourceAccess::ReadWrite, uses[4u]))
+                    return MakeUnexpected(Failure());
+                if(!ImportBufferUse(graph, bufGroup.meshTriBuffer, "Physics mesh triangles", ResourceStates::Common, GpuTaskResourceAccess::ReadWrite, uses[5u]))
+                    return MakeUnexpected(Failure());
+                if(!ImportBufferUse(graph, bufGroup.manifoldBuffer, "Physics bullet toi manifolds", ResourceStates::Common, GpuTaskResourceAccess::ReadWrite, uses[6u]))
+                    return MakeUnexpected(Failure());
+                if(!ImportBufferUse(graph, bufGroup.manifoldReadback, "Physics bullet toi readback", ResourceStates::CopyDest, GpuTaskResourceAccess::Write, uses[7u]))
+                    return MakeUnexpected(Failure());
+
+                GpuTaskDesc desc;
+                desc.setIdentity(Name("physics/gpu/bullet_toi")).setMarkerLabel("Physics Bullet TOI").setResourceUses(uses);
+                PhysicsBulletToiTask recorded = payload;
                 const auto task = graph.addPayloadTask(desc, recorded);
                 if(!task.has_value() || !task.value().valid())
                     return MakeUnexpected(Failure());
@@ -1488,6 +1719,550 @@ class PhysicsGpuDispatcher{
     }
 
     [cpp_unwind]
+    private b8 ensureStaticGeometry(
+        in PhysicsWorld world,
+        mut GraphicsRuntime graphics,
+        mut GpuDescriptorHeap heap
+    ){
+        const usize totalShapes = world.m_shapes.size();
+        const b8 rebuild = !this.m_staticGeomValid || this.m_cachedTopologyVersion != world.m_topologyVersion || this.m_shapeDataOffset.size() != totalShapes;
+        if(rebuild){
+            this.m_cachedHullData.clear();
+            this.m_cachedMeshNodes.clear();
+            this.m_cachedMeshTris.clear();
+            this.m_shapeDataOffset.clear();
+            this.m_shapeDataOffset.resize(totalShapes, 0u);
+            this.m_shapeDataMeta.clear();
+            this.m_shapeDataMeta.resize(totalShapes, 0u);
+
+            for(usize sId = 0u; sId < totalShapes; ++sId){
+                in Shape shape = world.m_shapes[sId];
+                if(!shape.alive)
+                    continue;
+                if(shape.type == ShapeType::Hull && !shape.hull.isBox){
+                    const u32 vOffset = cast<u32>(this.m_cachedHullData.size());
+                    const u32 vCount = cast<u32>(Min(shape.hull.vertices.size(), cast<usize>(s_MaxHullVertices)));
+                    const u32 fCount = cast<u32>(Min(shape.hull.faces.size(), cast<usize>(s_MaxHullFaces)));
+                    for(u32 i = 0u; i < vCount; ++i)
+                        this.m_cachedHullData.push_back(shape.hull.vertices[i]);
+                    for(u32 i = 0u; i < fCount; ++i)
+                        this.m_cachedHullData.push_back(shape.hull.faces[i].plane.normalOffset);
+                    this.m_shapeDataOffset[sId] = vOffset;
+                    this.m_shapeDataMeta[sId] = (vCount & 0xffffu) | ((fCount & 0xffffu) << 16u);
+                }
+                else if(shape.type == ShapeType::Mesh){
+                    if(!shape.mesh.nodes.empty() && !shape.mesh.triangles.empty()){
+                        const u32 nodeBase = cast<u32>(this.m_cachedMeshNodes.size() / 2u);
+                        const u32 triBase = cast<u32>(this.m_cachedMeshTris.size() / 4u);
+                        for(usize ni = 0u; ni < shape.mesh.nodes.size(); ++ni){
+                            in MeshBvhNode node = shape.mesh.nodes[ni];
+                            u32 metaBits = node.rightOrCount & 0x7fffffffu;
+                            if(node.isLeaf)
+                                metaBits |= 0x80000000u;
+                            this.m_cachedMeshNodes.push_back(f32x4(node.aabb.lowerBound.x, node.aabb.lowerBound.y, node.aabb.lowerBound.z, bit_cast<f32>(node.leftOrFirst)));
+                            this.m_cachedMeshNodes.push_back(f32x4(node.aabb.upperBound.x, node.aabb.upperBound.y, node.aabb.upperBound.z, bit_cast<f32>(metaBits)));
+                        }
+                        for(usize ti = 0u; ti < shape.mesh.triangles.size(); ++ti){
+                            in MeshTriangle tri = shape.mesh.triangles[ti];
+                            this.m_cachedMeshTris.push_back(tri.v0);
+                            this.m_cachedMeshTris.push_back(tri.v1);
+                            this.m_cachedMeshTris.push_back(tri.v2);
+                            this.m_cachedMeshTris.push_back(tri.normal);
+                        }
+                        this.m_shapeDataOffset[sId] = nodeBase;
+                        this.m_shapeDataMeta[sId] = triBase;
+                    }
+                    else{
+                        this.m_shapeDataOffset[sId] = s_GpuInvalidIndex;
+                        this.m_shapeDataMeta[sId] = s_GpuInvalidIndex;
+                    }
+                }
+            }
+            this.m_cachedTopologyVersion = world.m_topologyVersion;
+            this.m_staticGeomValid = true;
+            this.m_staticGeomDirtyUpload = true;
+        }
+
+        const b8 prevHullValid = this.m_hullVertexSlot.hasValidUav();
+        const u32 prevHullCap = this.m_hullVertexSlot.capacity;
+        const b8 prevNodeValid = this.m_meshNodeSlot.hasValidUav();
+        const u32 prevNodeCap = this.m_meshNodeSlot.capacity;
+        const b8 prevTriValid = this.m_meshTriSlot.hasValidUav();
+        const u32 prevTriCap = this.m_meshTriSlot.capacity;
+
+        if(!EnsurePhysicsGpuStorageBuffer(graphics, heap, Name("physics/gpu/hull_vertices"), size_of<f32x4>(), Max(cast<u32>(this.m_cachedHullData.size()), 1u), false, this.m_hullVertexSlot))
+            return false;
+        if(!EnsurePhysicsGpuStorageBuffer(graphics, heap, Name("physics/gpu/mesh_nodes"), size_of<f32x4>(), Max(cast<u32>(this.m_cachedMeshNodes.size()), 1u), false, this.m_meshNodeSlot))
+            return false;
+        if(!EnsurePhysicsGpuStorageBuffer(graphics, heap, Name("physics/gpu/mesh_tris"), size_of<f32x4>(), Max(cast<u32>(this.m_cachedMeshTris.size()), 1u), false, this.m_meshTriSlot))
+            return false;
+
+        if(!prevHullValid || this.m_hullVertexSlot.capacity != prevHullCap || !prevNodeValid || this.m_meshNodeSlot.capacity != prevNodeCap || !prevTriValid || this.m_meshTriSlot.capacity != prevTriCap)
+            this.m_staticGeomDirtyUpload = true;
+        return true;
+    }
+
+    private f32 computeBodyMaxRadiusForToi(in PhysicsWorld world, in Body body, in VectorSingle localCenter)const{
+        f32 maxRadius = 0.0f;
+        u32 sId = body.headShapeId;
+        while(sId != s_NullIndex){
+            in Shape s = world.m_shapes[sId];
+            if(s.alive && !s.isSensor){
+                if(s.type == ShapeType::Sphere){
+                    maxRadius = Max(maxRadius, Vector3Length(VectorSingle(VectorSingle(s.sphere.center) - localCenter, 0.0f)).x);
+                }
+                else if(s.type == ShapeType::Capsule){
+                    const f32 d1 = Vector3Length(VectorSingle(VectorSingle(s.capsule.center1) - localCenter, 0.0f)).x;
+                    const f32 d2 = Vector3Length(VectorSingle(VectorSingle(s.capsule.center2) - localCenter, 0.0f)).x;
+                    maxRadius = Max(maxRadius, Max(d1, d2));
+                }
+                else if(s.type == ShapeType::Hull){
+                    if(s.hull.isBox){
+                        const f32 d = Vector3Length(VectorSingle(VectorSingle(s.hull.centroid) - localCenter, 0.0f)).x + Vector3Length(VectorSingle(VectorSingle(s.hull.halfExtents), 0.0f)).x;
+                        maxRadius = Max(maxRadius, d);
+                    }
+                    else{
+                        for(usize vi = 0u; vi < s.hull.vertices.size(); ++vi)
+                            maxRadius = Max(maxRadius, Vector3Length(VectorSingle(VectorSingle(s.hull.vertices[vi]) - localCenter, 0.0f)).x);
+                    }
+                }
+            }
+            sId = s.nextShapeId;
+        }
+        return maxRadius;
+    }
+
+    [cpp_unwind]
+    private b8 solveBulletContinuousGpu(mut PhysicsWorld world, in f32 dt){
+        if(!world.m_def.enableContinuous || dt <= 0.0f)
+            return true;
+        if(this.m_staticGeomDirtyUpload || !this.m_hullVertexSlot.hasValidUav() || !this.m_meshNodeSlot.hasValidUav() || !this.m_meshTriSlot.hasValidUav())
+            return false;
+
+        const u32 bulletBit = cast<u32>(BodyFlags::IsBullet);
+        const u32 toiBit = cast<u32>(BodyFlags::HadTimeOfImpact);
+        const usize awakeCount = world.m_solverSets[s_AwakeSetIndex].sims.size();
+
+        Vector<u32> bulletAwakeIndices;
+        Vector<u32> bulletBodyIds;
+        Vector<f32x4> bulletSweepMin;
+        Vector<f32x4> bulletSweepMax;
+        for(usize idx = 0u; idx < awakeCount; ++idx){
+            in BodySim simInit = world.m_solverSets[s_AwakeSetIndex].sims[idx];
+            const u32 bodyIdA = simInit.bodyId;
+            in Body bodyInit = world.m_bodies[bodyIdA];
+            if(!bodyInit.alive || bodyInit.type != BodyType::Dynamic || (bodyInit.flags & bulletBit) == 0u)
+                continue;
+            const VectorSingle dispA(VectorSingle(simInit.center) - VectorSingle(simInit.center0), 0.0f);
+            if(Vector3LengthSq(dispA).x <= s_LinearSlop * s_LinearSlop)
+                continue;
+
+            VectorSingle sweepMin(s_MaxF32);
+            VectorSingle sweepMax(-s_MaxF32);
+            u32 shapeCheckIdx = bodyInit.headShapeId;
+            b8 hasCollider = false;
+            while(shapeCheckIdx != s_NullIndex){
+                in Shape sA = world.m_shapes[shapeCheckIdx];
+                if(sA.alive && !sA.isSensor && sA.type != ShapeType::Mesh){
+                    const Transform3D xfStart = Transform3D(VectorSingle(simInit.center0) - Vector3Rotate(VectorSingle(simInit.localCenter), VectorSingle(simInit.rotation0)), VectorSingle(simInit.rotation0));
+                    const Aabb3D boxStart = ComputeShapeWorldAabb(sA, xfStart);
+                    const Aabb3D boxEnd = ComputeShapeWorldAabb(sA, simInit.transform);
+                    const Aabb3D boxUnion = AabbUnion(boxStart, boxEnd);
+                    sweepMin = Min(sweepMin, VectorSingle(boxUnion.lowerBound));
+                    sweepMax = Max(sweepMax, VectorSingle(boxUnion.upperBound));
+                    hasCollider = true;
+                }
+                shapeCheckIdx = sA.nextShapeId;
+            }
+            if(!hasCollider)
+                continue;
+
+            bulletAwakeIndices.push_back(cast<u32>(idx));
+            bulletBodyIds.push_back(bodyIdA);
+            bulletSweepMin.push_back(f32x4(sweepMin, 0.0f));
+            bulletSweepMax.push_back(f32x4(sweepMax, 0.0f));
+        }
+
+        const usize bulletCount = bulletAwakeIndices.size();
+        if(bulletCount == 0u)
+            return true;
+
+        Vector<usize> pairBulletIdx;
+        Vector<u32> pairShapeA;
+        Vector<u32> pairShapeB;
+        in PhysicsWorld worldRef = world;
+        for(usize bi = 0u; bi < bulletCount; ++bi){
+            const u32 bodyIdA = bulletBodyIds[bi];
+            in Body bodyInit = world.m_bodies[bodyIdA];
+            const Aabb3D queryBox = FattenAabb(Aabb3D(VectorSingle(bulletSweepMin[bi]), VectorSingle(bulletSweepMax[bi])), s_SpeculativeDistance);
+            for(usize t = 0u; t < s_TreeCount; ++t){
+                world.m_broadPhase.trees[t].queryAabb(
+                    queryBox,
+                    0xffffffffu,
+                    lambda[in worldRef, in bi, in bodyIdA, in bodyInit, mut pairBulletIdx, mut pairShapeA, mut pairShapeB](in u32 proxyId, in u32 shapeIdxB) -> b8{
+                        if(shapeIdxB >= worldRef.m_shapes.size() || !worldRef.m_shapes[shapeIdxB].alive)
+                            return true;
+                        in Shape sB = worldRef.m_shapes[shapeIdxB];
+                        if(sB.isSensor || sB.bodyId == bodyIdA)
+                            return true;
+                        in Body bB = worldRef.m_bodies[sB.bodyId];
+                        if(!bB.alive || bB.setIndex == s_DisabledSetIndex)
+                            return true;
+                        if(worldRef.areBodiesConnectedNonColliding(bodyIdA, sB.bodyId))
+                            return true;
+
+                        u32 shapeIdxA = bodyInit.headShapeId;
+                        while(shapeIdxA != s_NullIndex){
+                            in Shape sA = worldRef.m_shapes[shapeIdxA];
+                            if(sA.alive && !sA.isSensor && sA.type != ShapeType::Mesh && ShouldCollideFilters(sA.filter, sB.filter)){
+                                b8 customAllow = true;
+                                if(worldRef.m_customFilterCallback.has_value()){
+                                    u32 ordA = shapeIdxA;
+                                    u32 ordB = shapeIdxB;
+                                    if(shapeIdxB < shapeIdxA){
+                                        ordA = shapeIdxB;
+                                        ordB = shapeIdxA;
+                                    }
+                                    customAllow = worldRef.m_customFilterCallback.value()(worldRef.makeShapeId(ordA), worldRef.makeShapeId(ordB));
+                                }
+                                if(customAllow){
+                                    pairBulletIdx.push_back(bi);
+                                    pairShapeA.push_back(shapeIdxA);
+                                    pairShapeB.push_back(shapeIdxB);
+                                }
+                            }
+                            shapeIdxA = sA.nextShapeId;
+                        }
+                        return true;
+                    }
+                );
+            }
+        }
+
+        const usize totalPairCount = pairBulletIdx.size();
+        if(totalPairCount == 0u)
+            return true;
+
+        Vector<u32> bodyToToiSlot(world.m_bodies.size(), s_GpuInvalidIndex);
+        Vector<u32> shapeToToiSlot(world.m_shapes.size(), s_GpuInvalidIndex);
+        this.m_gpuSimsScratch.clear();
+        this.m_gpuShapesScratch.clear();
+        Vector<GpuPhysicsBroadphasePair> toiPairs;
+        toiPairs.reserve(totalPairCount);
+
+        for(usize pi = 0u; pi < totalPairCount; ++pi){
+            const u32 sIdA = pairShapeA[pi];
+            const u32 sIdB = pairShapeB[pi];
+            const u32 bIdA = world.m_shapes[sIdA].bodyId;
+            const u32 bIdB = world.m_shapes[sIdB].bodyId;
+
+            if(bodyToToiSlot[bIdA] == s_GpuInvalidIndex){
+                bodyToToiSlot[bIdA] = cast<u32>(this.m_gpuSimsScratch.size());
+                in Body b = world.m_bodies[bIdA];
+                in BodySim sim = world.m_solverSets[b.setIndex].sims[b.localIndex];
+                GpuPhysicsBodySim gs = PackGpuBodySim(b, sim);
+                gs.forceLinearDamping = f32x4(sim.center0.x, sim.center0.y, sim.center0.z, this.computeBodyMaxRadiusForToi(world, b, VectorSingle(sim.localCenter)));
+                gs.torqueAngularDamping = sim.rotation0;
+                this.m_gpuSimsScratch.push_back(gs);
+            }
+            if(bodyToToiSlot[bIdB] == s_GpuInvalidIndex){
+                bodyToToiSlot[bIdB] = cast<u32>(this.m_gpuSimsScratch.size());
+                in Body b = world.m_bodies[bIdB];
+                in BodySim sim = world.m_solverSets[b.setIndex].sims[b.localIndex];
+                GpuPhysicsBodySim gs = PackGpuBodySim(b, sim);
+                f32x4 c0 = sim.center;
+                f32x4 q0 = sim.transform.rotation;
+                if(b.type != BodyType::Static && b.setIndex == s_AwakeSetIndex){
+                    c0 = sim.center0;
+                    q0 = sim.rotation0;
+                }
+                gs.forceLinearDamping = f32x4(c0.x, c0.y, c0.z, this.computeBodyMaxRadiusForToi(world, b, VectorSingle(sim.localCenter)));
+                gs.torqueAngularDamping = q0;
+                this.m_gpuSimsScratch.push_back(gs);
+            }
+            if(shapeToToiSlot[sIdA] == s_GpuInvalidIndex){
+                shapeToToiSlot[sIdA] = cast<u32>(this.m_gpuShapesScratch.size());
+                u32 off = 0u;
+                u32 meta = 0u;
+                if(sIdA < this.m_shapeDataOffset.size()){
+                    off = this.m_shapeDataOffset[sIdA];
+                    meta = this.m_shapeDataMeta[sIdA];
+                }
+                this.m_gpuShapesScratch.push_back(PackGpuShapeProxy(world.m_shapes[sIdA], world.m_bodies[bIdA], bodyToToiSlot[bIdA], sIdA, s_MaxAabbMargin, off, meta));
+            }
+            if(shapeToToiSlot[sIdB] == s_GpuInvalidIndex){
+                shapeToToiSlot[sIdB] = cast<u32>(this.m_gpuShapesScratch.size());
+                u32 off = 0u;
+                u32 meta = 0u;
+                if(sIdB < this.m_shapeDataOffset.size()){
+                    off = this.m_shapeDataOffset[sIdB];
+                    meta = this.m_shapeDataMeta[sIdB];
+                }
+                this.m_gpuShapesScratch.push_back(PackGpuShapeProxy(world.m_shapes[sIdB], world.m_bodies[bIdB], bodyToToiSlot[bIdB], sIdB, s_MaxAabbMargin, off, meta));
+            }
+
+            GpuPhysicsBroadphasePair pairOut;
+            pairOut.indices = u32x4(shapeToToiSlot[sIdA], shapeToToiSlot[sIdB], bodyToToiSlot[bIdA], bodyToToiSlot[bIdB]);
+            toiPairs.push_back(pairOut);
+        }
+
+        mut GraphicsRuntime graphics = this.m_graphics.value();
+        mut Device device = graphics.getDevice();
+        mut GpuDescriptorHeap heap = device.getDescriptorHeap();
+        const u32 toiBodyCount = cast<u32>(this.m_gpuSimsScratch.size());
+        const u32 toiShapeCount = cast<u32>(this.m_gpuShapesScratch.size());
+        const u32 toiPairCount = cast<u32>(toiPairs.size());
+
+        if(!EnsurePhysicsGpuStorageBuffer(graphics, heap, Name("physics/gpu/body_sims"), s_GpuBodySimBytes, toiBodyCount, false, this.m_bodySimSlot))
+            return false;
+        if(!EnsurePhysicsGpuStorageBuffer(graphics, heap, Name("physics/gpu/shapes"), s_GpuShapeProxyBytes, toiShapeCount, false, this.m_shapeSlot))
+            return false;
+        if(!EnsurePhysicsGpuStorageBuffer(graphics, heap, Name("physics/gpu/pairs"), s_GpuBroadphasePairBytes, toiPairCount, false, this.m_pairSlot))
+            return false;
+        if(!EnsurePhysicsGpuStorageBuffer(graphics, heap, Name("physics/gpu/manifolds"), s_GpuNarrowphaseManifoldBytes, toiPairCount, false, this.m_manifoldSlot))
+            return false;
+        if(!EnsurePhysicsGpuReadbackBuffer(graphics, Name("physics/gpu/manifolds_rb"), s_GpuNarrowphaseManifoldBytes, toiPairCount, this.m_manifoldSlot))
+            return false;
+
+        PhysicsGpuBufferGroup toiBufs;
+        toiBufs.bodySimBuffer = this.m_bodySimSlot.buffer;
+        toiBufs.shapeBuffer = this.m_shapeSlot.buffer;
+        toiBufs.pairBuffer = this.m_pairSlot.buffer;
+        toiBufs.hullVertexBuffer = this.m_hullVertexSlot.buffer;
+        toiBufs.meshNodeBuffer = this.m_meshNodeSlot.buffer;
+        toiBufs.meshTriBuffer = this.m_meshTriSlot.buffer;
+        toiBufs.manifoldBuffer = this.m_manifoldSlot.buffer;
+        toiBufs.manifoldReadback = this.m_manifoldSlot.readback;
+        toiBufs.slots0 = u32x4(
+            this.m_bodySimSlot.descriptor.slot(),
+            this.m_meshNodeSlot.descriptor.slot(),
+            this.m_shapeSlot.descriptor.slot(),
+            this.m_meshTriSlot.descriptor.slot()
+        );
+        toiBufs.slots1 = u32x4(
+            this.m_pairSlot.descriptor.slot(),
+            s_GpuInvalidIndex,
+            s_GpuInvalidIndex,
+            s_GpuInvalidIndex
+        );
+        toiBufs.slots2 = u32x4(
+            s_GpuInvalidIndex,
+            this.m_hullVertexSlot.descriptor.slot(),
+            this.m_manifoldSlot.descriptor.slot(),
+            s_GpuInvalidIndex
+        );
+
+        const auto toiToken = this.submitBulletToiAsync(
+            graphics,
+            heap,
+            toiBufs,
+            Span<GpuPhysicsBodySim>(this.m_gpuSimsScratch),
+            Span<GpuPhysicsShapeProxy>(this.m_gpuShapesScratch),
+            Span<GpuPhysicsBroadphasePair>(toiPairs),
+            toiPairCount
+        );
+        if(!toiToken.has_value())
+            return false;
+        if(!device.waitForSubmissionToken(toiToken.value()))
+            return false;
+
+        this.m_gpuManifoldsScratch.resize(toiPairCount);
+        if(!device.readMappedBuffer(this.m_manifoldSlot.readback.deref(), this.m_gpuManifoldsScratch))
+            return false;
+
+        Vector<f32> bestT(bulletCount, 1.0f);
+        Vector<b8> foundToi(bulletCount, false);
+        Vector<u32> bestShapeA(bulletCount, s_NullIndex);
+        Vector<u32> bestShapeB(bulletCount, s_NullIndex);
+        Vector<f32x4> bestNormal(bulletCount, f32x4(0.0f, 1.0f, 0.0f, 0.0f));
+        Vector<f32x4> bestPoint(bulletCount, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
+
+        for(usize pi = 0u; pi < totalPairCount; ++pi){
+            const usize bi = pairBulletIdx[pi];
+            in GpuPhysicsNarrowphaseManifold gm = this.m_gpuManifoldsScratch[pi];
+            const u32 shapeIdxA = pairShapeA[pi];
+            const u32 shapeIdxB = pairShapeB[pi];
+            if(gm.pairInfo.w == 2u){
+                const u32 idxA = bulletAwakeIndices[bi];
+                in BodySim simA = world.m_solverSets[s_AwakeSetIndex].sims[idxA];
+                Sweep3D sweepA;
+                sweepA.c0 = simA.center0;
+                sweepA.c1 = simA.center;
+                sweepA.q0 = simA.rotation0;
+                sweepA.q1 = simA.transform.rotation;
+                sweepA.localCenter = simA.localCenter;
+
+                in Shape sA = world.m_shapes[shapeIdxA];
+                in Shape sB = world.m_shapes[shapeIdxB];
+                in Body bB = world.m_bodies[sB.bodyId];
+                in BodySim simB = world.m_solverSets[bB.setIndex].sims[bB.localIndex];
+                Sweep3D sweepB;
+                if(bB.type != BodyType::Static && bB.setIndex == s_AwakeSetIndex){
+                    sweepB.c0 = simB.center0;
+                    sweepB.c1 = simB.center;
+                    sweepB.q0 = simB.rotation0;
+                    sweepB.q1 = simB.transform.rotation;
+                }
+                else{
+                    sweepB.c0 = simB.center;
+                    sweepB.c1 = simB.center;
+                    sweepB.q0 = simB.transform.rotation;
+                    sweepB.q1 = simB.transform.rotation;
+                }
+                sweepB.localCenter = simB.localCenter;
+
+                const ShapeProxy proxyA = MakeShapeProxyFromShape(sA);
+                if(sB.type == ShapeType::Mesh){
+                    const Transform3D startXfA = EvalSweepTransform(sweepA, 0.0f);
+                    const Transform3D endXfA = EvalSweepTransform(sweepA, 1.0f);
+                    const VectorSingle relDisp = VectorSingle(VectorSingle(endXfA.position) - VectorSingle(startXfA.position), 0.0f) - VectorSingle(VectorSingle(sweepB.c1) - VectorSingle(sweepB.c0), 0.0f);
+                    const LocalRayHit mHit = ShapeCastMesh(proxyA, startXfA, relDisp, sB.mesh, simB.transform, bestT[bi]);
+                    if(mHit.hit && mHit.fraction > 1.0e-5f && mHit.fraction < bestT[bi]){
+                        foundToi[bi] = true;
+                        bestT[bi] = mHit.fraction;
+                        bestShapeA[bi] = shapeIdxA;
+                        bestShapeB[bi] = shapeIdxB;
+                        bestNormal[bi] = f32x4(SafeNormalizeVec3(VectorSingle(mHit.normal), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
+                        bestPoint[bi] = mHit.point;
+                    }
+                }
+                else{
+                    const ShapeProxy proxyB = MakeShapeProxyFromShape(sB);
+                    const TimeOfImpactOutput toi = ComputeTimeOfImpact(proxyA, sweepA, proxyB, sweepB, bestT[bi]);
+                    if(toi.hit && !toi.initialOverlap && toi.fraction > 1.0e-5f && toi.fraction < bestT[bi]){
+                        foundToi[bi] = true;
+                        bestT[bi] = toi.fraction;
+                        bestShapeA[bi] = shapeIdxA;
+                        bestShapeB[bi] = shapeIdxB;
+                        bestNormal[bi] = f32x4(SafeNormalizeVec3(VectorSingle(toi.normal), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
+                        bestPoint[bi] = toi.point;
+                    }
+                }
+            }
+            else if(gm.pairInfo.z > 0u && gm.pairInfo.w == 0u && gm.normalPad.w > 1.0e-5f && gm.normalPad.w < bestT[bi]){
+                foundToi[bi] = true;
+                bestT[bi] = gm.normalPad.w;
+                bestShapeA[bi] = shapeIdxA;
+                bestShapeB[bi] = shapeIdxB;
+                bestNormal[bi] = f32x4(SafeNormalizeVec3(VectorSingle(gm.normalPad.x, gm.normalPad.y, gm.normalPad.z, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
+                bestPoint[bi] = f32x4(gm.anchorA[0u].x, gm.anchorA[0u].y, gm.anchorA[0u].z, 0.0f);
+            }
+        }
+
+        Vector<u32> wakeTargets;
+        for(usize bi = 0u; bi < bulletCount; ++bi){
+            if(!foundToi[bi] || bestShapeA[bi] == s_NullIndex || bestShapeB[bi] == s_NullIndex)
+                continue;
+
+            const u32 idx = bulletAwakeIndices[bi];
+            const u32 bodyIdA = bulletBodyIds[bi];
+            mut BodySim simA = world.m_solverSets[s_AwakeSetIndex].sims[idx];
+            mut BodyState stateA = world.m_solverSets[s_AwakeSetIndex].states[idx];
+            mut Body bodyA = world.m_bodies[bodyIdA];
+
+            Sweep3D sweepA;
+            sweepA.c0 = simA.center0;
+            sweepA.c1 = simA.center;
+            sweepA.q0 = simA.rotation0;
+            sweepA.q1 = simA.transform.rotation;
+            sweepA.localCenter = simA.localCenter;
+
+            const Transform3D hitXfA = EvalSweepTransform(sweepA, bestT[bi]);
+            simA.transform = hitXfA;
+            simA.center = f32x4(TransformPoint(hitXfA, VectorSingle(simA.localCenter)), 0.0f);
+            simA.invInertiaWorld = RotateSymmetricMat3(VectorSingle(hitXfA.rotation), simA.invInertiaLocal);
+
+            bodyA.flags |= toiBit;
+            simA.flags |= toiBit;
+            stateA.flags |= toiBit;
+
+            in Shape hitShapeA = world.m_shapes[bestShapeA[bi]];
+            in Shape hitShapeB = world.m_shapes[bestShapeB[bi]];
+            const u32 bodyIdB = hitShapeB.bodyId;
+            in Body bodyB = world.m_bodies[bodyIdB];
+            in BodySim simB = world.m_solverSets[bodyB.setIndex].sims[bodyB.localIndex];
+
+            VectorSingle vB(0.0f);
+            VectorSingle wB(0.0f);
+            if(bodyB.setIndex == s_AwakeSetIndex){
+                vB = VectorSingle(world.m_solverSets[s_AwakeSetIndex].states[bodyB.localIndex].linearVelocity);
+                wB = VectorSingle(world.m_solverSets[s_AwakeSetIndex].states[bodyB.localIndex].angularVelocity);
+            }
+
+            VectorSingle vA = VectorSingle(stateA.linearVelocity);
+            VectorSingle wA = VectorSingle(stateA.angularVelocity);
+            const VectorSingle nVec = VectorSingle(bestNormal[bi]);
+            const VectorSingle pVec = VectorSingle(bestPoint[bi]);
+            const VectorSingle rA(pVec - VectorSingle(simA.center), 0.0f);
+            const VectorSingle rB(pVec - VectorSingle(simB.center), 0.0f);
+            const VectorSingle velA = vA + Cross(wA, rA);
+            const VectorSingle velB = vB + Cross(wB, rB);
+            const VectorSingle relV(velB - velA, 0.0f);
+            const f32 vn = Vector3Dot(relV, nVec).x;
+
+            const VectorSingle rnA = Cross(rA, nVec);
+            const VectorSingle rnB = Cross(rB, nVec);
+            const f32 kNormal =
+                simA.invMass
+                + simB.invMass
+                + Vector3Dot(nVec, Cross(MulMat3Vec(simA.invInertiaWorld, rnA), rA)).x
+                + Vector3Dot(nVec, Cross(MulMat3Vec(simB.invInertiaWorld, rnB), rB)).x
+            ;
+
+            if(vn < 0.0f && kNormal > s_NormalizeEpsilonSq){
+                const f32 restitution = CombineMaterialRestitution(hitShapeA.material.restitution, hitShapeB.material.restitution);
+                f32 e = 0.0f;
+                if(-vn >= world.m_def.restitutionThreshold)
+                    e = restitution;
+                const f32 jN = -(1.0f + e) * vn / kNormal;
+                if(jN > 0.0f){
+                    const VectorSingle impulse = nVec * jN;
+                    vA = ApplyLinearLocks(vA - impulse * simA.invMass, bodyA.flags);
+                    wA = ApplyAngularLocks(wA - MulMat3Vec(simA.invInertiaWorld, Cross(rA, impulse)), bodyA.flags);
+                    stateA.linearVelocity = f32x4(vA, 0.0f);
+                    stateA.angularVelocity = f32x4(wA, 0.0f);
+
+                    if(bodyB.type == BodyType::Dynamic){
+                        if(bodyB.setIndex == s_AwakeSetIndex){
+                            mut BodyState stateB = world.m_solverSets[s_AwakeSetIndex].states[bodyB.localIndex];
+                            const VectorSingle nvB = ApplyLinearLocks(VectorSingle(stateB.linearVelocity) + impulse * simB.invMass, bodyB.flags);
+                            const VectorSingle nwB = ApplyAngularLocks(VectorSingle(stateB.angularVelocity) + MulMat3Vec(simB.invInertiaWorld, Cross(rB, impulse)), bodyB.flags);
+                            stateB.linearVelocity = f32x4(nvB, 0.0f);
+                            stateB.angularVelocity = f32x4(nwB, 0.0f);
+                        }
+                        else if(bodyB.setIndex >= 3u){
+                            wakeTargets.push_back(bodyIdB);
+                        }
+                    }
+                }
+
+                if((hitShapeA.enableHitEvents || hitShapeB.enableHitEvents) && -vn >= world.m_def.hitEventThreshold){
+                    ContactHitEvent hitEv;
+                    hitEv.shapeIdA = world.makeShapeId(bestShapeA[bi]);
+                    hitEv.shapeIdB = world.makeShapeId(bestShapeB[bi]);
+                    hitEv.normal = bestNormal[bi];
+                    hitEv.point = bestPoint[bi];
+                    hitEv.approachSpeed = -vn;
+                    world.m_contactHitEvents.push_back(hitEv);
+                }
+            }
+        }
+
+        for(usize wi = 0u; wi < wakeTargets.size(); ++wi){
+            WakeBodyWithGraph(
+                world.m_graph,
+                world.m_bodies,
+                world.m_islands,
+                world.m_solverSets,
+                world.m_freeSolverSetIds,
+                world.m_contacts,
+                wakeTargets[wi]
+            );
+        }
+        return true;
+    }
+
+    [cpp_unwind]
     public b8 tryExecuteStep(mut PhysicsWorld world, in f32 dt, in u32 subStepCount, mut CpuTaskScheduler cpuScheduler){
         if(world.m_backendMode == PhysicsBackendMode::CpuOnly)
             return false;
@@ -1515,16 +2290,19 @@ class PhysicsGpuDispatcher{
         if(!heap.isInitialized())
             return false;
 
+        if(!this.ensureStaticGeometry(world, graphics, heap))
+            return false;
+
         Vector<u32> bodyToGpuSim(world.m_bodies.size(), s_GpuInvalidIndex);
-        Vector<GpuPhysicsBodySim> gpuSims;
-        gpuSims.reserve(world.activeBodyCount());
+        this.m_gpuSimsScratch.clear();
+        this.m_gpuSimsScratch.reserve(world.activeBodyCount());
 
         in SolverSet awakeSet = world.m_solverSets[s_AwakeSetIndex];
         for(u32 idx = 0u; idx < awakeCount; ++idx){
             in BodySim sim = awakeSet.sims[idx];
             in Body body = world.m_bodies[sim.bodyId];
             bodyToGpuSim[sim.bodyId] = idx;
-            gpuSims.push_back(PackGpuBodySim(body, sim));
+            this.m_gpuSimsScratch.push_back(PackGpuBodySim(body, sim));
         }
 
         for(u32 bId = 0u; bId < world.m_bodies.size(); ++bId){
@@ -1533,17 +2311,16 @@ class PhysicsGpuDispatcher{
                 continue;
             if(body.setIndex >= world.m_solverSets.size() || body.localIndex >= world.m_solverSets[body.setIndex].sims.size())
                 continue;
-            bodyToGpuSim[bId] = cast<u32>(gpuSims.size());
-            gpuSims.push_back(PackGpuBodySim(body, world.m_solverSets[body.setIndex].sims[body.localIndex]));
+            bodyToGpuSim[bId] = cast<u32>(this.m_gpuSimsScratch.size());
+            this.m_gpuSimsScratch.push_back(PackGpuBodySim(body, world.m_solverSets[body.setIndex].sims[body.localIndex]));
         }
 
-        const u32 totalSimCount = cast<u32>(gpuSims.size());
+        const u32 totalSimCount = cast<u32>(this.m_gpuSimsScratch.size());
         if(totalSimCount == 0u)
             return false;
 
-        Vector<GpuPhysicsShapeProxy> gpuShapes;
-        Vector<f32x4> hullVertices;
-        gpuShapes.reserve(world.activeShapeCount());
+        this.m_gpuShapesScratch.clear();
+        this.m_gpuShapesScratch.reserve(world.activeShapeCount());
         const f32 gravBoost = Vector3Length(VectorSingle(world.m_def.gravity, 0.0f)).x * dt;
         f32 cellExtentAccum = 0.0f;
         u32 cellExtentCount = 0u;
@@ -1570,7 +2347,13 @@ class PhysicsGpuDispatcher{
                 cellExtentAccum += Max(shapeExtent, 0.25f);
                 ++cellExtentCount;
             }
-            gpuShapes.push_back(PackGpuShapeProxy(shape, shapeBody, gpuBodyIdx, sId, sweepMargin, hullVertices));
+            u32 dataOffset = 0u;
+            u32 dataMeta = 0u;
+            if(sId < this.m_shapeDataOffset.size()){
+                dataOffset = this.m_shapeDataOffset[sId];
+                dataMeta = this.m_shapeDataMeta[sId];
+            }
+            this.m_gpuShapesScratch.push_back(PackGpuShapeProxy(shape, shapeBody, gpuBodyIdx, sId, sweepMargin, dataOffset, dataMeta));
         }
 
         f32 cellSize = 2.0f;
@@ -1578,7 +2361,7 @@ class PhysicsGpuDispatcher{
             cellSize = Clamp((cellExtentAccum / cast<f32>(cellExtentCount)) * 2.0f, 0.5f, 4.0f);
         const f32 invCellSize = 1.0f / cellSize;
 
-        const u32 shapeCount = cast<u32>(gpuShapes.size());
+        const u32 shapeCount = cast<u32>(this.m_gpuShapesScratch.size());
         u32 pairCount = 0u;
 
         world.m_bodyMoveEvents.clear();
@@ -1621,8 +2404,6 @@ class PhysicsGpuDispatcher{
                 if(!EnsurePhysicsGpuStorageBuffer(graphics, heap, Name("physics/gpu/large_list"), size_of<u32>(), shapeCount + 1u, false, this.m_largeListSlot))
                     return false;
             }
-            if(!EnsurePhysicsGpuStorageBuffer(graphics, heap, Name("physics/gpu/hull_vertices"), size_of<f32x4>(), Max(cast<u32>(hullVertices.size()), 1u), false, this.m_hullVertexSlot))
-                return false;
             if(!EnsurePhysicsGpuStorageBuffer(graphics, heap, Name("physics/gpu/manifolds"), s_GpuNarrowphaseManifoldBytes, maxPairs, false, this.m_manifoldSlot))
                 return false;
             if(!EnsurePhysicsGpuReadbackBuffer(graphics, Name("physics/gpu/manifolds_rb"), s_GpuNarrowphaseManifoldBytes, maxPairs, this.m_manifoldSlot))
@@ -1638,13 +2419,15 @@ class PhysicsGpuDispatcher{
             colBufs.gridBuffer = this.m_gridSlot.buffer;
             colBufs.largeListBuffer = this.m_largeListSlot.buffer;
             colBufs.hullVertexBuffer = this.m_hullVertexSlot.buffer;
+            colBufs.meshNodeBuffer = this.m_meshNodeSlot.buffer;
+            colBufs.meshTriBuffer = this.m_meshTriSlot.buffer;
             colBufs.manifoldBuffer = this.m_manifoldSlot.buffer;
             colBufs.manifoldReadback = this.m_manifoldSlot.readback;
             colBufs.slots0 = u32x4(
                 this.m_bodySimSlot.descriptor.slot(),
-                this.m_bodyStateSlot.descriptor.slot(),
+                this.m_meshNodeSlot.descriptor.slot(),
                 this.m_shapeSlot.descriptor.slot(),
-                s_GpuInvalidIndex
+                this.m_meshTriSlot.descriptor.slot()
             );
             u32 gridSlotDesc = s_GpuInvalidIndex;
             u32 largeListDesc = s_GpuInvalidIndex;
@@ -1665,112 +2448,39 @@ class PhysicsGpuDispatcher{
                 s_GpuInvalidIndex
             );
 
-            Vector<u32> precompContactIds;
-            for(usize ci = 0u; ci < world.m_contacts.size(); ++ci){
-                in Contact c = world.m_contacts[ci];
-                if((c.flags & cast<u32>(ContactFlags::Alive)) == 0u)
-                    continue;
-                const u32 bAId = c.edges[0u].bodyId;
-                const u32 bBId = c.edges[1u].bodyId;
-                if(!world.m_bodies[bAId].alive || !world.m_bodies[bBId].alive)
-                    continue;
-                if(world.m_bodies[bAId].setIndex != s_AwakeSetIndex && world.m_bodies[bBId].setIndex != s_AwakeSetIndex)
-                    continue;
-                in Shape sA = world.m_shapes[c.shapeIdA];
-                in Shape sB = world.m_shapes[c.shapeIdB];
-                if(sA.proxyKey == s_NullIndex || sB.proxyKey == s_NullIndex)
-                    continue;
-                const b8 isSensor = (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u;
-                if(!isSensor && sA.type != ShapeType::Mesh && sB.type != ShapeType::Mesh)
-                    continue;
-                if(AabbOverlaps(world.m_broadPhase.fatAabb(sA.proxyKey), world.m_broadPhase.fatAabb(sB.proxyKey)))
-                    precompContactIds.push_back(cast<u32>(ci));
-            }
-
             Span<f32x4> hullVertSpan;
-            if(!hullVertices.empty())
-                hullVertSpan = Span<f32x4>(hullVertices.data(), hullVertices.size());
+            if(!this.m_cachedHullData.empty())
+                hullVertSpan = Span<f32x4>(this.m_cachedHullData.data(), this.m_cachedHullData.size());
+            Span<f32x4> meshNodeSpan;
+            if(!this.m_cachedMeshNodes.empty())
+                meshNodeSpan = Span<f32x4>(this.m_cachedMeshNodes.data(), this.m_cachedMeshNodes.size());
+            Span<f32x4> meshTriSpan;
+            if(!this.m_cachedMeshTris.empty())
+                meshTriSpan = Span<f32x4>(this.m_cachedMeshTris.data(), this.m_cachedMeshTris.size());
 
             const auto colToken = this.submitCollisionAsync(
                 graphics,
                 heap,
                 colBufs,
-                gpuSims,
-                gpuShapes,
+                Span<GpuPhysicsBodySim>(this.m_gpuSimsScratch),
+                Span<GpuPhysicsShapeProxy>(this.m_gpuShapesScratch),
                 hullVertSpan,
+                meshNodeSpan,
+                meshTriSpan,
                 shapeCount,
                 maxPairs,
-                invCellSize
+                invCellSize,
+                this.m_staticGeomDirtyUpload
             );
             if(!colToken.has_value())
                 return false;
 
-            const VectorSingle gravVec = VectorSingle(world.m_def.gravity);
-            const b8 enableContinuous = world.m_def.enableContinuous;
-            const usize precompCount = precompContactIds.size();
-            Vector<Manifold> precompManifolds;
-            precompManifolds.resize(precompCount);
-            if(precompCount > 0u){
-                if(cpuScheduler.isParallelEnabled() && precompCount >= s_CpuParallelThreshold){
-                    const usize grain = Max(cast<usize>(1u), precompCount / 16u);
-                    in PhysicsWorld worldRef = world;
-                    const Span<u32> precompSpan = Span<u32>(precompContactIds);
-                    const auto preRes = cpuScheduler.parallelFor(
-                        0u,
-                        precompCount,
-                        grain,
-                        lambda[in worldRef, in precompSpan, in gravVec, in dt, in enableContinuous, mut precompManifolds](in usize idx) -> void{
-                            const u32 cId = precompSpan[idx];
-                            in Contact c = worldRef.m_contacts[cId];
-                            in Shape sA = worldRef.m_shapes[c.shapeIdA];
-                            in Shape sB = worldRef.m_shapes[c.shapeIdB];
-                            in Body bA = worldRef.m_bodies[c.edges[0u].bodyId];
-                            in Body bB = worldRef.m_bodies[c.edges[1u].bodyId];
-                            in Transform3D xfA = worldRef.m_solverSets[bA.setIndex].sims[bA.localIndex].transform;
-                            in Transform3D xfB = worldRef.m_solverSets[bB.setIndex].sims[bB.localIndex].transform;
-                            const VectorSingle dispA = ComputePredictedBodyDisplacement(bA, worldRef.m_solverSets, gravVec, dt);
-                            const VectorSingle dispB = ComputePredictedBodyDisplacement(bB, worldRef.m_solverSets, gravVec, dt);
-                            const b8 isSensor = (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u;
-                            const b8 isBulletPair = ((bA.flags | bB.flags) & cast<u32>(BodyFlags::IsBullet)) != 0u;
-                            precompManifolds[idx] = CollideContactPairWithSweep(sA, xfA, dispA, sB, xfB, dispB, isSensor, enableContinuous && dt > 0.0f, isBulletPair);
-                        },
-                        CpuTaskOptions()
-                    );
-                    if(!preRes.has_value()){
-                        if(!device.waitForSubmissionToken(colToken.value()))
-                            return false;
-                        return false;
-                    }
-                }
-                else{
-                    for(usize idx = 0u; idx < precompCount; ++idx){
-                        const u32 cId = precompContactIds[idx];
-                        in Contact c = world.m_contacts[cId];
-                        in Shape sA = world.m_shapes[c.shapeIdA];
-                        in Shape sB = world.m_shapes[c.shapeIdB];
-                        in Body bA = world.m_bodies[c.edges[0u].bodyId];
-                        in Body bB = world.m_bodies[c.edges[1u].bodyId];
-                        in Transform3D xfA = world.m_solverSets[bA.setIndex].sims[bA.localIndex].transform;
-                        in Transform3D xfB = world.m_solverSets[bB.setIndex].sims[bB.localIndex].transform;
-                        const VectorSingle dispA = ComputePredictedBodyDisplacement(bA, world.m_solverSets, gravVec, dt);
-                        const VectorSingle dispB = ComputePredictedBodyDisplacement(bB, world.m_solverSets, gravVec, dt);
-                        const b8 isSensor = (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u;
-                        const b8 isBulletPair = ((bA.flags | bB.flags) & cast<u32>(BodyFlags::IsBullet)) != 0u;
-                        precompManifolds[idx] = CollideContactPairWithSweep(sA, xfA, dispA, sB, xfB, dispB, isSensor, enableContinuous && dt > 0.0f, isBulletPair);
-                    }
-                }
-            }
-
-            HashMap<u32, usize> precompMap;
-            precompMap.reserve(precompCount);
-            for(usize idx = 0u; idx < precompCount; ++idx)
-                precompMap.emplace(precompContactIds[idx], idx);
-
             u32 rawPairCount = 0u;
             u32 clampedPairCount = 0u;
-            Vector<GpuPhysicsNarrowphaseManifold> gpuManifolds;
-            if(!this.readbackCollisionResults(device, colToken.value(), maxPairs, rawPairCount, clampedPairCount, gpuManifolds))
+            this.m_gpuManifoldsScratch.clear();
+            if(!this.readbackCollisionResults(device, colToken.value(), maxPairs, rawPairCount, clampedPairCount, this.m_gpuManifoldsScratch))
                 return false;
+            this.m_staticGeomDirtyUpload = false;
             this.m_lastBroadphasePairCount = rawPairCount;
 
             if(rawPairCount > maxPairs){
@@ -1802,37 +2512,52 @@ class PhysicsGpuDispatcher{
                     graphics,
                     heap,
                     colBufs,
-                    gpuSims,
-                    gpuShapes,
+                    Span<GpuPhysicsBodySim>(this.m_gpuSimsScratch),
+                    Span<GpuPhysicsShapeProxy>(this.m_gpuShapesScratch),
                     hullVertSpan,
+                    meshNodeSpan,
+                    meshTriSpan,
                     shapeCount,
                     maxPairs,
-                    invCellSize
+                    invCellSize,
+                    false
                 );
                 if(!retryToken.has_value())
                     return false;
-                if(!this.readbackCollisionResults(device, retryToken.value(), maxPairs, rawPairCount, clampedPairCount, gpuManifolds))
+                if(!this.readbackCollisionResults(device, retryToken.value(), maxPairs, rawPairCount, clampedPairCount, this.m_gpuManifoldsScratch))
                     return false;
                 if(rawPairCount > maxPairs)
                     return false;
             }
             pairCount = rawPairCount;
 
+            const VectorSingle gravVec = VectorSingle(world.m_def.gravity);
+            const b8 enableContinuous = world.m_def.enableContinuous;
             Vector<b8> seenContacts(world.m_contacts.size(), false);
-            if(!gpuManifolds.empty()){
+            if(!this.m_gpuManifoldsScratch.empty()){
                 Vector<u32> manifoldContactIds;
-                manifoldContactIds.resize(gpuManifolds.size(), s_NullIndex);
+                manifoldContactIds.resize(this.m_gpuManifoldsScratch.size(), s_NullIndex);
                 Vector<Manifold> resolvedManifolds;
-                resolvedManifolds.resize(gpuManifolds.size());
+                resolvedManifolds.resize(this.m_gpuManifoldsScratch.size());
                 Vector<usize> fallbackManifoldIndices;
 
-                for(usize mi = 0u; mi < gpuManifolds.size(); ++mi){
-                    in GpuPhysicsNarrowphaseManifold gm = gpuManifolds[mi];
+                for(usize mi = 0u; mi < this.m_gpuManifoldsScratch.size(); ++mi){
+                    in GpuPhysicsNarrowphaseManifold gm = this.m_gpuManifoldsScratch[mi];
                     if(gm.pairInfo.x >= shapeCount || gm.pairInfo.y >= shapeCount)
                         continue;
 
-                    const u32 rawShapeA = gpuShapes[gm.pairInfo.x].bodyIndexTypeShape.z;
-                    const u32 rawShapeB = gpuShapes[gm.pairInfo.y].bodyIndexTypeShape.z;
+                    const u32 rawShapeA = this.m_gpuShapesScratch[gm.pairInfo.x].bodyIndexTypeShape.z;
+                    const u32 rawShapeB = this.m_gpuShapesScratch[gm.pairInfo.y].bodyIndexTypeShape.z;
+                    if(world.m_customFilterCallback.has_value()){
+                        u32 ordA = rawShapeA;
+                        u32 ordB = rawShapeB;
+                        if(ordB < ordA){
+                            ordA = rawShapeB;
+                            ordB = rawShapeA;
+                        }
+                        if(!world.m_customFilterCallback.value()(world.makeShapeId(ordA), world.makeShapeId(ordB)))
+                            continue;
+                    }
                     world.createContactInternal(rawShapeA, rawShapeB);
 
                     const u64 pairKey = PackUnorderedU32Pair(cast<isize>(rawShapeA), cast<isize>(rawShapeB));
@@ -1848,11 +2573,7 @@ class PhysicsGpuDispatcher{
 
                     in Contact c = world.m_contacts[cId];
                     const b8 isSensor = (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u;
-                    const auto preIt = precompMap.find(cId);
-                    if(preIt != precompMap.end()){
-                        resolvedManifolds[mi] = precompManifolds[preIt.value()];
-                    }
-                    else if(gm.pairInfo.w != 0u || isSensor){
+                    if(gm.pairInfo.w != 0u){
                         fallbackManifoldIndices.push_back(mi);
                     }
                     else{
@@ -1862,8 +2583,12 @@ class PhysicsGpuDispatcher{
                         in BodySim simB = world.m_solverSets[bB.setIndex].sims[bB.localIndex];
                         const b8 swapped = (rawShapeB < rawShapeA);
                         ConvertGpuManifoldToCpu(gm, simA, simB, swapped, resolvedManifolds[mi]);
-                        if(enableContinuous && dt > 0.0f && resolvedManifolds[mi].pointCount == 0u)
-                            fallbackManifoldIndices.push_back(mi);
+                        if(!isSensor && enableContinuous && dt > 0.0f && resolvedManifolds[mi].pointCount == 0u){
+                            const VectorSingle dispA = ComputePredictedBodyDisplacement(bA, world.m_solverSets, gravVec, dt);
+                            const VectorSingle dispB = ComputePredictedBodyDisplacement(bB, world.m_solverSets, gravVec, dt);
+                            if(Vector3LengthSq(dispB - dispA).x > s_SpeculativeDistance * s_SpeculativeDistance)
+                                fallbackManifoldIndices.push_back(mi);
+                        }
                     }
                 }
 
@@ -1919,7 +2644,7 @@ class PhysicsGpuDispatcher{
                     }
                 }
 
-                for(usize mi = 0u; mi < gpuManifolds.size(); ++mi){
+                for(usize mi = 0u; mi < this.m_gpuManifoldsScratch.size(); ++mi){
                     const u32 cId = manifoldContactIds[mi];
                     if(cId != s_NullIndex)
                         ApplyContactManifoldAndEvents(world, cId, resolvedManifolds[mi]);
@@ -1998,7 +2723,8 @@ class PhysicsGpuDispatcher{
                     StoreContactConstraintImpulsesAndHitEvents(world, cpuOnlyConstraints[c][idx]);
             }
 
-            SolveBulletContinuousCpu(world, dt);
+            if(!this.solveBulletContinuousGpu(world, dt))
+                SolveBulletContinuousCpu(world, dt);
             FinalizeMovedBodiesBroadphaseAndEvents(world);
             EvaluateSleepingIslands(world);
 
@@ -2008,15 +2734,13 @@ class PhysicsGpuDispatcher{
 
         const u32 gpuUploadCount = cast<u32>(partition.gpuAwakeIndices.size());
         in SolverSet latestAwake = world.m_solverSets[s_AwakeSetIndex];
-        Vector<GpuPhysicsBodySim> solverSims;
-        Vector<GpuPhysicsBodyState> solverStates;
-        solverSims.resize(gpuUploadCount);
-        solverStates.resize(gpuUploadCount);
+        this.m_solverSimsScratch.resize(gpuUploadCount);
+        this.m_solverStatesScratch.resize(gpuUploadCount);
         for(u32 g = 0u; g < gpuUploadCount; ++g){
             const u32 awakeIdx = partition.gpuAwakeIndices[g];
             in BodySim sim = latestAwake.sims[awakeIdx];
-            solverSims[g] = PackGpuBodySim(world.m_bodies[sim.bodyId], sim);
-            solverStates[g] = PackGpuBodyState(latestAwake.states[awakeIdx]);
+            this.m_solverSimsScratch[g] = PackGpuBodySim(world.m_bodies[sim.bodyId], sim);
+            this.m_solverStatesScratch[g] = PackGpuBodyState(latestAwake.states[awakeIdx]);
         }
 
         Array<Vector<ContactConstraint>, s_GraphColorCount> gpuColorConstraints;
@@ -2024,7 +2748,7 @@ class PhysicsGpuDispatcher{
             return false;
 
         Array<PhysicsGpuColorSlice, s_GraphColorCount> colorSlices;
-        Vector<GpuPhysicsContactConstraint> gpuConstraints;
+        this.m_gpuConstraintsScratch.clear();
         u32 totalGpuConstraints = 0u;
         for(usize c = 0u; c < s_GraphColorCount; ++c){
             const usize cnt = gpuColorConstraints[c].size();
@@ -2032,7 +2756,7 @@ class PhysicsGpuDispatcher{
             colorSlices[c].count = cast<u32>(cnt);
             totalGpuConstraints += cast<u32>(cnt);
             for(usize idx = 0u; idx < cnt; ++idx)
-                gpuConstraints.push_back(PackGpuContactConstraint(gpuColorConstraints[c][idx], partition.awakeToGpuSlot));
+                this.m_gpuConstraintsScratch.push_back(PackGpuContactConstraint(gpuColorConstraints[c][idx], partition.awakeToGpuSlot));
         }
 
         if(!EnsurePhysicsGpuStorageBuffer(graphics, heap, Name("physics/gpu/body_sims"), s_GpuBodySimBytes, gpuUploadCount, false, this.m_bodySimSlot))
@@ -2082,7 +2806,7 @@ class PhysicsGpuDispatcher{
         }
 
         Vector<JointConstraint> flatGpuJoints;
-        Vector<GpuPhysicsJointConstraint> gpuJoints;
+        this.m_gpuJointsScratch.clear();
         Array<PhysicsGpuColorSlice, s_GpuJointColorCount> jointColorSlices;
         u32 totalGpuJoints = 0u;
         for(usize c = 0u; c < s_GpuJointColorCount; ++c){
@@ -2090,7 +2814,7 @@ class PhysicsGpuDispatcher{
             jointColorSlices[c].count = cast<u32>(jointColorBuckets[c].size());
             for(usize ji = 0u; ji < jointColorBuckets[c].size(); ++ji){
                 flatGpuJoints.push_back(jointColorBuckets[c][ji]);
-                gpuJoints.push_back(PackGpuJointConstraint(jointColorBuckets[c][ji], partition.awakeToGpuSlot));
+                this.m_gpuJointsScratch.push_back(PackGpuJointConstraint(jointColorBuckets[c][ji], partition.awakeToGpuSlot));
             }
             totalGpuJoints += cast<u32>(jointColorBuckets[c].size());
         }
@@ -2124,17 +2848,17 @@ class PhysicsGpuDispatcher{
 
         Span<GpuPhysicsContactConstraint> conUploadSpan;
         if(totalGpuConstraints > 0u)
-            conUploadSpan = Span<GpuPhysicsContactConstraint>(gpuConstraints.data(), gpuConstraints.size());
+            conUploadSpan = Span<GpuPhysicsContactConstraint>(this.m_gpuConstraintsScratch.data(), this.m_gpuConstraintsScratch.size());
         Span<GpuPhysicsJointConstraint> jointUploadSpan;
         if(totalGpuJoints > 0u)
-            jointUploadSpan = Span<GpuPhysicsJointConstraint>(gpuJoints.data(), gpuJoints.size());
+            jointUploadSpan = Span<GpuPhysicsJointConstraint>(this.m_gpuJointsScratch.data(), this.m_gpuJointsScratch.size());
 
         const auto solverToken = this.submitSolverAsync(
             graphics,
             heap,
             solverBufs,
-            solverSims,
-            solverStates,
+            Span<GpuPhysicsBodySim>(this.m_solverSimsScratch),
+            Span<GpuPhysicsBodyState>(this.m_solverStatesScratch),
             conUploadSpan,
             colorSlices,
             jointUploadSpan,
@@ -2293,7 +3017,8 @@ class PhysicsGpuDispatcher{
                 StoreContactConstraintImpulsesAndHitEvents(world, gpuColorConstraints[c][idx]);
         }
 
-        SolveBulletContinuousCpu(world, dt);
+        if(!this.solveBulletContinuousGpu(world, dt))
+            SolveBulletContinuousCpu(world, dt);
         FinalizeMovedBodiesBroadphaseAndEvents(world);
         EvaluateSleepingIslands(world);
 

@@ -1,0 +1,625 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_physics/components.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_PhysicsComponentBinaryVersion = 1u;
+const u8 s_RigidBodyFlagEnableSleep = 0x01u;
+const u8 s_RigidBodyFlagIsAwake = 0x02u;
+const u8 s_RigidBodyFlagIsBullet = 0x04u;
+const u8 s_RigidBodyFlagIsEnabled = 0x08u;
+const u8 s_RigidBodyFlagAllowFastRotation = 0x10u;
+const u8 s_RigidBodyFlagEnableGyroscopic = 0x20u;
+const u8 s_RigidBodyFlagDriveKinematic = 0x40u;
+
+const u8 s_ColliderFlagIsBox = 0x01u;
+const u8 s_ColliderFlagIsSensor = 0x02u;
+const u8 s_ColliderFlagContactEvents = 0x04u;
+const u8 s_ColliderFlagHitEvents = 0x08u;
+const u8 s_ColliderFlagSensorEvents = 0x10u;
+const u8 s_ColliderFlagPreSolveEvents = 0x20u;
+const u8 s_ColliderFlagInvokeCreation = 0x40u;
+
+const u8 s_JointFlagUseRefRotation = 0x01u;
+const u8 s_JointFlagEnableLimit = 0x02u;
+const u8 s_JointFlagEnableMotor = 0x04u;
+const u8 s_JointFlagEnableSpring = 0x08u;
+const u8 s_JointFlagCollideConnected = 0x10u;
+
+const u8 s_WorldCfgFlagEnableSleep = 0x01u;
+const u8 s_WorldCfgFlagEnableContinuous = 0x02u;
+const u8 s_WorldCfgFlagContactSoftening = 0x04u;
+const u8 s_WorldCfgFlagWarmStarting = 0x08u;
+const u8 s_WorldCfgFlagPaused = 0x10u;
+
+
+class PhysicsComponentBinaryCodec{
+    private b8 validRigidBodyData(in RigidBodyComponent c)const{
+        if(cast<u8>(c.type) > cast<u8>(BodyType::Dynamic))
+            return false;
+        if(!IsFinite(VectorSingle(c.linearVelocity)) || !IsFinite(VectorSingle(c.angularVelocity)))
+            return false;
+        if(!IsFinite(VectorSingle(c.linearDamping, c.angularDamping, c.gravityScale, c.sleepThreshold)))
+            return false;
+        return c.linearDamping >= 0.0f && c.angularDamping >= 0.0f && c.sleepThreshold >= 0.0f;
+    }
+
+    private b8 validColliderEntryData(in ColliderShapeEntry e)const{
+        if(cast<u8>(e.shapeType) > cast<u8>(ShapeType::Mesh))
+            return false;
+        if(!IsFinite(VectorSingle(e.center)) || !IsFinite(VectorSingle(e.center2)) || !IsFinite(VectorSingle(e.halfExtents)) || !IsFinite(VectorSingle(e.localRotation)))
+            return false;
+        if(LengthSq(VectorSingle(e.localRotation)) <= s_NormalizeEpsilonSq)
+            return false;
+        if(!IsFinite(VectorSingle(e.radius, e.skinRadius, e.density, e.friction)))
+            return false;
+        if(!IsFinite(VectorSingle(e.restitution, e.rollingResistance, e.tangentSpeed, 0.0f)))
+            return false;
+        if(e.radius <= 0.0f || e.skinRadius < 0.0f || e.density < 0.0f || e.friction < 0.0f || e.restitution < 0.0f || e.rollingResistance < 0.0f)
+            return false;
+        if(e.shapeType == ShapeType::Hull){
+            if(e.isBox && (e.halfExtents.x <= 0.0f || e.halfExtents.y <= 0.0f || e.halfExtents.z <= 0.0f))
+                return false;
+            if(!e.isBox){
+                if(e.hullPoints.size() < 4u)
+                    return false;
+                for(usize i = 0u; i < e.hullPoints.size(); ++i){
+                    if(!IsFinite(VectorSingle(e.hullPoints[i])))
+                        return false;
+                }
+            }
+        }
+        else if(e.shapeType == ShapeType::Mesh){
+            if(!e.meshAsset.valid() && (e.meshVertices.empty() || e.meshIndices.empty()))
+                return false;
+            if((e.meshIndices.size() % 3u) != 0u)
+                return false;
+            for(usize i = 0u; i < e.meshVertices.size(); ++i){
+                if(!IsFinite(VectorSingle(e.meshVertices[i])))
+                    return false;
+            }
+            if(!e.meshVertices.empty()){
+                const usize vCount = e.meshVertices.size();
+                for(usize i = 0u; i < e.meshIndices.size(); ++i){
+                    if(cast<usize>(e.meshIndices[i]) >= vCount)
+                        return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private ColliderShapeEntry buildPrimaryEntry(in ColliderComponent c)const{
+        ColliderShapeEntry e;
+        e.shapeType = c.shapeType;
+        e.center = c.center;
+        e.center2 = c.center2;
+        e.halfExtents = c.halfExtents;
+        e.localRotation = c.localRotation;
+        e.radius = c.radius;
+        e.skinRadius = c.skinRadius;
+        e.density = c.density;
+        e.friction = c.friction;
+        e.restitution = c.restitution;
+        e.rollingResistance = c.rollingResistance;
+        e.tangentSpeed = c.tangentSpeed;
+        e.categoryBits = c.categoryBits;
+        e.maskBits = c.maskBits;
+        e.groupIndex = c.groupIndex;
+        e.isBox = c.isBox;
+        e.isSensor = c.isSensor;
+        e.enableContactEvents = c.enableContactEvents;
+        e.enableHitEvents = c.enableHitEvents;
+        e.enableSensorEvents = c.enableSensorEvents;
+        e.enablePreSolveEvents = c.enablePreSolveEvents;
+        e.invokeContactCreation = c.invokeContactCreation;
+        e.hullPoints = c.hullPoints;
+        e.meshVertices = c.meshVertices;
+        e.meshIndices = c.meshIndices;
+        e.meshAsset = c.meshAsset;
+        return e;
+    }
+
+    private void assignPrimaryEntry(in ColliderShapeEntry e, mut ColliderComponent outComp)const{
+        outComp.shapeType = e.shapeType;
+        outComp.center = e.center;
+        outComp.center2 = e.center2;
+        outComp.halfExtents = e.halfExtents;
+        outComp.localRotation = e.localRotation;
+        outComp.radius = e.radius;
+        outComp.skinRadius = e.skinRadius;
+        outComp.density = e.density;
+        outComp.friction = e.friction;
+        outComp.restitution = e.restitution;
+        outComp.rollingResistance = e.rollingResistance;
+        outComp.tangentSpeed = e.tangentSpeed;
+        outComp.categoryBits = e.categoryBits;
+        outComp.maskBits = e.maskBits;
+        outComp.groupIndex = e.groupIndex;
+        outComp.isBox = e.isBox;
+        outComp.isSensor = e.isSensor;
+        outComp.enableContactEvents = e.enableContactEvents;
+        outComp.enableHitEvents = e.enableHitEvents;
+        outComp.enableSensorEvents = e.enableSensorEvents;
+        outComp.enablePreSolveEvents = e.enablePreSolveEvents;
+        outComp.invokeContactCreation = e.invokeContactCreation;
+        outComp.hullPoints = e.hullPoints;
+        outComp.meshVertices = e.meshVertices;
+        outComp.meshIndices = e.meshIndices;
+        outComp.meshAsset = e.meshAsset;
+    }
+
+    private b8 validJointData(in JointComponent j)const{
+        if(cast<u8>(j.type) > cast<u8>(JointType::Wheel))
+            return false;
+        if(!IsFinite(VectorSingle(j.localAnchorA)) || !IsFinite(VectorSingle(j.localAnchorB)) || !IsFinite(VectorSingle(j.localAxisA)) || !IsFinite(VectorSingle(j.localAxisB)))
+            return false;
+        if(!IsFinite(VectorSingle(j.referenceRotation)) || LengthSq(VectorSingle(j.referenceRotation)) <= s_NormalizeEpsilonSq)
+            return false;
+        if(!IsFinite(VectorSingle(j.linearOffset)))
+            return false;
+        if(!IsFinite(VectorSingle(j.length, j.minLength, j.maxLength, j.lowerLimit)))
+            return false;
+        if(!IsFinite(VectorSingle(j.upperLimit, j.motorSpeed, j.maxMotorForce, j.hertz)))
+            return false;
+        if(!IsFinite(VectorSingle(j.dampingRatio, j.correctionFactor, j.maxTorque, j.swingLimit)))
+            return false;
+        if(!IsFinite(VectorSingle(j.suspensionHertz, j.suspensionDampingRatio, j.breakForce, j.breakTorque)))
+            return false;
+        return j.minLength >= 0.0f && j.maxLength >= j.minLength && j.hertz >= 0.0f && j.dampingRatio >= 0.0f && j.suspensionHertz >= 0.0f && j.suspensionDampingRatio >= 0.0f && j.breakForce >= 0.0f && j.breakTorque >= 0.0f;
+    }
+
+    private b8 validWorldConfigData(in PhysicsWorldConfigComponent w)const{
+        if(cast<u8>(w.backendMode) > cast<u8>(PhysicsBackendMode::GpuPreferred))
+            return false;
+        if(!IsFinite(VectorSingle(w.gravity)))
+            return false;
+        if(!IsFinite(VectorSingle(w.restitutionThreshold, w.hitEventThreshold, w.contactHertz, w.contactDampingRatio)))
+            return false;
+        if(!IsFinite(VectorSingle(w.maxLinearVelocity, w.fixedDeltaTime, w.gpuWorkloadFraction, 0.0f)))
+            return false;
+        return w.fixedDeltaTime > 0.0f && w.subStepCount >= 1u && w.maxSubStepsPerFrame >= 1u && w.contactHertz > 0.0f && w.contactDampingRatio >= 0.0f && w.maxLinearVelocity > 0.0f && w.gpuWorkloadFraction >= 0.0f && w.gpuWorkloadFraction <= 1.0f;
+    }
+
+    public b8 validateRigidBody(in RigidBodyComponent c, in Name virtualPath)const{
+        if(this.validRigidBodyData(c))
+            return true;
+        error("RigidBodyComponentAsset::validatePayload failed: invalid rigid body config for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 serializeRigidBody(in RigidBodyComponent c, mut Vector<u8> outPayload)const{
+        if(!this.validRigidBodyData(c))
+            return false;
+        RigidBodyComponentPayloadBinary bin;
+        bin.version = s_PhysicsComponentBinaryVersion;
+        bin.bodyType = cast<u8>(c.type);
+        u8 flags = 0u;
+        if(c.enableSleep) flags |= s_RigidBodyFlagEnableSleep;
+        if(c.isAwake) flags |= s_RigidBodyFlagIsAwake;
+        if(c.isBullet) flags |= s_RigidBodyFlagIsBullet;
+        if(c.isEnabled) flags |= s_RigidBodyFlagIsEnabled;
+        if(c.allowFastRotation) flags |= s_RigidBodyFlagAllowFastRotation;
+        if(c.enableGyroscopicTorque) flags |= s_RigidBodyFlagEnableGyroscopic;
+        if(c.driveKinematicFromTransform) flags |= s_RigidBodyFlagDriveKinematic;
+        bin.flags = flags;
+        bin.motionLocks = c.motionLocks;
+        bin.linearVelocity = c.linearVelocity;
+        bin.angularVelocity = c.angularVelocity;
+        bin.linearDamping = c.linearDamping;
+        bin.angularDamping = c.angularDamping;
+        bin.gravityScale = c.gravityScale;
+        bin.sleepThreshold = c.sleepThreshold;
+        outPayload.clear();
+        AppendPOD(outPayload, bin);
+        return true;
+    }
+
+    public b8 deserializeRigidBody(in Span<u8> payload, mut RigidBodyComponent outComp)const{
+        usize cursor = 0u;
+        const Expected<RigidBodyComponentPayloadBinary> res = ReadPOD<RigidBodyComponentPayloadBinary>(payload, cursor);
+        if(!res.has_value() || cursor != payload.size()){
+            error("RigidBodyComponentAsset::loadComponentPayload failed: invalid payload size");
+            return false;
+        }
+        in RigidBodyComponentPayloadBinary bin = res.value();
+        if(bin.version != s_PhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || (bin.flags & 0x80u) != 0u){
+            error("RigidBodyComponentAsset::loadComponentPayload failed: unsupported version or flags");
+            return false;
+        }
+        RigidBodyComponent c;
+        c.type = cast<BodyType>(bin.bodyType);
+        c.enableSleep = (bin.flags & s_RigidBodyFlagEnableSleep) != 0u;
+        c.isAwake = (bin.flags & s_RigidBodyFlagIsAwake) != 0u;
+        c.isBullet = (bin.flags & s_RigidBodyFlagIsBullet) != 0u;
+        c.isEnabled = (bin.flags & s_RigidBodyFlagIsEnabled) != 0u;
+        c.allowFastRotation = (bin.flags & s_RigidBodyFlagAllowFastRotation) != 0u;
+        c.enableGyroscopicTorque = (bin.flags & s_RigidBodyFlagEnableGyroscopic) != 0u;
+        c.driveKinematicFromTransform = (bin.flags & s_RigidBodyFlagDriveKinematic) != 0u;
+        c.motionLocks = bin.motionLocks;
+        c.linearVelocity = bin.linearVelocity;
+        c.angularVelocity = bin.angularVelocity;
+        c.linearDamping = bin.linearDamping;
+        c.angularDamping = bin.angularDamping;
+        c.gravityScale = bin.gravityScale;
+        c.sleepThreshold = bin.sleepThreshold;
+        c.dirty = true;
+        if(!this.validRigidBodyData(c)){
+            error("RigidBodyComponentAsset::loadComponentPayload failed: invalid rigid body fields");
+            return false;
+        }
+        outComp = c;
+        return true;
+    }
+
+    private b8 serializeColliderEntry(in ColliderShapeEntry e, mut Vector<u8> outPayload)const{
+        if(!this.validColliderEntryData(e))
+            return false;
+        ColliderShapeEntryHeaderBinary hdr;
+        hdr.version = s_PhysicsComponentBinaryVersion;
+        hdr.shapeType = cast<u8>(e.shapeType);
+        u8 flags = 0u;
+        if(e.isBox) flags |= s_ColliderFlagIsBox;
+        if(e.isSensor) flags |= s_ColliderFlagIsSensor;
+        if(e.enableContactEvents) flags |= s_ColliderFlagContactEvents;
+        if(e.enableHitEvents) flags |= s_ColliderFlagHitEvents;
+        if(e.enableSensorEvents) flags |= s_ColliderFlagSensorEvents;
+        if(e.enablePreSolveEvents) flags |= s_ColliderFlagPreSolveEvents;
+        if(e.invokeContactCreation) flags |= s_ColliderFlagInvokeCreation;
+        hdr.flags = flags;
+        hdr.groupIndex = e.groupIndex;
+        hdr.categoryBits = e.categoryBits;
+        hdr.maskBits = e.maskBits;
+        hdr.center = e.center;
+        hdr.center2 = e.center2;
+        hdr.halfExtents = e.halfExtents;
+        hdr.localRotation = e.localRotation;
+        hdr.radius = e.radius;
+        hdr.skinRadius = e.skinRadius;
+        hdr.density = e.density;
+        hdr.friction = e.friction;
+        hdr.restitution = e.restitution;
+        hdr.rollingResistance = e.rollingResistance;
+        hdr.tangentSpeed = e.tangentSpeed;
+        hdr.meshAssetHash = e.meshAsset.name().hash();
+        hdr.hullPointCount = cast<u32>(e.hullPoints.size());
+        hdr.meshVertexCount = cast<u32>(e.meshVertices.size());
+        hdr.meshIndexCount = cast<u32>(e.meshIndices.size());
+        AppendPOD(outPayload, hdr);
+
+        for(usize i = 0u; i < e.hullPoints.size(); ++i){
+            PhysicsVec4Binary v;
+            v.value = e.hullPoints[i];
+            AppendPOD(outPayload, v);
+        }
+        for(usize i = 0u; i < e.meshVertices.size(); ++i){
+            PhysicsVec4Binary v;
+            v.value = e.meshVertices[i];
+            AppendPOD(outPayload, v);
+        }
+        for(usize i = 0u; i < e.meshIndices.size(); ++i){
+            PhysicsU32Binary idx;
+            idx.value = e.meshIndices[i];
+            AppendPOD(outPayload, idx);
+        }
+        return true;
+    }
+
+    private b8 deserializeColliderEntry(in Span<u8> payload, mut usize inOutCursor, mut ColliderShapeEntry outEntry)const{
+        const Expected<ColliderShapeEntryHeaderBinary> hdrRes = ReadPOD<ColliderShapeEntryHeaderBinary>(payload, inOutCursor);
+        if(!hdrRes.has_value())
+            return false;
+        in ColliderShapeEntryHeaderBinary hdr = hdrRes.value();
+        if(hdr.version != s_PhysicsComponentBinaryVersion || hdr.reserved0 != 0u || hdr.reserved1 != 0u || hdr.reserved2 != 0u || hdr.reserved3 != 0u || (hdr.flags & 0x80u) != 0u)
+            return false;
+
+        const u64 remaining = cast<u64>(payload.size() - inOutCursor);
+        const u64 vecBytes = (cast<u64>(hdr.hullPointCount) + cast<u64>(hdr.meshVertexCount)) * cast<u64>(size_of<PhysicsVec4Binary>()) + cast<u64>(hdr.meshIndexCount) * cast<u64>(size_of<PhysicsU32Binary>());
+        if(vecBytes > remaining)
+            return false;
+
+        ColliderShapeEntry e;
+        e.shapeType = cast<ShapeType>(hdr.shapeType);
+        e.isBox = (hdr.flags & s_ColliderFlagIsBox) != 0u;
+        e.isSensor = (hdr.flags & s_ColliderFlagIsSensor) != 0u;
+        e.enableContactEvents = (hdr.flags & s_ColliderFlagContactEvents) != 0u;
+        e.enableHitEvents = (hdr.flags & s_ColliderFlagHitEvents) != 0u;
+        e.enableSensorEvents = (hdr.flags & s_ColliderFlagSensorEvents) != 0u;
+        e.enablePreSolveEvents = (hdr.flags & s_ColliderFlagPreSolveEvents) != 0u;
+        e.invokeContactCreation = (hdr.flags & s_ColliderFlagInvokeCreation) != 0u;
+        e.groupIndex = hdr.groupIndex;
+        e.categoryBits = hdr.categoryBits;
+        e.maskBits = hdr.maskBits;
+        e.center = hdr.center;
+        e.center2 = hdr.center2;
+        e.halfExtents = hdr.halfExtents;
+        e.localRotation = hdr.localRotation;
+        e.radius = hdr.radius;
+        e.skinRadius = hdr.skinRadius;
+        e.density = hdr.density;
+        e.friction = hdr.friction;
+        e.restitution = hdr.restitution;
+        e.rollingResistance = hdr.rollingResistance;
+        e.tangentSpeed = hdr.tangentSpeed;
+        e.meshAsset.virtualPath = Name(hdr.meshAssetHash);
+
+        e.hullPoints.resize(hdr.hullPointCount);
+        for(u32 i = 0u; i < hdr.hullPointCount; ++i){
+            const Expected<PhysicsVec4Binary> v = ReadPOD<PhysicsVec4Binary>(payload, inOutCursor);
+            if(!v.has_value())
+                return false;
+            e.hullPoints[i] = v.value().value;
+        }
+        e.meshVertices.resize(hdr.meshVertexCount);
+        for(u32 i = 0u; i < hdr.meshVertexCount; ++i){
+            const Expected<PhysicsVec4Binary> v = ReadPOD<PhysicsVec4Binary>(payload, inOutCursor);
+            if(!v.has_value())
+                return false;
+            e.meshVertices[i] = v.value().value;
+        }
+        e.meshIndices.resize(hdr.meshIndexCount);
+        for(u32 i = 0u; i < hdr.meshIndexCount; ++i){
+            const Expected<PhysicsU32Binary> idx = ReadPOD<PhysicsU32Binary>(payload, inOutCursor);
+            if(!idx.has_value())
+                return false;
+            e.meshIndices[i] = idx.value().value;
+        }
+
+        if(!this.validColliderEntryData(e))
+            return false;
+        outEntry = e;
+        return true;
+    }
+
+    public b8 validateCollider(in ColliderComponent c, in Name virtualPath)const{
+        if(!this.validColliderEntryData(this.buildPrimaryEntry(c))){
+            error("ColliderComponentAsset::validatePayload failed: invalid primary collider entry for '{}'", virtualPath.resolvedText());
+            return false;
+        }
+        for(usize i = 0u; i < c.extraShapes.size(); ++i){
+            if(!this.validColliderEntryData(c.extraShapes[i])){
+                error("ColliderComponentAsset::validatePayload failed: invalid extra collider shape for '{}'", virtualPath.resolvedText());
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public b8 serializeCollider(in ColliderComponent c, mut Vector<u8> outPayload)const{
+        ColliderComponentPayloadHeaderBinary rootHdr;
+        rootHdr.version = s_PhysicsComponentBinaryVersion;
+        rootHdr.extraShapeCount = cast<u32>(c.extraShapes.size());
+        outPayload.clear();
+        AppendPOD(outPayload, rootHdr);
+        if(!this.serializeColliderEntry(this.buildPrimaryEntry(c), outPayload))
+            return false;
+        for(usize i = 0u; i < c.extraShapes.size(); ++i){
+            if(!this.serializeColliderEntry(c.extraShapes[i], outPayload))
+                return false;
+        }
+        return true;
+    }
+
+    public b8 deserializeCollider(in Span<u8> payload, mut ColliderComponent outComp)const{
+        usize cursor = 0u;
+        const Expected<ColliderComponentPayloadHeaderBinary> rootRes = ReadPOD<ColliderComponentPayloadHeaderBinary>(payload, cursor);
+        if(!rootRes.has_value()){
+            error("ColliderComponentAsset::loadComponentPayload failed: truncated header");
+            return false;
+        }
+        in ColliderComponentPayloadHeaderBinary rootHdr = rootRes.value();
+        if(rootHdr.version != s_PhysicsComponentBinaryVersion || rootHdr.reserved0 != 0u){
+            error("ColliderComponentAsset::loadComponentPayload failed: invalid version");
+            return false;
+        }
+        const u64 minExtraBytes = cast<u64>(rootHdr.extraShapeCount) * cast<u64>(size_of<ColliderShapeEntryHeaderBinary>());
+        if(minExtraBytes > cast<u64>(payload.size() - cursor)){
+            error("ColliderComponentAsset::loadComponentPayload failed: truncated extra shapes");
+            return false;
+        }
+
+        ColliderShapeEntry primary;
+        if(!this.deserializeColliderEntry(payload, cursor, primary)){
+            error("ColliderComponentAsset::loadComponentPayload failed: invalid primary shape");
+            return false;
+        }
+
+        ColliderComponent c;
+        this.assignPrimaryEntry(primary, c);
+        c.extraShapes.resize(rootHdr.extraShapeCount);
+        for(u32 i = 0u; i < rootHdr.extraShapeCount; ++i){
+            if(!this.deserializeColliderEntry(payload, cursor, c.extraShapes[i])){
+                error("ColliderComponentAsset::loadComponentPayload failed: invalid extra shape");
+                return false;
+            }
+        }
+        if(cursor != payload.size()){
+            error("ColliderComponentAsset::loadComponentPayload failed: trailing bytes in payload");
+            return false;
+        }
+        c.dirty = true;
+        outComp = c;
+        return true;
+    }
+
+    public b8 validateJoint(in JointComponent j, in Name virtualPath)const{
+        if(this.validJointData(j))
+            return true;
+        error("JointComponentAsset::validatePayload failed: invalid joint parameters for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 serializeJoint(in JointComponent j, mut Vector<u8> outPayload)const{
+        if(!this.validJointData(j))
+            return false;
+        JointComponentPayloadBinary bin;
+        bin.version = s_PhysicsComponentBinaryVersion;
+        bin.jointType = cast<u8>(j.type);
+        u8 flags = 0u;
+        if(j.useReferenceRotation) flags |= s_JointFlagUseRefRotation;
+        if(j.enableLimit) flags |= s_JointFlagEnableLimit;
+        if(j.enableMotor) flags |= s_JointFlagEnableMotor;
+        if(j.enableSpring) flags |= s_JointFlagEnableSpring;
+        if(j.collideConnected) flags |= s_JointFlagCollideConnected;
+        bin.flags = flags;
+        bin.localAnchorA = j.localAnchorA;
+        bin.localAnchorB = j.localAnchorB;
+        bin.localAxisA = j.localAxisA;
+        bin.localAxisB = j.localAxisB;
+        bin.referenceRotation = j.referenceRotation;
+        bin.linearOffset = j.linearOffset;
+        bin.length = j.length;
+        bin.minLength = j.minLength;
+        bin.maxLength = j.maxLength;
+        bin.lowerLimit = j.lowerLimit;
+        bin.upperLimit = j.upperLimit;
+        bin.motorSpeed = j.motorSpeed;
+        bin.maxMotorForce = j.maxMotorForce;
+        bin.hertz = j.hertz;
+        bin.dampingRatio = j.dampingRatio;
+        bin.correctionFactor = j.correctionFactor;
+        bin.maxTorque = j.maxTorque;
+        bin.swingLimit = j.swingLimit;
+        bin.suspensionHertz = j.suspensionHertz;
+        bin.suspensionDampingRatio = j.suspensionDampingRatio;
+        bin.breakForce = j.breakForce;
+        bin.breakTorque = j.breakTorque;
+        outPayload.clear();
+        AppendPOD(outPayload, bin);
+        return true;
+    }
+
+    public b8 deserializeJoint(in Span<u8> payload, mut JointComponent outComp)const{
+        usize cursor = 0u;
+        const Expected<JointComponentPayloadBinary> res = ReadPOD<JointComponentPayloadBinary>(payload, cursor);
+        if(!res.has_value() || cursor != payload.size()){
+            error("JointComponentAsset::loadComponentPayload failed: invalid payload size");
+            return false;
+        }
+        in JointComponentPayloadBinary bin = res.value();
+        if(bin.version != s_PhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || (bin.flags & 0xe0u) != 0u){
+            error("JointComponentAsset::loadComponentPayload failed: unsupported version or flags");
+            return false;
+        }
+        JointComponent j;
+        j.type = cast<JointType>(bin.jointType);
+        j.useReferenceRotation = (bin.flags & s_JointFlagUseRefRotation) != 0u;
+        j.enableLimit = (bin.flags & s_JointFlagEnableLimit) != 0u;
+        j.enableMotor = (bin.flags & s_JointFlagEnableMotor) != 0u;
+        j.enableSpring = (bin.flags & s_JointFlagEnableSpring) != 0u;
+        j.collideConnected = (bin.flags & s_JointFlagCollideConnected) != 0u;
+        j.localAnchorA = bin.localAnchorA;
+        j.localAnchorB = bin.localAnchorB;
+        j.localAxisA = bin.localAxisA;
+        j.localAxisB = bin.localAxisB;
+        j.referenceRotation = bin.referenceRotation;
+        j.linearOffset = bin.linearOffset;
+        j.length = bin.length;
+        j.minLength = bin.minLength;
+        j.maxLength = bin.maxLength;
+        j.lowerLimit = bin.lowerLimit;
+        j.upperLimit = bin.upperLimit;
+        j.motorSpeed = bin.motorSpeed;
+        j.maxMotorForce = bin.maxMotorForce;
+        j.hertz = bin.hertz;
+        j.dampingRatio = bin.dampingRatio;
+        j.correctionFactor = bin.correctionFactor;
+        j.maxTorque = bin.maxTorque;
+        j.swingLimit = bin.swingLimit;
+        j.suspensionHertz = bin.suspensionHertz;
+        j.suspensionDampingRatio = bin.suspensionDampingRatio;
+        j.breakForce = bin.breakForce;
+        j.breakTorque = bin.breakTorque;
+        j.dirty = true;
+        if(!this.validJointData(j)){
+            error("JointComponentAsset::loadComponentPayload failed: invalid joint parameters");
+            return false;
+        }
+        outComp = j;
+        return true;
+    }
+
+    public b8 validateWorldConfig(in PhysicsWorldConfigComponent w, in Name virtualPath)const{
+        if(this.validWorldConfigData(w))
+            return true;
+        error("PhysicsWorldConfigComponentAsset::validatePayload failed: invalid config for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 serializeWorldConfig(in PhysicsWorldConfigComponent w, mut Vector<u8> outPayload)const{
+        if(!this.validWorldConfigData(w))
+            return false;
+        PhysicsWorldConfigComponentPayloadBinary bin;
+        bin.version = s_PhysicsComponentBinaryVersion;
+        bin.backendMode = cast<u8>(w.backendMode);
+        u8 flags = 0u;
+        if(w.enableSleep) flags |= s_WorldCfgFlagEnableSleep;
+        if(w.enableContinuous) flags |= s_WorldCfgFlagEnableContinuous;
+        if(w.enableContactSoftening) flags |= s_WorldCfgFlagContactSoftening;
+        if(w.enableWarmStarting) flags |= s_WorldCfgFlagWarmStarting;
+        if(w.paused) flags |= s_WorldCfgFlagPaused;
+        bin.flags = flags;
+        bin.subStepCount = w.subStepCount;
+        bin.maxSubStepsPerFrame = w.maxSubStepsPerFrame;
+        bin.gpuDispatchThreshold = w.gpuDispatchThreshold;
+        bin.gravity = w.gravity;
+        bin.restitutionThreshold = w.restitutionThreshold;
+        bin.hitEventThreshold = w.hitEventThreshold;
+        bin.contactHertz = w.contactHertz;
+        bin.contactDampingRatio = w.contactDampingRatio;
+        bin.maxLinearVelocity = w.maxLinearVelocity;
+        bin.fixedDeltaTime = w.fixedDeltaTime;
+        bin.gpuWorkloadFraction = w.gpuWorkloadFraction;
+        outPayload.clear();
+        AppendPOD(outPayload, bin);
+        return true;
+    }
+
+    public b8 deserializeWorldConfig(in Span<u8> payload, mut PhysicsWorldConfigComponent outComp)const{
+        usize cursor = 0u;
+        const Expected<PhysicsWorldConfigComponentPayloadBinary> res = ReadPOD<PhysicsWorldConfigComponentPayloadBinary>(payload, cursor);
+        if(!res.has_value() || cursor != payload.size()){
+            error("PhysicsWorldConfigComponentAsset::loadComponentPayload failed: invalid payload size");
+            return false;
+        }
+        in PhysicsWorldConfigComponentPayloadBinary bin = res.value();
+        if(bin.version != s_PhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || (bin.flags & 0xe0u) != 0u){
+            error("PhysicsWorldConfigComponentAsset::loadComponentPayload failed: unsupported version or flags");
+            return false;
+        }
+        PhysicsWorldConfigComponent w;
+        w.backendMode = cast<PhysicsBackendMode>(bin.backendMode);
+        w.enableSleep = (bin.flags & s_WorldCfgFlagEnableSleep) != 0u;
+        w.enableContinuous = (bin.flags & s_WorldCfgFlagEnableContinuous) != 0u;
+        w.enableContactSoftening = (bin.flags & s_WorldCfgFlagContactSoftening) != 0u;
+        w.enableWarmStarting = (bin.flags & s_WorldCfgFlagWarmStarting) != 0u;
+        w.paused = (bin.flags & s_WorldCfgFlagPaused) != 0u;
+        w.subStepCount = bin.subStepCount;
+        w.maxSubStepsPerFrame = bin.maxSubStepsPerFrame;
+        w.gpuDispatchThreshold = bin.gpuDispatchThreshold;
+        w.gravity = bin.gravity;
+        w.restitutionThreshold = bin.restitutionThreshold;
+        w.hitEventThreshold = bin.hitEventThreshold;
+        w.contactHertz = bin.contactHertz;
+        w.contactDampingRatio = bin.contactDampingRatio;
+        w.maxLinearVelocity = bin.maxLinearVelocity;
+        w.fixedDeltaTime = bin.fixedDeltaTime;
+        w.gpuWorkloadFraction = bin.gpuWorkloadFraction;
+        w.dirty = true;
+        if(!this.validWorldConfigData(w)){
+            error("PhysicsWorldConfigComponentAsset::loadComponentPayload failed: invalid world config values");
+            return false;
+        }
+        outComp = w;
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

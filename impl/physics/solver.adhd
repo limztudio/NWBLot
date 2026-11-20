@@ -8,7 +8,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const usize s_CpuParallelThreshold = 8u;
+const usize s_CpuParallelThreshold = 64u;
+const usize s_CpuColorParallelThreshold = 128u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,7 +26,7 @@ void UpdateBroadPhasePairsCpu(mut PhysicsWorld world, mut CpuTaskScheduler cpuSc
         world.m_broadPhase.workerBuckets[i].clear();
 
     if(cpuScheduler.isParallelEnabled() && moveCount >= s_CpuParallelThreshold){
-        const usize grain = Max(cast<usize>(1u), moveCount / 16u);
+        const usize grain = Max(cast<usize>(16u), moveCount / 16u);
         const auto res = cpuScheduler.parallelFor(
             0u,
             moveCount,
@@ -486,6 +487,22 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
             pruneContactIds.push_back(cast<u32>(i));
             continue;
         }
+        if(!ShouldCollideFilters(sA.filter, sB.filter)){
+            pruneContactIds.push_back(cast<u32>(i));
+            continue;
+        }
+        if(world.m_customFilterCallback.has_value()){
+            u32 ordA = c.shapeIdA;
+            u32 ordB = c.shapeIdB;
+            if(ordB < ordA){
+                ordA = c.shapeIdB;
+                ordB = c.shapeIdA;
+            }
+            if(!world.m_customFilterCallback.value()(world.makeShapeId(ordA), world.makeShapeId(ordB))){
+                pruneContactIds.push_back(cast<u32>(i));
+                continue;
+            }
+        }
         activeContactIds.push_back(cast<u32>(i));
     }
 
@@ -502,7 +519,7 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
     const b8 enableContinuous = world.m_def.enableContinuous;
 
     if(cpuScheduler.isParallelEnabled() && count >= s_CpuParallelThreshold){
-        const usize grain = Max(cast<usize>(1u), count / 16u);
+        const usize grain = Max(cast<usize>(16u), count / 16u);
         in PhysicsWorld worldRef = world;
         const Span<u32> activeContactSpan = Span<u32>(activeContactIds);
         const auto res = cpuScheduler.parallelFor(
@@ -1053,7 +1070,7 @@ b8 PrepareColorContactConstraints(
             continue;
 
         if(cpuScheduler.isParallelEnabled() && cCount >= s_CpuParallelThreshold){
-            const usize grain = Max(cast<usize>(1u), cCount / 16u);
+            const usize grain = Max(cast<usize>(16u), cCount / 16u);
             const Span<u32> colorContactSpan = Span<u32>(colorContactIds[c]);
             const auto res = cpuScheduler.parallelFor(
                 0u,
@@ -1131,10 +1148,10 @@ void StoreJointImpulsesAndCollectBroken(
 ){
     mut Joint joint = world.m_joints[jc.jointId];
     StoreJointConstraintImpulses(jc, invH, joint);
-    const f32 fSq = Vector3LengthSq(VectorSingle(joint.lastConstraintForce)).x;
-    const f32 tSq = Vector3LengthSq(VectorSingle(joint.lastConstraintTorque)).x;
-    const b8 brokeForce = joint.breakForce > 0.0f && fSq > joint.breakForce * joint.breakForce;
-    const b8 brokeTorque = joint.breakTorque > 0.0f && tSq > joint.breakTorque * joint.breakTorque;
+    const f32 peakForce = Max(Vector3Length(VectorSingle(joint.lastConstraintForce)).x, jc.maxLinearImpulseMag * invH);
+    const f32 peakTorque = Max(Vector3Length(VectorSingle(joint.lastConstraintTorque)).x, jc.maxAngularImpulseMag * invH);
+    const b8 brokeForce = joint.breakForce > 0.0f && peakForce > joint.breakForce;
+    const b8 brokeTorque = joint.breakTorque > 0.0f && peakTorque > joint.breakTorque;
     if(brokeForce || brokeTorque)
         outBrokenJointIds.push_back(jc.jointId);
 }
@@ -1510,6 +1527,305 @@ void BuildSolverWorkPartition(
     }
 }
 
+class CpuContactSlotRef{
+    public u32 color = 0u;
+    public u32 index = 0u;
+}
+
+class CpuComponentBatch{
+    public Vector<u32> awakeIndices;
+    public Vector<CpuContactSlotRef> contactSlots;
+    public Vector<u32> jointIndices;
+    public u32 workScore = 0u;
+}
+
+void SolveSingleComponentBatchCpu(
+    mut PhysicsWorld world,
+    mut Vector<BodySim> sims,
+    mut Vector<BodyState> states,
+    mut Array<Vector<ContactConstraint>, s_GraphColorCount> colorConstraints,
+    mut Vector<JointConstraint> jointConstraints,
+    in CpuComponentBatch batch,
+    in VectorSingle gravity,
+    in f32 dt,
+    in u32 subStepCount,
+    in f32 h,
+    in f32 invH,
+    in f32 maxLinVel,
+    in f32 restThresh,
+    in b8 enableWarmStarting
+){
+    for(u32 subStep = 0u; subStep < subStepCount; ++subStep){
+        for(usize bi = 0u; bi < batch.awakeIndices.size(); ++bi)
+            IntegrateBodyVelocitiesRange(sims, states, gravity, h, maxLinVel, cast<usize>(batch.awakeIndices[bi]));
+
+        if(enableWarmStarting){
+            for(usize ci = 0u; ci < batch.contactSlots.size(); ++ci){
+                const CpuContactSlotRef ref = batch.contactSlots[ci];
+                WarmStartContactConstraint(states, colorConstraints[ref.color][ref.index]);
+            }
+            for(usize ji = 0u; ji < batch.jointIndices.size(); ++ji)
+                WarmStartJointConstraint(states, jointConstraints[batch.jointIndices[ji]]);
+        }
+        else if(subStep > 0u){
+            for(usize ci = 0u; ci < batch.contactSlots.size(); ++ci){
+                const CpuContactSlotRef ref = batch.contactSlots[ci];
+                ResetContactConstraintSubStepImpulses(colorConstraints[ref.color][ref.index]);
+            }
+            for(usize ji = 0u; ji < batch.jointIndices.size(); ++ji)
+                ResetJointConstraintSubStepImpulses(jointConstraints[batch.jointIndices[ji]]);
+        }
+
+        for(usize ci = 0u; ci < batch.contactSlots.size(); ++ci){
+            const CpuContactSlotRef ref = batch.contactSlots[ci];
+            SolveContactConstraint(states, colorConstraints[ref.color][ref.index], invH, true);
+        }
+        for(usize ji = 0u; ji < batch.jointIndices.size(); ++ji)
+            SolveJointConstraint(states, jointConstraints[batch.jointIndices[ji]], h, true);
+
+        for(usize bi = 0u; bi < batch.awakeIndices.size(); ++bi)
+            IntegrateBodyPositionsAt(states, h, cast<usize>(batch.awakeIndices[bi]));
+
+        for(usize ci = 0u; ci < batch.contactSlots.size(); ++ci){
+            const CpuContactSlotRef ref = batch.contactSlots[ci];
+            SolveContactConstraint(states, colorConstraints[ref.color][ref.index], invH, false);
+        }
+        for(usize ji = 0u; ji < batch.jointIndices.size(); ++ji)
+            SolveJointConstraint(states, jointConstraints[batch.jointIndices[ji]], h, false);
+    }
+
+    for(usize ci = 0u; ci < batch.contactSlots.size(); ++ci){
+        const CpuContactSlotRef ref = batch.contactSlots[ci];
+        ApplyRestitutionContactConstraint(states, colorConstraints[ref.color][ref.index], restThresh);
+    }
+    for(usize bi = 0u; bi < batch.awakeIndices.size(); ++bi)
+        FinalizeAwakeBodyAt(world, dt, cast<usize>(batch.awakeIndices[bi]));
+}
+
+b8 TrySolvePartitionComponentsParallelCpu(
+    mut PhysicsWorld world,
+    in Vector<u32> awakeIndices,
+    mut Array<Vector<ContactConstraint>, s_GraphColorCount> colorConstraints,
+    mut Vector<JointConstraint> jointConstraints,
+    in f32 dt,
+    in u32 subStepCount,
+    mut CpuTaskScheduler cpuScheduler,
+    mut b8 outHandled
+){
+    outHandled = false;
+    const usize bodyCount = awakeIndices.size();
+    if(!cpuScheduler.isParallelEnabled() || bodyCount < 24u || dt <= 0.0f || subStepCount == 0u)
+        return true;
+
+    const usize totalAwake = world.m_solverSets[s_AwakeSetIndex].states.size();
+    if(totalAwake == 0u)
+        return true;
+
+    Vector<u32> awakeToLocal(totalAwake, s_NullIndex);
+    Vector<u32> dynAwakeIndices;
+    Vector<u32> kinAwakeIndices;
+    dynAwakeIndices.reserve(bodyCount);
+
+    const u32 dynBit = cast<u32>(BodyFlags::Dynamic);
+    in Vector<BodyState> statesView = world.m_solverSets[s_AwakeSetIndex].states;
+    for(usize i = 0u; i < bodyCount; ++i){
+        const u32 awakeIdx = awakeIndices[i];
+        if(awakeIdx >= totalAwake)
+            continue;
+        if((statesView[awakeIdx].flags & dynBit) != 0u){
+            awakeToLocal[awakeIdx] = cast<u32>(dynAwakeIndices.size());
+            dynAwakeIndices.push_back(awakeIdx);
+        }
+        else{
+            kinAwakeIndices.push_back(awakeIdx);
+        }
+    }
+
+    const usize dynCount = dynAwakeIndices.size();
+    if(dynCount < 2u)
+        return true;
+
+    Vector<u32> dsuParents(dynCount);
+    Vector<u8> dsuRanks(dynCount, 0u);
+    for(usize i = 0u; i < dynCount; ++i)
+        dsuParents[i] = cast<u32>(i);
+
+    usize totalContacts = 0u;
+    for(usize c = 0u; c < s_GraphColorCount; ++c){
+        in Vector<ContactConstraint> cons = colorConstraints[c];
+        totalContacts += cons.size();
+        for(usize idx = 0u; idx < cons.size(); ++idx){
+            in ContactConstraint cc = cons[idx];
+            if(cc.pointCount == 0u)
+                continue;
+            const u32 idxA = cc.indexA;
+            const u32 idxB = cc.indexB;
+            if(idxA != s_NullIndex && (statesView[idxA].flags & dynBit) == 0u)
+                return true;
+            if(idxB != s_NullIndex && (statesView[idxB].flags & dynBit) == 0u)
+                return true;
+            if(idxA != s_NullIndex && idxB != s_NullIndex){
+                const u32 locA = awakeToLocal[idxA];
+                const u32 locB = awakeToLocal[idxB];
+                if(locA != s_NullIndex && locB != s_NullIndex)
+                    JoinDisjointSets(cast<isize>(locA), cast<isize>(locB), dsuParents, dsuRanks);
+            }
+        }
+    }
+
+    for(usize ji = 0u; ji < jointConstraints.size(); ++ji){
+        in JointConstraint jc = jointConstraints[ji];
+        const u32 idxA = jc.indexA;
+        const u32 idxB = jc.indexB;
+        if(idxA != s_NullIndex && (statesView[idxA].flags & dynBit) == 0u)
+            return true;
+        if(idxB != s_NullIndex && (statesView[idxB].flags & dynBit) == 0u)
+            return true;
+        if(idxA != s_NullIndex && idxB != s_NullIndex){
+            const u32 locA = awakeToLocal[idxA];
+            const u32 locB = awakeToLocal[idxB];
+            if(locA != s_NullIndex && locB != s_NullIndex)
+                JoinDisjointSets(cast<isize>(locA), cast<isize>(locB), dsuParents, dsuRanks);
+        }
+    }
+
+    if(dynCount + totalContacts + jointConstraints.size() < 48u)
+        return true;
+
+    Vector<u32> rootToComp(dynCount, s_NullIndex);
+    Vector<CpuComponentBatch> components;
+    for(usize i = 0u; i < dynCount; ++i){
+        const u32 root = cast<u32>(FindDisjointRoot(cast<isize>(i), dsuParents));
+        u32 compIdx = rootToComp[root];
+        if(compIdx == s_NullIndex){
+            compIdx = cast<u32>(components.size());
+            rootToComp[root] = compIdx;
+            components.push_back(CpuComponentBatch());
+        }
+        components[compIdx].awakeIndices.push_back(dynAwakeIndices[i]);
+    }
+
+    if(components.size() < 2u)
+        return true;
+
+    for(usize c = 0u; c < s_GraphColorCount; ++c){
+        in Vector<ContactConstraint> cons = colorConstraints[c];
+        for(usize idx = 0u; idx < cons.size(); ++idx){
+            in ContactConstraint cc = cons[idx];
+            if(cc.pointCount == 0u)
+                continue;
+            u32 loc = s_NullIndex;
+            if(cc.indexA != s_NullIndex)
+                loc = awakeToLocal[cc.indexA];
+            else if(cc.indexB != s_NullIndex)
+                loc = awakeToLocal[cc.indexB];
+            if(loc == s_NullIndex)
+                continue;
+            const u32 compIdx = rootToComp[cast<u32>(FindDisjointRoot(cast<isize>(loc), dsuParents))];
+            CpuContactSlotRef slotRef;
+            slotRef.color = cast<u32>(c);
+            slotRef.index = cast<u32>(idx);
+            components[compIdx].contactSlots.push_back(slotRef);
+        }
+    }
+
+    for(usize ji = 0u; ji < jointConstraints.size(); ++ji){
+        in JointConstraint jc = jointConstraints[ji];
+        u32 loc = s_NullIndex;
+        if(jc.indexA != s_NullIndex)
+            loc = awakeToLocal[jc.indexA];
+        else if(jc.indexB != s_NullIndex)
+            loc = awakeToLocal[jc.indexB];
+        if(loc == s_NullIndex)
+            continue;
+        const u32 compIdx = rootToComp[cast<u32>(FindDisjointRoot(cast<isize>(loc), dsuParents))];
+        components[compIdx].jointIndices.push_back(cast<u32>(ji));
+    }
+
+    for(usize ci = 0u; ci < components.size(); ++ci){
+        components[ci].workScore = cast<u32>(
+            components[ci].awakeIndices.size()
+            + components[ci].contactSlots.size() * 2u
+            + components[ci].jointIndices.size() * 3u
+        );
+    }
+
+    Vector<usize> compOrder(components.size());
+    for(usize ci = 0u; ci < components.size(); ++ci)
+        compOrder[ci] = ci;
+    const Span<CpuComponentBatch> compSpan = Span<CpuComponentBatch>(components);
+    SortSequence<usize>(
+        compOrder,
+        lambda[in compSpan](in usize lhs, in usize rhs) -> b8{
+            return compSpan[lhs].workScore > compSpan[rhs].workScore;
+        }
+    );
+
+    const usize bucketCount = Min(components.size(), cast<usize>(16u));
+    Vector<Vector<usize>> buckets(bucketCount);
+    Vector<u64> bucketLoads(bucketCount, 0u);
+    for(usize oi = 0u; oi < compOrder.size(); ++oi){
+        const usize ci = compOrder[oi];
+        usize bestBucket = 0u;
+        for(usize b = 1u; b < bucketCount; ++b){
+            if(bucketLoads[b] < bucketLoads[bestBucket])
+                bestBucket = b;
+        }
+        buckets[bestBucket].push_back(ci);
+        bucketLoads[bestBucket] += cast<u64>(components[ci].workScore);
+    }
+
+    const f32 h = dt / cast<f32>(subStepCount);
+    const f32 invH = 1.0f / h;
+    const VectorSingle gravity = VectorSingle(world.m_def.gravity);
+    const f32 maxLinVel = world.m_def.maxLinearVelocity;
+    const f32 restThresh = world.m_def.restitutionThreshold;
+    const b8 enableWarmStarting = world.m_enableWarmStarting;
+    mut Vector<BodySim> sims = world.m_solverSets[s_AwakeSetIndex].sims;
+    mut Vector<BodyState> states = world.m_solverSets[s_AwakeSetIndex].states;
+    const Span<Vector<usize>> bucketSpan = Span<Vector<usize>>(buckets);
+
+    const auto res = cpuScheduler.parallelFor(
+        0u,
+        bucketCount,
+        1u,
+        lambda[mut world, mut sims, mut states, mut colorConstraints, mut jointConstraints, in compSpan, in bucketSpan, in gravity, in dt, in subStepCount, in h, in invH, in maxLinVel, in restThresh, in enableWarmStarting](in usize bucketIdx) -> void{
+            in Vector<usize> compIds = bucketSpan[bucketIdx];
+            for(usize k = 0u; k < compIds.size(); ++k){
+                SolveSingleComponentBatchCpu(
+                    world,
+                    sims,
+                    states,
+                    colorConstraints,
+                    jointConstraints,
+                    compSpan[compIds[k]],
+                    gravity,
+                    dt,
+                    subStepCount,
+                    h,
+                    invH,
+                    maxLinVel,
+                    restThresh,
+                    enableWarmStarting
+                );
+            }
+        },
+        CpuTaskOptions()
+    );
+    if(!res.has_value())
+        return false;
+
+    for(usize ki = 0u; ki < kinAwakeIndices.size(); ++ki){
+        const usize kIdx = cast<usize>(kinAwakeIndices[ki]);
+        for(u32 subStep = 0u; subStep < subStepCount; ++subStep)
+            IntegrateBodyPositionsAt(states, h, kIdx);
+        FinalizeAwakeBodyAt(world, dt, kIdx);
+    }
+
+    outHandled = true;
+    return true;
+}
+
 b8 SolvePartitionSubStepsCpu(
     mut PhysicsWorld world,
     in Vector<u32> awakeIndices,
@@ -1523,6 +1839,12 @@ b8 SolvePartitionSubStepsCpu(
     if(bodyCount == 0u || dt <= 0.0f || subStepCount == 0u)
         return true;
 
+    b8 handledParallel = false;
+    if(!TrySolvePartitionComponentsParallelCpu(world, awakeIndices, colorConstraints, jointConstraints, dt, subStepCount, cpuScheduler, handledParallel))
+        return false;
+    if(handledParallel)
+        return true;
+
     const f32 h = dt / cast<f32>(subStepCount);
     const f32 invH = 1.0f / h;
     const VectorSingle gravity = VectorSingle(world.m_def.gravity);
@@ -1533,8 +1855,8 @@ b8 SolvePartitionSubStepsCpu(
     const Span<u32> awakeSpan = Span<u32>(awakeIndices);
 
     for(u32 subStep = 0u; subStep < subStepCount; ++subStep){
-        if(cpuScheduler.isParallelEnabled() && bodyCount >= s_CpuParallelThreshold){
-            const usize grain = Max(cast<usize>(1u), bodyCount / 16u);
+        if(cpuScheduler.isParallelEnabled() && bodyCount >= s_CpuColorParallelThreshold){
+            const usize grain = Max(cast<usize>(32u), bodyCount / 16u);
             const auto res = cpuScheduler.parallelFor(
                 0u,
                 bodyCount,
@@ -1557,8 +1879,8 @@ b8 SolvePartitionSubStepsCpu(
                 const usize cCount = colorConstraints[c].size();
                 if(cCount == 0u)
                     continue;
-                if(cpuScheduler.isParallelEnabled() && cCount >= s_CpuParallelThreshold){
-                    const usize grain = Max(cast<usize>(1u), cCount / 16u);
+                if(cpuScheduler.isParallelEnabled() && cCount >= s_CpuColorParallelThreshold){
+                    const usize grain = Max(cast<usize>(32u), cCount / 16u);
                     const Span<ContactConstraint> colorSpan = Span<ContactConstraint>(colorConstraints[c]);
                     const auto res = cpuScheduler.parallelFor(
                         0u,
@@ -1596,8 +1918,8 @@ b8 SolvePartitionSubStepsCpu(
             const usize cCount = colorConstraints[c].size();
             if(cCount == 0u)
                 continue;
-            if(cpuScheduler.isParallelEnabled() && cCount >= s_CpuParallelThreshold){
-                const usize grain = Max(cast<usize>(1u), cCount / 16u);
+            if(cpuScheduler.isParallelEnabled() && cCount >= s_CpuColorParallelThreshold){
+                const usize grain = Max(cast<usize>(32u), cCount / 16u);
                 const auto res = cpuScheduler.parallelFor(
                     0u,
                     cCount,
@@ -1621,8 +1943,8 @@ b8 SolvePartitionSubStepsCpu(
         for(usize ji = 0u; ji < jointConstraints.size(); ++ji)
             SolveJointConstraint(states, jointConstraints[ji], h, true);
 
-        if(cpuScheduler.isParallelEnabled() && bodyCount >= s_CpuParallelThreshold){
-            const usize grain = Max(cast<usize>(1u), bodyCount / 16u);
+        if(cpuScheduler.isParallelEnabled() && bodyCount >= s_CpuColorParallelThreshold){
+            const usize grain = Max(cast<usize>(32u), bodyCount / 16u);
             const auto res = cpuScheduler.parallelFor(
                 0u,
                 bodyCount,
@@ -1644,8 +1966,8 @@ b8 SolvePartitionSubStepsCpu(
             const usize cCount = colorConstraints[c].size();
             if(cCount == 0u)
                 continue;
-            if(cpuScheduler.isParallelEnabled() && cCount >= s_CpuParallelThreshold){
-                const usize grain = Max(cast<usize>(1u), cCount / 16u);
+            if(cpuScheduler.isParallelEnabled() && cCount >= s_CpuColorParallelThreshold){
+                const usize grain = Max(cast<usize>(32u), cCount / 16u);
                 const auto res = cpuScheduler.parallelFor(
                     0u,
                     cCount,
@@ -1674,8 +1996,8 @@ b8 SolvePartitionSubStepsCpu(
         const usize cCount = colorConstraints[c].size();
         if(cCount == 0u)
             continue;
-        if(cpuScheduler.isParallelEnabled() && cCount >= s_CpuParallelThreshold){
-            const usize grain = Max(cast<usize>(1u), cCount / 16u);
+        if(cpuScheduler.isParallelEnabled() && cCount >= s_CpuColorParallelThreshold){
+            const usize grain = Max(cast<usize>(32u), cCount / 16u);
             const auto res = cpuScheduler.parallelFor(
                 0u,
                 cCount,
@@ -1696,8 +2018,8 @@ b8 SolvePartitionSubStepsCpu(
     for(usize idx = 0u; idx < colorConstraints[s_OverflowColorIndex].size(); ++idx)
         ApplyRestitutionContactConstraint(states, colorConstraints[s_OverflowColorIndex][idx], restThresh);
 
-    if(cpuScheduler.isParallelEnabled() && bodyCount >= s_CpuParallelThreshold){
-        const usize grain = Max(cast<usize>(1u), bodyCount / 16u);
+    if(cpuScheduler.isParallelEnabled() && bodyCount >= s_CpuColorParallelThreshold){
+        const usize grain = Max(cast<usize>(32u), bodyCount / 16u);
         const auto res = cpuScheduler.parallelFor(
             0u,
             bodyCount,

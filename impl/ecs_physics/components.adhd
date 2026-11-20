@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_mesh/payload_validation.adhd>
 #include <impl/ecs_scene/components.adhd>
 #include <impl/physics/world.adhd>
 
@@ -25,16 +26,18 @@ class RigidBodyComponent{
     public b8 isEnabled = true;
     public b8 allowFastRotation = false;
     public b8 enableGyroscopicTorque = false;
+    public b8 driveKinematicFromTransform = false;
     public b8 dirty = true;
     public BodyId runtimeBodyId;
 }
 
-[arena]
+[arena, reflect]
 class ColliderShapeEntry{
     public ShapeType shapeType = ShapeType::Hull;
     public f32x4 center(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 center2(0.0f, 0.5f, 0.0f, 0.0f);
     public f32x4 halfExtents(0.5f, 0.5f, 0.5f, 0.0f);
+    public f32x4 localRotation(0.0f, 0.0f, 0.0f, 1.0f);
     public f32 radius = 0.5f;
     public f32 skinRadius = 0.0f;
     public f32 density = 1.0f;
@@ -55,6 +58,7 @@ class ColliderShapeEntry{
     public Vector<f32x4> hullPoints;
     public Vector<f32x4> meshVertices;
     public Vector<u32> meshIndices;
+    public AssetRef<Mesh> meshAsset;
 }
 
 [arena, component("collider")]
@@ -63,6 +67,7 @@ class ColliderComponent{
     public f32x4 center(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 center2(0.0f, 0.5f, 0.0f, 0.0f);
     public f32x4 halfExtents(0.5f, 0.5f, 0.5f, 0.0f);
+    public f32x4 localRotation(0.0f, 0.0f, 0.0f, 1.0f);
     public f32 radius = 0.5f;
     public f32 skinRadius = 0.0f;
     public f32 density = 1.0f;
@@ -83,9 +88,11 @@ class ColliderComponent{
     public Vector<f32x4> hullPoints;
     public Vector<f32x4> meshVertices;
     public Vector<u32> meshIndices;
+    public AssetRef<Mesh> meshAsset;
     public Vector<ColliderShapeEntry> extraShapes;
     public b8 dirty = true;
     public ShapeId runtimeShapeId;
+    public Vector<ShapeId> runtimeExtraShapeIds;
     public BodyId boundBodyId;
 }
 

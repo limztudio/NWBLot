@@ -11,6 +11,7 @@
 #include <impl/ecs_model/system.adhd>
 #include <impl/ecs_model_renderer/model_renderer.adhd>
 #include <impl/ecs_physics/components.adhd>
+#include <impl/ecs_physics/debug_draw.adhd>
 #include <impl/ecs_physics/system.adhd>
 #include <impl/ecs_render/module.adhd>
 #include <impl/ecs_scene/module.adhd>
@@ -758,6 +759,35 @@ Expected<SharedImageSource> LoadUiGallerySkinImageSource(in SharedPool pool, mut
     if(!textureRef.valid())
         return MakeUnexpected(Failure());
     return LoadImageSource(pool, context.assetManager, textureRef);
+}
+
+void PaintPhysicsDebugOverlay(mut NotNullUniquePtr<World> worldHandle, mut UiPaintContext context){
+    mut World world = worldHandle.deref();
+    const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
+    if(!physicsSystem.has_value())
+        return;
+
+    const DisplayMetrics metrics = context.paint.displayMetrics();
+    if(metrics.logicalWidth <= 0.0f || metrics.logicalHeight <= 0.0f)
+        return;
+
+    const SceneCameraView cameraView = ResolveSceneCameraView(world, metrics.logicalWidth / Max(metrics.logicalHeight, 1.0f));
+    if(!cameraView.valid())
+        return;
+
+    Vector<PhysicsDebugLine> debugLines;
+    BuildPhysicsDebugLines(physicsSystem.value().physicsWorld(), PhysicsDebugDrawOptions(), debugLines);
+    if(debugLines.empty())
+        return;
+
+    in TransformComponent camXf = cameraView.components.value().transform;
+    in CameraProjection camProj = cameraView.projection;
+    for(usize li = 0u; li < debugLines.size(); ++li){
+        in PhysicsDebugLine line = debugLines[li];
+        VectorSingle seg(0.0f);
+        if(ProjectPhysicsWorldSegmentToScreen(camXf, camProj, metrics.logicalWidth, metrics.logicalHeight, VectorSingle(line.start), VectorSingle(line.end), seg))
+            context.paint.drawLine(Point(seg.x, seg.y), Point(seg.z, seg.w), 1.5f, Color(line.color.x, line.color.y, line.color.z, line.color.w));
+    }
 }
 
 

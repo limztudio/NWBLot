@@ -69,18 +69,14 @@ void nwbPhysicsApplyPointImpulse(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[numthreads(NWB_PHYSICS_WORKGROUP_SIZE, 1, 1)]
-void main(uint3 dispatchThreadID : SV_DispatchThreadID){
-    const uint localIdx = dispatchThreadID.x;
-    if(localIdx >= g_NwbPhysicsPushConstants.itemCount)
-        return;
-
-    const uint constraintIdx = g_NwbPhysicsPushConstants.itemOffset + localIdx;
-    const uint mode = g_NwbPhysicsPushConstants.modeOrSecondaryCount;
-    const uint bodyStateSlot = g_NwbPhysicsPushConstants.slots0.y;
-    const uint constraintSlot = g_NwbPhysicsPushConstants.slots0.w;
-    const float invH = g_NwbPhysicsPushConstants.invDeltaTime;
-
+void nwbPhysicsSolveSingleContact(
+    const uint constraintIdx,
+    const uint mode,
+    const uint bodyStateSlot,
+    const uint constraintSlot,
+    const float invH,
+    const uint flags
+){
     NwbPhysicsGpuContactConstraint c = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx];
     const uint indexA = c.indicesCountFlags.x;
     const uint indexB = c.indicesCountFlags.y;
@@ -119,7 +115,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float3 invIB2 = c.invIB2.xyz;
 
     if(mode == NWB_PHYSICS_SOLVER_MODE_WARM_START){
-        if((g_NwbPhysicsPushConstants.flags & 1u) == 0u){
+        if((flags & NWB_PHYSICS_SOLVER_FLAG_WARM_START) == 0u){
             for(uint i = 0u; i < pointCount; ++i)
                 c.points[i].impulsesMass.x = 0.0f;
             c.tangentMassFriction.z = 0.0f;
@@ -302,6 +298,34 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     nwbPhysicsStoreBodyVelocity(bodyStateSlot, indexA, vA, wA, flagsA);
     nwbPhysicsStoreBodyVelocity(bodyStateSlot, indexB, vB, wB, flagsB);
     g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx] = c;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[numthreads(NWB_PHYSICS_WORKGROUP_SIZE, 1, 1)]
+void main(uint3 dispatchThreadID : SV_DispatchThreadID){
+    const uint itemCount = g_NwbPhysicsPushConstants.itemCount;
+    const uint itemOffset = g_NwbPhysicsPushConstants.itemOffset;
+    const uint mode = g_NwbPhysicsPushConstants.modeOrSecondaryCount;
+    const uint flags = g_NwbPhysicsPushConstants.flags;
+    const uint bodyStateSlot = g_NwbPhysicsPushConstants.slots0.y;
+    const uint constraintSlot = g_NwbPhysicsPushConstants.slots0.w;
+    const float invH = g_NwbPhysicsPushConstants.invDeltaTime;
+
+    if((flags & NWB_PHYSICS_SOLVER_FLAG_SERIAL_LOOP) != 0u){
+        if(dispatchThreadID.x != 0u)
+            return;
+        for(uint k = 0u; k < itemCount; ++k)
+            nwbPhysicsSolveSingleContact(itemOffset + k, mode, bodyStateSlot, constraintSlot, invH, flags);
+        return;
+    }
+
+    const uint localIdx = dispatchThreadID.x;
+    if(localIdx >= itemCount)
+        return;
+    nwbPhysicsSolveSingleContact(itemOffset + localIdx, mode, bodyStateSlot, constraintSlot, invH, flags);
 }
 
 

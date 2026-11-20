@@ -1,0 +1,96 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_physics/components.adhd>
+#include <impl/assets_physics/physics_component_binary_codec.adhd>
+#include <impl/assets_scene/component_asset_binary_codec.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 RigidBodyComponentAsset::loadBinary(in Span<u8> binary){
+    return ComponentAssetBinaryCodec().loadBinary(binary, this);
+}
+
+b8 RigidBodyComponentAsset::loadComponentPayload(in Span<u8> payload){
+    return PhysicsComponentBinaryCodec().deserializeRigidBody(payload, this.component);
+}
+
+b8 RigidBodyComponentAsset::validatePayload()const{
+    if(!this.checkVirtualPath("RigidBodyComponentAsset::validatePayload"))
+        return false;
+    return PhysicsComponentBinaryCodec().validateRigidBody(this.component, this.virtualPath());
+}
+
+b8 RigidBodyComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return PhysicsComponentBinaryCodec().serializeRigidBody(this.component, outPayload);
+}
+
+b8 ColliderComponentAsset::loadBinary(in Span<u8> binary){
+    return ComponentAssetBinaryCodec().loadBinary(binary, this);
+}
+
+b8 ColliderComponentAsset::loadComponentPayload(in Span<u8> payload){
+    return PhysicsComponentBinaryCodec().deserializeCollider(payload, this.component);
+}
+
+b8 ColliderComponentAsset::validatePayload()const{
+    if(!this.checkVirtualPath("ColliderComponentAsset::validatePayload"))
+        return false;
+    return PhysicsComponentBinaryCodec().validateCollider(this.component, this.virtualPath());
+}
+
+b8 ColliderComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return PhysicsComponentBinaryCodec().serializeCollider(this.component, outPayload);
+}
+
+b8 JointComponentAsset::loadBinary(in Span<u8> binary){
+    return ComponentAssetBinaryCodec().loadBinary(binary, this);
+}
+
+b8 JointComponentAsset::loadComponentPayload(in Span<u8> payload){
+    return PhysicsComponentBinaryCodec().deserializeJoint(payload, this.component);
+}
+
+b8 JointComponentAsset::validatePayload()const{
+    if(!this.checkVirtualPath("JointComponentAsset::validatePayload"))
+        return false;
+    return PhysicsComponentBinaryCodec().validateJoint(this.component, this.virtualPath());
+}
+
+b8 JointComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return PhysicsComponentBinaryCodec().serializeJoint(this.component, outPayload);
+}
+
+b8 PhysicsWorldConfigComponentAsset::loadBinary(in Span<u8> binary){
+    return ComponentAssetBinaryCodec().loadBinary(binary, this);
+}
+
+b8 PhysicsWorldConfigComponentAsset::loadComponentPayload(in Span<u8> payload){
+    return PhysicsComponentBinaryCodec().deserializeWorldConfig(payload, this.component);
+}
+
+b8 PhysicsWorldConfigComponentAsset::validatePayload()const{
+    if(!this.checkVirtualPath("PhysicsWorldConfigComponentAsset::validatePayload"))
+        return false;
+    return PhysicsComponentBinaryCodec().validateWorldConfig(this.component, this.virtualPath());
+}
+
+b8 PhysicsWorldConfigComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return PhysicsComponentBinaryCodec().serializeWorldConfig(this.component, outPayload);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+register_asset RigidBodyComponentAsset using TypedComponentAutoRegistrar<RigidBodyComponentAsset>;
+register_asset ColliderComponentAsset using TypedComponentAutoRegistrar<ColliderComponentAsset>;
+register_asset JointComponentAsset using TypedComponentAutoRegistrar<JointComponentAsset>;
+register_asset PhysicsWorldConfigComponentAsset using TypedComponentAutoRegistrar<PhysicsWorldConfigComponentAsset>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

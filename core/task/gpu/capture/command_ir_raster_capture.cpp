@@ -84,6 +84,14 @@ GpuCommandIrCapture::~GpuCommandIrCapture()noexcept{
         DestroyArenaObjectNoexcept(m_arena, m_rasterOwners);
 }
 
+const GpuCommandIrRasterStateOwner* GpuCommandIrCapture::rasterStateOwner(const u32 index)const noexcept{
+    return m_rasterOwners && index < m_rasterOwners->stateOwners.size() ? &m_rasterOwners->stateOwners[index] : nullptr;
+}
+
+const GpuCommandIrRasterHeapOwner* GpuCommandIrCapture::rasterHeapOwner(const u32 index)const noexcept{
+    return m_rasterOwners && index < m_rasterOwners->heapOwners.size() ? &m_rasterOwners->heapOwners[index] : nullptr;
+}
+
 b8 GpuCommandIrCapture::captureSetGraphicsState(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue, const GpuCommandIrRasterStateDesc& state){
     if(
         !state.pipeline.valid() || state.pipeline.generation != task.generation

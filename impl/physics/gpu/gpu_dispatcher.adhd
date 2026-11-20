@@ -1673,9 +1673,6 @@ class PhysicsGpuDispatcher{
     private Array<Vector<JointConstraint>, s_GpuJointColorCount> m_jointColorBucketsScratch;
     private Vector<u32> m_bodyJointColorMaskScratch;
     private Vector<u8> m_hitFlagsScratch;
-    private Vector<u32> m_flatColorsScratch;
-    private Vector<u32> m_flatIndicesScratch;
-    private Vector<u32> m_flatContactIdsScratch;
     private SolverWorkPartition m_partitionScratch;
     private Array<Vector<ContactConstraint>, s_GraphColorCount> m_cpuColorConstraintsScratch;
     private Vector<JointConstraint> m_cpuJointConstraintsScratch;
@@ -1826,9 +1823,6 @@ class PhysicsGpuDispatcher{
             this.m_jointColorBucketsScratch[jc].clear();
         this.m_bodyJointColorMaskScratch.clear();
         this.m_hitFlagsScratch.clear();
-        this.m_flatColorsScratch.clear();
-        this.m_flatIndicesScratch.clear();
-        this.m_flatContactIdsScratch.clear();
         this.m_partitionScratch.resetForStep();
         for(usize cc = 0u; cc < s_GraphColorCount; ++cc)
             this.m_cpuColorConstraintsScratch[cc].clear();
@@ -3002,9 +2996,6 @@ class PhysicsGpuDispatcher{
             world,
             h,
             cpuScheduler,
-            world.m_cpuScratch.flatColors,
-            world.m_cpuScratch.flatIndices,
-            world.m_cpuScratch.flatContactIds,
             colorConstraints
         )){
             mut Vector<JointConstraint> jointConstraints = world.m_cpuScratch.jointConstraints;
@@ -3391,7 +3382,7 @@ class PhysicsGpuDispatcher{
                         const b8 enableWarmStarting = world.m_enableWarmStarting;
                         b8 resolvedParallel = false;
                         if(cpuScheduler.isParallelEnabled() && manifoldCount >= s_CpuParallelThreshold){
-                            const usize grain = Max(cast<usize>(16u), manifoldCount / 16u);
+                            const usize grain = ComputePhysicsGrain(cpuScheduler, manifoldCount, cast<usize>(16u));
                             const auto resolveRes = cpuScheduler.parallelFor(
                                 0u,
                                 manifoldCount,
@@ -3509,7 +3500,7 @@ class PhysicsGpuDispatcher{
                         mut Vector<Manifold> resolvedManifolds = this.m_resolvedManifoldsScratch;
                         b8 resolvedParallel = false;
                         if(cpuScheduler.isParallelEnabled() && manifoldCount >= s_CpuParallelThreshold){
-                            const usize grain = Max(cast<usize>(16u), manifoldCount / 16u);
+                            const usize grain = ComputePhysicsGrain(cpuScheduler, manifoldCount, cast<usize>(16u));
                             in PhysicsWorld worldRef = world;
                             const auto resolveRes = cpuScheduler.parallelFor(
                                 0u,
@@ -3594,7 +3585,7 @@ class PhysicsGpuDispatcher{
         BuildSolverWorkPartition(world, world.m_gpuWorkloadFraction, true, this.m_partitionScratch);
 
         if(this.m_partitionScratch.gpuOwnedBodyCount == 0u){
-            b8 cpuOk = PrepareColorContactConstraintsWithScratch(world, this.m_partitionScratch.cpuColorContactIds, h, cpuScheduler, this.m_flatColorsScratch, this.m_flatIndicesScratch, this.m_flatContactIdsScratch, this.m_cpuColorConstraintsScratch);
+            b8 cpuOk = PrepareColorContactConstraints(world, this.m_partitionScratch.cpuColorContactIds, h, cpuScheduler, this.m_cpuColorConstraintsScratch);
             if(cpuOk){
                 this.m_cpuJointConstraintsScratch.clear();
                 this.m_cpuJointConstraintsScratch.reserve(this.m_partitionScratch.cpuJointIds.size());
@@ -3639,12 +3630,12 @@ class PhysicsGpuDispatcher{
         this.m_gpuSimsScratch.resize(gpuUploadCount);
         this.m_solverStatesScratch.resize(gpuUploadCount);
         b8 packBodyParallel = false;
-        if(cpuScheduler.isParallelEnabled() && gpuUploadCount >= 128u){
+        if(cpuScheduler.isParallelEnabled() && gpuUploadCount >= 512u){
             in PhysicsWorld worldRef = world;
             const Span<u32> gpuIdxSpan = Span<u32>(this.m_partitionScratch.gpuAwakeIndices);
             mut Vector<GpuPhysicsBodySim> outSims = this.m_gpuSimsScratch;
             mut Vector<GpuPhysicsBodyState> outStates = this.m_solverStatesScratch;
-            const usize grain = Max(cast<usize>(16u), cast<usize>(gpuUploadCount) / 16u);
+            const usize grain = ComputePhysicsGrain(cpuScheduler, cast<usize>(gpuUploadCount), cast<usize>(128u));
             const auto packBodyRes = cpuScheduler.parallelFor(
                 0u,
                 gpuUploadCount,
@@ -3707,11 +3698,11 @@ class PhysicsGpuDispatcher{
             mut Vector<u8> outRestFlags = this.m_contactRestFlagsScratch;
 
             b8 packConParallel = false;
-            if(cpuScheduler.isParallelEnabled() && totalGpuConstraints >= s_CpuParallelThreshold){
+            if(cpuScheduler.isParallelEnabled() && totalGpuConstraints >= s_CpuPrepareContactThreshold){
                 in PhysicsWorld worldRef = world;
                 const Span<u32> contactIdSpan = Span<u32>(this.m_gpuContactIdsScratch);
                 mut Vector<GpuPhysicsContactConstraint> outConstraints = this.m_gpuConstraintsScratch;
-                const usize grain = Max(cast<usize>(32u), cast<usize>(totalGpuConstraints) / 16u);
+                const usize grain = ComputePhysicsGrain(cpuScheduler, cast<usize>(totalGpuConstraints), cast<usize>(32u));
                 const auto packConRes = cpuScheduler.parallelFor(
                     0u,
                     totalGpuConstraints,
@@ -3989,7 +3980,7 @@ class PhysicsGpuDispatcher{
         this.m_brokenJointIdsScratch.clear();
         b8 cpuSolveOk = true;
         if(!this.m_partitionScratch.cpuAwakeIndices.empty()){
-            cpuSolveOk = PrepareColorContactConstraintsWithScratch(world, this.m_partitionScratch.cpuColorContactIds, h, cpuScheduler, this.m_flatColorsScratch, this.m_flatIndicesScratch, this.m_flatContactIdsScratch, this.m_cpuColorConstraintsScratch);
+            cpuSolveOk = PrepareColorContactConstraints(world, this.m_partitionScratch.cpuColorContactIds, h, cpuScheduler, this.m_cpuColorConstraintsScratch);
             if(cpuSolveOk){
                 this.m_cpuJointConstraintsScratch.clear();
                 this.m_cpuJointConstraintsScratch.reserve(this.m_partitionScratch.cpuJointIds.size());
@@ -4037,7 +4028,7 @@ class PhysicsGpuDispatcher{
 
         if(!cpuSolveOk){
             if(!this.m_partitionScratch.cpuAwakeIndices.empty()){
-                if(PrepareColorContactConstraintsWithScratch(world, this.m_partitionScratch.cpuColorContactIds, h, cpuScheduler, this.m_flatColorsScratch, this.m_flatIndicesScratch, this.m_flatContactIdsScratch, this.m_cpuColorConstraintsScratch)){
+                if(PrepareColorContactConstraints(world, this.m_partitionScratch.cpuColorContactIds, h, cpuScheduler, this.m_cpuColorConstraintsScratch)){
                     if(SolvePartitionSubStepsCpu(world, this.m_partitionScratch.cpuAwakeIndices, this.m_cpuColorConstraintsScratch, this.m_cpuJointConstraintsScratch, dt, subStepCount, cpuScheduler)){
                         for(usize ji = 0u; ji < this.m_cpuJointConstraintsScratch.size(); ++ji)
                             StoreJointImpulsesAndCollectBroken(world, this.m_cpuJointConstraintsScratch[ji], invH, this.m_brokenJointIdsScratch);
@@ -4071,7 +4062,7 @@ class PhysicsGpuDispatcher{
                 if(this.m_partitionScratch.gpuAwakeWriteBack[g] != 0u)
                     gpuOwnedOnlyIndices.push_back(this.m_partitionScratch.gpuAwakeIndices[g]);
             }
-            if(PrepareColorContactConstraintsWithScratch(world, this.m_partitionScratch.gpuColorContactIds, h, cpuScheduler, this.m_flatColorsScratch, this.m_flatIndicesScratch, this.m_flatContactIdsScratch, this.m_cpuColorConstraintsScratch)){
+            if(PrepareColorContactConstraints(world, this.m_partitionScratch.gpuColorContactIds, h, cpuScheduler, this.m_cpuColorConstraintsScratch)){
                 if(SolvePartitionSubStepsCpu(world, gpuOwnedOnlyIndices, this.m_cpuColorConstraintsScratch, this.m_flatGpuJointsScratch, dt, subStepCount, cpuScheduler)){
                     for(usize ji = 0u; ji < this.m_flatGpuJointsScratch.size(); ++ji)
                         StoreJointImpulsesAndCollectBroken(world, this.m_flatGpuJointsScratch[ji], invH, this.m_brokenJointIdsScratch);
@@ -4099,12 +4090,12 @@ class PhysicsGpuDispatcher{
         else{
             mut SolverSet awakeOut = world.m_solverSets[s_AwakeSetIndex];
             b8 wbParallel = false;
-            if(cpuScheduler.isParallelEnabled() && gpuUploadCount >= 128u){
+            if(cpuScheduler.isParallelEnabled() && gpuUploadCount >= 512u){
                 const Span<GpuPhysicsBodyOut> outBodiesSpan = Span<GpuPhysicsBodyOut>(this.m_outBodiesScratch);
                 const Span<u32> gpuIdxSpan = Span<u32>(this.m_partitionScratch.gpuAwakeIndices);
                 const Span<u8> writeBackSpan = Span<u8>(this.m_partitionScratch.gpuAwakeWriteBack);
                 mut Vector<Body> bodiesMut = world.m_bodies;
-                const usize grain = Max(cast<usize>(16u), cast<usize>(gpuUploadCount) / 16u);
+                const usize grain = ComputePhysicsGrain(cpuScheduler, cast<usize>(gpuUploadCount), cast<usize>(128u));
                 const auto wbRes = cpuScheduler.parallelFor(
                     0u,
                     gpuUploadCount,
@@ -4215,14 +4206,14 @@ class PhysicsGpuDispatcher{
 
             if(totalGpuConstraints > 0u){
                 b8 conWbParallel = false;
-                if(cpuScheduler.isParallelEnabled() && totalGpuConstraints >= 256u){
+                if(cpuScheduler.isParallelEnabled() && totalGpuConstraints >= 512u){
                     const Span<u32> gpuConIdSpan = Span<u32>(this.m_gpuContactIdsScratch);
                     const Span<GpuPhysicsContactImpulseOut> outConImpSpan = Span<GpuPhysicsContactImpulseOut>(this.m_outContactImpulsesScratch);
                     mut Vector<Contact> contactsMut = world.m_contacts;
                     const f32 hitThreshold = world.m_def.hitEventThreshold;
                     this.m_hitFlagsScratch.resize(totalGpuConstraints);
                     mut Vector<u8> hitFlagsMut = this.m_hitFlagsScratch;
-                    const usize grain = Max(cast<usize>(32u), cast<usize>(totalGpuConstraints) / 16u);
+                    const usize grain = ComputePhysicsGrain(cpuScheduler, cast<usize>(totalGpuConstraints), cast<usize>(128u));
                     const auto conWbRes = cpuScheduler.parallelFor(
                         0u,
                         totalGpuConstraints,

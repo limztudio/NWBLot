@@ -9,7 +9,30 @@
 
 
 const usize s_CpuParallelThreshold = 64u;
-const usize s_CpuColorParallelThreshold = 128u;
+const usize s_CpuColorParallelThreshold = 256u;
+const usize s_CpuPrepareContactThreshold = 128u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+usize ComputePhysicsGrain(in CpuTaskScheduler cpuScheduler, in usize itemCount, in usize minGrain){
+    const usize workerCount = Max(cast<usize>(cpuScheduler.workerThreadCount()), cast<usize>(1u));
+    const usize targetChunks = workerCount * 4u;
+    return Max(minGrain, itemCount / targetChunks);
+}
+
+usize ComputePhysicsBucketCount(in CpuTaskScheduler cpuScheduler, in usize componentCount){
+    const usize workerCount = Max(cast<usize>(cpuScheduler.workerThreadCount()), cast<usize>(1u));
+    return Min(componentCount, workerCount * 2u);
+}
+
+usize ResolveColorSlotIndex(in Array<usize, s_GraphColorCount> colorStarts, in usize flatIndex){
+    usize c = 0u;
+    while(c + 1u < s_GraphColorCount && flatIndex >= colorStarts[c + 1u])
+        ++c;
+    return c;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,7 +49,7 @@ void UpdateBroadPhasePairsCpu(mut PhysicsWorld world, mut CpuTaskScheduler cpuSc
         world.m_broadPhase.workerBuckets[i].clear();
 
     if(cpuScheduler.isParallelEnabled() && moveCount >= s_CpuParallelThreshold){
-        const usize grain = Max(cast<usize>(16u), moveCount / 16u);
+        const usize grain = ComputePhysicsGrain(cpuScheduler, moveCount, cast<usize>(16u));
         const auto res = cpuScheduler.parallelFor(
             0u,
             moveCount,
@@ -599,7 +622,7 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
         const b8 enableWarmStarting = world.m_enableWarmStarting;
 
         if(cpuScheduler.isParallelEnabled() && count >= s_CpuParallelThreshold){
-            const usize grain = Max(cast<usize>(16u), count / 16u);
+            const usize grain = ComputePhysicsGrain(cpuScheduler, count, cast<usize>(16u));
             in PhysicsWorld worldRef = world;
             mut Vector<Contact> contactsMut = world.m_contacts;
             const Span<u32> activeContactSpan = Span<u32>(activeContactIds);
@@ -809,7 +832,7 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
     evaluatedManifolds.resize(count);
 
     if(cpuScheduler.isParallelEnabled() && count >= s_CpuParallelThreshold){
-        const usize grain = Max(cast<usize>(16u), count / 16u);
+        const usize grain = ComputePhysicsGrain(cpuScheduler, count, cast<usize>(16u));
         in PhysicsWorld worldRef = world;
         const Span<u32> activeContactSpan = Span<u32>(activeContactIds);
         const auto res = cpuScheduler.parallelFor(
@@ -1427,14 +1450,11 @@ void SplitDirtyAwakeIslands(mut PhysicsWorld world){
     }
 }
 
-b8 PrepareColorContactConstraintsWithScratch(
+b8 PrepareColorContactConstraints(
     in PhysicsWorld world,
     in Array<Vector<u32>, s_GraphColorCount> colorContactIds,
     in f32 h,
     mut CpuTaskScheduler cpuScheduler,
-    mut Vector<u32> flatColors,
-    mut Vector<u32> flatIndices,
-    mut Vector<u32> flatContactIds,
     mut Array<Vector<ContactConstraint>, s_GraphColorCount> outConstraints
 ){
     const f32 contactHertz = world.m_def.contactHertz;
@@ -1445,8 +1465,10 @@ b8 PrepareColorContactConstraintsWithScratch(
 
     in PhysicsWorld worldRef = world;
 
+    Array<usize, s_GraphColorCount> colorStarts;
     usize totalContacts = 0u;
     for(usize c = 0u; c < s_GraphColorCount; ++c){
+        colorStarts[c] = totalContacts;
         const usize cCount = colorContactIds[c].size();
         outConstraints[c].resize(cCount);
         totalContacts += cCount;
@@ -1454,33 +1476,16 @@ b8 PrepareColorContactConstraintsWithScratch(
     if(totalContacts == 0u)
         return true;
 
-    if(cpuScheduler.isParallelEnabled() && totalContacts >= s_CpuParallelThreshold){
-        flatColors.clear();
-        flatIndices.clear();
-        flatContactIds.clear();
-        flatColors.reserve(totalContacts);
-        flatIndices.reserve(totalContacts);
-        flatContactIds.reserve(totalContacts);
-        for(usize c = 0u; c < s_GraphColorCount; ++c){
-            in Vector<u32> ids = colorContactIds[c];
-            for(usize idx = 0u; idx < ids.size(); ++idx){
-                flatColors.push_back(cast<u32>(c));
-                flatIndices.push_back(cast<u32>(idx));
-                flatContactIds.push_back(ids[idx]);
-            }
-        }
-        const Span<u32> colorSpan = Span<u32>(flatColors);
-        const Span<u32> indexSpan = Span<u32>(flatIndices);
-        const Span<u32> contactIdSpan = Span<u32>(flatContactIds);
-        const usize grain = Max(cast<usize>(32u), totalContacts / 16u);
+    if(cpuScheduler.isParallelEnabled() && totalContacts >= s_CpuPrepareContactThreshold){
+        const usize grain = ComputePhysicsGrain(cpuScheduler, totalContacts, cast<usize>(32u));
         const auto res = cpuScheduler.parallelFor(
             0u,
             totalContacts,
             grain,
-            lambda[in worldRef, in colorSpan, in indexSpan, in contactIdSpan, in dynamicSoftness, in staticSoftness, in contactHertz, in contactDampingRatio, in h, in enableContactSoftening, mut outConstraints](in usize flatIdx) -> void{
-                const u32 c = colorSpan[flatIdx];
-                const u32 idx = indexSpan[flatIdx];
-                const u32 contactId = contactIdSpan[flatIdx];
+            lambda[in worldRef, in colorContactIds, in colorStarts, in dynamicSoftness, in staticSoftness, in contactHertz, in contactDampingRatio, in h, in enableContactSoftening, mut outConstraints](in usize flatIdx) -> void{
+                const usize c = ResolveColorSlotIndex(colorStarts, flatIdx);
+                const usize idx = flatIdx - colorStarts[c];
+                const u32 contactId = colorContactIds[c][idx];
                 PrepareContactConstraint(
                     worldRef.m_bodies,
                     worldRef.m_solverSets,
@@ -1524,35 +1529,10 @@ b8 PrepareColorContactConstraintsWithScratch(
     return true;
 }
 
-b8 PrepareColorContactConstraints(
-    in PhysicsWorld world,
-    in Array<Vector<u32>, s_GraphColorCount> colorContactIds,
-    in f32 h,
-    mut CpuTaskScheduler cpuScheduler,
-    mut Array<Vector<ContactConstraint>, s_GraphColorCount> outConstraints
-){
-    Vector<u32> flatColors;
-    Vector<u32> flatIndices;
-    Vector<u32> flatContactIds;
-    return PrepareColorContactConstraintsWithScratch(
-        world,
-        colorContactIds,
-        h,
-        cpuScheduler,
-        flatColors,
-        flatIndices,
-        flatContactIds,
-        outConstraints
-    );
-}
-
 b8 PrepareColorContactConstraintsFromGraph(
     in PhysicsWorld world,
     in f32 h,
     mut CpuTaskScheduler cpuScheduler,
-    mut Vector<u32> flatColors,
-    mut Vector<u32> flatIndices,
-    mut Vector<u32> flatContactIds,
     mut Array<Vector<ContactConstraint>, s_GraphColorCount> outConstraints
 ){
     const f32 contactHertz = world.m_def.contactHertz;
@@ -1563,8 +1543,10 @@ b8 PrepareColorContactConstraintsFromGraph(
 
     in PhysicsWorld worldRef = world;
 
+    Array<usize, s_GraphColorCount> colorStarts;
     usize totalContacts = 0u;
     for(usize c = 0u; c < s_GraphColorCount; ++c){
+        colorStarts[c] = totalContacts;
         const usize cCount = world.m_graph.colors[c].contactIds.size();
         outConstraints[c].resize(cCount);
         totalContacts += cCount;
@@ -1572,33 +1554,16 @@ b8 PrepareColorContactConstraintsFromGraph(
     if(totalContacts == 0u)
         return true;
 
-    if(cpuScheduler.isParallelEnabled() && totalContacts >= s_CpuParallelThreshold){
-        flatColors.clear();
-        flatIndices.clear();
-        flatContactIds.clear();
-        flatColors.reserve(totalContacts);
-        flatIndices.reserve(totalContacts);
-        flatContactIds.reserve(totalContacts);
-        for(usize c = 0u; c < s_GraphColorCount; ++c){
-            in Vector<u32> ids = world.m_graph.colors[c].contactIds;
-            for(usize idx = 0u; idx < ids.size(); ++idx){
-                flatColors.push_back(cast<u32>(c));
-                flatIndices.push_back(cast<u32>(idx));
-                flatContactIds.push_back(ids[idx]);
-            }
-        }
-        const Span<u32> colorSpan = Span<u32>(flatColors);
-        const Span<u32> indexSpan = Span<u32>(flatIndices);
-        const Span<u32> contactIdSpan = Span<u32>(flatContactIds);
-        const usize grain = Max(cast<usize>(32u), totalContacts / 16u);
+    if(cpuScheduler.isParallelEnabled() && totalContacts >= s_CpuPrepareContactThreshold){
+        const usize grain = ComputePhysicsGrain(cpuScheduler, totalContacts, cast<usize>(32u));
         const auto res = cpuScheduler.parallelFor(
             0u,
             totalContacts,
             grain,
-            lambda[in worldRef, in colorSpan, in indexSpan, in contactIdSpan, in dynamicSoftness, in staticSoftness, in contactHertz, in contactDampingRatio, in h, in enableContactSoftening, mut outConstraints](in usize flatIdx) -> void{
-                const u32 c = colorSpan[flatIdx];
-                const u32 idx = indexSpan[flatIdx];
-                const u32 contactId = contactIdSpan[flatIdx];
+            lambda[in worldRef, in colorStarts, in dynamicSoftness, in staticSoftness, in contactHertz, in contactDampingRatio, in h, in enableContactSoftening, mut outConstraints](in usize flatIdx) -> void{
+                const usize c = ResolveColorSlotIndex(colorStarts, flatIdx);
+                const usize idx = flatIdx - colorStarts[c];
+                const u32 contactId = worldRef.m_graph.colors[c].contactIds[idx];
                 PrepareContactConstraint(
                     worldRef.m_bodies,
                     worldRef.m_solverSets,
@@ -2795,7 +2760,7 @@ b8 TrySolvePartitionComponentsParallelCpu(
         }
     );
 
-    const usize bucketCount = Min(compCount, cast<usize>(16u));
+    const usize bucketCount = ComputePhysicsBucketCount(cpuScheduler, compCount);
     mut Vector<Vector<usize>> buckets = world.m_cpuScratch.parBuckets;
     buckets.resize(bucketCount);
     for(usize b = 0u; b < bucketCount; ++b)
@@ -2910,7 +2875,7 @@ b8 SolvePartitionSubStepsCpu(
 
     for(u32 subStep = 0u; subStep < subStepCount; ++subStep){
         if(cpuScheduler.isParallelEnabled() && bodyCount >= s_CpuColorParallelThreshold){
-            const usize grain = Max(cast<usize>(32u), bodyCount / 16u);
+            const usize grain = ComputePhysicsGrain(cpuScheduler, bodyCount, cast<usize>(64u));
             const auto res = cpuScheduler.parallelFor(
                 0u,
                 bodyCount,
@@ -2934,7 +2899,7 @@ b8 SolvePartitionSubStepsCpu(
                 if(cCount == 0u)
                     continue;
                 if(cpuScheduler.isParallelEnabled() && cCount >= s_CpuColorParallelThreshold){
-                    const usize grain = Max(cast<usize>(32u), cCount / 16u);
+                    const usize grain = ComputePhysicsGrain(cpuScheduler, cCount, cast<usize>(64u));
                     const Span<ContactConstraint> colorSpan = Span<ContactConstraint>(colorConstraints[c]);
                     const auto res = cpuScheduler.parallelFor(
                         0u,
@@ -2973,7 +2938,7 @@ b8 SolvePartitionSubStepsCpu(
             if(cCount == 0u)
                 continue;
             if(cpuScheduler.isParallelEnabled() && cCount >= s_CpuColorParallelThreshold){
-                const usize grain = Max(cast<usize>(32u), cCount / 16u);
+                const usize grain = ComputePhysicsGrain(cpuScheduler, cCount, cast<usize>(64u));
                 const auto res = cpuScheduler.parallelFor(
                     0u,
                     cCount,
@@ -2998,7 +2963,7 @@ b8 SolvePartitionSubStepsCpu(
             SolveJointConstraint(states, jointConstraints[ji], h, true);
 
         if(cpuScheduler.isParallelEnabled() && bodyCount >= s_CpuColorParallelThreshold){
-            const usize grain = Max(cast<usize>(32u), bodyCount / 16u);
+            const usize grain = ComputePhysicsGrain(cpuScheduler, bodyCount, cast<usize>(64u));
             const auto res = cpuScheduler.parallelFor(
                 0u,
                 bodyCount,
@@ -3021,7 +2986,7 @@ b8 SolvePartitionSubStepsCpu(
             if(cCount == 0u)
                 continue;
             if(cpuScheduler.isParallelEnabled() && cCount >= s_CpuColorParallelThreshold){
-                const usize grain = Max(cast<usize>(32u), cCount / 16u);
+                const usize grain = ComputePhysicsGrain(cpuScheduler, cCount, cast<usize>(64u));
                 const auto res = cpuScheduler.parallelFor(
                     0u,
                     cCount,
@@ -3051,7 +3016,7 @@ b8 SolvePartitionSubStepsCpu(
         if(cCount == 0u)
             continue;
         if(cpuScheduler.isParallelEnabled() && cCount >= s_CpuColorParallelThreshold){
-            const usize grain = Max(cast<usize>(32u), cCount / 16u);
+            const usize grain = ComputePhysicsGrain(cpuScheduler, cCount, cast<usize>(64u));
             const auto res = cpuScheduler.parallelFor(
                 0u,
                 cCount,
@@ -3073,7 +3038,7 @@ b8 SolvePartitionSubStepsCpu(
         ApplyRestitutionContactConstraint(states, colorConstraints[s_OverflowColorIndex][idx], restThresh);
 
     if(cpuScheduler.isParallelEnabled() && bodyCount >= s_CpuColorParallelThreshold){
-        const usize grain = Max(cast<usize>(32u), bodyCount / 16u);
+        const usize grain = ComputePhysicsGrain(cpuScheduler, bodyCount, cast<usize>(64u));
         const auto res = cpuScheduler.parallelFor(
             0u,
             bodyCount,
@@ -3122,7 +3087,7 @@ b8 SolvePartitionSubStepsCpuWithPartition(
             }
         );
 
-        const usize bucketCount = Min(compCount, cast<usize>(16u));
+        const usize bucketCount = ComputePhysicsBucketCount(cpuScheduler, compCount);
         mut Vector<Vector<usize>> buckets = world.m_cpuScratch.parBuckets;
         buckets.resize(bucketCount);
         for(usize b = 0u; b < bucketCount; ++b)
@@ -3250,9 +3215,6 @@ void SolveStepCpu(mut PhysicsWorld world, in f32 dt, in u32 subStepCount, mut Cp
         world,
         h,
         cpuScheduler,
-        world.m_cpuScratch.flatColors,
-        world.m_cpuScratch.flatIndices,
-        world.m_cpuScratch.flatContactIds,
         colorConstraints
     )){
         world.m_inStep = false;

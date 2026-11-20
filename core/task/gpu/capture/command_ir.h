@@ -364,6 +364,7 @@ public:
 class GpuCommandIrStreamReader final : NoCopy{
 public:
     explicit GpuCommandIrStreamReader(BinaryByteView bytes)noexcept;
+    GpuCommandIrStreamReader(BinaryByteView commandBytes, BinaryByteView blobBytes)noexcept;
 
 
 public:
@@ -380,15 +381,17 @@ public:
 
 
 private:
+    [[nodiscard]] b8 initializeValidatedHeader(BinaryByteView headerSource, GpuCommandIrStreamHeader& outHeader)noexcept;
+    void finalizeValidatedHeader(const GpuCommandIrStreamHeader& header, BinaryByteView commandBytes, BinaryByteView blobBytes)noexcept;
     void fail(GpuCommandIrStreamValidationError::Enum error, usize byteOffset, u64 recordIndex)noexcept;
 
 
 private:
-    BinaryByteView m_bytes;
+    BinaryByteView m_commandBytes;
+    BinaryByteView m_blobBytes;
     GpuCommandIrStreamValidationResult m_validation;
     usize m_cursor = 0u;
     usize m_payloadEnd = 0u;
-    usize m_blobBegin = 0u;
     usize m_nextBlobOffset = 0u;
     u64 m_graphGeneration = 0u;
     u64 m_planGeneration = 0u;
@@ -444,6 +447,7 @@ public:
     [[nodiscard]] BinaryByteView bytes()const noexcept{ return BinaryByteView{ m_bytes.data(), m_bytes.size() }; }
     [[nodiscard]] const GpuCommandIrRasterStateOwner* rasterStateOwner(u32 index)const noexcept;
     [[nodiscard]] const GpuCommandIrRasterHeapOwner* rasterHeapOwner(u32 index)const noexcept;
+    [[nodiscard]] const GpuCommandIrRasterOwnerTable* rasterOwners()const noexcept{ return m_rasterOwners; }
 
 
 private:
@@ -507,6 +511,7 @@ public:
 [[nodiscard]] GpuCommandIrReplayResult PreflightGpuCommandIrPacket(const GpuCommandIrOwnedStream& stream, const GpuTaskGraphDeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledGraph, GpuSubmissionPacketId packet)noexcept;
 
 [[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacket(const GpuCommandIrOwnedStream& stream, const GpuTaskGraphDeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledGraph, GpuSubmissionPacketId packet, CommandList& commandList);
+[[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacket(const GpuCommandIrCapture& capture, const GpuTaskGraphDeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledGraph, GpuSubmissionPacketId packet, CommandList& commandList);
 
 
 class GpuCommandIrCapture final : NoCopy{
@@ -528,6 +533,11 @@ public:
     [[nodiscard]] u64 recordingAttemptGeneration()const noexcept{ return m_recordingAttemptGeneration; }
     [[nodiscard]] b8 beginRecordingAttempt(u64 recordingAttemptGeneration)noexcept;
     [[nodiscard]] BinaryByteView commandBytes()const;
+    [[nodiscard]] BinaryByteView rawCommandBytes()const noexcept{ return BinaryByteView{ m_commandBytes.data(), m_commandBytes.size() }; }
+    [[nodiscard]] BinaryByteView rawBlobBytes()const noexcept{ return BinaryByteView{ m_blobBytes.data(), m_blobBytes.size() }; }
+    [[nodiscard]] const GpuCommandIrRasterStateOwner* rasterStateOwner(u32 index)const noexcept;
+    [[nodiscard]] const GpuCommandIrRasterHeapOwner* rasterHeapOwner(u32 index)const noexcept;
+    [[nodiscard]] const GpuCommandIrRasterOwnerTable* rasterOwners()const noexcept{ return m_rasterOwners; }
     [[nodiscard]] Expected<GpuCommandIrOwnedStream> exportOwned(GraphicsArena& arena)const;
     [[nodiscard]] Expected<GpuCommandIrOwnedStream> exportOwned()const{ return exportOwned(m_arena); }
     [[nodiscard]] GraphicsArena& ownerArena()const noexcept{ return m_arena; }

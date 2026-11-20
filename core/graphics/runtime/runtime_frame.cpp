@@ -185,45 +185,34 @@ Expected<void, CpuTaskAdmissionError::Enum> GraphicsRuntime::renderWithPhaseTimi
         return {};
     }
 
-    CpuTaskScope frameTasks(m_cpuScheduler, m_frameTaskProfileLabel);
-    const CpuTaskOptions options{ .priority = CpuTaskPriority::Critical, .target = CpuTaskTarget::MainThread, };
-    CpuTaskHandle previous;
     for(const auto renderPass : m_renderPasses.passes()){
-        const auto admitted = frameTasks.submit([this, &device, framebuffer, renderPass, phaseTiming](){
-            if(m_deviceRecreationRequested || device.requiresRecreation()){
-                if(device.requiresRecreation())
-                    requestDeviceRecreation();
-                return;
-            }
-            Timer prepareBegin;
-            if(phaseTiming)
-                prepareBegin = TimerNow();
-            const b8 resourcesPrepared = renderPass->prepareResources(framebuffer);
-            if(phaseTiming)
-                phaseTiming->stage(resourcesPrepared ? m_prepareResourcesTimingScope : m_prepareResourcesFailedTimingScope, prepareBegin);
-            if(!resourcesPrepared){
-                NWB_LOGGER_WARNING(FOUNDATION_TEXT("GraphicsRuntime: render pass skipped after resource preparation failed"));
-                return;
-            }
-
-            Timer renderBegin;
-            if(phaseTiming)
-                renderBegin = TimerNow();
-            renderPass->render(framebuffer);
-            if(phaseTiming)
-                phaseTiming->stage(m_renderPassesTimingScope, renderBegin);
-
+        if(m_deviceRecreationRequested || device.requiresRecreation()){
             if(device.requiresRecreation())
                 requestDeviceRecreation();
-        }, options, previous.valid() ? &previous : nullptr, previous.valid() ? 1u : 0u
-        );
-        if(!admitted){
-            frameTasks.wait();
-            return MakeUnexpected(admitted.error());
+            return {};
         }
-        previous = *admitted;
+
+        Timer prepareBegin;
+        if(phaseTiming)
+            prepareBegin = TimerNow();
+        const b8 resourcesPrepared = renderPass->prepareResources(framebuffer);
+        if(phaseTiming)
+            phaseTiming->stage(resourcesPrepared ? m_prepareResourcesTimingScope : m_prepareResourcesFailedTimingScope, prepareBegin);
+        if(!resourcesPrepared){
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("GraphicsRuntime: render pass skipped after resource preparation failed"));
+            continue;
+        }
+
+        Timer renderBegin;
+        if(phaseTiming)
+            renderBegin = TimerNow();
+        renderPass->render(framebuffer);
+        if(phaseTiming)
+            phaseTiming->stage(m_renderPassesTimingScope, renderBegin);
+
+        if(device.requiresRecreation())
+            requestDeviceRecreation();
     }
-    frameTasks.wait();
     return {};
 }
 
@@ -359,9 +348,13 @@ b8 GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const phas
 
             m_hasPresentedFrame = true;
         }
+        else{
+            YieldThread();
+        }
     }
-
-    YieldThread();
+    else{
+        YieldThread();
+    }
 
     Timer garbageCollectionBegin;
     if(phaseTiming)

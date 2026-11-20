@@ -19,9 +19,6 @@ class PhysicsWorldCpuScratch{
     public Vector<u32> pruneContactIds;
     public Vector<u8> contactTransitionFlags;
     public Vector<Manifold> evaluatedManifolds;
-    public Vector<u32> flatColors;
-    public Vector<u32> flatIndices;
-    public Vector<u32> flatContactIds;
     public Array<Vector<ContactConstraint>, s_GraphColorCount> colorConstraints;
     public Vector<JointConstraint> jointConstraints;
     public Vector<u32> awakeIndices;
@@ -58,9 +55,6 @@ class PhysicsWorldCpuScratch{
         this.pruneContactIds.clear();
         this.contactTransitionFlags.clear();
         this.evaluatedManifolds.clear();
-        this.flatColors.clear();
-        this.flatIndices.clear();
-        this.flatContactIds.clear();
         for(usize c = 0u; c < s_GraphColorCount; ++c)
             this.colorConstraints[c].clear();
         this.jointConstraints.clear();

@@ -74,6 +74,7 @@ class GpuSharedResources : NoCopy{
     public GraphicsPipelineHandle m_outputPipeline;
     public SamplerHandle m_sampler;
     public GpuDescriptorHandle m_samplerDescriptor;
+    public b8 m_loggedRasterReplayActive = false;
 
     public GpuSharedResources(mut GraphicsRuntime graphics){ this.m_graphics = graphics; }
     public ~GpuSharedResources(){ FreeGpuDescriptor(this.m_graphics, this.m_samplerDescriptor); }

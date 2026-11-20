@@ -71,6 +71,11 @@ u64 CpuTaskScheduler::AllocateDomainIdentity()noexcept{
     return NextNonWrappingIdentity(s_Next);
 }
 
+CpuTaskScheduler& SharedCpuTaskScheduler(){
+    static CpuTaskScheduler s_Shared;
+    return s_Shared;
+}
+
 CpuTaskSchedulerConfig CpuTaskScheduler::WorkerConfig(const u32 workerCount)noexcept{
     CpuTaskSchedulerConfig config;
     config.workerCount = workerCount;
@@ -207,13 +212,13 @@ Expected<CpuTaskScheduler::TaskHandle, CpuTaskAdmissionError::Enum> CpuTaskSched
     if(options.cost > CpuTaskCost::Light || options.priority > CpuTaskPriority::Background || options.target > CpuTaskTarget::MainThread)
         return MakeUnexpected(CpuTaskAdmissionError::InvalidOptions);
 
-    u32 wakeMask;
+    WorkerWakePlan wakePlan;
     b8 wakeJoiners;
     const auto reservation = [&]() -> Expected<TaskReservation, CpuTaskAdmissionError::Enum>{
         ScopedLock lock(m_mutex);
         if(m_aborting)
             return MakeUnexpected(CpuTaskAdmissionError::Aborting);
-        if(scope && scope->m_canceled)
+        if(isScopeCanceledLocked(scope))
             return MakeUnexpected(CpuTaskAdmissionError::ScopeCanceled);
         for(usize index = 0u; index < dependencyCount; ++index){
             if(dependencies[index].valid() && dependencies[index].domainIdentity != m_domainIdentity)
@@ -232,7 +237,7 @@ Expected<CpuTaskScheduler::TaskHandle, CpuTaskAdmissionError::Enum> CpuTaskSched
         ScopedLock lock(m_mutex);
         if(m_aborting)
             return MakeUnexpected(CpuTaskAdmissionError::Aborting);
-        if(scope && scope->m_canceled)
+        if(isScopeCanceledLocked(scope))
             return MakeUnexpected(CpuTaskAdmissionError::ScopeCanceled);
         if(node.latestCanceledGeneration != 0u)
             ContainerDetail::ReserveGrowingCapacity(node.olderCanceledGenerations, AddSize(node.olderCanceledGenerations.size(), 1u));
@@ -255,24 +260,35 @@ Expected<CpuTaskScheduler::TaskHandle, CpuTaskAdmissionError::Enum> CpuTaskSched
                 visit(reachable.parent);
             }
         }
-        m_searchStack.clear();
-        m_searchStack.reserve(dependencyCount);
-        for(usize index = 0u; index < dependencyCount; ++index){
-            if(resolveLocked(dependencies[index])){
-                const u32 dependencyIndex = dependencies[index].index;
+        if(dependencyCount == 1u){
+            if(resolveLocked(dependencies[0])){
+                const u32 dependencyIndex = dependencies[0].index;
                 if(dependencySearchGeneration != 0u && m_searchVisits[dependencyIndex] == dependencySearchGeneration)
                     return MakeUnexpected(CpuTaskAdmissionError::DependencyCycle);
-                m_searchStack.push_back(dependencyIndex);
+                auto& dependents = m_nodes[dependencyIndex].dependents;
+                ContainerDetail::ReserveGrowingCapacity(dependents, AddSize(dependents.size(), static_cast<usize>(1u)));
             }
         }
-        Sort(m_searchStack.begin(), m_searchStack.end());
-        for(usize first = 0u; first < m_searchStack.size();){
-            usize last = first + 1u;
-            while(last < m_searchStack.size() && m_searchStack[last] == m_searchStack[first])
-                ++last;
-            auto& dependents = m_nodes[m_searchStack[first]].dependents;
-            ContainerDetail::ReserveGrowingCapacity(dependents, AddSize(dependents.size(), last - first));
-            first = last;
+        else if(dependencyCount > 1u){
+            m_searchStack.clear();
+            m_searchStack.reserve(dependencyCount);
+            for(usize index = 0u; index < dependencyCount; ++index){
+                if(resolveLocked(dependencies[index])){
+                    const u32 dependencyIndex = dependencies[index].index;
+                    if(dependencySearchGeneration != 0u && m_searchVisits[dependencyIndex] == dependencySearchGeneration)
+                        return MakeUnexpected(CpuTaskAdmissionError::DependencyCycle);
+                    m_searchStack.push_back(dependencyIndex);
+                }
+            }
+            Sort(m_searchStack.begin(), m_searchStack.end());
+            for(usize first = 0u; first < m_searchStack.size();){
+                usize last = first + 1u;
+                while(last < m_searchStack.size() && m_searchStack[last] == m_searchStack[first])
+                    ++last;
+                auto& dependents = m_nodes[m_searchStack[first]].dependents;
+                ContainerDetail::ReserveGrowingCapacity(dependents, AddSize(dependents.size(), last - first));
+                first = last;
+            }
         }
         node.scope = scope;
         node.options = options;
@@ -304,11 +320,11 @@ Expected<CpuTaskScheduler::TaskHandle, CpuTaskAdmissionError::Enum> CpuTaskSched
         node.state = TaskState::Waiting;
         if(node.dependencies == 0u)
             enqueueLocked(handle.index);
-        wakeMask = workerWakeMaskLocked();
+        wakePlan = workerWakePlanLocked();
         wakeJoiners = m_joinWaiters != 0u;
     }
     release.release();
-    notifyProgress(wakeMask, wakeJoiners);
+    notifyProgress(wakePlan, wakeJoiners);
     return handle;
 }
 
@@ -346,6 +362,15 @@ b8 CpuTaskScheduler::wasCanceledLocked(const TaskHandle handle)const noexcept{
         return true;
     const auto found = LowerBound(node.olderCanceledGenerations.begin(), node.olderCanceledGenerations.end(), handle.generation);
     return found != node.olderCanceledGenerations.end() && *found == handle.generation;
+}
+
+b8 CpuTaskScheduler::isScopeCanceledLocked(const CpuTaskScope* scope)const noexcept{
+    while(scope){
+        if(scope->m_canceled)
+            return true;
+        scope = scope->m_parentScope;
+    }
+    return false;
 }
 
 void CpuTaskScheduler::enqueueLocked(const u32 index)noexcept{
@@ -427,63 +452,66 @@ b8 CpuTaskScheduler::queueEligible(const usize queue, const CpuAffinity::Enum af
     return affinity == CpuAffinity::Efficiency || m_busyEfficiency >= m_statistics.efficiencyWorkers;
 }
 
-void CpuTaskScheduler::execute(const TaskHandle handle, const usize workerIndex, const CpuAffinity::Enum affinity, const b8 cooperative){
-    TaskNode* node;
-    b8 invoke;
-    Optional<ProfileSample> profile;
-    Optional<ReadyProfile> readyProfile;
-    u32 wakeMask;
-    {
-        ScopedLock lock(m_mutex);
-        node = resolveLocked(handle);
-        if(!node)
-            return;
-        node->canceled = node->canceled || m_aborting || (node->scope && node->scope->m_canceled);
-        TaskHandle ancestor = node->parent;
-        while(TaskNode* parent = resolveLocked(ancestor)){
-            node->canceled = node->canceled || parent->canceled || (parent->scope && parent->scope->m_canceled);
-            ancestor = parent->parent;
-        }
-        if(workerIndex != 0u && m_workerDepth[workerIndex - 1u]++ == 0u){
-            if(affinity == CpuAffinity::Performance)
-                ++m_busyPerformance;
-            else if(affinity == CpuAffinity::Efficiency)
-                ++m_busyEfficiency;
-        }
-        invoke = !node->canceled;
-        if(cooperative)
-            ++m_statistics.cooperativeTasks;
-        if(invoke){
-            switch(affinity){
-            case CpuAffinity::Performance: ++m_statistics.performanceTasks; break;
-            case CpuAffinity::Efficiency: ++m_statistics.efficiencyTasks; break;
-            default: ++m_statistics.unclassifiedTasks; break;
-            }
-        }
-        if(invoke && m_profileEnabled.load(MemoryOrder::relaxed)){
-            profile = prepareProfileLocked(CpuTaskProfileKind::Execution, handle, {}, workerIndex, affinity);
-            const ReadyProfile& ready = m_readyProfiles[handle.index];
-            if(ready.captureEpoch == m_profileEpoch)
-                readyProfile = ready;
-        }
-        wakeMask = workerWakeMaskLocked();
+CpuTaskScheduler::ClaimedExecution CpuTaskScheduler::beginClaimedLocked(const TaskHandle handle, const usize workerIndex, const CpuAffinity::Enum affinity, const b8 cooperative)noexcept{
+    ClaimedExecution claimed;
+    claimed.handle = handle;
+    claimed.node = resolveLocked(handle);
+    if(!claimed.node)
+        return claimed;
+    TaskNode& node = *claimed.node;
+    node.canceled = node.canceled || m_aborting || isScopeCanceledLocked(node.scope);
+    TaskHandle ancestor = node.parent;
+    while(TaskNode* parent = resolveLocked(ancestor)){
+        node.canceled = node.canceled || parent->canceled || isScopeCanceledLocked(parent->scope);
+        ancestor = parent->parent;
     }
-    notifyWorkers(wakeMask);
+    if(workerIndex != 0u && m_workerDepth[workerIndex - 1u]++ == 0u){
+        if(affinity == CpuAffinity::Performance)
+            ++m_busyPerformance;
+        else if(affinity == CpuAffinity::Efficiency)
+            ++m_busyEfficiency;
+    }
+    claimed.invoke = !node.canceled;
+    if(cooperative)
+        ++m_statistics.cooperativeTasks;
+    if(claimed.invoke){
+        switch(affinity){
+        case CpuAffinity::Performance: ++m_statistics.performanceTasks; break;
+        case CpuAffinity::Efficiency: ++m_statistics.efficiencyTasks; break;
+        default: ++m_statistics.unclassifiedTasks; break;
+        }
+    }
+    if(claimed.invoke && m_profileEnabled.load(MemoryOrder::relaxed)){
+        claimed.profile = prepareProfileLocked(CpuTaskProfileKind::Execution, handle, {}, workerIndex, affinity);
+        const ReadyProfile& ready = m_readyProfiles[handle.index];
+        if(ready.captureEpoch == m_profileEpoch)
+            claimed.readyProfile = ready;
+    }
+    claimed.wakePlan = workerWakePlanLocked();
+    return claimed;
+}
+
+void CpuTaskScheduler::executeClaimed(ClaimedExecution& claimed, const usize workerIndex, const CpuAffinity::Enum affinity){
+    if(!claimed.node)
+        return;
+    TaskNode& node = *claimed.node;
+    const TaskHandle handle = claimed.handle;
+    notifyWorkers(claimed.wakePlan);
     b8 succeeded = false;
     ScopeExit finish([&]()noexcept{
-        const Timer end = profile ? TimerNow() : Timer{};
+        const Timer end = claimed.profile ? TimerNow() : Timer{};
         b8 readyToRetire;
         {
             ScopedLock lock(m_mutex);
-            if(profile){
-                if(readyProfile){
-                    ProfileSample queued = *profile;
+            if(claimed.profile){
+                if(claimed.readyProfile){
+                    ProfileSample queued = *claimed.profile;
                     queued.kind = CpuTaskProfileKind::QueueDelay;
-                    queued.begin = readyProfile->ready;
-                    queued.frameIndex = readyProfile->frameIndex;
-                    finishProfileLocked(queued, profile->begin);
+                    queued.begin = claimed.readyProfile->ready;
+                    queued.frameIndex = claimed.readyProfile->frameIndex;
+                    finishProfileLocked(queued, claimed.profile->begin);
                 }
-                finishProfileLocked(*profile, end);
+                finishProfileLocked(*claimed.profile, end);
             }
             if(workerIndex != 0u && --m_workerDepth[workerIndex - 1u] == 0u){
                 if(affinity == CpuAffinity::Performance)
@@ -493,21 +521,21 @@ void CpuTaskScheduler::execute(const TaskHandle handle, const usize workerIndex,
             }
             if(!succeeded){
                 m_aborting = true;
-                node->canceled = true;
+                node.canceled = true;
             }
-            FOUNDATION_ASSERT(node->state == TaskState::Running);
-            readyToRetire = node->children == 0u;
-            node->state = readyToRetire ? TaskState::Retiring : TaskState::Children;
+            FOUNDATION_ASSERT(node.state == TaskState::Running);
+            readyToRetire = node.children == 0u;
+            node.state = readyToRetire ? TaskState::Retiring : TaskState::Children;
         }
         if(readyToRetire)
-            retire(handle, *node);
+            retire(handle, node);
     });
     {
         Execution execution(*this, handle, workerIndex, affinity);
-        if(profile)
-            profile->begin = TimerNow();
-        if(invoke)
-            node->function();
+        if(claimed.profile)
+            claimed.profile->begin = TimerNow();
+        if(claimed.invoke)
+            node.function();
     }
     succeeded = true;
 }
@@ -519,11 +547,11 @@ void CpuTaskScheduler::retire(TaskHandle handle, TaskNode& first)noexcept{
         node->function.reset();
         TaskHandle parentHandle;
         TaskNode* parentToRetire = nullptr;
-        u32 wakeMask;
+        WorkerWakePlan wakePlan;
         b8 wakeJoiners;
         {
             ScopedLock lock(m_mutex);
-            node->canceled = node->canceled || m_aborting || (node->scope && node->scope->m_canceled);
+            node->canceled = node->canceled || m_aborting || isScopeCanceledLocked(node->scope);
             b8 madeReady = false;
             for(const TaskHandle dependentHandle : node->dependents){
                 TaskNode* dependent = resolveLocked(dependentHandle);
@@ -565,10 +593,10 @@ void CpuTaskScheduler::retire(TaskHandle handle, TaskNode& first)noexcept{
                 node->next = m_freeNode;
                 m_freeNode = handle.index;
             }
-            wakeMask = workerWakeMaskLocked();
+            wakePlan = workerWakePlanLocked();
             wakeJoiners = m_joinWaiters != 0u && (madeReady || scopeCompleted || m_outstanding == 0u || m_handleJoinWaiters != 0u);
         }
-        notifyProgress(wakeMask, wakeJoiners);
+        notifyProgress(wakePlan, wakeJoiners);
         handle = parentHandle;
         node = parentToRetire;
     }
@@ -590,7 +618,7 @@ void CpuTaskScheduler::workerLoop(const StopToken& stop, const usize workerIndex
     }
     Execution worker(*this, {}, workerIndex, affinity);
     for(;;){
-        TaskHandle handle;
+        ClaimedExecution claimed;
         {
             UniqueLock lock(m_mutex);
             if(stop.stop_requested())
@@ -611,24 +639,27 @@ void CpuTaskScheduler::workerLoop(const StopToken& stop, const usize workerIndex
                 if(!ready)
                     return;
             }
-            handle = claimLocked(affinity, false, false);
+            const TaskHandle handle = claimLocked(affinity, false, false);
+            if(handle.valid())
+                claimed = beginClaimedLocked(handle, workerIndex, affinity, false);
         }
-        if(handle.valid())
-            execute(handle, workerIndex, affinity, false);
+        executeClaimed(claimed, workerIndex, affinity);
     }
 }
 
 b8 CpuTaskScheduler::executeOne(const b8 cooperative, ScopeWait* const preferredScope){
-    TaskHandle handle;
+    ClaimedExecution claimed;
     const usize workerIndex = currentWorkerIndex();
     const CpuAffinity::Enum affinity = currentWorkerAffinity();
     {
         ScopedLock lock(m_mutex);
-        handle = claimLocked(affinity, isMainThread(), cooperative, preferredScope);
+        const TaskHandle handle = claimLocked(affinity, isMainThread(), cooperative, preferredScope);
+        if(handle.valid())
+            claimed = beginClaimedLocked(handle, workerIndex, affinity, cooperative);
     }
-    if(!handle.valid())
+    if(!claimed.node)
         return false;
-    execute(handle, workerIndex, affinity, cooperative);
+    executeClaimed(claimed, workerIndex, affinity);
     return true;
 }
 

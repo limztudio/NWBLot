@@ -44,9 +44,10 @@ struct TaskSubmissionBindings : NoCopy{
     Vector<ResolvedSubmissionHook, Alloc::ScratchArena> submissionHooks;
     Vector<usize, Alloc::ScratchArena> nextTimingTicket;
     Optional<HashMap<NotNull<GpuTimingSubmissionTicket*>, usize, Alloc::ScratchArena>> timingTicketIndices;
-    Optional<HashMap<u32, TimingPacketChain, Alloc::ScratchArena>> timingPacketChains;
-    Optional<HashMap<u32, usize, Alloc::ScratchArena>> submissionHookIndices;
+    Vector<TimingPacketChain, Alloc::ScratchArena> timingPacketChains;
+    Vector<u32, Alloc::ScratchArena> submissionHookIndices;
     u64 packetGeneration = 0u;
+    u32 packetRangeFirstIndex = 0u;
 
 
 public:
@@ -55,6 +56,8 @@ public:
         , timingTickets(scratchArena)
         , submissionHooks(scratchArena)
         , nextTimingTicket(scratchArena)
+        , timingPacketChains(scratchArena)
+        , submissionHookIndices(scratchArena)
     {}
 
 

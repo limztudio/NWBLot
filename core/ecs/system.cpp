@@ -6,6 +6,8 @@
 
 #include "world.h"
 
+#include <core/alloc/scratch.h>
+
 #include <global/scope_exit.h>
 
 
@@ -93,13 +95,34 @@ void SystemScheduler::rebuild(){
     m_dependencies.clear();
     const usize systemCount = m_allSystems.size();
     m_dependencies.reserve(systemCount);
+    if(systemCount == 0u){
+        m_dirty = false;
+        return;
+    }
 
+    Alloc::ScratchArena scratchArena;
+    constexpr usize s_BitsPerWord = 64u;
+    const usize wordsPerSystem = (systemCount + s_BitsPerWord - 1u) / s_BitsPerWord;
+    Vector<u64, Alloc::ScratchArena> reachableAncestors(systemCount * wordsPerSystem, 0u, scratchArena);
     for(usize systemIndex = 0u; systemIndex < systemCount; ++systemIndex){
         DependencyList predecessors(m_arena);
-        for(usize predecessorIndex = 0u; predecessorIndex < systemIndex; ++predecessorIndex){
-            if(__hidden_ecs_system::SystemsConflict(m_allSystems[predecessorIndex]->m_access, m_allSystems[systemIndex]->m_access))
-                predecessors.push_back(predecessorIndex);
+        u64* const systemAncestors = reachableAncestors.data() + systemIndex * wordsPerSystem;
+        for(usize predecessorIndex = systemIndex; predecessorIndex-- > 0u;){
+            const usize wordIndex = predecessorIndex / s_BitsPerWord;
+            const u64 bitMask = static_cast<u64>(1u) << (predecessorIndex % s_BitsPerWord);
+            if((systemAncestors[wordIndex] & bitMask) != 0u)
+                continue;
+            if(!__hidden_ecs_system::SystemsConflict(m_allSystems[predecessorIndex]->m_access, m_allSystems[systemIndex]->m_access))
+                continue;
+
+            predecessors.push_back(predecessorIndex);
+            systemAncestors[wordIndex] |= bitMask;
+            const u64* const predAncestors = reachableAncestors.data() + predecessorIndex * wordsPerSystem;
+            for(usize word = 0u; word <= wordIndex; ++word)
+                systemAncestors[word] |= predAncestors[word];
         }
+        for(usize lo = 0u, hi = predecessors.size(); lo + 1u < hi; ++lo, --hi)
+            Swap(predecessors[lo], predecessors[hi - 1u]);
         m_dependencies.push_back(Move(predecessors));
     }
 
@@ -153,7 +176,7 @@ Expected<void, CpuTaskAdmissionError::Enum> SystemScheduler::execute(World& worl
         }
         handles[systemIndex] = *admitted;
     }
-    tasks.wait();
+    tasks.waitCooperative();
     drainSubmitted.release();
     for(const auto& completed : m_executionResults){
         if(!completed)

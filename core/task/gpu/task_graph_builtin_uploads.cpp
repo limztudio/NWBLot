@@ -11,6 +11,7 @@
 #include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/rhi/command.h>
 
+#include <global/algorithm.h>
 #include <global/bit.h>
 
 
@@ -130,22 +131,60 @@ Expected<GpuUploadBlobId> GpuTaskGraph::copyUploadData(const void* const data, c
     if(!data || byteSize == 0u || alignment == 0u || (alignment & (alignment - 1u)) != 0u || m_uploadBlobs.size() >= Limit<u32>::s_Max)
         return MakeUnexpected(Failure{});
 
-    if(alignment - 1u > Limit<usize>::s_Max - byteSize)
-        return MakeUnexpected(Failure{});
-    const usize allocationSize = byteSize + alignment - 1u;
-    GpuUploadBlobNode blob(m_arena);
-    if(allocationSize > blob.bytes.max_size())
-        return MakeUnexpected(Failure{});
-    const u8* const sourceBytes = static_cast<const u8*>(data);
-    blob.bytes.resize(allocationSize);
-    const usize address = reinterpret_cast<usize>(blob.bytes.data());
-    blob.dataOffset = AlignmentOffsetPowerOfTwo(address, alignment);
-    blob.dataSize = byteSize;
-    FOUNDATION_MEMCPY(blob.bytes.data() + blob.dataOffset, byteSize, sourceBytes, byteSize);
-
     const u32 index = static_cast<u32>(m_uploadBlobs.size());
-    m_uploadBlobs.push_back(Move(blob));
-    m_declarationRevision = AllocateGeneration();
+    constexpr usize s_InlineMaxAlignment = alignof(GpuTaskGraphDetail::GpuUploadBlobStorageBlock);
+    if(alignment <= s_InlineMaxAlignment){
+        const auto alignedOffset = AlignUpPowerOfTwoChecked(m_uploadBlobStorageByteSize, alignment);
+        if(!alignedOffset || byteSize > Limit<usize>::s_Max - *alignedOffset)
+            return MakeUnexpected(Failure{});
+
+        const usize endByteSize = *alignedOffset + byteSize;
+        constexpr usize s_BlockSize = sizeof(GpuTaskGraphDetail::GpuUploadBlobStorageBlock);
+        const auto alignedEnd = AlignUpPowerOfTwoChecked(endByteSize, s_BlockSize);
+        if(!alignedEnd)
+            return MakeUnexpected(Failure{});
+
+        const usize requiredBlocks = *alignedEnd / s_BlockSize;
+        if(requiredBlocks > m_uploadBlobStorage.max_size())
+            return MakeUnexpected(Failure{});
+
+        ContainerDetail::ReserveGrowingCapacity(m_uploadBlobs, m_uploadBlobs.size() + 1u);
+        ContainerDetail::ReserveGrowingCapacity(m_uploadBlobStorage, requiredBlocks);
+        m_uploadBlobStorage.resize(requiredBlocks);
+        FOUNDATION_ASSERT((reinterpret_cast<usize>(m_uploadBlobStorage.data()) & (s_InlineMaxAlignment - 1u)) == 0u);
+        FOUNDATION_MEMCPY(reinterpret_cast<u8*>(m_uploadBlobStorage.data()) + *alignedOffset, byteSize, data, byteSize);
+
+        m_uploadBlobs.push_back(GpuUploadBlobNode{
+            .dataOffset = *alignedOffset,
+            .dataSize = byteSize,
+            .overflowIndex = Limit<u32>::s_Max,
+        });
+        m_uploadBlobStorageByteSize = endByteSize;
+    }
+    else{
+        if(m_overalignedUploadBlobs.size() >= Limit<u32>::s_Max || alignment - 1u > Limit<usize>::s_Max - byteSize)
+            return MakeUnexpected(Failure{});
+
+        const usize allocationSize = byteSize + alignment - 1u;
+        GraphicsBytes bytes(m_arena);
+        if(allocationSize > bytes.max_size())
+            return MakeUnexpected(Failure{});
+        bytes.resize(allocationSize);
+        const usize dataOffset = AlignmentOffsetPowerOfTwo(reinterpret_cast<usize>(bytes.data()), alignment);
+        FOUNDATION_MEMCPY(bytes.data() + dataOffset, byteSize, data, byteSize);
+
+        ContainerDetail::ReserveGrowingCapacity(m_overalignedUploadBlobs, m_overalignedUploadBlobs.size() + 1u);
+        ContainerDetail::ReserveGrowingCapacity(m_uploadBlobs, m_uploadBlobs.size() + 1u);
+        const u32 overflowIndex = static_cast<u32>(m_overalignedUploadBlobs.size());
+        m_overalignedUploadBlobs.push_back(Move(bytes));
+        m_uploadBlobs.push_back(GpuUploadBlobNode{
+            .dataOffset = dataOffset,
+            .dataSize = byteSize,
+            .overflowIndex = overflowIndex,
+        });
+    }
+
+    bumpDeclarationRevision();
     return GpuUploadBlobId{ .generation = m_generation, .index = index };
 }
 

@@ -53,6 +53,7 @@ struct OwnershipTransferSignatureEqual{
 struct OwnershipResourceStatistics{
     usize lastAdviceQueueIndex = Limit<usize>::s_Max;
     u8 avoidableSignatureCount = 0u;
+    b8 seen = false;
 };
 
 
@@ -187,9 +188,8 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
         return;
 
     HashSet<OwnershipTransferKey, Alloc::ScratchArena, OwnershipTransferSignatureHasher, OwnershipTransferSignatureEqual> signatures(0u, OwnershipTransferSignatureHasher(), OwnershipTransferSignatureEqual(), scratchArena);
-    HashMap<GpuGraphResourceId, OwnershipResourceStatistics, Alloc::ScratchArena, GpuGraphResourceIdHasher, EqualTo<GpuGraphResourceId>> resources(0u, GpuGraphResourceIdHasher(), EqualTo<GpuGraphResourceId>(), scratchArena);
+    Vector<OwnershipResourceStatistics, Alloc::ScratchArena> resources(graph.resourceCount(), scratchArena);
     signatures.reserve(m_ownershipTransfers.size());
-    resources.reserve(Min(graph.resourceCount(), m_ownershipTransfers.size()));
     const auto statisticsForQueue = [&](const GpuPhysicalQueueId& id)noexcept -> GpuTaskGraphPhysicalQueueCompileStatistics&{
         auto& queue = *MakeNotNull(queueInfo(id));
         FOUNDATION_ASSERT(queue.queueClass < CommandQueue::kCount);
@@ -207,12 +207,15 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
         ++source.outgoingLogicalOwnershipTransferCount;
         ++destination.incomingLogicalOwnershipTransferCount;
 
-        const auto resourceInsertion = resources.try_emplace(transfer.resource);
+        FOUNDATION_ASSERT(transfer.resource.generation == graph.generation() && transfer.resource.index < resources.size());
+        OwnershipResourceStatistics& resource = resources[transfer.resource.index];
+        const b8 firstForResource = !resource.seen;
+        resource.seen = true;
         if(!signatures.insert(OwnershipTransferKey{ &transfer }).second)
             continue;
 
         ++statistics.logicalOwnershipTransferSignatureCount;
-        const b8 repeatedSignature = !resourceInsertion.second;
+        const b8 repeatedSignature = !firstForResource;
         if(repeatedSignature)
             ++statistics.repeatedOwnershipTransferSignatureCount;
         ++source.outgoingLogicalOwnershipTransferSignatureCount;
@@ -222,7 +225,6 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
         if(repeatedSignature)
             ++destination.incomingRepeatedOwnershipTransferSignatureCount;
 
-        OwnershipResourceStatistics& resource = resourceInsertion.first.value();
         if(transfer.concurrentSharingCouldAvoid && resource.avoidableSignatureCount < s_ConcurrentSharingAdviceSignatureThreshold){
             ++resource.avoidableSignatureCount;
             if(resource.avoidableSignatureCount == s_ConcurrentSharingAdviceSignatureThreshold){
@@ -238,9 +240,8 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
             if(!transfer.concurrentSharingCouldAvoid || (transfer.sourceQueue != physical.queue && transfer.destinationQueue != physical.queue))
                 continue;
 
-            const auto resource = resources.find(transfer.resource);
-            FOUNDATION_ASSERT(resource != resources.end());
-            OwnershipResourceStatistics& resourceStatistics = resource.value();
+            OwnershipResourceStatistics& resourceStatistics = resources[transfer.resource.index];
+            FOUNDATION_ASSERT(resourceStatistics.seen);
             if(resourceStatistics.avoidableSignatureCount < s_ConcurrentSharingAdviceSignatureThreshold || resourceStatistics.lastAdviceQueueIndex == queueIndex)
                 continue;
             resourceStatistics.lastAdviceQueueIndex = queueIndex;

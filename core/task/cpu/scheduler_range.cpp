@@ -16,9 +16,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(const usize begin, const usize end, const usize grainSize, const CpuTaskOptions options, const NotNull<const void*> context, const NotNull<RangeFunction> invoke){
-    CpuTaskScope chunks(*this);
-    chunks.m_allowCallerWork = true;
+Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(const usize begin, const usize end, const usize grainSize, const CpuTaskOptions options, const NotNull<const void*> context, const NotNull<RangeFunction> invoke, CpuTaskScope* const callerScope){
     const usize count = end - begin;
     const usize grain = Max(grainSize, static_cast<usize>(1u));
     const usize chunkCount = Min(DivideUp(count, grain), Max(static_cast<usize>(m_workerCount), static_cast<usize>(1u)) * s_ChunksPerWorker);
@@ -39,15 +37,37 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
         }
     });
 
-    TaskHandle inlineTask;
-    u32 wakeMask;
-    b8 wakeJoiners;
+    b8 callerScopePending = false;
+    ScopeExit releaseCallerScope([&]()noexcept{
+        if(!callerScope || !callerScopePending)
+            return;
+        WorkerWakePlan wakePlan;
+        b8 wakeJoiners = false;
+        {
+            ScopedLock lock(m_mutex);
+            const b8 completed = callerScope->m_pending.fetch_sub(1u, MemoryOrder::acq_rel) == 1u;
+            wakePlan = workerWakePlanLocked();
+            wakeJoiners = m_joinWaiters != 0u && completed;
+        }
+        notifyProgress(wakePlan, wakeJoiners);
+    });
+    CpuTaskScope chunks(*this, callerScope ? callerScope->m_profileLabel : CpuTaskProfileLabel{});
+    chunks.m_allowCallerWork = true;
+    chunks.m_parentScope = callerScope;
+
+    const usize workerIndex = currentWorkerIndex();
+    const CpuAffinity::Enum affinity = currentWorkerAffinity();
+    ClaimedExecution inlineClaimed;
+    WorkerWakePlan wakePlan;
+    b8 wakeJoiners = false;
     {
         ScopedLock lock(m_mutex);
         if(m_aborting)
             return MakeUnexpected(CpuTaskAdmissionError::Aborting);
         if(options.cost > CpuTaskCost::Light || options.priority > CpuTaskPriority::Background || options.target > CpuTaskTarget::MainThread)
             return MakeUnexpected(CpuTaskAdmissionError::InvalidOptions);
+        if(callerScope && isScopeCanceledLocked(callerScope))
+            return {};
         for(usize chunk = 0u; chunk < chunkCount; ++chunk){
             const auto reserved = reserveTaskLocked();
             if(!reserved)
@@ -70,9 +90,10 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
         const TaskHandle parentHandle = s_Execution && &s_Execution->scheduler == this ? s_Execution->task : TaskHandle{};
         TaskNode* const parent = resolveLocked(parentHandle);
         const usize children = parent ? AddSize(parent->children, chunkCount) : 0u;
-        const b8 runInline = chunkCount == 1u && (isMainThread() || isExecuting()) && (options.target != CpuTaskTarget::MainThread || isMainThread());
+        const b8 runFirstInline = (isMainThread() || isExecuting()) && (options.target != CpuTaskTarget::MainThread || isMainThread());
         if(parent)
             parent->children = children;
+        TaskHandle inlineHandle;
         for(u32 index = reservedHead; index != TaskHandle::s_InvalidIndex;){
             TaskNode& node = m_nodes[index];
             const u32 next = node.next;
@@ -83,28 +104,38 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
             node.children = 0u;
             node.canceled = parent && parent->canceled;
             node.next = TaskHandle::s_InvalidIndex;
-            if(runInline){
+            if(runFirstInline && index == reservedHead){
                 node.state = TaskState::Running;
                 if(m_profileEnabled.load(MemoryOrder::relaxed))
                     profileReadyLocked(index);
-                inlineTask = { m_domainIdentity, index, node.generation };
+                inlineHandle = { m_domainIdentity, index, node.generation };
                 ++m_dispatchCount;
             }
             else
                 enqueueLocked(index);
             index = next;
         }
+        if(callerScope){
+            callerScope->m_pending.fetch_add(1u, MemoryOrder::release);
+            callerScopePending = true;
+        }
         invalidateScopeSearchLocked(true);
         chunks.m_pending.fetch_add(chunkCount, MemoryOrder::release);
         m_outstanding = outstanding;
         m_statistics.peakOutstandingTasks = Max(m_statistics.peakOutstandingTasks, m_outstanding);
-        wakeMask = workerWakeMaskLocked();
+        if(inlineHandle.valid()){
+            inlineClaimed = beginClaimedLocked(inlineHandle, workerIndex, affinity, true);
+            wakePlan = inlineClaimed.wakePlan;
+            inlineClaimed.wakePlan = {};
+        }
+        else
+            wakePlan = workerWakePlanLocked();
         wakeJoiners = m_joinWaiters != 0u;
     }
     releaseReservations.release();
-    notifyProgress(wakeMask, wakeJoiners);
-    if(inlineTask.valid())
-        execute(inlineTask, currentWorkerIndex(), currentWorkerAffinity(), true);
+    notifyProgress(wakePlan, wakeJoiners);
+    if(inlineClaimed.node)
+        executeClaimed(inlineClaimed, workerIndex, affinity);
     chunks.wait();
     return {};
 }

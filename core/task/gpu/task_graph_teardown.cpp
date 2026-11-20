@@ -127,6 +127,9 @@ b8 GpuTaskGraph::destroyTaskPayloadsWithoutCallbacks()noexcept{
 }
 
 void GpuTaskGraph::destroyTaskPayloadObjects()noexcept{
+    if(!m_hasTaskPayloads)
+        return;
+
     for(GpuTaskNode& task : m_tasks){
         if(task.payload && task.destroyPayload)
             task.destroyPayload(m_arena, task.payload);
@@ -136,19 +139,37 @@ void GpuTaskGraph::destroyTaskPayloadObjects()noexcept{
         task.discardPayload = nullptr;
         task.destroyPayload = nullptr;
     }
+    m_hasTaskPayloads = false;
+}
+
+void GpuTaskGraph::recycleOrDestroyStateSnapshot(const NotNull<CommandListResourceStateHandoff*> states)noexcept{
+    static_assert(IsNothrowDestructible_V<CommandListResourceStateHandoff>);
+    if(m_reusableStateSnapshots.size() < m_reusableStateSnapshots.capacity()){
+        states->reset();
+        m_reusableStateSnapshots.push_back(states);
+        return;
+    }
+    DestroyArenaObjectNoexcept(m_arena, states.get());
+}
+
+void GpuTaskGraph::destroyReusableStateSnapshots()noexcept{
+    static_assert(IsNothrowDestructible_V<CommandListResourceStateHandoff>);
+    for(const auto states : m_reusableStateSnapshots)
+        DestroyArenaObjectNoexcept(m_arena, states.get());
+    m_reusableStateSnapshots.clear();
 }
 
 void GpuTaskGraph::destroyTaskStateSnapshots()noexcept{
     static_assert(IsNothrowDestructible_V<CommandListResourceStateHandoff>);
     for(const auto states : m_externalStateSnapshots)
-        DestroyArenaObjectNoexcept(m_arena, states.get());
+        recycleOrDestroyStateSnapshot(states);
     m_externalStateSnapshots.clear();
 }
 
 void GpuTaskGraph::destroyResourceStateSnapshots()noexcept{
     static_assert(IsNothrowDestructible_V<CommandListResourceStateHandoff>);
     for(const auto states : m_initialOwnerHandoffStateSnapshots)
-        DestroyArenaObjectNoexcept(m_arena, states.get());
+        recycleOrDestroyStateSnapshot(states);
     m_initialOwnerHandoffStateSnapshots.clear();
     m_initialOwnerHandoffSources.clear();
 }

@@ -29,20 +29,36 @@ void CpuTaskScheduler::wait(const TaskHandle handle){
             throw RuntimeException("CPU task wait belongs to another scheduler");
         validateWaitLocked(handle, nullptr);
     }
-    while(!isComplete(handle)){
-        if(executeOne(isExecuting()))
-            continue;
-        UniqueLock lock(m_mutex);
-        ++m_joinWaiters;
-        ++m_handleJoinWaiters;
-        ScopeExit unregisterWaiter([this]()noexcept{
-            --m_handleJoinWaiters;
-            --m_joinWaiters;
-        });
+    const usize workerIndex = currentWorkerIndex();
+    const CpuAffinity::Enum affinity = currentWorkerAffinity();
+    for(;;){
+        ClaimedExecution claimed;
+        {
+            UniqueLock lock(m_mutex);
+            if(!resolveLocked(handle))
+                return;
+            const b8 mainThread = isMainThread();
+            const b8 executing = isExecuting();
+            TaskHandle readyHandle = claimLocked(affinity, mainThread, executing);
+            if(!readyHandle.valid()){
+                ++m_joinWaiters;
+                ++m_handleJoinWaiters;
+                ScopeExit unregisterWaiter([this]()noexcept{
+                    --m_handleJoinWaiters;
+                    --m_joinWaiters;
+                });
 
-        m_changed.wait(lock, [this, handle]()noexcept{
-            return !resolveLocked(handle) || hasReadyLocked(currentWorkerAffinity(), isMainThread(), isExecuting());
-        });
+                m_changed.wait(lock, [this, handle, affinity, mainThread, executing]()noexcept{
+                    return !resolveLocked(handle) || hasReadyLocked(affinity, mainThread, executing);
+                });
+                if(!resolveLocked(handle))
+                    return;
+                readyHandle = claimLocked(affinity, mainThread, executing);
+            }
+            if(readyHandle.valid())
+                claimed = beginClaimedLocked(readyHandle, workerIndex, affinity, executing);
+        }
+        executeClaimed(claimed, workerIndex, affinity);
     }
 }
 
@@ -53,20 +69,28 @@ void CpuTaskScheduler::wait(){
     if(m_profileEnabled.load(MemoryOrder::relaxed))
         profile.emplace(*this, CpuTaskProfileKind::SchedulerJoin);
     for(;;){
+        ClaimedExecution claimed;
         {
-            ScopedLock lock(m_mutex);
+            UniqueLock lock(m_mutex);
             if(m_outstanding == 0u)
                 return;
-        }
-        if(executeOne(false))
-            continue;
-        UniqueLock lock(m_mutex);
-        ++m_joinWaiters;
-        ScopeExit unregisterWaiter([this]()noexcept{ --m_joinWaiters; });
+            const b8 mainThread = isMainThread();
+            TaskHandle readyHandle = claimLocked(CpuAffinity::Any, mainThread, false);
+            if(!readyHandle.valid()){
+                ++m_joinWaiters;
+                ScopeExit unregisterWaiter([this]()noexcept{ --m_joinWaiters; });
 
-        m_changed.wait(lock, [this]()noexcept{
-            return m_outstanding == 0u || hasReadyLocked(CpuAffinity::Any, isMainThread(), false);
-        });
+                m_changed.wait(lock, [this, mainThread]()noexcept{
+                    return m_outstanding == 0u || hasReadyLocked(CpuAffinity::Any, mainThread, false);
+                });
+                if(m_outstanding == 0u)
+                    return;
+                readyHandle = claimLocked(CpuAffinity::Any, mainThread, false);
+            }
+            if(readyHandle.valid())
+                claimed = beginClaimedLocked(readyHandle, 0u, CpuAffinity::Any, false);
+        }
+        executeClaimed(claimed, 0u, CpuAffinity::Any);
     }
 }
 
@@ -89,6 +113,8 @@ void CpuTaskScheduler::drainTask(const TaskHandle handle)noexcept{
 }
 
 void CpuTaskScheduler::validateWaitLocked(const TaskHandle handle, const CpuTaskScope* const scope){
+    if(!isExecuting())
+        return;
     beginLockedSearch();
     const auto visit = [this](const TaskHandle candidate)noexcept{
         if(resolveLocked(candidate) && m_searchVisits[candidate.index] != m_searchGeneration){
@@ -118,6 +144,7 @@ void CpuTaskScheduler::waitScope(CpuTaskScope& scope){
     if(scope.m_pending.load(MemoryOrder::acquire) == 0u)
         return;
     ScopeWait wait{ scope };
+    u64 lastValidatedPublicationGeneration = 0u;
     {
         ScopedLock lock(m_mutex);
         if(scope.m_searchIdentity == 0u){
@@ -127,18 +154,38 @@ void CpuTaskScheduler::waitScope(CpuTaskScope& scope){
         }
         wait.scopeIdentity = scope.m_searchIdentity;
         validateWaitLocked({}, &scope);
+        lastValidatedPublicationGeneration = m_scopePublicationGeneration;
     }
+    const usize workerIndex = currentWorkerIndex();
+    const CpuAffinity::Enum affinity = currentWorkerAffinity();
     while(scope.m_pending.load(MemoryOrder::acquire) != 0u){
-        if(executeOne(isExecuting() || scope.m_allowCallerWork, &wait))
-            continue;
-        UniqueLock lock(m_mutex);
-        ++m_joinWaiters;
-        ScopeExit unregisterWaiter([this]()noexcept{ --m_joinWaiters; });
+        ClaimedExecution claimed;
+        const b8 cooperative = isExecuting() || scope.m_allowCallerWork;
+        {
+            UniqueLock lock(m_mutex);
+            if(scope.m_pending.load(MemoryOrder::acquire) == 0u)
+                return;
+            const b8 mainThread = isMainThread();
+            TaskHandle readyHandle = claimLocked(affinity, mainThread, cooperative, &wait);
+            if(!readyHandle.valid()){
+                ++m_joinWaiters;
+                ScopeExit unregisterWaiter([this]()noexcept{ --m_joinWaiters; });
 
-        m_changed.wait(lock, [this, &scope, &wait](){
-            validateWaitLocked({}, &scope);
-            return scope.m_pending.load(MemoryOrder::acquire) == 0u || hasReadyLocked(currentWorkerAffinity(), isMainThread(), isExecuting() || scope.m_allowCallerWork, &wait);
-        });
+                m_changed.wait(lock, [this, &scope, &wait, &lastValidatedPublicationGeneration, affinity, mainThread, cooperative](){
+                    if(m_scopePublicationGeneration != lastValidatedPublicationGeneration){
+                        validateWaitLocked({}, &scope);
+                        lastValidatedPublicationGeneration = m_scopePublicationGeneration;
+                    }
+                    return scope.m_pending.load(MemoryOrder::acquire) == 0u || hasReadyLocked(affinity, mainThread, cooperative, &wait);
+                });
+                if(scope.m_pending.load(MemoryOrder::acquire) == 0u)
+                    return;
+                readyHandle = claimLocked(affinity, mainThread, cooperative, &wait);
+            }
+            if(readyHandle.valid())
+                claimed = beginClaimedLocked(readyHandle, workerIndex, affinity, cooperative);
+        }
+        executeClaimed(claimed, workerIndex, affinity);
     }
 }
 

@@ -147,27 +147,29 @@ b8 GpuTaskScheduler::submitGraph(
         return false;
     }
 
-    const usize normalRangeEnd = static_cast<usize>(normalRange.first.index) + normalRange.packetCount;
-    for(usize packetIndex = normalRange.first.index; packetIndex < normalRangeEnd; ++packetIndex){
-        const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
-        exceptionScope.setFailedPacket(packet);
-        const GpuCompiledPacketView packetView = planAccess.packet(packet);
-        if(!packetView.valid()){
-            if(outFailedPacket)
-                *outFailedPacket = packet;
-            return false;
-        }
-        const GpuSubmissionPacket& packetPlan = *packetView.plan;
-        const GpuTaskId* const tasks = packetView.tasks;
+    if(!recordedCallbacks.empty()){
+        const usize normalRangeEnd = static_cast<usize>(normalRange.first.index) + normalRange.packetCount;
+        for(usize packetIndex = normalRange.first.index; packetIndex < normalRangeEnd; ++packetIndex){
+            const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
+            exceptionScope.setFailedPacket(packet);
+            const GpuCompiledPacketView packetView = planAccess.packet(packet);
+            if(!packetView.valid()){
+                if(outFailedPacket)
+                    *outFailedPacket = packet;
+                return false;
+            }
+            const GpuSubmissionPacket& packetPlan = *packetView.plan;
+            const GpuTaskId* const tasks = packetView.tasks;
 
-        for(u32 taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-            const GpuTaskId task = tasks[taskIndex];
-            const GpuTaskGraphTaskRecordedCallback* const callback = recordedCallbacks.find(task);
-            if(!callback || callback->invoke(callback->context, recordedGraph.packetStateSeed(packet, artifactOperation)))
-                continue;
-            if(outFailedPacket)
-                *outFailedPacket = packet;
-            return false;
+            for(u32 taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
+                const GpuTaskId task = tasks[taskIndex];
+                const GpuTaskGraphTaskRecordedCallback* const callback = recordedCallbacks.find(task);
+                if(!callback || callback->invoke(callback->context, recordedGraph.packetStateSeed(packet, artifactOperation)))
+                    continue;
+                if(outFailedPacket)
+                    *outFailedPacket = packet;
+                return false;
+            }
         }
     }
 

@@ -4,6 +4,7 @@
 
 #include "compiler_internal.h"
 
+#include <global/bit.h>
 #include <global/overflow.h>
 
 
@@ -29,6 +30,108 @@ const GpuPhysicalQueueInfo* FindPhysicalQueueInfo(const GpuPhysicalQueueTopology
             return &queue;
     }
     return nullptr;
+}
+
+
+void GpuTaskQueueLegalityCache::build(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology){
+    taskLegalQueueMasks.clear();
+    if(topology.queueCount == 0u || topology.queueCount > s_BitsPerWord){
+        active = false;
+        return;
+    }
+
+    active = true;
+    const u64 allMask = topology.queueCount == s_BitsPerWord ? ~static_cast<u64>(0u) : ((static_cast<u64>(1u) << topology.queueCount) - 1u);
+    Alloc::ScratchArena& scratchArena = taskLegalQueueMasks.get_allocator().arena();
+    Vector<u64, Alloc::ScratchArena> resourceLegalMasks(graph.resourceCount(), allMask, scratchArena);
+    for(usize resourceIndex = 0u; resourceIndex < graph.resourceCount(); ++resourceIndex){
+        const GpuTaskGraphResourceView resource = graph.resourceAt(resourceIndex);
+        if(resource.type == GpuGraphResourceType::HazardDomain)
+            continue;
+
+        u64 rMask = allMask;
+        if(resource.directConsumerQueue.valid()){
+            const GpuPhysicalQueueInfo* const consumerQueue = FindPhysicalQueueInfo(topology, resource.directConsumerQueue);
+            if(!consumerQueue || !ResourceSharingAdmitsQueue(resource, topology, *consumerQueue))
+                rMask = 0u;
+            else if(!ResourceUsesConcurrentQueueSharing(resource, topology)){
+                u64 familyMask = 0u;
+                for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+                    if(topology.queues[queueIndex].familyIndex == consumerQueue->familyIndex)
+                        familyMask |= BitMask<u64>(static_cast<u32>(queueIndex));
+                }
+                rMask &= familyMask;
+            }
+        }
+        if(rMask != 0u && ResourceUsesConcurrentQueueSharing(resource, topology)){
+            u64 concurrentMask = 0u;
+            for(u64 remaining = rMask; remaining != 0u; remaining &= remaining - 1u){
+                const u32 queueIndex = static_cast<u32>(CountTrailingZeros(remaining));
+                if(ResourceSharingAdmitsQueue(resource, topology, topology.queues[queueIndex]))
+                    concurrentMask |= BitMask<u64>(queueIndex);
+            }
+            rMask = concurrentMask;
+        }
+        resourceLegalMasks[resourceIndex] = rMask;
+    }
+
+    const GpuPresentEndpoint* const presentEndpoint = graph.presentEndpoint();
+    const GpuPhysicalQueueInfo* const primaryGraphics = FindDefaultGraphicsQueue(topology);
+    const u64 primaryGraphicsMask = primaryGraphics
+        ? BitMask<u64>(static_cast<u32>(static_cast<usize>(primaryGraphics - topology.queues)))
+        : 0u
+    ;
+
+    taskLegalQueueMasks.resize(graph.taskCount(), 0u);
+    for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
+        const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
+        u64 mask = allMask;
+        if(task.commands.externalQueue.valid()){
+            u64 extMask = 0u;
+            for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+                if(topology.queues[queueIndex].id == task.commands.externalQueue){
+                    extMask = BitMask<u64>(static_cast<u32>(queueIndex));
+                    break;
+                }
+            }
+            mask &= extMask;
+        }
+        if(task.commands.requiresPrimaryGraphicsQueue || (presentEndpoint && presentEndpoint->producer == task.id))
+            mask &= primaryGraphicsMask;
+
+        if(mask != 0u){
+            u64 capMask = 0u;
+            for(u64 remaining = mask; remaining != 0u; remaining &= remaining - 1u){
+                const u32 queueIndex = static_cast<u32>(CountTrailingZeros(remaining));
+                const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
+                if(
+                    HasCapabilities(candidate.capabilities, task.commands.requiredCapabilities)
+                    && (task.commands.alternativeCapabilities == GpuQueueCapability::None || (candidate.capabilities & task.commands.alternativeCapabilities) != GpuQueueCapability::None)
+                    && (task.commands.additionalAlternativeCapabilities == GpuQueueCapability::None || (candidate.capabilities & task.commands.additionalAlternativeCapabilities) != GpuQueueCapability::None)
+                )
+                    capMask |= BitMask<u64>(queueIndex);
+            }
+            mask = capMask;
+        }
+
+        if(mask != 0u){
+            for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
+                const GpuGraphResourceId resourceId = task.resourceUses[useIndex].resource;
+                if(presentEndpoint && resourceId == presentEndpoint->backBuffer)
+                    mask &= primaryGraphicsMask;
+                mask &= resourceLegalMasks[resourceId.index];
+                if(mask == 0u)
+                    break;
+            }
+        }
+        taskLegalQueueMasks[taskIndex] = mask;
+    }
+}
+
+b8 GpuTaskQueueLegalityCache::isLegal(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology, const GpuTaskGraphTaskView& task, const usize queueIndex)const noexcept{
+    if(active)
+        return (taskLegalQueueMasks[task.id.index] & BitMask<u64>(static_cast<u32>(queueIndex))) != 0u;
+    return IsLegalQueueAssignmentCandidate(graph, topology, task, topology.queues[queueIndex]);
 }
 
 
@@ -93,7 +196,8 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
     const GpuTaskQueueScoringData& scoringData,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& candidate,
-    const GpuTaskQueueScoreExclusions& exclusions
+    const GpuTaskQueueScoreExclusions& exclusions,
+    const b8 computeOverlap
 )noexcept{
     GpuQueueAssignmentScore score;
     const usize ignoredAssignmentOffset = exclusions.assignmentOffset;
@@ -109,7 +213,7 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
         queueLoad -= ownCost;
 
     u64 overlap = 0u;
-    if(ignoredAssignmentCount <= 1u && task.scheduling.overlapPreferred && !task.scheduling.avoidQueueCrossing && schedulingReachability.mayContainIndependentTasks()){
+    if(computeOverlap && ignoredAssignmentCount <= 1u && task.scheduling.overlapPreferred && !task.scheduling.avoidQueueCrossing && schedulingReachability.mayContainIndependentTasks()){
         u64 otherQueueCost = scoringData.totalAssignedCost - assignedQueueCost - (exclusions.totalCost - exclusions.candidateQueueCost);
         if(ownAssignment && ownAssignment->queue != candidate.id)
             otherQueueCost -= ownCost;
@@ -157,9 +261,9 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
 
     u64 ownershipTransfers = 0u;
     for(usize edgeIndex = scoringData.ownershipEdgeOffsets[task.id.index]; edgeIndex < scoringData.ownershipEdgeOffsets[task.id.index + 1u]; ++edgeIndex){
-        const GpuTaskDependencyEdge& edge = *scoringData.ownershipEdges[edgeIndex];
-        const u32 producerAssignmentIndex = assignmentIndicesByTask[edge.producer.index];
-        const u32 consumerAssignmentIndex = assignmentIndicesByTask[edge.consumer.index];
+        const GpuTaskQueueScoringData::OwnershipEdge& edge = scoringData.ownershipEdges[edgeIndex];
+        const u32 producerAssignmentIndex = assignmentIndicesByTask[edge.producerIndex];
+        const u32 consumerAssignmentIndex = assignmentIndicesByTask[edge.consumerIndex];
         if(
             producerAssignmentIndex >= ignoredAssignmentOffset
             && producerAssignmentIndex - ignoredAssignmentOffset < ignoredAssignmentCount
@@ -167,14 +271,22 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
             && consumerAssignmentIndex - ignoredAssignmentOffset < ignoredAssignmentCount
         )
             continue;
-        const GpuTaskQueueAssignment* const producerAssignment = FindQueueAssignment(assignments, assignmentIndicesByTask, edge.producer);
-        const GpuTaskQueueAssignment* const consumerAssignment = FindQueueAssignment(assignments, assignmentIndicesByTask, edge.consumer);
-        const GpuPhysicalQueueInfo* const producerQueue = edge.producer == task.id ? &candidate : producerAssignment ? FindPhysicalQueueInfo(topology, producerAssignment->queue) : nullptr;
-        const GpuPhysicalQueueInfo* const consumerQueue = edge.consumer == task.id ? &candidate : consumerAssignment ? FindPhysicalQueueInfo(topology, consumerAssignment->queue) : nullptr;
+        const GpuPhysicalQueueInfo* const producerQueue = edge.producerIndex == task.id.index
+            ? &candidate
+            : producerAssignmentIndex < assignments.size()
+                ? FindPhysicalQueueInfo(topology, assignments[producerAssignmentIndex].queue)
+                : nullptr
+        ;
+        const GpuPhysicalQueueInfo* const consumerQueue = edge.consumerIndex == task.id.index
+            ? &candidate
+            : consumerAssignmentIndex < assignments.size()
+                ? FindPhysicalQueueInfo(topology, assignments[consumerAssignmentIndex].queue)
+                : nullptr
+        ;
         if(!producerQueue || !consumerQueue || producerQueue->familyIndex == consumerQueue->familyIndex)
             continue;
 
-        const GpuTaskGraphResourceView resource = graph.resourceAt(edge.resource.index);
+        const GpuTaskGraphResourceView resource = graph.resourceAt(edge.resourceIndex);
         if(resource.type == GpuGraphResourceType::HazardDomain)
             continue;
 

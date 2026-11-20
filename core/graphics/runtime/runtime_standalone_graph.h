@@ -31,6 +31,7 @@ struct StandaloneGraphWorkspace final : NoCopy{
     GpuCompiledGraph compiledGraph;
     GpuRecordedGraph recordedGraph;
     GpuGraphSubmissionTransaction transaction;
+    Alloc::ScratchArena scratchArena;
     b8 leased = false;
 
 
@@ -42,6 +43,7 @@ public:
         , compiledGraph(arena)
         , recordedGraph(arena)
         , transaction(arena)
+        , scratchArena(Name("graphics.standalone_task_graph_scratch"))
     {}
 
 

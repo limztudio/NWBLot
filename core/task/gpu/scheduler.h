@@ -21,6 +21,10 @@ class GpuTaskGraphAnalysis;
 class GpuTaskGraphQueueAssignments;
 struct GpuTaskGraphCompileOptions;
 
+namespace GpuTaskSubmissionDetail{
+    struct TaskSubmissionBindings;
+};
+
 
 class GpuTaskScheduler final : NoCopy{
 private:
@@ -40,6 +44,11 @@ private:
 
     class PreparedTimingTicketsUnwindScope;
     class SubmittingPacketUnwindScope;
+    struct BatchEntryState;
+    class BatchEntryBuffer;
+    class BatchPreparedTimingTicketsUnwindScope;
+    class BatchSubmittingPacketsUnwindScope;
+    class AcceptedBatchUnwindScope;
 
     class SubmissionAttemptExceptionFinalizer final : NoCopy{
     private:
@@ -298,6 +307,7 @@ private:
         GpuSubmissionPacketId* outFailedPacket
     )const;
     [[nodiscard]] b8 submitPacketWithinSubmissionOperation(
+        const GpuTaskGraph::DeclarationReadView& declarationAccess,
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuRecordedGraph& recordedGraph,
@@ -309,6 +319,22 @@ private:
         Alloc::ScratchArena& scratchArena,
         GpuTaskGraph& graph,
         GpuGraphSubmissionTransaction& transaction
+    )const;
+    [[nodiscard]] b8 submitPacketBatchWithinSubmissionOperation(
+        const GpuTaskGraph::DeclarationReadView& declarationAccess,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        const GpuRecordedGraph& recordedGraph,
+        const GpuRecordedGraph::ArtifactOperation& artifactAccess,
+        usize batchStart,
+        usize batchEnd,
+        const GpuPhysicalQueueId& batchQueue,
+        const GpuTaskSubmissionDetail::TaskSubmissionBindings& bindings,
+        const GpuTaskSubmissionDetail::TaskCallbackBindings<GpuTaskGraphTaskAcceptedCallback>& taskAcceptedCallbacks,
+        Alloc::ScratchArena& scratchArena,
+        GpuTaskGraph& graph,
+        GpuGraphSubmissionTransaction& transaction,
+        GpuSubmissionPacketId* outFailedPacket
     )const;
 
 

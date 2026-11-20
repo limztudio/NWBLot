@@ -49,6 +49,7 @@ private:
     struct DescriptorHeapUseCommitTicket{
         NotNull<GpuDescriptorHeap*> heap;
         NotNull<TrackedCommandBuffer*> commandBuffer;
+        QueueSubmissionToken submissionToken;
         usize heapUseIndex = Limit<usize>::s_Max;
     };
 
@@ -79,6 +80,37 @@ public:
     struct SubmissionFailure{
         u64 lastSubmittedID = 0u;
         VkResult nativeResult = VK_SUCCESS;
+    };
+    struct BatchSubmitEntry{
+        CommandList* const* ppCmd = nullptr;
+        usize numCmd = 0u;
+        const SubmissionCommandListIdentity* expectedCommandLists = nullptr;
+        const SubmissionWait* localWaits = nullptr;
+        usize localWaitCount = 0u;
+        const SubmissionSignal* localSignals = nullptr;
+        usize localSignalCount = 0u;
+        u64 maxSameQueueWaitValue = 0u;
+        b8 forceNativeSubmission = false;
+    };
+    struct BatchSubmissionResult{
+        enum Status : u8{
+            Accepted,
+            ValidationFailed,
+            NativeSubmitFailed,
+        };
+        Status status = Status::ValidationFailed;
+        u64 lastSubmittedID = 0u;
+        VkResult nativeResult = VK_SUCCESS;
+    };
+    struct BatchPreparedEntry{
+        usize waitOffset = 0u;
+        usize waitCount = 0u;
+        usize cmdOffset = 0u;
+        usize cmdCount = 0u;
+        usize signalOffset = 0u;
+        usize signalCount = 0u;
+        usize timelineWaitCount = 0u;
+        u64 submissionID = 0u;
     };
 
 
@@ -128,8 +160,10 @@ public:
         usize localWaitCount = 0u,
         const SubmissionSignal* localSignals = nullptr,
         usize localSignalCount = 0u,
-        b8 forceNativeSubmission = false
+        b8 forceNativeSubmission = false,
+        u64 maxSameQueueWaitValue = 0u
     );
+    [[nodiscard]] BatchSubmissionResult submitBatch(Span<const BatchSubmitEntry> entries, Span<SubmissionReceipt> outReceipts);
     [[nodiscard]] VkResult updateLastFinishedID();
     void waitForIdle();
 
@@ -163,8 +197,12 @@ private:
     Futex m_mutex;
     Futex m_workerCommandArenasMutex;
     Vector<SubmissionWait, Alloc::GlobalArena> m_acceptedTimelineWaits;
+    Vector<SubmissionWait, Alloc::GlobalArena> m_submitBatchAcceptedTimelineWaits;
     Vector<DescriptorHeapUseCommitTicket, Alloc::GlobalArena> m_submitDescriptorHeapUseCommitTickets;
     Vector<NotNull<TrackedCommandBuffer*>, Alloc::GlobalArena> m_submitValidatedTimerQueryCommandBuffers;
+    Vector<CommandList*, Alloc::GlobalArena> m_submitBatchUniqueCommandLists;
+    Vector<BatchPreparedEntry, Alloc::GlobalArena> m_submitBatchEntries;
+    Vector<VkSubmitInfo2, Alloc::GlobalArena> m_submitBatchInfos;
     Vector<VkSemaphoreSubmitInfo, Alloc::GlobalArena> m_submitWaitInfos;
     Vector<VkSemaphoreSubmitInfo, Alloc::GlobalArena> m_submitSignalInfos;
     Vector<VkCommandBufferSubmitInfo, Alloc::GlobalArena> m_submitCommandBufferInfos;

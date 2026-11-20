@@ -149,8 +149,10 @@ struct GpuCommandIrRasterTaskRecord{
 
 struct GpuCommandIrDecodedRecord{
     GpuCommandIrWireOpcode::Enum opcode = GpuCommandIrWireOpcode::CopyBuffer;
-    GpuCommandIrBuiltinTaskRecord builtin;
-    GpuCommandIrRasterTaskRecord raster;
+    union{
+        GpuCommandIrBuiltinTaskRecord builtin{};
+        GpuCommandIrRasterTaskRecord raster;
+    };
 };
 
 

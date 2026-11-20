@@ -58,7 +58,7 @@ Expected<GpuExternalCompletionId> GpuTaskGraph::importExternalCompletion(const G
                 existing.token = desc.token;
                 existing.hasToken = true;
                 m_externalCompletionDeviceGeneration = desc.token.deviceGeneration;
-                m_declarationRevision = AllocateGeneration();
+                bumpDeclarationRevision();
             }
         }
         return GpuExternalCompletionId{ .generation = m_generation, .index = completionIndex };

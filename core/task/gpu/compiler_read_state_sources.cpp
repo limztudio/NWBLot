@@ -72,6 +72,8 @@ using namespace GpuTaskGraphCompilerDetail;
     }
     if(!foundSource)
         return false;
+    if(!plan.resourceHasPendingEpilogueBarrier[resource.id.index])
+        return true;
     for(const PendingCompiledEpilogueBarrier& pending : plan.pendingEpilogueBarriers){
         if(pending.barrier.resource != resource.id || !RangesOverlap(resource, pending.barrier.range, range))
             continue;

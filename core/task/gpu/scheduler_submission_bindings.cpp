@@ -55,24 +55,25 @@ using namespace __hidden_gpu_task_scheduler_submission_bindings;
     timingTickets.clear();
     submissionHooks.clear();
     nextTimingTicket.clear();
-    submissionHookIndices.reset();
-    timingPacketChains.reset();
+    submissionHookIndices.clear();
+    timingPacketChains.clear();
     timingTicketIndices.reset();
     packetGeneration = range.first.generation;
+    packetRangeFirstIndex = range.first.index;
     timingTickets.reserve(taskTimingTicketCount);
     submissionHooks.reserve(taskSubmissionHookCount);
-    if(taskTimingTicketCount > s_InlineBindingCount){
+    const b8 useTimingTable = taskTimingTicketCount > s_InlineBindingCount;
+    const b8 useHookTable = taskSubmissionHookCount > s_InlineBindingCount;
+    Vector<u8, Alloc::ScratchArena> timingAnchors(scratchArena);
+    if(useTimingTable){
         nextTimingTicket.reserve(taskTimingTicketCount);
         timingTicketIndices.emplace(AddSize(taskTimingTicketCount, taskTimingTicketCount), scratchArena);
-        const usize chainCount = Min(taskTimingTicketCount, range.packetCount);
-        timingPacketChains.emplace(AddSize(chainCount, chainCount), scratchArena);
+        timingPacketChains.assign(range.packetCount, TimingPacketChain{});
+        timingAnchors.assign(declarationAccess.taskCount(), 0u);
     }
-    if(taskSubmissionHookCount > s_InlineBindingCount)
-        submissionHookIndices.emplace(AddSize(taskSubmissionHookCount, taskSubmissionHookCount), scratchArena);
+    if(useHookTable)
+        submissionHookIndices.assign(range.packetCount, Limit<u32>::s_Max);
 
-    Optional<HashSet<u32, Alloc::ScratchArena>> timingAnchors;
-    if(taskTimingTicketCount > s_InlineBindingCount)
-        timingAnchors.emplace(AddSize(taskTimingTicketCount, taskTimingTicketCount), scratchArena);
     const usize rangeEnd = static_cast<usize>(range.first.index) + range.packetCount;
     for(usize bindingIndex = 0u; bindingIndex < taskTimingTicketCount; ++bindingIndex){
         const GpuTaskGraphTaskTimingTicket& binding = taskTimingTickets[bindingIndex];
@@ -82,9 +83,10 @@ using namespace __hidden_gpu_task_scheduler_submission_bindings;
         if(!task.valid())
             return false;
 
-        if(timingAnchors){
-            if(!timingAnchors->insert(binding.task.index).second)
+        if(useTimingTable){
+            if(timingAnchors[binding.task.index] != 0u)
                 return false;
+            timingAnchors[binding.task.index] = 1u;
         }
         else{
             for(usize previousBindingIndex = 0u; previousBindingIndex < bindingIndex; ++previousBindingIndex){
@@ -121,11 +123,14 @@ using namespace __hidden_gpu_task_scheduler_submission_bindings;
 
         const usize ticketIndex = timingTickets.size();
         timingTickets.push_back(ResolvedTimingTicket{ .packet = packet, .timingTicket = MakeNotNull(binding.timingTicket) });
-        if(timingPacketChains){
+        if(useTimingTable){
             nextTimingTicket.push_back(Limit<usize>::s_Max);
-            auto [it, inserted] = timingPacketChains->try_emplace(packet.index, TimingPacketChain{ ticketIndex, ticketIndex });
-            if(!inserted){
-                TimingPacketChain& chain = it.value();
+            TimingPacketChain& chain = timingPacketChains[packet.index - packetRangeFirstIndex];
+            if(chain.first == Limit<usize>::s_Max){
+                chain.first = ticketIndex;
+                chain.last = ticketIndex;
+            }
+            else{
                 nextTimingTicket[chain.last] = ticketIndex;
                 chain.last = ticketIndex;
             }
@@ -143,9 +148,11 @@ using namespace __hidden_gpu_task_scheduler_submission_bindings;
         if(!packet.valid() || packet.index < range.first.index || static_cast<usize>(packet.index) >= rangeEnd)
             return false;
 
-        if(submissionHookIndices){
-            if(!submissionHookIndices->try_emplace(packet.index, submissionHooks.size()).second)
+        if(useHookTable){
+            u32& slot = submissionHookIndices[packet.index - packetRangeFirstIndex];
+            if(slot != Limit<u32>::s_Max)
                 return false;
+            slot = static_cast<u32>(submissionHooks.size());
         }
         else{
             for(const ResolvedSubmissionHook& existing : submissionHooks){
@@ -178,13 +185,12 @@ const QueueSubmissionPreSubmitHook* TaskSubmissionBindings::collectPacket(const 
     if(timingTickets.empty() && submissionHooks.empty())
         return nullptr;
 
-    if(timingPacketChains){
-        if(packet.generation == packetGeneration){
-            const auto it = timingPacketChains->find(packet.index);
-            if(it != timingPacketChains->end()){
-                for(usize index = it.value().first; index != Limit<usize>::s_Max; index = nextTimingTicket[index])
-                    inOutTimingTickets.push_back(timingTickets[index].timingTicket);
-            }
+    const b8 packetInRange = packet.generation == packetGeneration && packet.index >= packetRangeFirstIndex;
+    const usize packetOffset = packetInRange ? static_cast<usize>(packet.index - packetRangeFirstIndex) : 0u;
+    if(!timingPacketChains.empty()){
+        if(packetInRange && packetOffset < timingPacketChains.size()){
+            for(usize index = timingPacketChains[packetOffset].first; index != Limit<usize>::s_Max; index = nextTimingTicket[index])
+                inOutTimingTickets.push_back(timingTickets[index].timingTicket);
         }
     }
     else{
@@ -193,11 +199,11 @@ const QueueSubmissionPreSubmitHook* TaskSubmissionBindings::collectPacket(const 
                 inOutTimingTickets.push_back(ticket.timingTicket);
         }
     }
-    if(submissionHookIndices){
-        if(packet.generation == packetGeneration){
-            const auto it = submissionHookIndices->find(packet.index);
-            if(it != submissionHookIndices->end())
-                preSubmitHook = &submissionHooks[it.value()].hook;
+    if(!submissionHookIndices.empty()){
+        if(packetInRange && packetOffset < submissionHookIndices.size()){
+            const u32 hookIndex = submissionHookIndices[packetOffset];
+            if(hookIndex != Limit<u32>::s_Max)
+                preSubmitHook = &submissionHooks[hookIndex].hook;
         }
     }
     else{

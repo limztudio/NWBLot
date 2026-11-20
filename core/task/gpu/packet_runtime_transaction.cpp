@@ -158,6 +158,7 @@ b8 GpuGraphSubmissionTransaction::tryReset(const GpuCompiledGraph& compiledGraph
     m_submissionBindingResolved = false;
     m_deviceGeneration = nextDeviceGeneration;
     m_acceptedSubmissionCount = 0u;
+    m_terminalPacketCount = 0u;
     m_acceptanceRevision = nextAcceptanceRevision;
     m_submissionStatistics = nextSubmissionStatistics;
     m_valid = true;
@@ -198,13 +199,7 @@ b8 GpuGraphSubmissionTransaction::waitForSubmissionPublicationAndHasAcceptedPack
 
 
 b8 GpuGraphSubmissionTransaction::allPacketsTerminalLocked()const noexcept{
-    if(m_packets.empty())
-        return false;
-    for(const PacketRuntime& runtime : m_packets){
-        if(runtime.state != PacketRuntimeState::Accepted && runtime.state != PacketRuntimeState::Rejected)
-            return false;
-    }
-    return true;
+    return !m_packets.empty() && m_terminalPacketCount == m_packets.size();
 }
 
 b8 GpuGraphSubmissionTransaction::bindRecordingAttemptWithinSubmissionOperation(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration, const GpuRecordingAttemptScope* const preparationAttempt)noexcept{
@@ -363,6 +358,7 @@ void GpuGraphSubmissionTransaction::commitAcceptedPacket(const GpuTaskGraph& gra
         FOUNDATION_FATAL_ASSERT_MSG(false, "accepted packet commit requires the exact submitting transaction packet");
     runtime.state = PacketRuntimeState::Accepted;
     runtime.token = token;
+    ++m_terminalPacketCount;
     runtime.nativeCommandListCount = nativeSubmissionInfo.commandListCount;
     runtime.plannedWaitTokenCount = nativeSubmissionInfo.plannedWaitTokenCount;
     runtime.sameQueueWaitElisionCount = nativeSubmissionInfo.sameQueueWaitElisionCount;

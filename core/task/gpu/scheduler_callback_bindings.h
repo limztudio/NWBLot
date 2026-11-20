@@ -42,10 +42,13 @@ private:
 public:
     explicit TaskCallbackBindings(Alloc::ScratchArena& scratchArena)noexcept
         : m_scratchArena(scratchArena)
+        , m_indices(scratchArena)
     {}
 
 
 public:
+    [[nodiscard]] b8 empty()const noexcept{ return m_callbackCount == 0u; }
+
     [[nodiscard]] b8 resolve(const GpuTaskGraph::DeclarationReadView& declarations, const GpuCompiledGraph::ReadView& plan, const GpuSubmissionPacketRange& range, const TaskCallback* const callbacks, const usize callbackCount);
 
     [[nodiscard]] const TaskCallback* find(GpuTaskId task)const noexcept;
@@ -60,7 +63,7 @@ private:
     const TaskCallback* m_callbacks = nullptr;
     usize m_callbackCount = 0u;
     u64 m_generation = 0u;
-    Optional<HashMap<u32, usize, Alloc::ScratchArena>> m_indices;
+    Vector<u32, Alloc::ScratchArena> m_indices;
 };
 
 extern template class TaskCallbackBindings<GpuTaskGraphTaskRecordedCallback>;

@@ -80,53 +80,89 @@ namespace __hidden_gpu_command_ir_stream{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuCommandIrStreamReader::GpuCommandIrStreamReader(const BinaryByteView bytes)noexcept
-    : m_bytes(bytes)
-{
-    if(!m_bytes.empty() && !m_bytes.data()){
-        fail(GpuCommandIrStreamValidationError::NullData, 0u, Limit<u64>::s_Max);
+GpuCommandIrStreamReader::GpuCommandIrStreamReader(const BinaryByteView bytes)noexcept{
+    GpuCommandIrStreamHeader header;
+    if(!initializeValidatedHeader(bytes, header))
         return;
-    }
 
-    usize cursor = 0u;
-    const auto wirePrefix = ReadPOD<GpuCommandIrStreamHeaderPrefix>(m_bytes, cursor);
-    if(!wirePrefix){
-        fail(GpuCommandIrStreamValidationError::TruncatedStreamHeader, 0u, Limit<u64>::s_Max);
-        return;
-    }
-    const GpuCommandIrStreamHeaderPrefix& prefix = *wirePrefix;
-    if(prefix.magic != s_GpuCommandIrStreamMagic){
-        fail(GpuCommandIrStreamValidationError::InvalidMagic, 0u, Limit<u64>::s_Max);
-        return;
-    }
-    if(prefix.version != s_GpuCommandIrStreamVersion){
-        fail(GpuCommandIrStreamValidationError::UnsupportedVersion, 0u, Limit<u64>::s_Max);
-        return;
-    }
-    if(prefix.reserved != 0u){
-        fail(GpuCommandIrStreamValidationError::InvalidHeaderReserved, 0u, Limit<u64>::s_Max);
-        return;
-    }
-
-    cursor = 0u;
-    const auto wireHeader = ReadPOD<GpuCommandIrStreamHeader>(m_bytes, cursor);
-    if(!wireHeader){
-        fail(GpuCommandIrStreamValidationError::TruncatedStreamHeader, 0u, Limit<u64>::s_Max);
-        return;
-    }
-    const GpuCommandIrStreamHeader& header = *wireHeader;
-    if(header.commandBytes > static_cast<u64>(Limit<usize>::s_Max) || header.blobBytes > static_cast<u64>(Limit<usize>::s_Max)){
-        fail(GpuCommandIrStreamValidationError::PayloadSizeMismatch, 0u, Limit<u64>::s_Max);
-        return;
-    }
-
-    const usize payloadBytes = m_bytes.size() - sizeof(GpuCommandIrStreamHeader);
+    const usize payloadBytes = bytes.size() - sizeof(GpuCommandIrStreamHeader);
     const usize commandBytes = static_cast<usize>(header.commandBytes);
     const usize blobBytes = static_cast<usize>(header.blobBytes);
     if(commandBytes > payloadBytes || blobBytes != payloadBytes - commandBytes){
         fail(GpuCommandIrStreamValidationError::PayloadSizeMismatch, 0u, Limit<u64>::s_Max);
         return;
     }
+
+    const BinaryByteView commandView{ bytes.data(), sizeof(GpuCommandIrStreamHeader) + commandBytes };
+    const BinaryByteView blobView = blobBytes != 0u
+        ? BinaryByteView{ bytes.data() + sizeof(GpuCommandIrStreamHeader) + commandBytes, blobBytes }
+        : BinaryByteView{}
+    ;
+    finalizeValidatedHeader(header, commandView, blobView);
+}
+
+GpuCommandIrStreamReader::GpuCommandIrStreamReader(const BinaryByteView commandBytes, const BinaryByteView blobBytes)noexcept{
+    if(!blobBytes.empty() && !blobBytes.data()){
+        fail(GpuCommandIrStreamValidationError::NullData, 0u, Limit<u64>::s_Max);
+        return;
+    }
+
+    GpuCommandIrStreamHeader header;
+    if(!initializeValidatedHeader(commandBytes, header))
+        return;
+
+    if(
+        header.commandBytes != static_cast<u64>(commandBytes.size() - sizeof(GpuCommandIrStreamHeader))
+        || header.blobBytes != static_cast<u64>(blobBytes.size())
+    ){
+        fail(GpuCommandIrStreamValidationError::PayloadSizeMismatch, 0u, Limit<u64>::s_Max);
+        return;
+    }
+
+    finalizeValidatedHeader(header, commandBytes, blobBytes);
+}
+
+b8 GpuCommandIrStreamReader::initializeValidatedHeader(const BinaryByteView headerSource, GpuCommandIrStreamHeader& outHeader)noexcept{
+    if(!headerSource.empty() && !headerSource.data()){
+        fail(GpuCommandIrStreamValidationError::NullData, 0u, Limit<u64>::s_Max);
+        return false;
+    }
+
+    usize cursor = 0u;
+    const auto wirePrefix = ReadPOD<GpuCommandIrStreamHeaderPrefix>(headerSource, cursor);
+    if(!wirePrefix){
+        fail(GpuCommandIrStreamValidationError::TruncatedStreamHeader, 0u, Limit<u64>::s_Max);
+        return false;
+    }
+    const GpuCommandIrStreamHeaderPrefix& prefix = *wirePrefix;
+    if(prefix.magic != s_GpuCommandIrStreamMagic){
+        fail(GpuCommandIrStreamValidationError::InvalidMagic, 0u, Limit<u64>::s_Max);
+        return false;
+    }
+    if(prefix.version != s_GpuCommandIrStreamVersion){
+        fail(GpuCommandIrStreamValidationError::UnsupportedVersion, 0u, Limit<u64>::s_Max);
+        return false;
+    }
+    if(prefix.reserved != 0u){
+        fail(GpuCommandIrStreamValidationError::InvalidHeaderReserved, 0u, Limit<u64>::s_Max);
+        return false;
+    }
+
+    cursor = 0u;
+    const auto wireHeader = ReadPOD<GpuCommandIrStreamHeader>(headerSource, cursor);
+    if(!wireHeader){
+        fail(GpuCommandIrStreamValidationError::TruncatedStreamHeader, 0u, Limit<u64>::s_Max);
+        return false;
+    }
+    outHeader = *wireHeader;
+    if(outHeader.commandBytes > static_cast<u64>(Limit<usize>::s_Max) || outHeader.blobBytes > static_cast<u64>(Limit<usize>::s_Max)){
+        fail(GpuCommandIrStreamValidationError::PayloadSizeMismatch, 0u, Limit<u64>::s_Max);
+        return false;
+    }
+    return true;
+}
+
+void GpuCommandIrStreamReader::finalizeValidatedHeader(const GpuCommandIrStreamHeader& header, const BinaryByteView commandBytes, const BinaryByteView blobBytes)noexcept{
     if((header.recordCount == 0u && header.graphGeneration != 0u) || (header.recordCount != 0u && header.graphGeneration == 0u)){
         fail(GpuCommandIrStreamValidationError::InvalidGraphGeneration, 0u, Limit<u64>::s_Max);
         return;
@@ -140,9 +176,10 @@ GpuCommandIrStreamReader::GpuCommandIrStreamReader(const BinaryByteView bytes)no
         return;
     }
 
-    m_cursor = cursor;
-    m_payloadEnd = sizeof(GpuCommandIrStreamHeader) + commandBytes;
-    m_blobBegin = m_payloadEnd;
+    m_commandBytes = commandBytes;
+    m_blobBytes = blobBytes;
+    m_cursor = sizeof(GpuCommandIrStreamHeader);
+    m_payloadEnd = commandBytes.size();
     m_graphGeneration = header.graphGeneration;
     m_planGeneration = header.planGeneration;
     m_recordCount = header.recordCount;
@@ -157,8 +194,8 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
             fail(GpuCommandIrStreamValidationError::TrailingPayload, m_cursor, m_nextRecordIndex);
             return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
         }
-        if(m_nextBlobOffset != m_bytes.size() - m_blobBegin){
-            fail(GpuCommandIrStreamValidationError::InvalidBlobRange, m_blobBegin, m_nextRecordIndex);
+        if(m_nextBlobOffset != m_blobBytes.size()){
+            fail(GpuCommandIrStreamValidationError::InvalidBlobRange, m_payloadEnd, m_nextRecordIndex);
             return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
         }
         m_validation.byteOffset = m_payloadEnd;
@@ -173,7 +210,7 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
         return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
     }
     usize recordCursor = recordOffset;
-    const auto wireHeader = ReadPOD<GpuCommandIrHeader>(m_bytes, recordCursor);
+    const auto wireHeader = ReadPOD<GpuCommandIrHeader>(m_commandBytes, recordCursor);
     if(!wireHeader){
         fail(GpuCommandIrStreamValidationError::TruncatedRecord, recordOffset, m_nextRecordIndex);
         return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
@@ -227,7 +264,7 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
     switch(header.opcode){
     case GpuCommandIrWireOpcode::CopyBuffer:{
         recordCursor = recordOffset;
-        const auto wireRecord = ReadPOD<GpuCommandIrCopyBufferRecord>(m_bytes, recordCursor);
+        const auto wireRecord = ReadPOD<GpuCommandIrCopyBufferRecord>(m_commandBytes, recordCursor);
         if(!wireRecord){
             fail(GpuCommandIrStreamValidationError::TruncatedRecord, recordOffset, m_nextRecordIndex);
             return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
@@ -254,7 +291,7 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
     }
     case GpuCommandIrWireOpcode::CopyTexture:{
         recordCursor = recordOffset;
-        const auto wireRecord = ReadPOD<GpuCommandIrCopyTextureRecord>(m_bytes, recordCursor);
+        const auto wireRecord = ReadPOD<GpuCommandIrCopyTextureRecord>(m_commandBytes, recordCursor);
         if(!wireRecord){
             fail(GpuCommandIrStreamValidationError::TruncatedRecord, recordOffset, m_nextRecordIndex);
             return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
@@ -280,7 +317,7 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
     }
     case GpuCommandIrWireOpcode::ClearBuffer:{
         recordCursor = recordOffset;
-        const auto wireRecord = ReadPOD<GpuCommandIrClearBufferRecord>(m_bytes, recordCursor);
+        const auto wireRecord = ReadPOD<GpuCommandIrClearBufferRecord>(m_commandBytes, recordCursor);
         if(!wireRecord){
             fail(GpuCommandIrStreamValidationError::TruncatedRecord, recordOffset, m_nextRecordIndex);
             return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
@@ -302,7 +339,7 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
     }
     case GpuCommandIrWireOpcode::ClearTexture:{
         recordCursor = recordOffset;
-        const auto wireRecord = ReadPOD<GpuCommandIrClearTextureRecord>(m_bytes, recordCursor);
+        const auto wireRecord = ReadPOD<GpuCommandIrClearTextureRecord>(m_commandBytes, recordCursor);
         if(!wireRecord){
             fail(GpuCommandIrStreamValidationError::TruncatedRecord, recordOffset, m_nextRecordIndex);
             return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
@@ -332,7 +369,7 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
     }
     case GpuCommandIrWireOpcode::ClearTextureRectUInt:{
         recordCursor = recordOffset;
-        const auto wireRecord = ReadPOD<GpuCommandIrClearTextureRectUIntRecord>(m_bytes, recordCursor);
+        const auto wireRecord = ReadPOD<GpuCommandIrClearTextureRectUIntRecord>(m_commandBytes, recordCursor);
         if(!wireRecord){
             fail(GpuCommandIrStreamValidationError::TruncatedRecord, recordOffset, m_nextRecordIndex);
             return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
@@ -356,7 +393,7 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
     }
     case GpuCommandIrWireOpcode::UploadBuffer:{
         recordCursor = recordOffset;
-        const auto wireRecord = ReadPOD<GpuCommandIrUploadBufferRecord>(m_bytes, recordCursor);
+        const auto wireRecord = ReadPOD<GpuCommandIrUploadBufferRecord>(m_commandBytes, recordCursor);
         if(!wireRecord){
             fail(GpuCommandIrStreamValidationError::TruncatedRecord, recordOffset, m_nextRecordIndex);
             return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
@@ -378,7 +415,7 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
         decoded.blobSizeBytes = record.blobSizeBytes;
         decoded.destinationOffsetBytes = record.destinationOffsetBytes;
         decoded.finalState = static_cast<ResourceStates::Mask>(record.finalState);
-        if(decodedRecord && (record.blobSizeBytes == 0u || record.blobOffsetBytes != m_nextBlobOffset || record.blobSizeBytes > m_bytes.size() - m_blobBegin - m_nextBlobOffset)){
+        if(decodedRecord && (record.blobSizeBytes == 0u || record.blobOffsetBytes != m_nextBlobOffset || record.blobSizeBytes > m_blobBytes.size() - m_nextBlobOffset)){
             fail(GpuCommandIrStreamValidationError::InvalidBlobRange, recordOffset, m_nextRecordIndex);
             return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
         }
@@ -388,7 +425,7 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
     }
     case GpuCommandIrWireOpcode::UploadTexture:{
         recordCursor = recordOffset;
-        const auto wireRecord = ReadPOD<GpuCommandIrUploadTextureRecord>(m_bytes, recordCursor);
+        const auto wireRecord = ReadPOD<GpuCommandIrUploadTextureRecord>(m_commandBytes, recordCursor);
         if(!wireRecord){
             fail(GpuCommandIrStreamValidationError::TruncatedRecord, recordOffset, m_nextRecordIndex);
             return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
@@ -413,7 +450,7 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
         decoded.depthPitch = record.depthPitch;
         decoded.finalState = static_cast<ResourceStates::Mask>(record.finalState);
         decoded.uploadAspect = static_cast<TextureUploadAspect::Enum>(record.aspect);
-        if(decodedRecord && (record.blobSizeBytes == 0u || record.blobOffsetBytes != m_nextBlobOffset || record.blobSizeBytes > m_bytes.size() - m_blobBegin - m_nextBlobOffset)){
+        if(decodedRecord && (record.blobSizeBytes == 0u || record.blobOffsetBytes != m_nextBlobOffset || record.blobSizeBytes > m_blobBytes.size() - m_nextBlobOffset)){
             fail(GpuCommandIrStreamValidationError::InvalidBlobRange, recordOffset, m_nextRecordIndex);
             return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
         }
@@ -439,9 +476,9 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
 }
 
 BinaryByteView GpuCommandIrStreamReader::blobBytes()const noexcept{
-    if(m_validation.failed() || m_blobBegin == m_bytes.size())
+    if(m_validation.failed() || m_blobBytes.empty())
         return {};
-    return BinaryByteView{ m_bytes.data() + m_blobBegin, m_bytes.size() - m_blobBegin };
+    return m_blobBytes;
 }
 
 void GpuCommandIrStreamReader::fail(const GpuCommandIrStreamValidationError::Enum error, const usize byteOffset, const u64 recordIndex)noexcept{

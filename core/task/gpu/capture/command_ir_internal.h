@@ -96,8 +96,57 @@ inline void InitializeRecord(RecordT& record, const GpuCommandIrWireOpcode::Enum
 [[nodiscard]] b8 LowerUploadOperation(const GpuCommandIrBuiltinTaskRecord& record, BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph, CommandList& commandList);
 [[nodiscard]] GpuCommandIrReplayError::Enum ValidateReplayCommandListQueue(const CommandListParameters& commandListDescription, const GpuPhysicalQueueId& packetQueue, CommandQueue::Enum packetQueueClass)noexcept;
 
+struct CachedRasterVertexValidation{
+    u32 stride = 0u;
+    u32 requiredBytes = 0u;
+    u8 vertexBindingIndex = 0u;
+    b8 instanceRate = false;
+};
+
+struct RasterOwnerTableView{
+    const GpuCommandIrRasterStateOwner* stateOwners = nullptr;
+    usize stateOwnerCount = 0u;
+    const GpuCommandIrRasterHeapOwner* heapOwners = nullptr;
+    usize heapOwnerCount = 0u;
+    b8 hasOwnerSidecar = false;
+
+
+public:
+    [[nodiscard]] static RasterOwnerTableView None()noexcept{ return {}; }
+
+    [[nodiscard]] static RasterOwnerTableView FromTable(const GpuCommandIrRasterOwnerTable* const owners)noexcept{
+        RasterOwnerTableView view;
+        view.hasOwnerSidecar = true;
+        if(owners){
+            view.stateOwners = owners->stateOwners.data();
+            view.stateOwnerCount = owners->stateOwners.size();
+            view.heapOwners = owners->heapOwners.data();
+            view.heapOwnerCount = owners->heapOwners.size();
+        }
+        return view;
+    }
+
+    [[nodiscard]] static RasterOwnerTableView FromOwnedStream(const GpuCommandIrOwnedStream& stream)noexcept{
+        return FromTable(stream.rasterOwners());
+    }
+
+    [[nodiscard]] static RasterOwnerTableView FromCapture(const GpuCommandIrCapture& capture)noexcept{
+        return FromTable(capture.rasterOwners());
+    }
+
+    [[nodiscard]] const GpuCommandIrRasterStateOwner* rasterStateOwner(const u32 index)const noexcept{
+        return stateOwners && index < stateOwnerCount ? &stateOwners[index] : nullptr;
+    }
+
+    [[nodiscard]] const GpuCommandIrRasterHeapOwner* rasterHeapOwner(const u32 index)const noexcept{
+        return heapOwners && index < heapOwnerCount ? &heapOwners[index] : nullptr;
+    }
+};
+
 struct RasterReplayState{
     GpuCommandIrRasterTaskRecord graphicsState;
+    FixedVector<CachedRasterVertexValidation, s_MaxVertexAttributes> cachedVertexValidations;
+    GpuCommandIrReplayError::Enum cachedInputLayoutError = GpuCommandIrReplayError::None;
     GpuTaskId task;
     b8 active = false;
     b8 heapBound = false;
@@ -127,14 +176,25 @@ struct RasterReplayState{
 
 [[nodiscard]] GpuCommandIrReplayError::Enum ValidateRasterGraphOperation(const GpuCommandIrRasterTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, const GpuTaskGraphTaskView& task, RasterReplayState& state)noexcept;
 [[nodiscard]] GpuCommandIrReplayError::Enum ValidateRasterBuiltinBoundary(const GpuTaskId& task, const RasterReplayState& state)noexcept;
+[[nodiscard]] GpuCommandIrReplayError::Enum ValidateBuiltinBackendOperand(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, const GpuPhysicalQueueInfo& queue, CommandList& commandList)noexcept;
 [[nodiscard]] GpuCommandIrReplayError::Enum ValidateRasterBackendOperand(
     const GpuCommandIrRasterTaskRecord& record,
-    const GpuCommandIrOwnedStream& stream,
+    const RasterOwnerTableView& owners,
     const GpuTaskGraphDeclarationReadView& graph,
     const GpuPhysicalQueueInfo& queue,
     u64 recordIndex,
     CommandList& commandList,
     RasterReplayState& state
+)noexcept;
+[[nodiscard]] GpuCommandIrReplayResult PreflightGpuCommandIrPacketStream(
+    BinaryByteView primaryBytes,
+    BinaryByteView secondaryBlobBytes,
+    b8 splitBuffers,
+    const RasterOwnerTableView& owners,
+    const GpuTaskGraphDeclarationReadView& graph,
+    const GpuCompiledGraph::ReadView& compiledGraph,
+    GpuSubmissionPacketId packet,
+    CommandList* commandList
 )noexcept;
 [[nodiscard]] inline GpuCommandIrReplayResult ReplayFailure(const GpuCommandIrReplayError::Enum error, const GpuCommandIrStreamValidationResult& streamValidation = {}, const u64 recordIndex = Limit<u64>::s_Max)noexcept{
     return GpuCommandIrReplayResult{ .error = error, .streamValidation = streamValidation, .recordIndex = recordIndex, };
@@ -142,7 +202,7 @@ struct RasterReplayState{
 
 [[nodiscard]] const GpuTaskResourceUse* FindTaskResourceUse(const GpuTaskGraphTaskView& task, GpuGraphResourceId resource, ResourceStates::Mask state, GpuTaskResourceAccess::Enum access)noexcept;
 
-[[nodiscard]] b8 LowerRasterOperation(const GpuCommandIrRasterTaskRecord& record, const GpuCommandIrOwnedStream& stream, BinaryByteView blobBytes, CommandList& commandList);
+[[nodiscard]] b8 LowerRasterOperation(const GpuCommandIrRasterTaskRecord& record, const RasterOwnerTableView& owners, BinaryByteView blobBytes, CommandList& commandList);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -247,11 +247,12 @@ b8 TaskCallbackBindings<TaskCallback>::resolve(
     m_callbacks = nullptr;
     m_callbackCount = 0u;
     m_generation = 0u;
-    m_indices.reset();
+    m_indices.clear();
     if((callbackCount != 0u && !callbacks) || !plan.validFor(declarations) || !plan.validPacketRange(range) || callbackCount > declarations.taskCount())
         return false;
-    if(callbackCount > s_InlineCallbackCount)
-        m_indices.emplace(AddSize(callbackCount, callbackCount), m_scratchArena);
+    const b8 useIndexTable = callbackCount > s_InlineCallbackCount;
+    if(useIndexTable)
+        m_indices.assign(declarations.taskCount(), Limit<u32>::s_Max);
     const usize rangeEnd = static_cast<usize>(range.first.index) + range.packetCount;
     for(usize callbackIndex = 0u; callbackIndex < callbackCount; ++callbackIndex){
         const TaskCallback& callback = callbacks[callbackIndex];
@@ -263,9 +264,10 @@ b8 TaskCallbackBindings<TaskCallback>::resolve(
         const GpuSubmissionPacketId packet = task.plan->packet;
         if(!packet.valid() || packet.index < range.first.index || static_cast<usize>(packet.index) >= rangeEnd)
             return false;
-        if(m_indices){
-            if(!m_indices->try_emplace(callback.task.index, callbackIndex).second)
+        if(useIndexTable){
+            if(m_indices[callback.task.index] != Limit<u32>::s_Max)
                 return false;
+            m_indices[callback.task.index] = static_cast<u32>(callbackIndex);
         }
         else{
             for(usize previousIndex = 0u; previousIndex < callbackIndex; ++previousIndex){
@@ -284,9 +286,11 @@ template<typename TaskCallback>
 const TaskCallback* TaskCallbackBindings<TaskCallback>::find(const GpuTaskId task)const noexcept{
     if(m_callbackCount == 0u || !m_callbacks || !task.valid() || task.generation != m_generation)
         return nullptr;
-    if(m_indices){
-        const auto found = m_indices->find(task.index);
-        return found == m_indices->end() ? nullptr : &m_callbacks[found.value()];
+    if(!m_indices.empty()){
+        if(task.index >= m_indices.size())
+            return nullptr;
+        const u32 index = m_indices[task.index];
+        return index == Limit<u32>::s_Max ? nullptr : &m_callbacks[index];
     }
     for(usize callbackIndex = 0u; callbackIndex < m_callbackCount; ++callbackIndex){
         if(m_callbacks[callbackIndex].task == task)

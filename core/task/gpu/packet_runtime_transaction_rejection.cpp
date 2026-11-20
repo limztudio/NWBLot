@@ -413,6 +413,7 @@ void GpuGraphSubmissionTransaction::completeRejectedPacketWithinSubmissionOperat
     PacketRuntime& runtime = m_packets[packetID.index];
     runtime.state = PacketRuntimeState::Rejected;
     runtime.nativeSubmissionRejected = nativeSubmissionRejected;
+    ++m_terminalPacketCount;
     ++m_submissionStatistics.rejectedPacketCount;
     m_submissionStatistics.rejectedTaskCount += packet.taskCount;
     if(nativeSubmissionRejected)
@@ -455,6 +456,7 @@ void GpuGraphSubmissionTransaction::abandonUnacceptedPacketsAfterExceptionWithin
         FOUNDATION_FATAL_ASSERT_MSG(runtimeValid, "exception cleanup must retain its packet transaction state");
         PacketRuntime& runtime = m_packets[packetIndex];
         runtime.state = PacketRuntimeState::Rejected;
+        ++m_terminalPacketCount;
         ++m_submissionStatistics.rejectedPacketCount;
         m_submissionStatistics.rejectedTaskCount += packet.taskCount;
     }

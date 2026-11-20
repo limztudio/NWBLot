@@ -187,6 +187,7 @@ private:
         CommandListResourceStateHandoff externalBaseStateSeed;
         CommandListResourceStateHandoff externalMergedStateSeed;
         GraphicsVector<CachedCommandList> commandLists;
+        GraphicsVector<CommandListResourceStateHandoff> seedSubsetBatch;
 
 
     public:
@@ -197,6 +198,7 @@ private:
             , externalBaseStateSeed(arena)
             , externalMergedStateSeed(arena)
             , commandLists(arena)
+            , seedSubsetBatch(arena)
         {}
 
 
@@ -263,7 +265,8 @@ private:
     );
     [[nodiscard]] CommandListResourceStateHandoff* packetStateSeed(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)noexcept;
     [[nodiscard]] const CommandListResourceStateHandoff* packetStateSeed(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)const noexcept;
-    [[nodiscard]] PacketRecordingScratch* packetRecordingScratch(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)noexcept;
+    [[nodiscard]] b8 ensureWorkerRecordingScratch(usize slotCount, const ArtifactOperation& artifactAccess);
+    [[nodiscard]] PacketRecordingScratch* workerRecordingScratch(usize slotIndex, const ArtifactOperation& artifactAccess)noexcept;
     [[nodiscard]] PacketRecordingScratch* serialRecordingScratch(const ArtifactOperation& artifactAccess)noexcept;
     [[nodiscard]] GpuRecordedPacket* packetStorage(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)noexcept;
     void clearPacketPublicationWithoutCallbacks(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)noexcept;
@@ -279,7 +282,11 @@ private:
     GraphicsArena& m_arena;
     GlobalUniquePtr<ArtifactStorage> m_activeStorage;
     GlobalUniquePtr<ArtifactStorage> m_candidateStorage;
+    PacketRecordingScratch m_serialRecordingScratch;
+    GraphicsVector<PacketRecordingScratch> m_workerRecordingScratch;
+    GraphicsVector<GlobalUniquePtr<GpuTimingSubmissionTicket>> m_reusableTimingTickets;
     mutable Atomic<u32> m_operationState{ 0u };
+    mutable Atomic<u32> m_operationWaiters{ 0u };
 };
 
 

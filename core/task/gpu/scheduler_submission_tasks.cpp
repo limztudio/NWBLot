@@ -87,31 +87,113 @@ b8 GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
     resolvedTimingTickets.reserve(bindings.timingTickets.size());
     preflightExceptionScope.complete();
 
-    for(usize packetIndex = range.first.index; packetIndex < rangeEnd; ++packetIndex){
-        const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
+    const auto packetHasAcceptedCallback = [&acceptedCallbacks, &planAccess](const GpuSubmissionPacketId packet)noexcept -> b8{
+        if(acceptedCallbacks.empty())
+            return false;
         const GpuCompiledPacketView packetView = planAccess.packet(packet);
         if(!packetView.valid())
             return false;
-        const QueueSubmissionPreSubmitHook* const preSubmitHook = bindings.collectPacket(packet, resolvedTimingTickets);
-        SubmissionAttemptExceptionScope packetExceptionScope(compiledGraph, recordedGraph, graph, transaction, outFailedPacket);
-        packetExceptionScope.setFailedPacket(packet);
-        if(!submitPacketWithinSubmissionOperation(
-            compiledGraph,
-            planAccess,
-            recordedGraph,
-            artifactOperation,
-            packet,
-            Span<const NotNull<GpuTimingSubmissionTicket*>>(resolvedTimingTickets.data(), resolvedTimingTickets.size()),
-            preSubmitHook,
-            acceptedCallbacks,
-            scratchArena,
-            graph,
-            transaction
-        )){
-            if(outFailedPacket)
-                *outFailedPacket = packet;
-            return false;
+        for(u32 taskIndex = 0u; taskIndex < packetView.plan->taskCount; ++taskIndex){
+            if(acceptedCallbacks.find(packetView.tasks[taskIndex]) != nullptr)
+                return true;
         }
+        return false;
+    };
+
+    for(usize packetIndex = range.first.index; packetIndex < rangeEnd;){
+        const GpuSubmissionPacketId firstPacket = planAccess.packetIdAt(packetIndex);
+        const GpuCompiledPacketView firstView = planAccess.packet(firstPacket);
+        if(!firstView.valid())
+            return false;
+        const GpuPhysicalQueueId batchQueue = firstView.plan->queue;
+        const QueueSubmissionPreSubmitHook* const firstHook = bindings.collectPacket(firstPacket, resolvedTimingTickets);
+        if(firstHook || packetHasAcceptedCallback(firstPacket)){
+            SubmissionAttemptExceptionScope packetExceptionScope(compiledGraph, recordedGraph, graph, transaction, outFailedPacket);
+            packetExceptionScope.setFailedPacket(firstPacket);
+            if(!submitPacketWithinSubmissionOperation(
+                declarationAccess,
+                compiledGraph,
+                planAccess,
+                recordedGraph,
+                artifactOperation,
+                firstPacket,
+                Span<const NotNull<GpuTimingSubmissionTicket*>>(resolvedTimingTickets.data(), resolvedTimingTickets.size()),
+                firstHook,
+                acceptedCallbacks,
+                scratchArena,
+                graph,
+                transaction
+            )){
+                if(outFailedPacket)
+                    *outFailedPacket = firstPacket;
+                return false;
+            }
+            ++packetIndex;
+            continue;
+        }
+
+        usize batchEnd = packetIndex + 1u;
+        while(batchEnd < rangeEnd){
+            const GpuSubmissionPacketId nextPacket = planAccess.packetIdAt(batchEnd);
+            const GpuCompiledPacketView nextView = planAccess.packet(nextPacket);
+            if(!nextView.valid() || nextView.plan->queue != batchQueue)
+                break;
+            if(bindings.collectPacket(nextPacket, resolvedTimingTickets) != nullptr)
+                break;
+            ++batchEnd;
+            if(packetHasAcceptedCallback(nextPacket))
+                break;
+        }
+
+        if(batchEnd - packetIndex == 1u){
+            const QueueSubmissionPreSubmitHook* const singleHook = bindings.collectPacket(firstPacket, resolvedTimingTickets);
+            SubmissionAttemptExceptionScope packetExceptionScope(compiledGraph, recordedGraph, graph, transaction, outFailedPacket);
+            packetExceptionScope.setFailedPacket(firstPacket);
+            if(!submitPacketWithinSubmissionOperation(
+                declarationAccess,
+                compiledGraph,
+                planAccess,
+                recordedGraph,
+                artifactOperation,
+                firstPacket,
+                Span<const NotNull<GpuTimingSubmissionTicket*>>(resolvedTimingTickets.data(), resolvedTimingTickets.size()),
+                singleHook,
+                acceptedCallbacks,
+                scratchArena,
+                graph,
+                transaction
+            )){
+                if(outFailedPacket)
+                    *outFailedPacket = firstPacket;
+                return false;
+            }
+        }
+        else{
+            GpuSubmissionPacketId batchFailedPacket = firstPacket;
+            SubmissionAttemptExceptionScope batchExceptionScope(compiledGraph, recordedGraph, graph, transaction, outFailedPacket);
+            batchExceptionScope.setFailedPacket(firstPacket);
+            if(!submitPacketBatchWithinSubmissionOperation(
+                declarationAccess,
+                compiledGraph,
+                planAccess,
+                recordedGraph,
+                artifactOperation,
+                packetIndex,
+                batchEnd,
+                batchQueue,
+                bindings,
+                acceptedCallbacks,
+                scratchArena,
+                graph,
+                transaction,
+                &batchFailedPacket
+            )){
+                if(outFailedPacket)
+                    *outFailedPacket = batchFailedPacket;
+                return false;
+            }
+        }
+        packetIndex = batchEnd;
     }
     return true;
 }

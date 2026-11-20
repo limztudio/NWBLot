@@ -18,10 +18,10 @@ public:
 
 
 public:
-    [[nodiscard]] b8 prepare(CommandList* const* ppCmd, usize numCmd);
+    [[nodiscard]] b8 prepareBatch(Span<const Queue::BatchSubmitEntry> entries);
     [[nodiscard]] b8 validateHeapUses(TrackedCommandBuffer& tracked, const QueueSubmissionToken& submissionToken);
     void releaseLocks()noexcept;
-    void commitAndRelease(const QueueSubmissionToken& submissionToken)noexcept;
+    void commitAndRelease()noexcept;
 
 
 private:

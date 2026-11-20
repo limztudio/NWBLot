@@ -244,6 +244,8 @@ private:
     Vector<GpuTaskTimingAssignmentState, ::ArenaBase> m_assignments;
     Optional<GpuTaskTimingHistoryDetail::RouteIndex> m_historyIndex;
     Optional<GpuTaskTimingHistoryDetail::AssignmentIndex> m_assignmentIndex;
+    u64 m_sourceStoreId = 0u;
+    u64 m_sourceRevision = 0u;
     u16 m_deviceGeneration = 0u;
     b8 m_valid = false;
 };
@@ -305,6 +307,8 @@ private:
     Vector<GpuTaskTimingAssignmentState, ::ArenaBase> m_assignments;
     Optional<GpuTaskTimingHistoryDetail::RouteIndex> m_historyIndex;
     Optional<GpuTaskTimingHistoryDetail::AssignmentIndex> m_assignmentIndex;
+    u64 m_storeId = 0u;
+    u64 m_mutationRevision = 0u;
     u32 m_maximumSamplesPerHistory = 1u;
     u16 m_deviceGeneration = 0u;
 };

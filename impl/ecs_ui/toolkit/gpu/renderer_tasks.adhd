@@ -60,7 +60,20 @@ class GpuRasterTask{
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
         return RecordGpuRaster(this, commands, context);
     }
-    public void accepted(in QueueSubmissionToken token){ this.frame.deref().m_raster = token; }
+    public void accepted(in QueueSubmissionToken token){
+        this.frame.deref().m_raster = token;
+        if(
+            this.frame.deref().m_recordingMode == GpuCommandRecordingMode::CommandIrReplay
+            && !this.frame.deref().m_snapshot.vertices().empty()
+            && !this.frame.deref().m_snapshot.commands().empty()
+            && this.frame.deref().m_resources.valid()
+            && !this.frame.deref().m_resources.deref().m_loggedRasterReplayActive
+        ){
+            this.frame.deref().m_resources.deref().m_loggedRasterReplayActive = true;
+            [essential]
+            info("UiGpuRenderer: raster command IR replay active");
+        }
+    }
 }
 
 
@@ -97,10 +110,7 @@ class GpuOutputTask{
 b8 ReplayCaptured(in GpuTaskRecordContext context, in GpuCommandIrCapture capture, mut CommandList commands){
     if(capture.recordCount() == 0u)
         return !commands.commandRecordingFailed();
-    const auto stream = capture.exportOwned();
-    if(!stream.has_value())
-        return false;
-    const GpuCommandIrReplayResult replay = ReplayGpuCommandIrPacket(stream.value(), context.declarations, context.compiledPlan, context.packet, commands);
+    const GpuCommandIrReplayResult replay = ReplayGpuCommandIrCapture(capture, context.declarations, context.compiledPlan, context.packet, commands);
     return replay.valid() && !commands.commandRecordingFailed();
 }
 
@@ -219,10 +229,6 @@ b8 RecordRasterCommandIr(in GpuRasterTask payload, in GpuTaskRecordContext conte
         return false;
     if(!ReplayCaptured(context, capture, commands))
         return false;
-    if(hasDraw){
-        [essential]
-        info("UiGpuRenderer: raster command IR replay active");
-    }
     return true;
 }
 

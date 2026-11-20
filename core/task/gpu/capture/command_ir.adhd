@@ -383,6 +383,9 @@ extern class GpuCommandIrUploadTextureRecord{
 [cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::ReplayGpuCommandIrPacket")]
 extern GpuCommandIrReplayResult ReplayGpuCommandIrPacket(in GpuCommandIrOwnedStream stream, in GpuTaskGraphDeclarationReadView graph, in GpuCompiledGraphReadView plan, in GpuSubmissionPacketId packet, mut CommandList commands);
 
+[cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::ReplayGpuCommandIrPacket")]
+extern GpuCommandIrReplayResult ReplayGpuCommandIrCapture(in GpuCommandIrCapture capture, in GpuTaskGraphDeclarationReadView graph, in GpuCompiledGraphReadView plan, in GpuSubmissionPacketId packet, mut CommandList commands);
+
 [cpp_header("<core/task/gpu/capture/command_ir.h>"), cpp_name("::NWB::Core::ValidateGpuCommandIrStream"), cpp_flags(byte_view_arg0)]
 extern GpuCommandIrStreamValidationResult ValidateGpuCommandIrStream(in Span<u8> a0);
 

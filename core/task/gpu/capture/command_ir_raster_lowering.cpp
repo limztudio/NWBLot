@@ -113,55 +113,29 @@ namespace __hidden_gpu_command_ir_raster_lowering{
     return ValidateBuffer(ResourceStates::IndexBuffer, queue, *index, commandList);
 }
 
-[[nodiscard]] static GpuCommandIrReplayError::Enum ValidateDraw(const GpuCommandIrRasterTaskRecord& record, const GpuCommandIrRasterTaskRecord& stateRecord, const GpuCommandIrRasterStateOwner& owner)noexcept{
+[[nodiscard]] static GpuCommandIrReplayError::Enum ValidateDraw(
+    const GpuCommandIrRasterTaskRecord& record,
+    const GpuCommandIrDetail::RasterReplayState& state,
+    const GpuCommandIrRasterStateOwner& owner
+)noexcept{
     const b8 indexed = record.opcode == GpuCommandIrWireOpcode::DrawIndexed;
     if(indexed){
         auto& index = *MakeNotNull(owner.indexBuffer.get());
-        const u32 indexBytes = GraphicsBackend::GetIndexElementByteSize(stateRecord.indexFormat);
-        if(!GraphicsBackend::IsIndexDrawRangeValid(index.getDescription(), stateRecord.indexOffset, record.drawArguments.startIndexLocation, record.drawArguments.vertexCount, indexBytes))
+        const u32 indexBytes = GraphicsBackend::GetIndexElementByteSize(state.graphicsState.indexFormat);
+        if(!GraphicsBackend::IsIndexDrawRangeValid(index.getDescription(), state.graphicsState.indexOffset, record.drawArguments.startIndexLocation, record.drawArguments.vertexCount, indexBytes))
             return GpuCommandIrReplayError::InvalidRasterDraw;
     }
 
-    InputLayout* const inputLayout = owner.pipeline->getDescription().inputLayout.get();
-    if(!inputLayout)
-        return GpuCommandIrReplayError::None;
-
-    for(u32 requiredIndex = 0u; requiredIndex < inputLayout->getNumBindings(); ++requiredIndex){
-        const GraphicsBackend::VertexInputBinding required = GraphicsBackend::GetVertexInputBinding(*inputLayout, requiredIndex);
-        if(!required.valid)
-            return GpuCommandIrReplayError::BackendResourceNotReady;
-
-        usize bindingIndex = 0u;
-        while(bindingIndex < stateRecord.vertexBuffers.size() && stateRecord.vertexBuffers[bindingIndex].slot != required.slot)
-            ++bindingIndex;
-        if(bindingIndex == stateRecord.vertexBuffers.size())
-            return GpuCommandIrReplayError::InvalidRasterDraw;
-
-        u32 requiredBytes = 0u;
-        b8 foundAttribute = false;
-        for(u32 matchingIndex = 0u; matchingIndex < inputLayout->getNumAttributes(); ++matchingIndex){
-            const VertexAttributeDesc* const matching = inputLayout->getAttributeDescription(matchingIndex);
-            if(!matching || matching->bufferIndex != required.slot)
-                continue;
-            foundAttribute = true;
-            const FormatInfo& format = GetFormatInfo(matching->format);
-            const u64 extent = static_cast<u64>(matching->offset) + static_cast<u64>(format.bytesPerBlock) * matching->arraySize;
-            if(extent > Limit<u32>::s_Max)
-                return GpuCommandIrReplayError::InvalidRasterDraw;
-            requiredBytes = Max(requiredBytes, static_cast<u32>(extent));
-        }
-        if(!foundAttribute)
-            return GpuCommandIrReplayError::InvalidRasterDraw;
-        const b8 instanceRate = required.instanceRate;
-        if(indexed && !instanceRate)
+    for(const GpuCommandIrDetail::CachedRasterVertexValidation& entry : state.cachedVertexValidations){
+        if(indexed && !entry.instanceRate)
             continue;
-        const u32 first = instanceRate ? record.drawArguments.startInstanceLocation : record.drawArguments.startVertexLocation;
-        const u32 count = instanceRate ? record.drawArguments.instanceCount : record.drawArguments.vertexCount;
-        const GpuCommandIrRasterVertexBinding& binding = stateRecord.vertexBuffers[bindingIndex];
-        if(!GraphicsBackend::IsStridedBufferRangeValid(owner.vertexBuffers[bindingIndex]->getDescription(), binding.offset, first, count, required.stride, requiredBytes))
+        const u32 first = entry.instanceRate ? record.drawArguments.startInstanceLocation : record.drawArguments.startVertexLocation;
+        const u32 count = entry.instanceRate ? record.drawArguments.instanceCount : record.drawArguments.vertexCount;
+        const GpuCommandIrRasterVertexBinding& binding = state.graphicsState.vertexBuffers[entry.vertexBindingIndex];
+        if(!GraphicsBackend::IsStridedBufferRangeValid(owner.vertexBuffers[entry.vertexBindingIndex]->getDescription(), binding.offset, first, count, entry.stride, entry.requiredBytes))
             return GpuCommandIrReplayError::InvalidRasterDraw;
     }
-    return GpuCommandIrReplayError::None;
+    return state.cachedInputLayoutError;
 }
 
 
@@ -182,7 +156,7 @@ namespace GpuCommandIrDetail{
 
 GpuCommandIrReplayError::Enum ValidateRasterBackendOperand(
     const GpuCommandIrRasterTaskRecord& record,
-    const GpuCommandIrOwnedStream& stream,
+    const RasterOwnerTableView& owners,
     const GpuTaskGraphDeclarationReadView& graph,
     const GpuPhysicalQueueInfo& queue,
     const u64 recordIndex,
@@ -191,7 +165,7 @@ GpuCommandIrReplayError::Enum ValidateRasterBackendOperand(
 )noexcept{
     switch(record.opcode){
     case GpuCommandIrWireOpcode::SetGraphicsState:{
-        const GpuCommandIrRasterStateOwner* const owner = stream.rasterStateOwner(record.framebufferOwnerIndex);
+        const GpuCommandIrRasterStateOwner* const owner = owners.rasterStateOwner(record.framebufferOwnerIndex);
         if(!owner)
             return GpuCommandIrReplayError::InvalidRasterOwner;
         const GpuCommandIrReplayError::Enum error = __hidden_gpu_command_ir_raster_lowering::ValidateStateOwner(record, *owner, graph, queue, recordIndex, commandList);
@@ -202,12 +176,59 @@ GpuCommandIrReplayError::Enum ValidateRasterBackendOperand(
         state.active = true;
         state.heapBound = false;
         state.pushConstantsSet = false;
+        state.cachedVertexValidations.clear();
+        state.cachedInputLayoutError = GpuCommandIrReplayError::None;
+        if(InputLayout* const inputLayout = owner->pipeline->getDescription().inputLayout.get()){
+            const u32 numBindings = inputLayout->getNumBindings();
+            const u32 numAttributes = inputLayout->getNumAttributes();
+            for(u32 requiredIndex = 0u; requiredIndex < numBindings; ++requiredIndex){
+                const GraphicsBackend::VertexInputBinding required = GraphicsBackend::GetVertexInputBinding(*inputLayout, requiredIndex);
+                if(!required.valid){
+                    state.cachedInputLayoutError = GpuCommandIrReplayError::BackendResourceNotReady;
+                    break;
+                }
+                usize bindingIndex = 0u;
+                while(bindingIndex < record.vertexBuffers.size() && record.vertexBuffers[bindingIndex].slot != required.slot)
+                    ++bindingIndex;
+                if(bindingIndex == record.vertexBuffers.size()){
+                    state.cachedInputLayoutError = GpuCommandIrReplayError::InvalidRasterDraw;
+                    break;
+                }
+                u32 requiredBytes = 0u;
+                b8 foundAttribute = false;
+                for(u32 matchingIndex = 0u; matchingIndex < numAttributes; ++matchingIndex){
+                    const VertexAttributeDesc* const matching = inputLayout->getAttributeDescription(matchingIndex);
+                    if(!matching || matching->bufferIndex != required.slot)
+                        continue;
+                    foundAttribute = true;
+                    const FormatInfo& format = GetFormatInfo(matching->format);
+                    const u64 extent = static_cast<u64>(matching->offset) + static_cast<u64>(format.bytesPerBlock) * matching->arraySize;
+                    if(extent > Limit<u32>::s_Max){
+                        state.cachedInputLayoutError = GpuCommandIrReplayError::InvalidRasterDraw;
+                        break;
+                    }
+                    requiredBytes = Max(requiredBytes, static_cast<u32>(extent));
+                }
+                if(state.cachedInputLayoutError != GpuCommandIrReplayError::None)
+                    break;
+                if(!foundAttribute || state.cachedVertexValidations.size() >= s_MaxVertexAttributes){
+                    state.cachedInputLayoutError = GpuCommandIrReplayError::InvalidRasterDraw;
+                    break;
+                }
+                state.cachedVertexValidations.push_back(CachedRasterVertexValidation{
+                    .stride = required.stride,
+                    .requiredBytes = requiredBytes,
+                    .vertexBindingIndex = static_cast<u8>(bindingIndex),
+                    .instanceRate = required.instanceRate,
+                });
+            }
+        }
         return GpuCommandIrReplayError::None;
     }
     case GpuCommandIrWireOpcode::BindGraphicsHeap:{
         if(!state.active || state.graphicsState.pipeline != record.pipeline)
             return GpuCommandIrReplayError::InvalidRasterState;
-        const GpuCommandIrRasterHeapOwner* const heapOwner = stream.rasterHeapOwner(record.heapOwnerIndex);
+        const GpuCommandIrRasterHeapOwner* const heapOwner = owners.rasterHeapOwner(record.heapOwnerIndex);
         if(
             !heapOwner
             || heapOwner->recordIndex != recordIndex
@@ -225,7 +246,7 @@ GpuCommandIrReplayError::Enum ValidateRasterBackendOperand(
     case GpuCommandIrWireOpcode::SetPushConstants:{
         if(!state.active)
             return GpuCommandIrReplayError::InvalidRasterState;
-        auto& owner = *MakeNotNull(stream.rasterStateOwner(state.graphicsState.framebufferOwnerIndex));
+        auto& owner = *MakeNotNull(owners.rasterStateOwner(state.graphicsState.framebufferOwnerIndex));
         FOUNDATION_ASSERT(owner.pipeline);
         if(record.blobSizeBytes > owner.pipeline->pushConstantByteSize)
             return GpuCommandIrReplayError::InvalidRasterState;
@@ -236,23 +257,25 @@ GpuCommandIrReplayError::Enum ValidateRasterBackendOperand(
     case GpuCommandIrWireOpcode::DrawIndexed:{
         if(!state.active || !state.heapBound || !state.pushConstantsSet)
             return GpuCommandIrReplayError::InvalidRasterState;
-        auto& owner = *MakeNotNull(stream.rasterStateOwner(state.graphicsState.framebufferOwnerIndex));
-        return __hidden_gpu_command_ir_raster_lowering::ValidateDraw(record, state.graphicsState, owner);
+        auto& owner = *MakeNotNull(owners.rasterStateOwner(state.graphicsState.framebufferOwnerIndex));
+        return __hidden_gpu_command_ir_raster_lowering::ValidateDraw(record, state, owner);
     }
     case GpuCommandIrWireOpcode::EndRenderPass:
         state.active = false;
         state.heapBound = false;
         state.pushConstantsSet = false;
+        state.cachedVertexValidations.clear();
+        state.cachedInputLayoutError = GpuCommandIrReplayError::None;
         return GpuCommandIrReplayError::None;
     default:
         return GpuCommandIrReplayError::InvalidRasterState;
     }
 }
 
-b8 LowerRasterOperation(const GpuCommandIrRasterTaskRecord& record, const GpuCommandIrOwnedStream& stream, const BinaryByteView blobBytes, CommandList& commandList){
+b8 LowerRasterOperation(const GpuCommandIrRasterTaskRecord& record, const RasterOwnerTableView& owners, const BinaryByteView blobBytes, CommandList& commandList){
     switch(record.opcode){
     case GpuCommandIrWireOpcode::SetGraphicsState:{
-        auto& owner = *MakeNotNull(stream.rasterStateOwner(record.framebufferOwnerIndex));
+        auto& owner = *MakeNotNull(owners.rasterStateOwner(record.framebufferOwnerIndex));
         FOUNDATION_ASSERT(owner.pipeline && owner.framebuffer);
         ViewportState viewport;
         viewport.addViewport(record.viewport);
@@ -271,7 +294,7 @@ b8 LowerRasterOperation(const GpuCommandIrRasterTaskRecord& record, const GpuCom
         return !commandList.commandRecordingFailed();
     }
     case GpuCommandIrWireOpcode::BindGraphicsHeap:{
-        auto& owner = *MakeNotNull(stream.rasterHeapOwner(record.heapOwnerIndex));
+        auto& owner = *MakeNotNull(owners.rasterHeapOwner(record.heapOwnerIndex));
         FOUNDATION_ASSERT(owner.heap && owner.pipeline);
         owner.heap->bindGraphics(commandList, *owner.pipeline);
         return !commandList.commandRecordingFailed();

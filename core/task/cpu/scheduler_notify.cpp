@@ -14,44 +14,52 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u32 CpuTaskScheduler::workerWakeMaskLocked()const noexcept{
-    const b8 any = m_readyWorkerCosts[CpuTaskCost::Any] != 0u;
-    const b8 heavy = m_readyWorkerCosts[CpuTaskCost::Heavy] != 0u;
-    const b8 light = m_readyWorkerCosts[CpuTaskCost::Light] != 0u;
-    u32 wakeMask = 0u;
+CpuTaskScheduler::WorkerWakePlan CpuTaskScheduler::workerWakePlanLocked()const noexcept{
+    const u32 any = m_readyWorkerCosts[CpuTaskCost::Any];
+    const u32 heavy = m_readyWorkerCosts[CpuTaskCost::Heavy];
+    const u32 light = m_readyWorkerCosts[CpuTaskCost::Light];
+    WorkerWakePlan wakePlan;
     for(u32 affinity = 0u; affinity < s_AffinitySlotCount; ++affinity){
-        if(m_sleepingWorkers[affinity] == 0u)
+        const u32 sleeping = m_sleepingWorkers[affinity];
+        if(sleeping == 0u)
             continue;
         const b8 heavyEligible = affinity != CpuAffinity::Efficiency || m_busyPerformance >= m_statistics.performanceWorkers;
         const b8 lightEligible = affinity != CpuAffinity::Performance || m_busyEfficiency >= m_statistics.efficiencyWorkers;
-        if(any || (heavy && heavyEligible) || (light && lightEligible))
-            wakeMask |= 1u << affinity;
+        const u32 eligible = any + (heavyEligible ? heavy : 0u) + (lightEligible ? light : 0u);
+        if(eligible == 0u)
+            continue;
+        wakePlan.counts[affinity] = Min(sleeping, eligible);
+        wakePlan.wakeAll[affinity] = eligible >= sleeping && sleeping > 1u;
     }
-    return wakeMask;
+    return wakePlan;
 }
 
-void CpuTaskScheduler::notifyWorkers(const u32 wakeMask)noexcept{
+void CpuTaskScheduler::notifyWorkers(const WorkerWakePlan& wakePlan)noexcept{
     for(u32 affinity = 0u; affinity < s_AffinitySlotCount; ++affinity){
-        if((wakeMask & (1u << affinity)) != 0u)
+        if(wakePlan.wakeAll[affinity]){
+            m_workerChanged[affinity].notify_all();
+            continue;
+        }
+        for(u32 count = 0u; count < wakePlan.counts[affinity]; ++count)
             m_workerChanged[affinity].notify_one();
     }
 }
 
-void CpuTaskScheduler::notifyProgress(const u32 wakeMask, const b8 wakeJoiners)noexcept{
+void CpuTaskScheduler::notifyProgress(const WorkerWakePlan& wakePlan, const b8 wakeJoiners)noexcept{
     if(wakeJoiners)
         m_changed.notify_all();
-    notifyWorkers(wakeMask);
+    notifyWorkers(wakePlan);
 }
 
 void CpuTaskScheduler::notifyProgress()noexcept{
-    u32 wakeMask;
+    WorkerWakePlan wakePlan;
     b8 wakeJoiners;
     {
         ScopedLock lock(m_mutex);
-        wakeMask = workerWakeMaskLocked();
+        wakePlan = workerWakePlanLocked();
         wakeJoiners = m_joinWaiters != 0u;
     }
-    notifyProgress(wakeMask, wakeJoiners);
+    notifyProgress(wakePlan, wakeJoiners);
 }
 
 

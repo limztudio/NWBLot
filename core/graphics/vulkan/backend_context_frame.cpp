@@ -167,28 +167,6 @@ b8 BackendContext::waitAcquireSyncSlotsForLifecycle(){
     return true;
 }
 
-b8 BackendContext::createFrameSyncQueries(){
-    if(!m_rhiDevice)
-        return false;
-
-    while(!m_framesInFlight.empty())
-        m_framesInFlight.pop();
-    m_queryPool.clear();
-    m_queryPool.reserve(m_maxFramesInFlight);
-
-    for(u32 index = 0u; index < m_maxFramesInFlight; ++index){
-        auto query = m_rhiDevice->createEventQuery();
-        if(!query){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to create frame synchronization query {} of {}"), index + 1u, m_maxFramesInFlight);
-            m_queryPool.clear();
-            return false;
-        }
-        m_queryPool.push_back(Move(*query));
-    }
-
-    return true;
-}
-
 Expected<QueueSubmissionNativeSignal> BackendContext::prepareFramePresentationSignal(const u64 identity, const GpuPhysicalQueueId& executionQueue)noexcept{
     return m_framePresentation.prepareFramePresentationSignal(identity, executionQueue);
 }

@@ -27,7 +27,6 @@ namespace __hidden_graphics_graph_setup{
 
 
 inline constexpr Name s_StandaloneTaskGraphRecoveryIdentity("graphics.standalone_task_graph.recovery");
-inline constexpr Name s_StandaloneTaskGraphScratchArena("graphics.standalone_task_graph_scratch");
 inline constexpr u32 s_MinFrameTimingTaskCount = 2u;
 inline constexpr u32 s_MinFrameTimingPacketCount = 2u;
 
@@ -143,7 +142,7 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
     GpuCompiledGraph& compiledGraph = workspace->compiledGraph;
     GpuRecordedGraph& recordedGraph = workspace->recordedGraph;
     GpuGraphSubmissionTransaction& transaction = workspace->transaction;
-    Alloc::ScratchArena scratchArena(__hidden_graphics_graph_setup::s_StandaloneTaskGraphScratchArena);
+    Alloc::ScratchArena& scratchArena = workspace->scratchArena;
     const GpuTaskScheduler& scheduler = graphics.gpuTasks();
     GpuTaskGraphCompileOptions compileOptions;
     if(frameTimingTransaction){

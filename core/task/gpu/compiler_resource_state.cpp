@@ -138,6 +138,7 @@ namespace GpuTaskGraphCompilerDetail{
                 .task = previousState.task,
                 .barrier = GpuCompiledBarrier{ .resource = use.resource, .range = barrierRange, .before = before, .after = before, .sourceQueue = previousState.queue, .destinationQueue = compiledTask.queue, .type = releaseType, },
             });
+            plan.resourceHasPendingEpilogueBarrier[resource.id.index] = 1u;
             compiledPlan.prologueBarriers.push_back(GpuCompiledBarrier{
                 .resource = use.resource,
                 .range = barrierRange,
@@ -225,10 +226,10 @@ namespace GpuTaskGraphCompilerDetail{
             }
 
             if(resource.type == GpuGraphResourceType::Texture || resource.type == GpuGraphResourceType::Buffer){
-                if(!CollectResourceFirstUseRangesWithinTask(graph, task, taskUseHistory, useIndex, resource, (*plannedRange), scratchArena, taskFirstUseRanges))
+                if(!CollectResourceFirstUseRangesWithinTaskWithScratch(graph, task, taskUseHistory, useIndex, resource, (*plannedRange), plan.rangeScratch, taskFirstUseRanges))
                     return false;
                 stateFragments.clear();
-                if(!CollectLatestResourceStateFragments(trackedResourceStates, resourceHistory, resource, taskFirstUseRanges, scratchArena, stateFragments))
+                if(!CollectLatestResourceStateFragmentsWithScratch(trackedResourceStates, resourceHistory, resource, taskFirstUseRanges, plan.rangeScratch, stateFragments))
                     return false;
 
                 usize readStateSourceIndex = trackedResourceStates.size();

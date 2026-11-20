@@ -228,16 +228,14 @@ struct GpuExternalCompletionNode{
     b8 hasToken = false;
 };
 
+struct alignas(16) GpuUploadBlobStorageBlock{
+    u8 bytes[16];
+};
+
 struct GpuUploadBlobNode{
-    GraphicsBytes bytes;
     usize dataOffset = 0u;
     usize dataSize = 0u;
-
-
-public:
-    explicit GpuUploadBlobNode(GraphicsArena& arena)noexcept
-        : bytes(arena)
-    {}
+    u32 overflowIndex = Limit<u32>::s_Max;
 };
 
 struct MarkerLabelRange{

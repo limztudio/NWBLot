@@ -521,7 +521,9 @@ b8 ShadowSoftwareBvhBuildChain::declare(
     clearScheduling.allowPacketMerge = true;
     clearScheduling.mergeWithPrevious = true;
     clearScheduling.allowMergeAcrossConsumerFrontier = true;
+    clearScheduling.allowParallelRecording = true;
     GpuTaskSchedulingHint buildScheduling = clearScheduling;
+    buildScheduling.allowParallelRecording = false;
     buildScheduling.cost = GpuTaskCostHint::Large;
 
     GpuTaskId buildDependency = shadowPrepareDependency;

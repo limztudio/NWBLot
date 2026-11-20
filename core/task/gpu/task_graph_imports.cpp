@@ -256,7 +256,7 @@ b8 GpuTaskGraph::declarePresentEndpoint(const GpuPresentEndpoint& endpoint){
         return false;
 
     m_presentEndpoint = endpoint;
-    m_declarationRevision = AllocateGeneration();
+    bumpDeclarationRevision();
     m_hasPresentEndpoint = true;
     return true;
 }

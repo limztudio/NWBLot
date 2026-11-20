@@ -321,6 +321,7 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
         if(graphOwnedAdaptivePlan.compact){
             GpuTaskSchedulingHint counterClearScheduling = primitiveScheduling;
             counterClearScheduling.mergeWithPrevious = adaptivePrimitivePrecedesVisibility;
+            counterClearScheduling.allowParallelRecording = true;
             GpuTaskDesc counterClearDesc;
             counterClearDesc.setIdentity(Name(s_ShadowPassAdaptiveCounterClear)).setMarkerLabel(s_ShadowAdaptiveCounterClearLabel).setScheduling(counterClearScheduling).setDependency(shadowVisibilityDependency);
             GpuClearBufferTaskDesc clear;

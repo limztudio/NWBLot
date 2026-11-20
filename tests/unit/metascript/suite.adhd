@@ -1408,7 +1408,7 @@ void RunCoreCppHeaderImportVerification(){
     ASSERT_TRUE(taskGraph.has_value());
     EXPECT_TRUE(taskGraph.value().isExtern);
     EXPECT_FALSE(taskGraph.value().isCopyConstructible);
-    EXPECT_EQ(taskGraph.value().totalSize, 1744u);
+    EXPECT_EQ(taskGraph.value().totalSize, 1848u);
     EXPECT_EQ(taskGraph.value().totalAlign, 8u);
     EXPECT_TRUE(FindAstDeclaration(unit.classes, "GpuTaskGraphPayloadLifetimeScope").has_value());
     b8 foundAddTask = false;

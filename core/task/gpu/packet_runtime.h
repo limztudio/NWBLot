@@ -474,11 +474,14 @@ private:
     u64 m_resetGeneration = 0u;
     GpuGraphSubmissionBinding m_activeSubmissionBinding;
     u64 m_acceptedSubmissionCount = 0u;
+    usize m_terminalPacketCount = 0u;
     u64 m_acceptanceRevision = 0u;
     GpuTaskGraphSubmissionStatistics m_submissionStatistics;
     mutable AtomicFlag m_compositeOperationActive;
     mutable Atomic<u32> m_submissionGateState{ 0u };
     mutable Atomic<u32> m_submissionGateWriterCount{ 0u };
+    mutable Atomic<u32> m_submissionGateStateWaiters{ 0u };
+    mutable Atomic<u32> m_submissionGateWriterWaiters{ 0u };
     mutable AtomicFlag m_submissionExceptionClosing;
     u64 m_exceptionClosingRecordingAttemptGeneration = 0u;
     GpuGraphSubmissionBinding m_exceptionClosingBinding;

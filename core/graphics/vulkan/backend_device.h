@@ -272,8 +272,23 @@ public:
 
 
 private:
+    struct GraphCommandListBatchEntry{
+        CommandList* const* commandLists = nullptr;
+        usize numCommandLists = 0u;
+        QueueSubmissionDesc submitDesc;
+    };
+    struct GraphCommandListBatchResult{
+        enum Status : u8{
+            Accepted,
+            ValidationFailed,
+            NativeSubmitFailed,
+        };
+        Status status = Status::ValidationFailed;
+    };
+
     [[nodiscard]] b8 readMappedBufferBytes(Buffer& buffer, void* outData, usize byteSize, u64 srcOffsetBytes = 0);
     [[nodiscard]] Expected<QueueSubmissionReceipt> executeGraphCommandLists(CommandList* const* commandLists, usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc);
+    [[nodiscard]] GraphCommandListBatchResult executeGraphCommandListsBatch(Span<const GraphCommandListBatchEntry> entries, const GpuPhysicalQueueId& executionQueue, Span<QueueSubmissionReceipt> outReceipts);
     [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandListsInternal(
         CommandList* const* commandLists,
         usize numCommandLists,

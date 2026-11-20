@@ -236,7 +236,7 @@ Expected<GpuGraphPipelineId> GpuTaskGraph::appendPipeline(const GpuGraphPipeline
         }
     }
     appendRollback.release();
-    m_declarationRevision = AllocateGeneration();
+    bumpDeclarationRevision();
     return GpuGraphPipelineId{ .generation = m_generation, .index = index };
 }
 

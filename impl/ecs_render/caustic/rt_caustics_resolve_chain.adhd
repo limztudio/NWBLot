@@ -304,6 +304,7 @@ Expected<CausticsStagePrefixResult> CausticsResolveChainBuilder::declarePrefixTa
     GpuTaskSchedulingHint irradianceClearScheduling;
     irradianceClearScheduling.cost = GpuTaskCostHint::Tiny;
     irradianceClearScheduling.allowPacketMerge = true;
+    irradianceClearScheduling.allowParallelRecording = true;
     ConfigureComputeEffectRoutingHint(false, irradianceClearScheduling);
 
     GpuTaskDesc irradianceClearDesc;
@@ -341,6 +342,7 @@ Expected<CausticsStagePrefixResult> CausticsResolveChainBuilder::declarePrefixTa
         accumulatorBootstrapClearScheduling.allowPacketMerge = true;
         accumulatorBootstrapClearScheduling.mergeWithPrevious = true;
         accumulatorBootstrapClearScheduling.allowMergeAcrossConsumerFrontier = true;
+        accumulatorBootstrapClearScheduling.allowParallelRecording = true;
         ConfigureComputeEffectRoutingHint(true, accumulatorBootstrapClearScheduling);
         GpuTaskDesc accumulatorBootstrapClearDesc;
         if(inputs.hardwareCaustics)

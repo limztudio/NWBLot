@@ -4,6 +4,7 @@
 
 #include "compiler_internal.h"
 
+#include <global/bit.h>
 #include <global/limit.h>
 
 
@@ -76,6 +77,7 @@ using namespace GpuTaskGraphCompilerDetail;
     TaskResourceUseIndex taskUses(graph.resourceCount(), graph.generation(), taskUseCapacity, scratchArena);
     Vector<GpuTaskResourceRange, Alloc::ScratchArena> firstUseRanges(scratchArena);
     Vector<TrackedResourceStateFragment, Alloc::ScratchArena> fragments(scratchArena);
+    ResourceRangeScratch rangeScratch(scratchArena);
     for(const GpuTaskId taskID : analysis.topologicalOrder()){
         const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
         if(!taskUses.build(task))
@@ -91,9 +93,9 @@ using namespace GpuTaskGraphCompilerDetail;
             if(!plannedRange)
                 return MakeUnexpected(taskID);
             if(resource.type == GpuGraphResourceType::Texture || resource.type == GpuGraphResourceType::Buffer){
-                if(!CollectResourceFirstUseRangesWithinTask(graph, task, taskUses, useIndex, resource, (*plannedRange), scratchArena, firstUseRanges))
+                if(!CollectResourceFirstUseRangesWithinTaskWithScratch(graph, task, taskUses, useIndex, resource, (*plannedRange), rangeScratch, firstUseRanges))
                     return MakeUnexpected(taskID);
-                if(!CollectLatestResourceStateFragments(states, history, resource, firstUseRanges, scratchArena, fragments))
+                if(!CollectLatestResourceStateFragmentsWithScratch(states, history, resource, firstUseRanges, rangeScratch, fragments))
                     return MakeUnexpected(taskID);
                 for(const TrackedResourceStateFragment& fragment : fragments){
                     if(!fragment.state && !AccumulateInitialOwnershipQueue(graph, resource, fragment.range, outQueues[taskID.index]))
@@ -158,9 +160,30 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskGraphAnalysis& analysis,
     const GpuPhysicalQueueTopology& topology,
     const GpuTaskQueuePlacementGroup& group,
-    const CommandQueue::Enum requiredClass
+    const CommandQueue::Enum requiredClass,
+    const GpuTaskQueueLegalityCache* const legalityCache
 )noexcept{
     const GpuPhysicalQueueInfo* result = nullptr;
+    if(legalityCache && legalityCache->active){
+        u64 groupMask = topology.queueCount == s_BitsPerWord ? ~static_cast<u64>(0u) : ((static_cast<u64>(1u) << topology.queueCount) - 1u);
+        for(usize taskOffset = 0u; taskOffset < group.assignmentCount && groupMask != 0u; ++taskOffset){
+            const GpuTaskId taskID = analysis.topologicalOrder()[group.assignmentOffset + taskOffset];
+            groupMask &= legalityCache->taskMask(taskID.index);
+        }
+        for(u64 remaining = groupMask; remaining != 0u; remaining &= remaining - 1u){
+            const usize queueIndex = static_cast<usize>(CountTrailingZeros(remaining));
+            const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
+            if(
+                (requiredClass != CommandQueue::kCount && candidate.queueClass != requiredClass)
+                || (group.initialOwnershipQueue.valid() && candidate.id != group.initialOwnershipQueue)
+                || !HasCapabilities(candidate.capabilities, group.requiredCapabilities)
+                || !IsBetterQueue(candidate, result)
+            )
+                continue;
+            result = &candidate;
+        }
+        return result;
+    }
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
         const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
         if(
@@ -187,7 +210,8 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskGraphAnalysis& analysis,
     const GpuPhysicalQueueTopology& topology,
     Alloc::ScratchArena& scratchArena,
-    Vector<GpuTaskQueuePlacementGroup, Alloc::ScratchArena>& outGroups
+    Vector<GpuTaskQueuePlacementGroup, Alloc::ScratchArena>& outGroups,
+    const GpuTaskQueueLegalityCache* const legalityCache
 ){
     using namespace __hidden_gpu_task_graph_compiler_queue_placement;
 
@@ -206,11 +230,12 @@ namespace GpuTaskGraphCompilerDetail{
     outGroups.clear();
     outGroups.reserve(graph.taskCount());
     const GpuPhysicalQueueInfo* legalityWitness = nullptr;
+    usize legalityWitnessIndex = Limit<usize>::s_Max;
     for(usize assignmentIndex = 0u; assignmentIndex < analysis.topologicalOrder().size(); ++assignmentIndex){
         const GpuTaskId taskID = analysis.topologicalOrder()[assignmentIndex];
         const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
         const GpuTaskQueuePlacementGroup singleton{ .assignmentOffset = assignmentIndex, .assignmentCount = 1u, .requiredCapabilities = task.commands.requiredCapabilities, .initialOwnershipQueue = initialOwnershipQueues[taskID.index], };
-        const GpuPhysicalQueueInfo* const singletonQueue = FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, singleton);
+        const GpuPhysicalQueueInfo* const singletonQueue = FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, singleton, CommandQueue::kCount, legalityCache);
         if(!singletonQueue)
             return fail(GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue, taskID);
 
@@ -221,19 +246,27 @@ namespace GpuTaskGraphCompilerDetail{
             const GpuPhysicalQueueInfo* combinedWitness = nullptr;
             if(AccumulateExactQueueConstraint(singleton.initialOwnershipQueue, combined.initialOwnershipQueue)){
                 FOUNDATION_ASSERT(legalityWitness);
-                if((!combined.initialOwnershipQueue.valid() || combined.initialOwnershipQueue == legalityWitness->id) && IsLegalQueueAssignmentCandidate(graph, topology, task, *legalityWitness))
+                const b8 witnessLegal = (!combined.initialOwnershipQueue.valid() || combined.initialOwnershipQueue == legalityWitness->id)
+                    && (
+                        legalityCache && legalityCache->active
+                            ? (legalityCache->taskMask(task.id.index) & BitMask<u64>(static_cast<u32>(legalityWitnessIndex))) != 0u
+                            : IsLegalQueueAssignmentCandidate(graph, topology, task, *legalityWitness)
+                    );
+                if(witnessLegal)
                     combinedWitness = legalityWitness;
                 else
-                    combinedWitness = FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, combined);
+                    combinedWitness = FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, combined, CommandQueue::kCount, legalityCache);
             }
             if(combinedWitness){
                 outGroups.back() = combined;
                 legalityWitness = combinedWitness;
+                legalityWitnessIndex = static_cast<usize>(combinedWitness - topology.queues);
                 continue;
             }
         }
         outGroups.push_back(singleton);
         legalityWitness = singletonQueue;
+        legalityWitnessIndex = static_cast<usize>(singletonQueue - topology.queues);
     }
     return {};
 }
@@ -248,18 +281,21 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskSchedulingReachability& schedulingReachability,
     const GpuTaskQueueScoringData& scoringData,
     const GpuTaskQueuePlacementGroup& group,
-    const GpuPhysicalQueueInfo& candidate
+    const GpuPhysicalQueueInfo& candidate,
+    const b8 computeOverlap
 )noexcept{
     GpuTaskQueueScoreExclusions exclusions{ .assignmentOffset = group.assignmentOffset, .assignmentCount = group.assignmentCount, .totalCost = 0u, .candidateQueueCost = 0u, };
-    b8 allTasksAllowOverlap = true;
+    b8 allTasksAllowOverlap = computeOverlap;
     for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
         const GpuTaskQueueAssignment& assignment = assignments[group.assignmentOffset + taskOffset];
         const u64 cost = scoringData.taskCosts[assignment.task.index];
         exclusions.totalCost += cost;
         if(assignment.queue == candidate.id)
             exclusions.candidateQueueCost += cost;
-        const GpuTaskSchedulingHint& scheduling = graph.taskAt(assignment.task.index).scheduling;
-        allTasksAllowOverlap = allTasksAllowOverlap && scheduling.overlapPreferred && !scheduling.avoidQueueCrossing;
+        if(allTasksAllowOverlap){
+            const GpuTaskSchedulingHint& scheduling = graph.taskAt(assignment.task.index).scheduling;
+            allTasksAllowOverlap = scheduling.overlapPreferred && !scheduling.avoidQueueCrossing;
+        }
     }
 
     GpuQueueAssignmentScore score;
@@ -275,7 +311,8 @@ namespace GpuTaskGraphCompilerDetail{
             scoringData,
             graph.taskAt(taskID.index),
             candidate,
-            exclusions
+            exclusions,
+            computeOverlap
         ), score
         );
     }

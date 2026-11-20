@@ -115,8 +115,8 @@ namespace GpuTaskGraphCompilerDetail{
                 return false;
 
             const b8 performsFinalization = state.state != resource.externalFinalState || (hasExternalFinalRelease && state.queue != resource.externalFinalReleaseDestinationQueue);
-            if(performsFinalization){
-                for(usize earlierStateIndex = resourceHistory.first(resource.id); earlierStateIndex != Limit<usize>::s_Max && earlierStateIndex < terminalStateIndex; earlierStateIndex = resourceHistory.next(earlierStateIndex)){
+            if(performsFinalization && !IsWriteAccess(state.access)){
+                for(usize earlierStateIndex = resourceHistory.previous(terminalStateIndex); earlierStateIndex != Limit<usize>::s_Max; earlierStateIndex = resourceHistory.previous(earlierStateIndex)){
                     const TrackedCompiledResourceState& earlierState = trackedResourceStates[earlierStateIndex];
                     if(!RangesOverlap(resource, earlierState.range, terminalRange))
                         continue;
@@ -124,12 +124,14 @@ namespace GpuTaskGraphCompilerDetail{
                     const GpuSubmissionPacketId earlierPacket = FindCompiledPacketForTask(compiledPlan, earlierState.task);
                     if(!earlierPacket.valid() || earlierPacket.generation != compiledPlan.planGeneration || earlierPacket.index >= compiledPlan.packets.size())
                         return false;
-                    if(earlierPacket == terminalPacket)
-                        continue;
-                    if(earlierPacket.index >= terminalPacket.index)
-                        return false;
+                    if(earlierPacket != terminalPacket){
+                        if(earlierPacket.index >= terminalPacket.index)
+                            return false;
 
-                    appendTerminalFinalizationDependency({ .producer = earlierPacket, .consumer = terminalPacket, });
+                        appendTerminalFinalizationDependency({ .producer = earlierPacket, .consumer = terminalPacket, });
+                    }
+                    if(IsWriteAccess(earlierState.access) && RangeContains(resource, earlierState.range, terminalRange))
+                        break;
                 }
             }
 
@@ -154,6 +156,7 @@ namespace GpuTaskGraphCompilerDetail{
                 .task = state.task,
                 .barrier = GpuCompiledBarrier{ .resource = state.resource, .range = terminalRange, .before = state.state, .after = resource.externalFinalState, .sourceQueue = state.queue, .destinationQueue = state.queue, .type = exportType, },
             });
+            plan.resourceHasPendingEpilogueBarrier[resource.id.index] = 1u;
             if(hasExternalFinalRelease && state.queue != resource.externalFinalReleaseDestinationQueue){
                 const GpuCompiledBarrierType::Enum releaseType = OwnershipReleaseBarrierType(resource.type);
                 FOUNDATION_ASSERT(releaseType < GpuCompiledBarrierType::Count);
@@ -171,6 +174,7 @@ namespace GpuTaskGraphCompilerDetail{
                         .type = releaseType,
                     },
                 });
+                plan.resourceHasPendingEpilogueBarrier[resource.id.index] = 1u;
             }
             hasTerminalDeclaredRange = true;
             return true;
@@ -178,7 +182,15 @@ namespace GpuTaskGraphCompilerDetail{
 
         if(resource.type == GpuGraphResourceType::Texture || resource.type == GpuGraphResourceType::Buffer){
             stateFragments.clear();
-            if(!CollectTerminalResourceStateFragments(trackedResourceStates, resourceHistory, resource, scratchArena, stateFragments))
+            const auto fullResolvedRange = ResolveResourceRangeForPlanning(graph, resource, GpuTaskResourceRange{});
+            if(!CollectTerminalResourceStateFragmentsWithScratch(
+                trackedResourceStates,
+                resourceHistory,
+                resource,
+                plan.rangeScratch,
+                stateFragments,
+                fullResolvedRange ? &(*fullResolvedRange) : nullptr
+            ))
                 return false;
             for(const TrackedResourceStateFragment& fragment : stateFragments){
                 FOUNDATION_ASSERT(fragment.state);
@@ -187,19 +199,10 @@ namespace GpuTaskGraphCompilerDetail{
             }
         }
         else{
-            for(usize stateIndex = resourceHistory.first(resource.id); stateIndex != Limit<usize>::s_Max; stateIndex = resourceHistory.next(stateIndex)){
-                const TrackedCompiledResourceState& state = trackedResourceStates[stateIndex];
-                b8 hasLaterOverlappingUse = false;
-                for(usize laterStateIndex = resourceHistory.next(stateIndex); laterStateIndex != Limit<usize>::s_Max; laterStateIndex = resourceHistory.next(laterStateIndex)){
-                    const TrackedCompiledResourceState& later = trackedResourceStates[laterStateIndex];
-                    if(RangesOverlap(resource, state.range, later.range)){
-                        hasLaterOverlappingUse = true;
-                        break;
-                    }
-                }
-                if(hasLaterOverlappingUse)
-                    continue;
-                if(!appendTerminalState(state, stateIndex, state.range))
+            const usize lastStateIndex = resourceHistory.last(resource.id);
+            if(lastStateIndex != Limit<usize>::s_Max){
+                const TrackedCompiledResourceState& state = trackedResourceStates[lastStateIndex];
+                if(!appendTerminalState(state, lastStateIndex, state.range))
                     return false;
             }
         }

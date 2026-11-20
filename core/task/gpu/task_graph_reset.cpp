@@ -116,10 +116,13 @@ void GpuTaskGraph::completeResetWithoutCallbacks()noexcept{
         m_externalCompletions.clear();
         m_externalCompletionDeviceGeneration = 0u;
         m_uploadBlobs.clear();
+        m_uploadBlobStorage.clear();
+        m_overalignedUploadBlobs.clear();
+        m_uploadBlobStorageByteSize = 0u;
         m_markerText.clear();
         m_presentEndpoint = {};
         m_generation = AllocateGeneration();
-        m_declarationRevision = AllocateGeneration();
+        bumpDeclarationRevision();
         m_activeRecordingAttemptGeneration = AllocateGeneration();
         m_activeRecordingPlanGeneration = 0u;
         m_activeRecordingPreparationSerial = 0u;
@@ -129,6 +132,7 @@ void GpuTaskGraph::completeResetWithoutCallbacks()noexcept{
         m_submissionBindingState = SubmissionBindingState::None;
         m_activeDiscardNotificationCount = 0u;
         m_hasPresentEndpoint = false;
+        m_hasTaskPayloads = false;
         m_teardownInProgress = false;
     }
 }

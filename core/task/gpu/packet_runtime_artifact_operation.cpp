@@ -85,7 +85,7 @@ GpuRecordedGraph::ArtifactOperation::ArtifactOperation(const GpuRecordedGraph& r
             if((operationState & GpuRecordedGraph::s_ArtifactOperationWriterBit) != 0u){
                 if(!waitRead)
                     return;
-                recordedGraph.m_operationState.wait(operationState, MemoryOrder::acquire);
+                GpuPacketRuntimeDetail::WaitAtomicStateValue(recordedGraph.m_operationState, recordedGraph.m_operationWaiters, operationState);
                 operationState = recordedGraph.m_operationState.load(MemoryOrder::acquire);
                 continue;
             }
@@ -114,7 +114,7 @@ GpuRecordedGraph::ArtifactOperation::~ArtifactOperation()noexcept{
     if(m_exclusive){
         FOUNDATION_FATAL_ASSERT_MSG(m_recordedGraph->m_operationState.load(MemoryOrder::relaxed) == GpuRecordedGraph::s_ArtifactOperationWriterBit, "GpuRecordedGraph exclusive artifact operation must retain its writer claim");
         m_recordedGraph->m_operationState.store(0u, MemoryOrder::release);
-        m_recordedGraph->m_operationState.notify_all();
+        GpuPacketRuntimeDetail::NotifyAllIfWaiting(m_recordedGraph->m_operationState, m_recordedGraph->m_operationWaiters);
     }
     else{
         u32 operationState = m_recordedGraph->m_operationState.load(MemoryOrder::acquire);
@@ -122,7 +122,7 @@ GpuRecordedGraph::ArtifactOperation::~ArtifactOperation()noexcept{
             FOUNDATION_FATAL_ASSERT_MSG((operationState & GpuRecordedGraph::s_ArtifactOperationReaderMask) != 0u, "GpuRecordedGraph shared artifact operation must retain its reader claim");
             if(m_recordedGraph->m_operationState.compare_exchange_weak(operationState, operationState - 1u, MemoryOrder::release, MemoryOrder::relaxed)){
                 if((operationState & GpuRecordedGraph::s_ArtifactOperationReaderMask) == 1u)
-                    m_recordedGraph->m_operationState.notify_all();
+                    GpuPacketRuntimeDetail::NotifyAllIfWaiting(m_recordedGraph->m_operationState, m_recordedGraph->m_operationWaiters);
                 break;
             }
         }

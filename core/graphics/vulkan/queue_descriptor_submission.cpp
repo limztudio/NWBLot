@@ -17,12 +17,15 @@ Queue::DescriptorSubmission::DescriptorSubmission(Queue& queue)noexcept
 {}
 
 
-b8 Queue::DescriptorSubmission::prepare(CommandList* const* ppCmd, const usize numCmd){
-    const b8 hasCommands = numCmd > 0u;
+b8 Queue::DescriptorSubmission::prepareBatch(const Span<const Queue::BatchSubmitEntry> entries){
     b8 requiresDescriptorBufferLifecycle = false;
-    if(hasCommands){
-        for(usize i = 0u; i < numCmd; ++i){
-            auto& tracked = *MakeNotNull(ppCmd[i]->m_currentCmdBuf.get());
+    b8 hasCommands = false;
+    for(const Queue::BatchSubmitEntry& entry : entries){
+        if(entry.numCmd == 0u)
+            continue;
+        hasCommands = true;
+        for(usize i = 0u; i < entry.numCmd; ++i){
+            auto& tracked = *MakeNotNull(entry.ppCmd[i]->m_currentCmdBuf.get());
             requiresDescriptorBufferLifecycle |= tracked.m_descriptorBufferManager != nullptr;
             for(const auto heap : tracked.m_referencedDescriptorHeaps){
 
@@ -41,27 +44,29 @@ b8 Queue::DescriptorSubmission::prepare(CommandList* const* ppCmd, const usize n
         m_descriptorBufferLifecycleLock = UniqueLock<Futex>(m_descriptorBufferManager->m_lifecycleMutex);
 
     if(hasCommands){
-        for(usize i = 0u; i < numCmd; ++i){
-            auto& cmdList = *MakeNotNull(ppCmd[i]);
-            auto& tracked = *MakeNotNull(cmdList.m_currentCmdBuf.get());
-            if(
-                (cmdList.m_descriptorBuffersBound && !tracked.m_descriptorBufferManager)
-                || (!tracked.m_descriptorBufferManager && tracked.m_descriptorBufferGeneration != 0u)
-                || (tracked.m_descriptorBufferManager && tracked.m_descriptorBufferGeneration == 0u)
-                || (
-                    tracked.m_descriptorBufferManager
-                    && (
-                        tracked.m_descriptorBufferManager != m_descriptorBufferManager
-                        || m_descriptorBufferManager != &m_queue.m_device.m_descriptorBufferManager
-                        || !m_descriptorBufferManager->m_enabled
-                        || m_descriptorBufferManager->m_lifecycleTransitioning
-                        || m_descriptorBufferManager->m_bindingGeneration == 0u
-                        || tracked.m_descriptorBufferGeneration != m_descriptorBufferManager->m_bindingGeneration
+        for(const Queue::BatchSubmitEntry& entry : entries){
+            for(usize i = 0u; i < entry.numCmd; ++i){
+                auto& cmdList = *MakeNotNull(entry.ppCmd[i]);
+                auto& tracked = *MakeNotNull(cmdList.m_currentCmdBuf.get());
+                if(
+                    (cmdList.m_descriptorBuffersBound && !tracked.m_descriptorBufferManager)
+                    || (!tracked.m_descriptorBufferManager && tracked.m_descriptorBufferGeneration != 0u)
+                    || (tracked.m_descriptorBufferManager && tracked.m_descriptorBufferGeneration == 0u)
+                    || (
+                        tracked.m_descriptorBufferManager
+                        && (
+                            tracked.m_descriptorBufferManager != m_descriptorBufferManager
+                            || m_descriptorBufferManager != &m_queue.m_device.m_descriptorBufferManager
+                            || !m_descriptorBufferManager->m_enabled
+                            || m_descriptorBufferManager->m_lifecycleTransitioning
+                            || m_descriptorBufferManager->m_bindingGeneration == 0u
+                            || tracked.m_descriptorBufferGeneration != m_descriptorBufferManager->m_bindingGeneration
+                        )
                     )
-                )
-            ){
-                NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: descriptor-buffer binding generation is stale"));
-                return false;
+                ){
+                    NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: descriptor-buffer binding generation is stale"));
+                    return false;
+                }
             }
         }
     }
@@ -81,7 +86,7 @@ b8 Queue::DescriptorSubmission::validateHeapUses(TrackedCommandBuffer& tracked, 
                 return false;
             }
         }
-        descriptorHeapUseCommitTickets.push_back(DescriptorHeapUseCommitTicket{ .heap = heap, .commandBuffer = MakeNotNull(&tracked), .heapUseIndex = *heapUseIndex, });
+        descriptorHeapUseCommitTickets.push_back(DescriptorHeapUseCommitTicket{ .heap = heap, .commandBuffer = MakeNotNull(&tracked), .submissionToken = submissionToken, .heapUseIndex = *heapUseIndex, });
     }
     return true;
 }
@@ -98,9 +103,9 @@ void Queue::DescriptorSubmission::releaseLocks()noexcept{
     }
 }
 
-void Queue::DescriptorSubmission::commitAndRelease(const QueueSubmissionToken& submissionToken)noexcept{
+void Queue::DescriptorSubmission::commitAndRelease()noexcept{
     for(const DescriptorHeapUseCommitTicket& ticket : m_queue.m_submitDescriptorHeapUseCommitTickets)
-        ticket.heap->commitCommandBufferUseSubmissionLocked(*ticket.commandBuffer, submissionToken, ticket.heapUseIndex);
+        ticket.heap->commitCommandBufferUseSubmissionLocked(*ticket.commandBuffer, ticket.submissionToken, ticket.heapUseIndex);
     releaseLocks();
 }
 

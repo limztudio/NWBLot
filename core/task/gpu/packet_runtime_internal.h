@@ -24,8 +24,6 @@ struct GpuRecordedGraph::ArtifactStorage final : NoCopy{
     GraphicsVector<u8> packetRecordingOverlaps;
     GraphicsVector<GlobalUniquePtr<GpuTimingSubmissionTicket>> packetTimingTickets;
     GraphicsVector<CommandListResourceStateHandoff> packetStateSeeds;
-    PacketRecordingScratch serialRecordingScratch;
-    GraphicsVector<PacketRecordingScratch> packetRecordingScratch;
     GpuTimingRecorder* timingRecorder = nullptr;
     const GpuTaskGraph* graphIdentity = nullptr;
     f64 recordingElapsedSeconds = 0.0;
@@ -47,8 +45,6 @@ public:
         , packetRecordingOverlaps(arena)
         , packetTimingTickets(arena)
         , packetStateSeeds(arena)
-        , serialRecordingScratch(arena)
-        , packetRecordingScratch(arena)
     {}
 };
 
@@ -108,6 +104,7 @@ private:
 private:
     [[nodiscard]] b8 recordPreparedPacketRangeInCompileOrder(
         const GpuTaskGraph& graph,
+        const GpuTaskGraph::DeclarationReadView& declarationAccess,
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuRecordedGraph::ArtifactOperation& artifactAccess,
@@ -120,6 +117,7 @@ private:
     )const;
     [[nodiscard]] b8 recordPacket(
         const GpuTaskGraph& graph,
+        const GpuTaskGraph::DeclarationReadView& declarationAccess,
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuRecordedGraph::ArtifactOperation& artifactAccess,
@@ -183,6 +181,19 @@ struct PacketWaitStatistics{
 [[nodiscard]] b8 ValidateInitialOwnershipCompletions(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packetID)noexcept;
 
 [[nodiscard]] b8 ValidateExternalDependencyTokens(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketRange& range)noexcept;
+
+FOUNDATION_INLINE void WaitAtomicStateValue(const Atomic<u32>& state, Atomic<u32>& waiters, const u32 expected)noexcept{
+    waiters.fetch_add(1u, MemoryOrder::seq_cst);
+    if(state.load(MemoryOrder::acquire) == expected)
+        state.wait(expected, MemoryOrder::acquire);
+    waiters.fetch_sub(1u, MemoryOrder::relaxed);
+}
+
+FOUNDATION_INLINE void NotifyAllIfWaiting(Atomic<u32>& state, const Atomic<u32>& waiters)noexcept{
+    AtomicThreadFence(MemoryOrder::seq_cst);
+    if(waiters.load(MemoryOrder::relaxed) != 0u)
+        state.notify_all();
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

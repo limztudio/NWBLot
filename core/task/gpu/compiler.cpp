@@ -178,11 +178,13 @@ b8 GpuTaskGraphCompiler::compile(
     const Timer resourceStatePlanningBegin = TimerNow();
     Vector<TrackedCompiledResourceState, Alloc::ScratchArena> trackedResourceStates(scratchArena);
     Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena> pendingEpilogueBarriers(scratchArena);
+    Vector<u8, Alloc::ScratchArena> resourceHasPendingEpilogueBarrier(graph.resourceCount(), 0u, scratchArena);
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena> initialOwnershipDependencies(scratchArena);
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena> initialAvailabilityDependencies(scratchArena);
     Vector<GpuPacketDependency, Alloc::ScratchArena> resourceStateDependencies(scratchArena);
     Vector<TrackedResourceStateFragment, Alloc::ScratchArena> stateFragments(scratchArena);
     Vector<GpuTaskResourceRange, Alloc::ScratchArena> taskFirstUseRanges(scratchArena);
+    ResourceRangeScratch rangeScratch(scratchArena);
     usize trackedStateCapacity = 0u;
     for(const GpuCompiledTask& compiledTask : compiledPlan.tasks){
         const usize useCount = graph.taskAt(compiledTask.task.index).resourceUseCount;
@@ -207,11 +209,13 @@ b8 GpuTaskGraphCompiler::compile(
         .trackedResourceStates = trackedResourceStates,
         .resourceHistory = resourceHistory,
         .pendingEpilogueBarriers = pendingEpilogueBarriers,
+        .resourceHasPendingEpilogueBarrier = resourceHasPendingEpilogueBarrier,
         .initialOwnershipDependencies = initialOwnershipDependencies,
         .initialAvailabilityDependencies = initialAvailabilityDependencies,
         .resourceStateDependencies = resourceStateDependencies,
         .stateFragments = stateFragments,
         .taskFirstUseRanges = taskFirstUseRanges,
+        .rangeScratch = rangeScratch,
     };
     if(!PlanTaskResourceStates(resourceStatePlan) || !PlanExternalResourceExports(resourceStatePlan) || !AppendPendingEpilogueBarriers(resourceStatePlan)){
         return false;

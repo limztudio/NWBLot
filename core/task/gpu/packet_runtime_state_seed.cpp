@@ -43,12 +43,12 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
             return true;
 
         if(!scratch.stateMergeScratch.valid())
-            return scratch.stateMergeScratch.copyFrom(scratch.stateSubsetScratch);
+            return scratch.stateMergeScratch.exchangeSnapshot(scratch.stateSubsetScratch);
 
         const Array<const CommandListResourceStateHandoff*, 1> branches = {{ &scratch.stateSubsetScratch }};
         if(!scratch.initialStateSeed.buildFanIn(scratch.stateMergeScratch, branches.data(), branches.size(), stateFanInScratchArena))
             return false;
-        return scratch.stateMergeScratch.copyFrom(scratch.initialStateSeed);
+        return scratch.stateMergeScratch.exchangeSnapshot(scratch.initialStateSeed);
     };
 
     const auto appendMergedExternalSource = [&]{
@@ -56,15 +56,15 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
             return true;
 
         if(!scratch.externalBaseStateSeed.valid()){
-            if(!scratch.externalBaseStateSeed.copyFrom(scratch.stateMergeScratch) || !scratch.externalMergedStateSeed.copyFrom(scratch.stateMergeScratch))
+            if(!scratch.externalBaseStateSeed.copyFrom(scratch.stateMergeScratch))
                 return false;
-            return true;
+            return scratch.externalMergedStateSeed.exchangeSnapshot(scratch.stateMergeScratch);
         }
 
         const Array<const CommandListResourceStateHandoff*, 2> branches = {{ &scratch.externalMergedStateSeed, &scratch.stateMergeScratch }};
         if(!scratch.initialStateSeed.buildFanIn(scratch.externalBaseStateSeed, branches.data(), branches.size(), stateFanInScratchArena))
             return false;
-        return scratch.externalMergedStateSeed.copyFrom(scratch.initialStateSeed);
+        return scratch.externalMergedStateSeed.exchangeSnapshot(scratch.initialStateSeed);
     };
 
     const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packetID);
@@ -209,18 +209,18 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
     }
 
     scratch.initialStateSeed.reset();
-    if(scratch.externalMergedStateSeed.valid() && !scratch.initialStateSeed.copyFrom(scratch.externalMergedStateSeed))
+    if(scratch.externalMergedStateSeed.valid() && !scratch.initialStateSeed.exchangeSnapshot(scratch.externalMergedStateSeed))
         return MakeUnexpected(Failure{});
     scratch.stateMergeScratch.reset();
 
     const auto appendInitialStateSubset = [&]{
         if(!scratch.initialStateSeed.valid())
-            return scratch.initialStateSeed.copyFrom(scratch.stateSubsetScratch);
+            return scratch.initialStateSeed.exchangeSnapshot(scratch.stateSubsetScratch);
 
         const Array<const CommandListResourceStateHandoff*, 1> branches = {{ &scratch.stateSubsetScratch }};
         if(!scratch.stateMergeScratch.buildFanIn(scratch.initialStateSeed, branches.data(), branches.size(), stateFanInScratchArena))
             return false;
-        return scratch.initialStateSeed.copyFrom(scratch.stateMergeScratch);
+        return scratch.initialStateSeed.exchangeSnapshot(scratch.stateMergeScratch);
     };
 
     const auto buildSeedSubset = [&](const GpuPacketStateSeed& seed, const CommandListResourceStateHandoff& sourceStates, CommandListResourceStateHandoff& subset){
@@ -247,7 +247,7 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
     };
 
     constexpr usize s_MaxSeedSubsetBatch = 8u;
-    Vector<CommandListResourceStateHandoff, Alloc::ScratchArena> seedSubsetBatch(stateFanInScratchArena);
+    GraphicsVector<CommandListResourceStateHandoff>& seedSubsetBatch = scratch.seedSubsetBatch;
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
         const GpuCompiledTaskView compiledTaskView = planAccess.findTask(tasks[taskIndex]);
         if(!compiledTaskView.valid())
@@ -285,13 +285,13 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
             }
             usize firstBranch = 0u;
             if(!scratch.initialStateSeed.valid()){
-                if(!scratch.initialStateSeed.copyFrom(*MakeNotNull(branches[0u])))
+                if(!scratch.initialStateSeed.exchangeSnapshot(seedSubsetBatch[0u]))
                     return MakeUnexpected(Failure{});
                 firstBranch = 1u;
             }
             if(!scratch.stateMergeScratch.buildFanIn(scratch.initialStateSeed, branches.data() + firstBranch, batchCount - firstBranch, stateFanInScratchArena))
                 return MakeUnexpected(Failure{});
-            if(!scratch.initialStateSeed.copyFrom(scratch.stateMergeScratch))
+            if(!scratch.initialStateSeed.exchangeSnapshot(scratch.stateMergeScratch))
                 return MakeUnexpected(Failure{});
             seedIndex += static_cast<u32>(batchCount);
         }

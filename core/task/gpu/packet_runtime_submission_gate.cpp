@@ -101,7 +101,7 @@ void GpuGraphSubmissionTransaction::SubmissionWriterReservation::reset()noexcept
     if(previousWriterCount == 0u)
         FOUNDATION_FATAL_ASSERT_MSG(false, "GPU graph submission writer ownership underflowed");
     if(previousWriterCount == 1u)
-        m_transaction->m_submissionGateWriterCount.notify_all();
+        GpuPacketRuntimeDetail::NotifyAllIfWaiting(m_transaction->m_submissionGateWriterCount, m_transaction->m_submissionGateWriterWaiters);
     m_transaction = nullptr;
 }
 
@@ -143,7 +143,7 @@ GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(const Gp
                 m_writerReservation.reset();
                 return;
             }
-            transaction.m_submissionGateState.wait(expectedState, MemoryOrder::acquire);
+            GpuPacketRuntimeDetail::WaitAtomicStateValue(transaction.m_submissionGateState, transaction.m_submissionGateStateWaiters, expectedState);
             expectedState = 0u;
         }
     }
@@ -151,12 +151,12 @@ GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(const Gp
         for(;;){
             const u32 writerCount = transaction.m_submissionGateWriterCount.load(MemoryOrder::acquire);
             if(writerCount != 0u){
-                transaction.m_submissionGateWriterCount.wait(writerCount, MemoryOrder::acquire);
+                GpuPacketRuntimeDetail::WaitAtomicStateValue(transaction.m_submissionGateWriterCount, transaction.m_submissionGateWriterWaiters, writerCount);
                 continue;
             }
             u32 operationState = transaction.m_submissionGateState.load(MemoryOrder::acquire);
             if((operationState & __hidden_gpu_packet_runtime_submission_gate::s_WriterBit) != 0u){
-                transaction.m_submissionGateState.wait(operationState, MemoryOrder::acquire);
+                GpuPacketRuntimeDetail::WaitAtomicStateValue(transaction.m_submissionGateState, transaction.m_submissionGateStateWaiters, operationState);
                 continue;
             }
             if((operationState & __hidden_gpu_packet_runtime_submission_gate::s_ReaderMask) == __hidden_gpu_packet_runtime_submission_gate::s_ReaderMask)
@@ -167,14 +167,14 @@ GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(const Gp
                 break;
             const u32 previousState = transaction.m_submissionGateState.fetch_sub(1u, MemoryOrder::release);
             if((previousState & __hidden_gpu_packet_runtime_submission_gate::s_ReaderMask) == 1u)
-                transaction.m_submissionGateState.notify_all();
+                GpuPacketRuntimeDetail::NotifyAllIfWaiting(transaction.m_submissionGateState, transaction.m_submissionGateStateWaiters);
         }
     }
     const b8 closingAfterAdmission = transaction.m_submissionExceptionClosing.test(MemoryOrder::acquire);
     if(closingAfterAdmission != exceptionFinalizer){
         if(exclusive){
             transaction.m_submissionGateState.store(0u, MemoryOrder::release);
-            transaction.m_submissionGateState.notify_all();
+            GpuPacketRuntimeDetail::NotifyAllIfWaiting(transaction.m_submissionGateState, transaction.m_submissionGateStateWaiters);
             m_writerReservation.reset();
         }
         else{
@@ -182,14 +182,14 @@ GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(const Gp
             if((previousState & __hidden_gpu_packet_runtime_submission_gate::s_ReaderMask) == 0u)
                 TerminateInvariant();
             if((previousState & __hidden_gpu_packet_runtime_submission_gate::s_ReaderMask) == 1u)
-                transaction.m_submissionGateState.notify_all();
+                GpuPacketRuntimeDetail::NotifyAllIfWaiting(transaction.m_submissionGateState, transaction.m_submissionGateStateWaiters);
         }
         return;
     }
     if(composite && transaction.m_compositeOperationActive.testAndSet(MemoryOrder::acq_rel)){
         if(exclusive){
             transaction.m_submissionGateState.store(0u, MemoryOrder::release);
-            transaction.m_submissionGateState.notify_all();
+            GpuPacketRuntimeDetail::NotifyAllIfWaiting(transaction.m_submissionGateState, transaction.m_submissionGateStateWaiters);
             m_writerReservation.reset();
         }
         return;
@@ -214,7 +214,7 @@ GpuGraphSubmissionTransaction::SubmissionOperation::~SubmissionOperation()noexce
         if(m_transaction->m_submissionGateState.load(MemoryOrder::acquire) != __hidden_gpu_packet_runtime_submission_gate::s_WriterBit)
             FOUNDATION_FATAL_ASSERT_MSG(false, "GPU graph submission writer operation lost its exact gate claim");
         m_transaction->m_submissionGateState.store(0u, MemoryOrder::release);
-        m_transaction->m_submissionGateState.notify_all();
+        GpuPacketRuntimeDetail::NotifyAllIfWaiting(m_transaction->m_submissionGateState, m_transaction->m_submissionGateStateWaiters);
         m_writerReservation.reset();
     }
     else{
@@ -222,7 +222,7 @@ GpuGraphSubmissionTransaction::SubmissionOperation::~SubmissionOperation()noexce
         if((previousState & __hidden_gpu_packet_runtime_submission_gate::s_ReaderMask) == 0u)
             FOUNDATION_FATAL_ASSERT_MSG(false, "GPU graph submission reader ownership underflowed");
         if((previousState & __hidden_gpu_packet_runtime_submission_gate::s_ReaderMask) == 1u)
-            m_transaction->m_submissionGateState.notify_all();
+            GpuPacketRuntimeDetail::NotifyAllIfWaiting(m_transaction->m_submissionGateState, m_transaction->m_submissionGateStateWaiters);
     }
 }
 

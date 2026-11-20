@@ -136,6 +136,7 @@ private:
 
 b8 GpuNativePacketRecorder::recordPacket(
     const GpuTaskGraph& graph,
+    const GpuTaskGraph::DeclarationReadView& declarationAccess,
     const GpuCompiledGraph& compiledGraph,
     const GpuCompiledGraph::ReadView& planAccess,
     const GpuRecordedGraph::ArtifactOperation& artifactAccess,
@@ -152,10 +153,7 @@ b8 GpuNativePacketRecorder::recordPacket(
         FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Packet recording abort output must be fresh"));
         return false;
     }
-    if(!planAccess.validFor(compiledGraph) || !artifactAccess.exclusiveFor(outRecordedGraph))
-        return false;
-    GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
-    if(!declarationAccess.valid())
+    if(!declarationAccess.validFor(graph) || !planAccess.validFor(compiledGraph) || !artifactAccess.exclusiveFor(outRecordedGraph))
         return false;
 
     const u64 recordingAttemptGeneration = outRecordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactAccess);

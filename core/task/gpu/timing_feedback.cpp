@@ -4,6 +4,7 @@
 
 #include "timing_feedback.h"
 
+#include <global/atomic.h>
 #include <global/limit.h>
 #include <global/scope_exit.h>
 #include <global/simd/vector.h>
@@ -27,6 +28,7 @@ namespace __hidden_gpu_task_timing_feedback{
 
 inline constexpr usize s_LinearHistoryCount = 16u;
 inline constexpr usize s_HistoryIndexBucketsPerEntry = 4u;
+inline Atomic<u64> s_NextTimingHistoryStoreId = 1u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -167,6 +169,8 @@ void GpuTaskTimingHistorySnapshot::reset()noexcept{
         m_assignmentIndex->clear();
     m_histories.clear();
     m_assignments.clear();
+    m_sourceStoreId = 0u;
+    m_sourceRevision = 0u;
     m_deviceGeneration = 0u;
     m_valid = false;
 }
@@ -179,6 +183,7 @@ GpuTaskTimingHistoryStore::GpuTaskTimingHistoryStore(::ArenaBase& arena, const u
     : m_arena(arena)
     , m_histories(arena)
     , m_assignments(arena)
+    , m_storeId(__hidden_gpu_task_timing_feedback::s_NextTimingHistoryStoreId.fetch_add(1u, MemoryOrder::relaxed))
     , m_maximumSamplesPerHistory(maximumSamplesPerHistory == 0u ? 1u : maximumSamplesPerHistory)
 {
     FOUNDATION_ASSERT(maximumSamplesPerHistory != 0u);
@@ -193,6 +198,7 @@ void GpuTaskTimingHistoryStore::reset()noexcept{
     m_histories.clear();
     m_assignments.clear();
     m_deviceGeneration = 0u;
+    ++m_mutationRevision;
 }
 
 
@@ -257,6 +263,7 @@ b8 GpuTaskTimingHistoryStore::recordNonCommittingSample(const GpuTaskTimingKey& 
         record->samples.erase(record->samples.begin());
     record->samples.push_back(durationSeconds);
     rebuildHistory(*record);
+    ++m_mutationRevision;
     return true;
 }
 
@@ -266,8 +273,10 @@ b8 GpuTaskTimingHistoryStore::noteAcceptedAssignment(const GpuTaskTimingKey& key
 
     if(!key.valid() || !physicalQueue.valid())
         return false;
-    if(m_deviceGeneration == 0u)
+    if(m_deviceGeneration == 0u){
         m_deviceGeneration = physicalQueue.deviceGeneration;
+        ++m_mutationRevision;
+    }
     if(m_deviceGeneration != physicalQueue.deviceGeneration)
         return false;
 
@@ -289,6 +298,7 @@ b8 GpuTaskTimingHistoryStore::noteAcceptedAssignment(const GpuTaskTimingKey& key
             return false;
         }
         discardAssignment.release();
+        ++m_mutationRevision;
         return true;
     }
     if(sourceFrameIndex < assignment->lastAcceptedFrameIndex)
@@ -302,14 +312,20 @@ b8 GpuTaskTimingHistoryStore::noteAcceptedAssignment(const GpuTaskTimingKey& key
     }
     assignment->lastAcceptedFrameIndex = sourceFrameIndex;
     assignment->hasAcceptedAssignment = true;
+    ++m_mutationRevision;
     return true;
 }
 
 
 void GpuTaskTimingHistoryStore::snapshot(GpuTaskTimingHistorySnapshot& outSnapshot)const{
-    outSnapshot.reset();
-    if(m_deviceGeneration == 0u)
+    if(m_deviceGeneration == 0u){
+        outSnapshot.reset();
         return;
+    }
+    if(outSnapshot.m_valid && outSnapshot.m_sourceStoreId == m_storeId && outSnapshot.m_sourceRevision == m_mutationRevision && outSnapshot.m_deviceGeneration == m_deviceGeneration)
+        return;
+
+    outSnapshot.reset();
 
     ScopeExit resetFailedSnapshot([&outSnapshot]()noexcept{
         outSnapshot.m_historyIndex.reset();
@@ -336,6 +352,8 @@ void GpuTaskTimingHistoryStore::snapshot(GpuTaskTimingHistorySnapshot& outSnapsh
     }else
         outSnapshot.m_assignmentIndex.reset();
 
+    outSnapshot.m_sourceStoreId = m_storeId;
+    outSnapshot.m_sourceRevision = m_mutationRevision;
     outSnapshot.m_deviceGeneration = m_deviceGeneration;
     outSnapshot.m_valid = true;
     resetFailedSnapshot.release();

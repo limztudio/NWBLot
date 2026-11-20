@@ -73,6 +73,8 @@ void GpuRecordedGraph::PacketRecordingScratch::reset()noexcept{
     stateMergeScratch.reset();
     externalBaseStateSeed.reset();
     externalMergedStateSeed.reset();
+    for(CommandListResourceStateHandoff& subset : seedSubsetBatch)
+        subset.reset();
 }
 
 
@@ -100,12 +102,6 @@ void GpuRecordedGraph::RetireStorageWithoutCallbacks(ArtifactStorage& storage)no
         static_assert(noexcept(stateSeed.reset()));
         stateSeed.reset();
     }
-    static_assert(noexcept(storage.serialRecordingScratch.reset()));
-    storage.serialRecordingScratch.reset();
-    for(PacketRecordingScratch& scratch : storage.packetRecordingScratch){
-        static_assert(noexcept(scratch.reset()));
-        scratch.reset();
-    }
     storage.timingRecorder = nullptr;
     storage.graphIdentity = nullptr;
     storage.recordingElapsedSeconds = 0.0;
@@ -125,6 +121,9 @@ GpuRecordedGraph::GpuRecordedGraph(GraphicsArena& arena)noexcept
     : m_arena(arena)
     , m_activeStorage(MakeGlobalUnique<ArtifactStorage>(arena, arena))
     , m_candidateStorage(MakeGlobalUnique<ArtifactStorage>(arena, arena))
+    , m_serialRecordingScratch(arena)
+    , m_workerRecordingScratch(arena)
+    , m_reusableTimingTickets(arena)
 {}
 
 
@@ -143,7 +142,7 @@ GpuRecordedGraph::~GpuRecordedGraph()noexcept{
     u32 operationState = m_operationState.load(MemoryOrder::acquire);
     for(;;){
         if((operationState & s_ArtifactOperationWriterBit) != 0u){
-            m_operationState.wait(operationState, MemoryOrder::acquire);
+            GpuPacketRuntimeDetail::WaitAtomicStateValue(m_operationState, m_operationWaiters, operationState);
             operationState = m_operationState.load(MemoryOrder::acquire);
             continue;
         }
@@ -153,7 +152,7 @@ GpuRecordedGraph::~GpuRecordedGraph()noexcept{
         }
     }
     while((operationState & s_ArtifactOperationReaderMask) != 0u){
-        m_operationState.wait(operationState, MemoryOrder::acquire);
+        GpuPacketRuntimeDetail::WaitAtomicStateValue(m_operationState, m_operationWaiters, operationState);
         operationState = m_operationState.load(MemoryOrder::acquire);
     }
     FOUNDATION_ASSERT(operationState == s_ArtifactOperationWriterBit);
@@ -161,7 +160,7 @@ GpuRecordedGraph::~GpuRecordedGraph()noexcept{
     if(m_activeStorage)
         revokeCommandListPublicationsWithoutCallbacks(*m_activeStorage);
     m_operationState.store(0u, MemoryOrder::release);
-    m_operationState.notify_all();
+    GpuPacketRuntimeDetail::NotifyAllIfWaiting(m_operationState, m_operationWaiters);
 }
 
 
@@ -204,13 +203,9 @@ b8 GpuRecordedGraph::releaseCommandListCache()noexcept{
     ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Exclusive);
     if(!artifactOperation.valid())
         return false;
-    for(ArtifactStorage* const storage : { m_activeStorage.get(), m_candidateStorage.get() }){
-        if(!storage)
-            continue;
-        storage->serialRecordingScratch.commandLists.clear();
-        for(PacketRecordingScratch& scratch : storage->packetRecordingScratch)
-            scratch.commandLists.clear();
-    }
+    m_serialRecordingScratch.commandLists.clear();
+    for(PacketRecordingScratch& scratch : m_workerRecordingScratch)
+        scratch.commandLists.clear();
     return true;
 }
 
@@ -265,6 +260,9 @@ b8 GpuRecordedGraph::prepareStorageCandidateLayout(const GpuCompiledGraph& compi
 
     ArtifactStorage& candidate = *m_candidateStorage;
     RetireStorageWithoutCallbacks(candidate);
+    m_serialRecordingScratch.reset();
+    for(PacketRecordingScratch& scratch : m_workerRecordingScratch)
+        scratch.reset();
 
     const usize packetCount = planAccess.packetCount();
     if(candidate.packets.size() < packetCount)
@@ -275,9 +273,7 @@ b8 GpuRecordedGraph::prepareStorageCandidateLayout(const GpuCompiledGraph& compi
         candidate.packetTimingTickets.resize(packetCount);
     while(candidate.packetStateSeeds.size() < packetCount)
         candidate.packetStateSeeds.emplace_back(m_arena);
-    while(candidate.packetRecordingScratch.size() < packetCount)
-        candidate.packetRecordingScratch.emplace_back(m_arena);
-    if(!candidate.serialRecordingScratch.ensureValid(m_arena))
+    if(!m_serialRecordingScratch.ensureValid(m_arena))
         return false;
 
     for(usize packetIndex = 0u; packetIndex < packetCount; ++packetIndex){
@@ -287,8 +283,6 @@ b8 GpuRecordedGraph::prepareStorageCandidateLayout(const GpuCompiledGraph& compi
         candidate.packets[packetIndex].packet = packetID;
         candidate.packetRecordingOverlaps[packetIndex] = 0u;
         candidate.packetStateSeeds[packetIndex].reset();
-        if(!candidate.packetRecordingScratch[packetIndex].ensureValid(m_arena))
-            return false;
     }
 
     candidate.timingRecorder = nullptr;
@@ -306,8 +300,8 @@ b8 GpuRecordedGraph::prepareResetStorageCandidate(const GpuCompiledGraph& compil
 
     ArtifactStorage& candidate = *m_candidateStorage;
     for(GlobalUniquePtr<GpuTimingSubmissionTicket>& ticket : candidate.packetTimingTickets){
-        static_assert(noexcept(ticket.reset()));
-        ticket.reset();
+        if(ticket)
+            m_reusableTimingTickets.push_back(Move(ticket));
     }
     candidate.valid = true;
     return true;
@@ -330,6 +324,10 @@ b8 GpuRecordedGraph::prepareRecordingStorageCandidate(const GpuCompiledGraph& co
             return false;
         if(packetPlan.recordsTiming){
             GlobalUniquePtr<GpuTimingSubmissionTicket>& ticket = candidate.packetTimingTickets[packetIndex];
+            if(!ticket && !m_reusableTimingTickets.empty()){
+                ticket = Move(m_reusableTimingTickets.back());
+                m_reusableTimingTickets.pop_back();
+            }
             if(ticket && !ticket->resetForRecordingReuse(*timingRecorder))
                 ticket.reset();
             if(!ticket)
@@ -339,14 +337,14 @@ b8 GpuRecordedGraph::prepareRecordingStorageCandidate(const GpuCompiledGraph& co
         }
         else{
             GlobalUniquePtr<GpuTimingSubmissionTicket>& ticket = candidate.packetTimingTickets[packetIndex];
-            static_assert(noexcept(ticket.reset()));
-            ticket.reset();
+            if(ticket)
+                m_reusableTimingTickets.push_back(Move(ticket));
         }
     }
     for(usize packetIndex = candidate.packetCount; packetIndex < candidate.packetTimingTickets.size(); ++packetIndex){
         GlobalUniquePtr<GpuTimingSubmissionTicket>& ticket = candidate.packetTimingTickets[packetIndex];
-        static_assert(noexcept(ticket.reset()));
-        ticket.reset();
+        if(ticket)
+            m_reusableTimingTickets.push_back(Move(ticket));
     }
 
     candidate.timingRecorder = recordsTiming ? timingRecorder : nullptr;
@@ -392,7 +390,6 @@ b8 GpuRecordedGraph::validForWithinArtifactOperation(const GpuCompiledGraph& com
         && storage->packetRecordingOverlaps.size() >= storage->packetCount
         && storage->packetTimingTickets.size() >= storage->packetCount
         && storage->packetStateSeeds.size() >= storage->packetCount
-        && storage->packetRecordingScratch.size() >= storage->packetCount
     ;
 }
 
@@ -454,15 +451,26 @@ const CommandListResourceStateHandoff* GpuRecordedGraph::packetStateSeed(const G
     return &storage->packetStateSeeds[packet.index];
 }
 
-GpuRecordedGraph::PacketRecordingScratch* GpuRecordedGraph::packetRecordingScratch(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)noexcept{
-    ArtifactStorage* const storage = m_activeStorage.get();
-    if(!artifactAccess.exclusiveFor(*this) || !storage || !storage->valid || !packet.valid() || packet.generation != storage->planGeneration || packet.index >= storage->packetCount)
+b8 GpuRecordedGraph::ensureWorkerRecordingScratch(const usize slotCount, const ArtifactOperation& artifactAccess){
+    if(!artifactAccess.exclusiveFor(*this))
+        return false;
+    while(m_workerRecordingScratch.size() < slotCount)
+        m_workerRecordingScratch.emplace_back(m_arena);
+    for(usize slotIndex = 0u; slotIndex < slotCount; ++slotIndex){
+        if(!m_workerRecordingScratch[slotIndex].ensureValid(m_arena))
+            return false;
+    }
+    return true;
+}
+
+GpuRecordedGraph::PacketRecordingScratch* GpuRecordedGraph::workerRecordingScratch(const usize slotIndex, const ArtifactOperation& artifactAccess)noexcept{
+    if(!artifactAccess.exclusiveFor(*this) || !m_activeStorage || !m_activeStorage->valid || slotIndex >= m_workerRecordingScratch.size())
         return nullptr;
-    return &storage->packetRecordingScratch[packet.index];
+    return &m_workerRecordingScratch[slotIndex];
 }
 
 GpuRecordedGraph::PacketRecordingScratch* GpuRecordedGraph::serialRecordingScratch(const ArtifactOperation& artifactAccess)noexcept{
-    return artifactAccess.exclusiveFor(*this) && m_activeStorage && m_activeStorage->valid ? &m_activeStorage->serialRecordingScratch : nullptr;
+    return artifactAccess.exclusiveFor(*this) && m_activeStorage && m_activeStorage->valid ? &m_serialRecordingScratch : nullptr;
 }
 
 GpuRecordedPacket* GpuRecordedGraph::packetStorage(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)noexcept{

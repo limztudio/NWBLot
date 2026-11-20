@@ -204,8 +204,10 @@ Expected<GpuTaskId> FrameGraphRefractionResolve::declare(in FrameGraphRefraction
     const GpuGraphResourceSetId traceMaterialSampledTextureSet = inputs.traceMaterialSampledTextureSet;
 
     if(!refractionActive || !refractionResources.valid()){
+        GpuTaskSchedulingHint clearScheduling;
+        clearScheduling.allowParallelRecording = true;
         GpuTaskDesc clearDesc;
-        clearDesc.setIdentity(s_RenderNameRenderAvboitRefractionResolveClear).setMarkerLabel(s_RefractionResolveClearLabel).setDependency(inputs.avboitFinalTask);
+        clearDesc.setIdentity(s_RenderNameRenderAvboitRefractionResolveClear).setMarkerLabel(s_RefractionResolveClearLabel).setScheduling(clearScheduling).setDependency(inputs.avboitFinalTask);
         GpuClearTextureTaskDesc clear;
         clear.destination = refractionResolve;
         clear.subresources = s_FramebufferSubresources;

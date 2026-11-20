@@ -34,6 +34,73 @@ GpuCommandIrReplayError::Enum ValidateReplayCommandListQueue(const CommandListPa
     return GpuCommandIrReplayError::None;
 }
 
+GpuCommandIrReplayError::Enum ValidateBuiltinBackendOperand(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, const GpuPhysicalQueueInfo& commandQueue, CommandList& commandList)noexcept{
+    switch(record.opcode){
+    case GpuCommandIrOpcode::CopyBuffer:{
+        auto& source = *MakeNotNull(graph.bufferForResource(record.source));
+        auto& destination = *MakeNotNull(graph.bufferForResource(record.destination));
+        if(&source == &destination)
+            return GraphicsBackend::IsBufferReadyForState(commandList.getDevice(), &source, ResourceStates::CopySource | ResourceStates::CopyDest) && ResourceQueueAdmissionAdmitsQueue(source.getQueueAdmissionSnapshot(), commandQueue)
+                ? (commandList.getPermanentBufferState(&source) != ResourceStates::Unknown && commandList.getPermanentBufferState(&source) != (ResourceStates::CopySource | ResourceStates::CopyDest) ? GpuCommandIrReplayError::PermanentResourceStateMismatch : GpuCommandIrReplayError::None)
+                : GpuCommandIrReplayError::BackendResourceNotReady
+            ;
+
+        const auto validateBuffer = [&](Buffer& buffer, const ResourceStates::Mask requiredState)noexcept -> GpuCommandIrReplayError::Enum{
+            if(!GraphicsBackend::IsBufferReadyForState(commandList.getDevice(), &buffer, requiredState) || !ResourceQueueAdmissionAdmitsQueue(buffer.getQueueAdmissionSnapshot(), commandQueue))
+                return GpuCommandIrReplayError::BackendResourceNotReady;
+            const ResourceStates::Mask permanentState = commandList.getPermanentBufferState(&buffer);
+            if(permanentState != ResourceStates::Unknown && permanentState != requiredState)
+                return GpuCommandIrReplayError::PermanentResourceStateMismatch;
+            return GpuCommandIrReplayError::None;
+        };
+        const GpuCommandIrReplayError::Enum sourceError = validateBuffer(source, ResourceStates::CopySource);
+        if(sourceError != GpuCommandIrReplayError::None)
+            return sourceError;
+        return validateBuffer(destination, ResourceStates::CopyDest);
+    }
+    case GpuCommandIrOpcode::CopyTexture:{
+        auto& source = *MakeNotNull(graph.textureForResource(record.source));
+        auto& destination = *MakeNotNull(graph.textureForResource(record.destination));
+        const auto validateTexture = [&](Texture& texture, const ResourceStates::Mask requiredState)noexcept -> GpuCommandIrReplayError::Enum{
+            if(!GraphicsBackend::IsTextureReadyForState(commandList.getDevice(), &texture, requiredState) || !ResourceQueueAdmissionAdmitsQueue(texture.getQueueAdmissionSnapshot(), commandQueue))
+                return GpuCommandIrReplayError::BackendResourceNotReady;
+            const ResourceStates::Mask permanentState = commandList.getPermanentTextureState(&texture);
+            if(permanentState != ResourceStates::Unknown && permanentState != requiredState)
+                return GpuCommandIrReplayError::PermanentResourceStateMismatch;
+            return GpuCommandIrReplayError::None;
+        };
+        const GpuCommandIrReplayError::Enum sourceError = validateTexture(source, ResourceStates::CopySource);
+        if(sourceError != GpuCommandIrReplayError::None)
+            return sourceError;
+        return validateTexture(destination, ResourceStates::CopyDest);
+    }
+    case GpuCommandIrOpcode::ClearBuffer:{
+        auto& destination = *MakeNotNull(graph.bufferForResource(record.destination));
+        if(!GraphicsBackend::IsBufferReadyForState(commandList.getDevice(), &destination, ResourceStates::CopyDest) || !ResourceQueueAdmissionAdmitsQueue(destination.getQueueAdmissionSnapshot(), commandQueue))
+            return GpuCommandIrReplayError::BackendResourceNotReady;
+        const ResourceStates::Mask permanentState = commandList.getPermanentBufferState(&destination);
+        if(permanentState != ResourceStates::Unknown && permanentState != ResourceStates::CopyDest)
+            return GpuCommandIrReplayError::PermanentResourceStateMismatch;
+        return GpuCommandIrReplayError::None;
+    }
+    case GpuCommandIrOpcode::ClearTexture:
+    case GpuCommandIrOpcode::ClearTextureRectUInt:{
+        auto& destination = *MakeNotNull(graph.textureForResource(record.destination));
+        if(!GraphicsBackend::IsTextureReadyForState(commandList.getDevice(), &destination, ResourceStates::CopyDest) || !ResourceQueueAdmissionAdmitsQueue(destination.getQueueAdmissionSnapshot(), commandQueue))
+            return GpuCommandIrReplayError::BackendResourceNotReady;
+        const ResourceStates::Mask permanentState = commandList.getPermanentTextureState(&destination);
+        if(permanentState != ResourceStates::Unknown && permanentState != ResourceStates::CopyDest)
+            return GpuCommandIrReplayError::PermanentResourceStateMismatch;
+        return GpuCommandIrReplayError::None;
+    }
+    case GpuCommandIrOpcode::UploadBuffer:
+    case GpuCommandIrOpcode::UploadTexture:
+        return ValidateUploadBackendOperand(record, graph, commandQueue, commandList);
+    default:
+        return GpuCommandIrReplayError::StreamChangedDuringReplay;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -49,105 +116,6 @@ namespace __hidden_gpu_command_ir_replay_lowering{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBufferBackendOperand(const ResourceStates::Mask requiredState, const GpuPhysicalQueueInfo& commandQueue, Buffer& buffer, CommandList& commandList)noexcept{
-    if(!GraphicsBackend::IsBufferReadyForState(commandList.getDevice(), &buffer, requiredState) || !ResourceQueueAdmissionAdmitsQueue(buffer.getQueueAdmissionSnapshot(), commandQueue))
-        return GpuCommandIrReplayError::BackendResourceNotReady;
-
-    const ResourceStates::Mask permanentState = commandList.getPermanentBufferState(&buffer);
-    if(permanentState != ResourceStates::Unknown && permanentState != requiredState)
-        return GpuCommandIrReplayError::PermanentResourceStateMismatch;
-    return GpuCommandIrReplayError::None;
-}
-
-[[nodiscard]] static GpuCommandIrReplayError::Enum ValidateTextureBackendOperand(const ResourceStates::Mask requiredState, const GpuPhysicalQueueInfo& commandQueue, Texture& texture, CommandList& commandList)noexcept{
-    if(!GraphicsBackend::IsTextureReadyForState(commandList.getDevice(), &texture, requiredState) || !ResourceQueueAdmissionAdmitsQueue(texture.getQueueAdmissionSnapshot(), commandQueue))
-        return GpuCommandIrReplayError::BackendResourceNotReady;
-
-    const ResourceStates::Mask permanentState = commandList.getPermanentTextureState(&texture);
-    if(permanentState != ResourceStates::Unknown && permanentState != requiredState)
-        return GpuCommandIrReplayError::PermanentResourceStateMismatch;
-    return GpuCommandIrReplayError::None;
-}
-
-[[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBackendOperands(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, const GpuPhysicalQueueInfo& commandQueue, CommandList& commandList)noexcept{
-    switch(record.opcode){
-    case GpuCommandIrOpcode::CopyBuffer:{
-        auto& source = *MakeNotNull(graph.bufferForResource(record.source));
-        auto& destination = *MakeNotNull(graph.bufferForResource(record.destination));
-        if(&source == &destination)
-            return ValidateBufferBackendOperand(ResourceStates::CopySource | ResourceStates::CopyDest, commandQueue, source, commandList);
-
-        const GpuCommandIrReplayError::Enum sourceError = ValidateBufferBackendOperand(ResourceStates::CopySource, commandQueue, source, commandList);
-        if(sourceError != GpuCommandIrReplayError::None)
-            return sourceError;
-        return ValidateBufferBackendOperand(ResourceStates::CopyDest, commandQueue, destination, commandList);
-    }
-    case GpuCommandIrOpcode::CopyTexture:{
-        auto& source = *MakeNotNull(graph.textureForResource(record.source));
-        auto& destination = *MakeNotNull(graph.textureForResource(record.destination));
-        const GpuCommandIrReplayError::Enum sourceError = ValidateTextureBackendOperand(ResourceStates::CopySource, commandQueue, source, commandList);
-        if(sourceError != GpuCommandIrReplayError::None)
-            return sourceError;
-        return ValidateTextureBackendOperand(ResourceStates::CopyDest, commandQueue, destination, commandList);
-    }
-    case GpuCommandIrOpcode::ClearBuffer:{
-        auto& destination = *MakeNotNull(graph.bufferForResource(record.destination));
-        return ValidateBufferBackendOperand(ResourceStates::CopyDest, commandQueue, destination, commandList);
-    }
-    case GpuCommandIrOpcode::ClearTexture:
-    case GpuCommandIrOpcode::ClearTextureRectUInt:{
-        auto& destination = *MakeNotNull(graph.textureForResource(record.destination));
-        return ValidateTextureBackendOperand(ResourceStates::CopyDest, commandQueue, destination, commandList);
-    }
-    case GpuCommandIrOpcode::UploadBuffer:
-    case GpuCommandIrOpcode::UploadTexture:
-        return GpuCommandIrDetail::ValidateUploadBackendOperand(record, graph, commandQueue, commandList);
-    default:
-        return GpuCommandIrReplayError::StreamChangedDuringReplay;
-    }
-}
-
-[[nodiscard]] static GpuCommandIrReplayResult ValidateBackendOperandPacket(
-    const BinaryByteView bytes,
-    const GpuCommandIrOwnedStream* const ownedStream,
-    const GpuTaskGraphDeclarationReadView& graph,
-    const GpuSubmissionPacketId packet,
-    const GpuCommandIrStreamValidationResult& expectedStreamValidation,
-    CommandList& commandList
-)noexcept{
-    const CommandListParameters commandListDescription = commandList.getResolvedDescription();
-    const GpuPhysicalQueueInfo* const commandQueue = commandList.getDevice().getPhysicalQueueInfo(commandListDescription.physicalQueue);
-    if(!commandQueue)
-        return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::BackendResourceNotReady, expectedStreamValidation);
-
-    GpuCommandIrStreamReader reader(bytes);
-    u64 recordIndex = 0u;
-    GpuCommandIrDetail::RasterReplayState rasterState;
-    for(;;){
-        const auto decodedResult = reader.next();
-        if(!decodedResult && decodedResult.error() == GpuCommandIrStreamReadStatus::End){
-            return GpuCommandIrReplayResult{ .streamValidation = reader.validation(), .recordIndex = recordIndex, };
-        }
-        if(!decodedResult){
-            return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::StreamChangedDuringReplay, reader.validation(), reader.validation().recordIndex);
-        }
-        const auto& decoded = *decodedResult;
-
-        const b8 raster = GpuCommandIrDetail::IsRasterOpcode(decoded.opcode);
-        const GpuSubmissionPacketId recordPacket = raster ? decoded.raster.packet : decoded.builtin.packet;
-        if(recordPacket == packet){
-            FOUNDATION_ASSERT(!raster || ownedStream);
-            const GpuCommandIrReplayError::Enum operandError = raster
-                ? GpuCommandIrDetail::ValidateRasterBackendOperand(decoded.raster, *ownedStream, graph, *commandQueue, recordIndex, commandList, rasterState)
-                : ValidateBackendOperands(decoded.builtin, graph, *commandQueue, commandList)
-            ;
-            if(operandError != GpuCommandIrReplayError::None)
-                return GpuCommandIrDetail::ReplayFailure(operandError, expectedStreamValidation, recordIndex);
-        }
-        ++recordIndex;
-    }
-}
 
 static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, CommandList& commandList){
     switch(record.opcode){
@@ -198,41 +166,36 @@ static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const Gp
 
 
 [[nodiscard]] static GpuCommandIrReplayResult ReplayPacketImpl(
-    const BinaryByteView bytes,
-    const GpuCommandIrOwnedStream* const ownedStream,
+    const BinaryByteView primaryBytes,
+    const BinaryByteView secondaryBlobBytes,
+    const b8 splitBuffers,
+    const GpuCommandIrDetail::RasterOwnerTableView& owners,
     const GpuTaskGraphDeclarationReadView& graph,
     const GpuCompiledGraph::ReadView& compiledGraph,
     const GpuSubmissionPacketId packet,
     CommandList& commandList
 ){
-    GpuCommandIrReplayResult result = ownedStream ? PreflightGpuCommandIrPacket(*ownedStream, graph, compiledGraph, packet) : PreflightGpuCommandIrPacket(bytes, graph, compiledGraph, packet);
+    const GpuCommandIrReplayResult result = GpuCommandIrDetail::PreflightGpuCommandIrPacketStream(
+        primaryBytes,
+        secondaryBlobBytes,
+        splitBuffers,
+        owners,
+        graph,
+        compiledGraph,
+        packet,
+        &commandList
+    );
     if(!result.valid())
         return result;
 
-    const GpuCompiledPacketView packetView = compiledGraph.packet(packet);
-    FOUNDATION_ASSERT(packetView.valid());
-    const GpuSubmissionPacket& packetPlan = *packetView.plan;
-    auto& queue = *MakeNotNull(compiledGraph.queueInfo(packetPlan.queue));
-    if(!commandList.isRecording()){
-        return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::CommandListNotRecording, result.streamValidation);
-    }
-    if(commandList.commandRecordingFailed()){
-        return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::CommandListRecordingFailed, result.streamValidation);
-    }
-    if(commandList.isRenderPassActive()){
-        return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::CommandListRenderPassActive, result.streamValidation);
-    }
-    const CommandListParameters commandListDescription = commandList.getResolvedDescription();
-    const GpuCommandIrReplayError::Enum commandListQueueError = GpuCommandIrDetail::ValidateReplayCommandListQueue(commandListDescription, packetPlan.queue, queue.queueClass);
-    if(commandListQueueError != GpuCommandIrReplayError::None){
-        return GpuCommandIrDetail::ReplayFailure(commandListQueueError, result.streamValidation);
-    }
-    const GpuCommandIrReplayResult backendPreflight = __hidden_gpu_command_ir_replay_lowering::ValidateBackendOperandPacket(bytes, ownedStream, graph, packet, result.streamValidation, commandList);
-    if(!backendPreflight.valid())
-        return backendPreflight;
-
     const u64 recordingLeaseSerial = commandList.recordingLeaseSerial();
-    GpuCommandIrStreamReader reader(bytes);
+    Optional<GpuCommandIrStreamReader> readerStorage;
+    if(splitBuffers)
+        readerStorage.emplace(primaryBytes, secondaryBlobBytes);
+    else
+        readerStorage.emplace(primaryBytes);
+    GpuCommandIrStreamReader& reader = *readerStorage;
+
     u64 recordIndex = 0u;
     for(;;){
         const auto decodedResult = reader.next();
@@ -253,8 +216,8 @@ static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const Gp
         FOUNDATION_ASSERT(raster || (graph.validResource(decoded.builtin.destination) && ((decoded.builtin.opcode != GpuCommandIrOpcode::CopyBuffer && decoded.builtin.opcode != GpuCommandIrOpcode::CopyTexture) || graph.validResource(decoded.builtin.source))));
 
         if(raster){
-            FOUNDATION_ASSERT(ownedStream);
-            if(!GpuCommandIrDetail::LowerRasterOperation(decoded.raster, *ownedStream, reader.blobBytes(), commandList))
+            FOUNDATION_ASSERT(owners.hasOwnerSidecar);
+            if(!GpuCommandIrDetail::LowerRasterOperation(decoded.raster, owners, reader.blobBytes(), commandList))
                 return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::CommandListRecordingFailed, result.streamValidation, recordIndex);
         }
         else if(decoded.builtin.opcode == GpuCommandIrOpcode::UploadBuffer || decoded.builtin.opcode == GpuCommandIrOpcode::UploadTexture){
@@ -272,7 +235,11 @@ static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const Gp
 }
 
 GpuCommandIrReplayResult ReplayGpuCommandIrPacket(const GpuCommandIrOwnedStream& stream, const GpuTaskGraphDeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledGraph, const GpuSubmissionPacketId packet, CommandList& commandList){
-    return ReplayPacketImpl(stream.bytes(), &stream, graph, compiledGraph, packet, commandList);
+    return ReplayPacketImpl(stream.bytes(), {}, false, GpuCommandIrDetail::RasterOwnerTableView::FromOwnedStream(stream), graph, compiledGraph, packet, commandList);
+}
+
+GpuCommandIrReplayResult ReplayGpuCommandIrPacket(const GpuCommandIrCapture& capture, const GpuTaskGraphDeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledGraph, const GpuSubmissionPacketId packet, CommandList& commandList){
+    return ReplayPacketImpl(capture.rawCommandBytes(), capture.rawBlobBytes(), true, GpuCommandIrDetail::RasterOwnerTableView::FromCapture(capture), graph, compiledGraph, packet, commandList);
 }
 
 

@@ -174,6 +174,7 @@ private:
     using PipelineImportMatch = GpuTaskGraphDetail::PipelineImportMatch;
     using PipelineBinding = GpuTaskGraphDetail::PipelineBinding;
     using GpuExternalCompletionNode = GpuTaskGraphDetail::GpuExternalCompletionNode;
+    using GpuUploadBlobStorageBlock = GpuTaskGraphDetail::GpuUploadBlobStorageBlock;
     using GpuUploadBlobNode = GpuTaskGraphDetail::GpuUploadBlobNode;
     using MarkerLabelRange = GpuTaskGraphDetail::MarkerLabelRange;
     using ImportIdentityIndex = HashMap<NameHash, u32, GraphicsArena>;
@@ -243,12 +244,15 @@ public:
         , m_resourceVersions(arena)
         , m_initialOwnerHandoffSources(arena)
         , m_initialOwnerHandoffStateSnapshots(arena)
+        , m_reusableStateSnapshots(arena)
         , m_queueFamilyIndices(arena)
         , m_resourceSets(arena)
         , m_resourceSetMembers(arena)
         , m_pipelines(arena)
         , m_externalCompletions(arena)
         , m_uploadBlobs(arena)
+        , m_uploadBlobStorage(arena)
+        , m_overalignedUploadBlobs(arena)
         , m_markerText(arena)
         , m_generation(AllocateGeneration())
         , m_declarationRevision(AllocateGeneration())
@@ -558,6 +562,14 @@ private:
 
     [[nodiscard]] MarkerLabelRange appendMarkerLabel(AStringView text);
     [[nodiscard]] AStringView markerLabel(u32 offset, u32 size)const noexcept;
+    void bumpDeclarationRevision()noexcept{
+        if(m_declarationRevision == Limit<u64>::s_Max)
+            FOUNDATION_FATAL_ASSERT_MSG(false, "GPU task graph declaration revision space is exhausted");
+        ++m_declarationRevision;
+    }
+    [[nodiscard]] GlobalUniquePtr<CommandListResourceStateHandoff> acquireStateSnapshot();
+    void recycleOrDestroyStateSnapshot(NotNull<CommandListResourceStateHandoff*> states)noexcept;
+    void destroyReusableStateSnapshots()noexcept;
     [[nodiscard]] b8 retireTaskPayloads();
     [[nodiscard]] b8 destroyTaskPayloads();
     [[nodiscard]] b8 destroyTaskPayloadsWithoutCallbacks()noexcept;
@@ -586,6 +598,7 @@ private:
     GraphicsVector<GpuGraphResourceVersionNode> m_resourceVersions;
     GraphicsVector<GpuTaskGraphInitialOwnerHandoffSourceView> m_initialOwnerHandoffSources;
     GraphicsVector<NotNull<CommandListResourceStateHandoff*>> m_initialOwnerHandoffStateSnapshots;
+    GraphicsVector<NotNull<CommandListResourceStateHandoff*>> m_reusableStateSnapshots;
     GraphicsVector<u32> m_queueFamilyIndices;
     GraphicsVector<GpuGraphResourceSetNode> m_resourceSets;
     GraphicsVector<GpuGraphResourceId> m_resourceSetMembers;
@@ -595,8 +608,11 @@ private:
     GraphicsVector<GpuExternalCompletionNode> m_externalCompletions;
     Optional<ImportIdentityIndex> m_externalCompletionIdentityIndex;
     GraphicsVector<GpuUploadBlobNode> m_uploadBlobs;
+    GraphicsVector<GpuUploadBlobStorageBlock> m_uploadBlobStorage;
+    GraphicsVector<GraphicsBytes> m_overalignedUploadBlobs;
     GraphicsBytes m_markerText;
     GpuPresentEndpoint m_presentEndpoint;
+    usize m_uploadBlobStorageByteSize = 0u;
     u64 m_generation = 0u;
     u64 m_declarationRevision = 0u;
     mutable u64 m_activeRecordingAttemptGeneration = 0u;
@@ -611,6 +627,7 @@ private:
     mutable SubmissionBindingState::Enum m_submissionBindingState = SubmissionBindingState::None;
     u16 m_externalCompletionDeviceGeneration = 0u;
     b8 m_hasPresentEndpoint = false;
+    b8 m_hasTaskPayloads = false;
     mutable b8 m_teardownInProgress = false;
 };
 

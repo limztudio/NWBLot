@@ -23,6 +23,8 @@ public:
 
 
 public:
+    void prepareBatch(Span<const Device::GraphCommandListBatchEntry> entries, b8 graphSubmissionAuthorized);
+    void finalizeBatch(Span<const Device::GraphCommandListBatchEntry> entries, const GpuPhysicalQueueId& executionQueue, u64 submittedID, b8 submissionAccepted);
     void prepare(CommandList* const* commandLists, usize count, b8 graphSubmissionAuthorized);
     void finalize(CommandList* const* commandLists, usize count, const GpuPhysicalQueueId& executionQueue, u64 submittedID, b8 submissionAccepted);
 

@@ -55,7 +55,7 @@ void AppendTaskOptions(MString& out, const Stmt& stmt){
 
 void ParallelStatementEmitter::emitTaskScopePrologue(MString& out, const u32 indent)const{
     m_emitter.emitIndent(out, indent);
-    out.append("static ::NWB::Core::CpuTaskScheduler s_AdhdTaskScheduler;\r\n");
+    out.append("::NWB::Core::CpuTaskScheduler& s_AdhdTaskScheduler = ::NWB::Core::SharedCpuTaskScheduler();\r\n");
     m_emitter.emitIndent(out, indent);
     out.append("::NWB::Core::CpuTaskScope __adhd_task_scope(s_AdhdTaskScheduler);\r\n");
     m_emitter.emitIndent(out, indent);

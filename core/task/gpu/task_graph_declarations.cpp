@@ -6,6 +6,7 @@
 
 #include <global/atomic.h>
 #include <global/exception.h>
+#include <global/scope_exit.h>
 
 #include <global/atomic_identity.h>
 
@@ -28,6 +29,7 @@ u64 GpuTaskGraph::AllocateGeneration()noexcept{
 }
 
 GpuTaskGraph::~GpuTaskGraph()noexcept(false){
+    ScopeExit destroyReusableSnapshots([this]()noexcept{ destroyReusableStateSnapshots(); });
     ResetCompletionScope resetCompletion(*this);
     b8 teardownValid = true;
     {
@@ -90,7 +92,7 @@ b8 GpuTaskGraph::setNormalExecutionPrelude(const GpuTaskId& task){
         return false;
 
     m_normalExecutionPrelude = task;
-    m_declarationRevision = AllocateGeneration();
+    bumpDeclarationRevision();
     return true;
 }
 

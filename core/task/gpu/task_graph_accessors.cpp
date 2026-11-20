@@ -149,7 +149,12 @@ Expected<BinaryByteView> GpuTaskGraph::uploadBlobData(const GpuUploadBlobId& blo
     const GpuUploadBlobNode* const node = findUploadBlob(blob);
     if(!node || node->dataSize == 0u)
         return MakeUnexpected(Failure{});
-    return BinaryByteView{ node->bytes.data() + node->dataOffset, node->dataSize };
+    if(node->overflowIndex != Limit<u32>::s_Max){
+        FOUNDATION_ASSERT(node->overflowIndex < m_overalignedUploadBlobs.size());
+        const GraphicsBytes& bytes = m_overalignedUploadBlobs[node->overflowIndex];
+        return BinaryByteView{ bytes.data() + node->dataOffset, node->dataSize };
+    }
+    return BinaryByteView{ reinterpret_cast<const u8*>(m_uploadBlobStorage.data()) + node->dataOffset, node->dataSize };
 }
 
 GraphicsPipeline* GpuTaskGraph::graphicsPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept{

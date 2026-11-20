@@ -25,8 +25,13 @@ NWB_CORE_BEGIN
 }
 
 struct GpuTaskDependencyPairHasher{
-    [[nodiscard]] usize operator()(const u64 pairKey)const noexcept{
-        return static_cast<usize>(ComputeFnv64Bytes(&pairKey, sizeof(pairKey)));
+    [[nodiscard]] usize operator()(u64 pairKey)const noexcept{
+        pairKey ^= pairKey >> 30u;
+        pairKey *= 0xBF58476D1CE4E5B9ull;
+        pairKey ^= pairKey >> 27u;
+        pairKey *= 0x94D049BB133111EBull;
+        pairKey ^= pairKey >> 31u;
+        return static_cast<usize>(pairKey);
     }
 };
 

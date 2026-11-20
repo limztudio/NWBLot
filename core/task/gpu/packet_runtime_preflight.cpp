@@ -101,6 +101,7 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
     if(packet.taskCount == 0u || !packetQueueInfo || !m_device.matchesPhysicalQueueIdentity(packet.queue) || (initialStates && !initialStates->validForDeviceGeneration(planAccess.deviceGeneration())))
         return false;
 
+    const u32 destinationDomain = initialStates ? GraphicsBackend::GetQueueOwnershipDomain(m_device, packet.queue) : GraphicsBackend::s_InvalidQueueOwnershipDomain;
     const auto validateOwnership = [&](const ResourceQueueSharing::Mask sharing, const ResourceQueueSharing::Mask resourceSharing, const b8 usesConcurrentSharing, const GpuPhysicalQueueId ownerQueue, const GpuPhysicalQueueId releaseDestinationQueue)noexcept{
         if(sharing != resourceSharing)
             return false;
@@ -109,7 +110,6 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
         if((ownerQueue.valid() && !m_device.matchesPhysicalQueueIdentity(ownerQueue)) || (releaseDestinationQueue.valid() && !m_device.matchesPhysicalQueueIdentity(releaseDestinationQueue)))
             return false;
 
-        const u32 destinationDomain = GraphicsBackend::GetQueueOwnershipDomain(m_device, packet.queue);
         const u32 sourceDomain = ownerQueue.valid() ? GraphicsBackend::GetQueueOwnershipDomain(m_device, ownerQueue) : GraphicsBackend::s_InvalidQueueOwnershipDomain;
         if(destinationDomain == GraphicsBackend::s_InvalidQueueOwnershipDomain)
             return false;
@@ -198,6 +198,14 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
         }
     }
 
+    struct PreflightCachedResource{
+        ResourceStates::Mask permanentState = ResourceStates::Unknown;
+        ResourceStates::Mask lastValidatedState = ResourceStates::Unknown;
+        b8 baseValidated = false;
+        b8 hasLastValidatedState = false;
+    };
+    Vector<PreflightCachedResource, Alloc::ScratchArena> cachedResources(declarationAccess.resourceCount(), stateFanInScratchArena);
+
     const auto validateTextureRange = [](Texture* const texture, const TextureSubresourceSet& sourceRange)noexcept{
         if(!texture)
             return false;
@@ -220,43 +228,83 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
         if(!resource.hasBackendResource)
             return MakeUnexpected(Failure{});
 
+        PreflightCachedResource& cached = cachedResources[resourceID.index];
         switch(resource.type){
         case GpuGraphResourceType::Texture:{
             Texture* const texture = declarationAccess.textureForResource(resourceID);
-            if(!(texture && texture->getDeviceGeneration() == planAccess.deviceGeneration() && texture->getCreationDescription().queueSharing == resource.queueSharing && validateTextureForState(texture, requiredState)))
+            if(!cached.baseValidated){
+                if(!(texture && texture->getDeviceGeneration() == planAccess.deviceGeneration() && texture->getCreationDescription().queueSharing == resource.queueSharing && validateTextureForState(texture, ResourceStates::Unknown)))
+                    return MakeUnexpected(Failure{});
+                const auto permanentState = permanentTextureState(texture);
+                if(!permanentState)
+                    return MakeUnexpected(Failure{});
+                cached.permanentState = *permanentState;
+                cached.baseValidated = true;
+            }
+            if(requiredState == ResourceStates::Unknown)
+                return cached.permanentState;
+            if(cached.hasLastValidatedState && cached.lastValidatedState == requiredState)
+                return cached.permanentState;
+            if(!GraphicsBackend::IsTextureResourceStateMaskValid(requiredState) || !GraphicsBackend::IsTextureReadyForState(m_device, texture, requiredState))
                 return MakeUnexpected(Failure{});
-            return permanentTextureState(texture);
+            cached.lastValidatedState = requiredState;
+            cached.hasLastValidatedState = true;
+            return cached.permanentState;
         }
         case GpuGraphResourceType::Buffer:{
             Buffer* const buffer = declarationAccess.bufferForResource(resourceID);
-            if(!(
-                buffer
-                && buffer->getDeviceGeneration() == planAccess.deviceGeneration()
-                && buffer->getCreationDescription().queueSharing == resource.queueSharing
-                && ResourceQueueAdmissionAdmitsQueue(buffer->getQueueAdmissionSnapshot(), *packetQueueInfo)
-                && (requiredState == ResourceStates::Unknown ? m_device.isBufferReadyForGpuUse(buffer) : validateBufferForState(buffer, requiredState))
-            ))
+            if(!cached.baseValidated){
+                if(!(buffer && buffer->getDeviceGeneration() == planAccess.deviceGeneration() && buffer->getCreationDescription().queueSharing == resource.queueSharing && ResourceQueueAdmissionAdmitsQueue(buffer->getQueueAdmissionSnapshot(), *packetQueueInfo) && m_device.isBufferReadyForGpuUse(buffer)))
+                    return MakeUnexpected(Failure{});
+                const auto permanentState = permanentBufferState(buffer);
+                if(!permanentState)
+                    return MakeUnexpected(Failure{});
+                cached.permanentState = *permanentState;
+                cached.baseValidated = true;
+            }
+            if(requiredState == ResourceStates::Unknown)
+                return cached.permanentState;
+            if(cached.hasLastValidatedState && cached.lastValidatedState == requiredState)
+                return cached.permanentState;
+            if(!GraphicsBackend::IsBufferResourceStateMaskValid(requiredState) || !GraphicsBackend::IsBufferDescriptionCompatibleWithResourceStates(buffer->getCreationDescription(), requiredState) || !GraphicsBackend::IsBufferReadyForState(m_device, buffer, requiredState))
                 return MakeUnexpected(Failure{});
-            return permanentBufferState(buffer);
+            cached.lastValidatedState = requiredState;
+            cached.hasLastValidatedState = true;
+            return cached.permanentState;
         }
         case GpuGraphResourceType::AccelStruct:{
             RayTracingAccelStruct* const accelStruct = declarationAccess.accelStructForResource(resourceID);
             Buffer* const backingBuffer = accelStruct ? accelStruct->getBackingBuffer() : nullptr;
-            const ResourceQueueSharing::Mask creationQueueSharing = accelStruct ? accelStruct->getCreationQueueSharing() : ResourceQueueSharing::Exclusive;
-            if(!(
-                accelStruct
-                && backingBuffer
-                && accelStruct->getDeviceGeneration() == planAccess.deviceGeneration()
-                && accelStruct->queueSharingMatchesCreation()
-                && creationQueueSharing == resource.queueSharing
-                && backingBuffer->descriptionMatchesCreation()
-                && backingBuffer->getCreationDescription().queueSharing == creationQueueSharing
-                && m_device.isAccelStructReadyForGpuUse(accelStruct)
-                && ResourceQueueAdmissionAdmitsQueue(backingBuffer->getQueueAdmissionSnapshot(), *packetQueueInfo)
-                && (requiredState == ResourceStates::Unknown ? m_device.isBufferReadyForGpuUse(backingBuffer) : validateBufferForState(backingBuffer, requiredState))
-            ))
+            if(!cached.baseValidated){
+                const ResourceQueueSharing::Mask creationQueueSharing = accelStruct ? accelStruct->getCreationQueueSharing() : ResourceQueueSharing::Exclusive;
+                if(!(
+                    accelStruct
+                    && backingBuffer
+                    && accelStruct->getDeviceGeneration() == planAccess.deviceGeneration()
+                    && accelStruct->queueSharingMatchesCreation()
+                    && creationQueueSharing == resource.queueSharing
+                    && backingBuffer->descriptionMatchesCreation()
+                    && backingBuffer->getCreationDescription().queueSharing == creationQueueSharing
+                    && m_device.isAccelStructReadyForGpuUse(accelStruct)
+                    && ResourceQueueAdmissionAdmitsQueue(backingBuffer->getQueueAdmissionSnapshot(), *packetQueueInfo)
+                    && m_device.isBufferReadyForGpuUse(backingBuffer)
+                ))
+                    return MakeUnexpected(Failure{});
+                const auto permanentState = permanentBufferState(backingBuffer);
+                if(!permanentState)
+                    return MakeUnexpected(Failure{});
+                cached.permanentState = *permanentState;
+                cached.baseValidated = true;
+            }
+            if(requiredState == ResourceStates::Unknown)
+                return cached.permanentState;
+            if(cached.hasLastValidatedState && cached.lastValidatedState == requiredState)
+                return cached.permanentState;
+            if(!GraphicsBackend::IsBufferResourceStateMaskValid(requiredState) || !GraphicsBackend::IsBufferDescriptionCompatibleWithResourceStates(backingBuffer->getCreationDescription(), requiredState) || !GraphicsBackend::IsBufferReadyForState(m_device, backingBuffer, requiredState))
                 return MakeUnexpected(Failure{});
-            return permanentBufferState(backingBuffer);
+            cached.lastValidatedState = requiredState;
+            cached.hasLastValidatedState = true;
+            return cached.permanentState;
         }
         default:
             return MakeUnexpected(Failure{});
@@ -277,6 +325,8 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
         return (*permanentState) == ResourceStates::Unknown || (*permanentState) == requiredState;
     };
     const auto resourcePermanentState = [&](const GpuGraphResourceId resourceID)noexcept -> Expected<ResourceStates::Mask>{
+        if(cachedResources[resourceID.index].baseValidated)
+            return cachedResources[resourceID.index].permanentState;
         const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(resourceID.index);
         if(resource.type == GpuGraphResourceType::Texture)
             return permanentTextureState(declarationAccess.textureForResource(resourceID));

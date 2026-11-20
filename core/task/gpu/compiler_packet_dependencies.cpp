@@ -194,8 +194,9 @@ namespace GpuTaskGraphCompilerDetail{
             continue;
 
         b8 consumerDependsOnNonRoot = false;
-        const b8 hasResourceStateConsumerGroup = resourceStateDependencyIndex < resourceStateDependencies.size() && resourceStateDependencies[resourceStateDependencyIndex].consumer == consumerPacketID;
-        if(packetReachabilityWordsPerPacket != 0u || hasResourceStateConsumerGroup){
+        const b8 hasRemainingResourceStateDependencies = resourceStateDependencyIndex < resourceStateDependencies.size();
+        const b8 hasResourceStateConsumerGroup = hasRemainingResourceStateDependencies && resourceStateDependencies[resourceStateDependencyIndex].consumer == consumerPacketID;
+        if((packetReachabilityWordsPerPacket != 0u && hasRemainingResourceStateDependencies) || hasResourceStateConsumerGroup){
             for(u32 dependencyIndex = 0u; dependencyIndex < consumerPacket.dependencyCount; ++dependencyIndex){
                 const GpuPacketDependency& dependency = compiledPlan.packetDependencies[consumerPacket.dependencyOffset + dependencyIndex];
                 if(packetReachabilityWordsPerPacket != 0u){
@@ -224,7 +225,7 @@ namespace GpuTaskGraphCompilerDetail{
             }
             if(!appendPacketDependency(producerPacketID))
                 return false;
-            if(packetReachabilityWordsPerPacket != 0u && !publishPacketDependency(producerPacketID, consumerPacketID))
+            if(packetReachabilityWordsPerPacket != 0u && resourceStateDependencyIndex < resourceStateDependencies.size() && !publishPacketDependency(producerPacketID, consumerPacketID))
                 return false;
         }
     }

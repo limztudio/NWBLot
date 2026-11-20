@@ -205,7 +205,6 @@ private:
     [[nodiscard]] b8 recreateAcquireSyncSlots(usize count);
     [[nodiscard]] b8 prepareAcquireSyncSlot(AcquireSyncSlot& slot);
     [[nodiscard]] b8 waitAcquireSyncSlotsForLifecycle();
-    [[nodiscard]] b8 createFrameSyncQueries();
     [[nodiscard]] b8 ensureDirectPresentCommandList(const GpuPhysicalQueueId& executionQueue);
     void resetDirectPresentCommandList()noexcept;
     [[nodiscard]] b8 recordDirectPresentTransition(const VulkanDetail::DirectPresentTransitionPolicy::Enum transitionPolicy, Texture* backbufferTexture);
@@ -253,8 +252,7 @@ private:
     SemaphoreVector m_presentSemaphores;
     CommandListHandle m_directPresentCommandList;
     GpuPhysicalQueueId m_directPresentQueue;
-    ::Queue<EventQueryHandle, Alloc::GlobalArena> m_framesInFlight;
-    Vector<EventQueryHandle, Alloc::GlobalArena> m_queryPool;
+    ::Queue<QueueSubmissionToken, Alloc::GlobalArena> m_framesInFlight;
     u32 m_swapChainIndex = Limit<u32>::s_Max;
     u32 m_acquireSyncSlotIndex = 0u;
     u32 m_maxFramesInFlight = s_MaxFramesInFlight;

@@ -194,7 +194,6 @@ b8 SwapChainLifecycle::commitSwapChainResize(SwapChainTransitionTicket&& ticket)
     m_context.commitPreparedSwapChainDestruction();
     while(!m_context.m_framesInFlight.empty())
         m_context.m_framesInFlight.pop();
-    m_context.m_queryPool.clear();
     m_context.clearSemaphores(m_context.m_presentSemaphores);
     m_context.clearAcquireSyncSlots();
 
@@ -231,7 +230,6 @@ b8 SwapChainLifecycle::commitDestroy(SwapChainTransitionTicket&& ticket)noexcept
 
     while(!m_context.m_framesInFlight.empty())
         m_context.m_framesInFlight.pop();
-    m_context.m_queryPool.clear();
 
     m_context.clearSemaphores(m_context.m_presentSemaphores);
     m_context.clearAcquireSyncSlots();
@@ -289,13 +287,8 @@ b8 SwapChainLifecycle::createSwapChainResources(Alloc::ScratchArena& scratchAren
         return false;
     }
 
-    if(!m_context.createFrameSyncQueries()){
-        m_context.clearSemaphores(m_context.m_presentSemaphores);
-        m_context.clearAcquireSyncSlots();
-        if(!m_context.destroySwapChainAfterCreateFailure())
-            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to destroy swapchain after frame-query creation failure."));
-        return false;
-    }
+    while(!m_context.m_framesInFlight.empty())
+        m_context.m_framesInFlight.pop();
 
     m_context.resetDirectPresentCommandList();
     {

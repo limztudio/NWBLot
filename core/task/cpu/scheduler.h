@@ -89,6 +89,23 @@ private:
         TaskNode& node;
     };
 
+private:
+    static constexpr usize s_PrioritySlotCount = 3u;
+    static constexpr usize s_CostSlotCount = 4u;
+    static constexpr usize s_CostValueCount = 3u;
+    static constexpr usize s_AffinitySlotCount = 3u;
+    static constexpr usize s_MainThreadTargetSlot = 3u;
+    static constexpr usize s_QueueCount = s_PrioritySlotCount * s_CostSlotCount;
+    static constexpr usize s_ChunksPerWorker = 4u;
+    static constexpr u64 s_ScopeSearchGenerationStep = 2u;
+
+
+private:
+    struct WorkerWakePlan{
+        Array<u32, s_AffinitySlotCount> counts{};
+        Array<b8, s_AffinitySlotCount> wakeAll{};
+    };
+
     struct ReadyProfile{
         Timer ready;
         u64 frameIndex = 0u;
@@ -96,6 +113,15 @@ private:
     };
 
     using ProfileSample = CpuTaskProfileBuffer::Sample;
+
+    struct ClaimedExecution{
+        TaskHandle handle;
+        TaskNode* node = nullptr;
+        Optional<ProfileSample> profile;
+        Optional<ReadyProfile> readyProfile;
+        WorkerWakePlan wakePlan;
+        b8 invoke = false;
+    };
 
     class ProfileMeasure final : NoCopy{
     public:
@@ -123,14 +149,6 @@ private:
 
 
 private:
-    static constexpr usize s_PrioritySlotCount = 3u;
-    static constexpr usize s_CostSlotCount = 4u;
-    static constexpr usize s_CostValueCount = 3u;
-    static constexpr usize s_AffinitySlotCount = 3u;
-    static constexpr usize s_MainThreadTargetSlot = 3u;
-    static constexpr usize s_QueueCount = s_PrioritySlotCount * s_CostSlotCount;
-    static constexpr usize s_ChunksPerWorker = 4u;
-    static constexpr u64 s_ScopeSearchGenerationStep = 2u;
     inline static thread_local Execution* s_Execution = nullptr;
 
 
@@ -204,11 +222,12 @@ public:
 private:
     [[nodiscard]] Expected<TaskReservation, CpuTaskAdmissionError::Enum> reserveTaskLocked();
     [[nodiscard]] Expected<TaskHandle, CpuTaskAdmissionError::Enum> submitTask(TaskFunction&& function, CpuTaskScope* scope, CpuTaskOptions options, const TaskHandle* dependencies, usize dependencyCount);
-    [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> parallelRange(usize begin, usize end, usize grainSize, CpuTaskOptions options, NotNull<const void*> context, NotNull<RangeFunction> invoke);
+    [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> parallelRange(usize begin, usize end, usize grainSize, CpuTaskOptions options, NotNull<const void*> context, NotNull<RangeFunction> invoke, CpuTaskScope* callerScope = nullptr);
     void releaseReservation(TaskHandle handle)noexcept;
     [[nodiscard]] TaskNode* resolveLocked(TaskHandle handle)noexcept;
     [[nodiscard]] const TaskNode* resolveLocked(TaskHandle handle)const noexcept;
     [[nodiscard]] b8 wasCanceledLocked(TaskHandle handle)const noexcept;
+    [[nodiscard]] b8 isScopeCanceledLocked(const CpuTaskScope* scope)const noexcept;
     void enqueueLocked(u32 index)noexcept;
     [[nodiscard]] TaskHandle claimLocked(CpuAffinity::Enum affinity, b8 mainThread, b8 cooperative, ScopeWait* preferredScope = nullptr)noexcept;
     [[nodiscard]] b8 hasReadyLocked(CpuAffinity::Enum affinity, b8 mainThread, b8 cooperative, ScopeWait* preferredScope = nullptr)noexcept;
@@ -216,7 +235,8 @@ private:
     void invalidateScopeSearchLocked(b8 publication)noexcept;
     [[nodiscard]] b8 contributesToScopeLocked(u32 index, const ScopeWait& wait)noexcept;
     [[nodiscard]] b8 queueEligible(usize queue, CpuAffinity::Enum affinity, b8 mainThread, b8 cooperative)const noexcept;
-    void execute(TaskHandle handle, usize workerIndex, CpuAffinity::Enum affinity, b8 cooperative);
+    [[nodiscard]] ClaimedExecution beginClaimedLocked(TaskHandle handle, usize workerIndex, CpuAffinity::Enum affinity, b8 cooperative)noexcept;
+    void executeClaimed(ClaimedExecution& claimed, usize workerIndex, CpuAffinity::Enum affinity);
     void retire(TaskHandle handle, TaskNode& first)noexcept;
     void workerLoop(const StopToken& stop, usize workerIndex);
     [[nodiscard]] b8 executeOne(b8 cooperative, ScopeWait* preferredScope = nullptr);
@@ -225,9 +245,9 @@ private:
     void waitScope(CpuTaskScope& scope);
     [[nodiscard]] b8 isMainThread()const noexcept;
     [[nodiscard]] b8 isExecuting()const noexcept{ return s_Execution && &s_Execution->scheduler == this; }
-    [[nodiscard]] u32 workerWakeMaskLocked()const noexcept;
-    void notifyWorkers(u32 wakeMask)noexcept;
-    void notifyProgress(u32 wakeMask, b8 wakeJoiners)noexcept;
+    [[nodiscard]] WorkerWakePlan workerWakePlanLocked()const noexcept;
+    void notifyWorkers(const WorkerWakePlan& wakePlan)noexcept;
+    void notifyProgress(const WorkerWakePlan& wakePlan, b8 wakeJoiners)noexcept;
     void notifyProgress()noexcept;
     void profileReadyLocked(u32 index)noexcept;
     [[nodiscard]] ProfileSample prepareProfileLocked(CpuTaskProfileKind::Enum kind, TaskHandle task, CpuTaskProfileLabel label, usize workerIndex, CpuAffinity::Enum affinity)const noexcept;
@@ -313,6 +333,13 @@ public:
 
 public:
     void wait(){ m_scheduler.waitScope(*this); }
+    void waitCooperative(){
+        const b8 previous = m_allowCallerWork;
+        m_allowCallerWork = true;
+        ScopeExit restore([this, previous]()noexcept{ m_allowCallerWork = previous; });
+
+        m_scheduler.waitScope(*this);
+    }
     void drain()noexcept;
     void cancel()noexcept;
     [[nodiscard]] CpuTaskScheduler& scheduler()const noexcept{ return m_scheduler; }
@@ -328,34 +355,36 @@ public:
     Expected<void, CpuTaskAdmissionError::Enum> parallelFor(usize begin, usize end, usize grainSize, const Func& function, CpuTaskOptions options = {}){
         if(begin >= end)
             return {};
-        TaskHandle parent;
-        ScopeExit drainOnFailure([this, &parent]()noexcept{ m_scheduler.drainTask(parent); });
-        Expected<void, CpuTaskAdmissionError::Enum> completed;
-        const auto admitted = submit([this, begin, end, grainSize, &function, options, &completed](){
-            completed = m_scheduler.parallelFor(begin, end, grainSize, function, options);
-        }, options
+
+        const auto range = [&function](const usize first, const usize last)noexcept(noexcept(DeclVal<const Func&>()(DeclVal<usize&>()))){
+            for(usize index = first; index < last; ++index)
+                function(index);
+        };
+        return m_scheduler.parallelRange(
+            begin,
+            end,
+            grainSize,
+            options,
+            MakeNotNull(static_cast<const void*>(&range)),
+            NotNull<CpuTaskScheduler::RangeFunction>([](NotNull<const void*> context, const usize first, const usize last)noexcept(noexcept((*static_cast<const decltype(range)*>(context.get()))(first, last))){
+                (*static_cast<const decltype(range)*>(context.get()))(first, last);
+            }),
+            this
         );
-        if(!admitted){
-            drainOnFailure.release();
-            if(admitted.error() == CpuTaskAdmissionError::ScopeCanceled)
-                return {};
-            return MakeUnexpected(admitted.error());
-        }
-        parent = *admitted;
-        m_scheduler.wait(parent);
-        drainOnFailure.release();
-        return completed;
     }
 
 
 private:
     CpuTaskScheduler& m_scheduler;
+    CpuTaskScope* m_parentScope = nullptr;
     const CpuTaskProfileLabel m_profileLabel;
     Atomic<usize> m_pending{ 0u };
     u64 m_searchIdentity = 0u;
     b8 m_canceled = false;
     b8 m_allowCallerWork = false;
 };
+
+[[nodiscard]] CpuTaskScheduler& SharedCpuTaskScheduler();
 
 
 template<typename Func>

@@ -298,6 +298,7 @@ Expected<b8, PresentationFailure> BackendContext::present(){
         NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Presentation signal state changed before native present."));
         return MakeUnexpected(PresentationFailure{ presentationAccepted });
     }
+    const QueueSubmissionToken presentationSubmission = m_framePresentation.m_framePresentationSubmission;
 
     VkPresentInfoKHR presentInfo = {};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -350,43 +351,22 @@ Expected<b8, PresentationFailure> BackendContext::present(){
     }
 
     while(m_framesInFlight.size() >= m_maxFramesInFlight){
-        auto query = m_framesInFlight.front();
-        if(!m_rhiDevice->waitEventQueryInternal(*query, Device::DeviceLossDiagnosticPolicy::Defer)){
+        const QueueSubmissionToken frameToken = m_framesInFlight.front();
+        if(!m_rhiDevice->waitForSubmissionTokenInternal(frameToken, Device::DeviceLossDiagnosticPolicy::Defer)){
             if(!m_rhiDevice->isDeviceLost())
                 m_rhiDevice->quarantineDevice();
-            captureDeviceLossAfterUnlock("frame synchronization query wait", &presentationLock);
+            captureDeviceLossAfterUnlock("frame synchronization token wait", &presentationLock);
             return MakeUnexpected(PresentationFailure{ presentationAccepted });
         }
         m_framesInFlight.pop();
-        m_queryPool.push_back(query);
     }
 
-    EventQueryHandle query;
-    if(!m_queryPool.empty()){
-        query = m_queryPool.back();
-        m_queryPool.pop_back();
-    }
-    else{
-        FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: frame synchronization query pool was exhausted"));
-        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Frame synchronization query pool was exhausted; forcing device teardown."));
+    if(!presentationSubmission.valid()){
+        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to acquire a frame synchronization token; forcing device teardown."));
         m_rhiDevice->quarantineDevice();
         return MakeUnexpected(PresentationFailure{ presentationAccepted });
     }
-
-    if(!query){
-        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to acquire a frame synchronization query; forcing device teardown."));
-        m_rhiDevice->quarantineDevice();
-        return MakeUnexpected(PresentationFailure{ presentationAccepted });
-    }
-
-    if(!m_rhiDevice->setEventQueryInternal(*query, CommandQueue::Graphics, Device::DeviceLossDiagnosticPolicy::Defer)){
-        m_queryPool.push_back(query);
-        if(!m_rhiDevice->isDeviceLost())
-            m_rhiDevice->quarantineDevice();
-        captureDeviceLossAfterUnlock("frame synchronization query submit", &presentationLock);
-        return MakeUnexpected(PresentationFailure{ presentationAccepted });
-    }
-    m_framesInFlight.push(query);
+    m_framesInFlight.push(presentationSubmission);
 
     return presentationAccepted;
 }

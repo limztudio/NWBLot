@@ -145,7 +145,7 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
         snapshots.reserve(desc.externalStateSourceCount);
         for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex){
             const CommandListResourceStateHandoff* const source = desc.externalStateSources[sourceIndex].states;
-            GlobalUniquePtr<CommandListResourceStateHandoff> snapshot = MakeGlobalUnique<CommandListResourceStateHandoff>(m_arena, m_arena);
+            GlobalUniquePtr<CommandListResourceStateHandoff> snapshot = acquireStateSnapshot();
             if(!snapshot)
                 return MakeUnexpected(Failure{});
             if(!snapshot->copyFrom(*source))
@@ -159,6 +159,7 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
     ContainerDetail::ReserveGrowingCapacity(m_externalDependencies, m_externalDependencies.size() + desc.externalDependencyCount);
     ContainerDetail::ReserveGrowingCapacity(m_externalStateSources, m_externalStateSources.size() + desc.externalStateSourceCount);
     ContainerDetail::ReserveGrowingCapacity(m_externalStateSnapshots, m_externalStateSnapshots.size() + desc.externalStateSourceCount);
+    ContainerDetail::ReserveGrowingCapacity(m_reusableStateSnapshots, m_reusableStateSnapshots.size() + m_externalStateSnapshots.size() + m_initialOwnerHandoffStateSnapshots.size() + desc.externalStateSourceCount);
     ContainerDetail::ReserveGrowingCapacity(m_resourceUses, m_resourceUses.size() + expandedResourceUseCount);
     ContainerDetail::ReserveGrowingCapacity(m_resourceVersionUses, m_resourceVersionUses.size() + desc.resourceVersionUseCount);
     ContainerDetail::ReserveGrowingCapacity(m_tasks, m_tasks.size() + 1u);
@@ -245,7 +246,9 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
     resourceUseRollback.commit();
     resourceVersionUseRollback.commit();
     taskRollback.commit();
-    m_declarationRevision = AllocateGeneration();
+    if(payload != nullptr)
+        m_hasTaskPayloads = true;
+    bumpDeclarationRevision();
     return GpuTaskId{ .generation = m_generation, .index = index };
 }
 
@@ -338,7 +341,7 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
         snapshots.reserve(desc.initialOwnerHandoffSourceCount);
         for(usize sourceIndex = 0u; sourceIndex < desc.initialOwnerHandoffSourceCount; ++sourceIndex){
             const GpuGraphInitialOwnerHandoffSourceDesc& source = desc.initialOwnerHandoffSources[sourceIndex];
-            GlobalUniquePtr<CommandListResourceStateHandoff> stateSnapshot = MakeGlobalUnique<CommandListResourceStateHandoff>(m_arena, m_arena);
+            GlobalUniquePtr<CommandListResourceStateHandoff> stateSnapshot = acquireStateSnapshot();
             if(!stateSnapshot)
                 return MakeUnexpected(Failure{});
             if(!stateSnapshot->copyFrom(*source.stateSource))
@@ -358,6 +361,7 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
 
     ContainerDetail::ReserveGrowingCapacity(m_initialOwnerHandoffSources, m_initialOwnerHandoffSources.size() + desc.initialOwnerHandoffSourceCount);
     ContainerDetail::ReserveGrowingCapacity(m_initialOwnerHandoffStateSnapshots, m_initialOwnerHandoffStateSnapshots.size() + desc.initialOwnerHandoffSourceCount);
+    ContainerDetail::ReserveGrowingCapacity(m_reusableStateSnapshots, m_reusableStateSnapshots.size() + m_externalStateSnapshots.size() + m_initialOwnerHandoffStateSnapshots.size() + desc.initialOwnerHandoffSourceCount);
     ContainerDetail::ReserveGrowingCapacity(m_queueFamilyIndices, m_queueFamilyIndices.size() + queueFamilyIndexCount);
     ContainerDetail::ReserveGrowingCapacity(m_markerText, m_markerText.size() + desc.markerLabel.size());
     ContainerDetail::ReserveGrowingCapacity(m_resources, m_resources.size() + 1u);
@@ -430,7 +434,7 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
     markerRollback.commit();
     resourceRollback.commit();
     indexRollback.release();
-    m_declarationRevision = AllocateGeneration();
+    bumpDeclarationRevision();
     return GpuGraphResourceId{ .generation = m_generation, .index = index };
 }
 
@@ -449,7 +453,7 @@ Expected<GpuGraphResourceVersionId> GpuTaskGraph::appendResourceVersion(const Gp
 
     const u32 index = static_cast<u32>(m_resourceVersions.size());
     m_resourceVersions.push_back(version);
-    m_declarationRevision = AllocateGeneration();
+    bumpDeclarationRevision();
     return GpuGraphResourceVersionId{ .generation = m_generation, .index = index };
 }
 
@@ -527,7 +531,7 @@ Expected<GpuGraphResourceSetId> GpuTaskGraph::appendResourceSet(const GpuGraphRe
     memberRollback.commit();
     setRollback.commit();
     indexRollback.release();
-    m_declarationRevision = AllocateGeneration();
+    bumpDeclarationRevision();
     return GpuGraphResourceSetId{ .generation = m_generation, .index = index };
 }
 
@@ -574,8 +578,18 @@ Expected<GpuExternalCompletionId> GpuTaskGraph::appendExternalCompletion(const G
     indexRollback.release();
     if(tokenDeviceGeneration != 0u)
         m_externalCompletionDeviceGeneration = tokenDeviceGeneration;
-    m_declarationRevision = AllocateGeneration();
+    bumpDeclarationRevision();
     return GpuExternalCompletionId{ .generation = m_generation, .index = index };
+}
+
+GlobalUniquePtr<CommandListResourceStateHandoff> GpuTaskGraph::acquireStateSnapshot(){
+    if(!m_reusableStateSnapshots.empty()){
+        const NotNull<CommandListResourceStateHandoff*> reused = m_reusableStateSnapshots.back();
+        m_reusableStateSnapshots.pop_back();
+        reused->reset();
+        return GlobalUniquePtr<CommandListResourceStateHandoff>(reused.get(), typename GlobalUniquePtr<CommandListResourceStateHandoff>::deleter_type(m_arena));
+    }
+    return MakeGlobalUnique<CommandListResourceStateHandoff>(m_arena, m_arena);
 }
 
 const GpuTaskGraph::GpuUploadBlobNode* GpuTaskGraph::findUploadBlob(const GpuUploadBlobId& blob)const noexcept{

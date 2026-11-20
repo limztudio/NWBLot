@@ -208,8 +208,9 @@ public:
 
     template<typename Func>
     [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> parallelEach(CpuTaskScope& tasks, Func&& func)const{
+        constexpr usize s_DefaultParallelEachGrainSize = 64u;
         return parallelEachImpl(func, [this, &tasks](const auto& apply){
-            return tasks.parallelFor(static_cast<usize>(0), m_count, apply);
+            return tasks.parallelFor(static_cast<usize>(0), m_count, s_DefaultParallelEachGrainSize, apply);
         });
     }
 

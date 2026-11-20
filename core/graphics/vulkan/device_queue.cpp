@@ -143,6 +143,203 @@ Expected<QueueSubmissionReceipt> Device::executeGraphCommandLists(CommandList* c
     return executeCommandListsInternal(commandLists, numCommandLists, executionQueue, submitDesc, true);
 }
 
+Device::GraphCommandListBatchResult Device::executeGraphCommandListsBatch(
+    const Span<const GraphCommandListBatchEntry> entries,
+    const GpuPhysicalQueueId& executionQueue,
+    Span<QueueSubmissionReceipt> outReceipts
+){
+    SubmissionOperationLease submissionOperation(*this);
+    if(!submissionOperation.valid() || entries.empty() || outReceipts.size() != entries.size())
+        return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
+
+    Queue* const queue = getQueue(executionQueue);
+    if(!queue){
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: requested queue is not available"));
+        return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
+    }
+
+    usize totalWaitTokens = 0u;
+    for(usize entryIndex = 0u; entryIndex < entries.size(); ++entryIndex){
+        const GraphCommandListBatchEntry& entry = entries[entryIndex];
+        if(entry.submitDesc.preSubmitHook.valid() && entryIndex + 1u != entries.size())
+            return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
+        if(entry.numCommandLists > 0u && !entry.commandLists){
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: command list array is null"));
+            return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
+        }
+        if(entry.numCommandLists > static_cast<usize>(Limit<u32>::s_Max)){
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: command list count exceeds Vulkan limit"));
+            return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
+        }
+        if(entry.submitDesc.waitTokenCount > 0u && !entry.submitDesc.waitTokens){
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: submission wait token array is null"));
+            return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
+        }
+        for(usize i = 0u; i < entry.numCommandLists; ++i){
+            CommandList* const commandList = entry.commandLists[i];
+            if(!commandList || &commandList->m_device != this){
+                NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: command list {} is null or foreign"), i);
+                return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
+            }
+            if(!commandList->matchesSubmissionLease(executionQueue, queue->m_queueID, true)){
+                NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Command list {} lease provenance does not match execution queue"), i);
+                return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
+            }
+            if(!commandList->matchesNativeLeaseIdentity()){
+                NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: command list {} has no native command buffer"), i);
+                return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
+            }
+            if(commandList->m_commandRecordingFailed){
+                NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: command list {} has a sticky native recording failure"), i);
+                return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
+            }
+            if(commandList->m_isRecording){
+                NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: command list {} is still recording"), i);
+                return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
+            }
+            for(usize previous = 0u; previous < i; ++previous){
+                if(entry.commandLists[previous] == commandList){
+                    NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: command list {} is duplicated"), i);
+                    return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
+                }
+            }
+            for(usize earlierEntry = 0u; earlierEntry < entryIndex; ++earlierEntry){
+                for(usize k = 0u; k < entries[earlierEntry].numCommandLists; ++k){
+                    if(entries[earlierEntry].commandLists[k] == commandList){
+                        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: command list is duplicated in batch"));
+                        return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
+                    }
+                }
+            }
+        }
+        totalWaitTokens += entry.submitDesc.waitTokenCount;
+    }
+
+    UniqueLock<Futex> submissionWorkspaceLock(queue->m_submissionWorkspaceMutex);
+    auto& localWaits = queue->m_executeLocalWaits;
+    auto& expectedCommandLists = queue->m_executeExpectedCommandLists;
+    localWaits.clear();
+    expectedCommandLists.clear();
+    localWaits.reserve(totalWaitTokens);
+
+    Vector<Queue::BatchSubmitEntry, Alloc::GlobalArena> queueEntries(entries.size(), m_context.objectArena);
+    Vector<usize, Alloc::GlobalArena> waitOffsets(entries.size(), m_context.objectArena);
+    for(usize entryIndex = 0u; entryIndex < entries.size(); ++entryIndex){
+        const GraphCommandListBatchEntry& entry = entries[entryIndex];
+        const usize waitOffset = localWaits.size();
+        u64 maxSameQueueWaitValue = 0u;
+        for(usize i = 0u; i < entry.submitDesc.waitTokenCount; ++i){
+            const QueueSubmissionToken& token = entry.submitDesc.waitTokens[i];
+            if(token.matchesPhysicalQueue(executionQueue.index, executionQueue.deviceGeneration)){
+                if(!token.valid() || !matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration)){
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: dependency token is invalid, unavailable, or unsignalled"));
+                    return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
+                }
+                maxSameQueueWaitValue = Max(maxSameQueueWaitValue, token.value);
+                continue;
+            }
+            if(!validateSubmissionWaitToken(token)){
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: dependency token is invalid, unavailable, or unsignalled"));
+                return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
+            }
+
+            const auto producerQueue = m_physicalQueues[token.physicalQueueIndex];
+            b8 merged = false;
+            for(usize w = waitOffset; w < localWaits.size(); ++w){
+                Queue::SubmissionWait& wait = localWaits[w];
+                if(wait.semaphore != producerQueue->m_trackingSemaphore)
+                    continue;
+                wait.value = Max(wait.value, token.value);
+                merged = true;
+                break;
+            }
+            if(!merged)
+                localWaits.push_back(Queue::SubmissionWait{ producerQueue->m_trackingSemaphore, token.value });
+        }
+        waitOffsets[entryIndex] = waitOffset;
+        queueEntries[entryIndex] = Queue::BatchSubmitEntry{
+            .ppCmd = entry.commandLists,
+            .numCmd = entry.numCommandLists,
+            .expectedCommandLists = nullptr,
+            .localWaits = nullptr,
+            .localWaitCount = localWaits.size() - waitOffset,
+            .localSignals = nullptr,
+            .localSignalCount = 0u,
+            .maxSameQueueWaitValue = maxSameQueueWaitValue,
+            .forceNativeSubmission = entry.submitDesc.forceNativeSubmission,
+        };
+    }
+
+    SubmissionWorkspace submissionWorkspace(*this, *queue);
+    submissionWorkspace.prepareBatch(entries, true);
+
+    usize expectedOffset = 0u;
+    for(usize entryIndex = 0u; entryIndex < entries.size(); ++entryIndex){
+        Queue::BatchSubmitEntry& qEntry = queueEntries[entryIndex];
+        qEntry.expectedCommandLists = entries[entryIndex].numCommandLists > 0u ? expectedCommandLists.data() + expectedOffset : nullptr;
+        qEntry.localWaits = qEntry.localWaitCount > 0u ? localWaits.data() + waitOffsets[entryIndex] : nullptr;
+        expectedOffset += entries[entryIndex].numCommandLists;
+    }
+
+    Queue::SubmissionSignal hookSignal = {};
+    const QueueSubmissionPreSubmitHook& lastHook = entries.back().submitDesc.preSubmitHook;
+    __hidden_vulkan_device_queue::ScopedSubmissionHookResolution hookResolution(lastHook);
+    b8 hookInvoked = false;
+    if(lastHook.valid()){
+        const auto nativeSignal = lastHook.invoke(lastHook.context, lastHook.identity, executionQueue);
+        hookInvoked = true;
+        if(nativeSignal)
+            hookResolution.arm();
+        if(!nativeSignal || !nativeSignal->valid()){
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to prepare exact queue submission hook"));
+            return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::NativeSubmitFailed };
+        }
+        hookSignal.semaphore = __hidden_vulkan_device_queue::DecodeSubmissionNativeSemaphore(nativeSignal->semaphore);
+        hookSignal.value = nativeSignal->value;
+        if(hookSignal.semaphore == VK_NULL_HANDLE){
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Exact queue submission hook returned an invalid native semaphore"));
+            return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::NativeSubmitFailed };
+        }
+        queueEntries.back().localSignals = &hookSignal;
+        queueEntries.back().localSignalCount = 1u;
+    }
+
+    Vector<Queue::SubmissionReceipt, Alloc::GlobalArena> queueReceipts(entries.size(), m_context.objectArena);
+    const Queue::BatchSubmissionResult batchResult = queue->submitBatch(Span<const Queue::BatchSubmitEntry>(queueEntries.data(), queueEntries.size()), Span<Queue::SubmissionReceipt>(queueReceipts.data(), queueReceipts.size()));
+    const b8 submissionAccepted = batchResult.status == Queue::BatchSubmissionResult::Status::Accepted;
+    const u64 submittedID = batchResult.lastSubmittedID;
+
+    const QueueSubmissionToken hookToken = submissionAccepted
+        ? QueueSubmissionToken{ .value = queueReceipts.back().submittedID, .physicalQueueIndex = executionQueue.index, .deviceGeneration = executionQueue.deviceGeneration, .queue = queue->m_queueID, }
+        : QueueSubmissionToken{}
+    ;
+
+    if(submissionAccepted || batchResult.status == Queue::BatchSubmissionResult::Status::NativeSubmitFailed)
+        submissionWorkspace.finalizeBatch(entries, executionQueue, submittedID, submissionAccepted);
+
+    hookResolution.resolve(hookToken);
+    submissionWorkspaceLock.unlock();
+
+    if(batchResult.nativeResult == VK_ERROR_DEVICE_LOST)
+        captureDeviceLoss(VulkanArenaScope::s_QueueSubmitContext);
+
+    if(!submissionAccepted){
+        return GraphCommandListBatchResult{
+            (batchResult.status == Queue::BatchSubmissionResult::Status::NativeSubmitFailed || hookInvoked)
+                ? GraphCommandListBatchResult::Status::NativeSubmitFailed
+                : GraphCommandListBatchResult::Status::ValidationFailed
+        };
+    }
+
+    for(usize entryIndex = 0u; entryIndex < entries.size(); ++entryIndex){
+        outReceipts[entryIndex] = QueueSubmissionReceipt{
+            QueueSubmissionToken{ .value = queueReceipts[entryIndex].submittedID, .physicalQueueIndex = executionQueue.index, .deviceGeneration = executionQueue.deviceGeneration, .queue = queue->m_queueID, },
+            queueReceipts[entryIndex].timelineWaitCount,
+        };
+    }
+    return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::Accepted };
+}
+
 Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
     CommandList* const* commandLists,
     const usize numCommandLists,
@@ -198,10 +395,6 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
             return MakeUnexpected(Failure{});
         }
     }
-    for(usize i = 0u; i < numCommandLists; ++i){
-        if(!commandLists[i]->validateTrackedResourcesReadyForSubmission())
-            return MakeUnexpected(Failure{});
-    }
 
     if(submitDesc.waitTokenCount > 0u && !submitDesc.waitTokens){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: submission wait token array is null"));
@@ -213,19 +406,25 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
     auto& expectedCommandLists = queue->m_executeExpectedCommandLists;
     localWaits.clear();
     expectedCommandLists.clear();
+    u64 maxSameQueueWaitValue = 0u;
     if(submitDesc.waitTokenCount > 0u){
         localWaits.reserve(submitDesc.waitTokenCount);
         for(usize i = 0u; i < submitDesc.waitTokenCount; ++i){
             const QueueSubmissionToken& token = submitDesc.waitTokens[i];
+            if(token.matchesPhysicalQueue(executionQueue.index, executionQueue.deviceGeneration)){
+                if(!token.valid() || !matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration)){
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: dependency token is invalid, unavailable, or unsignalled"));
+                    return MakeUnexpected(Failure{});
+                }
+                maxSameQueueWaitValue = Max(maxSameQueueWaitValue, token.value);
+                continue;
+            }
             if(!validateSubmissionWaitToken(token)){
                 NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: dependency token is invalid, unavailable, or unsignalled"));
                 return MakeUnexpected(Failure{});
             }
 
             const auto producerQueue = m_physicalQueues[token.physicalQueueIndex];
-
-            if(token.matchesPhysicalQueue(executionQueue.index, executionQueue.deviceGeneration))
-                continue;
 
             b8 merged = false;
             for(Queue::SubmissionWait& wait : localWaits){
@@ -275,7 +474,8 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
         localWaits.size(),
         localSignals,
         localSignalCount,
-        submitDesc.forceNativeSubmission
+        submitDesc.forceNativeSubmission,
+        maxSameQueueWaitValue
     );
     const b8 submissionAccepted = submission && submission->accepted;
     const u64 submittedID = submission ? submission->submittedID : submission.error().lastSubmittedID;
@@ -306,26 +506,28 @@ b8 Device::waitForSubmissionTokenInternal(const QueueSubmissionToken& token, con
     const auto producerQueue = m_physicalQueues[token.physicalQueueIndex];
     FOUNDATION_ASSERT(producerQueue->m_queueID == token.queue);
 
-    VkResult result = VK_SUCCESS;
+    VkSemaphore trackingSemaphore = VK_NULL_HANDLE;
     {
-        ScopedLock producerLock(producerQueue->m_mutex);
-        if(producerQueue->m_trackingSemaphore == VK_NULL_HANDLE || token.value > producerQueue->m_lastSubmittedID)
+        NothrowScopedLock producerLock(producerQueue->m_mutex);
+        trackingSemaphore = producerQueue->m_trackingSemaphore;
+        if(trackingSemaphore == VK_NULL_HANDLE || token.value > producerQueue->m_lastSubmittedID)
             return false;
         if(token.value <= producerQueue->m_lastFinishedID)
             return true;
-
-        auto waitInfo = VulkanDetail::MakeVkStruct<VkSemaphoreWaitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO);
-        waitInfo.semaphoreCount = 1u;
-        waitInfo.pSemaphores = &producerQueue->m_trackingSemaphore;
-        waitInfo.pValues = &token.value;
-        result = m_context.deviceDispatch.vkWaitSemaphores(m_context.device, &waitInfo, UINT64_MAX);
-        if(result == VK_SUCCESS){
-            producerQueue->m_lastFinishedID = Max(producerQueue->m_lastFinishedID, token.value);
-            producerQueue->collectCompletedCommandBuffers();
-        }
-        else if(result == VK_ERROR_DEVICE_LOST)
-            markDeviceLost();
     }
+
+    auto waitInfo = VulkanDetail::MakeVkStruct<VkSemaphoreWaitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO);
+    waitInfo.semaphoreCount = 1u;
+    waitInfo.pSemaphores = &trackingSemaphore;
+    waitInfo.pValues = &token.value;
+    const VkResult result = m_context.deviceDispatch.vkWaitSemaphores(m_context.device, &waitInfo, UINT64_MAX);
+    if(result == VK_SUCCESS){
+        NothrowScopedLock producerLock(producerQueue->m_mutex);
+        producerQueue->m_lastFinishedID = Max(producerQueue->m_lastFinishedID, token.value);
+        producerQueue->collectCompletedCommandBuffers();
+    }
+    else if(result == VK_ERROR_DEVICE_LOST)
+        markDeviceLost();
 
     if(result == VK_ERROR_DEVICE_LOST && deviceLossDiagnosticPolicy == DeviceLossDiagnosticPolicy::Capture)
         captureDeviceLoss("submission token wait");

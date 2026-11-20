@@ -111,7 +111,7 @@ void WakeIslandInSets(
 
         const BodySim sim = sets[oldSetIndex].sims[body.localIndex];
         BodyState state;
-        state.flags = sim.flags;
+        state.setFlags(sim.flags);
         body.sleepTime = 0.0f;
         RemoveBodyFromSolverSet(bodies, sets[oldSetIndex], body.localIndex);
         AddBodyToSolverSet(bodies, sets[s_AwakeSetIndex], sim, state);
@@ -154,7 +154,7 @@ void WakeBodyWithIsland(
     if(bodies[bodyId].localIndex < sets[setIdx].sims.size()){
         const BodySim sim = sets[setIdx].sims[bodies[bodyId].localIndex];
         BodyState state;
-        state.flags = sim.flags;
+        state.setFlags(sim.flags);
         RemoveBodyFromSolverSet(bodies, sets[setIdx], bodies[bodyId].localIndex);
         AddBodyToSolverSet(bodies, sets[s_AwakeSetIndex], sim, state);
     }

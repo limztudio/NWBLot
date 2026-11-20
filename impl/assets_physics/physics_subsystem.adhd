@@ -11,6 +11,8 @@ class PhysicsSubsystem{
     public AssetRef<ComputeShader> solverJointsCs;
     public AssetRef<ComputeShader> solverIntegratePositionsCs;
     public AssetRef<ComputeShader> solverFinalizeBodiesCs;
+    public AssetRef<ComputeShader> solverIslandsCs;
+    public AssetRef<ComputeShader> solverJointIslandsCs;
 }
 
 

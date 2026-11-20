@@ -169,6 +169,33 @@ class Mat3{
     }
 }
 
+class SymMat3{
+    public f32 m00;
+    public f32 m01;
+    public f32 m02;
+    public f32 m11;
+    public f32 m12;
+    public f32 m22;
+
+    public SymMat3(){
+        this.m00 = 0.0f;
+        this.m01 = 0.0f;
+        this.m02 = 0.0f;
+        this.m11 = 0.0f;
+        this.m12 = 0.0f;
+        this.m22 = 0.0f;
+    }
+
+    public SymMat3(in f32 v00, in f32 v01, in f32 v02, in f32 v11, in f32 v12, in f32 v22){
+        this.m00 = v00;
+        this.m01 = v01;
+        this.m02 = v02;
+        this.m11 = v11;
+        this.m12 = v12;
+        this.m22 = v22;
+    }
+}
+
 class Plane3D{
     public f32x4 normalOffset;
 
@@ -201,9 +228,20 @@ class SurfaceMaterial{
 }
 
 class MassData{
-    public f32 mass = 0.0f;
-    public f32x4 center(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 centerMass(0.0f, 0.0f, 0.0f, 0.0f);
     public Mat3 inertia;
+
+    public VectorSingle center()const{
+        return VectorSingle(VectorSingle(this.centerMass), 0.0f);
+    }
+
+    public f32 mass()const{
+        return this.centerMass.w;
+    }
+
+    public void setCenterMass(in VectorSingle c, in f32 m){
+        this.centerMass = f32x4(c, m);
+    }
 }
 
 class WorldDef{
@@ -340,10 +378,25 @@ class ShapeCastHit{
 }
 
 class BodyMoveEvent{
-    public Transform3D transform;
+    public f32x3_u32 positionFlags(0.0f, 0.0f, 0.0f, 0u);
+    public f32x4 rotation(0.0f, 0.0f, 0.0f, 1.0f);
     public BodyId bodyId;
     public u64 userData = 0u;
-    public b8 fellAsleep = false;
+
+    public Transform3D transform()const{
+        return Transform3D(VectorSingle(this.positionFlags.x, this.positionFlags.y, this.positionFlags.z, 0.0f), VectorSingle(this.rotation));
+    }
+
+    public b8 fellAsleep()const{
+        return this.positionFlags.w != 0u;
+    }
+
+    public void setFellAsleep(in b8 v){
+        if(v)
+            this.positionFlags.w = 1u;
+        else
+            this.positionFlags.w = 0u;
+    }
 }
 
 class ContactBeginTouchEvent{
@@ -360,8 +413,15 @@ class ContactHitEvent{
     public ShapeId shapeIdA;
     public ShapeId shapeIdB;
     public f32x4 point(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
-    public f32 approachSpeed = 0.0f;
+    public f32x4 normalApproachSpeed(0.0f, 1.0f, 0.0f, 0.0f);
+
+    public VectorSingle normal()const{
+        return VectorSingle(VectorSingle(this.normalApproachSpeed), 0.0f);
+    }
+
+    public f32 approachSpeed()const{
+        return this.normalApproachSpeed.w;
+    }
 }
 
 class SensorBeginTouchEvent{

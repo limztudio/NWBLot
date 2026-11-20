@@ -100,7 +100,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         NwbPhysicsGpuShapeProxy proxy = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idx];
         const NwbPhysicsGpuBodySim bodySim = g_NwbPhysicsBodySimBuffers[bodySimSlot][proxy.bodyIndexTypeShape.x];
         const float4 bodyQ = bodySim.rotation;
-        const float3 bodyLocalCenter = float3(bodySim.invInertiaWorldRow0.w, bodySim.invInertiaWorldRow1.w, bodySim.invInertiaWorldRow2.w);
+        const float3 bodyLocalCenter = bodySim.localCenterMinExtent.xyz;
         const float3 bodyOrigin = bodySim.positionInvMass.xyz - nwbPhysicsQuatRotate(bodyLocalCenter, bodyQ);
 
         const uint shapeType = proxy.bodyIndexTypeShape.y;

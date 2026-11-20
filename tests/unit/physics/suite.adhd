@@ -347,28 +347,59 @@ void VerifyPhysicsEdgeCases_RayCastAndShapeCastEdgeCases(){
     EXPECT_LT(scHit.normal.x, -0.95f);
 }
 
+static_assert(size_of<SphereShape>() == 16u, "SphereShape size");
+static_assert(size_of<CapsuleShape>() == 32u, "CapsuleShape size");
+static_assert(size_of<HullShape>() <= 224u, "HullShape size");
+static_assert(size_of<MeshTriangle>() == 48u, "MeshTriangle size");
+static_assert(size_of<MeshBvhNode>() == 32u, "MeshBvhNode size");
+static_assert(size_of<MeshShape>() <= 128u, "MeshShape size");
+static_assert(size_of<Shape>() == 160u, "Shape size");
+static_assert(size_of<SymMat3>() == 24u, "SymMat3 size");
+static_assert(size_of<MassData>() == 64u, "MassData size");
+static_assert(size_of<BodyMoveEvent>() == 48u, "BodyMoveEvent size");
+static_assert(size_of<ContactHitEvent>() == 48u, "ContactHitEvent size");
+static_assert(size_of<BodyState>() == 64u, "BodyState size");
+static_assert(size_of<BodySim>() == 192u, "BodySim size");
+static_assert(size_of<TreeNode>() == 48u, "TreeNode size");
+static_assert(size_of<ManifoldPoint>() == 48u, "ManifoldPoint size");
+static_assert(size_of<Manifold>() == 256u, "Manifold size");
+static_assert(size_of<Contact>() == 336u, "Contact size");
+static_assert(size_of<ManifoldConstraintPoint>() == 48u, "ManifoldConstraintPoint size");
+static_assert(size_of<ContactConstraint>() == 432u, "ContactConstraint size");
+static_assert(size_of<Joint>() == 256u, "Joint size");
+static_assert(size_of<JointConstraint>() == 336u, "JointConstraint size");
+static_assert(size_of<DistanceOutput>() == 48u, "DistanceOutput size");
+static_assert(size_of<SimplexVertex>() == 48u, "SimplexVertex size");
+static_assert(size_of<LocalRayHit>() == 32u, "LocalRayHit size");
+static_assert(size_of<TimeOfImpactOutput>() == 32u, "TimeOfImpactOutput size");
+static_assert(size_of<ClipVertex>() == 20u, "ClipVertex size");
+
 void VerifyPhysicsEdgeCases_GpuLayoutAndEcsCpuFallbackContract(){
     EXPECT_EQ(size_of<GpuPhysicsPushConstants>(), 80u);
     EXPECT_EQ(size_of<GpuPhysicsBodyState>(), 64u);
-    EXPECT_EQ(size_of<GpuPhysicsBodySim>(), 176u);
+    EXPECT_EQ(size_of<GpuPhysicsBodySim>(), 144u);
+    EXPECT_EQ(size_of<GpuPhysicsBodyOut>(), 64u);
     EXPECT_EQ(size_of<GpuPhysicsShapeProxy>(), 112u);
     EXPECT_EQ(size_of<GpuPhysicsBroadphasePair>(), 16u);
-    EXPECT_EQ(size_of<GpuPhysicsNarrowphaseManifold>(), 176u);
-    EXPECT_EQ(size_of<GpuPhysicsContactPoint>(), 64u);
-    EXPECT_EQ(size_of<GpuPhysicsContactConstraint>(), 528u);
-    EXPECT_EQ(size_of<GpuPhysicsJointConstraint>(), 400u);
+    EXPECT_EQ(size_of<GpuPhysicsNarrowphaseManifold>(), 160u);
+    EXPECT_EQ(size_of<GpuPhysicsContactPoint>(), 48u);
+    EXPECT_EQ(size_of<GpuPhysicsContactConstraint>(), 432u);
+    EXPECT_EQ(size_of<GpuPhysicsContactImpulseOut>(), 64u);
+    EXPECT_EQ(size_of<GpuPhysicsJointConstraint>(), 320u);
+    EXPECT_EQ(size_of<GpuPhysicsJointImpulseOut>(), 48u);
+    EXPECT_EQ(size_of<GpuPhysicsIslandSlice>(), s_GpuIslandSliceBytes);
     EXPECT_EQ(offset_of<GpuPhysicsPushConstants>(gravitySpeculative), 32u);
     EXPECT_EQ(offset_of<GpuPhysicsPushConstants>(slots0), 48u);
     EXPECT_EQ(offset_of<GpuPhysicsNarrowphaseManifold>(pairInfo), 0u);
-    EXPECT_EQ(offset_of<GpuPhysicsNarrowphaseManifold>(anchorA), 32u);
+    EXPECT_EQ(offset_of<GpuPhysicsNarrowphaseManifold>(anchorAFeature), 32u);
     EXPECT_EQ(offset_of<GpuPhysicsContactConstraint>(indicesCountFlags), 0u);
-    EXPECT_EQ(offset_of<GpuPhysicsContactConstraint>(points), 272u);
+    EXPECT_EQ(offset_of<GpuPhysicsContactConstraint>(points), 240u);
     EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(indicesTypeFlags), 0u);
-    EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(qA0), 64u);
-    EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(linearOffset), 192u);
-    EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(suspensionSoftness), 240u);
-    EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(linearImpulse), 352u);
-    EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(limitImpulses), 384u);
+    EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(qA0), 32u);
+    EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(linearOffsetMaxTorque), 160u);
+    EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(suspensionSoftness), 208u);
+    EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(linearImpulse), 272u);
+    EXPECT_EQ(offset_of<GpuPhysicsJointConstraint>(limitImpulses), 304u);
 
     {
         PhysicsWorld gpuFallbackWorld;
@@ -684,8 +715,8 @@ void VerifyPhysicsEdgeCases_CoupledTowerImpactAndCoplanarGjk(){
         input.useRadii = false;
         SimplexCache cache;
         const DistanceOutput distOut = ShapeDistance(input, cache);
-        EXPECT_GT(distOut.distance, 0.1f);
-        EXPECT_LT(distOut.distance, 0.35f);
+        EXPECT_GT(distOut.distance(), 0.1f);
+        EXPECT_LT(distOut.distance(), 0.35f);
     }
 }
 
@@ -1162,7 +1193,7 @@ void VerifyPhysicsEdgeCases_TriangleMeshBvhAndExactQueries(){
     EXPECT_GE(allRayHits.size(), 2u);
 
     ShapeProxy probe;
-    probe.points.push_back(f32x4(0.0f, 0.0f, 0.0f, 0.0f));
+    probe.points.push_back(f32x3u(0.0f, 0.0f, 0.0f));
     probe.radius = 0.2f;
     ShapeCastInput scIn;
     scIn.originTransform = Transform3D(VectorSingle(0.0f, 5.0f, 0.0f, 0.0f), VectorSingle(0.0f, 0.0f, 0.0f, 1.0f));
@@ -1210,15 +1241,14 @@ void VerifyPhysicsEdgeCases_ShapeMutatorsCustomMassAndExtendedJoints(){
         const ShapeId shapeId = physWorld.createSphereShape(bodyId, sd, MakeSphereShape(VectorSingle(0.0f), 0.5f).value()).value();
 
         MassData customMass;
-        customMass.mass = 12.0f;
-        customMass.center = f32x4(0.0f, 0.25f, 0.0f, 0.0f);
+        customMass.setCenterMass(VectorSingle(0.0f, 0.25f, 0.0f, 0.0f), 12.0f);
         customMass.inertia = Mat3(
             VectorSingle(3.0f, 0.0f, 0.0f, 0.0f),
             VectorSingle(0.0f, 4.0f, 0.0f, 0.0f),
             VectorSingle(0.0f, 0.0f, 5.0f, 0.0f)
         );
         EXPECT_TRUE(physWorld.setBodyMassData(bodyId, customMass));
-        EXPECT_NEAR(physWorld.tryGetBodyMassData(bodyId).value().mass, 12.0f, 1.0e-4f);
+        EXPECT_NEAR(physWorld.tryGetBodyMassData(bodyId).value().mass(), 12.0f, 1.0e-4f);
         EXPECT_NEAR(physWorld.tryGetBodyInertia(bodyId).value().row1.y, 4.0f, 1.0e-4f);
         EXPECT_NEAR(physWorld.tryGetLocalCenterOfMass(bodyId).value().y, 0.25f, 1.0e-4f);
         EXPECT_NEAR(physWorld.tryGetWorldCenterOfMass(bodyId).value().y, 3.25f, 1.0e-4f);

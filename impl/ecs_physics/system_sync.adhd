@@ -127,8 +127,7 @@ Expected<ShapeId> AttachEcsColliderEntry(
 
     if(entry.shapeType == ShapeType::Sphere){
         SphereShape sp;
-        sp.center = f32x4(scaledOffset, 0.0f);
-        sp.radius = Max(entry.radius * maxS, 1.0e-3f);
+        sp.centerRadius = f32x4(scaledOffset, Max(entry.radius * maxS, 1.0e-3f));
         return physicsWorld.createSphereShape(bodyId, sd, sp);
     }
 
@@ -141,9 +140,8 @@ Expected<ShapeId> AttachEcsColliderEntry(
             p1 = mid + Vector3Rotate(VectorSingle(p1 - mid, 0.0f), localRot);
             p2 = mid + Vector3Rotate(VectorSingle(p2 - mid, 0.0f), localRot);
         }
-        cap.center1 = f32x4(p1, 0.0f);
+        cap.center1Radius = f32x4(p1, Max(entry.radius * maxS, 1.0e-3f));
         cap.center2 = f32x4(p2, 0.0f);
-        cap.radius = Max(entry.radius * maxS, 1.0e-3f);
         return physicsWorld.createCapsuleShape(bodyId, sd, cap);
     }
 
@@ -226,23 +224,23 @@ Expected<ShapeId> AttachEcsColliderEntry(
         if(hasRot){
             h.boxRotation = f32x4(localRot);
             for(usize vi = 0u; vi < h.vertices.size(); ++vi)
-                h.vertices[vi] = f32x4(Vector3Rotate(VectorSingle(h.vertices[vi]), localRot) + scaledOffset, 0.0f);
-            for(usize fi = 0u; fi < h.faces.size(); ++fi){
-                const VectorSingle rotN = SafeNormalizeVec3(Vector3Rotate(VectorSingle(h.faces[fi].plane.normalOffset), localRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-                const f32 d = h.faces[fi].plane.normalOffset.w + Vector3Dot(rotN, scaledOffset).x;
-                h.faces[fi].plane = Plane3D(rotN, d);
+                h.vertices[vi] = PackVec3U(Vector3Rotate(Vec3FromU(h.vertices[vi]), localRot) + scaledOffset);
+            for(usize fi = 0u; fi < h.facePlanes.size(); ++fi){
+                const VectorSingle rotN = SafeNormalizeVec3(Vector3Rotate(VectorSingle(h.facePlanes[fi].normalOffset), localRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                const f32 d = h.facePlanes[fi].normalOffset.w + Vector3Dot(rotN, scaledOffset).x;
+                h.facePlanes[fi] = Plane3D(rotN, d);
             }
         }
         else{
             for(usize vi = 0u; vi < h.vertices.size(); ++vi)
-                h.vertices[vi] = f32x4(VectorSingle(h.vertices[vi]) + scaledOffset, 0.0f);
-            for(usize fi = 0u; fi < h.faces.size(); ++fi){
-                const VectorSingle n = VectorSingle(h.faces[fi].plane.normalOffset);
-                const f32 d = h.faces[fi].plane.normalOffset.w + Vector3Dot(n, scaledOffset).x;
-                h.faces[fi].plane = Plane3D(n, d);
+                h.vertices[vi] = PackVec3U(Vec3FromU(h.vertices[vi]) + scaledOffset);
+            for(usize fi = 0u; fi < h.facePlanes.size(); ++fi){
+                const VectorSingle n = VectorSingle(h.facePlanes[fi].normalOffset);
+                const f32 d = h.facePlanes[fi].normalOffset.w + Vector3Dot(n, scaledOffset).x;
+                h.facePlanes[fi] = Plane3D(n, d);
             }
         }
-        h.centroid = f32x4(scaledOffset, 0.0f);
+        h.centroidRadius = f32x4(scaledOffset, h.radius());
         return physicsWorld.createHullShape(bodyId, sd, h);
     }
 

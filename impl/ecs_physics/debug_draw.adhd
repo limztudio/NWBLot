@@ -108,7 +108,7 @@ void AppendPhysicsDebugHull(
     in VectorSingle color,
     mut Vector<PhysicsDebugLine> outLines
 ){
-    if(hull.halfEdges.empty() || hull.faces.empty())
+    if(hull.halfEdges.empty() || hull.faceTopologies.empty())
         return;
 
     const u32 edgeCount = cast<u32>(hull.halfEdges.size());
@@ -121,8 +121,8 @@ void AppendPhysicsDebugHull(
         const u8 headIdx = hull.halfEdges[edge.next].tail;
         if(cast<usize>(edge.tail) >= hull.vertices.size() || cast<usize>(headIdx) >= hull.vertices.size())
             continue;
-        const VectorSingle w0 = TransformPoint(xf, VectorSingle(hull.vertices[edge.tail]));
-        const VectorSingle w1 = TransformPoint(xf, VectorSingle(hull.vertices[headIdx]));
+        const VectorSingle w0 = TransformPoint(xf, Vec3FromU(hull.vertices[edge.tail]));
+        const VectorSingle w1 = TransformPoint(xf, Vec3FromU(hull.vertices[headIdx]));
         AppendPhysicsDebugLine(maxLines, w0, w1, color, outLines);
         if(outLines.size() >= cast<usize>(maxLines))
             return;
@@ -130,7 +130,7 @@ void AppendPhysicsDebugHull(
 }
 
 VectorSingle ResolveDebugShapeColor(in Shape shape, in Body body){
-    if(shape.isSensor)
+    if(shape.isSensor())
         return VectorSingle(0.95f, 0.30f, 0.90f, 0.85f);
     if(body.type == BodyType::Static)
         return VectorSingle(0.55f, 0.58f, 0.65f, 0.85f);
@@ -161,7 +161,7 @@ void BuildPhysicsDebugLines(
             if(outLines.size() >= cast<usize>(options.maxLines))
                 break;
             in Shape shape = world.m_shapes[si];
-            if(!shape.alive || shape.bodyId >= world.m_bodies.size())
+            if(!shape.alive() || shape.bodyId >= world.m_bodies.size())
                 continue;
             in Body body = world.m_bodies[shape.bodyId];
             if(!body.alive || body.setIndex >= world.m_solverSets.size() || body.localIndex >= world.m_solverSets[body.setIndex].sims.size())
@@ -179,24 +179,26 @@ void BuildPhysicsDebugLines(
 
             const VectorSingle color = ResolveDebugShapeColor(shape, body);
             if(shape.type == ShapeType::Sphere){
-                const VectorSingle c = TransformPoint(xf, VectorSingle(shape.sphere.center));
+                const SphereShape sphere = shape.sphereShape();
+                const VectorSingle c = TransformPoint(xf, sphere.center());
                 const VectorSingle rx = Vector3Rotate(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), VectorSingle(xf.rotation));
                 const VectorSingle ry = Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), VectorSingle(xf.rotation));
                 const VectorSingle rz = Vector3Rotate(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), VectorSingle(xf.rotation));
-                AppendPhysicsDebugCircle(options.maxLines, c, rx, ry, shape.sphere.radius, color, outLines);
-                AppendPhysicsDebugCircle(options.maxLines, c, ry, rz, shape.sphere.radius, color, outLines);
-                AppendPhysicsDebugCircle(options.maxLines, c, rx, rz, shape.sphere.radius, color, outLines);
+                AppendPhysicsDebugCircle(options.maxLines, c, rx, ry, sphere.radius(), color, outLines);
+                AppendPhysicsDebugCircle(options.maxLines, c, ry, rz, sphere.radius(), color, outLines);
+                AppendPhysicsDebugCircle(options.maxLines, c, rx, rz, sphere.radius(), color, outLines);
             }
             else if(shape.type == ShapeType::Capsule){
-                const VectorSingle p0 = TransformPoint(xf, VectorSingle(shape.capsule.center1));
-                const VectorSingle p1 = TransformPoint(xf, VectorSingle(shape.capsule.center2));
+                const CapsuleShape capsule = shape.capsuleShape();
+                const VectorSingle p0 = TransformPoint(xf, capsule.center1());
+                const VectorSingle p1 = TransformPoint(xf, capsule.center2Vec());
                 const VectorSingle axis = SafeNormalizeVec3(VectorSingle(p1 - p0, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                 VectorSingle refAxis(1.0f, 0.0f, 0.0f, 0.0f);
                 if(Abs(Vector3Dot(axis, refAxis).x) > 0.9f)
                     refAxis = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
                 const VectorSingle u = SafeNormalizeVec3(Cross(refAxis, axis), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
                 const VectorSingle v = SafeNormalizeVec3(Cross(axis, u), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
-                const f32 r = shape.capsule.radius;
+                const f32 r = capsule.radius();
                 AppendPhysicsDebugCircle(options.maxLines, p0, u, v, r, color, outLines);
                 AppendPhysicsDebugCircle(options.maxLines, p1, u, v, r, color, outLines);
                 AppendPhysicsDebugCircle(options.maxLines, (p0 + p1) * 0.5f, u, axis, r, color, outLines);
@@ -206,19 +208,21 @@ void BuildPhysicsDebugLines(
                 AppendPhysicsDebugLine(options.maxLines, p0 - v * r, p1 - v * r, color, outLines);
             }
             else if(shape.type == ShapeType::Hull){
-                if(shape.hull.isBox)
-                    AppendPhysicsDebugBoxEdges(options.maxLines, xf, VectorSingle(shape.hull.centroid), VectorSingle(shape.hull.halfExtents), SafeNormalizeQuat(VectorSingle(shape.hull.boxRotation)), color, outLines);
+                in HullShape hull = world.m_hullShapes[shape.geometryIndex];
+                if(hull.isBox())
+                    AppendPhysicsDebugBoxEdges(options.maxLines, xf, hull.centroid(), hull.halfExtents(), SafeNormalizeQuat(VectorSingle(hull.boxRotation)), color, outLines);
                 else
-                    AppendPhysicsDebugHull(options.maxLines, xf, shape.hull, color, outLines);
+                    AppendPhysicsDebugHull(options.maxLines, xf, hull, color, outLines);
             }
             else if(shape.type == ShapeType::Mesh){
-                for(usize ti = 0u; ti < shape.mesh.triangles.size(); ++ti){
+                in MeshShape mesh = world.m_meshShapes[shape.geometryIndex];
+                for(usize ti = 0u; ti < mesh.triangles.size(); ++ti){
                     if(outLines.size() >= cast<usize>(options.maxLines))
                         break;
-                    in MeshTriangle tri = shape.mesh.triangles[ti];
-                    const VectorSingle v0 = TransformPoint(xf, VectorSingle(tri.v0));
-                    const VectorSingle v1 = TransformPoint(xf, VectorSingle(tri.v1));
-                    const VectorSingle v2 = TransformPoint(xf, VectorSingle(tri.v2));
+                    in MeshTriangle tri = mesh.triangles[ti];
+                    const VectorSingle v0 = TransformPoint(xf, Vec3FromU(tri.v0));
+                    const VectorSingle v1 = TransformPoint(xf, Vec3FromU(tri.v1));
+                    const VectorSingle v2 = TransformPoint(xf, Vec3FromU(tri.v2));
                     AppendPhysicsDebugLine(options.maxLines, v0, v1, color, outLines);
                     AppendPhysicsDebugLine(options.maxLines, v1, v2, color, outLines);
                     AppendPhysicsDebugLine(options.maxLines, v2, v0, color, outLines);
@@ -232,12 +236,12 @@ void BuildPhysicsDebugLines(
             if(outLines.size() >= cast<usize>(options.maxLines))
                 break;
             in Contact c = world.m_contacts[ci];
-            if((c.flags & cast<u32>(ContactFlags::Alive)) == 0u || c.manifold.pointCount == 0u)
+            if((c.flags & cast<u32>(ContactFlags::Alive)) == 0u || c.manifold.pointCount() == 0u)
                 continue;
-            const VectorSingle n = VectorSingle(c.manifold.normal);
-            const u32 pCount = Min(c.manifold.pointCount, cast<u32>(s_MaxManifoldPoints));
+            const VectorSingle n = c.manifold.normal();
+            const u32 pCount = Min(c.manifold.pointCount(), cast<u32>(s_MaxManifoldPoints));
             for(u32 pi = 0u; pi < pCount; ++pi){
-                const VectorSingle p = VectorSingle(c.manifold.points[pi].point);
+                const VectorSingle p = c.manifold.points[pi].point();
                 AppendPhysicsDebugLine(options.maxLines, p, p + n * 0.2f, contactColor, outLines);
                 AppendPhysicsDebugLine(options.maxLines, p - VectorSingle(0.05f, 0.0f, 0.0f, 0.0f), p + VectorSingle(0.05f, 0.0f, 0.0f, 0.0f), contactColor, outLines);
                 AppendPhysicsDebugLine(options.maxLines, p - VectorSingle(0.0f, 0.0f, 0.05f, 0.0f), p + VectorSingle(0.0f, 0.0f, 0.05f, 0.0f), contactColor, outLines);
@@ -250,7 +254,7 @@ void BuildPhysicsDebugLines(
             if(outLines.size() >= cast<usize>(options.maxLines))
                 break;
             in Joint j = world.m_joints[ji];
-            if(!j.alive)
+            if(!j.alive())
                 continue;
             const u32 bAId = j.edges[0u].bodyId;
             const u32 bBId = j.edges[1u].bodyId;
@@ -266,11 +270,11 @@ void BuildPhysicsDebugLines(
                 continue;
             in BodySim simA = world.m_solverSets[bA.setIndex].sims[bA.localIndex];
             in BodySim simB = world.m_solverSets[bB.setIndex].sims[bB.localIndex];
-            const VectorSingle aA = TransformPoint(simA.transform, VectorSingle(j.localAnchorA));
-            const VectorSingle aB = TransformPoint(simB.transform, VectorSingle(j.localAnchorB));
-            AppendPhysicsDebugLine(options.maxLines, VectorSingle(simA.center), aA, jointColor, outLines);
+            const VectorSingle aA = TransformPoint(simA.transform, j.localAnchorA());
+            const VectorSingle aB = TransformPoint(simB.transform, j.localAnchorB());
+            AppendPhysicsDebugLine(options.maxLines, simA.center(), aA, jointColor, outLines);
             AppendPhysicsDebugLine(options.maxLines, aA, aB, jointColor, outLines);
-            AppendPhysicsDebugLine(options.maxLines, aB, VectorSingle(simB.center), jointColor, outLines);
+            AppendPhysicsDebugLine(options.maxLines, aB, simB.center(), jointColor, outLines);
         }
     }
 }

@@ -11,8 +11,7 @@
 class QuickhullFace{
     public FixedVector<u32, 32u> vertices;
     public Vector<u32> conflicts;
-    public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
-    public f32 offset = 0.0f;
+    public Plane3D plane;
     public b8 alive = true;
 }
 
@@ -44,8 +43,7 @@ QuickhullFace MakeTriangleFace(in Span<f32x4> points, in u32 i0, in u32 i1, in u
         n = -n;
         d = -d;
     }
-    f.normal = f32x4(n, 0.0f);
-    f.offset = d;
+    f.plane = Plane3D(n, d);
     return f;
 }
 
@@ -148,7 +146,7 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
         for(usize f = 0u; f < faces.size(); ++f){
             if(!faces[f].alive)
                 continue;
-            const f32 dist = Vector3Dot(VectorSingle(faces[f].normal), VectorSingle(uniquePts[i], 0.0f)).x - faces[f].offset;
+            const f32 dist = Vector3Dot(VectorSingle(faces[f].plane.normalOffset, 0.0f), VectorSingle(uniquePts[i], 0.0f)).x - faces[f].plane.normalOffset.w;
             if(dist > maxDist){
                 maxDist = dist;
                 bestFace = f;
@@ -167,7 +165,7 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
                 continue;
             for(usize c = 0u; c < faces[f].conflicts.size(); ++c){
                 const u32 pIdx = faces[f].conflicts[c];
-                const f32 dist = Vector3Dot(VectorSingle(faces[f].normal), VectorSingle(uniquePts[pIdx], 0.0f)).x - faces[f].offset;
+                const f32 dist = Vector3Dot(VectorSingle(faces[f].plane.normalOffset, 0.0f), VectorSingle(uniquePts[pIdx], 0.0f)).x - faces[f].plane.normalOffset.w;
                 if(dist > maxDist){
                     maxDist = dist;
                     chosenFace = f;
@@ -185,7 +183,7 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
         for(usize f = 0u; f < faces.size(); ++f){
             if(!faces[f].alive)
                 continue;
-            const f32 dist = Vector3Dot(VectorSingle(faces[f].normal), VectorSingle(apex, 0.0f)).x - faces[f].offset;
+            const f32 dist = Vector3Dot(VectorSingle(faces[f].plane.normalOffset, 0.0f), VectorSingle(apex, 0.0f)).x - faces[f].plane.normalOffset.w;
             if(dist > 1.0e-5f){
                 isVisible[f] = 1u;
                 visibleFaces.push_back(cast<u32>(f));
@@ -249,7 +247,7 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
             for(usize nf = newFaceBegin; nf < faces.size(); ++nf){
                 if(!faces[nf].alive)
                     continue;
-                const f32 dist = Vector3Dot(VectorSingle(faces[nf].normal), VectorSingle(uniquePts[cp], 0.0f)).x - faces[nf].offset;
+                const f32 dist = Vector3Dot(VectorSingle(faces[nf].plane.normalOffset, 0.0f), VectorSingle(uniquePts[cp], 0.0f)).x - faces[nf].plane.normalOffset.w;
                 if(dist > bestD){
                     bestD = dist;
                     bestNew = nf;
@@ -261,7 +259,6 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
     }
 
     HullShape result;
-    result.radius = radius;
     Vector<u32> vertRemap;
     vertRemap.resize(uniquePts.size(), s_NullIndex);
 
@@ -273,6 +270,9 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
     if(liveFaces.size() < 4u || liveFaces.size() > s_MaxHullFaces)
         return MakeUnexpected(Failure());
 
+    result.facePlanes.reserve(liveFaces.size());
+    result.faceTopologies.reserve(liveFaces.size());
+
     VectorSingle minB = VectorSingle(s_MaxF32);
     VectorSingle maxB = VectorSingle(-s_MaxF32);
     VectorSingle sumVerts = VectorSingle(0.0f);
@@ -282,11 +282,10 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
         if(qf.vertices.size() < 3u)
             return MakeUnexpected(Failure());
 
-        HullFace outFace;
-        outFace.plane = Plane3D(VectorSingle(qf.normal), qf.offset);
-        outFace.edge = cast<u8>(result.halfEdges.size());
-        outFace.vertexCount = cast<u8>(qf.vertices.size());
-        const u8 faceOutIdx = cast<u8>(result.faces.size());
+        HullFaceTopology outTopo;
+        outTopo.edge = cast<u8>(result.halfEdges.size());
+        outTopo.vertexCount = cast<u8>(qf.vertices.size());
+        const u8 faceOutIdx = cast<u8>(result.faceTopologies.size());
         const usize edgeBase = result.halfEdges.size();
 
         for(usize vi = 0u; vi < qf.vertices.size(); ++vi){
@@ -297,7 +296,7 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
                 const u32 newIdx = cast<u32>(result.vertices.size());
                 vertRemap[rawVert] = newIdx;
                 const VectorSingle vp = VectorSingle(uniquePts[rawVert]);
-                result.vertices.push_back(f32x4(vp, 0.0f));
+                result.vertices.push_back(PackVec3U(vp));
                 minB = Min(minB, vp);
                 maxB = Max(maxB, vp);
                 sumVerts = sumVerts + vp;
@@ -311,7 +310,8 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
                 return MakeUnexpected(Failure());
             result.halfEdges.push_back(he);
         }
-        result.faces.push_back(outFace);
+        result.facePlanes.push_back(qf.plane);
+        result.faceTopologies.push_back(outTopo);
     }
 
     for(usize e0 = 0u; e0 < result.halfEdges.size(); ++e0){
@@ -337,8 +337,10 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
     if(result.halfEdges.size() / 2u > s_MaxHullEdges)
         return MakeUnexpected(Failure());
 
-    result.centroid = f32x4(sumVerts / cast<f32>(result.vertices.size()), 0.0f);
-    result.halfExtents = f32x4((maxB - minB) * 0.5f, 0.0f);
+    const VectorSingle centroid = sumVerts / cast<f32>(result.vertices.size());
+    const VectorSingle halfExt = (maxB - minB) * 0.5f;
+    result.centroidRadius = f32x4(centroid, radius);
+    result.halfExtentsFlags = PackVec3U32(halfExt, 0u);
     return result;
 }
 

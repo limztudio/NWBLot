@@ -19,6 +19,26 @@ flag<u32> ContactFlags{
     Alive = 0x00000100u,
 }
 
+flag<u8> ShapeFlags{
+    None = 0u,
+    IsSensor = 0x01u,
+    EnableContactEvents = 0x02u,
+    EnableHitEvents = 0x04u,
+    EnableSensorEvents = 0x08u,
+    EnablePreSolveEvents = 0x10u,
+    EnlargeAabb = 0x20u,
+    Alive = 0x40u,
+}
+
+flag<u8> JointFlags{
+    None = 0u,
+    EnableLimit = 0x01u,
+    EnableMotor = 0x02u,
+    EnableSpring = 0x04u,
+    CollideConnected = 0x08u,
+    Alive = 0x10u,
+}
+
 class Body{
     public u64 userData = 0u;
     public u32 setIndex = s_StaticSetIndex;
@@ -45,56 +65,201 @@ class Body{
 class BodyState{
     public f32x4 linearVelocity(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 angularVelocity(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 deltaPosition(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x3_u32 deltaPositionFlags(0.0f, 0.0f, 0.0f, 0u);
     public f32x4 deltaRotation(0.0f, 0.0f, 0.0f, 1.0f);
-    public u32 flags = 0u;
+
+    public VectorSingle deltaPosition()const{
+        return VectorSingle(this.deltaPositionFlags, 0.0f);
+    }
+
+    public void setDeltaPosition(in VectorSingle p){
+        this.deltaPositionFlags = PackVec3U32(p, this.deltaPositionFlags.w);
+    }
+
+    public u32 flags()const{
+        return this.deltaPositionFlags.w;
+    }
+
+    public void setFlags(in u32 f){
+        this.deltaPositionFlags.w = f;
+    }
 }
 
 class BodySim{
     public Transform3D transform;
-    public f32x4 center(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 localCenter(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 centerInvMass(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localCenterMinExtent(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 rotation0(0.0f, 0.0f, 0.0f, 1.0f);
-    public f32x4 center0(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 force(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 torque(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 maxExtent(0.0f, 0.0f, 0.0f, 0.0f);
-    public Mat3 inertia;
-    public Mat3 invInertiaLocal;
-    public Mat3 invInertiaWorld;
-    public f32 invMass = 0.0f;
-    public f32 linearDamping = 0.0f;
-    public f32 angularDamping = 0.01f;
+    public f32x4 center0MaxExtent(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 forceLinearDamping(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 torqueAngularDamping(0.0f, 0.0f, 0.0f, 0.01f);
+    public SymMat3 invInertiaLocal;
+    public SymMat3 invInertiaWorld;
     public f32 gravityScale = 1.0f;
-    public f32 minExtent = 0.0f;
     public u32 flags = 0u;
     public u32 bodyId = s_NullIndex;
+
+    public VectorSingle center()const{
+        return VectorSingle(this.centerInvMass, 0.0f);
+    }
+
+    public void setCenter(in VectorSingle c){
+        this.centerInvMass = f32x4(c, this.centerInvMass.w);
+    }
+
+    public f32 invMass()const{
+        return this.centerInvMass.w;
+    }
+
+    public void setInvMass(in f32 m){
+        this.centerInvMass.w = m;
+    }
+
+    public VectorSingle localCenter()const{
+        return VectorSingle(this.localCenterMinExtent, 0.0f);
+    }
+
+    public void setLocalCenter(in VectorSingle c){
+        this.localCenterMinExtent = f32x4(c, this.localCenterMinExtent.w);
+    }
+
+    public f32 minExtent()const{
+        return this.localCenterMinExtent.w;
+    }
+
+    public void setMinExtent(in f32 e){
+        this.localCenterMinExtent.w = e;
+    }
+
+    public VectorSingle center0()const{
+        return VectorSingle(this.center0MaxExtent, 0.0f);
+    }
+
+    public void setCenter0(in VectorSingle c){
+        this.center0MaxExtent = f32x4(c, this.center0MaxExtent.w);
+    }
+
+    public f32 maxExtent()const{
+        return this.center0MaxExtent.w;
+    }
+
+    public void setMaxExtent(in f32 e){
+        this.center0MaxExtent.w = e;
+    }
+
+    public VectorSingle force()const{
+        return VectorSingle(this.forceLinearDamping, 0.0f);
+    }
+
+    public void setForce(in VectorSingle f){
+        this.forceLinearDamping = f32x4(f, this.forceLinearDamping.w);
+    }
+
+    public f32 linearDamping()const{
+        return this.forceLinearDamping.w;
+    }
+
+    public void setLinearDamping(in f32 d){
+        this.forceLinearDamping.w = d;
+    }
+
+    public VectorSingle torque()const{
+        return VectorSingle(this.torqueAngularDamping, 0.0f);
+    }
+
+    public void setTorque(in VectorSingle t){
+        this.torqueAngularDamping = f32x4(t, this.torqueAngularDamping.w);
+    }
+
+    public f32 angularDamping()const{
+        return this.torqueAngularDamping.w;
+    }
+
+    public void setAngularDamping(in f32 d){
+        this.torqueAngularDamping.w = d;
+    }
 }
 
 class Shape{
+    public f32x4 geom0(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 geom1(0.0f, 0.0f, 0.0f, 0.0f);
+    public Aabb3D localAabb;
+    public Aabb3D aabb;
+    public u64 userData = 0u;
+    public SurfaceMaterial material;
+    public Filter filter;
     public u32 bodyId = s_NullIndex;
     public u32 id = s_NullIndex;
     public u32 nextShapeId = s_NullIndex;
     public u32 proxyKey = s_NullIndex;
-    public ShapeType type = ShapeType::Sphere;
-    public SphereShape sphere;
-    public CapsuleShape capsule;
-    public HullShape hull;
-    public MeshShape mesh;
-    public Aabb3D localAabb;
-    public Aabb3D aabb;
-    public SurfaceMaterial material;
-    public Filter filter;
+    public u32 geometryIndex = s_NullIndex;
     public f32 density = 1.0f;
-    public u64 userData = 0u;
     public u16 generation = 0u;
-    public b8 isSensor = false;
-    public b8 enableContactEvents = false;
-    public b8 enableHitEvents = false;
-    public b8 enableSensorEvents = false;
-    public b8 enablePreSolveEvents = false;
-    public b8 enlargeAabb = false;
-    public b8 alive = false;
+    public ShapeType type = ShapeType::Sphere;
+    public u8 flags = 0u;
+
+    public SphereShape sphereShape()const{
+        SphereShape s;
+        s.centerRadius = this.geom0;
+        return s;
+    }
+
+    public void setSphere(in SphereShape s){
+        this.geom0 = s.centerRadius;
+        this.geom1 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    }
+
+    public CapsuleShape capsuleShape()const{
+        CapsuleShape c;
+        c.center1Radius = this.geom0;
+        c.center2 = this.geom1;
+        return c;
+    }
+
+    public void setCapsule(in CapsuleShape c){
+        this.geom0 = c.center1Radius;
+        this.geom1 = c.center2;
+    }
+
+    public b8 hasFlag(in ShapeFlags flagBit)const{
+        return (cast<u32>(this.flags) & cast<u32>(flagBit)) != 0u;
+    }
+
+    public void setFlag(in ShapeFlags flagBit, in b8 enabled){
+        const u32 bit = cast<u32>(flagBit);
+        if(enabled)
+            this.flags = cast<u8>(cast<u32>(this.flags) | bit);
+        else
+            this.flags = cast<u8>(cast<u32>(this.flags) & (0xffu ^ bit));
+    }
+
+    public b8 isSensor()const{
+        return this.hasFlag(ShapeFlags::IsSensor);
+    }
+
+    public b8 enableContactEvents()const{
+        return this.hasFlag(ShapeFlags::EnableContactEvents);
+    }
+
+    public b8 enableHitEvents()const{
+        return this.hasFlag(ShapeFlags::EnableHitEvents);
+    }
+
+    public b8 enableSensorEvents()const{
+        return this.hasFlag(ShapeFlags::EnableSensorEvents);
+    }
+
+    public b8 enablePreSolveEvents()const{
+        return this.hasFlag(ShapeFlags::EnablePreSolveEvents);
+    }
+
+    public b8 enlargeAabb()const{
+        return this.hasFlag(ShapeFlags::EnlargeAabb);
+    }
+
+    public b8 alive()const{
+        return this.hasFlag(ShapeFlags::Alive);
+    }
 }
 
 class ContactEdge{
@@ -104,16 +269,16 @@ class ContactEdge{
 }
 
 class Contact{
-    public u32 contactId = s_NullIndex;
+    public Manifold manifold;
     public u64 pairKey = 0u;
+    public Array<ContactEdge, 2u> edges;
+    public u32 contactId = s_NullIndex;
     public u32 shapeIdA = s_NullIndex;
     public u32 shapeIdB = s_NullIndex;
-    public Array<ContactEdge, 2u> edges;
     public u32 colorIndex = s_NullIndex;
     public u32 localIndex = s_NullIndex;
     public u32 islandId = s_NullIndex;
     public u32 islandIndex = s_NullIndex;
-    public Manifold manifold;
     public f32 friction = 0.6f;
     public f32 restitution = 0.0f;
     public f32 rollingResistance = 0.0f;
@@ -134,30 +299,24 @@ class JointEdge{
 }
 
 class Joint{
-    public u32 jointId = s_NullIndex;
-    public u16 generation = 0u;
-    public JointType type = JointType::Distance;
+    public f32x4 localAnchorALength(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 localAnchorBMinLength(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localAxisAMaxLength(0.0f, 1.0f, 0.0f, s_HugeCoordinate);
+    public f32x4 localAxisBLowerLimit(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32x4 referenceRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 linearOffsetUpperLimit(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 linearImpulseLimit(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 angularImpulseMotor(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 lastForceConeSusp(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 lastTorqueMotorSpeed(0.0f, 0.0f, 0.0f, 0.0f);
+    public u64 userData = 0u;
     public Array<JointEdge, 2u> edges;
+    public u32 jointId = s_NullIndex;
     public u32 islandId = s_NullIndex;
     public u32 islandIndex = s_NullIndex;
-    public f32x4 localAnchorA(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 localAnchorB(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 localAxisA(0.0f, 1.0f, 0.0f, 0.0f);
-    public f32x4 localAxisB(0.0f, 1.0f, 0.0f, 0.0f);
-    public f32x4 referenceRotation(0.0f, 0.0f, 0.0f, 1.0f);
-    public f32 length = 1.0f;
-    public f32 minLength = 0.0f;
-    public f32 maxLength = s_HugeCoordinate;
-    public f32 lowerLimit = 0.0f;
-    public f32 upperLimit = 0.0f;
-    public f32 motorSpeed = 0.0f;
     public f32 maxMotorForce = 0.0f;
     public f32 hertz = 0.0f;
     public f32 dampingRatio = 1.0f;
-    public b8 enableLimit = false;
-    public b8 enableMotor = false;
-    public b8 enableSpring = false;
-    public f32x4 linearOffset(0.0f, 0.0f, 0.0f, 0.0f);
     public f32 correctionFactor = 0.3f;
     public f32 maxTorque = 0.0f;
     public f32 swingLimit = 0.0f;
@@ -165,17 +324,185 @@ class Joint{
     public f32 suspensionDampingRatio = 0.7f;
     public f32 breakForce = 0.0f;
     public f32 breakTorque = 0.0f;
-    public b8 collideConnected = false;
-    public u64 userData = 0u;
-    public f32x4 linearImpulse(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 angularImpulse(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32 limitImpulse = 0.0f;
-    public f32 coneImpulse = 0.0f;
-    public f32 motorImpulse = 0.0f;
-    public f32 suspensionImpulse = 0.0f;
-    public f32x4 lastConstraintForce(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 lastConstraintTorque(0.0f, 0.0f, 0.0f, 0.0f);
-    public b8 alive = false;
+    public u16 generation = 0u;
+    public JointType type = JointType::Distance;
+    public u8 flags = 0u;
+
+    public VectorSingle localAnchorA()const{
+        return VectorSingle(this.localAnchorALength, 0.0f);
+    }
+
+    public void setLocalAnchorA(in VectorSingle v){
+        this.localAnchorALength = f32x4(v, this.localAnchorALength.w);
+    }
+
+    public f32 length()const{
+        return this.localAnchorALength.w;
+    }
+
+    public void setLength(in f32 v){
+        this.localAnchorALength.w = v;
+    }
+
+    public VectorSingle localAnchorB()const{
+        return VectorSingle(this.localAnchorBMinLength, 0.0f);
+    }
+
+    public void setLocalAnchorB(in VectorSingle v){
+        this.localAnchorBMinLength = f32x4(v, this.localAnchorBMinLength.w);
+    }
+
+    public f32 minLength()const{
+        return this.localAnchorBMinLength.w;
+    }
+
+    public void setMinLength(in f32 v){
+        this.localAnchorBMinLength.w = v;
+    }
+
+    public VectorSingle localAxisA()const{
+        return VectorSingle(this.localAxisAMaxLength, 0.0f);
+    }
+
+    public void setLocalAxisA(in VectorSingle v){
+        this.localAxisAMaxLength = f32x4(v, this.localAxisAMaxLength.w);
+    }
+
+    public f32 maxLength()const{
+        return this.localAxisAMaxLength.w;
+    }
+
+    public void setMaxLength(in f32 v){
+        this.localAxisAMaxLength.w = v;
+    }
+
+    public VectorSingle localAxisB()const{
+        return VectorSingle(this.localAxisBLowerLimit, 0.0f);
+    }
+
+    public void setLocalAxisB(in VectorSingle v){
+        this.localAxisBLowerLimit = f32x4(v, this.localAxisBLowerLimit.w);
+    }
+
+    public f32 lowerLimit()const{
+        return this.localAxisBLowerLimit.w;
+    }
+
+    public void setLowerLimit(in f32 v){
+        this.localAxisBLowerLimit.w = v;
+    }
+
+    public VectorSingle linearOffset()const{
+        return VectorSingle(this.linearOffsetUpperLimit, 0.0f);
+    }
+
+    public void setLinearOffset(in VectorSingle v){
+        this.linearOffsetUpperLimit = f32x4(v, this.linearOffsetUpperLimit.w);
+    }
+
+    public f32 upperLimit()const{
+        return this.linearOffsetUpperLimit.w;
+    }
+
+    public void setUpperLimit(in f32 v){
+        this.linearOffsetUpperLimit.w = v;
+    }
+
+    public VectorSingle linearImpulse()const{
+        return VectorSingle(this.linearImpulseLimit, 0.0f);
+    }
+
+    public void setLinearImpulse(in VectorSingle v){
+        this.linearImpulseLimit = f32x4(v, this.linearImpulseLimit.w);
+    }
+
+    public f32 limitImpulse()const{
+        return this.linearImpulseLimit.w;
+    }
+
+    public void setLimitImpulse(in f32 v){
+        this.linearImpulseLimit.w = v;
+    }
+
+    public VectorSingle angularImpulse()const{
+        return VectorSingle(this.angularImpulseMotor, 0.0f);
+    }
+
+    public void setAngularImpulse(in VectorSingle v){
+        this.angularImpulseMotor = f32x4(v, this.angularImpulseMotor.w);
+    }
+
+    public f32 motorImpulse()const{
+        return this.angularImpulseMotor.w;
+    }
+
+    public void setMotorImpulse(in f32 v){
+        this.angularImpulseMotor.w = v;
+    }
+
+    public VectorSingle lastConstraintForce()const{
+        return VectorSingle(this.lastForceConeSusp, 0.0f);
+    }
+
+    public void setLastConstraintForce(in VectorSingle v){
+        this.lastForceConeSusp = f32x4(v, this.lastForceConeSusp.w);
+    }
+
+    public f32 coneOrSuspensionImpulse()const{
+        return this.lastForceConeSusp.w;
+    }
+
+    public void setConeOrSuspensionImpulse(in f32 v){
+        this.lastForceConeSusp.w = v;
+    }
+
+    public VectorSingle lastConstraintTorque()const{
+        return VectorSingle(this.lastTorqueMotorSpeed, 0.0f);
+    }
+
+    public void setLastConstraintTorque(in VectorSingle v){
+        this.lastTorqueMotorSpeed = f32x4(v, this.lastTorqueMotorSpeed.w);
+    }
+
+    public f32 motorSpeed()const{
+        return this.lastTorqueMotorSpeed.w;
+    }
+
+    public void setMotorSpeed(in f32 v){
+        this.lastTorqueMotorSpeed.w = v;
+    }
+
+    public b8 hasFlag(in JointFlags flagBit)const{
+        return (cast<u32>(this.flags) & cast<u32>(flagBit)) != 0u;
+    }
+
+    public void setFlag(in JointFlags flagBit, in b8 enabled){
+        const u32 bit = cast<u32>(flagBit);
+        if(enabled)
+            this.flags = cast<u8>(cast<u32>(this.flags) | bit);
+        else
+            this.flags = cast<u8>(cast<u32>(this.flags) & (0xffu ^ bit));
+    }
+
+    public b8 enableLimit()const{
+        return this.hasFlag(JointFlags::EnableLimit);
+    }
+
+    public b8 enableMotor()const{
+        return this.hasFlag(JointFlags::EnableMotor);
+    }
+
+    public b8 enableSpring()const{
+        return this.hasFlag(JointFlags::EnableSpring);
+    }
+
+    public b8 collideConnected()const{
+        return this.hasFlag(JointFlags::CollideConnected);
+    }
+
+    public b8 alive()const{
+        return this.hasFlag(JointFlags::Alive);
+    }
 }
 
 class JointLink{
@@ -212,71 +539,120 @@ b8 ShouldCollideFilters(in Filter filterA, in Filter filterB){
     return ((filterA.categoryBits & filterB.maskBits) != 0u) && ((filterB.categoryBits & filterA.maskBits) != 0u);
 }
 
-Aabb3D ComputeShapeLocalAabb(in Shape shape){
+Aabb3D ComputeShapeLocalAabb(in Shape shape, in Vector<HullShape> hullShapes, in Vector<MeshShape> meshShapes){
     if(shape.type == ShapeType::Sphere)
-        return ComputeSphereAabb(shape.sphere, Transform3D());
+        return ComputeSphereAabb(shape.sphereShape(), Transform3D());
     if(shape.type == ShapeType::Capsule)
-        return ComputeCapsuleAabb(shape.capsule, Transform3D());
-    if(shape.type == ShapeType::Mesh)
-        return ComputeMeshAabb(shape.mesh, Transform3D());
-    return ComputeHullAabb(shape.hull, Transform3D());
+        return ComputeCapsuleAabb(shape.capsuleShape(), Transform3D());
+    if(shape.type == ShapeType::Mesh){
+        if(shape.geometryIndex < meshShapes.size())
+            return ComputeMeshAabb(meshShapes[shape.geometryIndex], Transform3D());
+        return Aabb3D();
+    }
+    if(shape.geometryIndex < hullShapes.size())
+        return ComputeHullAabb(hullShapes[shape.geometryIndex], Transform3D());
+    return Aabb3D();
 }
 
-Aabb3D ComputeShapeWorldAabb(in Shape shape, in Transform3D xf){
+Aabb3D ComputeShapeWorldAabb(in Shape shape, in Transform3D xf, in Vector<HullShape> hullShapes, in Vector<MeshShape> meshShapes){
     if(shape.type == ShapeType::Sphere)
-        return ComputeSphereAabb(shape.sphere, xf);
+        return ComputeSphereAabb(shape.sphereShape(), xf);
     if(shape.type == ShapeType::Capsule)
-        return ComputeCapsuleAabb(shape.capsule, xf);
-    if(shape.type == ShapeType::Mesh)
-        return ComputeMeshAabb(shape.mesh, xf);
-    return ComputeHullAabb(shape.hull, xf);
+        return ComputeCapsuleAabb(shape.capsuleShape(), xf);
+    if(shape.type == ShapeType::Mesh){
+        if(shape.geometryIndex < meshShapes.size())
+            return ComputeMeshAabb(meshShapes[shape.geometryIndex], xf);
+        return Aabb3D();
+    }
+    if(shape.geometryIndex < hullShapes.size())
+        return ComputeHullAabb(hullShapes[shape.geometryIndex], xf);
+    return Aabb3D();
 }
 
-ShapeProxy MakeShapeProxyFromShape(in Shape shape){
+ShapeProxy MakeShapeProxyFromShape(in Shape shape, in Vector<HullShape> hullShapes, in Vector<MeshShape> meshShapes){
     if(shape.type == ShapeType::Sphere)
-        return MakeSphereProxy(shape.sphere);
+        return MakeSphereProxy(shape.sphereShape());
     if(shape.type == ShapeType::Capsule)
-        return MakeCapsuleProxy(shape.capsule);
-    if(shape.type == ShapeType::Mesh)
+        return MakeCapsuleProxy(shape.capsuleShape());
+    if(shape.type == ShapeType::Mesh){
+        if(shape.geometryIndex < meshShapes.size())
+            return ShapeProxy();
         return ShapeProxy();
-    return MakeHullProxy(shape.hull);
+    }
+    if(shape.geometryIndex < hullShapes.size())
+        return MakeHullProxy(hullShapes[shape.geometryIndex]);
+    return ShapeProxy();
 }
 
-Manifold CollideShapePair(in Shape shapeA, in Transform3D xfA, in Shape shapeB, in Transform3D xfB, in f32 maxDistance){
+Manifold CollideShapePair(
+    in Shape shapeA,
+    in Transform3D xfA,
+    in Shape shapeB,
+    in Transform3D xfB,
+    in f32 maxDistance,
+    in Vector<HullShape> hullShapes,
+    in Vector<MeshShape> meshShapes
+){
     if(shapeA.type == ShapeType::Sphere){
+        const SphereShape sphA = shapeA.sphereShape();
         if(shapeB.type == ShapeType::Sphere)
-            return CollideSpheres(shapeA.sphere, xfA, shapeB.sphere, xfB, maxDistance);
+            return CollideSpheres(sphA, xfA, shapeB.sphereShape(), xfB, maxDistance);
         if(shapeB.type == ShapeType::Capsule)
-            return CollideSphereAndCapsule(shapeA.sphere, xfA, shapeB.capsule, xfB, maxDistance);
-        if(shapeB.type == ShapeType::Mesh)
-            return CollideSphereAndMesh(shapeA.sphere, xfA, shapeB.mesh, xfB, maxDistance);
-        return CollideSphereAndHull(shapeA.sphere, xfA, shapeB.hull, xfB, maxDistance);
-    }
-    if(shapeA.type == ShapeType::Capsule){
-        if(shapeB.type == ShapeType::Sphere)
-            return FlipManifoldNormalAndAnchors(CollideSphereAndCapsule(shapeB.sphere, xfB, shapeA.capsule, xfA, maxDistance));
-        if(shapeB.type == ShapeType::Capsule)
-            return CollideCapsules(shapeA.capsule, xfA, shapeB.capsule, xfB, maxDistance);
-        if(shapeB.type == ShapeType::Mesh)
-            return CollideCapsuleAndMesh(shapeA.capsule, xfA, shapeB.mesh, xfB, maxDistance);
-        return CollideCapsuleAndHull(shapeA.capsule, xfA, shapeB.hull, xfB, maxDistance);
-    }
-    if(shapeA.type == ShapeType::Mesh){
-        if(shapeB.type == ShapeType::Sphere)
-            return FlipManifoldNormalAndAnchors(CollideSphereAndMesh(shapeB.sphere, xfB, shapeA.mesh, xfA, maxDistance));
-        if(shapeB.type == ShapeType::Capsule)
-            return FlipManifoldNormalAndAnchors(CollideCapsuleAndMesh(shapeB.capsule, xfB, shapeA.mesh, xfA, maxDistance));
-        if(shapeB.type == ShapeType::Hull)
-            return FlipManifoldNormalAndAnchors(CollideHullAndMesh(shapeB.hull, xfB, shapeA.mesh, xfA, maxDistance));
+            return CollideSphereAndCapsule(sphA, xfA, shapeB.capsuleShape(), xfB, maxDistance);
+        if(shapeB.type == ShapeType::Mesh){
+            if(shapeB.geometryIndex < meshShapes.size())
+                return CollideSphereAndMesh(sphA, xfA, meshShapes[shapeB.geometryIndex], xfB, maxDistance);
+            return Manifold();
+        }
+        if(shapeB.geometryIndex < hullShapes.size())
+            return CollideSphereAndHull(sphA, xfA, hullShapes[shapeB.geometryIndex], xfB, maxDistance);
         return Manifold();
     }
+    if(shapeA.type == ShapeType::Capsule){
+        const CapsuleShape capA = shapeA.capsuleShape();
+        if(shapeB.type == ShapeType::Sphere)
+            return FlipManifoldNormalAndAnchors(CollideSphereAndCapsule(shapeB.sphereShape(), xfB, capA, xfA, maxDistance));
+        if(shapeB.type == ShapeType::Capsule)
+            return CollideCapsules(capA, xfA, shapeB.capsuleShape(), xfB, maxDistance);
+        if(shapeB.type == ShapeType::Mesh){
+            if(shapeB.geometryIndex < meshShapes.size())
+                return CollideCapsuleAndMesh(capA, xfA, meshShapes[shapeB.geometryIndex], xfB, maxDistance);
+            return Manifold();
+        }
+        if(shapeB.geometryIndex < hullShapes.size())
+            return CollideCapsuleAndHull(capA, xfA, hullShapes[shapeB.geometryIndex], xfB, maxDistance);
+        return Manifold();
+    }
+    if(shapeA.type == ShapeType::Mesh){
+        if(shapeA.geometryIndex >= meshShapes.size())
+            return Manifold();
+        in MeshShape meshA = meshShapes[shapeA.geometryIndex];
+        if(shapeB.type == ShapeType::Sphere)
+            return FlipManifoldNormalAndAnchors(CollideSphereAndMesh(shapeB.sphereShape(), xfB, meshA, xfA, maxDistance));
+        if(shapeB.type == ShapeType::Capsule)
+            return FlipManifoldNormalAndAnchors(CollideCapsuleAndMesh(shapeB.capsuleShape(), xfB, meshA, xfA, maxDistance));
+        if(shapeB.type == ShapeType::Hull){
+            if(shapeB.geometryIndex < hullShapes.size())
+                return FlipManifoldNormalAndAnchors(CollideHullAndMesh(hullShapes[shapeB.geometryIndex], xfB, meshA, xfA, maxDistance));
+            return Manifold();
+        }
+        return Manifold();
+    }
+    if(shapeA.geometryIndex >= hullShapes.size())
+        return Manifold();
+    in HullShape hullA = hullShapes[shapeA.geometryIndex];
     if(shapeB.type == ShapeType::Sphere)
-        return FlipManifoldNormalAndAnchors(CollideSphereAndHull(shapeB.sphere, xfB, shapeA.hull, xfA, maxDistance));
+        return FlipManifoldNormalAndAnchors(CollideSphereAndHull(shapeB.sphereShape(), xfB, hullA, xfA, maxDistance));
     if(shapeB.type == ShapeType::Capsule)
-        return FlipManifoldNormalAndAnchors(CollideCapsuleAndHull(shapeB.capsule, xfB, shapeA.hull, xfA, maxDistance));
-    if(shapeB.type == ShapeType::Mesh)
-        return CollideHullAndMesh(shapeA.hull, xfA, shapeB.mesh, xfB, maxDistance);
-    return CollideHulls(shapeA.hull, xfA, shapeB.hull, xfB, maxDistance);
+        return FlipManifoldNormalAndAnchors(CollideCapsuleAndHull(shapeB.capsuleShape(), xfB, hullA, xfA, maxDistance));
+    if(shapeB.type == ShapeType::Mesh){
+        if(shapeB.geometryIndex < meshShapes.size())
+            return CollideHullAndMesh(hullA, xfA, meshShapes[shapeB.geometryIndex], xfB, maxDistance);
+        return Manifold();
+    }
+    if(shapeB.geometryIndex < hullShapes.size())
+        return CollideHulls(hullA, xfA, hullShapes[shapeB.geometryIndex], xfB, maxDistance);
+    return Manifold();
 }
 
 f32 CombineMaterialFriction(in f32 a, in f32 b){

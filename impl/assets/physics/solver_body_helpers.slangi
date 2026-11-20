@@ -93,7 +93,8 @@ void nwbPhysicsApplyGyroscopicStep(const NwbPhysicsGpuBodySim sim, const float h
         dot(rhs, float3(jc0.y, jc1.y, jc2.y)),
         dot(rhs, float3(jc0.z, jc1.z, jc2.z))
     ) / detJ;
-    w = nwbPhysicsQuatRotate(wLocal + dw, q);
+    if(all(isfinite(dw)))
+        w = nwbPhysicsQuatRotate(wLocal + dw, q);
 }
 
 void nwbPhysicsIntegrateBodyVelocityValues(

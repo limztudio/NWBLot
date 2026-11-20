@@ -32,6 +32,8 @@ const u8 s_JointFlagEnableMotor = 0x04u;
 const u8 s_JointFlagEnableSpring = 0x08u;
 const u8 s_JointFlagCollideConnected = 0x10u;
 
+const u8 s_PhysicsParentFlagInheritScale = 0x01u;
+
 const u8 s_WorldCfgFlagEnableSleep = 0x01u;
 const u8 s_WorldCfgFlagEnableContinuous = 0x02u;
 const u8 s_WorldCfgFlagContactSoftening = 0x04u;
@@ -42,6 +44,8 @@ const u8 s_WorldCfgFlagPaused = 0x10u;
 class PhysicsComponentBinaryCodec{
     private b8 validRigidBodyData(in RigidBodyComponent c)const{
         if(cast<u8>(c.type) > cast<u8>(BodyType::Dynamic))
+            return false;
+        if((c.motionLocks & ~0x3Fu) != 0u)
             return false;
         if(!IsFinite(VectorSingle(c.linearVelocity)) || !IsFinite(VectorSingle(c.angularVelocity)))
             return false;
@@ -65,7 +69,7 @@ class PhysicsComponentBinaryCodec{
     private b8 validColliderEntryData(in ColliderShapeEntry e)const{
         if(cast<u8>(e.shapeType) > cast<u8>(ShapeType::Mesh))
             return false;
-        if(!IsFinite(VectorSingle(e.center)) || !IsFinite(VectorSingle(e.center2)) || !IsFinite(VectorSingle(e.halfExtents)) || !IsFinite(VectorSingle(e.localRotation)))
+        if(!IsValidPositionVec3(VectorSingle(e.center)) || !IsFinite(VectorSingle(e.center2)) || !IsFinite(VectorSingle(e.halfExtents)) || !IsFinite(VectorSingle(e.localRotation)))
             return false;
         if(LengthSq(VectorSingle(e.localRotation)) <= s_NormalizeEpsilonSq)
             return false;
@@ -77,6 +81,13 @@ class PhysicsComponentBinaryCodec{
             return false;
         if(e.radius < 0.0f || e.skinRadius < 0.0f || e.density < 0.0f || e.friction < 0.0f || e.restitution < 0.0f || e.rollingResistance < 0.0f)
             return false;
+        if(e.shapeType == ShapeType::Capsule){
+            if(!IsValidPositionVec3(VectorSingle(e.center2)))
+                return false;
+            const f32 lenSq = Vector3LengthSq(VectorSingle(e.center2) - VectorSingle(e.center)).x;
+            if(!IsFinite(lenSq) || lenSq < s_MinCapsuleLength * s_MinCapsuleLength)
+                return false;
+        }
         if(e.shapeType == ShapeType::Hull){
             if(e.isBox && (e.halfExtents.x <= 0.0f || e.halfExtents.y <= 0.0f || e.halfExtents.z <= 0.0f))
                 return false;
@@ -84,7 +95,7 @@ class PhysicsComponentBinaryCodec{
                 if(e.hullPoints.size() < 4u)
                     return false;
                 for(usize i = 0u; i < e.hullPoints.size(); ++i){
-                    if(!IsFinite(VectorSingle(e.hullPoints[i])))
+                    if(!IsValidPositionVec3(VectorSingle(e.hullPoints[i])))
                         return false;
                 }
             }
@@ -95,7 +106,7 @@ class PhysicsComponentBinaryCodec{
             if((e.meshIndices.size() % 3u) != 0u)
                 return false;
             for(usize i = 0u; i < e.meshVertices.size(); ++i){
-                if(!IsFinite(VectorSingle(e.meshVertices[i])))
+                if(!IsValidPositionVec3(VectorSingle(e.meshVertices[i])))
                     return false;
             }
             if(!e.meshVertices.empty()){
@@ -188,7 +199,7 @@ class PhysicsComponentBinaryCodec{
             return false;
         if(!IsFinite(VectorSingle(j.suspensionHertz, j.suspensionDampingRatio, j.breakForce, j.breakTorque)))
             return false;
-        return j.length >= 0.0f && j.minLength >= 0.0f && j.maxLength >= j.minLength && j.maxMotorForce >= 0.0f && j.hertz >= 0.0f && j.dampingRatio >= 0.0f && j.correctionFactor >= 0.0f && j.correctionFactor <= 1.0f && j.maxTorque >= 0.0f && j.swingLimit >= 0.0f && j.suspensionHertz >= 0.0f && j.suspensionDampingRatio >= 0.0f && j.breakForce >= 0.0f && j.breakTorque >= 0.0f;
+        return (!j.enableLimit || j.lowerLimit <= j.upperLimit) && j.length >= 0.0f && j.minLength >= 0.0f && j.maxLength >= j.minLength && j.maxMotorForce >= 0.0f && j.hertz >= 0.0f && j.dampingRatio >= 0.0f && j.correctionFactor >= 0.0f && j.correctionFactor <= 1.0f && j.maxTorque >= 0.0f && j.swingLimit >= 0.0f && j.suspensionHertz >= 0.0f && j.suspensionDampingRatio >= 0.0f && j.breakForce >= 0.0f && j.breakTorque >= 0.0f;
     }
 
     private b8 validWorldConfigData(in PhysicsWorldConfigComponent w)const{
@@ -200,7 +211,11 @@ class PhysicsComponentBinaryCodec{
             return false;
         if(!IsFinite(VectorSingle(w.maxLinearVelocity, w.fixedDeltaTime, w.gpuWorkloadFraction, 0.0f)))
             return false;
-        return w.fixedDeltaTime > 0.0f && w.subStepCount >= 1u && w.maxSubStepsPerFrame >= 1u && w.contactHertz > 0.0f && w.contactDampingRatio >= 0.0f && w.maxLinearVelocity > 0.0f && w.gpuWorkloadFraction >= 0.0f && w.gpuWorkloadFraction <= 1.0f;
+        return w.restitutionThreshold >= 0.0f && w.hitEventThreshold >= 0.0f && w.fixedDeltaTime > 0.0f && w.subStepCount >= 1u && w.maxSubStepsPerFrame >= 1u && w.contactHertz > 0.0f && w.contactDampingRatio >= 0.0f && w.maxLinearVelocity > 0.0f && w.gpuWorkloadFraction >= 0.0f && w.gpuWorkloadFraction <= 1.0f;
+    }
+
+    private b8 validPhysicsParentData(in PhysicsParentComponent p)const{
+        return true;
     }
 
     public b8 validateRigidBody(in RigidBodyComponent c, in Name virtualPath)const{
@@ -669,6 +684,53 @@ class PhysicsComponentBinaryCodec{
             return false;
         }
         outComp = w;
+        return true;
+    }
+
+    public b8 validatePhysicsParent(in PhysicsParentComponent p, in Name virtualPath)const{
+        if(this.validPhysicsParentData(p))
+            return true;
+        error("PhysicsParentComponentAsset::validatePayload failed: invalid parent component for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 serializePhysicsParent(in PhysicsParentComponent p, mut Vector<u8> outPayload)const{
+        if(!this.validPhysicsParentData(p))
+            return false;
+        PhysicsParentComponentPayloadBinary bin;
+        bin.version = s_PhysicsComponentBinaryVersion;
+        u8 flags = 0u;
+        if(p.inheritScale) flags |= s_PhysicsParentFlagInheritScale;
+        bin.flags = flags;
+        bin.parentEntityNameHash = p.parentEntityName.hash();
+        outPayload.clear();
+        AppendPOD(outPayload, bin);
+        return true;
+    }
+
+    public b8 deserializePhysicsParent(in Span<u8> payload, mut PhysicsParentComponent outComp)const{
+        usize cursor = 0u;
+        const Expected<PhysicsParentComponentPayloadBinary> res = ReadPOD<PhysicsParentComponentPayloadBinary>(payload, cursor);
+        if(!res.has_value() || cursor != payload.size()){
+            error("PhysicsParentComponentAsset::loadComponentPayload failed: invalid payload size");
+            return false;
+        }
+        in PhysicsParentComponentPayloadBinary bin = res.value();
+        if(bin.version != s_PhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || (bin.flags & 0xfeu) != 0u){
+            error("PhysicsParentComponentAsset::loadComponentPayload failed: unsupported version or flags");
+            return false;
+        }
+        PhysicsParentComponent p;
+        p.inheritScale = (bin.flags & s_PhysicsParentFlagInheritScale) != 0u;
+        if(bin.parentEntityNameHash == s_NameNone.hash())
+            p.parentEntityName = s_NameNone;
+        else
+            p.parentEntityName = Name(bin.parentEntityNameHash);
+        if(!this.validPhysicsParentData(p)){
+            error("PhysicsParentComponentAsset::loadComponentPayload failed: invalid parent component");
+            return false;
+        }
+        outComp = p;
         return true;
     }
 }

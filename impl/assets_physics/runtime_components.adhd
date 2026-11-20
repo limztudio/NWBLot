@@ -82,6 +82,24 @@ b8 PhysicsWorldConfigComponentAsset::serializeComponentPayload(mut Vector<u8> ou
     return PhysicsComponentBinaryCodec().serializeWorldConfig(this.component, outPayload);
 }
 
+b8 PhysicsParentComponentAsset::loadBinary(in Span<u8> binary){
+    return ComponentAssetBinaryCodec().loadBinary(binary, this);
+}
+
+b8 PhysicsParentComponentAsset::loadComponentPayload(in Span<u8> payload){
+    return PhysicsComponentBinaryCodec().deserializePhysicsParent(payload, this.component);
+}
+
+b8 PhysicsParentComponentAsset::validatePayload()const{
+    if(!this.checkVirtualPath("PhysicsParentComponentAsset::validatePayload"))
+        return false;
+    return PhysicsComponentBinaryCodec().validatePhysicsParent(this.component, this.virtualPath());
+}
+
+b8 PhysicsParentComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return PhysicsComponentBinaryCodec().serializePhysicsParent(this.component, outPayload);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -90,6 +108,7 @@ register_asset RigidBodyComponentAsset using TypedComponentAutoRegistrar<RigidBo
 register_asset ColliderComponentAsset using TypedComponentAutoRegistrar<ColliderComponentAsset>;
 register_asset JointComponentAsset using TypedComponentAutoRegistrar<JointComponentAsset>;
 register_asset PhysicsWorldConfigComponentAsset using TypedComponentAutoRegistrar<PhysicsWorldConfigComponentAsset>;
+register_asset PhysicsParentComponentAsset using TypedComponentAutoRegistrar<PhysicsParentComponentAsset>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

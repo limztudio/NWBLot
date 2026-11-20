@@ -1023,12 +1023,14 @@ class MeshContactCandidate{
     public f32x4 pointSep;
     public f32x4 anchorA;
     public f32x4 anchorB;
+    public f32x4 normal;
     public u32 featureId = 0u;
 
     public MeshContactCandidate(){
         this.pointSep = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
         this.anchorA = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
         this.anchorB = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        this.normal = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
     }
 }
 
@@ -1043,10 +1045,25 @@ void ReduceMeshCandidatesAndWriteManifold(
     FixedVector<ClipVertex, s_MaxClipPoints> verts;
     const usize limit = Min(candidates.size(), cast<usize>(s_MaxClipPoints));
     for(usize i = 0u; i < limit; ++i){
+        if(Vector3Dot(VectorSingle(candidates[i].normal, 0.0f), normal).x <= 0.7f)
+            continue;
         ClipVertex cv;
         cv.position = PackVec3U(VectorSingle(candidates[i].pointSep));
         cv.separation = candidates[i].pointSep.w;
         cv.id0 = cast<u8>(i);
+        cv.id1 = 0u;
+        verts.push_back(cv);
+    }
+    if(verts.empty()){
+        usize bestIdx = 0u;
+        for(usize i = 1u; i < limit; ++i){
+            if(candidates[i].pointSep.w < candidates[bestIdx].pointSep.w)
+                bestIdx = i;
+        }
+        ClipVertex cv;
+        cv.position = PackVec3U(VectorSingle(candidates[bestIdx].pointSep));
+        cv.separation = candidates[bestIdx].pointSep.w;
+        cv.id0 = cast<u8>(bestIdx);
         cv.id1 = 0u;
         verts.push_back(cv);
     }
@@ -1073,6 +1090,7 @@ void PushMeshCandidate(
     in VectorSingle pt,
     in VectorSingle anchorA,
     in VectorSingle anchorB,
+    in VectorSingle normal,
     in f32 sep,
     in u32 featureId,
     mut Vector<MeshContactCandidate> candidates
@@ -1081,6 +1099,7 @@ void PushMeshCandidate(
     c.pointSep = f32x4(pt, sep);
     c.anchorA = f32x4(anchorA, 0.0f);
     c.anchorB = f32x4(anchorB, 0.0f);
+    c.normal = f32x4(normal, 0.0f);
     c.featureId = featureId;
     if(candidates.size() < s_MaxClipPoints){
         candidates.push_back(c);
@@ -1185,7 +1204,7 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
                         deepestSep = sep;
                         chosenNormal = nAtoB;
                     }
-                    PushMeshCandidate((wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), sep, MakeFeatureId(4u, 0u, 3u, cast<u8>(ti & 0xffu)), candidates);
+                    PushMeshCandidate((wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), nAtoB, sep, MakeFeatureId(4u, 0u, 3u, cast<u8>(ti & 0xffu)), candidates);
                     continue;
                 }
 
@@ -1336,7 +1355,7 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
                         deepestSep = winSep;
                         chosenNormal = worldWinN;
                     }
-                    PushMeshCandidate((wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), winSep, MakeFeatureId(4u, cast<u8>(bestEdgeHullIdx & 0xffu), 3u, cast<u8>((ti & 0xffu) ^ bestEdgeTriIdx)), candidates);
+                    PushMeshCandidate((wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), worldWinN, winSep, MakeFeatureId(4u, cast<u8>(bestEdgeHullIdx & 0xffu), 3u, cast<u8>((ti & 0xffu) ^ bestEdgeTriIdx)), candidates);
                 }
                 else if(winKind == 1u){
                     FixedVector<ClipVertex, s_MaxClipPoints> polyA;
@@ -1372,7 +1391,7 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
                             deepestSep = sep;
                             chosenNormal = worldWinN;
                         }
-                        PushMeshCandidate((wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), sep, MakeFeatureId(4u, cast<u8>(bestHullFace), polyA[k].id0, polyA[k].id1), candidates);
+                        PushMeshCandidate((wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), worldWinN, sep, MakeFeatureId(4u, cast<u8>(bestHullFace), polyA[k].id0, polyA[k].id1), candidates);
                     }
                 }
                 else{
@@ -1401,9 +1420,10 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
                         incEdge = he.next;
                     }
 
-                    const VectorSingle sn0 = SafeNormalizeVec3(Cross(te0, triNLocal), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
-                    const VectorSingle sn1 = SafeNormalizeVec3(Cross(te1, triNLocal), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
-                    const VectorSingle sn2 = SafeNormalizeVec3(Cross(te2, triNLocal), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+                    const VectorSingle rawTriN = Vec3FromU(tri.normal);
+                    const VectorSingle sn0 = SafeNormalizeVec3(Cross(te0, rawTriN), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+                    const VectorSingle sn1 = SafeNormalizeVec3(Cross(te1, rawTriN), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+                    const VectorSingle sn2 = SafeNormalizeVec3(Cross(te2, rawTriN), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
                     if(
                         ClipPolygonAgainstPlane(polyA, sn0, Vector3Dot(sn0, tv0).x + s_LinearSlop, 0u, polyB) > 0u
                         && ClipPolygonAgainstPlane(polyB, sn1, Vector3Dot(sn1, tv1).x + s_LinearSlop, 1u, polyA) > 0u
@@ -1422,7 +1442,7 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
                                 deepestSep = sep;
                                 chosenNormal = worldWinN;
                             }
-                            PushMeshCandidate((wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), sep, MakeFeatureId(4u, polyB[k].id0, 3u, polyB[k].id1), candidates);
+                            PushMeshCandidate((wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), worldWinN, sep, MakeFeatureId(4u, polyB[k].id0, 3u, polyB[k].id1), candidates);
                         }
                     }
                 }
@@ -1431,6 +1451,25 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
         else{
             stack.push_back(node.leftOrFirst());
             stack.push_back(node.rightOrCount());
+        }
+    }
+
+    if(candidates.empty() && closedMesh && IsPointInsideClosedMesh(meshB, hullCentroidB)){
+        VectorSingle closePt(0.0f);
+        VectorSingle closeN(0.0f, 1.0f, 0.0f, 0.0f);
+        u32 closeTri = 0u;
+        if(FindClosestPointOnClosedMesh(meshB, hullCentroidB, closePt, closeN, closeTri)){
+            const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(closeN, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            const VectorSingle nAtoB = -worldOut;
+            const VectorSingle supLocalA = HullSupportVertex(hullA, Vector3InverseRotate(-closeN, localRotA));
+            const VectorSingle supW = TransformPoint(xfA, supLocalA);
+            const VectorSingle closeW = TransformPoint(xfB, closePt);
+            const f32 depth = Vector3Dot(VectorSingle(closeW - supW, 0.0f), worldOut).x;
+            const f32 sep = -(Max(depth, 0.0f) + totalR);
+            const VectorSingle wA = supW + nAtoB * hullR;
+            const VectorSingle wB = closeW - nAtoB * meshR;
+            chosenNormal = nAtoB;
+            PushMeshCandidate((wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), nAtoB, sep, MakeFeatureId(4u, 0u, 3u, cast<u8>(closeTri & 0xffu)), candidates);
         }
     }
 
@@ -1533,7 +1572,7 @@ Manifold CollideMeshes(
                             deepestSep = sep;
                             chosenNormal = nAtoB;
                         }
-                        PushMeshCandidate((wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), sep, MakeFeatureId(3u, cast<u8>(tAi & 0xffu), 3u, cast<u8>(tBi & 0xffu)), candidates);
+                        PushMeshCandidate((wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), nAtoB, sep, MakeFeatureId(3u, cast<u8>(tAi & 0xffu), 3u, cast<u8>(tBi & 0xffu)), candidates);
                         continue;
                     }
 
@@ -1692,7 +1731,7 @@ Manifold CollideMeshes(
                         deepestSep = bestSep;
                         chosenNormal = nAtoB;
                     }
-                    PushMeshCandidate((wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), bestSep, MakeFeatureId(3u, cast<u8>(tAi & 0xffu), 3u, cast<u8>(tBi & 0xffu)), candidates);
+                    PushMeshCandidate((wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), nAtoB, bestSep, MakeFeatureId(3u, cast<u8>(tAi & 0xffu), 3u, cast<u8>(tBi & 0xffu)), candidates);
                 }
             }
         }

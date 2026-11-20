@@ -17,10 +17,15 @@ class PhysicsSystem{
     private HashMap<EntityID, BodyId> m_entityBodies;
     private HashMap<EntityID, Vector<ShapeId>> m_entityShapes;
     private HashMap<EntityID, JointId> m_entityJoints;
-    private HashMap<u32, EntityID> m_bodyIndexToEntity;
-    private HashMap<u32, EntityID> m_shapeIndexToEntity;
-    private HashMap<u32, EntityID> m_jointIndexToEntity;
+    private HashMap<u32, EcsSlotOwner> m_bodyIndexToEntity;
+    private HashMap<u32, EcsSlotOwner> m_shapeIndexToEntity;
+    private HashMap<u32, EcsSlotOwner> m_jointIndexToEntity;
     private HashMap<Name, EntityID> m_namedEntities;
+    private HashMap<EntityID, Name> m_syncedRigidBodyTags;
+    private HashMap<EntityID, Name> m_syncedColliderTags;
+    private HashMap<EntityID, b8> m_syncedUseCustomMass;
+    private HashMap<EntityID, usize> m_syncedExtraShapeCount;
+    private HashMap<EntityID, EcsJointStructuralSnapshot> m_syncedJointStructure;
     private HashMap<EntityID, EcsWorldPose> m_syncedBodyPoses;
     private HashMap<EntityID, f32x4> m_syncedColliderScales;
     private HashMap<EntityID, Transform3D> m_prevBodyTransforms;
@@ -60,7 +65,7 @@ class PhysicsSystem{
         this.writeAccess<ColliderComponent>();
         this.writeAccess<JointComponent>();
         this.writeAccess<TransformComponent>();
-        this.readAccess<PhysicsParentComponent>();
+        this.writeAccess<PhysicsParentComponent>();
     }
 
     private void clearFrameEvents(){
@@ -140,27 +145,27 @@ class PhysicsSystem{
         if(!bodyId.valid() || !this.m_physicsWorld.isValidBody(bodyId))
             return s_InvalidEntityId;
         const auto found = this.m_bodyIndexToEntity.find(bodyId.index);
-        if(found == this.m_bodyIndexToEntity.end())
+        if(found == this.m_bodyIndexToEntity.end() || found.value().generation != bodyId.generation)
             return s_InvalidEntityId;
-        return found.value();
+        return found.value().entity;
     }
 
     public EntityID entityForShape(in ShapeId shapeId)const{
         if(!shapeId.valid() || !this.m_physicsWorld.isValidShape(shapeId))
             return s_InvalidEntityId;
         const auto found = this.m_shapeIndexToEntity.find(shapeId.index);
-        if(found == this.m_shapeIndexToEntity.end())
+        if(found == this.m_shapeIndexToEntity.end() || found.value().generation != shapeId.generation)
             return s_InvalidEntityId;
-        return found.value();
+        return found.value().entity;
     }
 
     public EntityID entityForJoint(in JointId jointId)const{
         if(!jointId.valid())
             return s_InvalidEntityId;
         const auto found = this.m_jointIndexToEntity.find(jointId.index);
-        if(found == this.m_jointIndexToEntity.end())
+        if(found == this.m_jointIndexToEntity.end() || found.value().generation != jointId.generation)
             return s_InvalidEntityId;
-        return found.value();
+        return found.value().entity;
     }
 
     public Expected<Transform3D> tryGetInterpolatedTransform(in EntityID entity)const{
@@ -292,6 +297,33 @@ class PhysicsSystem{
         }
     }
 
+    public void overlapShape(
+        in ShapeProxy queryProxy,
+        in Transform3D queryTransform,
+        in Filter filter,
+        in b8 hitSensors,
+        mut Vector<EntityID> outEntities
+    )const{
+        outEntities.clear();
+        Vector<ShapeId> rawShapes;
+        this.m_physicsWorld.overlapShape(queryProxy, queryTransform, filter, hitSensors, rawShapes);
+        outEntities.reserve(rawShapes.size());
+        for(usize i = 0u; i < rawShapes.size(); ++i){
+            const EntityID ent = this.entityForShape(rawShapes[i]);
+            if(!ent.valid())
+                continue;
+            b8 seen = false;
+            for(usize j = 0u; j < outEntities.size(); ++j){
+                if(outEntities[j] == ent){
+                    seen = true;
+                    break;
+                }
+            }
+            if(!seen)
+                outEntities.push_back(ent);
+        }
+    }
+
     public b8 applyForce(in EntityID entity, in VectorSingle force, in b8 wake){
         const auto found = this.m_entityBodies.find(entity);
         if(found == this.m_entityBodies.end())
@@ -379,17 +411,38 @@ class PhysicsSystem{
             this.m_shapeIndexToEntity,
             this.m_jointIndexToEntity,
             this.m_namedEntities,
+            this.m_syncedRigidBodyTags,
+            this.m_syncedColliderTags,
+            this.m_syncedUseCustomMass,
+            this.m_syncedExtraShapeCount,
+            this.m_syncedJointStructure,
             this.m_syncedBodyPoses,
             this.m_syncedColliderScales,
             this.m_prevBodyTransforms,
             this.m_currBodyTransforms
         );
 
-        if(paused || !IsFinite(delta) || delta <= 0.0f)
+        if(paused || !IsFinite(delta) || delta <= 0.0f){
+            this.m_physicsWorld.consumePendingEndEvents(this.m_frameContactEndEvents, this.m_frameSensorEndEvents);
             return Expected<void, CpuTaskAdmissionError>();
+        }
 
         const f32 clampedDelta = Min(delta, fixedDt * cast<f32>(maxSubStepsPerFrame));
         this.m_accumulator += clampedDelta;
+
+        u32 plannedSteps = 0u;
+        f32 simAccum = this.m_accumulator;
+        while(simAccum + 1.0e-6f >= fixedDt && plannedSteps < maxSubStepsPerFrame){
+            if(simAccum >= fixedDt)
+                simAccum -= fixedDt;
+            else
+                simAccum = 0.0f;
+            ++plannedSteps;
+        }
+
+        Vector<EcsKinematicInterpolationTarget> kinematicTargets;
+        if(plannedSteps > 1u)
+            SnapshotDrivenKinematicTargets(this.m_world, this.m_physicsWorld, kinematicTargets);
 
         mut CpuTaskScheduler scheduler = this.m_world.taskScheduler();
         u32 stepsExecuted = 0u;
@@ -400,7 +453,10 @@ class PhysicsSystem{
                 this.m_accumulator = 0.0f;
 
             SnapshotEcsBodyTransforms(this.m_physicsWorld, this.m_entityBodies, this.m_prevBodyTransforms);
-            ApplyKinematicTargetsFromEcs(this.m_world, this.m_physicsWorld, fixedDt);
+            if(plannedSteps <= 1u)
+                ApplyKinematicTargetsFromEcs(this.m_world, this.m_physicsWorld, fixedDt);
+            else
+                ApplyInterpolatedKinematicTargets(kinematicTargets, stepsExecuted, plannedSteps, fixedDt, this.m_physicsWorld);
 
             const Timer stepStart = TimerNow();
             StepWorldWithGpu(this.m_physicsWorld, this.m_gpuDispatcher, fixedDt, subStepCount, scheduler);
@@ -414,6 +470,9 @@ class PhysicsSystem{
         if(stepsExecuted > 0u){
             SnapshotEcsBodyTransforms(this.m_physicsWorld, this.m_entityBodies, this.m_currBodyTransforms);
             WriteBackPhysicsTransformsToEcs(this.m_world, this.m_physicsWorld);
+        }
+        else{
+            this.m_physicsWorld.consumePendingEndEvents(this.m_frameContactEndEvents, this.m_frameSensorEndEvents);
         }
         this.m_interpolationAlpha = Clamp(this.m_accumulator / fixedDt, 0.0f, 1.0f);
 

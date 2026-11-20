@@ -13,6 +13,7 @@
 [arena, component("physics_parent")]
 class PhysicsParentComponent{
     public EntityID parent = s_InvalidEntityId;
+    public Name parentEntityName = s_NameNone;
     public b8 inheritScale = true;
 }
 

@@ -15,16 +15,19 @@ const StringView s_RigidBodyComponentDiagnosticPrefix = "RigidBody component met
 const StringView s_ColliderComponentDiagnosticPrefix = "Collider component meta";
 const StringView s_JointComponentDiagnosticPrefix = "Joint component meta";
 const StringView s_PhysicsWorldConfigComponentDiagnosticPrefix = "PhysicsWorldConfig component meta";
+const StringView s_PhysicsParentComponentDiagnosticPrefix = "PhysicsParent component meta";
 
 type RigidBodyComponentCookEntry = TypedComponentCookEntry<RigidBodyComponent>;
 type ColliderComponentCookEntry = TypedComponentCookEntry<ColliderComponent>;
 type JointComponentCookEntry = TypedComponentCookEntry<JointComponent>;
 type PhysicsWorldConfigComponentCookEntry = TypedComponentCookEntry<PhysicsWorldConfigComponent>;
+type PhysicsParentComponentCookEntry = TypedComponentCookEntry<PhysicsParentComponent>;
 
 type RigidBodyComponentCodec = TypedComponentAssetCodec<RigidBodyComponentAsset>;
 type ColliderComponentCodec = TypedComponentAssetCodec<ColliderComponentAsset>;
 type JointComponentCodec = TypedComponentAssetCodec<JointComponentAsset>;
 type PhysicsWorldConfigComponentCodec = TypedComponentAssetCodec<PhysicsWorldConfigComponentAsset>;
+type PhysicsParentComponentCodec = TypedComponentAssetCodec<PhysicsParentComponentAsset>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -643,6 +646,28 @@ Expected<PhysicsWorldConfigComponentCookEntry> ParsePhysicsWorldConfigComponentC
 
     entry.component = w;
     if(!BuildComponentAssetFromEntry<PhysicsWorldConfigComponentAsset, PhysicsWorldConfigComponentCookEntry>(entry).has_value())
+        return MakeUnexpected(Failure());
+    return entry;
+}
+
+b8 IsAllowedPhysicsParentMetadataField(in StringView key){
+    return key == "parent_entity" || key == "inherit_scale";
+}
+
+Expected<PhysicsParentComponentCookEntry> ParsePhysicsParentComponentCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
+    PhysicsParentComponentCookEntry entry;
+    if(!CheckMetadataAssetMap(file, value, s_PhysicsParentComponentDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_PhysicsParentComponentDiagnosticPrefix, entry)
+        || !ValidateMetadataAssetFields(file, value, s_PhysicsParentComponentDiagnosticPrefix, IsAllowedPhysicsParentMetadataField))
+        return MakeUnexpected(Failure());
+
+    PhysicsParentComponent p = entry.component;
+    if(!ReadPhysicsOptionalNameField(file, value, s_PhysicsParentComponentDiagnosticPrefix, "parent_entity", p.parentEntityName)
+        || !ReadOptionalMetadataBoolField(file, value, s_PhysicsParentComponentDiagnosticPrefix, "inherit_scale", p.inheritScale))
+        return MakeUnexpected(Failure());
+
+    entry.component = p;
+    if(!BuildComponentAssetFromEntry<PhysicsParentComponentAsset, PhysicsParentComponentCookEntry>(entry).has_value())
         return MakeUnexpected(Failure());
     return entry;
 }

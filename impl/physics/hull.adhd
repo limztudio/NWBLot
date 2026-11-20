@@ -518,7 +518,7 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
             he.tail = cast<u8>(vertRemap[rawVert]);
             he.face = faceOutIdx;
             he.next = cast<u8>(edgeBase + ((vi + 1u) % qf.vertices.size()));
-            he.twin = 255u;
+            he.twin = 0u;
             if(result.halfEdges.size() >= 256u)
                 return MakeUnexpected(Failure());
             result.halfEdges.push_back(he);
@@ -527,23 +527,29 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
         result.faceTopologies.push_back(outTopo);
     }
 
+    Array<u16, 256u> twinIndices;
+    for(usize ti = 0u; ti < 256u; ++ti)
+        twinIndices[ti] = 0xffffu;
+
     for(usize e0 = 0u; e0 < result.halfEdges.size(); ++e0){
-        if(result.halfEdges[e0].twin != 255u)
+        if(twinIndices[e0] != 0xffffu)
             continue;
         const u8 a0 = result.halfEdges[e0].tail;
         const u8 b0 = result.halfEdges[result.halfEdges[e0].next].tail;
         for(usize e1 = e0 + 1u; e1 < result.halfEdges.size(); ++e1){
-            if(result.halfEdges[e1].twin != 255u)
+            if(twinIndices[e1] != 0xffffu)
                 continue;
             const u8 a1 = result.halfEdges[e1].tail;
             const u8 b1 = result.halfEdges[result.halfEdges[e1].next].tail;
             if(a0 == b1 && b0 == a1){
+                twinIndices[e0] = cast<u16>(e1);
+                twinIndices[e1] = cast<u16>(e0);
                 result.halfEdges[e0].twin = cast<u8>(e1);
                 result.halfEdges[e1].twin = cast<u8>(e0);
                 break;
             }
         }
-        if(result.halfEdges[e0].twin == 255u)
+        if(twinIndices[e0] == 0xffffu)
             return MakeUnexpected(Failure());
     }
 

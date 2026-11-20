@@ -64,12 +64,22 @@ b8 ExtractPhysicsWorldConfigComponentDependencies(in CookDependencyItemContext c
     return ReadCookDependencyEntry<PhysicsWorldConfigComponentCookEntry>(context, s_PhysicsWorldConfigComponentDiagnosticPrefix, ParsePhysicsWorldConfigComponentCookMetadata).has_value();
 }
 
+[cook_entry("component", s_PhysicsParentComponentDiagnosticPrefix, ParsePhysicsParentComponentCookMetadata, document_and_value, log_failure, PhysicsParentComponentCodec)]
+Expected<PhysicsParentComponentAsset> CookPhysicsParentComponentVolumeEntry(in PhysicsParentComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<PhysicsParentComponentAsset, PhysicsParentComponentCookEntry>(entry);
+}
+
+b8 ExtractPhysicsParentComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<PhysicsParentComponentCookEntry>(context, s_PhysicsParentComponentDiagnosticPrefix, ParsePhysicsParentComponentCookMetadata).has_value();
+}
+
 [cook_registrar]
 b8 RegisterPhysicsComponentCookDependencies(mut CookDependencyRegistry registry){
     return registry.registerType(RigidBodyComponentAsset::AssetTypeName(), ExtractRigidBodyComponentDependencies, IComponent::AssetTypeName())
         && registry.registerType(ColliderComponentAsset::AssetTypeName(), ExtractColliderComponentDependencies, IComponent::AssetTypeName())
         && registry.registerType(JointComponentAsset::AssetTypeName(), ExtractJointComponentDependencies, IComponent::AssetTypeName())
-        && registry.registerType(PhysicsWorldConfigComponentAsset::AssetTypeName(), ExtractPhysicsWorldConfigComponentDependencies, IComponent::AssetTypeName());
+        && registry.registerType(PhysicsWorldConfigComponentAsset::AssetTypeName(), ExtractPhysicsWorldConfigComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(PhysicsParentComponentAsset::AssetTypeName(), ExtractPhysicsParentComponentDependencies, IComponent::AssetTypeName());
 }
 
 

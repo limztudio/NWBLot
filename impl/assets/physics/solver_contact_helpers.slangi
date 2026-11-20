@@ -23,18 +23,20 @@ void nwbPhysicsApplyPointImpulse(
     const float4 invIB1,
     const bool dynA,
     const bool dynB,
+    const uint flagsA,
+    const uint flagsB,
     inout float3 vA,
     inout float3 wA,
     inout float3 vB,
     inout float3 wB
 ){
     if(dynA){
-        vA -= invMassA * P;
-        wA -= nwbPhysicsMulSymmetric3(invIA0, invIA1, cross(rA, P));
+        vA = nwbPhysicsApplyLinearLocks(vA - invMassA * P, flagsA);
+        wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulSymmetric3(invIA0, invIA1, cross(rA, P)), flagsA);
     }
     if(dynB){
-        vB += invMassB * P;
-        wB += nwbPhysicsMulSymmetric3(invIB0, invIB1, cross(rB, P));
+        vB = nwbPhysicsApplyLinearLocks(vB + invMassB * P, flagsB);
+        wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulSymmetric3(invIB0, invIB1, cross(rB, P)), flagsB);
     }
 }
 
@@ -176,7 +178,7 @@ void nwbPhysicsSolveSingleContact(
             const float3 rA = pt.rABaseSep.xyz;
             const float3 rB = pt.rBRelVel.xyz;
             const float3 P = normalImpulse * normal;
-            nwbPhysicsApplyPointImpulse(P, rA, rB, invMassA, invMassB, invIA0, invIA1RollX, invIB0, invIB1RollYZ, dynA, dynB, vA, wA, vB, wB);
+            nwbPhysicsApplyPointImpulse(P, rA, rB, invMassA, invMassB, invIA0, invIA1RollX, invIB0, invIB1RollYZ, dynA, dynB, flagsA, flagsB, vA, wA, vB, wB);
             anyWarmApplied = true;
         }
 
@@ -187,25 +189,25 @@ void nwbPhysicsSolveSingleContact(
             const float3 tangent2 = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].tangent2Rolling.xyz;
             const float3 centerA = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].centerATwistMass.xyz;
             const float3 fImpulse = ft.x * tangent1 + ft.y * tangent2;
-            nwbPhysicsApplyPointImpulse(fImpulse, centerA, centerBTwist.xyz, invMassA, invMassB, invIA0, invIA1RollX, invIB0, invIB1RollYZ, dynA, dynB, vA, wA, vB, wB);
+            nwbPhysicsApplyPointImpulse(fImpulse, centerA, centerBTwist.xyz, invMassA, invMassB, invIA0, invIA1RollX, invIB0, invIB1RollYZ, dynA, dynB, flagsA, flagsB, vA, wA, vB, wB);
             anyWarmApplied = true;
         }
 
         if(centerBTwist.w != 0.0f){
             const float3 twistAng = centerBTwist.w * normal;
             if(dynA)
-                wA -= nwbPhysicsMulSymmetric3(invIA0, invIA1RollX, twistAng);
+                wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulSymmetric3(invIA0, invIA1RollX, twistAng), flagsA);
             if(dynB)
-                wB += nwbPhysicsMulSymmetric3(invIB0, invIB1RollYZ, twistAng);
+                wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulSymmetric3(invIB0, invIB1RollYZ, twistAng), flagsB);
             anyWarmApplied = true;
         }
 
         const float3 rollAng = float3(invIA1RollX.z, invIB1RollYZ.z, invIB1RollYZ.w);
         if(rollAng.x != 0.0f || rollAng.y != 0.0f || rollAng.z != 0.0f){
             if(dynA)
-                wA -= nwbPhysicsMulSymmetric3(invIA0, invIA1RollX, rollAng);
+                wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulSymmetric3(invIA0, invIA1RollX, rollAng), flagsA);
             if(dynB)
-                wB += nwbPhysicsMulSymmetric3(invIB0, invIB1RollYZ, rollAng);
+                wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulSymmetric3(invIB0, invIB1RollYZ, rollAng), flagsB);
             anyWarmApplied = true;
         }
 
@@ -220,7 +222,7 @@ void nwbPhysicsSolveSingleContact(
 
     if(mode == NWB_PHYSICS_SOLVER_MODE_RESTITUTION){
         float restThresh = NWB_PHYSICS_RESTITUTION_THRESHOLD;
-        if(g_NwbPhysicsPushConstants.linearSlop > 0.0f)
+        if(g_NwbPhysicsPushConstants.linearSlop >= 0.0f)
             restThresh = g_NwbPhysicsPushConstants.linearSlop;
         bool anyApplied = false;
         for(uint i = 0u; i < pointCount; ++i){
@@ -243,7 +245,7 @@ void nwbPhysicsSolveSingleContact(
                 g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].points[i].impulsesMass.x = 0.0f;
                 g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].points[i].impulsesMass.w = newRest;
                 const float3 P = impulse * normal;
-                nwbPhysicsApplyPointImpulse(P, rA, rB, invMassA, invMassB, invIA0, invIA1RollX, invIB0, invIB1RollYZ, dynA, dynB, vA, wA, vB, wB);
+                nwbPhysicsApplyPointImpulse(P, rA, rB, invMassA, invMassB, invIA0, invIA1RollX, invIB0, invIB1RollYZ, dynA, dynB, flagsA, flagsB, vA, wA, vB, wB);
                 anyApplied = true;
             }
         }
@@ -302,7 +304,7 @@ void nwbPhysicsSolveSingleContact(
         if(delta != 0.0f){
             g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].points[i].impulsesMass.x = newImpulse;
             const float3 P = delta * normal;
-            nwbPhysicsApplyPointImpulse(P, rA, rB, invMassA, invMassB, invIA0, invIA1RollX, invIB0, invIB1RollYZ, dynA, dynB, vA, wA, vB, wB);
+            nwbPhysicsApplyPointImpulse(P, rA, rB, invMassA, invMassB, invIA0, invIA1RollX, invIB0, invIB1RollYZ, dynA, dynB, flagsA, flagsB, vA, wA, vB, wB);
         }
         if(useBias && newImpulse != 0.0f)
             g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].points[i].impulsesMass.y = pt.impulsesMass.y + newImpulse;
@@ -343,7 +345,7 @@ void nwbPhysicsSolveSingleContact(
         if(appliedF.x != 0.0f || appliedF.y != 0.0f){
             g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].tangentMassFriction.zw = newF;
             const float3 P = appliedF.x * tangent1 + appliedF.y * tangent2;
-            nwbPhysicsApplyPointImpulse(P, centerA, centerB, invMassA, invMassB, invIA0, invIA1RollX, invIB0, invIB1RollYZ, dynA, dynB, vA, wA, vB, wB);
+            nwbPhysicsApplyPointImpulse(P, centerA, centerB, invMassA, invMassB, invIA0, invIA1RollX, invIB0, invIB1RollYZ, dynA, dynB, flagsA, flagsB, vA, wA, vB, wB);
         }
     }
 
@@ -359,9 +361,9 @@ void nwbPhysicsSolveSingleContact(
             g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].centerBTwistImpulse.w = newT;
             const float3 angP = appliedT * normal;
             if(dynA)
-                wA -= nwbPhysicsMulSymmetric3(invIA0, invIA1RollX, angP);
+                wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulSymmetric3(invIA0, invIA1RollX, angP), flagsA);
             if(dynB)
-                wB += nwbPhysicsMulSymmetric3(invIB0, invIB1RollYZ, angP);
+                wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulSymmetric3(invIB0, invIB1RollYZ, angP), flagsB);
         }
     }
 
@@ -386,9 +388,9 @@ void nwbPhysicsSolveSingleContact(
             g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].invIA1RollX.z = newR.x;
             g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].invIB1RollYZ.zw = newR.yz;
             if(dynA)
-                wA -= nwbPhysicsMulSymmetric3(invIA0, invIA1RollX, appliedR);
+                wA = nwbPhysicsApplyAngularLocks(wA - nwbPhysicsMulSymmetric3(invIA0, invIA1RollX, appliedR), flagsA);
             if(dynB)
-                wB += nwbPhysicsMulSymmetric3(invIB0, invIB1RollYZ, appliedR);
+                wB = nwbPhysicsApplyAngularLocks(wB + nwbPhysicsMulSymmetric3(invIB0, invIB1RollYZ, appliedR), flagsB);
         }
     }
 

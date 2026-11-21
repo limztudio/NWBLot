@@ -130,6 +130,13 @@ b8 BuildZippedMeshletRefsFixed(
     outAttributeRefs.clear();
     outLocalVertexRefs.clear();
 
+    Array<u8, 256u> positionSlots;
+    Array<u8, 256u> attributeSlots;
+    for(usize clearIndex = 0u; clearIndex < 256u; ++clearIndex){
+        positionSlots[clearIndex] = 0xffu;
+        attributeSlots[clearIndex] = 0xffu;
+    }
+
     for(in u32 vertexRefIndex : sourceVertexRefs){
         const MeshVertexRef source = vertexRefs[cast<usize>(vertexRefIndex)];
         MeshletPositionStreamRef positionRef;
@@ -141,29 +148,57 @@ b8 BuildZippedMeshletRefsFixed(
         attributeRef.uv0 = source.uv0;
         attributeRef.color = source.color;
 
+        u32 posHash = (positionRef.position * 0x9e3779b1u) ^ (positionRef.skin * 0x85ebca6bu);
+        posHash ^= posHash >> 16u;
+        usize posSlot = cast<usize>(posHash) & 255u;
         u16 localPosition = 0u;
-        const Expected<u16> foundPosition = TryFindMeshletPositionRef(outPositionRefs, positionRef);
-        if(foundPosition.has_value())
-            localPosition = foundPosition.value();
-        else{
+        b8 foundPosition = false;
+        for(usize probe = 0u; probe < 256u; ++probe){
+            const u8 slotEntry = positionSlots[posSlot];
+            if(slotEntry == 0xffu)
+                break;
+            const MeshletPositionStreamRef existing = outPositionRefs[cast<usize>(slotEntry)];
+            if(existing.position == positionRef.position && existing.skin == positionRef.skin){
+                localPosition = cast<u16>(slotEntry);
+                foundPosition = true;
+                break;
+            }
+            posSlot = (posSlot + 1u) & 255u;
+        }
+        if(!foundPosition){
             if(outPositionRefs.size() >= cast<usize>(s_MeshMaxMeshletVertices)){
                 error("{} meta '{}': meshlet deformed positions exceed local index limits", metaKind, filePathText);
                 return false;
             }
             localPosition = cast<u16>(outPositionRefs.size());
+            positionSlots[posSlot] = cast<u8>(localPosition);
             outPositionRefs.push_back(positionRef);
         }
 
+        u32 attrHash = (attributeRef.normal * 0x9e3779b1u) ^ (attributeRef.tangent * 0x85ebca6bu) ^ (attributeRef.uv0 * 0xc2b2ae35u) ^ (attributeRef.color * 0x27d4eb2fu);
+        attrHash ^= attrHash >> 16u;
+        usize attrSlot = cast<usize>(attrHash) & 255u;
         u16 localAttribute = 0u;
-        const Expected<u16> foundAttribute = TryFindMeshletAttributeRef(outAttributeRefs, attributeRef);
-        if(foundAttribute.has_value())
-            localAttribute = foundAttribute.value();
-        else{
+        b8 foundAttribute = false;
+        for(usize probe = 0u; probe < 256u; ++probe){
+            const u8 slotEntry = attributeSlots[attrSlot];
+            if(slotEntry == 0xffu)
+                break;
+            const MeshletAttributeStreamRef existing = outAttributeRefs[cast<usize>(slotEntry)];
+            if(existing.normal == attributeRef.normal && existing.tangent == attributeRef.tangent && existing.uv0 == attributeRef.uv0 && existing.color == attributeRef.color){
+                localAttribute = cast<u16>(slotEntry);
+                foundAttribute = true;
+                break;
+            }
+            attrSlot = (attrSlot + 1u) & 255u;
+        }
+        if(!foundAttribute){
             if(outAttributeRefs.size() >= cast<usize>(s_MeshMaxMeshletVertices)){
                 error("{} meta '{}': meshlet attributes exceed local index limits", metaKind, filePathText);
                 return false;
             }
             localAttribute = cast<u16>(outAttributeRefs.size());
+            attributeSlots[attrSlot] = cast<u8>(localAttribute);
             outAttributeRefs.push_back(attributeRef);
         }
 

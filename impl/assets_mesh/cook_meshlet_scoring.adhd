@@ -82,21 +82,26 @@ void UpdateBestMeshletCandidateFromPrecompute(
     if(!vertexCounts.has_value())
         return;
 
-    const f32 score = ScoreMeshletCandidateFromCalculations(
+    const Expected<f32> score = TryScoreMeshletCandidateBetterThanBound(
         triangleCalculations,
         scoreState,
         triangleIndex,
         vertexCounts.value().shared,
         vertexCounts.value().missing,
-        disconnected
+        disconnected,
+        found,
+        outCandidate.score,
+        outCandidate.triangleIndex
     );
-    if(!IsBetterMeshletCandidate(score, triangleIndex, found, outCandidate))
+    if(!score.has_value())
+        return;
+    if(!IsBetterMeshletCandidate(score.value(), triangleIndex, found, outCandidate))
         return;
 
     found = true;
     outCandidate.frontierOffset = frontierOffset;
     outCandidate.triangleIndex = triangleIndex;
-    outCandidate.score = score;
+    outCandidate.score = score.value();
 }
 
 Expected<MeshletFrontierCandidate> FindBestMeshletFrontierCandidateFromPrecompute(

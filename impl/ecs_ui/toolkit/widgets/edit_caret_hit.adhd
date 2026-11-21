@@ -81,19 +81,27 @@ b8 TryHitEditCaretLineAndStop(in Span<EditCaretLine> lines, in Span<EditBoxCaret
     outCommittedByte = 0u;
     if(lines.empty() || lines.size() > cast<usize>(0xffffffffu) || stops.empty() || !IsFinite(localPoint.x) || !IsFinite(localPoint.y))
         return false;
-    u32 lineIndex = cast<u32>(lines.size() - 1u);
-    for(u32 index = 0u; cast<usize>(index) < lines.size(); ++index){
-        const EditCaretLine line = lines[index];
+    usize low = 0u;
+    usize high = lines.size();
+    while(low < high){
+        const usize mid = low + (high - low) / 2u;
+        const EditCaretLine line = lines[mid];
         if(!IsFinite(line.top) || !IsFinite(line.height) || line.height <= 0.0f)
             return false;
         const f32 bottom = line.top + line.height;
         if(!IsFinite(bottom))
             return false;
-        if(localPoint.y < bottom){
-            lineIndex = index;
-            break;
-        }
+        if(localPoint.y < bottom)
+            high = mid;
+        else
+            low = mid + 1u;
     }
+    u32 lineIndex = cast<u32>(lines.size() - 1u);
+    if(low < lines.size())
+        lineIndex = cast<u32>(low);
+    const EditCaretLine selected = lines[lineIndex];
+    if(!IsFinite(selected.top) || !IsFinite(selected.height) || selected.height <= 0.0f || !IsFinite(selected.top + selected.height))
+        return false;
     const Expected<usize> committedByte = TryFindNearestEditCaretStop(lines, stops, lineIndex, localPoint);
     if(!committedByte.has_value())
         return false;
@@ -134,10 +142,17 @@ Expected<usize> TryHitEditWordCaretGeometry(in Span<EditCaretLine> lines, in Spa
 }
 
 Expected<EditBoxCaretStop> TryFindEditCaretStopByCommittedByte(in Span<EditBoxCaretStop> stops, in usize committedByte){
-    for(usize i = 0u; i < stops.size(); ++i){
-        if(stops[i].committedByte == committedByte)
-            return stops[i];
+    usize low = 0u;
+    usize high = stops.size();
+    while(low < high){
+        const usize mid = low + (high - low) / 2u;
+        if(stops[mid].committedByte < committedByte)
+            low = mid + 1u;
+        else
+            high = mid;
     }
+    if(low < stops.size() && stops[low].committedByte == committedByte)
+        return stops[low];
     return MakeUnexpected(Failure());
 }
 

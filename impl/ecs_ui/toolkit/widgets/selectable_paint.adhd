@@ -11,17 +11,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<UiSkinRegion> TryResolveSelectableStateRegion(in UiSkin skin, in Name preferred, in Name fallback){
-    UiSkinRegion outRegion;
-    if(skin.tryFindRegion(preferred, outRegion))
-        return outRegion;
-    if(skin.tryFindRegion(fallback, outRegion))
-        return outRegion;
-    return MakeUnexpected(Failure());
+Optional<in UiSkinRegion> TryResolveSelectableStateRegion(in borrow UiSkin skin, in Name preferred, in Name fallback){
+    const auto preferredIdx = skin.findRegionIndex(preferred);
+    if(preferredIdx.has_value())
+        return Optional<in UiSkinRegion>(skin.regions()[preferredIdx.value()]);
+    if(fallback != preferred){
+        const auto fallbackIdx = skin.findRegionIndex(fallback);
+        if(fallbackIdx.has_value())
+            return Optional<in UiSkinRegion>(skin.regions()[fallbackIdx.value()]);
+    }
+    return Optional<in UiSkinRegion>();
 }
 
 b8 AccumulateSelectableStateMetrics(in UiSkin skin, in Name preferred, in Name fallback, mut SelectableMetrics metrics){
-    const Expected<UiSkinRegion> region = TryResolveSelectableStateRegion(skin, preferred, fallback);
+    const Optional<in UiSkinRegion> region = TryResolveSelectableStateRegion(skin, preferred, fallback);
     if(!region.has_value())
         return false;
     const Insets padding(region.value().padding.left, region.value().padding.top, region.value().padding.right, region.value().padding.bottom);
@@ -78,7 +81,7 @@ b8 PaintSelectable(
         preferred = style.hover;
         fallback = style.hoverFallback;
     }
-    const Expected<UiSkinRegion> region = TryResolveSelectableStateRegion(skin, preferred, fallback);
+    const Optional<in UiSkinRegion> region = TryResolveSelectableStateRegion(skin, preferred, fallback);
     if(!region.has_value())
         return false;
     paint.pushClip(clip);

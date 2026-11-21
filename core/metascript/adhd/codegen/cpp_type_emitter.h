@@ -50,7 +50,7 @@ public:
     void appendQualifiedName(MString& out, MStringView declNamespace, MStringView symbolName)const;
     void emitConstantTextCpp(MString& out, MStringView text)const;
     void emitTypeArgCpp(MString& out, const TypeArg& arg)const;
-    void emitTypeCpp(MString& out, const TypeRef& type)const;
+    void emitTypeCpp(MString& out, const TypeRef& type, b8 ignoreRefMode = false)const;
     void emitReturnTypeCpp(MString& out, const TypeRef& type)const;
     void emitTypeWithCustomArenaCpp(MString& out, const TypeRef& type, MStringView arenaExpr)const;
     void emitTypeArgListCpp(MString& out, Span<const TypeArg> args)const;

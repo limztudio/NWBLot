@@ -96,6 +96,17 @@ void GpuTaskQueueLegalityCache::build(const GpuTaskGraph::DeclarationReadView& g
     const usize taskCount = CompilerGraphAccess::TaskCount(graph);
     const usize resourceCount = CompilerGraphAccess::ResourceCount(graph);
     taskLegalQueueMasks.resize(taskCount, 0u);
+    Array<u64, 64u> sameFamilyMaskByQueue{};
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const u32 familyIndex = topology.queues[queueIndex].familyIndex;
+        u64 familyMask = 0u;
+        for(usize otherQueueIndex = 0u; otherQueueIndex < topology.queueCount; ++otherQueueIndex){
+            if(topology.queues[otherQueueIndex].familyIndex == familyIndex)
+                familyMask |= BitMask<u64>(static_cast<u32>(otherQueueIndex));
+        }
+        sameFamilyMaskByQueue[queueIndex] = familyMask;
+    }
+    const TopologySharingLut sharingLut = TopologySharingLut::Build(topology);
     Alloc::ScratchArena& scratchArena = taskLegalQueueMasks.get_allocator().arena();
     Vector<u64, Alloc::ScratchArena> resourceLegalMasks(resourceCount, allMask, scratchArena);
     for(usize resourceIndex = 0u; resourceIndex < resourceCount; ++resourceIndex){
@@ -104,27 +115,41 @@ void GpuTaskQueueLegalityCache::build(const GpuTaskGraph::DeclarationReadView& g
             continue;
 
         u64 rMask = allMask;
-        if(resource.directConsumerQueue.valid()){
-            const GpuPhysicalQueueInfo* const consumerQueue = FindPhysicalQueueInfo(topology, resource.directConsumerQueue);
-            if(!consumerQueue || !ResourceNodeSharingAdmitsQueue(graph, resource, topology, *consumerQueue))
-                rMask = 0u;
-            else if(!ResourceNodeUsesConcurrentQueueSharing(graph, resource, topology)){
-                u64 familyMask = 0u;
-                for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
-                    if(topology.queues[queueIndex].familyIndex == consumerQueue->familyIndex)
-                        familyMask |= BitMask<u64>(static_cast<u32>(queueIndex));
+        if(!resource.hasQueueAdmission){
+            const b8 usesConcurrent = sharingLut.logicalUsesConcurrent(resource.queueSharing);
+            const u64 admittedMask = sharingLut.logicalAdmittedMask(resource.queueSharing);
+            if(resource.directConsumerQueue.valid()){
+                const GpuPhysicalQueueInfo* const consumerQueue = FindPhysicalQueueInfo(topology, resource.directConsumerQueue);
+                if(!consumerQueue)
+                    rMask = 0u;
+                else{
+                    const usize consumerIndex = static_cast<usize>(consumerQueue - topology.queues);
+                    if((admittedMask & BitMask<u64>(static_cast<u32>(consumerIndex))) == 0u)
+                        rMask = 0u;
+                    else if(!usesConcurrent)
+                        rMask &= sameFamilyMaskByQueue[consumerIndex];
                 }
-                rMask &= familyMask;
             }
+            if(rMask != 0u && usesConcurrent)
+                rMask &= admittedMask;
         }
-        if(rMask != 0u && ResourceNodeUsesConcurrentQueueSharing(graph, resource, topology)){
-            u64 concurrentMask = 0u;
-            for(u64 remaining = rMask; remaining != 0u; remaining &= remaining - 1u){
-                const u32 queueIndex = static_cast<u32>(CountTrailingZeros(remaining));
-                if(ResourceNodeSharingAdmitsQueue(graph, resource, topology, topology.queues[queueIndex]))
-                    concurrentMask |= BitMask<u64>(queueIndex);
+        else{
+            if(resource.directConsumerQueue.valid()){
+                const GpuPhysicalQueueInfo* const consumerQueue = FindPhysicalQueueInfo(topology, resource.directConsumerQueue);
+                if(!consumerQueue || !ResourceNodeSharingAdmitsQueue(graph, resource, topology, *consumerQueue))
+                    rMask = 0u;
+                else if(!ResourceNodeUsesConcurrentQueueSharing(graph, resource, topology))
+                    rMask &= sameFamilyMaskByQueue[static_cast<usize>(consumerQueue - topology.queues)];
             }
-            rMask = concurrentMask;
+            if(rMask != 0u && ResourceNodeUsesConcurrentQueueSharing(graph, resource, topology)){
+                u64 concurrentMask = 0u;
+                for(u64 remaining = rMask; remaining != 0u; remaining &= remaining - 1u){
+                    const u32 queueIndex = static_cast<u32>(CountTrailingZeros(remaining));
+                    if(ResourceNodeSharingAdmitsQueue(graph, resource, topology, topology.queues[queueIndex]))
+                        concurrentMask |= BitMask<u64>(queueIndex);
+                }
+                rMask = concurrentMask;
+            }
         }
         resourceLegalMasks[resourceIndex] = rMask;
     }
@@ -162,6 +187,12 @@ b8 GpuTaskQueueLegalityCache::isLegal(const GpuTaskGraph::DeclarationReadView& g
     if(active)
         return (taskLegalQueueMasks[task.id.index] & BitMask<u64>(static_cast<u32>(queueIndex))) != 0u;
     return IsLegalQueueAssignmentCandidate(graph, topology, task, topology.queues[queueIndex]);
+}
+
+b8 GpuTaskQueueLegalityCache::isLegal(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology, const GpuTaskId taskId, const usize queueIndex)const noexcept{
+    if(active)
+        return (taskLegalQueueMasks[taskId.index] & BitMask<u64>(static_cast<u32>(queueIndex))) != 0u;
+    return IsLegalQueueAssignmentCandidate(graph, topology, graph.taskAt(taskId.index), topology.queues[queueIndex]);
 }
 
 

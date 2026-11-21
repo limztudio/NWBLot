@@ -68,9 +68,9 @@ b8 AppendMaterialGeometrySources(
     mut Vector<MaterialGeometrySourceKey> sources
 ){
     for(in MaterialPassDrawItem item : items){
-        if(!item.meshResources.valid())
+        if(!item.mesh().valid())
             return false;
-        const MaterialGeometrySourceKey key(item.meshResources);
+        const MaterialGeometrySourceKey key(item.mesh());
         if(!deduplicate || seen.insert(key).second)
             sources.push_back(key);
     }

@@ -5,6 +5,7 @@ nwb_target_adhd_sources(nwb_physics
         "${CMAKE_CURRENT_LIST_DIR}/*.adhd"
 )
 target_link_libraries(nwb_physics PUBLIC nwb_common nwb_alloc nwb_cpu_task)
+set_target_properties(nwb_physics PROPERTIES UNITY_BUILD_BATCH_SIZE 32)
 
 nwb_declare_static_library(nwb_physics_gpu)
 nwb_target_adhd_sources(nwb_physics_gpu

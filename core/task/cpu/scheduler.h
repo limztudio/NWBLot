@@ -413,7 +413,7 @@ private:
         CpuTaskOptions options{};
         ParallelRangeGroup* next = nullptr;
         u32 remainingHelperClaims = 0u;
-        b8 linked = false;
+        Atomic<b8> linked{ false };
         b8 fastUnscoped = false;
 
         alignas(64) Atomic<usize> nextChunk{ 0u };
@@ -650,7 +650,7 @@ private:
     alignas(64) Atomic<b8> m_abortingAtomic{ false };
     Atomic<b8> m_stoppingAtomic{ false };
     Atomic<b8> m_profileEnabled{ false };
-    Atomic<u32> m_joinWaitersAtomic{ 0u };
+    alignas(64) Atomic<u32> m_joinWaitersAtomic{ 0u };
     alignas(64) Atomic<u32> m_activeFastRanges{ 0u };
     Atomic<u64> m_fastRangeCompleted{ 0u };
 
@@ -778,6 +778,24 @@ public:
         );
     }
 
+    template<typename Func>
+    Expected<void, CpuTaskAdmissionError::Enum> parallelRange(usize begin, usize end, usize grainSize, const Func& function, CpuTaskOptions options = {}){
+        if(begin >= end)
+            return {};
+
+        return m_scheduler.parallelRange(
+            begin,
+            end,
+            grainSize,
+            options,
+            MakeNotNull(static_cast<const void*>(&function)),
+            NotNull<CpuTaskScheduler::RangeFunction>([](NotNull<const void*> context, const usize first, const usize last)noexcept(noexcept((*static_cast<const Func*>(context.get()))(first, last))){
+                (*static_cast<const Func*>(context.get()))(first, last);
+            }),
+            this
+        );
+    }
+
 
 private:
     CpuTaskScheduler& m_scheduler;
@@ -790,6 +808,17 @@ private:
 };
 
 [[nodiscard]] CpuTaskScheduler& SharedCpuTaskScheduler();
+
+inline b8 CpuTaskScheduler::isRangeCanceled(const CpuTaskScope* scope)const noexcept{
+    if(m_abortingAtomic.load(MemoryOrder::relaxed))
+        return true;
+    while(scope){
+        if(scope->m_canceled.load(MemoryOrder::relaxed))
+            return true;
+        scope = scope->m_parentScope;
+    }
+    return false;
+}
 
 
 template<typename Func>

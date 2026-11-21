@@ -80,6 +80,8 @@ void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, 
     const NwbSwBvhInstance instance = nwbHeapSwBvhInstances(g_NwbGiSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
     NwbBvhRayIterator<NWB_GI_SW_MESH_STACK_SIZE> iterator;
     nwbBvhRayBeginWalk<NWB_GI_SW_MESH_STACK_SIZE>(material.nodeSlot, nwbSwBvhTransformPoint(instance, worldOrigin), nwbSwBvhTransformVector(instance, worldDirection), minimum, closest.distance, iterator);
+    bool hitInstance = false;
+    float3 hitObjectNormal = float3(0.0, 0.0, 1.0);
     uint primitive;
     while(nwbBvhRayNextLeaf(iterator, primitive)){
         const NwbRayTriangleHit triangle = nwbGiSwTriangleHit(material, primitive, iterator.origin, iterator.direction, iterator.minimum, iterator.maximum);
@@ -90,12 +92,15 @@ void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, 
         closest.primitive = primitive;
         closest.distance = triangle.t;
         closest.barycentrics = float2(triangle.u, triangle.v);
-        closest.normal = nwbSafeNormalize(nwbSwBvhTransformNormal(instance, triangle.normal), float3(0.0, 0.0, 1.0));
+        hitInstance = true;
+        hitObjectNormal = triangle.normal;
 #if NWB_GI_CSG_ENABLED
         closest.cutter = NWB_CSG_RAY_INVALID_INDEX;
 #endif
         iterator.maximum = triangle.t;
     }
+    if(hitInstance)
+        closest.normal = nwbSafeNormalize(nwbSwBvhTransformNormal(instance, hitObjectNormal), float3(0.0, 0.0, 1.0));
 #if NWB_GI_CSG_ENABLED
     if(iterator.overflow){
         nwbGiReportGeometryFailure(NWB_CSG_RAY_FAILURE_CAPACITY);

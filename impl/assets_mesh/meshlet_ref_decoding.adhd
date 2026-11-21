@@ -243,6 +243,8 @@ b8 TryDecodeMeshletTriangleCornerAttribute(
     return true;
 }
 
+static_assert(s_MeshMaxMeshletVertices <= 128u);
+
 b8 DecodeMeshletTriangleIndicesInto(
     in Span<MeshletDesc> meshlets,
     in Span<MeshletLocalVertexRef> localVertexRefs,
@@ -261,7 +263,9 @@ b8 DecodeMeshletTriangleIndicesInto(
         if(!layout.has_value())
             return false;
         const u32 encodedPositionCount = MeshletPositionCount(meshlet);
-        u64 decodedMask = 0u;
+        Array<u64, 2u> decodedMask;
+        decodedMask[0u] = 0u;
+        decodedMask[1u] = 0u;
         const u32 primitiveCount = MeshletPrimitiveCount(meshlet);
         for(u32 primitive = 0u; primitive < primitiveCount; ++primitive){
             const usize base = cast<usize>(meshlet.primitiveOffset) + cast<usize>(primitive) * s_MeshletTriangleIndexCount;
@@ -275,13 +279,14 @@ b8 DecodeMeshletTriangleIndicesInto(
                 const u32 localPosition = cast<u32>(localVertexRefs[refIndex].localDeformedPosition);
                 if(localPosition >= encodedPositionCount || localPosition >= s_MeshMaxMeshletVertices)
                     return false;
-                const u64 bit = cast<u64>(1u) << localPosition;
-                if((decodedMask & bit) == 0u){
+                const usize maskWord = cast<usize>(localPosition >> 6u);
+                const u64 bit = cast<u64>(1u) << (localPosition & 63u);
+                if((decodedMask[maskWord] & bit) == 0u){
                     const Expected<MeshletPositionStreamRef> positionRef = TryDecodeMeshletPositionRefWithLayout(positionRefDeltas, meshlet, layout.value(), localPosition, skinRequired);
                     if(!positionRef.has_value() || cast<usize>(positionRef.value().position) >= positionCount)
                         return false;
                     decodedPositions[cast<usize>(localPosition)] = positionRef.value().position;
-                    decodedMask |= bit;
+                    decodedMask[maskWord] |= bit;
                 }
                 outIndices[byteIndex] = decodedPositions[cast<usize>(localPosition)];
             }
@@ -309,7 +314,9 @@ b8 DecodeMeshletTriangleAttributesInto(
             return false;
         in MeshletAttributeRefEncodingLayout attrLayout = layout.value();
         const u32 attributeCount = MeshletAttributeCount(meshlet);
-        u64 decodedMask = 0u;
+        Array<u64, 2u> decodedMask;
+        decodedMask[0u] = 0u;
+        decodedMask[1u] = 0u;
         const u32 primitiveCount = MeshletPrimitiveCount(meshlet);
         for(u32 primitive = 0u; primitive < primitiveCount; ++primitive){
             const usize base = cast<usize>(meshlet.primitiveOffset) + cast<usize>(primitive) * s_MeshletTriangleIndexCount;
@@ -323,8 +330,9 @@ b8 DecodeMeshletTriangleAttributesInto(
                 const u32 localAttribute = cast<u32>(localVertexRefs[refIndex].localAttribute);
                 if(localAttribute >= attributeCount || localAttribute >= s_MeshMaxMeshletVertices)
                     return false;
-                const u64 bit = cast<u64>(1u) << localAttribute;
-                if((decodedMask & bit) == 0u){
+                const usize maskWord = cast<usize>(localAttribute >> 6u);
+                const u64 bit = cast<u64>(1u) << (localAttribute & 63u);
+                if((decodedMask[maskWord] & bit) == 0u){
                     const Expected<u32> normalIndex = TryDecodeMeshletRefChannelValue(attributeRefDeltas, attrLayout.normalByteOffset, attrLayout.normalWidth, meshlet.normalBase, localAttribute);
                     if(!normalIndex.has_value() || cast<usize>(normalIndex.value()) >= normalStream.size())
                         return false;
@@ -333,7 +341,7 @@ b8 DecodeMeshletTriangleAttributesInto(
                         return false;
                     decodedAttributes[cast<usize>(localAttribute)].normal = normalStream[cast<usize>(normalIndex.value())];
                     decodedAttributes[cast<usize>(localAttribute)].uv0 = uv0Stream[cast<usize>(uv0Index.value())];
-                    decodedMask |= bit;
+                    decodedMask[maskWord] |= bit;
                 }
                 outAttributes[byteIndex] = decodedAttributes[cast<usize>(localAttribute)];
             }

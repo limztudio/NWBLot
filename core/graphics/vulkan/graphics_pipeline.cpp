@@ -241,7 +241,7 @@ void CommandList::setGraphicsState(const GraphicsState& state){
         const auto bufferReadyNoBarrier = [&](Buffer* const buffer, const ResourceStates::Mask requiredState)noexcept -> b8{
             if(!buffer || !buffer->m_managed || buffer->m_creationDesc.isVirtual || &buffer->m_context != &m_context || buffer->m_buffer == VK_NULL_HANDLE)
                 return false;
-            if(buffer->m_bufferInfo.sharingMode != VK_SHARING_MODE_CONCURRENT && !isBufferAdmittedToCommandQueue(*buffer))
+            if(!m_hasCachedPhysicalQueueInfo || (buffer->m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT && !isBufferAdmittedToCommandQueue(*buffer)))
                 return false;
             if(!buffer->m_gpuReady.load(MemoryOrder::acquire))
                 return false;
@@ -414,8 +414,9 @@ void CommandList::setGraphicsState(const GraphicsState& state){
         }
 
         if(!vertexBuffersEqual){
-            if(onlyVertexOffsetsChanged && state.vertexBuffers.size() == 1u && m_graphicsDrawStateValid && m_resolvedVertexBindingCount == 1u){
-                m_resolvedVertexBindings[0u].offset = state.vertexBuffers[0u].offset;
+            if(onlyVertexOffsetsChanged && m_graphicsDrawStateValid){
+                for(u32 i = 0u; i < m_resolvedVertexBindingCount; ++i)
+                    m_resolvedVertexBindings[i].offset = state.vertexBuffers[m_resolvedVertexBindings[i].stateVertexIndex].offset;
                 m_graphicsDrawIndexedValid = m_currentGraphicsState.indexBuffer.buffer != nullptr;
             }
             else
@@ -593,26 +594,45 @@ void CommandList::setViewportState(const ViewportState& viewportState, const b8 
     }
 }
 
+b8 CommandList::beginDynamicRenderingDefault(Framebuffer& framebuffer){
+    FOUNDATION_ASSERT(framebuffer.m_framebufferInfo.width != 0u && framebuffer.m_framebufferInfo.height != 0u && framebuffer.m_framebufferInfo.arraySize != 0u);
+    if(framebuffer.m_defaultRenderingCacheState.load(MemoryOrder::acquire) == 2u){
+        m_context.deviceDispatch.vkCmdBeginRendering(m_currentCmdBuf->m_cmdBuf, &framebuffer.m_cachedDefaultRenderingInfo);
+        return true;
+    }
+
+    const RenderPassParameters params{};
+    return beginDynamicRendering(framebuffer, params);
+}
+
 b8 CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPassParameters& params){
     FOUNDATION_ASSERT(framebuffer.m_framebufferInfo.width != 0u && framebuffer.m_framebufferInfo.height != 0u && framebuffer.m_framebufferInfo.arraySize != 0u);
 
     const FramebufferDesc& fbDesc = framebuffer.m_desc;
+    const b8 hasDefaultCache = framebuffer.m_defaultRenderingCacheState.load(MemoryOrder::acquire) == 2u;
 
     Array<VkRenderingAttachmentInfo, s_MaxRenderTargets> colorAttachments;
     const u32 numColorAttachments = static_cast<u32>(fbDesc.colorAttachments.size());
     FOUNDATION_ASSERT(numColorAttachments <= s_MaxRenderTargets);
 
     for(u32 i = 0u; i < numColorAttachments; ++i){
-        const auto view = framebuffer.resolveColorAttachmentView(i);
-        if(!view){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
-            FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
-            return false;
+        VkImageView imageView = VK_NULL_HANDLE;
+        if(hasDefaultCache){
+            imageView = framebuffer.m_cachedDefaultColorAttachments[i].imageView;
+        }
+        else{
+            const auto view = framebuffer.resolveColorAttachmentView(i);
+            if(!view){
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
+                FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
+                return false;
+            }
+            imageView = *view;
         }
 
         VkRenderingAttachmentInfo& colorInfo = colorAttachments[i];
         colorInfo = VulkanDetail::MakeVkStruct<VkRenderingAttachmentInfo>(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO);
-        colorInfo.imageView = *view;
+        colorInfo.imageView = imageView;
         colorInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         const VulkanDetail::RenderPassAttachmentOperations operations = VulkanDetail::ConvertRenderPassAttachmentActions(params.colorAttachmentActions[i]);
         colorInfo.loadOp = operations.loadOp;
@@ -630,18 +650,28 @@ b8 CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPass
 
     if(fbDesc.depthAttachment.texture){
         auto& depthTex = *MakeNotNull(fbDesc.depthAttachment.texture);
-        const auto depthView = framebuffer.resolveDepthAttachmentView();
-        if(!depthView){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
-            FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
-            return false;
+        VkImageView depthViewHandle = VK_NULL_HANDLE;
+        if(hasDefaultCache){
+            depthViewHandle = (depthTex.m_aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) != 0
+                ? framebuffer.m_cachedDefaultDepthAttachment.imageView
+                : framebuffer.m_cachedDefaultStencilAttachment.imageView
+            ;
+        }
+        else{
+            const auto depthView = framebuffer.resolveDepthAttachmentView();
+            if(!depthView){
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
+                FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
+                return false;
+            }
+            depthViewHandle = *depthView;
         }
 
         const VkImageLayout depthStencilLayout = fbDesc.depthAttachment.isReadOnly ? VulkanDetail::s_ReadOnlyImageLayout : VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         if((depthTex.m_aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) != 0){
             const VulkanDetail::RenderPassAttachmentOperations operations = VulkanDetail::ConvertRenderPassAttachmentActions(params.depthAttachmentActions);
             depthAttachment = VulkanDetail::MakeVkStruct<VkRenderingAttachmentInfo>(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO);
-            depthAttachment.imageView = *depthView;
+            depthAttachment.imageView = depthViewHandle;
             depthAttachment.imageLayout = depthStencilLayout;
             depthAttachment.loadOp = operations.loadOp;
             depthAttachment.storeOp = operations.storeOp;
@@ -651,7 +681,7 @@ b8 CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPass
         if((depthTex.m_aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) != 0){
             const VulkanDetail::RenderPassAttachmentOperations operations = VulkanDetail::ConvertRenderPassAttachmentActions(params.stencilAttachmentActions);
             stencilAttachment = VulkanDetail::MakeVkStruct<VkRenderingAttachmentInfo>(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO);
-            stencilAttachment.imageView = *depthView;
+            stencilAttachment.imageView = depthViewHandle;
             stencilAttachment.imageLayout = depthStencilLayout;
             stencilAttachment.loadOp = operations.loadOp;
             stencilAttachment.storeOp = operations.storeOp;
@@ -659,8 +689,51 @@ b8 CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPass
             hasStencil = true;
         }
     }
-    if(framebuffer.m_allAttachmentsManagedNonVirtual && !framebuffer.m_allViewsCached.load(MemoryOrder::relaxed))
-        framebuffer.m_allViewsCached.store(true, MemoryOrder::release);
+    if(framebuffer.m_allAttachmentsManagedNonVirtual){
+        if(!framebuffer.m_allViewsCached.load(MemoryOrder::relaxed))
+            framebuffer.m_allViewsCached.store(true, MemoryOrder::release);
+        u8 expectedCacheState = 0u;
+        if(
+            !hasDefaultCache
+            && framebuffer.m_defaultRenderingCacheState.load(MemoryOrder::relaxed) == 0u
+            && framebuffer.m_defaultRenderingCacheState.compare_exchange_strong(expectedCacheState, 1u, MemoryOrder::acq_rel, MemoryOrder::relaxed)
+        ){
+            for(u32 i = 0u; i < numColorAttachments; ++i){
+                VkRenderingAttachmentInfo& cachedColor = framebuffer.m_cachedDefaultColorAttachments[i];
+                cachedColor = VulkanDetail::MakeVkStruct<VkRenderingAttachmentInfo>(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO);
+                cachedColor.imageView = colorAttachments[i].imageView;
+                cachedColor.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                cachedColor.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+                cachedColor.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            }
+            if(hasDepth){
+                framebuffer.m_cachedDefaultDepthAttachment = VulkanDetail::MakeVkStruct<VkRenderingAttachmentInfo>(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO);
+                framebuffer.m_cachedDefaultDepthAttachment.imageView = depthAttachment.imageView;
+                framebuffer.m_cachedDefaultDepthAttachment.imageLayout = depthAttachment.imageLayout;
+                framebuffer.m_cachedDefaultDepthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+                framebuffer.m_cachedDefaultDepthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                framebuffer.m_cachedDefaultDepthAttachment.clearValue.depthStencil.depth = s_DepthClearValue;
+            }
+            if(hasStencil){
+                framebuffer.m_cachedDefaultStencilAttachment = VulkanDetail::MakeVkStruct<VkRenderingAttachmentInfo>(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO);
+                framebuffer.m_cachedDefaultStencilAttachment.imageView = stencilAttachment.imageView;
+                framebuffer.m_cachedDefaultStencilAttachment.imageLayout = stencilAttachment.imageLayout;
+                framebuffer.m_cachedDefaultStencilAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+                framebuffer.m_cachedDefaultStencilAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                framebuffer.m_cachedDefaultStencilAttachment.clearValue.depthStencil.stencil = 0u;
+            }
+            auto& cachedInfo = framebuffer.m_cachedDefaultRenderingInfo;
+            cachedInfo = VulkanDetail::MakeVkStruct<VkRenderingInfo>(VK_STRUCTURE_TYPE_RENDERING_INFO);
+            cachedInfo.renderArea.offset = { 0, 0 };
+            cachedInfo.renderArea.extent = { framebuffer.m_framebufferInfo.width, framebuffer.m_framebufferInfo.height };
+            cachedInfo.layerCount = framebuffer.m_framebufferInfo.arraySize;
+            cachedInfo.colorAttachmentCount = numColorAttachments;
+            cachedInfo.pColorAttachments = framebuffer.m_cachedDefaultColorAttachments.data();
+            cachedInfo.pDepthAttachment = hasDepth ? &framebuffer.m_cachedDefaultDepthAttachment : nullptr;
+            cachedInfo.pStencilAttachment = hasStencil ? &framebuffer.m_cachedDefaultStencilAttachment : nullptr;
+            framebuffer.m_defaultRenderingCacheState.store(2u, MemoryOrder::release);
+        }
+    }
 
     auto renderingInfo = VulkanDetail::MakeVkStruct<VkRenderingInfo>(VK_STRUCTURE_TYPE_RENDERING_INFO);
     renderingInfo.renderArea.offset = { 0, 0 };
@@ -698,8 +771,7 @@ b8 CommandList::ensureGraphicsRenderPass(Framebuffer* framebuffer){
             return false;
     }
 
-    RenderPassParameters params = {};
-    if(!beginDynamicRendering(*framebuffer, params)){
+    if(!beginDynamicRenderingDefault(*framebuffer)){
         rejectCommandRecording(FOUNDATION_TEXT("begin graphics render pass"), __hidden_graphics_pipeline::s_DynamicRenderingBeginFailedReason);
         return false;
     }

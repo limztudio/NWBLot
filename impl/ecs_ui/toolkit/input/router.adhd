@@ -107,6 +107,9 @@ class InputRouter : NoCopy{
     private InputVector<ContextMenuAction> m_contextMenuActions;
     private InputPopupState m_popupState;
     private InputHoverState m_hoverState;
+    private WidgetId m_pointerPressedTarget;
+    private WidgetId m_commandPressedTarget;
+    private b8 m_pointerPressedCached = true;
     private u64 m_focusLossGeneration = 0u;
     private u64 m_nextActionSequence = 1u;
     private b8 m_windowFocused = true;
@@ -163,6 +166,7 @@ class InputRouter : NoCopy{
             this.m_pointerState.capture(),
             result
         );
+        this.refreshPressedCache();
         return result;
     }
     [cpp_unwind]
@@ -177,7 +181,8 @@ class InputRouter : NoCopy{
     public b8 commitTargets(in Span<HitTarget> targets, in u64 layoutGeneration, in Span<PopupScope> popups, in u64 expectedFocusLossGeneration){
         if(!this.m_targetTable.canPublish(targets.size(), layoutGeneration))
             return false;
-        if(!this.stagePopups(popups) || !this.m_targetTable.publish(targets, this.m_popupState.staged(), layoutGeneration))
+        b8 hasFocusOnCommit = false;
+        if(!this.stagePopups(popups) || !this.m_targetTable.publish(targets, this.m_popupState.staged(), layoutGeneration, hasFocusOnCommit))
             return false;
         this.installPopups(expectedFocusLossGeneration);
         this.reconcileTargets();
@@ -188,10 +193,13 @@ class InputRouter : NoCopy{
             this.m_windowFocused,
             this.m_focusLossGeneration,
             expectedFocusLossGeneration,
+            hasFocusOnCommit,
             this.m_commandSources.focus(),
             this.m_commandSources.declaration(),
             this.m_commandSources.control()
         );
+        if(hasFocusOnCommit)
+            this.refreshPressedCache();
         return true;
     }
     public Expected<PopupDismissReason> consumePopupDismissal(in PopupToken token){
@@ -276,6 +284,7 @@ class InputRouter : NoCopy{
     }
     public void clearFocus(){
         this.m_commandSources.clearFocus();
+        this.m_commandPressedTarget = WidgetId();
     }
     public void reset(){
         this.retireQueuedReleases();
@@ -283,6 +292,9 @@ class InputRouter : NoCopy{
         this.m_targetTable.reset();
         this.m_popupState.reset();
         this.cancelInteraction();
+        this.m_pointerPressedTarget = WidgetId();
+        this.m_commandPressedTarget = WidgetId();
+        this.m_pointerPressedCached = true;
     }
     public void cancelDeviceInput(in u64 device){
         if(MatchesInputDeviceSource(this.m_pointerState.activeSource(), device))
@@ -290,6 +302,7 @@ class InputRouter : NoCopy{
         this.m_admission.cancelDevice(device, this.m_pointerState.sources(), this.m_commandSources.records());
         if(MatchesInputDeviceSource(this.m_hoverState.source, device))
             this.m_hoverState.forgetSource();
+        this.refreshPressedCache();
     }
     public b8 consumeActivation(in WidgetId id){
         return TryConsumeRouterActivation(this.m_targetTable.targets(), this.m_targetTable.lookup(), this.m_popupState.records(), id, this.m_actions);
@@ -324,6 +337,9 @@ class InputRouter : NoCopy{
     public in Vector<HitTarget> targets()const{ return this.m_targetTable.targets(); }
     public in InputVector<InputAction> actions()const{ return this.m_actions; }
     public in InputVector<ControlAction> controlActions()const{ return this.m_controlActions; }
+    public b8 hasActions()const{ return !this.m_actions.empty(); }
+    public b8 hasControlActions()const{ return !this.m_controlActions.empty(); }
+    public b8 hasPointerGestures()const{ return !this.m_pointerState.gestures().empty(); }
     public WidgetId hover()const{ return this.m_hoverState.target; }
     public u64 hoverActivityGeneration()const{ return this.m_hoverState.activityGeneration; }
     public WidgetId focus()const{ return this.m_commandSources.focus(); }
@@ -361,11 +377,36 @@ class InputRouter : NoCopy{
     }
     public void cancelSubmitCommands(in WidgetId id){
         this.m_commandSources.cancelSubmit(id);
+        this.refreshPressedCache();
     }
     public b8 pressed(in WidgetId id)const{
-        if(CanCheckPointerSubmitPressedTarget(this.m_pointerState.primaryDown(), this.m_pointerState.submitArmed(), this.m_pointerState.capture(), id) && this.hitTest(this.m_pointerState.interactionPosition()) == id)
+        if(!id.valid())
+            return false;
+        if(id == this.m_commandPressedTarget)
             return true;
-        return this.m_commandSources.isPressed(this.m_targetTable.targets(), this.m_targetTable.lookup(), this.m_popupState.records(), this.m_windowFocused, id);
+        if(this.m_pointerPressedCached)
+            return id == this.m_pointerPressedTarget;
+        return CanCheckPointerSubmitPressedTarget(this.m_pointerState.primaryDown(), this.m_pointerState.submitArmed(), this.m_pointerState.capture(), id)
+            && this.hitTest(this.m_pointerState.interactionPosition()) == id;
+    }
+    private void refreshPressedCache(){
+        this.m_pointerPressedTarget = WidgetId();
+        this.m_pointerPressedCached = true;
+        this.m_commandPressedTarget = WidgetId();
+        if(this.m_pointerState.primaryDown() && this.m_pointerState.submitArmed() && this.m_pointerState.capture().valid()){
+            in Point pos = this.m_pointerState.interactionPosition();
+            if(this.m_hoverState.known && this.m_hoverState.position.x == pos.x && this.m_hoverState.position.y == pos.y){
+                if(this.m_hoverState.target == this.m_pointerState.capture())
+                    this.m_pointerPressedTarget = this.m_hoverState.target;
+            }
+            else
+                this.m_pointerPressedCached = false;
+        }
+        if(this.m_windowFocused && !this.m_commandSources.records().empty() && this.m_commandSources.focus().valid()){
+            const WidgetId focusId = this.m_commandSources.focus();
+            if(this.m_commandSources.isPressed(this.m_targetTable.targets(), this.m_targetTable.lookup(), this.m_popupState.records(), this.m_windowFocused, focusId))
+                this.m_commandPressedTarget = focusId;
+        }
     }
     private void retireQueuedReleases(){
         b8 unfinishedHoverSource = false;
@@ -564,6 +605,7 @@ class InputRouter : NoCopy{
         );
         if(changedHoverOwner)
             this.m_hoverState.advanceActivity();
+        this.refreshPressedCache();
     }
     private void updateHover(){
         if(this.m_hoverState.known){

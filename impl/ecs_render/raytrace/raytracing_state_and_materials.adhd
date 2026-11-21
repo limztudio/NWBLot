@@ -52,6 +52,10 @@ class RayTraceSceneQueryReadinessPolicy{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+u64 PackRayTraceSlotsPair(in u32 lo, in u32 hi){
+    return cast<u64>(lo) | (cast<u64>(hi) << 32u);
+}
+
 RayTraceMaterialContextSlots PackRayTraceMaterialContextSlots(in u32 sceneBvhNodes, in u32 sceneInstances, in u32 instanceMaterial, in u32 materialTyped, in u32 meshInstances, in b8 opticalValid, in u32 opticalSlot, in u32 opticalInstanceCount, in b8 hasCsgContext, in u32 csgContextSlot){
     RayTraceMaterialContextSlots slots;
     slots.sceneBvhNodes = sceneBvhNodes;
@@ -184,6 +188,54 @@ Expected<RayTraceMaterialContextSlots> RendererRayTracingSystem::snapshotRayTrac
     return PackRayTraceMaterialContextSlots(sceneBvhNodes.value(), sceneInstances.value(), instanceMaterial.value(), materialTyped.value(), meshInstances.value(), opticalValid, opticalSlot, opticalInstanceCount, hasCsgContext, csgContextSlot);
 }
 
+b8 RendererRayTracingSystem::rayTraceMaterialContextSlotsUploadNeeded(
+    in RayTraceMaterialContextSlots slots,
+    in usize bufferIdentity,
+    mut u64 outWord0,
+    mut u64 outWord1,
+    mut u64 outWord2,
+    mut u64 outWord3
+)const{
+    outWord0 = PackRayTraceSlotsPair(slots.sceneBvhNodes, slots.sceneInstances);
+    outWord1 = PackRayTraceSlotsPair(slots.instanceMaterial, slots.materialTyped);
+    outWord2 = PackRayTraceSlotsPair(slots.meshInstances, slots.opticalScene);
+    outWord3 = PackRayTraceSlotsPair(slots.opticalInstanceCount, slots.csgContext);
+
+    in RtSceneBvhState sceneBvh = this.m_rayTracingState.sceneBvh;
+    if(
+        bufferIdentity != 0u
+        && sceneBvh.m_acceptedRayTraceMaterialContextSlotsValid
+        && sceneBvh.m_acceptedRayTraceMaterialContextSlotsBufferIdentity == bufferIdentity
+        && sceneBvh.m_acceptedRayTraceMaterialContextSlotsWord0 == outWord0
+        && sceneBvh.m_acceptedRayTraceMaterialContextSlotsWord1 == outWord1
+        && sceneBvh.m_acceptedRayTraceMaterialContextSlotsWord2 == outWord2
+        && sceneBvh.m_acceptedRayTraceMaterialContextSlotsWord3 == outWord3
+    )
+        return false;
+    return true;
+}
+
+void RendererRayTracingSystem::confirmPreparedRayTraceMaterialContextSlotsUpload(
+    in u64 word0,
+    in u64 word1,
+    in u64 word2,
+    in u64 word3,
+    in usize bufferIdentity
+){
+    if(
+        bufferIdentity == 0u
+        || !this.m_rayTracingState.sceneBvh.m_rayTraceMaterialContextSlotsBuffer.valid()
+        || this.m_rayTracingState.sceneBvh.m_rayTraceMaterialContextSlotsBuffer.identity() != bufferIdentity
+    )
+        return;
+    this.m_rayTracingState.sceneBvh.m_acceptedRayTraceMaterialContextSlotsWord0 = word0;
+    this.m_rayTracingState.sceneBvh.m_acceptedRayTraceMaterialContextSlotsWord1 = word1;
+    this.m_rayTracingState.sceneBvh.m_acceptedRayTraceMaterialContextSlotsWord2 = word2;
+    this.m_rayTracingState.sceneBvh.m_acceptedRayTraceMaterialContextSlotsWord3 = word3;
+    this.m_rayTracingState.sceneBvh.m_acceptedRayTraceMaterialContextSlotsBufferIdentity = bufferIdentity;
+    this.m_rayTracingState.sceneBvh.m_acceptedRayTraceMaterialContextSlotsValid = true;
+}
+
 void RayTraceMaterialResources::releaseRayTraceMaterialContextHeapHandles(){
     mut Device device = this.m_graphics.getDevice();
     mut GpuDescriptorHeap heap = device.getDescriptorHeap();
@@ -219,10 +271,14 @@ b8 RayTraceMaterialResources::ensureRayTraceMaterialContextSlotsBuffer(){
     slotsBufferDesc.setByteSize(size_of<RayTraceMaterialContextSlots>()).setIsConstantBuffer(true)
         .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(s_RenderNameRaytraceMaterialContextSlots)).enableAutomaticStateTracking(ResourceStates::Common);
     auto rayTraceMaterialContextSlotsBufferResult = this.m_graphics.createBuffer(slotsBufferDesc);
-    if(rayTraceMaterialContextSlotsBufferResult.has_value())
+    if(rayTraceMaterialContextSlotsBufferResult.has_value()){
         this.m_scene.m_rayTraceMaterialContextSlotsBuffer = rayTraceMaterialContextSlotsBufferResult.value();
-    else
+        this.m_scene.m_acceptedRayTraceMaterialContextSlotsValid = false;
+    }
+    else{
         this.m_scene.m_rayTraceMaterialContextSlotsBuffer.reset();
+        this.m_scene.m_acceptedRayTraceMaterialContextSlotsValid = false;
+    }
     if(!rayTraceMaterialContextSlotsBufferResult.has_value()){
         error("RendererSystem: failed to create ray-trace material-context slot buffer");
         return false;

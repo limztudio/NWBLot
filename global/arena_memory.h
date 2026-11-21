@@ -62,22 +62,22 @@ public:
     void reset(u64 reservedBytes = 0u)noexcept;
 
     void addReservedBytes(const u64 bytes)noexcept{
-        if(bytes != 0u)
+        if(bytes != 0u && m_reservation == ArenaMemoryReservation::Separate)
             m_reservedBytes.fetch_add(bytes, MemoryOrder::relaxed);
     }
 
     void removeReservedBytes(const u64 bytes)noexcept{
-        if(bytes != 0u)
+        if(bytes != 0u && m_reservation == ArenaMemoryReservation::Separate)
             m_reservedBytes.fetch_sub(bytes, MemoryOrder::relaxed);
     }
 
     void addReservedBytesSingleThread(const u64 bytes)noexcept{
-        if(bytes != 0u)
+        if(bytes != 0u && m_reservation == ArenaMemoryReservation::Separate)
             m_reservedBytes.store(m_reservedBytes.load(MemoryOrder::relaxed) + bytes, MemoryOrder::relaxed);
     }
 
     void removeReservedBytesSingleThread(const u64 bytes)noexcept{
-        if(bytes != 0u)
+        if(bytes != 0u && m_reservation == ArenaMemoryReservation::Separate)
             m_reservedBytes.store(m_reservedBytes.load(MemoryOrder::relaxed) - bytes, MemoryOrder::relaxed);
     }
 
@@ -141,13 +141,15 @@ private:
     ArenaMemoryTracker* m_next = nullptr;
     Atomic<u64> m_reservedBytes{ 0u };
     Atomic<u64> m_usedBytes{ 0u };
-    Atomic<u64> m_peakUsedBytes{ 0u };
+    mutable Atomic<u64> m_peakUsedBytes{ 0u };
     Atomic<u64> m_allocationCount{ 0u };
     Atomic<u64> m_reallocationCount{ 0u };
     Atomic<u64> m_deallocationCount{ 0u };
     ArenaMemoryReservation::Enum m_reservation = ArenaMemoryReservation::Separate;
     b8 m_attached = false;
+    Atomic<u32> m_ownerThreadSlot{ 0u };
 };
+static_assert(sizeof(ArenaMemoryTracker) == 80u);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

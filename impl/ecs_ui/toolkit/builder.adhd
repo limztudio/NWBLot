@@ -32,10 +32,25 @@ class Builder : NoCopy{
     private ComboStyle m_comboStyle;
     private TooltipStyle m_tooltipStyle;
     private Optional<mut IEditBoxHost> m_editHost;
+    private u64 m_metricsCacheSkinVersion = 0u;
+    private Point m_cachedButtonMinSize;
+    private Insets m_cachedButtonPadding;
+    private f32 m_cachedCheckboxExtent = 0.0f;
+    private SelectableMetrics m_cachedSelectableMetrics;
+    private Point m_cachedEditMinSize;
+    private Insets m_cachedEditPadding;
     private f32 m_deltaSeconds = 0.0f;
     private b8 m_pointerBusy = false;
     private b8 m_declaring = false;
     private b8 m_finalizing = false;
+    private b8 m_buttonMetricsCached = false;
+    private b8 m_buttonMetricsValid = false;
+    private b8 m_checkboxExtentCached = false;
+    private b8 m_checkboxExtentValid = false;
+    private b8 m_selectableMetricsCached = false;
+    private b8 m_selectableMetricsValid = false;
+    private b8 m_editMinSizeCached = false;
+    private b8 m_editPaddingCached = false;
 
     [cpp_unwind]
     public Builder(mut Context context, mut PaintBuilder paint, mut TextService text){
@@ -44,10 +59,6 @@ class Builder : NoCopy{
         this.m_text = text;
         this.m_textLanguage.assign(s_TextDefaultLanguage);
         this.m_scope = Optional<mut BuilderScopeFrame>(this.m_scopeFrame);
-        for(usize index = 0u; index < s_MaxNestedPopupFrames; ++index){
-            if(!this.m_popupFrames[index].tryEmplace())
-                break;
-        }
     }
 
     public void setEditHost(mut IEditBoxHost host){
@@ -64,8 +75,10 @@ class Builder : NoCopy{
             this.m_editHost.reset();
     }
 
-    [owner_result]
     private BuilderItem makeItem()const{ return BuilderItem(); }
+
+    [owner_result]
+    private BuilderEditBoxFrame makeEditBoxFrame()const{ return BuilderEditBoxFrame(); }
 
     [owner_result]
     private BuilderListFrame makeListFrame()const{ return BuilderListFrame(); }
@@ -231,6 +244,8 @@ class Builder : NoCopy{
 
     public mut WidgetStyle style(){
         this.checkStyleAccess();
+        this.m_buttonMetricsCached = false;
+        this.m_checkboxExtentCached = false;
         return this.m_style;
     }
 
@@ -241,6 +256,8 @@ class Builder : NoCopy{
 
     public mut EditBoxStyle editStyle(){
         this.checkStyleAccess();
+        this.m_editMinSizeCached = false;
+        this.m_editPaddingCached = false;
         return this.m_editStyle;
     }
 
@@ -251,6 +268,7 @@ class Builder : NoCopy{
 
     public mut ListStyle listStyle(){
         this.checkStyleAccess();
+        this.m_selectableMetricsCached = false;
         return this.m_listStyle;
     }
 
@@ -323,7 +341,32 @@ class Builder : NoCopy{
 
     private Insets resolveRegionsPadding(in Insets initial, in Span<Name> names, in Name fallback)const;
 
-    private void loadButtonMetrics(mut Point size, mut Insets padding)const;
+    private void invalidateStyleMetricsCache(){
+        this.m_metricsCacheSkinVersion = 0u;
+        this.m_buttonMetricsCached = false;
+        this.m_checkboxExtentCached = false;
+        this.m_selectableMetricsCached = false;
+        this.m_editMinSizeCached = false;
+        this.m_editPaddingCached = false;
+    }
+
+    private void syncMetricsCacheSkinVersion(){
+        if(!this.m_skin.has_value()){
+            this.invalidateStyleMetricsCache();
+            return;
+        }
+        const u64 version = this.m_skin.value().regionVersion();
+        if(this.m_metricsCacheSkinVersion != version){
+            this.invalidateStyleMetricsCache();
+            this.m_metricsCacheSkinVersion = version;
+        }
+    }
+
+    private b8 loadButtonMetrics(mut Point size, mut Insets padding);
+
+    private Expected<f32> loadCheckboxExtent();
+
+    private Expected<SelectableMetrics> loadSelectableMetrics();
 
     [cpp_unwind]
     private b8 paintPanel();
@@ -387,10 +430,12 @@ class Builder : NoCopy{
 
     private b8 numericStateAvailable(in EditBoxState state)const;
 
-    private Point loadEditMinimumSize()const;
+    private Point loadEditMinimumSize();
+
+    private Insets loadEditPadding();
 
     [cpp_unwind]
-    private b8 prepareEditBox(in EditBoxResult result, mut EditModel model, mut EditBoxState state, mut BuilderItem item);
+    private b8 prepareEditBox(in EditBoxResult result, mut EditModel model, mut EditBoxState state, mut BuilderItem item, mut BuilderEditBoxFrame editFrame);
 
     [cpp_unwind]
     private b8 paintEditBox(in BuilderItem item, in LayoutBox box){ return this.paintEditBox(item, box, Optional<in HitTarget>()); }

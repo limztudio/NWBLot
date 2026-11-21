@@ -27,15 +27,6 @@ namespace __hidden_adhd_symbol_table{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename DeclT>
-[[nodiscard]] DeclT* FindDeclByName(const Span<DeclT* const> decls, const MStringView name)noexcept{
-    for(DeclT* decl : decls){
-        if(decl && decl->name == name)
-            return decl;
-    }
-    return nullptr;
-}
-
 template<typename ObjPred, typename GenericPred>
 [[nodiscard]] b8 MatchObjectOrGenericFlag(const MStringView name, ObjPred&& objPred, GenericPred&& genericPred)noexcept{
     if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(name))
@@ -185,21 +176,28 @@ b8 SymbolTable::build(TranslationUnit& unit, MVector<ParseError>& errors){
     FOUNDATION_ASSERT(&unit == &m_unit);
     b8 ok = true;
 
-    const auto registerTypeSymbols = [&](const auto& decls, auto& target){
+    m_typeMap.clear();
+    m_globalConstantMap.clear();
+    m_freeFunctions.clear();
+    m_freeFunctionHead.clear();
+    m_freeFunctionNext.clear();
+
+    const usize totalTypes = unit.enums.size() + unit.interfaces.size() + unit.classes.size() + unit.typeAliases.size();
+    m_typeMap.reserve(totalTypes);
+
+    const auto registerTypeSymbols = [&](const auto& decls, const TypeSymbolKind::Enum kind){
         for(auto* decl : decls){
-            if(hasTypeSymbol(decl->name)){
+            if(!m_typeMap.emplace(decl->name, TypeSymbolEntry{ kind, decl, decl->cppNamespace }).second){
                 ReportAdhdDiagnostic(m_arena, errors, decl->span, "duplicate type symbol name");
                 ok = false;
-                continue;
             }
-            target.push_back(decl);
         }
     };
 
-    registerTypeSymbols(unit.enums, m_enums);
-    registerTypeSymbols(unit.interfaces, m_interfaces);
-    registerTypeSymbols(unit.classes, m_classes);
-    registerTypeSymbols(unit.typeAliases, m_typeAliases);
+    registerTypeSymbols(unit.enums, TypeSymbolKind::EnumDeclKind);
+    registerTypeSymbols(unit.interfaces, TypeSymbolKind::InterfaceDeclKind);
+    registerTypeSymbols(unit.classes, TypeSymbolKind::ClassDeclKind);
+    registerTypeSymbols(unit.typeAliases, TypeSymbolKind::TypeAliasDeclKind);
 
     for(ClassDecl* cls : unit.classes){
         cls->concreteBase = nullptr;
@@ -231,43 +229,66 @@ b8 SymbolTable::build(TranslationUnit& unit, MVector<ParseError>& errors){
         }
     }
 
-    for(MethodDecl* fn : unit.freeFunctions)
+    m_freeFunctions.reserve(unit.freeFunctions.size());
+    m_freeFunctionNext.reserve(unit.freeFunctions.size());
+    HashMap<MStringView, usize, MetaArena, MStringViewHash> freeFunctionTail(m_arena);
+    freeFunctionTail.reserve(unit.freeFunctions.size());
+    m_freeFunctionHead.reserve(unit.freeFunctions.size());
+    for(MethodDecl* fn : unit.freeFunctions){
+        const usize idx = m_freeFunctions.size();
         m_freeFunctions.push_back(fn);
+        m_freeFunctionNext.push_back(s_InvalidFreeFunctionIndex);
+        if(!fn)
+            continue;
+        auto [tailIt, inserted] = freeFunctionTail.emplace(fn->name, idx);
+        if(inserted){
+            m_freeFunctionHead.emplace(fn->name, idx);
+        }
+        else{
+            m_freeFunctionNext[tailIt->second] = idx;
+            tailIt.value() = idx;
+        }
+    }
 
+    m_globalConstantMap.reserve(unit.globalConstants.size());
     for(Stmt* c : unit.globalConstants){
-        if(findGlobalConstant(c->name)){
+        if(!m_globalConstantMap.emplace(c->name, c).second){
             ReportAdhdDiagnostic(m_arena, errors, c->span, "duplicate file-level 'const' name");
             ok = false;
-            continue;
         }
-        m_globalConstants.push_back(c);
     }
 
     return ok;
 }
 
 EnumDecl* SymbolTable::findEnum(const MStringView name)const noexcept{
-    return __hidden_adhd_symbol_table::FindDeclByName(Span<EnumDecl* const>(m_enums), name);
+    const auto it = m_typeMap.find(name);
+    return (it != m_typeMap.end() && it->second.kind == TypeSymbolKind::EnumDeclKind) ? static_cast<EnumDecl*>(it->second.decl) : nullptr;
 }
 
 InterfaceDecl* SymbolTable::findInterface(const MStringView name)const noexcept{
-    return __hidden_adhd_symbol_table::FindDeclByName(Span<InterfaceDecl* const>(m_interfaces), name);
+    const auto it = m_typeMap.find(name);
+    return (it != m_typeMap.end() && it->second.kind == TypeSymbolKind::InterfaceDeclKind) ? static_cast<InterfaceDecl*>(it->second.decl) : nullptr;
 }
 
 ClassDecl* SymbolTable::findClass(const MStringView name)const noexcept{
-    return __hidden_adhd_symbol_table::FindDeclByName(Span<ClassDecl* const>(m_classes), name);
+    const auto it = m_typeMap.find(name);
+    return (it != m_typeMap.end() && it->second.kind == TypeSymbolKind::ClassDeclKind) ? static_cast<ClassDecl*>(it->second.decl) : nullptr;
 }
 
 TypeAliasDecl* SymbolTable::findTypeAlias(const MStringView name)const noexcept{
-    return __hidden_adhd_symbol_table::FindDeclByName(Span<TypeAliasDecl* const>(m_typeAliases), name);
+    const auto it = m_typeMap.find(name);
+    return (it != m_typeMap.end() && it->second.kind == TypeSymbolKind::TypeAliasDeclKind) ? static_cast<TypeAliasDecl*>(it->second.decl) : nullptr;
 }
 
 MethodDecl* SymbolTable::findFreeFunction(const MStringView name, const usize* preferredArgCount, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)const noexcept{
+    const auto it = m_freeFunctionHead.find(name);
+    if(it == m_freeFunctionHead.end())
+        return nullptr;
     MethodDecl* bestMatch = nullptr;
     i32 bestScore = -1;
-    for(MethodDecl* fn : m_freeFunctions){
-        if(!fn || fn->name != name)
-            continue;
+    for(usize idx = it->second; idx != s_InvalidFreeFunctionIndex; idx = m_freeFunctionNext[idx]){
+        MethodDecl* const fn = m_freeFunctions[idx];
         if(CallableOverloadSelector::ConsiderScoredCallableCandidate(*this, preferredArgCount, argTypeNames, argIsMut, *fn, bestMatch, bestScore))
             return bestMatch;
     }
@@ -276,11 +297,13 @@ MethodDecl* SymbolTable::findFreeFunction(const MStringView name, const usize* p
 
 const MethodDecl* SymbolTable::findUniqueFreeFunction(const MStringView name, b8& outAmbiguous)const noexcept{
     outAmbiguous = false;
+    const auto it = m_freeFunctionHead.find(name);
+    if(it == m_freeFunctionHead.end())
+        return nullptr;
     const MethodDecl* function = nullptr;
     const TypeComparator comparator(*this);
-    for(const MethodDecl* candidate : m_freeFunctions){
-        if(!candidate || candidate->name != name)
-            continue;
+    for(usize idx = it->second; idx != s_InvalidFreeFunctionIndex; idx = m_freeFunctionNext[idx]){
+        const MethodDecl* const candidate = m_freeFunctions[idx];
         if(
             !candidate->templateParams.empty()
             || (function && (
@@ -299,7 +322,67 @@ const MethodDecl* SymbolTable::findUniqueFreeFunction(const MStringView name, b8
 }
 
 Stmt* SymbolTable::findGlobalConstant(const MStringView name)const noexcept{
-    return __hidden_adhd_symbol_table::FindDeclByName(Span<Stmt* const>(m_globalConstants), name);
+    const auto it = m_globalConstantMap.find(name);
+    return (it != m_globalConstantMap.end()) ? it->second : nullptr;
+}
+
+b8 SymbolTable::hasMultipleFreeFunctions(const MStringView name)const noexcept{
+    const auto it = m_freeFunctionHead.find(name);
+    return it != m_freeFunctionHead.end() && m_freeFunctionNext[it->second] != s_InvalidFreeFunctionIndex;
+}
+
+b8 SymbolTable::hasMultipleClassMethods(const ClassDecl& classDecl, const MStringView name, const b8 staticOnly)const noexcept{
+    for(auto* owner = &classDecl; owner; owner = owner->concreteBase){
+        u32 matchCount = 0u;
+        b8 anyWithName = false;
+        for(const MethodDecl* m : owner->methods){
+            if(!m || m->isConstructor || m->isDestructor || m->isOperator || m->name != name)
+                continue;
+            anyWithName = true;
+            if(staticOnly && !m->isStatic)
+                continue;
+            ++matchCount;
+            if(matchCount > 1u)
+                return true;
+        }
+        if(matchCount > 0u || anyWithName)
+            return false;
+    }
+    return false;
+}
+
+void SymbolTable::countInterfaceMethodsUpToTwo(const TypeRef& ifaceType, const MStringView methodName, const u32 depth, u32& inOutCount)const noexcept{
+    if(depth > 16u || inOutCount >= 2u)
+        return;
+    const TypeRef* resolvedIface = unwrapTypeAlias(&ifaceType);
+    if(!resolvedIface)
+        return;
+    const InterfaceDecl* iface = findInterface(resolvedIface->name);
+    if(!iface)
+        return;
+    for(const MethodDecl* method : iface->methods){
+        if(method && method->name == methodName){
+            ++inOutCount;
+            if(inOutCount >= 2u)
+                return;
+        }
+    }
+    for(const TypeRef* baseType : iface->baseInterfaces){
+        if(!baseType)
+            continue;
+        const TypeRef* subBase = substituteTypeParams(baseType, iface->templateParams, resolvedIface);
+        if(!subBase)
+            continue;
+        countInterfaceMethodsUpToTwo(*subBase, methodName, depth + 1u, inOutCount);
+        if(inOutCount >= 2u)
+            return;
+    }
+}
+
+b8 SymbolTable::hasMultipleInterfaceMethods(const TypeRef& ifaceType, const MStringView methodName, const u32 depth)const noexcept{
+    u32 count = 0u;
+    countInterfaceMethodsUpToTwo(ifaceType, methodName, depth, count);
+    return count >= 2u;
 }
 
 const MethodDecl* SymbolTable::findClassMethod(
@@ -507,19 +590,12 @@ b8 SymbolTable::isSmallValueType(MStringView typeName)const noexcept{
 }
 
 MStringView SymbolTable::findTypeNamespace(const MStringView name)const noexcept{
-    if(const EnumDecl* decl = findEnum(name))
-        return decl->cppNamespace;
-    if(const InterfaceDecl* decl = findInterface(name))
-        return decl->cppNamespace;
-    if(const ClassDecl* decl = findClass(name))
-        return decl->cppNamespace;
-    if(const TypeAliasDecl* decl = findTypeAlias(name))
-        return decl->cppNamespace;
-    return {};
+    const auto it = m_typeMap.find(name);
+    return (it != m_typeMap.end()) ? it->second.cppNamespace : MStringView{};
 }
 
 b8 SymbolTable::hasTypeSymbol(const MStringView name)const noexcept{
-    return findEnum(name) != nullptr || findInterface(name) != nullptr || findClass(name) != nullptr || findTypeAlias(name) != nullptr;
+    return m_typeMap.find(name) != m_typeMap.end();
 }
 
 b8 SymbolTable::isEnumType(const MStringView name)const noexcept{

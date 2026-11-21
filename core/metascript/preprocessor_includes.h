@@ -53,7 +53,10 @@ public:
 
 
 public:
-    void clearRanges()noexcept{ m_includedByteRanges.clear(); }
+    void clearRanges()noexcept{
+        m_includedByteRanges.clear();
+        m_topLevelByteRanges.clear();
+    }
     [[nodiscard]] b8 containsOffset(usize offset)const noexcept;
     [[nodiscard]] MStringView includedFileAtOffset(usize offset)const noexcept;
     [[nodiscard]] MStringView resolveNamespaceAtOffset(usize offset)const noexcept;
@@ -70,6 +73,7 @@ private:
     IncludedList m_includedFiles;
     IncludedList m_resolvedIncludedFiles;
     IncludedRangeList m_includedByteRanges;
+    IncludedRangeList m_topLevelByteRanges;
     b8 m_allowNwbInclude = true;
 };
 

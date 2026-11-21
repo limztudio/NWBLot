@@ -22,10 +22,16 @@ class GpuImageCache : NoCopy{
     private Vector<GpuVersion<GpuGlyphVersion>> m_glyphCache;
     private Vector<GpuVersion<GpuSdfAtlasVersion>> m_sdfCache;
     private Vector<GpuVersion<GpuTextureImageVersion>> m_textureCache;
+    private u64 m_useTick = 0u;
 
     public mut Vector<GpuVersion<GpuGlyphVersion>> glyphs(){ return this.m_glyphCache; }
     public mut Vector<GpuVersion<GpuSdfAtlasVersion>> sdfs(){ return this.m_sdfCache; }
     public mut Vector<GpuVersion<GpuTextureImageVersion>> textures(){ return this.m_textureCache; }
+
+    public u64 nextTick(){
+        ++this.m_useTick;
+        return this.m_useTick;
+    }
 
     [cpp_unwind]
     public void reserve(){
@@ -37,6 +43,7 @@ class GpuImageCache : NoCopy{
         this.m_glyphCache.clear();
         this.m_sdfCache.clear();
         this.m_textureCache.clear();
+        this.m_useTick = 0u;
     }
     [cpp_unwind]
     public void trim(in DrawSnapshot snapshot){
@@ -50,12 +57,51 @@ class GpuImageCache : NoCopy{
         RetainReferencedCacheEntries(snapshot.textureImages(), SameCachedGpuTexture, this.m_textureCache);
     }
     public void evict(){
-        if(!this.m_glyphCache.empty())
-            this.m_glyphCache.erase(this.m_glyphCache.begin());
-        else if(!this.m_sdfCache.empty())
-            this.m_sdfCache.erase(this.m_sdfCache.begin());
-        else if(!this.m_textureCache.empty())
-            this.m_textureCache.erase(this.m_textureCache.begin());
+        if(!this.m_glyphCache.empty()){
+            usize oldest = 0u;
+            u64 oldestTick = this.m_glyphCache[0u].deref().m_lastUsedTick;
+            for(usize index = 1u; index < this.m_glyphCache.size(); ++index){
+                const u64 tick = this.m_glyphCache[index].deref().m_lastUsedTick;
+                if(tick < oldestTick){
+                    oldestTick = tick;
+                    oldest = index;
+                }
+            }
+            const usize last = this.m_glyphCache.size() - 1u;
+            if(oldest != last)
+                this.m_glyphCache[oldest] = this.m_glyphCache[last];
+            this.m_glyphCache.pop_back();
+        }
+        else if(!this.m_sdfCache.empty()){
+            usize oldest = 0u;
+            u64 oldestTick = this.m_sdfCache[0u].deref().m_lastUsedTick;
+            for(usize index = 1u; index < this.m_sdfCache.size(); ++index){
+                const u64 tick = this.m_sdfCache[index].deref().m_lastUsedTick;
+                if(tick < oldestTick){
+                    oldestTick = tick;
+                    oldest = index;
+                }
+            }
+            const usize last = this.m_sdfCache.size() - 1u;
+            if(oldest != last)
+                this.m_sdfCache[oldest] = this.m_sdfCache[last];
+            this.m_sdfCache.pop_back();
+        }
+        else if(!this.m_textureCache.empty()){
+            usize oldest = 0u;
+            u64 oldestTick = this.m_textureCache[0u].deref().m_lastUsedTick;
+            for(usize index = 1u; index < this.m_textureCache.size(); ++index){
+                const u64 tick = this.m_textureCache[index].deref().m_lastUsedTick;
+                if(tick < oldestTick){
+                    oldestTick = tick;
+                    oldest = index;
+                }
+            }
+            const usize last = this.m_textureCache.size() - 1u;
+            if(oldest != last)
+                this.m_textureCache[oldest] = this.m_textureCache[last];
+            this.m_textureCache.pop_back();
+        }
     }
 }
 

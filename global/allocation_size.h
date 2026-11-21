@@ -45,15 +45,18 @@ constexpr inline usize AddSize(usize lhs, usize rhs){
     return lhs + rhs;
 }
 
-constexpr inline usize Alignment(usize align, usize size){
-    const auto aligned = AlignUpChecked(size, align);
+constexpr inline usize AlignmentPowerOfTwo(usize align, usize size){
+    const auto aligned = AlignUpPowerOfTwoChecked(size, align);
     if(!aligned)
         throw AllocationSizeException{};
     return *aligned;
 }
 
-constexpr inline usize AlignmentPowerOfTwo(usize align, usize size){
-    const auto aligned = AlignUpPowerOfTwoChecked(size, align);
+constexpr inline usize Alignment(usize align, usize size){
+    if((align & (align - 1u)) == 0u) [[likely]]
+        return AlignmentPowerOfTwo(align, size);
+
+    const auto aligned = AlignUpChecked(size, align);
     if(!aligned)
         throw AllocationSizeException{};
     return *aligned;

@@ -91,9 +91,11 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
     const usize resourceCount = CompilerGraphAccess::ResourceCount(graph);
     const b8 buildConcurrentMasks = topology && topology->queueCount > 0u && topology->queueCount <= s_BitsPerWord;
     Vector<u8, Alloc::ScratchArena> computedConcurrentMask(buildConcurrentMasks ? resourceCount : 0u, 0u, scratchArena);
+    TopologySharingLut sharingLut{};
     if(buildConcurrentMasks){
         resourceConcurrentAdmittedMasks.assign(resourceCount, 0u);
         hasResourceConcurrentMasks = true;
+        sharingLut = TopologySharingLut::Build(*topology);
     }
 
     Vector<OwnershipEdge, Alloc::ScratchArena> uniqueEdges(scratchArena);
@@ -106,7 +108,11 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
             continue;
         if(buildConcurrentMasks && !computedConcurrentMask[edge.resource.index]){
             computedConcurrentMask[edge.resource.index] = 1u;
-            if(ResourceNodeUsesConcurrentQueueSharing(graph, resource, *topology)){
+            if(!resource.hasQueueAdmission){
+                if(sharingLut.logicalUsesConcurrent(resource.queueSharing))
+                    resourceConcurrentAdmittedMasks[edge.resource.index] = sharingLut.logicalAdmittedMask(resource.queueSharing);
+            }
+            else if(ResourceNodeUsesConcurrentQueueSharing(graph, resource, *topology)){
                 u64 admittedMask = 0u;
                 for(usize queueIndex = 0u; queueIndex < topology->queueCount; ++queueIndex){
                     if(ResourceNodeSharingAdmitsQueue(graph, resource, *topology, topology->queues[queueIndex]))
@@ -185,8 +191,9 @@ void GpuTaskQueueScoringData::rebuildAssignmentLoads(const Span<const GpuTaskQue
         assignedQueueLoads[queueIndex] = { .queue = topology.queues[queueIndex].id, .estimatedCost = 0u };
 
     const b8 trackTaskQueueIndices = topology.queueCount < Limit<u16>::s_Max && assignedQueueIndexByTask.size() == taskCosts.size();
-    relatedAllCostByTask.clear();
     if(taskCostGroups.empty()){
+        relatedAllCostByTask.clear();
+        allCostWordsFullGraph = false;
         allCostWords.clear();
         queueCostWords.clear();
         queueNonEmptyWordMasks.clear();
@@ -211,11 +218,24 @@ void GpuTaskQueueScoringData::rebuildAssignmentLoads(const Span<const GpuTaskQue
     const auto queueWordCount = TryMultiply<usize>(topology.queueCount, costWordsPerGroup);
     if(!queueWordCount)
         throw AllocationSizeException{};
-    allCostWords.assign(costWordsPerGroup, InterleavedCostWord{});
-    queueCostWords.assign(*queueWordCount, InterleavedCostWord{});
-    queueNonEmptyWordMasks.assign(costWordsPerGroup <= s_BitsPerWord ? topology.queueCount : 0u, 0u);
+    const usize nonEmptyWordMaskCount = costWordsPerGroup <= s_BitsPerWord ? topology.queueCount : 0u;
+    const b8 isFullGraph = assignments.size() == taskCosts.size();
+    const b8 reuseAllCostWords = allCostWordsFullGraph && isFullGraph && allCostWords.size() == costWordsPerGroup;
+    if(!reuseAllCostWords){
+        relatedAllCostByTask.clear();
+        allCostWords.resize(costWordsPerGroup);
+        if(!allCostWords.empty())
+            FOUNDATION_MEMSET(allCostWords.data(), 0, allCostWords.size() * sizeof(InterleavedCostWord));
+        nonEmptyCostGroupMask = 0u;
+        allCostWordsFullGraph = isFullGraph;
+    }
+    queueCostWords.resize(*queueWordCount);
+    if(!queueCostWords.empty())
+        FOUNDATION_MEMSET(queueCostWords.data(), 0, queueCostWords.size() * sizeof(InterleavedCostWord));
+    queueNonEmptyWordMasks.resize(nonEmptyWordMaskCount);
+    if(!queueNonEmptyWordMasks.empty())
+        FOUNDATION_MEMSET(queueNonEmptyWordMasks.data(), 0, queueNonEmptyWordMasks.size() * sizeof(u64));
 
-    nonEmptyCostGroupMask = 0u;
     totalAssignedCost = 0u;
     for(const GpuTaskQueueAssignment& assignment : assignments){
         const usize queueIndex = findAssignedQueueIndex(assignment.queue);
@@ -226,10 +246,12 @@ void GpuTaskQueueScoringData::rebuildAssignmentLoads(const Span<const GpuTaskQue
             continue;
         totalAssignedCost += cost;
         const u8 costGroup = taskCostGroups[assignment.task.index];
-        nonEmptyCostGroupMask |= static_cast<u8>(1u << costGroup);
         const usize wordIndex = assignment.task.index / s_BitsPerWord;
         const u64 mask = static_cast<u64>(1u) << (assignment.task.index % s_BitsPerWord);
-        allCostWords[wordIndex].groups[costGroup] |= mask;
+        if(!reuseAllCostWords){
+            nonEmptyCostGroupMask |= static_cast<u8>(1u << costGroup);
+            allCostWords[wordIndex].groups[costGroup] |= mask;
+        }
         if(queueIndex < assignedQueueLoads.size()){
             assignedQueueLoads[queueIndex].estimatedCost += cost;
             queueCostWords[queueIndex * costWordsPerGroup + wordIndex].groups[costGroup] |= mask;

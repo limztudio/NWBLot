@@ -106,47 +106,97 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     if(emittedForwardDecl)
         out.append("\r\n");
 
-    const auto constUsesLocalTypeAlias = [&](const Stmt& c)noexcept -> b8{
-        if(!c.varType)
+    const auto typeRefUsesAnyName = [&](const auto& self, const TypeRef& type, const HashMap<MStringView, u8, MetaArena, MStringViewHash>& names, const u32 depth)noexcept -> b8{
+        if(depth > 16u)
             return false;
-        for(const TypeAliasDecl* aliasDecl : unit.typeAliases){
-            if(aliasDecl && !aliasDecl->isImported && !aliasDecl->isExtern && declarationDependencies.typeRefReferencesSymbol(*c.varType, aliasDecl->name))
+        if(names.find(type.name) != names.end())
+            return true;
+        if(type.isFuncType){
+            if(type.funcReturnType && self(self, *type.funcReturnType, names, depth + 1u))
+                return true;
+            for(const FuncParamType& fp : type.funcParams){
+                if(fp.type && self(self, *fp.type, names, depth + 1u))
+                    return true;
+            }
+        }
+        for(const TypeArg& targ : type.templateArgs){
+            if(targ.type && self(self, *targ.type, names, depth + 1u))
                 return true;
         }
         return false;
     };
 
-    const auto constUsesLocalClass = [&](const Stmt& c)noexcept -> b8{
-        if(!c.varType)
+    const auto typeRefUsesAnyClassByValue = [&](const auto& self, const TypeRef& type, const HashMap<MStringView, u8, MetaArena, MStringViewHash>& classNames, const u32 depth)noexcept -> b8{
+        if(depth > 16u || type.isFuncType || m_symbols.resolveRefMode(&type) != ParamPassingMode::None)
             return false;
-        for(const ClassDecl* classDecl : unit.classes){
-            if(classDecl && !classDecl->isImported && !classDecl->isExtern && declarationDependencies.typeRefReferencesSymbolByValue(*c.varType, classDecl->name))
+        if(classNames.find(type.name) != classNames.end())
+            return true;
+        if(const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(&type)){
+            if(unwrapped != &type && self(self, *unwrapped, classNames, depth + 1u))
+                return true;
+        }
+        if(IsAssetHandleType(m_symbols.resolveBaseTypeName(type.name)))
+            return false;
+        if(const ClassDecl* cls = m_symbols.findClass(type.name); cls && !cls->templateParams.empty()){
+            if(cls->concreteBase && classNames.find(cls->concreteBase->name) != classNames.end())
+                return true;
+            for(const FieldDecl* field : cls->fields){
+                if(field && field->type && self(self, *field->type, classNames, depth + 1u))
+                    return true;
+            }
+        }
+        for(const TypeArg& targ : type.templateArgs){
+            if(targ.type && self(self, *targ.type, classNames, depth + 1u))
                 return true;
         }
         return false;
     };
 
-    const auto emitMatchingGlobalConsts = [&](const auto& pred){
-        b8 emittedAny = false;
-        for(const Stmt* c : unit.globalConstants){
-            if(!c || c->isImported || c->isExtern || !c->varType || !pred(*c))
-                continue;
-            emittedAny = true;
-            emitGlobalConstDecl(out, *c);
-        }
-        if(emittedAny)
-            out.append("\r\n\r\n");
-    };
-
-    emitMatchingGlobalConsts([&](const Stmt& c)noexcept{
-        return !constUsesLocalTypeAlias(c) && !constUsesLocalClass(c);
-    });
-
+    HashMap<MStringView, u8, MetaArena, MStringViewHash> localAliasNames(m_arena);
     MVector<const TypeAliasDecl*> localAliases(m_arena);
     for(const TypeAliasDecl* aliasDecl : unit.typeAliases){
-        if(aliasDecl && !aliasDecl->isImported && !aliasDecl->isExtern)
+        if(aliasDecl && !aliasDecl->isImported && !aliasDecl->isExtern){
+            localAliasNames.emplace(aliasDecl->name, 1u);
             localAliases.push_back(aliasDecl);
+        }
     }
+
+    HashMap<MStringView, u8, MetaArena, MStringViewHash> localClassNames(m_arena);
+    MVector<const ClassDecl*> localClasses(m_arena);
+    for(const ClassDecl* classDecl : unit.classes){
+        if(classDecl && !classDecl->isImported && !classDecl->isExtern){
+            localClassNames.emplace(classDecl->name, 1u);
+            localClasses.push_back(classDecl);
+        }
+    }
+
+    MVector<const Stmt*> preAliasConsts(m_arena);
+    MVector<const Stmt*> preClassConsts(m_arena);
+    MVector<const Stmt*> postClassConsts(m_arena);
+    for(const Stmt* c : unit.globalConstants){
+        if(!c || c->isImported || c->isExtern || !c->varType)
+            continue;
+        if(!localClassNames.empty() && typeRefUsesAnyClassByValue(typeRefUsesAnyClassByValue, *c->varType, localClassNames, 0u)){
+            postClassConsts.push_back(c);
+            continue;
+        }
+        if(!localAliasNames.empty() && typeRefUsesAnyName(typeRefUsesAnyName, *c->varType, localAliasNames, 0u)){
+            preClassConsts.push_back(c);
+            continue;
+        }
+        preAliasConsts.push_back(c);
+    }
+
+    const auto emitGlobalConstBucket = [&](const Span<const Stmt* const> bucket){
+        if(bucket.empty())
+            return;
+        for(const Stmt* c : bucket)
+            emitGlobalConstDecl(out, *c);
+        out.append("\r\n\r\n");
+    };
+
+    emitGlobalConstBucket(Span<const Stmt* const>(preAliasConsts.data(), preAliasConsts.size()));
+
     if(!localAliases.empty()){
         MVector<const TypeAliasDecl*> sortedAliases(m_arena);
         declarationDependencies.sortTypeAliasesTopologically(localAliases, sortedAliases);
@@ -156,9 +206,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         }
     }
 
-    emitMatchingGlobalConsts([&](const Stmt& c)noexcept{
-        return constUsesLocalTypeAlias(c) && !constUsesLocalClass(c);
-    });
+    emitGlobalConstBucket(Span<const Stmt* const>(preClassConsts.data(), preClassConsts.size()));
 
     MVector<const InterfaceDecl*> localInterfaces(m_arena);
     for(const InterfaceDecl* ifaceDecl : unit.interfaces){
@@ -182,32 +230,31 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         }
     }
 
-    MVector<const ClassDecl*> allClasses(m_arena);
-    for(const ClassDecl* classDecl : unit.classes){
-        if(classDecl)
-            allClasses.push_back(classDecl);
-    }
-    if(!allClasses.empty()){
-        MVector<const ClassDecl*> sortedClasses(m_arena);
-        declarationDependencies.sortClassesTopologically(allClasses, sortedClasses);
+    if(!localClasses.empty() || !unit.templateInstantiations.empty()){
+        MVector<const ClassDecl*> sortedLocalClasses(m_arena);
+        declarationDependencies.sortClassesTopologically(localClasses, sortedLocalClasses);
 
         MVector<u8> instEmitted(unit.templateInstantiations.size(), 0u, m_arena);
-        MVector<const ClassDecl*> readyClasses(m_arena);
-        readyClasses.reserve(sortedClasses.size());
-        for(const ClassDecl* classDecl : sortedClasses){
-            if(classDecl && (classDecl->isImported || classDecl->isExtern))
-                readyClasses.push_back(classDecl);
+        MVector<u8> localClassReady(sortedLocalClasses.size(), 0u, m_arena);
+        HashMap<const ClassDecl*, usize, MetaArena> localClassIndex(m_arena);
+        localClassIndex.reserve(sortedLocalClasses.size());
+        for(usize idx = 0u; idx < sortedLocalClasses.size(); ++idx){
+            if(sortedLocalClasses[idx])
+                localClassIndex.emplace(sortedLocalClasses[idx], idx);
         }
 
         const auto isClassReady = [&](const ClassDecl* target)noexcept -> b8{
-            for(const ClassDecl* c : readyClasses){
-                if(c == target)
-                    return true;
-            }
-            return false;
+            if(!target)
+                return false;
+            if(target->isImported || target->isExtern)
+                return true;
+            const auto it = localClassIndex.find(target);
+            return it != localClassIndex.end() && localClassReady[it->second] != 0u;
         };
 
         const auto emitReadyInstantiations = [&](){
+            if(unit.templateInstantiations.empty())
+                return;
             b8 progress = true;
             while(progress){
                 progress = false;
@@ -222,10 +269,10 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
                     if(!isClassReady(inst->templateDecl))
                         continue;
                     b8 depsReady = true;
-                    for(const ClassDecl* depCls : sortedClasses){
-                        if(!depCls || isClassReady(depCls))
+                    for(usize depIdx = 0u; depIdx < sortedLocalClasses.size(); ++depIdx){
+                        if(localClassReady[depIdx] != 0u || !sortedLocalClasses[depIdx])
                             continue;
-                        if(declarationDependencies.instantiationDependsOnClassByValue(*inst, depCls->name)){
+                        if(declarationDependencies.instantiationDependsOnClassByValue(*inst, sortedLocalClasses[depIdx]->name)){
                             depsReady = false;
                             break;
                         }
@@ -240,40 +287,40 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         };
 
         emitReadyInstantiations();
-        for(const ClassDecl* classDecl : sortedClasses){
-            if(!classDecl || classDecl->isImported || classDecl->isExtern)
+        for(usize idx = 0u; idx < sortedLocalClasses.size(); ++idx){
+            const ClassDecl* classDecl = sortedLocalClasses[idx];
+            if(!classDecl)
                 continue;
             emitClassDecl(out, *classDecl);
-            readyClasses.push_back(classDecl);
+            localClassReady[idx] = 1u;
             emitReadyInstantiations();
         }
         for(usize idx = 0u; idx < unit.templateInstantiations.size(); ++idx){
             if(instEmitted[idx] == 0u && unit.templateInstantiations[idx] && !unit.templateInstantiations[idx]->isImported)
                 emitClassTemplateSpecialization(out, *unit.templateInstantiations[idx], namespacePath);
         }
-        for(const ClassDecl* classDecl : sortedClasses){
-            if(!classDecl || classDecl->isExtern)
+        for(const ClassDecl* classDecl : sortedLocalClasses){
+            if(!classDecl || !classDecl->templateParams.empty())
                 continue;
-            if(classDecl->isImported){
-                for(const MethodDecl* method : classDecl->methods){
-                    if(!method || method->isImported || method->isExtern || !ShouldEmitCallableInHeader(classDecl, *method))
-                        continue;
-                    m_sourceEmitter.emitOutOfClassCallable(out, classDecl, *method, true, true, false);
-                }
-            }
-            else if(classDecl->templateParams.empty()){
-                for(const MethodDecl* method : classDecl->methods){
-                    if(!method || method->isImported || method->isExtern || !method->hasBody || !method->hasSynthesizedArenaParams)
-                        continue;
-                    m_sourceEmitter.emitOutOfClassCallable(out, classDecl, *method, true, true, false);
-                }
+            for(const MethodDecl* method : classDecl->methods){
+                if(!method || method->isImported || method->isExtern || !method->hasBody || !method->hasSynthesizedArenaParams)
+                    continue;
+                m_sourceEmitter.emitOutOfClassCallable(out, classDecl, *method, true, true, false);
             }
         }
     }
 
-    emitMatchingGlobalConsts([&](const Stmt& c)noexcept{
-        return constUsesLocalClass(c);
-    });
+    for(const ClassDecl* classDecl : unit.classes){
+        if(!classDecl || !classDecl->isImported || classDecl->isExtern)
+            continue;
+        for(const MethodDecl* method : classDecl->methods){
+            if(!method || method->isImported || method->isExtern || !ShouldEmitCallableInHeader(classDecl, *method))
+                continue;
+            m_sourceEmitter.emitOutOfClassCallable(out, classDecl, *method, true, true, false);
+        }
+    }
+
+    emitGlobalConstBucket(Span<const Stmt* const>(postClassConsts.data(), postClassConsts.size()));
 
     for(const MethodDecl* fn : unit.freeFunctions){
         if(!fn || fn->isImported || fn->isExtern)

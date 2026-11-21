@@ -59,10 +59,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
     const uint mode = g_NwbBvhBitonicSortPushConstants.mode;
 
     if(mode == NWB_BVH_SORT_MODE_GLOBAL){
-        const uint index = dispatchThreadID.x;
-        const uint partner = index ^ g_NwbBvhBitonicSortPushConstants.compareDistance;
-        if(partner <= index)
-            return;
+        const uint compareDistance = g_NwbBvhBitonicSortPushConstants.compareDistance;
+        const uint lowMask = compareDistance - 1u;
+        const uint pairIndex = dispatchThreadID.x;
+        const uint index = ((pairIndex & ~lowMask) << 1u) | (pairIndex & lowMask);
+        const uint partner = index | compareDistance;
 
         const uint keyA = g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.keysHeapSlot][index];
         const uint payloadA = g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.payloadHeapSlot][index];

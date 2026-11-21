@@ -31,10 +31,45 @@ void PushPaintClip(in b8 recording, in Rect clip, mut Vector<Rect> clips){
         error("PaintSystem: paint clip pushed while recording is off");
         return;
     }
-    const Rect parent = clips.back();
+    in Rect parent = clips.back();
     Rect next;
-    if(HasUiRectArea(parent) && HasUiRectArea(clip))
-        next = IntersectUiRectsBounds(parent, clip);
+    if(parent.width > 0.0f && parent.height > 0.0f && clip.width > 0.0f && clip.height > 0.0f){
+        const VectorSingle parentVec(parent.x, parent.y, parent.width, parent.height);
+        const VectorSingle parentOrigin(parent.x, parent.y, 0.0f, 0.0f);
+        const VectorSingle parentEnd = parentOrigin + VectorSingle(parent.width, parent.height, 0.0f, 0.0f);
+        const VectorSingle clipVec(clip.x, clip.y, clip.width, clip.height);
+        const VectorSingle clipOrigin(clip.x, clip.y, 0.0f, 0.0f);
+        const VectorSingle clipEnd = clipOrigin + VectorSingle(clip.width, clip.height, 0.0f, 0.0f);
+        if(IsFinite(parentVec) && IsFinite(parentEnd.xy) && IsFinite(clipVec) && IsFinite(clipEnd.xy)){
+            const VectorSingle origin = Max(parentOrigin, clipOrigin);
+            const VectorSingle end = Min(parentEnd, clipEnd);
+            const VectorSingle size = Max(VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), end - origin);
+            next = Rect(origin.x, origin.y, size.x, size.y);
+        }
+    }
+    clips.push_back(next);
+}
+
+void PushPaintClipValidatedParent(in b8 recording, in Rect clip, mut Vector<Rect> clips){
+    if(!recording){
+        error("PaintSystem: paint clip pushed while recording is off");
+        return;
+    }
+    in Rect parent = clips.back();
+    Rect next;
+    if(parent.width > 0.0f && parent.height > 0.0f && clip.width > 0.0f && clip.height > 0.0f){
+        const VectorSingle clipVec(clip.x, clip.y, clip.width, clip.height);
+        const VectorSingle clipOrigin(clip.x, clip.y, 0.0f, 0.0f);
+        const VectorSingle clipEnd = clipOrigin + VectorSingle(clip.width, clip.height, 0.0f, 0.0f);
+        if(IsFinite(clipVec) && IsFinite(clipEnd.xy)){
+            const VectorSingle parentOrigin(parent.x, parent.y, 0.0f, 0.0f);
+            const VectorSingle parentEnd = parentOrigin + VectorSingle(parent.width, parent.height, 0.0f, 0.0f);
+            const VectorSingle origin = Max(parentOrigin, clipOrigin);
+            const VectorSingle end = Min(parentEnd, clipEnd);
+            const VectorSingle size = Max(VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), end - origin);
+            next = Rect(origin.x, origin.y, size.x, size.y);
+        }
+    }
     clips.push_back(next);
 }
 
@@ -90,8 +125,9 @@ b8 EndPaintOverlay(
     return true;
 }
 
-void EmitPaintQuad(
+void EmitPaintQuadImpl(
     in b8 recording,
+    in b8 clipValidated,
     in Rect clip,
     in Rect rectangle,
     in Rect uv,
@@ -111,43 +147,80 @@ void EmitPaintQuad(
         error("PaintSystem: paint quad emitted while recording is off");
         return;
     }
-    if(!IsValidPaintColor(color)){
+    if(!IsFinite(VectorSingle(color.r, color.g, color.b, color.a)) || color.a < 0.0f || color.a > 1.0f){
         error("PaintSystem: paint quad color is invalid");
         return;
     }
-    if(!HasUiRectArea(rectangle) || !HasUiRectArea(clip))
+    if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f) || !(clip.width > 0.0f) || !(clip.height > 0.0f))
         return;
-    const Rect visible = IntersectUiRectsBounds(rectangle, clip);
-    if(!HasUiRectArea(visible) || color.a <= 0.0f)
+    const VectorSingle rectOrigin(rectangle.x, rectangle.y, 0.0f, 0.0f);
+    const VectorSingle rectEnd = rectOrigin + VectorSingle(rectangle.width, rectangle.height, 0.0f, 0.0f);
+    if(!IsFinite(VectorSingle(rectangle.x, rectangle.y, rectangle.width, rectangle.height)) || !IsFinite(rectEnd.xy))
+        return;
+    const VectorSingle clipOrigin(clip.x, clip.y, 0.0f, 0.0f);
+    const VectorSingle clipEnd = clipOrigin + VectorSingle(clip.width, clip.height, 0.0f, 0.0f);
+    if(!clipValidated && !IsFinite(VectorSingle(clip.x, clip.y, clip.width, clip.height)))
+        return;
+    if(!IsFinite(clipEnd.xy))
+        return;
+    const VectorSingle origin = Max(rectOrigin, clipOrigin);
+    const VectorSingle end = Min(rectEnd, clipEnd);
+    const VectorSingle size = Max(VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), end - origin);
+    const VectorSingle visibleEnd = origin + size;
+    if(!IsFinite(size.xy) || !IsFinite(visibleEnd.xy) || !(size.x > 0.0f) || !(size.y > 0.0f) || color.a <= 0.0f)
         return;
     if(vertices.size() > cast<usize>(u32.max - s_PaintQuadVertexCount) || indices.size() > cast<usize>(u32.max - s_PaintQuadIndexCount)){
         assert(false);
         return;
     }
-    const VectorSingle textureCoordinates = ResolveQuadTextureCoords(rectangle, visible, uv);
-    const f32 left = textureCoordinates.x;
-    const f32 top = textureCoordinates.y;
-    const f32 right = textureCoordinates.z;
-    const f32 bottom = textureCoordinates.w;
-    const Color premultiplied = PremultiplyPaintColor(color);
+    f32 left = 0.0f;
+    f32 top = 0.0f;
+    f32 right = 0.0f;
+    f32 bottom = 0.0f;
+    if(material != PaintMaterial::Solid && (uv.width != 0.0f || uv.height != 0.0f || uv.x != 0.0f || uv.y != 0.0f)){
+        if(origin.x == rectangle.x && origin.y == rectangle.y && size.x == rectangle.width && size.y == rectangle.height && visibleEnd.x == rectEnd.x && visibleEnd.y == rectEnd.y){
+            left = uv.x;
+            top = uv.y;
+            right = uv.x + uv.width;
+            bottom = uv.y + uv.height;
+        }
+        else{
+            const VectorSingle coordinates(origin.x, origin.y, visibleEnd.x, visibleEnd.y);
+            const VectorSingle delta = coordinates - VectorSingle(rectangle.x, rectangle.y, rectangle.x, rectangle.y);
+            const VectorSingle fraction = delta / VectorSingle(rectangle.width, rectangle.height, rectangle.width, rectangle.height);
+            const VectorSingle textureScale(uv.width, uv.height, uv.width, uv.height);
+            const VectorSingle textureOrigin(uv.x, uv.y, uv.x, uv.y);
+            const VectorSingle textureCoordinates = fraction * textureScale + textureOrigin;
+            left = textureCoordinates.x;
+            top = textureCoordinates.y;
+            right = textureCoordinates.z;
+            bottom = textureCoordinates.w;
+        }
+    }
+    Color premultiplied = color;
+    if(color.a != 1.0f){
+        const VectorSingle rgb = VectorSingle(color.r, color.g, color.b, color.b) * color.a;
+        premultiplied = Color(rgb.x, rgb.y, rgb.z, color.a);
+    }
     const u32 vertexBase = cast<u32>(vertices.size());
     const u32 firstIndex = cast<u32>(indices.size());
-    const VectorSingle visibleEnd = VectorSingle(visible.x, visible.y, visible.x, visible.y) + VectorSingle(visible.width, visible.height, visible.width, visible.height);
-    const f32 visibleRight = visibleEnd.x;
-    const f32 visibleBottom = visibleEnd.y;
-    vertices.push_back(Vertex(Point(visible.x, visible.y), Point(left, top), premultiplied));
-    vertices.push_back(Vertex(Point(visibleRight, visible.y), Point(right, top), premultiplied));
-    vertices.push_back(Vertex(Point(visibleRight, visibleBottom), Point(right, bottom), premultiplied));
-    vertices.push_back(Vertex(Point(visible.x, visibleBottom), Point(left, bottom), premultiplied));
-    indices.push_back(vertexBase);
-    indices.push_back(vertexBase + 1u);
-    indices.push_back(vertexBase + 2u);
-    indices.push_back(vertexBase);
-    indices.push_back(vertexBase + 2u);
-    indices.push_back(vertexBase + 3u);
+    Array<Vertex, 4u> quadVertices;
+    quadVertices[0u] = Vertex(Point(origin.x, origin.y), Point(left, top), premultiplied);
+    quadVertices[1u] = Vertex(Point(visibleEnd.x, origin.y), Point(right, top), premultiplied);
+    quadVertices[2u] = Vertex(Point(visibleEnd.x, visibleEnd.y), Point(right, bottom), premultiplied);
+    quadVertices[3u] = Vertex(Point(origin.x, visibleEnd.y), Point(left, bottom), premultiplied);
+    AppendTriviallyCopyableVector(vertices, Span<Vertex>(quadVertices));
+    Array<u32, 6u> quadIndices;
+    quadIndices[0u] = vertexBase;
+    quadIndices[1u] = vertexBase + 1u;
+    quadIndices[2u] = vertexBase + 2u;
+    quadIndices[3u] = vertexBase;
+    quadIndices[4u] = vertexBase + 2u;
+    quadIndices[5u] = vertexBase + 3u;
+    AppendTriviallyCopyableVector(indices, Span<u32>(quadIndices));
     if(!commands.empty()){
         const usize lastIndex = commands.size() - 1u;
-        const DrawCommand previous = commands[lastIndex];
+        in DrawCommand previous = commands[lastIndex];
         if(
             previous.layer == layer && previous.material == material && previous.glyphPageIndex == glyphPageIndex
             && previous.sdfPageIndex == sdfPageIndex && previous.sdfChannel == sdfChannel
@@ -173,6 +246,142 @@ void EmitPaintQuad(
     commands.push_back(command);
 }
 
+void EmitPaintQuad(
+    in b8 recording,
+    in Rect clip,
+    in Rect rectangle,
+    in Rect uv,
+    in Color color,
+    in PaintMaterial material,
+    in u32 layer,
+    in u32 glyphPageIndex,
+    in u32 sdfPageIndex,
+    in u32 sdfChannel,
+    in u32 textureImageIndex,
+    mut Vector<Vertex> vertices,
+    mut Vector<u32> indices,
+    mut Vector<DrawCommand> commands,
+    mut b8 inOutCommandsOrdered
+){
+    EmitPaintQuadImpl(
+        recording, false, clip, rectangle, uv, color, material, layer,
+        glyphPageIndex, sdfPageIndex, sdfChannel, textureImageIndex,
+        vertices, indices, commands, inOutCommandsOrdered
+    );
+}
+
+void EmitPaintQuadValidated(
+    in b8 recording,
+    in Rect clip,
+    in Rect rectangle,
+    in Rect uv,
+    in Color color,
+    in PaintMaterial material,
+    in u32 layer,
+    in u32 glyphPageIndex,
+    in u32 sdfPageIndex,
+    in u32 sdfChannel,
+    in u32 textureImageIndex,
+    mut Vector<Vertex> vertices,
+    mut Vector<u32> indices,
+    mut Vector<DrawCommand> commands,
+    mut b8 inOutCommandsOrdered
+){
+    EmitPaintQuadImpl(
+        recording, true, clip, rectangle, uv, color, material, layer,
+        glyphPageIndex, sdfPageIndex, sdfChannel, textureImageIndex,
+        vertices, indices, commands, inOutCommandsOrdered
+    );
+}
+
+void EmitPaintSolidQuadValidated(
+    in b8 recording,
+    in Rect clip,
+    in Rect rectangle,
+    in Color color,
+    in u32 layer,
+    mut Vector<Vertex> vertices,
+    mut Vector<u32> indices,
+    mut Vector<DrawCommand> commands,
+    mut b8 inOutCommandsOrdered
+){
+    if(!recording){
+        error("PaintSystem: paint quad emitted while recording is off");
+        return;
+    }
+    if(!IsFinite(VectorSingle(color.r, color.g, color.b, color.a)) || color.a < 0.0f || color.a > 1.0f){
+        error("PaintSystem: paint quad color is invalid");
+        return;
+    }
+    if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f) || !(clip.width > 0.0f) || !(clip.height > 0.0f))
+        return;
+    const VectorSingle rectOrigin(rectangle.x, rectangle.y, 0.0f, 0.0f);
+    const VectorSingle rectEnd = rectOrigin + VectorSingle(rectangle.width, rectangle.height, 0.0f, 0.0f);
+    if(!IsFinite(VectorSingle(rectangle.x, rectangle.y, rectangle.width, rectangle.height)) || !IsFinite(rectEnd.xy))
+        return;
+    const VectorSingle clipOrigin(clip.x, clip.y, 0.0f, 0.0f);
+    const VectorSingle clipEnd = clipOrigin + VectorSingle(clip.width, clip.height, 0.0f, 0.0f);
+    if(!IsFinite(clipEnd.xy))
+        return;
+    const VectorSingle origin = Max(rectOrigin, clipOrigin);
+    const VectorSingle end = Min(rectEnd, clipEnd);
+    const VectorSingle size = Max(VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), end - origin);
+    const VectorSingle visibleEnd = origin + size;
+    if(!IsFinite(size.xy) || !IsFinite(visibleEnd.xy) || !(size.x > 0.0f) || !(size.y > 0.0f) || color.a <= 0.0f)
+        return;
+    if(vertices.size() > cast<usize>(u32.max - s_PaintQuadVertexCount) || indices.size() > cast<usize>(u32.max - s_PaintQuadIndexCount)){
+        assert(false);
+        return;
+    }
+    Color premultiplied = color;
+    if(color.a != 1.0f){
+        const VectorSingle rgb = VectorSingle(color.r, color.g, color.b, color.b) * color.a;
+        premultiplied = Color(rgb.x, rgb.y, rgb.z, color.a);
+    }
+    const u32 vertexBase = cast<u32>(vertices.size());
+    const u32 firstIndex = cast<u32>(indices.size());
+    Array<Vertex, 4u> quadVertices;
+    quadVertices[0u] = Vertex(Point(origin.x, origin.y), Point(0.0f, 0.0f), premultiplied);
+    quadVertices[1u] = Vertex(Point(visibleEnd.x, origin.y), Point(0.0f, 0.0f), premultiplied);
+    quadVertices[2u] = Vertex(Point(visibleEnd.x, visibleEnd.y), Point(0.0f, 0.0f), premultiplied);
+    quadVertices[3u] = Vertex(Point(origin.x, visibleEnd.y), Point(0.0f, 0.0f), premultiplied);
+    AppendTriviallyCopyableVector(vertices, Span<Vertex>(quadVertices));
+    Array<u32, 6u> quadIndices;
+    quadIndices[0u] = vertexBase;
+    quadIndices[1u] = vertexBase + 1u;
+    quadIndices[2u] = vertexBase + 2u;
+    quadIndices[3u] = vertexBase;
+    quadIndices[4u] = vertexBase + 2u;
+    quadIndices[5u] = vertexBase + 3u;
+    AppendTriviallyCopyableVector(indices, Span<u32>(quadIndices));
+    if(!commands.empty()){
+        const usize lastIndex = commands.size() - 1u;
+        in DrawCommand previous = commands[lastIndex];
+        if(
+            previous.layer == layer && previous.material == PaintMaterial::Solid && previous.glyphPageIndex == u32.max
+            && previous.sdfPageIndex == u32.max && previous.sdfChannel == 0u
+            && previous.textureImageIndex == u32.max
+            && EqualUiRect(previous.clip, clip)
+        ){
+            commands[lastIndex].indexCount += s_PaintQuadIndexCount;
+            return;
+        }
+        if(previous.layer > layer)
+            inOutCommandsOrdered = false;
+    }
+    DrawCommand command;
+    command.firstIndex = firstIndex;
+    command.indexCount = s_PaintQuadIndexCount;
+    command.clip = clip;
+    command.material = PaintMaterial::Solid;
+    command.glyphPageIndex = u32.max;
+    command.sdfPageIndex = u32.max;
+    command.sdfChannel = 0u;
+    command.layer = layer;
+    command.textureImageIndex = u32.max;
+    commands.push_back(command);
+}
+
 void EmitPaintLine(
     in b8 recording,
     in Rect clip,
@@ -190,11 +399,14 @@ void EmitPaintLine(
         error("PaintSystem: paint line emitted while recording is off");
         return;
     }
-    if(!IsValidPaintColor(color)){
+    if(!IsFinite(VectorSingle(color.r, color.g, color.b, color.a)) || color.a < 0.0f || color.a > 1.0f){
         error("PaintSystem: paint line color is invalid");
         return;
     }
-    if(!HasUiRectArea(clip) || color.a <= 0.0f || !IsFinite(thickness) || thickness <= 0.0f)
+    if(!(clip.width > 0.0f) || !(clip.height > 0.0f) || color.a <= 0.0f || !IsFinite(thickness) || thickness <= 0.0f)
+        return;
+    const VectorSingle clipEnd = VectorSingle(clip.x, clip.y, 0.0f, 0.0f) + VectorSingle(clip.width, clip.height, 0.0f, 0.0f);
+    if(!IsFinite(VectorSingle(clip.x, clip.y, clip.width, clip.height)) || !IsFinite(clipEnd.xy))
         return;
     if(!IsFinite(VectorSingle(start.x, start.y, end.x, end.y)))
         return;
@@ -215,7 +427,7 @@ void EmitPaintLine(
     const f32 maxX = Max(start.x, end.x) + absNx;
     const f32 minY = Min(start.y, end.y) - absNy;
     const f32 maxY = Max(start.y, end.y) + absNy;
-    if(maxX <= clip.x || maxY <= clip.y || minX >= clip.x + clip.width || minY >= clip.y + clip.height)
+    if(maxX <= clip.x || maxY <= clip.y || minX >= clipEnd.x || minY >= clipEnd.y)
         return;
 
     if(vertices.size() > cast<usize>(u32.max - s_PaintQuadVertexCount) || indices.size() > cast<usize>(u32.max - s_PaintQuadIndexCount)){
@@ -223,23 +435,31 @@ void EmitPaintLine(
         return;
     }
 
-    const Color premultiplied = PremultiplyPaintColor(color);
+    Color premultiplied = color;
+    if(color.a != 1.0f){
+        const VectorSingle rgb = VectorSingle(color.r, color.g, color.b, color.b) * color.a;
+        premultiplied = Color(rgb.x, rgb.y, rgb.z, color.a);
+    }
     const u32 vertexBase = cast<u32>(vertices.size());
     const u32 firstIndex = cast<u32>(indices.size());
-    vertices.push_back(Vertex(Point(start.x + nx, start.y + ny), Point(0.0f, 0.0f), premultiplied));
-    vertices.push_back(Vertex(Point(end.x + nx, end.y + ny), Point(0.0f, 0.0f), premultiplied));
-    vertices.push_back(Vertex(Point(end.x - nx, end.y - ny), Point(0.0f, 0.0f), premultiplied));
-    vertices.push_back(Vertex(Point(start.x - nx, start.y - ny), Point(0.0f, 0.0f), premultiplied));
-    indices.push_back(vertexBase);
-    indices.push_back(vertexBase + 1u);
-    indices.push_back(vertexBase + 2u);
-    indices.push_back(vertexBase);
-    indices.push_back(vertexBase + 2u);
-    indices.push_back(vertexBase + 3u);
+    Array<Vertex, 4u> quadVertices;
+    quadVertices[0u] = Vertex(Point(start.x + nx, start.y + ny), Point(0.0f, 0.0f), premultiplied);
+    quadVertices[1u] = Vertex(Point(end.x + nx, end.y + ny), Point(0.0f, 0.0f), premultiplied);
+    quadVertices[2u] = Vertex(Point(end.x - nx, end.y - ny), Point(0.0f, 0.0f), premultiplied);
+    quadVertices[3u] = Vertex(Point(start.x - nx, start.y - ny), Point(0.0f, 0.0f), premultiplied);
+    AppendTriviallyCopyableVector(vertices, Span<Vertex>(quadVertices));
+    Array<u32, 6u> quadIndices;
+    quadIndices[0u] = vertexBase;
+    quadIndices[1u] = vertexBase + 1u;
+    quadIndices[2u] = vertexBase + 2u;
+    quadIndices[3u] = vertexBase;
+    quadIndices[4u] = vertexBase + 2u;
+    quadIndices[5u] = vertexBase + 3u;
+    AppendTriviallyCopyableVector(indices, Span<u32>(quadIndices));
 
     if(!commands.empty()){
         const usize lastIndex = commands.size() - 1u;
-        const DrawCommand previous = commands[lastIndex];
+        in DrawCommand previous = commands[lastIndex];
         if(
             previous.layer == layer && previous.material == PaintMaterial::Solid && previous.glyphPageIndex == u32.max
             && previous.sdfPageIndex == u32.max && previous.sdfChannel == 0u

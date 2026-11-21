@@ -49,20 +49,31 @@ b8 StageRouterHitTargets(
     mut Vector<HitTarget> stagedTargets,
     mut Vector<TargetLookup> stagedLookup,
     mut b8 outHasOwners,
-    mut b8 outHasCommandOwners
+    mut b8 outHasCommandOwners,
+    mut b8 outNeedsSort,
+    mut b8 outHasFocusOnCommit
 ){
     stagedTargets.clear();
     stagedLookup.clear();
     outHasOwners = false;
     outHasCommandOwners = false;
+    outNeedsSort = false;
+    outHasFocusOnCommit = false;
     b8 needsSort = false;
     u64 previousIdValue = 0u;
     for(usize index = 0u; index < targets.size(); ++index){
         in HitTarget target = targets[index];
+        const b8 gestureZero = target.gestureReference.x == 0.0f && target.gestureReference.y == 0.0f && target.gestureReference.width == 0.0f && target.gestureReference.height == 0.0f;
+        const b8 validGestureRef = gestureZero || (IsValidUiRect(target.gestureReference) && ((target.gestureReference.width == 0.0f) == (target.gestureReference.height == 0.0f)));
+        b8 validPopup = false;
+        if(!target.popup.widget.valid())
+            validPopup = target.layer == 0u && target.popup.declarationGeneration == 0u && target.popup.instanceGeneration == 0u && target.popup.openGeneration == 0u;
+        else
+            validPopup = ValidStagedPopupTarget(target, stagedPopups);
         if(
             !target.id.valid() || target.declarationGeneration == 0u
-            || !HasValidHitTargetGeometry(target.rectangle, target.clip, target.gestureReference)
-            || !ValidStagedPopupTarget(target, stagedPopups)
+            || !IsValidUiRect(target.rectangle) || !IsValidUiRect(target.clip) || !validGestureRef
+            || !validPopup
             || !HasValidHitTargetControlProperties(target)
             || !HasValidHitTargetCommandOwnerProperties(target)
         )
@@ -71,17 +82,24 @@ b8 StageRouterHitTargets(
             outHasOwners = true;
         if(target.commandOwner.valid())
             outHasCommandOwners = true;
+        if(target.focusOnCommit && target.focusable)
+            outHasFocusOnCommit = true;
         stagedTargets.push_back(target);
         TargetLookup entry;
         entry.value = target.id.value;
         entry.index = cast<u32>(index);
-        if(index > 0u && entry.value < previousIdValue)
-            needsSort = true;
+        if(index > 0u){
+            if(entry.value < previousIdValue)
+                needsSort = true;
+            else if(entry.value == previousIdValue)
+                return false;
+        }
         previousIdValue = entry.value;
         stagedLookup.push_back(entry);
     }
     if(needsSort)
         SortSequence<TargetLookup>(stagedLookup, LessTargetLookup);
+    outNeedsSort = needsSort;
     return true;
 }
 
@@ -90,11 +108,14 @@ b8 ValidateSortedStagedRouterTargetsAndPopups(
     in Span<TargetLookup> stagedLookup,
     in Span<PopupRecord> stagedPopups,
     in b8 hasOwners,
-    in b8 hasCommandOwners
+    in b8 hasCommandOwners,
+    in b8 checkDuplicates
 ){
-    for(usize index = 1u; index < stagedLookup.size(); ++index){
-        if(stagedLookup[index - 1u].value == stagedLookup[index].value)
-            return false;
+    if(checkDuplicates){
+        for(usize index = 1u; index < stagedLookup.size(); ++index){
+            if(stagedLookup[index - 1u].value == stagedLookup[index].value)
+                return false;
+        }
     }
     if(hasOwners || hasCommandOwners){
         for(in HitTarget target : stagedTargets){
@@ -142,11 +163,12 @@ void ApplyRouterFocusOnCommit(
     in b8 windowFocused,
     in u64 focusLossGeneration,
     in u64 expectedFocusLossGeneration,
+    in b8 hasFocusOnCommit,
     mut WidgetId inOutFocus,
     mut u64 inOutFocusDeclaration,
     mut ControlToken inOutFocusControl
 ){
-    if(inOutFocus.valid() || !windowFocused || (expectedFocusLossGeneration != u64.max && expectedFocusLossGeneration != focusLossGeneration))
+    if(!hasFocusOnCommit || inOutFocus.valid() || !windowFocused || (expectedFocusLossGeneration != u64.max && expectedFocusLossGeneration != focusLossGeneration))
         return;
     for(in HitTarget target : targets){
         if(target.focusOnCommit && target.focusable && IsRouterTargetInteractive(targets, lookup, popups, target)){

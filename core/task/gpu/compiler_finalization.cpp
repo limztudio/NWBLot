@@ -87,10 +87,10 @@ namespace GpuTaskGraphCompilerDetail{
         resourceStateDependencies.push_back(dependency);
     };
 
-    for(usize resourceIndex = 0u; resourceIndex < graph.resourceCount(); ++resourceIndex){
-        const GpuTaskGraphResourceView resource = graph.resourceAt(resourceIndex);
-        if(resource.externalFinalState == ResourceStates::Unknown)
+    for(usize resourceIndex = 0u; resourceIndex < CompilerGraphAccess::ResourceCount(graph); ++resourceIndex){
+        if(CompilerGraphAccess::ResourceNode(graph, resourceIndex).externalFinalState == ResourceStates::Unknown)
             continue;
+        const GpuTaskGraphResourceView resource = graph.resourceAt(resourceIndex);
 
         const b8 hasExternalFinalRelease = resource.externalFinalReleaseDestinationQueue.valid();
 
@@ -160,7 +160,7 @@ namespace GpuTaskGraphCompilerDetail{
             if(hasExternalFinalRelease && state.queue != resource.externalFinalReleaseDestinationQueue){
                 const GpuCompiledBarrierType::Enum releaseType = OwnershipReleaseBarrierType(resource.type);
                 FOUNDATION_ASSERT(releaseType < GpuCompiledBarrierType::Count);
-                if(!AppendCompiledOwnershipTransfer(plan, resource, terminalRange, state.task, GpuTaskId{}, state.queue, resource.externalFinalReleaseDestinationQueue, GpuOwnershipTransferRoute::ExternalExport))
+                if(!AppendCompiledOwnershipTransfer(plan, resource, terminalRange, state.task, GpuTaskId{}, state.queue, resource.externalFinalReleaseDestinationQueue, GpuOwnershipTransferRoute::ExternalExport, nullptr, true))
                     return false;
                 pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{
                     .task = state.task,

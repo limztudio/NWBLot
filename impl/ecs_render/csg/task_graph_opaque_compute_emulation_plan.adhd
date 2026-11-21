@@ -81,13 +81,13 @@ class OpaqueCsgReceiverComputeEmulationGraphPlan{
         this.regularOutputLayouts.reserve(this.regularDrawItems.size());
         MaterialPassEmulationOutputIndex<MaterialEmulationBufferIdentity> outputs;
         for(in MaterialPassDrawItem regularDrawItem : this.regularDrawItems){
-            in MaterialPassMeshResourceSnapshot regularMesh = regularDrawItem.meshResources;
+            in MaterialPassMeshResourceSnapshot regularMesh = regularDrawItem.mesh();
             if(!regularMesh.emulationVertexBuffer.valid() || !regularMesh.emulationVertexHeapHandle.valid()){
                 this.reset();
                 return false;
             }
             this.regularOutputBuffers.push_back(regularMesh.emulationVertexBuffer);
-            this.regularOutputLayouts.push_back(MakeGeneratedGeometryOutputLayout(regularMesh.emulationIndexByteOffset, regularDrawItem.pipelineResources.indexedGeometryOutput));
+            this.regularOutputLayouts.push_back(MakeGeneratedGeometryOutputLayout(regularMesh.emulationIndexByteOffset, regularDrawItem.pipeline().indexedGeometryOutput));
             outputs.insert(MaterialEmulationBufferIdentity(regularMesh.emulationVertexBuffer));
         }
         for(in MaterialPassDrawItem drawItem : receiverSurfaceDrawItems.computeDrawItems){
@@ -95,7 +95,7 @@ class OpaqueCsgReceiverComputeEmulationGraphPlan{
                 this.reset();
                 return false;
             }
-            in MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
+            in MaterialPassMeshResourceSnapshot mesh = drawItem.mesh();
             if(!mesh.emulationVertexBuffer.valid() || !mesh.emulationVertexHeapHandle.valid()){
                 this.reset();
                 return false;
@@ -106,7 +106,7 @@ class OpaqueCsgReceiverComputeEmulationGraphPlan{
             }
             this.drawItems.push_back(drawItem);
             this.outputBuffers.push_back(mesh.emulationVertexBuffer);
-            this.outputLayouts.push_back(MakeGeneratedGeometryOutputLayout(mesh.emulationIndexByteOffset, drawItem.pipelineResources.indexedGeometryOutput));
+            this.outputLayouts.push_back(MakeGeneratedGeometryOutputLayout(mesh.emulationIndexByteOffset, drawItem.pipeline().indexedGeometryOutput));
         }
         this.receiverRanges.reserve(csgFrameData.receiverRanges.size());
         this.receiverRanges.assign(csgFrameData.receiverRanges.begin(), csgFrameData.receiverRanges.end());
@@ -131,23 +131,23 @@ class OpaqueCsgReceiverComputeEmulationGraphPlan{
             return false;
         MaterialPassEmulationOutputIndex<MaterialEmulationBufferIdentity> receiverOutputs;
         for(usize drawIndex = 0u; drawIndex < this.drawItems.size(); ++drawIndex){
-            in MaterialPassMeshResourceSnapshot mesh = this.drawItems[drawIndex].meshResources;
+            in MaterialPassMeshResourceSnapshot mesh = this.drawItems[drawIndex].mesh();
             if(
                 !mesh.emulationVertexBuffer.valid()
                 || !mesh.emulationVertexHeapHandle.valid()
                 || mesh.emulationVertexBuffer != this.outputBuffers[drawIndex]
-                || !this.outputLayouts[drawIndex].matches(mesh.emulationIndexByteOffset, this.drawItems[drawIndex].pipelineResources.indexedGeometryOutput)
+                || !this.outputLayouts[drawIndex].matches(mesh.emulationIndexByteOffset, this.drawItems[drawIndex].pipeline().indexedGeometryOutput)
             )
                 return false;
             receiverOutputs.insert(MaterialEmulationBufferIdentity(mesh.emulationVertexBuffer));
         }
         for(usize drawIndex = 0u; drawIndex < this.regularDrawItems.size(); ++drawIndex){
-            in MaterialPassMeshResourceSnapshot mesh = this.regularDrawItems[drawIndex].meshResources;
+            in MaterialPassMeshResourceSnapshot mesh = this.regularDrawItems[drawIndex].mesh();
             if(
                 !mesh.emulationVertexBuffer.valid()
                 || !mesh.emulationVertexHeapHandle.valid()
                 || mesh.emulationVertexBuffer != this.regularOutputBuffers[drawIndex]
-                || !this.regularOutputLayouts[drawIndex].matches(mesh.emulationIndexByteOffset, this.regularDrawItems[drawIndex].pipelineResources.indexedGeometryOutput)
+                || !this.regularOutputLayouts[drawIndex].matches(mesh.emulationIndexByteOffset, this.regularDrawItems[drawIndex].pipeline().indexedGeometryOutput)
             )
                 return false;
             if(receiverOutputs.contains(MaterialEmulationBufferIdentity(mesh.emulationVertexBuffer)))

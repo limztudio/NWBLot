@@ -19,33 +19,39 @@ b8 CanAddLayoutTreeNode(in Span<LayoutTreeNode> nodes, in u32 maxNodes, in b8 bu
 }
 
 Expected<Point> MeasureLayoutTreeNode(in Span<LayoutTreeNode> nodes, in Span<LayoutTreeWork> work, in u32 index){
-    const LayoutTreeNode node = nodes[cast<usize>(index)];
-    const LayoutNodeDesc description = node.description;
-    VectorDouble extent(0.0, 0.0, 0.0, 0.0);
+    in LayoutTreeNode node = nodes[cast<usize>(index)];
+    in LayoutNodeDesc description = node.description;
+    f64 extentX = 0.0;
+    f64 extentY = 0.0;
     u32 childCount = 0u;
-    for(u32 child = node.firstChild; child != s_LayoutNoParent; child = nodes[cast<usize>(child)].nextSibling){
-        const Point measured = work[cast<usize>(child)].box.measuredSize;
-        const VectorDouble candidate(cast<f64>(measured.x), cast<f64>(measured.y), 0.0, 0.0);
-        const VectorDouble maximum = Max(extent, candidate);
-        if(description.direction == LayoutDirection::Row){
-            const VectorDouble accumulated = VectorDouble(extent.x) + VectorDouble(candidate.x);
-            extent = VectorDouble(accumulated.x, maximum.y, 0.0, 0.0);
+    if(description.direction == LayoutDirection::Row){
+        for(u32 child = node.firstChild; child != s_LayoutNoParent; child = nodes[cast<usize>(child)].nextSibling){
+            const Point measured = work[cast<usize>(child)].box.measuredSize;
+            extentX += cast<f64>(measured.x);
+            extentY = Max(extentY, cast<f64>(measured.y));
+            ++childCount;
         }
-        else if(description.direction == LayoutDirection::Column){
-            const VectorDouble accumulated = VectorDouble(extent.y) + VectorDouble(candidate.y);
-            extent = VectorDouble(maximum.x, accumulated.y, 0.0, 0.0);
+        if(childCount > 1u)
+            extentX += cast<f64>(description.gap) * cast<f64>(childCount - 1u);
+    }
+    else if(description.direction == LayoutDirection::Column){
+        for(u32 child = node.firstChild; child != s_LayoutNoParent; child = nodes[cast<usize>(child)].nextSibling){
+            const Point measured = work[cast<usize>(child)].box.measuredSize;
+            extentX = Max(extentX, cast<f64>(measured.x));
+            extentY += cast<f64>(measured.y);
+            ++childCount;
         }
-        else
-            extent = maximum;
-        ++childCount;
+        if(childCount > 1u)
+            extentY += cast<f64>(description.gap) * cast<f64>(childCount - 1u);
     }
-    if(childCount > 1u){
-        const f64 spacing = cast<f64>(description.gap) * cast<f64>(childCount - 1u);
-        if(description.direction == LayoutDirection::Row)
-            extent.x = (extent.xxxx + VectorDouble(spacing)).x;
-        else if(description.direction == LayoutDirection::Column)
-            extent.y = (extent.yyyy + VectorDouble(spacing)).x;
+    else{
+        for(u32 child = node.firstChild; child != s_LayoutNoParent; child = nodes[cast<usize>(child)].nextSibling){
+            const Point measured = work[cast<usize>(child)].box.measuredSize;
+            extentX = Max(extentX, cast<f64>(measured.x));
+            extentY = Max(extentY, cast<f64>(measured.y));
+        }
     }
+    const VectorDouble extent(extentX, extentY, 0.0, 0.0);
     const VectorDouble intrinsic(cast<f64>(description.intrinsicSize.x), cast<f64>(description.intrinsicSize.y), 0.0, 0.0);
     const VectorDouble maximum = Max(extent, intrinsic);
     const VectorDouble padded = (maximum + VectorDouble(cast<f64>(description.padding.left), cast<f64>(description.padding.top), 0.0, 0.0)) + VectorDouble(cast<f64>(description.padding.right), cast<f64>(description.padding.bottom), 0.0, 0.0);

@@ -49,6 +49,10 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
         return;
     const VkBuildAccelerationStructureFlagsKHR vkBuildFlags = *vkBuildFlagsResult;
     const b8 allowEmptyInstances = (buildFlags & RayTracingAccelStructBuildFlags::AllowEmptyInstances) != 0u;
+    constexpr usize s_ValidatedBlasCacheCapacity = 8u;
+    Array<const AccelStruct*, s_ValidatedBlasCacheCapacity> validatedBlasCache{};
+    usize validatedBlasCacheCount = 0u;
+    usize validatedBlasCacheNext = 0u;
     for(usize i = 0u; i < numInstances; ++i){
         auto* blas = instances[i].bottomLevelAS;
         if(!blas){
@@ -58,10 +62,23 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build TLAS: instance {} has a null bottom-level acceleration structure"), i);
             return;
         }
-        Buffer* const backingBuffer = blas->getBackingBuffer();
-        if(blas->m_isTopLevelAtCreation || !m_device.isAccelStructReadyForGpuUse(blas) || !backingBuffer || !isBufferAdmittedToCommandQueue(*backingBuffer)){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build TLAS: instance {} references an invalid bottom-level acceleration structure"), i);
-            return;
+        b8 blasValidated = false;
+        for(usize cacheIndex = 0u; cacheIndex < validatedBlasCacheCount; ++cacheIndex){
+            if(validatedBlasCache[cacheIndex] == blas){
+                blasValidated = true;
+                break;
+            }
+        }
+        if(!blasValidated){
+            Buffer* const backingBuffer = blas->getBackingBuffer();
+            if(blas->m_isTopLevelAtCreation || !m_device.isAccelStructReadyForGpuUse(blas) || !backingBuffer || !isBufferAdmittedToCommandQueue(*backingBuffer)){
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build TLAS: instance {} references an invalid bottom-level acceleration structure"), i);
+                return;
+            }
+            validatedBlasCache[validatedBlasCacheNext] = blas;
+            validatedBlasCacheNext = (validatedBlasCacheNext + 1u) % s_ValidatedBlasCacheCapacity;
+            if(validatedBlasCacheCount < s_ValidatedBlasCacheCapacity)
+                ++validatedBlasCacheCount;
         }
         if(instances[i].instanceMask == 0u && !allowEmptyInstances){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build TLAS: instance {} has a zero mask"), i);

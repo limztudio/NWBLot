@@ -95,6 +95,14 @@ class DrawCommand{
     public PaintMaterial material = PaintMaterial::Solid;
 }
 
+class ResolvedGlyphDraw{
+    public Rect rectangle;
+    public Rect uv;
+    public u32 pageIndex = u32.max;
+    public u32 channel = 0u;
+    public b8 isSdf = false;
+}
+
 class SkinBindingRecord<TUiSkin, TTexture>{
     public AssetRef<TUiSkin> skin;
     public AssetRef<TTexture> texture;

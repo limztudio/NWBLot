@@ -244,7 +244,7 @@ public:
         b8 forceNativeSubmission = false,
         u64 maxSameQueueWaitValue = 0u
     );
-    [[nodiscard]] BatchSubmissionResult submitBatch(Span<const BatchSubmitEntry> entries, Span<SubmissionReceipt> outReceipts);
+    [[nodiscard]] BatchSubmissionResult submitBatch(Span<const BatchSubmitEntry> entries, Span<SubmissionReceipt> outReceipts, b8 callerPreValidated = false);
     [[nodiscard]] VkResult updateLastFinishedID();
     void waitForIdle();
     [[nodiscard]] u64 lastObservedFinishedID()const noexcept{ return m_lastObservedFinishedID.load(MemoryOrder::acquire); }

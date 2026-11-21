@@ -45,6 +45,21 @@ TextGlyphIntersection TryIntersectTextRects(in Rect rectangle, in Rect clip){
     return TryIntersectTextBounds(minVec.x, minVec.y, maxVec.x, maxVec.y, clip);
 }
 
+TextGlyphIntersection TryValidateTextClipRect(in Rect clip){
+    if(!IsValidUiRect(clip))
+        return TextGlyphIntersection::Invalid;
+    const VectorDouble minVec(cast<f64>(clip.x), cast<f64>(clip.y), 0.0, 0.0);
+    const VectorDouble maxVec = minVec + VectorDouble(cast<f64>(clip.width), cast<f64>(clip.height), 0.0, 0.0);
+    if(!FitsTextCoordinates(VectorDouble(minVec.x, minVec.y, maxVec.x, maxVec.y)))
+        return TextGlyphIntersection::Invalid;
+    const VectorDouble extent = maxVec - minVec;
+    if(extent.x > s_TextMaxCoordinateF64 || extent.y > s_TextMaxCoordinateF64)
+        return TextGlyphIntersection::Invalid;
+    if(clip.width <= 0.0f || clip.height <= 0.0f)
+        return TextGlyphIntersection::Invisible;
+    return TextGlyphIntersection::Visible;
+}
+
 Point ResolveLabelPaintOrigin(in Rect bounds, in Rect measured){
     const VectorSingle origin = VectorSingle(bounds.x, bounds.y, bounds.x, bounds.y) - VectorSingle(measured.x, measured.y, measured.x, measured.y);
     return Point(origin.x, origin.y);

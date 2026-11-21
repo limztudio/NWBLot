@@ -185,6 +185,7 @@ void Builder::setSkin(in borrow UiSkin skin){
         this.m_sliderStyle,
         this.m_progressStyle
     );
+    this.invalidateStyleMetricsCache();
 }
 
 b8 Builder::setTextShaping(in u32 scriptTag, in StringView language){
@@ -242,7 +243,7 @@ Expected<mut BuilderItem> Builder::addItem(in StringView stableKey, in StringVie
     const Point textSize = Point(item.textBounds.width, item.textBounds.height);
     Point intrinsicSize = textSize;
     if(kind == WidgetKind::Selectable){
-        const auto metrics = MeasureSelectable(this.m_skin.value(), this.m_listStyle.row);
+        const auto metrics = this.loadSelectableMetrics();
         if(!metrics.has_value()){
             this.m_context.fail();
             return MakeUnexpected(Failure());
@@ -251,16 +252,15 @@ Expected<mut BuilderItem> Builder::addItem(in StringView stableKey, in StringVie
         intrinsicSize = ResolvePaddedIntrinsicSize(textSize, item.padding, metrics.value().minimum);
     }
     else if(kind == WidgetKind::Button){
-        if(!this.region(this.m_style.button, this.m_style.button).has_value()){
+        Point minimum;
+        if(!this.loadButtonMetrics(minimum, item.padding)){
             this.m_context.fail();
             return MakeUnexpected(Failure());
         }
-        Point minimum;
-        this.loadButtonMetrics(minimum, item.padding);
         intrinsicSize = ResolvePaddedIntrinsicSize(textSize, item.padding, minimum);
     }
     else if(kind == WidgetKind::Checkbox){
-        const auto checkboxExtent = ControlStyleMetrics().checkboxExtent(this.m_skin.value(), this.m_style);
+        const auto checkboxExtent = this.loadCheckboxExtent();
         if(!checkboxExtent.has_value()){
             this.m_context.fail();
             return MakeUnexpected(Failure());
@@ -291,9 +291,11 @@ Optional<in UiSkinRegion> Builder::region(in Name preferred, in Name fallback)co
     const auto preferredIdx = this.m_skin.value().findRegionIndex(preferred);
     if(preferredIdx.has_value())
         return Optional<in UiSkinRegion>(this.m_skin.value().regions()[preferredIdx.value()]);
-    const auto fallbackIdx = this.m_skin.value().findRegionIndex(fallback);
-    if(fallbackIdx.has_value())
-        return Optional<in UiSkinRegion>(this.m_skin.value().regions()[fallbackIdx.value()]);
+    if(fallback != preferred){
+        const auto fallbackIdx = this.m_skin.value().findRegionIndex(fallback);
+        if(fallbackIdx.has_value())
+            return Optional<in UiSkinRegion>(this.m_skin.value().regions()[fallbackIdx.value()]);
+    }
     return Optional<in UiSkinRegion>();
 }
 
@@ -303,10 +305,59 @@ Insets Builder::resolveRegionsPadding(in Insets initial, in Span<Name> names, in
     return ControlStyleMetrics().skinRegionsMaxPadding(this.m_skin.value(), initial, names, fallback);
 }
 
-void Builder::loadButtonMetrics(mut Point size, mut Insets padding)const{
-    if(!this.m_skin.has_value())
-        return;
-    ControlStyleMetrics().buttonMetrics(this.m_skin.value(), this.m_style, size, padding);
+b8 Builder::loadButtonMetrics(mut Point size, mut Insets padding){
+    this.syncMetricsCacheSkinVersion();
+    if(!this.m_buttonMetricsCached){
+        this.m_cachedButtonMinSize = Point();
+        this.m_cachedButtonPadding = Insets();
+        this.m_buttonMetricsValid = this.m_skin.has_value() && this.m_skin.value().hasRegion(this.m_style.button);
+        if(this.m_buttonMetricsValid)
+            ControlStyleMetrics().buttonMetrics(this.m_skin.value(), this.m_style, this.m_cachedButtonMinSize, this.m_cachedButtonPadding);
+        this.m_buttonMetricsCached = true;
+    }
+    if(!this.m_buttonMetricsValid)
+        return false;
+    size = this.m_cachedButtonMinSize;
+    padding = this.m_cachedButtonPadding;
+    return true;
+}
+
+Expected<f32> Builder::loadCheckboxExtent(){
+    this.syncMetricsCacheSkinVersion();
+    if(!this.m_checkboxExtentCached){
+        this.m_checkboxExtentValid = false;
+        this.m_cachedCheckboxExtent = 0.0f;
+        if(this.m_skin.has_value()){
+            const auto measured = ControlStyleMetrics().checkboxExtent(this.m_skin.value(), this.m_style);
+            if(measured.has_value()){
+                this.m_checkboxExtentValid = true;
+                this.m_cachedCheckboxExtent = measured.value();
+            }
+        }
+        this.m_checkboxExtentCached = true;
+    }
+    if(!this.m_checkboxExtentValid)
+        return MakeUnexpected(Failure());
+    return this.m_cachedCheckboxExtent;
+}
+
+Expected<SelectableMetrics> Builder::loadSelectableMetrics(){
+    this.syncMetricsCacheSkinVersion();
+    if(!this.m_selectableMetricsCached){
+        this.m_selectableMetricsValid = false;
+        this.m_cachedSelectableMetrics = SelectableMetrics();
+        if(this.m_skin.has_value()){
+            const auto measured = MeasureSelectable(this.m_skin.value(), this.m_listStyle.row);
+            if(measured.has_value()){
+                this.m_selectableMetricsValid = true;
+                this.m_cachedSelectableMetrics = measured.value();
+            }
+        }
+        this.m_selectableMetricsCached = true;
+    }
+    if(!this.m_selectableMetricsValid)
+        return MakeUnexpected(Failure());
+    return this.m_cachedSelectableMetrics;
 }
 
 
@@ -376,23 +427,19 @@ b8 Builder::validateDeferredStates()const{
 void Builder::releaseDeferredLoans(){
     this.m_scope.value().m_radioGroups.clear();
     this.m_scope.value().m_sliders.clear();
+    for(mut auto editBox : this.m_scope.value().m_editBoxes)
+        editBox.editState.reset();
     for(mut auto frame : this.m_scope.value().m_textAreas){
         frame.model.reset();
         frame.state.reset();
-        if(frame.item < this.m_scope.value().m_items.size())
-            this.m_scope.value().m_items[frame.item].editState.reset();
     }
     for(mut auto frame : this.m_scope.value().m_integerEdits){
         frame.model.reset();
         frame.state.reset();
-        if(frame.item < this.m_scope.value().m_items.size())
-            this.m_scope.value().m_items[frame.item].editState.reset();
     }
     for(mut auto frame : this.m_scope.value().m_floatEdits){
         frame.model.reset();
         frame.state.reset();
-        if(frame.item < this.m_scope.value().m_items.size())
-            this.m_scope.value().m_items[frame.item].editState.reset();
     }
     for(mut auto frame : this.m_scope.value().m_lists){
         frame.source.reset();
@@ -404,8 +451,6 @@ void Builder::releaseDeferredLoans(){
         frame.searchSource.reset();
         frame.search.reset();
         frame.state.reset();
-        if(frame.editor != s_LayoutNoParent)
-            this.m_scope.value().m_comboEditors[frame.editor].editState.reset();
     }
     for(mut auto frame : this.m_scope.value().m_contextMenus){
         frame.source.reset();

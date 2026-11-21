@@ -81,6 +81,7 @@ b8 GpuTaskGraphCompiler::compile(
     const Timer analysisBegin = compileBegin;
     f64 analysisSeconds = 0.0;
     f64 queueAssignmentSeconds = 0.0;
+    Timer planningBegin;
     {
         Alloc::ScratchArena::Scope analysisAndQueueScratchScope(scratchArena);
         DenseDescendantBitMatrix denseDesc(scratchArena);
@@ -145,9 +146,9 @@ b8 GpuTaskGraphCompiler::compile(
         const Timer queueAssignmentBegin = options.allowMetadataOnlyTasks ? postAnalysisTime : TimerNow();
         if(!assignQueuesInternal(graph, outAnalysis, topology, options.queueAssignmentOptions, scratchArena, outAssignments, denseDesc.valid ? &denseDesc : nullptr, hasNonHazardDomainResource))
             return false;
-        queueAssignmentSeconds = DurationInSeconds<f64>(TimerNow(), queueAssignmentBegin);
+        planningBegin = TimerNow();
+        queueAssignmentSeconds = DurationInSeconds<f64>(planningBegin, queueAssignmentBegin);
     }
-    const Timer planningBegin = TimerNow();
 
     FOUNDATION_ASSERT(topology.queues && topology.queueCount != 0u);
     if(options.packetizationPolicy >= GpuTaskGraphPacketizationPolicy::Count || !graph.validForDeviceGeneration(topology.queues[0].id.deviceGeneration))
@@ -249,6 +250,7 @@ b8 GpuTaskGraphCompiler::compile(
                 .stateFragments = stateFragments,
                 .taskFirstUseRanges = taskFirstUseRanges,
                 .rangeScratch = rangeScratch,
+                .sharingLut = TopologySharingLut::Build(topology),
             };
             if(!PlanTaskResourceStates(resourceStatePlan) || !PlanExternalResourceExports(resourceStatePlan) || !AppendPendingEpilogueBarriers(resourceStatePlan))
                 return false;

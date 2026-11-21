@@ -112,6 +112,9 @@ class SoftwareSceneRefitPushConstants{
     public u32 sceneNodeSlot = 0u;
     public u32 instanceInputSlot = 0u;
     public u32 instanceCount = 0u;
+    public u32 parentSlot = s_RtInvalidSlot;
+    public u32 visitCounterSlot = s_RtInvalidSlot;
+    public u32 passMode = 0u;
 }
 
 [serialize]
@@ -230,13 +233,19 @@ SoftwareSceneRefitPushConstants MakeSoftwareSceneRefitPushConstants(
     in u32 nodeCount,
     in u32 sceneNodeSlot,
     in u32 instanceInputSlot,
-    in u32 instanceCount
+    in u32 instanceCount,
+    in u32 parentSlot,
+    in u32 visitCounterSlot,
+    in u32 passMode
 ){
     SoftwareSceneRefitPushConstants push;
     push.nodeCount = nodeCount;
     push.sceneNodeSlot = sceneNodeSlot;
     push.instanceInputSlot = instanceInputSlot;
     push.instanceCount = instanceCount;
+    push.parentSlot = parentSlot;
+    push.visitCounterSlot = visitCounterSlot;
+    push.passMode = passMode;
     return push;
 }
 

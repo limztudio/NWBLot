@@ -300,6 +300,32 @@ struct PendingCompiledEpilogueBarrier{
     GpuCompiledBarrier barrier;
 };
 
+struct TopologySharingLut{
+    Array<u64, 8u> admittedQueueMasks{};
+    u8 concurrentSharingBits = 0u;
+    b8 validBitmask = false;
+
+    [[nodiscard]] static TopologySharingLut Build(const GpuPhysicalQueueTopology& topology)noexcept;
+
+    [[nodiscard]] inline b8 logicalUsesConcurrent(const ResourceQueueSharing::Mask sharing)const noexcept{
+        return (concurrentSharingBits & static_cast<u8>(1u << (static_cast<u8>(sharing) & 7u))) != 0u;
+    }
+
+    [[nodiscard]] inline u64 logicalAdmittedMask(const ResourceQueueSharing::Mask sharing)const noexcept{
+        return admittedQueueMasks[static_cast<u8>(sharing) & 7u];
+    }
+};
+
+struct ResourceShareCacheEntry{
+    u64 admittedQueueMask = 0u;
+    b8 resolved = false;
+    b8 isConcurrent = false;
+
+    [[nodiscard]] inline b8 admitsQueueIndex(const usize queueIndex)const noexcept{
+        return (admittedQueueMask & BitMask<u64>(static_cast<u32>(queueIndex))) != 0u;
+    }
+};
+
 struct GpuTaskGraphResourceStatePlan{
     const GpuTaskGraph::DeclarationReadView& graph;
     const GpuPhysicalQueueTopology& topology;
@@ -316,6 +342,7 @@ struct GpuTaskGraphResourceStatePlan{
     Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& stateFragments;
     Vector<GpuTaskResourceRange, Alloc::ScratchArena>& taskFirstUseRanges;
     ResourceRangeScratch& rangeScratch;
+    TopologySharingLut sharingLut{};
 };
 
 
@@ -473,6 +500,7 @@ public:
 public:
     void build(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology);
     [[nodiscard]] b8 isLegal(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology, const GpuTaskGraphTaskView& task, usize queueIndex)const noexcept;
+    [[nodiscard]] b8 isLegal(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology, GpuTaskId taskId, usize queueIndex)const noexcept;
     [[nodiscard]] u64 taskMask(u32 taskIndex)const noexcept{
         return active ? taskLegalQueueMasks[taskIndex] : 0u;
     }
@@ -509,6 +537,7 @@ struct GpuTaskQueueScoringData{
     usize externalQueueLoadCount = 0u;
     u8 nonEmptyCostGroupMask = 0u;
     b8 hasResourceConcurrentMasks = false;
+    b8 allCostWordsFullGraph = false;
 
 
 public:
@@ -641,23 +670,23 @@ struct GpuTaskQueuePlacementGroup{
     Span<const u64> prefixQueueCosts,
     const GpuTaskQueueScoringData& scoringData,
     const GpuPhysicalQueueTopology& topology,
-    const GpuTaskGraphTaskView& task,
+    GpuTaskId taskId,
     const GpuPhysicalQueueInfo& baseQueue,
-    const b8 allowCrossFamilyRouting,
-    const b8 preferNonPrimaryQueue,
+    b8 allowCrossFamilyRouting,
+    b8 preferNonPrimaryQueue,
     const GpuTaskQueueLegalityCache* legalityCache = nullptr
 )noexcept;
 
 [[nodiscard]] const GpuPhysicalQueueInfo* FindDirectDependencySameClassQueue(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
-    const GpuTaskGraphTaskView& task,
+    GpuTaskId taskId,
     Span<const GpuTaskQueueAssignment> assignments,
     Span<const u32> assignmentIndicesByTask,
     const GpuPhysicalQueueTopology& topology,
     const GpuPhysicalQueueInfo& baseQueue,
-    const usize assignedPrefixCount,
-    const b8 allowCrossFamilyRouting,
+    usize assignedPrefixCount,
+    b8 allowCrossFamilyRouting,
     const GpuTaskQueueLegalityCache* legalityCache = nullptr
 )noexcept;
 
@@ -878,7 +907,9 @@ struct GpuTaskQueuePlacementGroup{
     GpuTaskId destinationTask,
     GpuPhysicalQueueId sourceQueue,
     GpuPhysicalQueueId destinationQueue,
-    GpuOwnershipTransferRoute::Enum route
+    GpuOwnershipTransferRoute::Enum route,
+    const ResourceShareCacheEntry* precomputedShareInfo = nullptr,
+    b8 rangePreResolved = false
 );
 
 [[nodiscard]] Expected<GpuSubmissionPacketRange> BuildSubmissionPackets(

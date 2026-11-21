@@ -9,11 +9,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_SCENE_BVH_REFIT_PUSH_BYTES 16u
+#define NWB_SCENE_BVH_REFIT_PUSH_BYTES 28u
 #define NWB_SCENE_BVH_REFIT_INSTANCE_BYTES 64u
 #define NWB_SCENE_BVH_REFIT_ROW_BYTES 16u
 #define NWB_SCENE_BVH_REFIT_MESH_SLOT_OFFSET 48u
-#define NWB_SCENE_BVH_REFIT_GROUP_SIZE 128
+#define NWB_SCENE_BVH_REFIT_GROUP_SIZE 128u
+#define NWB_SCENE_BVH_REFIT_MODE_INIT_PARENTS 0u
+#define NWB_SCENE_BVH_REFIT_MODE_REFIT 1u
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

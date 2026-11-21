@@ -121,33 +121,6 @@ namespace __hidden_cpp_header_importer_type_mapper{
     return nullptr;
 }
 
-[[nodiscard]] MStringView MapBuiltinScalarKind(const CXTypeKind kind)noexcept{
-    switch(kind){
-    case CXType_Void: return BuiltinTypeSemantics::VoidTypeName();
-    case CXType_Bool: return BuiltinTypeSemantics::BoolScalarTypeName();
-    case CXType_Char_S:
-    case CXType_SChar: return BuiltinTypeSemantics::FindIntegerScalarTypeName(1u, true);
-    case CXType_Char_U:
-    case CXType_UChar: return BuiltinTypeSemantics::FindIntegerScalarTypeName(1u, false);
-    case CXType_Short: return BuiltinTypeSemantics::FindIntegerScalarTypeName(2u, true);
-    case CXType_UShort: return BuiltinTypeSemantics::FindIntegerScalarTypeName(2u, false);
-    case CXType_Int: return BuiltinTypeSemantics::FindIntegerScalarTypeName(4u, true);
-    case CXType_UInt: return BuiltinTypeSemantics::FindIntegerScalarTypeName(4u, false);
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-    case CXType_Long: return BuiltinTypeSemantics::FindIntegerScalarTypeName(4u, true);
-    case CXType_ULong: return BuiltinTypeSemantics::FindIntegerScalarTypeName(4u, false);
-#else
-    case CXType_Long: return BuiltinTypeSemantics::FindPointerSizedIntScalarTypeName(true);
-    case CXType_ULong: return BuiltinTypeSemantics::FindPointerSizedIntScalarTypeName(false);
-#endif
-    case CXType_LongLong: return BuiltinTypeSemantics::FindIntegerScalarTypeName(8u, true);
-    case CXType_ULongLong: return BuiltinTypeSemantics::FindIntegerScalarTypeName(8u, false);
-    case CXType_Float: return BuiltinTypeSemantics::FindFloatScalarTypeName(4u);
-    case CXType_Double: return BuiltinTypeSemantics::FindFloatScalarTypeName(8u);
-    default: return {};
-    }
-}
-
 [[nodiscard]] constexpr b8 IsUnsupportedCppTypeKind(const CXTypeKind kind)noexcept{
     switch(kind){
     case CXType_Pointer:
@@ -165,6 +138,36 @@ namespace __hidden_cpp_header_importer_type_mapper{
     default:
         return false;
     }
+}
+
+[[nodiscard]] b8 TypeRefContainsName(const TypeRef* const ref, const MStringView targetName)noexcept{
+    if(!ref)
+        return false;
+    if(ref->name == targetName)
+        return true;
+    for(const TypeArg& targ : ref->templateArgs){
+        if(TypeRefContainsName(targ.type, targetName))
+            return true;
+    }
+    if(TypeRefContainsName(ref->funcReturnType, targetName))
+        return true;
+    for(const FuncParamType& fp : ref->funcParams){
+        if(TypeRefContainsName(fp.type, targetName))
+            return true;
+    }
+    return false;
+}
+
+void RewriteTemplateTypeRefNameInPlace(TypeRef* const ref, const MStringView oldName, const MStringView newName)noexcept{
+    if(!ref)
+        return;
+    if(ref->name == oldName)
+        ref->name = newName;
+    for(TypeArg& targ : ref->templateArgs)
+        RewriteTemplateTypeRefNameInPlace(targ.type, oldName, newName);
+    RewriteTemplateTypeRefNameInPlace(ref->funcReturnType, oldName, newName);
+    for(FuncParamType& fp : ref->funcParams)
+        RewriteTemplateTypeRefNameInPlace(fp.type, oldName, newName);
 }
 
 
@@ -232,16 +235,71 @@ MString ConsumeClangString(MetaArena& arena, CXString cxStr){
     return result;
 }
 
-void RewriteTemplateTypeRefName(TypeRef* const ref, const MStringView oldName, const MStringView newName)noexcept{
-    if(!ref)
-        return;
-    if(ref->name == oldName)
-        ref->name = newName;
-    for(TypeArg& targ : ref->templateArgs)
-        RewriteTemplateTypeRefName(targ.type, oldName, newName);
-    RewriteTemplateTypeRefName(ref->funcReturnType, oldName, newName);
-    for(FuncParamType& fp : ref->funcParams)
-        RewriteTemplateTypeRefName(fp.type, oldName, newName);
+TypeRef* CloneTypeRefDeep(MetaArena& arena, const TypeRef* const src){
+    if(!src)
+        return nullptr;
+    TypeRef* dst = AllocateAstNode<TypeRef>(arena);
+    dst->name = InternArenaString(arena, src->name);
+    dst->refMode = src->refMode;
+    dst->inferredCaptureBytes = src->inferredCaptureBytes;
+    dst->span = src->span;
+    dst->isFuncType = src->isFuncType;
+    dst->isAuto = src->isAuto;
+    if(!src->templateArgs.empty()){
+        dst->templateArgs.reserve(src->templateArgs.size());
+        for(const TypeArg& targ : src->templateArgs){
+            TypeArg copyArg;
+            copyArg.type = CloneTypeRefDeep(arena, targ.type);
+            copyArg.constantText = InternArenaString(arena, targ.constantText);
+            dst->templateArgs.push_back(copyArg);
+        }
+    }
+    dst->funcReturnType = CloneTypeRefDeep(arena, src->funcReturnType);
+    if(!src->funcParams.empty()){
+        dst->funcParams.reserve(src->funcParams.size());
+        for(const FuncParamType& fp : src->funcParams){
+            FuncParamType copyFp;
+            copyFp.mode = fp.mode;
+            copyFp.type = CloneTypeRefDeep(arena, fp.type);
+            dst->funcParams.push_back(copyFp);
+        }
+    }
+    return dst;
+}
+
+TypeRef* RewriteTemplateTypeRefName(MetaArena& arena, TypeRef* const ref, const MStringView oldName, const MStringView newName){
+    if(!__hidden_cpp_header_importer_type_mapper::TypeRefContainsName(ref, oldName))
+        return ref;
+    TypeRef* cloned = CloneTypeRefDeep(arena, ref);
+    __hidden_cpp_header_importer_type_mapper::RewriteTemplateTypeRefNameInPlace(cloned, oldName, newName);
+    return cloned;
+}
+
+MStringView MapRawBuiltinScalarKind(const CXTypeKind kind)noexcept{
+    switch(kind){
+    case CXType_Void: return BuiltinTypeSemantics::VoidTypeName();
+    case CXType_Bool: return BuiltinTypeSemantics::BoolScalarTypeName();
+    case CXType_Char_S:
+    case CXType_SChar: return BuiltinTypeSemantics::FindIntegerScalarTypeName(1u, true);
+    case CXType_Char_U:
+    case CXType_UChar: return BuiltinTypeSemantics::FindIntegerScalarTypeName(1u, false);
+    case CXType_Short: return BuiltinTypeSemantics::FindIntegerScalarTypeName(2u, true);
+    case CXType_UShort: return BuiltinTypeSemantics::FindIntegerScalarTypeName(2u, false);
+    case CXType_Int: return BuiltinTypeSemantics::FindIntegerScalarTypeName(4u, true);
+    case CXType_UInt: return BuiltinTypeSemantics::FindIntegerScalarTypeName(4u, false);
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+    case CXType_Long: return BuiltinTypeSemantics::FindIntegerScalarTypeName(4u, true);
+    case CXType_ULong: return BuiltinTypeSemantics::FindIntegerScalarTypeName(4u, false);
+#else
+    case CXType_Long: return BuiltinTypeSemantics::FindPointerSizedIntScalarTypeName(true);
+    case CXType_ULong: return BuiltinTypeSemantics::FindPointerSizedIntScalarTypeName(false);
+#endif
+    case CXType_LongLong: return BuiltinTypeSemantics::FindIntegerScalarTypeName(8u, true);
+    case CXType_ULongLong: return BuiltinTypeSemantics::FindIntegerScalarTypeName(8u, false);
+    case CXType_Float: return BuiltinTypeSemantics::FindFloatScalarTypeName(4u);
+    case CXType_Double: return BuiltinTypeSemantics::FindFloatScalarTypeName(8u);
+    default: return {};
+    }
 }
 
 
@@ -368,10 +426,19 @@ TypeRef* ImporterContext::mapType(CXType type, const b8 isParamContext, const u3
     if(type.kind == CXType_Invalid || depth > 12u)
         return nullptr;
 
-    const MString initialSpelling = ConsumeClangString(m_arena, ::clang_getTypeSpelling(type));
-    if(MStringView(initialSpelling.data(), initialSpelling.size()).find(CppImporterSemantics::s_VariadicPackToken) != MStringView::npos)
-        return nullptr;
+    if(depth == 0u){
+        const TypeCacheKey cacheKey{ static_cast<i32>(type.kind), static_cast<u8>(isParamContext ? 1u : 0u), type.data[0], type.data[1] };
+        if(const auto it = m_typeCache.find(cacheKey); it != m_typeCache.end())
+            return it->second;
+        TypeRef* mapped = mapTypeUncached(type, isParamContext, depth);
+        m_typeCache.emplace(cacheKey, mapped);
+        return mapped;
+    }
 
+    return mapTypeUncached(type, isParamContext, depth);
+}
+
+TypeRef* ImporterContext::mapTypeUncached(CXType type, const b8 isParamContext, const u32 depth){
     ParamPassingMode::Enum refMode = ParamPassingMode::None;
     if(type.kind == CXType_LValueReference){
         const CXType pointee = ::clang_getNonReferenceType(type);
@@ -385,14 +452,8 @@ TypeRef* ImporterContext::mapType(CXType type, const b8 isParamContext, const u3
         type = pointee;
     }
 
-    const CXType canonical = ::clang_getCanonicalType(type);
-    if(__hidden_cpp_header_importer_type_mapper::IsUnsupportedCppTypeKind(type.kind) || __hidden_cpp_header_importer_type_mapper::IsUnsupportedCppTypeKind(canonical.kind))
+    if(__hidden_cpp_header_importer_type_mapper::IsUnsupportedCppTypeKind(type.kind))
         return nullptr;
-
-    const MString sugaredSpelling = ConsumeClangString(m_arena, ::clang_getTypeSpelling(type));
-    const MStringView sugaredView(sugaredSpelling.data(), sugaredSpelling.size());
-    const MStringView strippedSugared = __hidden_cpp_header_importer_type_mapper::StripConstAndRefPrefix(sugaredView);
-    const MStringView sugaredLeaf = __hidden_cpp_header_importer_type_mapper::ExtractUnqualifiedLeaf(strippedSugared);
 
     const auto allocateNonGenericLeafType = [&](const MStringView name, const b8 dropInRefMode) -> TypeRef*{
         if(BuiltinTypeSemantics::IsVoidTypeName(name) && refMode != ParamPassingMode::None)
@@ -403,6 +464,21 @@ TypeRef* ImporterContext::mapType(CXType type, const b8 isParamContext, const u3
         return ref;
     };
 
+    if(const MStringView rawBuiltin = MapRawBuiltinScalarKind(type.kind); !rawBuiltin.empty())
+        return allocateNonGenericLeafType(rawBuiltin, true);
+
+    const CXType canonical = ::clang_getCanonicalType(type);
+    if(__hidden_cpp_header_importer_type_mapper::IsUnsupportedCppTypeKind(canonical.kind))
+        return nullptr;
+
+    const MString sugaredSpelling = ConsumeClangString(m_arena, ::clang_getTypeSpelling(type));
+    const MStringView sugaredView(sugaredSpelling.data(), sugaredSpelling.size());
+    if(sugaredView.find(CppImporterSemantics::s_VariadicPackToken) != MStringView::npos)
+        return nullptr;
+
+    const MStringView strippedSugared = __hidden_cpp_header_importer_type_mapper::StripConstAndRefPrefix(sugaredView);
+    const MStringView sugaredLeaf = __hidden_cpp_header_importer_type_mapper::ExtractUnqualifiedLeaf(strippedSugared);
+
     if(const MStringView direct = CppImporterSemantics::MapDirectTypeName(sugaredLeaf); !direct.empty())
         return allocateNonGenericLeafType(direct, BuiltinTypeSemantics::IsScalarType(direct));
 
@@ -412,7 +488,7 @@ TypeRef* ImporterContext::mapType(CXType type, const b8 isParamContext, const u3
     if(wasGenericContainer)
         return nullptr;
 
-    if(const MStringView builtin = __hidden_cpp_header_importer_type_mapper::MapBuiltinScalarKind(canonical.kind); !builtin.empty())
+    if(const MStringView builtin = MapRawBuiltinScalarKind(canonical.kind); !builtin.empty())
         return allocateNonGenericLeafType(builtin, true);
 
     CXCursor declCursor = ::clang_getTypeDeclaration(type);
@@ -428,7 +504,7 @@ TypeRef* ImporterContext::mapType(CXType type, const b8 isParamContext, const u3
         MStringView dummyExport;
         b8 dummyDirect = false;
         b8 dummyFlag = false;
-        if(FormatNormalizedAdhdDeclName(m_arena, declCursor, adhdName, dummyNs, dummyExport, dummyDirect, dummyFlag)){
+        if(formatDeclName(declCursor, adhdName, dummyNs, dummyExport, dummyDirect, dummyFlag)){
             TypeRef* ref = AllocateAstNode<TypeRef>(m_arena);
             ref->name = adhdName;
             ref->refMode = (dk == CXCursor_EnumDecl && refMode == ParamPassingMode::In) ? ParamPassingMode::None : refMode;

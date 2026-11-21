@@ -87,7 +87,8 @@ void Framebuffer::cacheStaticValidationState(const VulkanAllocator& allocator)no
     const auto validateAttachmentStatic = [this, &allocator, &allManagedNonVirtual, &allExclusiveSharing](
         const FramebufferAttachment& attachment,
         const b8 requireDepthStencilFormat,
-        const Format::Enum expectedFormat
+        const Format::Enum expectedFormat,
+        TextureSubresourceSet& outResolved
     )noexcept -> b8{
         Texture* const texture = attachment.texture;
         if(!texture || &texture->m_context != &m_context || &texture->m_allocator != &allocator)
@@ -141,35 +142,31 @@ void Framebuffer::cacheStaticValidationState(const VulkanAllocator& allocator)no
         const ResourceQueueAdmissionSnapshot admission = texture->getQueueAdmissionSnapshot();
         if(!admission.valid() || admission.usesConcurrentSharing)
             allExclusiveSharing = false;
+        outResolved = resolved;
         return true;
     };
 
     for(usize colorIndex = 0u; colorIndex < m_desc.colorAttachments.size(); ++colorIndex){
-        if(!validateAttachmentStatic(m_desc.colorAttachments[colorIndex], false, m_framebufferInfo.colorFormats[colorIndex]))
+        if(!validateAttachmentStatic(m_desc.colorAttachments[colorIndex], false, m_framebufferInfo.colorFormats[colorIndex], m_cachedColorSubresources[colorIndex]))
             return;
     }
 
     if(m_desc.depthAttachment.valid()){
-        if(!validateAttachmentStatic(m_desc.depthAttachment, true, m_framebufferInfo.depthFormat))
+        if(!validateAttachmentStatic(m_desc.depthAttachment, true, m_framebufferInfo.depthFormat, m_cachedDepthSubresources))
             return;
     }
 
     for(usize colorIndex = 0u; colorIndex < m_desc.colorAttachments.size(); ++colorIndex){
         const FramebufferAttachment& colorAttachment = m_desc.colorAttachments[colorIndex];
-        const TextureSubresourceSet colorRange = colorAttachment.subresources.resolve(colorAttachment.texture->m_creationDesc, TextureSubresourceMipResolve::Range);
+        const TextureSubresourceSet& colorRange = m_cachedColorSubresources[colorIndex];
         for(usize priorIndex = 0u; priorIndex < colorIndex; ++priorIndex){
-            const FramebufferAttachment& priorAttachment = m_desc.colorAttachments[priorIndex];
-            if(priorAttachment.texture != colorAttachment.texture)
+            if(m_desc.colorAttachments[priorIndex].texture != colorAttachment.texture)
                 continue;
-            const TextureSubresourceSet priorRange = priorAttachment.subresources.resolve(priorAttachment.texture->m_creationDesc, TextureSubresourceMipResolve::Range);
-            if(VulkanDetail::TextureSubresourceRangesOverlap(colorRange, priorRange))
+            if(VulkanDetail::TextureSubresourceRangesOverlap(colorRange, m_cachedColorSubresources[priorIndex]))
                 return;
         }
-        if(m_desc.depthAttachment.texture == colorAttachment.texture){
-            const TextureSubresourceSet depthRange = m_desc.depthAttachment.subresources.resolve(m_desc.depthAttachment.texture->m_creationDesc, TextureSubresourceMipResolve::Range);
-            if(VulkanDetail::TextureSubresourceRangesOverlap(colorRange, depthRange))
-                return;
-        }
+        if(m_desc.depthAttachment.texture == colorAttachment.texture && VulkanDetail::TextureSubresourceRangesOverlap(colorRange, m_cachedDepthSubresources))
+            return;
     }
 
     m_staticStructureValid = true;

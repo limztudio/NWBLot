@@ -40,6 +40,195 @@ b8 IsValidPaintSdfGlyphRequest(in u32 channel, in u32 channelCount, in Rect uv){
     return channel < channelCount && IsValidPaintUvRect(uv);
 }
 
+b8 EmitPaintResolvedGlyphBatch(
+    in b8 recording,
+    in Rect clip,
+    in Span<ResolvedGlyphDraw> glyphs,
+    in Color tint,
+    in u32 layer,
+    in Span<SharedGlyphPage> glyphPages,
+    in Span<SharedSdfAtlasPage> sdfPages,
+    mut Vector<Vertex> vertices,
+    mut Vector<u32> indices,
+    mut Vector<DrawCommand> commands,
+    mut b8 inOutCommandsOrdered
+){
+    if(!recording){
+        error("PaintSystem: paint quad emitted while recording is off");
+        return false;
+    }
+    if(glyphs.empty())
+        return true;
+    const b8 colorValid = IsFinite(VectorSingle(tint.r, tint.g, tint.b, tint.a)) && tint.a >= 0.0f && tint.a <= 1.0f;
+    if(!colorValid){
+        for(in ResolvedGlyphDraw glyph : glyphs){
+            if(glyph.pageIndex == u32.max)
+                continue;
+            if(glyph.isSdf){
+                if(cast<usize>(glyph.pageIndex) >= sdfPages.size())
+                    return false;
+                in SharedSdfAtlasPage page = sdfPages[glyph.pageIndex];
+                if(!page.valid() || !IsValidPaintSdfGlyphRequest(glyph.channel, page.deref().binding().channelCount, glyph.uv))
+                    return false;
+            }
+            else if(cast<usize>(glyph.pageIndex) >= glyphPages.size() || !IsValidPaintUvRect(glyph.uv))
+                return false;
+            error("PaintSystem: paint quad color is invalid");
+        }
+        return true;
+    }
+    const VectorSingle clipOrigin(clip.x, clip.y, 0.0f, 0.0f);
+    const VectorSingle clipEnd = clipOrigin + VectorSingle(clip.width, clip.height, 0.0f, 0.0f);
+    const b8 clipActive = clip.width > 0.0f && clip.height > 0.0f && IsFinite(clipEnd.xy) && tint.a > 0.0f;
+    if(
+        clipActive
+        && glyphs.size() <= (cast<usize>(u32.max) - vertices.size()) / cast<usize>(s_PaintQuadVertexCount)
+        && glyphs.size() <= (cast<usize>(u32.max) - indices.size()) / cast<usize>(s_PaintQuadIndexCount)
+    ){
+        vertices.reserve(vertices.size() + glyphs.size() * cast<usize>(s_PaintQuadVertexCount));
+        indices.reserve(indices.size() + glyphs.size() * cast<usize>(s_PaintQuadIndexCount));
+    }
+    Color premultiplied = tint;
+    if(tint.a != 1.0f){
+        const VectorSingle rgb = VectorSingle(tint.r, tint.g, tint.b, tint.b) * tint.a;
+        premultiplied = Color(rgb.x, rgb.y, rgb.z, tint.a);
+    }
+    b8 hasMergedRun = false;
+    usize mergedCommandIndex = 0u;
+    PaintMaterial mergedMaterial = PaintMaterial::Solid;
+    u32 mergedGlyphPageIndex = u32.max;
+    u32 mergedSdfPageIndex = u32.max;
+    u32 mergedSdfChannel = 0u;
+    for(in ResolvedGlyphDraw glyph : glyphs){
+        if(glyph.pageIndex == u32.max)
+            continue;
+        PaintMaterial material = PaintMaterial::Glyph;
+        u32 glyphPageIndex = glyph.pageIndex;
+        u32 sdfPageIndex = u32.max;
+        u32 sdfChannel = 0u;
+        if(glyph.isSdf){
+            if(cast<usize>(glyph.pageIndex) >= sdfPages.size())
+                return false;
+            in SharedSdfAtlasPage page = sdfPages[glyph.pageIndex];
+            if(!page.valid() || !IsValidPaintSdfGlyphRequest(glyph.channel, page.deref().binding().channelCount, glyph.uv))
+                return false;
+            material = PaintMaterial::SdfGlyph;
+            glyphPageIndex = u32.max;
+            sdfPageIndex = glyph.pageIndex;
+            sdfChannel = glyph.channel;
+        }
+        else if(cast<usize>(glyph.pageIndex) >= glyphPages.size() || !IsValidPaintUvRect(glyph.uv))
+            return false;
+        if(!clipActive)
+            continue;
+        in Rect rectangle = glyph.rectangle;
+        if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f))
+            continue;
+        const VectorSingle rectOrigin(rectangle.x, rectangle.y, 0.0f, 0.0f);
+        const VectorSingle rectEnd = rectOrigin + VectorSingle(rectangle.width, rectangle.height, 0.0f, 0.0f);
+        if(!IsFinite(VectorSingle(rectangle.x, rectangle.y, rectangle.width, rectangle.height)) || !IsFinite(rectEnd.xy))
+            continue;
+        const VectorSingle origin = Max(rectOrigin, clipOrigin);
+        const VectorSingle end = Min(rectEnd, clipEnd);
+        const VectorSingle size = Max(VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), end - origin);
+        const VectorSingle visibleEnd = origin + size;
+        if(!IsFinite(size.xy) || !IsFinite(visibleEnd.xy) || !(size.x > 0.0f) || !(size.y > 0.0f))
+            continue;
+        if(vertices.size() > cast<usize>(u32.max - s_PaintQuadVertexCount) || indices.size() > cast<usize>(u32.max - s_PaintQuadIndexCount)){
+            assert(false);
+            continue;
+        }
+        in Rect uv = glyph.uv;
+        f32 left = 0.0f;
+        f32 top = 0.0f;
+        f32 right = 0.0f;
+        f32 bottom = 0.0f;
+        if(origin.x == rectangle.x && origin.y == rectangle.y && size.x == rectangle.width && size.y == rectangle.height && visibleEnd.x == rectEnd.x && visibleEnd.y == rectEnd.y){
+            left = uv.x;
+            top = uv.y;
+            right = uv.x + uv.width;
+            bottom = uv.y + uv.height;
+        }
+        else{
+            const VectorSingle coordinates(origin.x, origin.y, visibleEnd.x, visibleEnd.y);
+            const VectorSingle delta = coordinates - VectorSingle(rectangle.x, rectangle.y, rectangle.x, rectangle.y);
+            const VectorSingle fraction = delta / VectorSingle(rectangle.width, rectangle.height, rectangle.width, rectangle.height);
+            const VectorSingle textureScale(uv.width, uv.height, uv.width, uv.height);
+            const VectorSingle textureOrigin(uv.x, uv.y, uv.x, uv.y);
+            const VectorSingle textureCoordinates = fraction * textureScale + textureOrigin;
+            left = textureCoordinates.x;
+            top = textureCoordinates.y;
+            right = textureCoordinates.z;
+            bottom = textureCoordinates.w;
+        }
+        const u32 vertexBase = cast<u32>(vertices.size());
+        const u32 firstIndex = cast<u32>(indices.size());
+        Array<Vertex, 4u> quadVertices;
+        quadVertices[0u] = Vertex(Point(origin.x, origin.y), Point(left, top), premultiplied);
+        quadVertices[1u] = Vertex(Point(visibleEnd.x, origin.y), Point(right, top), premultiplied);
+        quadVertices[2u] = Vertex(Point(visibleEnd.x, visibleEnd.y), Point(right, bottom), premultiplied);
+        quadVertices[3u] = Vertex(Point(origin.x, visibleEnd.y), Point(left, bottom), premultiplied);
+        AppendTriviallyCopyableVector(vertices, Span<Vertex>(quadVertices));
+        Array<u32, 6u> quadIndices;
+        quadIndices[0u] = vertexBase;
+        quadIndices[1u] = vertexBase + 1u;
+        quadIndices[2u] = vertexBase + 2u;
+        quadIndices[3u] = vertexBase;
+        quadIndices[4u] = vertexBase + 2u;
+        quadIndices[5u] = vertexBase + 3u;
+        AppendTriviallyCopyableVector(indices, Span<u32>(quadIndices));
+        if(
+            hasMergedRun
+            && mergedMaterial == material
+            && mergedGlyphPageIndex == glyphPageIndex
+            && mergedSdfPageIndex == sdfPageIndex
+            && mergedSdfChannel == sdfChannel
+        ){
+            commands[mergedCommandIndex].indexCount += s_PaintQuadIndexCount;
+            continue;
+        }
+        if(!commands.empty()){
+            const usize lastIndex = commands.size() - 1u;
+            in DrawCommand previous = commands[lastIndex];
+            if(
+                previous.layer == layer && previous.material == material && previous.glyphPageIndex == glyphPageIndex
+                && previous.sdfPageIndex == sdfPageIndex && previous.sdfChannel == sdfChannel
+                && previous.textureImageIndex == u32.max
+                && EqualUiRect(previous.clip, clip)
+            ){
+                commands[lastIndex].indexCount += s_PaintQuadIndexCount;
+                hasMergedRun = true;
+                mergedCommandIndex = lastIndex;
+                mergedMaterial = material;
+                mergedGlyphPageIndex = glyphPageIndex;
+                mergedSdfPageIndex = sdfPageIndex;
+                mergedSdfChannel = sdfChannel;
+                continue;
+            }
+            if(previous.layer > layer)
+                inOutCommandsOrdered = false;
+        }
+        DrawCommand command;
+        command.firstIndex = firstIndex;
+        command.indexCount = s_PaintQuadIndexCount;
+        command.clip = clip;
+        command.material = material;
+        command.glyphPageIndex = glyphPageIndex;
+        command.sdfPageIndex = sdfPageIndex;
+        command.sdfChannel = sdfChannel;
+        command.layer = layer;
+        command.textureImageIndex = u32.max;
+        mergedCommandIndex = commands.size();
+        commands.push_back(command);
+        hasMergedRun = true;
+        mergedMaterial = material;
+        mergedGlyphPageIndex = glyphPageIndex;
+        mergedSdfPageIndex = sdfPageIndex;
+        mergedSdfChannel = sdfChannel;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -118,7 +307,7 @@ class PaintBuilder : NoCopy{
         ReservePaintSnapshot(quadCount, clipDepth, this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_clips);
     }
     [cpp_unwind]
-    public void pushClip(in Rect clip){ PushPaintClip(this.m_recording, clip, this.m_clips); }
+    public void pushClip(in Rect clip){ PushPaintClipValidatedParent(this.m_recording, clip, this.m_clips); }
     public b8 popClip(){ return PopPaintClip(this.m_recording, this.m_overlayDepth, this.m_overlays, this.m_clips); }
 
     [cpp_unwind]
@@ -131,7 +320,11 @@ class PaintBuilder : NoCopy{
     public void fillRect(in Rect rectangle){ this.fillRect(rectangle, Color()); }
     [cpp_unwind]
     public void fillRect(in Rect rectangle, in Color color){
-        this.emitQuad(rectangle, Rect(), color, PaintMaterial::Solid, u32.max, u32.max, 0u, u32.max);
+        assert(this.m_recording);
+        EmitPaintSolidQuadValidated(
+            this.m_recording, this.m_clips.back(), rectangle, color, this.m_layer,
+            this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered
+        );
     }
     [cpp_unwind]
     public void drawLine(in Point start, in Point end, in f32 thickness, in Color color){
@@ -197,6 +390,16 @@ class PaintBuilder : NoCopy{
             return false;
         this.emitQuad(rectangle, uv, tint, PaintMaterial::SdfGlyph, u32.max, sdfPageIndex, channel, u32.max);
         return true;
+    }
+    [cpp_unwind]
+    public b8 drawResolvedGlyphBatch(in Span<ResolvedGlyphDraw> glyphs, in Color tint){
+        assert(this.m_recording);
+        return EmitPaintResolvedGlyphBatch(
+            this.m_recording, this.m_clips.back(), glyphs, tint, this.m_layer,
+            Span<SharedGlyphPage>(this.m_snapshot.m_images.glyphPages()),
+            Span<SharedSdfAtlasPage>(this.m_snapshot.m_images.sdfPages()),
+            this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered
+        );
     }
 
     [cpp_unwind]
@@ -267,7 +470,7 @@ class PaintBuilder : NoCopy{
     [cpp_unwind]
     private void emitQuad(in Rect rectangle, in Rect uv, in Color color, in PaintMaterial material, in u32 glyphPageIndex, in u32 sdfPageIndex, in u32 sdfChannel, in u32 textureImageIndex){
         assert(this.m_recording);
-        EmitPaintQuad(
+        EmitPaintQuadValidated(
             this.m_recording, this.m_clips.back(), rectangle, uv, color, material, this.m_layer,
             glyphPageIndex, sdfPageIndex, sdfChannel, textureImageIndex,
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered

@@ -69,14 +69,15 @@ Expected<GpuGraphResourceId> GpuTaskGraph::importResource(const GpuGraphResource
     if(!desc.identity || desc.markerLabel.empty() || desc.type >= GpuGraphResourceType::Count)
         return MakeUnexpected(Failure{});
 
-    const u32 resourceIndex = m_resourceImportIndexes.findResourceIdentity(m_resources, desc.identity);
+    GpuGraphResourceImportIndex::ResourceLookupHint lookupHint;
+    const u32 resourceIndex = m_resourceImportIndexes.findResourceIdentity(m_resources, desc.identity, &lookupHint);
     if(resourceIndex != s_InvalidImportIndex){
         if(!__hidden_gpu_task_graph_imports::CompatibleResourceMetadata(resourceAt(resourceIndex), desc))
             return MakeUnexpected(Failure{});
         return GpuGraphResourceId{ .generation = m_generation, .index = resourceIndex };
     }
 
-    return appendResourceWithinMutation(desc, nullptr, {}, mutation);
+    return appendResourceWithinMutation(desc, nullptr, {}, mutation, &lookupHint);
 }
 
 Expected<GpuGraphResourceId> GpuTaskGraph::importTexture(const TextureHandle& texture, const GpuGraphResourceDesc& desc){
@@ -104,14 +105,15 @@ Expected<GpuGraphResourceId> GpuTaskGraph::importTexture(const TextureHandle& te
         return MakeUnexpected(Failure{});
     resolvedDesc.queueSharing = textureDesc.queueSharing;
 
-    const ResourceImportMatch match = m_resourceImportIndexes.findResourceImportMatch(m_resources, &resolvedDesc.identity.identityHash(), { texture.get(), GpuGraphResourceType::Texture });
+    GpuGraphResourceImportIndex::ResourceLookupHint lookupHint;
+    const ResourceImportMatch match = m_resourceImportIndexes.findResourceImportMatch(m_resources, &resolvedDesc.identity.identityHash(), { texture.get(), GpuGraphResourceType::Texture }, &lookupHint);
     if(match.index != s_InvalidImportIndex){
         if(!match.samePointer || !__hidden_gpu_task_graph_imports::CompatibleResourceMetadata(resourceAt(match.index), resolvedDesc))
             return MakeUnexpected(Failure{});
         return GpuGraphResourceId{ .generation = m_generation, .index = match.index };
     }
 
-    return appendResourceWithinMutation(resolvedDesc, &queueAdmission, ResourceBinding{ .texture = &texture, .deviceGeneration = texture->getDeviceGeneration() }, mutation);
+    return appendResourceWithinMutation(resolvedDesc, &queueAdmission, ResourceBinding{ .texture = &texture, .deviceGeneration = texture->getDeviceGeneration() }, mutation, &lookupHint);
 }
 
 Expected<GpuGraphResourceId> GpuTaskGraph::importBuffer(const BufferHandle& buffer, const GpuGraphResourceDesc& desc){
@@ -136,14 +138,15 @@ Expected<GpuGraphResourceId> GpuTaskGraph::importBuffer(const BufferHandle& buff
         return MakeUnexpected(Failure{});
     resolvedDesc.queueSharing = bufferDesc.queueSharing;
 
-    const ResourceImportMatch match = m_resourceImportIndexes.findResourceImportMatch(m_resources, &resolvedDesc.identity.identityHash(), { buffer.get(), GpuGraphResourceType::Buffer });
+    GpuGraphResourceImportIndex::ResourceLookupHint lookupHint;
+    const ResourceImportMatch match = m_resourceImportIndexes.findResourceImportMatch(m_resources, &resolvedDesc.identity.identityHash(), { buffer.get(), GpuGraphResourceType::Buffer }, &lookupHint);
     if(match.index != s_InvalidImportIndex){
         if(!match.samePointer || !__hidden_gpu_task_graph_imports::CompatibleResourceMetadata(resourceAt(match.index), resolvedDesc))
             return MakeUnexpected(Failure{});
         return GpuGraphResourceId{ .generation = m_generation, .index = match.index };
     }
 
-    return appendResourceWithinMutation(resolvedDesc, &queueAdmission, ResourceBinding{ .buffer = &buffer, .deviceGeneration = buffer->getDeviceGeneration() }, mutation);
+    return appendResourceWithinMutation(resolvedDesc, &queueAdmission, ResourceBinding{ .buffer = &buffer, .deviceGeneration = buffer->getDeviceGeneration() }, mutation, &lookupHint);
 }
 
 
@@ -204,14 +207,15 @@ Expected<GpuGraphResourceId> GpuTaskGraph::importAccelStruct(const RayTracingAcc
         return MakeUnexpected(Failure{});
     resolvedDesc.queueSharing = creationQueueSharing;
 
-    const ResourceImportMatch match = m_resourceImportIndexes.findResourceImportMatch(m_resources, &resolvedDesc.identity.identityHash(), { accelStruct.get(), GpuGraphResourceType::AccelStruct });
+    GpuGraphResourceImportIndex::ResourceLookupHint lookupHint;
+    const ResourceImportMatch match = m_resourceImportIndexes.findResourceImportMatch(m_resources, &resolvedDesc.identity.identityHash(), { accelStruct.get(), GpuGraphResourceType::AccelStruct }, &lookupHint);
     if(match.index != s_InvalidImportIndex){
         if(!match.samePointer || !__hidden_gpu_task_graph_imports::CompatibleResourceMetadata(resourceAt(match.index), resolvedDesc))
             return MakeUnexpected(Failure{});
         return GpuGraphResourceId{ .generation = m_generation, .index = match.index };
     }
 
-    return appendResourceWithinMutation(resolvedDesc, backingBuffer ? &queueAdmission : nullptr, ResourceBinding{ .accelStruct = &accelStruct, .deviceGeneration = accelStruct->getDeviceGeneration() }, mutation);
+    return appendResourceWithinMutation(resolvedDesc, backingBuffer ? &queueAdmission : nullptr, ResourceBinding{ .accelStruct = &accelStruct, .deviceGeneration = accelStruct->getDeviceGeneration() }, mutation, &lookupHint);
 }
 
 Expected<GpuGraphResourceId> GpuTaskGraph::importHazardDomain(const GpuGraphResourceDesc& desc){
@@ -228,7 +232,8 @@ Expected<GpuGraphResourceSetId> GpuTaskGraph::importResourceSet(const GpuGraphRe
     if(!desc.identity || desc.markerLabel.empty() || (desc.memberCount != 0u && !desc.members))
         return MakeUnexpected(Failure{});
 
-    const u32 resourceSetIndex = m_resourceImportIndexes.findResourceSetIdentity(m_resourceSets, desc.identity);
+    GpuGraphResourceImportIndex::ResourceSetLookupHint lookupHint;
+    const u32 resourceSetIndex = m_resourceImportIndexes.findResourceSetIdentity(m_resourceSets, desc.identity, &lookupHint);
     if(resourceSetIndex != s_InvalidImportIndex){
         const GpuTaskGraphResourceSetView existing = resourceSetAt(resourceSetIndex);
         if(existing.memberCount != desc.memberCount)
@@ -240,7 +245,7 @@ Expected<GpuGraphResourceSetId> GpuTaskGraph::importResourceSet(const GpuGraphRe
         return existing.id;
     }
 
-    return appendResourceSet(desc);
+    return appendResourceSet(desc, &lookupHint);
 }
 
 b8 GpuTaskGraph::declarePresentEndpoint(const GpuPresentEndpoint& endpoint){

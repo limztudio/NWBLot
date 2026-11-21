@@ -130,12 +130,12 @@ private:
     };
 
     struct GraphicsBufferStateEntry{
-        Buffer* buffer = nullptr;
-        ResourceStates::Mask state = ResourceStates::Unknown;
+        Buffer* buffer;
+        ResourceStates::Mask state;
     };
 
     struct GraphicsBufferStateTable{
-        Array<GraphicsBufferStateEntry, s_MaxVertexAttributes + s_GraphicsExtraBufferStateCount> entries{};
+        Array<GraphicsBufferStateEntry, s_MaxVertexAttributes + s_GraphicsExtraBufferStateCount> entries;
         u32 count = 0u;
     };
 
@@ -552,7 +552,7 @@ private:
     }
     [[nodiscard]] b8 matchesNativeLeaseIdentity()const noexcept;
     [[nodiscard]] b8 matchesActiveNativeLeaseIdentity()const noexcept;
-    [[nodiscard]] b8 matchesSubmissionLease(GpuPhysicalQueueId executionQueue, CommandQueue::Enum executionQueueClass, b8 graphSubmissionAuthorized)const noexcept;
+    [[nodiscard]] b8 matchesSubmissionLease(GpuPhysicalQueueId executionQueue, CommandQueue::Enum executionQueueClass, b8 graphSubmissionAuthorized, u64* outGraphOwnershipSerial = nullptr)const noexcept;
     [[nodiscard]] b8 validateViewportState(const ViewportState& viewportState, TStringView operationName);
     [[nodiscard]] b8 resolveTrackedTextureSubresources(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits, TStringView operationName, TextureSubresourceSet& outResolvedSubresources);
     [[nodiscard]] b8 validateTextureForGpuState(Texture* texture, ResourceStates::Mask requiredState, TStringView operationName, VkImageUsageFlags explicitRequiredUsage = 0u);
@@ -595,6 +595,7 @@ private:
     [[nodiscard]] b8 validateTrackedTexturesReadyForClose();
     [[nodiscard]] b8 validateTrackedBuffersReadyForClose();
     [[nodiscard]] b8 validateTrackedResourcesReadyForSubmission()const;
+    [[nodiscard]] b8 validateTrackedResourcesReadyForSubmissionFast()const;
     [[nodiscard]] b8 importResourceStateHandoff(Alloc::ScratchArena& scratchArena, const CommandListResourceStateHandoff& states);
     void exportResourceStateHandoff(CommandListResourceStateHandoff& states)const;
     void appendPendingOwnershipReleaseBarriers();
@@ -635,6 +636,7 @@ private:
     void bindVertexBuffersNative(Span<const VertexBufferBinding> vertexBuffers)noexcept;
 
     b8 beginDynamicRendering(Framebuffer& framebuffer, const RenderPassParameters& params);
+    b8 beginDynamicRenderingDefault(Framebuffer& framebuffer);
     void endDynamicRendering();
     b8 ensureGraphicsRenderPass(Framebuffer* framebuffer);
     void endActiveRenderPass();
@@ -736,6 +738,7 @@ private:
         u64 offset = 0u;
         u32 stride = 0u;
         u32 requiredElementBytes = 0u;
+        u32 stateVertexIndex = 0u;
         b8 instanceRate = false;
     };
 

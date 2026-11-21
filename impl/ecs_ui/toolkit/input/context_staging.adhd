@@ -13,7 +13,8 @@ b8 TryAppendContextTarget(
     in PopupToken currentPopup,
     in u32 popupLayer,
     in HitTarget target,
-    mut Vector<ContextOwnedTarget> targets
+    mut Vector<HitTarget> targets,
+    mut Vector<WidgetRoot> targetRoots
 ){
     if(targets.size() >= s_InputMaxTargets)
         return false;
@@ -23,10 +24,8 @@ b8 TryAppendContextTarget(
     admitted.paintOrder = cast<u32>(targets.size());
     admitted.popup = currentPopup;
     admitted.layer = popupLayer;
-    ContextOwnedTarget owned;
-    owned.target = admitted;
-    owned.root = state.root;
-    targets.push_back(owned);
+    targets.push_back(admitted);
+    targetRoots.push_back(state.root);
     return true;
 }
 
@@ -36,7 +35,8 @@ b8 TryAppendContextPartTarget(
     in PopupToken currentPopup,
     in u32 popupLayer,
     in HitTarget target,
-    mut Vector<ContextOwnedTarget> targets
+    mut Vector<HitTarget> targets,
+    mut Vector<WidgetRoot> targetRoots
 ){
     if(!part.valid() || part == owner.id || targets.size() >= s_InputMaxTargets)
         return false;
@@ -48,22 +48,15 @@ b8 TryAppendContextPartTarget(
     admitted.paintOrder = cast<u32>(targets.size());
     admitted.popup = currentPopup;
     admitted.layer = popupLayer;
-    ContextOwnedTarget owned;
-    owned.target = admitted;
-    owned.root = owner.root;
-    targets.push_back(owned);
+    targets.push_back(admitted);
+    targetRoots.push_back(owner.root);
     return true;
 }
 
-void ExtractContextCommitPayloads(
-    in Span<ContextOwnedTarget> targets,
+void ExtractContextCommitPopups(
     in Span<ContextOwnedPopup> popups,
-    mut Vector<HitTarget> commitTargets,
     mut Vector<PopupScope> commitPopups
 ){
-    commitTargets.clear();
-    for(in ContextOwnedTarget owned : targets)
-        commitTargets.push_back(owned.target);
     commitPopups.clear();
     for(in ContextOwnedPopup owned : popups)
         commitPopups.push_back(owned.scope);
@@ -79,7 +72,8 @@ b8 TryBeginContextFrame(
     mut b8 outFailed,
     mut usize outDeclarationCount,
     mut usize outStateClaimCount,
-    mut Vector<ContextOwnedTarget> targets,
+    mut Vector<HitTarget> targets,
+    mut Vector<WidgetRoot> targetRoots,
     mut Vector<ContextOwnedPopup> popups,
     mut usize outPopupDepth,
     mut PopupToken outCurrentPopup,
@@ -94,6 +88,7 @@ b8 TryBeginContextFrame(
     outDeclarationCount = 0u;
     outStateClaimCount = 0u;
     targets.clear();
+    targetRoots.clear();
     popups.clear();
     outPopupDepth = 0u;
     outCurrentPopup = PopupToken();
@@ -172,7 +167,8 @@ b8 CanFinishContextFrame(
 }
 
 void ResetContextPopupAndTargetState(
-    mut Vector<ContextOwnedTarget> targets,
+    mut Vector<HitTarget> targets,
+    mut Vector<WidgetRoot> targetRoots,
     mut Vector<ContextOwnedPopup> popups,
     mut PopupToken outCurrentPopup,
     mut usize outPopupDepth,
@@ -181,6 +177,7 @@ void ResetContextPopupAndTargetState(
     mut u64 outReadyGeneration
 ){
     targets.clear();
+    targetRoots.clear();
     popups.clear();
     outCurrentPopup = PopupToken();
     outPopupDepth = 0u;
@@ -248,18 +245,22 @@ void PrepareRetainedContextRoots(
 
 void PruneUnretainedContextTargetsAndPopups(
     in HashSet<WidgetRoot> retainedRoots,
-    mut Vector<ContextOwnedTarget> inOutTargets,
+    mut Vector<HitTarget> inOutTargets,
+    mut Vector<WidgetRoot> inOutTargetRoots,
     mut Vector<ContextOwnedPopup> inOutPopups
 ){
     usize keptTargets = 0u;
     for(usize index = 0u; index < inOutTargets.size(); ++index){
-        if(retainedRoots.contains(inOutTargets[index].root)){
-            if(keptTargets != index)
+        if(retainedRoots.contains(inOutTargetRoots[index])){
+            if(keptTargets != index){
                 inOutTargets[keptTargets] = inOutTargets[index];
+                inOutTargetRoots[keptTargets] = inOutTargetRoots[index];
+            }
             ++keptTargets;
         }
     }
     inOutTargets.resize(keptTargets);
+    inOutTargetRoots.resize(keptTargets);
     usize keptPopups = 0u;
     for(usize index = 0u; index < inOutPopups.size(); ++index){
         if(retainedRoots.contains(inOutPopups[index].root)){

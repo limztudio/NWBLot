@@ -461,13 +461,14 @@ b8 Builder::prepareComboSearch(in WidgetState field, mut BuilderComboFrame frame
     auto item = this.makeItem();
     item.state = editor;
     item.style = this.m_style;
-    item.editStyle = this.m_editStyle;
-    item.editOptions.enabled = frame.options.enabled;
+    auto editFrame = this.makeEditBoxFrame();
+    editFrame.editStyle = this.m_editStyle;
+    editFrame.editOptions.enabled = frame.options.enabled;
     EditBoxResult result;
     result.valid = true;
     result.focused = this.m_context.input().focus() == editor.id;
     if(this.m_editHost.has_value())
-        result = this.m_editHost.value().editInPopup(editor, item.editOptions, frame.popupToken, query);
+        result = this.m_editHost.value().editInPopup(editor, editFrame.editOptions, frame.popupToken, query);
     if(!result.valid)
         return false;
     frame.queryChanged = result.textChanged;
@@ -492,9 +493,11 @@ b8 Builder::prepareComboSearch(in WidgetState field, mut BuilderComboFrame frame
         return false;
     if(!frame.open)
         return true;
-    if(!this.prepareEditBox(result, query, state.m_editor, item))
+    if(!this.prepareEditBox(result, query, state.m_editor, item, editFrame))
         return false;
+    item.editBox = cast<u32>(this.m_scope.value().m_editBoxes.size());
     frame.editor = cast<u32>(this.m_scope.value().m_comboEditors.size());
+    AppendOwned<BuilderEditBoxFrame>(this.m_scope.value().m_editBoxes, editFrame);
     AppendOwned<BuilderItem>(this.m_scope.value().m_comboEditors, item);
     return this.comboMatches(frame);
 }
@@ -510,11 +513,14 @@ b8 Builder::paintComboQuery(mut BuilderComboFrame frame, mut LayoutBox content){
     if(frame.editor >= this.m_scope.value().m_comboEditors.size() || !this.comboMatches(frame))
         return false;
     in BuilderItem item = this.m_scope.value().m_comboEditors[frame.editor];
-    const f32 measuredHeight = item.editView.visualBounds().height + item.padding.top + item.padding.bottom;
+    if(item.editBox >= this.m_scope.value().m_editBoxes.size())
+        return false;
+    in BuilderEditBoxFrame editFrame = this.m_scope.value().m_editBoxes[item.editBox];
+    const f32 measuredHeight = editFrame.editView.visualBounds().height + item.padding.top + item.padding.bottom;
     Rect nextContentRect = content.rectangle;
     LayoutBox box = content;
     box.rectangle = ResolveComboQueryBoxAndAdvanceContent(measuredHeight, frame.queryHeight, frame.queryGap, nextContentRect);
-    const HitTarget navigation = targets.makeComboQueryNavigationTarget(frame.options.enabled, item.editView.composing(), frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
+    const HitTarget navigation = targets.makeComboQueryNavigationTarget(frame.options.enabled, editFrame.editView.composing(), frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
     if(!this.paintEditBox(item, box, Optional<in HitTarget>(navigation)))
         return false;
     content.rectangle = nextContentRect;

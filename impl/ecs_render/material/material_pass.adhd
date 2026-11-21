@@ -59,7 +59,7 @@ Optional<u32> ResolveClipContextHeapSlot(in Optional<CsgGraphResourceSnapshot> c
 
 b8 MaterialPassDrawRecorder::meshMaterialPassDrawResourcesReady(in Span<MaterialPassDrawItem> drawItems, in MeshFrameBindingSnapshot frameBindings){
     for(in MaterialPassDrawItem drawItem : drawItems){
-        if(!this.materialPassDrawResourcesReady(drawItem.meshResources, frameBindings) || !drawItem.pipelineResources.meshletPipeline.valid())
+        if(!this.materialPassDrawResourcesReady(drawItem.mesh(), frameBindings) || !drawItem.pipeline().meshletPipeline.valid())
             return false;
     }
     return true;
@@ -70,8 +70,8 @@ b8 MaterialPassDrawRecorder::computeMaterialPassDrawResourcesReady(in Span<Mater
         return true;
 
     for(in MaterialPassDrawItem drawItem : drawItems){
-        in MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
-        in MaterialPassPipelineResourceSnapshot pipelineResources = drawItem.pipelineResources;
+        in MaterialPassMeshResourceSnapshot mesh = drawItem.mesh();
+        in MaterialPassPipelineResourceSnapshot pipelineResources = drawItem.pipeline();
         if(
             !this.materialPassDrawResourcesReady(mesh, frameBindings)
             || !pipelineResources.computePipeline.valid()
@@ -333,7 +333,7 @@ void MaterialPassDrawRecorder::renderMeshMaterialPassDrawItems(mut MaterialPassD
     this.setMaterialPassFrameBufferStates(context);
     if(!context.materialGeometryStatesGraphOwned){
         for(in MaterialPassDrawItem drawItem : drawItems)
-            this.setMaterialPassMeshBufferStates(context, drawItem.meshResources);
+            this.setMaterialPassMeshBufferStates(context, drawItem.mesh());
     }
 
     const MeshFrameHeapSlots baseFrameHeapSlots = ResolveMeshFrameHeapSlots(context.frameBindings);
@@ -350,8 +350,8 @@ void MaterialPassDrawRecorder::renderMeshMaterialPassDrawItems(mut MaterialPassD
 
     GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeMeshDispatch, this.m_graphics.getDevice(), context.commandList);
     for(in MaterialPassDrawItem drawItem : drawItems){
-        in MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
-        in MaterialPassPipelineResourceSnapshot pipelineResources = drawItem.pipelineResources;
+        in MaterialPassMeshResourceSnapshot mesh = drawItem.mesh();
+        in MaterialPassPipelineResourceSnapshot pipelineResources = drawItem.pipeline();
         assert(this.materialPassDrawResourcesReady(mesh, context.frameBindings));
         assert(pipelineResources.meshletPipeline.valid());
 
@@ -378,7 +378,7 @@ void MaterialPassDrawRecorder::generateComputeMaterialPassDrawItems(mut Material
     this.setMaterialPassFrameBufferStates(context);
     if(!context.materialGeometryStatesGraphOwned){
         for(in MaterialPassDrawItem drawItem : drawItems)
-            this.setMaterialPassMeshBufferStates(context, drawItem.meshResources);
+            this.setMaterialPassMeshBufferStates(context, drawItem.mesh());
     }
 
     const MeshFrameHeapSlots baseFrameHeapSlots = ResolveMeshFrameHeapSlots(context.frameBindings);
@@ -388,8 +388,8 @@ void MaterialPassDrawRecorder::generateComputeMaterialPassDrawItems(mut Material
 
     GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeMeshDispatch, this.m_graphics.getDevice(), context.commandList);
     for(in MaterialPassDrawItem drawItem : drawItems){
-        in MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
-        in MaterialPassPipelineResourceSnapshot pipelineResources = drawItem.pipelineResources;
+        in MaterialPassMeshResourceSnapshot mesh = drawItem.mesh();
+        in MaterialPassPipelineResourceSnapshot pipelineResources = drawItem.pipeline();
         assert(this.materialPassDrawResourcesReady(mesh, context.frameBindings));
         assert(pipelineResources.computePipeline.valid());
         assert(mesh.emulationVertexHeapHandle.valid());
@@ -414,7 +414,7 @@ void MaterialPassDrawRecorder::renderComputeMaterialPassDrawItemsRasterOnly(mut 
     this.setMaterialPassFrameBufferStates(context);
     if(!context.materialGeometryStatesGraphOwned){
         for(in MaterialPassDrawItem drawItem : drawItems)
-            this.setMaterialPassMeshBufferStates(context, drawItem.meshResources);
+            this.setMaterialPassMeshBufferStates(context, drawItem.mesh());
     }
 
     const MeshFrameHeapSlots baseFrameHeapSlots = ResolveMeshFrameHeapSlots(context.frameBindings);
@@ -429,8 +429,8 @@ void MaterialPassDrawRecorder::renderComputeMaterialPassDrawItemsRasterOnly(mut 
 
     GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeRaster, this.m_graphics.getDevice(), context.commandList);
     for(in MaterialPassDrawItem drawItem : drawItems){
-        in MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
-        in MaterialPassPipelineResourceSnapshot pipelineResources = drawItem.pipelineResources;
+        in MaterialPassMeshResourceSnapshot mesh = drawItem.mesh();
+        in MaterialPassPipelineResourceSnapshot pipelineResources = drawItem.pipeline();
         assert(this.materialPassDrawResourcesReady(mesh, context.frameBindings));
         assert(pipelineResources.emulationPipeline.valid());
         assert(mesh.emulationVertexBuffer.valid());
@@ -461,12 +461,12 @@ void MaterialPassDrawRecorder::renderComputeMaterialPassDrawItems(mut MaterialPa
     this.setMaterialPassFrameBufferStates(context);
     if(!context.materialGeometryStatesGraphOwned){
         for(in MaterialPassDrawItem drawItem : drawItems)
-            this.setMaterialPassMeshBufferStates(context, drawItem.meshResources);
+            this.setMaterialPassMeshBufferStates(context, drawItem.mesh());
     }
 
     for(in MaterialPassDrawItem drawItem : drawItems){
-        in MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
-        in MaterialPassPipelineResourceSnapshot pipelineResources = drawItem.pipelineResources;
+        in MaterialPassMeshResourceSnapshot mesh = drawItem.mesh();
+        in MaterialPassPipelineResourceSnapshot pipelineResources = drawItem.pipeline();
         assert(this.materialPassDrawResourcesReady(mesh, context.frameBindings));
         assert(pipelineResources.computePipeline.valid());
         assert(pipelineResources.emulationPipeline.valid());
@@ -483,8 +483,10 @@ void MaterialPassDrawRecorder::renderComputeMaterialPassDrawItems(mut MaterialPa
 
 b8 MaterialPassDrawRecorder::prepareIndexedMaterialPassResourceBindings(in Span<MaterialPassDrawItem> drawItems){
     for(in MaterialPassDrawItem draw : drawItems){
-        in ObjectGeometryCacheSnapshot cache = draw.meshResources.objectGeometryCache;
-        if(!draw.meshResources.valid() || !draw.pipelineResources.indexedPipeline.valid() || !cache.valid() || cache.decoderPipeline != draw.pipelineResources.objectGeometryDecodePipeline)
+        in MaterialPassMeshResourceSnapshot mesh = draw.mesh();
+        in MaterialPassPipelineResourceSnapshot pipelineResources = draw.pipeline();
+        in ObjectGeometryCacheSnapshot cache = mesh.objectGeometryCache;
+        if(!mesh.valid() || !pipelineResources.indexedPipeline.valid() || !cache.valid() || cache.decoderPipeline != pipelineResources.objectGeometryDecodePipeline)
             return false;
     }
     return true;
@@ -510,9 +512,9 @@ void MaterialPassDrawRecorder::renderIndexedMaterialPassDrawItems(mut MaterialPa
 
     GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeRaster, this.m_graphics.getDevice(), context.commandList);
     for(in MaterialPassDrawItem drawItem : drawItems){
-        in MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
+        in MaterialPassMeshResourceSnapshot mesh = drawItem.mesh();
         in ObjectGeometryCacheSnapshot cache = mesh.objectGeometryCache;
-        in GraphicsPipelineHandle pipeline = drawItem.pipelineResources.indexedPipeline;
+        in GraphicsPipelineHandle pipeline = drawItem.pipeline().indexedPipeline;
         if(pipeline != lastPipeline || cache.buffer != lastBuffer || cache.indexByteOffset != lastIndexByteOffset){
             GraphicsState state;
             state.setPipeline(pipeline.deref());
@@ -553,8 +555,8 @@ b8 MaterialPassDrawRecorder::prepareMaterialPassResourceBindingsImpl(in Span<Mat
         if(!ready)
             break;
 
-        in MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
-        in MaterialPassPipelineResourceSnapshot pipelineResources = drawItem.pipelineResources;
+        in MaterialPassMeshResourceSnapshot mesh = drawItem.mesh();
+        in MaterialPassPipelineResourceSnapshot pipelineResources = drawItem.pipeline();
 
         if(!computeEmulation){
             ready = pipelineResources.meshletPipeline.valid() && mesh.valid();
@@ -743,9 +745,9 @@ b8 RendererMaterialSystem::createObjectGeometryPipelineResources(mut MaterialPip
 }
 
 b8 RendererMaterialSystem::recordObjectGeometryDecode(in MaterialPassDrawContext context, in MaterialPassDrawItem drawItem){
-    in MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
+    in MaterialPassMeshResourceSnapshot mesh = drawItem.mesh();
     in ObjectGeometryCacheSnapshot cache = mesh.objectGeometryCache;
-    in ComputePipelineHandle pipeline = drawItem.pipelineResources.objectGeometryDecodePipeline;
+    in ComputePipelineHandle pipeline = drawItem.pipeline().objectGeometryDecodePipeline;
     if(!pipeline.valid() || pipeline != cache.decoderPipeline || !cache.valid() || !this.m_drawRecorder.materialPassDrawResourcesReady(mesh, context.frameBindings))
         return false;
     mut CommandList commandList = context.commandList;

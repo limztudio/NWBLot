@@ -75,13 +75,16 @@ NwbShadowInstanceStatus nwbSwShadowInstanceOptics(const uint instanceIndex, cons
     const float3 origin = nwbSwBvhTransformPoint(instance, worldOrigin);
     const float3 direction = nwbSwBvhTransformVector(instance, worldDirection);
     const float3 invDir = nwbSwShadowSafeInvDir(direction);
+    const float3 minBias = (-NWB_SW_SHADOW_AABB_PADDING - origin) * invDir;
+    const float3 maxBias = (NWB_SW_SHADOW_AABB_PADDING - origin) * invDir;
+    const NwbSwShadowWoopRay woopRay = nwbSwShadowMakeWoopRay(origin, direction);
 
     uint stack[NWB_SW_SHADOW_MESH_STACK_SIZE];
     stack[0u] = 0u;
     uint stackPointer = 0u;
 
     NwbBvhNode node = nwbHeapBvhNodes(material.nodeSlot)[0u];
-    if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, node.aabbMin, node.aabbMax))
+    if(!nwbSwShadowRayAabbFma(invDir, minBias, maxBias, tMin, tMax, node.aabbMin, node.aabbMax))
         return NwbShadowInstanceStatus::NoIntersection;
 
     while(true){
@@ -92,7 +95,7 @@ NwbShadowInstanceStatus nwbSwShadowInstanceOptics(const uint instanceIndex, cons
             const float3 v0 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
             const float3 v1 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
             const float3 v2 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-            const NwbSwShadowTriangleHit triangleHit = nwbSwShadowRayTriangle(origin, direction, tMin, tMax, v0, v1, v2);
+            const NwbSwShadowTriangleHit triangleHit = nwbSwShadowRayTriangleWoop(woopRay, tMin, tMax, v0, v1, v2);
             if(triangleHit.hit){
                 if(!transparent)
                     return NwbShadowInstanceStatus::OpaqueBlocked;
@@ -133,8 +136,8 @@ NwbShadowInstanceStatus nwbSwShadowInstanceOptics(const uint instanceIndex, cons
             const uint right = nwbBvhNodeRightChildIndex(node);
             const NwbBvhNode leftNode = nwbHeapBvhNodes(material.nodeSlot)[left];
             const NwbBvhNode rightNode = nwbHeapBvhNodes(material.nodeSlot)[right];
-            const float tLeft = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, leftNode.aabbMin, leftNode.aabbMax);
-            const float tRight = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, rightNode.aabbMin, rightNode.aabbMax);
+            const float tLeft = nwbSwShadowRayAabbEntryTFma(invDir, minBias, maxBias, tMin, tMax, leftNode.aabbMin, leftNode.aabbMax);
+            const float tRight = nwbSwShadowRayAabbEntryTFma(invDir, minBias, maxBias, tMin, tMax, rightNode.aabbMin, rightNode.aabbMax);
             const bool leftMiss = (tLeft >= NWB_SW_SHADOW_AABB_MISS);
             const bool rightMiss = (tRight >= NWB_SW_SHADOW_AABB_MISS);
 
@@ -182,6 +185,8 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
         return;
 
     const float3 invDir = nwbSwShadowSafeInvDir(direction);
+    const float3 minBias = (-NWB_SW_SHADOW_AABB_PADDING - origin) * invDir;
+    const float3 maxBias = (NWB_SW_SHADOW_AABB_PADDING - origin) * invDir;
 
     uint stack[NWB_SW_SHADOW_SCENE_STACK_SIZE];
     stack[0u] = 0u;
@@ -192,7 +197,7 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
     if(!nwbBvhNodeContainsTransparentOccluder(node))
         return;
 #endif
-    if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, node.aabbMin, node.aabbMax))
+    if(!nwbSwShadowRayAabbFma(invDir, minBias, maxBias, tMin, tMax, node.aabbMin, node.aabbMax))
         return;
 
     while(true){
@@ -217,19 +222,19 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
             const float tLeft =
 #if NWB_SW_SHADOW_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
                 leftTransparent
-                    ? nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, leftNode.aabbMin, leftNode.aabbMax)
+                    ? nwbSwShadowRayAabbEntryTFma(invDir, minBias, maxBias, tMin, tMax, leftNode.aabbMin, leftNode.aabbMax)
                     : NWB_SW_SHADOW_AABB_MISS
 #else
-                nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, leftNode.aabbMin, leftNode.aabbMax)
+                nwbSwShadowRayAabbEntryTFma(invDir, minBias, maxBias, tMin, tMax, leftNode.aabbMin, leftNode.aabbMax)
 #endif
             ;
             const float tRight =
 #if NWB_SW_SHADOW_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
                 rightTransparent
-                    ? nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, rightNode.aabbMin, rightNode.aabbMax)
+                    ? nwbSwShadowRayAabbEntryTFma(invDir, minBias, maxBias, tMin, tMax, rightNode.aabbMin, rightNode.aabbMax)
                     : NWB_SW_SHADOW_AABB_MISS
 #else
-                nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, rightNode.aabbMin, rightNode.aabbMax)
+                nwbSwShadowRayAabbEntryTFma(invDir, minBias, maxBias, tMin, tMax, rightNode.aabbMin, rightNode.aabbMax)
 #endif
             ;
             const bool leftMiss = (tLeft >= NWB_SW_SHADOW_AABB_MISS);

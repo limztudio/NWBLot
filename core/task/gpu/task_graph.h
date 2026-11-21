@@ -81,6 +81,7 @@ private:
 
     private:
         GpuTaskGraph& m_graph;
+        u32 m_ownerThreadId = 0u;
         b8 m_valid = false;
         b8 m_isRootWriter = false;
     };
@@ -547,6 +548,7 @@ private:
 
 private:
     static constexpr usize s_ReaderStripeCount = 16u;
+    static constexpr u64 s_AdmissionWriterOwnerMask = 0xffffffffull;
     static constexpr u64 s_AdmissionReaderStripesDirtyBit = 1ull << 59u;
     static constexpr u64 s_AdmissionWriterBit = 1ull << 60u;
     static constexpr u64 s_AdmissionWriterMask = s_AdmissionWriterBit;
@@ -784,9 +786,15 @@ private:
     [[nodiscard]] u32 findExternalCompletionIdentity(const Name& identity)const noexcept;
     void preparePipelineIndexes(const PipelinePointerKey& pendingPointer);
     void prepareExternalCompletionIndex();
-    [[nodiscard]] Expected<GpuGraphResourceId> appendResourceWithinMutation(const GpuGraphResourceDesc& desc, const ResourceQueueAdmissionSnapshot* queueAdmission, const ResourceBinding& binding, const DeclarationMutationScope& mutationAccess);
+    [[nodiscard]] Expected<GpuGraphResourceId> appendResourceWithinMutation(
+        const GpuGraphResourceDesc& desc,
+        const ResourceQueueAdmissionSnapshot* queueAdmission,
+        const ResourceBinding& binding,
+        const DeclarationMutationScope& mutationAccess,
+        const GpuGraphResourceImportIndex::ResourceLookupHint* lookupHint = nullptr
+    );
     [[nodiscard]] Expected<GpuGraphResourceVersionId> appendResourceVersion(const GpuGraphResourceVersionDesc& desc);
-    [[nodiscard]] Expected<GpuGraphResourceSetId> appendResourceSet(const GpuGraphResourceSetDesc& desc);
+    [[nodiscard]] Expected<GpuGraphResourceSetId> appendResourceSet(const GpuGraphResourceSetDesc& desc, const GpuGraphResourceImportIndex::ResourceSetLookupHint* lookupHint = nullptr);
     [[nodiscard]] Expected<GpuGraphPipelineId> appendPipeline(const GpuGraphPipelineDesc& desc, const PipelineBinding& binding);
     [[nodiscard]] Expected<GpuExternalCompletionId> appendExternalCompletion(const GpuExternalCompletionDesc& desc);
     [[nodiscard]] const GpuUploadBlobNode* findUploadBlob(const GpuUploadBlobId& blob)const noexcept;
@@ -816,8 +824,8 @@ private:
 private:
     GraphicsArena& m_arena;
     Alloc::ScratchArena m_declarationScratch;
-    mutable Atomic<u32> m_writerOwnerThread{ 0u };
-    mutable u32 m_writerRecursionDepth = 0u;
+    u32 m_declarationAdmissionPadding0 = 0u;
+    u32 m_declarationAdmissionPadding1 = 0u;
     mutable Futex m_lifecycleMutex;
     GraphicsVector<GpuTaskNode> m_tasks;
     GraphicsVector<GpuTaskId> m_dependencies;
@@ -859,6 +867,7 @@ private:
     alignas(128) mutable Atomic<u64> m_declarationAdmissionState{ 0u };
     u32 m_publishedTaskCount = 0u;
     u32 m_publishedResourceCount = 0u;
+    mutable u32 m_writerRecursionDepth = 0u;
     mutable Array<DeclarationReaderStripe, s_ReaderStripeCount> m_readerStripes{};
     mutable u32 m_activeDiscardNotificationCount = 0u;
     mutable u32 m_exceptionRecordingClaimWaiters = 0u;
@@ -883,16 +892,17 @@ inline GpuTaskGraph::DeclarationMutationScope::DeclarationMutationScope(GpuTaskG
     static_assert(Atomic<u64>::is_always_lock_free, "GpuTaskGraph declaration admission atomic must remain lock-free");
 
     const u32 threadId = GpuTaskGraph::CachedCurrentThreadId();
-    if(m_graph.m_writerOwnerThread.load(MemoryOrder::relaxed) == threadId){
+    const u64 desired = GpuTaskGraph::s_AdmissionWriterBit | static_cast<u64>(threadId);
+    u64 expected = m_graph.m_declarationAdmissionState.load(MemoryOrder::relaxed);
+    if((expected & (GpuTaskGraph::s_AdmissionWriterBit | GpuTaskGraph::s_AdmissionWriterOwnerMask)) == desired){
         ++m_graph.m_writerRecursionDepth;
         m_valid = true;
         return;
     }
 
-    u64 expected = 0u;
-    if(m_graph.m_declarationAdmissionState.compare_exchange_strong(expected, GpuTaskGraph::s_AdmissionWriterBit, MemoryOrder::acquire, MemoryOrder::acquire)){
-        m_graph.m_writerOwnerThread.store(threadId, MemoryOrder::relaxed);
+    if(expected == 0u && m_graph.m_declarationAdmissionState.compare_exchange_strong(expected, desired, MemoryOrder::acquire, MemoryOrder::acquire)){
         m_graph.m_writerRecursionDepth = 1u;
+        m_ownerThreadId = threadId;
         m_valid = true;
         m_isRootWriter = true;
         return;
@@ -913,8 +923,7 @@ inline GpuTaskGraph::DeclarationMutationScope::~DeclarationMutationScope()noexce
     }
 
     m_graph.m_writerRecursionDepth = 0u;
-    m_graph.m_writerOwnerThread.store(0u, MemoryOrder::relaxed);
-    u64 expected = GpuTaskGraph::s_AdmissionWriterBit;
+    u64 expected = GpuTaskGraph::s_AdmissionWriterBit | static_cast<u64>(m_ownerThreadId);
     if(!m_graph.m_declarationAdmissionState.compare_exchange_strong(expected, 0u, MemoryOrder::release, MemoryOrder::relaxed))
         releaseSlow();
 }

@@ -134,6 +134,20 @@ b8 DescriptorBufferManager::initialize(){
     if(!initializeSegment(m_samplerSegment, __hidden_vulkan_resource_bindings_descriptor_buffer::s_SamplerSegmentDebugName, *samplerCapacityBytes))
         return failInitialization();
 
+    if(!m_bufferFormatFeaturesCached && m_context.physicalDevice != VK_NULL_HANDLE && m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties){
+        for(u32 formatIndex = 0u; formatIndex < Format::Count; ++formatIndex){
+            const VkFormat vkFormat = VulkanDetail::ConvertFormat(static_cast<Format::Enum>(formatIndex));
+            if(vkFormat == VK_FORMAT_UNDEFINED){
+                m_cachedBufferFormatFeatures[formatIndex] = 0u;
+                continue;
+            }
+            VkFormatProperties formatProperties{};
+            m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, vkFormat, &formatProperties);
+            m_cachedBufferFormatFeatures[formatIndex] = formatProperties.bufferFeatures;
+        }
+        m_bufferFormatFeaturesCached = true;
+    }
+
     m_bindingGeneration = m_nextBindingGeneration;
     m_nextBindingGeneration = m_bindingGeneration == UINT64_MAX ? 0u : m_bindingGeneration + 1u;
     m_enabled = true;
@@ -162,6 +176,10 @@ u32 DescriptorBufferManager::getDescriptorSize(const VkDescriptorType descriptor
     ScopedLock lifecycleLock(m_lifecycleMutex);
 
     return VulkanDetail::GetDescriptorSize(m_context, m_enabled, descriptorType);
+}
+
+u32 DescriptorBufferManager::getImmutableDescriptorSize(const VkDescriptorType descriptorType)const noexcept{
+    return VulkanDetail::GetDescriptorSize(m_context, true, descriptorType);
 }
 
 u32 DescriptorBufferManager::getOffsetAlignmentBytes()const noexcept{

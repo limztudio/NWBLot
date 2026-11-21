@@ -38,7 +38,8 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskResourceRange& range,
     const TrackedCompiledResourceState& previousState,
     const GpuTaskResourceUse& use,
-    const GpuPhysicalQueueInfo& destinationQueue
+    const GpuPhysicalQueueInfo& destinationQueue,
+    const ResourceShareCacheEntry* precomputedShareInfo = nullptr
 )noexcept;
 
 [[nodiscard]] ResourceStates::Mask ReadStateSourceSnapshotState(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphResourceView& resource, ResourceStates::Mask state)noexcept;

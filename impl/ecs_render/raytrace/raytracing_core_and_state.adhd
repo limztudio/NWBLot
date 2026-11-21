@@ -347,6 +347,9 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources(){
     this.m_rayTracingState.sceneBvh.m_sceneSwBvhStaticSceneHashValid = false;
     this.m_rayTracingState.shadow.m_hwShadowMaterialContextHashValid = false;
     this.m_rayTracingState.shadow.m_swShadowMaterialContextHashValid = false;
+    this.m_rayTracingState.sceneBvh.m_acceptedRayTraceMaterialContextSlotsValid = false;
+    this.m_rayTracingState.sceneBvh.m_acceptedCsgTraceContextValid = false;
+    this.m_rayTracingState.caustics.m_acceptedCausticEmissionTargetsValid = false;
     this.m_rayTracingState.surfelGi.m_surfelEnabled = false;
     this.m_rayTracingState.surfelGi.m_surfelUseHwTrace = false;
     this.m_sceneGatherScratch.clear();

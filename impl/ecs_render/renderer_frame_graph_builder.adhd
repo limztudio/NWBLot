@@ -223,6 +223,19 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     GpuTaskId shadowPrepareHandoffTask = this.m_shadowPrepareGraph.m_deferredShadowPrepareTask;
     if(this.m_shadowPrepareGraph.m_deferredShadowPrepareAccelStructFinalizeTask.valid())
         shadowPrepareHandoffTask = this.m_shadowPrepareGraph.m_deferredShadowPrepareAccelStructFinalizeTask;
+    GpuTaskId traceContextPriorReadersDrained = this.m_shadowPrepareGraph.m_rayTraceMaterialContextSlotsUploadTask;
+    if(!traceContextPriorReadersDrained.valid())
+        traceContextPriorReadersDrained = this.m_shadowPrepareGraph.m_csgTraceContextUploadTask;
+    if(!traceContextPriorReadersDrained.valid())
+        traceContextPriorReadersDrained = this.m_shadowPrepareGraph.m_causticEmissionTargetsUploadTask;
+    if(!traceContextPriorReadersDrained.valid())
+        traceContextPriorReadersDrained = this.m_shadowPrepareGraph.m_surfelFrameConstantsUploadTask;
+    if(!traceContextPriorReadersDrained.valid())
+        traceContextPriorReadersDrained = this.m_shadowPrepareGraph.m_shadowInstanceMaterialUploadTask;
+    if(!traceContextPriorReadersDrained.valid())
+        traceContextPriorReadersDrained = this.m_shadowPrepareGraph.m_sceneBvhNodesUploadTask;
+    if(!traceContextPriorReadersDrained.valid())
+        traceContextPriorReadersDrained = this.m_shadowPrepareGraph.m_deferredShadowPrepareTask;
 
     const MeshViewBufferUpload meshViewUpload = this.m_meshSystem.prepareMeshViewBufferUpload(meshViewAspectRatio);
     ReflectionSceneContentStamp reflectionContentStamp;
@@ -289,7 +302,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const RayTracingSceneGraphResources sceneResources = this.m_raytracingSystem.snapshotSceneGraphResources();
     RayTracingSceneGraphReads sceneReads;
     if(ShouldImportSharedHardwareOpticalSceneReads(rayTracingShadowVisibilityPlan.hardwareTransparentTrace, declaresHardwareCaustics, causticOpticalReader)){
-        auto sceneReadsResult = ImportRayTracingSceneGraphReads(sceneResources, this.m_raytracingSystem.sceneTlasBackingInitialState(), this.m_shadowPrepareGraph.m_rayTraceMaterialContextSlotsUploadTask, this.m_deferredLightingTaskGraph);
+        auto sceneReadsResult = ImportRayTracingSceneGraphReads(sceneResources, this.m_raytracingSystem.sceneTlasBackingInitialState(), traceContextPriorReadersDrained, this.m_deferredLightingTaskGraph);
         if(!sceneReadsResult.has_value()){
             warning("RendererSystem: could not import shared hardware optical scene reads");
             return;
@@ -301,7 +314,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     if(causticOpticalReader && declaresHardwareCaustics)
         causticOpticalScene = sceneReads.uses[sceneReads.uses.size() - 1u].resource;
     else if(causticOpticalReader){
-        const auto optical = ImportRayTracingOpticalSceneBuffer(sceneResources.opticalScene, this.m_shadowPrepareGraph.m_rayTraceMaterialContextSlotsUploadTask, this.m_deferredLightingTaskGraph);
+        const auto optical = ImportRayTracingOpticalSceneBuffer(sceneResources.opticalScene, traceContextPriorReadersDrained, this.m_deferredLightingTaskGraph);
         if(!optical.has_value()){
             warning("RendererSystem: could not import software caustic optical scene reads");
             return;
@@ -544,7 +557,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     reflectionInputs.lights = graphResources.lights;
     reflectionInputs.hardwareTraceGeometrySet = traceGeometry.hardwareTraceGeometrySet;
     reflectionInputs.traceMaterialSampledTextureSet = traceGeometry.traceMaterialSampledTextureSet;
-    reflectionInputs.traceContextUploadTask = this.m_shadowPrepareGraph.m_rayTraceMaterialContextSlotsUploadTask;
+    reflectionInputs.traceContextUploadTask = traceContextPriorReadersDrained;
     reflectionInputs.lightingTask = this.m_deferredLightingTask;
     auto reflectionResolveResult = reflectionResolve.declare(reflectionInputs, sceneReads);
     if(!reflectionResolveResult.has_value()){
@@ -575,7 +588,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     refractionInputs.avboitForegroundExtinction = graphResources.avboitForegroundExtinction;
     refractionInputs.hardwareTraceGeometrySet = traceGeometry.hardwareTraceGeometrySet;
     refractionInputs.traceMaterialSampledTextureSet = traceGeometry.traceMaterialSampledTextureSet;
-    refractionInputs.traceContextUploadTask = this.m_shadowPrepareGraph.m_rayTraceMaterialContextSlotsUploadTask;
+    refractionInputs.traceContextUploadTask = traceContextPriorReadersDrained;
     refractionInputs.reflectionCompletionTask = reflectionResolveResult.value().reflectionGraph.completion;
     refractionInputs.avboitFinalTask = avboitStageResult.value();
     refractionInputs.surfelGiTask = this.m_surfelGiGraph.m_deferredSurfelGiTask;

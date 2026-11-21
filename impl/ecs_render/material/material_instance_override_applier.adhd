@@ -4,6 +4,7 @@
 
 #include <impl/assets_material/field_types.adhd>
 #include <impl/ecs_render/components.adhd>
+#include <impl/ecs_render/material/instance_override_fields.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -105,29 +106,21 @@ class MaterialInstanceOverrideApplier{
         return true;
     }
 
-    private Expected<u32> resolveByteOffset(
+    private Expected<u32> validateResolvedFieldByteOffset(
         in u32 entityId,
         in Name materialName,
-        in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
-        in Span<MaterialTypedLayoutField> typedLayoutFields,
         in MaterialInstanceParameter parameter,
+        in b8 mutableBlock,
+        in MaterialLayoutFieldType fieldType,
+        in u32 fieldOffset,
+        in u32 blockByteBegin,
         in usize mutableByteCapacity
     )const{
-        if(parameter.blockName == s_NameNone || parameter.fieldName == s_NameNone){
-            error("RendererSystem: material instance override for entity {} has an invalid parameter name", entityId);
-            return MakeUnexpected(Failure());
-        }
-
-        const Expected<MaterialInstanceOverrideField> resolvedField = this.resolveField(entityId, materialName, typedLayoutBlocks, typedLayoutFields, parameter);
-        if(!resolvedField.has_value())
-            return MakeUnexpected(Failure());
-
-        const MaterialTypedLayoutField field = resolvedField.value().field;
-        if(!resolvedField.value().mutableBlock){
+        if(!mutableBlock){
             error("RendererSystem: material instance override '{}' for entity {} targets material-constant storage", parameter.parameterName.resolvedText(), entityId);
             return MakeUnexpected(Failure());
         }
-        if(field.fieldType != parameter.fieldType){
+        if(fieldType != parameter.fieldType){
             error(
                 "RendererSystem: material instance override '{}' for entity {} type does not match material '{}'"
                 , parameter.parameterName.resolvedText()
@@ -137,15 +130,50 @@ class MaterialInstanceOverrideApplier{
             return MakeUnexpected(Failure());
         }
 
-        assert(field.offset <= 0xFFFFFFFFu - resolvedField.value().blockByteBegin);
-        const u32 fieldByteOffset = resolvedField.value().blockByteBegin + field.offset;
-        const u32 fieldByteSize = MaterialLayoutFieldByteSize(field.fieldType);
+        assert(fieldOffset <= 0xFFFFFFFFu - blockByteBegin);
+        const u32 fieldByteOffset = blockByteBegin + fieldOffset;
+        const u32 fieldByteSize = MaterialLayoutFieldByteSize(fieldType);
         assert(fieldByteSize != 0u);
         if(cast<usize>(fieldByteOffset) > mutableByteCapacity || cast<usize>(fieldByteSize) > mutableByteCapacity - cast<usize>(fieldByteOffset)){
             error("RendererSystem: material instance override '{}' for entity {} exceeds mutable storage for material '{}'", parameter.parameterName.resolvedText(), entityId, materialName.resolvedText());
             return MakeUnexpected(Failure());
         }
         return fieldByteOffset;
+    }
+
+    private Expected<u32> resolveByteOffsetWithLookup(
+        in u32 entityId,
+        in Name materialName,
+        in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
+        in Span<MaterialTypedLayoutField> typedLayoutFields,
+        in HashMap<MaterialOverrideFieldKey, MaterialOverrideFieldEntry> fieldLookup,
+        in MaterialInstanceParameter parameter,
+        in usize mutableByteCapacity
+    )const{
+        if(parameter.blockName == s_NameNone || parameter.fieldName == s_NameNone){
+            error("RendererSystem: material instance override for entity {} has an invalid parameter name", entityId);
+            return MakeUnexpected(Failure());
+        }
+
+        if(!fieldLookup.empty()){
+            MaterialOverrideFieldKey key;
+            key.blockName = parameter.blockName;
+            key.fieldName = parameter.fieldName;
+            const auto found = fieldLookup.find(key);
+            if(found == fieldLookup.end()){
+                error("RendererSystem: material instance override '{}' for entity {} is not declared by material '{}'", parameter.parameterName.resolvedText(), entityId, materialName.resolvedText());
+                return MakeUnexpected(Failure());
+            }
+            const MaterialOverrideFieldEntry entry = found.value();
+            return this.validateResolvedFieldByteOffset(entityId, materialName, parameter, entry.mutableBlock, entry.fieldType, entry.byteOffset, 0u, mutableByteCapacity);
+        }
+
+        const Expected<MaterialInstanceOverrideField> resolvedField = this.resolveField(entityId, materialName, typedLayoutBlocks, typedLayoutFields, parameter);
+        if(!resolvedField.has_value())
+            return MakeUnexpected(Failure());
+
+        const MaterialTypedLayoutField field = resolvedField.value().field;
+        return this.validateResolvedFieldByteOffset(entityId, materialName, parameter, resolvedField.value().mutableBlock, field.fieldType, field.offset, resolvedField.value().blockByteBegin, mutableByteCapacity);
     }
 
     private Array<u8, 16> unpackBytes(in u32x4u value)const{
@@ -180,12 +208,13 @@ class MaterialInstanceOverrideApplier{
             inOutMutableTypedBytes[baseOffset + byteIndex] = valueBytes[byteIndex];
     }
 
-    public b8 apply(
+    public b8 applyWithLookup(
         in u32 entityId,
         in Name materialName,
         in Name materialInterface,
         in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
         in Span<MaterialTypedLayoutField> typedLayoutFields,
+        in HashMap<MaterialOverrideFieldKey, MaterialOverrideFieldEntry> fieldLookup,
         in MaterialInstanceComponent materialInstance,
         mut Span<u8> inOutMutableTypedBytes
     )const{
@@ -193,11 +222,12 @@ class MaterialInstanceOverrideApplier{
             return false;
 
         for(in MaterialInstanceParameter parameter : materialInstance.overrides){
-            const Expected<u32> fieldByteOffset = this.resolveByteOffset(
+            const Expected<u32> fieldByteOffset = this.resolveByteOffsetWithLookup(
                 entityId,
                 materialName,
                 typedLayoutBlocks,
                 typedLayoutFields,
+                fieldLookup,
                 parameter,
                 inOutMutableTypedBytes.size()
             );
@@ -212,6 +242,28 @@ class MaterialInstanceOverrideApplier{
         }
 
         return true;
+    }
+
+    public b8 apply(
+        in u32 entityId,
+        in Name materialName,
+        in Name materialInterface,
+        in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
+        in Span<MaterialTypedLayoutField> typedLayoutFields,
+        in MaterialInstanceComponent materialInstance,
+        mut Span<u8> inOutMutableTypedBytes
+    )const{
+        const HashMap<MaterialOverrideFieldKey, MaterialOverrideFieldEntry> emptyLookup = HashMap<MaterialOverrideFieldKey, MaterialOverrideFieldEntry>();
+        return this.applyWithLookup(
+            entityId,
+            materialName,
+            materialInterface,
+            typedLayoutBlocks,
+            typedLayoutFields,
+            emptyLookup,
+            materialInstance,
+            inOutMutableTypedBytes
+        );
     }
 
     public void patchConstantResourceSlot(

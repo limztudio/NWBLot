@@ -262,13 +262,18 @@ b8 SoftwareBvhBuilder::bvhBitonicSort(mut CommandList commandList, in u32 elemen
     commandList.setBufferState(payloadBuffer, ResourceStates::UnorderedAccess, false, sortRange);
     commandList.commitBarriers();
 
+    ComputeState computeState;
+    computeState.setPipeline(this.m_state.m_bvhSortPipeline.deref());
+    commandList.setComputeState(computeState);
+    this.m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, this.m_state.m_bvhSortPipeline.deref());
+
+    const u32 globalGroupCount = groupCount >> 1u;
     for(in BvhSortPushConstants pushConstants : sortSteps){
-        ComputeState computeState;
-        computeState.setPipeline(this.m_state.m_bvhSortPipeline.deref());
-        commandList.setComputeState(computeState);
-        this.m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, this.m_state.m_bvhSortPipeline.deref());
         commandList.setPushConstants(pushConstants);
-        commandList.dispatch(groupCount, 1u, 1u);
+        if(pushConstants.mode == s_BvhSortModeGlobal && globalGroupCount != 0u)
+            commandList.dispatch(globalGroupCount, 1u, 1u);
+        else
+            commandList.dispatch(groupCount, 1u, 1u);
         commandList.setBufferState(keysBuffer, ResourceStates::UnorderedAccess, false, sortRange);
         commandList.setBufferState(payloadBuffer, ResourceStates::UnorderedAccess, false, sortRange);
         commandList.commitBarriers();

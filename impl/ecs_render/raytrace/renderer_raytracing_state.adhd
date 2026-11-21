@@ -59,6 +59,16 @@ class RtSceneBvhState{
     public b8 m_capabilityLogged = false;
     public b8 m_bvhSortPipelineFailed = false;
     public b8 m_bvhBuildPipelineFailed = false;
+    public u64 m_acceptedRayTraceMaterialContextSlotsWord0 = 0u;
+    public u64 m_acceptedRayTraceMaterialContextSlotsWord1 = 0u;
+    public u64 m_acceptedRayTraceMaterialContextSlotsWord2 = 0u;
+    public u64 m_acceptedRayTraceMaterialContextSlotsWord3 = 0u;
+    public usize m_acceptedRayTraceMaterialContextSlotsBufferIdentity = 0u;
+    public b8 m_acceptedRayTraceMaterialContextSlotsValid = false;
+    public u64 m_acceptedCsgTraceContextHash = 0u;
+    public usize m_acceptedCsgTraceContextByteSize = 0u;
+    public usize m_acceptedCsgTraceContextBufferIdentity = 0u;
+    public b8 m_acceptedCsgTraceContextValid = false;
 }
 
 
@@ -181,12 +191,26 @@ class RendererRayTracingState : NoCopy{
         this.sceneBvh.m_rayTraceMaterialContextSlotsHeapHandle = GpuDescriptorHandleInvalid();
         this.sceneBvh.m_csgTraceContextBuffer.reset();
         this.sceneBvh.m_csgTraceContextHeapHandle = GpuDescriptorHandleInvalid();
+        this.sceneBvh.m_acceptedRayTraceMaterialContextSlotsWord0 = 0u;
+        this.sceneBvh.m_acceptedRayTraceMaterialContextSlotsWord1 = 0u;
+        this.sceneBvh.m_acceptedRayTraceMaterialContextSlotsWord2 = 0u;
+        this.sceneBvh.m_acceptedRayTraceMaterialContextSlotsWord3 = 0u;
+        this.sceneBvh.m_acceptedRayTraceMaterialContextSlotsBufferIdentity = 0u;
+        this.sceneBvh.m_acceptedRayTraceMaterialContextSlotsValid = false;
+        this.sceneBvh.m_acceptedCsgTraceContextHash = 0u;
+        this.sceneBvh.m_acceptedCsgTraceContextByteSize = 0u;
+        this.sceneBvh.m_acceptedCsgTraceContextBufferIdentity = 0u;
+        this.sceneBvh.m_acceptedCsgTraceContextValid = false;
         for(mut QueueSubmissionToken token : this.shadow.m_rayTraceContextReadSubmissionTokens)
             token = QueueSubmissionToken();
         this.sceneBvh.m_sceneBvhNodeCapacity = 0u;
         this.sceneBvh.m_sceneInstanceCapacity = 0u;
         this.sceneBvh.m_sceneBvhInstanceCount = 0u;
         this.caustics.m_causticEmissionTargets.reset();
+        this.caustics.m_acceptedCausticEmissionTargetsHash = 0u;
+        this.caustics.m_acceptedCausticEmissionTargetsByteSize = 0u;
+        this.caustics.m_acceptedCausticEmissionTargetsBufferIdentity = 0u;
+        this.caustics.m_acceptedCausticEmissionTargetsValid = false;
         this.caustics.m_causticRefractiveInstanceCount = 0u;
         this.caustics.m_causticLightCount = 0u;
         this.caustics.m_causticTargetBoundsMin = f32x4(0.0f, 0.0f, 0.0f, 0.0f);

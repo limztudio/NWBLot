@@ -36,6 +36,9 @@ struct NameSymbolResolverState{
 };
 
 
+inline constinit Atomic<b8> s_SymbolRecorderActive{ false };
+inline constinit Atomic<b8> s_SymbolResolverActive{ false };
+
 [[nodiscard]] inline MallocMutex& SymbolRecorderMutex()noexcept{
     static MallocMutex s_Mutex;
     return s_Mutex;
@@ -47,13 +50,11 @@ struct NameSymbolResolverState{
 }
 
 [[nodiscard]] inline Atomic<b8>& SymbolRecorderActive()noexcept{
-    static Atomic<b8> s_Active{ false };
-    return s_Active;
+    return s_SymbolRecorderActive;
 }
 
 [[nodiscard]] inline Atomic<b8>& SymbolResolverActive()noexcept{
-    static Atomic<b8> s_Active{ false };
-    return s_Active;
+    return s_SymbolResolverActive;
 }
 
 [[nodiscard]] inline NameSymbolRecorderState& SymbolRecorderState()noexcept{
@@ -140,8 +141,8 @@ inline void SetNameSymbolResolveCallback(const NameSymbolResolveCallback callbac
 }
 
 template<typename CharT>
-inline void RecordNameSymbolText(const NameHash& hash, const BasicStringView<CharT> text){
-    if(!SymbolRecorderActive().load(MemoryOrder::acquire) || IsZeroHash(hash))
+FOUNDATION_NOINLINE inline void RecordNameSymbolTextSlow(const NameHash& hash, const BasicStringView<CharT> text){
+    if(!s_SymbolRecorderActive.load(MemoryOrder::acquire) || IsZeroHash(hash))
         return;
 
     b8& inProgress = SymbolRecordInProgress();
@@ -175,6 +176,13 @@ inline void RecordNameSymbolText(const NameHash& hash, const BasicStringView<Cha
             return;
         state.callback(hash, AStringView(narrowText.data(), copiedCount), state.userData);
     }
+}
+
+template<typename CharT>
+FOUNDATION_INLINE void RecordNameSymbolText(const NameHash& hash, const BasicStringView<CharT> text){
+    if(!s_SymbolRecorderActive.load(MemoryOrder::relaxed)) [[likely]]
+        return;
+    RecordNameSymbolTextSlow(hash, text);
 }
 
 #if defined(FOUNDATION_BUILD_SYMBOLS)

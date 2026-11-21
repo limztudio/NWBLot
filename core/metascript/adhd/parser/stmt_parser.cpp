@@ -125,47 +125,60 @@ Stmt* StmtParser::parseStatement(){
     if(m_cursor.check(TokenType::Identifier)){
         const b8 startsWithRefOrProhibitedType = KeywordSemantics::ParseParamPassingModeKeyword(m_cursor.current().text) != ParamPassingMode::None
             || !KeywordSemantics::FindProhibitedTypeKeywordError(m_cursor.current().text).empty();
-        const ParserCursor::Checkpoint cp = m_cursor.save();
-        TypeRef* maybeType = m_typeParser.parseType(true, true);
-        if(maybeType && !m_typeParser.hasPendingRightAngles() && m_cursor.check(TokenType::Identifier) && KeywordSemantics::FindProhibitedPostfixKeywordError(m_cursor.current().text).empty())
-            return parseVarDeclWithType(*maybeType, span, false);
-        if(startsWithRefOrProhibitedType){
-            if(maybeType)
-                m_cursor.errorExpected("expected variable name");
-            return nullptr;
+        b8 canStartVarDecl = startsWithRefOrProhibitedType;
+        if(!canStartVarDecl){
+            const TokenType::Enum nextType = m_cursor.peekNextToken().type;
+            canStartVarDecl = nextType == TokenType::Identifier
+                || nextType == TokenType::Less
+                || nextType == TokenType::ColonColon
+                || nextType == TokenType::Star
+                || nextType == TokenType::Ampersand
+                || nextType == TokenType::LeftBracket
+                || (nextType == TokenType::LeftParen && BuiltinTypeSemantics::IsFuncTypeName(m_cursor.current().text));
         }
-        if(!maybeType && m_cursor.failed()){
-            if(m_cursor.check(TokenType::Star) || m_cursor.check(TokenType::Ampersand)){
-                const MStringView firstIdent = cp.current.text;
-                while(m_cursor.check(TokenType::Star) || m_cursor.check(TokenType::Ampersand))
+        if(canStartVarDecl){
+            const ParserCursor::Checkpoint cp = m_cursor.save();
+            TypeRef* maybeType = m_typeParser.parseType(true, true);
+            if(maybeType && !m_typeParser.hasPendingRightAngles() && m_cursor.check(TokenType::Identifier) && KeywordSemantics::FindProhibitedPostfixKeywordError(m_cursor.current().text).empty())
+                return parseVarDeclWithType(*maybeType, span, false);
+            if(startsWithRefOrProhibitedType){
+                if(maybeType)
+                    m_cursor.errorExpected("expected variable name");
+                return nullptr;
+            }
+            if(!maybeType && m_cursor.failed()){
+                if(m_cursor.check(TokenType::Star) || m_cursor.check(TokenType::Ampersand)){
+                    const MStringView firstIdent = cp.current.text;
+                    while(m_cursor.check(TokenType::Star) || m_cursor.check(TokenType::Ampersand))
+                        m_cursor.advance();
+                    if(BuiltinTypeSemantics::IsReservedPrimitiveOrContainerTypeName(firstIdent))
+                        return nullptr;
+                    if(m_cursor.check(TokenType::Identifier)){
+                        m_cursor.advance();
+                        if(m_cursor.check(TokenType::Equal) || m_cursor.check(TokenType::Semicolon))
+                            return nullptr;
+                    }
+                }
+                else if(m_cursor.check(TokenType::LeftBracket)){
+                    const MStringView firstIdent = cp.current.text;
+                    if(BuiltinTypeSemantics::IsReservedPrimitiveOrContainerTypeName(firstIdent))
+                        return nullptr;
+                    u32 bracketDepth = 1u;
                     m_cursor.advance();
-                if(BuiltinTypeSemantics::IsReservedPrimitiveOrContainerTypeName(firstIdent))
-                    return nullptr;
-                if(m_cursor.check(TokenType::Identifier)){
-                    m_cursor.advance();
-                    if(m_cursor.check(TokenType::Equal) || m_cursor.check(TokenType::Semicolon))
+                    while(bracketDepth > 0u && !m_cursor.check(TokenType::EndOfFile)){
+                        if(m_cursor.check(TokenType::LeftBracket))
+                            ++bracketDepth;
+                        else if(m_cursor.check(TokenType::RightBracket))
+                            --bracketDepth;
+                        m_cursor.advance();
+                    }
+                    if(bracketDepth == 0u && m_cursor.check(TokenType::Identifier))
                         return nullptr;
                 }
             }
-            else if(m_cursor.check(TokenType::LeftBracket)){
-                const MStringView firstIdent = cp.current.text;
-                if(BuiltinTypeSemantics::IsReservedPrimitiveOrContainerTypeName(firstIdent))
-                    return nullptr;
-                u32 bracketDepth = 1u;
-                m_cursor.advance();
-                while(bracketDepth > 0u && !m_cursor.check(TokenType::EndOfFile)){
-                    if(m_cursor.check(TokenType::LeftBracket))
-                        ++bracketDepth;
-                    else if(m_cursor.check(TokenType::RightBracket))
-                        --bracketDepth;
-                    m_cursor.advance();
-                }
-                if(bracketDepth == 0u && m_cursor.check(TokenType::Identifier))
-                    return nullptr;
-            }
+            m_cursor.restore(cp);
+            m_typeParser.resetPendingRightAngles();
         }
-        m_cursor.restore(cp);
-        m_typeParser.resetPendingRightAngles();
     }
 
     Expr* expr = m_exprParser.parseExpression();

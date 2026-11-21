@@ -87,6 +87,20 @@ void CopySourceGroups(in PreparedFontSource source, mut FontAtlasPayload payload
     }
 }
 
+void MoveSourceGroups(mut PreparedFontSource source, mut FontAtlasPayload payload){
+    payload.groups.reserve(source.groups.size());
+    for(usize index = 0u; index < source.groups.size(); ++index){
+        mut PreparedFontImageGroup prepared = source.groups[index];
+        payload.groups.emplace_back();
+        mut FontAtlasGroup group = payload.groups.back();
+        group.width = prepared.width;
+        group.height = prepared.height;
+        group.channelCount = prepared.channelCount;
+        group.sha256 = prepared.sha256;
+        group.pixels.swap(prepared.pixels);
+    }
+}
+
 Expected<u32> ReadFontAtlasMetadataU32(
     in Path path,
     in MetascriptValue map,
@@ -218,16 +232,25 @@ b8 SerializeFontAtlasAsset(in FontAtlas atlas, mut Vector<u8> outBinary){
     return SerializeFontAtlasPayloadInto(atlas.payload(), outBinary);
 }
 
-Expected<FontAtlas> BuildFontAtlasAssetFromPayload(in Name virtualPath, in FontAtlasPayload payload){
+Expected<FontAtlas> BuildFontAtlasAssetFromPayloadWithValidation(in Name virtualPath, in FontAtlasPayload payload, in b8 validatePayloadFlag){
     FontAtlas candidate(virtualPath);
     candidate.setPayload(payload);
-    if(!candidate.validatePayload())
+    if(validatePayloadFlag){
+        if(!candidate.validatePayload())
+            return MakeUnexpected(Failure());
+    }
+    else if(!candidate.checkVirtualPath("FontAtlas::validatePayload")){
         return MakeUnexpected(Failure());
+    }
     candidate.markPayloadValidated();
     return candidate;
 }
 
-b8 PopulateFontAtlasPayloadFromPreparedSourceWithOptions(
+Expected<FontAtlas> BuildFontAtlasAssetFromPayload(in Name virtualPath, in FontAtlasPayload payload){
+    return BuildFontAtlasAssetFromPayloadWithValidation(virtualPath, payload, true);
+}
+
+b8 FinalizeFontAtlasPayloadFromPreparedSource(
     in Path nwbFilePath,
     in MetascriptValue asset,
     in PreparedFontSource source,
@@ -235,7 +258,6 @@ b8 PopulateFontAtlasPayloadFromPreparedSourceWithOptions(
     in b8 verifyPixelDigests,
     mut FontAtlasPayload inOutPayload
 ){
-    CopySourceGroups(source, inOutPayload);
     inOutPayload.fontSha256 = source.fontSha256;
     inOutPayload.faceIndex = font.faceIndex();
 
@@ -259,6 +281,30 @@ b8 PopulateFontAtlasPayloadFromPreparedSourceWithOptions(
         return false;
     inOutPayload.glyphs = glyphsResult.value();
     return ValidateFontAtlasPayloadWithOptions(inOutPayload, verifyPixelDigests);
+}
+
+b8 PopulateFontAtlasPayloadFromPreparedSourceWithOptions(
+    in Path nwbFilePath,
+    in MetascriptValue asset,
+    in PreparedFontSource source,
+    in Font font,
+    in b8 verifyPixelDigests,
+    mut FontAtlasPayload inOutPayload
+){
+    CopySourceGroups(source, inOutPayload);
+    return FinalizeFontAtlasPayloadFromPreparedSource(nwbFilePath, asset, source, font, verifyPixelDigests, inOutPayload);
+}
+
+b8 PopulateFontAtlasPayloadFromPreparedSourceConsuming(
+    in Path nwbFilePath,
+    in MetascriptValue asset,
+    mut PreparedFontSource source,
+    in Font font,
+    in b8 verifyPixelDigests,
+    mut FontAtlasPayload inOutPayload
+){
+    MoveSourceGroups(source, inOutPayload);
+    return FinalizeFontAtlasPayloadFromPreparedSource(nwbFilePath, asset, source, font, verifyPixelDigests, inOutPayload);
 }
 
 b8 PopulateFontAtlasPayloadFromPreparedSource(
@@ -301,14 +347,15 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(in Name virtualPath
 
     Path sourcePath = path;
     sourcePath.replaceExtension(s_PreparedFontExtension);
-    const Expected<PreparedFontSource, StringView> source = ReadPreparedFontSource(sourcePath, s_FontAtlasCookIncludePreparedPixels);
+    Expected<PreparedFontSource, StringView> source = ReadPreparedFontSource(sourcePath, s_FontAtlasCookIncludePreparedPixels);
     if(!source.has_value())
         return MakeUnexpected(Failure());
     Font font(candidate.payload.font.name());
     font.setFontBytes(source.value().fontBytes, source.value().faceIndex);
-    if(!PopulateFontAtlasPayloadFromPreparedSourceWithOptions(path, asset, source.value(), font, false, candidate.payload))
+    if(!PopulateFontAtlasPayloadFromPreparedSourceConsuming(path, asset, source.value(), font, false, candidate.payload))
         return MakeUnexpected(Failure());
     candidate.virtualPath = virtualPath;
+    candidate.payloadValidated = true;
     return candidate;
 }
 
@@ -323,7 +370,7 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(in Path root, in StringV
 }
 
 Expected<FontAtlas> BuildFontAtlasAsset(in FontAtlasCookEntry entry){
-    return BuildFontAtlasAssetFromPayload(entry.virtualPath, entry.payload);
+    return BuildFontAtlasAssetFromPayloadWithValidation(entry.virtualPath, entry.payload, !entry.payloadValidated);
 }
 
 

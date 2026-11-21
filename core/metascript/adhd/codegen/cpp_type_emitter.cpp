@@ -153,21 +153,19 @@ void CppTypeEmitter::emitTypeArgCpp(MString& out, const TypeArg& arg)const{
         emitConstantTextCpp(out, arg.constantText);
 }
 
-void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
+void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type, const b8 ignoreRefMode)const{
     if(m_canonicalTemplateArguments && m_symbols.findTypeAlias(type.name)){
         const TypeRef* const resolved = m_symbols.unwrapTypeAlias(&type);
         if(resolved && resolved->name != type.name){
-            emitTypeCpp(out, *resolved);
+            emitTypeCpp(out, *resolved, ignoreRefMode);
             return;
         }
     }
-    if(type.refMode != ParamPassingMode::None){
+    if(!ignoreRefMode && type.refMode != ParamPassingMode::None){
         out.append("::NotNull<");
         if(type.refMode == ParamPassingMode::In)
             out.append("const ");
-        TypeRef innerType = type;
-        innerType.refMode = ParamPassingMode::None;
-        emitTypeCpp(out, innerType);
+        emitTypeCpp(out, type, true);
         out.append("*>");
         return;
     }
@@ -278,13 +276,12 @@ void CppTypeEmitter::emitReturnTypeCpp(MString& out, const TypeRef& type)const{
         if(refMode == ParamPassingMode::In)
             out.append("const ");
         const TypeRef* unwrapped = type.refMode != ParamPassingMode::None ? &type : m_symbols.unwrapTypeAlias(&type);
-        TypeRef innerType = unwrapped ? *unwrapped : type;
-        innerType.refMode = ParamPassingMode::None;
-        emitTypeCpp(out, innerType);
+        const TypeRef& innerType = unwrapped ? *unwrapped : type;
+        emitTypeCpp(out, innerType, true);
         out.push_back('&');
         return;
     }
-    emitTypeCpp(out, type);
+    emitTypeCpp(out, type, false);
 }
 
 void CppTypeEmitter::emitTypeWithCustomArenaCpp(MString& out, const TypeRef& type, const MStringView arenaExpr)const{

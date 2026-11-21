@@ -195,6 +195,72 @@ void LogMissingMaterialInstanceComponent(in EntityID entity){
     error("MaterialInstanceComponent: entity {} has no material instance component", entity.id);
 }
 
+class MaterialOverrideFieldKey{
+    public Name blockName = s_NameNone;
+    public Name fieldName = s_NameNone;
+
+    public usize hash()const{
+        usize seed = HashValue(this.blockName);
+        return HashCombineValue(seed, this.fieldName);
+    }
+
+    public b8 operator==(in MaterialOverrideFieldKey rhs)const{
+        return this.blockName == rhs.blockName && this.fieldName == rhs.fieldName;
+    }
+}
+
+class MaterialOverrideFieldEntry{
+    public u32 byteOffset = 0u;
+    public MaterialLayoutFieldType fieldType = MaterialLayoutFieldType::f32;
+    public b8 mutableBlock = false;
+}
+
+void BuildMaterialOverrideFieldLookup(
+    in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
+    in Span<MaterialTypedLayoutField> typedLayoutFields,
+    mut HashMap<MaterialOverrideFieldKey, MaterialOverrideFieldEntry> outLookup
+){
+    outLookup.clear();
+    outLookup.reserve(typedLayoutFields.size());
+    u32 constantBlockByteBegin = 0u;
+    u32 mutableBlockByteBegin = 0u;
+    for(usize blockIndex = 0u; blockIndex < typedLayoutBlocks.size(); ++blockIndex){
+        MaterialTypedLayoutBlock block = typedLayoutBlocks[blockIndex];
+        assert(IsValidMaterialBlockClass(block.blockClass));
+        const b8 mutableBlock = block.blockClass == MaterialBlockClass::MaterialMutable;
+        u32 blockByteBegin = constantBlockByteBegin;
+        if(mutableBlock){
+            blockByteBegin = mutableBlockByteBegin;
+            assert(block.byteSize <= 0xFFFFFFFFu - mutableBlockByteBegin);
+            mutableBlockByteBegin += block.byteSize;
+        }
+        else{
+            assert(block.byteSize <= 0xFFFFFFFFu - constantBlockByteBegin);
+            constantBlockByteBegin += block.byteSize;
+        }
+
+        const usize fieldBegin = cast<usize>(block.fieldBegin);
+        const usize fieldCount = cast<usize>(block.fieldCount);
+        assert(fieldBegin <= typedLayoutFields.size() && fieldCount <= typedLayoutFields.size() - fieldBegin);
+        for(usize fieldIndex = fieldBegin; fieldIndex < fieldBegin + fieldCount; ++fieldIndex){
+            MaterialTypedLayoutField field = typedLayoutFields[fieldIndex];
+            MaterialOverrideFieldKey key;
+            key.blockName = block.blockName;
+            key.fieldName = field.fieldName;
+            MaterialOverrideFieldEntry entry;
+            if(mutableBlock){
+                assert(field.offset <= 0xFFFFFFFFu - blockByteBegin);
+                entry.byteOffset = blockByteBegin + field.offset;
+            }
+            else
+                entry.byteOffset = field.offset;
+            entry.fieldType = field.fieldType;
+            entry.mutableBlock = mutableBlock;
+            outLookup.try_emplace(key, entry);
+        }
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

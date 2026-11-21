@@ -537,7 +537,7 @@ Expected<GpuTaskId> DeclareAvboitRefractionCapture(
             return MakeUnexpected(Failure());
         for(usize i = 0u; i < items.computeDrawItems.size(); ++i){
             in MaterialPassDrawItem item = items.computeDrawItems[i];
-            const auto outputResult = FindOrImportBuffer(graph, item.meshResources.emulationVertexBuffer, s_RefractionCaptureBufferLabel);
+            const auto outputResult = FindOrImportBuffer(graph, item.mesh().emulationVertexBuffer, s_RefractionCaptureBufferLabel);
             const Span<MaterialPassDrawItem> singleItem = items.computeDrawItems.subspan(i, 1u);
             if(!outputResult.has_value() || !appendDraw(singleItem, csg, RenderPath::ComputeEmulation, true, outputResult.value()) || !appendDraw(singleItem, csg, RenderPath::ComputeEmulation, false, outputResult.value()))
                 return MakeUnexpected(Failure());

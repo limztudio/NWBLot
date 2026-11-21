@@ -205,9 +205,11 @@ void CommandList::rebuildGraphicsDrawValidationCache()noexcept{
         for(usize requiredIndex = 0u; requiredIndex < requiredCount; ++requiredIndex){
             const VkVertexInputBindingDescription& requiredBinding = requiredBindings[requiredIndex];
             const VertexBufferBinding* bound = nullptr;
+            u32 boundVertexIndex = 0u;
             for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
                 if(vertexData[vertexIndex].slot == requiredBinding.binding){
                     bound = &vertexData[vertexIndex];
+                    boundVertexIndex = static_cast<u32>(vertexIndex);
                     break;
                 }
             }
@@ -223,6 +225,7 @@ void CommandList::rebuildGraphicsDrawValidationCache()noexcept{
                 .offset = bound->offset,
                 .stride = requiredBinding.stride,
                 .requiredElementBytes = requiredElementBytes[requiredIndex],
+                .stateVertexIndex = boundVertexIndex,
                 .instanceRate = instanceRate,
             };
         }

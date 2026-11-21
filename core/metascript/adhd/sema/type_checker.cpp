@@ -193,6 +193,8 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
     b8 ok = true;
     m_activeUnit = &unit;
     m_recordGlobalHeaders = false;
+    m_recordedRequiredHeaders.clear();
+    m_recordedTypeHeaders.clear();
 
     if(!m_symbols.build(unit, errors))
         ok = false;
@@ -203,55 +205,89 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
     for(const EnumDecl* enumDecl : unit.enums){
         if(!enumDecl)
             continue;
+        if(enumDecl->isImported || enumDecl->isExtern){
+            if(enumDecl->entries.size() > 16u){
+                HashSet<MStringView, MetaArena, MStringViewHash> seenEntries(m_arena);
+                seenEntries.reserve(enumDecl->entries.size());
+                for(const EnumEntry& entry : enumDecl->entries){
+                    if(!seenEntries.insert(entry.name).second){
+                        reportError(errors, entry.span, enumDecl->isFlag ? "duplicate enumerator name in flag" : "duplicate enumerator name in enum");
+                        ok = false;
+                    }
+                }
+            }
+            else{
+                for(usize i = 0u; i < enumDecl->entries.size(); ++i){
+                    const EnumEntry& entry = enumDecl->entries[i];
+                    for(usize j = 0u; j < i; ++j){
+                        if(enumDecl->entries[j].name == entry.name){
+                            reportError(errors, entry.span, enumDecl->isFlag ? "duplicate enumerator name in flag" : "duplicate enumerator name in enum");
+                            ok = false;
+                            break;
+                        }
+                    }
+                }
+            }
+            continue;
+        }
+
         u32 autoFlagBitIndex = 0u;
         MethodDecl dummyEnumCtx(m_arena);
         MVector<ScopedVarInfo> enumScope(m_arena);
         TypeRef* enumUnderlyingRef = AllocateAstNode<TypeRef>(m_arena);
         enumUnderlyingRef->name = enumDecl->name;
+        const b8 useHashDup = enumDecl->entries.size() > 16u;
+        HashSet<MStringView, MetaArena, MStringViewHash> seenEntries(m_arena);
+        if(useHashDup)
+            seenEntries.reserve(enumDecl->entries.size());
 
         for(usize i = 0u; i < enumDecl->entries.size(); ++i){
             const EnumEntry& entry = enumDecl->entries[i];
-            if(!enumDecl->isImported && !enumDecl->isExtern){
-                if(const MStringView sentryErr = KeywordSemantics::FindForbiddenEnumSentryError(entry.name, enumDecl->isFlag); !sentryErr.empty()){
-                    reportError(errors, entry.span, sentryErr);
-                    ok = false;
-                }
+            if(const MStringView sentryErr = KeywordSemantics::FindForbiddenEnumSentryError(entry.name, enumDecl->isFlag); !sentryErr.empty()){
+                reportError(errors, entry.span, sentryErr);
+                ok = false;
             }
-            for(usize j = 0u; j < i; ++j){
-                if(enumDecl->entries[j].name == entry.name){
+            if(useHashDup){
+                if(!seenEntries.insert(entry.name).second){
                     reportError(errors, entry.span, enumDecl->isFlag ? "duplicate enumerator name in flag" : "duplicate enumerator name in enum");
                     ok = false;
-                    break;
                 }
             }
-            if(!enumDecl->isImported && !enumDecl->isExtern){
-                if(enumDecl->isFlag && !entry.valueExpr){
-                    if(autoFlagBitIndex >= static_cast<u32>(enumDecl->underlyingSize) * 8u){
-                        reportError(errors, entry.span, "auto-assigned 'flag' bit position exceeds underlying flag bit width");
+            else{
+                for(usize j = 0u; j < i; ++j){
+                    if(enumDecl->entries[j].name == entry.name){
+                        reportError(errors, entry.span, enumDecl->isFlag ? "duplicate enumerator name in flag" : "duplicate enumerator name in enum");
                         ok = false;
+                        break;
                     }
-                    ++autoFlagBitIndex;
                 }
-                if(entry.valueExpr){
-                    if(!checkExpr(nullptr, enumScope, false, dummyEnumCtx, *entry.valueExpr, errors)){
+            }
+            if(enumDecl->isFlag && !entry.valueExpr){
+                if(autoFlagBitIndex >= static_cast<u32>(enumDecl->underlyingSize) * 8u){
+                    reportError(errors, entry.span, "auto-assigned 'flag' bit position exceeds underlying flag bit width");
+                    ok = false;
+                }
+                ++autoFlagBitIndex;
+            }
+            if(entry.valueExpr){
+                if(!checkExpr(nullptr, enumScope, false, dummyEnumCtx, *entry.valueExpr, errors)){
+                    ok = false;
+                }
+                else{
+                    const MStringView valType = inferExprTypeName(nullptr, &dummyEnumCtx, *entry.valueExpr, enumScope);
+                    i64 evalConstVal = 0;
+                    if(
+                        entry.valueExpr->kind == ExprKind::FloatLiteral
+                        || entry.valueExpr->kind == ExprKind::DoubleLiteral
+                        || entry.valueExpr->kind == ExprKind::StringLiteral
+                        || BuiltinTypeSemantics::IsFloatScalarType(valType)
+                        || SymbolTable::IsStringSwitchType(valType)
+                        || !TryEvaluateEnumEntryConstant(*enumDecl, entry.name, m_symbols, 0u, evalConstVal)
+                    ){
+                        reportError(errors, entry.span, enumDecl->isFlag
+                            ? "flag entry value must be an integral constant expression"
+                            : "enum entry value must be an integral constant expression");
                         ok = false;
-                    }
-                    else{
-                        const MStringView valType = inferExprTypeName(nullptr, &dummyEnumCtx, *entry.valueExpr, enumScope);
-                        i64 evalConstVal = 0;
-                        if(
-                            entry.valueExpr->kind == ExprKind::FloatLiteral
-                            || entry.valueExpr->kind == ExprKind::DoubleLiteral
-                            || entry.valueExpr->kind == ExprKind::StringLiteral
-                            || BuiltinTypeSemantics::IsFloatScalarType(valType)
-                            || SymbolTable::IsStringSwitchType(valType)
-                            || !TryEvaluateEnumEntryConstant(*enumDecl, entry.name, m_symbols, 0u, evalConstVal)
-                        ){
-                            reportError(errors, entry.span, enumDecl->isFlag
-                                ? "flag entry value must be an integral constant expression"
-                                : "enum entry value must be an integral constant expression");
-                            ok = false;
-                        }
                     }
                 }
             }
@@ -506,25 +542,29 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
 void TypeChecker::recordRequiredHeader(const MStringView header)noexcept{
     if(!m_recordGlobalHeaders || !m_activeUnit || header.empty())
         return;
-    if(!ContainsStringView(Span<const MStringView>(m_activeUnit->requiredGlobalHeaders.data(), m_activeUnit->requiredGlobalHeaders.size()), header))
+    if(m_recordedRequiredHeaders.emplace(header, 1u).second)
         m_activeUnit->requiredGlobalHeaders.push_back(header);
 }
 
 void TypeChecker::recordBuiltinTypeHeader(const MStringView typeName)noexcept{
     if(!m_recordGlobalHeaders || !m_activeUnit || typeName.empty())
         return;
+    if(!m_recordedTypeHeaders.emplace(typeName, 1u).second)
+        return;
     if(const TypeAliasDecl* aliasDecl = m_symbols.findTypeAlias(typeName))
         recordRequiredHeader(aliasDecl->requiredHeader);
     const MStringView base = m_symbols.resolveBaseTypeName(typeName);
-    if(const TypeAliasDecl* baseAliasDecl = (base != typeName) ? m_symbols.findTypeAlias(base) : nullptr)
-        recordRequiredHeader(baseAliasDecl->requiredHeader);
+    if(base != typeName){
+        if(const TypeAliasDecl* baseAliasDecl = m_symbols.findTypeAlias(base))
+            recordRequiredHeader(baseAliasDecl->requiredHeader);
+    }
     if(const EnumDecl* enumDecl = m_symbols.findEnum(base))
         recordRequiredHeader(enumDecl->requiredHeader);
     else if(const ClassDecl* cls = m_symbols.findClass(base))
         recordRequiredHeader(cls->requiredHeader);
     else if(const InterfaceDecl* iface = m_symbols.findInterface(base))
         recordRequiredHeader(iface->requiredHeader);
-    if(base.empty() || m_symbols.hasTypeSymbol(base))
+    if(base.empty() || m_symbols.hasTypeSymbol(base) || BuiltinTypeSemantics::IsScalarType(base))
         return;
     if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(base))
         recordRequiredHeader(objInfo->requiredHeader);

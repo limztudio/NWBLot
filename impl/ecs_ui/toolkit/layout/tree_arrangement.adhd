@@ -24,29 +24,35 @@ b8 TryBeginArrangeLayoutTreeNode(
     outCursor = 0.0;
     if(!IsValidUiRect(inoutBox.rectangle))
         return false;
-    const LayoutTreeNode node = nodes[cast<usize>(index)];
-    const LayoutNodeDesc description = node.description;
-    const Rect inheritedClip = work[cast<usize>(index)].inheritedClip;
-    const VectorSingle rectangleVec = LoadRect(inoutBox.rectangle);
-    const VectorSingle inheritedClipVec = LoadRect(inheritedClip);
-    const VectorSingle contentVec = VectorSingle(ComputeInsetUiRectBounds(inoutBox.rectangle, description.padding));
+    in LayoutTreeNode node = nodes[cast<usize>(index)];
+    in LayoutNodeDesc description = node.description;
+    in Rect inheritedClip = work[cast<usize>(index)].inheritedClip;
+    const VectorSingle rectangleVec(inoutBox.rectangle.x, inoutBox.rectangle.y, inoutBox.rectangle.width, inoutBox.rectangle.height);
+    const VectorSingle inheritedClipVec(inheritedClip.x, inheritedClip.y, inheritedClip.width, inheritedClip.height);
+    const VectorDouble boundsSize(cast<f64>(inoutBox.rectangle.width), cast<f64>(inoutBox.rectangle.height), cast<f64>(inoutBox.rectangle.width), cast<f64>(inoutBox.rectangle.height));
+    const VectorDouble first = Min(VectorDouble(cast<f64>(description.padding.left), cast<f64>(description.padding.top), cast<f64>(description.padding.left), cast<f64>(description.padding.top)), boundsSize);
+    const VectorDouble remaining = boundsSize - first;
+    const VectorDouble last = Min(VectorDouble(cast<f64>(description.padding.right), cast<f64>(description.padding.bottom), cast<f64>(description.padding.right), cast<f64>(description.padding.bottom)), remaining);
+    const VectorDouble contentOrigin = VectorDouble(cast<f64>(inoutBox.rectangle.x), cast<f64>(inoutBox.rectangle.y), cast<f64>(inoutBox.rectangle.x), cast<f64>(inoutBox.rectangle.y)) + first;
+    const VectorDouble contentSize = remaining - last;
+    const VectorSingle contentVec = VectorSingle(VectorDouble(contentOrigin.x, contentOrigin.y, contentSize.x, contentSize.y));
     const VectorSingle clipVec = IntersectRectVec(rectangleVec, inheritedClipVec);
-    inoutBox.content = StoreRect(contentVec);
-    inoutBox.clip = StoreRect(clipVec);
+    inoutBox.content = Rect(contentVec.x, contentVec.y, contentVec.z, contentVec.w);
+    inoutBox.clip = Rect(clipVec.x, clipVec.y, clipVec.z, clipVec.w);
     inoutBox.hit = inoutBox.clip;
     if(!IsValidUiRect(inoutBox.content) || !IsValidUiRect(inoutBox.clip))
         return false;
     VectorSingle childClipVec = inheritedClipVec;
     if(description.clipChildren)
         childClipVec = IntersectRectVec(inheritedClipVec, contentVec);
-    outChildClip = StoreRect(childClipVec);
+    outChildClip = Rect(childClipVec.x, childClipVec.y, childClipVec.z, childClipVec.w);
     const b8 row = description.direction == LayoutDirection::Row;
     const b8 column = description.direction == LayoutDirection::Column;
     f64 consumed = 0.0;
     f64 weight = 0.0;
     u32 childCount = 0u;
     for(u32 child = node.firstChild; child != s_LayoutNoParent; child = nodes[cast<usize>(child)].nextSibling){
-        const LayoutNodeDesc childDescription = nodes[cast<usize>(child)].description;
+        in LayoutNodeDesc childDescription = nodes[cast<usize>(child)].description;
         if(row || column){
             LayoutSize main = childDescription.height;
             if(row)
@@ -129,9 +135,9 @@ b8 ArrangeLayoutTreeNodeAt(in Span<LayoutTreeNode> nodes, in u32 index, mut Vect
     f64 cursor = 0.0;
     if(!TryBeginArrangeLayoutTreeNode(nodes, work, index, work[cast<usize>(index)].box, childClip, available, weight, cursor))
         return false;
-    const LayoutTreeNode node = nodes[cast<usize>(index)];
-    const LayoutNodeDesc description = node.description;
-    const Rect content = work[cast<usize>(index)].box.content;
+    in LayoutTreeNode node = nodes[cast<usize>(index)];
+    in LayoutNodeDesc description = node.description;
+    in Rect content = work[cast<usize>(index)].box.content;
     for(u32 child = node.firstChild; child != s_LayoutNoParent; child = nodes[cast<usize>(child)].nextSibling){
         const Expected<Rect> childRect = TryArrangeLayoutTreeChild(
             description.direction,
@@ -165,7 +171,7 @@ b8 ArrangeLayoutTree(
     work.resize(nodes.size());
     if(!MeasureLayoutTreeNodes(nodes, work))
         return false;
-    const LayoutNodeDesc root = nodes[0u].description;
+    in LayoutNodeDesc root = nodes[0u].description;
     const Point measured = work[0u].box.measuredSize;
     f32 width = measured.x;
     if(root.width.policy == LayoutSizePolicy::Stretch)
@@ -180,6 +186,7 @@ b8 ArrangeLayoutTree(
             return false;
     }
     stagedBoxes.clear();
+    stagedBoxes.reserve(work.size());
     for(in LayoutTreeWork item : work)
         stagedBoxes.push_back(item.box);
     boxes.swap(stagedBoxes);

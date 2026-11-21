@@ -162,7 +162,20 @@ Device::GraphCommandListBatchResult Device::executeGraphCommandListsBatch(
     if(executeBatchStamp == 0u)
         executeBatchStamp = queue->m_nextExecuteBatchStamp++;
 
-    usize totalWaitTokens = 0u;
+    auto& localWaits = queue->m_executeLocalWaits;
+    auto& expectedCommandLists = queue->m_executeExpectedCommandLists;
+    localWaits.clear();
+    expectedCommandLists.clear();
+    queue->m_executeSubmittedUploadMask = 0u;
+
+    auto& queueEntries = queue->m_executeQueueEntries;
+    auto& waitOffsets = queue->m_executeWaitOffsets;
+    auto& queueReceipts = queue->m_executeQueueReceipts;
+    queueEntries.resize(entries.size());
+    waitOffsets.resize(entries.size());
+    queueReceipts.resize(entries.size());
+
+    u8 uploadMask = 0u;
     for(usize entryIndex = 0u; entryIndex < entries.size(); ++entryIndex){
         const GraphCommandListBatchEntry& entry = entries[entryIndex];
         if(entry.submitDesc.preSubmitHook.valid() && entryIndex + 1u != entries.size())
@@ -185,7 +198,8 @@ Device::GraphCommandListBatchResult Device::executeGraphCommandListsBatch(
                 NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: command list {} is null or foreign"), i);
                 return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
             }
-            if(!commandList->matchesSubmissionLease(executionQueue, queue->m_queueID, true)){
+            u64 graphOwnershipSerial = 0u;
+            if(!commandList->matchesSubmissionLease(executionQueue, queue->m_queueID, true, &graphOwnershipSerial)){
                 NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Command list {} lease provenance does not match execution queue"), i);
                 return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
             }
@@ -194,24 +208,20 @@ Device::GraphCommandListBatchResult Device::executeGraphCommandListsBatch(
                 return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
             }
             commandList->m_lastExecuteBatchStamp = executeBatchStamp;
+
+            TrackedCommandBuffer& owner = *commandList->m_currentCmdBuf;
+            uploadMask |= owner.m_usedUploadChunkMask;
+            expectedCommandLists.push_back(Queue::SubmissionCommandListIdentity{
+                .owner = &owner,
+                .recordingLeaseSerial = commandList->m_recordingLeaseSerial,
+                .nativeRecordingID = commandList->m_nativeRecordingID,
+                .recordingWorkerDomain = commandList->m_creationDesc.recordingWorkerDomain,
+                .graphRecordingOwnershipSerial = graphOwnershipSerial,
+                .recordingWorkerIndex = commandList->m_creationDesc.recordingWorkerIndex,
+                .graphSubmissionAuthorized = true,
+            });
         }
-        totalWaitTokens += entry.submitDesc.waitTokenCount;
-    }
 
-    auto& localWaits = queue->m_executeLocalWaits;
-    auto& expectedCommandLists = queue->m_executeExpectedCommandLists;
-    localWaits.clear();
-    expectedCommandLists.clear();
-    localWaits.reserve(totalWaitTokens);
-
-    auto& queueEntries = queue->m_executeQueueEntries;
-    auto& waitOffsets = queue->m_executeWaitOffsets;
-    auto& queueReceipts = queue->m_executeQueueReceipts;
-    queueEntries.resize(entries.size());
-    waitOffsets.resize(entries.size());
-    queueReceipts.resize(entries.size());
-    for(usize entryIndex = 0u; entryIndex < entries.size(); ++entryIndex){
-        const GraphCommandListBatchEntry& entry = entries[entryIndex];
         const usize waitOffset = localWaits.size();
         u64 maxSameQueueWaitValue = 0u;
         for(usize i = 0u; i < entry.submitDesc.waitTokenCount; ++i){
@@ -256,9 +266,7 @@ Device::GraphCommandListBatchResult Device::executeGraphCommandListsBatch(
             .allowSignalCoalescing = entry.allowSignalCoalescing && !entry.submitDesc.preSubmitHook.valid(),
         };
     }
-
-    SubmissionWorkspace submissionWorkspace(*this, *queue);
-    submissionWorkspace.prepareBatch(entries, true);
+    queue->m_executeSubmittedUploadMask = uploadMask;
 
     usize expectedOffset = 0u;
     for(usize entryIndex = 0u; entryIndex < entries.size(); ++entryIndex){
@@ -291,7 +299,8 @@ Device::GraphCommandListBatchResult Device::executeGraphCommandListsBatch(
         queueEntries.back().localSignalCount = 1u;
     }
 
-    const Queue::BatchSubmissionResult batchResult = queue->submitBatch(Span<const Queue::BatchSubmitEntry>(queueEntries.data(), queueEntries.size()), Span<Queue::SubmissionReceipt>(queueReceipts.data(), queueReceipts.size()));
+    const b8 callerPreValidated = !hookInvoked;
+    const Queue::BatchSubmissionResult batchResult = queue->submitBatch(Span<const Queue::BatchSubmitEntry>(queueEntries.data(), queueEntries.size()), Span<Queue::SubmissionReceipt>(queueReceipts.data(), queueReceipts.size()), callerPreValidated);
     const b8 submissionAccepted = batchResult.status == Queue::BatchSubmissionResult::Status::Accepted;
     const u64 submittedID = batchResult.lastSubmittedID;
 
@@ -300,8 +309,10 @@ Device::GraphCommandListBatchResult Device::executeGraphCommandListsBatch(
         : QueueSubmissionToken{}
     ;
 
-    if(submissionAccepted || batchResult.status == Queue::BatchSubmissionResult::Status::NativeSubmitFailed)
+    if(submissionAccepted || batchResult.status == Queue::BatchSubmissionResult::Status::NativeSubmitFailed){
+        SubmissionWorkspace submissionWorkspace(*this, *queue);
         submissionWorkspace.finalizeBatch(entries, executionQueue, submittedID, submissionAccepted);
+    }
 
     hookResolution.resolve(hookToken);
     submissionWorkspaceLock.unlock();

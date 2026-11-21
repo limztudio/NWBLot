@@ -220,13 +220,30 @@ b8 CallableDeclarationLinker::link(TranslationUnit& unit, MVector<ParseError>& e
             matched->isImported = false;
     }
 
+    constexpr usize s_InvalidFnIdx = Limit<usize>::s_Max;
+    MVector<usize> freeFnPrevSameName(unit.freeFunctions.size(), s_InvalidFnIdx, m_arena);
+    HashMap<MStringView, usize, MetaArena, MStringViewHash> freeFnLastByName(m_arena);
+    freeFnLastByName.reserve(unit.freeFunctions.size());
+
+    MVector<usize> sameNameChain(m_arena);
     for(usize i = 0u; i < unit.freeFunctions.size(); ++i){
         MethodDecl* fn = unit.freeFunctions[i];
         if(!fn)
             continue;
-        for(usize j = 0u; j < i; ++j){
-            MethodDecl* prev = unit.freeFunctions[j];
-            if(!prev || prev->name != fn->name || prev->templateParams.size() != fn->templateParams.size())
+        auto [it, inserted] = freeFnLastByName.emplace(fn->name, i);
+        if(inserted)
+            continue;
+        const usize lastIdx = it->second;
+        freeFnPrevSameName[i] = lastIdx;
+        it.value() = i;
+
+        sameNameChain.clear();
+        for(usize prevIdx = lastIdx; prevIdx != s_InvalidFnIdx; prevIdx = freeFnPrevSameName[prevIdx])
+            sameNameChain.push_back(prevIdx);
+
+        for(usize k = sameNameChain.size(); k > 0u; --k){
+            MethodDecl* prev = unit.freeFunctions[sameNameChain[k - 1u]];
+            if(!prev || prev->templateParams.size() != fn->templateParams.size())
                 continue;
             if(!m_comparator.doParamListsMatch(prev->params, fn->params))
                 continue;
@@ -254,9 +271,9 @@ b8 CallableDeclarationLinker::link(TranslationUnit& unit, MVector<ParseError>& e
                 continue;
             }
             b8 hasValueParameter = false;
-            for(usize i = 0u; i < fn->params.size(); ++i){
-                const ParamDecl& oldParam = prev->params[i];
-                const ParamDecl& newParam = fn->params[i];
+            for(usize paramIndex = 0u; paramIndex < fn->params.size(); ++paramIndex){
+                const ParamDecl& oldParam = prev->params[paramIndex];
+                const ParamDecl& newParam = fn->params[paramIndex];
                 hasValueParameter |= oldParam.copiesArgument || newParam.copiesArgument || oldParam.forwardsArgument || newParam.forwardsArgument;
             }
             if(hasValueParameter){

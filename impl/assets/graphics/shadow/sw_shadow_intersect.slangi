@@ -18,6 +18,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool nwbSwShadowRayAabbFma(const float3 invDir, const float3 minBias, const float3 maxBias, const float tMin, const float tMax, const float3 boxMin, const float3 boxMax){
+    float unusedTEntry;
+    return nwbBvhRayAabbIntervalPaddedFma(invDir, minBias, maxBias, tMin, tMax, boxMin, boxMax, unusedTEntry);
+}
+
+float nwbSwShadowRayAabbEntryTFma(const float3 invDir, const float3 minBias, const float3 maxBias, const float tMin, const float tMax, const float3 boxMin, const float3 boxMax){
+    float tEntry;
+    return nwbBvhRayAabbIntervalPaddedFma(invDir, minBias, maxBias, tMin, tMax, boxMin, boxMax, tEntry) ? tEntry : NWB_SW_SHADOW_AABB_MISS;
+}
+
 bool nwbSwShadowRayAabb(const float3 origin, const float3 invDir, const float tMin, const float tMax, const float3 boxMin, const float3 boxMax){
     return nwbBvhRayAabb(origin, invDir, tMin, tMax, boxMin, boxMax, NWB_SW_SHADOW_AABB_PADDING);
 }
@@ -31,6 +41,16 @@ float3 nwbSwShadowSafeInvDir(const float3 direction){
     return nwbBvhSafeInvDir(direction);
 }
 
+struct NwbSwShadowWoopRay{
+    float3 origin;
+    int kx;
+    int ky;
+    int kz;
+    float shearX;
+    float shearY;
+    float shearZ;
+};
+
 struct NwbSwShadowTriangleHit{
     bool hit;
     float t;
@@ -39,16 +59,11 @@ struct NwbSwShadowTriangleHit{
     float w;
 };
 
-NwbSwShadowTriangleHit nwbSwShadowRayTriangle(const float3 origin, const float3 direction, const float tMin, const float tMax, const float3 v0, const float3 v1, const float3 v2){
-    NwbSwShadowTriangleHit result;
-    result.hit = false;
-    result.t = 0.0;
-    result.u = 0.0;
-    result.v = 0.0;
-    result.w = 0.0;
-
+NwbSwShadowWoopRay nwbSwShadowMakeWoopRay(const float3 origin, const float3 direction){
+    NwbSwShadowWoopRay ray;
+    ray.origin = origin;
     const float3 absDir = abs(direction);
-    int kz = (absDir.x >= absDir.y) ? ((absDir.x >= absDir.z) ? 0 : 2) : ((absDir.y >= absDir.z) ? 1 : 2);
+    const int kz = (absDir.x >= absDir.y) ? ((absDir.x >= absDir.z) ? 0 : 2) : ((absDir.y >= absDir.z) ? 1 : 2);
     int kx = (kz + 1 == 3) ? 0 : (kz + 1);
     int ky = (kx + 1 == 3) ? 0 : (kx + 1);
     const float dirKz = direction[kz];
@@ -57,20 +72,35 @@ NwbSwShadowTriangleHit nwbSwShadowRayTriangle(const float3 origin, const float3 
         kx = ky;
         ky = swap;
     }
+    ray.kx = kx;
+    ray.ky = ky;
+    ray.kz = kz;
+    ray.shearX = direction[kx] / dirKz;
+    ray.shearY = direction[ky] / dirKz;
+    ray.shearZ = 1.0 / dirKz;
+    return ray;
+}
 
-    const float shearX = direction[kx] / dirKz;
-    const float shearY = direction[ky] / dirKz;
-    const float shearZ = 1.0 / dirKz;
+NwbSwShadowTriangleHit nwbSwShadowRayTriangleWoop(const NwbSwShadowWoopRay ray, const float tMin, const float tMax, const float3 v0, const float3 v1, const float3 v2){
+    NwbSwShadowTriangleHit result;
+    result.hit = false;
+    result.t = 0.0;
+    result.u = 0.0;
+    result.v = 0.0;
+    result.w = 0.0;
 
-    const float3 relA = v0 - origin;
-    const float3 relB = v1 - origin;
-    const float3 relC = v2 - origin;
-    const float ax = relA[kx] - shearX * relA[kz];
-    const float ay = relA[ky] - shearY * relA[kz];
-    const float bx = relB[kx] - shearX * relB[kz];
-    const float by = relB[ky] - shearY * relB[kz];
-    const float cx = relC[kx] - shearX * relC[kz];
-    const float cy = relC[ky] - shearY * relC[kz];
+    const float3 relA = v0 - ray.origin;
+    const float3 relB = v1 - ray.origin;
+    const float3 relC = v2 - ray.origin;
+    const int kx = ray.kx;
+    const int ky = ray.ky;
+    const int kz = ray.kz;
+    const float ax = fma(-ray.shearX, relA[kz], relA[kx]);
+    const float ay = fma(-ray.shearY, relA[kz], relA[ky]);
+    const float bx = fma(-ray.shearX, relB[kz], relB[kx]);
+    const float by = fma(-ray.shearY, relB[kz], relB[ky]);
+    const float cx = fma(-ray.shearX, relC[kz], relC[kx]);
+    const float cy = fma(-ray.shearY, relC[kz], relC[ky]);
 
     float u = cx * by - cy * bx;
     float v = ax * cy - ay * cx;
@@ -83,9 +113,9 @@ NwbSwShadowTriangleHit nwbSwShadowRayTriangle(const float3 origin, const float3 
     if(det == 0.0)
         return result;
 
-    const float az = shearZ * relA[kz];
-    const float bz = shearZ * relB[kz];
-    const float cz = shearZ * relC[kz];
+    const float az = ray.shearZ * relA[kz];
+    const float bz = ray.shearZ * relB[kz];
+    const float cz = ray.shearZ * relC[kz];
     const float tScaled = u * az + v * bz + w * cz;
     const float detSign = (det < 0.0) ? -1.0 : 1.0;
     const float absDet = det * detSign;
@@ -100,6 +130,10 @@ NwbSwShadowTriangleHit nwbSwShadowRayTriangle(const float3 origin, const float3 
     result.v = w * invDet;
     result.w = u * invDet;
     return result;
+}
+
+NwbSwShadowTriangleHit nwbSwShadowRayTriangle(const float3 origin, const float3 direction, const float tMin, const float tMax, const float3 v0, const float3 v1, const float3 v2){
+    return nwbSwShadowRayTriangleWoop(nwbSwShadowMakeWoopRay(origin, direction), tMin, tMax, v0, v1, v2);
 }
 
 

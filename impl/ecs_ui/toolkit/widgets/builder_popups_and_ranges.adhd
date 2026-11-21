@@ -151,7 +151,11 @@ b8 Builder::beginPopup(in StringView stableKey, mut PopupState state, in PopupOp
     if(!nested)
         this.reset();
     else{
-        if(this.m_popupFrameCount >= this.m_popupFrames.size() || !this.m_popupFrames[this.m_popupFrameCount].valid()){
+        if(this.m_popupFrameCount >= this.m_popupFrames.size()){
+            this.m_context.fail();
+            return false;
+        }
+        if(!this.m_popupFrames[this.m_popupFrameCount].valid() && !this.m_popupFrames[this.m_popupFrameCount].tryEmplace()){
             this.m_context.fail();
             return false;
         }

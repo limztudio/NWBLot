@@ -101,6 +101,12 @@ template<typename T>
     return ::new(mem) T(arena);
 }
 
+struct MStringViewHash{
+    [[nodiscard]] usize operator()(const MStringView text)const noexcept{
+        return static_cast<usize>(ComputeFnv64Bytes(text.data(), text.size()));
+    }
+};
+
 inline void CopyArenaChars(MChar* dst, const MStringView text)noexcept{
     if(!text.empty())
         FOUNDATION_MEMCPY(dst, text.size(), text.data(), text.size());

@@ -70,6 +70,11 @@ groupshared float4 g_NwbSurfelShB[NWB_SURFEL_RAYS_PER_SURFEL];
 groupshared uint g_NwbSurfelGuideBin[NWB_SURFEL_RAYS_PER_SURFEL];
 groupshared float g_NwbSurfelGuideObservation[NWB_SURFEL_RAYS_PER_SURFEL];
 groupshared float g_NwbSurfelGuideUpdated[NWB_SURFEL_GUIDE_BIN_COUNT];
+groupshared float3 g_NwbSurfelPosition;
+groupshared float3 g_NwbSurfelNormal;
+groupshared float3 g_NwbSurfelTangent;
+groupshared float3 g_NwbSurfelBitangent;
+groupshared float4 g_NwbSurfelGuideWeights[NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL];
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -86,10 +91,6 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
     const uint cursor = frameIndex % updateDivisor;
     const uint surfelIndex = cursor + groupID.x * updateDivisor;
 
-    g_NwbSurfelShR[rayIndex] = float4(0.0, 0.0, 0.0, 0.0);
-    g_NwbSurfelShG[rayIndex] = float4(0.0, 0.0, 0.0, 0.0);
-    g_NwbSurfelShB[rayIndex] = float4(0.0, 0.0, 0.0, 0.0);
-
     if(surfelIndex >= poolCapacity)
         return;
 
@@ -105,12 +106,24 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
     const uint guidedRayCount = rayCount - uniformRayCount;
     const bool updateGuide = sampleCount <= NWB_SURFEL_CONVERGED_SAMPLE_COUNT || ((frameIndex / updateDivisor + groupID.x) % NWB_SURFEL_GUIDE_MATURE_UPDATE_INTERVAL == 0u);
 
-    if(rayIndex < rayCount){
-        const float normalBias = g_NwbSurfelConstants.cellSizeRadiusBiasAccum.z;
+    if(rayIndex == 0u){
         const float3 n = g_NwbSurfelPool[surfelIndex].normal;
         const float3 up = abs(n.z) < NWB_FRAME_FALLBACK_AXIS_Z_MAX ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
         const float3 tangent = normalize(cross(up, n));
-        const float3 bitangent = cross(n, tangent);
+        g_NwbSurfelPosition = g_NwbSurfelPool[surfelIndex].position;
+        g_NwbSurfelNormal = n;
+        g_NwbSurfelTangent = tangent;
+        g_NwbSurfelBitangent = cross(n, tangent);
+    }
+    if((guidedRayCount != 0u || updateGuide) && rayIndex < NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL)
+        g_NwbSurfelGuideWeights[rayIndex] = g_NwbSurfelGuidePool[surfelIndex * NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL + rayIndex];
+    GroupMemoryBarrierWithGroupSync();
+
+    if(rayIndex < rayCount){
+        const float normalBias = g_NwbSurfelConstants.cellSizeRadiusBiasAccum.z;
+        const float3 n = g_NwbSurfelNormal;
+        const float3 tangent = g_NwbSurfelTangent;
+        const float3 bitangent = g_NwbSurfelBitangent;
 
         const uint randomSeed = frameIndex * NWB_SURFEL_TRACE_SEED_FRAME_MULTIPLIER ^ surfelIndex * NWB_SURFEL_TRACE_SEED_SURFEL_MULTIPLIER ^ rayIndex * NWB_SURFEL_TRACE_SEED_RAY_MULTIPLIER;
         uint bin = 0u;
@@ -123,7 +136,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
             NwbSurfelGuide guide;
             [unroll]
             for(uint guideLane = 0u; guideLane < NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL; ++guideLane)
-                guide.weights[guideLane] = g_NwbSurfelGuidePool[surfelIndex * NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL + guideLane];
+                guide.weights[guideLane] = g_NwbSurfelGuideWeights[guideLane];
             const float guideTotal = nwbSurfelGuideTotal(guide);
             if(rayIndex >= uniformRayCount){
                 const uint guidedIndex = rayIndex - uniformRayCount;
@@ -136,7 +149,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         const float3 dirLocal = nwbSurfelGuideDirection(bin, withinBin);
         const float3 rayDir = normalize(dirLocal.x * tangent + dirLocal.y * bitangent + dirLocal.z * n);
 
-        const float3 origin = g_NwbSurfelPool[surfelIndex].position + n * normalBias;
+        const float3 origin = g_NwbSurfelPosition + n * normalBias;
         const NwbGiTraceHit hit = nwbGiTraceClosest(origin, rayDir, NWB_GI_TRACE_RAY_MIN_DISTANCE, NWB_GI_TRACE_RAY_MAX_DISTANCE);
         half3 radiance = half3(0.0h, 0.0h, 0.0h);
         if(hit.hit && any(hit.albedo != half3(0.0h))){
@@ -159,13 +172,30 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
 
     GroupMemoryBarrierWithGroupSync();
 
-    [unroll] for(uint stride = NWB_SURFEL_RAYS_PER_SURFEL >> 1; stride > 0u; stride >>= 1){
-        if(rayIndex < stride){
-            g_NwbSurfelShR[rayIndex] += g_NwbSurfelShR[rayIndex + stride];
-            g_NwbSurfelShG[rayIndex] += g_NwbSurfelShG[rayIndex + stride];
-            g_NwbSurfelShB[rayIndex] += g_NwbSurfelShB[rayIndex + stride];
+    float4 shRSum = float4(0.0, 0.0, 0.0, 0.0);
+    float4 shGSum = float4(0.0, 0.0, 0.0, 0.0);
+    float4 shBSum = float4(0.0, 0.0, 0.0, 0.0);
+    if(rayCount <= 16u){
+        if(rayIndex == 0u){
+            for(uint i = 0u; i < rayCount; ++i){
+                shRSum += g_NwbSurfelShR[i];
+                shGSum += g_NwbSurfelShG[i];
+                shBSum += g_NwbSurfelShB[i];
+            }
         }
-        GroupMemoryBarrierWithGroupSync();
+    }
+    else if(rayIndex < 16u){
+        float4 r = g_NwbSurfelShR[rayIndex];
+        float4 g = g_NwbSurfelShG[rayIndex];
+        float4 b = g_NwbSurfelShB[rayIndex];
+        for(uint i = rayIndex + 16u; i < rayCount; i += 16u){
+            r += g_NwbSurfelShR[i];
+            g += g_NwbSurfelShG[i];
+            b += g_NwbSurfelShB[i];
+        }
+        g_NwbSurfelShR[rayIndex] = r;
+        g_NwbSurfelShG[rayIndex] = g;
+        g_NwbSurfelShB[rayIndex] = b;
     }
 
     if(updateGuide && rayIndex < NWB_SURFEL_GUIDE_BIN_COUNT){
@@ -177,7 +207,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
                 ++observations;
             }
         }
-        const float4 oldGuideLane = g_NwbSurfelGuidePool[surfelIndex * NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL + (rayIndex >> NWB_SURFEL_GUIDE_FLOAT4_BIN_SHIFT)];
+        const float4 oldGuideLane = g_NwbSurfelGuideWeights[rayIndex >> NWB_SURFEL_GUIDE_FLOAT4_BIN_SHIFT];
         const float oldWeight = max(oldGuideLane[rayIndex & NWB_SURFEL_GUIDE_FLOAT4_BIN_MASK], NWB_SURFEL_GUIDE_INITIAL_WEIGHT);
         g_NwbSurfelGuideUpdated[rayIndex] = observations != 0u
             ? lerp(oldWeight, max(observed / float(observations), NWB_SURFEL_GUIDE_INITIAL_WEIGHT), NWB_SURFEL_GUIDE_OBSERVED_BLEND)
@@ -185,14 +215,21 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         ;
     }
 
-    if(updateGuide)
+    if(rayCount > 16u || updateGuide)
         GroupMemoryBarrierWithGroupSync();
 
     if(rayIndex == 0u){
+        if(rayCount > 16u){
+            [unroll] for(uint i = 0u; i < 16u; ++i){
+                shRSum += g_NwbSurfelShR[i];
+                shGSum += g_NwbSurfelShG[i];
+                shBSum += g_NwbSurfelShB[i];
+            }
+        }
         const float projectionScale = 1.0 / float(rayCount);
-        const float4 frameShR = g_NwbSurfelShR[0] * projectionScale;
-        const float4 frameShG = g_NwbSurfelShG[0] * projectionScale;
-        const float4 frameShB = g_NwbSurfelShB[0] * projectionScale;
+        const float4 frameShR = shRSum * projectionScale;
+        const float4 frameShG = shGSum * projectionScale;
+        const float4 frameShB = shBSum * projectionScale;
 
         const uint accumCap = max(uint(g_NwbSurfelConstants.cellSizeRadiusBiasAccum.w), 1u);
         const uint n = min(sampleCount, accumCap);

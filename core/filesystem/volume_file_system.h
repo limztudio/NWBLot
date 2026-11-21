@@ -24,6 +24,11 @@ NWB_FILESYSTEM_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace FilesystemVolumeDetail{
+    class SegmentTransferCache;
+};
+
+
 class VolumeFileSystem final : public IFilesystem, NoCopy{
 private:
     struct MetadataFlushMode{
@@ -139,6 +144,7 @@ public:
 public:
     virtual b8 writeFile(const Name& virtualPath, const void* data, usize bytes)override;
     virtual b8 writeFileDeferred(const Name& virtualPath, const void* data, usize bytes)override;
+    virtual b8 writeFilesDeferred(const DeferredWriteItem* items, usize count)override;
     virtual b8 flush()override{ return compact(true); }
     virtual void reserveFileCapacity(usize fileCount)override;
 
@@ -152,7 +158,7 @@ public:
 
 
 private:
-    b8 writeFileLocked(const Name& virtualPath, const void* data, usize bytes, MetadataFlushMode::Enum flushMode);
+    b8 writeFileLocked(const Name& virtualPath, const void* data, usize bytes, MetadataFlushMode::Enum flushMode, Alloc::ScratchArena* flushScratchArena = nullptr);
     b8 scanSegmentsLocked();
 
     b8 createSegmentLocked(usize segmentIndex);
@@ -190,6 +196,7 @@ private:
     Alloc::GlobalArena& m_arena;
     SegmentPathVector m_segmentPaths;
     ReadMappingVector m_readMappings;
+    FilesystemVolumeDetail::SegmentTransferCache* m_activeWriteCache = nullptr;
     FileMap m_files;
     mutable VolumeRWLock m_mutex;
 

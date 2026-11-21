@@ -50,9 +50,15 @@ void nwbAvboitIntegrateMain(uint lowPixelIndex){
     if(firstPhysicalSlice >= activePhysicalSlices)
         return;
 
+    half lastEvaluatedExtinction = half(-1.0h);
+    half cachedTransmittance = half(1.0h);
     for(uint physicalSlice = firstPhysicalSlice; physicalSlice < physicalSliceCount; ++physicalSlice){
-        const half transmittance = exp(-min(accumulatedExtinction, saturatedExtinction));
-        g_Transmittance[uint3(lowPixel.x, lowPixel.y, physicalSlice)] = float(transmittance);
+        const half clampedExtinction = min(accumulatedExtinction, saturatedExtinction);
+        if(clampedExtinction != lastEvaluatedExtinction){
+            cachedTransmittance = exp(-clampedExtinction);
+            lastEvaluatedExtinction = clampedExtinction;
+        }
+        g_Transmittance[uint3(lowPixel.x, lowPixel.y, physicalSlice)] = float(cachedTransmittance);
 
         if(physicalSlice >= activePhysicalSlices || accumulatedExtinction >= saturatedExtinction)
             continue;
@@ -70,7 +76,8 @@ void nwbAvboitIntegrateMain(uint lowPixelIndex){
             cachedPackedWord = g_Extinction[wordIndex];
             cachedWordIndex = wordIndex;
         }
-        accumulatedExtinction = min(accumulatedExtinction + nwbAvboitUnpackExtinctionByte(cachedPackedWord, physicalSlice), saturatedExtinction);
+        if(cachedPackedWord != 0u)
+            accumulatedExtinction = min(accumulatedExtinction + nwbAvboitUnpackExtinctionByte(cachedPackedWord, physicalSlice), saturatedExtinction);
     }
 }
 

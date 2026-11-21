@@ -79,7 +79,7 @@ class ShadowMaterialContextPolicy{
             || (staticScene && swHashValid && swHash == expectedHash && sceneBvhInstanceCount == expectedInstanceCount);
     }
 
-    public b8 validateRetainState(
+    public b8 validateRetainStateForRoute(
         in PreparedShadowMaterialContextRoute route,
         in usize instanceMaterialCount,
         in usize instanceCount,
@@ -94,6 +94,8 @@ class ShadowMaterialContextPolicy{
         in b8 storageReady,
         in b8 uploadRequired,
         in b8 staticScene,
+        in b8 hwHashValid,
+        in u64 hwHash,
         in b8 swHashValid,
         in u64 swHash,
         in u64 expectedHash,
@@ -117,21 +119,38 @@ class ShadowMaterialContextPolicy{
             return false;
         }
         if(!uploadRequired){
-            if(
-                route != PreparedShadowMaterialContextRoute::Software
-                || !staticScene
-                || !swHashValid
-                || swHash != expectedHash
-                || sceneBvhInstanceCount != instanceMaterialCount
-                || sceneBvhInstanceCount != instanceCount
-                || instanceMaterialByteCount != 0u
-                || instanceByteCount != 0u
-                || materialTypedByteCount != 0u
-            ){
-                error("RendererSystem: frozen software material-context cache identity is no longer accepted");
-                return false;
+            if(route == PreparedShadowMaterialContextRoute::Hardware){
+                if(
+                    !staticScene
+                    || !hwHashValid
+                    || hwHash != expectedHash
+                    || instanceMaterialByteCount != 0u
+                    || instanceByteCount != 0u
+                    || materialTypedByteCount != 0u
+                ){
+                    error("RendererSystem: frozen hardware material-context cache identity is no longer accepted");
+                    return false;
+                }
+                return true;
             }
-            return true;
+            if(route == PreparedShadowMaterialContextRoute::Software){
+                if(
+                    !staticScene
+                    || !swHashValid
+                    || swHash != expectedHash
+                    || sceneBvhInstanceCount != instanceMaterialCount
+                    || sceneBvhInstanceCount != instanceCount
+                    || instanceMaterialByteCount != 0u
+                    || instanceByteCount != 0u
+                    || materialTypedByteCount != 0u
+                ){
+                    error("RendererSystem: frozen software material-context cache identity is no longer accepted");
+                    return false;
+                }
+                return true;
+            }
+            error("RendererSystem: frozen shadow material-context route is unsupported for cache reuse");
+            return false;
         }
         if(
             instanceMaterialByteCount == 0u
@@ -145,6 +164,56 @@ class ShadowMaterialContextPolicy{
             return false;
         }
         return true;
+    }
+
+    public b8 validateRetainState(
+        in PreparedShadowMaterialContextRoute route,
+        in usize instanceMaterialCount,
+        in usize instanceCount,
+        in usize materialTypedUploadBytes,
+        in b8 storageMatches,
+        in usize stateInstanceMaterialCapacity,
+        in usize expectedInstanceMaterialCapacity,
+        in usize stateInstanceCapacity,
+        in usize expectedInstanceCapacity,
+        in usize stateMaterialTypedCapacity,
+        in usize expectedMaterialTypedCapacity,
+        in b8 storageReady,
+        in b8 uploadRequired,
+        in b8 staticScene,
+        in b8 swHashValid,
+        in u64 swHash,
+        in u64 expectedHash,
+        in usize sceneBvhInstanceCount,
+        in usize instanceMaterialByteCount,
+        in usize instanceByteCount,
+        in usize materialTypedByteCount
+    )const{
+        return this.validateRetainStateForRoute(
+            route,
+            instanceMaterialCount,
+            instanceCount,
+            materialTypedUploadBytes,
+            storageMatches,
+            stateInstanceMaterialCapacity,
+            expectedInstanceMaterialCapacity,
+            stateInstanceCapacity,
+            expectedInstanceCapacity,
+            stateMaterialTypedCapacity,
+            expectedMaterialTypedCapacity,
+            storageReady,
+            uploadRequired,
+            staticScene,
+            false,
+            0u,
+            swHashValid,
+            swHash,
+            expectedHash,
+            sceneBvhInstanceCount,
+            instanceMaterialByteCount,
+            instanceByteCount,
+            materialTypedByteCount
+        );
     }
 }
 

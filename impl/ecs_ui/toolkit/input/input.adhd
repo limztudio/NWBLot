@@ -347,13 +347,16 @@ b8 PublishRouterTargetTable(
     mut Vector<TargetLookup> committedLookup,
     mut Vector<TargetLookup> stagedLookup,
     mut TargetSpatialIndex outSpatialIndex,
-    mut u64 inOutGeneration
+    mut u64 inOutGeneration,
+    mut b8 outHasFocusOnCommit
 ){
     b8 hasOwners = false;
     b8 hasCommandOwners = false;
-    if(!CanPublishRouterTargetTable(targets.size(), generation, inOutGeneration) || !StageRouterHitTargets(targets, stagedPopups, stagedTargets, stagedLookup, hasOwners, hasCommandOwners))
+    b8 needsSort = false;
+    outHasFocusOnCommit = false;
+    if(!CanPublishRouterTargetTable(targets.size(), generation, inOutGeneration) || !StageRouterHitTargets(targets, stagedPopups, stagedTargets, stagedLookup, hasOwners, hasCommandOwners, needsSort, outHasFocusOnCommit))
         return false;
-    if(!ValidateSortedStagedRouterTargetsAndPopups(stagedTargets, stagedLookup, stagedPopups, hasOwners, hasCommandOwners))
+    if(!ValidateSortedStagedRouterTargetsAndPopups(stagedTargets, stagedLookup, stagedPopups, hasOwners, hasCommandOwners, needsSort))
         return false;
     committedTargets.swap(stagedTargets);
     committedLookup.swap(stagedLookup);

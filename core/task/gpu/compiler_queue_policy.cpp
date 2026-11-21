@@ -68,6 +68,34 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
     return false;
 }
 
+TopologySharingLut TopologySharingLut::Build(const GpuPhysicalQueueTopology& topology)noexcept{
+    TopologySharingLut lut{};
+    lut.validBitmask = topology.queueCount > 0u && topology.queueCount <= s_BitsPerWord;
+    const u64 allMask = lut.validBitmask
+        ? (topology.queueCount == s_BitsPerWord ? ~static_cast<u64>(0u) : ((static_cast<u64>(1u) << topology.queueCount) - 1u))
+        : 0u
+    ;
+    lut.admittedQueueMasks[0u] = allMask;
+    for(u8 s = 1u; s < 8u; ++s){
+        const auto mask = static_cast<ResourceQueueSharing::Mask>(s);
+        if(LogicalSharingUsesConcurrentQueueSharing(mask, topology)){
+            lut.concurrentSharingBits |= static_cast<u8>(1u << s);
+            if(lut.validBitmask){
+                u64 admitted = 0u;
+                for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+                    if(LogicalSharingIncludesQueueFamily(mask, topology, topology.queues[queueIndex].familyIndex))
+                        admitted |= BitMask<u64>(static_cast<u32>(queueIndex));
+                }
+                lut.admittedQueueMasks[s] = admitted;
+            }
+        }
+        else{
+            lut.admittedQueueMasks[s] = allMask;
+        }
+    }
+    return lut;
+}
+
 [[nodiscard]] b8 ResourceSharingAdmitsQueue(const GpuTaskGraphResourceView& resource, const GpuPhysicalQueueTopology& topology, const GpuPhysicalQueueInfo& queue)noexcept{
     if(resource.hasQueueAdmission){
         const ResourceQueueAdmissionSnapshot& admission = resource.queueAdmission;

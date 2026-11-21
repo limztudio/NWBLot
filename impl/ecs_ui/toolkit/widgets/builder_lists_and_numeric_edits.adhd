@@ -140,7 +140,7 @@ Optional<in UiSkinRegion> Builder::prepareListFrame(in borrow IListDataSource so
 b8 Builder::prepareListMetrics(mut BuilderListFrame frame){
     if(!this.listMatches(frame) || !this.m_skin.has_value())
         return false;
-    const auto metrics = MeasureSelectable(this.m_skin.value(), frame.style.row);
+    const auto metrics = this.loadSelectableMetrics();
     if(!metrics.has_value())
         return false;
     frame.style.row.padding = metrics.value().padding;

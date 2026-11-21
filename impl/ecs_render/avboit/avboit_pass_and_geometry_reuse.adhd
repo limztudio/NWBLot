@@ -278,8 +278,8 @@ void RendererAvboitSystem::renderAvboitMaterialPass(
 }
 
 b8 DrawInputsMatch(in MaterialPassDrawItem left, in MaterialPassDrawItem right){
-    in MaterialPassMeshResourceSnapshot leftMesh = left.meshResources;
-    in MaterialPassMeshResourceSnapshot rightMesh = right.meshResources;
+    in MaterialPassMeshResourceSnapshot leftMesh = left.mesh();
+    in MaterialPassMeshResourceSnapshot rightMesh = right.mesh();
     if(
         !AvboitReuseDrawScalarComparisonPolicy().matchesScalarDrawFields(
             left.meshKey,
@@ -310,8 +310,8 @@ b8 DrawInputsMatch(in MaterialPassDrawItem left, in MaterialPassDrawItem right){
             rightMesh.dynamicMeshletConesFresh,
             leftMesh.emulationIndexByteOffset,
             rightMesh.emulationIndexByteOffset,
-            left.pipelineResources.indexedGeometryOutput,
-            right.pipelineResources.indexedGeometryOutput
+            left.pipeline().indexedGeometryOutput,
+            right.pipeline().indexedGeometryOutput
         )
         || leftMesh.emulationVertexBuffer != rightMesh.emulationVertexBuffer
         || leftMesh.emulationVertexHeapHandle != rightMesh.emulationVertexHeapHandle
@@ -347,9 +347,9 @@ b8 EligibleAvboitReuseGroup(in MaterialPassDrawItemPartitionsView draws, in Span
     MaterialPassEmulationOutputIndex<MaterialEmulationBufferIdentity> outputs;
     MaterialPassEmulationOutputIndex<u32> slots;
     for(in MaterialPassDrawItem draw : draws.regular.computeDrawItems){
-        in MaterialPassMeshResourceSnapshot mesh = draw.meshResources;
+        in MaterialPassMeshResourceSnapshot mesh = draw.mesh();
         if(draw.pipelineKey.pass != pass || draw.pipelineKey.csgMode != MaterialPipelineCsgMode::None
-            || !draw.pipelineResources.sharedGeometryComputeProgram || draw.instanceIndex >= instances.size()
+            || !draw.pipeline().sharedGeometryComputeProgram || draw.instanceIndex >= instances.size()
             || !mesh.valid() || !mesh.emulationVertexBuffer.valid() || !mesh.emulationVertexHeapHandle.valid()
             || mesh.emulationVertexHeapHandle.descriptorClass() != GpuDescriptorClass::StorageBuffer
             || !outputs.insert(MaterialEmulationBufferIdentity(mesh.emulationVertexBuffer)) || !slots.insert(mesh.emulationVertexHeapHandle.slot()))

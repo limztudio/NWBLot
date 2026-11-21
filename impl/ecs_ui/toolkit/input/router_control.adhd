@@ -60,6 +60,8 @@ Expected<ControlAction> TryConsumeRouterControlAction(
     in ControlToken token,
     mut Vector<ControlAction> controlActions
 ){
+    if(controlActions.empty())
+        return MakeUnexpected(Failure());
     const Expected<usize> targetIndex = FindTargetIndexInTable(targets, lookup, host, declarationGeneration);
     if(declarationGeneration == 0u || !token.valid() || !targetIndex.has_value())
         return MakeUnexpected(Failure());

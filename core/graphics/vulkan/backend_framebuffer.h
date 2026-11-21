@@ -58,6 +58,13 @@ private:
     VkRenderPass m_renderPass = VK_NULL_HANDLE;
     Array<CachedAttachmentView, s_MaxRenderTargets> m_cachedColorViews{};
     CachedAttachmentView m_cachedDepthView{};
+    Array<TextureSubresourceSet, s_MaxRenderTargets> m_cachedColorSubresources{};
+    TextureSubresourceSet m_cachedDepthSubresources{};
+    Array<VkRenderingAttachmentInfo, s_MaxRenderTargets> m_cachedDefaultColorAttachments{};
+    VkRenderingAttachmentInfo m_cachedDefaultDepthAttachment{};
+    VkRenderingAttachmentInfo m_cachedDefaultStencilAttachment{};
+    VkRenderingInfo m_cachedDefaultRenderingInfo{};
+    Atomic<u8> m_defaultRenderingCacheState{ 0u };
     Atomic<b8> m_allViewsCached{ false };
     b8 m_staticStructureValid = false;
     b8 m_allAttachmentsManagedNonVirtual = false;

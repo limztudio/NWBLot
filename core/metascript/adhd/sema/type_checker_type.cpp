@@ -91,25 +91,20 @@ b8 TypeChecker::interfaceInheritsFrom(const TypeRef& ifaceRef, const TypeRef& re
     if(!unwrappedIface || !unwrappedReq)
         return false;
 
-    TypeRef cleanIface = *unwrappedIface;
-    cleanIface.refMode = ParamPassingMode::None;
-    TypeRef cleanReq = *unwrappedReq;
-    cleanReq.refMode = ParamPassingMode::None;
-
-    if(cleanIface.name == cleanReq.name){
-        if(cleanReq.templateArgs.empty() || TypeComparator(m_symbols).areEquivalent(&cleanIface, &cleanReq))
+    if(unwrappedIface->name == unwrappedReq->name){
+        if(unwrappedReq->templateArgs.empty() || TypeComparator(m_symbols).areEquivalentIgnoringRefMode(unwrappedIface, unwrappedReq))
             return true;
     }
 
-    if(const InterfaceDecl* ifaceDecl = m_symbols.findInterface(cleanIface.name)){
+    if(const InterfaceDecl* ifaceDecl = m_symbols.findInterface(unwrappedIface->name)){
         const ClassRoleContractInfo* assetContract = ContractSemantics::FindClassRoleContract(ClassRoleKind::Asset);
-        if(!ifaceDecl->assetTypeName.empty() && assetContract && m_symbols.resolveBaseTypeName(cleanReq.name) == assetContract->implicitInterfaceAdhdName)
+        if(!ifaceDecl->assetTypeName.empty() && assetContract && m_symbols.resolveBaseTypeName(unwrappedReq->name) == assetContract->implicitInterfaceAdhdName)
             return true;
         for(const TypeRef* rawBase : ifaceDecl->baseInterfaces){
             if(!rawBase)
                 continue;
-            const TypeRef* subBase = m_symbols.substituteTypeParams(rawBase, ifaceDecl->templateParams, &cleanIface);
-            if(subBase && interfaceInheritsFrom(*subBase, cleanReq, depth + 1u))
+            const TypeRef* subBase = m_symbols.substituteTypeParams(rawBase, ifaceDecl->templateParams, unwrappedIface);
+            if(subBase && interfaceInheritsFrom(*subBase, *unwrappedReq, depth + 1u))
                 return true;
         }
     }
@@ -261,9 +256,11 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
     if(!FindTemplateParam(enclosingClass, enclosingMethod, typeRef.name))
         recordBuiltinTypeHeader(typeRef.name);
     const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(&typeRef);
-    const MStringView resolvedHeaderTypeName = unwrapped ? unwrapped->name : typeRef.name;
-    if(!FindTemplateParam(enclosingClass, enclosingMethod, resolvedHeaderTypeName))
-        recordBuiltinTypeHeader(resolvedHeaderTypeName);
+    if(unwrapped && unwrapped != &typeRef && unwrapped->name != typeRef.name){
+        if(!FindTemplateParam(enclosingClass, enclosingMethod, unwrapped->name))
+            recordBuiltinTypeHeader(unwrapped->name);
+    }
+    const TypeAliasDecl* targetAlias = m_symbols.findTypeAlias(typeRef.name);
     const b8 isVoid = IsVoidTypeRef(&typeRef) || IsVoidTypeRef(unwrapped);
     if(isVoid){
         if(typeRef.refMode != ParamPassingMode::None || (unwrapped && unwrapped->refMode != ParamPassingMode::None)){
@@ -275,12 +272,10 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
             ok = false;
         }
     }
-    else if(typeRef.refMode != ParamPassingMode::None){
-        if(const TypeAliasDecl* aliasDecl = m_symbols.findTypeAlias(typeRef.name)){
-            if(m_symbols.resolveRefMode(aliasDecl->aliasedType) != ParamPassingMode::None){
-                reportError(errors, typeRef.span, "cannot apply 'in' or 'mut' to a 'type' alias that already specifies a reference mode");
-                ok = false;
-            }
+    else if(typeRef.refMode != ParamPassingMode::None && targetAlias){
+        if(m_symbols.resolveRefMode(targetAlias->aliasedType) != ParamPassingMode::None){
+            reportError(errors, typeRef.span, "cannot apply 'in' or 'mut' to a 'type' alias that already specifies a reference mode");
+            ok = false;
         }
     }
     if(typeRef.isFuncType){
@@ -297,26 +292,29 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
             }
         }
     }
-    if(const ClassDecl* targetCls = m_symbols.findClass(typeRef.name)){
+    const ClassDecl* targetCls = m_symbols.findClass(typeRef.name);
+    const InterfaceDecl* targetIface = targetCls ? nullptr : m_symbols.findInterface(typeRef.name);
+    const b8 hasTypeSym = (targetCls != nullptr) || (targetIface != nullptr) || (targetAlias != nullptr) || (m_symbols.findEnum(typeRef.name) != nullptr);
+    const BuiltinGenericTypeInfo* genericInfo = hasTypeSym ? nullptr : FindBuiltinGenericType(typeRef.name);
+    if(targetCls){
         if(!targetCls->templateParams.empty() || !typeRef.templateArgs.empty()){
             if(!checkTemplateArgBounds(targetCls->templateParams, typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors))
                 ok = false;
         }
     }
-    else if(const InterfaceDecl* targetIface = m_symbols.findInterface(typeRef.name)){
+    else if(targetIface){
         if(!targetIface->templateParams.empty() || !typeRef.templateArgs.empty()){
             if(!checkTemplateArgBounds(targetIface->templateParams, typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors))
                 ok = false;
         }
     }
-    else if(const TypeAliasDecl* targetAlias = m_symbols.findTypeAlias(typeRef.name)){
+    else if(targetAlias){
         if(!targetAlias->templateParams.empty() || !typeRef.templateArgs.empty()){
             if(!checkTemplateArgBounds(targetAlias->templateParams, typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors))
                 ok = false;
         }
     }
-    else if(!m_symbols.hasTypeSymbol(typeRef.name) && FindBuiltinGenericType(typeRef.name) != nullptr){
-        const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(typeRef.name);
+    else if(genericInfo){
         switch(genericInfo->paramKind){
         case GenericParamKind::SingleType:{
             if(typeRef.templateArgs.size() != 1u || !typeRef.templateArgs[0].type){
@@ -366,7 +364,7 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
         }
         }
     }
-    else if(const BuiltinObjectTypeInfo* obj = FindBuiltinObjectType(typeRef.name); obj && !obj->templateParams.empty()){
+    else if(const BuiltinObjectTypeInfo* obj = hasTypeSym ? nullptr : FindBuiltinObjectType(typeRef.name); obj && !obj->templateParams.empty()){
         if(!checkTemplateArgBounds(obj->templateParams, typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors))
             ok = false;
     }
@@ -375,17 +373,15 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
         ok = false;
     }
 
-    const BuiltinGenericTypeInfo* outerGenericInfo = m_symbols.hasTypeSymbol(typeRef.name) ? nullptr : FindBuiltinGenericType(typeRef.name);
-    const b8 allowFirstVoidArg = outerGenericInfo && outerGenericInfo->inlineLayoutKind == InlineLayoutKind::Expected;
-    const usize nsSep = typeRef.name.rfind(ContractSemantics::s_CppScopeSeparator);
-    const MStringView outerBaseName = (nsSep == MStringView::npos) ? typeRef.name : typeRef.name.substr(nsSep + ContractSemantics::s_CppScopeSeparator.size());
-    const b8 allowInterfaceArgs = (outerGenericInfo && outerGenericInfo->isAssetHandle)
-        || IsAssetHandleType(typeRef.name)
-        || AllowsInterfaceTypeArg(outerBaseName);
-    if(!checkTemplateArgTypes(typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors, allowFirstVoidArg, allowInterfaceArgs))
-        ok = false;
     if(!typeRef.templateArgs.empty()){
-        const BuiltinGenericTypeInfo* genericInfo = m_symbols.hasTypeSymbol(typeRef.name) ? nullptr : FindBuiltinGenericType(typeRef.name);
+        const b8 allowFirstVoidArg = genericInfo && genericInfo->inlineLayoutKind == InlineLayoutKind::Expected;
+        const usize nsSep = typeRef.name.rfind(ContractSemantics::s_CppScopeSeparator);
+        const MStringView outerBaseName = (nsSep == MStringView::npos) ? typeRef.name : typeRef.name.substr(nsSep + ContractSemantics::s_CppScopeSeparator.size());
+        const b8 allowInterfaceArgs = (genericInfo && genericInfo->isAssetHandle)
+            || IsAssetHandleType(typeRef.name)
+            || AllowsInterfaceTypeArg(outerBaseName);
+        if(!checkTemplateArgTypes(typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors, allowFirstVoidArg, allowInterfaceArgs))
+            ok = false;
         const b8 allowsDirectSimdValueArg = genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional);
         for(usize argIdx = 0u; argIdx < typeRef.templateArgs.size(); ++argIdx){
             const TypeRef* argType = typeRef.templateArgs[argIdx].type;
@@ -413,7 +409,7 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
         }
     }
     if(!typeRef.isAuto && !typeRef.isFuncType && !typeRef.name.empty()){
-        if((m_symbols.findGlobalConstant(typeRef.name) != nullptr && !m_symbols.hasTypeSymbol(typeRef.name)) || HasConstValueTemplateParam(enclosingClass, enclosingMethod, typeRef.name)){
+        if((!hasTypeSym && m_symbols.findGlobalConstant(typeRef.name) != nullptr) || HasConstValueTemplateParam(enclosingClass, enclosingMethod, typeRef.name)){
             reportError(errors, typeRef.span, "compile-time constant cannot be used as a type");
             ok = false;
         }

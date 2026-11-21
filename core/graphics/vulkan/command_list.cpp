@@ -526,20 +526,24 @@ b8 CommandList::matchesActiveNativeLeaseIdentity()const noexcept{
     return m_isRecording && matchesNativeLeaseIdentity();
 }
 
-b8 CommandList::matchesSubmissionLease(const GpuPhysicalQueueId executionQueue, const CommandQueue::Enum executionQueueClass, const b8 graphSubmissionAuthorized)const noexcept{
+b8 CommandList::matchesSubmissionLease(const GpuPhysicalQueueId executionQueue, const CommandQueue::Enum executionQueueClass, const b8 graphSubmissionAuthorized, u64* const outGraphOwnershipSerial)const noexcept{
     const u8 requiredPublicationState = graphSubmissionAuthorized ? s_GraphPublicationSubmitting : s_GraphPublicationUnowned;
     if(m_graphPublicationState.load(MemoryOrder::acquire) != requiredPublicationState)
         return false;
 
-    return
+    const u64 ownershipSerial = m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire);
+    const b8 matches =
         !m_isRecording
         && !m_commandRecordingFailed
-        && (graphSubmissionAuthorized == (m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire) != 0u))
+        && (graphSubmissionAuthorized == (ownershipSerial != 0u))
         && executionQueue.valid()
         && executionQueue == m_creationDesc.physicalQueue
         && executionQueueClass == m_creationDesc.queueType
         && matchesNativeLeaseIdentity()
     ;
+    if(matches && outGraphOwnershipSerial)
+        *outGraphOwnershipSerial = graphSubmissionAuthorized ? ownershipSerial : 0u;
+    return matches;
 }
 
 b8 CommandList::isTextureAdmittedToCommandQueue(const Texture& texture)const noexcept{

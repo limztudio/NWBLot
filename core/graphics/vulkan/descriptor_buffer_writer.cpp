@@ -88,7 +88,7 @@ b8 GpuDescriptorHeap::DescriptorBufferWriter::initialize(const u32 offsetAlignme
 }
 
 b8 GpuDescriptorHeap::DescriptorBufferWriter::write(const DescriptorWriteItem& writeItem, const GpuDescriptorClass::Enum descriptorClass){
-    if(!m_heap.m_context.descriptorBufferManager || !m_heap.m_context.descriptorBufferManager->isEnabled())
+    if(!m_heap.m_context.descriptorBufferManager || !m_heap.m_context.descriptorBufferManager->isEnabledFast())
         return false;
 
     if(descriptorClass == GpuDescriptorClass::AccelStruct){
@@ -97,7 +97,7 @@ b8 GpuDescriptorHeap::DescriptorBufferWriter::write(const DescriptorWriteItem& w
             return false;
         }
 
-        const u32 descriptorSize = m_heap.m_context.descriptorBufferManager->getDescriptorSize(VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR);
+        const u32 descriptorSize = m_heap.m_context.descriptorBufferManager->getImmutableDescriptorSize(VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR);
         const u32 setSizeBytes = m_heap.m_accelStructLayout->getDescriptorBufferSetSizeBytes();
         if(
             descriptorSize == 0u
@@ -160,7 +160,7 @@ b8 GpuDescriptorHeap::DescriptorBufferWriter::write(const DescriptorWriteItem& w
     }
 
     const VkDescriptorType descriptorType = VulkanDetail::ConvertDescriptorType(writeItem.type);
-    const u32 descriptorSize = m_heap.m_context.descriptorBufferManager->getDescriptorSize(descriptorType);
+    const u32 descriptorSize = m_heap.m_context.descriptorBufferManager->getImmutableDescriptorSize(descriptorType);
     if(descriptorSize == 0u){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap::writeDescriptorBuffer: zero descriptor size for class {}."), static_cast<u32>(descriptorClass));
         return false;

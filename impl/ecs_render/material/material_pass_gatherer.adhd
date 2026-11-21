@@ -105,6 +105,108 @@ MaterialPassMeshResourceSnapshot CaptureMaterialMeshResourceSnapshot(in MeshReso
     return snapshot;
 }
 
+class MaterialPassMeshSnapshotKey{
+    public usize positionIdentity = 0u;
+    public usize emulationIdentity = 0u;
+    public usize objectCacheIdentity = 0u;
+    public u64 runtimeVersion = 0u;
+    public u64 sourceRevision = 0u;
+    public u32 emulationIndexByteOffset = 0u;
+    public u32 objectCacheIndexByteOffset = 0u;
+    public b8 runtimeMesh = false;
+    public b8 boundsFresh = false;
+    public b8 conesFresh = false;
+    public b8 objectCacheInitialized = false;
+    public b8 objectDecoderValid = false;
+    public b8 emulationHeapValid = false;
+
+    public usize hash()const{
+        usize seed = HashValue(this.positionIdentity);
+        seed = HashCombineValue(seed, this.emulationIdentity);
+        seed = HashCombineValue(seed, this.objectCacheIdentity);
+        seed = HashCombineValue(seed, this.runtimeVersion);
+        seed = HashCombineValue(seed, this.sourceRevision);
+        seed = HashCombineValue(seed, this.emulationIndexByteOffset);
+        seed = HashCombineValue(seed, this.objectCacheIndexByteOffset);
+        return HashCombineValue(seed,
+            cast<usize>(this.runtimeMesh)
+            | (cast<usize>(this.boundsFresh) << 1u)
+            | (cast<usize>(this.conesFresh) << 2u)
+            | (cast<usize>(this.objectCacheInitialized) << 3u)
+            | (cast<usize>(this.objectDecoderValid) << 4u)
+            | (cast<usize>(this.emulationHeapValid) << 5u)
+        );
+    }
+
+    public b8 operator==(in MaterialPassMeshSnapshotKey rhs)const{
+        return this.positionIdentity == rhs.positionIdentity
+            && this.emulationIdentity == rhs.emulationIdentity
+            && this.objectCacheIdentity == rhs.objectCacheIdentity
+            && this.runtimeVersion == rhs.runtimeVersion
+            && this.sourceRevision == rhs.sourceRevision
+            && this.emulationIndexByteOffset == rhs.emulationIndexByteOffset
+            && this.objectCacheIndexByteOffset == rhs.objectCacheIndexByteOffset
+            && this.runtimeMesh == rhs.runtimeMesh
+            && this.boundsFresh == rhs.boundsFresh
+            && this.conesFresh == rhs.conesFresh
+            && this.objectCacheInitialized == rhs.objectCacheInitialized
+            && this.objectDecoderValid == rhs.objectDecoderValid
+            && this.emulationHeapValid == rhs.emulationHeapValid;
+    }
+}
+
+MaterialPassMeshSnapshotKey MakeMaterialPassMeshSnapshotKey(in MeshResources mesh){
+    MaterialPassMeshSnapshotKey key;
+    key.positionIdentity = mesh.buffers.positionBuffer.identity();
+    key.emulationIdentity = mesh.emulationVertexBuffer.identity();
+    key.objectCacheIdentity = mesh.objectGeometryCache.buffer.identity();
+    key.runtimeVersion = mesh.runtimeMeshVersion;
+    key.sourceRevision = mesh.runtimeGeometryContentRevision;
+    key.emulationIndexByteOffset = mesh.emulationIndexByteOffset;
+    key.objectCacheIndexByteOffset = mesh.objectGeometryCache.indexByteOffset;
+    key.runtimeMesh = mesh.runtimeMesh;
+    key.boundsFresh = mesh.dynamicMeshletBoundsFresh;
+    key.conesFresh = mesh.dynamicMeshletConesFresh;
+    key.objectCacheInitialized = mesh.objectGeometryCache.initialized;
+    key.objectDecoderValid = mesh.objectGeometryCache.decoderPipeline.valid();
+    key.emulationHeapValid = mesh.emulationVertexHeapHandle.valid();
+    return key;
+}
+
+class MaterialPassDrawSnapshotCache : NoCopy{
+    private HashMap<MaterialPassMeshSnapshotKey, Shared<MaterialPassMeshResourceSnapshot>> m_meshes;
+    private HashMap<MaterialPipelineKey, Shared<MaterialPassPipelineResourceSnapshot>> m_pipelines;
+
+    [cpp_unwind]
+    public Expected<Shared<MaterialPassMeshResourceSnapshot>> mesh(in SharedPool pool, in MeshResources meshResources){
+        const MaterialPassMeshSnapshotKey key = MakeMaterialPassMeshSnapshotKey(meshResources);
+        const auto found = this.m_meshes.find(key);
+        if(found != this.m_meshes.end())
+            return found.value();
+
+        MaterialPassMeshResourceSnapshot snapshot = CaptureMaterialMeshResourceSnapshot(meshResources);
+        const auto created = pool.makePrepared<MaterialPassMeshResourceSnapshot>(snapshot);
+        if(!created.has_value())
+            return MakeUnexpected(Failure());
+        const auto inserted = this.m_meshes.try_emplace(key, created.value());
+        return inserted.first.value();
+    }
+
+    [cpp_unwind]
+    public Expected<Shared<MaterialPassPipelineResourceSnapshot>> pipeline(in SharedPool pool, in MaterialPipelineKey key, in MaterialPipelineResources pipelineResources){
+        const auto found = this.m_pipelines.find(key);
+        if(found != this.m_pipelines.end())
+            return found.value();
+
+        MaterialPassPipelineResourceSnapshot snapshot = CaptureMaterialPassPipelineResourceSnapshot(pipelineResources);
+        const auto created = pool.makePrepared<MaterialPassPipelineResourceSnapshot>(snapshot);
+        if(!created.has_value())
+            return MakeUnexpected(Failure());
+        const auto inserted = this.m_pipelines.try_emplace(key, created.value());
+        return inserted.first.value();
+    }
+}
+
 b8 PrepareMaterialPassGeometry(mut RendererMeshSystem meshes, in RendererResourceLookupMode lookupMode, mut MeshResources mesh, in MaterialPipelineResources resources){
     switch(resources.renderPath){
     case RenderPath::MeshShader:
@@ -276,6 +378,7 @@ class MaterialDrawGather{
     private in Optional<in MeshViewGpuData> meshView;
     private in MaterialPassGatherOutputs outputs;
     private mut MaterialTypedStager typedStager;
+    private MaterialPassDrawSnapshotCache m_snapshotCache;
 
     public MaterialDrawGather(
         mut RendererMaterialSystem system,
@@ -372,10 +475,13 @@ class MaterialDrawGather{
         if(!primary.has_value() || !this.prepareGeometry(mesh, primary.value()))
             return false;
         const RenderPath path = primary.value().renderPath;
-        const MaterialPassPipelineResourceSnapshot primarySnapshot = CaptureMaterialPassPipelineResourceSnapshot(primary.value());
+        in SharedPool snapshotPool = this.system.materialState().m_drawSnapshotPool;
+        const auto primarySnapshotResult = this.m_snapshotCache.pipeline(snapshotPool, key, primary.value());
+        if(!primarySnapshotResult.has_value())
+            return false;
         const b8 surfaceActive = IsCsgReceiverSurfacePassActive(clipActive, this.pass);
         MaterialPipelineKey surfaceKey = key;
-        MaterialPassPipelineResourceSnapshot surfaceSnapshot;
+        Shared<MaterialPassPipelineResourceSnapshot> surfaceSnapshot;
         RenderPath surfacePath = RenderPath::MeshShader;
         if(surfaceActive){
             surfaceKey.pass = MaterialPipelinePass::CsgReceiverSurface;
@@ -385,8 +491,14 @@ class MaterialDrawGather{
             if(!surface.has_value() || !this.prepareGeometry(mesh, surface.value()))
                 return false;
             surfacePath = surface.value().renderPath;
-            surfaceSnapshot = CaptureMaterialPassPipelineResourceSnapshot(surface.value());
+            const auto surfaceSnapshotResult = this.m_snapshotCache.pipeline(snapshotPool, surfaceKey, surface.value());
+            if(!surfaceSnapshotResult.has_value())
+                return false;
+            surfaceSnapshot = surfaceSnapshotResult.value();
         }
+        const auto meshSnapshotResult = this.m_snapshotCache.mesh(snapshotPool, mesh);
+        if(!meshSnapshotResult.has_value())
+            return false;
 
         const auto appended = this.appendInstance(entity, material, mesh, transform, lookup.has_value());
         if(!appended.has_value())
@@ -415,8 +527,8 @@ class MaterialDrawGather{
         MaterialPassDrawItem item;
         item.meshKey = mesh.meshName;
         item.pipelineKey = key;
-        item.meshResources = CaptureMaterialMeshResourceSnapshot(mesh);
-        item.pipelineResources = primarySnapshot;
+        item.meshResources = meshSnapshotResult.value();
+        item.pipelineResources = primarySnapshotResult.value();
         item.instanceIndex = index;
         item.materialConstantByteOffset = constantOffset;
         item.shadingModelId = material.shadingModelId;
@@ -509,6 +621,7 @@ class TransparentBatchGatherState : NoCopy{
     public in Array<usize, s_MaterialPipelinePassCount> dimIndexPerPass;
     public usize dimCount;
     public mut Array<b8, s_MaterialPipelinePassCount> fallbackPass;
+    private MaterialPassDrawSnapshotCache m_snapshotCache;
 
     public TransparentBatchGatherState(
         mut RendererMaterialSystem system,
@@ -602,8 +715,9 @@ class TransparentBatchGatherState : NoCopy{
         }
 
         const usize passCount = this.passes.size();
+        in SharedPool snapshotPool = this.system.materialState().m_drawSnapshotPool;
         Array<MaterialPipelineKey, s_MaterialPipelinePassCount> keys;
-        Array<MaterialPassPipelineResourceSnapshot, s_MaterialPipelinePassCount> pipelineSnapshots;
+        Array<Shared<MaterialPassPipelineResourceSnapshot>, s_MaterialPipelinePassCount> pipelineSnapshots;
         Array<RenderPath, s_MaterialPipelinePassCount> paths;
         Array<b8, s_MaterialPipelinePassCount> emitDraw;
         Array<b8, s_MaterialPipelinePassCount> dimNeedsClip;
@@ -629,8 +743,13 @@ class TransparentBatchGatherState : NoCopy{
                 this.fallbackPass[p] = true;
                 continue;
             }
+            const auto snapshotResult = this.m_snapshotCache.pipeline(snapshotPool, key, primary.value());
+            if(!snapshotResult.has_value()){
+                this.fallbackPass[p] = true;
+                continue;
+            }
             keys[p] = key;
-            pipelineSnapshots[p] = CaptureMaterialPassPipelineResourceSnapshot(primary.value());
+            pipelineSnapshots[p] = snapshotResult.value();
             paths[p] = primary.value().renderPath;
             emitDraw[p] = true;
             anySuccess = true;
@@ -639,6 +758,13 @@ class TransparentBatchGatherState : NoCopy{
         }
         if(!anySuccess && !needsReceiverInstanceOnly)
             return;
+        Shared<MaterialPassMeshResourceSnapshot> meshSnapshot;
+        if(anySuccess){
+            const auto meshSnapshotResult = this.m_snapshotCache.mesh(snapshotPool, mesh);
+            if(!meshSnapshotResult.has_value())
+                return;
+            meshSnapshot = meshSnapshotResult.value();
+        }
 
         const auto appended = AppendMaterialPassInstance(
             this.typedStager,
@@ -690,7 +816,6 @@ class TransparentBatchGatherState : NoCopy{
             }
         }
 
-        const MaterialPassMeshResourceSnapshot meshSnapshot = CaptureMaterialMeshResourceSnapshot(mesh);
         b8 meshletConeCullScaleSafe = true;
         if(transform.has_value())
             meshletConeCullScaleSafe = MeshletConeCullScaleSafe(LoadFloat(transform.value().scale));

@@ -63,11 +63,23 @@ class Name{
 
 private:
     struct StringViewConstruction{};
+    struct UninitializedHashTag{};
 
 
 public:
+    explicit Name(UninitializedHashTag)noexcept
+#if defined(FOUNDATION_DEBUG) || defined(FOUNDATION_BUILD_SYMBOLS)
+        : m_debugName{}
+#endif
+#if defined(FOUNDATION_BUILD_SYMBOLS)
+        , m_hasSymbolText(false)
+#endif
+    {}
+
     template<typename CharT>
     [[nodiscard]] static constexpr Expected<Name, NameTextError::Enum> FromText(const BasicStringView<CharT> text){
+        if(!IsConstantEvaluated())
+            return FromTextRuntime(text);
         const auto hash = ComputeNameHash(text);
         if(!hash)
             return MakeUnexpected(hash.error());
@@ -76,6 +88,23 @@ public:
 
 
 private:
+    template<typename CharT>
+    [[nodiscard]] static Expected<Name, NameTextError::Enum> FromTextRuntime(const BasicStringView<CharT> text){
+        Expected<Name, NameTextError::Enum> result(std::in_place, UninitializedHashTag{});
+        if(!NameDetail::ComputeCanonicalNameHashDirect(result->m_hash, text)) [[unlikely]]{
+            result = MakeUnexpected(NameTextError::EmbeddedNull);
+            return result;
+        }
+#if defined(FOUNDATION_DEBUG) || defined(FOUNDATION_BUILD_SYMBOLS)
+        NameDetail::CopyDebugName(result->m_debugName.data(), NameDetail::s_DebugNameCapacity, text);
+#endif
+#if defined(FOUNDATION_BUILD_SYMBOLS)
+        result->m_hasSymbolText = true;
+#endif
+        NameDetail::RecordNameSymbolText(result->m_hash, text);
+        return result;
+    }
+
     template<typename CharT>
     constexpr Name(StringViewConstruction, const NameHash& hash, const BasicStringView<CharT> text)
         : m_hash(hash)

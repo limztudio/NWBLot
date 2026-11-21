@@ -160,12 +160,15 @@ b8 ParseAssetMetadata(
             outMetadata.fileCacheRecords.emplace_back(cookArena);
     }
 
-    ScratchString metaText{scratchArena};
-    ScratchString sourcePathText{scratchArena};
-    ScratchString cacheFileName{scratchArena};
+    ScratchArena fileScratchArena;
 
     b8 parsedAnyMetadata = false;
     for(usize fileIndex = 0u; fileIndex < nwbFiles.size(); ++fileIndex){
+        Alloc::ScratchArena::Scope fileScratchScope(fileScratchArena);
+        ScratchString metaText{fileScratchArena};
+        ScratchString sourcePathText{fileScratchArena};
+        ScratchString cacheFileName{fileScratchArena};
+
         const DiscoveredNwbFile& discoveredNwbFile = nwbFiles[fileIndex];
         metaText.clear();
         if(!ReadTextFile(discoveredNwbFile.filePath, metaText)){
@@ -182,7 +185,7 @@ b8 ParseAssetMetadata(
                 discoveredNwbFile,
                 AStringView(metaText),
                 producerDigest,
-                scratchArena,
+                fileScratchArena,
                 sourcePathText,
                 cacheFileName,
                 cacheRecord
@@ -192,7 +195,7 @@ b8 ParseAssetMetadata(
             if(cacheRecord.canWriteCache && !IsLikelyNonStandaloneFirstToken(firstToken)){
                 const auto cacheResult = CookMetadataDetail::TryLoadNwbFileAssetCache(
                     cacheRecord,
-                    scratchArena,
+                    fileScratchArena,
                     seenPropertyAssetPathHashes,
                     outMetadata
                 );
@@ -217,7 +220,7 @@ b8 ParseAssetMetadata(
         const auto& doc = *parsedDoc;
 
         b8 fileIsStandalone = true;
-        AssetBunchExpandContext assetBunchExpandContext{ discoveredNwbFile.assetRoot, discoveredNwbFile.virtualRoot.view(), discoveredNwbFile.filePath, doc, scratchArena };
+        AssetBunchExpandContext assetBunchExpandContext{ discoveredNwbFile.assetRoot, discoveredNwbFile.virtualRoot.view(), discoveredNwbFile.filePath, doc, fileScratchArena };
         auto expandedAssets = TryAutoCollectedAssetBunchExpanders(assetBunchExpandContext);
         if(!expandedAssets && expandedAssets.error() == AssetBunchExpandFailure::Error)
             return false;
@@ -235,7 +238,7 @@ b8 ParseAssetMetadata(
                     expandedAsset.value,
                     cookArena,
                     cpuScheduler,
-                    scratchArena,
+                    fileScratchArena,
                     seenPropertyAssetPathHashes,
                     outMetadata,
                     fileIsStandalone
@@ -254,7 +257,7 @@ b8 ParseAssetMetadata(
             return false;
         }
 
-        if(!__hidden_cook_metadata::ParseSingleAssetDocument(discoveredNwbFile, fileIndex, doc, cookArena, cpuScheduler, scratchArena, seenPropertyAssetPathHashes, outMetadata, fileIsStandalone))
+        if(!__hidden_cook_metadata::ParseSingleAssetDocument(discoveredNwbFile, fileIndex, doc, cookArena, cpuScheduler, fileScratchArena, seenPropertyAssetPathHashes, outMetadata, fileIsStandalone))
             return false;
         if(useAssetCache)
             outMetadata.fileCacheRecords[fileIndex].standalone = fileIsStandalone;

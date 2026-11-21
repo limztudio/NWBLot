@@ -15,6 +15,7 @@
 #include <clang-c/Index.h>
 #include <core/metascript/literal_decoder.h>
 #include <global/array.h>
+#include <global/hash_utils.h>
 #include <global/numeric_text.h>
 
 
@@ -241,7 +242,9 @@ public:
 [[nodiscard]] b8 StartsWithCaseInsensitivePrefix(MStringView fullPath, MStringView prefix)noexcept;
 [[nodiscard]] Expr* AllocateSignedIntegerLiteral(MetaArena& arena, long long val);
 [[nodiscard]] MString ConsumeClangString(MetaArena& arena, CXString cxStr);
-void RewriteTemplateTypeRefName(TypeRef* ref, MStringView oldName, MStringView newName)noexcept;
+[[nodiscard]] TypeRef* CloneTypeRefDeep(MetaArena& arena, const TypeRef* src);
+[[nodiscard]] TypeRef* RewriteTemplateTypeRefName(MetaArena& arena, TypeRef* ref, MStringView oldName, MStringView newName);
+[[nodiscard]] MStringView MapRawBuiltinScalarKind(CXTypeKind kind)noexcept;
 [[nodiscard]] b8 FormatNormalizedAdhdDeclName(
     MetaArena& arena,
     CXCursor declCursor,
@@ -255,6 +258,61 @@ void RewriteTemplateTypeRefName(TypeRef* ref, MStringView oldName, MStringView n
 void AppendExternAttributes(MString& out, MStringView requiredHeader, MStringView cppExportName, MStringView indent);
 void AppendTypeRefExternText(MString& out, const TypeRef& type, b8 includeRefMode);
 void AppendMethodExternSignature(MString& out, const MethodDecl& m, MStringView indent, b8 includeHeader);
+[[nodiscard]] MString BuildFreeFunctionSigKey(MetaArena& arena, const MethodDecl& decl);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct CursorKey{
+    i32 kind = 0;
+    i32 xdata = 0;
+    const void* data0 = nullptr;
+    const void* data1 = nullptr;
+
+    [[nodiscard]] b8 operator==(const CursorKey& rhs)const noexcept{
+        return kind == rhs.kind && xdata == rhs.xdata && data0 == rhs.data0 && data1 == rhs.data1;
+    }
+};
+
+struct CursorKeyHash{
+    [[nodiscard]] usize operator()(const CursorKey& key)const noexcept{
+        u64 h = MixMurmur64Finalizer((static_cast<u64>(static_cast<u32>(key.kind)) << 32u) ^ static_cast<u64>(static_cast<u32>(key.xdata)));
+        h = MixMurmur64Finalizer(h ^ reinterpret_cast<u64>(key.data0));
+        h = MixMurmur64Finalizer(h ^ reinterpret_cast<u64>(key.data1));
+        return static_cast<usize>(h);
+    }
+};
+
+[[nodiscard]] inline CursorKey MakeCursorKey(const CXCursor cursor)noexcept{
+    return CursorKey{ static_cast<i32>(cursor.kind), static_cast<i32>(cursor.xdata), cursor.data[0], cursor.data[1] };
+}
+
+struct TypeCacheKey{
+    i32 kind = 0;
+    u8 isParamContext = 0u;
+    const void* data0 = nullptr;
+    const void* data1 = nullptr;
+
+    [[nodiscard]] b8 operator==(const TypeCacheKey& rhs)const noexcept{
+        return kind == rhs.kind && isParamContext == rhs.isParamContext && data0 == rhs.data0 && data1 == rhs.data1;
+    }
+};
+
+struct TypeCacheKeyHash{
+    [[nodiscard]] usize operator()(const TypeCacheKey& key)const noexcept{
+        u64 h = MixMurmur64Finalizer((static_cast<u64>(static_cast<u32>(key.kind)) << 8u) ^ static_cast<u64>(key.isParamContext));
+        h = MixMurmur64Finalizer(h ^ reinterpret_cast<u64>(key.data0));
+        h = MixMurmur64Finalizer(h ^ reinterpret_cast<u64>(key.data1));
+        return static_cast<usize>(h);
+    }
+};
+
+struct VoidPtrHash{
+    [[nodiscard]] usize operator()(const void* ptr)const noexcept{
+        return static_cast<usize>(MixMurmur64Finalizer(reinterpret_cast<u64>(ptr)));
+    }
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -266,7 +324,10 @@ public:
         : m_arena(arena)
         , m_unit(unit)
         , m_includeRoots(arena)
+        , m_headerByFile(arena)
         , m_headerCache(arena)
+        , m_declNameCache(arena)
+        , m_typeCache(arena)
         , m_classByExportName(arena)
         , m_classByName(arena)
         , m_enumByExportName(arena)
@@ -283,6 +344,15 @@ public:
 
 
 private:
+    struct CachedDeclName{
+        MStringView name;
+        MStringView cppNamespace;
+        MStringView cppExportName;
+        b8 isDirectEnum = false;
+        b8 isFlag = false;
+        b8 valid = false;
+    };
+
     struct ClassTraits{
         b8 isCopyConstructible = true;
         b8 isMoveConstructible = true;
@@ -298,18 +368,43 @@ private:
         explicit ClassTraits(MetaArena& arena)noexcept : publicBaseRecords(arena){}
     };
 
+    struct ClassImportDedupe{
+        HashSet<MStringView, MetaArena, MStringViewHash> seenFields;
+        HashMap<MStringView, MVector<const MethodDecl*>, MetaArena, MStringViewHash> methodsByName;
+        HashSet<CursorKey, MetaArena, CursorKeyHash> visitedBaseRecords;
+
+        ClassImportDedupe(MetaArena& arena, const ClassDecl& cls)
+            : seenFields(arena)
+            , methodsByName(arena)
+            , visitedBaseRecords(arena)
+        {
+            for(const FieldDecl* field : cls.fields){
+                if(field && !field->name.empty())
+                    seenFields.insert(field->name);
+            }
+            for(const MethodDecl* method : cls.methods){
+                if(!method)
+                    continue;
+                auto [it, inserted] = methodsByName.emplace(method->name, MVector<const MethodDecl*>(arena));
+                it.value().push_back(method);
+            }
+        }
+    };
+
 
 private:
+    [[nodiscard]] b8 formatDeclName(CXCursor declCursor, MStringView& outName, MStringView& outNamespace, MStringView& outCppExportName, b8& outIsDirectEnum, b8& outIsFlag);
     [[nodiscard]] MStringView resolveRequiredHeader(CXCursor cursor);
     [[nodiscard]] MStringView mapOperatorToken(MStringView spelling)noexcept;
     [[nodiscard]] b8 hasDefaultInitializerToken(CXCursor parmCursor)const;
     [[nodiscard]] TypeRef* mapGenericContainerType(CXType type, CXType canonical, MStringView rawSpelling, MStringView sugaredLeaf, ParamPassingMode::Enum refMode, u32 depth, b8& outWasGenericContainer);
+    [[nodiscard]] TypeRef* mapTypeUncached(CXType type, b8 isParamContext, u32 depth);
     [[nodiscard]] TypeRef* mapType(CXType type, b8 isParamContext, u32 depth = 0u);
     [[nodiscard]] b8 evaluateIntegralConstant(CXCursor cursor, MStringView& outText);
     [[nodiscard]] MethodDecl* buildMethodDecl(CXCursor cursor, MStringView ownerClassName, b8 isTemplate, const ClassDecl* ownerClass = nullptr);
     void visitChildrenList(CXCursor parent, MVector<CXCursor>& outChildren)const;
-    void inspectBaseAndSpecialMembers(CXCursor classCursor, ClassTraits& traits);
-    void importClassMethodsFromCursor(CXCursor classCursor, ClassDecl& targetClass, b8 isBasePass);
+    void inspectBaseAndSpecialMembers(CXCursor classCursor, ClassTraits& traits, HashSet<CursorKey, MetaArena, CursorKeyHash>& visitedTraitBases, b8 isBasePass);
+    void importClassMethodsFromCursor(CXCursor classCursor, ClassDecl& targetClass, b8 isBasePass, ClassImportDedupe& dedupe);
     void extractEnum(CXCursor enumCursor);
     void extractTypeAlias(CXCursor aliasCursor);
     void extractClass(CXCursor classCursor);
@@ -335,17 +430,18 @@ private:
         return nullptr;
     }
     [[nodiscard]] static b8 methodSignaturesEqual(const MethodDecl& a, const MethodDecl& b)noexcept;
-    [[nodiscard]] b8 hasClassFieldNamed(const ClassDecl& target, MStringView fieldName)noexcept;
-    [[nodiscard]] MString buildFreeFunctionSigKey(const MethodDecl& decl)const;
-    void tryAddClassField(ClassDecl& targetClass, CXCursor child, CXType recordType, b8 isStatic);
-    static void addUniqueMethod(ClassDecl& target, MethodDecl* method);
+    void tryAddClassField(ClassDecl& targetClass, CXCursor child, CXType recordType, b8 isStatic, ClassImportDedupe& dedupe);
+    void addUniqueMethod(ClassDecl& target, MethodDecl* method, ClassImportDedupe& dedupe);
 
 
 private:
     MetaArena& m_arena;
     TranslationUnit& m_unit;
     MVector<MString> m_includeRoots;
+    HashMap<const void*, MStringView, MetaArena, VoidPtrHash> m_headerByFile;
     MStringMap<MStringView> m_headerCache;
+    HashMap<CursorKey, CachedDeclName, MetaArena, CursorKeyHash> m_declNameCache;
+    HashMap<TypeCacheKey, TypeRef*, MetaArena, TypeCacheKeyHash> m_typeCache;
     MStringMap<ClassDecl*> m_classByExportName;
     MStringMap<ClassDecl*> m_classByName;
     MStringMap<EnumDecl*> m_enumByExportName;

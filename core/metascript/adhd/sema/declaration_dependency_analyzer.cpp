@@ -24,14 +24,39 @@ namespace __hidden_declaration_dependencies{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename DeclT, typename DependsOnPred>
-void SortDeclsTopologically(const Span<const DeclT* const> items, const DependsOnPred& dependsOn, MetaArena& arena, MVector<const DeclT*>& outSorted){
-    if(items.empty()){
-        outSorted.clear();
+template<typename DeclT, typename VisitDepsFn>
+void SortDeclsTopologicallyIndexed(
+    const Span<const DeclT* const> items,
+    MetaArena& arena,
+    MVector<const DeclT*>& outSorted,
+    HashMap<MStringView, usize, MetaArena, MStringViewHash>& outIndexByName,
+    const VisitDepsFn& visitDeps
+){
+    outSorted.clear();
+    if(items.empty())
         return;
+
+    outIndexByName.reserve(items.size());
+    for(usize i = 0u; i < items.size(); ++i){
+        if(items[i] && !items[i]->name.empty())
+            outIndexByName.emplace(items[i]->name, i);
     }
+
     MVector<u8> state(items.size(), 0u, arena);
-    TopologicallySortPointers(items, dependsOn, state, outSorted);
+    outSorted.reserve(items.size());
+
+    const auto visit = [&](const auto& self, const usize idx) -> void{
+        if(idx >= items.size() || state[idx] != 0u)
+            return;
+        state[idx] = 1u;
+        if(items[idx])
+            visitDeps(*items[idx], [&](const usize depIdx){ self(self, depIdx); });
+        state[idx] = 2u;
+        outSorted.push_back(items[idx]);
+    };
+
+    for(usize i = 0u; i < items.size(); ++i)
+        visit(visit, i);
 }
 
 
@@ -113,27 +138,84 @@ b8 DeclarationDependencyAnalyzer::instantiationDependsOnClassByValue(const Class
 
 
 void DeclarationDependencyAnalyzer::sortTypeAliasesTopologically(const Span<const TypeAliasDecl* const> aliases, MVector<const TypeAliasDecl*>& outSorted)const{
-    __hidden_declaration_dependencies::SortDeclsTopologically(aliases, [this](const TypeAliasDecl& cur, const TypeAliasDecl& dep)noexcept{
-        return cur.aliasedType && typeRefReferencesSymbol(*cur.aliasedType, dep.name);
-    }, m_arena, outSorted);
+    HashMap<MStringView, usize, MetaArena, MStringViewHash> indexByName(m_arena);
+    const auto visitTypeSymbols = [&](const auto& self, const TypeRef& type, const u32 depth, const auto& visitIdx) -> void{
+        if(depth > 16u)
+            return;
+        if(const auto it = indexByName.find(type.name); it != indexByName.end())
+            visitIdx(it->second);
+        if(type.isFuncType){
+            if(type.funcReturnType)
+                self(self, *type.funcReturnType, depth + 1u, visitIdx);
+            for(const FuncParamType& fp : type.funcParams){
+                if(fp.type)
+                    self(self, *fp.type, depth + 1u, visitIdx);
+            }
+        }
+        for(const TypeArg& targ : type.templateArgs){
+            if(targ.type)
+                self(self, *targ.type, depth + 1u, visitIdx);
+        }
+    };
+    __hidden_declaration_dependencies::SortDeclsTopologicallyIndexed(aliases, m_arena, outSorted, indexByName, [&](const TypeAliasDecl& cur, const auto& visitIdx){
+        if(cur.aliasedType)
+            visitTypeSymbols(visitTypeSymbols, *cur.aliasedType, 0u, visitIdx);
+    });
 }
 
 
 void DeclarationDependencyAnalyzer::sortInterfacesTopologically(const Span<const InterfaceDecl* const> interfaces, MVector<const InterfaceDecl*>& outSorted)const{
-    __hidden_declaration_dependencies::SortDeclsTopologically(interfaces, [&](const InterfaceDecl& cur, const InterfaceDecl& dep)noexcept{
+    HashMap<MStringView, usize, MetaArena, MStringViewHash> indexByName(m_arena);
+    __hidden_declaration_dependencies::SortDeclsTopologicallyIndexed(interfaces, m_arena, outSorted, indexByName, [&](const InterfaceDecl& cur, const auto& visitIdx){
         for(const TypeRef* baseRef : cur.baseInterfaces){
-            if(baseRef && m_symbols.resolveBaseTypeName(baseRef->name) == dep.name)
-                return true;
+            if(!baseRef)
+                continue;
+            const MStringView baseName = m_symbols.resolveBaseTypeName(baseRef->name);
+            if(const auto it = indexByName.find(baseName); it != indexByName.end())
+                visitIdx(it->second);
         }
-        return false;
-    }, m_arena, outSorted);
+    });
 }
 
 
 void DeclarationDependencyAnalyzer::sortClassesTopologically(const Span<const ClassDecl* const> classes, MVector<const ClassDecl*>& outSorted)const{
-    __hidden_declaration_dependencies::SortDeclsTopologically(classes, [&](const ClassDecl& cur, const ClassDecl& dep)noexcept{
-        return classDependsOnClassByValue(cur, dep.name);
-    }, m_arena, outSorted);
+    HashMap<MStringView, usize, MetaArena, MStringViewHash> indexByName(m_arena);
+    const auto visitValueTypeSymbols = [&](const auto& self, const TypeRef& type, const u32 depth, const auto& visitIdx) -> void{
+        if(depth > 16u || type.isFuncType || m_symbols.resolveRefMode(&type) != ParamPassingMode::None)
+            return;
+        if(const auto it = indexByName.find(type.name); it != indexByName.end())
+            visitIdx(it->second);
+        if(const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(&type)){
+            if(unwrapped != &type)
+                self(self, *unwrapped, depth + 1u, visitIdx);
+        }
+        if(IsAssetHandleType(m_symbols.resolveBaseTypeName(type.name)))
+            return;
+        if(const ClassDecl* cls = m_symbols.findClass(type.name); cls && !cls->templateParams.empty()){
+            if(cls->concreteBase){
+                if(const auto it = indexByName.find(cls->concreteBase->name); it != indexByName.end())
+                    visitIdx(it->second);
+            }
+            for(const FieldDecl* field : cls->fields){
+                if(field && field->type)
+                    self(self, *field->type, depth + 1u, visitIdx);
+            }
+        }
+        for(const TypeArg& targ : type.templateArgs){
+            if(targ.type)
+                self(self, *targ.type, depth + 1u, visitIdx);
+        }
+    };
+    __hidden_declaration_dependencies::SortDeclsTopologicallyIndexed(classes, m_arena, outSorted, indexByName, [&](const ClassDecl& cur, const auto& visitIdx){
+        if(cur.concreteBase){
+            if(const auto it = indexByName.find(cur.concreteBase->name); it != indexByName.end())
+                visitIdx(it->second);
+        }
+        for(const FieldDecl* field : cur.fields){
+            if(field && field->type)
+                visitValueTypeSymbols(visitValueTypeSymbols, *field->type, 0u, visitIdx);
+        }
+    });
 }
 
 

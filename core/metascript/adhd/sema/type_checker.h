@@ -69,6 +69,8 @@ public:
         , m_symbols(symbols)
         , m_layoutOptimizer(arena, symbols)
         , m_parallelValidator(arena)
+        , m_recordedRequiredHeaders(arena)
+        , m_recordedTypeHeaders(arena)
     {}
 
 
@@ -162,6 +164,8 @@ private:
 
     [[nodiscard]] b8 checkCallExpr(ClassDecl* ownerClass, Span<const ScopedVarInfo> scope, b8 isMutationTarget, MethodDecl& method, Expr& expr, MVector<ParseError>& errors);
 
+    [[nodiscard]] MStringView inferExprTypeNameFastPrefix(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
+    [[nodiscard]] MStringView inferExprTypeNameFallbackSuffix(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
     [[nodiscard]] MStringView inferExprTypeName(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
     [[nodiscard]] const TypeRef* inferExprTypeRef(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
     [[nodiscard]] MStringView inferExprBaseType(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope, const TypeRef** outTypeRef = nullptr)const noexcept;
@@ -172,6 +176,8 @@ private:
     SymbolTable& m_symbols;
     LayoutOptimizer m_layoutOptimizer;
     ParallelGraphValidator m_parallelValidator;
+    HashMap<MStringView, u8, MetaArena, MStringViewHash> m_recordedRequiredHeaders;
+    HashMap<MStringView, u8, MetaArena, MStringViewHash> m_recordedTypeHeaders;
     TranslationUnit* m_activeUnit = nullptr;
     const TypeRef* m_activeLambdaReturnType = nullptr;
     u32 m_parallelDepth = 0u;

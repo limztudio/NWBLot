@@ -1023,6 +1023,8 @@ void SyncEntityColliderRecord(
                     col.runtimeExtraShapeIds.push_back(rec.extraShapeIds[ei]);
                 col.boundBodyId = targetBodyId;
                 col.dirty = false;
+                col.syncedWorldScale = f32x4(worldScale);
+                col.hasSyncedWorldScale = true;
                 rec.syncedColliderScale = f32x4(worldScale);
                 rec.syncedExtraShapeCount = col.extraShapes.size();
                 rec.hasColliderSync = true;
@@ -1075,6 +1077,8 @@ void SyncEntityColliderRecord(
     rec.hasColliderSync = true;
     col.boundBodyId = targetBodyId;
     col.dirty = false;
+    col.syncedWorldScale = f32x4(worldScale);
+    col.hasSyncedWorldScale = true;
 }
 
 void SyncEcsEntitiesToPhysicsWorld(
@@ -1112,81 +1116,96 @@ void SyncEcsEntitiesToPhysicsWorld(
         scratch
     );
 
-    in World worldForRbTag = world;
-    world.view<RigidBodyComponent, TransformComponent>().each(
-        lambda[in worldForRbTag, mut namedEntities, mut syncedRigidBodyTags](
-            in EntityID entity,
-            in RigidBodyComponent rb,
-            in TransformComponent xf
-        ) -> void{
-            if(rb.entityTag == s_NameNone)
-                return;
-            const auto syncedIt = syncedRigidBodyTags.find(entity);
-            if(syncedIt == syncedRigidBodyTags.end()){
-                syncedRigidBodyTags.insert_or_assign(entity, rb.entityTag);
+    const b8 hasPhysicsParentCandidates = world.view<PhysicsParentComponent>().candidateCount() > 0u;
+    in World worldForTagSync = world;
+    if(hasPhysicsParentCandidates){
+        world.view<RigidBodyComponent, TransformComponent>().each(
+            lambda[in worldForTagSync, mut namedEntities, mut syncedRigidBodyTags](
+                in EntityID entity,
+                in RigidBodyComponent rb,
+                in TransformComponent xf
+            ) -> void{
+                if(rb.entityTag == s_NameNone)
+                    return;
+                const auto syncedIt = syncedRigidBodyTags.find(entity);
+                if(syncedIt == syncedRigidBodyTags.end()){
+                    syncedRigidBodyTags.insert_or_assign(entity, rb.entityTag);
+                }
+                else if(syncedIt.value() != rb.entityTag){
+                    EraseSyncedTagIfUnused(worldForTagSync, entity, syncedIt.value(), namedEntities);
+                    syncedIt.value() = rb.entityTag;
+                }
+                const auto namedIt = namedEntities.find(rb.entityTag);
+                if(namedIt == namedEntities.end() || namedIt.value() != entity)
+                    namedEntities.insert_or_assign(rb.entityTag, entity);
             }
-            else if(syncedIt.value() != rb.entityTag){
-                EraseSyncedTagIfUnused(worldForRbTag, entity, syncedIt.value(), namedEntities);
-                syncedIt.value() = rb.entityTag;
-            }
-            const auto namedIt = namedEntities.find(rb.entityTag);
-            if(namedIt == namedEntities.end() || namedIt.value() != entity)
-                namedEntities.insert_or_assign(rb.entityTag, entity);
-        }
-    );
+        );
 
-    in World worldForColTag = world;
-    world.view<ColliderComponent, TransformComponent>().each(
-        lambda[in worldForColTag, mut namedEntities, mut syncedColliderTags](
-            in EntityID entity,
-            in ColliderComponent col,
-            in TransformComponent xf
-        ) -> void{
-            if(col.entityTag == s_NameNone)
-                return;
-            const auto syncedIt = syncedColliderTags.find(entity);
-            if(syncedIt == syncedColliderTags.end()){
-                syncedColliderTags.insert_or_assign(entity, col.entityTag);
+        world.view<ColliderComponent, TransformComponent>().each(
+            lambda[in worldForTagSync, mut namedEntities, mut syncedColliderTags](
+                in EntityID entity,
+                in ColliderComponent col,
+                in TransformComponent xf
+            ) -> void{
+                if(col.entityTag == s_NameNone)
+                    return;
+                const auto syncedIt = syncedColliderTags.find(entity);
+                if(syncedIt == syncedColliderTags.end()){
+                    syncedColliderTags.insert_or_assign(entity, col.entityTag);
+                }
+                else if(syncedIt.value() != col.entityTag){
+                    EraseSyncedTagIfUnused(worldForTagSync, entity, syncedIt.value(), namedEntities);
+                    syncedIt.value() = col.entityTag;
+                }
+                const auto namedIt = namedEntities.find(col.entityTag);
+                if(namedIt == namedEntities.end() || namedIt.value() != entity)
+                    namedEntities.insert_or_assign(col.entityTag, entity);
             }
-            else if(syncedIt.value() != col.entityTag){
-                EraseSyncedTagIfUnused(worldForColTag, entity, syncedIt.value(), namedEntities);
-                syncedIt.value() = col.entityTag;
-            }
-            const auto namedIt = namedEntities.find(col.entityTag);
-            if(namedIt == namedEntities.end() || namedIt.value() != entity)
-                namedEntities.insert_or_assign(col.entityTag, entity);
-        }
-    );
+        );
 
-    in World worldForParent = world;
-    in HashMap<Name, EntityID> namedEntitiesForParent = namedEntities;
-    world.view<PhysicsParentComponent>().each(
-        lambda[in worldForParent, in namedEntitiesForParent, mut outHasAnyPhysicsParents](
-            in EntityID entity,
-            mut PhysicsParentComponent pp
-        ) -> void{
-            outHasAnyPhysicsParents = true;
-            if(pp.parentEntityName != s_NameNone){
-                const auto foundParent = namedEntitiesForParent.find(pp.parentEntityName);
-                if(foundParent != namedEntitiesForParent.end() && foundParent.value() != entity && worldForParent.alive(foundParent.value()))
-                    pp.parent = foundParent.value();
-                else if(!pp.parent.valid() || !worldForParent.alive(pp.parent))
+        in HashMap<Name, EntityID> namedEntitiesForParent = namedEntities;
+        world.view<PhysicsParentComponent>().each(
+            lambda[in worldForTagSync, in namedEntitiesForParent, mut outHasAnyPhysicsParents](
+                in EntityID entity,
+                mut PhysicsParentComponent pp
+            ) -> void{
+                outHasAnyPhysicsParents = true;
+                if(pp.parentEntityName != s_NameNone){
+                    const auto foundParent = namedEntitiesForParent.find(pp.parentEntityName);
+                    if(foundParent != namedEntitiesForParent.end() && foundParent.value() != entity && worldForTagSync.alive(foundParent.value()))
+                        pp.parent = foundParent.value();
+                    else if(!pp.parent.valid() || !worldForTagSync.alive(pp.parent))
+                        pp.parent = s_InvalidEntityId;
+                }
+                else if(pp.parent.valid() && !worldForTagSync.alive(pp.parent)){
                     pp.parent = s_InvalidEntityId;
+                }
             }
-            else if(pp.parent.valid() && !worldForParent.alive(pp.parent)){
-                pp.parent = s_InvalidEntityId;
-            }
-        }
-    );
+        );
+    }
 
     const b8 hasAnyPhysicsParents = outHasAnyPhysicsParents;
     in World worldForBodyView = world;
     world.view<RigidBodyComponent, TransformComponent>().each(
-        lambda[in worldForBodyView, in hasAnyPhysicsParents, mut physicsWorld, mut entityRecords, mut bodyIndexToEntity, mut bodyTransformSnapshots, mut scratch, mut outHasDrivenKinematic](
+        lambda[in worldForBodyView, in hasAnyPhysicsParents, in hasPhysicsParentCandidates, mut namedEntities, mut syncedRigidBodyTags, mut physicsWorld, mut entityRecords, mut bodyIndexToEntity, mut bodyTransformSnapshots, mut scratch, mut outHasDrivenKinematic](
             in EntityID entity,
             mut RigidBodyComponent rb,
             in TransformComponent xf
         ) -> void{
+            if(!hasPhysicsParentCandidates && rb.entityTag != s_NameNone){
+                const auto syncedIt = syncedRigidBodyTags.find(entity);
+                if(syncedIt == syncedRigidBodyTags.end()){
+                    syncedRigidBodyTags.insert_or_assign(entity, rb.entityTag);
+                }
+                else if(syncedIt.value() != rb.entityTag){
+                    EraseSyncedTagIfUnused(worldForBodyView, entity, syncedIt.value(), namedEntities);
+                    syncedIt.value() = rb.entityTag;
+                }
+                const auto namedIt = namedEntities.find(rb.entityTag);
+                if(namedIt == namedEntities.end() || namedIt.value() != entity)
+                    namedEntities.insert_or_assign(rb.entityTag, entity);
+            }
+
             if(rb.type == BodyType::Kinematic && rb.driveKinematicFromTransform && rb.isEnabled)
                 outHasDrivenKinematic = true;
 
@@ -1341,13 +1360,45 @@ void SyncEcsEntitiesToPhysicsWorld(
 
     in Optional<mut AssetManager> assetsRef = assetManager;
     world.view<ColliderComponent, TransformComponent>().each(
-        lambda[mut world, mut physicsWorld, in assetsRef, in hasAnyPhysicsParents, mut entityRecords, mut bodyIndexToEntity, mut shapeIndexToEntity, mut bodyTransformSnapshots](
+        lambda[mut world, mut physicsWorld, in assetsRef, in hasAnyPhysicsParents, in hasPhysicsParentCandidates, mut namedEntities, mut syncedColliderTags, mut entityRecords, mut bodyIndexToEntity, mut shapeIndexToEntity, mut bodyTransformSnapshots](
             in EntityID entity,
             mut ColliderComponent col,
             in TransformComponent xf
         ) -> void{
-            const auto initialRecIt = entityRecords.find(entity);
+            if(!hasPhysicsParentCandidates && col.entityTag != s_NameNone){
+                const auto syncedIt = syncedColliderTags.find(entity);
+                if(syncedIt == syncedColliderTags.end()){
+                    syncedColliderTags.insert_or_assign(entity, col.entityTag);
+                }
+                else if(syncedIt.value() != col.entityTag){
+                    EraseSyncedTagIfUnused(world, entity, syncedIt.value(), namedEntities);
+                    syncedIt.value() = col.entityTag;
+                }
+                const auto namedIt = namedEntities.find(col.entityTag);
+                if(namedIt == namedEntities.end() || namedIt.value() != entity)
+                    namedEntities.insert_or_assign(col.entityTag, entity);
+            }
+
             const Optional<mut RigidBodyComponent> rbOpt = world.borrowComponent<RigidBodyComponent>(entity);
+            if(
+                rbOpt.has_value()
+                && !col.dirty
+                && !hasAnyPhysicsParents
+                && col.hasSyncedWorldScale
+                && col.extraShapes.empty()
+                && col.runtimeExtraShapeIds.empty()
+                && col.runtimeShapeId.valid()
+                && col.boundBodyId.valid()
+                && (col.boundBodyId == rbOpt.value().runtimeBodyId)
+                && col.runtimeShapeId.index < cast<u32>(shapeIndexToEntity.size())
+                && shapeIndexToEntity[col.runtimeShapeId.index].entity == entity
+                && shapeIndexToEntity[col.runtimeShapeId.index].generation == col.runtimeShapeId.generation
+                && EcsVec4NearlyEqual(VectorSingle(col.syncedWorldScale), VectorSingle(xf.scale), 1.0e-5f)
+                && physicsWorld.isValidShape(col.runtimeShapeId)
+            )
+                return;
+
+            const auto initialRecIt = entityRecords.find(entity);
             BodyId targetBodyId;
             b8 useCustomMass = false;
             BodyType targetBodyType = BodyType::Static;

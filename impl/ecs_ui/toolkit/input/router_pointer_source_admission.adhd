@@ -81,8 +81,8 @@ class RouterPointerSourceAdmission{
         PointerIntent intent = PointerIntent::Activate;
         if(event.type == InputEventType::SecondaryDown || event.type == InputEventType::SecondaryUp)
             intent = PointerIntent::ContextMenu;
-        const Expected<usize> heldFound = FindRouterPointerSourceIndex(inOutPointerSources, event.source, intent);
         if(press){
+            const Expected<usize> heldFound = FindRouterPointerSourceIndex(inOutPointerSources, event.source, intent);
             if(heldFound.has_value()){
                 inOutResult.pointerConsumed = inOutResult.pointerConsumed || inOutPointerSources[heldFound.value()].consumed;
                 return false;
@@ -122,6 +122,7 @@ class RouterPointerSourceAdmission{
             outHeldIndex = inOutPointerSources.size() - 1u;
         }
         else if(release){
+            const Expected<usize> heldFound = FindRouterPointerSourceIndex(inOutPointerSources, event.source, intent);
             if(!heldFound.has_value()){
                 if(!hitResolved){
                     const Expected<usize> hitIndex = FindRouterHitTargetIndexIndexed(targets, lookup, popups, spatial, event.position);
@@ -143,15 +144,27 @@ class RouterPointerSourceAdmission{
             outHeldIndex = heldIndex;
         }
         else{
-            const Expected<usize> activationIndex = FindRouterPointerSourceIndex(inOutPointerSources, event.source, PointerIntent::Activate);
-            const Expected<usize> contextIndex = FindRouterPointerSourceIndex(inOutPointerSources, event.source, PointerIntent::ContextMenu);
-            const b8 activationInert = activationIndex.has_value() && inOutPointerSources[activationIndex.value()].inert;
-            const b8 contextInert = contextIndex.has_value() && inOutPointerSources[contextIndex.value()].inert;
-            const b8 blocked = activationInert || contextInert || !AcceptsRouterPointerSource(inOutActivePointerSource, inOutPointerSources, event.source);
-            if(blocked){
-                const b8 activationConsumed = activationIndex.has_value() && inOutPointerSources[activationIndex.value()].consumed;
-                const b8 contextConsumed = contextIndex.has_value() && inOutPointerSources[contextIndex.value()].consumed;
-                inOutResult.pointerConsumed = inOutResult.pointerConsumed || activationConsumed || contextConsumed;
+            const b8 sourceRejected = !event.source.valid() || (inOutActivePointerSource.valid() && inOutActivePointerSource != event.source);
+            if(sourceRejected && inOutResult.pointerConsumed)
+                return false;
+            b8 anyInert = false;
+            b8 anyConsumed = false;
+            u32 matchedCount = 0u;
+            if(event.source.valid()){
+                for(in PointerSource held : inOutPointerSources){
+                    if(held.source != event.source)
+                        continue;
+                    if(held.inert)
+                        anyInert = true;
+                    if(held.consumed)
+                        anyConsumed = true;
+                    ++matchedCount;
+                    if(matchedCount == 2u || (anyInert && anyConsumed) || (sourceRejected && anyConsumed))
+                        break;
+                }
+            }
+            if(anyInert || sourceRejected){
+                inOutResult.pointerConsumed = inOutResult.pointerConsumed || anyConsumed;
                 return false;
             }
             if(!inOutActivePointerSource.valid() && !event.hoverCapable && event.type == InputEventType::PointerMove)

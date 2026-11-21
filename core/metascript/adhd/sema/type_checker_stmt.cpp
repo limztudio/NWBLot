@@ -303,6 +303,46 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
             }
         }
         ++m_switchDepth;
+        const b8 useHashedSwitchDups = stmt.switchCases.size() > 16u;
+        struct ScopeCaseKey{
+            MStringView a;
+            MStringView b;
+            [[nodiscard]] b8 operator==(const ScopeCaseKey& rhs)const noexcept{ return a == rhs.a && b == rhs.b; }
+        };
+        struct ScopeCaseKeyHash{
+            [[nodiscard]] usize operator()(const ScopeCaseKey& key)const noexcept{
+                return static_cast<usize>(MixMurmur64Finalizer(ComputeFnv64Bytes(key.a.data(), key.a.size()) ^ MixMurmur64Finalizer(ComputeFnv64Bytes(key.b.data(), key.b.size()))));
+            }
+        };
+        struct ConstCaseKey{
+            i64 val = 0;
+            u8 isBool = 0u;
+            [[nodiscard]] b8 operator==(const ConstCaseKey& rhs)const noexcept{ return val == rhs.val && isBool == rhs.isBool; }
+        };
+        struct ConstCaseKeyHash{
+            [[nodiscard]] usize operator()(const ConstCaseKey& key)const noexcept{
+                return static_cast<usize>(MixMurmur64Finalizer(static_cast<u64>(key.val) ^ (static_cast<u64>(key.isBool) << 56u)));
+            }
+        };
+        struct LitIdentCaseKey{
+            u8 kind = 0u;
+            MStringView text;
+            [[nodiscard]] b8 operator==(const LitIdentCaseKey& rhs)const noexcept{ return kind == rhs.kind && text == rhs.text; }
+        };
+        struct LitIdentCaseKeyHash{
+            [[nodiscard]] usize operator()(const LitIdentCaseKey& key)const noexcept{
+                return static_cast<usize>(MixMurmur64Finalizer(ComputeFnv64Bytes(key.text.data(), key.text.size()) ^ (static_cast<u64>(key.kind) << 56u)));
+            }
+        };
+        HashSet<LitIdentCaseKey, MetaArena, LitIdentCaseKeyHash> seenLitIdentCases(m_arena);
+        HashSet<ScopeCaseKey, MetaArena, ScopeCaseKeyHash> seenScopeCases(m_arena);
+        HashSet<ConstCaseKey, MetaArena, ConstCaseKeyHash> seenConstCases(m_arena);
+        if(useHashedSwitchDups){
+            seenLitIdentCases.reserve(stmt.switchCases.size());
+            seenScopeCases.reserve(stmt.switchCases.size());
+            seenConstCases.reserve(stmt.switchCases.size());
+        }
+
         for(usize i = 0u; i < stmt.switchCases.size(); ++i){
             SwitchCase& sc = stmt.switchCases[i];
             if(sc.matchExpr){
@@ -310,34 +350,59 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
                     ok = false;
                 if(sc.matchExpr->kind == ExprKind::StringLiteral)
                     stmt.lowerSwitchToIfChain = true;
-                for(usize j = 0u; j < i; ++j){
-                    const SwitchCase& prevSc = stmt.switchCases[j];
-                    if(prevSc.isDefault || !prevSc.matchExpr)
-                        continue;
+                if(useHashedSwitchDups){
                     b8 isDup = false;
-                    if(prevSc.matchExpr->kind == sc.matchExpr->kind){
-                        if(IsLiteralExprKind(sc.matchExpr->kind) || sc.matchExpr->kind == ExprKind::Identifier){
-                            isDup = (prevSc.matchExpr->text == sc.matchExpr->text);
-                        }
-                        else if(sc.matchExpr->kind == ExprKind::ScopeAccess && prevSc.matchExpr->scopeChain.size() == 2u && sc.matchExpr->scopeChain.size() == 2u){
-                            isDup = (prevSc.matchExpr->scopeChain[0] == sc.matchExpr->scopeChain[0]
-                                && prevSc.matchExpr->scopeChain[1] == sc.matchExpr->scopeChain[1]);
-                        }
+                    if(IsLiteralExprKind(sc.matchExpr->kind) || sc.matchExpr->kind == ExprKind::Identifier){
+                        if(!seenLitIdentCases.insert(LitIdentCaseKey{ static_cast<u8>(sc.matchExpr->kind), sc.matchExpr->text }).second)
+                            isDup = true;
                     }
-                    if(!isDup && !stmt.lowerSwitchToIfChain && sc.matchExpr->kind != ExprKind::StringLiteral && prevSc.matchExpr->kind != ExprKind::StringLiteral){
-                        i64 prevConst = 0;
+                    else if(sc.matchExpr->kind == ExprKind::ScopeAccess && sc.matchExpr->scopeChain.size() == 2u){
+                        if(!seenScopeCases.insert(ScopeCaseKey{ sc.matchExpr->scopeChain[0], sc.matchExpr->scopeChain[1] }).second)
+                            isDup = true;
+                    }
+                    if(!isDup && !stmt.lowerSwitchToIfChain && sc.matchExpr->kind != ExprKind::StringLiteral){
                         i64 curConst = 0;
-                        if(TryEvaluateExprConstant(prevSc.matchExpr, m_symbols, 0u, nullptr, prevConst) && TryEvaluateExprConstant(sc.matchExpr, m_symbols, 0u, nullptr, curConst)){
-                            const b8 prevIsBool = (prevSc.matchExpr->kind == ExprKind::BoolLiteral);
-                            const b8 curIsBool = (sc.matchExpr->kind == ExprKind::BoolLiteral);
-                            if(prevIsBool == curIsBool && prevConst == curConst)
+                        if(TryEvaluateExprConstant(sc.matchExpr, m_symbols, 0u, nullptr, curConst)){
+                            const u8 curIsBool = (sc.matchExpr->kind == ExprKind::BoolLiteral) ? 1u : 0u;
+                            if(!seenConstCases.insert(ConstCaseKey{ curConst, curIsBool }).second)
                                 isDup = true;
                         }
                     }
                     if(isDup){
                         reportError(errors, sc.matchExpr->span, "duplicate 'case' value in 'switch' statement");
                         ok = false;
-                        break;
+                    }
+                }
+                else{
+                    for(usize j = 0u; j < i; ++j){
+                        const SwitchCase& prevSc = stmt.switchCases[j];
+                        if(prevSc.isDefault || !prevSc.matchExpr)
+                            continue;
+                        b8 isDup = false;
+                        if(prevSc.matchExpr->kind == sc.matchExpr->kind){
+                            if(IsLiteralExprKind(sc.matchExpr->kind) || sc.matchExpr->kind == ExprKind::Identifier){
+                                isDup = (prevSc.matchExpr->text == sc.matchExpr->text);
+                            }
+                            else if(sc.matchExpr->kind == ExprKind::ScopeAccess && prevSc.matchExpr->scopeChain.size() == 2u && sc.matchExpr->scopeChain.size() == 2u){
+                                isDup = (prevSc.matchExpr->scopeChain[0] == sc.matchExpr->scopeChain[0]
+                                    && prevSc.matchExpr->scopeChain[1] == sc.matchExpr->scopeChain[1]);
+                            }
+                        }
+                        if(!isDup && !stmt.lowerSwitchToIfChain && sc.matchExpr->kind != ExprKind::StringLiteral && prevSc.matchExpr->kind != ExprKind::StringLiteral){
+                            i64 prevConst = 0;
+                            i64 curConst = 0;
+                            if(TryEvaluateExprConstant(prevSc.matchExpr, m_symbols, 0u, nullptr, prevConst) && TryEvaluateExprConstant(sc.matchExpr, m_symbols, 0u, nullptr, curConst)){
+                                const b8 prevIsBool = (prevSc.matchExpr->kind == ExprKind::BoolLiteral);
+                                const b8 curIsBool = (sc.matchExpr->kind == ExprKind::BoolLiteral);
+                                if(prevIsBool == curIsBool && prevConst == curConst)
+                                    isDup = true;
+                            }
+                        }
+                        if(isDup){
+                            reportError(errors, sc.matchExpr->span, "duplicate 'case' value in 'switch' statement");
+                            ok = false;
+                            break;
+                        }
                     }
                 }
             }

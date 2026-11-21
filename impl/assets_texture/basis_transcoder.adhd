@@ -17,14 +17,23 @@ extern b8 TranscodeBasisAstcBlock(in Span<u8> source, in usize offset, mut Span<
 [cpp_header("<impl/assets_texture/basis_transcoder.h>"), cpp_name("::NWB::TextureBasis::TranscodeBasisAstcSlice")]
 extern b8 TranscodeBasisAstcSlice(in Span<u8> source, mut Span<u8> destination, in usize outputOffset);
 
+[cpp_header("<impl/assets_texture/basis_transcoder.h>"), cpp_name("::NWB::TextureBasis::TranscodeBasisAstcSliceRange")]
+extern b8 TranscodeBasisAstcSliceRange(in Span<u8> source, mut Span<u8> destination, in usize outputOffset, in usize blockBegin, in usize blockEnd);
+
 [cpp_header("<impl/assets_texture/basis_transcoder.h>"), cpp_name("::NWB::TextureBasis::UnpackBasisRgbaBlock")]
 extern b8 UnpackBasisRgbaBlock(in Span<u8> source, in usize offset, mut Array<u8, 64> rgba);
 
 [cpp_header("<impl/assets_texture/basis_transcoder.h>"), cpp_name("::NWB::TextureBasis::UnpackBasisRgbaSlice")]
 extern b8 UnpackBasisRgbaSlice(in u32 width, in u32 height, in u32 blockCountX, in u32 blockCountY, in Span<u8> source, in b8 alphaOnly, mut Span<u8> destination, in usize outputOffset);
 
+[cpp_header("<impl/assets_texture/basis_transcoder.h>"), cpp_name("::NWB::TextureBasis::UnpackBasisRgbaSliceRange")]
+extern b8 UnpackBasisRgbaSliceRange(in u32 width, in u32 height, in u32 blockCountX, in u32 blockCountY, in Span<u8> source, in b8 alphaOnly, mut Span<u8> destination, in usize outputOffset, in u32 blockRowBegin, in u32 blockRowEnd);
+
 [cpp_header("<impl/assets_texture/basis_transcoder.h>"), cpp_name("::NWB::TextureBasis::TranscodeBasisImage")]
 extern b8 TranscodeBasisImage(in BasisTranscodeFormat format, in BasisTranscodeLayout layout, in Span<u8> source, mut Span<u8> bytes, in usize offset, in usize count);
+
+[cpp_header("<impl/assets_texture/basis_transcoder.h>"), cpp_name("::NWB::TextureBasis::TranscodeBasisImageRowRange")]
+extern b8 TranscodeBasisImageRowRange(in BasisTranscodeFormat format, in BasisTranscodeLayout layout, in Span<u8> source, mut Span<u8> bytes, in usize offset, in usize count, in u32 blockRowBegin, in u32 blockRowEnd);
 
 [cpp_header("<impl/assets_texture/basis_transcoder.h>"), cpp_name("::NWB::TextureBasis::BasisFloatToHalf")]
 extern u16 BasisFloatToHalf(in f32 value);

@@ -26,20 +26,24 @@ b8 CanCapturePreparedShadowMaterialContext(
 }
 
 b8 CanCapturePreparedShadowMaterialContextCacheReuse(
+    in PreparedShadowMaterialContextRoute route,
     in usize instanceMaterialCount,
     in usize instanceCount,
     in usize materialTypedByteCount,
+    in b8 hwHashValid,
+    in u64 hwHash,
     in b8 swHashValid,
     in u64 swHash,
     in u64 expectedHash,
     in b8 validStorage
 ){
-    return instanceMaterialCount != 0u
-        && instanceCount != 0u
-        && materialTypedByteCount != 0u
-        && swHashValid
-        && swHash == expectedHash
-        && validStorage;
+    if(instanceMaterialCount == 0u || instanceCount == 0u || materialTypedByteCount == 0u || !validStorage)
+        return false;
+    if(route == PreparedShadowMaterialContextRoute::Hardware)
+        return hwHashValid && hwHash == expectedHash;
+    if(route == PreparedShadowMaterialContextRoute::Software)
+        return swHashValid && swHash == expectedHash;
+    return false;
 }
 
 b8 PreparedShadowMaterialContext::capture(
@@ -77,6 +81,7 @@ b8 PreparedShadowMaterialContext::capture(
 
 b8 PreparedShadowMaterialContext::captureCacheReuse(
     in RendererRayTracingState state,
+    in PreparedShadowMaterialContextRoute route,
     in u64 hash,
     in usize instanceMaterialCount,
     in usize instanceCount,
@@ -85,9 +90,12 @@ b8 PreparedShadowMaterialContext::captureCacheReuse(
     this.clear();
     const b8 validStorage = IsPreparedShadowMaterialStorageReady(state, instanceMaterialCount, instanceCount, materialTypedByteCount);
     if(!CanCapturePreparedShadowMaterialContextCacheReuse(
+        route,
         instanceMaterialCount,
         instanceCount,
         materialTypedByteCount,
+        state.shadow.m_hwShadowMaterialContextHashValid,
+        state.shadow.m_hwShadowMaterialContextHash,
         state.shadow.m_swShadowMaterialContextHashValid,
         state.shadow.m_swShadowMaterialContextHash,
         hash,
@@ -96,7 +104,7 @@ b8 PreparedShadowMaterialContext::captureCacheReuse(
         return false;
 
     this.captureStorage(state, hash, instanceMaterialCount, instanceCount, materialTypedByteCount);
-    this.m_route = PreparedShadowMaterialContextRoute::Software;
+    this.m_route = route;
     this.m_static = true;
     this.m_ready = true;
     this.m_uploadRequired = false;
@@ -109,7 +117,7 @@ Expected<PreparedShadowMaterialContextUploads> PreparedShadowMaterialContext::re
     if(!this.m_ready)
         return result;
 
-    if(!ShadowMaterialContextPolicy().validateRetainState(
+    if(!ShadowMaterialContextPolicy().validateRetainStateForRoute(
         this.m_route,
         this.m_instanceMaterialCount,
         this.m_instanceCount,
@@ -124,6 +132,8 @@ Expected<PreparedShadowMaterialContextUploads> PreparedShadowMaterialContext::re
         IsPreparedShadowMaterialStorageReady(state, this.m_instanceMaterialCount, this.m_instanceCount, this.m_materialTypedUploadBytes),
         this.m_uploadRequired,
         this.m_static,
+        state.shadow.m_hwShadowMaterialContextHashValid,
+        state.shadow.m_hwShadowMaterialContextHash,
         state.shadow.m_swShadowMaterialContextHashValid,
         state.shadow.m_swShadowMaterialContextHash,
         this.m_hash,
@@ -256,9 +266,9 @@ b8 RendererRayTracingSystem::capturePreparedShadowMaterialContext(
     return true;
 }
 
-b8 RendererRayTracingSystem::capturePreparedShadowMaterialContextCacheReuse(in u64 hash, in usize instanceMaterialCount, in usize instanceCount, in usize materialTypedByteCount){
+b8 RendererRayTracingSystem::capturePreparedShadowMaterialContextCacheReuse(in PreparedShadowMaterialContextRoute route, in u64 hash, in usize instanceMaterialCount, in usize instanceCount, in usize materialTypedByteCount){
     this.m_preparedSceneSwBvhTraversal.clear();
-    return this.m_preparedShadowMaterialContext.captureCacheReuse(this.m_rayTracingState, hash, instanceMaterialCount, instanceCount, materialTypedByteCount);
+    return this.m_preparedShadowMaterialContext.captureCacheReuse(this.m_rayTracingState, route, hash, instanceMaterialCount, instanceCount, materialTypedByteCount);
 }
 
 void RendererRayTracingSystem::clearPreparedShadowMaterialContext(){

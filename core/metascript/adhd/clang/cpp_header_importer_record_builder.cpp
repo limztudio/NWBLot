@@ -218,12 +218,11 @@ MethodDecl* ImporterContext::buildMethodDecl(CXCursor cursor, const MStringView 
         decl->returnsReference = (decl->returnType->refMode != ParamPassingMode::None);
     }
 
-    MVector<CXCursor> children(m_arena);
-    visitChildrenList(cursor, children);
-
     MVector<CXCursor> paramCursors(m_arena);
     MVector<Pair<MStringView, MStringView>> tparamRenames(m_arena);
     if(isTemplate){
+        MVector<CXCursor> children(m_arena);
+        visitChildrenList(cursor, children);
         for(const CXCursor child : children){
             const CXCursorKind ck = ::clang_getCursorKind(child);
             if(ck == CXCursor_TemplateTypeParameter || ck == CXCursor_NonTypeTemplateParameter){
@@ -246,10 +245,13 @@ MethodDecl* ImporterContext::buildMethodDecl(CXCursor cursor, const MStringView 
     else{
         const int numArgs = ::clang_Cursor_getNumArguments(cursor);
         if(numArgs >= 0){
+            paramCursors.reserve(static_cast<usize>(numArgs));
             for(int i = 0; i < numArgs; ++i)
                 paramCursors.push_back(::clang_Cursor_getArgument(cursor, static_cast<unsigned>(i)));
         }
         else{
+            MVector<CXCursor> children(m_arena);
+            visitChildrenList(cursor, children);
             for(const CXCursor child : children){
                 if(::clang_getCursorKind(child) == CXCursor_ParmDecl)
                     paramCursors.push_back(child);
@@ -273,9 +275,16 @@ MethodDecl* ImporterContext::buildMethodDecl(CXCursor cursor, const MStringView 
     for(usize idx = 0u; idx < paramCursors.size(); ++idx){
         const CXCursor parm = paramCursors[idx];
         const CXType parmType = ::clang_getCursorType(parm);
-        const MString parmTypeSpelling = ConsumeClangString(m_arena, ::clang_getTypeSpelling(parmType));
-        if(MStringView(parmTypeSpelling.data(), parmTypeSpelling.size()).find(CppImporterSemantics::s_VariadicPackToken) != MStringView::npos)
-            return nullptr;
+        const TypeCacheKey parmCacheKey{ static_cast<i32>(parmType.kind), 1u, parmType.data[0], parmType.data[1] };
+        const auto cachedParmIt = m_typeCache.find(parmCacheKey);
+        const b8 knownNonPack = !MapRawBuiltinScalarKind(parmType.kind).empty()
+            || parmType.kind == CXType_Enum
+            || (cachedParmIt != m_typeCache.end() && cachedParmIt->second != nullptr);
+        if(!knownNonPack){
+            const MString parmTypeSpelling = ConsumeClangString(m_arena, ::clang_getTypeSpelling(parmType));
+            if(MStringView(parmTypeSpelling.data(), parmTypeSpelling.size()).find(CppImporterSemantics::s_VariadicPackToken) != MStringView::npos)
+                return nullptr;
+        }
 
         const b8 hasDefault = hasDefaultInitializerToken(parm);
         TypeRef* mappedParamType = mapType(parmType, true);
@@ -310,15 +319,20 @@ MethodDecl* ImporterContext::buildMethodDecl(CXCursor cursor, const MStringView 
     }
 
     for(const auto& rename : tparamRenames){
-        RewriteTemplateTypeRefName(decl->returnType, rename.first(), rename.second());
+        decl->returnType = RewriteTemplateTypeRefName(m_arena, decl->returnType, rename.first(), rename.second());
         for(ParamDecl& p : decl->params)
-            RewriteTemplateTypeRefName(p.type, rename.first(), rename.second());
+            p.type = RewriteTemplateTypeRefName(m_arena, p.type, rename.first(), rename.second());
     }
 
     return decl;
 }
 
-void ImporterContext::inspectBaseAndSpecialMembers(CXCursor classCursor, ClassTraits& traits){
+void ImporterContext::inspectBaseAndSpecialMembers(CXCursor classCursor, ClassTraits& traits, HashSet<CursorKey, MetaArena, CursorKeyHash>& visitedTraitBases, const b8 isBasePass){
+    if(isBasePass){
+        if(!visitedTraitBases.insert(MakeCursorKey(classCursor)).second)
+            return;
+    }
+
     MVector<CXCursor> children(m_arena);
     visitChildrenList(classCursor, children);
 
@@ -344,7 +358,7 @@ void ImporterContext::inspectBaseAndSpecialMembers(CXCursor classCursor, ClassTr
             }
 
             if(acc == CX_CXXPublic && !::clang_Cursor_isNull(baseDecl) && ::clang_getCursorKind(baseDecl) != CXCursor_NoDeclFound){
-                inspectBaseAndSpecialMembers(baseDecl, traits);
+                inspectBaseAndSpecialMembers(baseDecl, traits, visitedTraitBases, true);
                 traits.publicBaseRecords.push_back(baseDecl);
             }
             continue;
@@ -416,32 +430,26 @@ b8 ImporterContext::methodSignaturesEqual(const MethodDecl& a, const MethodDecl&
     return true;
 }
 
-void ImporterContext::addUniqueMethod(ClassDecl& target, MethodDecl* method){
+void ImporterContext::addUniqueMethod(ClassDecl& target, MethodDecl* method, ClassImportDedupe& dedupe){
     if(!method)
         return;
-    for(const MethodDecl* existing : target.methods){
+    auto [it, inserted] = dedupe.methodsByName.emplace(method->name, MVector<const MethodDecl*>(m_arena));
+    for(const MethodDecl* existing : it.value()){
         if(existing && methodSignaturesEqual(*existing, *method))
             return;
     }
+    it.value().push_back(method);
     target.methods.push_back(method);
 }
 
-b8 ImporterContext::hasClassFieldNamed(const ClassDecl& target, const MStringView fieldName)noexcept{
-    for(const FieldDecl* existing : target.fields){
-        if(existing && existing->name == fieldName)
-            return true;
-    }
-    return false;
-}
-
-void ImporterContext::tryAddClassField(ClassDecl& targetClass, CXCursor child, CXType recordType, const b8 isStatic){
+void ImporterContext::tryAddClassField(ClassDecl& targetClass, CXCursor child, CXType recordType, const b8 isStatic, ClassImportDedupe& dedupe){
     const MString fieldNameStr = ConsumeClangString(m_arena, ::clang_getCursorSpelling(child));
     const MStringView fieldNameView(fieldNameStr.data(), fieldNameStr.size());
     if(!IsAsciiIdentifier(fieldNameView) || CppImporterSemantics::IsInternalIdentifierName(fieldNameView))
         return;
 
     const MStringView fieldName = InternArenaString(m_arena, fieldNameStr);
-    if(hasClassFieldNamed(targetClass, fieldName))
+    if(!dedupe.seenFields.insert(fieldName).second)
         return;
 
     const CXType ftype = ::clang_getCursorType(child);
@@ -471,7 +479,12 @@ void ImporterContext::tryAddClassField(ClassDecl& targetClass, CXCursor child, C
     targetClass.orderedFields.push_back(field);
 }
 
-void ImporterContext::importClassMethodsFromCursor(CXCursor classCursor, ClassDecl& targetClass, const b8 isBasePass){
+void ImporterContext::importClassMethodsFromCursor(CXCursor classCursor, ClassDecl& targetClass, const b8 isBasePass, ClassImportDedupe& dedupe){
+    if(isBasePass){
+        if(!dedupe.visitedBaseRecords.insert(MakeCursorKey(classCursor)).second)
+            return;
+    }
+
     MVector<CXCursor> children(m_arena);
     visitChildrenList(classCursor, children);
 
@@ -501,7 +514,7 @@ void ImporterContext::importClassMethodsFromCursor(CXCursor classCursor, ClassDe
             if(::clang_Cursor_isNull(baseDecl))
                 baseDecl = ::clang_getCursorReferenced(child);
             if(!::clang_Cursor_isNull(baseDecl))
-                importClassMethodsFromCursor(baseDecl, targetClass, true);
+                importClassMethodsFromCursor(baseDecl, targetClass, true, dedupe);
             continue;
         }
 
@@ -509,12 +522,12 @@ void ImporterContext::importClassMethodsFromCursor(CXCursor classCursor, ClassDe
             continue;
 
         if(ck == CXCursor_FieldDecl && !isBasePass){
-            tryAddClassField(targetClass, child, recordType, false);
+            tryAddClassField(targetClass, child, recordType, false, dedupe);
             continue;
         }
 
         if(ck == CXCursor_VarDecl && !isBasePass){
-            tryAddClassField(targetClass, child, recordType, true);
+            tryAddClassField(targetClass, child, recordType, true, dedupe);
             continue;
         }
 
@@ -529,7 +542,7 @@ void ImporterContext::importClassMethodsFromCursor(CXCursor classCursor, ClassDe
             }
             MethodDecl* method = buildMethodDecl(child, targetClass.name, isTpl, &targetClass);
             if(method)
-                addUniqueMethod(targetClass, method);
+                addUniqueMethod(targetClass, method, dedupe);
         }
     }
 }
@@ -543,7 +556,7 @@ void ImporterContext::extractClass(CXCursor classCursor){
     MStringView cppExportName;
     b8 dummyDirect = false;
     b8 dummyFlag = false;
-    if(!FormatNormalizedAdhdDeclName(m_arena, classCursor, adhdName, cppNs, cppExportName, dummyDirect, dummyFlag))
+    if(!formatDeclName(classCursor, adhdName, cppNs, cppExportName, dummyDirect, dummyFlag))
         return;
 
     const CXType recordType = ::clang_getCursorType(classCursor);
@@ -571,7 +584,8 @@ void ImporterContext::extractClass(CXCursor classCursor){
         cls->totalAlign = static_cast<usize>(al);
 
     ClassTraits traits(m_arena);
-    inspectBaseAndSpecialMembers(classCursor, traits);
+    HashSet<CursorKey, MetaArena, CursorKeyHash> visitedTraitBases(m_arena);
+    inspectBaseAndSpecialMembers(classCursor, traits, visitedTraitBases, false);
     cls->isCopyConstructible = traits.isCopyConstructible;
     cls->isMoveConstructible = traits.isMoveConstructible;
     cls->isCopyAssignable = traits.isCopyAssignable;
@@ -584,9 +598,13 @@ void ImporterContext::extractClass(CXCursor classCursor){
         m_classByExportName.emplace(MString(cls->cppExportName.data(), cls->cppExportName.size(), m_arena), cls);
     }
 
-    importClassMethodsFromCursor(classCursor, *cls, false);
-    for(const CXCursor baseRec : traits.publicBaseRecords)
-        importClassMethodsFromCursor(baseRec, *cls, true);
+    ClassImportDedupe dedupe(m_arena, *cls);
+    importClassMethodsFromCursor(classCursor, *cls, false, dedupe);
+    for(const CXCursor baseRec : traits.publicBaseRecords){
+        const CXCursor def = ::clang_getCursorDefinition(baseRec);
+        const CXCursor resolvedBase = ::clang_Cursor_isNull(def) ? baseRec : def;
+        importClassMethodsFromCursor(resolvedBase, *cls, true, dedupe);
+    }
 
     if(const MStringView compatAliasName = CppImporterSemantics::FindCompatTypeAlias(cppExportName); !compatAliasName.empty() && findExistingDeclForMerge(m_classByExportName, m_classByName, compatAliasName, {}) == nullptr){
         if(m_aliasByName.find(compatAliasName) == m_aliasByName.end()){

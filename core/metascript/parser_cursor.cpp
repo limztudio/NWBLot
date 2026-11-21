@@ -151,12 +151,16 @@ b8 ParserCursor::expect(TokenType::Enum type, MStringView expected){
 }
 
 void ParserCursor::error(const u32 line, const u32 column, const MStringView message){
+    if(m_suppressErrors)
+        return;
     m_errors.push_back(ParseError{line, column, MString(message.data(), message.size(), m_arena)});
 }
 
 void ParserCursor::errorExpected(MStringView expected){
     using namespace __hidden_metascript_parser_cursor;
 
+    if(m_suppressErrors)
+        return;
     const TokenDescription found = DescribeToken(m_current);
     const usize foundSize = found.prefix.size() + found.text.size() + found.suffix.size();
     MString message(m_arena);

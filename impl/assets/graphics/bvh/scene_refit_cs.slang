@@ -16,6 +16,9 @@ struct NwbSceneBvhRefitPushConstants{
     uint sceneNodeSlot;
     uint instanceInputSlot;
     uint instanceCount;
+    uint parentSlot;
+    uint visitCounterSlot;
+    uint passMode;
 };
 [[vk::push_constant]] ConstantBuffer<NwbSceneBvhRefitPushConstants> g_NwbSceneBvhRefitPush;
 
@@ -47,53 +50,77 @@ bool nwbSceneRefitAxis(const float4 row, const float3 localMin, const float3 loc
 
 [shader("compute")]
 [numthreads(NWB_SCENE_BVH_REFIT_GROUP_SIZE, 1, 1)]
-void main(const uint3 threadId : SV_GroupThreadID){
+void main(const uint3 dispatchThreadId : SV_DispatchThreadID){
     const uint nodeCount = g_NwbSceneBvhRefitPush.nodeCount;
-    if(nodeCount == 0u)
+    const uint index = dispatchThreadId.x;
+    if(index >= nodeCount)
         return;
+
     const uint sceneSlot = g_NwbSceneBvhRefitPush.sceneNodeSlot;
-    const float finiteMax = asfloat(NWB_FLOAT_MAX_BITS);
-    for(uint index = threadId.x; index < nodeCount; index += NWB_SCENE_BVH_REFIT_GROUP_SIZE){
-        NwbBvhNode node = g_NwbHeapBvhWritableNodeBuffers[sceneSlot][index];
-        if(!nwbBvhNodeIsLeaf(node))
-            continue;
-        float3 worldMin = -finiteMax;
-        float3 worldMax = finiteMax;
-        const uint instance = nwbBvhLeafPrimitive(node);
-        if(instance < g_NwbSceneBvhRefitPush.instanceCount){
-            const uint offset = instance * NWB_SCENE_BVH_REFIT_INSTANCE_BYTES;
-            const ByteAddressBuffer inputs = nwbHeapRawBuffer(g_NwbSceneBvhRefitPush.instanceInputSlot);
-            const uint meshSlot = inputs.Load(offset + NWB_SCENE_BVH_REFIT_MESH_SLOT_OFFSET);
-            const NwbBvhNode root = nwbHeapBvhNodes(meshSlot)[0u];
-            float3 lower;
-            float3 upper;
-            bool valid = all(isfinite(root.aabbMin)) && all(isfinite(root.aabbMax)) && all(root.aabbMin <= root.aabbMax);
-            for(uint axis = 0u; axis < 3u; ++axis){
-                const float4 row = asfloat(inputs.Load4(offset + axis * NWB_SCENE_BVH_REFIT_ROW_BYTES));
-                valid = nwbSceneRefitAxis(row, root.aabbMin, root.aabbMax, lower[axis], upper[axis]) && valid;
-            }
-            if(valid){
-                worldMin = lower;
-                worldMax = upper;
-            }
+    const uint parentSlot = g_NwbSceneBvhRefitPush.parentSlot;
+    const uint visitCounterSlot = g_NwbSceneBvhRefitPush.visitCounterSlot;
+    if(g_NwbSceneBvhRefitPush.passMode == NWB_SCENE_BVH_REFIT_MODE_INIT_PARENTS){
+        if(index == 0u)
+            g_NwbHeapBvhWritableUintBuffers[parentSlot][0u] = NWB_BVH_INVALID;
+        g_NwbHeapBvhWritableUintBuffers[visitCounterSlot][index] = 0u;
+        const NwbBvhNode node = g_NwbHeapBvhWritableNodeBuffers[sceneSlot][index];
+        if(!nwbBvhNodeIsLeaf(node)){
+            g_NwbHeapBvhWritableUintBuffers[parentSlot][node.leftChild] = index;
+            g_NwbHeapBvhWritableUintBuffers[parentSlot][nwbBvhNodeRightChildIndex(node)] = index;
         }
-        node.aabbMin = worldMin;
-        node.aabbMax = worldMax;
-        g_NwbHeapBvhWritableNodeBuffers[sceneSlot][index] = node;
+        return;
     }
-    DeviceMemoryBarrierWithGroupSync();
-    if(threadId.x == 0u){
-        for(uint remaining = nodeCount; remaining > 0u; --remaining){
-            const uint index = remaining - 1u;
-            NwbBvhNode node = g_NwbHeapBvhWritableNodeBuffers[sceneSlot][index];
-            if(nwbBvhNodeIsLeaf(node))
-                continue;
-            const NwbBvhNode left = g_NwbHeapBvhWritableNodeBuffers[sceneSlot][node.leftChild];
-            const NwbBvhNode right = g_NwbHeapBvhWritableNodeBuffers[sceneSlot][nwbBvhNodeRightChildIndex(node)];
-            node.aabbMin = min(left.aabbMin, right.aabbMin);
-            node.aabbMax = max(left.aabbMax, right.aabbMax);
-            g_NwbHeapBvhWritableNodeBuffers[sceneSlot][index] = node;
+
+    NwbBvhNode node = g_NwbHeapBvhWritableNodeBuffers[sceneSlot][index];
+    if(!nwbBvhNodeIsLeaf(node))
+        return;
+
+    const float finiteMax = asfloat(NWB_FLOAT_MAX_BITS);
+    float3 worldMin = -finiteMax;
+    float3 worldMax = finiteMax;
+    const uint instance = nwbBvhLeafPrimitive(node);
+    if(instance < g_NwbSceneBvhRefitPush.instanceCount){
+        const uint offset = instance * NWB_SCENE_BVH_REFIT_INSTANCE_BYTES;
+        const ByteAddressBuffer inputs = nwbHeapRawBuffer(g_NwbSceneBvhRefitPush.instanceInputSlot);
+        const uint meshSlot = inputs.Load(offset + NWB_SCENE_BVH_REFIT_MESH_SLOT_OFFSET);
+        const NwbBvhNode root = nwbHeapBvhNodes(meshSlot)[0u];
+        float3 lower;
+        float3 upper;
+        bool valid = all(isfinite(root.aabbMin)) && all(isfinite(root.aabbMax)) && all(root.aabbMin <= root.aabbMax);
+        [unroll] for(uint axis = 0u; axis < 3u; ++axis){
+            const float4 row = asfloat(inputs.Load4(offset + axis * NWB_SCENE_BVH_REFIT_ROW_BYTES));
+            valid = nwbSceneRefitAxis(row, root.aabbMin, root.aabbMax, lower[axis], upper[axis]) && valid;
         }
+        if(valid){
+            worldMin = lower;
+            worldMax = upper;
+        }
+    }
+    node.aabbMin = worldMin;
+    node.aabbMax = worldMax;
+    g_NwbHeapBvhWritableNodeBuffers[sceneSlot][index] = node;
+
+    DeviceMemoryBarrier();
+
+    uint current = g_NwbHeapBvhWritableUintBuffers[parentSlot][index];
+    while(current != NWB_BVH_INVALID){
+        uint previousVisits;
+        InterlockedAdd(g_NwbHeapBvhWritableUintBuffers[visitCounterSlot][current], 1u, previousVisits);
+        if(previousVisits == 0u)
+            break;
+
+        NwbBvhNode internalNode = g_NwbHeapBvhWritableNodeBuffers[sceneSlot][current];
+        const NwbBvhNode left = g_NwbHeapBvhWritableNodeBuffers[sceneSlot][internalNode.leftChild];
+        const NwbBvhNode right = g_NwbHeapBvhWritableNodeBuffers[sceneSlot][nwbBvhNodeRightChildIndex(internalNode)];
+        internalNode.aabbMin = min(left.aabbMin, right.aabbMin);
+        internalNode.aabbMax = max(left.aabbMax, right.aabbMax);
+        g_NwbHeapBvhWritableNodeBuffers[sceneSlot][current] = internalNode;
+
+        DeviceMemoryBarrier();
+
+        if(current == 0u)
+            break;
+        current = g_NwbHeapBvhWritableUintBuffers[parentSlot][current];
     }
 }
 

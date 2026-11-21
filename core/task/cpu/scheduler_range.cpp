@@ -172,7 +172,7 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
             group.remainingHelperClaims = static_cast<u32>(taskCount - 1u);
             group.next = m_activeRangeHead;
             m_activeRangeHead = &group;
-            group.linked = true;
+            group.linked.store(true, MemoryOrder::relaxed);
             takeRangeWakePlanLocked(group, 2u, wakePlan);
             wakeJoiners = publishJoinWakeLocked(!fastUnscoped);
         }
@@ -255,7 +255,7 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
         }
         unwindInlineRange.release();
 
-        {
+        if(group.linked.load(MemoryOrder::acquire) || (!fastUnscoped && workerIndex != 0u)){
             ScopedLock lock(m_mutex);
             unlinkRangeGroupLocked(group);
             if(!fastUnscoped && workerIndex != 0u)

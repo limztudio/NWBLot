@@ -87,8 +87,43 @@ constexpr u32 s_MaxIncludeDepth = 64u;
     return line;
 }
 
-[[nodiscard]] b8 HasUnclosedFunctionMacroCall(const MStringView text, const Preprocessor::MacroMap& macros)noexcept{
-    usize i = 0u;
+struct MacroCallScanState{
+    usize scanOffset = 0u;
+    u32 parenDepth = 0u;
+};
+
+[[nodiscard]] b8 HasUnclosedFunctionMacroCall(const MStringView text, const Preprocessor::MacroMap& macros, MacroCallScanState& state)noexcept{
+    usize i = state.scanOffset;
+    if(state.parenDepth > 0u){
+        u32 parenDepth = state.parenDepth;
+        usize scan = i;
+        while(scan < text.size() && parenDepth > 0u){
+            const usize stepStart = scan;
+            b8 innerTerminator = false;
+            if(PreprocessorSemantics::AdvancePreprocessorScanStep(text, scan, 0u, true, innerTerminator)){
+                if(innerTerminator){
+                    state.scanOffset = stepStart;
+                    state.parenDepth = parenDepth;
+                    return true;
+                }
+                continue;
+            }
+            const MChar ch = text[scan];
+            if(ch == '(')
+                ++parenDepth;
+            else if(ch == ')')
+                --parenDepth;
+            ++scan;
+        }
+        if(parenDepth > 0u){
+            state.scanOffset = scan;
+            state.parenDepth = parenDepth;
+            return true;
+        }
+        state.parenDepth = 0u;
+        i = scan;
+    }
+
     while(i < text.size()){
         b8 hitTerminator = false;
         if(PreprocessorSemantics::AdvancePreprocessorScanStep(text, i, 0u, true, hitTerminator)){
@@ -114,10 +149,14 @@ constexpr u32 s_MaxIncludeDepth = 64u;
             u32 parenDepth = 1u;
             usize scan = lookahead + 1u;
             while(scan < text.size() && parenDepth > 0u){
+                const usize stepStart = scan;
                 b8 innerTerminator = false;
                 if(PreprocessorSemantics::AdvancePreprocessorScanStep(text, scan, 0u, true, innerTerminator)){
-                    if(innerTerminator)
-                        break;
+                    if(innerTerminator){
+                        state.scanOffset = stepStart;
+                        state.parenDepth = parenDepth;
+                        return true;
+                    }
                     continue;
                 }
                 const MChar ch = text[scan];
@@ -127,13 +166,18 @@ constexpr u32 s_MaxIncludeDepth = 64u;
                     --parenDepth;
                 ++scan;
             }
-            if(parenDepth > 0u)
+            if(parenDepth > 0u){
+                state.scanOffset = scan;
+                state.parenDepth = parenDepth;
                 return true;
+            }
             i = scan;
             continue;
         }
         ++i;
     }
+    state.scanOffset = i;
+    state.parenDepth = 0u;
     return false;
 }
 
@@ -186,6 +230,8 @@ Preprocessor::Preprocessor(MetaArena& arena, Alloc::ScratchArena& scratchArena, 
 
 
 void Preprocessor::defineObjectMacro(const MStringView name, const MStringView body){
+    if(const auto existing = m_macros.find(name); existing != m_macros.end() && existing.value().isFunctionLike && m_functionMacroCount > 0u)
+        --m_functionMacroCount;
     PreprocessorMacro macro(m_arena);
     macro.name.assign(name.data(), name.size());
     macro.body.assign(body.data(), body.size());
@@ -196,8 +242,11 @@ void Preprocessor::defineObjectMacro(const MStringView name, const MStringView b
 
 void Preprocessor::undefineMacro(const MStringView name)noexcept{
     const auto it = m_macros.find(name);
-    if(it != m_macros.end())
+    if(it != m_macros.end()){
+        if(it.value().isFunctionLike && m_functionMacroCount > 0u)
+            --m_functionMacroCount;
         m_macros.erase(it);
+    }
 }
 
 b8 Preprocessor::isOffsetInIncludedRange(const usize offset)const noexcept{
@@ -287,6 +336,11 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
         return line;
     };
 
+    MString joinedBuffer(m_arena);
+    MString rewrittenSegment(m_arena);
+    MString expandedTail(m_arena);
+    MString expandedLine(m_arena);
+
     while(pos < source.size()){
         usize lineEnd = pos;
         MStringView rawLine = readTrimmedLineAt(pos, lineEnd);
@@ -295,12 +349,13 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
         const u32 startLine = currentLine;
         u32 joinedLines = 0u;
 
-        MString joinedBuffer(m_arena);
+        joinedBuffer.clear();
         if(!inBlockComment && !inRawString){
             b8 hasBackslashCont = !rawLine.empty() && rawLine.back() == '\\';
             const MStringView initialTrimmed = TrimView(rawLine);
             const b8 isDirectiveLine = !initialTrimmed.empty() && initialTrimmed[0] == '#';
-            b8 hasUnclosedMacro = !hasBackslashCont && !isDirectiveLine && isActive && HasUnclosedFunctionMacroCall(rawLine, m_macros);
+            MacroCallScanState macroScanState{};
+            b8 hasUnclosedMacro = m_functionMacroCount > 0u && !hasBackslashCont && !isDirectiveLine && isActive && HasUnclosedFunctionMacroCall(rawLine, m_macros, macroScanState);
 
             if(hasBackslashCont || hasUnclosedMacro){
                 const auto appendJoinedSegment = [&](const MStringView segment, const b8 hasBackslash){
@@ -310,7 +365,7 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
                         joinedBuffer.append(segment.data(), segment.size() - 1u);
                         return;
                     }
-                    MString rewrittenSegment(m_arena);
+                    rewrittenSegment.clear();
                     const MStringView strippedSegment = StripLineComment(segment, rewrittenSegment);
                     joinedBuffer.append(strippedSegment.data(), strippedSegment.size());
                 };
@@ -324,7 +379,7 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
                     const MStringView nextRaw = readTrimmedLineAt(pos, lineEnd);
                     hasBackslashCont = !nextRaw.empty() && nextRaw.back() == '\\';
                     appendJoinedSegment(nextRaw, hasBackslashCont);
-                    hasUnclosedMacro = !hasBackslashCont && !isDirectiveLine && isActive && HasUnclosedFunctionMacroCall(MStringView(joinedBuffer.data(), joinedBuffer.size()), m_macros);
+                    hasUnclosedMacro = m_functionMacroCount > 0u && !hasBackslashCont && !isDirectiveLine && isActive && HasUnclosedFunctionMacroCall(MStringView(joinedBuffer.data(), joinedBuffer.size()), m_macros, macroScanState);
                 }
                 rawLine = MStringView(joinedBuffer.data(), joinedBuffer.size());
             }
@@ -380,7 +435,7 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
             outProcessed.push_back('\n');
         }
         else if(isActive){
-            MString expandedTail(m_arena);
+            expandedTail.clear();
             MStringView expandedView = effectiveLine;
             if(!m_macros.empty()){
                 PreprocessorMacroExpander macroExpander(m_arena, m_macros, m_errors);
@@ -392,7 +447,7 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
                 outProcessed.append(expandedView.data(), expandedView.size());
             }
             else{
-                MString expandedLine(m_arena);
+                expandedLine.clear();
                 expandedLine.append(commentPrefix.data(), commentPrefix.size());
                 expandedLine.append(expandedView.data(), expandedView.size());
                 updateLineScanState(MStringView(expandedLine.data(), expandedLine.size()), commentPrefix.size());
@@ -591,6 +646,10 @@ b8 Preprocessor::handleDefine(const MStringView rest, const u32 line){
         macro.body.assign(body.data(), body.size());
     }
 
+    if(const auto existing = m_macros.find(name); existing != m_macros.end() && existing.value().isFunctionLike && m_functionMacroCount > 0u)
+        --m_functionMacroCount;
+    if(macro.isFunctionLike)
+        ++m_functionMacroCount;
     MString key(name.data(), name.size(), m_arena);
     m_macros.insert_or_assign(Move(key), Move(macro));
     return true;

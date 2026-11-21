@@ -287,6 +287,9 @@ template<typename T>
     if(alignment == 0)
         return value;
 
+    if((alignment & (alignment - static_cast<T>(1))) == static_cast<T>(0))
+        return AlignUpPowerOfTwoChecked(value, alignment);
+
     const T remainder = value % alignment;
     if(remainder == 0)
         return value;
@@ -302,7 +305,7 @@ template<typename T>
 [[nodiscard]] inline constexpr Expected<u32> AlignU32PowerOfTwoChecked(const u32 value, const u32 alignment)noexcept{
     if(alignment == 0u || (alignment & (alignment - 1u)) != 0u)
         return MakeUnexpected(Failure{});
-    return AlignUpChecked(value, alignment);
+    return AlignUpPowerOfTwoChecked(value, alignment);
 }
 
 [[nodiscard]] inline constexpr Expected<usize> AlignUpCheckedSize(const usize value, const usize alignment)noexcept{

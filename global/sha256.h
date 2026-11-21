@@ -11,6 +11,9 @@
 #include "not_null.h"
 #include "numeric_text.h"
 
+#include <bit>
+#include <cstring>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -50,9 +53,26 @@ inline constexpr u32 s_LengthFieldOffset = s_BlockByteCount - s_LengthFieldByteC
 inline constexpr u8 s_PaddingMarker = 0x80u;
 inline constexpr u32 s_HexDigitsPerByte = 2u;
 
+[[nodiscard]] constexpr inline u32 ByteSwap32(const u32 value)noexcept{
+#if defined(__clang__) || defined(__GNUC__)
+    return __builtin_bswap32(value);
+#else
+    return ((value & 0x000000ffu) << 24u) | ((value & 0x0000ff00u) << 8u) | ((value & 0x00ff0000u) >> 8u) | ((value & 0xff000000u) >> 24u);
+#endif
+}
+
 inline void UnpackBlockWords(const u8* const block, u32* const outWords)noexcept{
-    for(u32 index = 0u; index < s_BlockWordCount; ++index)
-        outWords[index] = ReadU32BigEndian(MakeNotNull(block + index * s_WordByteCount));
+    if constexpr(std::endian::native == std::endian::little){
+        for(u32 index = 0u; index < s_BlockWordCount; ++index){
+            u32 word = 0u;
+            std::memcpy(&word, block + index * s_WordByteCount, sizeof(u32));
+            outWords[index] = ByteSwap32(word);
+        }
+    }
+    else{
+        for(u32 index = 0u; index < s_BlockWordCount; ++index)
+            outWords[index] = ReadU32BigEndian(MakeNotNull(block + index * s_WordByteCount));
+    }
 }
 
 inline void UnpackBlockWords(const Array<u8, s_BlockByteCount>& block, u32* const outWords)noexcept{
@@ -162,7 +182,7 @@ inline constexpr u32 s_RoundSigma1RotateC = 25u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Array<u32, s_RoundCount> s_RoundConstants = {
+alignas(16) inline constexpr Array<u32, s_RoundCount> s_RoundConstants = {
     0x428a2f98u, 0x71374491u, 0xb5c0fbcfu, 0xe9b5dba5u, 0x3956c25bu, 0x59f111f1u, 0x923f82a4u, 0xab1c5ed5u,
     0xd807aa98u, 0x12835b01u, 0x243185beu, 0x550c7dc3u, 0x72be5d74u, 0x80deb1feu, 0x9bdc06a7u, 0xc19bf174u,
     0xe49b69c1u, 0xefbe4786u, 0x0fc19dc6u, 0x240ca1ccu, 0x2de92c6fu, 0x4a7484aau, 0x5cb0a9dcu, 0x76f988dau,
@@ -183,44 +203,10 @@ inline constexpr Array<u32, s_StateWordCount> s_InitialState = { 0x6a09e667u, 0x
     return (value >> count) | (value << (ShaBe32Detail::s_WordBits - count));
 }
 
+void CompressBlocks(Array<u32, s_StateWordCount>& state, const u8* blocks, usize blockCount)noexcept;
+
 inline void Compress(Array<u32, s_StateWordCount>& state, const u8* const block)noexcept{
-    Array<u32, s_RoundCount> words;
-    ShaBe32Detail::UnpackBlockWords(block, words.data());
-    for(u32 index = ShaBe32Detail::s_BlockWordCount; index < s_RoundCount; ++index){
-        const u32 a = words[index - s_ScheduleLagSigma0];
-        const u32 b = words[index - s_ScheduleLagSigma1];
-        const u32 sigma0 = Rotate(a, s_ScheduleSigma0RotateA) ^ Rotate(a, s_ScheduleSigma0RotateB) ^ (a >> s_ScheduleSigma0Shift);
-        const u32 sigma1 = Rotate(b, s_ScheduleSigma1RotateA) ^ Rotate(b, s_ScheduleSigma1RotateB) ^ (b >> s_ScheduleSigma1Shift);
-        words[index] = words[index - s_ScheduleLagPrevious] + sigma0 + words[index - s_ScheduleLagAdded] + sigma1;
-    }
-    u32 a = state[0u];
-    u32 b = state[1u];
-    u32 c = state[2u];
-    u32 d = state[3u];
-    u32 e = state[4u];
-    u32 f = state[5u];
-    u32 g = state[6u];
-    u32 h = state[7u];
-    for(u32 index = 0u; index < s_RoundCount; ++index){
-        const u32 first = h + (Rotate(e, s_RoundSigma1RotateA) ^ Rotate(e, s_RoundSigma1RotateB) ^ Rotate(e, s_RoundSigma1RotateC)) + ((e & f) ^ (~e & g)) + s_RoundConstants[index] + words[index];
-        const u32 second = (Rotate(a, s_RoundSigma0RotateA) ^ Rotate(a, s_RoundSigma0RotateB) ^ Rotate(a, s_RoundSigma0RotateC)) + ((a & b) ^ (a & c) ^ (b & c));
-        h = g;
-        g = f;
-        f = e;
-        e = d + first;
-        d = c;
-        c = b;
-        b = a;
-        a = first + second;
-    }
-    state[0u] += a;
-    state[1u] += b;
-    state[2u] += c;
-    state[3u] += d;
-    state[4u] += e;
-    state[5u] += f;
-    state[6u] += g;
-    state[7u] += h;
+    CompressBlocks(state, block, 1u);
 }
 
 
@@ -234,7 +220,38 @@ inline void Compress(Array<u32, s_StateWordCount>& state, const u8* const block)
 
 
 [[nodiscard]] inline Sha256Digest ComputeSha256(const BinaryByteView input)noexcept{
-    return ShaBe32Detail::ComputeDigest<Sha256Digest, Sha256Detail::s_StateWordCount, &Sha256Detail::Compress>(input, Sha256Detail::s_InitialState);
+    Array<u32, Sha256Detail::s_StateWordCount> state = Sha256Detail::s_InitialState;
+    const usize inputSize = input.size();
+    const u8* const inputData = input.data();
+    const usize fullBlocks = inputSize / ShaBe32Detail::s_BlockByteCount;
+    const usize offset = fullBlocks * ShaBe32Detail::s_BlockByteCount;
+    if(fullBlocks > 0u)
+        Sha256Detail::CompressBlocks(state, inputData, fullBlocks);
+
+    Array<u8, ShaBe32Detail::s_BlockByteCount * 2u> tail = {};
+    const usize remainder = inputSize - offset;
+    if(remainder > 0u)
+        FOUNDATION_MEMCPY(tail.data(), tail.size(), inputData + offset, remainder);
+    tail[remainder] = ShaBe32Detail::s_PaddingMarker;
+    const usize tailBlockCount = remainder >= ShaBe32Detail::s_LengthFieldOffset ? 2u : 1u;
+    const usize totalTailBytes = tailBlockCount * ShaBe32Detail::s_BlockByteCount;
+    const u64 bitCount = static_cast<u64>(inputSize) * s_BitsPerByte;
+    for(u32 index = 0u; index < ShaBe32Detail::s_LengthFieldByteCount; ++index)
+        tail[totalTailBytes - 1u - index] = static_cast<u8>(bitCount >> (index * s_BitsPerByte));
+    Sha256Detail::CompressBlocks(state, tail.data(), tailBlockCount);
+
+    Sha256Digest digest;
+    if constexpr(std::endian::native == std::endian::little){
+        for(u32 index = 0u; index < Sha256Detail::s_StateWordCount; ++index){
+            const u32 bigEndianWord = ShaBe32Detail::ByteSwap32(state[index]);
+            std::memcpy(digest.bytes + index * ShaBe32Detail::s_WordByteCount, &bigEndianWord, sizeof(u32));
+        }
+    }
+    else{
+        for(u32 index = 0u; index < Sha256Digest::s_ByteCount; ++index)
+            digest.bytes[index] = static_cast<u8>(state[index / ShaBe32Detail::s_WordByteCount] >> ((ShaBe32Detail::s_LastByteInWord - index % ShaBe32Detail::s_WordByteCount) * s_BitsPerByte));
+    }
+    return digest;
 }
 
 [[nodiscard]] inline Expected<Sha256Digest> ParseSha256(const AStringView text)noexcept{

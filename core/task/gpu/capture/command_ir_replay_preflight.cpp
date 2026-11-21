@@ -156,6 +156,7 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacketStream(
     GpuCommandIrReplayError::Enum commandListError = GpuCommandIrReplayError::None;
     const GpuPhysicalQueueInfo* backendCommandQueue = nullptr;
     Optional<BackendRasterReplayState> backendRasterState;
+    Optional<BuiltinBackendResourceCache> builtinResourceCache;
     if(commandList){
         if(!commandList->isRecording())
             commandListError = GpuCommandIrReplayError::CommandListNotRecording;
@@ -172,8 +173,10 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacketStream(
                     backendCommandQueue = commandList->getDevice().getPhysicalQueueInfo(commandListDescription.physicalQueue);
                 if(!backendCommandQueue)
                     commandListError = GpuCommandIrReplayError::BackendResourceNotReady;
-                else
+                else{
                     backendRasterState.emplace();
+                    builtinResourceCache.emplace();
+                }
             }
         }
     }
@@ -184,15 +187,13 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacketStream(
     GpuTaskGraphTaskView cachedTaskView;
     u64 recordIndex = 0u;
     RasterReplayState graphRasterState;
-    BuiltinBackendResourceCache builtinResourceCache;
     GpuCommandIrReplayError::Enum firstBackendError = GpuCommandIrReplayError::None;
     u64 firstBackendErrorRecordIndex = Limit<u64>::s_Max;
     const u8* recordPtr = nullptr;
-    Optional<GpuCommandIrBuiltinTaskRecord> builtinRecord;
     GpuCommandIrWireOpcode::Enum wireOpcode = GpuCommandIrWireOpcode::Count;
     DecodedRecordContext decodedContext;
     for(;;){
-        const WireStepStatus::Enum step = cursor.nextView(recordPtr, wireOpcode, decodedContext, builtinRecord);
+        const WireStepStatus::Enum step = cursor.nextView(recordPtr, wireOpcode, decodedContext);
         if(step == WireStepStatus::End){
             if(graphRasterState.active)
                 return ReplayFailure(GpuCommandIrReplayError::InvalidRasterState, cursor.validation(), recordIndex);
@@ -293,17 +294,15 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacketStream(
                 operationError = GpuCommandIrReplayError::MissingTransferCapability;
             else{
                 operationError = ValidateRasterBuiltinBoundary(decodedContext.task, graphRasterState);
-                if(operationError == GpuCommandIrReplayError::None){
-                    FOUNDATION_ASSERT(builtinRecord.has_value());
-                    operationError = GpuCommandIrBuiltinPreflight::Validate(*builtinRecord, cursor.blobBytes(), graph, task, *queue);
-                }
+                if(operationError == GpuCommandIrReplayError::None)
+                    operationError = GpuCommandIrBuiltinPreflight::ValidateWire(wireOpcode, recordPtr, decodedContext.task.generation, cursor.blobBytes(), graph, task, *queue);
             }
         }
         if(operationError != GpuCommandIrReplayError::None)
             return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(cursor, operationError, recordIndex);
 
         if(commandList && commandListError == GpuCommandIrReplayError::None && firstBackendError == GpuCommandIrReplayError::None){
-            FOUNDATION_ASSERT(backendCommandQueue && backendRasterState.has_value());
+            FOUNDATION_ASSERT(backendCommandQueue && backendRasterState.has_value() && builtinResourceCache.has_value());
             GpuCommandIrReplayError::Enum operandError = GpuCommandIrReplayError::None;
             if(raster){
                 if(wireOpcode == GpuCommandIrWireOpcode::Draw){
@@ -318,8 +317,7 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacketStream(
                     operandError = ValidateRasterWireBackendOperand(wireOpcode, recordPtr, cursor.blobBytes(), decodedContext.task, owners, graph, *backendCommandQueue, recordIndex, *commandList, *backendRasterState);
             }
             else{
-                FOUNDATION_ASSERT(builtinRecord.has_value());
-                operandError = ValidateBuiltinBackendOperand(*builtinRecord, graph, *backendCommandQueue, *commandList, builtinResourceCache);
+                operandError = ValidateBuiltinWireBackendOperand(wireOpcode, recordPtr, decodedContext.task.generation, graph, *backendCommandQueue, *commandList, *builtinResourceCache);
             }
             if(operandError != GpuCommandIrReplayError::None){
                 firstBackendError = operandError;

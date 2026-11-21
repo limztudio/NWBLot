@@ -365,6 +365,19 @@ void CommandList::setBufferStateValidated(Buffer& buffer, const ResourceStates::
         append(resolvedRange, permanentState);
     else{
         StateTracker::BufferRangeStates* const existingRanges = m_stateTracker.findBufferRangesCachedMutable(buffer);
+        if(
+            !uavBarrierEnabled
+            && !forceMemoryDependency
+            && existingRanges
+            && existingRanges->size() == 1u
+            && (*existingRanges)[0u].range == resolvedRange
+            && (*existingRanges)[0u].state == stateBits
+        ){
+            if(VulkanDetail::HasBufferDeviceWriteState(stateBits))
+                registerHostReadbackBuffer(buffer);
+            retainResource(&buffer);
+            return;
+        }
         u64 cursor = resolvedRange.byteOffset;
         if(existingRanges && !existingRanges->empty() && resolvedRange.byteOffset < existingRanges->back().range.end()){
             for(const StateTracker::BufferRangeState* it = StateTracker::FindFirstPotentiallyOverlappingRange(*existingRanges, resolvedRange.byteOffset); it != existingRanges->end(); ++it){

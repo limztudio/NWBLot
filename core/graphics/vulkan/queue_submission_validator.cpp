@@ -82,7 +82,7 @@ b8 Queue::SubmissionValidator::validateCommandList(CommandList* const cmdList, c
         NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: command list {} replaced its validated native recording lease"), cmdIndex);
         return false;
     }
-    return cmdList->validateTrackedResourcesReadyForSubmission();
+    return cmdList->validateTrackedResourcesReadyForSubmissionFast();
 }
 
 b8 Queue::SubmissionValidator::validate(CommandList* const* ppCmd, const usize numCmd, const SubmissionCommandListIdentity* const expectedCommandLists, const u64 batchStamp)const{

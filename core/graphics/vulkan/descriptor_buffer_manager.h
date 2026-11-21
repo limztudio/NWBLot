@@ -71,8 +71,12 @@ public:
     [[nodiscard]] b8 shutdown();
 
     [[nodiscard]] b8 isEnabled()const noexcept;
+    [[nodiscard]] b8 isEnabledFast()const noexcept{
+        return m_fastBindingGeneration.load(MemoryOrder::acquire) != 0u;
+    }
 
     [[nodiscard]] u32 getDescriptorSize(VkDescriptorType descriptorType)const noexcept;
+    [[nodiscard]] u32 getImmutableDescriptorSize(VkDescriptorType descriptorType)const noexcept;
     [[nodiscard]] u32 getOffsetAlignmentBytes()const noexcept;
     [[nodiscard]] u64 getUniformBufferAddressAlignmentBytes()const noexcept{
         return Max<u64>(m_context.physicalDeviceProperties.limits.minUniformBufferOffsetAlignment, 1u);
@@ -127,6 +131,8 @@ private:
     u64 m_nextBindingGeneration = 1u;
     b8 m_enabled = false;
     b8 m_lifecycleTransitioning = false;
+    b8 m_bufferFormatFeaturesCached = false;
+    Array<VkFormatFeatureFlags, Format::Count> m_cachedBufferFormatFeatures{};
     SegmentStorage m_resourceSegment;
     SegmentStorage m_samplerSegment;
 };

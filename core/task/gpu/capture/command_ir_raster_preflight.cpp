@@ -107,11 +107,11 @@ template<typename GetVertexBindingFn>
     else{
         if(!graph.validPipeline(pipeline))
             return GpuCommandIrReplayError::InvalidRasterState;
-        if(graph.pipelineAt(pipeline.index).type != GpuGraphPipelineType::Graphics)
+        if(graph.pipelineTypeAt(pipeline.index) != GpuGraphPipelineType::Graphics)
             return GpuCommandIrReplayError::InvalidRasterState;
         if(!graph.validResource(colorAttachment))
             return GpuCommandIrReplayError::InvalidResource;
-        if(graph.resourceAt(colorAttachment.index).type != GpuGraphResourceType::Texture)
+        if(graph.resourceTypeAt(colorAttachment.index) != GpuGraphResourceType::Texture)
             return GpuCommandIrReplayError::ResourceTypeMismatch;
         if(!HasResourceUse(task, colorAttachment, ResourceStates::RenderTarget, GpuTaskResourceAccess::Write))
             return GpuCommandIrReplayError::ResourceUseMismatch;
@@ -135,7 +135,7 @@ template<typename GetVertexBindingFn>
                 return GpuCommandIrReplayError::InvalidRasterState;
             if(!graph.validResource(binding.resource))
                 return GpuCommandIrReplayError::InvalidResource;
-            if(graph.resourceAt(binding.resource.index).type != GpuGraphResourceType::Buffer)
+            if(graph.resourceTypeAt(binding.resource.index) != GpuGraphResourceType::Buffer)
                 return GpuCommandIrReplayError::ResourceTypeMismatch;
             if(!HasResourceUse(task, binding.resource, ResourceStates::VertexBuffer, GpuTaskResourceAccess::Read))
                 return GpuCommandIrReplayError::ResourceUseMismatch;
@@ -154,7 +154,7 @@ template<typename GetVertexBindingFn>
         else{
             if(!graph.validResource(indexResource))
                 return GpuCommandIrReplayError::InvalidResource;
-            if(graph.resourceAt(indexResource.index).type != GpuGraphResourceType::Buffer)
+            if(graph.resourceTypeAt(indexResource.index) != GpuGraphResourceType::Buffer)
                 return GpuCommandIrReplayError::ResourceTypeMismatch;
             if(!HasResourceUse(task, indexResource, ResourceStates::IndexBuffer, GpuTaskResourceAccess::Read))
                 return GpuCommandIrReplayError::ResourceUseMismatch;

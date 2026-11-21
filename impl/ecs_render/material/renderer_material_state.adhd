@@ -75,6 +75,7 @@ class RendererMaterialState : NoCopy{
     public HashMap<MaterialPipelineKey, MaterialPipelineResources> m_pipelines;
     public MaterialInstanceMutableCache m_instanceMutableCache;
     public HashMap<Name, RenderPath> m_loggedMaterialPaths;
+    public SharedPool m_drawSnapshotPool = SharedPool();
     public PreparedMaterialStreamCache m_preparedTransparentStreams;
     public Array<PreparedMaterialPassCacheSlot, s_MaterialPipelinePassCount> m_preparedPassCache;
     public u64 m_preparedStreamGeneration = 0u;

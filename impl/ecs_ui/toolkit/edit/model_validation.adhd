@@ -40,14 +40,11 @@ b8 CanReplaceEditRange(
 }
 
 usize ResolveReplacedEditCaret(in Span<usize> boundaries, in usize begin, in usize replacementSize){
-    usize caret = begin + replacementSize;
-    for(usize index = 0u; index < boundaries.size(); ++index){
-        if(boundaries[index] >= caret){
-            caret = boundaries[index];
-            break;
-        }
-    }
-    return caret;
+    const usize target = begin + replacementSize;
+    const usize idx = LowerBoundIndex(boundaries, target);
+    if(idx < boundaries.size())
+        return boundaries[idx];
+    return target;
 }
 
 
@@ -80,9 +77,7 @@ void CommitEditModelSetText(
         candidate.assign(value);
     const b8 changed = StringView(candidate) != StringView(inOutText);
     inOutText.assign(candidate);
-    inOutBoundaries.clear();
-    for(usize i = 0u; i < newBoundaries.size(); ++i)
-        inOutBoundaries.push_back(newBoundaries[i]);
+    AssignTriviallyCopyableVector(inOutBoundaries, newBoundaries);
     outAnchor = inOutText.size();
     outCaret = outAnchor;
     ++inOutSelectionGeneration;
@@ -150,9 +145,7 @@ b8 CommitEditModelEraseAroundSelection(
         inOutHistoryBytes
     );
     inOutText.assign(candidate);
-    inOutBoundaries.clear();
-    for(usize i = 0u; i < newBoundaries.size(); ++i)
-        inOutBoundaries.push_back(newBoundaries[i]);
+    AssignTriviallyCopyableVector(inOutBoundaries, newBoundaries);
     inOutAnchor = anchor;
     inOutCaret = caret;
     ++inOutSelectionGeneration;
@@ -213,9 +206,7 @@ void CommitEditModelReplaceRange(
         );
     }
     inOutText.assign(candidate);
-    inOutBoundaries.clear();
-    for(usize i = 0u; i < newBoundaries.size(); ++i)
-        inOutBoundaries.push_back(newBoundaries[i]);
+    AssignTriviallyCopyableVector(inOutBoundaries, newBoundaries);
     inOutAnchor = caret;
     inOutCaret = caret;
     ++inOutSelectionGeneration;

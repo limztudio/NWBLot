@@ -124,10 +124,12 @@ const TrackedCompiledResourceState* FindConcurrentReadStateSource(
     const GpuTaskResourceRange& range,
     const TrackedCompiledResourceState& previousState,
     const GpuTaskResourceUse& use,
-    const GpuPhysicalQueueInfo& destinationQueue
+    const GpuPhysicalQueueInfo& destinationQueue,
+    const ResourceShareCacheEntry* const precomputedShareInfo
 )noexcept{
     if(
-        previousState.access != GpuTaskResourceAccess::Read
+        (precomputedShareInfo && !precomputedShareInfo->isConcurrent)
+        || previousState.access != GpuTaskResourceAccess::Read
         || use.access != GpuTaskResourceAccess::Read
         || !__hidden_gpu_task_graph_compiler_read_state_sources::ReadStatesCompatible(resource, previousState.state, use.requiredState)
         || previousState.readStateSourceIndex >= plan.trackedResourceStates.size()
@@ -144,11 +146,36 @@ const TrackedCompiledResourceState* FindConcurrentReadStateSource(
         || !RangeContains(resource, source.range, range)
         || !previousQueue
         || !sourceQueue
-        || !ResourceUsesConcurrentQueueSharing(resource, plan.topology)
-        || !ResourceSharingAdmitsQueue(resource, plan.topology, *previousQueue)
-        || !ResourceSharingAdmitsQueue(resource, plan.topology, *sourceQueue)
-        || !ResourceSharingAdmitsQueue(resource, plan.topology, destinationQueue)
     )
+        return nullptr;
+
+    const auto queueIndexFor = [&](const GpuPhysicalQueueInfo& queue)noexcept -> usize{
+        if(plan.compiledPlan.queueTopology.data() && &queue >= plan.compiledPlan.queueTopology.data() && &queue < plan.compiledPlan.queueTopology.data() + plan.compiledPlan.queueTopology.size())
+            return static_cast<usize>(&queue - plan.compiledPlan.queueTopology.data());
+        if(plan.topology.queues && &queue >= plan.topology.queues && &queue < plan.topology.queues + plan.topology.queueCount)
+            return static_cast<usize>(&queue - plan.topology.queues);
+        return Limit<usize>::s_Max;
+    };
+    const b8 usesConcurrent = precomputedShareInfo
+        ? precomputedShareInfo->isConcurrent
+        : (!resource.hasQueueAdmission ? plan.sharingLut.logicalUsesConcurrent(resource.queueSharing) : ResourceUsesConcurrentQueueSharing(resource, plan.topology))
+    ;
+    if(!usesConcurrent)
+        return nullptr;
+
+    const auto admitsQueue = [&](const GpuPhysicalQueueInfo& queue)noexcept -> b8{
+        if(plan.sharingLut.validBitmask){
+            const usize queueIndex = queueIndexFor(queue);
+            if(queueIndex < plan.topology.queueCount){
+                if(precomputedShareInfo)
+                    return precomputedShareInfo->admitsQueueIndex(queueIndex);
+                if(!resource.hasQueueAdmission)
+                    return (plan.sharingLut.logicalAdmittedMask(resource.queueSharing) & BitMask<u64>(static_cast<u32>(queueIndex))) != 0u;
+            }
+        }
+        return ResourceSharingAdmitsQueue(resource, plan.topology, queue);
+    };
+    if(!admitsQueue(*previousQueue) || !admitsQueue(*sourceQueue) || !admitsQueue(destinationQueue))
         return nullptr;
     const usize previousStateIndex = static_cast<usize>(&previousState - plan.trackedResourceStates.data());
     if(previousState.readStateSourceIndex > previousStateIndex)

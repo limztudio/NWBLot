@@ -144,6 +144,63 @@ namespace GpuTaskGraphCompilerDetail{
     return GpuTaskResourceRange{ .textureSubresources = TextureSubresourceSet{ static_cast<MipLevel>(bounds.xBegin), static_cast<MipLevel>(mipCount), static_cast<ArraySlice>(bounds.yBegin), static_cast<ArraySlice>(arrayCount), }, };
 }
 
+[[nodiscard]] static b8 HasValidResourceBounds(const GpuGraphResourceType::Enum resourceType, const GpuTaskResourceRange& range)noexcept{
+    if(resourceType == GpuGraphResourceType::Buffer)
+        return range.bufferRange.hasExtent();
+    if(resourceType == GpuGraphResourceType::Texture){
+        const TextureSubresourceSet& texture = range.textureSubresources;
+        return texture.baseMipLevel < texture.mipEnd() && texture.baseArraySlice < texture.arrayEnd();
+    }
+    return false;
+}
+
+[[nodiscard]] static b8 TryNormalizeSingleResourceRange(const GpuGraphResourceType::Enum resourceType, const GpuTaskResourceRange& range, GpuTaskResourceRange& outRange)noexcept{
+    if(resourceType == GpuGraphResourceType::Buffer){
+        if(!range.bufferRange.hasExtent())
+            return false;
+        const u64 xBegin = range.bufferRange.byteOffset;
+        const u64 xEnd = range.bufferRange.end();
+        if(xBegin >= xEnd)
+            return false;
+        outRange = GpuTaskResourceRange{
+            .bufferRange = BufferRange(xBegin, xEnd == Limit<u64>::s_Max ? BufferRange::s_AllBytes : xEnd - xBegin),
+        };
+        return true;
+    }
+    if(resourceType != GpuGraphResourceType::Texture)
+        return false;
+
+    const TextureSubresourceSet& texture = range.textureSubresources;
+    const u64 xBegin = texture.baseMipLevel;
+    const u64 xEnd = texture.mipEnd();
+    const u64 yBegin = texture.baseArraySlice;
+    const u64 yEnd = texture.arrayEnd();
+    if(xBegin >= xEnd || yBegin >= yEnd || xBegin > Limit<MipLevel>::s_Max || yBegin > Limit<ArraySlice>::s_Max)
+        return false;
+
+    const u64 mipCount = xEnd == Limit<u64>::s_Max ? TextureSubresourceSet::s_AllMipLevels : xEnd - xBegin;
+    const u64 arrayCount = yEnd == Limit<u64>::s_Max ? TextureSubresourceSet::s_AllArraySlices : yEnd - yBegin;
+    if(
+        mipCount == 0u
+        || arrayCount == 0u
+        || mipCount > Limit<MipLevel>::s_Max
+        || arrayCount > Limit<ArraySlice>::s_Max
+        || (xEnd != Limit<u64>::s_Max && mipCount == TextureSubresourceSet::s_AllMipLevels)
+        || (yEnd != Limit<u64>::s_Max && arrayCount == TextureSubresourceSet::s_AllArraySlices)
+    )
+        return false;
+
+    outRange = GpuTaskResourceRange{
+        .textureSubresources = TextureSubresourceSet{
+            static_cast<MipLevel>(xBegin),
+            static_cast<MipLevel>(mipCount),
+            static_cast<ArraySlice>(yBegin),
+            static_cast<ArraySlice>(arrayCount),
+        },
+    };
+    return true;
+}
+
 [[nodiscard]] b8 CollectResourceFirstUseRangesWithinTaskWithScratch(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphTaskView& task,
@@ -158,18 +215,18 @@ namespace GpuTaskGraphCompilerDetail{
     if(!useHistory.validFor(task) || useIndex >= task.resourceUseCount || !useHistory.validResource(resource.id) || task.resourceUses[useIndex].resource != resource.id)
         return false;
 
+    const usize firstUse = useHistory.first(resource.id);
+    if(firstUse >= useIndex){
+        GpuTaskResourceRange firstUseRange{};
+        if(!TryNormalizeSingleResourceRange(resource.type, range, firstUseRange))
+            return false;
+        outRanges.push_back(firstUseRange);
+        return true;
+    }
+
     const auto requestedBounds = IntegerRectBoundsFrom(resource.type, range);
     if(!requestedBounds)
         return false;
-
-    const usize firstUse = useHistory.first(resource.id);
-    if(firstUse >= useIndex){
-        const auto firstUseRange = IntegerRectBoundsTo(resource.type, (*requestedBounds));
-        if(!firstUseRange)
-            return false;
-        outRanges.push_back((*firstUseRange));
-        return true;
-    }
 
     const auto firstPreviousRange = ResolveResourceRangeForPlanning(graph, resource, task.resourceUses[firstUse].range);
     if(!firstPreviousRange)
@@ -267,27 +324,20 @@ static void AppendResourceStateFragmentsInStateOrder(const Span<const TrackedRes
         outFragments.clear();
         outFragments.reserve(requestedRanges.size());
         for(const GpuTaskResourceRange& requestedRange : requestedRanges){
-            const auto requestedBounds = IntegerRectBoundsFrom(resource.type, requestedRange);
-            if(!requestedBounds)
+            GpuTaskResourceRange fragmentRange{};
+            if(!TryNormalizeSingleResourceRange(resource.type, requestedRange, fragmentRange))
                 return false;
-            const auto fragmentRange = IntegerRectBoundsTo(resource.type, (*requestedBounds));
-            if(!fragmentRange)
-                return false;
-            outFragments.push_back(TrackedResourceStateFragment{ .range = (*fragmentRange), });
+            outFragments.push_back(TrackedResourceStateFragment{ .range = fragmentRange, });
         }
         return true;
     }
     if(requestedRanges.size() == 1u && RangeContains(resource, trackedStates[newestStateIndex].range, requestedRanges.front())){
-        Expected<IntegerRectBounds> requestedBounds = IntegerRectBounds{};
-        Expected<IntegerRectBounds> stateBounds = IntegerRectBounds{};
-        if(!(requestedBounds = IntegerRectBoundsFrom(resource.type, requestedRanges.front())) || !(stateBounds = IntegerRectBoundsFrom(resource.type, trackedStates[newestStateIndex].range)))
-            return false;
-        const auto fragmentRange = IntegerRectBoundsTo(resource.type, (*requestedBounds));
-        if(!fragmentRange)
+        GpuTaskResourceRange fragmentRange{};
+        if(!TryNormalizeSingleResourceRange(resource.type, requestedRanges.front(), fragmentRange) || !HasValidResourceBounds(resource.type, trackedStates[newestStateIndex].range))
             return false;
         outFragments.clear();
         outFragments.reserve(1u);
-        outFragments.push_back(TrackedResourceStateFragment{ .range = (*fragmentRange), .state = &trackedStates[newestStateIndex], .stateIndex = newestStateIndex, });
+        outFragments.push_back(TrackedResourceStateFragment{ .range = fragmentRange, .state = &trackedStates[newestStateIndex], .stateIndex = newestStateIndex, });
         return true;
     }
 

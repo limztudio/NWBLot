@@ -218,6 +218,7 @@ Expected<mut MaterialSurfaceInfo> RendererMaterialSystem::createMaterialSurfaceI
         createdInfo.refractive
     ))
         return MakeUnexpected(Failure());
+    BuildMaterialOverrideFieldLookup(createdInfo.typedLayoutBlocks, createdInfo.typedLayoutFields, createdInfo.overrideFieldLookup);
     if(!ResolveMaterialResourceReferences(createdInfo, this.m_materialState.m_resourceState, this.m_graphics, this.m_assetManager))
         return MakeUnexpected(Failure());
 

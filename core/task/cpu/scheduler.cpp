@@ -262,6 +262,15 @@ Expected<CpuTaskScheduler::TaskHandle, CpuTaskAdmissionError::Enum> CpuTaskSched
     const b8 inScheduler = activeExec && &activeExec->scheduler == this;
     WorkerWakePlan wakePlan;
     b8 wakeJoiners = false;
+    if(m_abortingAtomic.load(MemoryOrder::relaxed))
+        return MakeUnexpected(CpuTaskAdmissionError::Aborting);
+    if(scope && isScopeCanceledLocked(scope))
+        return MakeUnexpected(CpuTaskAdmissionError::ScopeCanceled);
+    for(usize depIdx = 0u; depIdx < dependencyCount; ++depIdx){
+        if(dependencies[depIdx].valid() && dependencies[depIdx].domainIdentity != m_domainIdentity)
+            return MakeUnexpected(CpuTaskAdmissionError::ForeignDependency);
+    }
+
     TaskHandle handle;
     {
         ScopedLock lock(m_mutex);
@@ -279,10 +288,6 @@ Expected<CpuTaskScheduler::TaskHandle, CpuTaskAdmissionError::Enum> CpuTaskSched
         }
         if(isScopeCanceledLocked(scope))
             return MakeUnexpected(CpuTaskAdmissionError::ScopeCanceled);
-        for(usize depIdx = 0u; depIdx < dependencyCount; ++depIdx){
-            if(dependencies[depIdx].valid() && dependencies[depIdx].domainIdentity != m_domainIdentity)
-                return MakeUnexpected(CpuTaskAdmissionError::ForeignDependency);
-        }
         const auto reservation = reserveTaskLocked();
         if(!reservation)
             return MakeUnexpected(reservation.error());
@@ -389,10 +394,11 @@ Expected<CpuTaskScheduler::TaskHandle, CpuTaskAdmissionError::Enum> CpuTaskSched
         if(m_scopeSearchActive)
             invalidateScopeSearchLocked(true);
         meta.state = TaskState::Waiting;
-        if(meta.dependencies == 0u)
+        if(meta.dependencies == 0u){
             enqueueLocked(handle.index, meta);
-        takeWorkerWakePlanLocked(wakePlan);
-        wakeJoiners = publishJoinWakeLocked(true);
+            takeWorkerWakePlanLocked(wakePlan);
+            wakeJoiners = publishJoinWakeLocked(true);
+        }
     }
     notifyProgress(wakePlan, wakeJoiners);
     return handle;
@@ -426,17 +432,6 @@ b8 CpuTaskScheduler::wasCanceledLocked(const TaskHandle handle)const noexcept{
 b8 CpuTaskScheduler::isScopeCanceledLocked(const CpuTaskScope* scope)const noexcept{
     while(scope){
         if(scope->m_canceled.load(MemoryOrder::relaxed))
-            return true;
-        scope = scope->m_parentScope;
-    }
-    return false;
-}
-
-b8 CpuTaskScheduler::isRangeCanceled(const CpuTaskScope* scope)const noexcept{
-    if(m_abortingAtomic.load(MemoryOrder::acquire))
-        return true;
-    while(scope){
-        if(scope->m_canceled.load(MemoryOrder::acquire))
             return true;
         scope = scope->m_parentScope;
     }
@@ -565,20 +560,20 @@ u32 CpuTaskScheduler::claimTaskLocked(const u16 candidateMask, const CpuAffinity
 }
 
 void CpuTaskScheduler::unlinkRangeGroupLocked(ParallelRangeGroup& group)noexcept{
-    if(!group.linked)
+    if(!group.linked.load(MemoryOrder::relaxed))
         return;
     ParallelRangeGroup** cursor = &m_activeRangeHead;
     while(*cursor){
         if(*cursor == &group){
             *cursor = group.next;
             group.next = nullptr;
-            group.linked = false;
+            group.linked.store(false, MemoryOrder::release);
             return;
         }
         cursor = &((*cursor)->next);
     }
     group.next = nullptr;
-    group.linked = false;
+    group.linked.store(false, MemoryOrder::release);
 }
 
 void CpuTaskScheduler::waitRangeHelpers(ParallelRangeGroup& group)noexcept{
@@ -612,7 +607,7 @@ CpuTaskScheduler::ParallelRangeGroup* CpuTaskScheduler::claimRangeLocked(const u
         if(group->remainingHelperClaims == 0u || group->nextChunk.load(MemoryOrder::relaxed) >= group->chunkCount){
             *cursor = group->next;
             group->next = nullptr;
-            group->linked = false;
+            group->linked.store(false, MemoryOrder::release);
             continue;
         }
         const u16 costBit = static_cast<u16>(1u << static_cast<usize>(group->options.cost));
@@ -622,7 +617,7 @@ CpuTaskScheduler::ParallelRangeGroup* CpuTaskScheduler::claimRangeLocked(const u
                 if(group->remainingHelperClaims == 0u){
                     *cursor = group->next;
                     group->next = nullptr;
-                    group->linked = false;
+                    group->linked.store(false, MemoryOrder::release);
                 }
                 group->activeHelpers.fetch_add(1u, MemoryOrder::acq_rel);
                 return group;

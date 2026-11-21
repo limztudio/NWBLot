@@ -435,26 +435,15 @@ Manifold CollideHullFaces(
 }
 
 void QuatToBasisAxes(in VectorSingle q, mut VectorSingle outX, mut VectorSingle outY, mut VectorSingle outZ){
-    const f32 x = q.x;
-    const f32 y = q.y;
-    const f32 z = q.z;
-    const f32 w = q.w;
-    const f32 xx = x + x;
-    const f32 yy = y + y;
-    const f32 zz = z + z;
-    const f32 x2 = x * xx;
-    const f32 y2 = y * yy;
-    const f32 z2 = z * zz;
-    const f32 xy = x * yy;
-    const f32 xz = x * zz;
-    const f32 yz = y * zz;
-    const f32 wx = w * xx;
-    const f32 wy = w * yy;
-    const f32 wz = w * zz;
+    const VectorSingle q2 = q + q;
+    const VectorSingle qx = q2 * q.x;
+    const VectorSingle qy = q2 * q.y;
+    const VectorSingle qz = q2 * q.z;
+    const VectorSingle qw = q2 * q.w;
 
-    outX = VectorSingle(1.0f - (y2 + z2), xy + wz, xz - wy, 0.0f);
-    outY = VectorSingle(xy - wz, 1.0f - (x2 + z2), yz + wx, 0.0f);
-    outZ = VectorSingle(xz + wy, yz - wx, 1.0f - (x2 + y2), 0.0f);
+    outX = VectorSingle(1.0f - (qy.y + qz.z), qx.y + qw.z, qx.z - qw.y, 0.0f);
+    outY = VectorSingle(qx.y - qw.z, 1.0f - (qx.x + qz.z), qy.z + qw.x, 0.0f);
+    outZ = VectorSingle(qx.z + qw.y, qy.z - qw.x, 1.0f - (qx.x + qy.y), 0.0f);
 }
 
 u32 ClipBoxQuadAgainstPlane(
@@ -607,15 +596,93 @@ void ReduceBoxCandidatesTo4(in VectorSingle refNormal, mut Array<ClipVertex, 8u>
     inOutCount = 4u;
 }
 
+b8 EvalBoxSatEdgeRow(
+    in i32 rowBaseAxis,
+    in VectorSingle rI,
+    in VectorSingle aI,
+    in VectorSingle rI1,
+    in VectorSingle rI2,
+    in VectorSingle aI1,
+    in VectorSingle aI2,
+    in f32 tA1,
+    in f32 tA2,
+    in f32 hA1,
+    in f32 hA2,
+    in VectorSingle hbShift1,
+    in VectorSingle hbShift2,
+    in f32 totalR,
+    in f32 maxDistance,
+    mut f32 bestSep,
+    mut i32 bestAxis,
+    mut f32 bestSign
+){
+    const VectorSingle lenSqVec = VectorSingle(1.0f) - rI * rI;
+    const VectorSingle invLenVec = Rsqrt(Max(lenSqVec, VectorSingle(1.0e-5f)));
+    const VectorSingle projVec = rI1 * tA2 - rI2 * tA1;
+    const VectorSingle raVec = aI2 * hA1 + aI1 * hA2;
+    const VectorSingle aShift2(aI.z, aI.x, aI.y, 0.0f);
+    const VectorSingle aShift1(aI.y, aI.z, aI.x, 0.0f);
+    const VectorSingle rbVec = hbShift1 * aShift2 + hbShift2 * aShift1;
+    const VectorSingle sepVec = (Abs(projVec) - (raVec + rbVec)) * invLenVec - VectorSingle(totalR);
+
+    if(lenSqVec.x >= 1.0e-5f){
+        if(sepVec.x > maxDistance)
+            return false;
+        if(sepVec.x > bestSep + 5.0e-4f){
+            bestSep = sepVec.x;
+            bestAxis = rowBaseAxis;
+            if(projVec.x >= 0.0f)
+                bestSign = 1.0f;
+            else
+                bestSign = -1.0f;
+        }
+    }
+    if(lenSqVec.y >= 1.0e-5f){
+        if(sepVec.y > maxDistance)
+            return false;
+        if(sepVec.y > bestSep + 5.0e-4f){
+            bestSep = sepVec.y;
+            bestAxis = rowBaseAxis + 1;
+            if(projVec.y >= 0.0f)
+                bestSign = 1.0f;
+            else
+                bestSign = -1.0f;
+        }
+    }
+    if(lenSqVec.z >= 1.0e-5f){
+        if(sepVec.z > maxDistance)
+            return false;
+        if(sepVec.z > bestSep + 5.0e-4f){
+            bestSep = sepVec.z;
+            bestAxis = rowBaseAxis + 2;
+            if(projVec.z >= 0.0f)
+                bestSign = 1.0f;
+            else
+                bestSign = -1.0f;
+        }
+    }
+    return true;
+}
+
 Manifold CollideBoxes(in HullShape hullA, in Transform3D xfA, in HullShape hullB, in Transform3D xfB, in f32 maxDistance){
     Manifold m;
-    const VectorSingle cA = TransformPoint(xfA, hullA.centroid());
-    const VectorSingle qA = SafeNormalizeQuat(QuaternionMultiply(VectorSingle(xfA.rotation), VectorSingle(hullA.boxRotation)));
+    const VectorSingle localCA = hullA.centroid();
+    VectorSingle cA = VectorSingle(xfA.position);
+    if(localCA.x != 0.0f || localCA.y != 0.0f || localCA.z != 0.0f)
+        cA = TransformPoint(xfA, localCA);
+    VectorSingle qA = VectorSingle(xfA.rotation);
+    if(hullA.boxRotation.x != 0.0f || hullA.boxRotation.y != 0.0f || hullA.boxRotation.z != 0.0f || hullA.boxRotation.w != 1.0f)
+        qA = SafeNormalizeQuat(QuaternionMultiply(qA, VectorSingle(hullA.boxRotation)));
     const VectorSingle hA = hullA.halfExtents();
     const f32 rA = hullA.radius();
 
-    const VectorSingle cB = TransformPoint(xfB, hullB.centroid());
-    const VectorSingle qB = SafeNormalizeQuat(QuaternionMultiply(VectorSingle(xfB.rotation), VectorSingle(hullB.boxRotation)));
+    const VectorSingle localCB = hullB.centroid();
+    VectorSingle cB = VectorSingle(xfB.position);
+    if(localCB.x != 0.0f || localCB.y != 0.0f || localCB.z != 0.0f)
+        cB = TransformPoint(xfB, localCB);
+    VectorSingle qB = VectorSingle(xfB.rotation);
+    if(hullB.boxRotation.x != 0.0f || hullB.boxRotation.y != 0.0f || hullB.boxRotation.z != 0.0f || hullB.boxRotation.w != 1.0f)
+        qB = SafeNormalizeQuat(QuaternionMultiply(qB, VectorSingle(hullB.boxRotation)));
     const VectorSingle hB = hullB.halfExtents();
     const f32 rB = hullB.radius();
     const f32 totalR = rA + rB;
@@ -630,10 +697,9 @@ Manifold CollideBoxes(in HullShape hullA, in Transform3D xfA, in HullShape hullB
     QuatToBasisAxes(qB, axB, ayB, azB);
 
     const VectorSingle dCenter = VectorSingle(cB - cA, 0.0f);
-    Array<f32, 3u> tA;
-    tA[0u] = Vector3Dot(dCenter, axA).x;
-    tA[1u] = Vector3Dot(dCenter, ayA).x;
-    tA[2u] = Vector3Dot(dCenter, azA).x;
+    const f32 tA0 = Vector3Dot(dCenter, axA).x;
+    const f32 tA1 = Vector3Dot(dCenter, ayA).x;
+    const f32 tA2 = Vector3Dot(dCenter, azA).x;
 
     Array<f32, 3u> halfA;
     halfA[0u] = hA.x;
@@ -644,83 +710,85 @@ Manifold CollideBoxes(in HullShape hullA, in Transform3D xfA, in HullShape hullB
     halfB[1u] = hB.y;
     halfB[2u] = hB.z;
 
-    Array<f32, 9u> rMat;
-    Array<f32, 9u> aMat;
-    rMat[0u] = Vector3Dot(axA, axB).x;
-    rMat[1u] = Vector3Dot(axA, ayB).x;
-    rMat[2u] = Vector3Dot(axA, azB).x;
-    rMat[3u] = Vector3Dot(ayA, axB).x;
-    rMat[4u] = Vector3Dot(ayA, ayB).x;
-    rMat[5u] = Vector3Dot(ayA, azB).x;
-    rMat[6u] = Vector3Dot(azA, axB).x;
-    rMat[7u] = Vector3Dot(azA, ayB).x;
-    rMat[8u] = Vector3Dot(azA, azB).x;
-    for(u32 k = 0u; k < 9u; ++k)
-        aMat[k] = Abs(rMat[k]);
+    const VectorSingle rRow0(Vector3Dot(axA, axB).x, Vector3Dot(axA, ayB).x, Vector3Dot(axA, azB).x, 0.0f);
+    const VectorSingle rRow1(Vector3Dot(ayA, axB).x, Vector3Dot(ayA, ayB).x, Vector3Dot(ayA, azB).x, 0.0f);
+    const VectorSingle rRow2(Vector3Dot(azA, axB).x, Vector3Dot(azA, ayB).x, Vector3Dot(azA, azB).x, 0.0f);
+    const VectorSingle aRow0 = Abs(rRow0);
+    const VectorSingle aRow1 = Abs(rRow1);
+    const VectorSingle aRow2 = Abs(rRow2);
 
     i32 bestAxis = -1;
     f32 bestSep = -s_MaxF32;
     f32 bestSign = 1.0f;
 
-    for(u32 i = 0u; i < 3u; ++i){
-        const u32 row = i * 3u;
-        const f32 rb = halfB[0u] * aMat[row] + halfB[1u] * aMat[row + 1u] + halfB[2u] * aMat[row + 2u];
-        const f32 sep = Abs(tA[i]) - (halfA[i] + rb) - totalR;
-        if(sep > maxDistance)
-            return m;
-        if(sep > bestSep){
-            bestSep = sep;
-            bestAxis = cast<i32>(i);
-            if(tA[i] >= 0.0f)
-                bestSign = 1.0f;
-            else
-                bestSign = -1.0f;
-        }
+    const VectorSingle rAVec0(Vector3Dot(hB, aRow0).x, Vector3Dot(hB, aRow1).x, Vector3Dot(hB, aRow2).x, 0.0f);
+    const VectorSingle tAVec(tA0, tA1, tA2, 0.0f);
+    const VectorSingle sepAVec = Abs(tAVec) - (hA + rAVec0) - VectorSingle(totalR);
+    if(sepAVec.x > maxDistance || sepAVec.y > maxDistance || sepAVec.z > maxDistance)
+        return m;
+    if(sepAVec.x > bestSep){
+        bestSep = sepAVec.x;
+        bestAxis = 0;
+        if(tA0 >= 0.0f)
+            bestSign = 1.0f;
+        else
+            bestSign = -1.0f;
+    }
+    if(sepAVec.y > bestSep){
+        bestSep = sepAVec.y;
+        bestAxis = 1;
+        if(tA1 >= 0.0f)
+            bestSign = 1.0f;
+        else
+            bestSign = -1.0f;
+    }
+    if(sepAVec.z > bestSep){
+        bestSep = sepAVec.z;
+        bestAxis = 2;
+        if(tA2 >= 0.0f)
+            bestSign = 1.0f;
+        else
+            bestSign = -1.0f;
     }
 
-    for(u32 j = 0u; j < 3u; ++j){
-        const f32 tb = tA[0u] * rMat[j] + tA[1u] * rMat[3u + j] + tA[2u] * rMat[6u + j];
-        const f32 ra = halfA[0u] * aMat[j] + halfA[1u] * aMat[3u + j] + halfA[2u] * aMat[6u + j];
-        const f32 sep = Abs(tb) - (ra + halfB[j]) - totalR;
-        if(sep > maxDistance)
-            return m;
-        if(sep > bestSep + 1.0e-4f){
-            bestSep = sep;
-            bestAxis = 3 + cast<i32>(j);
-            if(tb >= 0.0f)
-                bestSign = 1.0f;
-            else
-                bestSign = -1.0f;
-        }
+    const VectorSingle tBVec = rRow0 * tA0 + rRow1 * tA1 + rRow2 * tA2;
+    const VectorSingle rBVec = aRow0 * hA.x + aRow1 * hA.y + aRow2 * hA.z;
+    const VectorSingle sepBVec = Abs(tBVec) - (rBVec + hB) - VectorSingle(totalR);
+    if(sepBVec.x > maxDistance || sepBVec.y > maxDistance || sepBVec.z > maxDistance)
+        return m;
+    if(sepBVec.x > bestSep + 1.0e-4f){
+        bestSep = sepBVec.x;
+        bestAxis = 3;
+        if(tBVec.x >= 0.0f)
+            bestSign = 1.0f;
+        else
+            bestSign = -1.0f;
+    }
+    if(sepBVec.y > bestSep + 1.0e-4f){
+        bestSep = sepBVec.y;
+        bestAxis = 4;
+        if(tBVec.y >= 0.0f)
+            bestSign = 1.0f;
+        else
+            bestSign = -1.0f;
+    }
+    if(sepBVec.z > bestSep + 1.0e-4f){
+        bestSep = sepBVec.z;
+        bestAxis = 5;
+        if(tBVec.z >= 0.0f)
+            bestSign = 1.0f;
+        else
+            bestSign = -1.0f;
     }
 
-    for(u32 i = 0u; i < 3u; ++i){
-        const u32 i1 = (i + 1u) % 3u;
-        const u32 i2 = (i + 2u) % 3u;
-        for(u32 j = 0u; j < 3u; ++j){
-            const f32 rij = rMat[i * 3u + j];
-            const f32 lenSq = 1.0f - rij * rij;
-            if(lenSq < 1.0e-5f)
-                continue;
-            const u32 j1 = (j + 1u) % 3u;
-            const u32 j2 = (j + 2u) % 3u;
-            const f32 projRaw = tA[i2] * rMat[i1 * 3u + j] - tA[i1] * rMat[i2 * 3u + j];
-            const f32 ra = halfA[i1] * aMat[i2 * 3u + j] + halfA[i2] * aMat[i1 * 3u + j];
-            const f32 rb = halfB[j1] * aMat[i * 3u + j2] + halfB[j2] * aMat[i * 3u + j1];
-            const f32 invLen = Rsqrt(VectorSingle(lenSq)).x;
-            const f32 sep = (Abs(projRaw) - (ra + rb)) * invLen - totalR;
-            if(sep > maxDistance)
-                return m;
-            if(sep > bestSep + 5.0e-4f){
-                bestSep = sep;
-                bestAxis = 6 + cast<i32>(i * 3u + j);
-                if(projRaw >= 0.0f)
-                    bestSign = 1.0f;
-                else
-                    bestSign = -1.0f;
-            }
-        }
-    }
+    const VectorSingle hbShift1(hB.y, hB.z, hB.x, 0.0f);
+    const VectorSingle hbShift2(hB.z, hB.x, hB.y, 0.0f);
+    if(!EvalBoxSatEdgeRow(6, rRow0, aRow0, rRow1, rRow2, aRow1, aRow2, tA1, tA2, hA.y, hA.z, hbShift1, hbShift2, totalR, maxDistance, bestSep, bestAxis, bestSign))
+        return m;
+    if(!EvalBoxSatEdgeRow(9, rRow1, aRow1, rRow2, rRow0, aRow2, aRow0, tA2, tA0, hA.z, hA.x, hbShift1, hbShift2, totalR, maxDistance, bestSep, bestAxis, bestSign))
+        return m;
+    if(!EvalBoxSatEdgeRow(12, rRow2, aRow2, rRow0, rRow1, aRow0, aRow1, tA0, tA1, hA.x, hA.y, hbShift1, hbShift2, totalR, maxDistance, bestSep, bestAxis, bestSign))
+        return m;
 
     if(bestAxis >= 6){
         const u32 ea = cast<u32>(bestAxis - 6) / 3u;

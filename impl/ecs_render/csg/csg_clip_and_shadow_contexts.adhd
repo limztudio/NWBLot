@@ -260,17 +260,50 @@ Expected<CsgReceiverRangeGpuData> RendererCsgSystem::appendCsgReceiverClipData(
 
 
 [cpp_unwind]
-Expected<Optional<GpuUploadBlobId>> RendererRayTracingSystem::retainPreparedCsgTraceContextUpload(mut GpuTaskGraph graph)const{
+Expected<Optional<GpuUploadBlobId>> RendererRayTracingSystem::retainPreparedCsgTraceContextUpload(mut GpuTaskGraph graph, mut u64 outHash, mut usize outByteSize, mut usize outBufferIdentity)const{
+    outHash = 0u;
+    outByteSize = 0u;
+    outBufferIdentity = 0u;
     if(!this.m_shadowVisibilityTraceResourcesPreflighted || !this.m_lightSpaceShadow.m_csg.snapshot.hasCsg)
         return Optional<GpuUploadBlobId>();
     in Vector<u8> bytes = this.m_lightSpaceShadow.m_csg.bytes;
     if(bytes.empty() || !this.m_rayTracingState.sceneBvh.m_csgTraceContextBuffer.valid() || !this.m_rayTracingState.sceneBvh.m_csgTraceContextHeapHandle.valid())
         return MakeUnexpected(Failure());
 
+    const usize bufferIdentity = this.m_rayTracingState.sceneBvh.m_csgTraceContextBuffer.identity();
+    const usize byteSize = bytes.size();
+    const u64 hash = UpdateFnv64(s_Fnv64OffsetBasis, Span<u8>(bytes));
+    in RtSceneBvhState sceneBvh = this.m_rayTracingState.sceneBvh;
+    if(
+        bufferIdentity != 0u
+        && sceneBvh.m_acceptedCsgTraceContextValid
+        && sceneBvh.m_acceptedCsgTraceContextBufferIdentity == bufferIdentity
+        && sceneBvh.m_acceptedCsgTraceContextByteSize == byteSize
+        && sceneBvh.m_acceptedCsgTraceContextHash == hash
+    )
+        return Optional<GpuUploadBlobId>();
+
     const auto blobResult = graph.copyUploadBytes<u32>(Span<u8>(bytes));
     if(!blobResult.has_value())
         return MakeUnexpected(Failure());
+    outHash = hash;
+    outByteSize = byteSize;
+    outBufferIdentity = bufferIdentity;
     return Optional<GpuUploadBlobId>(blobResult.value());
+}
+
+void RendererRayTracingSystem::confirmPreparedCsgTraceContextUpload(in u64 hash, in usize byteSize, in usize bufferIdentity){
+    if(
+        bufferIdentity == 0u
+        || byteSize == 0u
+        || !this.m_rayTracingState.sceneBvh.m_csgTraceContextBuffer.valid()
+        || this.m_rayTracingState.sceneBvh.m_csgTraceContextBuffer.identity() != bufferIdentity
+    )
+        return;
+    this.m_rayTracingState.sceneBvh.m_acceptedCsgTraceContextHash = hash;
+    this.m_rayTracingState.sceneBvh.m_acceptedCsgTraceContextByteSize = byteSize;
+    this.m_rayTracingState.sceneBvh.m_acceptedCsgTraceContextBufferIdentity = bufferIdentity;
+    this.m_rayTracingState.sceneBvh.m_acceptedCsgTraceContextValid = true;
 }
 
 [cpp_unwind]
@@ -377,6 +410,7 @@ b8 RendererRayTracingSystem::ensureCsgTraceContextResources(){
     RetireDescriptor(heap, handle);
     buffer = replacement;
     handle = replacementHandle.value();
+    this.m_rayTracingState.sceneBvh.m_acceptedCsgTraceContextValid = false;
     retireReplacement.release();
     return true;
 }

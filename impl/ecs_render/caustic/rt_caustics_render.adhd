@@ -208,7 +208,10 @@ b8 RendererRayTracingSystem::setCausticQualitySettings(in CausticQualitySettings
 }
 
 [cpp_unwind]
-Expected<Optional<GpuUploadBlobId>> RendererRayTracingSystem::retainPreparedCausticEmissionTargetUpload(mut GpuTaskGraph graph)const{
+Expected<Optional<GpuUploadBlobId>> RendererRayTracingSystem::retainPreparedCausticEmissionTargetUpload(mut GpuTaskGraph graph, mut u64 outHash, mut usize outByteSize, mut usize outBufferIdentity)const{
+    outHash = 0u;
+    outByteSize = 0u;
+    outBufferIdentity = 0u;
     const u32 targetCount = this.m_rayTracingState.caustics.m_causticRefractiveInstanceCount;
     if(targetCount == 0u){
         if(!this.m_preparedCausticEmissionTargetBytes.empty())
@@ -228,10 +231,40 @@ Expected<Optional<GpuUploadBlobId>> RendererRayTracingSystem::retainPreparedCaus
     ))
         return MakeUnexpected(Failure());
 
+    const usize bufferIdentity = this.m_rayTracingState.caustics.m_causticEmissionTargets.buffer.identity();
+    const usize byteSize = this.m_preparedCausticEmissionTargetBytes.size();
+    const u64 hash = UpdateFnv64(s_Fnv64OffsetBasis, Span<u8>(this.m_preparedCausticEmissionTargetBytes));
+    in RtCausticState caustics = this.m_rayTracingState.caustics;
+    if(
+        bufferIdentity != 0u
+        && caustics.m_acceptedCausticEmissionTargetsValid
+        && caustics.m_acceptedCausticEmissionTargetsBufferIdentity == bufferIdentity
+        && caustics.m_acceptedCausticEmissionTargetsByteSize == byteSize
+        && caustics.m_acceptedCausticEmissionTargetsHash == hash
+    )
+        return Optional<GpuUploadBlobId>();
+
     const auto blob = graph.copyUploadBytes<NwbCausticEmissionTargetGpu>(Span<u8>(this.m_preparedCausticEmissionTargetBytes));
     if(!blob.has_value())
         return MakeUnexpected(Failure());
+    outHash = hash;
+    outByteSize = byteSize;
+    outBufferIdentity = bufferIdentity;
     return Optional<GpuUploadBlobId>(blob.value());
+}
+
+void RendererRayTracingSystem::confirmPreparedCausticEmissionTargetUpload(in u64 hash, in usize byteSize, in usize bufferIdentity){
+    if(
+        bufferIdentity == 0u
+        || byteSize == 0u
+        || !this.m_rayTracingState.caustics.m_causticEmissionTargets.buffer.valid()
+        || this.m_rayTracingState.caustics.m_causticEmissionTargets.buffer.identity() != bufferIdentity
+    )
+        return;
+    this.m_rayTracingState.caustics.m_acceptedCausticEmissionTargetsHash = hash;
+    this.m_rayTracingState.caustics.m_acceptedCausticEmissionTargetsByteSize = byteSize;
+    this.m_rayTracingState.caustics.m_acceptedCausticEmissionTargetsBufferIdentity = bufferIdentity;
+    this.m_rayTracingState.caustics.m_acceptedCausticEmissionTargetsValid = true;
 }
 
 [cpp_unwind]
@@ -551,8 +584,11 @@ b8 RendererRayTracingSystem::prepareCausticEmissionTargetResources(){
         return true;
     }
 
+    const b8 bufferWillReallocate = !this.m_rayTracingState.caustics.m_causticEmissionTargets.buffer.valid() || this.m_rayTracingState.caustics.m_causticEmissionTargets.capacity < targetCount;
     if(!this.m_rayTracingState.caustics.m_causticEmissionTargets.ensure(this.m_graphics, targetCount))
         return false;
+    if(bufferWillReallocate)
+        this.m_rayTracingState.caustics.m_acceptedCausticEmissionTargetsValid = false;
 
     CausticEmissionTargetBuilder().captureBytes(
         Span<NwbCausticEmissionTargetGpu>(targets),

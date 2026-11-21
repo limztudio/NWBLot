@@ -60,10 +60,11 @@ void CommandList::setResourceStatesForFramebufferValidated(Framebuffer& framebuf
         m_pendingImageBarriers.push_back(barrier);
     };
 
-    const auto transitionAttachment = [&](const FramebufferAttachment& attachment, const ResourceStates::Mask stateBits){
+    const b8 hasStaticStructure = framebuffer.m_staticStructureValid;
+    const auto transitionAttachment = [&](const FramebufferAttachment& attachment, const ResourceStates::Mask stateBits, const TextureSubresourceSet* const preResolved){
         Texture& texture = *attachment.texture;
-        const TextureSubresourceSet resolved = attachment.subresources.resolve(texture.m_creationDesc, TextureSubresourceMipResolve::Range);
-        if(!VulkanDetail::IsTextureSubresourceRangeValid(resolved)){
+        const TextureSubresourceSet resolved = preResolved ? *preResolved : attachment.subresources.resolve(texture.m_creationDesc, TextureSubresourceMipResolve::Range);
+        if(!preResolved && !VulkanDetail::IsTextureSubresourceRangeValid(resolved)){
             rejectCommandRecording(FOUNDATION_TEXT("set framebuffer states"), VulkanStateTrackingDetail::s_SubresourceRangeOutsideTextureReason);
             return false;
         }
@@ -149,15 +150,16 @@ void CommandList::setResourceStatesForFramebufferValidated(Framebuffer& framebuf
         return true;
     };
 
-    for(const FramebufferAttachment& attachment : desc.colorAttachments){
+    for(usize colorIndex = 0u; colorIndex < desc.colorAttachments.size(); ++colorIndex){
+        const FramebufferAttachment& attachment = desc.colorAttachments[colorIndex];
         if(!attachment.texture)
             continue;
-        if(!transitionAttachment(attachment, ResourceStates::RenderTarget))
+        if(!transitionAttachment(attachment, ResourceStates::RenderTarget, hasStaticStructure ? &framebuffer.m_cachedColorSubresources[colorIndex] : nullptr))
             return;
     }
 
     if(desc.depthAttachment.valid()){
-        if(!transitionAttachment(desc.depthAttachment, desc.depthAttachment.isReadOnly ? ResourceStates::DepthRead : ResourceStates::DepthWrite))
+        if(!transitionAttachment(desc.depthAttachment, desc.depthAttachment.isReadOnly ? ResourceStates::DepthRead : ResourceStates::DepthWrite, hasStaticStructure ? &framebuffer.m_cachedDepthSubresources : nullptr))
             return;
     }
 

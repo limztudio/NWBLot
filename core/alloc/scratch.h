@@ -34,17 +34,23 @@ public:
 
 
 private:
+    static constexpr usize s_BucketCount = FloorLog2(s_MaxAlignSize) + 1u;
+
+    [[noreturn]] FOUNDATION_NOINLINE static void ThrowAllocationSizeOverflow(){
+        throw AllocationSizeException{};
+    }
+
     class Chunk{
         friend class ScratchArena;
 
 
     public:
         [[nodiscard]] static inline Chunk* Create(usize align, usize size){
-            const usize payloadSize = Alignment(align, size);
+            const usize payloadSize = AlignmentPowerOfTwo(align, size);
             if(payloadSize == 0u)
                 return nullptr;
             const usize backingAlign = Max(align, alignof(Chunk));
-            const usize payloadOffset = Alignment(backingAlign, sizeof(Chunk));
+            const usize payloadOffset = AlignmentPowerOfTwo(backingAlign, sizeof(Chunk));
             if(AddOverflows<usize>(payloadOffset, payloadSize))
                 return nullptr;
             void* const backing = CoreAllocAligned(payloadOffset + payloadSize, backingAlign);
@@ -133,11 +139,6 @@ private:
         NotNull<u8*> m_buffer;
         NotNull<u8*> m_available;
     };
-    struct ChunkWrapper{
-        Chunk* active;
-        Chunk* cached;
-        usize size;
-    };
 
 
 private:
@@ -150,9 +151,9 @@ public:
     class Scope final : ::NoCopy{
     private:
         struct SavedBucket{
-            Chunk* active = nullptr;
-            u8* available = nullptr;
-            usize remaining = 0u;
+            Chunk* active;
+            u8* available;
+            usize remaining;
         };
 
 
@@ -163,7 +164,7 @@ public:
         {
             for(u32 bits = m_savedMask; bits != 0u; bits &= bits - 1u){
                 const usize i = static_cast<usize>(CountTrailingZeros(bits));
-                const Chunk* const active = arena.m_bucket[i].active;
+                const Chunk* const active = arena.m_active[i];
                 m_saved[i] = SavedBucket{
                     .active = const_cast<Chunk*>(active),
                     .available = active->m_available.get(),
@@ -175,28 +176,29 @@ public:
         ~Scope()noexcept{
             for(u32 bits = m_arena.m_activeBucketMask; bits != 0u; bits &= bits - 1u){
                 const usize i = static_cast<usize>(CountTrailingZeros(bits));
-                auto& bucket = m_arena.m_bucket[i];
                 const b8 hadSaved = (m_savedMask & static_cast<u16>(1u << i)) != 0u;
                 Chunk* const savedActive = hadSaved ? m_saved[i].active : nullptr;
-                while(bucket.active && bucket.active != savedActive){
-                    Chunk& chunk = *bucket.active;
+                while(m_arena.m_active[i] && m_arena.m_active[i] != savedActive){
+                    Chunk& chunk = *m_arena.m_active[i];
                     const usize unpopped = chunk.m_size - chunk.m_remaining;
                     if(unpopped != 0u)
                         m_arena.m_memoryStats.recordDeallocationSingleThread(unpopped);
                     chunk.m_available = chunk.m_buffer;
                     chunk.m_remaining = chunk.m_size;
-                    m_arena.cacheEmptyChunk(i, bucket, chunk);
+                    if(!chunk.m_next)
+                        break;
+                    m_arena.cacheEmptyChunk(i, chunk);
                 }
-                if(hadSaved && bucket.active && bucket.active == savedActive){
-                    Chunk& chunk = *bucket.active;
+                if(hadSaved && m_arena.m_active[i] && m_arena.m_active[i] == savedActive){
+                    Chunk& chunk = *m_arena.m_active[i];
                     const SavedBucket& saved = m_saved[i];
                     if(chunk.m_remaining < saved.remaining){
                         const usize unpopped = saved.remaining - chunk.m_remaining;
                         m_arena.m_memoryStats.recordDeallocationSingleThread(unpopped);
                         chunk.m_available = MakeNotNull(saved.available);
                         chunk.m_remaining = saved.remaining;
-                        if(chunk.m_remaining == chunk.m_size)
-                            m_arena.cacheEmptyChunk(i, bucket, chunk);
+                        if(chunk.m_remaining == chunk.m_size && chunk.m_next)
+                            m_arena.cacheEmptyChunk(i, chunk);
                     }
                 }
             }
@@ -205,7 +207,7 @@ public:
 
     private:
         ScratchArena& m_arena;
-        Array<SavedBucket, FloorLog2(s_MaxAlignSize) + 1> m_saved;
+        Array<SavedBucket, s_BucketCount> m_saved;
         u16 m_savedMask = 0u;
     };
 
@@ -221,8 +223,8 @@ public:
         , m_initSize(initSize)
     {}
     ~ScratchArena()noexcept override{
-        for(auto& bucket : m_bucket){
-            for(auto* chunk : { bucket.active, bucket.cached }){
+        for(usize i = 0u; i < s_BucketCount; ++i){
+            for(auto* chunk : { m_active[i], m_cached[i] }){
                 while(chunk){
                     auto* previous = chunk->m_next;
                     Chunk::Destroy(*chunk);
@@ -237,39 +239,46 @@ public:
 public:
     [[nodiscard]] FOUNDATION_INLINE void* allocate(usize align, usize size)override{
         FOUNDATION_ASSERT_MSG(IsValidAlignment(align), FOUNDATION_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
-        if(!IsValidAlignment(align))
+        if(!IsValidAlignment(align)) [[unlikely]]
             return nullptr;
 
-        const usize bucketIndex = static_cast<usize>(CountTrailingZeros(align));
-        auto& bucket = m_bucket[bucketIndex];
+        const usize alignMask = align - 1u;
+        if(size > Limit<usize>::s_Max - alignMask) [[unlikely]]
+            ThrowAllocationSizeOverflow();
+        size = (size + alignMask) & ~alignMask;
 
-        size = AlignmentPowerOfTwo(align, size);
-        if(!bucket.active || size > bucket.active->m_remaining){
-            if(!acquireChunk(bucketIndex, bucket, align, size))
+        const usize bucketIndex = static_cast<usize>(CountTrailingZeros(align));
+        Chunk* active = m_active[bucketIndex];
+        if(!active || size > active->m_remaining) [[unlikely]]{
+            active = acquireChunk(bucketIndex, align, size);
+            if(!active)
                 return nullptr;
         }
 
-        void* p = bucket.active->allocate(size).get();
+        void* p = active->allocate(size).get();
         m_memoryStats.recordAllocationSingleThread(size);
         return p;
     }
 
     [[nodiscard]] FOUNDATION_INLINE void* reallocate(void* p, usize align, usize size)override{
         FOUNDATION_ASSERT_MSG(IsValidAlignment(align), FOUNDATION_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
-        if(!IsValidAlignment(align))
+        if(!IsValidAlignment(align)) [[unlikely]]
             return nullptr;
         if(!p)
             return allocate(align, size);
 
+        const usize alignMask = align - 1u;
+        if(size > Limit<usize>::s_Max - alignMask) [[unlikely]]
+            ThrowAllocationSizeOverflow();
+        size = (size + alignMask) & ~alignMask;
+
         const usize bucketIndex = static_cast<usize>(CountTrailingZeros(align));
-        auto& bucket = m_bucket[bucketIndex];
-        FOUNDATION_ASSERT_MSG(bucket.active != nullptr, FOUNDATION_TEXT("Attempted to reallocate before allocating"));
-        if(!bucket.active)
+        Chunk* const active = m_active[bucketIndex];
+        FOUNDATION_ASSERT_MSG(active != nullptr, FOUNDATION_TEXT("Attempted to reallocate before allocating"));
+        if(!active)
             return nullptr;
 
-        size = AlignmentPowerOfTwo(align, size);
-
-        Chunk& chunk = *bucket.active;
+        Chunk& chunk = *active;
         const usize oldSize = chunk.lifoTopSpan(p);
         FOUNDATION_ASSERT_MSG(oldSize != 0, FOUNDATION_TEXT("ScratchArena can only reallocate its most-recent allocation"));
         if(oldSize == 0)
@@ -277,8 +286,8 @@ public:
 
         if(chunk.tryResizeLifoTop(MakeNotNull(p), size)){
             m_memoryStats.recordReallocationSingleThread(oldSize, size);
-            if(chunk.m_remaining == chunk.m_size)
-                cacheEmptyChunk(bucketIndex, bucket, chunk);
+            if(chunk.m_remaining == chunk.m_size && chunk.m_next)
+                cacheEmptyChunk(bucketIndex, chunk);
             return p;
         }
 
@@ -290,7 +299,7 @@ public:
         if(chunk.tryPopLifo(p, oldSize)){
             m_memoryStats.recordDeallocationSingleThread(oldSize);
             if(chunk.m_remaining == chunk.m_size)
-                cacheEmptyChunk(bucket, chunk, *MakeNotNull(bucket.active));
+                cacheEmptyChunk(bucketIndex, chunk, *MakeNotNull(m_active[bucketIndex]));
         }
         return next;
     }
@@ -301,36 +310,36 @@ public:
             return;
 
         const usize bucketIndex = static_cast<usize>(CountTrailingZeros(align));
-        auto& bucket = m_bucket[bucketIndex];
-        FOUNDATION_ASSERT_MSG(bucket.active != nullptr, FOUNDATION_TEXT("Attempted to deallocate before allocating"));
-        if(!bucket.active)
+        Chunk* const active = m_active[bucketIndex];
+        FOUNDATION_ASSERT_MSG(active != nullptr, FOUNDATION_TEXT("Attempted to deallocate before allocating"));
+        if(!active)
             return;
 
         const usize alignMask = align - 1u;
-        if(size > Limit<usize>::s_Max - alignMask)
+        if(size > Limit<usize>::s_Max - alignMask) [[unlikely]]
             return;
         size = (size + alignMask) & ~alignMask;
-        Chunk& chunk = *bucket.active;
+        Chunk& chunk = *active;
         if(chunk.tryPopLifo(p, size)){
             m_memoryStats.recordDeallocationSingleThread(size);
-            if(chunk.m_remaining == chunk.m_size)
-                cacheEmptyChunk(bucketIndex, bucket, chunk);
+            if(chunk.m_remaining == chunk.m_size && chunk.m_next) [[unlikely]]
+                cacheEmptyChunk(bucketIndex, chunk);
         }
     }
 
 
 private:
-    [[nodiscard]] Chunk* acquireChunk(const usize bucketIndex, ChunkWrapper& bucket, const usize align, const usize size){
-        if(bucket.size == 0u && m_initSize != 0u)
-            bucket.size = AlignmentPowerOfTwo(align, m_initSize);
+    [[nodiscard]] FOUNDATION_NOINLINE Chunk* acquireChunk(const usize bucketIndex, const usize align, const usize size){
+        if(m_bucketSizes[bucketIndex] == 0u && m_initSize != 0u)
+            m_bucketSizes[bucketIndex] = AlignmentPowerOfTwo(align, m_initSize);
 
-        Chunk* chunk = bucket.cached;
+        Chunk* chunk = m_cached[bucketIndex];
         while(chunk && chunk->m_size < size)
             chunk = chunk->m_next;
 
         const b8 created = !chunk;
         if(created){
-            usize chunkSize = bucket.size;
+            usize chunkSize = m_bucketSizes[bucketIndex];
             if(size > chunkSize)
                 chunkSize = size > (static_cast<usize>(-1) >> 1) ? size : (size << 1);
             chunk = Chunk::Create(align, chunkSize);
@@ -340,46 +349,48 @@ private:
 
         m_memoryStats.ensureAttached();
 
-        while(bucket.cached && bucket.cached != chunk){
-            Chunk* discarded = bucket.cached;
-            bucket.cached = discarded->m_next;
+        while(m_cached[bucketIndex] && m_cached[bucketIndex] != chunk){
+            Chunk* discarded = m_cached[bucketIndex];
+            m_cached[bucketIndex] = discarded->m_next;
             m_memoryStats.removeReservedBytesSingleThread(static_cast<u64>(discarded->m_size));
             Chunk::Destroy(*discarded);
         }
         if(created){
-            bucket.size = Max(bucket.size, chunk->m_size);
+            m_bucketSizes[bucketIndex] = Max(m_bucketSizes[bucketIndex], chunk->m_size);
             m_memoryStats.addReservedBytesSingleThread(static_cast<u64>(chunk->m_size));
         }
         else
-            bucket.cached = chunk->m_next;
+            m_cached[bucketIndex] = chunk->m_next;
 
-        chunk->m_next = bucket.active;
-        bucket.active = chunk;
+        chunk->m_next = m_active[bucketIndex];
+        m_active[bucketIndex] = chunk;
         m_activeBucketMask |= static_cast<u16>(1u << bucketIndex);
         return chunk;
     }
 
-    void cacheEmptyChunk(const usize bucketIndex, ChunkWrapper& bucket, Chunk& chunk)noexcept{
+    FOUNDATION_NOINLINE void cacheEmptyChunk(const usize bucketIndex, Chunk& chunk)noexcept{
         FOUNDATION_ASSERT(chunk.m_remaining == chunk.m_size);
-        FOUNDATION_ASSERT(bucket.active == &chunk);
-        bucket.active = chunk.m_next;
-        chunk.m_next = bucket.cached;
-        bucket.cached = &chunk;
-        if(!bucket.active)
+        FOUNDATION_ASSERT(m_active[bucketIndex] == &chunk);
+        m_active[bucketIndex] = chunk.m_next;
+        chunk.m_next = m_cached[bucketIndex];
+        m_cached[bucketIndex] = &chunk;
+        if(!m_active[bucketIndex])
             m_activeBucketMask &= static_cast<u16>(~(1u << bucketIndex));
     }
 
-    void cacheEmptyChunk(ChunkWrapper& bucket, Chunk& chunk, Chunk& newer)noexcept{
+    FOUNDATION_NOINLINE void cacheEmptyChunk(const usize bucketIndex, Chunk& chunk, Chunk& newer)noexcept{
         FOUNDATION_ASSERT(chunk.m_remaining == chunk.m_size);
         FOUNDATION_ASSERT(newer.m_next == &chunk);
         newer.m_next = chunk.m_next;
-        chunk.m_next = bucket.cached;
-        bucket.cached = &chunk;
+        chunk.m_next = m_cached[bucketIndex];
+        m_cached[bucketIndex] = &chunk;
     }
 
 
 private:
-    Array<ChunkWrapper, FloorLog2(s_MaxAlignSize) + 1> m_bucket{};
+    Array<Chunk*, s_BucketCount> m_active{};
+    Array<Chunk*, s_BucketCount> m_cached{};
+    Array<usize, s_BucketCount> m_bucketSizes{};
     usize m_initSize = s_DefaultInitialChunkBytes;
     u16 m_activeBucketMask = 0u;
 };

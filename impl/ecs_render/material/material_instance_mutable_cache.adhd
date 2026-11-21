@@ -12,6 +12,7 @@
 
 class MaterialInstanceMutableCache : NoCopy{
     private HashMap<EntityID, MaterialInstanceMutableCacheEntry> m_entries;
+    private Vector<EntityID> m_deadEntities;
     private u64 m_componentMutationVersion = 0u;
 
     [owner_result]
@@ -36,8 +37,8 @@ class MaterialInstanceMutableCache : NoCopy{
             return Span<u8>(entry.mutableTypedBytes);
 
         MaterialSurfaceBuilder().copyTypedBytes(surface.mutableDefaultTypedBytes, entry.mutableTypedBytes);
-        if(!MaterialInstanceOverrideApplier().apply(entity.id, surface.materialName, surface.materialInterface, surface.typedLayoutBlocks,
-            surface.typedLayoutFields, instance.value(), entry.mutableTypedBytes)){
+        if(!MaterialInstanceOverrideApplier().applyWithLookup(entity.id, surface.materialName, surface.materialInterface, surface.typedLayoutBlocks,
+            surface.typedLayoutFields, surface.overrideFieldLookup, instance.value(), entry.mutableTypedBytes)){
             this.m_entries.erase(stored.first);
             return MakeUnexpected(Failure());
         }
@@ -59,14 +60,26 @@ class MaterialInstanceMutableCache : NoCopy{
 
     public void prune(mut World world){
         const u64 version = world.componentMutationVersion<MaterialInstanceComponent>();
-        if(version != this.m_componentMutationVersion){
-            this.m_entries.clear();
-            this.m_componentMutationVersion = version;
+        if(version == this.m_componentMutationVersion)
+            return;
+
+        this.m_componentMutationVersion = version;
+        if(this.m_entries.empty())
+            return;
+
+        this.m_deadEntities.clear();
+        for(in auto entry : this.m_entries){
+            const EntityID entity = entry.first;
+            if(!world.hasComponent<MaterialInstanceComponent>(entity))
+                this.m_deadEntities.push_back(entity);
         }
+        for(in EntityID dead : this.m_deadEntities)
+            this.m_entries.erase(dead);
     }
 
     public void clear(){
         this.m_entries.clear();
+        this.m_deadEntities.clear();
         this.m_componentMutationVersion = 0u;
     }
 }

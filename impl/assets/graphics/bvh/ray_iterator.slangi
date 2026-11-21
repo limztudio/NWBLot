@@ -20,6 +20,7 @@ struct NwbBvhRayIterator<let capacity : uint>{
     float3 origin;
     float3 direction;
     float3 inverseDirection;
+    float3 negOriginInvDir;
     float minimum;
     float maximum;
     uint nodeSlot;
@@ -32,6 +33,7 @@ void nwbBvhRayBeginWalk<let capacity : uint>(const uint nodeSlot, const float3 o
     iterator.origin = origin;
     iterator.direction = direction;
     iterator.inverseDirection = nwbBvhSafeInvDir(direction);
+    iterator.negOriginInvDir = -origin * iterator.inverseDirection;
     iterator.minimum = minimum;
     iterator.maximum = maximum;
     iterator.nodeSlot = nodeSlot;
@@ -46,7 +48,7 @@ bool nwbBvhRayNextLeaf<let capacity : uint, let conservative : bool = false>(__r
         --iterator.stackPointer;
         NwbBvhNode node = nwbHeapBvhNodes(iterator.nodeSlot)[iterator.stack[iterator.stackPointer]];
         float entry;
-        const bool hit = conservative ? nwbBvhRayConservativeAabb(iterator.origin, iterator.direction, iterator.minimum, iterator.maximum, node.aabbMin, node.aabbMax, entry) : nwbBvhRayAabb(iterator.origin, iterator.inverseDirection, iterator.minimum, iterator.maximum, node.aabbMin, node.aabbMax, 0.0);
+        const bool hit = conservative ? nwbBvhRayConservativeAabb(iterator.origin, iterator.direction, iterator.minimum, iterator.maximum, node.aabbMin, node.aabbMax, entry) : nwbBvhRayAabbIntervalFma(iterator.inverseDirection, iterator.negOriginInvDir, iterator.minimum, iterator.maximum, node.aabbMin, node.aabbMax, entry);
         if(!hit)
             continue;
         [loop] while(true){
@@ -59,6 +61,7 @@ bool nwbBvhRayNextLeaf<let capacity : uint, let conservative : bool = false>(__r
             const NwbBvhNode rightNode = nwbHeapBvhNodes(iterator.nodeSlot)[right];
             NwbBvhNode descendNode;
             uint farChild;
+            float unusedFarEntryT;
             bool bothHit;
             if(conservative){
                 float leftEntry;
@@ -72,7 +75,7 @@ bool nwbBvhRayNextLeaf<let capacity : uint, let conservative : bool = false>(__r
                 farChild = leftFirst ? right : node.leftChild;
                 bothHit = leftHit && rightHit;
             }
-            else if(!nwbBvhPickNearChild(iterator.origin, iterator.inverseDirection, iterator.minimum, iterator.maximum, node, leftNode, right, rightNode, descendNode, farChild, bothHit))
+            else if(!nwbBvhPickNearChildFma(iterator.inverseDirection, iterator.negOriginInvDir, iterator.minimum, iterator.maximum, node, leftNode, right, rightNode, descendNode, farChild, unusedFarEntryT, bothHit))
                 break;
             if(bothHit){
                 if(iterator.stackPointer == capacity){

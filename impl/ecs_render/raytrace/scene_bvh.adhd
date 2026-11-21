@@ -278,6 +278,453 @@ SceneBvhSahSplit SelectSceneBvhSahSplit(
     return split;
 }
 
+class SceneBvhBuildWorkItem{
+    public f32x4 aabbMin(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 aabbMax(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 centroid(0.0f, 0.0f, 0.0f, 0.0f);
+    public u32 instance = 0u;
+    public u32 leafCost = 0u;
+    public b8 transparentOccluder = false;
+}
+
+class SceneBvhBoundsSummary{
+    public f32x4 aabbMin(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 aabbMax(0.0f, 0.0f, 0.0f, 0.0f);
+    public b8 containsTransparentOccluder = false;
+}
+
+class SceneBvhSubtreeJob{
+    public u32 lo = 0u;
+    public u32 hi = 0u;
+    public u32 nodeIndex = 0u;
+    public f32x4 centroidMin(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 centroidMax(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+class SceneBvhTopInternalNode{
+    public u32 nodeIndex = 0u;
+    public u32 leftChild = 0u;
+    public u32 rightChild = 0u;
+}
+
+const u32 s_SceneBvhParallelThreshold = 512u;
+const u32 s_SceneBvhParallelMinSplitCount = 128u;
+const usize s_SceneBvhParallelMaxJobs = 32u;
+
+f32 ComputeSceneBvhAabbHalfArea(in VectorSingle minBounds, in VectorSingle maxBounds){
+    const VectorSingle extent = maxBounds - minBounds;
+    return Dot(extent.xyz, extent.yzx);
+}
+
+NwbBvhNodeGpu PackSceneBvhLeafNodeGpu(in SceneBvhBuildWorkItem item){
+    NwbBvhNodeGpu node;
+    node.aabbMinLeftChild = f32x3_u32(VectorSingle(item.aabbMin), cast<u32>(BvhNodeIndex::LeafFlag) | item.instance);
+    u32 taggedRightChild = 1u;
+    if(item.transparentOccluder)
+        taggedRightChild |= cast<u32>(BvhNodeIndex::TransparentSubtreeFlag);
+    node.aabbMaxRightChild = f32x3_u32(VectorSingle(item.aabbMax), taggedRightChild);
+    return node;
+}
+
+NwbBvhNodeGpu PackSceneBvhInternalNodeGpu(in SceneBvhBoundsSummary leftNode, in SceneBvhBoundsSummary rightNode, in u32 leftChild, in u32 rightChild){
+    NwbBvhNodeGpu node;
+    node.aabbMinLeftChild = f32x3_u32(Min(VectorSingle(leftNode.aabbMin), VectorSingle(rightNode.aabbMin)), leftChild);
+    u32 taggedRightChild = rightChild;
+    if(leftNode.containsTransparentOccluder || rightNode.containsTransparentOccluder)
+        taggedRightChild |= cast<u32>(BvhNodeIndex::TransparentSubtreeFlag);
+    node.aabbMaxRightChild = f32x3_u32(Max(VectorSingle(leftNode.aabbMax), VectorSingle(rightNode.aabbMax)), taggedRightChild);
+    return node;
+}
+
+SceneBvhBoundsSummary ExtractSceneBvhBoundsSummaryFromGpuNode(in NwbBvhNodeGpu node){
+    SceneBvhBoundsSummary summary;
+    summary.aabbMin = f32x4(node.aabbMinLeftChild.x, node.aabbMinLeftChild.y, node.aabbMinLeftChild.z, 0.0f);
+    summary.aabbMax = f32x4(node.aabbMaxRightChild.x, node.aabbMaxRightChild.y, node.aabbMaxRightChild.z, 0.0f);
+    summary.containsTransparentOccluder = (node.aabbMaxRightChild.w & cast<u32>(BvhNodeIndex::TransparentSubtreeFlag)) != 0u;
+    return summary;
+}
+
+SceneBvhBoundsSummary MakeSceneBvhLeafSummary(in SceneBvhBuildWorkItem item){
+    SceneBvhBoundsSummary summary;
+    summary.aabbMin = item.aabbMin;
+    summary.aabbMax = item.aabbMax;
+    summary.containsTransparentOccluder = item.transparentOccluder;
+    return summary;
+}
+
+SceneBvhBoundsSummary MergeSceneBvhBoundsSummaries(in SceneBvhBoundsSummary leftNode, in SceneBvhBoundsSummary rightNode){
+    SceneBvhBoundsSummary summary;
+    summary.aabbMin = f32x4(Min(VectorSingle(leftNode.aabbMin), VectorSingle(rightNode.aabbMin)));
+    summary.aabbMax = f32x4(Max(VectorSingle(leftNode.aabbMax), VectorSingle(rightNode.aabbMax)));
+    summary.containsTransparentOccluder = leftNode.containsTransparentOccluder || rightNode.containsTransparentOccluder;
+    return summary;
+}
+
+SceneBvhSahSplit SelectSceneBvhSahSplitWork(
+    in u32 lo,
+    in u32 hi,
+    in VectorSingle centroidMin,
+    in VectorSingle centroidMax,
+    in Span<SceneBvhBuildWorkItem> work
+){
+    SceneBvhSahSplit split;
+    Array<f32, s_SceneBvhAxisCount> axisLoExtent;
+    Array<f32, s_SceneBvhAxisCount> axisInvExtent;
+    Array<b8, s_SceneBvhAxisCount> axisActive;
+    b8 anyAxisActive = false;
+    for(u32 axis = 0u; axis < s_SceneBvhAxisCount; ++axis){
+        const f32 loExtent = SelectSceneBvhAxisValue(centroidMin, axis);
+        const f32 extent = SelectSceneBvhAxisValue(centroidMax, axis) - loExtent;
+        axisLoExtent[axis] = loExtent;
+        if(extent <= 0.0f){
+            axisInvExtent[axis] = 0.0f;
+            axisActive[axis] = false;
+        }
+        else{
+            axisInvExtent[axis] = cast<f32>(s_SceneBvhSahBinCount) / extent;
+            axisActive[axis] = true;
+            anyAxisActive = true;
+        }
+    }
+    if(!anyAxisActive)
+        return split;
+
+    Array<f32x4, s_SceneBvhTotalSahBinCount> binMin;
+    Array<f32x4, s_SceneBvhTotalSahBinCount> binMax;
+    Array<u64, s_SceneBvhTotalSahBinCount> binCost;
+    Array<u32, s_SceneBvhTotalSahBinCount> binCount;
+    for(u32 axis = 0u; axis < s_SceneBvhAxisCount; ++axis){
+        if(!axisActive[axis])
+            continue;
+        const usize base = cast<usize>(axis * s_SceneBvhSahBinCount);
+        for(u32 b = 0u; b < s_SceneBvhSahBinCount; ++b){
+            const usize idx = base + cast<usize>(b);
+            binMin[idx] = f32x4(s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity);
+            binMax[idx] = f32x4(-s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity);
+            binCost[idx] = 0u;
+            binCount[idx] = 0u;
+        }
+    }
+
+    const VectorSingle invExtentVec(axisInvExtent[0u], axisInvExtent[1u], axisInvExtent[2u], 0.0f);
+    const b8 active0 = axisActive[0u];
+    const b8 active1 = axisActive[1u];
+    const b8 active2 = axisActive[2u];
+    for(u32 i = lo; i < hi; ++i){
+        in SceneBvhBuildWorkItem item = work[cast<usize>(i)];
+        const u64 cost = cast<u64>(item.leafCost);
+        const VectorSingle scaled = (VectorSingle(item.centroid) - centroidMin) * invExtentVec;
+        const VectorSingle primMin(item.aabbMin);
+        const VectorSingle primMax(item.aabbMax);
+        if(active0){
+            u32 b = cast<u32>(scaled.x);
+            if(b >= s_SceneBvhSahBinCount)
+                b = s_SceneBvhSahBinCount - 1u;
+            const usize binIdx = cast<usize>(b);
+            binMin[binIdx] = f32x4(Min(VectorSingle(binMin[binIdx]), primMin));
+            binMax[binIdx] = f32x4(Max(VectorSingle(binMax[binIdx]), primMax));
+            binCost[binIdx] += cost;
+            ++binCount[binIdx];
+        }
+        if(active1){
+            u32 b = cast<u32>(scaled.y);
+            if(b >= s_SceneBvhSahBinCount)
+                b = s_SceneBvhSahBinCount - 1u;
+            const usize binIdx = cast<usize>(s_SceneBvhSahBinCount + b);
+            binMin[binIdx] = f32x4(Min(VectorSingle(binMin[binIdx]), primMin));
+            binMax[binIdx] = f32x4(Max(VectorSingle(binMax[binIdx]), primMax));
+            binCost[binIdx] += cost;
+            ++binCount[binIdx];
+        }
+        if(active2){
+            u32 b = cast<u32>(scaled.z);
+            if(b >= s_SceneBvhSahBinCount)
+                b = s_SceneBvhSahBinCount - 1u;
+            const usize binIdx = cast<usize>(2u * s_SceneBvhSahBinCount + b);
+            binMin[binIdx] = f32x4(Min(VectorSingle(binMin[binIdx]), primMin));
+            binMax[binIdx] = f32x4(Max(VectorSingle(binMax[binIdx]), primMax));
+            binCost[binIdx] += cost;
+            ++binCount[binIdx];
+        }
+    }
+
+    Array<f32, s_SceneBvhSahBinCount> suffixHalfArea;
+    Array<u64, s_SceneBvhSahBinCount> suffixCost;
+    Array<u32, s_SceneBvhSahBinCount> suffixCount;
+    f32 bestCost = s_RayTracingFiniteInfinity;
+    for(u32 axis = 0u; axis < s_SceneBvhAxisCount; ++axis){
+        if(!axisActive[axis])
+            continue;
+        const usize base = cast<usize>(axis * s_SceneBvhSahBinCount);
+        VectorSingle accMin(s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity);
+        VectorSingle accMax(-s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity);
+        u64 accCost = 0u;
+        u32 accCount = 0u;
+        for(u32 b = s_SceneBvhSahBinCount; b >= 1u; --b){
+            const usize binIdx = base + cast<usize>(b - 1u);
+            const usize suffixIdx = cast<usize>(b - 1u);
+            accMin = Min(accMin, VectorSingle(binMin[binIdx]));
+            accMax = Max(accMax, VectorSingle(binMax[binIdx]));
+            accCost += binCost[binIdx];
+            accCount += binCount[binIdx];
+            if(accCount != 0u)
+                suffixHalfArea[suffixIdx] = ComputeSceneBvhAabbHalfArea(accMin, accMax);
+            else
+                suffixHalfArea[suffixIdx] = 0.0f;
+            suffixCost[suffixIdx] = accCost;
+            suffixCount[suffixIdx] = accCount;
+        }
+
+        VectorSingle leftMin(s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity);
+        VectorSingle leftMax(-s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity);
+        u64 leftCost = 0u;
+        u32 leftCount = 0u;
+        const f32 loExtent = axisLoExtent[axis];
+        const f32 invExtent = axisInvExtent[axis];
+        for(u32 k = 1u; k < s_SceneBvhSahBinCount; ++k){
+            const usize binIdx = base + cast<usize>(k - 1u);
+            leftMin = Min(leftMin, VectorSingle(binMin[binIdx]));
+            leftMax = Max(leftMax, VectorSingle(binMax[binIdx]));
+            leftCost += binCost[binIdx];
+            leftCount += binCount[binIdx];
+
+            const usize kIdx = cast<usize>(k);
+            const u32 rightCount = suffixCount[kIdx];
+            if(leftCount == 0u || rightCount == 0u)
+                continue;
+
+            const f32 leftHalfArea = ComputeSceneBvhAabbHalfArea(leftMin, leftMax);
+            const f32 rightHalfArea = suffixHalfArea[kIdx];
+            const f32 cost = leftHalfArea * cast<f32>(leftCost) + rightHalfArea * cast<f32>(suffixCost[kIdx]);
+            if(cost < bestCost){
+                bestCost = cost;
+                split.axis = axis;
+                split.bin = k;
+                split.loExtent = loExtent;
+                split.invExtent = invExtent;
+                split.valid = true;
+            }
+        }
+    }
+    return split;
+}
+
+void SwapSceneBvhBuildWorkItems(mut Span<SceneBvhBuildWorkItem> work, in u32 a, in u32 b){
+    if(a == b)
+        return;
+    const SceneBvhBuildWorkItem temp = work[cast<usize>(a)];
+    work[cast<usize>(a)] = work[cast<usize>(b)];
+    work[cast<usize>(b)] = temp;
+}
+
+void ComputeSceneBvhCentroidBoundsRange(
+    in Span<SceneBvhBuildWorkItem> work,
+    in u32 begin,
+    in u32 end,
+    mut VectorSingle outMin,
+    mut VectorSingle outMax
+){
+    VectorSingle cMin(s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity);
+    VectorSingle cMax(-s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity);
+    for(u32 i = begin; i < end; ++i){
+        const VectorSingle c(work[cast<usize>(i)].centroid);
+        cMin = Min(cMin, c);
+        cMax = Max(cMax, c);
+    }
+    outMin = cMin;
+    outMax = cMax;
+}
+
+void PartitionSceneBvhWorkRange(
+    in SceneBvhSahSplit split,
+    in u32 lo,
+    in u32 hi,
+    mut Span<SceneBvhBuildWorkItem> work,
+    mut u32 outMid,
+    mut VectorSingle outLeftCentroidMin,
+    mut VectorSingle outLeftCentroidMax,
+    mut VectorSingle outRightCentroidMin,
+    mut VectorSingle outRightCentroidMax
+){
+    u32 mid = lo;
+    if(split.valid){
+        const f32 loExtent = split.loExtent;
+        const f32 invExtent = split.invExtent;
+        const f32 binLimit = cast<f32>(split.bin);
+        if(split.axis == 0u){
+            for(u32 i = lo; i < hi; ++i){
+                if((work[cast<usize>(i)].centroid.x - loExtent) * invExtent < binLimit){
+                    SwapSceneBvhBuildWorkItems(work, i, mid);
+                    ++mid;
+                }
+            }
+        }
+        else if(split.axis == 1u){
+            for(u32 i = lo; i < hi; ++i){
+                if((work[cast<usize>(i)].centroid.y - loExtent) * invExtent < binLimit){
+                    SwapSceneBvhBuildWorkItems(work, i, mid);
+                    ++mid;
+                }
+            }
+        }
+        else{
+            for(u32 i = lo; i < hi; ++i){
+                if((work[cast<usize>(i)].centroid.z - loExtent) * invExtent < binLimit){
+                    SwapSceneBvhBuildWorkItems(work, i, mid);
+                    ++mid;
+                }
+            }
+        }
+    }
+
+    if(!split.valid || mid == lo || mid == hi)
+        mid = lo + (hi - lo) / 2u;
+
+    outMid = mid;
+    ComputeSceneBvhCentroidBoundsRange(work, lo, mid, outLeftCentroidMin, outLeftCentroidMax);
+    ComputeSceneBvhCentroidBoundsRange(work, mid, hi, outRightCentroidMin, outRightCentroidMax);
+}
+
+SceneBvhBoundsSummary BuildSceneBvhSubtreeDirect(
+    in u32 lo,
+    in u32 hi,
+    in u32 nodeIndex,
+    in VectorSingle centroidMin,
+    in VectorSingle centroidMax,
+    mut Span<SceneBvhBuildWorkItem> work,
+    mut Span<NwbBvhNodeGpu> outNodes
+){
+    const u32 count = hi - lo;
+    if(count == 1u){
+        in SceneBvhBuildWorkItem item = work[cast<usize>(lo)];
+        outNodes[cast<usize>(nodeIndex)] = PackSceneBvhLeafNodeGpu(item);
+        return MakeSceneBvhLeafSummary(item);
+    }
+    if(count == 2u){
+        in SceneBvhBuildWorkItem leftItem = work[cast<usize>(lo)];
+        in SceneBvhBuildWorkItem rightItem = work[cast<usize>(lo + 1u)];
+        const u32 leftChild = nodeIndex + 1u;
+        const u32 rightChild = nodeIndex + 2u;
+        outNodes[cast<usize>(leftChild)] = PackSceneBvhLeafNodeGpu(leftItem);
+        outNodes[cast<usize>(rightChild)] = PackSceneBvhLeafNodeGpu(rightItem);
+        const SceneBvhBoundsSummary leftSummary = MakeSceneBvhLeafSummary(leftItem);
+        const SceneBvhBoundsSummary rightSummary = MakeSceneBvhLeafSummary(rightItem);
+        outNodes[cast<usize>(nodeIndex)] = PackSceneBvhInternalNodeGpu(leftSummary, rightSummary, leftChild, rightChild);
+        return MergeSceneBvhBoundsSummaries(leftSummary, rightSummary);
+    }
+
+    const SceneBvhSahSplit split = SelectSceneBvhSahSplitWork(lo, hi, centroidMin, centroidMax, work);
+    u32 mid = lo;
+    VectorSingle leftCentroidMin = VectorZero();
+    VectorSingle leftCentroidMax = VectorZero();
+    VectorSingle rightCentroidMin = VectorZero();
+    VectorSingle rightCentroidMax = VectorZero();
+    PartitionSceneBvhWorkRange(split, lo, hi, work, mid, leftCentroidMin, leftCentroidMax, rightCentroidMin, rightCentroidMax);
+
+    const u32 leftChild = nodeIndex + 1u;
+    const u32 rightChild = nodeIndex + 2u * (mid - lo);
+    const SceneBvhBoundsSummary leftSummary = BuildSceneBvhSubtreeDirect(lo, mid, leftChild, leftCentroidMin, leftCentroidMax, work, outNodes);
+    const SceneBvhBoundsSummary rightSummary = BuildSceneBvhSubtreeDirect(mid, hi, rightChild, rightCentroidMin, rightCentroidMax, work, outNodes);
+    outNodes[cast<usize>(nodeIndex)] = PackSceneBvhInternalNodeGpu(leftSummary, rightSummary, leftChild, rightChild);
+    return MergeSceneBvhBoundsSummaries(leftSummary, rightSummary);
+}
+
+void BuildSceneBvhDirectInto(
+    mut Span<SceneBvhBuildWorkItem> work,
+    in VectorSingle rootCentroidMin,
+    in VectorSingle rootCentroidMax,
+    mut Span<NwbBvhNodeGpu> outNodes
+){
+    const u32 instanceCount = cast<u32>(work.size());
+    if(instanceCount < s_SceneBvhParallelThreshold){
+        BuildSceneBvhSubtreeDirect(0u, instanceCount, 0u, rootCentroidMin, rootCentroidMax, work, outNodes);
+        return;
+    }
+
+    Vector<SceneBvhSubtreeJob> jobs;
+    jobs.reserve(s_SceneBvhParallelMaxJobs);
+    SceneBvhSubtreeJob rootJob;
+    rootJob.lo = 0u;
+    rootJob.hi = instanceCount;
+    rootJob.nodeIndex = 0u;
+    rootJob.centroidMin = f32x4(rootCentroidMin);
+    rootJob.centroidMax = f32x4(rootCentroidMax);
+    jobs.push_back(rootJob);
+
+    Vector<SceneBvhTopInternalNode> topInternals;
+    topInternals.reserve(s_SceneBvhParallelMaxJobs);
+
+    while(jobs.size() < s_SceneBvhParallelMaxJobs){
+        usize bestJobIndex = usize.max;
+        u32 bestSpan = s_SceneBvhParallelMinSplitCount - 1u;
+        for(usize jobIdx = 0u; jobIdx < jobs.size(); ++jobIdx){
+            const u32 span = jobs[jobIdx].hi - jobs[jobIdx].lo;
+            if(span > bestSpan){
+                bestSpan = span;
+                bestJobIndex = jobIdx;
+            }
+        }
+        if(bestJobIndex == usize.max)
+            break;
+
+        const SceneBvhSubtreeJob parent = jobs[bestJobIndex];
+        const VectorSingle parentCentroidMin(parent.centroidMin);
+        const VectorSingle parentCentroidMax(parent.centroidMax);
+        const SceneBvhSahSplit split = SelectSceneBvhSahSplitWork(parent.lo, parent.hi, parentCentroidMin, parentCentroidMax, work);
+        u32 mid = parent.lo;
+        VectorSingle leftCentroidMin = VectorZero();
+        VectorSingle leftCentroidMax = VectorZero();
+        VectorSingle rightCentroidMin = VectorZero();
+        VectorSingle rightCentroidMax = VectorZero();
+        PartitionSceneBvhWorkRange(split, parent.lo, parent.hi, work, mid, leftCentroidMin, leftCentroidMax, rightCentroidMin, rightCentroidMax);
+
+        const u32 leftChild = parent.nodeIndex + 1u;
+        const u32 rightChild = parent.nodeIndex + 2u * (mid - parent.lo);
+        SceneBvhTopInternalNode internalNode;
+        internalNode.nodeIndex = parent.nodeIndex;
+        internalNode.leftChild = leftChild;
+        internalNode.rightChild = rightChild;
+        topInternals.push_back(internalNode);
+
+        SceneBvhSubtreeJob leftJob;
+        leftJob.lo = parent.lo;
+        leftJob.hi = mid;
+        leftJob.nodeIndex = leftChild;
+        leftJob.centroidMin = f32x4(leftCentroidMin);
+        leftJob.centroidMax = f32x4(leftCentroidMax);
+        jobs[bestJobIndex] = leftJob;
+
+        SceneBvhSubtreeJob rightJob;
+        rightJob.lo = mid;
+        rightJob.hi = parent.hi;
+        rightJob.nodeIndex = rightChild;
+        rightJob.centroidMin = f32x4(rightCentroidMin);
+        rightJob.centroidMax = f32x4(rightCentroidMax);
+        jobs.push_back(rightJob);
+    }
+
+    const usize jobCount = jobs.size();
+    parallel_for(usize jobIdx = 0u; jobIdx < jobCount; ++jobIdx){
+        in SceneBvhSubtreeJob job = jobs[jobIdx];
+        BuildSceneBvhSubtreeDirect(
+            job.lo,
+            job.hi,
+            job.nodeIndex,
+            VectorSingle(job.centroidMin),
+            VectorSingle(job.centroidMax),
+            work,
+            outNodes
+        );
+    }
+
+    for(usize idx = topInternals.size(); idx >= 1u; --idx){
+        in SceneBvhTopInternalNode internalNode = topInternals[idx - 1u];
+        const SceneBvhBoundsSummary leftSummary = ExtractSceneBvhBoundsSummaryFromGpuNode(outNodes[cast<usize>(internalNode.leftChild)]);
+        const SceneBvhBoundsSummary rightSummary = ExtractSceneBvhBoundsSummaryFromGpuNode(outNodes[cast<usize>(internalNode.rightChild)]);
+        outNodes[cast<usize>(internalNode.nodeIndex)] = PackSceneBvhInternalNodeGpu(leftSummary, rightSummary, internalNode.leftChild, internalNode.rightChild);
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -98,6 +98,22 @@ GpuTaskGraphPipelineView GpuTaskGraphDeclarationReadView::pipelineAt(const usize
     return m_graph && index < m_graph->m_pipelines.size() ? m_graph->pipelineAt(index) : GpuTaskGraphPipelineView{};
 }
 
+GpuGraphResourceType::Enum GpuTaskGraphDeclarationReadView::resourceTypeAt(const usize index)const noexcept{
+    return m_graph && index < m_graph->m_resources.size() ? m_graph->m_resources[index].type : GpuGraphResourceType::HazardDomain;
+}
+
+GpuGraphPipelineType::Enum GpuTaskGraphDeclarationReadView::pipelineTypeAt(const usize index)const noexcept{
+    return m_graph && index < m_graph->m_pipelines.size() ? m_graph->m_pipelines[index].type : GpuGraphPipelineType::Count;
+}
+
+ResourceStates::Mask GpuTaskGraphDeclarationReadView::resourceInitialStateAt(const usize index)const noexcept{
+    return m_graph && index < m_graph->m_resources.size() ? m_graph->m_resources[index].initialState : ResourceStates::Unknown;
+}
+
+ResourceStates::Mask GpuTaskGraphDeclarationReadView::resourceExternalFinalStateAt(const usize index)const noexcept{
+    return m_graph && index < m_graph->m_resources.size() ? m_graph->m_resources[index].externalFinalState : ResourceStates::Unknown;
+}
+
 GpuTaskGraphExternalCompletionView GpuTaskGraphDeclarationReadView::externalCompletionAt(const usize index)const & noexcept{
     return m_graph && index < m_graph->m_externalCompletions.size() ? m_graph->externalCompletionAt(index) : GpuTaskGraphExternalCompletionView{};
 }

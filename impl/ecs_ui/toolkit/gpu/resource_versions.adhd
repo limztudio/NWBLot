@@ -18,6 +18,7 @@ class GpuPageVersion<TPage> : NoCopy{
     public TextureHandle m_texture;
     public GpuDescriptorHandle m_sampledImage;
     public QueueSubmissionToken m_readinessToken;
+    public u64 m_lastUsedTick = 0u;
 
     public GpuPageVersion(mut GraphicsRuntime graphics, in TPage page){
         this.m_graphics = graphics;
@@ -33,6 +34,7 @@ class GpuTextureImageVersion : NoCopy{
     private mut GraphicsRuntime m_graphics;
     public SharedImageSource m_source;
     public TextureGpuResource m_texture;
+    public u64 m_lastUsedTick = 0u;
 
     public GpuTextureImageVersion(mut GraphicsRuntime graphics, in SharedImageSource source){
         this.m_graphics = graphics;

@@ -13,13 +13,15 @@
 
 
 Expected<UiSkinRegion> TryResolveEditBoxBackgroundRegion(in UiSkin skin, in EditBoxStyle style, in EditBoxPaintFlags flags){
+    if(skin.regions().empty())
+        return MakeUnexpected(Failure());
     const Name preferred = ResolvePreferredEditBoxBackgroundName(style, flags);
     UiSkinRegion outRegion;
     if(skin.tryFindRegion(preferred, outRegion))
         return outRegion;
-    if(skin.tryFindRegion(style.normal, outRegion))
+    if(style.normal != preferred && skin.tryFindRegion(style.normal, outRegion))
         return outRegion;
-    if(skin.tryFindRegion(style.fallback, outRegion))
+    if(style.fallback != preferred && style.fallback != style.normal && skin.tryFindRegion(style.fallback, outRegion))
         return outRegion;
     return MakeUnexpected(Failure());
 }

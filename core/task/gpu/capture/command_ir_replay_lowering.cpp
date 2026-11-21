@@ -143,6 +143,138 @@ GpuCommandIrReplayError::Enum ValidateBuiltinBackendOperand(const GpuCommandIrBu
     }
 }
 
+GpuCommandIrReplayError::Enum ValidateBuiltinWireBackendOperand(
+    const GpuCommandIrWireOpcode::Enum opcode,
+    const u8* const recordPtr,
+    const u64 graphGeneration,
+    const GpuTaskGraphDeclarationReadView& graph,
+    const GpuPhysicalQueueInfo& commandQueue,
+    CommandList& commandList,
+    BuiltinBackendResourceCache& resourceCache
+)noexcept{
+    const auto validateBuffer = [&](const GpuGraphResourceId resourceID, Buffer& buffer, const ResourceStates::Mask requiredState)noexcept -> GpuCommandIrReplayError::Enum{
+        const usize slotIndex = resourceID.index & (BuiltinBackendResourceCache::s_SlotCount - 1u);
+        const u16 slotBit = static_cast<u16>(1u << slotIndex);
+        auto& slot = resourceCache.slots[slotIndex];
+        const b8 matchesSlot = (resourceCache.populatedMask & slotBit) != 0u && slot.resourceIndex == resourceID.index && slot.resourceGeneration == resourceID.generation && slot.resourceKind == 1u;
+        if(matchesSlot){
+            if(slot.hasValidatedState && slot.validatedState == requiredState)
+                return GpuCommandIrReplayError::None;
+            if(slot.permanentStateKnown && slot.permanentState != ResourceStates::Unknown && slot.permanentState != requiredState){
+                if(!GraphicsBackend::IsBufferReadyForState(commandList.getDevice(), &buffer, requiredState) || !ResourceQueueAdmissionAdmitsQueue(buffer.getQueueAdmissionSnapshot(), commandQueue))
+                    return GpuCommandIrReplayError::BackendResourceNotReady;
+                return GpuCommandIrReplayError::PermanentResourceStateMismatch;
+            }
+        }
+        if(!GraphicsBackend::IsBufferReadyForState(commandList.getDevice(), &buffer, requiredState) || !ResourceQueueAdmissionAdmitsQueue(buffer.getQueueAdmissionSnapshot(), commandQueue))
+            return GpuCommandIrReplayError::BackendResourceNotReady;
+        ResourceStates::Mask permanentState = ResourceStates::Unknown;
+        if(matchesSlot && slot.permanentStateKnown)
+            permanentState = slot.permanentState;
+        else{
+            permanentState = commandList.getPermanentBufferState(&buffer);
+            slot.resourceGeneration = resourceID.generation;
+            slot.resourceIndex = resourceID.index;
+            slot.resourceKind = 1u;
+            slot.permanentState = permanentState;
+            slot.permanentStateKnown = true;
+            slot.hasValidatedState = false;
+            resourceCache.populatedMask |= slotBit;
+        }
+        if(permanentState != ResourceStates::Unknown && permanentState != requiredState)
+            return GpuCommandIrReplayError::PermanentResourceStateMismatch;
+        slot.validatedState = requiredState;
+        slot.hasValidatedState = true;
+        return GpuCommandIrReplayError::None;
+    };
+    const auto validateTexture = [&](const GpuGraphResourceId resourceID, Texture& texture, const ResourceStates::Mask requiredState)noexcept -> GpuCommandIrReplayError::Enum{
+        const usize slotIndex = resourceID.index & (BuiltinBackendResourceCache::s_SlotCount - 1u);
+        const u16 slotBit = static_cast<u16>(1u << slotIndex);
+        auto& slot = resourceCache.slots[slotIndex];
+        const b8 matchesSlot = (resourceCache.populatedMask & slotBit) != 0u && slot.resourceIndex == resourceID.index && slot.resourceGeneration == resourceID.generation && slot.resourceKind == 2u;
+        if(matchesSlot){
+            if(slot.hasValidatedState && slot.validatedState == requiredState)
+                return GpuCommandIrReplayError::None;
+            if(slot.permanentStateKnown && slot.permanentState != ResourceStates::Unknown && slot.permanentState != requiredState){
+                if(!GraphicsBackend::IsTextureReadyForState(commandList.getDevice(), &texture, requiredState) || !ResourceQueueAdmissionAdmitsQueue(texture.getQueueAdmissionSnapshot(), commandQueue))
+                    return GpuCommandIrReplayError::BackendResourceNotReady;
+                return GpuCommandIrReplayError::PermanentResourceStateMismatch;
+            }
+        }
+        if(!GraphicsBackend::IsTextureReadyForState(commandList.getDevice(), &texture, requiredState) || !ResourceQueueAdmissionAdmitsQueue(texture.getQueueAdmissionSnapshot(), commandQueue))
+            return GpuCommandIrReplayError::BackendResourceNotReady;
+        ResourceStates::Mask permanentState = ResourceStates::Unknown;
+        if(matchesSlot && slot.permanentStateKnown)
+            permanentState = slot.permanentState;
+        else{
+            permanentState = commandList.getPermanentTextureState(&texture);
+            slot.resourceGeneration = resourceID.generation;
+            slot.resourceIndex = resourceID.index;
+            slot.resourceKind = 2u;
+            slot.permanentState = permanentState;
+            slot.permanentStateKnown = true;
+            slot.hasValidatedState = false;
+            resourceCache.populatedMask |= slotBit;
+        }
+        if(permanentState != ResourceStates::Unknown && permanentState != requiredState)
+            return GpuCommandIrReplayError::PermanentResourceStateMismatch;
+        slot.validatedState = requiredState;
+        slot.hasValidatedState = true;
+        return GpuCommandIrReplayError::None;
+    };
+
+    switch(opcode){
+    case GpuCommandIrWireOpcode::CopyBuffer:{
+        const auto wire = ReadWirePod<GpuCommandIrCopyBufferRecord>(recordPtr);
+        const GpuGraphResourceId sourceId{ .generation = graphGeneration, .index = wire.sourceResourceIndex };
+        const GpuGraphResourceId destinationId{ .generation = graphGeneration, .index = wire.destinationResourceIndex };
+        auto& source = *MakeNotNull(graph.bufferForResource(sourceId));
+        auto& destination = *MakeNotNull(graph.bufferForResource(destinationId));
+        if(&source == &destination)
+            return validateBuffer(sourceId, source, ResourceStates::CopySource | ResourceStates::CopyDest);
+
+        const GpuCommandIrReplayError::Enum sourceError = validateBuffer(sourceId, source, ResourceStates::CopySource);
+        if(sourceError != GpuCommandIrReplayError::None)
+            return sourceError;
+        return validateBuffer(destinationId, destination, ResourceStates::CopyDest);
+    }
+    case GpuCommandIrWireOpcode::CopyTexture:{
+        const auto wire = ReadWirePod<GpuCommandIrCopyTextureRecord>(recordPtr);
+        const GpuGraphResourceId sourceId{ .generation = graphGeneration, .index = wire.sourceResourceIndex };
+        const GpuGraphResourceId destinationId{ .generation = graphGeneration, .index = wire.destinationResourceIndex };
+        auto& source = *MakeNotNull(graph.textureForResource(sourceId));
+        auto& destination = *MakeNotNull(graph.textureForResource(destinationId));
+        const GpuCommandIrReplayError::Enum sourceError = validateTexture(sourceId, source, ResourceStates::CopySource);
+        if(sourceError != GpuCommandIrReplayError::None)
+            return sourceError;
+        return validateTexture(destinationId, destination, ResourceStates::CopyDest);
+    }
+    case GpuCommandIrWireOpcode::ClearBuffer:{
+        const auto wire = ReadWirePod<GpuCommandIrClearBufferRecord>(recordPtr);
+        const GpuGraphResourceId destinationId{ .generation = graphGeneration, .index = wire.destinationResourceIndex };
+        auto& destination = *MakeNotNull(graph.bufferForResource(destinationId));
+        return validateBuffer(destinationId, destination, ResourceStates::CopyDest);
+    }
+    case GpuCommandIrWireOpcode::ClearTexture:{
+        const auto wire = ReadWirePod<GpuCommandIrClearTextureRecord>(recordPtr);
+        const GpuGraphResourceId destinationId{ .generation = graphGeneration, .index = wire.destinationResourceIndex };
+        auto& destination = *MakeNotNull(graph.textureForResource(destinationId));
+        return validateTexture(destinationId, destination, ResourceStates::CopyDest);
+    }
+    case GpuCommandIrWireOpcode::ClearTextureRectUInt:{
+        const auto wire = ReadWirePod<GpuCommandIrClearTextureRectUIntRecord>(recordPtr);
+        const GpuGraphResourceId destinationId{ .generation = graphGeneration, .index = wire.destinationResourceIndex };
+        auto& destination = *MakeNotNull(graph.textureForResource(destinationId));
+        return validateTexture(destinationId, destination, ResourceStates::CopyDest);
+    }
+    case GpuCommandIrWireOpcode::UploadBuffer:
+    case GpuCommandIrWireOpcode::UploadTexture:
+        return ValidateUploadWireBackendOperand(opcode, recordPtr, graphGeneration, graph, commandQueue, commandList);
+    default:
+        return GpuCommandIrReplayError::StreamChangedDuringReplay;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -159,47 +291,87 @@ namespace __hidden_gpu_command_ir_replay_lowering{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, CommandList& commandList){
-    switch(record.opcode){
-    case GpuCommandIrOpcode::CopyBuffer:
-        commandList.copyBuffer(*graph.bufferForResource(record.destination), record.destinationOffsetBytes, *graph.bufferForResource(record.source), record.sourceOffsetBytes, record.dataSizeBytes);
-        return;
-    case GpuCommandIrOpcode::CopyTexture:
-        commandList.copyTexture(*graph.textureForResource(record.destination), record.destinationSlice, *graph.textureForResource(record.source), record.sourceSlice);
-        return;
-    case GpuCommandIrOpcode::ClearBuffer:
-        commandList.clearBufferUInt(*graph.bufferForResource(record.destination), record.uintClearValue.r);
-        return;
-    case GpuCommandIrOpcode::ClearTexture:
-        switch(record.clearTextureValueType){
+static b8 LowerBuiltinWireOperation(
+    const GpuCommandIrWireOpcode::Enum opcode,
+    const u8* const recordPtr,
+    const u64 graphGeneration,
+    const BinaryByteView blobBytes,
+    const GpuTaskGraphDeclarationReadView& graph,
+    CommandList& commandList
+){
+    switch(opcode){
+    case GpuCommandIrWireOpcode::CopyBuffer:{
+        const auto wire = GpuCommandIrDetail::ReadWirePod<GpuCommandIrCopyBufferRecord>(recordPtr);
+        const GpuGraphResourceId sourceId{ .generation = graphGeneration, .index = wire.sourceResourceIndex };
+        const GpuGraphResourceId destinationId{ .generation = graphGeneration, .index = wire.destinationResourceIndex };
+        FOUNDATION_ASSERT(graph.validResource(destinationId) && graph.validResource(sourceId));
+        commandList.copyBuffer(*graph.bufferForResource(destinationId), wire.destinationOffsetBytes, *graph.bufferForResource(sourceId), wire.sourceOffsetBytes, wire.dataSizeBytes);
+        return true;
+    }
+    case GpuCommandIrWireOpcode::CopyTexture:{
+        const auto wire = GpuCommandIrDetail::ReadWirePod<GpuCommandIrCopyTextureRecord>(recordPtr);
+        const GpuGraphResourceId sourceId{ .generation = graphGeneration, .index = wire.sourceResourceIndex };
+        const GpuGraphResourceId destinationId{ .generation = graphGeneration, .index = wire.destinationResourceIndex };
+        FOUNDATION_ASSERT(graph.validResource(destinationId) && graph.validResource(sourceId));
+        const TextureSlice sourceSlice{ .x = wire.sourceSlice.x, .y = wire.sourceSlice.y, .z = wire.sourceSlice.z, .width = wire.sourceSlice.width, .height = wire.sourceSlice.height, .depth = wire.sourceSlice.depth, .mipLevel = wire.sourceSlice.mipLevel, .arraySlice = wire.sourceSlice.arraySlice };
+        const TextureSlice destinationSlice{ .x = wire.destinationSlice.x, .y = wire.destinationSlice.y, .z = wire.destinationSlice.z, .width = wire.destinationSlice.width, .height = wire.destinationSlice.height, .depth = wire.destinationSlice.depth, .mipLevel = wire.destinationSlice.mipLevel, .arraySlice = wire.destinationSlice.arraySlice };
+        commandList.copyTexture(*graph.textureForResource(destinationId), destinationSlice, *graph.textureForResource(sourceId), sourceSlice);
+        return true;
+    }
+    case GpuCommandIrWireOpcode::ClearBuffer:{
+        const auto wire = GpuCommandIrDetail::ReadWirePod<GpuCommandIrClearBufferRecord>(recordPtr);
+        const GpuGraphResourceId destinationId{ .generation = graphGeneration, .index = wire.destinationResourceIndex };
+        FOUNDATION_ASSERT(graph.validResource(destinationId));
+        commandList.clearBufferUInt(*graph.bufferForResource(destinationId), wire.clearValue);
+        return true;
+    }
+    case GpuCommandIrWireOpcode::ClearTexture:{
+        const auto wire = GpuCommandIrDetail::ReadWirePod<GpuCommandIrClearTextureRecord>(recordPtr);
+        const GpuGraphResourceId destinationId{ .generation = graphGeneration, .index = wire.destinationResourceIndex };
+        FOUNDATION_ASSERT(graph.validResource(destinationId));
+        const TextureSubresourceSet subresources(wire.destinationSubresources.baseMipLevel, wire.destinationSubresources.numMipLevels, wire.destinationSubresources.baseArraySlice, wire.destinationSubresources.numArraySlices);
+        switch(static_cast<GpuClearTextureTaskValueType::Enum>(wire.clearTextureValueType)){
         case GpuClearTextureTaskValueType::Float:
-            commandList.clearTextureFloat(*graph.textureForResource(record.destination), record.destinationSubresources, record.floatClearValue);
-            return;
+            commandList.clearTextureFloat(*graph.textureForResource(destinationId), subresources, Color(wire.floatClearValue.r, wire.floatClearValue.g, wire.floatClearValue.b, wire.floatClearValue.a));
+            return true;
         case GpuClearTextureTaskValueType::UInt:
-            commandList.clearTextureUInt(*graph.textureForResource(record.destination), record.destinationSubresources, record.uintClearValue);
-            return;
+            commandList.clearTextureUInt(*graph.textureForResource(destinationId), subresources, UIntColor(wire.uintClearValue.r, wire.uintClearValue.g, wire.uintClearValue.b, wire.uintClearValue.a));
+            return true;
         case GpuClearTextureTaskValueType::Int:
-            commandList.clearTextureInt(*graph.textureForResource(record.destination), record.destinationSubresources, record.intClearValue);
-            return;
+            commandList.clearTextureInt(*graph.textureForResource(destinationId), subresources, IntColor(wire.intClearValue.r, wire.intClearValue.g, wire.intClearValue.b, wire.intClearValue.a));
+            return true;
         case GpuClearTextureTaskValueType::DepthStencil:
-            commandList.clearDepthStencilTexture(*graph.textureForResource(record.destination), record.destinationSubresources, record.clearDepth, record.depthClearValue, record.clearStencil, record.stencilClearValue);
-            return;
+            commandList.clearDepthStencilTexture(
+                *graph.textureForResource(destinationId),
+                subresources,
+                (static_cast<u8>(wire.clearFlags) & GpuCommandIrClearTextureFlag::ClearDepth) != 0u,
+                wire.depthClearValue,
+                (static_cast<u8>(wire.clearFlags) & GpuCommandIrClearTextureFlag::ClearStencil) != 0u,
+                wire.stencilClearValue
+            );
+            return true;
         default:
             FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Validated command IR clear type lost its lowerer"));
-            return;
+            return true;
         }
-    case GpuCommandIrOpcode::ClearTextureRectUInt:
-        commandList.clearTextureRectUInt(*graph.textureForResource(record.destination), record.destinationSubresources, record.clearRect, record.uintClearValue);
-        return;
+    }
+    case GpuCommandIrWireOpcode::ClearTextureRectUInt:{
+        const auto wire = GpuCommandIrDetail::ReadWirePod<GpuCommandIrClearTextureRectUIntRecord>(recordPtr);
+        const GpuGraphResourceId destinationId{ .generation = graphGeneration, .index = wire.destinationResourceIndex };
+        FOUNDATION_ASSERT(graph.validResource(destinationId));
+        const TextureSubresourceSet subresources(wire.destinationSubresources.baseMipLevel, wire.destinationSubresources.numMipLevels, wire.destinationSubresources.baseArraySlice, wire.destinationSubresources.numArraySlices);
+        const Rect clearRect(wire.clearRect.minX, wire.clearRect.maxX, wire.clearRect.minY, wire.clearRect.maxY);
+        commandList.clearTextureRectUInt(*graph.textureForResource(destinationId), subresources, clearRect, UIntColor(wire.uintClearValue.r, wire.uintClearValue.g, wire.uintClearValue.b, wire.uintClearValue.a));
+        return true;
+    }
+    case GpuCommandIrWireOpcode::UploadBuffer:
+    case GpuCommandIrWireOpcode::UploadTexture:
+        return GpuCommandIrDetail::LowerUploadWireOperation(opcode, recordPtr, graphGeneration, blobBytes, graph, commandList);
     default:
         FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Validated command IR opcode lost its lowerer"));
-        return;
+        return true;
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 };
 
@@ -238,12 +410,11 @@ static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const Gp
     GraphicsState reusableGraphicsState;
     u64 recordIndex = 0u;
     const u8* recordPtr = nullptr;
-    Optional<GpuCommandIrBuiltinTaskRecord> builtinRecord;
     GpuCommandIrWireOpcode::Enum wireOpcode = GpuCommandIrWireOpcode::Count;
     GpuCommandIrDetail::DecodedRecordContext decodedContext;
     for(;;){
         b8 matchesPacket = false;
-        const GpuCommandIrDetail::WireStepStatus::Enum step = cursor.nextReplayFastForPacket(packet, recordPtr, wireOpcode, decodedContext, builtinRecord, matchesPacket);
+        const GpuCommandIrDetail::WireStepStatus::Enum step = cursor.nextReplayFastForPacket(packet, recordPtr, wireOpcode, decodedContext, matchesPacket);
         if(step == GpuCommandIrDetail::WireStepStatus::End)
             return GpuCommandIrReplayResult{ .streamValidation = cursor.validation(), .recordIndex = recordIndex, };
         if(step == GpuCommandIrDetail::WireStepStatus::Error)
@@ -306,15 +477,9 @@ static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const Gp
             }
         }
         else{
-            FOUNDATION_ASSERT(builtinRecord.has_value());
-            const GpuCommandIrBuiltinTaskRecord& builtin = *builtinRecord;
-            FOUNDATION_ASSERT(graph.validResource(builtin.destination) && ((builtin.opcode != GpuCommandIrOpcode::CopyBuffer && builtin.opcode != GpuCommandIrOpcode::CopyTexture) || graph.validResource(builtin.source)));
-            if(builtin.opcode == GpuCommandIrOpcode::UploadBuffer || builtin.opcode == GpuCommandIrOpcode::UploadTexture){
-                if(!GpuCommandIrDetail::LowerUploadOperation(builtin, cursor.blobBytes(), graph, commandList))
-                    return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::CommandListRecordingFailed, result.streamValidation, recordIndex);
-            }
-            else
-                __hidden_gpu_command_ir_replay_lowering::LowerOperation(builtin, graph, commandList);
+            FOUNDATION_ASSERT(recordPtr != nullptr);
+            if(!__hidden_gpu_command_ir_replay_lowering::LowerBuiltinWireOperation(wireOpcode, recordPtr, decodedContext.task.generation, cursor.blobBytes(), graph, commandList))
+                return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::CommandListRecordingFailed, result.streamValidation, recordIndex);
         }
         if(!commandList.isRecordingLeaseHealthy(recordingLeaseSerial)){
             return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::CommandListRecordingFailed, result.streamValidation, recordIndex);

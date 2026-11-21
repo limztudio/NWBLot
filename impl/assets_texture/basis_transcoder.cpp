@@ -33,22 +33,32 @@ b8 TranscodeBasisAstcBlock(const Span<const u8> source, const usize offset, cons
     return basist::transcode_uastc_to_astc(block, destination.data() + outputOffset);
 }
 
-b8 TranscodeBasisAstcSlice(const Span<const u8> source, const Span<u8> destination, const usize outputOffset){
+b8 TranscodeBasisAstcSliceRange(const Span<const u8> source, const Span<u8> destination, const usize outputOffset, const usize blockBegin, const usize blockEnd){
     const usize sourceBytes = source.size();
     if((sourceBytes % sizeof(basist::uastc_block)) != 0u)
         return false;
     if(outputOffset > destination.size() || sourceBytes > destination.size() - outputOffset)
         return false;
 
+    const usize totalBlocks = sourceBytes / sizeof(basist::uastc_block);
+    if(blockBegin > blockEnd || blockEnd > totalBlocks)
+        return false;
+
     const u8* const srcBase = source.data();
     u8* const dstBase = destination.data() + outputOffset;
-    for(usize blockOffset = 0u; blockOffset < sourceBytes; blockOffset += sizeof(basist::uastc_block)){
+    const usize byteBegin = blockBegin * sizeof(basist::uastc_block);
+    const usize byteEnd = blockEnd * sizeof(basist::uastc_block);
+    for(usize blockOffset = byteBegin; blockOffset < byteEnd; blockOffset += sizeof(basist::uastc_block)){
         basist::uastc_block block;
         FOUNDATION_MEMCPY(&block, sizeof(block), srcBase + blockOffset, sizeof(block));
         if(!basist::transcode_uastc_to_astc(block, dstBase + blockOffset))
             return false;
     }
     return true;
+}
+
+b8 TranscodeBasisAstcSlice(const Span<const u8> source, const Span<u8> destination, const usize outputOffset){
+    return TranscodeBasisAstcSliceRange(source, destination, outputOffset, 0u, source.size() / sizeof(basist::uastc_block));
 }
 
 b8 UnpackBasisRgbaBlock(const Span<const u8> source, const usize offset, Array<u8, 64u>& rgba){
@@ -64,8 +74,10 @@ b8 UnpackBasisRgbaBlock(const Span<const u8> source, const usize offset, Array<u
     return true;
 }
 
-b8 UnpackBasisRgbaSlice(const u32 width, const u32 height, const u32 blockCountX, const u32 blockCountY, const Span<const u8> source, const b8 alphaOnly, const Span<u8> destination, const usize outputOffset){
+b8 UnpackBasisRgbaSliceRange(const u32 width, const u32 height, const u32 blockCountX, const u32 blockCountY, const Span<const u8> source, const b8 alphaOnly, const Span<u8> destination, const usize outputOffset, const u32 blockRowBegin, const u32 blockRowEnd){
     if(width == 0u || height == 0u || blockCountX != 1u + (width - 1u) / 4u || blockCountY != 1u + (height - 1u) / 4u)
+        return false;
+    if(blockRowBegin > blockRowEnd || blockRowEnd > blockCountY)
         return false;
 
     const u64 totalBlocks = static_cast<u64>(blockCountX) * blockCountY;
@@ -94,7 +106,7 @@ b8 UnpackBasisRgbaSlice(const u32 width, const u32 height, const u32 blockCountX
     u8* const dstBase = destination.data() + outputOffset;
     const usize widthSize = static_cast<usize>(width);
 
-    for(u32 blockY = 0u; blockY < blockCountY; ++blockY){
+    for(u32 blockY = blockRowBegin; blockY < blockRowEnd; ++blockY){
         const u32 copyRows = Min<u32>(4u, height - blockY * 4u);
         const u32 rowBaseY = blockY * 4u;
         for(u32 blockX = 0u; blockX < blockCountX; ++blockX){
@@ -133,7 +145,11 @@ b8 UnpackBasisRgbaSlice(const u32 width, const u32 height, const u32 blockCountX
     return true;
 }
 
-b8 TranscodeBasisImage(const Impl::BasisTranscodeFormat::Enum format, const Impl::BasisTranscodeLayout& layout, const Span<const u8> source, const Span<u8> bytes, const usize offset, const usize count){
+b8 UnpackBasisRgbaSlice(const u32 width, const u32 height, const u32 blockCountX, const u32 blockCountY, const Span<const u8> source, const b8 alphaOnly, const Span<u8> destination, const usize outputOffset){
+    return UnpackBasisRgbaSliceRange(width, height, blockCountX, blockCountY, source, alphaOnly, destination, outputOffset, 0u, blockCountY);
+}
+
+b8 TranscodeBasisImageRowRange(const Impl::BasisTranscodeFormat::Enum format, const Impl::BasisTranscodeLayout& layout, const Span<const u8> source, const Span<u8> bytes, const usize offset, const usize count, const u32 blockRowBegin, const u32 blockRowEnd){
     if(offset > bytes.size() || count > bytes.size() - offset)
         return false;
     const Span<u8> destination = bytes.subspan(offset, count);
@@ -148,17 +164,35 @@ b8 TranscodeBasisImage(const Impl::BasisTranscodeFormat::Enum format, const Impl
     }
     if(!layout.width || !layout.height || layout.blockCountX != 1u + (layout.width - 1u) / 4u || layout.blockCountY != 1u + (layout.height - 1u) / 4u)
         return false;
+    if(blockRowBegin > blockRowEnd || blockRowEnd > layout.blockCountY)
+        return false;
     const u64 blocks = static_cast<u64>(layout.blockCountX) * layout.blockCountY;
     const u32 width = format == Impl::BasisTranscodeFormat::RgbaHalf ? layout.width : layout.blockCountX;
     const u32 rows = format == Impl::BasisTranscodeFormat::RgbaHalf ? layout.height : layout.blockCountY;
+    const u32 bytesPerElem = basist::basis_get_bytes_per_block_or_pixel(target);
     if(source.size() > Limit<u32>::s_Max || blocks > Limit<u32>::s_Max / sizeof(basist::uastc_block) || blocks * sizeof(basist::uastc_block) != source.size()
         || layout.outputRowPitch < width || static_cast<u64>(layout.outputRowPitch) * rows > layout.outputElements
-        || static_cast<u64>(layout.outputElements) * basist::basis_get_bytes_per_block_or_pixel(target) > destination.size())
+        || static_cast<u64>(layout.outputElements) * bytesPerElem > destination.size())
         return false;
+    if(blockRowBegin == blockRowEnd)
+        return true;
+
+    const u32 stripBlockRows = blockRowEnd - blockRowBegin;
+    const u32 stripPixelHeight = Min<u32>(layout.height - blockRowBegin * 4u, stripBlockRows * 4u);
+    const usize stripSourceOffset = static_cast<usize>(blockRowBegin) * layout.blockCountX * sizeof(basist::uastc_block);
+    const usize stripSourceBytes = static_cast<usize>(stripBlockRows) * layout.blockCountX * sizeof(basist::uastc_block);
+    const usize stripDstOffset = (format == Impl::BasisTranscodeFormat::RgbaHalf)
+        ? (static_cast<usize>(blockRowBegin) * 4u * layout.outputRowPitch * bytesPerElem)
+        : (static_cast<usize>(blockRowBegin) * layout.outputRowPitch * bytesPerElem)
+    ;
+    const u32 stripOutputElements = (format == Impl::BasisTranscodeFormat::RgbaHalf)
+        ? (stripPixelHeight * layout.outputRowPitch)
+        : (stripBlockRows * layout.outputRowPitch)
+    ;
     const auto transcode = [&](auto& decoder, const b8 alpha){
-        return decoder.transcode_image(target, destination.data(), layout.outputElements, source.data(), static_cast<u32>(source.size()),
-            layout.blockCountX, layout.blockCountY, layout.width, layout.height, layout.mipLevel, 0u, static_cast<u32>(source.size()),
-            0u, alpha, false, layout.outputRowPitch, nullptr, layout.height);
+        return decoder.transcode_image(target, destination.data() + stripDstOffset, stripOutputElements, source.data() + stripSourceOffset, static_cast<u32>(stripSourceBytes),
+            layout.blockCountX, stripBlockRows, layout.width, stripPixelHeight, layout.mipLevel, 0u, static_cast<u32>(stripSourceBytes),
+            0u, alpha, false, layout.outputRowPitch, nullptr, stripPixelHeight);
     };
     if(format == Impl::BasisTranscodeFormat::Bc7){
         basist::basisu_lowlevel_uastc_ldr_4x4_transcoder decoder;
@@ -166,6 +200,10 @@ b8 TranscodeBasisImage(const Impl::BasisTranscodeFormat::Enum format, const Impl
     }
     basist::basisu_lowlevel_uastc_hdr_4x4_transcoder decoder;
     return transcode(decoder, false);
+}
+
+b8 TranscodeBasisImage(const Impl::BasisTranscodeFormat::Enum format, const Impl::BasisTranscodeLayout& layout, const Span<const u8> source, const Span<u8> bytes, const usize offset, const usize count){
+    return TranscodeBasisImageRowRange(format, layout, source, bytes, offset, count, 0u, layout.blockCountY);
 }
 
 u16 BasisFloatToHalf(const f32 value)noexcept{

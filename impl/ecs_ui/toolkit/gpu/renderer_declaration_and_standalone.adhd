@@ -159,13 +159,13 @@ Expected<GpuTaskGraphOutputLayer> GpuRendererState::declare(mut GpuTaskGraph gra
     GpuGraphResourceId indices;
     uses.push_back(GpuLayerResourceUse(color, ResourceStates::RenderTarget, GpuTaskResourceAccess::Write));
     uses.push_back(GpuLayerResourceUse(skin, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read));
-    auto glyphPages = DeclareGpuGlyphPages(graph, snapshot, data.m_glyphPages, uses);
+    auto glyphPages = DeclareGpuGlyphPages(graph, snapshot, data.m_glyphPages, this.m_sampledTextureNames, uses);
     if(!glyphPages.has_value())
         return MakeUnexpected(Failure());
-    auto sdfPages = DeclareGpuSdfPages(graph, snapshot, data.m_sdfPages, uses);
+    auto sdfPages = DeclareGpuSdfPages(graph, snapshot, data.m_sdfPages, this.m_sampledTextureNames, uses);
     if(!sdfPages.has_value())
         return MakeUnexpected(Failure());
-    auto textureImages = DeclareGpuTextureImages(graph, snapshot, data.m_textureImages, uses);
+    auto textureImages = DeclareGpuTextureImages(graph, snapshot, data.m_textureImages, this.m_sampledTextureNames, uses);
     if(!textureImages.has_value())
         return MakeUnexpected(Failure());
     if(!snapshot.vertices().empty()){

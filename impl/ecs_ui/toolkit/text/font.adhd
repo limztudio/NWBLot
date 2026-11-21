@@ -12,6 +12,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const usize s_FontGlyphExtentsCacheMaxEntries = 2048u;
+
+class CachedShapedGlyphExtents{
+    public Rect ink;
+    public GlyphCoverageBounds coverage;
+}
+
 class FontSource{
     public AssetRef<Font> identity;
     public in Font font;
@@ -82,11 +89,13 @@ u32 ResolveShapedClusterByteEnd(
 }
 
 [cpp_unwind]
-GlyphCoverageBounds MeasureFontOutlineCoverage(mut FreeTypeFaceView face, in b8 allowOutlineBounds, in b8 coverageInkReliable, in u32 glyph, in f32 fontSize){
+GlyphCoverageBounds MeasureFontOutlineCoverage(mut FreeTypeFaceView face, in b8 allowOutlineBounds, in b8 coverageInkReliable, in u32 glyph, in f32 fontSize, mut b8 outCacheable){
+    outCacheable = true;
     if(!allowOutlineBounds || coverageInkReliable)
         return GlyphCoverageBounds();
     if(face.loadGlyph(glyph, s_FreeTypeLoadNoScale | s_FreeTypeLoadNoHinting | s_FreeTypeLoadNoBitmap | s_FreeTypeLoadNoAutohint) != 0){
         warning("UI glyph outline bounds unavailable; retaining conservative coverage candidate");
+        outCacheable = false;
         return GlyphCoverageBounds();
     }
     if(!face.hasOutline())
@@ -202,6 +211,7 @@ b8 ShapeFontGlyphRun(
     mut FreeTypeFaceView outlineFace,
     in b8 allowOutlineBounds,
     in b8 coverageInkReliable,
+    mut HashMap<u64, CachedShapedGlyphExtents> glyphExtentsCache,
     mut Vector<RawShapedGlyph> output
 ){
     if(!IsValidFontFaceShapeByteRange(byteBegin, byteEnd, request.text.size(), request.fontSize))
@@ -247,6 +257,7 @@ b8 ShapeFontGlyphRun(
     }
     output.clear();
     output.reserve(count);
+    const u64 fontSizeKeyPrefix = cast<u64>(bit_cast<u32>(request.fontSize)) << 32u;
     u32 first = 0u;
     u32 previousBegin = byteEnd;
     while(first < count){
@@ -260,14 +271,32 @@ b8 ShapeFontGlyphRun(
         const u32 clusterEnd = ResolveShapedClusterByteEnd(request.direction, end, count, nextCluster, byteEnd, previousBegin);
         for(u32 index = first; index < end; ++index){
             const u32 glyph = infos[index].codepoint;
-            HarfBuzzGlyphExtents extents;
+            const u64 cacheKey = fontSizeKeyPrefix | cast<u64>(glyph);
             Rect ink;
-            if(font.glyphExtents(glyph, extents))
-                ink = ResolveHbGlyphExtentsInk(extents.x_bearing, extents.y_bearing, extents.width, extents.height);
+            GlyphCoverageBounds coverage;
+            const auto found = glyphExtentsCache.find(cacheKey);
+            if(found != glyphExtentsCache.end()){
+                ink = found.value().ink;
+                coverage = found.value().coverage;
+            }
+            else{
+                HarfBuzzGlyphExtents extents;
+                if(font.glyphExtents(glyph, extents))
+                    ink = ResolveHbGlyphExtentsInk(extents.x_bearing, extents.y_bearing, extents.width, extents.height);
+                b8 cacheable = true;
+                coverage = MeasureFontOutlineCoverage(outlineFace, allowOutlineBounds, coverageInkReliable, glyph, request.fontSize, cacheable);
+                if(cacheable){
+                    if(glyphExtentsCache.size() >= s_FontGlyphExtentsCacheMaxEntries)
+                        glyphExtentsCache.clear();
+                    CachedShapedGlyphExtents cached;
+                    cached.ink = ink;
+                    cached.coverage = coverage;
+                    glyphExtentsCache.try_emplace(cacheKey, cached);
+                }
+            }
             Point offset;
             Point advance;
             ResolveHbGlyphPlacement(positions[index].x_offset, positions[index].y_offset, positions[index].x_advance, positions[index].y_advance, offset, advance);
-            const GlyphCoverageBounds coverage = MeasureFontOutlineCoverage(outlineFace, allowOutlineBounds, coverageInkReliable, glyph, request.fontSize);
             output.push_back(RawShapedGlyph(glyph, clusterBegin, clusterEnd, offset, advance, ink, coverage));
         }
         previousBegin = clusterBegin;
@@ -305,6 +334,7 @@ class FontFace : NoCopy{
     private HarfBuzzFont m_hbFont = HarfBuzzFont();
     private HarfBuzzBuffer m_shapeBuffer = HarfBuzzBuffer();
     private SharedBakedFontAtlas m_bakedAtlas = SharedBakedFontAtlas();
+    private HashMap<u64, CachedShapedGlyphExtents> m_glyphExtentsCache;
     private u32 m_unitsPerEm = 0u;
     private b8 m_started = false;
     private b8 m_ready = false;
@@ -376,7 +406,7 @@ class FontFace : NoCopy{
     public b8 shape(in ShapeRequest request, in u32 byteBegin, in u32 byteEnd, mut Vector<RawShapedGlyph> output){
         if(!this.m_ready)
             return false;
-        return ShapeFontGlyphRun(this.m_hbFont, this.m_shapeBuffer, request, byteBegin, byteEnd, this.m_freeType.view(), this.m_allowOutlineBounds, this.m_coverageInkReliable, output);
+        return ShapeFontGlyphRun(this.m_hbFont, this.m_shapeBuffer, request, byteBegin, byteEnd, this.m_freeType.view(), this.m_allowOutlineBounds, this.m_coverageInkReliable, this.m_glyphExtentsCache, output);
     }
     [cpp_unwind]
     public Expected<Rect> rasterBounds(in u32 glyphId, in u32 pixelSize){

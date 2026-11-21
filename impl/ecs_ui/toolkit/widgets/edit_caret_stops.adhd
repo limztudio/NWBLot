@@ -126,10 +126,17 @@ Expected<usize> ResolveEditCaretVerticalTarget(
     else if(current != 0u)
         target = current - 1u;
     if(target == current){
-        for(usize i = 0u; i < stops.size(); ++i){
-            if(stops[i].displayByte == displayCaret)
-                return stops[i].committedByte;
+        usize low = 0u;
+        usize high = stops.size();
+        while(low < high){
+            const usize mid = low + (high - low) / 2u;
+            if(stops[mid].displayByte < displayCaret)
+                low = mid + 1u;
+            else
+                high = mid;
         }
+        if(low < stops.size() && stops[low].displayByte == displayCaret)
+            return stops[low].committedByte;
         const f32 center = caret.value().y + (caret.value().height * s_RectCenterFraction);
         return TryFindNearestEditCaretStop(caretLines, stops, current, Point(caret.value().x, center));
     }
@@ -152,11 +159,12 @@ Expected<Rect> ResolveEditCaretRangeOnLine(
         cast<usize>(lineIndex) >= caretLines.size() || range.begin > range.end || range.end > text.size()
         || !IsFinite(breakWidth) || breakWidth < 0.0f
         || !IsUtf8ScalarBoundary(text, range.begin)
-        || !IsUtf8ScalarBoundary(text, range.end)
     )
         return MakeUnexpected(Failure());
     if(range.begin == range.end)
         return Rect();
+    if(!IsUtf8ScalarBoundary(text, range.end))
+        return MakeUnexpected(Failure());
     const EditCaretLine line = caretLines[cast<usize>(lineIndex)];
     const usize begin = Max(range.begin, line.byteBegin);
     const usize end = Min(range.end, line.byteEnd);
@@ -248,18 +256,9 @@ b8 AdoptEditCaretGeometryInto(
         if(!ResolveEditCaretRect(expectedText, textLines, clusters, boundaries, caret).has_value())
             return false;
     }
-    outBoundaries.clear();
-    outBoundaries.reserve(boundaries.size());
-    for(in usize boundary : boundaries)
-        outBoundaries.push_back(boundary);
-    outStops.clear();
-    outStops.reserve(stops.size());
-    for(in EditBoxCaretStop stop : stops)
-        outStops.push_back(stop);
-    outLines.clear();
-    outLines.reserve(lines.size());
-    for(in EditCaretLine line : lines)
-        outLines.push_back(line);
+    AssignTriviallyCopyableVector(outBoundaries, Span<usize>(boundaries));
+    AssignTriviallyCopyableVector(outStops, Span<EditBoxCaretStop>(stops));
+    AssignTriviallyCopyableVector(outLines, Span<EditCaretLine>(lines));
     return true;
 }
 

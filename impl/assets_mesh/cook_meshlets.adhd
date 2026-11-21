@@ -37,8 +37,11 @@ class MeshletTriangleData{
     public Array<u32, s_MeshletTriangleIndexCount> positions;
 }
 
+const usize s_MeshletActiveNormalGroupCount = (cast<usize>(s_MeshMaxMeshletTriangles) + 3u) / 4u;
+
 class MeshletTriangleCalculation{
-    public Array<f32x4, s_MeshletTriangleIndexCount> positions;
+    public f32x4 minBounds(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 maxBounds(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 centroid(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 areaNormal(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 unitNormal(0.0f, 0.0f, 0.0f, 0.0f);
@@ -49,14 +52,18 @@ class MeshletScoreState{
     public f32x4 minBounds(f32.max, f32.max, f32.max, 0.0f);
     public f32x4 maxBounds(-f32.max, -f32.max, -f32.max, 0.0f);
     public f32x4 centroidSum(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 centroid(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 normalSum(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 normalAxis(0.0f, 0.0f, 0.0f, 0.0f);
-    public Array<f32x4, s_MeshMaxMeshletTriangles> activeUnitNormals;
+    public Array<f32x4, s_MeshletActiveNormalGroupCount> activeUnitNormalX;
+    public Array<f32x4, s_MeshletActiveNormalGroupCount> activeUnitNormalY;
+    public Array<f32x4, s_MeshletActiveNormalGroupCount> activeUnitNormalZ;
     public u32 activeUnitNormalCount = 0u;
     public f32 radius = 0.0f;
     public f32 coneCutoff = -1.0f;
     public u32 primitiveCount = 0u;
     public b8 coneEnabled = false;
+    public b8 hasValidNormalAxis = false;
 }
 
 
@@ -214,9 +221,8 @@ void ComputeMeshletTriangleDataAndCalculation(
     const VectorSingle p2(positions[cast<usize>(outTriangle.positions[2u])]);
     const VectorSingle centroid = ((p0 + p1) + p2) * (1.0f / s_TriangleVertexCount);
     const VectorSingle areaNormal = Cross((p1 - p0).xyz, (p2 - p0).xyz);
-    outCalculation.positions[0u] = f32x4(p0);
-    outCalculation.positions[1u] = f32x4(p1);
-    outCalculation.positions[2u] = f32x4(p2);
+    outCalculation.minBounds = f32x4(Min(Min(p0, p1), p2));
+    outCalculation.maxBounds = f32x4(Max(Max(p0, p1), p2));
     outCalculation.centroid = f32x4(centroid);
     outCalculation.areaNormal = f32x4(areaNormal);
     if(IsValidMeshletDirection3(areaNormal)){

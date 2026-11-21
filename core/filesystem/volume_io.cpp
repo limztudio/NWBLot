@@ -201,6 +201,8 @@ b8 VolumeFileSystem::ensureCapacityLocked(const u64 requiredBytes){
         const Path& previousLast = m_segmentPaths.back();
         const u64 previousSegmentsCapacity = capacity - m_segmentSize;
         const u64 minimumLastBytes = m_nextFreeOffset > previousSegmentsCapacity ? m_nextFreeOffset - previousSegmentsCapacity : 0u;
+        if(m_activeWriteCache)
+            m_activeWriteCache->closeAll();
         const auto grown = FilesystemVolumeDetail::GrowLastSegment(previousLast, m_segmentSize, minimumLastBytes);
         if(!grown){
             FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, FilesystemVolumeDetail::s_VolumeOpEnsureCapacity, previousLast, grown.error());
@@ -321,6 +323,8 @@ b8 VolumeFileSystem::writeBytesLocked(const u64 offset, const void* data, const 
         return false;
     }
 
+    if(m_activeWriteCache)
+        return FilesystemVolumeDetail::VolumeSegmentTransfer::WriteCached(m_volumeName, m_segmentPaths, m_segmentSize, offset, byteCount, static_cast<const u8*>(data), *m_activeWriteCache);
     return FilesystemVolumeDetail::VolumeSegmentTransfer::Write(m_volumeName, m_segmentPaths, m_segmentSize, offset, byteCount, static_cast<const u8*>(data));
 }
 

@@ -40,6 +40,24 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace NameDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+alignas(64) const Array<u64, s_NameHashLaneCount> g_NameHashLaneSeeds = s_LaneSeeds;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_arena_memory{
 
 
@@ -49,6 +67,9 @@ namespace __hidden_arena_memory{
 inline constexpr usize s_OwnerBucketCount = 256u;
 inline constexpr usize s_HeapShardPadBytes = 80u;
 inline constexpr usize s_HeapShardMinBytes = 128u;
+inline constexpr u32 s_TrackerShardCount = 32u;
+inline constexpr usize s_TrackerShardPadBytes = 88u;
+inline constexpr usize s_TrackerShardMinBytes = 128u;
 static constinit ArenaMemoryOwnerRecord s_HeapBacking{ Name("global/arena_memory/heap_backing"), ArenaMemorySource::HeapBacking };
 static constinit Atomic<const ArenaMemoryOwnerRecord*> s_OwnerHead{ &s_HeapBacking };
 static MallocMutex s_OwnerMutex;
@@ -66,10 +87,78 @@ struct HeapMemoryShard{
 };
 static_assert(sizeof(HeapMemoryShard) >= s_HeapShardMinBytes);
 
+struct TrackerShard{
+    Atomic<u64> allocatedBytes{ 0u };
+    Atomic<u64> releasedBytes{ 0u };
+    Atomic<u64> allocationCount{ 0u };
+    Atomic<u64> reallocationCount{ 0u };
+    Atomic<u64> deallocationCount{ 0u };
+
+    Array<u8, s_TrackerShardPadBytes> padding = {};
+};
+static_assert(sizeof(TrackerShard) >= s_TrackerShardMinBytes);
+
+struct TrackerShardTable{
+    Array<TrackerShard, s_TrackerShardCount> slots = {};
+};
+
 static constinit HeapMemoryShard s_HeapFallback;
 static constinit Atomic<const HeapMemoryShard*> s_HeapHead{ &s_HeapFallback };
 static constinit Atomic<u64> s_HeapSampledPeak{ 0u };
 static constinit thread_local HeapMemoryShard* s_ThreadHeapShard = nullptr;
+static constinit Atomic<u32> s_NextTrackerThreadTag{ 0u };
+static constinit thread_local u32 s_ThreadTrackerTag = 0u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] inline u32 ThreadTrackerTag()noexcept{
+    u32 tag = s_ThreadTrackerTag;
+    if(tag == 0u) [[unlikely]]{
+        tag = s_NextTrackerThreadTag.fetch_add(1u, MemoryOrder::relaxed) + 1u;
+        if(tag == 0u) [[unlikely]]
+            tag = 1u;
+        s_ThreadTrackerTag = tag;
+    }
+    return tag;
+}
+
+[[nodiscard]] inline u32 ThreadTrackerSlot(const u32 tag)noexcept{
+    return (tag - 1u) & (s_TrackerShardCount - 1u);
+}
+
+[[nodiscard]] inline TrackerShard* ResolveFollowsUsageShard(Atomic<u64>& reservedBits, Atomic<u32>& ownerThreadTag)noexcept{
+    u64 tableBits = reservedBits.load(MemoryOrder::acquire);
+    if(tableBits == 0u){
+        const u32 myTag = ThreadTrackerTag();
+        u32 ownerTag = ownerThreadTag.load(MemoryOrder::relaxed);
+        if(ownerTag == 0u){
+            if(ownerThreadTag.compare_exchange_strong(ownerTag, myTag, MemoryOrder::relaxed, MemoryOrder::relaxed))
+                return nullptr;
+        }
+        if(ownerTag == myTag)
+            return nullptr;
+
+        void* const storage = std::malloc(sizeof(TrackerShardTable));
+        if(!storage)
+            return nullptr;
+        auto* const created = new(storage) TrackerShardTable;
+        u64 expected = 0u;
+        if(!reservedBits.compare_exchange_strong(expected, static_cast<u64>(reinterpret_cast<usize>(created)), MemoryOrder::release, MemoryOrder::acquire)){
+            std::free(created);
+            tableBits = expected;
+        }
+        else{
+            tableBits = static_cast<u64>(reinterpret_cast<usize>(created));
+        }
+    }
+    if(tableBits == 0u)
+        return nullptr;
+
+    auto* const table = reinterpret_cast<TrackerShardTable*>(static_cast<usize>(tableBits));
+    return &table->slots[ThreadTrackerSlot(ThreadTrackerTag())];
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -184,13 +273,17 @@ ArenaMemoryTracker::ArenaMemoryTracker(const Name& ownerName, const ArenaMemoryR
 }
 
 ArenaMemoryTracker::~ArenaMemoryTracker()noexcept{
-    if(!m_owner || !m_attached)
-        return;
-
-    auto& owner = *m_owner;
-    NothrowScopedLock lock(owner.mutex);
-    owner.retire(*this);
-    m_attached = false;
+    if(m_owner && m_attached){
+        auto& owner = *m_owner;
+        NothrowScopedLock lock(owner.mutex);
+        owner.retire(*this);
+        m_attached = false;
+    }
+    if(m_reservation == ArenaMemoryReservation::FollowsUsage){
+        void* const table = reinterpret_cast<void*>(static_cast<usize>(m_reservedBytes.exchange(0u, MemoryOrder::acq_rel)));
+        if(table)
+            std::free(table);
+    }
 }
 
 void ArenaMemoryTracker::attachToOwnerSlow()noexcept{
@@ -205,6 +298,19 @@ void ArenaMemoryTracker::attachToOwnerSlow()noexcept{
 }
 
 void ArenaMemoryTracker::releaseRetainedMemory()noexcept{
+    if(m_reservation == ArenaMemoryReservation::FollowsUsage){
+        const u64 tableBits = m_reservedBytes.load(MemoryOrder::acquire);
+        if(tableBits != 0u){
+            auto* const table = reinterpret_cast<__hidden_arena_memory::TrackerShardTable*>(static_cast<usize>(tableBits));
+            for(__hidden_arena_memory::TrackerShard& shard : table->slots){
+                shard.releasedBytes.store(shard.allocatedBytes.load(MemoryOrder::relaxed), MemoryOrder::relaxed);
+                shard.deallocationCount.store(shard.allocationCount.load(MemoryOrder::relaxed), MemoryOrder::relaxed);
+            }
+        }
+        m_usedBytes.store(0u, MemoryOrder::relaxed);
+        m_deallocationCount.store(m_allocationCount.load(MemoryOrder::relaxed), MemoryOrder::relaxed);
+        return;
+    }
     m_reservedBytes.store(0u, MemoryOrder::relaxed);
     m_usedBytes.store(0u, MemoryOrder::relaxed);
     m_deallocationCount.store(m_allocationCount.load(MemoryOrder::relaxed), MemoryOrder::relaxed);
@@ -218,7 +324,22 @@ void ArenaMemoryTracker::reset(const u64 reservedBytes)noexcept{
         releaseRetainedMemory();
         if(m_owner && m_attached)
             __hidden_arena_memory::AccumulateStats(m_owner->retiredStats, snapshot());
-        m_reservedBytes.store(reservedBytes, MemoryOrder::relaxed);
+        if(m_reservation == ArenaMemoryReservation::FollowsUsage){
+            const u64 tableBits = m_reservedBytes.load(MemoryOrder::acquire);
+            if(tableBits != 0u){
+                auto* const table = reinterpret_cast<__hidden_arena_memory::TrackerShardTable*>(static_cast<usize>(tableBits));
+                for(__hidden_arena_memory::TrackerShard& shard : table->slots){
+                    shard.allocatedBytes.store(0u, MemoryOrder::relaxed);
+                    shard.releasedBytes.store(0u, MemoryOrder::relaxed);
+                    shard.allocationCount.store(0u, MemoryOrder::relaxed);
+                    shard.reallocationCount.store(0u, MemoryOrder::relaxed);
+                    shard.deallocationCount.store(0u, MemoryOrder::relaxed);
+                }
+            }
+        }
+        else{
+            m_reservedBytes.store(reservedBytes, MemoryOrder::relaxed);
+        }
         m_usedBytes.store(0u, MemoryOrder::relaxed);
         m_peakUsedBytes.store(0u, MemoryOrder::relaxed);
         m_allocationCount.store(0u, MemoryOrder::relaxed);
@@ -237,8 +358,17 @@ void ArenaMemoryTracker::recordAllocation(const u64 bytes)noexcept{
     if(bytes == 0u)
         return;
 
+    if(m_reservation == ArenaMemoryReservation::FollowsUsage){
+        if(__hidden_arena_memory::TrackerShard* const shard = __hidden_arena_memory::ResolveFollowsUsageShard(m_reservedBytes, m_ownerThreadSlot)){
+            shard->allocatedBytes.fetch_add(bytes, MemoryOrder::relaxed);
+            shard->allocationCount.fetch_add(1u, MemoryOrder::relaxed);
+            return;
+        }
+    }
+
     const u64 usedBytes = m_usedBytes.fetch_add(bytes, MemoryOrder::relaxed) + bytes;
-    UpdateAtomicMaxRelaxed(m_peakUsedBytes, usedBytes);
+    if(usedBytes > m_peakUsedBytes.load(MemoryOrder::relaxed))
+        UpdateAtomicMaxRelaxed(m_peakUsedBytes, usedBytes);
     m_allocationCount.fetch_add(1u, MemoryOrder::relaxed);
 }
 
@@ -254,6 +384,17 @@ void ArenaMemoryTracker::recordReallocation(const u64 oldBytes, const u64 newByt
         return;
     }
 
+    if(m_reservation == ArenaMemoryReservation::FollowsUsage){
+        if(__hidden_arena_memory::TrackerShard* const shard = __hidden_arena_memory::ResolveFollowsUsageShard(m_reservedBytes, m_ownerThreadSlot)){
+            if(newBytes > oldBytes)
+                shard->allocatedBytes.fetch_add(newBytes - oldBytes, MemoryOrder::relaxed);
+            else if(oldBytes > newBytes)
+                shard->releasedBytes.fetch_add(oldBytes - newBytes, MemoryOrder::relaxed);
+            shard->reallocationCount.fetch_add(1u, MemoryOrder::relaxed);
+            return;
+        }
+    }
+
     u64 usedBytes = 0u;
     if(newBytes >= oldBytes){
         const u64 growth = newBytes - oldBytes;
@@ -263,7 +404,8 @@ void ArenaMemoryTracker::recordReallocation(const u64 oldBytes, const u64 newByt
         const u64 shrink = oldBytes - newBytes;
         usedBytes = m_usedBytes.fetch_sub(shrink, MemoryOrder::relaxed) - shrink;
     }
-    UpdateAtomicMaxRelaxed(m_peakUsedBytes, usedBytes);
+    if(usedBytes > m_peakUsedBytes.load(MemoryOrder::relaxed))
+        UpdateAtomicMaxRelaxed(m_peakUsedBytes, usedBytes);
     m_reallocationCount.fetch_add(1u, MemoryOrder::relaxed);
 }
 
@@ -271,18 +413,52 @@ void ArenaMemoryTracker::recordDeallocation(const u64 bytes)noexcept{
     if(bytes == 0u)
         return;
 
+    if(m_reservation == ArenaMemoryReservation::FollowsUsage){
+        if(__hidden_arena_memory::TrackerShard* const shard = __hidden_arena_memory::ResolveFollowsUsageShard(m_reservedBytes, m_ownerThreadSlot)){
+            shard->releasedBytes.fetch_add(bytes, MemoryOrder::relaxed);
+            shard->deallocationCount.fetch_add(1u, MemoryOrder::relaxed);
+            return;
+        }
+    }
+
     m_usedBytes.fetch_sub(bytes, MemoryOrder::relaxed);
     m_deallocationCount.fetch_add(1u, MemoryOrder::relaxed);
 }
 
 ArenaMemoryStats ArenaMemoryTracker::snapshot()const noexcept{
     ArenaMemoryStats stats;
-    stats.usedBytes = m_usedBytes.load(MemoryOrder::relaxed);
-    stats.reservedBytes = m_reservation == ArenaMemoryReservation::FollowsUsage ? stats.usedBytes : m_reservedBytes.load(MemoryOrder::relaxed);
-    stats.peakUsedBytes = m_peakUsedBytes.load(MemoryOrder::relaxed);
     stats.allocationCount = m_allocationCount.load(MemoryOrder::relaxed);
     stats.reallocationCount = m_reallocationCount.load(MemoryOrder::relaxed);
     stats.deallocationCount = m_deallocationCount.load(MemoryOrder::relaxed);
+    if(m_reservation == ArenaMemoryReservation::FollowsUsage){
+        const u64 tableBits = m_reservedBytes.load(MemoryOrder::acquire);
+        if(tableBits != 0u){
+            const auto* const table = reinterpret_cast<const __hidden_arena_memory::TrackerShardTable*>(static_cast<usize>(tableBits));
+            u64 shardAlloc = 0u;
+            u64 shardRelease = 0u;
+            for(const __hidden_arena_memory::TrackerShard& shard : table->slots){
+                shardAlloc += shard.allocatedBytes.load(MemoryOrder::relaxed);
+                shardRelease += shard.releasedBytes.load(MemoryOrder::relaxed);
+                stats.allocationCount += shard.allocationCount.load(MemoryOrder::relaxed);
+                stats.reallocationCount += shard.reallocationCount.load(MemoryOrder::relaxed);
+                stats.deallocationCount += shard.deallocationCount.load(MemoryOrder::relaxed);
+            }
+            const i64 netBytes = static_cast<i64>(m_usedBytes.load(MemoryOrder::relaxed)) + static_cast<i64>(shardAlloc) - static_cast<i64>(shardRelease);
+            stats.usedBytes = netBytes > 0 ? static_cast<u64>(netBytes) : 0u;
+            stats.reservedBytes = stats.usedBytes;
+            if(stats.usedBytes > m_peakUsedBytes.load(MemoryOrder::relaxed))
+                UpdateAtomicMaxRelaxed(m_peakUsedBytes, stats.usedBytes);
+            stats.peakUsedBytes = m_peakUsedBytes.load(MemoryOrder::relaxed);
+            return stats;
+        }
+        stats.usedBytes = m_usedBytes.load(MemoryOrder::relaxed);
+        stats.reservedBytes = stats.usedBytes;
+        stats.peakUsedBytes = m_peakUsedBytes.load(MemoryOrder::relaxed);
+        return stats;
+    }
+    stats.usedBytes = m_usedBytes.load(MemoryOrder::relaxed);
+    stats.reservedBytes = m_reservedBytes.load(MemoryOrder::relaxed);
+    stats.peakUsedBytes = m_peakUsedBytes.load(MemoryOrder::relaxed);
     return stats;
 }
 

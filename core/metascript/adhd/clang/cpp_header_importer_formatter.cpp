@@ -155,6 +155,13 @@ void AppendMethodExternSignature(MString& out, const MethodDecl& m, const MStrin
 
 MString CppHeaderImporter::FormatExternAdhd(const TranslationUnit& unit, MetaArena& arena){
     MString out(arena);
+    const usize estimatedSize = 4096u
+        + unit.enums.size() * 256u
+        + unit.typeAliases.size() * 96u
+        + unit.globalConstants.size() * 96u
+        + unit.classes.size() * 512u
+        + unit.freeFunctions.size() * 128u;
+    out.reserve(estimatedSize);
     out.append(CppHeaderImportDetail::CppImporterSemantics::s_EmitExternsBanner.data(), CppHeaderImportDetail::CppImporterSemantics::s_EmitExternsBanner.size());
 
     for(const EnumDecl* e : unit.enums){

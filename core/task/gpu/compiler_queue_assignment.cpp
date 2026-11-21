@@ -373,9 +373,8 @@ b8 GpuTaskGraphCompiler::assignQueuesInternal(
             if(group.assignmentCount == 1u && !group.initialOwnershipQueue.valid()){
                 const GpuTaskGraphDetail::GpuTaskNode& taskNode = CompilerGraphAccess::TaskNode(graph, assignment.task.index);
                 if(taskNode.scheduling.allowSameClassQueueRouting && taskNode.scheduling.overlapPreferred && !taskNode.scheduling.avoidQueueCrossing){
-                    const GpuTaskGraphTaskView taskView = graph.taskAt(assignment.task.index);
                     const GpuPhysicalQueueInfo* const dependencyQueue = taskNode.scheduling.preserveSameClassQueueWithDirectDependency
-                        ? FindDirectDependencySameClassQueue(graph, analysis, taskView, outAssignments.m_assignments, outAssignments.m_assignmentIndicesByTask, topology, *selectedQueue, assignmentIndex, taskNode.scheduling.allowCrossFamilySameClassQueueRouting, &legalityCache)
+                        ? FindDirectDependencySameClassQueue(graph, analysis, assignment.task, outAssignments.m_assignments, outAssignments.m_assignmentIndicesByTask, topology, *selectedQueue, assignmentIndex, taskNode.scheduling.allowCrossFamilySameClassQueueRouting, &legalityCache)
                         : nullptr
                     ;
                     if(dependencyQueue){
@@ -390,7 +389,7 @@ b8 GpuTaskGraphCompiler::assignQueuesInternal(
                         prefixQueueCosts,
                         scoringData,
                         topology,
-                        taskView,
+                        assignment.task,
                         *selectedQueue,
                         taskNode.scheduling.allowCrossFamilySameClassQueueRouting,
                         taskNode.scheduling.preferNonPrimarySameClassQueue,

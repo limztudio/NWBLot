@@ -61,32 +61,35 @@ Expected<Name> FormatObjectGeometryReadyIdentity(in usize phaseIndex){
 }
 
 ObjectGeometryDecodeIdentity MakeDecodeIdentity(in MaterialPassDrawItem item){
-    in ObjectGeometryCacheSnapshot cache = item.meshResources.objectGeometryCache;
+    in MaterialPassMeshResourceSnapshot mesh = item.mesh();
+    in ObjectGeometryCacheSnapshot cache = mesh.objectGeometryCache;
     ObjectGeometryDecodeIdentity identity;
     identity.meshKey = item.meshKey;
     identity.sourceRevision = cache.sourceRevision;
-    identity.meshletCount = item.meshResources.meshletCount;
+    identity.meshletCount = mesh.meshletCount;
     identity.indexByteOffset = cache.indexByteOffset;
     identity.indexCount = cache.indexCount;
-    identity.runtimeMesh = item.meshResources.runtimeMesh;
+    identity.runtimeMesh = mesh.runtimeMesh;
     identity.requiresDecode = cache.requiresDecode;
     identity.initialized = cache.initialized;
     return identity;
 }
 
 b8 SameDecode(in MaterialPassDrawItem left, in MaterialPassDrawItem right){
-    in ObjectGeometryCacheSnapshot leftCache = left.meshResources.objectGeometryCache;
-    in ObjectGeometryCacheSnapshot rightCache = right.meshResources.objectGeometryCache;
+    in MaterialPassMeshResourceSnapshot leftMesh = left.mesh();
+    in MaterialPassMeshResourceSnapshot rightMesh = right.mesh();
+    in ObjectGeometryCacheSnapshot leftCache = leftMesh.objectGeometryCache;
+    in ObjectGeometryCacheSnapshot rightCache = rightMesh.objectGeometryCache;
     if(
         !MakeDecodeIdentity(left).matches(MakeDecodeIdentity(right))
         || leftCache.buffer != rightCache.buffer || leftCache.heapHandle != rightCache.heapHandle
         || leftCache.decoderPipeline != rightCache.decoderPipeline
     )
         return false;
-    if(!left.meshResources.sourceBuffers.sameBuffers(right.meshResources.sourceBuffers))
+    if(!leftMesh.sourceBuffers.sameBuffers(rightMesh.sourceBuffers))
         return false;
-    for(usize index = 0u; index < LengthOf(left.meshResources.geometryHeapHandles); ++index){
-        if(left.meshResources.geometryHeapHandles[index] != right.meshResources.geometryHeapHandles[index])
+    for(usize index = 0u; index < LengthOf(leftMesh.geometryHeapHandles); ++index){
+        if(leftMesh.geometryHeapHandles[index] != rightMesh.geometryHeapHandles[index])
             return false;
     }
     return true;
@@ -124,12 +127,13 @@ class ObjectGeometryDecodeGraphTask{
         MaterialPassDrawContext context(commands, viewport, this.frameBindings, MaterialPipelinePass::Opaque, true, true, true);
         if(!this.materialSystem.recordObjectGeometryDecode(context, this.draw))
             return false;
-        commands.setBufferState(this.draw.meshResources.objectGeometryCache.buffer.deref(), s_ObjectGeometryRasterState);
+        commands.setBufferState(this.draw.mesh().objectGeometryCache.buffer.deref(), s_ObjectGeometryRasterState);
         commands.commitBarriers();
         return true;
     }
     public void accepted(in QueueSubmissionToken token){
-        if(!this.meshSystem.confirmObjectGeometryCache(this.draw.meshKey, this.draw.meshResources.sourceBuffers, this.draw.meshResources.objectGeometryCache, this.draw.meshResources.runtimeMesh))
+        in MaterialPassMeshResourceSnapshot mesh = this.draw.mesh();
+        if(!this.meshSystem.confirmObjectGeometryCache(this.draw.meshKey, mesh.sourceBuffers, mesh.objectGeometryCache, mesh.runtimeMesh))
             return;
     }
 }
@@ -211,15 +215,16 @@ class ObjectGeometryCacheGraph : NoCopy{
         producers.reserve(draws.size() + 1u);
         for(usize i = 0u; i < draws.size(); ++i){
             in MaterialPassDrawItem draw = draws[i];
-            in ObjectGeometryCacheSnapshot cache = draw.meshResources.objectGeometryCache;
-            if(!draw.pipelineResources.indexedPipeline.valid() || !draw.pipelineResources.objectGeometryDecodePipeline.valid()
-                || !cache.valid() || draw.pipelineResources.objectGeometryDecodePipeline != cache.decoderPipeline
+            in ObjectGeometryCacheSnapshot cache = draw.mesh().objectGeometryCache;
+            in MaterialPassPipelineResourceSnapshot pipeline = draw.pipeline();
+            if(!pipeline.indexedPipeline.valid() || !pipeline.objectGeometryDecodePipeline.valid()
+                || !cache.valid() || pipeline.objectGeometryDecodePipeline != cache.decoderPipeline
                 || !bindings.bindingValid() || draw.instanceIndex >= bindings.instanceBufferCapacity)
                 return false;
             usize entryIndex = 0u;
             while(entryIndex < this.m_entries.size()){
                 in MaterialPassDrawItem previous = this.m_entries[entryIndex].draw;
-                if(previous.meshResources.objectGeometryCache.buffer == cache.buffer){
+                if(previous.mesh().objectGeometryCache.buffer == cache.buffer){
                     if(!SameDecode(previous, draw))
                         return false;
                     break;

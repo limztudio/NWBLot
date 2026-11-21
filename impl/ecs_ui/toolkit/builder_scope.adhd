@@ -44,17 +44,12 @@ class BuilderItem{
     public WidgetState state;
     public WidgetStyle style;
     public SelectableStyle selectableStyle;
-    public EditBoxStyle editStyle;
-    public ScrollbarStyle scrollbarStyle;
     public SharedTextLayout text;
     public Rect textBounds;
-    public EditBoxView editView;
-    public Optional<mut EditBoxState> editState;
-    public EditBoxOptions editOptions;
-    public EditBoxPaintFlags editFlags;
     public Insets padding;
     public f32 checkboxExtent = 0.0f;
     public u32 node = 0u;
+    public u32 editBox = s_LayoutNoParent;
     public u32 list = s_LayoutNoParent;
     public u32 radioGroup = s_LayoutNoParent;
     public u32 slider = s_LayoutNoParent;
@@ -68,6 +63,15 @@ class BuilderItem{
     public b8 checked = false;
     public b8 contextMenu = false;
     public b8 annotated = false;
+}
+
+class BuilderEditBoxFrame{
+    public EditBoxStyle editStyle;
+    public ScrollbarStyle scrollbarStyle;
+    public EditBoxView editView;
+    public Optional<mut EditBoxState> editState;
+    public EditBoxOptions editOptions;
+    public EditBoxPaintFlags editFlags;
 }
 
 class BuilderWindowFrame{
@@ -211,6 +215,7 @@ class BuilderScopeFrame : NoCopy{
     private PopupStyle m_popupPaintStyle;
     private LayoutTree m_layout;
     private Vector<BuilderItem> m_items;
+    private Vector<BuilderEditBoxFrame> m_editBoxes;
     private Vector<BuilderTextAreaFrame> m_textAreas;
     private Vector<BuilderIntegerEditFrame> m_integerEdits;
     private Vector<BuilderFloatEditFrame> m_floatEdits;
@@ -233,7 +238,7 @@ class BuilderScopeFrame : NoCopy{
 
     [cpp_unwind]
     public BuilderScopeFrame(){
-        this.m_items.reserve(s_LayoutMaxNodes);
+        this.m_items.reserve(cast<usize>(s_LayoutInitialReserve));
         this.m_radioGroups.reserve(s_WidgetFrameReserve);
         this.m_sliders.reserve(s_WidgetFrameReserve);
         this.m_stack.reserve(s_ContextMaxScopeDepth);
@@ -281,6 +286,7 @@ class BuilderScopeFrame : NoCopy{
         this.m_popupToken = PopupToken();
         this.m_popupVisible = false;
         this.m_items.clear();
+        this.m_editBoxes.clear();
         this.m_textAreas.clear();
         this.m_integerEdits.clear();
         this.m_floatEdits.clear();

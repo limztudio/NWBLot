@@ -43,6 +43,13 @@ private:
             u32 stamp = 0u;
         };
 
+        struct ProbeResult{
+            u32 value = s_InvalidImportIndex;
+            usize slotIndex = Limit<usize>::s_Max;
+            usize slotCapacity = 0u;
+            u32 stamp = 0u;
+        };
+
 
     public:
         explicit FlatIndexTable(GraphicsArena& arena)noexcept
@@ -57,8 +64,10 @@ private:
         [[nodiscard]] usize size()const noexcept{ return m_count; }
 
         [[nodiscard]] u32 find(const KeyT& key)const noexcept;
+        [[nodiscard]] ProbeResult probe(const KeyT& key)const noexcept;
         void reserveForCount(usize targetCount);
         [[nodiscard]] b8 emplace(const KeyT& key, u32 value);
+        [[nodiscard]] b8 emplaceAtHint(const KeyT& key, u32 value, const ProbeResult& hint);
         void erase(const KeyT& key)noexcept;
         void clear()noexcept;
 
@@ -80,22 +89,29 @@ public:
         b8 pointer = false;
     };
 
+    struct ResourceLookupHint{
+        IdentityIndex::ProbeResult identity;
+        PointerIndex::ProbeResult pointer;
+    };
+
+    using ResourceSetLookupHint = IdentityIndex::ProbeResult;
+
     explicit GpuGraphResourceImportIndex(GraphicsArena& arena)noexcept
         : m_resourceIdentityIndex(arena)
         , m_resourcePointerIndex(arena)
         , m_resourceSetIdentityIndex(arena)
     {}
-    [[nodiscard]] u32 findResourceIdentity(Span<const ResourceNode> resources, const Name& identity)const noexcept;
+    [[nodiscard]] u32 findResourceIdentity(Span<const ResourceNode> resources, const Name& identity, ResourceLookupHint* outHint = nullptr)const noexcept;
     [[nodiscard]] ResourceImportMatch findPointerMatch(const Span<const ResourceNode> resources, const ResourcePointerKey& pointer)const noexcept{
         return findResourceImportMatch(resources, nullptr, pointer);
     }
-    [[nodiscard]] ResourceImportMatch findResourceImportMatch(Span<const ResourceNode> resources, const NameHash* identity, const ResourcePointerKey& pointer)const noexcept;
-    [[nodiscard]] u32 findResourceSetIdentity(Span<const ResourceSetNode> sets, const Name& identity)const noexcept;
+    [[nodiscard]] ResourceImportMatch findResourceImportMatch(Span<const ResourceNode> resources, const NameHash* identity, const ResourcePointerKey& pointer, ResourceLookupHint* outHint = nullptr)const noexcept;
+    [[nodiscard]] u32 findResourceSetIdentity(Span<const ResourceSetNode> sets, const Name& identity, ResourceSetLookupHint* outHint = nullptr)const noexcept;
     void prepareResourceIndexes(Span<const ResourceNode> resources, const ResourcePointerKey& pendingPointer);
     void prepareResourceSetIndex(Span<const ResourceSetNode> sets);
-    [[nodiscard]] b8 publishResource(const NameHash& identity, const ResourcePointerKey& pointer, u32 index, Publication& publication);
+    [[nodiscard]] b8 publishResource(const NameHash& identity, const ResourcePointerKey& pointer, u32 index, Publication& publication, const ResourceLookupHint* hint = nullptr);
     void rollbackResource(const NameHash& identity, const ResourcePointerKey& pointer, const Publication& publication)noexcept;
-    [[nodiscard]] b8 publishResourceSet(const NameHash& identity, u32 index, b8& inserted);
+    [[nodiscard]] b8 publishResourceSet(const NameHash& identity, u32 index, b8& inserted, const ResourceSetLookupHint* hint = nullptr);
     void rollbackResourceSet(const NameHash& identity, b8 inserted)noexcept;
     void clearResources();
     void clearResourceSets();

@@ -96,6 +96,62 @@ b8 ValidateGpuTextureImages(in DrawSnapshot snapshot){
     return ValidateDrawCommandImageBindings(snapshot.commands(), images.size());
 }
 
+b8 ValidateGpuSnapshotImages(in DrawSnapshot snapshot){
+    in Vector<SharedGlyphPage> glyphPages = snapshot.glyphPages();
+    in Vector<SharedSdfAtlasPage> sdfPages = snapshot.sdfPages();
+    in Vector<SharedImageSource> images = snapshot.textureImages();
+    const usize glyphCount = glyphPages.size();
+    const usize sdfCount = sdfPages.size();
+    const usize imageCount = images.size();
+    if(!ValidSnapshotImageCounts(glyphCount, sdfCount, imageCount))
+        return false;
+    for(usize index = 0u; index < glyphCount; ++index){
+        if(!glyphPages[index].valid() || !ValidGlyphPageBinding(glyphPages[index].deref().binding(), glyphPages[index].deref().pixels().size()))
+            return false;
+        for(usize previous = 0u; previous < index; ++previous){
+            if(SameGlyphPageKey(glyphPages[index].deref().binding(), glyphPages[previous].deref().binding()))
+                return false;
+        }
+    }
+    for(usize index = 0u; index < sdfCount; ++index){
+        if(!sdfPages[index].valid() || !ValidSdfAtlasPageBinding(sdfPages[index].deref().binding(), sdfPages[index].deref().pixels().size()))
+            return false;
+        for(usize previous = 0u; previous < index; ++previous){
+            if(SameSdfAtlasPageKey(sdfPages[index].deref().binding(), sdfPages[previous].deref().binding()))
+                return false;
+        }
+    }
+    for(usize index = 0u; index < imageCount; ++index){
+        if(!images[index].valid() || !ValidUiTextureImageSource(images[index].deref()))
+            return false;
+        for(usize previous = 0u; previous < index; ++previous){
+            if(images[index].deref().generation() == images[previous].deref().generation())
+                return false;
+        }
+    }
+    for(in DrawCommand command : snapshot.commands()){
+        if(command.material == PaintMaterial::Solid || command.material == PaintMaterial::Skin){
+            if(command.glyphPageIndex != 0xffffffffu || command.sdfPageIndex != 0xffffffffu || command.sdfChannel != 0u || command.textureImageIndex != 0xffffffffu)
+                return false;
+        }
+        else if(command.material == PaintMaterial::Glyph){
+            if(cast<usize>(command.glyphPageIndex) >= glyphCount || command.sdfPageIndex != 0xffffffffu || command.sdfChannel != 0u || command.textureImageIndex != 0xffffffffu)
+                return false;
+        }
+        else if(command.material == PaintMaterial::SdfGlyph){
+            if(command.glyphPageIndex != 0xffffffffu || cast<usize>(command.sdfPageIndex) >= sdfCount || command.sdfChannel >= sdfPages[command.sdfPageIndex].deref().binding().channelCount || command.textureImageIndex != 0xffffffffu)
+                return false;
+        }
+        else if(command.material == PaintMaterial::Image){
+            if(cast<usize>(command.textureImageIndex) >= imageCount || command.glyphPageIndex != 0xffffffffu || command.sdfPageIndex != 0xffffffffu || command.sdfChannel != 0u)
+                return false;
+        }
+        else
+            return false;
+    }
+    return true;
+}
+
 class GpuImageResources : NoCopy{
     private mut GraphicsRuntime m_graphics;
     private mut GpuImageCache m_imageCache;
@@ -120,8 +176,7 @@ class GpuImageResources : NoCopy{
             if(!SameGlyphPageVersion(existing.deref().m_page.deref().binding(), existing.deref().m_page.deref().pixels(), page.deref().binding(), page.deref().pixels(), existing.deref().m_page == page))
                 return MakeUnexpected(Failure());
             GpuVersion<GpuGlyphVersion> reused = existing;
-            this.m_imageCache.glyphs().erase(this.m_imageCache.glyphs().begin() + cast<isize>(index));
-            this.m_imageCache.glyphs().push_back(reused);
+            reused.deref().m_lastUsedTick = this.m_imageCache.nextTick();
             if(!PrepareGpuSampledTextureDescriptor(this.m_graphics, reused.deref().m_texture, Format::R8_UNORM, reused.deref().m_sampledImage))
                 return MakeUnexpected(Failure());
             return reused;
@@ -149,11 +204,14 @@ class GpuImageResources : NoCopy{
             version.deref().m_readinessToken
         ))
             return MakeUnexpected(Failure());
+        version.deref().m_lastUsedTick = this.m_imageCache.nextTick();
         if(replaceIndex < this.m_imageCache.glyphs().size())
-            this.m_imageCache.glyphs().erase(this.m_imageCache.glyphs().begin() + cast<isize>(replaceIndex));
-        else if(ShouldEvictGpuImageCacheBeforeInsert(this.m_imageCache.glyphs().size(), this.m_imageCache.sdfs().size(), this.m_imageCache.textures().size()))
-            this.m_imageCache.evict();
-        this.m_imageCache.glyphs().push_back(version);
+            this.m_imageCache.glyphs()[replaceIndex] = version;
+        else{
+            if(ShouldEvictGpuImageCacheBeforeInsert(this.m_imageCache.glyphs().size(), this.m_imageCache.sdfs().size(), this.m_imageCache.textures().size()))
+                this.m_imageCache.evict();
+            this.m_imageCache.glyphs().push_back(version);
+        }
         if(!PrepareGpuSampledTextureDescriptor(this.m_graphics, version.deref().m_texture, Format::R8_UNORM, version.deref().m_sampledImage))
             return MakeUnexpected(Failure());
         return version;
@@ -181,8 +239,7 @@ class GpuImageResources : NoCopy{
             if(!(existing.deref().m_page.deref().binding() == page.deref().binding()))
                 return MakeUnexpected(Failure());
             GpuVersion<GpuSdfAtlasVersion> reused = existing;
-            this.m_imageCache.sdfs().erase(this.m_imageCache.sdfs().begin() + cast<isize>(index));
-            this.m_imageCache.sdfs().push_back(reused);
+            reused.deref().m_lastUsedTick = this.m_imageCache.nextTick();
             if(!PrepareGpuSampledTextureDescriptor(this.m_graphics, reused.deref().m_texture, reused.deref().m_texture.deref().getDescription().format, reused.deref().m_sampledImage))
                 return MakeUnexpected(Failure());
             return reused;
@@ -225,6 +282,7 @@ class GpuImageResources : NoCopy{
             version.deref().m_readinessToken
         ))
             return MakeUnexpected(Failure());
+        version.deref().m_lastUsedTick = this.m_imageCache.nextTick();
         if(ShouldEvictGpuImageCacheBeforeInsert(this.m_imageCache.glyphs().size(), this.m_imageCache.sdfs().size(), this.m_imageCache.textures().size()))
             this.m_imageCache.evict();
         this.m_imageCache.sdfs().push_back(version);
@@ -257,8 +315,7 @@ class GpuImageResources : NoCopy{
             if(!SameTextureImageKey(existing.deref().m_source.deref(), source.deref()) || !ValidGpuTextureImageVersion(existing.deref()))
                 return MakeUnexpected(Failure());
             GpuVersion<GpuTextureImageVersion> reused = existing;
-            this.m_imageCache.textures().erase(this.m_imageCache.textures().begin() + cast<isize>(index));
-            this.m_imageCache.textures().push_back(reused);
+            reused.deref().m_lastUsedTick = this.m_imageCache.nextTick();
             return reused;
         }
         assert(source.deref().texture().validatePayload());
@@ -272,6 +329,7 @@ class GpuImageResources : NoCopy{
             error("GpuRenderer: texture image {} has invalid GPU format, geometry, or readiness", source.deref().generation());
             return MakeUnexpected(Failure());
         }
+        version.deref().m_lastUsedTick = this.m_imageCache.nextTick();
         if(ShouldEvictGpuImageCacheBeforeInsert(this.m_imageCache.glyphs().size(), this.m_imageCache.sdfs().size(), this.m_imageCache.textures().size()))
             this.m_imageCache.evict();
         this.m_imageCache.textures().push_back(version);
@@ -297,7 +355,13 @@ class GpuImageResources : NoCopy{
 
 
 [cpp_unwind]
-Expected<GpuSampledGraphResources> DeclareGpuGlyphPages(mut GpuTaskGraph graph, in DrawSnapshot snapshot, in Vector<GpuVersion<GpuGlyphVersion>> versions, mut GpuRasterResourceUses uses){
+Expected<GpuSampledGraphResources> DeclareGpuGlyphPages(
+    mut GpuTaskGraph graph,
+    in DrawSnapshot snapshot,
+    in Vector<GpuVersion<GpuGlyphVersion>> versions,
+    mut GpuSampledTextureNameTable nameTable,
+    mut GpuRasterResourceUses uses
+){
     GpuSampledGraphResources resources;
     if(versions.size() != snapshot.glyphPages().size()){
         error("GpuRenderer: prepared glyph page count does not match the immutable snapshot");
@@ -305,7 +369,11 @@ Expected<GpuSampledGraphResources> DeclareGpuGlyphPages(mut GpuTaskGraph graph, 
     }
     for(usize index = 0u; index < versions.size(); ++index){
         in GpuVersion<GpuGlyphVersion> page = versions[index];
-        const Expected<GpuGraphResourceId, GpuSampledTextureImportError> texture = ImportGpuSampledTexture(
+        Name readyIdentity;
+        Name textureIdentity;
+        if(!nameTable.resolvePair(0u, index, s_GpuGlyphPageReadyPrefix, s_GpuGlyphPagePrefix, readyIdentity, textureIdentity))
+            return MakeUnexpected(Failure());
+        const Expected<GpuGraphResourceId, GpuSampledTextureImportError> texture = ImportGpuSampledTextureWithNames(
             GpuSampledTextureImportDesc(
                 s_GpuGlyphPageReadyPrefix,
                 s_GpuGlyphPageReadyMarkerLabel,
@@ -316,6 +384,8 @@ Expected<GpuSampledGraphResources> DeclareGpuGlyphPages(mut GpuTaskGraph graph, 
                 page.deref().m_texture,
                 index
             ),
+            readyIdentity,
+            textureIdentity,
             graph,
             uses
         );
@@ -336,7 +406,13 @@ Expected<GpuSampledGraphResources> DeclareGpuGlyphPages(mut GpuTaskGraph graph, 
 }
 
 [cpp_unwind]
-Expected<GpuSampledGraphResources> DeclareGpuSdfPages(mut GpuTaskGraph graph, in DrawSnapshot snapshot, in Vector<GpuVersion<GpuSdfAtlasVersion>> versions, mut GpuRasterResourceUses uses){
+Expected<GpuSampledGraphResources> DeclareGpuSdfPages(
+    mut GpuTaskGraph graph,
+    in DrawSnapshot snapshot,
+    in Vector<GpuVersion<GpuSdfAtlasVersion>> versions,
+    mut GpuSampledTextureNameTable nameTable,
+    mut GpuRasterResourceUses uses
+){
     GpuSampledGraphResources resources;
     if(versions.size() != snapshot.sdfPages().size()){
         error("GpuRenderer: prepared SDF page count does not match the immutable snapshot");
@@ -344,7 +420,11 @@ Expected<GpuSampledGraphResources> DeclareGpuSdfPages(mut GpuTaskGraph graph, in
     }
     for(usize index = 0u; index < versions.size(); ++index){
         in GpuVersion<GpuSdfAtlasVersion> page = versions[index];
-        const Expected<GpuGraphResourceId, GpuSampledTextureImportError> texture = ImportGpuSampledTexture(
+        Name readyIdentity;
+        Name textureIdentity;
+        if(!nameTable.resolvePair(1u, index, s_GpuSdfPageReadyPrefix, s_GpuSdfPagePrefix, readyIdentity, textureIdentity))
+            return MakeUnexpected(Failure());
+        const Expected<GpuGraphResourceId, GpuSampledTextureImportError> texture = ImportGpuSampledTextureWithNames(
             GpuSampledTextureImportDesc(
                 s_GpuSdfPageReadyPrefix,
                 s_GpuSdfPageReadyMarkerLabel,
@@ -355,6 +435,8 @@ Expected<GpuSampledGraphResources> DeclareGpuSdfPages(mut GpuTaskGraph graph, in
                 page.deref().m_texture,
                 index
             ),
+            readyIdentity,
+            textureIdentity,
             graph,
             uses
         );
@@ -375,7 +457,13 @@ Expected<GpuSampledGraphResources> DeclareGpuSdfPages(mut GpuTaskGraph graph, in
 }
 
 [cpp_unwind]
-Expected<GpuSampledGraphResources> DeclareGpuTextureImages(mut GpuTaskGraph graph, in DrawSnapshot snapshot, in Vector<GpuVersion<GpuTextureImageVersion>> versions, mut GpuRasterResourceUses uses){
+Expected<GpuSampledGraphResources> DeclareGpuTextureImages(
+    mut GpuTaskGraph graph,
+    in DrawSnapshot snapshot,
+    in Vector<GpuVersion<GpuTextureImageVersion>> versions,
+    mut GpuSampledTextureNameTable nameTable,
+    mut GpuRasterResourceUses uses
+){
     GpuSampledGraphResources resources;
     if(versions.size() != snapshot.textureImages().size()){
         error("GpuRenderer: prepared texture image count does not match the immutable snapshot");
@@ -386,7 +474,11 @@ Expected<GpuSampledGraphResources> DeclareGpuTextureImages(mut GpuTaskGraph grap
         in SharedImageSource source = snapshot.textureImages()[index];
         if(!image.valid() || !source.valid() || !image.deref().m_source.valid() || !SameTextureImageKey(image.deref().m_source.deref(), source.deref()) || !ValidGpuTextureImageVersion(image.deref()))
             return MakeUnexpected(Failure());
-        const Expected<GpuGraphResourceId, GpuSampledTextureImportError> texture = ImportGpuSampledTexture(
+        Name readyIdentity;
+        Name textureIdentity;
+        if(!nameTable.resolvePair(2u, index, s_GpuTextureImageReadyPrefix, s_GpuTextureImagePrefix, readyIdentity, textureIdentity))
+            return MakeUnexpected(Failure());
+        const Expected<GpuGraphResourceId, GpuSampledTextureImportError> texture = ImportGpuSampledTextureWithNames(
             GpuSampledTextureImportDesc(
                 s_GpuTextureImageReadyPrefix,
                 s_GpuTextureImageReadyMarkerLabel,
@@ -397,6 +489,8 @@ Expected<GpuSampledGraphResources> DeclareGpuTextureImages(mut GpuTaskGraph grap
                 image.deref().m_texture.texture,
                 index
             ),
+            readyIdentity,
+            textureIdentity,
             graph,
             uses
         );

@@ -44,13 +44,13 @@ class Context : NoCopy{
     private InputRouter m_input;
     private WidgetStateStore m_states;
     private Vector<WidgetId> m_scopes;
-    private Vector<ContextOwnedTarget> m_targets;
+    private Vector<HitTarget> m_targets;
+    private Vector<WidgetRoot> m_targetRoots;
     private Vector<ContextOwnedPopup> m_popups;
     private Array<ContextStateClaim, s_SmallStateClaims> m_smallStateClaims;
     private HashSet<ContextStateClaim> m_stateClaims;
     private HashSet<WidgetRoot> m_retainedRoots;
     private usize m_retainedRootCapacity = 0u;
-    private Vector<HitTarget> m_commitTargets;
     private Vector<PopupScope> m_commitPopups;
     private Vector<WidgetId> m_retiredIds;
     private PopupToken m_currentPopup;
@@ -71,7 +71,7 @@ class Context : NoCopy{
     public Context(){
         this.m_scopes.reserve(s_ContextMaxScopeDepth);
         this.m_targets.reserve(s_InputMaxTargets);
-        this.m_commitTargets.reserve(s_InputMaxTargets);
+        this.m_targetRoots.reserve(s_InputMaxTargets);
         this.m_popups.reserve(s_InputMaxPopups);
         this.m_commitPopups.reserve(s_InputMaxPopups);
     }
@@ -87,6 +87,7 @@ class Context : NoCopy{
             this.m_declarationCount,
             this.m_stateClaimCount,
             this.m_targets,
+            this.m_targetRoots,
             this.m_popups,
             this.m_popupDepth,
             this.m_currentPopup,
@@ -157,7 +158,7 @@ class Context : NoCopy{
     }
     [cpp_unwind]
     public b8 addTarget(in WidgetState state, in HitTarget target){
-        if(this.m_failed || !this.currentDeclaration(state) || !TryAppendContextTarget(state, this.m_currentPopup, this.m_popupLayer, target, this.m_targets)){
+        if(this.m_failed || !this.currentDeclaration(state) || !TryAppendContextTarget(state, this.m_currentPopup, this.m_popupLayer, target, this.m_targets, this.m_targetRoots)){
             this.fail();
             return false;
         }
@@ -165,7 +166,7 @@ class Context : NoCopy{
     }
     [cpp_unwind]
     public b8 addPartTarget(in WidgetState owner, in WidgetId part, in HitTarget target){
-        if(this.m_failed || !this.currentDeclaration(owner) || !TryAppendContextPartTarget(owner, part, this.m_currentPopup, this.m_popupLayer, target, this.m_targets)){
+        if(this.m_failed || !this.currentDeclaration(owner) || !TryAppendContextPartTarget(owner, part, this.m_currentPopup, this.m_popupLayer, target, this.m_targets, this.m_targetRoots)){
             this.fail();
             return false;
         }
@@ -179,6 +180,8 @@ class Context : NoCopy{
             this.m_input.invalidateTarget(state.id);
             return false;
         }
+        if(!this.m_input.hasActions())
+            return false;
         const Optional<in HitTarget> target = this.m_input.findTarget(state.id);
         if(target.has_value() && !MatchesContextTargetPopup(target.value(), this.m_currentPopup))
             return false;
@@ -192,6 +195,8 @@ class Context : NoCopy{
             this.m_input.invalidateTarget(state.id);
             return MakeUnexpected(Failure());
         }
+        if(!this.m_input.hasPointerGestures())
+            return MakeUnexpected(Failure());
         const Optional<in HitTarget> target = this.m_input.findTarget(state.id);
         if(target.has_value() && !MatchesContextTargetPopup(target.value(), this.m_currentPopup))
             return MakeUnexpected(Failure());
@@ -205,6 +210,8 @@ class Context : NoCopy{
             this.m_input.invalidateTarget(state.id);
             return MakeUnexpected(Failure());
         }
+        if(!this.m_input.hasControlActions())
+            return MakeUnexpected(Failure());
         const Optional<in HitTarget> target = this.m_input.findTarget(state.id);
         if(target.has_value() && !MatchesContextTargetPopup(target.value(), this.m_currentPopup))
             return MakeUnexpected(Failure());
@@ -218,6 +225,8 @@ class Context : NoCopy{
             this.m_input.invalidateTarget(owner.id);
             return MakeUnexpected(Failure());
         }
+        if(!this.m_input.hasPointerGestures())
+            return MakeUnexpected(Failure());
         const Optional<in HitTarget> target = this.m_input.findTarget(part);
         if(target.has_value() && !MatchesContextPartTargetOwner(target.value(), this.m_currentPopup, owner.id))
             return MakeUnexpected(Failure());
@@ -261,7 +270,7 @@ class Context : NoCopy{
     }
     public void discardPopupScope(in PopupToken token){
         b8 removedAny = false;
-        if(!DiscardContextPopupScope(token, this.m_popupStack, this.m_popupDepth, this.m_targets, this.m_popups, removedAny)){
+        if(!DiscardContextPopupScope(token, this.m_popupStack, this.m_popupDepth, this.m_targets, this.m_targetRoots, this.m_popups, removedAny)){
             this.fail();
             return;
         }
@@ -297,10 +306,12 @@ class Context : NoCopy{
     public b8 commitFrame(in u64 generation){
         if(!CanCommitContextFrameGeneration(generation, this.m_readyGeneration))
             return false;
-        ExtractContextCommitPayloads(this.m_targets, this.m_popups, this.m_commitTargets, this.m_commitPopups);
-        if(!this.m_input.commitTargets(this.m_commitTargets, generation, this.m_commitPopups, this.m_focusLossGeneration))
+        if(!this.m_popups.empty() || !this.m_commitPopups.empty())
+            ExtractContextCommitPopups(this.m_popups, this.m_commitPopups);
+        if(!this.m_input.commitTargets(Span<HitTarget>(this.m_targets), generation, this.m_commitPopups, this.m_focusLossGeneration))
             return false;
         this.m_targets.clear();
+        this.m_targetRoots.clear();
         this.m_popups.clear();
         this.m_readyGeneration = 0u;
         return true;
@@ -318,6 +329,7 @@ class Context : NoCopy{
         this.m_input.reset();
         ResetContextPopupAndTargetState(
             this.m_targets,
+            this.m_targetRoots,
             this.m_popups,
             this.m_currentPopup,
             this.m_popupDepth,
@@ -336,7 +348,7 @@ class Context : NoCopy{
             this.m_input.invalidateTargets(Span<WidgetId>(this.m_retiredIds));
             this.m_states.finishRetirement();
         }
-        PruneUnretainedContextTargetsAndPopups(this.m_retainedRoots, this.m_targets, this.m_popups);
+        PruneUnretainedContextTargetsAndPopups(this.m_retainedRoots, this.m_targets, this.m_targetRoots, this.m_popups);
     }
     public void fail(){ this.m_failed = true; }
     public b8 failed()const{ return this.m_failed; }

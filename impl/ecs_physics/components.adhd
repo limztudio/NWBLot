@@ -121,6 +121,8 @@ class ColliderComponent{
     public ShapeId runtimeShapeId;
     public Vector<ShapeId> runtimeExtraShapeIds;
     public BodyId boundBodyId;
+    public f32x4 syncedWorldScale(1.0f, 1.0f, 1.0f, 0.0f);
+    public b8 hasSyncedWorldScale = false;
 }
 
 [arena, component("joint")]

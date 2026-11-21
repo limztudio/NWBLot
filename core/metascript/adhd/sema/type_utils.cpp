@@ -177,6 +177,16 @@ inline constexpr BuiltinFunctionArgRuleInfo s_BuiltinFunctionArgRules[] = {
 static_assert(BuiltinFunctionArgRule::Any == 0u);
 static_assert(BuiltinFunctionArgRule::StaticCount == sizeof(s_BuiltinFunctionArgRules) / sizeof(s_BuiltinFunctionArgRules[0]));
 
+[[nodiscard]] consteval b8 AreStaticArgRulesDense()noexcept{
+    for(usize i = 0u; i < static_cast<usize>(BuiltinFunctionArgRule::StaticCount); ++i){
+        if(static_cast<usize>(s_BuiltinFunctionArgRules[i].rule) != i)
+            return false;
+    }
+    return true;
+}
+
+static_assert(AreStaticArgRulesDense());
+
 inline constexpr BuiltinFunctionInfo s_BuiltinFunctions[] = {
 #define NWB_ADHD_EXPORT_FUNCTION(adhdName, cppExportName, arity, returnRule, returnTypeName, returnTypeArgName, arg0Rule, arg1Rule, arg2Rule) \
     BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, "", "", "", arity, arity, BuiltinFunctionReturnRule::returnRule, BuiltinCallLowering::None, false, false, false, false, false, false, false, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any } },
@@ -277,36 +287,41 @@ template<typename ObjPred, typename GenericPred>
     return {};
 }
 
-template<typename EntryT, usize N>
-[[nodiscard]] const EntryT* FindBuiltinScopedSymbol(
-    const EntryT (&table)[N],
-    const MStringView scopeTypeName,
-    const MStringView memberName,
-    const b8 allowArenaTemplateScope
-)noexcept{
-    if(memberName.empty())
-        return nullptr;
-    const MStringView prefix = ResolveBuiltinScopePrefix(scopeTypeName);
-    if(prefix.empty())
-        return nullptr;
-    constexpr MStringView s_ArenaSuffix = ContractSemantics::s_CppArenaTemplateScopeSep;
+struct StringViewPair{
+    MStringView first;
+    MStringView second;
+
+    [[nodiscard]] b8 operator==(const StringViewPair& rhs)const noexcept{
+        return first == rhs.first && second == rhs.second;
+    }
+};
+
+struct StringViewPairHash{
+    [[nodiscard]] usize operator()(const StringViewPair& key)const noexcept{
+        const u64 h0 = ComputeFnv64Bytes(key.first.data(), key.first.size());
+        const u64 h1 = ComputeFnv64Bytes(key.second.data(), key.second.size());
+        return static_cast<usize>(MixMurmur64Finalizer(h0 ^ MixMurmur64Finalizer(h1)));
+    }
+};
+
+template<typename MapT, typename ValueT>
+void IndexScopedSymbolKey(MapT& map, const MStringView cppExportName, const ValueT value, const b8 allowArenaTemplateScope){
     constexpr MStringView s_ScopeSep = ContractSemantics::s_CppScopeSeparator;
-    for(const auto& info : table){
-        if(!info.cppExportName.starts_with(prefix) || !info.cppExportName.ends_with(memberName))
-            continue;
-        if(info.cppExportName.size() == prefix.size() + s_ScopeSep.size() + memberName.size()
-            && info.cppExportName.substr(prefix.size(), s_ScopeSep.size()) == s_ScopeSep
-        ){
-            return &info;
-        }
-        if(allowArenaTemplateScope
-            && info.cppExportName.size() == prefix.size() + s_ArenaSuffix.size() + memberName.size()
-            && info.cppExportName.substr(prefix.size(), s_ArenaSuffix.size()) == s_ArenaSuffix
-        ){
-            return &info;
+    constexpr MStringView s_ArenaSuffix = ContractSemantics::s_CppArenaTemplateScopeSep;
+    if(const usize sepPos = cppExportName.rfind(s_ScopeSep); sepPos != MStringView::npos){
+        const MStringView prefix = cppExportName.substr(0u, sepPos);
+        const MStringView member = cppExportName.substr(sepPos + s_ScopeSep.size());
+        if(!prefix.empty() && !member.empty())
+            map.emplace(StringViewPair{ prefix, member }, value);
+    }
+    if(allowArenaTemplateScope){
+        if(const usize arenaSepPos = cppExportName.rfind(s_ArenaSuffix); arenaSepPos != MStringView::npos){
+            const MStringView prefix = cppExportName.substr(0u, arenaSepPos);
+            const MStringView member = cppExportName.substr(arenaSepPos + s_ArenaSuffix.size());
+            if(!prefix.empty() && !member.empty())
+                map.emplace(StringViewPair{ prefix, member }, value);
         }
     }
-    return nullptr;
 }
 
 [[nodiscard]] const BuiltinImplicitConversionInfo* FindImplicitConversion(const MStringView fromTypeName, const MStringView toTypeName)noexcept{
@@ -325,26 +340,112 @@ template<typename EntryT, usize N>
     return nullptr;
 }
 
-template<typename Fn>
-[[nodiscard]] decltype(auto) WithJoinedKey(const MStringView a, const MStringView sep, const MStringView b, const Fn& fn)noexcept{
-    MChar stackBuf[512];
-    const usize totalLen = a.size() + sep.size() + b.size();
-    if(totalLen <= sizeof(stackBuf)){
-        if(!a.empty())
-            FOUNDATION_MEMCPY(stackBuf, a.size(), a.data(), a.size());
-        if(!sep.empty())
-            FOUNDATION_MEMCPY(stackBuf + a.size(), sep.size(), sep.data(), sep.size());
-        if(!b.empty())
-            FOUNDATION_MEMCPY(stackBuf + a.size() + sep.size(), b.size(), b.data(), b.size());
-        return fn(MStringView(stackBuf, totalLen));
+class StaticBuiltinTableIndex final{
+public:
+    StaticBuiltinTableIndex()
+        : m_arena(MetascriptArenaScope::s_ParserScratch)
+        , m_objectTypeByName(m_arena)
+        , m_genericTypeByName(m_arena)
+        , m_unalignedVectorByName(m_arena)
+        , m_simdVectorByName(m_arena)
+        , m_simdMatrixByName(m_arena)
+        , m_memberMethodByName(m_arena)
+        , m_receiverMethodByKey(m_arena)
+        , m_fieldByKey(m_arena)
+        , m_functionByName(m_arena)
+        , m_scopedFunctionByKey(m_arena)
+        , m_specialFunctionByName(m_arena)
+        , m_simdLaneZeroRuleByName(m_arena)
+        , m_specialMethodByName(m_arena)
+        , m_simdRegisterFieldReceivers(m_arena)
+    {
+        for(const BuiltinObjectTypeInfo& info : s_BuiltinObjectTypes)
+            m_objectTypeByName.emplace(info.adhdName, &info);
+        for(const BuiltinGenericTypeInfo& info : s_BuiltinGenericTypes)
+            m_genericTypeByName.emplace(info.adhdName, &info);
+        for(const BuiltinUnalignedVectorInfo& info : s_BuiltinUnalignedVectorTypes)
+            m_unalignedVectorByName.emplace(info.adhdName, &info);
+        for(const BuiltinSimdVectorInfo& info : s_BuiltinSimdVectorTypes)
+            m_simdVectorByName.emplace(info.adhdName, &info);
+        for(const BuiltinSimdMatrixInfo& info : s_BuiltinSimdMatrixTypes)
+            m_simdMatrixByName.emplace(info.adhdName, &info);
+        for(const BuiltinMemberMethodInfo& info : s_BuiltinMemberMethods)
+            m_memberMethodByName.emplace(info.methodName, &info);
+        for(const BuiltinReceiverMethodInfo& info : s_BuiltinReceiverMethods)
+            m_receiverMethodByKey.emplace(StringViewPair{ info.receiverTypeName, info.methodName }, &info);
+        for(const BuiltinFieldInfo& info : s_BuiltinFields){
+            m_fieldByKey.emplace(StringViewPair{ info.receiverTypeName, info.fieldName }, &info);
+            const auto vIt = m_simdVectorByName.find(info.fieldTypeName);
+            const auto mIt = m_simdMatrixByName.find(info.fieldTypeName);
+            const b8 isSimdReg = (vIt != m_simdVectorByName.end() && vIt->second->cppExportName == vIt->second->regCppType)
+                || (mIt != m_simdMatrixByName.end() && mIt->second->cppExportName == mIt->second->regCppType);
+            if(isSimdReg)
+                m_simdRegisterFieldReceivers.insert(info.receiverTypeName);
+        }
+        for(const BuiltinFunctionInfo& info : s_BuiltinFunctions){
+            m_functionByName.emplace(info.adhdName, &info);
+            IndexScopedSymbolKey(m_scopedFunctionByKey, info.cppExportName, &info, true);
+        }
+        for(const BuiltinSpecialFunctionInfo& info : s_SpecialFunctions)
+            m_specialFunctionByName.emplace(info.adhdName, info.kind);
+        for(const BuiltinSimdLaneZeroRuleInfo& info : s_SimdLaneZeroRules)
+            m_simdLaneZeroRuleByName.emplace(info.adhdName, info.ruleKind);
+        for(const BuiltinSpecialMethodInfo& info : s_SpecialMethods)
+            m_specialMethodByName.emplace(info.methodName, info.kind);
     }
-    Alloc::ScratchArena scratch(MetascriptArenaScope::s_ParserScratch);
-    AString<Alloc::ScratchArena> heapBuf(scratch);
-    heapBuf.reserve(totalLen);
-    heapBuf.append(a.data(), a.size());
-    heapBuf.append(sep.data(), sep.size());
-    heapBuf.append(b.data(), b.size());
-    return fn(MStringView(heapBuf.data(), heapBuf.size()));
+
+    template<typename MapT, typename KeyT>
+    [[nodiscard]] static auto FindPtr(const MapT& map, const KeyT& key)noexcept{
+        const auto it = map.find(key);
+        return (it != map.end()) ? it->second : decltype(it->second){ nullptr };
+    }
+
+    [[nodiscard]] const BuiltinObjectTypeInfo* findObjectType(const MStringView name)const noexcept{ return FindPtr(m_objectTypeByName, name); }
+    [[nodiscard]] const BuiltinGenericTypeInfo* findGenericType(const MStringView name)const noexcept{ return FindPtr(m_genericTypeByName, name); }
+    [[nodiscard]] const BuiltinUnalignedVectorInfo* findUnalignedVectorType(const MStringView name)const noexcept{ return FindPtr(m_unalignedVectorByName, name); }
+    [[nodiscard]] const BuiltinSimdVectorInfo* findSimdVectorType(const MStringView name)const noexcept{ return FindPtr(m_simdVectorByName, name); }
+    [[nodiscard]] const BuiltinSimdMatrixInfo* findSimdMatrixType(const MStringView name)const noexcept{ return FindPtr(m_simdMatrixByName, name); }
+    [[nodiscard]] const BuiltinMemberMethodInfo* findMemberMethod(const MStringView name)const noexcept{ return FindPtr(m_memberMethodByName, name); }
+    [[nodiscard]] const BuiltinReceiverMethodInfo* findReceiverMethod(const MStringView receiverTypeName, const MStringView methodName)const noexcept{ return FindPtr(m_receiverMethodByKey, StringViewPair{ receiverTypeName, methodName }); }
+    [[nodiscard]] const BuiltinFieldInfo* findField(const MStringView receiverTypeName, const MStringView fieldName)const noexcept{ return FindPtr(m_fieldByKey, StringViewPair{ receiverTypeName, fieldName }); }
+    [[nodiscard]] const BuiltinFunctionInfo* findFunction(const MStringView name)const noexcept{ return FindPtr(m_functionByName, name); }
+    [[nodiscard]] const BuiltinFunctionInfo* findScopedFunction(const MStringView prefix, const MStringView memberName)const noexcept{ return FindPtr(m_scopedFunctionByKey, StringViewPair{ prefix, memberName }); }
+    [[nodiscard]] b8 hasSimdRegisterField(const MStringView typeName)const noexcept{ return m_simdRegisterFieldReceivers.find(typeName) != m_simdRegisterFieldReceivers.end(); }
+    [[nodiscard]] SpecialFunctionKind::Enum findSpecialFunctionKind(const MStringView name)const noexcept{
+        const auto it = m_specialFunctionByName.find(name);
+        return (it != m_specialFunctionByName.end()) ? it->second : SpecialFunctionKind::None;
+    }
+    [[nodiscard]] SimdLaneZeroRuleKind::Enum findSimdLaneZeroRule(const MStringView name)const noexcept{
+        const auto it = m_simdLaneZeroRuleByName.find(name);
+        return (it != m_simdLaneZeroRuleByName.end()) ? it->second : SimdLaneZeroRuleKind::None;
+    }
+    [[nodiscard]] SpecialMethodKind::Enum findSpecialMethodKind(const MStringView name)const noexcept{
+        const auto it = m_specialMethodByName.find(name);
+        return (it != m_specialMethodByName.end()) ? it->second : SpecialMethodKind::None;
+    }
+
+
+private:
+    MetaArena m_arena;
+    HashMap<MStringView, const BuiltinObjectTypeInfo*, MetaArena, MStringViewHash> m_objectTypeByName;
+    HashMap<MStringView, const BuiltinGenericTypeInfo*, MetaArena, MStringViewHash> m_genericTypeByName;
+    HashMap<MStringView, const BuiltinUnalignedVectorInfo*, MetaArena, MStringViewHash> m_unalignedVectorByName;
+    HashMap<MStringView, const BuiltinSimdVectorInfo*, MetaArena, MStringViewHash> m_simdVectorByName;
+    HashMap<MStringView, const BuiltinSimdMatrixInfo*, MetaArena, MStringViewHash> m_simdMatrixByName;
+    HashMap<MStringView, const BuiltinMemberMethodInfo*, MetaArena, MStringViewHash> m_memberMethodByName;
+    HashMap<StringViewPair, const BuiltinReceiverMethodInfo*, MetaArena, StringViewPairHash> m_receiverMethodByKey;
+    HashMap<StringViewPair, const BuiltinFieldInfo*, MetaArena, StringViewPairHash> m_fieldByKey;
+    HashMap<MStringView, const BuiltinFunctionInfo*, MetaArena, MStringViewHash> m_functionByName;
+    HashMap<StringViewPair, const BuiltinFunctionInfo*, MetaArena, StringViewPairHash> m_scopedFunctionByKey;
+    HashMap<MStringView, SpecialFunctionKind::Enum, MetaArena, MStringViewHash> m_specialFunctionByName;
+    HashMap<MStringView, SimdLaneZeroRuleKind::Enum, MetaArena, MStringViewHash> m_simdLaneZeroRuleByName;
+    HashMap<MStringView, SpecialMethodKind::Enum, MetaArena, MStringViewHash> m_specialMethodByName;
+    HashSet<MStringView, MetaArena, MStringViewHash> m_simdRegisterFieldReceivers;
+};
+
+[[nodiscard]] inline const StaticBuiltinTableIndex& GetStaticBuiltinTableIndex()noexcept{
+    static const StaticBuiltinTableIndex s_Index;
+    return s_Index;
 }
 
 class CoreExternRegistry final{
@@ -371,9 +472,9 @@ public:
         , m_receiverMethodByKey(m_arena)
         , m_receiverSigByKey(m_arena)
         , m_functionByName(m_arena)
-        , m_functionByCppName(m_arena)
+        , m_scopedFunctionByKey(m_arena)
         , m_globalConstantByName(m_arena)
-        , m_globalConstantByCppName(m_arena)
+        , m_scopedConstantByKey(m_arena)
         , m_simdFieldTypes(m_arena)
         , m_exactRuleByKey(m_arena)
         , m_visitorRuleByKey(m_arena)
@@ -392,9 +493,7 @@ public:
     }
 
     [[nodiscard]] b8 hasEnumEntry(const MStringView enumName, const MStringView entryName)const noexcept{
-        return WithJoinedKey(enumName, MStringView("\n", 1u), entryName, [&](const MStringView key)noexcept{
-            return m_enumEntryByKey.find(key) != m_enumEntryByKey.end();
-        });
+        return m_enumEntryByKey.find(StringViewPair{ enumName, entryName }) != m_enumEntryByKey.end();
     }
 
     [[nodiscard]] const BuiltinFieldInfo* findField(const MStringView receiverTypeName, const MStringView fieldName)const noexcept{
@@ -429,7 +528,12 @@ public:
     }
 
     [[nodiscard]] const BuiltinFunctionInfo* findScopedFunction(const MStringView scopeTypeName, const MStringView memberName)const noexcept{
-        return FindScopedInMap(m_functions, m_functionByCppName, scopeTypeName, memberName, true);
+        if(memberName.empty())
+            return nullptr;
+        const MStringView prefix = ResolveBuiltinScopePrefix(scopeTypeName);
+        if(prefix.empty())
+            return nullptr;
+        return FindPairInMap(m_functions, m_scopedFunctionByKey, prefix, memberName);
     }
 
     [[nodiscard]] const BuiltinGlobalConstantInfo* findGlobalConstant(const MStringView name)const noexcept{
@@ -437,7 +541,12 @@ public:
     }
 
     [[nodiscard]] const BuiltinGlobalConstantInfo* findScopedConstant(const MStringView scopeTypeName, const MStringView memberName)const noexcept{
-        return FindScopedInMap(m_globalConstants, m_globalConstantByCppName, scopeTypeName, memberName, false);
+        if(memberName.empty())
+            return nullptr;
+        const MStringView prefix = ResolveBuiltinScopePrefix(scopeTypeName);
+        if(prefix.empty())
+            return nullptr;
+        return FindPairInMap(m_globalConstants, m_scopedConstantByKey, prefix, memberName);
     }
 
     [[nodiscard]] b8 hasSimdRegisterField(const MStringView typeName)const noexcept{
@@ -491,41 +600,25 @@ private:
     }
 
     template<typename InfoT>
-    [[nodiscard]] static const InfoT* FindInMap(const MVector<InfoT>& items, const MStringMap<usize>& indexMap, const MStringView key)noexcept{
+    [[nodiscard]] static const InfoT* FindInMap(const MVector<InfoT>& items, const HashMap<MStringView, usize, MetaArena, MStringViewHash>& indexMap, const MStringView key)noexcept{
         const auto it = indexMap.find(key);
         return (it != indexMap.end()) ? &items[it->second] : nullptr;
     }
 
     template<typename InfoT>
-    [[nodiscard]] static const InfoT* FindPairInMap(const MVector<InfoT>& items, const MStringMap<usize>& indexMap, const MStringView a, const MStringView b)noexcept{
-        return WithJoinedKey(a, MStringView("\n", 1u), b, [&](const MStringView key)noexcept -> const InfoT*{
-            return FindInMap(items, indexMap, key);
-        });
+    [[nodiscard]] static const InfoT* FindPairInMap(const MVector<InfoT>& items, const HashMap<StringViewPair, usize, MetaArena, StringViewPairHash>& indexMap, const MStringView a, const MStringView b)noexcept{
+        const auto it = indexMap.find(StringViewPair{ a, b });
+        return (it != indexMap.end()) ? &items[it->second] : nullptr;
     }
 
-    template<typename InfoT>
-    [[nodiscard]] static const InfoT* FindScopedInMap(
-        const MVector<InfoT>& items,
-        const MStringMap<usize>& cppMap,
-        const MStringView scopeTypeName,
-        const MStringView memberName,
-        const b8 allowArenaTemplateScope
-    )noexcept{
-        if(memberName.empty())
-            return nullptr;
-        const MStringView prefix = ResolveBuiltinScopePrefix(scopeTypeName);
-        if(prefix.empty())
-            return nullptr;
-        if(const InfoT* direct = WithJoinedKey(prefix, ContractSemantics::s_CppScopeSeparator, memberName, [&](const MStringView key)noexcept{
-            return FindInMap(items, cppMap, key);
-        }))
-            return direct;
-        if(allowArenaTemplateScope){
-            return WithJoinedKey(prefix, ContractSemantics::s_CppArenaTemplateScopeSep, memberName, [&](const MStringView key)noexcept{
-                return FindInMap(items, cppMap, key);
-            });
-        }
-        return nullptr;
+    void insertUniqueIndex(HashMap<MStringView, usize, MetaArena, MStringViewHash>& map, const MStringView key, const usize idx){
+        if(!key.empty())
+            map.emplace(key, idx);
+    }
+
+    void insertUniquePairIndex(HashMap<StringViewPair, usize, MetaArena, StringViewPairHash>& map, const MStringView a, const MStringView b, const usize idx){
+        if(!a.empty() && !b.empty())
+            map.emplace(StringViewPair{ a, b }, idx);
     }
 
     [[nodiscard]] MStringView ownString(const MStringView text){
@@ -548,24 +641,13 @@ private:
         return MStringView(stored.data(), stored.size());
     }
 
-    [[nodiscard]] MString buildPairKey(const MStringView a, const MStringView b){
+    MString buildPairKey(const MStringView a, const MStringView b){
         MString key(m_arena);
         key.reserve(a.size() + 1u + b.size());
         key.append(a.data(), a.size());
         key.push_back('\n');
         key.append(b.data(), b.size());
         return key;
-    }
-
-    void insertUniqueIndex(MStringMap<usize>& map, const MStringView key, const usize idx){
-        if(!key.empty() && map.find(key) == map.end())
-            map.emplace(MString(key.data(), key.size(), m_arena), idx);
-    }
-
-    void insertUniqueKey(MStringMap<usize>& map, MString&& key, const usize idx){
-        const MStringView view(key.data(), key.size());
-        if(!view.empty() && map.find(view) == map.end())
-            map.emplace(Move(key), idx);
     }
 
     [[nodiscard]] BuiltinFunctionArgRule::Enum allocRuleId()const noexcept{
@@ -771,10 +853,7 @@ private:
                     continue;
                 const MStringView ownedEntry = ownString(entry.name);
                 m_enumEntries.push_back(BuiltinEnumEntryInfo{ info.adhdName, ownedEntry });
-                MString entryKey = buildPairKey(info.adhdName, ownedEntry);
-                const MStringView entryKeyView(entryKey.data(), entryKey.size());
-                if(m_enumEntryByKey.find(entryKeyView) == m_enumEntryByKey.end())
-                    m_enumEntryByKey.emplace(Move(entryKey), 1u);
+                m_enumEntryByKey.insert(StringViewPair{ info.adhdName, ownedEntry });
             }
         }
     }
@@ -830,7 +909,7 @@ private:
 
                 const usize fIdx = m_fields.size();
                 m_fields.push_back(fInfo);
-                insertUniqueKey(m_fieldByKey, buildPairKey(obj.adhdName, fInfo.fieldName), fIdx);
+                insertUniquePairIndex(m_fieldByKey, obj.adhdName, fInfo.fieldName, fIdx);
             }
 
             for(const MethodDecl* method : cls->methods){
@@ -849,7 +928,7 @@ private:
 
                 const usize rmIdx = m_receiverMethods.size();
                 m_receiverMethods.push_back(rm);
-                insertUniqueKey(m_receiverMethodByKey, buildPairKey(obj.adhdName, rm.methodName), rmIdx);
+                insertUniquePairIndex(m_receiverMethodByKey, obj.adhdName, rm.methodName, rmIdx);
 
                 if(!method->isVariadic && !method->isOperator && method->params.size() <= 9u){
                     BuiltinReceiverSignatureInfo sig{};
@@ -869,7 +948,7 @@ private:
 
                     const usize sigIdx = m_receiverSignatures.size();
                     m_receiverSignatures.push_back(sig);
-                    insertUniqueKey(m_receiverSigByKey, buildPairKey(obj.adhdName, rm.methodName), sigIdx);
+                    insertUniquePairIndex(m_receiverSigByKey, obj.adhdName, rm.methodName, sigIdx);
                 }
             }
         }
@@ -1010,7 +1089,7 @@ private:
             const usize fnIdx = m_functions.size();
             m_functions.push_back(info);
             insertUniqueIndex(m_functionByName, info.adhdName, fnIdx);
-            insertUniqueIndex(m_functionByCppName, info.cppExportName, fnIdx);
+            IndexScopedSymbolKey(m_scopedFunctionByKey, info.cppExportName, fnIdx, true);
         }
     }
 
@@ -1027,7 +1106,7 @@ private:
             const usize gcIdx = m_globalConstants.size();
             m_globalConstants.push_back(gc);
             insertUniqueIndex(m_globalConstantByName, gc.adhdName, gcIdx);
-            insertUniqueIndex(m_globalConstantByCppName, gc.cppExportName, gcIdx);
+            IndexScopedSymbolKey(m_scopedConstantByKey, gc.cppExportName, gcIdx, false);
         }
     }
 
@@ -1109,16 +1188,16 @@ private:
     MVector<BuiltinVisitorRuleInfo> m_visitorRules;
     MVector<BuiltinFunctionInfo> m_functions;
     MVector<BuiltinGlobalConstantInfo> m_globalConstants;
-    MStringMap<usize> m_objectTypeByName;
-    MStringMap<usize> m_enumByName;
-    MStringMap<u8> m_enumEntryByKey;
-    MStringMap<usize> m_fieldByKey;
-    MStringMap<usize> m_receiverMethodByKey;
-    MStringMap<usize> m_receiverSigByKey;
-    MStringMap<usize> m_functionByName;
-    MStringMap<usize> m_functionByCppName;
-    MStringMap<usize> m_globalConstantByName;
-    MStringMap<usize> m_globalConstantByCppName;
+    HashMap<MStringView, usize, MetaArena, MStringViewHash> m_objectTypeByName;
+    HashMap<MStringView, usize, MetaArena, MStringViewHash> m_enumByName;
+    HashSet<StringViewPair, MetaArena, StringViewPairHash> m_enumEntryByKey;
+    HashMap<StringViewPair, usize, MetaArena, StringViewPairHash> m_fieldByKey;
+    HashMap<StringViewPair, usize, MetaArena, StringViewPairHash> m_receiverMethodByKey;
+    HashMap<StringViewPair, usize, MetaArena, StringViewPairHash> m_receiverSigByKey;
+    HashMap<MStringView, usize, MetaArena, MStringViewHash> m_functionByName;
+    HashMap<StringViewPair, usize, MetaArena, StringViewPairHash> m_scopedFunctionByKey;
+    HashMap<MStringView, usize, MetaArena, MStringViewHash> m_globalConstantByName;
+    HashMap<StringViewPair, usize, MetaArena, StringViewPairHash> m_scopedConstantByKey;
     MStringMap<u8> m_simdFieldTypes;
     MStringMap<BuiltinFunctionArgRule::Enum> m_exactRuleByKey;
     MStringMap<BuiltinFunctionArgRule::Enum> m_visitorRuleByKey;
@@ -1144,7 +1223,7 @@ MStringView BuiltinPreludeLoadError()noexcept{
 }
 
 const BuiltinObjectTypeInfo* FindBuiltinObjectType(const MStringView name)noexcept{
-    if(const BuiltinObjectTypeInfo* info = __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinObjectTypes, name))
+    if(const BuiltinObjectTypeInfo* info = __hidden_adhd_type_utils::GetStaticBuiltinTableIndex().findObjectType(name))
         return info;
     return __hidden_adhd_type_utils::GetCoreExternRegistry().findObjectType(name);
 }
@@ -1172,7 +1251,7 @@ b8 OmitsArenaInCtorType(const MStringView name)noexcept{
 }
 
 const BuiltinGenericTypeInfo* FindBuiltinGenericType(const MStringView name)noexcept{
-    return __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinGenericTypes, name);
+    return __hidden_adhd_type_utils::GetStaticBuiltinTableIndex().findGenericType(name);
 }
 
 b8 FindBuiltinBinaryHashMemberSuffix(const MStringView name, MStringView& outMemberSuffix)noexcept{
@@ -1188,15 +1267,15 @@ const BuiltinNwbValueTypeInfo* FindBuiltinNwbValueType(const MStringView name)no
 }
 
 const BuiltinUnalignedVectorInfo* FindBuiltinUnalignedVectorType(const MStringView name)noexcept{
-    return __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinUnalignedVectorTypes, name);
+    return __hidden_adhd_type_utils::GetStaticBuiltinTableIndex().findUnalignedVectorType(name);
 }
 
 const BuiltinSimdVectorInfo* FindBuiltinSimdVectorType(const MStringView name)noexcept{
-    return __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinSimdVectorTypes, name);
+    return __hidden_adhd_type_utils::GetStaticBuiltinTableIndex().findSimdVectorType(name);
 }
 
 const BuiltinSimdMatrixInfo* FindBuiltinSimdMatrixType(const MStringView name)noexcept{
-    return __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinSimdMatrixTypes, name);
+    return __hidden_adhd_type_utils::GetStaticBuiltinTableIndex().findSimdMatrixType(name);
 }
 
 b8 IsValidBuiltinVectorOrMatrixCtorArity(const MStringView baseTypeName, const usize argCount)noexcept{
@@ -1260,18 +1339,12 @@ b8 FindBuiltinFixedLayout(const MStringView name, usize& outSize, usize& outAlig
 }
 
 const BuiltinMemberMethodInfo* FindBuiltinMemberMethod(const MStringView name)noexcept{
-    for(const BuiltinMemberMethodInfo& info : __hidden_adhd_type_utils::s_BuiltinMemberMethods){
-        if(info.methodName == name)
-            return &info;
-    }
-    return nullptr;
+    return __hidden_adhd_type_utils::GetStaticBuiltinTableIndex().findMemberMethod(name);
 }
 
 const BuiltinReceiverMethodInfo* FindBuiltinReceiverMethod(const MStringView receiverTypeName, const MStringView methodName)noexcept{
-    for(const BuiltinReceiverMethodInfo& info : __hidden_adhd_type_utils::s_BuiltinReceiverMethods){
-        if(info.receiverTypeName == receiverTypeName && info.methodName == methodName)
-            return &info;
-    }
+    if(const BuiltinReceiverMethodInfo* info = __hidden_adhd_type_utils::GetStaticBuiltinTableIndex().findReceiverMethod(receiverTypeName, methodName))
+        return info;
     return __hidden_adhd_type_utils::GetCoreExternRegistry().findReceiverMethod(receiverTypeName, methodName);
 }
 
@@ -1280,16 +1353,15 @@ const BuiltinReceiverSignatureInfo* FindBuiltinReceiverSignature(const MStringVi
 }
 
 const BuiltinFieldInfo* FindBuiltinField(const MStringView receiverTypeName, const MStringView fieldName)noexcept{
-    for(const BuiltinFieldInfo& info : __hidden_adhd_type_utils::s_BuiltinFields){
-        if(info.receiverTypeName == receiverTypeName && info.fieldName == fieldName)
-            return &info;
-    }
+    if(const BuiltinFieldInfo* info = __hidden_adhd_type_utils::GetStaticBuiltinTableIndex().findField(receiverTypeName, fieldName))
+        return info;
     return __hidden_adhd_type_utils::GetCoreExternRegistry().findField(receiverTypeName, fieldName);
 }
 
 const BuiltinFunctionArgRuleInfo* FindBuiltinFunctionArgRule(const BuiltinFunctionArgRule::Enum rule)noexcept{
-    if(const BuiltinFunctionArgRuleInfo* info = __hidden_adhd_type_utils::FindBuiltinByRule(__hidden_adhd_type_utils::s_BuiltinFunctionArgRules, rule))
-        return info;
+    const usize idx = static_cast<usize>(rule);
+    if(idx < static_cast<usize>(BuiltinFunctionArgRule::StaticCount))
+        return &__hidden_adhd_type_utils::s_BuiltinFunctionArgRules[idx];
     return __hidden_adhd_type_utils::GetCoreExternRegistry().findArgRule(rule);
 }
 
@@ -1298,14 +1370,19 @@ const BuiltinVisitorRuleInfo* FindBuiltinVisitorRule(const BuiltinFunctionArgRul
 }
 
 const BuiltinFunctionInfo* FindBuiltinFunction(const MStringView name)noexcept{
-    if(const BuiltinFunctionInfo* info = __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinFunctions, name))
+    if(const BuiltinFunctionInfo* info = __hidden_adhd_type_utils::GetStaticBuiltinTableIndex().findFunction(name))
         return info;
     return __hidden_adhd_type_utils::GetCoreExternRegistry().findFunction(name);
 }
 
 const BuiltinFunctionInfo* FindBuiltinScopedFunction(const MStringView scopeTypeName, const MStringView memberName)noexcept{
-    if(const BuiltinFunctionInfo* info = __hidden_adhd_type_utils::FindBuiltinScopedSymbol(__hidden_adhd_type_utils::s_BuiltinFunctions, scopeTypeName, memberName, true))
-        return info;
+    if(!memberName.empty()){
+        const MStringView prefix = __hidden_adhd_type_utils::ResolveBuiltinScopePrefix(scopeTypeName);
+        if(!prefix.empty()){
+            if(const BuiltinFunctionInfo* info = __hidden_adhd_type_utils::GetStaticBuiltinTableIndex().findScopedFunction(prefix, memberName))
+                return info;
+        }
+    }
     return __hidden_adhd_type_utils::GetCoreExternRegistry().findScopedFunction(scopeTypeName, memberName);
 }
 
@@ -1551,10 +1628,8 @@ b8 IsMoveOnlyTypeName(const MStringView name)noexcept{
 }
 
 b8 HasBuiltinSimdRegisterField(const MStringView typeName)noexcept{
-    for(const BuiltinFieldInfo& info : __hidden_adhd_type_utils::s_BuiltinFields){
-        if(info.receiverTypeName == typeName && SymbolTable::IsSimdRegisterType(info.fieldTypeName))
-            return true;
-    }
+    if(__hidden_adhd_type_utils::GetStaticBuiltinTableIndex().hasSimdRegisterField(typeName))
+        return true;
     return __hidden_adhd_type_utils::GetCoreExternRegistry().hasSimdRegisterField(typeName);
 }
 
@@ -1629,27 +1704,15 @@ b8 IsNumericScalarArgRule(const BuiltinFunctionArgRule::Enum rule)noexcept{
 }
 
 SpecialFunctionKind::Enum FindSpecialFunctionKind(const MStringView name)noexcept{
-    for(const BuiltinSpecialFunctionInfo& info : __hidden_adhd_type_utils::s_SpecialFunctions){
-        if(info.adhdName == name)
-            return info.kind;
-    }
-    return SpecialFunctionKind::None;
+    return __hidden_adhd_type_utils::GetStaticBuiltinTableIndex().findSpecialFunctionKind(name);
 }
 
 SimdLaneZeroRuleKind::Enum FindSimdLaneZeroRule(const MStringView name)noexcept{
-    for(const BuiltinSimdLaneZeroRuleInfo& info : __hidden_adhd_type_utils::s_SimdLaneZeroRules){
-        if(info.adhdName == name)
-            return info.ruleKind;
-    }
-    return SimdLaneZeroRuleKind::None;
+    return __hidden_adhd_type_utils::GetStaticBuiltinTableIndex().findSimdLaneZeroRule(name);
 }
 
 SpecialMethodKind::Enum FindSpecialMethodSemantics(const MStringView methodName)noexcept{
-    for(const BuiltinSpecialMethodInfo& info : __hidden_adhd_type_utils::s_SpecialMethods){
-        if(info.methodName == methodName)
-            return info.kind;
-    }
-    return SpecialMethodKind::None;
+    return __hidden_adhd_type_utils::GetStaticBuiltinTableIndex().findSpecialMethodKind(methodName);
 }
 
 b8 BuiltinTypeSemantics::IsReservedPrimitiveOrContainerTypeName(const MStringView name)noexcept{

@@ -3,6 +3,7 @@
 
 
 #include "volume_file_system.h"
+#include "volume_segment_transfer.h"
 #include "volume_storage_detail.h"
 #include "arena_names.h"
 
@@ -251,12 +252,51 @@ Expected<u64> VolumeFileSystem::wastedBytes()const noexcept{
 
 b8 VolumeFileSystem::writeFile(const Name& virtualPath, const void* data, const usize bytes){
     ExclusiveLockGuard lock(m_mutex);
-    return writeFileLocked(virtualPath, data, bytes, MetadataFlushMode::Immediate);
+    Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_SaveMetadataScratch);
+    FilesystemVolumeDetail::SegmentTransferCache writeCache(scratchArena, true);
+    m_activeWriteCache = AddressOf(writeCache);
+    ScopeExit clearCache([this, &writeCache]()noexcept{
+        m_activeWriteCache = nullptr;
+        writeCache.closeAll();
+    });
+    return writeFileLocked(virtualPath, data, bytes, MetadataFlushMode::Immediate, AddressOf(scratchArena));
 }
 
 b8 VolumeFileSystem::writeFileDeferred(const Name& virtualPath, const void* data, const usize bytes){
     ExclusiveLockGuard lock(m_mutex);
     return writeFileLocked(virtualPath, data, bytes, MetadataFlushMode::Deferred);
+}
+
+b8 VolumeFileSystem::writeFilesDeferred(const DeferredWriteItem* const items, const usize count){
+    if(count == 0u)
+        return true;
+    if(!items){
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpWriteFile, FilesystemVolumeDetail::s_VolumeDetailInvalidArguments);
+        return false;
+    }
+
+    ExclusiveLockGuard lock(m_mutex);
+    if(!m_mounted || !m_writable){
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpWriteFile, FilesystemVolumeDetail::s_VolumeDetailNotMountedWritable);
+        return false;
+    }
+
+    if(count <= Limit<usize>::s_Max - m_files.size())
+        m_files.reserve(m_files.size() + count);
+
+    Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_SaveMetadataScratch);
+    FilesystemVolumeDetail::SegmentTransferCache writeCache(scratchArena, true);
+    m_activeWriteCache = AddressOf(writeCache);
+    ScopeExit clearCache([this, &writeCache]()noexcept{
+        m_activeWriteCache = nullptr;
+        writeCache.closeAll();
+    });
+
+    for(usize i = 0u; i < count; ++i){
+        if(!writeFileLocked(items[i].virtualPath, items[i].data, items[i].bytes, MetadataFlushMode::Deferred))
+            return false;
+    }
+    return true;
 }
 
 void VolumeFileSystem::reserveFileCapacity(const usize fileCount){
@@ -374,7 +414,7 @@ Expected<u64> VolumeFileSystem::fileSize(const Name& virtualPath)const noexcept(
 }
 
 
-b8 VolumeFileSystem::writeFileLocked(const Name& virtualPath, const void* data, const usize bytes, const MetadataFlushMode::Enum flushMode){
+b8 VolumeFileSystem::writeFileLocked(const Name& virtualPath, const void* data, const usize bytes, const MetadataFlushMode::Enum flushMode, Alloc::ScratchArena* const flushScratchArena){
     if(!m_mounted || !m_writable){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpWriteFile, FilesystemVolumeDetail::s_VolumeDetailNotMountedWritable);
         return false;
@@ -439,8 +479,14 @@ b8 VolumeFileSystem::writeFileLocked(const Name& virtualPath, const void* data, 
         return true;
     }
 
-    Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_SaveMetadataScratch);
-    if(flushMetadataLocked(scratchArena)){
+    b8 flushed = false;
+    if(flushScratchArena)
+        flushed = flushMetadataLocked(*flushScratchArena);
+    else{
+        Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_SaveMetadataScratch);
+        flushed = flushMetadataLocked(scratchArena);
+    }
+    if(flushed){
         rollback.release();
         return true;
     }

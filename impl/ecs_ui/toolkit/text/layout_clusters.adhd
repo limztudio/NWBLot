@@ -116,13 +116,18 @@ TextHit HitTestTextLayout(in Span<TextLine> lines, in Span<TextCluster> clusters
     TextHit hit;
     if(lines.empty() || !IsFinite(VectorSingle(point.x, point.y, point.x, point.y).xy))
         return hit;
-    usize lineIndex = lines.size() - 1u;
-    for(usize index = 0u; index < lines.size(); ++index){
-        if(point.y < lines[index].top + lines[index].height){
-            lineIndex = index;
-            break;
-        }
+    usize low = 0u;
+    usize high = lines.size();
+    while(low < high){
+        const usize mid = low + (high - low) / 2u;
+        if(point.y < lines[mid].top + lines[mid].height)
+            high = mid;
+        else
+            low = mid + 1u;
     }
+    usize lineIndex = lines.size() - 1u;
+    if(low < lines.size())
+        lineIndex = low;
     const TextLine line = lines[lineIndex];
     hit.byteOffset = line.byteBegin;
     if(line.clusterCount == 0u)
@@ -149,43 +154,91 @@ TextHit HitTestTextLayout(in Span<TextLine> lines, in Span<TextCluster> clusters
 Expected<Rect> TryResolveTextCaretRect(in Span<TextLine> lines, in Span<TextCluster> clusters, in TextDirection direction, in u32 byteOffset, in TextCaretEdge edge){
     if(edge != TextCaretEdge::Leading && edge != TextCaretEdge::Trailing)
         return MakeUnexpected(Failure());
-    b8 hasAlternate = false;
-    TextCluster alternate;
-    for(usize i = 0u; i < clusters.size(); ++i){
-        const TextCluster cluster = clusters[i];
-        b8 matched = false;
-        if(edge == TextCaretEdge::Leading)
-            matched = cluster.byteBegin == byteOffset;
+    if(lines.empty())
+        return MakeUnexpected(Failure());
+    usize firstLine = 0u;
+    usize lineCount = lines.size();
+    while(lineCount > 0u){
+        const usize step = lineCount / 2u;
+        const usize mid = firstLine + step;
+        if(lines[mid].byteBegin <= byteOffset){
+            firstLine = mid + 1u;
+            lineCount -= step + 1u;
+        }
         else
-            matched = cluster.byteEnd == byteOffset;
-        if(matched){
-            const TextLine line = lines[cast<usize>(cluster.lineIndex)];
-            f32 x = cluster.trailingX;
+            lineCount = step;
+    }
+    if(firstLine == 0u)
+        return MakeUnexpected(Failure());
+    const TextLine line = lines[firstLine - 1u];
+    if(byteOffset < line.byteBegin || byteOffset > line.byteEnd)
+        return MakeUnexpected(Failure());
+    if(line.clusterCount != 0u){
+        const usize first = cast<usize>(line.firstCluster);
+        const usize end = first + cast<usize>(line.clusterCount);
+        usize candidate = first;
+        if(direction == TextDirection::LeftToRight){
+            usize low = first;
+            usize high = end;
+            while(low < high){
+                const usize mid = low + (high - low) / 2u;
+                if(clusters[mid].byteEnd < byteOffset)
+                    low = mid + 1u;
+                else
+                    high = mid;
+            }
+            candidate = low;
+        }
+        else{
+            usize low = first;
+            usize high = end;
+            while(low < high){
+                const usize mid = low + (high - low) / 2u;
+                if(clusters[mid].byteBegin > byteOffset)
+                    low = mid + 1u;
+                else
+                    high = mid;
+            }
+            candidate = low;
+        }
+        b8 hasAlternate = false;
+        TextCluster alternate;
+        usize checkLimit = candidate + 2u;
+        if(checkLimit > end)
+            checkLimit = end;
+        for(usize i = candidate; i < checkLimit; ++i){
+            const TextCluster cluster = clusters[i];
+            b8 matched = false;
             if(edge == TextCaretEdge::Leading)
-                x = cluster.leadingX;
-            return Rect(x, line.top, 0.0f, line.height);
+                matched = cluster.byteBegin == byteOffset;
+            else
+                matched = cluster.byteEnd == byteOffset;
+            if(matched){
+                const TextLine clusterLine = lines[cast<usize>(cluster.lineIndex)];
+                f32 x = cluster.trailingX;
+                if(edge == TextCaretEdge::Leading)
+                    x = cluster.leadingX;
+                return Rect(x, clusterLine.top, 0.0f, clusterLine.height);
+            }
+            if(!hasAlternate && (cluster.byteBegin == byteOffset || cluster.byteEnd == byteOffset)){
+                alternate = cluster;
+                hasAlternate = true;
+            }
         }
-        if(cluster.byteBegin == byteOffset || cluster.byteEnd == byteOffset){
-            alternate = cluster;
-            hasAlternate = true;
+        if(hasAlternate){
+            const TextLine clusterLine = lines[cast<usize>(alternate.lineIndex)];
+            f32 x = alternate.trailingX;
+            if(alternate.byteBegin == byteOffset)
+                x = alternate.leadingX;
+            return Rect(x, clusterLine.top, 0.0f, clusterLine.height);
         }
     }
-    if(hasAlternate){
-        const TextLine line = lines[cast<usize>(alternate.lineIndex)];
-        f32 x = alternate.trailingX;
-        if(alternate.byteBegin == byteOffset)
-            x = alternate.leadingX;
+    if(byteOffset == line.byteBegin || byteOffset == line.byteEnd){
+        const b8 atBegin = byteOffset == line.byteBegin;
+        f32 x = line.advance;
+        if(atBegin == (direction == TextDirection::LeftToRight))
+            x = 0.0f;
         return Rect(x, line.top, 0.0f, line.height);
-    }
-    for(usize i = 0u; i < lines.size(); ++i){
-        const TextLine line = lines[i];
-        if(byteOffset == line.byteBegin || byteOffset == line.byteEnd){
-            const b8 atBegin = byteOffset == line.byteBegin;
-            f32 x = line.advance;
-            if(atBegin == (direction == TextDirection::LeftToRight))
-                x = 0.0f;
-            return Rect(x, line.top, 0.0f, line.height);
-        }
     }
     return MakeUnexpected(Failure());
 }

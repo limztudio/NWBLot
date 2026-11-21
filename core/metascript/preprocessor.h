@@ -103,6 +103,7 @@ private:
     MVector<ParseError>& m_errors;
     MacroMap m_macros;
     PreprocessorIncludes m_includes;
+    u32 m_functionMacroCount = 0u;
 };
 
 

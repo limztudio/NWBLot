@@ -56,9 +56,11 @@ MeshletBounds BuildMeshletBounds(
     const VectorSingle radius = Sqrt(radiusSquaredLanes);
 
     VectorSingle areaWeightedNormal(0.0f, 0.0f, 0.0f, 0.0f);
+    Array<f32x4, s_MeshMaxMeshletTriangles> faceNormals;
     u32 validFaceNormalCount = 0u;
     for(u32 primitiveIndex = 0u; primitiveIndex < primitiveCount; ++primitiveIndex){
         const VectorSingle faceNormal = MeshletFaceNormal(Span<f32x4>(positions), meshletPrimitiveIndices, meshletLocalVertexRefs, meshlet, primitiveIndex);
+        faceNormals[cast<usize>(primitiveIndex)] = f32x4(faceNormal);
         if(IsValidMeshletDirection3(faceNormal)){
             areaWeightedNormal = areaWeightedNormal + faceNormal;
             ++validFaceNormalCount;
@@ -70,7 +72,7 @@ MeshletBounds BuildMeshletBounds(
     if(validFaceNormalCount == primitiveCount && IsValidMeshletDirection3(coneAxis)){
         coneCutoff = 1.0f;
         for(u32 primitiveIndex = 0u; primitiveIndex < primitiveCount; ++primitiveIndex){
-            const VectorSingle faceNormal = NormalizeMeshletDirection3OrZero(MeshletFaceNormal(Span<f32x4>(positions), meshletPrimitiveIndices, meshletLocalVertexRefs, meshlet, primitiveIndex));
+            const VectorSingle faceNormal = NormalizeMeshletDirection3OrZero(VectorSingle(faceNormals[cast<usize>(primitiveIndex)]));
             if(IsValidMeshletDirection3(faceNormal)){
                 const VectorSingle current(coneCutoff);
                 const VectorSingle candidate = Vector3Dot(coneAxis, faceNormal);

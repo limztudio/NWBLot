@@ -68,30 +68,43 @@ b8 BuildAndPackSceneBvhNodesInto(
     mut Vector<NwbBvhNodeGpu> outNodes
 ){
     const u32 instanceCount = cast<u32>(instances.size());
+    if(instanceCount == 0u)
+        return false;
     const usize requiredNodeCount = cast<usize>(instanceCount) * 2u - 1u;
 
     indices.clear();
-    indices.reserve(cast<usize>(instanceCount));
-    for(u32 i = 0u; i < instanceCount; ++i)
-        indices.push_back(i);
-
-    buildNodes.clear();
-    buildNodes.reserve(requiredNodeCount);
     instanceLeafCost.clear();
-    instanceLeafCost.reserve(cast<usize>(instanceCount));
-    for(u32 i = 0u; i < instanceCount; ++i)
-        instanceLeafCost.push_back(instances[cast<usize>(i)].primitiveCount);
+    buildNodes.clear();
 
-    BuildSceneBvhNode(0u, instanceCount, instanceBvhPrimitives, instanceLeafCost, indices, buildNodes);
-    assert(buildNodes.size() == requiredNodeCount);
+    Vector<SceneBvhBuildWorkItem> work;
+    work.resize(cast<usize>(instanceCount));
+    VectorSingle rootCentroidMin(s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity);
+    VectorSingle rootCentroidMax(-s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity);
+    for(u32 i = 0u; i < instanceCount; ++i){
+        const usize idx = cast<usize>(i);
+        in SceneBvhPrimitiveCalculation prim = instanceBvhPrimitives[idx];
+        mut SceneBvhBuildWorkItem item = work[idx];
+        item.aabbMin = prim.aabbMin;
+        item.aabbMax = prim.aabbMax;
+        item.centroid = prim.centroid;
+        item.instance = i;
+        item.leafCost = instances[idx].primitiveCount;
+        item.transparentOccluder = prim.transparentOccluder;
+        const VectorSingle centroid(prim.centroid);
+        rootCentroidMin = Min(rootCentroidMin, centroid);
+        rootCentroidMax = Max(rootCentroidMax, centroid);
+    }
 
-    outNodes.clear();
-    outNodes.reserve(buildNodes.size());
-    for(in SceneBvhNodeCalculation buildNode : buildNodes){
-        const u32 nodeIndex = cast<u32>(outNodes.size());
-        if(!IsValidSceneBvhNodeChildren(buildNode.leftChild, buildNode.rightChild, nodeIndex, cast<u32>(buildNodes.size()), instanceCount))
+    outNodes.resize(requiredNodeCount);
+    BuildSceneBvhDirectInto(work, rootCentroidMin, rootCentroidMax, outNodes);
+
+    const u32 childIndexMask = cast<u32>(BvhNodeIndex::ChildIndexMask);
+    for(usize nodeIdx = 0u; nodeIdx < requiredNodeCount; ++nodeIdx){
+        in NwbBvhNodeGpu node = outNodes[nodeIdx];
+        const u32 leftChild = node.aabbMinLeftChild.w;
+        const u32 rightChild = node.aabbMaxRightChild.w & childIndexMask;
+        if(!IsValidSceneBvhNodeChildren(leftChild, rightChild, cast<u32>(nodeIdx), cast<u32>(requiredNodeCount), instanceCount))
             return false;
-        outNodes.push_back(PackSceneBvhNodeGpu(buildNode));
     }
     return true;
 }

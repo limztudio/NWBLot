@@ -213,10 +213,15 @@ Expected<InputEvent> TryResolveRouterPointerEvent(
     usize contactIndex = pointerBindings.size();
     for(usize index = 0u; index < pointerBindings.size(); ++index){
         if(pointerBindings[index].source == event.source){
-            if(contactIndex == pointerBindings.size())
+            if(contactIndex == pointerBindings.size()){
                 contactIndex = index;
-            if(pointerBindings[index].intent == intent && heldIndex == pointerBindings.size())
+                if(!press && !release)
+                    break;
+            }
+            if(pointerBindings[index].intent == intent && heldIndex == pointerBindings.size()){
                 heldIndex = index;
+                break;
+            }
         }
     }
     if(contactIndex != pointerBindings.size())

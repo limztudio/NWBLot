@@ -77,16 +77,20 @@ namespace __hidden_adhd_source_emitter{
     for(const Stmt* stmt : stmts){
         if(!stmt)
             continue;
-        if(stmt->kind == StmtKind::VarDecl && SimdExpressionAnalysis::ResolveLocalVarDeclSimdType(*stmt, symbols).empty()){
-            if(stmt->expr && SimdExpressionAnalysis::ExprContainsSimdMath(stmt->expr, symbols))
-                hasSimdScalarLocal = true;
-            for(const Expr* arg : stmt->arguments){
-                if(SimdExpressionAnalysis::ExprContainsSimdMath(arg, symbols))
+        if(!hasSimdScalarLocal){
+            if(stmt->kind == StmtKind::VarDecl && SimdExpressionAnalysis::ResolveLocalVarDeclSimdType(*stmt, symbols).empty()){
+                if(stmt->expr && SimdExpressionAnalysis::ExprContainsSimdMath(stmt->expr, symbols))
                     hasSimdScalarLocal = true;
+                for(const Expr* arg : stmt->arguments){
+                    if(hasSimdScalarLocal)
+                        break;
+                    if(SimdExpressionAnalysis::ExprContainsSimdMath(arg, symbols))
+                        hasSimdScalarLocal = true;
+                }
             }
+            if(!hasSimdScalarLocal && stmt->kind == StmtKind::ExprStmt && stmt->expr && stmt->expr->kind == ExprKind::Binary && stmt->expr->rhs && SimdExpressionAnalysis::ExprContainsSimdMath(stmt->expr->rhs, symbols))
+                hasSimdScalarLocal = true;
         }
-        if(stmt->kind == StmtKind::ExprStmt && stmt->expr && stmt->expr->kind == ExprKind::Binary && stmt->expr->rhs && SimdExpressionAnalysis::ExprContainsSimdMath(stmt->expr->rhs, symbols))
-            hasSimdScalarLocal = true;
         if(ExprNeedsSimdFloatingPointEnv(stmt->expr, symbols, hasSimdScalarLocal)
             || ExprNeedsSimdFloatingPointEnv(stmt->condition, symbols, hasSimdScalarLocal)
             || ExprNeedsSimdFloatingPointEnv(stmt->stepExpr, symbols, hasSimdScalarLocal))
@@ -112,55 +116,6 @@ namespace __hidden_adhd_source_emitter{
     return false;
 }
 
-[[nodiscard]] b8 StmtsReferenceIdentifier(const Span<const Stmt* const> stmts, const MStringView name)noexcept;
-
-[[nodiscard]] b8 ExprReferencesIdentifier(const Expr* const expr, const MStringView name)noexcept{
-    if(!expr)
-        return false;
-    if(expr->kind == ExprKind::Identifier && expr->text == name)
-        return true;
-    if(expr->kind == ExprKind::Lambda && StmtsReferenceIdentifier(expr->lambdaBody, name))
-        return true;
-    if(ExprReferencesIdentifier(expr->lhs, name) || ExprReferencesIdentifier(expr->rhs, name))
-        return true;
-    for(const Expr* arg : expr->arguments){
-        if(ExprReferencesIdentifier(arg, name))
-            return true;
-    }
-    for(const LambdaCapture& cap : expr->lambdaCaptures){
-        if(cap.name == name)
-            return true;
-    }
-    return false;
-}
-
-[[nodiscard]] b8 StmtsReferenceIdentifier(const Span<const Stmt* const> stmts, const MStringView name)noexcept{
-    for(const Stmt* stmt : stmts){
-        if(!stmt)
-            continue;
-        if(ExprReferencesIdentifier(stmt->expr, name)
-            || ExprReferencesIdentifier(stmt->condition, name)
-            || ExprReferencesIdentifier(stmt->stepExpr, name))
-            return true;
-        if(stmt->initStmt){
-            const Stmt* const initPtr = stmt->initStmt;
-            if(StmtsReferenceIdentifier(Span<const Stmt* const>(&initPtr, 1u), name))
-                return true;
-        }
-        for(const Expr* arg : stmt->arguments){
-            if(ExprReferencesIdentifier(arg, name))
-                return true;
-        }
-        if(StmtsReferenceIdentifier(stmt->statements, name) || StmtsReferenceIdentifier(stmt->elseStatements, name))
-            return true;
-        for(const SwitchCase& sc : stmt->switchCases){
-            if(ExprReferencesIdentifier(sc.matchExpr, name) || StmtsReferenceIdentifier(sc.statements, name))
-                return true;
-        }
-    }
-    return false;
-}
-
 template<typename IsReadyField>
 [[nodiscard]] b8 ExprDisallowsMemberInitializerLift(const Expr* const expr, const IsReadyField& isReadyField)noexcept{
     if(!expr)
@@ -176,25 +131,31 @@ template<typename IsReadyField>
     return false;
 }
 
-[[nodiscard]] const Expr* FindConstructorFieldAssignment(const Span<const Stmt* const> stmts, const MStringView fieldName, const Expr*& outUniqueTopLevelAssignExpr, b8& outInLeadingAssignPrefix)noexcept{
+struct CtorFieldAssignInfo{
     const Expr* firstFound = nullptr;
     usize totalMatches = 0u;
     b8 firstIsTopLevel = false;
     b8 firstInLeadingPrefix = false;
-    b8 stillInLeadingPrefix = true;
+};
 
-    const auto countRecursive = [&](const auto& self, const Span<const Stmt* const> list, const b8 topLevel)noexcept -> void{
+void CollectCtorFieldAssignments(
+    const Span<const Stmt* const> stmts,
+    HashMap<MStringView, CtorFieldAssignInfo, MetaArena, MStringViewHash>& assignMap
+){
+    b8 stillInLeadingPrefix = true;
+    const auto walk = [&](const auto& self, const Span<const Stmt* const> list, const b8 topLevel) -> void{
         for(const Stmt* stmt : list){
             if(!stmt)
                 continue;
             const b8 isThisMemberAssign = IsThisMemberSimpleAssignStmt(*stmt);
-            if(IsThisMemberSimpleAssignStmt(*stmt, fieldName) && stmt->expr->rhs){
-                if(!firstFound){
-                    firstFound = stmt->expr;
-                    firstIsTopLevel = topLevel;
-                    firstInLeadingPrefix = topLevel && stillInLeadingPrefix;
+            if(isThisMemberAssign && stmt->expr->rhs){
+                CtorFieldAssignInfo& entry = assignMap[stmt->expr->lhs->text];
+                if(!entry.firstFound){
+                    entry.firstFound = stmt->expr;
+                    entry.firstIsTopLevel = topLevel;
+                    entry.firstInLeadingPrefix = topLevel && stillInLeadingPrefix;
                 }
-                ++totalMatches;
+                ++entry.totalMatches;
             }
             if(topLevel && !isThisMemberAssign)
                 stillInLeadingPrefix = false;
@@ -208,11 +169,75 @@ template<typename IsReadyField>
             }
         }
     };
+    walk(walk, stmts, true);
+}
 
-    countRecursive(countRecursive, stmts, true);
-    outUniqueTopLevelAssignExpr = (firstFound != nullptr && firstIsTopLevel && totalMatches == 1u) ? firstFound : nullptr;
-    outInLeadingAssignPrefix = (outUniqueTopLevelAssignExpr != nullptr) && firstInLeadingPrefix;
-    return firstFound ? firstFound->rhs : nullptr;
+void MarkUsedParamNamesInStmts(
+    const Span<const Stmt* const> stmts,
+    const Span<const ParamDecl> params,
+    u64& usedMask,
+    MVector<u8>* const overflowUsed,
+    const HashMap<MStringView, usize, MetaArena, MStringViewHash>* const overflowIndex,
+    usize& remainingCount
+)noexcept{
+    const auto markName = [&](const MStringView name)noexcept{
+        if(remainingCount == 0u)
+            return;
+        if(params.size() <= 64u){
+            for(usize i = 0u; i < params.size(); ++i){
+                const u64 bit = 1ull << i;
+                if((usedMask & bit) == 0u && params[i].name == name){
+                    usedMask |= bit;
+                    --remainingCount;
+                }
+            }
+            return;
+        }
+        if(overflowUsed && overflowIndex){
+            if(const auto it = overflowIndex->find(name); it != overflowIndex->end()){
+                if((*overflowUsed)[it->second] == 0u){
+                    (*overflowUsed)[it->second] = 1u;
+                    --remainingCount;
+                }
+            }
+        }
+    };
+
+    const auto scanExpr = [&](const auto& selfExpr, const Expr* const expr)noexcept -> void{
+        if(!expr || remainingCount == 0u)
+            return;
+        if(expr->kind == ExprKind::Identifier)
+            markName(expr->text);
+        else if(expr->kind == ExprKind::Lambda){
+            for(const LambdaCapture& cap : expr->lambdaCaptures)
+                markName(cap.name);
+            MarkUsedParamNamesInStmts(expr->lambdaBody, params, usedMask, overflowUsed, overflowIndex, remainingCount);
+        }
+        selfExpr(selfExpr, expr->lhs);
+        selfExpr(selfExpr, expr->rhs);
+        for(const Expr* arg : expr->arguments)
+            selfExpr(selfExpr, arg);
+    };
+
+    for(const Stmt* stmt : stmts){
+        if(!stmt || remainingCount == 0u)
+            break;
+        scanExpr(scanExpr, stmt->expr);
+        scanExpr(scanExpr, stmt->condition);
+        scanExpr(scanExpr, stmt->stepExpr);
+        if(stmt->initStmt){
+            const Stmt* const initPtr = stmt->initStmt;
+            MarkUsedParamNamesInStmts(Span<const Stmt* const>(&initPtr, 1u), params, usedMask, overflowUsed, overflowIndex, remainingCount);
+        }
+        for(const Expr* arg : stmt->arguments)
+            scanExpr(scanExpr, arg);
+        MarkUsedParamNamesInStmts(stmt->statements, params, usedMask, overflowUsed, overflowIndex, remainingCount);
+        MarkUsedParamNamesInStmts(stmt->elseStatements, params, usedMask, overflowUsed, overflowIndex, remainingCount);
+        for(const SwitchCase& sc : stmt->switchCases){
+            scanExpr(scanExpr, sc.matchExpr);
+            MarkUsedParamNamesInStmts(sc.statements, params, usedMask, overflowUsed, overflowIndex, remainingCount);
+        }
+    }
 }
 
 
@@ -571,8 +596,46 @@ b8 SourceEmitter::statementsNeedSimdFloatingPointEnv(const Span<const Stmt* cons
 }
 
 void SourceEmitter::emitUnusedParamSuppressions(MString& out, const Span<const ParamDecl> params, const Span<const Stmt* const> statements, const u32 indent)const{
+    usize nonEmptyCount = 0u;
     for(const ParamDecl& param : params){
-        if(!param.name.empty() && !__hidden_adhd_source_emitter::StmtsReferenceIdentifier(statements, param.name)){
+        if(!param.name.empty())
+            ++nonEmptyCount;
+    }
+    if(nonEmptyCount == 0u)
+        return;
+
+    u64 usedMask = 0ull;
+    MVector<u8> overflowUsed(m_arena);
+    HashMap<MStringView, usize, MetaArena, MStringViewHash> overflowIndex(m_arena);
+    usize remainingCount = nonEmptyCount;
+    if(params.size() > 64u){
+        overflowUsed.resize(params.size(), 0u);
+        overflowIndex.reserve(params.size());
+        for(usize i = 0u; i < params.size(); ++i){
+            if(!params[i].name.empty())
+                overflowIndex.emplace(params[i].name, i);
+        }
+        remainingCount = overflowIndex.size();
+    }
+
+    __hidden_adhd_source_emitter::MarkUsedParamNamesInStmts(
+        statements,
+        params,
+        usedMask,
+        params.size() > 64u ? &overflowUsed : nullptr,
+        params.size() > 64u ? &overflowIndex : nullptr,
+        remainingCount
+    );
+
+    if(remainingCount == 0u)
+        return;
+
+    for(usize i = 0u; i < params.size(); ++i){
+        const ParamDecl& param = params[i];
+        if(param.name.empty())
+            continue;
+        const b8 isUsed = (params.size() <= 64u) ? ((usedMask & (1ull << i)) != 0ull) : (overflowUsed[overflowIndex.find(param.name)->second] != 0u);
+        if(!isUsed){
             emitIndent(out, indent);
             out.append("(void)");
             out.append(param.name.data(), param.name.size());
@@ -656,6 +719,10 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
         out.append(CodegenSymbols::s_MotherArenaVar.data(), CodegenSymbols::s_MotherArenaVar.size());
         out.append("))");
     }
+    HashMap<MStringView, __hidden_adhd_source_emitter::CtorFieldAssignInfo, MetaArena, MStringViewHash> ctorAssignMap(m_arena);
+    if(!orderedFields.empty())
+        __hidden_adhd_source_emitter::CollectCtorFieldAssignments(ctor.body, ctorAssignMap);
+
     MVector<MStringView> readyFields(m_arena);
     const auto isReadyField = [&](const MStringView name)noexcept{
         if(m_activeOwnerClass && m_activeOwnerClass->concreteBase){
@@ -672,9 +739,10 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
     for(const FieldDecl* field : orderedFields){
         if(!field || !field->type)
             continue;
-        const Expr* uniqueAssign = nullptr;
-        b8 inLeadingPrefix = false;
-        const Expr* rhs = __hidden_adhd_source_emitter::FindConstructorFieldAssignment(ctor.body, field->name, uniqueAssign, inLeadingPrefix);
+        const auto assignIt = ctorAssignMap.find(field->name);
+        const Expr* rhs = (assignIt != ctorAssignMap.end() && assignIt->second.firstFound) ? assignIt->second.firstFound->rhs : nullptr;
+        const Expr* uniqueAssign = (assignIt != ctorAssignMap.end() && assignIt->second.firstIsTopLevel && assignIt->second.totalMatches == 1u) ? assignIt->second.firstFound : nullptr;
+        const b8 inLeadingPrefix = (uniqueAssign != nullptr) && assignIt->second.firstInLeadingPrefix;
         if(!rhs){
             if(m_activeOwnerClass && m_activeOwnerClass->preserveFieldOrder)
                 readyFields.push_back(field->name);

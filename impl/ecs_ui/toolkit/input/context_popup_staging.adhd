@@ -125,7 +125,8 @@ b8 DiscardContextPopupScope(
     in PopupToken token,
     in Array<PopupToken, s_InputMaxPopups> popupStack,
     in usize popupDepth,
-    mut Vector<ContextOwnedTarget> targets,
+    mut Vector<HitTarget> targets,
+    mut Vector<WidgetRoot> targetRoots,
     mut Vector<ContextOwnedPopup> popups,
     mut b8 outRemovedAny
 ){
@@ -150,7 +151,7 @@ b8 DiscardContextPopupScope(
     }
     usize keptTargets = 0u;
     for(usize index = 0u; index < targets.size(); ++index){
-        const PopupToken targetPopup = targets[index].target.popup;
+        const PopupToken targetPopup = targets[index].popup;
         b8 removeTarget = false;
         for(usize popup = 0u; popup < popups.size(); ++popup){
             if(removed[popup] && targetPopup == popups[popup].scope.token){
@@ -159,12 +160,15 @@ b8 DiscardContextPopupScope(
             }
         }
         if(!removeTarget){
-            if(keptTargets != index)
+            if(keptTargets != index){
                 targets[keptTargets] = targets[index];
+                targetRoots[keptTargets] = targetRoots[index];
+            }
             ++keptTargets;
         }
     }
     targets.resize(keptTargets);
+    targetRoots.resize(keptTargets);
     usize keptPopups = 0u;
     for(usize index = 0u; index < popups.size(); ++index){
         if(!removed[index]){

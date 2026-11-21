@@ -164,13 +164,17 @@ class RendererRayTracingSystem : NoCopy{
     public b8 createSurfelTargets(mut DeferredFrameTargets targets);
     [cpp_unwind]
     public Expected<RayTraceMaterialContextSlots> snapshotRayTraceMaterialContextSlots();
+    public b8 rayTraceMaterialContextSlotsUploadNeeded(in RayTraceMaterialContextSlots slots, in usize bufferIdentity, mut u64 outWord0, mut u64 outWord1, mut u64 outWord2, mut u64 outWord3)const;
+    public void confirmPreparedRayTraceMaterialContextSlotsUpload(in u64 word0, in u64 word1, in u64 word2, in u64 word3, in usize bufferIdentity);
     [cpp_unwind]
-    public Expected<Optional<GpuUploadBlobId>> retainPreparedCsgTraceContextUpload(mut GpuTaskGraph graph)const;
+    public Expected<Optional<GpuUploadBlobId>> retainPreparedCsgTraceContextUpload(mut GpuTaskGraph graph, mut u64 outHash, mut usize outByteSize, mut usize outBufferIdentity)const;
+    public void confirmPreparedCsgTraceContextUpload(in u64 hash, in usize byteSize, in usize bufferIdentity);
     [cpp_unwind]
     public b8 prepareCausticOpticalReadTracking(in MeshViewBufferSnapshot meshView);
     public void confirmRayTraceContextReadSubmission(in QueueSubmissionToken token);
     [cpp_unwind]
-    public Expected<Optional<GpuUploadBlobId>> retainPreparedCausticEmissionTargetUpload(mut GpuTaskGraph graph)const;
+    public Expected<Optional<GpuUploadBlobId>> retainPreparedCausticEmissionTargetUpload(mut GpuTaskGraph graph, mut u64 outHash, mut usize outByteSize, mut usize outBufferIdentity)const;
+    public void confirmPreparedCausticEmissionTargetUpload(in u64 hash, in usize byteSize, in usize bufferIdentity);
     [cpp_unwind]
     public Expected<Optional<GpuUploadBlobId>> retainPreparedSurfelFrameConstantsUpload(mut GpuTaskGraph graph, in DeferredFrameTargets targets)const;
     [cpp_unwind]
@@ -598,7 +602,7 @@ class RendererRayTracingSystem : NoCopy{
     private b8 preparedTraversalStorageMatchesCurrent()const{
         return PreparedTraversalStorageMatchesCurrent(this.m_preparedSceneBvh.storageMatches(this.m_rayTracingState), this.m_preparedShadowMaterialContext.storageMatches(this.m_rayTracingState));
     }
-    private b8 capturePreparedShadowMaterialContextCacheReuse(in u64 hash, in usize instanceMaterialCount, in usize instanceCount, in usize materialTypedByteCount);
+    private b8 capturePreparedShadowMaterialContextCacheReuse(in PreparedShadowMaterialContextRoute route, in u64 hash, in usize instanceMaterialCount, in usize instanceCount, in usize materialTypedByteCount);
     private void clearPreparedShadowMaterialContext();
     private void clearPreparedShadowTraceMaterialSampledTextures(){ this.m_preparedShadowTraceMaterialSampledTextures.clear(); }
     [cpp_unwind]

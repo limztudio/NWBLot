@@ -14,7 +14,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 TypeComparator::areEquivalentWithSubst(const TypeRef* actual, const TypeRef* pattern, const Span<const TemplateParamDecl> ifaceParams, const Span<const TypeArg> ifaceArgs)const noexcept{
+b8 TypeComparator::areEquivalentWithSubst(const TypeRef* actual, const TypeRef* pattern, const Span<const TemplateParamDecl> ifaceParams, const Span<const TypeArg> ifaceArgs, const b8 ignoreTopLevelRefMode)const noexcept{
     actual = m_symbols.unwrapTypeAlias(actual);
     pattern = m_symbols.unwrapTypeAlias(pattern);
     if(actual == pattern)
@@ -29,18 +29,16 @@ b8 TypeComparator::areEquivalentWithSubst(const TypeRef* actual, const TypeRef* 
                 const TypeRef* subst = m_symbols.unwrapTypeAlias(ifaceArgs[k].type);
                 if(!subst)
                     return false;
-                if(pattern->refMode == ParamPassingMode::None || subst->refMode == pattern->refMode)
-                    return areEquivalent(actual, subst);
+                if(ignoreTopLevelRefMode || pattern->refMode == ParamPassingMode::None || subst->refMode == pattern->refMode)
+                    return areEquivalentWithSubst(actual, subst, {}, {}, ignoreTopLevelRefMode);
                 if(actual->refMode != pattern->refMode)
                     return false;
-                TypeRef actualNormalized(*const_cast<TypeRef*>(actual));
-                actualNormalized.refMode = subst->refMode;
-                return areEquivalent(&actualNormalized, subst);
+                return areEquivalentWithSubst(actual, subst, {}, {}, true);
             }
         }
     }
 
-    if(actual->name != pattern->name || actual->refMode != pattern->refMode || actual->isAuto != pattern->isAuto || actual->isFuncType != pattern->isFuncType || actual->templateArgs.size() != pattern->templateArgs.size())
+    if(actual->name != pattern->name || (!ignoreTopLevelRefMode && actual->refMode != pattern->refMode) || actual->isAuto != pattern->isAuto || actual->isFuncType != pattern->isFuncType || actual->templateArgs.size() != pattern->templateArgs.size())
         return false;
     for(usize i = 0u; i < actual->templateArgs.size(); ++i){
         const TypeArg& ta = actual->templateArgs[i];

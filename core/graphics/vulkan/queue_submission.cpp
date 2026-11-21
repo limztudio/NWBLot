@@ -51,7 +51,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
     return MakeUnexpected(SubmissionFailure{ result.lastSubmittedID, result.nativeResult });
 }
 
-Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntry> entries, Span<SubmissionReceipt> outReceipts){
+Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntry> entries, Span<SubmissionReceipt> outReceipts, const b8 callerPreValidated){
     ScopedLock lock(m_mutex);
     DescriptorSubmission descriptorSubmission(*this);
     static_assert(IsTriviallyCopyable_V<DescriptorHeapUseCommitTicket>, "accepted descriptor-use tickets must remain scalar-only");
@@ -215,7 +215,20 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
         const Span<const SubmissionWait> entryWaits = entry.localWaits ? Span<const SubmissionWait>(entry.localWaits, entry.localWaitCount) : Span<const SubmissionWait>{};
         for(usize i = 0u; i < entry.numCmd; ++i){
             CommandList* const commandList = entry.ppCmd[i];
-            if(!validator.validateCommandList(commandList, entry.expectedCommandLists[i], i, batchStamp))
+            if(callerPreValidated){
+                const SubmissionCommandListIdentity& expected = entry.expectedCommandLists[i];
+                const b8 fastValid =
+                    commandList
+                    && commandList->m_graphPublicationState.load(MemoryOrder::relaxed) == CommandList::s_GraphPublicationSubmitting
+                    && commandList->m_graphRecordingOwnershipSerial.load(MemoryOrder::relaxed) == expected.graphRecordingOwnershipSerial
+                    && commandList->m_recordingLeaseSerial == expected.recordingLeaseSerial
+                    && commandList->m_currentCmdBuf.get() == expected.owner
+                    && commandList->validateTrackedResourcesReadyForSubmissionFast()
+                ;
+                if(!fastValid && !validator.validateCommandList(commandList, expected, i, batchStamp))
+                    return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
+            }
+            else if(!validator.validateCommandList(commandList, entry.expectedCommandLists[i], i, batchStamp))
                 return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
             TrackedCommandBuffer& tracked = *MakeNotNull(commandList->m_currentCmdBuf.get());
             if(tracked.m_recordingWorkerIndex == 0u)
@@ -451,7 +464,7 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
             CommandList* const commandList = entry.ppCmd[i];
             if(!commandList || commandList->m_recordingLeaseSerial != entry.expectedCommandLists[i].recordingLeaseSerial)
                 TerminateInvariant();
-            commandList->m_stateTracker.commitRecordingAttempt();
+            commandList->m_stateTracker.commitRecordingAttemptFast();
 
             TrackedCommandBufferPtr& tracked = m_commandBuffersInFlight[cmdCursor];
             const u8 commitFlags = tracked->m_pendingCommitFlags;

@@ -299,8 +299,79 @@ void FinalizePaintBuilderRecording(
     mut b8 inOutRecording
 ){
     [essential] assert(inOutRecording && inOutClips.size() == 1u && overlayDepth == 0u);
-    if(!commandsOrdered)
-        SortSequence<DrawCommand>(inOutCommands, IsPaintDrawCommandBefore);
+    const usize count = inOutCommands.size();
+    if(!commandsOrdered && count > 1u){
+        b8 strictlyDescending = true;
+        b8 firstIndexMonotonic = true;
+        u32 orDiff = 0u;
+        const u32 firstLayer = inOutCommands[0u].layer;
+        for(usize index = 1u; index < count; ++index){
+            in DrawCommand prev = inOutCommands[index - 1u];
+            in DrawCommand cur = inOutCommands[index];
+            if(!(prev.layer > cur.layer))
+                strictlyDescending = false;
+            if(!(prev.firstIndex < cur.firstIndex))
+                firstIndexMonotonic = false;
+            orDiff |= (cur.layer ^ firstLayer);
+        }
+        if(strictlyDescending){
+            const usize half = count / 2u;
+            for(usize index = 0u; index < half; ++index){
+                const DrawCommand temp = inOutCommands[index];
+                inOutCommands[index] = inOutCommands[count - 1u - index];
+                inOutCommands[count - 1u - index] = temp;
+            }
+        }
+        else if(orDiff != 0u){
+            if(count <= 32u || !firstIndexMonotonic)
+                SortSequence<DrawCommand>(inOutCommands, IsPaintDrawCommandBefore);
+            else{
+                Vector<DrawCommand> scratch;
+                scratch.resize(count);
+                b8 inScratch = false;
+                for(u32 shift = 0u; shift < 32u; shift += 8u){
+                    if(((orDiff >> shift) & 0xffu) == 0u)
+                        continue;
+                    Array<u32, 256u> counts;
+                    for(usize bucket = 0u; bucket < 256u; ++bucket)
+                        counts[bucket] = 0u;
+                    if(!inScratch){
+                        for(usize index = 0u; index < count; ++index)
+                            ++counts[cast<usize>((inOutCommands[index].layer >> shift) & 0xffu)];
+                    }
+                    else{
+                        for(usize index = 0u; index < count; ++index)
+                            ++counts[cast<usize>((scratch[index].layer >> shift) & 0xffu)];
+                    }
+                    u32 offset = 0u;
+                    for(usize bucket = 0u; bucket < 256u; ++bucket){
+                        const u32 bucketCount = counts[bucket];
+                        counts[bucket] = offset;
+                        offset += bucketCount;
+                    }
+                    if(!inScratch){
+                        for(usize index = 0u; index < count; ++index){
+                            in DrawCommand command = inOutCommands[index];
+                            const usize bucket = cast<usize>((command.layer >> shift) & 0xffu);
+                            scratch[cast<usize>(counts[bucket])] = command;
+                            ++counts[bucket];
+                        }
+                    }
+                    else{
+                        for(usize index = 0u; index < count; ++index){
+                            in DrawCommand command = scratch[index];
+                            const usize bucket = cast<usize>((command.layer >> shift) & 0xffu);
+                            inOutCommands[cast<usize>(counts[bucket])] = command;
+                            ++counts[bucket];
+                        }
+                    }
+                    inScratch = !inScratch;
+                }
+                if(inScratch)
+                    AssignTriviallyCopyableVector(inOutCommands, Span<DrawCommand>(scratch));
+            }
+        }
+    }
     inOutRecording = false;
     inOutClips.clear();
 }

@@ -5,6 +5,7 @@
 #include <impl/assets_material/asset.adhd>
 #include <impl/assets_shader/asset.adhd>
 #include <impl/ecs_render/components.adhd>
+#include <impl/ecs_render/material/instance_override_fields.adhd>
 #include <impl/ecs_render/material/pipeline_types.adhd>
 
 
@@ -30,6 +31,7 @@ class MaterialSurfaceInfo{
     public Vector<u8> unpatchedConstantTypedBytes;
     public Vector<u8> constantTypedBytes;
     public Vector<u8> mutableDefaultTypedBytes;
+    public HashMap<MaterialOverrideFieldKey, MaterialOverrideFieldEntry> overrideFieldLookup;
     public u32 shadingModelId = 0u;
     public u32 surfaceDispatchId = 0u;
     public b8 csgCapSurfaceDispatchAvailable = false;

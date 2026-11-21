@@ -70,10 +70,17 @@ float3 nwbDeferredDecodeNormal(half3 value){
 
 NwbBxdfSurface nwbBxdfLoadSurface(const int2 pixel){
     const int3 texel = int3(pixel, 0);
+    const float depth = nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.w).Load(texel).r;
     const half4 baseColorSample = half4(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.x).Load(texel));
+    if(depth >= NWB_SCENE_BACKGROUND_DEPTH){
+        NwbBxdfSurface surface = (NwbBxdfSurface)0;
+        surface.baseColor = baseColorSample.rgb;
+        surface.isBackground = true;
+        return surface;
+    }
+
     const half4 normalSample = half4(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.y).Load(texel));
     const half4 worldSample = half4(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.z).Load(texel));
-    const float depth = nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.w).Load(texel).r;
 
     NwbBxdfSurface surface;
     surface.baseColor = baseColorSample.rgb;
@@ -83,7 +90,7 @@ NwbBxdfSurface nwbBxdfLoadSurface(const int2 pixel){
     surface.worldPosition = float3(worldSample.xyz);
     surface.param1 = worldSample.a;
     surface.viewVector = nwbSafeNormalize(g_NwbSceneCameraPosition.xyz - surface.worldPosition, float3(0.0, 0.0, 1.0));
-    surface.isBackground = depth >= NWB_SCENE_BACKGROUND_DEPTH;
+    surface.isBackground = false;
     surface.indirectIrradiance = nwbBxdfResolvedIndirect(pixel, surface.normal);
     return surface;
 }

@@ -20,8 +20,8 @@ class InputTargetTable : NoCopy{
         return CanPublishRouterTargetTable(count, generation, this.m_generation);
     }
 
-    public b8 publish(in Span<HitTarget> targets, in Span<PopupRecord> stagedPopups, in u64 generation){
-        return PublishRouterTargetTable(targets, stagedPopups, generation, this.m_targets, this.m_stagedTargets, this.m_lookup, this.m_stagedLookup, this.m_spatialIndex, this.m_generation);
+    public b8 publish(in Span<HitTarget> targets, in Span<PopupRecord> stagedPopups, in u64 generation, mut b8 outHasFocusOnCommit){
+        return PublishRouterTargetTable(targets, stagedPopups, generation, this.m_targets, this.m_stagedTargets, this.m_lookup, this.m_stagedLookup, this.m_spatialIndex, this.m_generation, outHasFocusOnCommit);
     }
 
     public Expected<usize> findIndex(in WidgetId id, in u64 declarationGeneration)const{

@@ -41,7 +41,7 @@ class AliasFreeComputeEmulationGraphPlan{
         MaterialPassEmulationOutputIndex<MaterialEmulationBufferIdentity> buffers;
         MaterialPassEmulationOutputIndex<u32> slots;
         for(in MaterialPassDrawItem item : source.computeDrawItems){
-            in MaterialPassMeshResourceSnapshot mesh = item.meshResources;
+            in MaterialPassMeshResourceSnapshot mesh = item.mesh();
             if((item.pipelineKey.csgMode != MaterialPipelineCsgMode::None) != requireCsg
                 || !mesh.emulationVertexBuffer.valid() || !mesh.emulationVertexHeapHandle.valid()
                 || !buffers.insert(MaterialEmulationBufferIdentity(mesh.emulationVertexBuffer)) || !slots.insert(mesh.emulationVertexHeapHandle.slot())){
@@ -50,7 +50,7 @@ class AliasFreeComputeEmulationGraphPlan{
             }
             this.drawItems.push_back(item);
             this.outputBuffers.push_back(mesh.emulationVertexBuffer);
-            this.outputLayouts.push_back(MakeGeneratedGeometryOutputLayout(mesh.emulationIndexByteOffset, item.pipelineResources.indexedGeometryOutput));
+            this.outputLayouts.push_back(MakeGeneratedGeometryOutputLayout(mesh.emulationIndexByteOffset, item.pipeline().indexedGeometryOutput));
             this.outputHeapSlots.push_back(mesh.emulationVertexHeapHandle.slot());
         }
         this.captured = IsAliasFreeCaptureCountConsistent(this.drawItems.size(), this.outputBuffers.size(), this.outputHeapSlots.size());

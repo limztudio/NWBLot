@@ -24,6 +24,7 @@ class GpuRendererState : NoCopy{
     public GpuVersion<GpuSharedResources> m_resources;
     public GpuVersion<GpuSkinVersion> m_skin;
     public GpuImageCache m_imageCache;
+    public GpuSampledTextureNameTable m_sampledTextureNames;
     public Array<GpuFrameSlot, s_GpuTargetSlotCount> m_slots;
     public Array<GpuFrame, s_GpuFrameCount> m_frames;
     public GpuFrame m_pending;

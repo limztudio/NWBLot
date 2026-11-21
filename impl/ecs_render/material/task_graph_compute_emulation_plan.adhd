@@ -39,7 +39,7 @@ class RegularSharedComputeEmulationGraphPlan{
             if(drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None)
                 return false;
 
-            in MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
+            in MaterialPassMeshResourceSnapshot mesh = drawItem.mesh();
             if(!mesh.emulationVertexBuffer.valid() || !mesh.emulationVertexHeapHandle.valid())
                 return false;
 
@@ -61,7 +61,7 @@ class RegularSharedComputeEmulationGraphPlan{
                 mesh.emulationVertexHeapHandle.valid(),
                 mesh.emulationVertexHeapHandle.slot(),
                 mesh.emulationIndexByteOffset,
-                drawItem.pipelineResources.indexedGeometryOutput
+                drawItem.pipeline().indexedGeometryOutput
             );
         }
         this.captured = this.outputBuffer.valid();
@@ -73,7 +73,7 @@ class RegularSharedComputeEmulationGraphPlan{
             return false;
 
         in MaterialPassDrawItem drawItem = this.drawItems[drawIndex];
-        in MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
+        in MaterialPassMeshResourceSnapshot mesh = drawItem.mesh();
         return
             mesh.emulationVertexBuffer.valid()
             && mesh.emulationVertexHeapHandle.valid()
@@ -90,7 +90,7 @@ class RegularSharedComputeEmulationGraphPlan{
                 mesh.emulationVertexHeapHandle.valid(),
                 mesh.emulationVertexHeapHandle.slot(),
                 mesh.emulationIndexByteOffset,
-                drawItem.pipelineResources.indexedGeometryOutput
+                drawItem.pipeline().indexedGeometryOutput
             )
         ;
     }

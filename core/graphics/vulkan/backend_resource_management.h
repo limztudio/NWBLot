@@ -379,11 +379,19 @@ public:
     }
     void beginRecordingAttempt()noexcept;
     void commitRecordingAttempt()noexcept;
+    void commitRecordingAttemptFast()noexcept{
+        if(m_recordingAttemptActive && m_attemptPermanentTextures.empty() && m_attemptPermanentBuffers.empty()){
+            m_recordingAttemptActive = false;
+            return;
+        }
+        commitRecordingAttempt();
+    }
     void rollbackRecordingAttempt()noexcept;
     void setPermanentTextureState(Texture& texture, ResourceStates::Mask state);
     void setPermanentBufferState(Buffer& buffer, ResourceStates::Mask state);
 
     [[nodiscard]] b8 hasPermanentTextureStates()const noexcept{ return !m_permanentTextureStates.empty(); }
+    [[nodiscard]] b8 hasPermanentBufferStates()const noexcept{ return !m_permanentBufferStates.empty(); }
 
     [[nodiscard]] b8 isPermanentTexture(Texture& texture)const noexcept{
         return !m_permanentTextureStates.empty() && m_permanentTextureStates.find(MakeNotNull(&texture)) != m_permanentTextureStates.end();

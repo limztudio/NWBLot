@@ -56,6 +56,18 @@ void IFilesystem::closeFile(FileCursor& cursor)const noexcept{
         cursor = {};
 }
 
+b8 IFilesystem::writeFilesDeferred(const DeferredWriteItem* const items, const usize count){
+    if(count == 0u)
+        return true;
+    if(!items)
+        return false;
+    for(usize i = 0u; i < count; ++i){
+        if(!writeFileDeferred(items[i].virtualPath, items[i].data, items[i].bytes))
+            return false;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

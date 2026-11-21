@@ -42,6 +42,10 @@ struct NwbReflectionScreenRay{
     float3 screenOrigin;
     float3 screenDirection;
     float parameterEpsilon;
+    float2 invScreenDirection;
+    float2 negOriginInvDir;
+    float2 stepEdgeOffset;
+    bool2 hasDirection;
 };
 
 
@@ -93,13 +97,23 @@ bool nwbReflectionBuildScreenRay(const NwbReflectionSurface surface, out NwbRefl
     if(!all(isfinite(ray.screenOrigin)) || !all(isfinite(ray.screenDirection)) || projectedLength <= NWB_REFLECTION_SCREEN_MIN_PROJECTED_LENGTH)
         return false;
     ray.parameterEpsilon = max(NWB_REFLECTION_SCREEN_PARAMETER_EPSILON_MIN, NWB_REFLECTION_SCREEN_PARAMETER_EPSILON_PIXEL_FRACTION / projectedLength);
+    ray.hasDirection = abs(ray.screenDirection.xy) > NWB_REFLECTION_SCREEN_DIRECTION_EPSILON;
+    ray.invScreenDirection = float2(
+        ray.hasDirection.x ? (1.0 / ray.screenDirection.x) : 0.0,
+        ray.hasDirection.y ? (1.0 / ray.screenDirection.y) : 0.0
+    );
+    ray.negOriginInvDir = -ray.screenOrigin.xy * ray.invScreenDirection;
+    ray.stepEdgeOffset = float2(
+        ray.screenDirection.x > 0.0 ? 1.0 : 0.0,
+        ray.screenDirection.y > 0.0 ? 1.0 : 0.0
+    );
     return true;
 }
 
 float nwbReflectionScreenCellExit(const NwbReflectionScreenRay ray, const uint2 cell, const uint2 dimensions){
-    const float2 edge = (float2(cell) + float2(ray.screenDirection.x > 0.0 ? 1.0 : 0.0, ray.screenDirection.y > 0.0 ? 1.0 : 0.0)) / float2(dimensions);
-    const float exitX = abs(ray.screenDirection.x) > NWB_REFLECTION_SCREEN_DIRECTION_EPSILON ? (edge.x - ray.screenOrigin.x) / ray.screenDirection.x : NWB_REFLECTION_SCREEN_EXIT_FAR;
-    const float exitY = abs(ray.screenDirection.y) > NWB_REFLECTION_SCREEN_DIRECTION_EPSILON ? (edge.y - ray.screenOrigin.y) / ray.screenDirection.y : NWB_REFLECTION_SCREEN_EXIT_FAR;
+    const float2 edge = (float2(cell) + ray.stepEdgeOffset) * rcp(float2(dimensions));
+    const float exitX = ray.hasDirection.x ? fma(edge.x, ray.invScreenDirection.x, ray.negOriginInvDir.x) : NWB_REFLECTION_SCREEN_EXIT_FAR;
+    const float exitY = ray.hasDirection.y ? fma(edge.y, ray.invScreenDirection.y, ray.negOriginInvDir.y) : NWB_REFLECTION_SCREEN_EXIT_FAR;
     return min(1.0, min(exitX, exitY));
 }
 

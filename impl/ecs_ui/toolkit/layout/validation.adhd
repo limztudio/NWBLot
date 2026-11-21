@@ -9,7 +9,7 @@
 
 
 b8 HasValidUiRectDimensions(in Rect rectangle){
-    return IsFinite(VectorSingle(rectangle.x, rectangle.y, rectangle.width, rectangle.height)) && rectangle.width >= 0.0f && rectangle.height >= 0.0f;
+    return IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height) && rectangle.width >= 0.0f && rectangle.height >= 0.0f;
 }
 
 b8 HasPreciseUiRectEndpoints(in Rect rectangle){
@@ -21,10 +21,7 @@ b8 HasPreciseUiRectEndpoints(in Rect rectangle){
 }
 
 b8 IsValidUiRect(in Rect rectangle){
-    if(!HasValidUiRectDimensions(rectangle))
-        return false;
-    const VectorSingle end = VectorSingle(rectangle.x, rectangle.y, rectangle.x, rectangle.y) + VectorSingle(rectangle.width, rectangle.height, rectangle.width, rectangle.height);
-    return IsFinite(end.xy);
+    return IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height) && rectangle.width >= 0.0f && rectangle.height >= 0.0f && IsFinite(rectangle.x + rectangle.width) && IsFinite(rectangle.y + rectangle.height);
 }
 
 b8 HasUiRectArea(in Rect rectangle){
@@ -60,7 +57,7 @@ b8 UiRectContainsPoint(in Rect rectangle, in Point position){
 }
 
 b8 IsValidUiPadding(in Insets padding){
-    return IsFinite(VectorSingle(padding.left, padding.top, padding.right, padding.bottom)) && padding.left >= 0.0f && padding.top >= 0.0f && padding.right >= 0.0f && padding.bottom >= 0.0f;
+    return IsFinite(padding.left) && IsFinite(padding.top) && IsFinite(padding.right) && IsFinite(padding.bottom) && padding.left >= 0.0f && padding.top >= 0.0f && padding.right >= 0.0f && padding.bottom >= 0.0f;
 }
 
 b8 IsBoundedUiPadding(in Insets padding){
@@ -80,15 +77,15 @@ b8 IsBoundedUiPadding(in UiSkinInsets padding){
 }
 
 b8 IsValidUiColor(in Color color){
-    return IsFinite(VectorSingle(color.r, color.g, color.b, color.a)) && color.r >= 0.0f && color.g >= 0.0f && color.b >= 0.0f && color.a >= 0.0f && color.a <= 1.0f;
+    return IsFinite(color.r) && IsFinite(color.g) && IsFinite(color.b) && IsFinite(color.a) && color.r >= 0.0f && color.g >= 0.0f && color.b >= 0.0f && color.a >= 0.0f && color.a <= 1.0f;
 }
 
 b8 IsValidPaintColor(in Color color){
-    return IsFinite(VectorSingle(color.r, color.g, color.b, color.a)) && color.a >= 0.0f && color.a <= 1.0f;
+    return IsFinite(color.r) && IsFinite(color.g) && IsFinite(color.b) && IsFinite(color.a) && color.a >= 0.0f && color.a <= 1.0f;
 }
 
 b8 IsValidUiExtent(in Point point){
-    return IsFinite(VectorSingle(point.x, point.y, point.x, point.y).xy) && point.x >= 0.0f && point.y >= 0.0f;
+    return IsFinite(point.x) && IsFinite(point.y) && point.x >= 0.0f && point.y >= 0.0f;
 }
 
 b8 IsValidLayoutSize(in LayoutSize size){
@@ -96,10 +93,9 @@ b8 IsValidLayoutSize(in LayoutSize size){
 }
 
 b8 IsValidLayoutNodeDesc(in LayoutNodeDesc description){
-    const Insets padding = description.padding;
     return
         description.direction <= LayoutDirection::Overlay && IsValidLayoutSize(description.width) && IsValidLayoutSize(description.height)
-        && IsValidUiPadding(padding) && IsFinite(padding.left + padding.right) && IsFinite(padding.top + padding.bottom)
+        && IsValidUiPadding(description.padding) && IsFinite(description.padding.left + description.padding.right) && IsFinite(description.padding.top + description.padding.bottom)
         && IsFinite(description.gap) && description.gap >= 0.0f && IsValidUiExtent(description.intrinsicSize)
     ;
 }

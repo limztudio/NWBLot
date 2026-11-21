@@ -120,7 +120,7 @@ class PreparedShadowMaterialContext : NoCopy{
         in Span<InstanceGpuData> instances,
         in Span<u8> materialTypedBytes
     );
-    public b8 captureCacheReuse(in RendererRayTracingState state, in u64 hash, in usize instanceMaterialCount, in usize instanceCount, in usize materialTypedByteCount);
+    public b8 captureCacheReuse(in RendererRayTracingState state, in PreparedShadowMaterialContextRoute route, in u64 hash, in usize instanceMaterialCount, in usize instanceCount, in usize materialTypedByteCount);
     public void clear(){
         this.m_instanceMaterialBytes.clear();
         this.m_instanceBytes.clear();

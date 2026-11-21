@@ -25,42 +25,103 @@ class MaterialTypedByteBucket{
     }
 }
 
-[move_only]
+u64 HashMaterialTypedBytesFast(in Span<u8> bytes){
+    const usize count = bytes.size();
+    u64 hash = 0x9e3779b97f4a7c15u ^ cast<u64>(count);
+    usize offset = 0u;
+    while(offset + 8u <= count){
+        const u64 word =
+            cast<u64>(bytes[offset + 0u])
+            | (cast<u64>(bytes[offset + 1u]) << 8u)
+            | (cast<u64>(bytes[offset + 2u]) << 16u)
+            | (cast<u64>(bytes[offset + 3u]) << 24u)
+            | (cast<u64>(bytes[offset + 4u]) << 32u)
+            | (cast<u64>(bytes[offset + 5u]) << 40u)
+            | (cast<u64>(bytes[offset + 6u]) << 48u)
+            | (cast<u64>(bytes[offset + 7u]) << 56u);
+        hash ^= word * 0xbf58476d1ce4e5b9u;
+        hash = ((hash << 27u) | (hash >> 37u)) * 0x94d049bb133111ebu;
+        offset += 8u;
+    }
+    if(offset < count){
+        u64 tail = 0u;
+        u32 shift = 0u;
+        while(offset < count){
+            tail |= cast<u64>(bytes[offset]) << shift;
+            shift += 8u;
+            ++offset;
+        }
+        hash ^= tail * 0xbf58476d1ce4e5b9u;
+        hash = ((hash << 27u) | (hash >> 37u)) * 0x94d049bb133111ebu;
+    }
+    hash ^= hash >> 30u;
+    hash *= 0xbf58476d1ce4e5b9u;
+    hash ^= hash >> 27u;
+    hash *= 0x94d049bb133111ebu;
+    hash ^= hash >> 31u;
+    return hash;
+}
+
 class MaterialTypedByteEntry{
-    public Vector<u8> bytes;
+    public usize storageOffset = 0u;
+    public usize storageSize = 0u;
     public MaterialTypedByteRange range;
     public usize next = usize.max;
 }
 
 class PendingMaterialTypedByteEntry : NoCopy{
     private mut Vector<MaterialTypedByteEntry> m_entries;
+    private mut Vector<u8> m_storage;
     private usize m_originalSize;
+    private usize m_originalStorageSize;
     private b8 m_committed = false;
 
-    public PendingMaterialTypedByteEntry(mut Vector<MaterialTypedByteEntry> entries){
+    public PendingMaterialTypedByteEntry(mut Vector<MaterialTypedByteEntry> entries, mut Vector<u8> storage){
         this.m_entries = entries;
+        this.m_storage = storage;
         this.m_originalSize = entries.size();
+        this.m_originalStorageSize = storage.size();
     }
     public void commit(){ this.m_committed = true; }
     public ~PendingMaterialTypedByteEntry(){
-        if(!this.m_committed && this.m_entries.size() > this.m_originalSize)
-            this.m_entries.pop_back();
+        if(!this.m_committed){
+            if(this.m_entries.size() > this.m_originalSize)
+                this.m_entries.resize(this.m_originalSize);
+            if(this.m_storage.size() > this.m_originalStorageSize)
+                this.m_storage.resize(this.m_originalStorageSize);
+        }
     }
 }
 
 class MaterialTypedByteContentRangeMap : NoCopy{
     private HashMap<MaterialTypedByteBucket, usize> m_heads;
     private Vector<MaterialTypedByteEntry> m_entries;
+    private Vector<u8> m_storage;
 
-    [owner_result]
-    private MaterialTypedByteEntry emptyEntry()const{ return MaterialTypedByteEntry(); }
+    private Span<u8> entrySpan(in MaterialTypedByteEntry entry)const{
+        return Span<u8>(this.m_storage).subspan(entry.storageOffset, entry.storageSize);
+    }
+
+    private Optional<MaterialTypedByteRange> findInChain(in usize headIndex, in MaterialTypedByteContentLookup lookup)const{
+        usize chainIndex = headIndex;
+        while(chainIndex != usize.max){
+            in MaterialTypedByteEntry existing = this.m_entries[chainIndex];
+            if(EqualMaterialTypedByteContent(lookup.byteHash, this.entrySpan(existing), lookup.byteHash, lookup.bytes))
+                return Optional<MaterialTypedByteRange>(existing.range);
+            chainIndex = existing.next;
+        }
+        return Optional<MaterialTypedByteRange>();
+    }
 
     [cpp_unwind]
     private mut MaterialTypedByteEntry copyBytes(in Span<u8> bytes){
         const usize index = this.m_entries.size();
-        this.m_entries.push_back(this.emptyEntry());
-        mut MaterialTypedByteEntry entry = this.m_entries[index];
-        AppendTriviallyCopyableVector(entry.bytes, bytes);
+        const usize storageOffset = this.m_storage.size();
+        AppendTriviallyCopyableVector(this.m_storage, bytes);
+        MaterialTypedByteEntry entry;
+        entry.storageOffset = storageOffset;
+        entry.storageSize = bytes.size();
+        this.m_entries.push_back(entry);
         return this.m_entries[index];
     }
 
@@ -74,35 +135,22 @@ class MaterialTypedByteContentRangeMap : NoCopy{
     public void clear(){
         this.m_heads.clear();
         this.m_entries.clear();
+        this.m_storage.clear();
     }
 
     public Optional<MaterialTypedByteRange> find(in MaterialTypedByteContentLookup lookup)const{
         const auto head = this.m_heads.find(MaterialTypedByteBucket(lookup));
-        if(head != this.m_heads.end()){
-            usize index = head.value();
-            while(index != usize.max){
-                in MaterialTypedByteEntry entry = this.m_entries[index];
-                if(EqualMaterialTypedByteContent(lookup.byteHash, entry.bytes, lookup.byteHash, lookup.bytes))
-                    return Optional<MaterialTypedByteRange>(entry.range);
-                index = entry.next;
-            }
-        }
+        if(head != this.m_heads.end())
+            return this.findInChain(head.value(), lookup);
         return Optional<MaterialTypedByteRange>();
     }
 
     [cpp_unwind]
     public b8 insert(in MaterialTypedByteContentLookup lookup, in MaterialTypedByteRange range){
         const auto head = this.m_heads.try_emplace(MaterialTypedByteBucket(lookup), usize.max);
-        if(!head.second){
-            usize chainIndex = head.first.value();
-            while(chainIndex != usize.max){
-                in MaterialTypedByteEntry existing = this.m_entries[chainIndex];
-                if(EqualMaterialTypedByteContent(lookup.byteHash, existing.bytes, lookup.byteHash, lookup.bytes))
-                    return false;
-                chainIndex = existing.next;
-            }
-        }
-        PendingMaterialTypedByteEntry pending(this.m_entries);
+        if(!head.second && this.findInChain(head.first.value(), lookup).has_value())
+            return false;
+        PendingMaterialTypedByteEntry pending(this.m_entries, this.m_storage);
         const usize index = this.m_entries.size();
         mut MaterialTypedByteEntry entry = this.copyBytes(lookup.bytes);
         entry.next = head.first.value();
@@ -116,22 +164,18 @@ class MaterialTypedByteContentRangeMap : NoCopy{
     public Expected<MaterialTypedByteRange> findOrAppend(in Span<u8> bytes, mut Vector<u8> upload){
         if(bytes.empty())
             return MaterialTypedByteRange();
-        const MaterialTypedByteContentLookup lookup(UpdateFnv64(s_Fnv64OffsetBasis, bytes), bytes);
+        const MaterialTypedByteContentLookup lookup(HashMaterialTypedBytesFast(bytes), bytes);
         const auto head = this.m_heads.try_emplace(MaterialTypedByteBucket(lookup), usize.max);
         if(!head.second){
-            usize chainIndex = head.first.value();
-            while(chainIndex != usize.max){
-                in MaterialTypedByteEntry existing = this.m_entries[chainIndex];
-                if(EqualMaterialTypedByteContent(lookup.byteHash, existing.bytes, lookup.byteHash, lookup.bytes))
-                    return existing.range;
-                chainIndex = existing.next;
-            }
+            const Optional<MaterialTypedByteRange> found = this.findInChain(head.first.value(), lookup);
+            if(found.has_value())
+                return found.value();
         }
 
-        PendingMaterialTypedByteEntry pending(this.m_entries);
+        PendingMaterialTypedByteEntry pending(this.m_entries, this.m_storage);
         const usize index = this.m_entries.size();
         mut MaterialTypedByteEntry entry = this.copyBytes(bytes);
-        const auto range = AppendMaterialTypedByteRange(entry.bytes, upload);
+        const auto range = AppendMaterialTypedByteRange(this.entrySpan(entry), upload);
         if(!range.has_value()){
             if(head.second)
                 this.m_heads.erase(head.first);

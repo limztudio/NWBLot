@@ -59,78 +59,95 @@ namespace __hidden_gpu_command_ir_upload_preflight{
     return hasCopyDest && hasFinalState && terminalState == finalState;
 }
 
-[[nodiscard]] static b8 HasSourceBlob(const GpuCommandIrBuiltinTaskRecord& record, const BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph)noexcept{
-    if(!graph.validUploadBlob(record.sourceUploadBlob))
+[[nodiscard]] static b8 HasSourceBlobImpl(const GpuUploadBlobId sourceUploadBlob, const u64 blobOffsetBytes, const u64 blobSizeBytes, const BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph)noexcept{
+    if(!graph.validUploadBlob(sourceUploadBlob))
         return false;
-    const auto source = graph.uploadBlobData(record.sourceUploadBlob);
-    if(!source || !blobBytes.data() || record.blobOffsetBytes > static_cast<u64>(blobBytes.size()) || record.blobSizeBytes > static_cast<u64>(blobBytes.size()) - record.blobOffsetBytes || record.blobSizeBytes > static_cast<u64>(source->size()))
+    const auto source = graph.uploadBlobData(sourceUploadBlob);
+    if(!source || !blobBytes.data() || blobOffsetBytes > static_cast<u64>(blobBytes.size()) || blobSizeBytes > static_cast<u64>(blobBytes.size()) - blobOffsetBytes || blobSizeBytes > static_cast<u64>(source->size()))
         return false;
-    return FOUNDATION_MEMCMP(source->data(), blobBytes.data() + static_cast<usize>(record.blobOffsetBytes), static_cast<usize>(record.blobSizeBytes)) == 0;
+    return FOUNDATION_MEMCMP(source->data(), blobBytes.data() + static_cast<usize>(blobOffsetBytes), static_cast<usize>(blobSizeBytes)) == 0;
 }
 
-[[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBufferUpload(const GpuCommandIrBuiltinTaskRecord& record, const BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph, const GpuTaskGraphTaskView& task)noexcept{
-    if(!graph.validResource(record.destination))
-        return GpuCommandIrReplayError::InvalidResource;
-    const GpuTaskGraphResourceView view = graph.resourceAt(record.destination.index);
-    if(view.type != GpuGraphResourceType::Buffer)
-        return GpuCommandIrReplayError::ResourceTypeMismatch;
-    Buffer* const destination = graph.bufferForResource(record.destination);
-    if(!destination)
+[[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBufferUploadImpl(
+    const GpuGraphResourceId destinationId,
+    const GpuUploadBlobId sourceUploadBlob,
+    const u64 blobOffsetBytes,
+    const u64 blobSizeBytes,
+    const u64 destinationOffsetBytes,
+    const ResourceStates::Mask finalState,
+    const BinaryByteView blobBytes,
+    const GpuTaskGraphDeclarationReadView& graph,
+    const GpuTaskGraphTaskView& task
+)noexcept{
+    Buffer* const destination = graph.bufferForResource(destinationId);
+    if(!destination){
+        if(!graph.validResource(destinationId))
+            return GpuCommandIrReplayError::InvalidResource;
+        if(graph.resourceTypeAt(destinationId.index) != GpuGraphResourceType::Buffer)
+            return GpuCommandIrReplayError::ResourceTypeMismatch;
         return GpuCommandIrReplayError::MissingBackendResource;
-    if(!HasSourceBlob(record, blobBytes, graph))
+    }
+    if(!HasSourceBlobImpl(sourceUploadBlob, blobOffsetBytes, blobSizeBytes, blobBytes, graph))
         return GpuCommandIrReplayError::InvalidBufferUpload;
 
     const BufferDesc& description = destination->getCreationDescription();
     if(
-        record.blobSizeBytes == 0u
-        || record.blobSizeBytes > static_cast<u64>(Limit<usize>::s_Max)
-        || (record.destinationOffsetBytes & (sizeof(u32) - 1u)) != 0u
-        || (record.blobSizeBytes & (sizeof(u32) - 1u)) != 0u
-        || !GraphicsBackend::IsBufferRangeInBounds(description, record.destinationOffsetBytes, record.blobSizeBytes)
-        || record.finalState == ResourceStates::Unknown
-        || !GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(description, view.initialState, view.externalFinalState)
-        || (description.keepInitialState && record.finalState != description.initialState)
+        blobSizeBytes == 0u
+        || blobSizeBytes > static_cast<u64>(Limit<usize>::s_Max)
+        || (destinationOffsetBytes & (sizeof(u32) - 1u)) != 0u
+        || (blobSizeBytes & (sizeof(u32) - 1u)) != 0u
+        || !GraphicsBackend::IsBufferRangeInBounds(description, destinationOffsetBytes, blobSizeBytes)
+        || finalState == ResourceStates::Unknown
+        || !GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(description, graph.resourceInitialStateAt(destinationId.index), graph.resourceExternalFinalStateAt(destinationId.index))
+        || (description.keepInitialState && finalState != description.initialState)
     )
         return GpuCommandIrReplayError::InvalidBufferUpload;
 
-    const BufferRange requested(record.destinationOffsetBytes, record.blobSizeBytes);
-    if(!HasValidBufferUploadUses(task, record.destination, description, requested, record.finalState))
+    const BufferRange requested(destinationOffsetBytes, blobSizeBytes);
+    if(!HasValidBufferUploadUses(task, destinationId, description, requested, finalState))
         return GpuCommandIrReplayError::ResourceUseMismatch;
     return GpuCommandIrReplayError::None;
 }
 
-[[nodiscard]] static GpuCommandIrReplayError::Enum ValidateTextureUpload(
-    const GpuCommandIrBuiltinTaskRecord& record,
+[[nodiscard]] static GpuCommandIrReplayError::Enum ValidateTextureUploadImpl(
+    const GpuGraphResourceId destinationId,
+    const GpuUploadBlobId sourceUploadBlob,
+    const u64 blobOffsetBytes,
+    const u64 blobSizeBytes,
+    const TextureSlice& slice,
+    const u64 rowPitch,
+    const u64 depthPitch,
+    const ResourceStates::Mask finalState,
+    const TextureUploadAspect::Enum uploadAspect,
     const BinaryByteView blobBytes,
     const GpuTaskGraphDeclarationReadView& graph,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& queue
 )noexcept{
-    if(!graph.validResource(record.destination))
-        return GpuCommandIrReplayError::InvalidResource;
-    const GpuTaskGraphResourceView view = graph.resourceAt(record.destination.index);
-    if(view.type != GpuGraphResourceType::Texture)
-        return GpuCommandIrReplayError::ResourceTypeMismatch;
-    Texture* const destination = graph.textureForResource(record.destination);
-    if(!destination)
+    Texture* const destination = graph.textureForResource(destinationId);
+    if(!destination){
+        if(!graph.validResource(destinationId))
+            return GpuCommandIrReplayError::InvalidResource;
+        if(graph.resourceTypeAt(destinationId.index) != GpuGraphResourceType::Texture)
+            return GpuCommandIrReplayError::ResourceTypeMismatch;
         return GpuCommandIrReplayError::MissingBackendResource;
-    if(!HasSourceBlob(record, blobBytes, graph))
+    }
+    if(!HasSourceBlobImpl(sourceUploadBlob, blobOffsetBytes, blobSizeBytes, blobBytes, graph))
         return GpuCommandIrReplayError::InvalidTextureUpload;
 
     const TextureDesc& description = destination->getCreationDescription();
-    const TextureSlice& slice = record.destinationSlice;
     Expected<usize> requiredBytes = MakeUnexpected(Failure{});
     if(static_cast<usize>(description.format) >= static_cast<usize>(Format::Count))
         return GpuCommandIrReplayError::InvalidTextureUpload;
-    const auto resolvedAspect = ResolveTextureUploadAspect(GetFormatInfo(description.format), record.uploadAspect);
+    const auto resolvedAspect = ResolveTextureUploadAspect(GetFormatInfo(description.format), uploadAspect);
     if(
-        record.rowPitch > static_cast<u64>(Limit<usize>::s_Max)
-        || record.depthPitch > static_cast<u64>(Limit<usize>::s_Max)
-        || record.finalState == ResourceStates::Unknown
+        rowPitch > static_cast<u64>(Limit<usize>::s_Max)
+        || depthPitch > static_cast<u64>(Limit<usize>::s_Max)
+        || finalState == ResourceStates::Unknown
         || !resolvedAspect
-        || !GpuTaskGraphBuiltinDetail::UploadTextureTaskCanMaterializeRetainedState(description, view.initialState, view.externalFinalState, record.finalState)
-        || !(requiredBytes = ComputeTextureUploadByteSize(description, slice.arraySlice, slice.mipLevel, static_cast<usize>(record.rowPitch), static_cast<usize>(record.depthPitch), record.uploadAspect))
-        || *requiredBytes != record.blobSizeBytes
+        || !GpuTaskGraphBuiltinDetail::UploadTextureTaskCanMaterializeRetainedState(description, graph.resourceInitialStateAt(destinationId.index), graph.resourceExternalFinalStateAt(destinationId.index), finalState)
+        || !(requiredBytes = ComputeTextureUploadByteSize(description, slice.arraySlice, slice.mipLevel, static_cast<usize>(rowPitch), static_cast<usize>(depthPitch), uploadAspect))
+        || *requiredBytes != blobSizeBytes
     )
         return GpuCommandIrReplayError::InvalidTextureUpload;
 
@@ -151,7 +168,7 @@ namespace __hidden_gpu_command_ir_upload_preflight{
         return GpuCommandIrReplayError::InvalidTextureUpload;
 
     const TextureSubresourceSet requested(slice.mipLevel, 1u, slice.arraySlice, 1u);
-    if(!HasValidTextureUploadUses(task, record.destination, description, requested, record.finalState))
+    if(!HasValidTextureUploadUses(task, destinationId, description, requested, finalState))
         return GpuCommandIrReplayError::ResourceUseMismatch;
     return GpuCommandIrReplayError::None;
 }
@@ -175,9 +192,57 @@ namespace GpuCommandIrDetail{
 GpuCommandIrReplayError::Enum ValidateUploadOperation(const GpuCommandIrBuiltinTaskRecord& record, const BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph, const GpuTaskGraphTaskView& task, const GpuPhysicalQueueInfo& queue)noexcept{
     switch(record.opcode){
     case GpuCommandIrOpcode::UploadBuffer:
-        return __hidden_gpu_command_ir_upload_preflight::ValidateBufferUpload(record, blobBytes, graph, task);
+        return __hidden_gpu_command_ir_upload_preflight::ValidateBufferUploadImpl(record.destination, record.sourceUploadBlob, record.blobOffsetBytes, record.blobSizeBytes, record.destinationOffsetBytes, record.finalState, blobBytes, graph, task);
     case GpuCommandIrOpcode::UploadTexture:
-        return __hidden_gpu_command_ir_upload_preflight::ValidateTextureUpload(record, blobBytes, graph, task, queue);
+        return __hidden_gpu_command_ir_upload_preflight::ValidateTextureUploadImpl(record.destination, record.sourceUploadBlob, record.blobOffsetBytes, record.blobSizeBytes, record.destinationSlice, record.rowPitch, record.depthPitch, record.finalState, record.uploadAspect, blobBytes, graph, task, queue);
+    default:
+        return GpuCommandIrReplayError::InvalidStream;
+    }
+}
+
+GpuCommandIrReplayError::Enum ValidateUploadWireOperation(
+    const GpuCommandIrWireOpcode::Enum opcode,
+    const u8* const recordPtr,
+    const u64 graphGeneration,
+    const BinaryByteView blobBytes,
+    const GpuTaskGraphDeclarationReadView& graph,
+    const GpuTaskGraphTaskView& task,
+    const GpuPhysicalQueueInfo& queue
+)noexcept{
+    switch(opcode){
+    case GpuCommandIrWireOpcode::UploadBuffer:{
+        const auto wire = ReadWirePod<GpuCommandIrUploadBufferRecord>(recordPtr);
+        return __hidden_gpu_command_ir_upload_preflight::ValidateBufferUploadImpl(
+            { .generation = graphGeneration, .index = wire.destinationResourceIndex },
+            { .generation = graphGeneration, .index = wire.sourceUploadBlobIndex },
+            wire.blobOffsetBytes,
+            wire.blobSizeBytes,
+            wire.destinationOffsetBytes,
+            static_cast<ResourceStates::Mask>(wire.finalState),
+            blobBytes,
+            graph,
+            task
+        );
+    }
+    case GpuCommandIrWireOpcode::UploadTexture:{
+        const auto wire = ReadWirePod<GpuCommandIrUploadTextureRecord>(recordPtr);
+        const TextureSlice slice{ .x = wire.destinationSlice.x, .y = wire.destinationSlice.y, .z = wire.destinationSlice.z, .width = wire.destinationSlice.width, .height = wire.destinationSlice.height, .depth = wire.destinationSlice.depth, .mipLevel = wire.destinationSlice.mipLevel, .arraySlice = wire.destinationSlice.arraySlice };
+        return __hidden_gpu_command_ir_upload_preflight::ValidateTextureUploadImpl(
+            { .generation = graphGeneration, .index = wire.destinationResourceIndex },
+            { .generation = graphGeneration, .index = wire.sourceUploadBlobIndex },
+            wire.blobOffsetBytes,
+            wire.blobSizeBytes,
+            slice,
+            wire.rowPitch,
+            wire.depthPitch,
+            static_cast<ResourceStates::Mask>(wire.finalState),
+            static_cast<TextureUploadAspect::Enum>(wire.aspect),
+            blobBytes,
+            graph,
+            task,
+            queue
+        );
+    }
     default:
         return GpuCommandIrReplayError::InvalidStream;
     }

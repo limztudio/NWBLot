@@ -72,6 +72,10 @@ class RtCausticState{
     public b8 m_causticGeometryDownsamplePipelineFailed = false;
     public b8 m_causticAccumulatorInitialized = false;
     public b8 m_causticAccumulatorDecayPipelineFailed = false;
+    public u64 m_acceptedCausticEmissionTargetsHash = 0u;
+    public usize m_acceptedCausticEmissionTargetsByteSize = 0u;
+    public usize m_acceptedCausticEmissionTargetsBufferIdentity = 0u;
+    public b8 m_acceptedCausticEmissionTargetsValid = false;
 }
 
 

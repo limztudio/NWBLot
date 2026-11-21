@@ -97,25 +97,26 @@ static Expected<Core::Filesystem::VolumeBuildConfig> ConfigureVolumeSizing(const
     return config;
 }
 
-static b8 PushManifestEntryToVolume(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry, Core::Filesystem::IFilesystem& filesystem){
-    if(entry.identity.cookKeyHash == 0u || entry.identity.payloadSize != static_cast<u64>(entry.payloadBytes.size()) || entry.identity.payloadHash != ComputeFnv64Bytes(entry.payloadBytes.data(), entry.payloadBytes.size())){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: manifest payload identity mismatch '{}'"), ConvertString(entry.virtualPath.resolvedText()));
-        return false;
+static b8 PushManifestToVolume(const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, Core::Filesystem::IFilesystem& filesystem, ScratchArena& scratchArena){
+    Vector<Core::Filesystem::DeferredWriteItem, ScratchArena> items(scratchArena);
+    items.reserve(manifest.entries.size());
+    for(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry : manifest.entries){
+        if(entry.identity.cookKeyHash == 0u || entry.identity.payloadSize != static_cast<u64>(entry.payloadBytes.size()) || entry.identity.payloadHash != ComputeFnv64Bytes(entry.payloadBytes.data(), entry.payloadBytes.size())){
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: manifest payload identity mismatch '{}'"), ConvertString(entry.virtualPath.resolvedText()));
+            return false;
+        }
+        Core::Filesystem::DeferredWriteItem item;
+        item.virtualPath = entry.virtualPath;
+        item.data = entry.payloadBytes.empty() ? nullptr : entry.payloadBytes.data();
+        item.bytes = entry.payloadBytes.size();
+        items.push_back(item);
     }
-    if(filesystem.writeFileDeferred(entry.virtualPath, entry.payloadBytes))
+
+    if(filesystem.writeFilesDeferred(items.data(), items.size()))
         return true;
 
-    NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: failed to push manifest payload '{}'"), ConvertString(entry.virtualPath.resolvedText()));
+    NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: failed to push manifest payloads"));
     return false;
-}
-
-static b8 PushManifestToVolume(const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, Core::Filesystem::IFilesystem& filesystem){
-    for(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry : manifest.entries){
-        if(!PushManifestEntryToVolume(entry, filesystem))
-            return false;
-    }
-
-    return true;
 }
 
 static b8 ValidateManifestEntryCount(const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest){
@@ -189,7 +190,7 @@ Expected<AssetVolumeWriteResult> WriteAssetVolume(const ResolvedCookPaths& resol
             return MakeUnexpected(Failure{});
         }
 
-        if(!__hidden_asset_volume_writer::PushManifestToVolume(manifest, filesystem))
+        if(!__hidden_asset_volume_writer::PushManifestToVolume(manifest, filesystem, scratchArena))
             return MakeUnexpected(Failure{});
         if(!filesystem.flush()){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: failed to flush staged volume metadata"));

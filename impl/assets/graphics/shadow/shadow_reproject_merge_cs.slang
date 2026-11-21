@@ -60,18 +60,30 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     const half4 gc = nwbShadowMergeGeometry(g_NwbShadowMergePush.geometryCurrSlot, texel);
     const bool valid = gc.w > half(NWB_SHADOW_GEOMETRY_VALID_THRESHOLD);
-    const float3 currentNormal = nwbOctDecodeNormal(float2(gc.xy));
-    const float currentCameraDistance = float(gc.z);
-
-    const int2 full = int2(min((int)h.x * g_NwbShadowMergePush.receiverFactor, (int)g_NwbShadowMergePush.width - 1), min((int)h.y * g_NwbShadowMergePush.receiverFactor, (int)g_NwbShadowMergePush.height - 1));
-    const half3 worldPositionSample = half3(nwbHeapSampledImage2D(g_NwbShadowMergePush.worldPositionSlot).Load(int3(full, 0)).xyz);
-    const float3 currentWorldPosition = float3(worldPositionSample);
-
-    const NwbShadowMergeReprojection reprojection = nwbShadowReprojectHistory(currentWorldPosition, g_NwbShadowMergePush.prevWorldToClip, g_NwbShadowMergePush.historyValid, halfWidth, halfHeight);
-    const bool historyAccepted = nwbShadowMergeHistoryAccepted(reprojection, valid, g_NwbShadowMergePush.geometryPrevSlot, currentNormal, currentCameraDistance);
+    NwbShadowMergeReprojection reprojection;
+    reprojection.texel = int2(0, 0);
+    reprojection.onScreen = false;
+    bool historyAccepted = false;
+    uint validTapMask = 0u;
+    if(valid){
+        const float3 currentNormal = nwbOctDecodeNormal(float2(gc.xy));
+        const float currentCameraDistance = float(gc.z);
+        const int2 full = int2(min((int)h.x * g_NwbShadowMergePush.receiverFactor, (int)g_NwbShadowMergePush.width - 1), min((int)h.y * g_NwbShadowMergePush.receiverFactor, (int)g_NwbShadowMergePush.height - 1));
+        const half3 worldPositionSample = half3(nwbHeapSampledImage2D(g_NwbShadowMergePush.worldPositionSlot).Load(int3(full, 0)).xyz);
+        const float3 currentWorldPosition = float3(worldPositionSample);
+        reprojection = nwbShadowReprojectHistory(currentWorldPosition, g_NwbShadowMergePush.prevWorldToClip, g_NwbShadowMergePush.historyValid, halfWidth, halfHeight);
+        historyAccepted = nwbShadowMergeHistoryAccepted(reprojection, true, g_NwbShadowMergePush.geometryPrevSlot, currentNormal, currentCameraDistance);
+        [unroll] for(int dy = -1; dy <= 1; ++dy){
+            [unroll] for(int dx = -1; dx <= 1; ++dx){
+                const int2 tap = clamp(texel + int2(dx, dy), int2(0), int2(hw - 1, hh - 1));
+                if(!(nwbShadowMergeGeometry(g_NwbShadowMergePush.geometryCurrSlot, tap).w <= half(NWB_SHADOW_GEOMETRY_VALID_THRESHOLD)))
+                    validTapMask |= 1u << uint((dy + 1) * 3 + dx + 1);
+            }
+        }
+    }
 
     for(uint slot = slotStart; slot < slotEnd; ++slot){
-        const NwbShadowMergeResult result = nwbShadowMergeChannel<false>(
+        const NwbShadowMergeResult result = nwbShadowMergeChannel<true>(
             texel,
             reprojection.texel,
             hw,
@@ -83,7 +95,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             g_NwbShadowMergePush.historyInSlot,
             g_NwbShadowMergePush.momentsInSlot,
             g_NwbShadowMergePush.geometryCurrSlot,
-            0u
+            validTapMask
         );
         g_NwbShadowMergeHistoryOut[uint3(h, slot)] = result.history;
         g_NwbShadowMergeMomentsOut[uint3(h, slot)] = result.moments;

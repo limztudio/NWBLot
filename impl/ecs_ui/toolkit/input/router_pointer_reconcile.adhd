@@ -289,6 +289,8 @@ b8 TryConsumeRouterActivation(
     in WidgetId id,
     mut Vector<InputAction> actions
 ){
+    if(actions.empty())
+        return false;
     const Expected<usize> targetIndex = FindTargetIndexInTable(targets, lookup, id, 0u);
     if(!targetIndex.has_value())
         return false;
@@ -316,6 +318,8 @@ Expected<ContextMenuAction> TryConsumeRouterContextMenu(
     in u64 declarationGeneration,
     mut Vector<ContextMenuAction> contextMenuActions
 ){
+    if(contextMenuActions.empty())
+        return MakeUnexpected(Failure());
     const Expected<usize> targetIndex = FindTargetIndexInTable(targets, lookup, id, declarationGeneration);
     if(declarationGeneration == 0u || !windowFocused || !targetIndex.has_value())
         return MakeUnexpected(Failure());
@@ -342,6 +346,8 @@ Expected<PointerGesture> TryConsumeRouterPointerGesture(
     in u64 declarationGeneration,
     mut Vector<PointerGestureRecord> pointerGestures
 ){
+    if(pointerGestures.empty())
+        return MakeUnexpected(Failure());
     const Expected<usize> targetIndex = FindTargetIndexInTable(targets, lookup, id, declarationGeneration);
     if(declarationGeneration == 0u || !targetIndex.has_value())
         return MakeUnexpected(Failure());

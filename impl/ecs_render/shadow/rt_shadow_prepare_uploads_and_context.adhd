@@ -50,7 +50,6 @@ Name SelectCausticEmissionTargetsIdentity(in b8 hardwareRayTracingSupported, in 
 b8 CanReusePreparedShadowMaterialContext(
     in PreparedShadowMaterialContextRoute route,
     in b8 staticScene,
-    in b8 sceneHasTransparentOccluder,
     in b8 hwHashValid,
     in u64 hwHash,
     in b8 swHashValid,
@@ -61,7 +60,7 @@ b8 CanReusePreparedShadowMaterialContext(
     if(!staticScene || !buffersReady)
         return false;
     if(route == PreparedShadowMaterialContextRoute::Hardware)
-        return !sceneHasTransparentOccluder && hwHashValid && hwHash == expectedHash;
+        return hwHashValid && hwHash == expectedHash;
     if(route == PreparedShadowMaterialContextRoute::Software)
         return swHashValid && swHash == expectedHash;
     return false;
@@ -93,6 +92,7 @@ b8 AppendChainedUploadBufferTask(
     in GpuUploadBlobId source,
     in GpuGraphResourceId destination,
     in StringView warningMessage,
+    mut Vector<GpuExternalCompletionId> pendingReadCompletions,
     mut GpuTaskId inOutDependencyTask,
     mut GpuTaskId outTask
 ){
@@ -100,10 +100,16 @@ b8 AppendChainedUploadBufferTask(
     uploadScheduling.cost = cost;
     uploadScheduling.forceSubmissionBoundary = false;
     uploadScheduling.allowPacketMerge = true;
-    uploadScheduling.mergeWithPrevious = true;
+    uploadScheduling.mergeWithPrevious = inOutDependencyTask.valid();
 
     GpuTaskDesc uploadDesc;
-    uploadDesc.setIdentity(identity).setMarkerLabel(markerLabel).setScheduling(uploadScheduling).setDependency(inOutDependencyTask);
+    uploadDesc.setIdentity(identity).setMarkerLabel(markerLabel).setScheduling(uploadScheduling);
+    if(inOutDependencyTask.valid())
+        uploadDesc.setDependency(inOutDependencyTask);
+    if(!pendingReadCompletions.empty()){
+        uploadDesc.setExternalDependencies(pendingReadCompletions);
+        pendingReadCompletions.clear();
+    }
     GpuUploadBufferTaskDesc uploadTaskResultUpload;
     uploadTaskResultUpload.source = source;
     uploadTaskResultUpload.destination = destination;
@@ -124,6 +130,7 @@ b8 AppendChainedUploadBufferTask(
 
 
 b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(in ShadowPrepareUploadInputs inputs, mut ShadowPrepareUploadChain chain){
+    chain.completionTask = GpuTaskId();
 
     chain.currentBindlessSlotsGraphOwned = !inputs.targets.bindless.slotsUploaded;
     if(chain.currentBindlessSlotsGraphOwned){
@@ -152,6 +159,7 @@ b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(in ShadowPr
             return false;
         }
         chain.tasks.bindlessSlots = deferredBindlessSlotsUploadTaskResult.value();
+        chain.completionTask = chain.tasks.bindlessSlots;
     }
 
     const auto rayTraceMaterialContextSlots = this.m_raytracingSystem.snapshotRayTraceMaterialContextSlots();
@@ -159,16 +167,10 @@ b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(in ShadowPr
         warning("RendererSystem: could not snapshot ray-trace material-context selector");
         return false;
     }
-    const auto rayTraceMaterialContextSlotsBlobResult = this.m_graph.copyUploadValue(rayTraceMaterialContextSlots.value());
-    if(!rayTraceMaterialContextSlotsBlobResult.has_value()){
-        warning("RendererSystem: could not retain ray-trace material-context selector upload data");
-        return false;
-    }
-    const GpuUploadBlobId rayTraceMaterialContextSlotsBlob = rayTraceMaterialContextSlotsBlobResult.value();
 
-    Vector<GpuExternalCompletionId> csgReadCompletions;
+    chain.pendingContextReadCompletions.clear();
     if(!inputs.rayTracingResources.rayTraceContextReadSubmissionTokens.empty()){
-        csgReadCompletions.reserve(inputs.rayTracingResources.rayTraceContextReadSubmissionTokens.size());
+        chain.pendingContextReadCompletions.reserve(inputs.rayTracingResources.rayTraceContextReadSubmissionTokens.size());
         for(in QueueSubmissionToken token : inputs.rayTracingResources.rayTraceContextReadSubmissionTokens){
             if(!token.valid())
                 continue;
@@ -180,36 +182,60 @@ b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(in ShadowPr
             const auto readCompleteResult = this.m_graph.importExternalCompletion(readCompleteDesc);
             if(!readCompleteResult.has_value())
                 return false;
-            csgReadCompletions.push_back(readCompleteResult.value());
+            chain.pendingContextReadCompletions.push_back(readCompleteResult.value());
         }
     }
 
-    GpuTaskSchedulingHint materialContextUploadScheduling;
-    materialContextUploadScheduling.cost = GpuTaskCostHint::Tiny;
-    materialContextUploadScheduling.forceSubmissionBoundary = false;
-    materialContextUploadScheduling.allowPacketMerge = true;
-    materialContextUploadScheduling.mergeWithPrevious = chain.currentBindlessSlotsGraphOwned;
-    GpuTaskDesc materialContextUploadDesc;
-    materialContextUploadDesc
-        .setIdentity(s_ShadowRaytraceMaterialContextSlotsUpload)
-        .setMarkerLabel("Ray-Trace Material Context Slots Upload")
-        .setScheduling(materialContextUploadScheduling)
-        .setExternalDependencies(csgReadCompletions)
-    ;
-    if(chain.currentBindlessSlotsGraphOwned)
-        materialContextUploadDesc.setDependency(chain.tasks.bindlessSlots);
-    GpuUploadBufferTaskDesc rayTraceMaterialContextSlotsUploadTaskResultUpload;
-    rayTraceMaterialContextSlotsUploadTaskResultUpload.source = rayTraceMaterialContextSlotsBlob;
-    rayTraceMaterialContextSlotsUploadTaskResultUpload.destination = inputs.materialContextSlots;
-    rayTraceMaterialContextSlotsUploadTaskResultUpload.finalState = ResourceStates::Common;
-    const auto rayTraceMaterialContextSlotsUploadTaskResult = this.m_graph.addUploadBufferTask(
-        materialContextUploadDesc,rayTraceMaterialContextSlotsUploadTaskResultUpload);
-    if(!rayTraceMaterialContextSlotsUploadTaskResult.has_value()){
-        chain.tasks.rayTraceMaterialContextSlots = GpuTaskId();
-        warning("RendererSystem: could not declare ray-trace material-context selector upload");
-        return false;
+    const usize slotsBufferIdentity = inputs.rayTracingResources.materialContextSlotsBuffer.identity();
+    if(this.m_raytracingSystem.rayTraceMaterialContextSlotsUploadNeeded(
+        rayTraceMaterialContextSlots.value(),
+        slotsBufferIdentity,
+        chain.rayTraceMaterialContextSlotsWord0,
+        chain.rayTraceMaterialContextSlotsWord1,
+        chain.rayTraceMaterialContextSlotsWord2,
+        chain.rayTraceMaterialContextSlotsWord3
+    )){
+        const auto rayTraceMaterialContextSlotsBlobResult = this.m_graph.copyUploadValue(rayTraceMaterialContextSlots.value());
+        if(!rayTraceMaterialContextSlotsBlobResult.has_value()){
+            warning("RendererSystem: could not retain ray-trace material-context selector upload data");
+            return false;
+        }
+        const GpuUploadBlobId rayTraceMaterialContextSlotsBlob = rayTraceMaterialContextSlotsBlobResult.value();
+
+        GpuTaskSchedulingHint materialContextUploadScheduling;
+        materialContextUploadScheduling.cost = GpuTaskCostHint::Tiny;
+        materialContextUploadScheduling.forceSubmissionBoundary = false;
+        materialContextUploadScheduling.allowPacketMerge = true;
+        materialContextUploadScheduling.mergeWithPrevious = chain.completionTask.valid();
+        GpuTaskDesc materialContextUploadDesc;
+        materialContextUploadDesc
+            .setIdentity(s_ShadowRaytraceMaterialContextSlotsUpload)
+            .setMarkerLabel("Ray-Trace Material Context Slots Upload")
+            .setScheduling(materialContextUploadScheduling)
+        ;
+        if(!chain.pendingContextReadCompletions.empty()){
+            materialContextUploadDesc.setExternalDependencies(chain.pendingContextReadCompletions);
+            chain.pendingContextReadCompletions.clear();
+        }
+        if(chain.completionTask.valid())
+            materialContextUploadDesc.setDependency(chain.completionTask);
+        GpuUploadBufferTaskDesc rayTraceMaterialContextSlotsUploadTaskResultUpload;
+        rayTraceMaterialContextSlotsUploadTaskResultUpload.source = rayTraceMaterialContextSlotsBlob;
+        rayTraceMaterialContextSlotsUploadTaskResultUpload.destination = inputs.materialContextSlots;
+        rayTraceMaterialContextSlotsUploadTaskResultUpload.finalState = ResourceStates::Common;
+        const auto rayTraceMaterialContextSlotsUploadTaskResult = this.m_graph.addUploadBufferTask(
+            materialContextUploadDesc,rayTraceMaterialContextSlotsUploadTaskResultUpload);
+        if(!rayTraceMaterialContextSlotsUploadTaskResult.has_value()){
+            chain.tasks.rayTraceMaterialContextSlots = GpuTaskId();
+            warning("RendererSystem: could not declare ray-trace material-context selector upload");
+            return false;
+        }
+        chain.tasks.rayTraceMaterialContextSlots = rayTraceMaterialContextSlotsUploadTaskResult.value();
+        chain.completionTask = chain.tasks.rayTraceMaterialContextSlots;
+        chain.rayTraceMaterialContextSlotsBufferIdentity = slotsBufferIdentity;
+        chain.rayTraceMaterialContextSlotsUploadPending = true;
     }
-    chain.tasks.rayTraceMaterialContextSlots = rayTraceMaterialContextSlotsUploadTaskResult.value();
+
     const Name causticEmissionTargetsIdentity = SelectCausticEmissionTargetsIdentity(
         this.m_graphics.queryFeatureSupport(Feature::RayTracingAccelStruct) && this.m_graphics.queryFeatureSupport(Feature::RayQuery),
         Name(s_HardwareCausticEmissionTargetsName),
@@ -222,13 +248,17 @@ b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(in ShadowPr
     }
     chain.causticEmissionTargets = causticEmissionTargetsResult.value();
 
-    const auto causticEmissionTargetsBlob = this.m_raytracingSystem.retainPreparedCausticEmissionTargetUpload(this.m_graph);
+    const auto causticEmissionTargetsBlob = this.m_raytracingSystem.retainPreparedCausticEmissionTargetUpload(
+        this.m_graph,
+        chain.causticEmissionTargetsUploadHash,
+        chain.causticEmissionTargetsUploadByteSize,
+        chain.causticEmissionTargetsUploadBufferIdentity
+    );
     if(!causticEmissionTargetsBlob.has_value()){
         warning("RendererSystem: could not retain preflighted caustic emission-target upload data");
         return false;
     }
 
-    chain.completionTask = chain.tasks.rayTraceMaterialContextSlots;
     Expected<GpuGraphResourceId> csgTraceContextResult = MakeUnexpected(Failure());
     if(inputs.rayTracingResources.csgTraceContextBuffer.valid()){
         GpuGraphResourceDesc contextDesc = BufferResourceDesc(s_ShadowRaytraceCsgContext, "Current CSG Ray Context");
@@ -236,7 +266,12 @@ b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(in ShadowPr
         if(csgTraceContextResult.has_value())
             chain.csgTraceContext = csgTraceContextResult.value();
     }
-    const auto csgTraceContextBlob = this.m_raytracingSystem.retainPreparedCsgTraceContextUpload(this.m_graph);
+    const auto csgTraceContextBlob = this.m_raytracingSystem.retainPreparedCsgTraceContextUpload(
+        this.m_graph,
+        chain.csgTraceContextUploadHash,
+        chain.csgTraceContextUploadByteSize,
+        chain.csgTraceContextUploadBufferIdentity
+    );
     if(!csgTraceContextBlob.has_value() || (inputs.rayTracingResources.csgTraceContextBuffer.valid() && !csgTraceContextResult.has_value())){
         error("RendererSystem: could not retain current CSG ray context");
         return false;
@@ -244,17 +279,23 @@ b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(in ShadowPr
     if(csgTraceContextBlob.value().has_value()){
         if(!chain.csgTraceContext.valid())
             return false;
-        GpuTaskSchedulingHint csgUploadScheduling = materialContextUploadScheduling;
+        GpuTaskSchedulingHint csgUploadScheduling;
         csgUploadScheduling.cost = GpuTaskCostHint::Medium;
-        csgUploadScheduling.mergeWithPrevious = true;
+        csgUploadScheduling.forceSubmissionBoundary = false;
+        csgUploadScheduling.allowPacketMerge = true;
+        csgUploadScheduling.mergeWithPrevious = chain.completionTask.valid();
         GpuTaskDesc csgUploadDesc;
         csgUploadDesc
             .setIdentity(s_ShadowRaytraceCsgContextUpload)
             .setMarkerLabel("Current CSG Ray Context Upload")
             .setScheduling(csgUploadScheduling)
-            .setDependency(chain.completionTask)
-            .setExternalDependencies(csgReadCompletions)
         ;
+        if(!chain.pendingContextReadCompletions.empty()){
+            csgUploadDesc.setExternalDependencies(chain.pendingContextReadCompletions);
+            chain.pendingContextReadCompletions.clear();
+        }
+        if(chain.completionTask.valid())
+            csgUploadDesc.setDependency(chain.completionTask);
         GpuUploadBufferTaskDesc csgTraceContextUploadTaskResultUpload;
         csgTraceContextUploadTaskResultUpload.source = csgTraceContextBlob.value().value();
         csgTraceContextUploadTaskResultUpload.destination = chain.csgTraceContext;
@@ -266,6 +307,7 @@ b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(in ShadowPr
         }
         chain.tasks.csgTraceContext = csgTraceContextUploadTaskResult.value();
         chain.completionTask = chain.tasks.csgTraceContext;
+        chain.csgTraceContextUploadPending = true;
     }
     if(causticEmissionTargetsBlob.value().has_value()){
         if(!chain.causticEmissionTargets.valid()){
@@ -273,8 +315,9 @@ b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(in ShadowPr
             return false;
         }
         if(!AppendChainedUploadBufferTask(this.m_graph, s_ShadowRaytraceCausticEmissionTargetsUpload, "Caustic Emission Targets Upload", GpuTaskCostHint::Medium, causticEmissionTargetsBlob.value().value(),
-            chain.causticEmissionTargets, "RendererSystem: could not declare caustic emission-target upload", chain.completionTask, chain.tasks.causticEmissionTargets))
+            chain.causticEmissionTargets, "RendererSystem: could not declare caustic emission-target upload", chain.pendingContextReadCompletions, chain.completionTask, chain.tasks.causticEmissionTargets))
             return false;
+        chain.causticEmissionTargetsUploadPending = true;
     }
     return true;
 }
@@ -298,7 +341,7 @@ b8 ShadowPrepareUploadChainBuilder::declareSurfelFrameConstantsUpload(in ShadowP
             return false;
         }
         if(!AppendChainedUploadBufferTask(this.m_graph, s_ShadowSurfelConstantsUpload, "Surfel Frame Constants Upload", GpuTaskCostHint::Tiny, surfelFrameConstantsBlob.value().value(), chain.surfelFrameConstants,
-            "RendererSystem: could not declare surfel-frame constants upload", chain.completionTask, chain.tasks.surfelFrameConstants))
+            "RendererSystem: could not declare surfel-frame constants upload", chain.pendingContextReadCompletions, chain.completionTask, chain.tasks.surfelFrameConstants))
             return false;
     }
     return true;
@@ -330,11 +373,11 @@ b8 ShadowPrepareUploadChainBuilder::declareShadowMaterialContextUploads(in Shado
     if(chain.shadowMaterialContextBatchGraphOwned){
         if(
             !AppendChainedUploadBufferTask(this.m_graph, s_ShadowDeferredEffectsInstanceMaterialUpload, "Shadow Instance Materials Upload", GpuTaskCostHint::Medium, shadowInstanceMaterialsBlob,
-                chain.shadowInstanceMaterials, "RendererSystem: could not declare shadow instance-material upload", chain.completionTask, chain.tasks.shadowInstanceMaterial)
+                chain.shadowInstanceMaterials, "RendererSystem: could not declare shadow instance-material upload", chain.pendingContextReadCompletions, chain.completionTask, chain.tasks.shadowInstanceMaterial)
             || !AppendChainedUploadBufferTask(this.m_graph, s_ShadowDeferredEffectsShadowInstancesUpload, "Shadow Instances Upload", GpuTaskCostHint::Medium, shadowInstancesBlob, chain.shadowInstances,
-                "RendererSystem: could not declare shadow instance upload", chain.completionTask, chain.tasks.shadowInstance)
+                "RendererSystem: could not declare shadow instance upload", chain.pendingContextReadCompletions, chain.completionTask, chain.tasks.shadowInstance)
             || !AppendChainedUploadBufferTask(this.m_graph, s_ShadowDeferredEffectsMaterialTypedUpload, "Shadow Typed Materials Upload", GpuTaskCostHint::Medium, shadowMaterialTypedBlob, chain.shadowMaterialTyped,
-                "RendererSystem: could not declare shadow typed-material upload", chain.completionTask, chain.tasks.shadowMaterialTyped)
+                "RendererSystem: could not declare shadow typed-material upload", chain.pendingContextReadCompletions, chain.completionTask, chain.tasks.shadowMaterialTyped)
         )
             return false;
     }
@@ -364,9 +407,9 @@ b8 ShadowPrepareUploadChainBuilder::declareSceneBvhUploads(in ShadowPrepareUploa
     if(chain.sceneBvhBatchGraphOwned){
         if(
             !AppendChainedUploadBufferTask(this.m_graph, s_ShadowPassSceneBvhNodesUpload, "Scene BVH Nodes Upload", GpuTaskCostHint::Medium, sceneBvhNodesBlob, chain.sceneBvhNodes,
-                "RendererSystem: could not declare software scene-BVH node upload", chain.completionTask, chain.tasks.sceneBvhNodes)
+                "RendererSystem: could not declare software scene-BVH node upload", chain.pendingContextReadCompletions, chain.completionTask, chain.tasks.sceneBvhNodes)
             || !AppendChainedUploadBufferTask(this.m_graph, s_ShadowPassSceneInstancesUpload, "Scene BVH Instances Upload", GpuTaskCostHint::Medium, sceneBvhInstancesBlob, chain.sceneBvhInstances,
-                "RendererSystem: could not declare software scene-BVH instance upload", chain.completionTask, chain.tasks.sceneBvhInstances)
+                "RendererSystem: could not declare software scene-BVH instance upload", chain.pendingContextReadCompletions, chain.completionTask, chain.tasks.sceneBvhInstances)
         )
             return false;
     }
@@ -389,14 +432,13 @@ Expected<u64> ShadowMaterialContextPreparer::prepareBytes(
 
     const usize materialTypedUploadBytes = ResolveMaterialTypedUploadByteCount(shadowMaterialTypedBytes);
     const u64 materialContextHash = ComputeShadowMaterialContextHashWithTypedHash(instanceMaterials, shadowInstanceData, shadowMaterialTypedBytes.size(), materialTypedHash);
-    const b8 hardware = route == PreparedShadowMaterialContextRoute::Hardware;
     const b8 canReuseMaterialContext = CanReusePreparedShadowMaterialContext(
-        route, staticScene, this.m_system.m_rayTracingState.sceneBvh.m_sceneHasTransparentOccluder,
+        route, staticScene,
         this.m_system.m_rayTracingState.shadow.m_hwShadowMaterialContextHashValid, this.m_system.m_rayTracingState.shadow.m_hwShadowMaterialContextHash,
         this.m_system.m_rayTracingState.shadow.m_swShadowMaterialContextHashValid, this.m_system.m_rayTracingState.shadow.m_swShadowMaterialContextHash,
         materialContextHash, HasPreparedShadowMaterialContextBuffers(this.m_system.m_rayTracingState, instanceMaterials.size(), shadowInstanceData.size(), materialTypedUploadBytes)
     );
-    if(!hardware && canReuseMaterialContext && !this.m_system.capturePreparedShadowMaterialContextCacheReuse(materialContextHash, instanceMaterials.size(), shadowInstanceData.size(), materialTypedUploadBytes))
+    if(canReuseMaterialContext && !this.m_system.capturePreparedShadowMaterialContextCacheReuse(route, materialContextHash, instanceMaterials.size(), shadowInstanceData.size(), materialTypedUploadBytes))
         return MakeUnexpected(Failure());
     if(!canReuseMaterialContext){
         RayTraceMaterialResources resources(this.m_system.m_graphics, this.m_system.m_rayTracingState.sceneBvh, this.m_system.m_rayTracingState.shadow);

@@ -229,6 +229,10 @@ public:
     [[nodiscard]] GpuTaskGraphResourceSetView resourceSetAt(usize index)const && = delete;
     [[nodiscard]] GpuTaskGraphPipelineView pipelineAt(usize index)const & noexcept;
     [[nodiscard]] GpuTaskGraphPipelineView pipelineAt(usize index)const && = delete;
+    [[nodiscard]] GpuGraphResourceType::Enum resourceTypeAt(usize index)const noexcept;
+    [[nodiscard]] GpuGraphPipelineType::Enum pipelineTypeAt(usize index)const noexcept;
+    [[nodiscard]] ResourceStates::Mask resourceInitialStateAt(usize index)const noexcept;
+    [[nodiscard]] ResourceStates::Mask resourceExternalFinalStateAt(usize index)const noexcept;
     [[nodiscard]] GpuTaskGraphExternalCompletionView externalCompletionAt(usize index)const & noexcept;
     [[nodiscard]] GpuTaskGraphExternalCompletionView externalCompletionAt(usize index)const && = delete;
     [[nodiscard]] Optional<QueueSubmissionToken> findCompletionToken(GpuExternalCompletionId completion)const noexcept{

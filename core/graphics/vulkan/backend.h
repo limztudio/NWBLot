@@ -85,6 +85,18 @@ inline Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline b8 CommandList::validateTrackedResourcesReadyForSubmissionFast()const{
+    if(!m_currentCmdBuf)
+        return validateTrackedResourcesReadyForSubmission();
+    if(!m_currentCmdBuf->m_resourceReferences.m_hasDynamicReadinessResources && !m_stateTracker.hasPermanentTextureStates() && !m_stateTracker.hasPermanentBufferStates())
+        return true;
+    return validateTrackedResourcesReadyForSubmission();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_VULKAN_END
 
 

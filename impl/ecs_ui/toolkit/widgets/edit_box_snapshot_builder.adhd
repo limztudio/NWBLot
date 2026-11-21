@@ -131,10 +131,7 @@ class EditBoxSnapshotBuilder{
         if(!this.buildInto(committed, graphemeBoundaries, composition, textMode, display, stops, preeditBytes))
             return false;
         outDisplay.assign(display);
-        outMapping.clear();
-        outMapping.reserve(stops.size());
-        for(in EditCaretMapping stop : stops)
-            outMapping.push_back(stop);
+        AssignTriviallyCopyableVector(outMapping, Span<EditCaretMapping>(stops));
         outComposing = composition.active;
         this.resolveRanges(
             composition,

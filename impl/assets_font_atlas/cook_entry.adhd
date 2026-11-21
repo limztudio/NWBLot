@@ -11,6 +11,7 @@
 class FontAtlasCookEntry{
     public FontAtlasPayload payload;
     public Name virtualPath = s_NameNone;
+    public b8 payloadValidated = false;
 }
 
 

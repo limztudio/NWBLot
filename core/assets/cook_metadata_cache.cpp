@@ -64,10 +64,14 @@ namespace __hidden_cook_metadata_cache{
         AppendPOD(shaInput, present);
         if(!*exists)
             continue;
-        Vector<u8, ScratchArena> sidecarBytes(scratchArena);
-        if(!ReadBinaryFile(sidecarPath, sidecarBytes))
-            return false;
-        const Sha256Digest digest = ComputeSha256(BinaryByteView{ sidecarBytes.data(), sidecarBytes.size() });
+        Sha256Digest digest{};
+        {
+            Alloc::ScratchArena::Scope sidecarScope(scratchArena);
+            Vector<u8, ScratchArena> sidecarBytes(scratchArena);
+            if(!ReadBinaryFile(sidecarPath, sidecarBytes))
+                return false;
+            digest = ComputeSha256(BinaryByteView{ sidecarBytes.data(), sidecarBytes.size() });
+        }
         AppendPOD(shaInput, digest);
     }
     return true;
@@ -81,6 +85,7 @@ namespace __hidden_cook_metadata_cache{
     ScratchArena& scratchArena,
     b8& outCanUseCache
 ){
+    Alloc::ScratchArena::Scope checksumScope(scratchArena);
     outCanUseCache = true;
     const auto derivedVirtualPath = AssetPathsDetail::BuildDerivedAssetVirtualPathText(
         discoveredNwbFile.assetRoot,
@@ -93,9 +98,7 @@ namespace __hidden_cook_metadata_cache{
         outCanUseCache = false;
     const AStringView derivedVirtualPathView = derivedVirtualPath ? AStringView(*derivedVirtualPath) : AStringView{};
 
-    Vector<u8, ScratchArena> metaBytes(scratchArena);
-    AppendBytesUnchecked(metaBytes, metaText.data(), metaText.size());
-    const Sha256Digest metaSha256 = ComputeSha256(BinaryByteView{ metaBytes.data(), metaBytes.size() });
+    const Sha256Digest metaSha256 = ComputeSha256(BinaryByteView{ reinterpret_cast<const u8*>(metaText.data()), metaText.size() });
 
     Vector<u8, ScratchArena> shaInput(scratchArena);
     shaInput.reserve(sizeof(u16) + sourcePathText.size() + discoveredNwbFile.virtualRoot.view().size() + derivedVirtualPathView.size() + sizeof(Sha256Digest) * 3u + 16u);

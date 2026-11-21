@@ -42,6 +42,12 @@ struct FileCursor{
     u64 offset = 0;
 };
 
+struct DeferredWriteItem{
+    Name virtualPath;
+    const void* data = nullptr;
+    usize bytes = 0;
+};
+
 
 interface IFilesystem{
 public:
@@ -62,6 +68,7 @@ public:
     virtual b8 seekFile(FileCursor& cursor, i64 offset, FileSeekOrigin::Enum origin)const = 0;
     virtual b8 writeFile(const Name& virtualPath, const void* data, usize bytes) = 0;
     virtual b8 writeFileDeferred(const Name& virtualPath, const void* data, usize bytes) = 0;
+    virtual b8 writeFilesDeferred(const DeferredWriteItem* items, usize count);
     virtual b8 flush() = 0;
     virtual b8 removeFile(const Name& virtualPath) = 0;
     [[nodiscard]] virtual b8 fileExists(const Name& virtualPath)const = 0;

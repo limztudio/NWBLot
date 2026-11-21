@@ -178,10 +178,16 @@ b8 DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, con
                 NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: typed-buffer format is unsupported."));
                 return false;
             }
-            VkFormatProperties formatProperties{};
-            m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, vkFormat, &formatProperties);
+            VkFormatFeatureFlags bufferFeatures = 0u;
+            if(m_bufferFormatFeaturesCached)
+                bufferFeatures = m_cachedBufferFormatFeatures[static_cast<u32>(viewFormat)];
+            else{
+                VkFormatProperties formatProperties{};
+                m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, vkFormat, &formatProperties);
+                bufferFeatures = formatProperties.bufferFeatures;
+            }
             const VkFormatFeatureFlags requiredFormatFeature = item.type == ResourceType::TypedBuffer_UAV ? VK_FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_BIT : VK_FORMAT_FEATURE_UNIFORM_TEXEL_BUFFER_BIT;
-            if((formatProperties.bufferFeatures & requiredFormatFeature) == 0u){
+            if((bufferFeatures & requiredFormatFeature) == 0u){
                 NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor buffer write rejected: format lacks texel-buffer support."));
                 return false;
             }

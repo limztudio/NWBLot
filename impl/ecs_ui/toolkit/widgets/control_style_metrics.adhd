@@ -23,7 +23,7 @@ class ControlStyleMetrics{
     public Insets skinRegionsMaxPadding(in UiSkin skin, in Insets initial, in Span<Name> names, in Name fallback)const{
         Insets result = initial;
         for(in Name name : names){
-            const Expected<UiSkinRegion> found = TryResolveSelectableStateRegion(skin, name, fallback);
+            const Optional<in UiSkinRegion> found = TryResolveSelectableStateRegion(skin, name, fallback);
             if(found.has_value()){
                 const Insets regionPadding(
                     found.value().padding.left,
@@ -44,7 +44,7 @@ class ControlStyleMetrics{
         names[2u] = style.buttonPressed;
         names[3u] = style.buttonDisabled;
         for(in Name name : names){
-            const Expected<UiSkinRegion> found = TryResolveSelectableStateRegion(skin, name, style.button);
+            const Optional<in UiSkinRegion> found = TryResolveSelectableStateRegion(skin, name, style.button);
             if(!found.has_value())
                 continue;
             AccumulateButtonRegionMetrics(found.value(), outSize, outPadding);
@@ -61,7 +61,7 @@ class ControlStyleMetrics{
         names[3u] = style.checkboxDisabled;
         f32 checkboxExtent = style.checkboxExtent;
         for(in Name name : names){
-            const Expected<UiSkinRegion> found = TryResolveSelectableStateRegion(skin, name, style.checkbox);
+            const Optional<in UiSkinRegion> found = TryResolveSelectableStateRegion(skin, name, style.checkbox);
             if(!found.has_value())
                 return MakeUnexpected(Failure());
             checkboxExtent = ResolveUiSkinSquareExtent(checkboxExtent, found.value());
@@ -77,7 +77,7 @@ class ControlStyleMetrics{
         names[2u] = editStyle.focused;
         names[3u] = editStyle.disabled;
         for(in Name name : names){
-            const Expected<UiSkinRegion> found = TryResolveSelectableStateRegion(skin, name, editStyle.fallback);
+            const Optional<in UiSkinRegion> found = TryResolveSelectableStateRegion(skin, name, editStyle.fallback);
             if(found.has_value())
                 AccumulateEditRegionMinimumSize(found.value(), minimum);
         }
@@ -112,14 +112,14 @@ class ControlStyleMetrics{
         names[3u] = style.focused;
         names[4u] = style.disabled;
         for(in Name name : names){
-            const Expected<UiSkinRegion> skinRegion = TryResolveSelectableStateRegion(skin, name, style.fallback);
+            const Optional<in UiSkinRegion> skinRegion = TryResolveSelectableStateRegion(skin, name, style.fallback);
             if(!skinRegion.has_value())
                 return false;
             const VectorSingle minimum = Max(VectorSingle(minimumSize.x, minimumSize.y, minimumSize.x, minimumSize.y), VectorSingle(skinRegion.value().minimumWidth, skinRegion.value().minimumHeight, skinRegion.value().minimumWidth, skinRegion.value().minimumHeight));
             minimumSize = Point(minimum.x, minimum.y);
             padding = MaxUiPadding(padding, skinRegion.value().padding);
         }
-        const Expected<UiSkinRegion> arrow = TryResolveSelectableStateRegion(skin, style.arrow, style.arrowFallback);
+        const Optional<in UiSkinRegion> arrow = TryResolveSelectableStateRegion(skin, style.arrow, style.arrowFallback);
         if(!arrow.has_value())
             return false;
         outMinimumSize = minimumSize;
@@ -152,9 +152,9 @@ class ControlStyleMetrics{
         mut RadioGroupStyle inOutStyle,
         mut RadioGroupMetrics outMetrics
     )const{
-        const Expected<UiSkinRegion> normal = TryResolveSelectableStateRegion(skin, inOutStyle.normal, inOutStyle.fallback);
-        const Expected<UiSkinRegion> checked = TryResolveSelectableStateRegion(skin, inOutStyle.checked, inOutStyle.checkedFallback);
-        const Expected<UiSkinRegion> mark = TryResolveSelectableStateRegion(skin, inOutStyle.mark, inOutStyle.markFallback);
+        const Optional<in UiSkinRegion> normal = TryResolveSelectableStateRegion(skin, inOutStyle.normal, inOutStyle.fallback);
+        const Optional<in UiSkinRegion> checked = TryResolveSelectableStateRegion(skin, inOutStyle.checked, inOutStyle.checkedFallback);
+        const Optional<in UiSkinRegion> mark = TryResolveSelectableStateRegion(skin, inOutStyle.mark, inOutStyle.markFallback);
         const f32 referenceDensity = skin.referenceDensity();
         if(!normal.has_value() || !checked.has_value() || !mark.has_value() || !IsFinite(referenceDensity) || referenceDensity <= 0.0f)
             return false;
@@ -205,8 +205,8 @@ class ControlStyleMetrics{
         const f32 referenceDensity = skin.referenceDensity();
         if(!IsFinite(referenceDensity) || referenceDensity <= 0.0f)
             return false;
-        const Expected<UiSkinRegion> track = TryResolveSelectableStateRegion(skin, inOutStyle.track, inOutStyle.trackFallback);
-        const Expected<UiSkinRegion> normal = TryResolveSelectableStateRegion(skin, inOutStyle.normal, inOutStyle.thumbFallback);
+        const Optional<in UiSkinRegion> track = TryResolveSelectableStateRegion(skin, inOutStyle.track, inOutStyle.trackFallback);
+        const Optional<in UiSkinRegion> normal = TryResolveSelectableStateRegion(skin, inOutStyle.normal, inOutStyle.thumbFallback);
         if(!track.has_value() || !normal.has_value())
             return false;
         const Expected<Point> trackMinimum = TryResolveSkinRegionMinimumSize(track.value(), referenceDensity);
@@ -244,8 +244,8 @@ class ControlStyleMetrics{
     )const{
         if(!IsFinite(fraction))
             return false;
-        const Expected<UiSkinRegion> track = TryResolveSelectableStateRegion(skin, inOutStyle.track, inOutStyle.trackFallback);
-        const Expected<UiSkinRegion> fill = TryResolveSelectableStateRegion(skin, inOutStyle.fill, inOutStyle.fillFallback);
+        const Optional<in UiSkinRegion> track = TryResolveSelectableStateRegion(skin, inOutStyle.track, inOutStyle.trackFallback);
+        const Optional<in UiSkinRegion> fill = TryResolveSelectableStateRegion(skin, inOutStyle.fill, inOutStyle.fillFallback);
         if(!track.has_value() || !fill.has_value())
             return false;
         const Expected<ProgressMetrics> metrics = MeasureProgress(options, inOutStyle, track.value(), fill.value(), skin.referenceDensity());

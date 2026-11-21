@@ -14,14 +14,28 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/bvh/scene_refit_constants.h>"), cpp_name("NWB_SCENE_BVH_REFIT_PUSH_BYTES")]
+extern const u32 s_ShaderSceneBvhRefitPushBytes;
+
 [cpp_header("<impl/assets/graphics/bvh/scene_refit_constants.h>"), cpp_name("NWB_SCENE_BVH_REFIT_INSTANCE_BYTES")]
 extern const u32 s_ShaderSceneBvhRefitInstanceBytes;
 
 [cpp_header("<impl/assets/graphics/bvh/scene_refit_constants.h>"), cpp_name("NWB_SCENE_BVH_REFIT_MESH_SLOT_OFFSET")]
 extern const u32 s_ShaderSceneBvhRefitMeshSlotOffset;
+
+[cpp_header("<impl/assets/graphics/bvh/scene_refit_constants.h>"), cpp_name("NWB_SCENE_BVH_REFIT_GROUP_SIZE")]
+extern const u32 s_ShaderSceneBvhRefitGroupSize;
+
+[cpp_header("<impl/assets/graphics/bvh/scene_refit_constants.h>"), cpp_name("NWB_SCENE_BVH_REFIT_MODE_INIT_PARENTS")]
+extern const u32 s_ShaderSceneBvhRefitModeInitParents;
+
+[cpp_header("<impl/assets/graphics/bvh/scene_refit_constants.h>"), cpp_name("NWB_SCENE_BVH_REFIT_MODE_REFIT")]
+extern const u32 s_ShaderSceneBvhRefitModeRefit;
+
 static_assert(align_of<SoftwareSceneRefitInstanceGpu>() >= 16u);
 static_assert(size_of<SoftwareSceneRefitInstanceGpu>() == s_ShaderSceneBvhRefitInstanceBytes);
 static_assert(offset_of<SoftwareSceneRefitInstanceGpu>(meshNodeSlot) == s_ShaderSceneBvhRefitMeshSlotOffset);
+static_assert(size_of<SoftwareSceneRefitPushConstants>() == s_ShaderSceneBvhRefitPushBytes);
 
 const usize s_SoftwareSceneRefitInstanceGpuByteSize = 64u;
 
@@ -79,12 +93,16 @@ static_assert(size_of<SoftwareSceneRefitInstanceGpu>() == s_SoftwareSceneRefitIn
 class SoftwareSceneRefitSnapshot{
     public BufferHandle inputBuffer;
     public BufferHandle sceneNodes;
+    public BufferHandle parentBuffer;
+    public BufferHandle visitCounterBuffer;
     public ComputePipelineHandle pipeline;
     public Vector<SoftwareSceneRefitInstanceGpu> inputs;
     public Vector<BufferHandle> meshNodes;
     public mut GraphicsRuntime graphics;
     public GpuDescriptorHandle inputDescriptor = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle sceneDescriptor = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle parentDescriptor = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle visitCounterDescriptor = GpuDescriptorHandleInvalid();
     public GpuPhysicalQueueId queue;
     public u32 nodeCount = 0u;
 
@@ -98,7 +116,11 @@ class SoftwareSceneRefitResources : NoCopy{
     private mut GraphicsRuntime m_graphics;
     private Vector<SoftwareSceneRefitHandle> m_snapshots;
     private BufferHandle m_inputBuffer;
+    private BufferHandle m_parentBuffer;
+    private BufferHandle m_visitCounterBuffer;
     private GpuDescriptorHandle m_inputDescriptor = GpuDescriptorHandleInvalid();
+    private GpuDescriptorHandle m_parentDescriptor = GpuDescriptorHandleInvalid();
+    private GpuDescriptorHandle m_visitCounterDescriptor = GpuDescriptorHandleInvalid();
     private BindingLayoutHandle m_bindingLayout;
     private ShaderHandle m_shader;
     private ComputePipelineHandle m_pipeline;
@@ -107,15 +129,48 @@ class SoftwareSceneRefitResources : NoCopy{
         this.m_graphics = graphics;
     }
 
+    private void releaseOwnedBufferDescriptor(mut Device device, mut GpuDescriptorHeap heap, mut BufferHandle buffer, mut GpuDescriptorHandle descriptor){
+        if(heap.isInitialized() && buffer.valid() && descriptor.valid() && buffer.deref().getDeviceGeneration() == device.getDeviceGeneration())
+            heap.free(descriptor);
+        buffer.reset();
+        descriptor = GpuDescriptorHandleInvalid();
+    }
+
+    [cpp_unwind]
+    private b8 ensureU32StorageBuffer(in usize byteSize, in Name debugName, mut BufferHandle inOutBuffer, mut GpuDescriptorHandle inOutDescriptor){
+        mut Device device = this.m_graphics.getDevice();
+        mut GpuDescriptorHeap heap = device.getDescriptorHeap();
+        if(inOutBuffer.valid() && inOutBuffer.deref().getDeviceGeneration() != device.getDeviceGeneration())
+            return false;
+        if(inOutBuffer.valid() && inOutBuffer.deref().getCreationDescription().byteSize >= byteSize && inOutDescriptor.valid())
+            return true;
+
+        BufferDesc desc;
+        desc.setByteSize(byteSize).setStructStride(size_of<u32>()).setCanHaveUAVs(true).setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+            .setDebugName(debugName).enableAutomaticStateTracking(ResourceStates::Common);
+        auto replacementResult = this.m_graphics.createBuffer(desc);
+        if(!replacementResult.has_value())
+            return false;
+        BufferHandle replacement = replacementResult.value();
+        const Expected<GpuDescriptorHandle> descriptorResult = RegisterHeapBuffer(heap, replacement.deref(), GpuDescriptorClass::StorageBuffer, true);
+        if(!descriptorResult.has_value())
+            return false;
+        const GpuDescriptorHandle descriptor = descriptorResult.value();
+        if(inOutDescriptor.valid())
+            heap.free(inOutDescriptor);
+        inOutBuffer = replacement;
+        inOutDescriptor = descriptor;
+        return true;
+    }
+
     [cpp_unwind]
     public void invalidate(){
         this.m_snapshots.clear();
         mut Device device = this.m_graphics.getDevice();
         mut GpuDescriptorHeap heap = device.getDescriptorHeap();
-        if(heap.isInitialized() && this.m_inputBuffer.valid() && this.m_inputDescriptor.valid() && this.m_inputBuffer.deref().getDeviceGeneration() == device.getDeviceGeneration())
-            heap.free(this.m_inputDescriptor);
-        this.m_inputBuffer.reset();
-        this.m_inputDescriptor = GpuDescriptorHandleInvalid();
+        this.releaseOwnedBufferDescriptor(device, heap, this.m_inputBuffer, this.m_inputDescriptor);
+        this.releaseOwnedBufferDescriptor(device, heap, this.m_parentBuffer, this.m_parentDescriptor);
+        this.releaseOwnedBufferDescriptor(device, heap, this.m_visitCounterBuffer, this.m_visitCounterDescriptor);
         this.m_pipeline.reset();
         this.m_shader.reset();
         this.m_bindingLayout.reset();
@@ -163,6 +218,11 @@ class SoftwareSceneRefitResources : NoCopy{
             this.m_inputBuffer = replacement;
             this.m_inputDescriptor = descriptor;
         }
+        const usize nodeU32Bytes = cast<usize>(nodeCount) * size_of<u32>();
+        if(!this.ensureU32StorageBuffer(nodeU32Bytes, Name(s_SoftwareSceneRefitParentsName), this.m_parentBuffer, this.m_parentDescriptor)
+            || !this.ensureU32StorageBuffer(nodeU32Bytes, Name(s_SoftwareSceneRefitVisitsName), this.m_visitCounterBuffer, this.m_visitCounterDescriptor)
+        )
+            return MakeUnexpected(Failure());
         SoftwareSceneRefitHandle snapshot;
         for(in SoftwareSceneRefitHandle cached : this.m_snapshots){
             if(cached.referenceCount() == 1u){
@@ -182,9 +242,13 @@ class SoftwareSceneRefitResources : NoCopy{
         snapshot.deref().meshNodes.clear();
         snapshot.deref().inputBuffer = this.m_inputBuffer;
         snapshot.deref().sceneNodes = sceneNodes;
+        snapshot.deref().parentBuffer = this.m_parentBuffer;
+        snapshot.deref().visitCounterBuffer = this.m_visitCounterBuffer;
         snapshot.deref().pipeline = this.m_pipeline;
         snapshot.deref().inputDescriptor = this.m_inputDescriptor;
         snapshot.deref().sceneDescriptor = sceneDescriptor;
+        snapshot.deref().parentDescriptor = this.m_parentDescriptor;
+        snapshot.deref().visitCounterDescriptor = this.m_visitCounterDescriptor;
         snapshot.deref().queue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
         snapshot.deref().nodeCount = nodeCount;
         snapshot.deref().inputs.reserve(instanceCount);
@@ -215,6 +279,18 @@ class SoftwareSceneRefitResources : NoCopy{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+SoftwareSceneRefitPushConstants MakeSoftwareSceneBvhRefitPushConstantsWrapper(in SoftwareSceneRefitSnapshot snapshot, in u32 passMode){
+    return MakeSoftwareSceneRefitPushConstants(
+        snapshot.nodeCount,
+        snapshot.sceneDescriptor.slot(),
+        snapshot.inputDescriptor.slot(),
+        cast<u32>(snapshot.inputs.size()),
+        snapshot.parentDescriptor.slot(),
+        snapshot.visitCounterDescriptor.slot(),
+        passMode
+    );
+}
+
 class SoftwareSceneRefitTask{
     private SoftwareSceneRefitHandle m_snapshot;
 
@@ -239,16 +315,32 @@ class SoftwareSceneRefitTask{
         state.setPipeline(snapshot.pipeline.deref());
         commandList.setComputeState(state);
         snapshot.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, snapshot.pipeline.deref());
-        const SoftwareSceneRefitPushConstants push = MakeSoftwareSceneRefitPushConstants(snapshot.nodeCount, snapshot.sceneDescriptor.slot(), snapshot.inputDescriptor.slot(), cast<u32>(snapshot.inputs.size()));
-        commandList.setPushConstants(push);
-        commandList.dispatch(1u, 1u, 1u);
+
+        const BufferRange refitRange(0u, cast<u64>(snapshot.nodeCount) * size_of<u32>());
+        mut Buffer parentBuffer = snapshot.parentBuffer.deref();
+        mut Buffer visitCounterBuffer = snapshot.visitCounterBuffer.deref();
+        const u32 groupCount = DivideUp(snapshot.nodeCount, s_ShaderSceneBvhRefitGroupSize);
+
+        const SoftwareSceneRefitPushConstants initPush = MakeSoftwareSceneBvhRefitPushConstantsWrapper(snapshot, s_ShaderSceneBvhRefitModeInitParents);
+        commandList.setPushConstants(initPush);
+        commandList.dispatch(groupCount, 1u, 1u);
+
+        commandList.setEnableUavBarriersForBuffer(parentBuffer, true);
+        commandList.setEnableUavBarriersForBuffer(visitCounterBuffer, true);
+        commandList.setBufferState(parentBuffer, ResourceStates::UnorderedAccess, false, refitRange);
+        commandList.setBufferState(visitCounterBuffer, ResourceStates::UnorderedAccess, false, refitRange);
+        commandList.commitBarriers();
+
+        const SoftwareSceneRefitPushConstants refitPush = MakeSoftwareSceneBvhRefitPushConstantsWrapper(snapshot, s_ShaderSceneBvhRefitModeRefit);
+        commandList.setPushConstants(refitPush);
+        commandList.dispatch(groupCount, 1u, 1u);
         return true;
     }
 }
 
 [cpp_unwind]
 Expected<SoftwareSceneRefitGraphTasks> DeclareSoftwareSceneRefit(in SoftwareSceneRefitHandle snapshot, in GpuGraphResourceId sceneNodes, in borrow GpuTaskId dependency, mut GpuTaskGraph graph){
-    if(!snapshot.valid() || !sceneNodes.valid() || !dependency.valid() || snapshot.deref().inputs.empty())
+    if(!snapshot.valid() || !sceneNodes.valid() || snapshot.deref().inputs.empty())
         return MakeUnexpected(Failure());
     {
         const GpuTaskGraphDeclarationReadView declarations(graph);
@@ -261,14 +353,33 @@ Expected<SoftwareSceneRefitGraphTasks> DeclareSoftwareSceneRefit(in SoftwareScen
     if(!inputResult.has_value())
         return MakeUnexpected(Failure());
     const GpuGraphResourceId input = inputResult.value();
+
+    GpuGraphResourceDesc parentDesc = BufferResourceDesc(Name(s_SoftwareSceneRefitParentsName), "Software Scene Refit Parents");
+    parentDesc.setInitialState(ResourceStates::Common).setExternalFinalState(ResourceStates::Common);
+    const auto parentResult = graph.importBuffer(snapshot.deref().parentBuffer, parentDesc);
+    if(!parentResult.has_value())
+        return MakeUnexpected(Failure());
+    const GpuGraphResourceId parents = parentResult.value();
+
+    GpuGraphResourceDesc visitsDesc = BufferResourceDesc(Name(s_SoftwareSceneRefitVisitsName), "Software Scene Refit Visits");
+    visitsDesc.setInitialState(ResourceStates::Common).setExternalFinalState(ResourceStates::Common);
+    const auto visitsResult = graph.importBuffer(snapshot.deref().visitCounterBuffer, visitsDesc);
+    if(!visitsResult.has_value())
+        return MakeUnexpected(Failure());
+    const GpuGraphResourceId visits = visitsResult.value();
+
     Vector<GpuTaskResourceUse> uses;
     uses.reserve(snapshot.deref().meshNodes.size() + s_SoftwareSceneRefitFixedUseCapacity);
     uses.push_back(ReadUse(input, ResourceStates::ShaderResource));
     uses.push_back(ReadWriteUse(sceneNodes, ResourceStates::UnorderedAccess));
+    uses.push_back(ReadWriteUse(parents, ResourceStates::UnorderedAccess));
+    uses.push_back(ReadWriteUse(visits, ResourceStates::UnorderedAccess));
     HashSet<u32> seenResources;
     seenResources.reserve(snapshot.deref().meshNodes.size() + s_SoftwareSceneRefitFixedUseCapacity);
     seenResources.insert(input.index);
     seenResources.insert(sceneNodes.index);
+    seenResources.insert(parents.index);
+    seenResources.insert(visits.index);
     {
         const GpuTaskGraphDeclarationReadView declarations(graph);
         if(!declarations.valid())
@@ -290,8 +401,12 @@ Expected<SoftwareSceneRefitGraphTasks> DeclareSoftwareSceneRefit(in SoftwareScen
     scheduling.allowPacketMerge = true;
     scheduling.mergeWithPrevious = true;
     scheduling.allowMergeAcrossConsumerFrontier = true;
+    GpuTaskSchedulingHint uploadScheduling = scheduling;
+    uploadScheduling.mergeWithPrevious = dependency.valid();
     GpuTaskDesc uploadDesc;
-    uploadDesc.setIdentity(Name(s_RenderNameRenderShadowPrepareSceneRefitInputsUpload)).setMarkerLabel("Software Scene Refit Inputs Upload").setScheduling(scheduling).setDependency(dependency);
+    uploadDesc.setIdentity(Name(s_RenderNameRenderShadowPrepareSceneRefitInputsUpload)).setMarkerLabel("Software Scene Refit Inputs Upload").setScheduling(uploadScheduling);
+    if(dependency.valid())
+        uploadDesc.setDependency(dependency);
     SoftwareSceneRefitGraphTasks result;
     GpuUploadBufferTaskDesc uploadTask;
     uploadTask.source = upload;

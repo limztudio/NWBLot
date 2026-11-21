@@ -53,7 +53,7 @@ namespace GpuTaskGraphCompilerDetail{
     const Span<const u64> prefixQueueCosts,
     const GpuTaskQueueScoringData& scoringData,
     const GpuPhysicalQueueTopology& topology,
-    const GpuTaskGraphTaskView& task,
+    const GpuTaskId taskId,
     const GpuPhysicalQueueInfo& baseQueue,
     const b8 allowCrossFamilyRouting,
     const b8 preferNonPrimaryQueue,
@@ -61,11 +61,12 @@ namespace GpuTaskGraphCompilerDetail{
 )noexcept{
     const GpuPhysicalQueueInfo* result = nullptr;
     u64 resultLoad = Limit<u64>::s_Max;
+    const Optional<GpuTaskGraphTaskView> taskView = legalityCache ? Optional<GpuTaskGraphTaskView>{} : Optional<GpuTaskGraphTaskView>{ graph.taskAt(taskId.index) };
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
         const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
         const b8 legal = legalityCache
-            ? legalityCache->isLegal(graph, topology, task, queueIndex)
-            : IsLegalQueueAssignmentCandidate(graph, topology, task, candidate);
+            ? legalityCache->isLegal(graph, topology, taskId, queueIndex)
+            : IsLegalQueueAssignmentCandidate(graph, topology, *taskView, candidate);
         if(candidate.queueClass != baseQueue.queueClass || (!allowCrossFamilyRouting && candidate.familyIndex != baseQueue.familyIndex) || !legal)
             continue;
 
@@ -91,7 +92,7 @@ namespace GpuTaskGraphCompilerDetail{
 [[nodiscard]] const GpuPhysicalQueueInfo* FindDirectDependencySameClassQueue(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
-    const GpuTaskGraphTaskView& task,
+    const GpuTaskId taskId,
     const Span<const GpuTaskQueueAssignment> assignments,
     const Span<const u32> assignmentIndicesByTask,
     const GpuPhysicalQueueTopology& topology,
@@ -103,7 +104,8 @@ namespace GpuTaskGraphCompilerDetail{
     FOUNDATION_ASSERT(assignedPrefixCount <= assignments.size());
     const GpuPhysicalQueueInfo* result = nullptr;
     usize resultAssignmentIndex = 0u;
-    const GpuTaskGraphSchedulingTaskIndexView producerIndices = analysis.schedulingProducers(task.id);
+    const Optional<GpuTaskGraphTaskView> taskView = legalityCache ? Optional<GpuTaskGraphTaskView>{} : Optional<GpuTaskGraphTaskView>{ graph.taskAt(taskId.index) };
+    const GpuTaskGraphSchedulingTaskIndexView producerIndices = analysis.schedulingProducers(taskId);
     for(usize producerIndex = 0u; producerIndex < producerIndices.taskCount; ++producerIndex){
         const u32 producerTaskIndex = producerIndices[producerIndex];
         FOUNDATION_ASSERT(producerTaskIndex < assignmentIndicesByTask.size());
@@ -112,12 +114,12 @@ namespace GpuTaskGraphCompilerDetail{
         if(producerAssignmentIndex >= assignedPrefixCount)
             continue;
         const GpuTaskQueueAssignment& assignment = assignments[producerAssignmentIndex];
-        FOUNDATION_ASSERT(assignment.task.generation == task.id.generation && assignment.task.index == producerTaskIndex);
+        FOUNDATION_ASSERT(assignment.task.generation == taskId.generation && assignment.task.index == producerTaskIndex);
         auto& candidate = *MakeNotNull(FindPhysicalQueueInfo(topology, assignment.queue));
         const usize queueIndex = static_cast<usize>(&candidate - topology.queues);
         const b8 legal = legalityCache
-            ? legalityCache->isLegal(graph, topology, task, queueIndex)
-            : IsLegalQueueAssignmentCandidate(graph, topology, task, candidate);
+            ? legalityCache->isLegal(graph, topology, taskId, queueIndex)
+            : IsLegalQueueAssignmentCandidate(graph, topology, *taskView, candidate);
         if(candidate.queueClass != baseQueue.queueClass || (!allowCrossFamilyRouting && candidate.familyIndex != baseQueue.familyIndex) || !legal)
             continue;
         if(!result || producerAssignmentIndex > resultAssignmentIndex){

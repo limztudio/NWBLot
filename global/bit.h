@@ -53,9 +53,96 @@ template<typename T>
     return (alignment - (address & (alignment - 1u))) & (alignment - 1u);
 }
 
+template<typename T>
+    requires requires(T value){ std::countl_zero(value); }
+[[nodiscard]] constexpr FOUNDATION_INLINE i32 CountLeadingZeros(const T value)noexcept{
+#if defined(__clang__) || defined(__GNUC__)
+    constexpr i32 s_BitWidth = static_cast<i32>(sizeof(T) * 8u);
+#if defined(__has_builtin)
+#if __has_builtin(__builtin_clzg)
+    return __builtin_clzg(value, s_BitWidth);
+#else
+    if(value == static_cast<T>(0))
+        return s_BitWidth;
+    if constexpr(sizeof(T) <= sizeof(unsigned int))
+        return __builtin_clz(static_cast<unsigned int>(value)) - (static_cast<i32>(sizeof(unsigned int) * 8u) - s_BitWidth);
+    else if constexpr(sizeof(T) <= sizeof(unsigned long))
+        return __builtin_clzl(static_cast<unsigned long>(value)) - (static_cast<i32>(sizeof(unsigned long) * 8u) - s_BitWidth);
+    else if constexpr(sizeof(T) <= sizeof(unsigned long long))
+        return __builtin_clzll(static_cast<unsigned long long>(value)) - (static_cast<i32>(sizeof(unsigned long long) * 8u) - s_BitWidth);
+    else
+        return std::countl_zero(value);
+#endif
+#else
+    return std::countl_zero(value);
+#endif
+#else
+    return std::countl_zero(value);
+#endif
+}
+
+template<typename T>
+    requires requires(T value){ std::bit_width(value); }
+[[nodiscard]] constexpr FOUNDATION_INLINE i32 BitWidth(const T value)noexcept{
+    return static_cast<i32>(sizeof(T) * 8u) - CountLeadingZeros(value);
+}
+
+template<typename T>
+    requires requires(T value){ std::countr_zero(value); }
+[[nodiscard]] constexpr FOUNDATION_INLINE i32 CountTrailingZeros(const T value)noexcept{
+#if defined(__clang__) || defined(__GNUC__)
+    constexpr i32 s_BitWidth = static_cast<i32>(sizeof(T) * 8u);
+#if defined(__has_builtin)
+#if __has_builtin(__builtin_ctzg)
+    return __builtin_ctzg(value, s_BitWidth);
+#else
+    if(value == static_cast<T>(0))
+        return s_BitWidth;
+    if constexpr(sizeof(T) <= sizeof(unsigned int))
+        return __builtin_ctz(static_cast<unsigned int>(value));
+    else if constexpr(sizeof(T) <= sizeof(unsigned long))
+        return __builtin_ctzl(static_cast<unsigned long>(value));
+    else if constexpr(sizeof(T) <= sizeof(unsigned long long))
+        return __builtin_ctzll(static_cast<unsigned long long>(value));
+    else
+        return std::countr_zero(value);
+#endif
+#else
+    return std::countr_zero(value);
+#endif
+#else
+    return std::countr_zero(value);
+#endif
+}
+
+template<typename T>
+    requires requires(T value){ std::popcount(value); }
+[[nodiscard]] constexpr FOUNDATION_INLINE i32 CountSetBits(const T value)noexcept{
+#if defined(__clang__) || defined(__GNUC__)
+#if defined(__has_builtin)
+#if __has_builtin(__builtin_popcountg)
+    return __builtin_popcountg(value);
+#else
+    if constexpr(sizeof(T) <= sizeof(unsigned int))
+        return __builtin_popcount(static_cast<unsigned int>(value));
+    else if constexpr(sizeof(T) <= sizeof(unsigned long))
+        return __builtin_popcountl(static_cast<unsigned long>(value));
+    else if constexpr(sizeof(T) <= sizeof(unsigned long long))
+        return __builtin_popcountll(static_cast<unsigned long long>(value));
+    else
+        return std::popcount(value);
+#endif
+#else
+    return std::popcount(value);
+#endif
+#else
+    return std::popcount(value);
+#endif
+}
+
 [[nodiscard]] inline constexpr u32 BitWidthLowU32(const u32 value, const u32 bitCount)noexcept{
     const u32 mask = bitCount >= 32u ? 0xffffffffu : ((1u << bitCount) - 1u);
-    return static_cast<u32>(std::bit_width(value & mask));
+    return static_cast<u32>(BitWidth(value & mask));
 }
 
 [[nodiscard]] inline constexpr u64 PackU32Words(const u32 low, const u32 high)noexcept{
@@ -93,18 +180,6 @@ template<typename T>
         direction ^= direction >> 1u;
     }
     return PackU32Words(x, y);
-}
-
-template<typename T>
-    requires requires(T value){ std::countr_zero(value); }
-[[nodiscard]] constexpr FOUNDATION_INLINE i32 CountTrailingZeros(const T value)noexcept{
-    return std::countr_zero(value);
-}
-
-template<typename T>
-    requires requires(T value){ std::popcount(value); }
-[[nodiscard]] constexpr FOUNDATION_INLINE i32 CountSetBits(const T value)noexcept{
-    return std::popcount(value);
 }
 
 template<typename To, typename From>

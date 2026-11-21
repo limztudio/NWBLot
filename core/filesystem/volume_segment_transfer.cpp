@@ -337,6 +337,74 @@ static b8 TransferVolumeBytes(const AStringView volumeName, const AStringView op
 }
 #endif
 
+template<typename HandleVector>
+static void CloseNativeHandleVector(HandleVector& nativeHandles)noexcept{
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+    const usize invalidValue = reinterpret_cast<usize>(INVALID_HANDLE_VALUE);
+    for(const usize raw : nativeHandles){
+        if(raw != invalidValue && raw != 0u)
+            CloseHandle(reinterpret_cast<HANDLE>(raw));
+    }
+#else
+    const usize invalidValue = static_cast<usize>(~0u);
+    for(const usize raw : nativeHandles){
+        if(raw != invalidValue)
+            ::close(static_cast<int>(raw));
+    }
+#endif
+    nativeHandles.clear();
+}
+
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+template<typename HandleVector>
+[[nodiscard]] static HANDLE AcquireCachedWindowsHandle(
+    HandleVector& nativeHandles,
+    const b8 writable,
+    const AStringView volumeName,
+    const Path& segmentPath,
+    const usize segmentIndex,
+    const AStringView openOperation
+){
+    const usize invalidValue = reinterpret_cast<usize>(INVALID_HANDLE_VALUE);
+    if(segmentIndex >= nativeHandles.size())
+        nativeHandles.resize(segmentIndex + 1u, invalidValue);
+    if(nativeHandles[segmentIndex] != invalidValue)
+        return reinterpret_cast<HANDLE>(nativeHandles[segmentIndex]);
+
+    const HANDLE opened = OpenSegmentNativeHandle(segmentPath, writable);
+    if(opened == INVALID_HANDLE_VALUE){
+        LogFailureWithFsError(volumeName, openOperation, segmentPath, LastSystemError());
+        return nullptr;
+    }
+    nativeHandles[segmentIndex] = reinterpret_cast<usize>(opened);
+    return opened;
+}
+#else
+template<typename HandleVector>
+[[nodiscard]] static int AcquireCachedPosixFd(
+    HandleVector& nativeHandles,
+    const b8 writable,
+    const AStringView volumeName,
+    const Path& segmentPath,
+    const usize segmentIndex,
+    const AStringView openOperation
+){
+    const usize invalidValue = static_cast<usize>(~0u);
+    if(segmentIndex >= nativeHandles.size())
+        nativeHandles.resize(segmentIndex + 1u, invalidValue);
+    if(nativeHandles[segmentIndex] != invalidValue)
+        return static_cast<int>(nativeHandles[segmentIndex]);
+
+    const int opened = OpenSegmentPosixFd(segmentPath, writable);
+    if(opened < 0){
+        LogFailureWithPath(volumeName, openOperation, segmentPath, LastErrnoMessage());
+        return -1;
+    }
+    nativeHandles[segmentIndex] = static_cast<usize>(opened);
+    return opened;
+}
+#endif
+
 SegmentTransferCache::SegmentTransferCache(Alloc::ScratchArena& scratchArena, const b8 writable)noexcept
     : m_nativeHandles(scratchArena)
     , m_writable(writable)
@@ -347,37 +415,12 @@ SegmentTransferCache::~SegmentTransferCache()noexcept{
 }
 
 void SegmentTransferCache::closeAll()noexcept{
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-    const usize invalidValue = reinterpret_cast<usize>(INVALID_HANDLE_VALUE);
-    for(const usize raw : m_nativeHandles){
-        if(raw != invalidValue && raw != 0u)
-            CloseHandle(reinterpret_cast<HANDLE>(raw));
-    }
-#else
-    const usize invalidValue = static_cast<usize>(~0u);
-    for(const usize raw : m_nativeHandles){
-        if(raw != invalidValue)
-            ::close(static_cast<int>(raw));
-    }
-#endif
-    m_nativeHandles.clear();
+    CloseNativeHandleVector(m_nativeHandles);
 }
 
 void* SegmentTransferCache::acquireWindowsHandle(const AStringView volumeName, const Path& segmentPath, const usize segmentIndex, const AStringView openOperation){
 #if defined(FOUNDATION_PLATFORM_WINDOWS)
-    const usize invalidValue = reinterpret_cast<usize>(INVALID_HANDLE_VALUE);
-    if(segmentIndex >= m_nativeHandles.size())
-        m_nativeHandles.resize(segmentIndex + 1u, invalidValue);
-    if(m_nativeHandles[segmentIndex] != invalidValue)
-        return reinterpret_cast<void*>(m_nativeHandles[segmentIndex]);
-
-    const HANDLE opened = OpenSegmentNativeHandle(segmentPath, m_writable);
-    if(opened == INVALID_HANDLE_VALUE){
-        LogFailureWithFsError(volumeName, openOperation, segmentPath, LastSystemError());
-        return nullptr;
-    }
-    m_nativeHandles[segmentIndex] = reinterpret_cast<usize>(opened);
-    return opened;
+    return AcquireCachedWindowsHandle(m_nativeHandles, m_writable, volumeName, segmentPath, segmentIndex, openOperation);
 #else
     (void)volumeName;
     (void)segmentPath;
@@ -395,19 +438,7 @@ int SegmentTransferCache::acquirePosixFd(const AStringView volumeName, const Pat
     (void)openOperation;
     return -1;
 #else
-    const usize invalidValue = static_cast<usize>(~0u);
-    if(segmentIndex >= m_nativeHandles.size())
-        m_nativeHandles.resize(segmentIndex + 1u, invalidValue);
-    if(m_nativeHandles[segmentIndex] != invalidValue)
-        return static_cast<int>(m_nativeHandles[segmentIndex]);
-
-    const int opened = OpenSegmentPosixFd(segmentPath, m_writable);
-    if(opened < 0){
-        LogFailureWithPath(volumeName, openOperation, segmentPath, LastErrnoMessage());
-        return -1;
-    }
-    m_nativeHandles[segmentIndex] = static_cast<usize>(opened);
-    return opened;
+    return AcquireCachedPosixFd(m_nativeHandles, m_writable, volumeName, segmentPath, segmentIndex, openOperation);
 #endif
 }
 

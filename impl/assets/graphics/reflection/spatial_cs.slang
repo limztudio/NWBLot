@@ -70,7 +70,7 @@ struct NwbReflectionSpatialView{
 groupshared half4 g_NwbReflectionSpatialRadiance[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
 groupshared half4 g_NwbReflectionSpatialSpecular[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
 groupshared float4 g_NwbReflectionSpatialPositionDepth[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
-groupshared float4 g_NwbReflectionSpatialNormal[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
+groupshared half3 g_NwbReflectionSpatialNormal[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
 groupshared uint g_NwbReflectionSpatialTileEligible;
 
 
@@ -125,7 +125,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
     g_NwbReflectionSpatialRadiance[centerIndex] = center;
     g_NwbReflectionSpatialSpecular[centerIndex] = specular;
     g_NwbReflectionSpatialPositionDepth[centerIndex] = centerPositionDepth;
-    g_NwbReflectionSpatialNormal[centerIndex] = centerNormal;
+    g_NwbReflectionSpatialNormal[centerIndex] = half3(nwbSafeNormalize(centerNormal.xyz * 2.0 - 1.0, float3(0.0, 1.0, 0.0)));
 
     const int2 tileOrigin = int2(groupId.xy * NWB_REFLECTION_SPATIAL_GROUP_SIZE) - int2(radius);
     const uint groupThreads = NWB_REFLECTION_SPATIAL_GROUP_SIZE * NWB_REFLECTION_SPATIAL_GROUP_SIZE;
@@ -137,19 +137,20 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
         half4 radiance = half4(0.0h);
         half4 neighborSpecular = half4(0.0h);
         float4 positionDepth = float4(0.0, 0.0, 0.0, 1.0);
-        float4 normal = float4(0.0);
+        half3 decodedNormal = half3(0.0h, 1.0h, 0.0h);
         if(all(sourcePixel >= int2(0)) && sourcePixel.x < int(g_NwbReflectionSpatial.width) && sourcePixel.y < int(g_NwbReflectionSpatial.height)){
             const int3 sourceTexel = int3(sourcePixel, 0);
             radiance = half4(nwbHeapSampledImage2D(g_NwbReflectionSpatial.sourceRadianceSrvSlot).Load(sourceTexel));
             neighborSpecular = half4(nwbHeapSampledImage2D(g_NwbReflectionSpatial.opaqueSpecularSlot).Load(sourceTexel));
             positionDepth.xyz = nwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.z).Load(sourceTexel).xyz;
             positionDepth.w = nwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.w).Load(sourceTexel).r;
-            normal = nwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.y).Load(sourceTexel);
+            const float3 rawNormal = nwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.y).Load(sourceTexel).xyz;
+            decodedNormal = half3(nwbSafeNormalize(rawNormal * 2.0 - 1.0, float3(0.0, 1.0, 0.0)));
         }
         g_NwbReflectionSpatialRadiance[tileIndex] = radiance;
         g_NwbReflectionSpatialSpecular[tileIndex] = neighborSpecular;
         g_NwbReflectionSpatialPositionDepth[tileIndex] = positionDepth;
-        g_NwbReflectionSpatialNormal[tileIndex] = normal;
+        g_NwbReflectionSpatialNormal[tileIndex] = decodedNormal;
     }
     GroupMemoryBarrierWithGroupSync();
     if(!insideImage)
@@ -160,7 +161,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
     }
 
     const float3 position = g_NwbReflectionSpatialPositionDepth[centerIndex].xyz;
-    const float3 normal = nwbSafeNormalize(g_NwbReflectionSpatialNormal[centerIndex].xyz * 2.0 - 1.0, float3(0.0, 1.0, 0.0));
+    const float3 normal = float3(g_NwbReflectionSpatialNormal[centerIndex]);
     const float4 clip = mul(g_NwbReflectionSpatialView.worldToClip, float4(position, 1.0));
     if(!all(isfinite(position)) || !all(isfinite(clip))){
         nwbHeapStorageImage2DFloat4(g_NwbReflectionSpatial.destinationRadianceUavSlot)[pixel] = float4(center);
@@ -174,17 +175,23 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
     const half roughness = saturate(specular.a);
     const float sigma = float(radius) * float(roughness);
     const float spatialDenominator = max(2.0 * sigma * sigma, NWB_REFLECTION_SPATIAL_DENOMINATOR_MIN);
+    const float negInvSpatialDenominator = -1.0 / spatialDenominator;
     float3 sum = float3(center.rgb);
     float weightSum = 1.0;
     for(int y = -int(radius); y <= int(radius); ++y){
+        const int neighborY = int(pixel.y) + y;
+        if(neighborY < 0 || neighborY >= int(g_NwbReflectionSpatial.height))
+            continue;
+        const int ySq = y * y;
         for(int x = -int(radius); x <= int(radius); ++x){
             if(x == 0 && y == 0)
                 continue;
-            const float spatialExponent = -float(x * x + y * y) / spatialDenominator;
-            if(exp(spatialExponent) == 0.0)
+            const int neighborX = int(pixel.x) + x;
+            if(neighborX < 0 || neighborX >= int(g_NwbReflectionSpatial.width))
                 continue;
-            const int2 neighborPixel = int2(pixel) + int2(x, y);
-            if(any(neighborPixel < int2(0)) || neighborPixel.x >= int(g_NwbReflectionSpatial.width) || neighborPixel.y >= int(g_NwbReflectionSpatial.height))
+            const int tapDistSq = x * x + ySq;
+            const float spatialExponent = float(tapDistSq) * negInvSpatialDenominator;
+            if(spatialExponent < -88.722839)
                 continue;
             const int2 neighborTilePixel = int2(tilePixel) + int2(x, y);
             const uint neighborIndex = uint(neighborTilePixel.y) * tileWidth + uint(neighborTilePixel.x);
@@ -198,7 +205,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
             const half maxF0Difference = max(max(f0Difference.x, f0Difference.y), f0Difference.z);
             if(roughnessDifference > half(NWB_REFLECTION_SPATIAL_ROUGHNESS_DIFFERENCE_MAX) || maxF0Difference > half(NWB_REFLECTION_SPATIAL_F0_DIFFERENCE_MAX))
                 continue;
-            const float3 neighborNormal = nwbSafeNormalize(g_NwbReflectionSpatialNormal[neighborIndex].xyz * 2.0 - 1.0, normal);
+            const float3 neighborNormal = float3(g_NwbReflectionSpatialNormal[neighborIndex]);
             const half normalAgreement = half(dot(normal, neighborNormal));
             if(normalAgreement < half(NWB_REFLECTION_SPATIAL_NORMAL_AGREEMENT_MIN))
                 continue;
@@ -209,7 +216,10 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
             const float3 positionUncertainty = (abs(position) + abs(neighborPosition)) * NWB_REFLECTION_SPATIAL_POSITION_RELATIVE_ERROR;
             const float planeTolerance = max(NWB_REFLECTION_SPATIAL_PLANE_TOLERANCE_MIN, max(dot(positionUncertainty, abs(normal)), dot(positionUncertainty, abs(neighborNormal))) + pixelFootprint * NWB_REFLECTION_SPATIAL_PLANE_FOOTPRINT_SCALE);
             const float planeDistance = max(abs(dot(displacement, normal)), abs(dot(displacement, neighborNormal)));
-            if(planeDistance > planeTolerance * 2.0 || length(displacement) > tangentFootprint * (length(float2(x, y)) + NWB_REFLECTION_SPATIAL_TAP_DISTANCE_MARGIN) + length(positionUncertainty))
+            if(planeDistance > planeTolerance * 2.0)
+                continue;
+            const float maxDist = tangentFootprint * (sqrt(float(tapDistSq)) + NWB_REFLECTION_SPATIAL_TAP_DISTANCE_MARGIN) + length(positionUncertainty);
+            if(dot(displacement, displacement) > maxDist * maxDist)
                 continue;
             const half4 neighborH = g_NwbReflectionSpatialRadiance[neighborIndex];
             const half4 neighbor = neighborH;

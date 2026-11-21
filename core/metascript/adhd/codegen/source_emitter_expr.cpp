@@ -58,60 +58,59 @@ b8 SourceEmitter::tryEmitFusedSimdLogicChain(MString& out, const Expr& expr, con
 
 
 void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterBinaryParens)const{
+    emitExprImpl(out, expr, omitOuterBinaryParens, 0u);
+}
+
+void SourceEmitter::emitExprImpl(MString& out, const Expr& expr, const b8 omitOuterBinaryParens, const u8 suppressWrapMask)const{
+    constexpr u8 s_SuppressFormatArgWrap = 1u << 0u;
+    constexpr u8 s_SuppressSimdResult = 1u << 1u;
+    constexpr u8 s_SuppressNotNull = 1u << 2u;
+    constexpr u8 s_SuppressFuncType = 1u << 3u;
+    constexpr u8 s_SuppressAdaptToTChar = 1u << 4u;
+
     const TokenType::Enum prevUnfusedLogicOp = m_unfusedLogicOp;
     if(expr.kind != ExprKind::Binary || expr.op != prevUnfusedLogicOp)
         m_unfusedLogicOp = TokenType::EndOfFile;
 
-    if(expr.formatArgWrapKind != 0u){
-        Expr unwrapped = expr;
-        unwrapped.formatArgWrapKind = 0u;
+    if((suppressWrapMask & s_SuppressFormatArgWrap) == 0u && expr.formatArgWrapKind != 0u){
+        const u8 nextMask = suppressWrapMask | s_SuppressFormatArgWrap;
         if(const BuiltinFormatArgWrapInfo* wrapInfo = FindFormatArgWrapInfo(expr.formatArgWrapKind)){
             out.append(wrapInfo->cppPrefix.data(), wrapInfo->cppPrefix.size());
-            emitExpr(out, unwrapped);
+            emitExprImpl(out, expr, false, nextMask);
             out.append(wrapInfo->cppSuffix.data(), wrapInfo->cppSuffix.size());
         }
         else{
-            emitExpr(out, unwrapped);
+            emitExprImpl(out, expr, false, nextMask);
         }
         return;
     }
 
-    if(expr.wrapInSimdResult){
+    if((suppressWrapMask & s_SuppressSimdResult) == 0u && expr.wrapInSimdResult){
         const MStringView resultPrefix = IsDoubleSimdType(expr.resolvedSimdType) ? CodegenSymbols::s_SimdResultDouble : CodegenSymbols::s_SimdResultSingle;
         out.append(resultPrefix.data(), resultPrefix.size());
-        Expr unwrapped = expr;
-        unwrapped.wrapInSimdResult = false;
-        emitExpr(out, unwrapped);
+        emitExprImpl(out, expr, false, suppressWrapMask | s_SuppressSimdResult);
         out.append(" }");
         return;
     }
 
-    if(expr.wrapInNotNull){
+    if((suppressWrapMask & s_SuppressNotNull) == 0u && expr.wrapInNotNull){
         out.append("::MakeNotNull(::AddressOf(");
-        Expr unwrapped = expr;
-        unwrapped.wrapInNotNull = false;
-        emitExpr(out, unwrapped);
+        emitExprImpl(out, expr, false, suppressWrapMask | s_SuppressNotNull);
         out.append("))");
         return;
     }
 
-    if(expr.wrapInFuncType && expr.kind == ExprKind::Lambda){
-        TypeRef valueFuncType = *expr.wrapInFuncType;
-        valueFuncType.refMode = ParamPassingMode::None;
-        m_typeEmitter.emitTypeCpp(out, valueFuncType);
+    if((suppressWrapMask & s_SuppressFuncType) == 0u && expr.wrapInFuncType && expr.kind == ExprKind::Lambda){
+        m_typeEmitter.emitTypeCpp(out, *expr.wrapInFuncType, true);
         out.push_back('(');
-        Expr unwrapped = expr;
-        unwrapped.wrapInFuncType = nullptr;
-        emitExpr(out, unwrapped);
+        emitExprImpl(out, expr, false, suppressWrapMask | s_SuppressFuncType);
         out.push_back(')');
         return;
     }
 
-    if(expr.adaptToTChar && expr.kind != ExprKind::StringLiteral){
+    if((suppressWrapMask & s_SuppressAdaptToTChar) == 0u && expr.adaptToTChar && expr.kind != ExprKind::StringLiteral){
         out.append("::ConvertString(");
-        Expr unwrapped = expr;
-        unwrapped.adaptToTChar = false;
-        emitExpr(out, unwrapped);
+        emitExprImpl(out, expr, false, suppressWrapMask | s_SuppressAdaptToTChar);
         out.push_back(')');
         return;
     }

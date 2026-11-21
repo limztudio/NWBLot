@@ -31,6 +31,23 @@ public:
         usize errorCount = 0u;
     };
 
+    class SuppressErrorsScope final : NoCopy{
+    public:
+        explicit SuppressErrorsScope(ParserCursor& cursor)noexcept
+            : m_cursor(cursor)
+            , m_prevSuppress(cursor.m_suppressErrors)
+        {
+            m_cursor.m_suppressErrors = true;
+        }
+        ~SuppressErrorsScope()noexcept{
+            m_cursor.m_suppressErrors = m_prevSuppress;
+        }
+
+    private:
+        ParserCursor& m_cursor;
+        b8 m_prevSuppress = false;
+    };
+
 
 public:
     ParserCursor(MStringView source, MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors);
@@ -42,6 +59,7 @@ public:
 
     [[nodiscard]] b8 failed()const noexcept{ return !m_errors.empty(); }
     [[nodiscard]] const Token& current()const noexcept{ return m_current; }
+    [[nodiscard]] Token peekNextToken()const noexcept{ Lexer copy = m_lexer; return copy.next(); }
     [[nodiscard]] MetaArena& arena()const noexcept{ return m_arena; }
 
     [[nodiscard]] b8 check(const TokenType::Enum type)const noexcept{ return m_current.type == type; }
@@ -65,6 +83,7 @@ private:
     MVector<ParseError>& m_errors;
 
     Token m_current;
+    b8 m_suppressErrors = false;
 };
 
 

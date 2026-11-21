@@ -506,10 +506,11 @@ EditBoxResult Builder::declareEditBox(
     }
     auto item = this.makeItem();
     item.style = this.m_style;
-    item.editStyle = this.m_editStyle;
     item.state = widget.value();
-    item.editOptions = options;
-    if(!this.prepareEditBox(result, model, state, item)){
+    auto editFrame = this.makeEditBoxFrame();
+    editFrame.editStyle = this.m_editStyle;
+    editFrame.editOptions = options;
+    if(!this.prepareEditBox(result, model, state, item, editFrame)){
         result.valid = false;
         return result;
     }
@@ -518,6 +519,7 @@ EditBoxResult Builder::declareEditBox(
         result.valid = false;
         return result;
     }
+    item.editBox = cast<u32>(this.m_scope.value().m_editBoxes.size());
     if(integerFrame.has_value())
         item.integerEdit = cast<u32>(this.m_scope.value().m_integerEdits.size());
     if(floatFrame.has_value())
@@ -525,63 +527,81 @@ EditBoxResult Builder::declareEditBox(
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    description.intrinsicSize = ResolveEditIntrinsicSize(this.loadEditMinimumSize(), item.editView.visualBounds().height, item.padding);
+    description.intrinsicSize = ResolveEditIntrinsicSize(this.loadEditMinimumSize(), editFrame.editView.visualBounds().height, item.padding);
     if(!this.addItemNode(description, item)){
         result.valid = false;
         return result;
     }
+    AppendOwned<BuilderEditBoxFrame>(this.m_scope.value().m_editBoxes, editFrame);
     AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
     return result;
 }
 
-b8 Builder::prepareEditBox(in EditBoxResult result, mut EditModel model, mut EditBoxState state, mut BuilderItem item){
+b8 Builder::prepareEditBox(in EditBoxResult result, mut EditModel model, mut EditBoxState state, mut BuilderItem item, mut BuilderEditBoxFrame editFrame){
     state.updateFromModel(model.stamp(), result.focused, this.m_deltaSeconds);
 
-    item.editFlags.enabled = item.editOptions.enabled;
-    item.editFlags.hovered = this.m_context.input().hover() == item.state.id;
-    item.editFlags.focused = result.focused;
-    item.editFlags.readOnly = item.editOptions.readOnly;
-    item.editFlags.caretVisible = state.caretElapsed < s_CaretVisiblePhaseEnd;
-    item.editFlags.preeditCaretVisible = result.preeditCaretVisible;
-    if(!item.editView.snapshot(model) || item.editView.shape(this.m_text, this.textShapeRequest("", this.m_style.fontSize)) != TextLayoutStatus::Success || !item.editView.measure(this.m_text, this.m_paint.displayMetrics())){
+    editFrame.editFlags.enabled = editFrame.editOptions.enabled;
+    editFrame.editFlags.hovered = this.m_context.input().hover() == item.state.id;
+    editFrame.editFlags.focused = result.focused;
+    editFrame.editFlags.readOnly = editFrame.editOptions.readOnly;
+    editFrame.editFlags.caretVisible = state.caretElapsed < s_CaretVisiblePhaseEnd;
+    editFrame.editFlags.preeditCaretVisible = result.preeditCaretVisible;
+    if(!editFrame.editView.snapshot(model) || editFrame.editView.shape(this.m_text, this.textShapeRequest("", this.m_style.fontSize)) != TextLayoutStatus::Success || !editFrame.editView.measure(this.m_text, this.m_paint.displayMetrics())){
         this.m_context.fail();
         return false;
     }
-    item.editState = Optional<mut EditBoxState>(state);
-    item.padding = item.editStyle.padding;
-    if(this.m_skin.has_value())
-        item.padding = ControlStyleMetrics().editPadding(this.m_skin.value(), item.editStyle);
+    editFrame.editState = Optional<mut EditBoxState>(state);
+    item.padding = this.loadEditPadding();
     return true;
 }
 
 b8 Builder::paintEditBox(in BuilderItem item, in LayoutBox box, in Optional<in HitTarget> navigation){
-    if(!this.numericEditMatches(item))
+    if(item.editBox >= this.m_scope.value().m_editBoxes.size() || !this.numericEditMatches(item))
         return false;
+    mut BuilderEditBoxFrame editFrame = this.m_scope.value().m_editBoxes[item.editBox];
     const f32 caretWidth = ResolveSinglePixelCaretWidth(this.m_paint.displayMetrics());
-    const auto arranged = item.editView.arrange(box.rectangle, item.padding, this.visibleClip(box.clip), Point(item.editState.value().scroll, 0.0f), caretWidth);
+    const auto arranged = editFrame.editView.arrange(box.rectangle, item.padding, this.visibleClip(box.clip), Point(editFrame.editState.value().scroll, 0.0f), caretWidth);
     if(!arranged.has_value())
         return false;
     in EditBoxPlacement placement = arranged.value();
-    if(!item.editView.paint(this.m_text, this.m_paint, this.m_skin.value(), placement, item.editStyle, item.editFlags))
+    if(!editFrame.editView.paint(this.m_text, this.m_paint, this.m_skin.value(), placement, editFrame.editStyle, editFrame.editFlags))
         return false;
-    item.editState.value().placement = placement;
-    item.editState.value().scroll = placement.scroll;
+    editFrame.editState.value().placement = placement;
+    editFrame.editState.value().scroll = placement.scroll;
     HitTarget navigationTarget;
     if(navigation.has_value())
         navigationTarget = navigation.value();
     HitTargetFactory targets;
-    const HitTarget target = targets.makeEditBoxHitTarget(navigationTarget, box.rectangle, this.visibleClip(box.clip), item.editOptions.enabled, item.contextMenu);
+    const HitTarget target = targets.makeEditBoxHitTarget(navigationTarget, box.rectangle, this.visibleClip(box.clip), editFrame.editOptions.enabled, item.contextMenu);
     if(!this.m_context.addTarget(item.state, target))
         return false;
-    const b8 published = !this.m_editHost.has_value() || this.m_editHost.value().publish(item.state, item.editView, placement, item.editOptions);
+    const b8 published = !this.m_editHost.has_value() || this.m_editHost.value().publish(item.state, editFrame.editView, placement, editFrame.editOptions);
     return published && this.numericEditMatches(item);
 }
 
 
-Point Builder::loadEditMinimumSize()const{
-    if(!this.m_skin.has_value())
-        return Point(s_StyleMinimumFieldWidth, 0.0f);
-    return ControlStyleMetrics().editMinimumSize(this.m_skin.value(), this.m_editStyle);
+Point Builder::loadEditMinimumSize(){
+    this.syncMetricsCacheSkinVersion();
+    if(!this.m_editMinSizeCached){
+        if(this.m_skin.has_value())
+            this.m_cachedEditMinSize = ControlStyleMetrics().editMinimumSize(this.m_skin.value(), this.m_editStyle);
+        else
+            this.m_cachedEditMinSize = Point(s_StyleMinimumFieldWidth, 0.0f);
+        this.m_editMinSizeCached = true;
+    }
+    return this.m_cachedEditMinSize;
+}
+
+Insets Builder::loadEditPadding(){
+    this.syncMetricsCacheSkinVersion();
+    if(!this.m_editPaddingCached){
+        if(this.m_skin.has_value())
+            this.m_cachedEditPadding = ControlStyleMetrics().editPadding(this.m_skin.value(), this.m_editStyle);
+        else
+            this.m_cachedEditPadding = this.m_editStyle.padding;
+        this.m_editPaddingCached = true;
+    }
+    return this.m_cachedEditPadding;
 }
 
 

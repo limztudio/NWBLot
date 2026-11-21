@@ -24,20 +24,40 @@ PreprocessorIncludes::PreprocessorIncludes(MetaArena& arena, MVector<ParseError>
     , m_includedFiles(arena)
     , m_resolvedIncludedFiles(arena)
     , m_includedByteRanges(arena)
+    , m_topLevelByteRanges(arena)
     , m_allowNwbInclude(allowNwbInclude)
 {}
 
 
 b8 PreprocessorIncludes::containsOffset(const usize offset)const noexcept{
-    for(const IncludedByteRange& range : m_includedByteRanges){
-        if(offset >= range.startOffset && offset < range.endOffset)
-            return true;
+    usize lo = 0u;
+    usize hi = m_topLevelByteRanges.size();
+    while(lo < hi){
+        const usize mid = lo + (hi - lo) / 2u;
+        if(m_topLevelByteRanges[mid].endOffset <= offset)
+            lo = mid + 1u;
+        else
+            hi = mid;
+    }
+    if(lo < m_topLevelByteRanges.size()){
+        const IncludedByteRange& range = m_topLevelByteRanges[lo];
+        return offset >= range.startOffset && offset < range.endOffset;
     }
     return false;
 }
 
 MStringView PreprocessorIncludes::includedFileAtOffset(const usize offset)const noexcept{
-    for(const IncludedByteRange& range : m_includedByteRanges){
+    usize lo = 0u;
+    usize hi = m_includedByteRanges.size();
+    while(lo < hi){
+        const usize mid = lo + (hi - lo) / 2u;
+        if(m_includedByteRanges[mid].endOffset <= offset)
+            lo = mid + 1u;
+        else
+            hi = mid;
+    }
+    for(usize idx = lo; idx < m_includedByteRanges.size(); ++idx){
+        const IncludedByteRange& range = m_includedByteRanges[idx];
         if(offset >= range.startOffset && offset < range.endOffset && range.resolvedFileIndex < m_resolvedIncludedFiles.size())
             return MStringView(m_resolvedIncludedFiles[range.resolvedFileIndex].data(), m_resolvedIncludedFiles[range.resolvedFileIndex].size());
     }
@@ -126,7 +146,10 @@ b8 PreprocessorIncludes::process(Preprocessor& owner, const MStringView rest, co
     m_includeResolver->popIncludeScope();
     if(!ok)
         return false;
-    m_includedByteRanges.push_back(IncludedByteRange{startOffset, outProcessed.size(), fileIndex});
+    const IncludedByteRange recordedRange{ startOffset, outProcessed.size(), fileIndex };
+    m_includedByteRanges.push_back(recordedRange);
+    if(depth == 0u)
+        m_topLevelByteRanges.push_back(recordedRange);
     return true;
 }
 

@@ -156,7 +156,7 @@ class GpuRenderer : IGpuTaskGraphOutputLayerContributor, NoCopy{
             return false;
         if(!IsValidDisplayMetricsForGpuSubmit(snapshot.displayMetrics()))
             return false;
-        if(!ValidateGpuGlyphPages(snapshot) || !ValidateGpuSdfPages(snapshot) || !ValidateGpuTextureImages(snapshot))
+        if(!ValidateGpuSnapshotImages(snapshot))
             return false;
         mut Device device = state.m_graphics.getDevice();
         for(mut auto slot : state.m_slots){

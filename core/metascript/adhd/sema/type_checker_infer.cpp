@@ -188,7 +188,7 @@ template<typename InferBaseFn>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
+MStringView TypeChecker::inferExprTypeNameFastPrefix(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
     if(!expr.resolvedSimdType.empty())
         return expr.resolvedSimdType;
     if(!expr.resolvedUnalignedType.empty())
@@ -236,8 +236,10 @@ MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const Me
     if(expr.kind == ExprKind::Binary)
         return inferExprBaseType(ownerClass, method, expr, scope, nullptr);
 
-    if(const TypeRef* resolvedRef = inferExprTypeRef(ownerClass, method, expr, scope))
-        return m_symbols.resolveBaseTypeName(resolvedRef->name);
+    return {};
+}
+
+MStringView TypeChecker::inferExprTypeNameFallbackSuffix(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
     if(expr.kind == ExprKind::Call && expr.lhs){
         if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
             const MStringView recvBase = inferExprTypeName(ownerClass, method, *expr.lhs->lhs, scope);
@@ -304,32 +306,34 @@ MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const Me
                     return lhsT;
                 }
                 if(fnInfo->returnRule == BuiltinFunctionReturnRule::PromoteSimd){
+                    MStringView firstArgType;
+                    b8 haveFirst = false;
+                    MStringView promoted;
+                    b8 allScalar = true;
                     for(const Expr* arg : expr.arguments){
-                        if(!arg)
-                            continue;
-                        const MStringView argT = inferExprTypeName(ownerClass, method, *arg, scope);
-                        if(SymbolTable::IsSimdType(argT))
+                        const MStringView argT = arg ? inferExprTypeName(ownerClass, method, *arg, scope) : MStringView{};
+                        if(!haveFirst){
+                            firstArgType = argT;
+                            haveFirst = true;
+                        }
+                        if(arg && SymbolTable::IsSimdType(argT))
                             return argT;
+                        if(allScalar){
+                            if(!BuiltinTypeSemantics::IsScalarType(argT))
+                                allScalar = false;
+                            else if(const MStringView next = BuiltinTypeSemantics::PromoteFloatScalarTypes(promoted, argT); !next.empty())
+                                promoted = next;
+                        }
                     }
                     const SpecialFunctionKind::Enum specialFn = FindSpecialFunctionKind(expr.lhs->text);
                     if(specialFn == SpecialFunctionKind::Lerp){
-                        MStringView promoted;
-                        b8 allScalar = true;
-                        for(const Expr* argument : expr.arguments){
-                            const MStringView type = argument ? inferExprTypeName(ownerClass, method, *argument, scope) : MStringView{};
-                            if(!BuiltinTypeSemantics::IsScalarType(type)){
-                                allScalar = false;
-                                break;
-                            }
-                            if(const MStringView next = BuiltinTypeSemantics::PromoteFloatScalarTypes(promoted, type); !next.empty())
-                                promoted = next;
-                        }
                         if(allScalar && !promoted.empty())
                             return promoted;
                     }
-                    else if(specialFn != SpecialFunctionKind::Rsqrt && !expr.callTemplateArgs.empty() && expr.callTemplateArgs[0].type)
+                    else if(specialFn != SpecialFunctionKind::Rsqrt && !expr.callTemplateArgs.empty() && expr.callTemplateArgs[0].type){
                         return m_symbols.resolveBaseTypeName(expr.callTemplateArgs[0].type->name);
-                    return inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
+                    }
+                    return firstArgType;
                 }
             }
         }
@@ -391,6 +395,14 @@ MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const Me
         return BuiltinTypeSemantics::FindIntegerScalarTypeName(4u, !hasU);
     }
     return {};
+}
+
+MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
+    if(const MStringView fast = inferExprTypeNameFastPrefix(ownerClass, method, expr, scope); !fast.empty())
+        return fast;
+    if(const TypeRef* resolvedRef = inferExprTypeRef(ownerClass, method, expr, scope))
+        return m_symbols.resolveBaseTypeName(resolvedRef->name);
+    return inferExprTypeNameFallbackSuffix(ownerClass, method, expr, scope);
 }
 
 const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
@@ -523,12 +535,20 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
         const usize callArgCount = expr.arguments.size();
         MVector<MStringView> argTypeHints(m_arena);
         MVector<u8> argIsMutHints(m_arena);
-        buildCallArgHints(ownerClass, method, expr.arguments, scope, argTypeHints, argIsMutHints);
+        b8 hintsBuilt = false;
+        const auto ensureCallArgHints = [&](){
+            if(!hintsBuilt && callArgCount > 0u){
+                buildCallArgHints(ownerClass, method, expr.arguments, scope, argTypeHints, argIsMutHints);
+                hintsBuilt = true;
+            }
+        };
         const CallableTemplateDeduction templateDeducer(*this);
         const auto inferArg0Base = [this, ownerClass, method, scope](const Expr& argExpr, const TypeRef** outRef)noexcept{
             return inferExprBaseType(ownerClass, method, argExpr, scope, outRef);
         };
         if(expr.lhs->kind == ExprKind::Identifier){
+            if(m_symbols.hasMultipleFreeFunctions(expr.lhs->text))
+                ensureCallArgHints();
             if(const MethodDecl* fn = m_symbols.findFreeFunction(expr.lhs->text, &callArgCount, argTypeHints, argIsMutHints))
                 return __hidden_adhd_type_infer::SubstituteCallableReturnType(m_arena, m_symbols, ownerClass, method, *fn, nullptr, nullptr, expr, scope, templateDeducer);
             if(const ScopedVarInfo* local = FindScopedVar(scope, expr.lhs->text)){
@@ -561,6 +581,8 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
         }
         else if(expr.lhs->kind == ExprKind::ThisMember && ownerClass){
             const b8 isConstThis = method ? isThisConstInScope(*method, scope) : false;
+            if(m_symbols.hasMultipleClassMethods(*ownerClass, expr.lhs->text, false))
+                ensureCallArgHints();
             if(const MethodDecl* m = m_symbols.findClassMethod(*ownerClass, expr.lhs->text, &callArgCount, isConstThis, false, argTypeHints, argIsMutHints))
                 return __hidden_adhd_type_infer::SubstituteCallableReturnType(m_arena, m_symbols, ownerClass, method, *m, nullptr, nullptr, expr, scope, templateDeducer);
             if(const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, expr.lhs->text)){
@@ -576,6 +598,8 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
             const MStringView mName = expr.lhs->text;
             if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
                 const b8 recvIsConst = method ? isReceiverConst(ownerClass, *method, *expr.lhs->lhs, scope) : false;
+                if(m_symbols.hasMultipleClassMethods(*cls, mName, false))
+                    ensureCallArgHints();
                 if(const MethodDecl* m = m_symbols.findClassMethod(*cls, mName, &callArgCount, recvIsConst, !m_symbols.canAccessPrivateMembers(*cls, ownerClass), argTypeHints, argIsMutHints))
                     return __hidden_adhd_type_infer::SubstituteCallableReturnType(m_arena, m_symbols, ownerClass, method, *m, cls, recvTypeRef, expr, scope, templateDeducer);
                 if(const FieldDecl* field = SymbolTable::FindClassField(*cls, mName)){
@@ -587,6 +611,8 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                     return __hidden_adhd_type_infer::SynthesizeBuiltinReturnTypeRef(m_arena, inheritedRecv->returnTypeName, inheritedRecv->returnTypeArgName, inheritedRecv->returnNestedTypeArgName, inheritedRecv->returnErrorTypeName, inheritedRecv->returnTypeArgRefMode);
             }
             else if(const InterfaceDecl* ifaceDecl = recvTypeRef ? m_symbols.findInterface(lhsType) : nullptr){
+                if(m_symbols.hasMultipleInterfaceMethods(*recvTypeRef, mName))
+                    ensureCallArgHints();
                 if(const MethodDecl* m = m_symbols.findInterfaceMethod(*recvTypeRef, mName, &callArgCount, 0u, argTypeHints, argIsMutHints); m && m->returnType)
                     return m_symbols.unwrapTypeAlias(m->returnType);
                 if(const BuiltinReceiverMethodInfo* inheritedRecv = m_symbols.findInheritedBuiltinReceiverMethod(nullptr, ifaceDecl, mName); inheritedRecv && !inheritedRecv->returnTypeName.empty())
@@ -596,6 +622,8 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                 for(const TypeRef* boundRef : tp->interfaceBounds){
                     if(!boundRef)
                         continue;
+                    if(m_symbols.hasMultipleInterfaceMethods(*boundRef, mName))
+                        ensureCallArgHints();
                     if(const MethodDecl* m = m_symbols.findInterfaceMethod(*boundRef, mName, &callArgCount, 0u, argTypeHints, argIsMutHints))
                         return m->returnType ? m_symbols.unwrapTypeAlias(m->returnType) : nullptr;
                 }
@@ -643,6 +671,8 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
             && isUnshadowedTypeScopeAccess(scope, expr.lhs->scopeChain[0])
         ){
             if(const ClassDecl* scopedCls = m_symbols.findClass(m_symbols.resolveBaseTypeName(expr.lhs->scopeChain[0]))){
+                if(m_symbols.hasMultipleClassMethods(*scopedCls, expr.lhs->scopeChain[1], true))
+                    ensureCallArgHints();
                 if(const MethodDecl* m = m_symbols.findClassMethod(*scopedCls, expr.lhs->scopeChain[1], &callArgCount, false, !m_symbols.canAccessPrivateMembers(*scopedCls, ownerClass), argTypeHints, argIsMutHints, true))
                     return __hidden_adhd_type_infer::SubstituteCallableReturnType(m_arena, m_symbols, ownerClass, method, *m, nullptr, nullptr, expr, scope, templateDeducer);
                 if(const FieldDecl* staticField = SymbolTable::FindClassField(*scopedCls, expr.lhs->scopeChain[1]); staticField && staticField->isStatic && staticField->type){
@@ -730,9 +760,11 @@ MStringView TypeChecker::inferExprBaseType(const ClassDecl* ownerClass, const Me
     const TypeRef* typeRef = inferExprTypeRef(ownerClass, method, expr, scope);
     if(outTypeRef)
         *outTypeRef = typeRef;
-    return typeRef
-        ? m_symbols.resolveBaseTypeName(typeRef->name)
-        : inferExprTypeName(ownerClass, method, expr, scope);
+    if(typeRef)
+        return m_symbols.resolveBaseTypeName(typeRef->name);
+    if(const MStringView fast = inferExprTypeNameFastPrefix(ownerClass, method, expr, scope); !fast.empty())
+        return fast;
+    return inferExprTypeNameFallbackSuffix(ownerClass, method, expr, scope);
 }
 
 

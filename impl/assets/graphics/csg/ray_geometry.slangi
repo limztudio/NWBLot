@@ -244,13 +244,13 @@ bool nwbCsgRayCutCoversSegment(const float2 cut, const float2 segment, const flo
     return all(isfinite(cut)) && isfinite(margin) && margin >= 0.0 && cut.x + margin < segment.x && cut.y - margin > segment.y;
 }
 
-NwbCsgRayTriangleHit nwbCsgRayIntersectTriangle(const NwbRtInstanceMaterial material, const uint primitive, const bool closed, const float3 origin, const float3 direction){
+NwbCsgRayTriangleHit nwbCsgRayIntersectTriangleWoop(const NwbRtInstanceMaterial material, const uint primitive, const bool closed, const NwbCsgWoopRay woopRay){
     NwbCsgRayTriangleHit result = (NwbCsgRayTriangleHit)0;
     const uint3 indices = nwbHeapRawBuffer(material.indexSlot).Load3(primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
     const float3 v0 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
     const float3 v1 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
     const float3 v2 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-    const NwbCsgRayTriangleIntersection triangle = nwbCsgRayTriangleIntersection(v0, v1, v2, origin, direction, closed);
+    const NwbCsgRayTriangleIntersection triangle = nwbCsgRayTriangleIntersectionWoop(v0, v1, v2, woopRay, closed);
     result.failure = triangle.failure;
     result.hit = triangle.hit;
     if(!triangle.hit)
@@ -269,6 +269,10 @@ NwbCsgRayTriangleHit nwbCsgRayIntersectTriangle(const NwbRtInstanceMaterial mate
     result.crossing.primitive = primitive;
     result.crossing.barycentrics = triangle.barycentrics;
     return result;
+}
+
+NwbCsgRayTriangleHit nwbCsgRayIntersectTriangle(const NwbRtInstanceMaterial material, const uint primitive, const bool closed, const float3 origin, const float3 direction){
+    return nwbCsgRayIntersectTriangleWoop(material, primitive, closed, nwbCsgMakeWoopRay(origin, direction));
 }
 
 bool nwbCsgRaySameCrossingDistance(const float first, const float second){

@@ -47,12 +47,11 @@ public:
     explicit SymbolTable(MetaArena& arena, TranslationUnit& unit)noexcept
         : m_arena(arena)
         , m_unit(unit)
-        , m_enums(arena)
-        , m_interfaces(arena)
-        , m_classes(arena)
-        , m_typeAliases(arena)
+        , m_typeMap(arena)
+        , m_globalConstantMap(arena)
         , m_freeFunctions(arena)
-        , m_globalConstants(arena)
+        , m_freeFunctionHead(arena)
+        , m_freeFunctionNext(arena)
     {}
 
 
@@ -66,6 +65,9 @@ public:
     [[nodiscard]] MethodDecl* findFreeFunction(MStringView name, const usize* preferredArgCount = nullptr, Span<const MStringView> argTypeNames = {}, Span<const u8> argIsMut = {})const noexcept;
     [[nodiscard]] const MethodDecl* findUniqueFreeFunction(MStringView name, b8& outAmbiguous)const noexcept;
     [[nodiscard]] Stmt* findGlobalConstant(MStringView name)const noexcept;
+    [[nodiscard]] b8 hasMultipleFreeFunctions(MStringView name)const noexcept;
+    [[nodiscard]] b8 hasMultipleClassMethods(const ClassDecl& classDecl, MStringView name, b8 staticOnly = false)const noexcept;
+    [[nodiscard]] b8 hasMultipleInterfaceMethods(const TypeRef& ifaceType, MStringView methodName, u32 depth = 0u)const noexcept;
 
     [[nodiscard]] const MethodDecl* findClassMethod(
         const ClassDecl& classDecl,
@@ -111,14 +113,36 @@ public:
 
 
 private:
+    struct TypeSymbolKind{
+        enum Enum : u8{
+            EnumDeclKind,
+            InterfaceDeclKind,
+            ClassDeclKind,
+            TypeAliasDeclKind,
+        };
+    };
+
+    struct TypeSymbolEntry{
+        TypeSymbolKind::Enum kind = TypeSymbolKind::EnumDeclKind;
+        void* decl = nullptr;
+        MStringView cppNamespace;
+    };
+
+    static constexpr usize s_InvalidFreeFunctionIndex = Limit<usize>::s_Max;
+
+
+private:
+    void countInterfaceMethodsUpToTwo(const TypeRef& ifaceType, MStringView methodName, u32 depth, u32& inOutCount)const noexcept;
+
+
+private:
     MetaArena& m_arena;
     TranslationUnit& m_unit;
-    MVector<EnumDecl*> m_enums;
-    MVector<InterfaceDecl*> m_interfaces;
-    MVector<ClassDecl*> m_classes;
-    MVector<TypeAliasDecl*> m_typeAliases;
+    HashMap<MStringView, TypeSymbolEntry, MetaArena, MStringViewHash> m_typeMap;
+    HashMap<MStringView, Stmt*, MetaArena, MStringViewHash> m_globalConstantMap;
     MVector<MethodDecl*> m_freeFunctions;
-    MVector<Stmt*> m_globalConstants;
+    HashMap<MStringView, usize, MetaArena, MStringViewHash> m_freeFunctionHead;
+    MVector<usize> m_freeFunctionNext;
 };
 
 

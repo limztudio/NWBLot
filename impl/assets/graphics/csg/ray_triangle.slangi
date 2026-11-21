@@ -124,14 +124,47 @@ float nwbCsgRayEdgeDistance(const float3 first, const float3 second, const float
     return fma(weight, b.z - a.z, a.z) / direction;
 }
 
-NwbCsgRayTriangleIntersection nwbCsgRayTriangleIntersection(const float3 v0, const float3 v1, const float3 v2, const float3 origin, const float3 direction, const bool closed){
+struct NwbCsgWoopRay{
+    float3 origin;
+    float2 shear;
+    float dirZ;
+    uint x;
+    uint y;
+    uint z;
+    bool validRay;
+};
+
+NwbCsgWoopRay nwbCsgMakeWoopRay(const float3 origin, const float3 direction){
+    NwbCsgWoopRay woop;
+    woop.origin = origin;
+    woop.validRay = all(isfinite(origin)) && all(isfinite(direction)) && !all(direction == float3(0.0));
+    if(!woop.validRay){
+        woop.shear = float2(0.0, 0.0);
+        woop.dirZ = 1.0;
+        woop.x = 0u;
+        woop.y = 1u;
+        woop.z = 2u;
+        return woop;
+    }
+    const float3 absoluteDirection = abs(direction);
+    const uint z = absoluteDirection.x > absoluteDirection.y ? (absoluteDirection.x > absoluteDirection.z ? 0u : 2u) : (absoluteDirection.y > absoluteDirection.z ? 1u : 2u);
+    const uint x = direction[z] < 0.0 ? (z + 2u) % 3u : (z + 1u) % 3u;
+    const uint y = direction[z] < 0.0 ? (z + 1u) % 3u : (z + 2u) % 3u;
+    woop.x = x;
+    woop.y = y;
+    woop.z = z;
+    woop.dirZ = direction[z];
+    woop.shear = float2(direction[x], direction[y]) / woop.dirZ;
+    return woop;
+}
+
+NwbCsgRayTriangleIntersection nwbCsgRayTriangleIntersectionWoop(const float3 v0, const float3 v1, const float3 v2, const NwbCsgWoopRay woop, const bool closed){
     NwbCsgRayTriangleIntersection result = (NwbCsgRayTriangleIntersection)0;
     const float3 edge0 = v1 - v0;
     const float3 edge1 = v2 - v0;
     const float3 magnitude = max(abs(edge0), abs(edge1));
     const float edgeScale = max(magnitude.x, max(magnitude.y, magnitude.z));
-    const float3 absoluteDirection = abs(direction);
-    if(!all(isfinite(edge0)) || !all(isfinite(edge1)) || !all(isfinite(origin)) || !all(isfinite(direction)) || !isfinite(edgeScale) || all(direction == float3(0.0))){
+    if(!all(isfinite(edge0)) || !all(isfinite(edge1)) || !woop.validRay || !isfinite(edgeScale)){
         result.failure = NWB_CSG_RAY_FAILURE_TOPOLOGY;
         return result;
     }
@@ -139,16 +172,15 @@ NwbCsgRayTriangleIntersection nwbCsgRayTriangleIntersection(const float3 v0, con
         result.failure = closed ? NWB_CSG_RAY_FAILURE_TOPOLOGY : 0u;
         return result;
     }
-    const uint z = absoluteDirection.x > absoluteDirection.y ? (absoluteDirection.x > absoluteDirection.z ? 0u : 2u) : (absoluteDirection.y > absoluteDirection.z ? 1u : 2u);
-    const uint x = direction[z] < 0.0 ? (z + 2u) % 3u : (z + 1u) % 3u;
-    const uint y = direction[z] < 0.0 ? (z + 1u) % 3u : (z + 2u) % 3u;
-    const float2 shear = float2(direction[x], direction[y]) / direction[z];
-    const float3 a = v0 - origin;
-    const float3 b = v1 - origin;
-    const float3 c = v2 - origin;
-    const float3 p0 = float3(fma(-shear.x, a[z], a[x]), fma(-shear.y, a[z], a[y]), a[z]);
-    const float3 p1 = float3(fma(-shear.x, b[z], b[x]), fma(-shear.y, b[z], b[y]), b[z]);
-    const float3 p2 = float3(fma(-shear.x, c[z], c[x]), fma(-shear.y, c[z], c[y]), c[z]);
+    const uint x = woop.x;
+    const uint y = woop.y;
+    const uint z = woop.z;
+    const float3 a = v0 - woop.origin;
+    const float3 b = v1 - woop.origin;
+    const float3 c = v2 - woop.origin;
+    const float3 p0 = float3(fma(-woop.shear.x, a[z], a[x]), fma(-woop.shear.y, a[z], a[y]), a[z]);
+    const float3 p1 = float3(fma(-woop.shear.x, b[z], b[x]), fma(-woop.shear.y, b[z], b[y]), b[z]);
+    const float3 p2 = float3(fma(-woop.shear.x, c[z], c[x]), fma(-woop.shear.y, c[z], c[y]), c[z]);
     if(!all(isfinite(p0)) || !all(isfinite(p1)) || !all(isfinite(p2))){
         result.failure = NWB_CSG_RAY_FAILURE_TOPOLOGY;
         return result;
@@ -174,19 +206,19 @@ NwbCsgRayTriangleIntersection nwbCsgRayTriangleIntersection(const float3 v0, con
     const float determinant = weights.x + weights.y + weights.z;
     float distance;
     if(signs.y == 0 && signs.z == 0)
-        distance = p0.z / direction[z];
+        distance = p0.z / woop.dirZ;
     else if(signs.z == 0 && signs.x == 0)
-        distance = p1.z / direction[z];
+        distance = p1.z / woop.dirZ;
     else if(signs.x == 0 && signs.y == 0)
-        distance = p2.z / direction[z];
+        distance = p2.z / woop.dirZ;
     else if(signs.x == 0)
-        distance = nwbCsgRayEdgeDistance(p1, p2, direction[z]);
+        distance = nwbCsgRayEdgeDistance(p1, p2, woop.dirZ);
     else if(signs.y == 0)
-        distance = nwbCsgRayEdgeDistance(p2, p0, direction[z]);
+        distance = nwbCsgRayEdgeDistance(p2, p0, woop.dirZ);
     else if(signs.z == 0)
-        distance = nwbCsgRayEdgeDistance(p0, p1, direction[z]);
+        distance = nwbCsgRayEdgeDistance(p0, p1, woop.dirZ);
     else
-        distance = dot(weights / determinant, float3(p0.z, p1.z, p2.z)) / direction[z];
+        distance = dot(weights / determinant, float3(p0.z, p1.z, p2.z)) / woop.dirZ;
     if(determinant == 0.0 || !isfinite(determinant) || !isfinite(distance)){
         result.failure = NWB_CSG_RAY_FAILURE_TOPOLOGY;
         return result;
@@ -198,6 +230,10 @@ NwbCsgRayTriangleIntersection nwbCsgRayTriangleIntersection(const float3 v0, con
     result.barycentrics = weights.yz / determinant;
     result.windingDelta = -orientation;
     return result;
+}
+
+NwbCsgRayTriangleIntersection nwbCsgRayTriangleIntersection(const float3 v0, const float3 v1, const float3 v2, const float3 origin, const float3 direction, const bool closed){
+    return nwbCsgRayTriangleIntersectionWoop(v0, v1, v2, nwbCsgMakeWoopRay(origin, direction), closed);
 }
 
 

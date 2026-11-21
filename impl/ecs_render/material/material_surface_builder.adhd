@@ -34,24 +34,17 @@ class MaterialSurfaceBuilder{
             assert((block.byteSize & 3u) == 0u);
             const usize blockByteCount = cast<usize>(block.byteSize);
             assert(sourceByteOffset <= packedTypedBytes.size() && blockByteCount <= packedTypedBytes.size() - sourceByteOffset);
-            if(block.blockClass == MaterialBlockClass::MaterialConstant){
-                for(usize i = 0u; i < blockByteCount; ++i)
-                    outConstantTypedBytes.push_back(packedTypedBytes[sourceByteOffset + i]);
-            }
-            else{
-                for(usize i = 0u; i < blockByteCount; ++i)
-                    outMutableDefaultTypedBytes.push_back(packedTypedBytes[sourceByteOffset + i]);
-            }
+            if(block.blockClass == MaterialBlockClass::MaterialConstant)
+                AppendTriviallyCopyableVector(outConstantTypedBytes, packedTypedBytes.subspan(sourceByteOffset, blockByteCount));
+            else
+                AppendTriviallyCopyableVector(outMutableDefaultTypedBytes, packedTypedBytes.subspan(sourceByteOffset, blockByteCount));
             sourceByteOffset += blockByteCount;
         }
         assert(sourceByteOffset == packedTypedBytes.size());
     }
 
     public void copyTypedBytes(in Span<u8> sourceBytes, mut Vector<u8> outBytes)const{
-        outBytes.clear();
-        outBytes.reserve(sourceBytes.size());
-        for(in u8 b : sourceBytes)
-            outBytes.push_back(b);
+        AssignVector(outBytes, sourceBytes);
     }
 
     public b8 populate(

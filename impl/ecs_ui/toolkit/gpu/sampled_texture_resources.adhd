@@ -84,6 +84,79 @@ class GpuPageTextureUploadDesc{
     }
 };
 
+class GpuSampledTextureNameTable{
+    private Array<Name, s_PaintMaxImages> m_glyphReady;
+    private Array<Name, s_PaintMaxImages> m_glyphTexture;
+    private Array<Name, s_PaintMaxImages> m_sdfReady;
+    private Array<Name, s_PaintMaxImages> m_sdfTexture;
+    private Array<Name, s_PaintMaxImages> m_imageReady;
+    private Array<Name, s_PaintMaxImages> m_imageTexture;
+    private u64 m_glyphValidMask = 0u;
+    private u64 m_sdfValidMask = 0u;
+    private u64 m_imageValidMask = 0u;
+
+    public b8 resolvePair(
+        in u32 category,
+        in usize index,
+        in Name readyPrefix,
+        in Name texturePrefix,
+        mut Name outReady,
+        mut Name outTexture
+    ){
+        if(index >= s_PaintMaxImages)
+            return false;
+        const u64 bit = cast<u64>(1u) << cast<u64>(index);
+        if(category == 0u){
+            if((this.m_glyphValidMask & bit) != 0u){
+                outReady = this.m_glyphReady[index];
+                outTexture = this.m_glyphTexture[index];
+                return true;
+            }
+        }
+        else if(category == 1u){
+            if((this.m_sdfValidMask & bit) != 0u){
+                outReady = this.m_sdfReady[index];
+                outTexture = this.m_sdfTexture[index];
+                return true;
+            }
+        }
+        else if(category == 2u){
+            if((this.m_imageValidMask & bit) != 0u){
+                outReady = this.m_imageReady[index];
+                outTexture = this.m_imageTexture[index];
+                return true;
+            }
+        }
+        else
+            return false;
+
+        CompactString suffix = CompactString("");
+        AppendUnsignedU64Text(suffix, cast<u64>(index));
+        const Expected<Name> readyIdentity = DeriveName(readyPrefix, suffix.view());
+        const Expected<Name> textureIdentity = DeriveName(texturePrefix, suffix.view());
+        if(!readyIdentity.has_value() || !textureIdentity.has_value())
+            return false;
+        outReady = readyIdentity.value();
+        outTexture = textureIdentity.value();
+        if(category == 0u){
+            this.m_glyphReady[index] = outReady;
+            this.m_glyphTexture[index] = outTexture;
+            this.m_glyphValidMask |= bit;
+        }
+        else if(category == 1u){
+            this.m_sdfReady[index] = outReady;
+            this.m_sdfTexture[index] = outTexture;
+            this.m_sdfValidMask |= bit;
+        }
+        else{
+            this.m_imageReady[index] = outReady;
+            this.m_imageTexture[index] = outTexture;
+            this.m_imageValidMask |= bit;
+        }
+        return true;
+    }
+};
+
 class GpuSampledTextures{
     public b8 createAndUploadPage(
         mut GraphicsRuntime graphics,
@@ -149,19 +222,15 @@ b8 PrepareGpuSampledTextureDescriptor(
     return true;
 }
 
-Expected<GpuGraphResourceId, GpuSampledTextureImportError> ImportGpuSampledTexture(
+Expected<GpuGraphResourceId, GpuSampledTextureImportError> ImportGpuSampledTextureWithNames(
     in GpuSampledTextureImportDesc desc,
+    in Name readyIdentity,
+    in Name textureIdentity,
     mut GpuTaskGraph graph,
     mut GpuRasterResourceUses uses
 ){
-    CompactString suffix = CompactString("");
-    AppendUnsignedU64Text(suffix, cast<u64>(desc.index));
-    const Expected<Name> readyIdentity = DeriveName(desc.readyPrefix, suffix.view());
-    const Expected<Name> textureIdentity = DeriveName(desc.texturePrefix, suffix.view());
-    if(!readyIdentity.has_value() || !textureIdentity.has_value())
-        return MakeUnexpected(GpuSampledTextureImportError::Identity);
     GpuExternalCompletionDesc completionDesc = GpuExternalCompletionDesc();
-    completionDesc.setIdentity(readyIdentity.value());
+    completionDesc.setIdentity(readyIdentity);
     completionDesc.setMarkerLabel(desc.readyMarkerLabel);
     completionDesc.setToken(desc.readinessToken);
     const Expected<GpuExternalCompletionId> readyResult = graph.importExternalCompletion(completionDesc);
@@ -177,7 +246,7 @@ Expected<GpuGraphResourceId, GpuSampledTextureImportError> ImportGpuSampledTextu
         return MakeUnexpected(GpuSampledTextureImportError::Completion);
     }
     GpuGraphResourceDesc resourceDesc = GpuGraphResourceDesc();
-    resourceDesc.setIdentity(textureIdentity.value());
+    resourceDesc.setIdentity(textureIdentity);
     resourceDesc.setMarkerLabel(desc.textureMarkerLabel);
     resourceDesc.setType(GpuGraphResourceType::Texture);
     resourceDesc.setInitialAvailabilityCompletion(readyResult.value());
@@ -191,6 +260,20 @@ Expected<GpuGraphResourceId, GpuSampledTextureImportError> ImportGpuSampledTextu
     use.access = GpuTaskResourceAccess::Read;
     uses.push_back(use);
     return textureResult.value();
+}
+
+Expected<GpuGraphResourceId, GpuSampledTextureImportError> ImportGpuSampledTexture(
+    in GpuSampledTextureImportDesc desc,
+    mut GpuTaskGraph graph,
+    mut GpuRasterResourceUses uses
+){
+    CompactString suffix = CompactString("");
+    AppendUnsignedU64Text(suffix, cast<u64>(desc.index));
+    const Expected<Name> readyIdentity = DeriveName(desc.readyPrefix, suffix.view());
+    const Expected<Name> textureIdentity = DeriveName(desc.texturePrefix, suffix.view());
+    if(!readyIdentity.has_value() || !textureIdentity.has_value())
+        return MakeUnexpected(GpuSampledTextureImportError::Identity);
+    return ImportGpuSampledTextureWithNames(desc, readyIdentity.value(), textureIdentity.value(), graph, uses);
 }
 
 

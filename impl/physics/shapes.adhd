@@ -459,19 +459,25 @@ Aabb3D ComputeCapsuleAabb(in CapsuleShape capsule, in Transform3D xf){
 Aabb3D ComputeHullAabb(in HullShape hull, in Transform3D xf){
     const f32 r = hull.radius();
     if(hull.isBox()){
-        const VectorSingle worldCenter = TransformPoint(xf, hull.centroid());
-        const VectorSingle qBox = SafeNormalizeQuat(QuaternionMultiply(VectorSingle(xf.rotation), VectorSingle(hull.boxRotation)));
-        const Mat3 rot = Mat3FromQuaternion(qBox);
+        const VectorSingle localCenter = hull.centroid();
+        VectorSingle worldCenter = VectorSingle(xf.position);
+        if(localCenter.x != 0.0f || localCenter.y != 0.0f || localCenter.z != 0.0f)
+            worldCenter = TransformPoint(xf, localCenter);
+
+        VectorSingle qBox = VectorSingle(xf.rotation);
+        if(hull.boxRotation.x != 0.0f || hull.boxRotation.y != 0.0f || hull.boxRotation.z != 0.0f || hull.boxRotation.w != 1.0f)
+            qBox = SafeNormalizeQuat(QuaternionMultiply(qBox, VectorSingle(hull.boxRotation)));
+
+        const VectorSingle q2 = qBox + qBox;
+        const VectorSingle qx = q2 * qBox.x;
+        const VectorSingle qy = q2 * qBox.y;
+        const VectorSingle qz = q2 * qBox.z;
+        const VectorSingle qw = q2 * qBox.w;
+        const VectorSingle ax(1.0f - (qy.y + qz.z), qx.y + qw.z, qx.z - qw.y, 0.0f);
+        const VectorSingle ay(qx.y - qw.z, 1.0f - (qx.x + qz.z), qy.z + qw.x, 0.0f);
+        const VectorSingle az(qx.z + qw.y, qy.z - qw.x, 1.0f - (qx.x + qy.y), 0.0f);
         const VectorSingle ext = hull.halfExtents();
-        const f32 hx = ext.x;
-        const f32 hy = ext.y;
-        const f32 hz = ext.z;
-        const VectorSingle extent(
-            Abs(rot.row0.x) * hx + Abs(rot.row0.y) * hy + Abs(rot.row0.z) * hz + r,
-            Abs(rot.row1.x) * hx + Abs(rot.row1.y) * hy + Abs(rot.row1.z) * hz + r,
-            Abs(rot.row2.x) * hx + Abs(rot.row2.y) * hy + Abs(rot.row2.z) * hz + r,
-            0.0f
-        );
+        const VectorSingle extent = Abs(ax) * ext.x + Abs(ay) * ext.y + Abs(az) * ext.z + VectorSingle(r, r, r, 0.0f);
         return Aabb3D(worldCenter - extent, worldCenter + extent);
     }
 

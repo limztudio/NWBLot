@@ -73,6 +73,19 @@ public:
 public:
     template<typename... Ts>
     View<Ts...> view()noexcept{
+        if constexpr(sizeof...(Ts) >= 3u){
+            u64 requiredMask = 0u;
+            b8 allFastMaskBits = true;
+            const auto collectBit = [&](const ComponentTypeId typeId)noexcept{
+                if(typeId < s_FastComponentMaskBits)
+                    requiredMask |= (1ull << typeId);
+                else
+                    allFastMaskBits = false;
+            };
+            (collectBit(ComponentType<Ts>()), ...);
+            if(allFastMaskBits)
+                return View<Ts...>(MakeTuple(getPool<Ts>()...), m_entityComponentMasks.data(), m_entityComponentMasks.size(), requiredMask);
+        }
         return View<Ts...>(MakeTuple(getPool<Ts>()...));
     }
 

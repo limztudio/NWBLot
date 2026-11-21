@@ -250,6 +250,41 @@ Expected<MeshCookEntry> ParseMeshCookMetadata(in Path root, in StringView virtua
     });
 }
 
+b8 CollectMeshletTriangleIndicesFromStreamRefs(in MeshCookEntry entry, mut Vector<u32> outIndices){
+    outIndices.resize(entry.meshletPrimitiveIndices.size());
+    const usize positionCount = entry.positions.size();
+    const usize primitiveSize = entry.meshletPrimitiveIndices.size();
+    const usize localVertexSize = entry.meshletLocalVertexRefs.size();
+    const usize streamRefSize = entry.meshletPositionStreamRefs.size();
+    for(usize meshletIndex = 0u; meshletIndex < entry.meshlets.size(); ++meshletIndex){
+        in MeshletDesc meshlet = entry.meshlets[meshletIndex];
+        const u32 encodedPositionCount = MeshletPositionCount(meshlet);
+        const u32 primitiveCount = MeshletPrimitiveCount(meshlet);
+        for(u32 primitive = 0u; primitive < primitiveCount; ++primitive){
+            const usize base = cast<usize>(meshlet.primitiveOffset) + cast<usize>(primitive) * s_MeshletTriangleIndexCount;
+            for(u32 corner = 0u; corner < s_MeshletTriangleIndexCount; ++corner){
+                const usize byteIndex = base + corner;
+                if(byteIndex >= primitiveSize)
+                    return false;
+                const usize refIndex = cast<usize>(meshlet.localVertexOffset) + entry.meshletPrimitiveIndices[byteIndex];
+                if(refIndex >= localVertexSize)
+                    return false;
+                const u32 localPosition = cast<u32>(entry.meshletLocalVertexRefs[refIndex].localDeformedPosition);
+                if(localPosition >= encodedPositionCount || localPosition >= s_MeshMaxMeshletVertices)
+                    return false;
+                const usize streamRefIndex = cast<usize>(meshlet.positionRefOffset) + cast<usize>(localPosition);
+                if(streamRefIndex >= streamRefSize)
+                    return false;
+                in MeshletPositionStreamRef posRef = entry.meshletPositionStreamRefs[streamRefIndex];
+                if(posRef.skin != s_MeshMissingStreamIndex || cast<usize>(posRef.position) >= positionCount)
+                    return false;
+                outIndices[byteIndex] = posRef.position;
+            }
+        }
+    }
+    return true;
+}
+
 b8 BuildMeshSolidWords(in MeshCookEntry entry, mut Vector<u32> solidWords){
     const Expected<Vector<u32>> indices = BuildMeshletTriangleIndices(entry.meshlets, entry.meshletLocalVertexRefs, entry.meshletPositionRefDeltas, entry.meshletPrimitiveIndices, entry.positions.size());
     return indices.has_value() && BuildSolidTriangleWordsInto(entry.positions, indices.value(), solidWords);
@@ -262,6 +297,9 @@ Expected<Mesh> BuildMeshAsset(mut MeshCookEntry entry){
         entry.meshletPositionStreamRefs, entry.meshletAttributeStreamRefs
     ))
         return MakeUnexpected(Failure());
+    Vector<u32> triangleIndices;
+    if(!CollectMeshletTriangleIndicesFromStreamRefs(entry, triangleIndices))
+        return MakeUnexpected(Failure());
     const Name path = entry.virtualPath;
     if(!EncodeMeshletRefDeltas(entry.meshletPositionStreamRefs, entry.meshletAttributeStreamRefs, false, lambda[in path](in usize index, in auto reason) -> b8{
         error("{} '{}': meshlet {} {}", s_MeshMetaText, path.resolvedText(), index, reason);
@@ -269,7 +307,7 @@ Expected<Mesh> BuildMeshAsset(mut MeshCookEntry entry){
     }, entry.meshlets, entry.meshletPositionRefDeltas, entry.meshletAttributeRefDeltas))
         return MakeUnexpected(Failure());
     Vector<u32> solidWords;
-    if(!BuildMeshSolidWords(entry, solidWords))
+    if(!BuildSolidTriangleWordsInto(entry.positions, triangleIndices, solidWords))
         return MakeUnexpected(Failure());
     Mesh asset(path);
     asset.setPayload(entry.positions, entry.normals, entry.tangents, entry.uv0, entry.colors, entry.meshlets, entry.meshletBounds,

@@ -54,6 +54,7 @@ void TryAppendCoincidentOpticalVolumeCandidate(
 
 class RendererOpticalVolumeSelection : NoCopy{
     private HashSet<EntityID> m_suppressed;
+    private Vector<CoincidentOpticalVolumeCandidate> m_candidates;
 
     public RendererOpticalVolumeSelection(){}
 
@@ -64,21 +65,14 @@ class RendererOpticalVolumeSelection : NoCopy{
             return;
         }
 
-        usize candidateCapacity = 0u;
-        for(in auto row : world.view<RendererComponent>()){
-            if(RendererComponentOpticalVolumeMergingEnabled(Get<1>(row)))
-                ++candidateCapacity;
-        }
-        if(candidateCapacity < s_MinCoincidentCandidateCount){
+        this.m_candidates.clear();
+        for(in auto row : world.view<RendererComponent>())
+            TryAppendCoincidentOpticalVolumeCandidate(world, meshSystem.value(), materials, Get<0>(row), Get<1>(row), this.m_candidates);
+        if(this.m_candidates.size() < s_MinCoincidentCandidateCount){
             this.reset();
             return;
         }
-
-        Vector<CoincidentOpticalVolumeCandidate> candidates;
-        candidates.reserve(candidateCapacity);
-        for(in auto row : world.view<RendererComponent>())
-            TryAppendCoincidentOpticalVolumeCandidate(world, meshSystem.value(), materials, Get<0>(row), Get<1>(row), candidates);
-        this.select(Span<CoincidentOpticalVolumeCandidate>(candidates));
+        this.select(Span<CoincidentOpticalVolumeCandidate>(this.m_candidates));
     }
 
     public void select(in Span<CoincidentOpticalVolumeCandidate> candidates){
@@ -87,6 +81,7 @@ class RendererOpticalVolumeSelection : NoCopy{
 
     public void reset(){
         this.m_suppressed.clear();
+        this.m_candidates.clear();
     }
 
     public b8 isSuppressed(in EntityID entity)const{

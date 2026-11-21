@@ -40,10 +40,11 @@ NwbCsgRayCollection nwbCsgRayCollectCrossings<T : NwbCsgRayOpenVisitor>(
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex];
     NwbBvhRayIterator<NWB_CSG_RAY_SW_STACK_SIZE> iterator;
     nwbBvhRayBeginWalk<NWB_CSG_RAY_SW_STACK_SIZE>(material.nodeSlot, nwbSwBvhTransformPoint(instance, worldOrigin), nwbSwBvhTransformVector(instance, worldDirection), 0.0, asfloat(NWB_FLOAT_MAX_BITS), iterator);
+    const NwbCsgWoopRay woopRay = nwbCsgMakeWoopRay(iterator.origin, iterator.direction);
     uint primitive;
     while(nwbBvhRayNextLeaf<NWB_CSG_RAY_SW_STACK_SIZE, true>(iterator, primitive)){
         const bool closed = nwbCsgRayPrimitiveClosed(contextSlot, membershipOffset, primitive);
-        const NwbCsgRayTriangleHit triangle = nwbCsgRayIntersectTriangle(material, primitive, closed, iterator.origin, iterator.direction);
+        const NwbCsgRayTriangleHit triangle = nwbCsgRayIntersectTriangleWoop(material, primitive, closed, woopRay);
         if(triangle.failure != 0u){
             result.failure = triangle.failure;
             return result;

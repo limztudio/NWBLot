@@ -61,7 +61,7 @@ struct NwbShadowResolveSceneShading{
 
 #if NWB_SHADOW_RESOLVE_COMPILED_STAGE == NWB_SHADOW_RESOLVE_STAGE_WAVELET
 groupshared NwbShadowResolveVisVec g_NwbShadowResolveTileVis[NWB_SHADOW_RESOLVE_TILE_TEXELS];
-groupshared half2  g_NwbShadowResolveTileNormal[NWB_SHADOW_RESOLVE_TILE_TEXELS];
+groupshared half3  g_NwbShadowResolveTileNormal[NWB_SHADOW_RESOLVE_TILE_TEXELS];
 groupshared half   g_NwbShadowResolveTileDist[NWB_SHADOW_RESOLVE_TILE_TEXELS];
 groupshared uint   g_NwbShadowResolveTileValid[NWB_SHADOW_RESOLVE_TILE_TEXELS];
 #endif
@@ -89,9 +89,13 @@ half3 nwbShadowResolveSpatialWeights(const half offset){
     return half3(half(0.5h) * side.x * side.x, half(NWB_SHADOW_RESOLVE_BSPLINE_CENTER_BASE) - offset * offset, half(0.5h) * side.y * side.y);
 }
 
+half nwbShadowResolveNormalWeightDecoded(const float3 centerNormal, const half3 tapNormal){
+    return half(pow(max(dot(centerNormal, float3(tapNormal)), 0.0), NWB_SHADOW_RESOLVE_NORMAL_POWER));
+}
+
 half nwbShadowResolveNormalWeightVec(const float3 centerNormal, const half2 tapOct){
     const float3 tn = nwbOctDecodeNormal(float2(tapOct));
-    return half(pow(max(dot(centerNormal, tn), 0.0h), NWB_SHADOW_RESOLVE_NORMAL_POWER));
+    return half(pow(max(dot(centerNormal, tn), 0.0), NWB_SHADOW_RESOLVE_NORMAL_POWER));
 }
 
 #if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB

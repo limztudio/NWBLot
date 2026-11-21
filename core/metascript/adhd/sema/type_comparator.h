@@ -23,8 +23,9 @@ public:
         : m_symbols(symbols)
     {}
 
-    [[nodiscard]] b8 areEquivalentWithSubst(const TypeRef* actual, const TypeRef* pattern, Span<const TemplateParamDecl> ifaceParams, Span<const TypeArg> ifaceArgs)const noexcept;
-    [[nodiscard]] b8 areEquivalent(const TypeRef* a, const TypeRef* b)const noexcept{ return areEquivalentWithSubst(a, b, {}, {}); }
+    [[nodiscard]] b8 areEquivalentWithSubst(const TypeRef* actual, const TypeRef* pattern, Span<const TemplateParamDecl> ifaceParams, Span<const TypeArg> ifaceArgs, b8 ignoreTopLevelRefMode = false)const noexcept;
+    [[nodiscard]] b8 areEquivalent(const TypeRef* a, const TypeRef* b)const noexcept{ return areEquivalentWithSubst(a, b, {}, {}, false); }
+    [[nodiscard]] b8 areEquivalentIgnoringRefMode(const TypeRef* a, const TypeRef* b)const noexcept{ return areEquivalentWithSubst(a, b, {}, {}, true); }
     [[nodiscard]] b8 hasEquivalentInPrefix(Span<const TypeRef* const> types, const TypeRef* target)const noexcept;
     [[nodiscard]] b8 areTemplateArgListsEqual(Span<const TypeArg> a, Span<const TypeArg> b)const noexcept;
     [[nodiscard]] b8 doTemplateParamHeaderMatch(const TemplateParamDecl& a, const TemplateParamDecl& b, b8 checkName)const noexcept;

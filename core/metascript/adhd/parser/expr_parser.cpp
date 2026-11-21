@@ -237,7 +237,12 @@ Expr* ExprParser::parsePostfix(){
         if(m_cursor.check(TokenType::Less)){
             const ParserCursor::Checkpoint cp = m_cursor.save();
             MVector<TypeArg> targs(m_cursor.arena());
-            if(m_typeParser.parseTypeArgList(targs) && !m_typeParser.hasPendingRightAngles() && m_cursor.check(TokenType::LeftParen)){
+            b8 parsedTypeArgs = false;
+            {
+                const ParserCursor::SuppressErrorsScope suppressErrors(m_cursor);
+                parsedTypeArgs = m_typeParser.parseTypeArgList(targs) && !m_typeParser.hasPendingRightAngles() && m_cursor.check(TokenType::LeftParen);
+            }
+            if(parsedTypeArgs){
                 if(!tryParseCallNode(Move(targs)))
                     return nullptr;
                 continue;
@@ -282,31 +287,41 @@ Expr* ExprParser::parsePrimary(){
                 m_cursor.error(prohibitedTypeErr);
                 return nullptr;
             }
-            const ParserCursor::Checkpoint cp = m_cursor.save();
-            TypeRef* maybeType = m_typeParser.parseType(false, false);
-            if(!maybeType && (m_cursor.check(TokenType::Star) || m_cursor.check(TokenType::Ampersand))){
-                while(m_cursor.check(TokenType::Star) || m_cursor.check(TokenType::Ampersand))
-                    m_cursor.advance();
-                if(m_cursor.match(TokenType::RightParen)){
-                    const b8 nextIsCastOperand = __hidden_adhd_expr_parser::IsUnambiguousCastOperandStartToken(m_cursor.current().type)
-                        || m_cursor.check(TokenType::Plus)
-                        || m_cursor.check(TokenType::Minus);
-                    if(nextIsCastOperand)
+            const TokenType::Enum nextType = m_cursor.peekNextToken().type;
+            const b8 canBeCastType = nextType == TokenType::RightParen
+                || nextType == TokenType::Less
+                || nextType == TokenType::ColonColon
+                || nextType == TokenType::Star
+                || nextType == TokenType::Ampersand
+                || nextType == TokenType::Identifier
+                || (nextType == TokenType::LeftParen && BuiltinTypeSemantics::IsFuncTypeName(m_cursor.current().text));
+            if(canBeCastType){
+                const ParserCursor::Checkpoint cp = m_cursor.save();
+                TypeRef* maybeType = m_typeParser.parseType(false, false);
+                if(!maybeType && (m_cursor.check(TokenType::Star) || m_cursor.check(TokenType::Ampersand))){
+                    while(m_cursor.check(TokenType::Star) || m_cursor.check(TokenType::Ampersand))
+                        m_cursor.advance();
+                    if(m_cursor.match(TokenType::RightParen)){
+                        const b8 nextIsCastOperand = __hidden_adhd_expr_parser::IsUnambiguousCastOperandStartToken(m_cursor.current().type)
+                            || m_cursor.check(TokenType::Plus)
+                            || m_cursor.check(TokenType::Minus);
+                        if(nextIsCastOperand)
+                            return nullptr;
+                    }
+                }
+                if(maybeType && !m_typeParser.hasPendingRightAngles() && m_cursor.match(TokenType::RightParen)){
+                    const b8 isKnownType = maybeType->refMode != ParamPassingMode::None || maybeType->isFuncType || !maybeType->templateArgs.empty() || BuiltinTypeSemantics::IsBuiltinTypeName(maybeType->name);
+                    const b8 looksLikeType = isKnownType || (!maybeType->name.empty() && IsAsciiUpper(maybeType->name[0]));
+                    const b8 nextIsUnambiguousCastOperand = __hidden_adhd_expr_parser::IsUnambiguousCastOperandStartToken(m_cursor.current().type);
+                    const b8 nextIsPlusOrMinus = m_cursor.check(TokenType::Plus) || m_cursor.check(TokenType::Minus);
+                    if((looksLikeType && nextIsUnambiguousCastOperand) || (isKnownType && nextIsPlusOrMinus)){
+                        m_cursor.error("C-style '(T)x' cast is prohibited in adhd; use 'cast<T>(x)' or 'bit_cast<T>(x)'");
                         return nullptr;
+                    }
                 }
+                m_cursor.restore(cp);
+                m_typeParser.resetPendingRightAngles();
             }
-            if(maybeType && !m_typeParser.hasPendingRightAngles() && m_cursor.match(TokenType::RightParen)){
-                const b8 isKnownType = maybeType->refMode != ParamPassingMode::None || maybeType->isFuncType || !maybeType->templateArgs.empty() || BuiltinTypeSemantics::IsBuiltinTypeName(maybeType->name);
-                const b8 looksLikeType = isKnownType || (!maybeType->name.empty() && IsAsciiUpper(maybeType->name[0]));
-                const b8 nextIsUnambiguousCastOperand = __hidden_adhd_expr_parser::IsUnambiguousCastOperandStartToken(m_cursor.current().type);
-                const b8 nextIsPlusOrMinus = m_cursor.check(TokenType::Plus) || m_cursor.check(TokenType::Minus);
-                if((looksLikeType && nextIsUnambiguousCastOperand) || (isKnownType && nextIsPlusOrMinus)){
-                    m_cursor.error("C-style '(T)x' cast is prohibited in adhd; use 'cast<T>(x)' or 'bit_cast<T>(x)'");
-                    return nullptr;
-                }
-            }
-            m_cursor.restore(cp);
-            m_typeParser.resetPendingRightAngles();
         }
         Expr* inner = parseExpression();
         if(!inner)

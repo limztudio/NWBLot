@@ -96,6 +96,20 @@ class ShadowPrepareGraphTask{
     private b8 meshBlasGeometryBuildInputStatesGraphOwned;
     private b8 meshSwBvhBuildsGraphOwned;
     private b8 preparedMeshSwBvhBuildsRecordedByGraph;
+    private u64 rayTraceMaterialContextSlotsWord0;
+    private u64 rayTraceMaterialContextSlotsWord1;
+    private u64 rayTraceMaterialContextSlotsWord2;
+    private u64 rayTraceMaterialContextSlotsWord3;
+    private usize rayTraceMaterialContextSlotsBufferIdentity;
+    private b8 rayTraceMaterialContextSlotsUploadPending;
+    private u64 csgTraceContextUploadHash;
+    private usize csgTraceContextUploadByteSize;
+    private usize csgTraceContextUploadBufferIdentity;
+    private b8 csgTraceContextUploadPending;
+    private u64 causticEmissionTargetsUploadHash;
+    private usize causticEmissionTargetsUploadByteSize;
+    private usize causticEmissionTargetsUploadBufferIdentity;
+    private b8 causticEmissionTargetsUploadPending;
 
     public ShadowPrepareGraphTask(
         mut RendererRayTracingSystem raytracingSystem,
@@ -110,7 +124,21 @@ class ShadowPrepareGraphTask{
         in b8 meshBlasBuildsGraphOwned,
         in b8 meshBlasGeometryBuildInputStatesGraphOwned,
         in b8 meshSwBvhBuildsGraphOwned,
-        in b8 preparedMeshSwBvhBuildsRecordedByGraph
+        in b8 preparedMeshSwBvhBuildsRecordedByGraph,
+        in u64 rayTraceMaterialContextSlotsWord0,
+        in u64 rayTraceMaterialContextSlotsWord1,
+        in u64 rayTraceMaterialContextSlotsWord2,
+        in u64 rayTraceMaterialContextSlotsWord3,
+        in usize rayTraceMaterialContextSlotsBufferIdentity,
+        in b8 rayTraceMaterialContextSlotsUploadPending,
+        in u64 csgTraceContextUploadHash,
+        in usize csgTraceContextUploadByteSize,
+        in usize csgTraceContextUploadBufferIdentity,
+        in b8 csgTraceContextUploadPending,
+        in u64 causticEmissionTargetsUploadHash,
+        in usize causticEmissionTargetsUploadByteSize,
+        in usize causticEmissionTargetsUploadBufferIdentity,
+        in b8 causticEmissionTargetsUploadPending
     ){
         this.raytracingSystem = raytracingSystem;
         this.outcome = outcome;
@@ -125,6 +153,20 @@ class ShadowPrepareGraphTask{
         this.meshBlasGeometryBuildInputStatesGraphOwned = meshBlasGeometryBuildInputStatesGraphOwned;
         this.meshSwBvhBuildsGraphOwned = meshSwBvhBuildsGraphOwned;
         this.preparedMeshSwBvhBuildsRecordedByGraph = preparedMeshSwBvhBuildsRecordedByGraph;
+        this.rayTraceMaterialContextSlotsWord0 = rayTraceMaterialContextSlotsWord0;
+        this.rayTraceMaterialContextSlotsWord1 = rayTraceMaterialContextSlotsWord1;
+        this.rayTraceMaterialContextSlotsWord2 = rayTraceMaterialContextSlotsWord2;
+        this.rayTraceMaterialContextSlotsWord3 = rayTraceMaterialContextSlotsWord3;
+        this.rayTraceMaterialContextSlotsBufferIdentity = rayTraceMaterialContextSlotsBufferIdentity;
+        this.rayTraceMaterialContextSlotsUploadPending = rayTraceMaterialContextSlotsUploadPending;
+        this.csgTraceContextUploadHash = csgTraceContextUploadHash;
+        this.csgTraceContextUploadByteSize = csgTraceContextUploadByteSize;
+        this.csgTraceContextUploadBufferIdentity = csgTraceContextUploadBufferIdentity;
+        this.csgTraceContextUploadPending = csgTraceContextUploadPending;
+        this.causticEmissionTargetsUploadHash = causticEmissionTargetsUploadHash;
+        this.causticEmissionTargetsUploadByteSize = causticEmissionTargetsUploadByteSize;
+        this.causticEmissionTargetsUploadBufferIdentity = causticEmissionTargetsUploadBufferIdentity;
+        this.causticEmissionTargetsUploadPending = causticEmissionTargetsUploadPending;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{
@@ -161,6 +203,19 @@ class ShadowPrepareGraphTask{
         if(this.currentBindlessSlotsGraphOwned)
             this.targets.bindless.slotsUploaded = true;
         this.raytracingSystem.confirmPreparedShadowTraceGeometryNormalization();
+        if(this.rayTraceMaterialContextSlotsUploadPending){
+            this.raytracingSystem.confirmPreparedRayTraceMaterialContextSlotsUpload(
+                this.rayTraceMaterialContextSlotsWord0,
+                this.rayTraceMaterialContextSlotsWord1,
+                this.rayTraceMaterialContextSlotsWord2,
+                this.rayTraceMaterialContextSlotsWord3,
+                this.rayTraceMaterialContextSlotsBufferIdentity
+            );
+        }
+        if(this.csgTraceContextUploadPending)
+            this.raytracingSystem.confirmPreparedCsgTraceContextUpload(this.csgTraceContextUploadHash, this.csgTraceContextUploadByteSize, this.csgTraceContextUploadBufferIdentity);
+        if(this.causticEmissionTargetsUploadPending)
+            this.raytracingSystem.confirmPreparedCausticEmissionTargetUpload(this.causticEmissionTargetsUploadHash, this.causticEmissionTargetsUploadByteSize, this.causticEmissionTargetsUploadBufferIdentity);
         if(this.shadowMaterialContextBatchGraphOwned)
             this.raytracingSystem.confirmPreparedShadowMaterialContextUploads();
         if(this.sceneBvhBatchGraphOwned)
@@ -207,8 +262,12 @@ class ShadowPrepareSoftwareBvhBuildGraphTask{
 b8 AppendShadowSoftwareBvhClear(mut GpuTaskGraph graph, in GpuTaskSchedulingHint scheduling, mut GpuTaskId firstTask, mut GpuTaskId dependency, in Expected<Name> identity, in StringView label, in GpuGraphResourceId destination, in u32 clearValue){
     if(!identity.has_value())
         return false;
+    GpuTaskSchedulingHint taskScheduling = scheduling;
+    taskScheduling.mergeWithPrevious = scheduling.mergeWithPrevious && dependency.valid();
     GpuTaskDesc desc;
-    desc.setIdentity(identity.value()).setMarkerLabel(label).setScheduling(scheduling).setDependency(dependency);
+    desc.setIdentity(identity.value()).setMarkerLabel(label).setScheduling(taskScheduling);
+    if(dependency.valid())
+        desc.setDependency(dependency);
     GpuClearBufferTaskDesc clear;
     clear.destination = destination;
     clear.clearValue = clearValue;
@@ -336,7 +395,7 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
     scheduling.cost = GpuTaskCostHint::Large;
     scheduling.forceSubmissionBoundary = false;
     scheduling.allowPacketMerge = true;
-    scheduling.mergeWithPrevious = true;
+    scheduling.mergeWithPrevious = shadowPrepareDependency.valid();
     scheduling.allowMergeAcrossConsumerFrontier = ShouldMergeShadowPrepareAcrossConsumerFrontier(pureSoftwareMeshSwBvhBuildsGraphOwned, this.m_deferredShadowPrepareSceneRefitTask.valid());
     GpuTaskExternalStateSource shadowPrepareStateSource;
     const auto persistent = context.persistentState.borrowSource();
@@ -348,11 +407,14 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
         .setIdentity(Name(s_ShadowPreparePass))
         .setMarkerLabel("Shadow Preparation")
         .setScheduling(scheduling)
-        .setDependency(shadowPrepareDependency)
         .setExternalStateSources(Span<GpuTaskExternalStateSource>(stateSources).first(cast<usize>(shadowPrepareStateSource.hasState())))
         .setResourceUses(shadowResourcePlan.resourceUses)
         .setResourceSetUses(Span<GpuTaskResourceSetUse>(shadowResourcePlan.resourceSetUses).first(shadowResourcePlan.resourceSetUseCount))
     ;
+    if(shadowPrepareDependency.valid())
+        desc.setDependency(shadowPrepareDependency);
+    if(!uploads.pendingContextReadCompletions.empty())
+        desc.setExternalDependencies(uploads.pendingContextReadCompletions);
     const auto deferredShadowPrepareTaskResult = context.graph.addPayloadTask(desc, ShadowPrepareGraphTask(
         context.rayTracing,
         this.m_shadowPreparationOutcome,
@@ -366,7 +428,21 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
         meshBlasBuildsGraphOwned,
         meshBlasGeometryBuildInputStatesGraphOwned,
         meshSwBvhBuildsGraphOwned,
-        pureSoftwareMeshSwBvhBuildsGraphOwned
+        pureSoftwareMeshSwBvhBuildsGraphOwned,
+        uploads.rayTraceMaterialContextSlotsWord0,
+        uploads.rayTraceMaterialContextSlotsWord1,
+        uploads.rayTraceMaterialContextSlotsWord2,
+        uploads.rayTraceMaterialContextSlotsWord3,
+        uploads.rayTraceMaterialContextSlotsBufferIdentity,
+        uploads.rayTraceMaterialContextSlotsUploadPending,
+        uploads.csgTraceContextUploadHash,
+        uploads.csgTraceContextUploadByteSize,
+        uploads.csgTraceContextUploadBufferIdentity,
+        uploads.csgTraceContextUploadPending,
+        uploads.causticEmissionTargetsUploadHash,
+        uploads.causticEmissionTargetsUploadByteSize,
+        uploads.causticEmissionTargetsUploadBufferIdentity,
+        uploads.causticEmissionTargetsUploadPending
     ));
     if(!deferredShadowPrepareTaskResult.has_value()){
         this.m_deferredShadowPrepareTask = GpuTaskId();

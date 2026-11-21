@@ -48,11 +48,10 @@ SymMat3 AddSymMat3(in SymMat3 a, in SymMat3 b){
 }
 
 VectorSingle MulSymMat3Vec(in SymMat3 m, in VectorSingle v){
-    const VectorSingle v0 = VectorSingle(v, 0.0f);
-    const f32 x = m.m00 * v0.x + m.m01 * v0.y + m.m02 * v0.z;
-    const f32 y = m.m01 * v0.x + m.m11 * v0.y + m.m12 * v0.z;
-    const f32 z = m.m02 * v0.x + m.m12 * v0.y + m.m22 * v0.z;
-    return VectorSingle(x, y, z, 0.0f);
+    const VectorSingle row0(m.m00, m.m01, m.m02, 0.0f);
+    const VectorSingle row1(m.m01, m.m11, m.m12, 0.0f);
+    const VectorSingle row2(m.m02, m.m12, m.m22, 0.0f);
+    return row0 * v.x + row1 * v.y + row2 * v.z;
 }
 
 SymMat3 InvertSymMat3(in SymMat3 a){

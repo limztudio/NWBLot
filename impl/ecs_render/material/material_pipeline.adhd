@@ -262,6 +262,7 @@ Expected<mut MaterialPipelineResources> RendererMaterialSystem::findRendererPipe
 }
 
 void RendererMaterialSystem::invalidateRendererPipelines(){
+    this.m_materialState.clearPreparedFrameCache();
     this.m_materialState.m_pipelines.clear();
     this.m_materialState.m_objectGeometryDecodeShader.reset();
     this.m_materialState.m_objectGeometryDecodePipeline.reset();
@@ -272,9 +273,9 @@ void RendererMaterialSystem::invalidateRendererPipelines(){
 void RendererMaterialSystem::logMaterialRenderPathDecision(in Name materialKey, in RenderPath renderPath, in b8 meshSupported){
     const auto entry = this.m_materialState.m_loggedMaterialPaths.try_emplace(materialKey, renderPath);
     if(!entry.second){
-        if(this.m_materialState.m_loggedMaterialPaths.at(materialKey) == renderPath)
+        if(entry.first.value() == renderPath)
             return;
-        this.m_materialState.m_loggedMaterialPaths.at(materialKey) = renderPath;
+        entry.first.value() = renderPath;
     }
 
     LogMaterialRenderPathDecision(materialKey, renderPath, meshSupported);

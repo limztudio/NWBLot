@@ -270,29 +270,9 @@ usize GpuGraphSubmissionTransaction::beginPacketSubmissionBatch(const GpuTaskGra
         return 0u;
 
     b8 alreadyBound = false;
-    {
-        NothrowScopedLock lock(m_mutex);
-        if(!validForLocked(planAccess))
-            return 0u;
-        if(m_recordingAttemptGeneration != 0u){
-            if(m_recordingAttemptGeneration != recordingAttemptGeneration || !m_activeSubmissionBinding.valid())
-                return 0u;
-            alreadyBound = true;
-        }
-    }
-    if(!alreadyBound){
-        if(!graph.packetReadyForSubmission(compiledGraph, planAccess, packets[0u], recordingAttemptGeneration))
-            return 0u;
-        if(!bindRecordingAttemptWithinSubmissionOperation(graph, compiledGraph, recordingAttemptGeneration))
-            return 0u;
-    }
-
     GpuGraphSubmissionBinding submissionBinding;
     usize txClaimedCount = 0u;
-    {
-        NothrowScopedLock lock(m_mutex);
-        if(!validForLocked(planAccess) || m_recordingAttemptGeneration != recordingAttemptGeneration)
-            return 0u;
+    const auto claimTransactionPacketsLocked = [&]()noexcept{
         submissionBinding = m_activeSubmissionBinding;
         while(txClaimedCount < validPrefix){
             const GpuSubmissionPacketId packetID = packets[txClaimedCount];
@@ -303,6 +283,29 @@ usize GpuGraphSubmissionTransaction::beginPacketSubmissionBatch(const GpuTaskGra
                 break;
             runtime.state = PacketRuntimeState::Submitting;
             ++txClaimedCount;
+        }
+    };
+    {
+        NothrowScopedLock lock(m_mutex);
+        if(!validForLocked(planAccess))
+            return 0u;
+        if(m_recordingAttemptGeneration != 0u){
+            if(m_recordingAttemptGeneration != recordingAttemptGeneration || !m_activeSubmissionBinding.valid())
+                return 0u;
+            alreadyBound = true;
+            claimTransactionPacketsLocked();
+        }
+    }
+    if(!alreadyBound){
+        if(!graph.packetReadyForSubmission(compiledGraph, planAccess, packets[0u], recordingAttemptGeneration))
+            return 0u;
+        if(!bindRecordingAttemptWithinSubmissionOperation(graph, compiledGraph, recordingAttemptGeneration))
+            return 0u;
+        {
+            NothrowScopedLock lock(m_mutex);
+            if(!validForLocked(planAccess) || m_recordingAttemptGeneration != recordingAttemptGeneration)
+                return 0u;
+            claimTransactionPacketsLocked();
         }
     }
     if(txClaimedCount == 0u)
@@ -441,15 +444,16 @@ b8 GpuGraphSubmissionTransaction::acceptSubmittingPacketBatch(
                 FOUNDATION_FATAL_ASSERT_MSG(false, "native-accepted packet observer arrays must remain valid through publication");
             totalTimingTickets += packetTimingCount;
         }
-        const auto& firstLease = *leases[0u];
-        if(!graph.matchesSubmissionTransaction(compiledGraph, firstLease.m_recordingAttemptGeneration, firstLease.m_submissionBinding))
-            FOUNDATION_FATAL_ASSERT_MSG(false, "native-accepted packet batch must retain its exact graph submission binding");
-    }
-
-    if(totalTimingTickets == 0u && taskAcceptedCallbacks.empty()){
-        if(graph.acceptPacketSubmissionBatchWithoutCallbacks(compiledGraph, planAccess, packets, receipts, leases)){
-            commitAcceptedPacketBatch(graph, compiledGraph, packets, receipts, nativeSubmissionInfos);
-            return true;
+        if(totalTimingTickets == 0u && taskAcceptedCallbacks.empty()){
+            if(graph.acceptPacketSubmissionBatchWithoutCallbacks(compiledGraph, planAccess, packets, receipts, leases)){
+                commitAcceptedPacketBatchLocked(graph, compiledGraph, planAccess, packets, receipts, nativeSubmissionInfos);
+                return true;
+            }
+        }
+        else{
+            const auto& firstLease = *leases[0u];
+            if(!graph.matchesSubmissionTransaction(compiledGraph, firstLease.m_recordingAttemptGeneration, firstLease.m_submissionBinding))
+                FOUNDATION_FATAL_ASSERT_MSG(false, "native-accepted packet batch must retain its exact graph submission binding");
         }
     }
 
@@ -565,6 +569,10 @@ void GpuGraphSubmissionTransaction::commitAcceptedPacket(const GpuTaskGraph& gra
 void GpuGraphSubmissionTransaction::commitAcceptedPacketBatch(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const Span<const GpuSubmissionPacketId> packets, const QueueSubmissionReceipt* const receipts, const NativeSubmissionInfo* const nativeSubmissionInfos)noexcept{
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
     NothrowScopedLock lock(m_mutex);
+    commitAcceptedPacketBatchLocked(graph, compiledGraph, planAccess, packets, receipts, nativeSubmissionInfos);
+}
+
+void GpuGraphSubmissionTransaction::commitAcceptedPacketBatchLocked(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const Span<const GpuSubmissionPacketId> packets, const QueueSubmissionReceipt* const receipts, const NativeSubmissionInfo* const nativeSubmissionInfos)noexcept{
     if(!validForLocked(planAccess) || packets.empty() || !receipts || !nativeSubmissionInfos)
         FOUNDATION_FATAL_ASSERT_MSG(false, "accepted packet batch commit must retain its exact transaction and compiled packets");
 

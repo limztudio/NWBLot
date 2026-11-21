@@ -68,12 +68,11 @@ class MaterialTypedStager : NoCopy{
 
     [cpp_unwind]
     public Expected<MaterialTypedByteRange> mutableInstance(in EntityID entity, in MaterialSurfaceInfo material){
-        if(!this.m_world.hasComponent<MaterialInstanceComponent>(entity))
+        const Optional<mut MaterialInstanceComponent> borrowedInstance = this.m_world.borrowComponent<MaterialInstanceComponent>(entity);
+        if(!borrowedInstance.has_value() || borrowedInstance.value().overrides.empty())
             return this.defaultMutable(material);
-        in MaterialInstanceComponent instance = this.m_world.getComponent<MaterialInstanceComponent>(entity);
-        if(instance.overrides.empty())
-            return this.defaultMutable(material);
-        const Optional<in MaterialInstanceComponent> borrowInstance(instance);
+        Optional<in MaterialInstanceComponent> borrowInstance;
+        borrowInstance.emplace(borrowedInstance.value());
         Expected<Span<u8>> bytes = MakeUnexpected(Failure());
         if(this.m_lookupMode == RendererResourceLookupMode::CreateMissing)
             bytes = this.m_system.prepareMaterialInstanceMutableTypedBytes(entity, material, borrowInstance);

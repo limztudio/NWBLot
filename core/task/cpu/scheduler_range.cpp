@@ -17,6 +17,9 @@ NWB_CORE_BEGIN
 
 
 Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(const usize begin, const usize end, const usize grainSize, const CpuTaskOptions options, const NotNull<const void*> context, const NotNull<RangeFunction> invoke, CpuTaskScope* const callerScope){
+    if(options.cost > CpuTaskCost::Light || options.priority > CpuTaskPriority::Background || options.target > CpuTaskTarget::MainThread)
+        return MakeUnexpected(CpuTaskAdmissionError::InvalidOptions);
+
     const usize count = end - begin;
     const usize grain = Max(grainSize, static_cast<usize>(1u));
     const usize chunkGroups = DivideUp(count, grain);
@@ -43,19 +46,47 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
     });
 
     if(!m_profileEnabled.load(MemoryOrder::relaxed) && options.target != CpuTaskTarget::MainThread && m_workerCount != 0u && runFirstInline && chunkGroups >= 2u){
+        const b8 fastUnscoped = !inScheduler && !callerScope && mainThread;
         const usize workerCapacity = static_cast<usize>(1u) + static_cast<usize>(m_workerCount);
         const usize chunkCount = Min(chunkGroups, static_cast<usize>(m_workerCount) * 2u);
         const usize chunkSize = count / chunkCount;
         const usize remainder = count % chunkCount;
         const usize taskCount = Min(chunkCount, workerCapacity);
 
-        alignas(64) CpuTaskScope chunks(*this, callerScope ? callerScope->m_profileLabel : CpuTaskProfileLabel{});
-        chunks.m_allowCallerWork = true;
-        chunks.m_parentScope = callerScope;
+        Optional<CpuTaskScope> scopedChunks;
+        alignas(CpuTaskScope) u8 lazyChildScopeStorage[sizeof(CpuTaskScope)];
+        if(!fastUnscoped){
+            scopedChunks.emplace(*this, callerScope ? callerScope->m_profileLabel : CpuTaskProfileLabel{});
+            scopedChunks->m_allowCallerWork = true;
+            scopedChunks->m_parentScope = callerScope;
+            scopedChunks->m_pending.store(1u, MemoryOrder::release);
+        }
 
         ParallelRangeGroup group(context, invoke, begin, chunkCount, chunkSize, remainder);
-        group.scope = &chunks;
+        group.scope = scopedChunks ? &(*scopedChunks) : nullptr;
+        group.lazyChildScopeStorage = lazyChildScopeStorage;
         group.options = options;
+        group.fastUnscoped = fastUnscoped;
+
+        b8 fastRangeActive = false;
+        b8 rangeCompletedCleanly = false;
+        ScopeExit cleanupFastActive([&]()noexcept{
+            if(!fastRangeActive)
+                return;
+            if(group.lazyChildScope){
+                if(group.lazyChildScope->m_pending.load(MemoryOrder::acquire) != 0u)
+                    group.lazyChildScope->drain();
+                group.lazyChildScope->~CpuTaskScope();
+                group.lazyChildScope = nullptr;
+            }
+            if(rangeCompletedCleanly)
+                m_fastRangeCompleted.fetch_add(1u, MemoryOrder::relaxed);
+            if(m_activeFastRanges.fetch_sub(1u, MemoryOrder::seq_cst) == 1u && m_joinWaitersAtomic.load(MemoryOrder::seq_cst) != 0u){
+                ScopedLock lock(m_mutex);
+                if(publishJoinWakeLocked(true))
+                    m_joinEpoch.notify_all();
+            }
+        });
 
         TaskHandle anchorHandle;
         WorkerWakePlan wakePlan;
@@ -64,62 +95,66 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
             ScopedLock lock(m_mutex);
             if(m_aborting)
                 return MakeUnexpected(CpuTaskAdmissionError::Aborting);
-            if(options.cost > CpuTaskCost::Light || options.priority > CpuTaskPriority::Background || options.target > CpuTaskTarget::MainThread)
-                return MakeUnexpected(CpuTaskAdmissionError::InvalidOptions);
             if(callerScope && isScopeCanceledLocked(callerScope))
                 return {};
 
-            const auto reserved = reserveTaskLocked();
-            if(!reserved)
-                return MakeUnexpected(reserved.error());
-            anchorHandle = reserved->handle;
-            TaskMeta& meta = reserved->meta;
-            TaskPayload& payload = reserved->payload;
-            ScopeExit releaseAnchor([&]()noexcept{
-                meta.state = TaskState::Free;
-                meta.next = m_freeNode;
-                m_freeNode = anchorHandle.index;
-            });
-            if(meta.latestCanceledGeneration != 0u)
-                ContainerDetail::ReserveGrowingCapacity(payload.olderCanceledGenerations, AddSize(payload.olderCanceledGenerations.size(), 1u));
+            if(!fastUnscoped){
+                const auto reservation = reserveTaskLocked();
+                if(!reservation)
+                    return MakeUnexpected(reservation.error());
+                anchorHandle = reservation->handle;
+                TaskMeta& meta = reservation->meta;
+                TaskPayload& payload = reservation->payload;
+                ScopeExit releaseAnchor([&]()noexcept{
+                    meta.state = TaskState::Free;
+                    meta.next = m_freeNode;
+                    m_freeNode = anchorHandle.index;
+                });
+                if(meta.latestCanceledGeneration != 0u)
+                    ContainerDetail::ReserveGrowingCapacity(payload.olderCanceledGenerations, AddSize(payload.olderCanceledGenerations.size(), 1u));
 
-            const TaskHandle parentHandle = inScheduler ? activeExec->task : TaskHandle{};
-            TaskMeta* const parent = resolveLocked(parentHandle);
-            const usize children = parent ? AddSize(parent->children, static_cast<usize>(1u)) : 0u;
-            const usize outstanding = AddSize(m_outstanding, static_cast<usize>(1u));
-            if(parent){
-                parent->children = children;
-                s_Execution->spawnedChildren = true;
+                const TaskHandle parentHandle = inScheduler ? activeExec->task : TaskHandle{};
+                TaskMeta* const parent = resolveLocked(parentHandle);
+                const usize children = parent ? AddSize(parent->children, static_cast<usize>(1u)) : 0u;
+                const usize outstanding = AddSize(m_outstanding, static_cast<usize>(1u));
+                if(parent){
+                    parent->children = children;
+                    s_Execution->spawnedChildren = true;
+                }
+
+                meta.scope = &(*scopedChunks);
+                meta.parent = parent ? parentHandle : TaskHandle{};
+                meta.dependencies = 0u;
+                meta.children = 0u;
+                meta.cost = options.cost;
+                meta.priority = options.priority;
+                meta.target = CpuTaskTarget::Worker;
+                meta.canceled = parent && parent->canceled;
+                meta.hasHandleWaiter = false;
+                meta.hasDependents = false;
+                meta.next = TaskHandle::s_InvalidIndex;
+                meta.state = TaskState::Running;
+                payload.profileLabel = options.profileLabel;
+                releaseAnchor.release();
+
+                if(callerScope){
+                    callerScope->m_pending.fetch_add(1u, MemoryOrder::release);
+                    callerScopePending = true;
+                }
+                if(m_scopeSearchActive)
+                    invalidateScopeSearchLocked(true);
+                if(m_outstanding == 0u)
+                    m_outstandingAtomic.store(1u, MemoryOrder::release);
+                m_outstanding = outstanding;
+                m_statistics.peakOutstandingTasks = Max(m_statistics.peakOutstandingTasks, m_outstanding);
+            }
+            else{
+                const u32 activeFast = m_activeFastRanges.fetch_add(1u, MemoryOrder::acq_rel) + 1u;
+                fastRangeActive = true;
+                m_statistics.peakOutstandingTasks = Max(m_statistics.peakOutstandingTasks, AddSize(m_outstanding, static_cast<usize>(activeFast)));
             }
 
-            meta.scope = &chunks;
-            meta.parent = parent ? parentHandle : TaskHandle{};
-            meta.dependencies = 0u;
-            meta.children = 0u;
-            meta.cost = options.cost;
-            meta.priority = options.priority;
-            meta.target = CpuTaskTarget::Worker;
-            meta.canceled = parent && parent->canceled;
-            meta.hasHandleWaiter = false;
-            meta.hasDependents = false;
-            meta.next = TaskHandle::s_InvalidIndex;
-            meta.state = TaskState::Running;
-            payload.profileLabel = options.profileLabel;
-            releaseAnchor.release();
-
-            if(callerScope){
-                callerScope->m_pending.fetch_add(1u, MemoryOrder::release);
-                callerScopePending = true;
-            }
-            if(m_scopeSearchActive)
-                invalidateScopeSearchLocked(true);
-            chunks.m_pending.store(1u, MemoryOrder::release);
-            if(m_outstanding == 0u)
-                m_outstandingAtomic.store(1u, MemoryOrder::release);
-            m_outstanding = outstanding;
-            m_statistics.peakOutstandingTasks = Max(m_statistics.peakOutstandingTasks, m_outstanding);
             ++m_dispatchCount;
-
             if(workerIndex != 0u){
                 b8 dummy = false;
                 addActiveDepthLocked(workerIndex, affinity, dummy);
@@ -132,79 +167,84 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
             }
 
             group.anchorHandle = anchorHandle;
+            group.nextChunk.store(1u, MemoryOrder::relaxed);
+            group.activeHelpers.store(0u, MemoryOrder::release);
             group.remainingHelperClaims = static_cast<u32>(taskCount - 1u);
             group.next = m_activeRangeHead;
             m_activeRangeHead = &group;
             group.linked = true;
-
             takeRangeWakePlanLocked(group, 2u, wakePlan);
-            wakeJoiners = publishJoinWakeLocked(true);
+            wakeJoiners = publishJoinWakeLocked(!fastUnscoped);
         }
-        notifyProgress(wakePlan, wakeJoiners);
 
-        b8 spawnedChildren = false;
-        b8 rangeSucceeded = false;
-        ScopeExit cleanupInlineRange([&]()noexcept{
+        ScopeExit unwindInlineRange([&]()noexcept{
             WorkerWakePlan errWakePlan;
             b8 errWakeJoiners = false;
             {
                 ScopedLock lock(m_mutex);
                 unlinkRangeGroupLocked(group);
-                if(!rangeSucceeded){
-                    m_aborting = true;
-                    m_abortingAtomic.store(true, MemoryOrder::release);
-                    if(TaskMeta* const anchorMeta = resolveLocked(anchorHandle))
-                        anchorMeta->canceled = true;
-                    takeWorkerWakePlanLocked(errWakePlan);
-                    errWakeJoiners = publishJoinWakeLocked(true);
-                }
+                m_aborting = true;
+                m_abortingAtomic.store(true, MemoryOrder::release);
+                if(fastUnscoped)
+                    ++m_statistics.canceledTasks;
+                else if(TaskMeta* const anchorMeta = resolveLocked(anchorHandle))
+                    anchorMeta->canceled = true;
                 if(workerIndex != 0u)
                     removeActiveDepthLocked(workerIndex, affinity);
+                takeWorkerWakePlanLocked(errWakePlan);
+                errWakeJoiners = publishJoinWakeLocked(true);
             }
-            if(!rangeSucceeded)
-                notifyProgress(errWakePlan, errWakeJoiners);
+            notifyProgress(errWakePlan, errWakeJoiners);
 
             waitRangeHelpers(group);
 
+            if(fastUnscoped)
+                return;
+
             TaskHandle parentHandle;
             TaskMeta* parentToRetire = nullptr;
+            TaskPayload* parentPayload = nullptr;
             WorkerWakePlan finishWakePlan;
             b8 finishWakeJoiners = false;
-            b8 waitForDescendants = false;
+            b8 drainDescendants = false;
             {
                 ScopedLock lock(m_mutex);
                 TaskMeta& anchorMeta = m_slabs.meta(anchorHandle.index);
-                if(!rangeSucceeded)
-                    anchorMeta.canceled = true;
+                anchorMeta.canceled = true;
                 if(anchorMeta.children == 0u){
                     anchorMeta.state = TaskState::Retiring;
                     b8 madeReady = false;
                     b8 scopeCompleted = false;
                     b8 handleWaited = false;
-                    retireNodeLocked(anchorHandle, anchorMeta, parentHandle, parentToRetire, madeReady, scopeCompleted, handleWaited);
+                    retireNodeLocked(anchorHandle, anchorMeta, parentHandle, parentToRetire, parentPayload, madeReady, scopeCompleted, handleWaited);
                     takeWorkerWakePlanLocked(finishWakePlan);
-                    finishWakeJoiners = publishJoinWakeLocked(madeReady || scopeCompleted || m_outstanding == 0u || handleWaited || !rangeSucceeded);
+                    finishWakeJoiners = publishJoinWakeLocked(true);
                 }
                 else{
                     anchorMeta.state = TaskState::Children;
-                    waitForDescendants = true;
-                    if(!rangeSucceeded){
-                        takeWorkerWakePlanLocked(finishWakePlan);
-                        finishWakeJoiners = publishJoinWakeLocked(true);
-                    }
+                    drainDescendants = true;
+                    takeWorkerWakePlanLocked(finishWakePlan);
+                    finishWakeJoiners = publishJoinWakeLocked(true);
                 }
             }
             notifyProgress(finishWakePlan, finishWakeJoiners);
-            if(waitForDescendants)
-                chunks.wait();
+            if(drainDescendants)
+                scopedChunks->drain();
             else if(parentToRetire)
-                retire(parentHandle, *parentToRetire);
+                retire(parentHandle, *parentToRetire, *parentPayload);
         });
 
+        notifyProgress(wakePlan, wakeJoiners);
+
+        b8 spawnedChildren = false;
         {
-            Execution execution(*this, anchorHandle, workerIndex, affinity, &spawnedChildren);
+            Execution execution(*this, anchorHandle, workerIndex, affinity, &spawnedChildren, &group);
+            if(!isRangeCanceled(group.scope)){
+                const BalancedPartitionRange firstRange = ComputeBalancedPartitionRange(begin, static_cast<usize>(0u), chunkSize, remainder);
+                invoke.get()(context, firstRange.first, firstRange.last);
+            }
             for(;;){
-                if(isRangeCanceled(&chunks))
+                if(isRangeCanceled(group.scope) || group.nextChunk.load(MemoryOrder::relaxed) >= chunkCount)
                     break;
                 const usize chunk = group.nextChunk.fetch_add(1u, MemoryOrder::relaxed);
                 if(chunk >= chunkCount)
@@ -213,7 +253,52 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
                 invoke.get()(context, range.first, range.last);
             }
         }
-        rangeSucceeded = true;
+        unwindInlineRange.release();
+
+        {
+            ScopedLock lock(m_mutex);
+            unlinkRangeGroupLocked(group);
+            if(!fastUnscoped && workerIndex != 0u)
+                removeActiveDepthLocked(workerIndex, affinity);
+        }
+
+        waitRangeHelpers(group);
+
+        if(fastUnscoped){
+            if(group.hasChildScope.load(MemoryOrder::acquire) && group.lazyChildScope)
+                group.lazyChildScope->wait();
+            rangeCompletedCleanly = true;
+            return {};
+        }
+
+        TaskHandle parentHandle;
+        TaskMeta* parentToRetire = nullptr;
+        TaskPayload* parentPayload = nullptr;
+        WorkerWakePlan finishWakePlan;
+        b8 finishWakeJoiners = false;
+        b8 waitForDescendants = false;
+        {
+            ScopedLock lock(m_mutex);
+            TaskMeta& anchorMeta = m_slabs.meta(anchorHandle.index);
+            if(anchorMeta.children == 0u){
+                anchorMeta.state = TaskState::Retiring;
+                b8 madeReady = false;
+                b8 scopeCompleted = false;
+                b8 handleWaited = false;
+                retireNodeLocked(anchorHandle, anchorMeta, parentHandle, parentToRetire, parentPayload, madeReady, scopeCompleted, handleWaited);
+                takeWorkerWakePlanLocked(finishWakePlan);
+                finishWakeJoiners = publishJoinWakeLocked(madeReady || scopeCompleted || m_outstanding == 0u || handleWaited);
+            }
+            else{
+                anchorMeta.state = TaskState::Children;
+                waitForDescendants = true;
+            }
+        }
+        notifyProgress(finishWakePlan, finishWakeJoiners);
+        if(waitForDescendants)
+            scopedChunks->wait();
+        else if(parentToRetire)
+            retire(parentHandle, *parentToRetire, *parentPayload);
         return {};
     }
 
@@ -238,8 +323,6 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
         ScopedLock lock(m_mutex);
         if(m_aborting)
             return MakeUnexpected(CpuTaskAdmissionError::Aborting);
-        if(options.cost > CpuTaskCost::Light || options.priority > CpuTaskPriority::Background || options.target > CpuTaskTarget::MainThread)
-            return MakeUnexpected(CpuTaskAdmissionError::InvalidOptions);
         if(callerScope && isScopeCanceledLocked(callerScope))
             return {};
         u32 reservedHead = TaskHandle::s_InvalidIndex;
@@ -255,17 +338,18 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
             }
         });
         for(usize task = 0u; task < taskCount; ++task){
-            const auto reserved = reserveTaskLocked();
-            if(!reserved)
-                return MakeUnexpected(reserved.error());
-            const TaskHandle handle = reserved->handle;
+            const auto reservation = reserveTaskLocked();
+            if(!reservation)
+                return MakeUnexpected(reservation.error());
+            const u32 index = reservation->handle.index;
             if(reservedTail != TaskHandle::s_InvalidIndex)
-                m_slabs.meta(reservedTail).next = handle.index;
+                m_slabs.meta(reservedTail).next = index;
             else
-                reservedHead = handle.index;
-            reservedTail = handle.index;
-            TaskMeta& meta = reserved->meta;
-            TaskPayload& payload = reserved->payload;
+                reservedHead = index;
+            reservedTail = index;
+            TaskMeta& meta = reservation->meta;
+            TaskPayload& payload = reservation->payload;
+            meta.next = TaskHandle::s_InvalidIndex;
             if(meta.latestCanceledGeneration != 0u)
                 ContainerDetail::ReserveGrowingCapacity(payload.olderCanceledGenerations, AddSize(payload.olderCanceledGenerations.size(), 1u));
         }
@@ -282,9 +366,9 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
             TaskMeta& meta = m_slabs.meta(index);
             TaskPayload& payload = m_slabs.payload(index);
             const u32 next = meta.next;
-            payload.function = [this, &nextChunk, &chunks, begin, chunkCount, chunkSize, remainder, context, invoke](){
+            payload.function.emplace([this, &nextChunk, &chunks, begin, chunkCount, chunkSize, remainder, context, invoke](){
                 for(;;){
-                    if(isRangeCanceled(&chunks))
+                    if(isRangeCanceled(&chunks) || nextChunk.load(MemoryOrder::relaxed) >= chunkCount)
                         break;
                     const usize chunk = nextChunk.fetch_add(1u, MemoryOrder::relaxed);
                     if(chunk >= chunkCount)
@@ -292,7 +376,7 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
                     const BalancedPartitionRange range = ComputeBalancedPartitionRange(begin, chunk, chunkSize, remainder);
                     invoke.get()(context, range.first, range.last);
                 }
-            };
+            });
             payload.profileLabel = options.profileLabel;
             meta.scope = &chunks;
             meta.parent = parent ? parentHandle : TaskHandle{};

@@ -35,11 +35,8 @@ class MaterialGeometrySourceKey{
     }
 
     public usize hash()const{
-        usize seed = 0u;
-        ForEachMaterialPassMeshSourceBuffer(this.mesh, lambda[mut seed](in BufferHandle buffer) -> void{
-            seed = HashCombineValue(seed, buffer);
-        });
-        return seed;
+        usize seed = HashValue(this.mesh.sourceBuffers.positionBuffer);
+        return HashCombineValue(seed, this.mesh.sourceBuffers.meshletPrimitiveIndexBuffer);
     }
 
     public b8 operator==(in MaterialGeometrySourceKey other)const{
@@ -182,16 +179,19 @@ Expected<Vector<GpuGraphResourceId>, SampledTextureImportFailure> ImportMaterial
     mut GpuTaskGraph graph
 ){
     Vector<GpuGraphResourceId> resources;
-    resources.reserve(textures.size());
-    for(in TextureHandle texture : textures){
-        GpuGraphResourceId resource;
-        {
-            const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
-            if(!declarations.valid())
-                return MakeUnexpected(SampledTextureImportFailure::GraphUnavailable);
-            resource = declarations.findImportedTexture(texture);
-        }
-        if(!resource.valid()){
+    if(textures.empty())
+        return resources;
+    resources.resize(textures.size());
+    {
+        const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
+        if(!declarations.valid())
+            return MakeUnexpected(SampledTextureImportFailure::GraphUnavailable);
+        for(usize i = 0u; i < textures.size(); ++i)
+            resources[i] = declarations.findImportedTexture(textures[i]);
+    }
+    for(usize i = 0u; i < textures.size(); ++i){
+        if(!resources[i].valid()){
+            in TextureHandle texture = textures[i];
             if(!texture.valid())
                 return MakeUnexpected(SampledTextureImportFailure::MissingIdentity);
             const Name identity = texture.deref().getCreationDescription().name;
@@ -200,9 +200,8 @@ Expected<Vector<GpuGraphResourceId>, SampledTextureImportFailure> ImportMaterial
             const Expected<GpuGraphResourceId> imported = graph.importTexture(texture, TextureResourceDesc(identity, markerLabel));
             if(!imported.has_value())
                 return MakeUnexpected(SampledTextureImportFailure::ImportFailed);
-            resource = imported.value();
+            resources[i] = imported.value();
         }
-        resources.push_back(resource);
     }
     return resources;
 }

@@ -359,6 +359,22 @@ b8 InvalidateRouterTargetTable(in WidgetId id, mut Vector<TargetLookup> lookup, 
     return true;
 }
 
+[cpp_unwind]
+b8 InvalidateRouterTargetTableBatch(
+    in Span<WidgetId> ids,
+    mut Vector<TargetLookup> lookup,
+    mut Vector<HitTarget> targets
+){
+    if(ids.empty() || targets.empty())
+        return false;
+    if(ids.size() == 1u)
+        return InvalidateRouterTargetTable(ids[0u], lookup, targets);
+    if(!EraseInvalidatedRouterTargetsBatch(ids, lookup, targets))
+        return false;
+    RebuildRouterTargetLookup(targets, lookup);
+    return true;
+}
+
 Optional<InputPopupRetirement> RetireRouterTargetTablePopup(
     in WidgetId id,
     mut Vector<PopupRecord> popups,

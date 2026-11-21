@@ -2,11 +2,62 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_csg/frame_types.adhd>
+#include <impl/ecs_render/csg/renderer_csg_types.adhd>
 #include <impl/ecs_render/material/material_instance_mutable_cache.adhd>
+#include <impl/ecs_render/material/material_typed_private.adhd>
 #include <impl/ecs_render/material/sampled_texture_collection.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_MaterialPipelinePassCount = 6u;
+
+class PreparedMaterialStreamCache{
+    public InstanceGpuDataVector instanceData;
+    public MaterialTypedInstanceRangeVector materialTypedRanges;
+    public MaterialTypedByteDataVector materialTypedBytes;
+    public u64 streamToken = 0u;
+
+    public void clear(){
+        this.instanceData.clear();
+        this.materialTypedRanges.clear();
+        this.materialTypedBytes.clear();
+        this.streamToken = 0u;
+    }
+}
+
+class PreparedMaterialPassCacheSlot{
+    public MaterialPassDrawItemPartitions drawItems;
+    public CsgFrameGpuData csgFrameData;
+    public PreparedMaterialStreamCache ownedStreams;
+    public MaterialFramebufferInfo framebufferInfo;
+    public CsgFrameState csgFrameState;
+    public Array<u8, s_MeshViewGpuDataBytes> meshViewBytes;
+    public u32 framebufferWidth = 0u;
+    public u32 framebufferHeight = 0u;
+    public b8 usesSharedTransparentStreams = false;
+    public b8 hasMeshView = false;
+    public b8 transparent = false;
+    public b8 valid = false;
+
+    public void clear(){
+        this.drawItems.clear();
+        this.csgFrameData.receiverRanges.clear();
+        this.csgFrameData.cutters.clear();
+        this.csgFrameData.workRegion = CsgFrameWorkRegion();
+        this.ownedStreams.clear();
+        this.framebufferInfo = MaterialFramebufferInfo();
+        this.csgFrameState = CsgFrameState();
+        this.framebufferWidth = 0u;
+        this.framebufferHeight = 0u;
+        this.usesSharedTransparentStreams = false;
+        this.hasMeshView = false;
+        this.transparent = false;
+        this.valid = false;
+    }
+}
 
 
 class RendererMaterialState : NoCopy{
@@ -24,13 +75,25 @@ class RendererMaterialState : NoCopy{
     public HashMap<MaterialPipelineKey, MaterialPipelineResources> m_pipelines;
     public MaterialInstanceMutableCache m_instanceMutableCache;
     public HashMap<Name, RenderPath> m_loggedMaterialPaths;
+    public PreparedMaterialStreamCache m_preparedTransparentStreams;
+    public Array<PreparedMaterialPassCacheSlot, s_MaterialPipelinePassCount> m_preparedPassCache;
+    public u64 m_preparedStreamGeneration = 0u;
+    public u64 m_lastGatheredStreamToken = 0u;
     public usize m_instanceBufferCapacity = 0u;
     public usize m_materialTypedBufferCapacity = 0u;
 
     [owner_result]
     public MaterialSurfaceInfo emptySurface()const{ return MaterialSurfaceInfo(); }
 
+    public void clearPreparedFrameCache(){
+        this.m_preparedTransparentStreams.clear();
+        for(usize i = 0u; i < this.m_preparedPassCache.size(); ++i)
+            this.m_preparedPassCache[i].clear();
+        this.m_lastGatheredStreamToken = 0u;
+    }
+
     public void invalidateResources(){
+        this.clearPreparedFrameCache();
         this.m_pipelines.clear();
         this.m_materialPassBindingLayout.reset();
         this.m_computeBindingLayout.reset();
@@ -43,6 +106,7 @@ class RendererMaterialState : NoCopy{
         this.m_objectGeometryInputLayout.reset();
         this.m_instanceMutableCache.clear();
         this.m_loggedMaterialPaths.clear();
+        this.m_preparedStreamGeneration = 0u;
         this.m_instanceBufferCapacity = 0u;
         this.m_materialTypedBufferCapacity = 0u;
     }

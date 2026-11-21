@@ -185,21 +185,28 @@ void TrackedCommandBuffer::commitPendingOpacityMicromapBuildCommits()noexcept{
 }
 
 void TrackedCommandBuffer::discardPendingRecordingCommits()noexcept{
-    discardTimerQueryRecordingClaims();
-    m_resourceReferences.discardBufferStateCommits();
-    m_retainedTextureStateCommits.clear();
-    abandonPendingAccelStructBuildCommits();
-    m_pendingOpacityMicromapBuildCommits.clear();
+    if((m_pendingCommitFlags & s_CommitTimerQueries) != 0u || !m_timerQueryClaims.claims().empty())
+        discardTimerQueryRecordingClaims();
+    if((m_pendingCommitFlags & s_CommitBufferStates) != 0u || !m_resourceReferences.m_bufferStateCommits.empty())
+        m_resourceReferences.discardBufferStateCommits();
+    if(!m_retainedTextureStateCommits.empty())
+        m_retainedTextureStateCommits.clear();
+    if((m_pendingCommitFlags & s_CommitAccelStructBuilds) != 0u || !m_accelStructJournal.pendingEmpty())
+        abandonPendingAccelStructBuildCommits();
+    if(!m_pendingOpacityMicromapBuildCommits.empty())
+        m_pendingOpacityMicromapBuildCommits.clear();
     m_pendingCommitFlags = 0u;
 }
 
 void TrackedCommandBuffer::clearTrackedReferences()noexcept{
     discardPendingRecordingCommits();
 
-    for(const auto heap : m_referencedDescriptorHeaps){
-        heap->discardCommandBufferUse(*this);
+    if(!m_referencedDescriptorHeaps.empty()){
+        for(const auto heap : m_referencedDescriptorHeaps){
+            heap->discardCommandBufferUse(*this);
+        }
+        m_referencedDescriptorHeaps.clear();
     }
-    m_referencedDescriptorHeaps.clear();
     m_trackedDescriptorHeapQueue = {};
     m_trackedDescriptorHeapUseID = 0u;
     m_trackedDescriptorHeapUseIndexHint = 0u;
@@ -211,7 +218,8 @@ void TrackedCommandBuffer::clearTrackedReferences()noexcept{
 
     m_accelStructJournal.clearTrackedReferences();
     m_resourceReferences.clear();
-    m_referencedStagingBuffers.clear();
+    if(!m_referencedStagingBuffers.empty())
+        m_referencedStagingBuffers.clear();
 }
 
 

@@ -46,7 +46,7 @@ class BuilderItem{
     public SelectableStyle selectableStyle;
     public EditBoxStyle editStyle;
     public ScrollbarStyle scrollbarStyle;
-    public TextLayout text;
+    public SharedTextLayout text;
     public Rect textBounds;
     public EditBoxView editView;
     public Optional<mut EditBoxState> editState;
@@ -79,7 +79,7 @@ class BuilderWindowFrame{
     public WidgetState titleState;
     public WidgetState collapseState;
     public WidgetState resizeState;
-    public TextLayout title;
+    public SharedTextLayout title;
     public Rect titleBounds;
 }
 
@@ -107,7 +107,7 @@ type BuilderIntegerEditFrame = BuilderNumericEditFrame<IntegerEditModel>;
 type BuilderFloatEditFrame = BuilderNumericEditFrame<FloatEditModel>;
 
 class BuilderListRow{
-    public TextLayout text;
+    public SharedTextLayout text;
     public Rect textBounds;
     public u64 index = 0u;
     public u64 key = 0u;
@@ -171,7 +171,7 @@ class BuilderTooltipFrame{
     public Optional<mut TooltipState> state;
     public TooltipStyle style;
     public TooltipOptions options;
-    public TextLayout text;
+    public SharedTextLayout text;
     public u64 revision = 0u;
     public u32 anchorIndex = 0u;
     public u32 layer = 1u;

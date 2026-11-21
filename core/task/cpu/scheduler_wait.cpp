@@ -55,9 +55,10 @@ void CpuTaskScheduler::wait(const TaskHandle handle){
         .allowPark = false,
     };
     b8 validated = false;
-    ClaimedExecution claimed;
+    ClaimedExecution claims[2];
+    u32 active = 0u;
     for(;;){
-        if(!claimed.hasWork()){
+        if(!claims[active].hasWork()){
             UniqueLock lock(m_mutex);
             if(!validated){
                 validateWaitLocked(handle, nullptr);
@@ -66,24 +67,29 @@ void CpuTaskScheduler::wait(const TaskHandle handle){
             TaskMeta* awaited = resolveLocked(handle);
             if(!awaited)
                 return;
-            if(!claimNextLocked(affinity, mainThread, executing, executing, nullptr, workerIndex, claimed)){
+            if(!claimNextLocked(affinity, mainThread, executing, executing, nullptr, workerIndex, claims[active])){
                 do{
                     const u32 epoch = m_joinEpoch.load(MemoryOrder::relaxed);
                     awaited->hasHandleWaiter = true;
                     ++m_joinWaiters;
-                    ScopeExit unregisterWaiter([this]()noexcept{ --m_joinWaiters; });
+                    m_joinWaitersAtomic.store(m_joinWaiters, MemoryOrder::seq_cst);
+                    ScopeExit unregisterWaiter([this]()noexcept{
+                        m_joinWaitersAtomic.store(--m_joinWaiters, MemoryOrder::release);
+                    });
                     lock.unlock();
                     waitJoinEpoch(epoch);
                     lock.lock();
                     awaited = resolveLocked(handle);
                     if(!awaited)
                         return;
-                }while(!claimNextLocked(affinity, mainThread, executing, executing, nullptr, workerIndex, claimed));
+                }while(!claimNextLocked(affinity, mainThread, executing, executing, nullptr, workerIndex, claims[active]));
             }
         }
-        ClaimedExecution nextClaim;
-        executeClaimed(claimed, workerIndex, affinity, &nextClaim, &pipeline);
-        claimed = Move(nextClaim);
+        const u32 next = active ^ 1u;
+        claims[next].resetFast();
+        executeClaimed(claims[active], workerIndex, affinity, &claims[next], &pipeline);
+        claims[active].resetFast();
+        active = next;
     }
 }
 
@@ -93,10 +99,11 @@ void CpuTaskScheduler::wait(){
     Optional<ProfileMeasure> profile;
     if(m_profileEnabled.load(MemoryOrder::relaxed))
         profile.emplace(*this, CpuTaskProfileKind::SchedulerJoin);
-    else if(m_outstandingAtomic.load(MemoryOrder::acquire) == 0u)
+    else if(m_outstandingAtomic.load(MemoryOrder::acquire) == 0u && m_activeFastRanges.load(MemoryOrder::acquire) == 0u)
         return;
 
     const b8 mainThread = isMainThread();
+
     const ClaimPipeline pipeline{
         .preferredScope = nullptr,
         .stopOnCompleteHandle = nullptr,
@@ -107,28 +114,36 @@ void CpuTaskScheduler::wait(){
         .cooperative = false,
         .allowPark = false,
     };
-    ClaimedExecution claimed;
+    ClaimedExecution claims[2];
+    u32 active = 0u;
     for(;;){
-        if(!claimed.hasWork()){
+        if(!claims[active].hasWork()){
             UniqueLock lock(m_mutex);
-            if(m_outstanding == 0u)
+            if(m_outstanding == 0u && m_activeFastRanges.load(MemoryOrder::acquire) == 0u)
                 return;
-            if(!claimNextLocked(CpuAffinity::Any, mainThread, false, false, nullptr, 0u, claimed)){
+            if(!claimNextLocked(CpuAffinity::Any, mainThread, false, false, nullptr, 0u, claims[active])){
                 do{
                     const u32 epoch = m_joinEpoch.load(MemoryOrder::relaxed);
                     ++m_joinWaiters;
-                    ScopeExit unregisterWaiter([this]()noexcept{ --m_joinWaiters; });
+                    m_joinWaitersAtomic.store(m_joinWaiters, MemoryOrder::seq_cst);
+                    ScopeExit unregisterWaiter([this]()noexcept{
+                        m_joinWaitersAtomic.store(--m_joinWaiters, MemoryOrder::release);
+                    });
+                    if(m_activeFastRanges.load(MemoryOrder::seq_cst) == 0u && m_outstanding == 0u)
+                        return;
                     lock.unlock();
                     waitJoinEpoch(epoch);
                     lock.lock();
-                    if(m_outstanding == 0u)
+                    if(m_outstanding == 0u && m_activeFastRanges.load(MemoryOrder::acquire) == 0u)
                         return;
-                }while(!claimNextLocked(CpuAffinity::Any, mainThread, false, false, nullptr, 0u, claimed));
+                }while(!claimNextLocked(CpuAffinity::Any, mainThread, false, false, nullptr, 0u, claims[active]));
             }
         }
-        ClaimedExecution nextClaim;
-        executeClaimed(claimed, 0u, CpuAffinity::Any, &nextClaim, &pipeline);
-        claimed = Move(nextClaim);
+        const u32 next = active ^ 1u;
+        claims[next].resetFast();
+        executeClaimed(claims[active], 0u, CpuAffinity::Any, &claims[next], &pipeline);
+        claims[active].resetFast();
+        active = next;
     }
 }
 
@@ -193,10 +208,11 @@ void CpuTaskScheduler::waitScope(CpuTaskScope& scope){
     const CpuAffinity::Enum affinity = executing ? activeExec->affinity : CpuAffinity::Any;
     const b8 mainThread = isMainThread();
     b8 initialized = false;
-    ClaimedExecution claimed;
-    while(claimed.hasWork() || scope.m_pending.load(MemoryOrder::acquire) != 0u){
+    ClaimedExecution claims[2];
+    u32 active = 0u;
+    while(claims[active].hasWork() || scope.m_pending.load(MemoryOrder::acquire) != 0u){
         const b8 cooperative = executing || scope.m_allowCallerWork;
-        if(!claimed.hasWork()){
+        if(!claims[active].hasWork()){
             UniqueLock lock(m_mutex);
             if(!initialized){
                 if(scope.m_searchIdentity == 0u){
@@ -212,7 +228,7 @@ void CpuTaskScheduler::waitScope(CpuTaskScope& scope){
             }
             if(scope.m_pending.load(MemoryOrder::acquire) == 0u)
                 return;
-            if(!claimNextLocked(affinity, mainThread, executing, cooperative, &wait, workerIndex, claimed)){
+            if(!claimNextLocked(affinity, mainThread, executing, cooperative, &wait, workerIndex, claims[active])){
                 do{
                     if(m_scopePublicationGeneration != lastValidatedPublicationGeneration){
                         validateWaitLocked({}, &scope);
@@ -222,7 +238,10 @@ void CpuTaskScheduler::waitScope(CpuTaskScope& scope){
                         return;
                     const u32 epoch = m_joinEpoch.load(MemoryOrder::relaxed);
                     ++m_joinWaiters;
-                    ScopeExit unregisterWaiter([this]()noexcept{ --m_joinWaiters; });
+                    m_joinWaitersAtomic.store(m_joinWaiters, MemoryOrder::seq_cst);
+                    ScopeExit unregisterWaiter([this]()noexcept{
+                        m_joinWaitersAtomic.store(--m_joinWaiters, MemoryOrder::release);
+                    });
                     lock.unlock();
                     waitJoinEpoch(epoch);
                     lock.lock();
@@ -232,7 +251,7 @@ void CpuTaskScheduler::waitScope(CpuTaskScope& scope){
                     }
                     if(scope.m_pending.load(MemoryOrder::acquire) == 0u)
                         return;
-                }while(!claimNextLocked(affinity, mainThread, executing, cooperative, &wait, workerIndex, claimed));
+                }while(!claimNextLocked(affinity, mainThread, executing, cooperative, &wait, workerIndex, claims[active]));
             }
         }
         const ClaimPipeline pipeline{
@@ -245,9 +264,11 @@ void CpuTaskScheduler::waitScope(CpuTaskScope& scope){
             .cooperative = cooperative,
             .allowPark = false,
         };
-        ClaimedExecution nextClaim;
-        executeClaimed(claimed, workerIndex, affinity, &nextClaim, &pipeline);
-        claimed = Move(nextClaim);
+        const u32 next = active ^ 1u;
+        claims[next].resetFast();
+        executeClaimed(claims[active], workerIndex, affinity, &claims[next], &pipeline);
+        claims[active].resetFast();
+        active = next;
     }
 }
 

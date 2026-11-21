@@ -195,25 +195,23 @@ void SelectSuppressedCoincidentOpticalVolumes(
         if(!ValidCoincidentOpticalVolumeCandidate(candidates[index]))
             continue;
         const CoincidentOpticalVolumeKey key(candidates[index]);
-        if(!representatives.contains(key)){
-            representatives.insert_or_assign(key, index);
+        const auto inserted = representatives.try_emplace(key, index);
+        if(inserted.second)
             continue;
-        }
 
-        const usize previousIndex = representatives[key];
+        const usize previousIndex = inserted.first.value();
         const CoincidentOpticalVolumeCandidate previous = candidates[previousIndex];
         const CoincidentOpticalVolumeCandidate candidate = candidates[index];
         const b8 replace = CoincidentOpticalVolumeCandidateOutranks(candidate, previous);
         EntityID suppressed = candidate.entity;
         if(replace){
             suppressed = previous.entity;
-            representatives.insert_or_assign(key, index);
+            inserted.first.value() = index;
         }
-        if(outSuppressed.contains(suppressed)){
+        if(!outSuppressed.insert(suppressed).second){
             assert(false);
             continue;
         }
-        outSuppressed.insert(suppressed);
     }
 }
 

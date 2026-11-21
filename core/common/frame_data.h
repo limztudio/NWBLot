@@ -65,6 +65,10 @@ public:
 
     inline void setActive(b8 value)noexcept{ m_data.active = value; }
 
+    inline b8 isMouseLeaveTracked()const noexcept{ return m_mouseLeaveTracked; }
+
+    inline void setMouseLeaveTracked(b8 value)noexcept{ m_mouseLeaveTracked = value; }
+
     inline HINSTANCE instance()const noexcept{ return m_data.instance; }
 
     inline void setInstance(HINSTANCE value)noexcept{ m_data.instance = value; }
@@ -76,6 +80,10 @@ public:
     inline ATOM windowClass()const noexcept{ return m_data.windowClass; }
 
     inline void setWindowClass(ATOM value)noexcept{ m_data.windowClass = value; }
+
+
+private:
+    b8 m_mouseLeaveTracked = false;
 };
 #elif defined(FOUNDATION_PLATFORM_LINUX)
 namespace LinuxFrameBackend{

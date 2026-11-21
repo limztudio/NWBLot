@@ -85,17 +85,9 @@
 #define FOUNDATION_MEMCMP(lhs, rhs, size) memcmp(lhs, rhs, size)
 #define FOUNDATION_STRCMP(lhs, rhs) strcmp(lhs, rhs)
 #define FOUNDATION_MEMSET(dest, value, size) memset(dest, value, size)
-#if defined(_MSC_VER)
-#define FOUNDATION_STRNLEN(src, count) strnlen_s(src, count)
-#define FOUNDATION_MEMCPY(dest, destSize, src, srcSize) memcpy_s(dest, destSize, src, srcSize)
-#define FOUNDATION_STRCPY(dest, destSize, src) strcpy_s(dest, destSize, src)
-#define FOUNDATION_STRCAT(dest, destSize, src) strcat_s(dest, destSize, src)
-#define FOUNDATION_SPRINTF(format, formatSize, ...) sprintf_s(format, formatSize, __VA_ARGS__)
-#define FOUNDATION_STRERROR(dest, destSize, errorNum) strerror_s(dest, destSize, errorNum)
-#else
 namespace CompileDetail{
 template<typename DestT, typename SrcT>
-inline DestT* CheckedMemcpy(DestT* dest, const std::size_t destSize, const SrcT* src, const std::size_t srcSize)noexcept{
+FOUNDATION_INLINE DestT* CheckedMemcpy(DestT* dest, const std::size_t destSize, const SrcT* src, const std::size_t srcSize)noexcept{
     if(srcSize == 0u)
         return dest;
     if(srcSize > destSize)
@@ -105,7 +97,16 @@ inline DestT* CheckedMemcpy(DestT* dest, const std::size_t destSize, const SrcT*
 
     return static_cast<DestT*>(std::memcpy(dest, src, srcSize));
 }
-
+};
+#define FOUNDATION_MEMCPY(dest, destSize, src, srcSize) ::CompileDetail::CheckedMemcpy((dest), (destSize), (src), (srcSize))
+#if defined(_MSC_VER)
+#define FOUNDATION_STRNLEN(src, count) strnlen_s(src, count)
+#define FOUNDATION_STRCPY(dest, destSize, src) strcpy_s(dest, destSize, src)
+#define FOUNDATION_STRCAT(dest, destSize, src) strcat_s(dest, destSize, src)
+#define FOUNDATION_SPRINTF(format, formatSize, ...) sprintf_s(format, formatSize, __VA_ARGS__)
+#define FOUNDATION_STRERROR(dest, destSize, errorNum) strerror_s(dest, destSize, errorNum)
+#else
+namespace CompileDetail{
 inline std::size_t BoundedLength(const char* text, const std::size_t maxLength)noexcept{
     return ::strnlen(text, maxLength);
 }
@@ -154,7 +155,6 @@ inline int BoundedStrError(char* dest, const std::size_t destSize, const int err
 };
 
 #define FOUNDATION_STRNLEN(src, count) strnlen(src, count)
-#define FOUNDATION_MEMCPY(dest, destSize, src, srcSize) ::CompileDetail::CheckedMemcpy(dest, destSize, src, srcSize)
 #define FOUNDATION_STRCPY(dest, destSize, src) ::CompileDetail::BoundedCopy(dest, destSize, src)
 #define FOUNDATION_STRCAT(dest, destSize, src) ::CompileDetail::BoundedCat(dest, destSize, src)
 #define FOUNDATION_SPRINTF(format, formatSize, ...) snprintf(format, formatSize, __VA_ARGS__)

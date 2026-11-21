@@ -243,6 +243,7 @@ private:
     mutable Futex m_mutex;
     Atomic<b8> m_hasPendingRetirementWork{ false };
     b8 m_initialized = false;
+    b8 m_staticBindingContractValid = false;
 };
 
 

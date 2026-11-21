@@ -140,50 +140,54 @@ void StateTracker::beginTrackingTexture(Texture& texture, TextureSubresourceSet 
 }
 
 void StateTracker::appendKeepInitialStateBarriers(TrackedCommandBuffer& commandBuffer, Vector<VkImageMemoryBarrier2, Alloc::GlobalArena>& imageBarriers, Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena>& bufferBarriers){
-    for(auto it = m_textureStates.begin(); it != m_textureStates.end(); ++it){
-        const TextureSubresourceStateKey& key = it->first;
-        FOUNDATION_ASSERT(key.texture);
+    if(m_hasKeepInitialStateTextures){
+        for(auto it = m_textureStates.begin(); it != m_textureStates.end(); ++it){
+            const TextureSubresourceStateKey& key = it->first;
+            FOUNDATION_ASSERT(key.texture);
 
-        const TextureDesc& desc = key.texture->getCreationDescription();
-        const ResourceStates::Mask currentState = it.value();
-        if(!desc.keepInitialState)
-            continue;
+            const TextureDesc& desc = key.texture->getCreationDescription();
+            const ResourceStates::Mask currentState = it.value();
+            if(!desc.keepInitialState)
+                continue;
 
-        auto& texture = *MakeNotNull(key.texture);
-        if(currentState == desc.initialState){
+            auto& texture = *MakeNotNull(key.texture);
+            if(currentState == desc.initialState){
+                commandBuffer.appendRetainedTextureStateCommit(texture, key.mipLevel, key.arraySlice);
+                continue;
+            }
+
+            imageBarriers.push_back(VulkanStateTrackingDetail::BuildTextureStateBarrier(
+                texture.m_image,
+                texture.m_aspectMask,
+                TextureSubresourceSet(key.mipLevel, 1u, key.arraySlice, 1u),
+                currentState,
+                desc.initialState,
+                m_context.extensions.khrRayTracingPipeline
+            ));
+            it.value() = desc.initialState;
             commandBuffer.appendRetainedTextureStateCommit(texture, key.mipLevel, key.arraySlice);
-            continue;
         }
-
-        imageBarriers.push_back(VulkanStateTrackingDetail::BuildTextureStateBarrier(
-            texture.m_image,
-            texture.m_aspectMask,
-            TextureSubresourceSet(key.mipLevel, 1u, key.arraySlice, 1u),
-            currentState,
-            desc.initialState,
-            m_context.extensions.khrRayTracingPipeline
-        ));
-        it.value() = desc.initialState;
-        commandBuffer.appendRetainedTextureStateCommit(texture, key.mipLevel, key.arraySlice);
     }
 
-    for(auto it = m_bufferStates.begin(); it != m_bufferStates.end(); ++it){
-        if(it.value().empty())
-            continue;
-        auto& buffer = *MakeNotNull(it->first.get());
-        if(!buffer.m_creationDesc.keepInitialState)
-            continue;
+    if(m_hasKeepInitialStateBuffers){
+        for(auto it = m_bufferStates.begin(); it != m_bufferStates.end(); ++it){
+            if(it.value().empty())
+                continue;
+            auto& buffer = *MakeNotNull(it->first.get());
+            if(!buffer.m_creationDesc.keepInitialState)
+                continue;
 
-        const BufferDesc& desc = buffer.m_creationDesc;
-        for(BufferRangeState& entry : it.value()){
-            if(entry.state != desc.initialState){
-                bufferBarriers.push_back(VulkanStateTrackingDetail::BuildBufferStateBarrier(buffer.m_buffer, entry.range, entry.state, desc.initialState, m_context.extensions.khrRayTracingPipeline));
-                entry.state = desc.initialState;
+            const BufferDesc& desc = buffer.m_creationDesc;
+            for(BufferRangeState& entry : it.value()){
+                if(entry.state != desc.initialState){
+                    bufferBarriers.push_back(VulkanStateTrackingDetail::BuildBufferStateBarrier(buffer.m_buffer, entry.range, entry.state, desc.initialState, m_context.extensions.khrRayTracingPipeline));
+                    entry.state = desc.initialState;
+                }
             }
-        }
-        if(buffer.isRetainedStateKnown() || hasExplicitBufferStateFromRanges(&it.value(), BufferRange(0u, desc.byteSize))){
-            commandBuffer.m_resourceReferences.appendBufferStateCommit(buffer);
-            commandBuffer.m_pendingCommitFlags |= TrackedCommandBuffer::s_CommitBufferStates;
+            if(buffer.isRetainedStateKnown() || hasExplicitBufferStateFromRanges(&it.value(), BufferRange(0u, desc.byteSize))){
+                commandBuffer.m_resourceReferences.appendBufferStateCommit(buffer);
+                commandBuffer.m_pendingCommitFlags |= TrackedCommandBuffer::s_CommitBufferStates;
+            }
         }
     }
 }
@@ -240,7 +244,7 @@ ResourceStates::Mask StateTracker::getResolvedTransientTextureState(Texture& tex
             return existing.value();
     }
 
-    return texture.isRetainedSubresourceStateKnown(arraySlice, mipLevel) ? texture.m_creationDesc.initialState : ResourceStates::Unknown;
+    return (texture.m_creationDesc.keepInitialState && texture.isRetainedSubresourceStateKnown(arraySlice, mipLevel)) ? texture.m_creationDesc.initialState : ResourceStates::Unknown;
 }
 
 void StateTracker::beginTrackingTransientTexture(Texture& texture, TextureSubresourceSet subresources, ResourceStates::Mask state){
@@ -254,6 +258,8 @@ void StateTracker::beginTrackingResolvedTransientTexture(Texture& texture, const
     const usize subresourceCount = static_cast<usize>(resolvedSubresources.numMipLevels) * static_cast<usize>(resolvedSubresources.numArraySlices);
 
     ::ContainerDetail::ReserveAdditionalCapacity(m_textureStates, subresourceCount);
+    if(texture.m_creationDesc.keepInitialState)
+        m_hasKeepInitialStateTextures = true;
 
     for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
@@ -272,6 +278,8 @@ void StateTracker::seedResolvedTransientTexture(Texture& texture, const TextureS
     const usize subresourceCount = static_cast<usize>(resolvedSubresources.numMipLevels) * static_cast<usize>(resolvedSubresources.numArraySlices);
 
     ::ContainerDetail::ReserveAdditionalCapacity(m_textureStates, subresourceCount);
+    if(texture.m_creationDesc.keepInitialState)
+        m_hasKeepInitialStateTextures = true;
 
     for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){

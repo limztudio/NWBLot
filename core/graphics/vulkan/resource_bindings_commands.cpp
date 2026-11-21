@@ -23,21 +23,6 @@ namespace __hidden_vulkan_resource_bindings_commands{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 HasExactLayoutAtSet(const PipelineBindingState& pipelineBindings, const BindingLayout* const expectedLayout, const u32 expectedSetIndex, const u32 expectedCount)noexcept{
-    if(!expectedLayout)
-        return expectedCount == 0u;
-
-    u32 foundCount = 0u;
-    for(u32 layoutIndex = 0u; layoutIndex < static_cast<u32>(pipelineBindings.bindingLayoutsAtCreation.size()); ++layoutIndex){
-        if(pipelineBindings.bindingLayoutsAtCreation[layoutIndex].get() != expectedLayout)
-            continue;
-        if(pipelineBindings.bindingLayoutSetIndicesAtCreation[layoutIndex] != expectedSetIndex)
-            return false;
-        ++foundCount;
-    }
-    return foundCount == expectedCount;
-}
-
 [[nodiscard]] b8 PipelineMatchesHeapLayouts(
     const PipelineBindingState& pipelineBindings,
     const BindingLayout* const resourceLayout,
@@ -46,11 +31,35 @@ namespace __hidden_vulkan_resource_bindings_commands{
     const GpuDescriptorHeapAbi& abi,
     const b8 bindAccelStruct
 )noexcept{
-    return
-        HasExactLayoutAtSet(pipelineBindings, resourceLayout, abi.resourceSetIndex, 1u)
-        && HasExactLayoutAtSet(pipelineBindings, samplerLayout, abi.samplerSetIndex, 1u)
-        && HasExactLayoutAtSet(pipelineBindings, accelStructLayout, abi.accelStructSetIndex, bindAccelStruct ? 1u : 0u)
-    ;
+    if(!resourceLayout || !samplerLayout)
+        return false;
+    if(bindAccelStruct && !accelStructLayout)
+        return false;
+
+    u32 resourceCount = 0u;
+    u32 samplerCount = 0u;
+    u32 accelStructCount = 0u;
+    const usize layoutCount = pipelineBindings.bindingLayoutsAtCreation.size();
+    for(usize layoutIndex = 0u; layoutIndex < layoutCount; ++layoutIndex){
+        const BindingLayout* const layout = pipelineBindings.bindingLayoutsAtCreation[layoutIndex].get();
+        const u32 setIndex = pipelineBindings.bindingLayoutSetIndicesAtCreation[layoutIndex];
+        if(layout == resourceLayout){
+            if(setIndex != abi.resourceSetIndex)
+                return false;
+            ++resourceCount;
+        }
+        else if(layout == samplerLayout){
+            if(setIndex != abi.samplerSetIndex)
+                return false;
+            ++samplerCount;
+        }
+        else if(accelStructLayout && layout == accelStructLayout){
+            if(setIndex != abi.accelStructSetIndex)
+                return false;
+            ++accelStructCount;
+        }
+    }
+    return resourceCount == 1u && samplerCount == 1u && accelStructCount == (bindAccelStruct ? 1u : 0u);
 }
 
 
@@ -245,58 +254,69 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
     const b8 bindAccelStruct = accelStructHandle.valid();
     ScopedLock heapLock(heap.m_mutex);
     const GpuDescriptorHeapAbi abi = heap.m_desc.bindlessHeapAbi;
-    const u32 maxBoundDescriptorSets = m_context.physicalDeviceProperties.limits.maxBoundDescriptorSets;
-    if(
-        !abi.valid()
-        || abi.resourceSetIndex != 0u
-        || abi.samplerSetIndex != abi.resourceSetIndex + 1u
-        || abi.accelStructSetIndex != abi.samplerSetIndex + 1u
-        || abi.resourceSetIndex >= maxBoundDescriptorSets
-        || abi.samplerSetIndex >= maxBoundDescriptorSets
-        || abi.accelStructSetIndex >= maxBoundDescriptorSets
-    ){
-        rejectCommandRecording(operationName, FOUNDATION_TEXT("heap descriptor-set ABI is not the dense set-0/1/2 contract or exceeds device limits"));
-        return;
-    }
-
     BindingLayout* const resourceLayout = heap.m_resourceLayout.get();
     BindingLayout* const samplerLayout = heap.m_samplerLayout.get();
     BindingLayout* const accelStructLayout = heap.m_accelStructLayout.get();
-    if(
-        !heap.m_initialized
-        || heap.m_descriptorBufferGeneration == 0u
-        || !resourceLayout
-        || !samplerLayout
-        || &resourceLayout->m_context != &m_context
-        || &samplerLayout->m_context != &m_context
-        || (accelStructLayout && &accelStructLayout->m_context != &m_context)
-        || !resourceLayout->m_descriptorBufferCompatible
-        || !samplerLayout->m_descriptorBufferCompatible
-        || (accelStructLayout && !accelStructLayout->m_descriptorBufferCompatible)
-        || resourceLayout->m_descriptorBufferSegmentKind != DescriptorBufferSegmentKind::Resource
-        || samplerLayout->m_descriptorBufferSegmentKind != DescriptorBufferSegmentKind::Sampler
-        || (accelStructLayout && accelStructLayout->m_descriptorBufferSegmentKind != DescriptorBufferSegmentKind::Resource)
-    ){
-        rejectCommandRecording(operationName, FOUNDATION_TEXT("heap layouts are unavailable, foreign, or incompatible"));
-        return;
+    if(heap.m_initialized && heap.m_staticBindingContractValid && heap.m_descriptorBufferGeneration != 0u){
+        if(
+            (bindAccelStruct && !accelStructLayout)
+            || !__hidden_vulkan_resource_bindings_commands::PipelineMatchesHeapLayouts(pipelineBindings, resourceLayout, samplerLayout, accelStructLayout, abi, bindAccelStruct)
+        ){
+            rejectCommandRecording(operationName, FOUNDATION_TEXT("pipeline creation layouts do not exactly match the heap ABI"));
+            return;
+        }
     }
-    const BindlessLayoutDesc* const resourceDesc = resourceLayout->getBindlessDesc();
-    const BindlessLayoutDesc* const samplerDesc = samplerLayout->getBindlessDesc();
-    const BindlessLayoutDesc* const accelStructDesc = accelStructLayout ? accelStructLayout->getBindlessDesc() : nullptr;
-    if(
-        !resourceDesc
-        || !samplerDesc
-        || resourceDesc->descriptorSetIndex != abi.resourceSetIndex
-        || samplerDesc->descriptorSetIndex != abi.samplerSetIndex
-        || resourceDesc->maxCapacity != heap.m_resourceSlots.capacity
-        || samplerDesc->maxCapacity != heap.m_samplerSlots.capacity
-        || (bindAccelStruct && !accelStructDesc)
-        || (accelStructDesc && accelStructDesc->descriptorSetIndex != abi.accelStructSetIndex)
-        || (accelStructDesc && accelStructDesc->maxCapacity != 1u)
-        || !__hidden_vulkan_resource_bindings_commands::PipelineMatchesHeapLayouts(pipelineBindings, resourceLayout, samplerLayout, accelStructLayout, abi, bindAccelStruct)
-    ){
-        rejectCommandRecording(operationName, FOUNDATION_TEXT("pipeline creation layouts do not exactly match the heap ABI"));
-        return;
+    else{
+        const u32 maxBoundDescriptorSets = m_context.physicalDeviceProperties.limits.maxBoundDescriptorSets;
+        if(
+            !abi.valid()
+            || abi.resourceSetIndex != 0u
+            || abi.samplerSetIndex != abi.resourceSetIndex + 1u
+            || abi.accelStructSetIndex != abi.samplerSetIndex + 1u
+            || abi.resourceSetIndex >= maxBoundDescriptorSets
+            || abi.samplerSetIndex >= maxBoundDescriptorSets
+            || abi.accelStructSetIndex >= maxBoundDescriptorSets
+        ){
+            rejectCommandRecording(operationName, FOUNDATION_TEXT("heap descriptor-set ABI is not the dense set-0/1/2 contract or exceeds device limits"));
+            return;
+        }
+
+        if(
+            !heap.m_initialized
+            || heap.m_descriptorBufferGeneration == 0u
+            || !resourceLayout
+            || !samplerLayout
+            || &resourceLayout->m_context != &m_context
+            || &samplerLayout->m_context != &m_context
+            || (accelStructLayout && &accelStructLayout->m_context != &m_context)
+            || !resourceLayout->m_descriptorBufferCompatible
+            || !samplerLayout->m_descriptorBufferCompatible
+            || (accelStructLayout && !accelStructLayout->m_descriptorBufferCompatible)
+            || resourceLayout->m_descriptorBufferSegmentKind != DescriptorBufferSegmentKind::Resource
+            || samplerLayout->m_descriptorBufferSegmentKind != DescriptorBufferSegmentKind::Sampler
+            || (accelStructLayout && accelStructLayout->m_descriptorBufferSegmentKind != DescriptorBufferSegmentKind::Resource)
+        ){
+            rejectCommandRecording(operationName, FOUNDATION_TEXT("heap layouts are unavailable, foreign, or incompatible"));
+            return;
+        }
+        const BindlessLayoutDesc* const resourceDesc = resourceLayout->getBindlessDesc();
+        const BindlessLayoutDesc* const samplerDesc = samplerLayout->getBindlessDesc();
+        const BindlessLayoutDesc* const accelStructDesc = accelStructLayout ? accelStructLayout->getBindlessDesc() : nullptr;
+        if(
+            !resourceDesc
+            || !samplerDesc
+            || resourceDesc->descriptorSetIndex != abi.resourceSetIndex
+            || samplerDesc->descriptorSetIndex != abi.samplerSetIndex
+            || resourceDesc->maxCapacity != heap.m_resourceSlots.capacity
+            || samplerDesc->maxCapacity != heap.m_samplerSlots.capacity
+            || (bindAccelStruct && !accelStructDesc)
+            || (accelStructDesc && accelStructDesc->descriptorSetIndex != abi.accelStructSetIndex)
+            || (accelStructDesc && accelStructDesc->maxCapacity != 1u)
+            || !__hidden_vulkan_resource_bindings_commands::PipelineMatchesHeapLayouts(pipelineBindings, resourceLayout, samplerLayout, accelStructLayout, abi, bindAccelStruct)
+        ){
+            rejectCommandRecording(operationName, FOUNDATION_TEXT("pipeline creation layouts do not exactly match the heap ABI"));
+            return;
+        }
     }
 
     if(!heap.retainedResourcesReadyForQueueLocked(*exactQueueInfo)){
@@ -311,8 +331,6 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
 #endif
 
     ScopedLock lifecycleLock(manager->m_lifecycleMutex);
-    ScopedLock resourceStorageLock(manager->m_resourceSegment.mutex);
-    ScopedLock samplerStorageLock(manager->m_samplerSegment.mutex);
     const auto managerSnapshot = manager->captureBindingSnapshotLocked();
     if(!managerSnapshot || managerSnapshot->generation != heap.m_descriptorBufferGeneration){
         rejectCommandRecording(operationName, FOUNDATION_TEXT("descriptor-buffer manager generation is unavailable or stale"));
@@ -322,14 +340,25 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
     const DescriptorBufferSegment resourceBlock = heap.m_resourceBufferBlock;
     const DescriptorBufferSegment samplerBlock = heap.m_samplerBufferBlock;
     if(
-        !manager->isLiveSegmentLocked(manager->m_resourceSegment, resourceBlock, DescriptorBufferSegmentKind::Resource)
-        || !manager->isLiveSegmentLocked(manager->m_samplerSegment, samplerBlock, DescriptorBufferSegmentKind::Sampler)
-        || resourceBlock.sizeBytes != resourceLayout->m_descriptorBufferSetSizeBytes
+        resourceBlock.sizeBytes != resourceLayout->m_descriptorBufferSetSizeBytes
         || samplerBlock.sizeBytes != samplerLayout->m_descriptorBufferSetSizeBytes
     ){
         rejectCommandRecording(operationName, FOUNDATION_TEXT("persistent heap blocks are not exact live manager allocations"));
         return;
     }
+#if defined(NWB_DEBUG)
+    {
+        ScopedLock resourceStorageLock(manager->m_resourceSegment.mutex);
+        ScopedLock samplerStorageLock(manager->m_samplerSegment.mutex);
+        if(
+            !manager->isLiveSegmentLocked(manager->m_resourceSegment, resourceBlock, DescriptorBufferSegmentKind::Resource)
+            || !manager->isLiveSegmentLocked(manager->m_samplerSegment, samplerBlock, DescriptorBufferSegmentKind::Sampler)
+        ){
+            rejectCommandRecording(operationName, FOUNDATION_TEXT("persistent heap blocks are not exact live manager allocations"));
+            return;
+        }
+    }
+#endif
 
     DescriptorBufferSegment accelStructBlock{};
     if(bindAccelStruct){
@@ -351,8 +380,13 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
         accelStructBlock = heap.m_accelStructBufferBlocks[slot];
         AccelStruct* const accelStruct = heap.m_accelStructResources[slot].get();
         Buffer* const backingBuffer = accelStruct ? accelStruct->getBackingBuffer() : nullptr;
+        b8 accelStructBlockLive = false;
+        {
+            ScopedLock resourceStorageLock(manager->m_resourceSegment.mutex);
+            accelStructBlockLive = manager->isLiveSegmentLocked(manager->m_resourceSegment, accelStructBlock, DescriptorBufferSegmentKind::Resource);
+        }
         if(
-            !manager->isLiveSegmentLocked(manager->m_resourceSegment, accelStructBlock, DescriptorBufferSegmentKind::Resource)
+            !accelStructBlockLive
             || accelStructBlock.sizeBytes != accelStructLayout->m_descriptorBufferSetSizeBytes
             || !m_device.isAccelStructReadyForGpuUse(accelStruct)
             || !isBufferAdmittedToCommandQueue(*backingBuffer)
@@ -387,6 +421,23 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
 
     ensureDescriptorBuffersBound(*manager, *managerSnapshot);
 
+    u32 bindPointIndex = 0u;
+    if(bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE)
+        bindPointIndex = 1u;
+    else if(bindPoint == VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR)
+        bindPointIndex = 2u;
+    CachedDescriptorBufferOffsets& cachedOffsets = m_boundDescriptorBufferOffsets[bindPointIndex];
+    if(
+        cachedOffsets.valid
+        && cachedOffsets.pipelineLayout == pipelineBindings.pipelineLayout
+        && cachedOffsets.descriptorGeneration == managerSnapshot->generation
+        && cachedOffsets.hasAccelStruct == bindAccelStruct
+        && cachedOffsets.resourceOffset == resourceBlock.offsetBytes
+        && cachedOffsets.samplerOffset == samplerBlock.offsetBytes
+        && (!bindAccelStruct || cachedOffsets.accelStructOffset == accelStructBlock.offsetBytes)
+    )
+        return;
+
     const Array<u32, DescriptorBufferManager::s_DescriptorBufferCountWithAccelStruct> bufferIndices = {{
         DescriptorBufferManager::s_ResourceDescriptorBufferIndex,
         DescriptorBufferManager::s_SamplerDescriptorBufferIndex,
@@ -403,6 +454,14 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
         bufferIndices.data(),
         offsets.data()
     );
+
+    cachedOffsets.pipelineLayout = pipelineBindings.pipelineLayout;
+    cachedOffsets.descriptorGeneration = managerSnapshot->generation;
+    cachedOffsets.resourceOffset = resourceBlock.offsetBytes;
+    cachedOffsets.samplerOffset = samplerBlock.offsetBytes;
+    cachedOffsets.accelStructOffset = accelStructBlock.offsetBytes;
+    cachedOffsets.hasAccelStruct = bindAccelStruct;
+    cachedOffsets.valid = true;
 }
 
 
@@ -417,6 +476,7 @@ void CommandList::ensureDescriptorBuffersBound(DescriptorBufferManager& manager,
     m_currentCmdBuf->m_descriptorBufferManager = &manager;
     m_currentCmdBuf->m_descriptorBufferGeneration = snapshot.generation;
     m_descriptorBuffersBound = true;
+    m_boundDescriptorBufferOffsets = {};
 }
 
 

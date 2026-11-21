@@ -247,6 +247,33 @@ class InputRouter : NoCopy{
             return;
         this.reconcileTargets();
     }
+    [cpp_unwind]
+    public void invalidateTargets(in Span<WidgetId> ids){
+        if(ids.empty())
+            return;
+        if(ids.size() == 1u){
+            this.invalidateTarget(ids[0u]);
+            return;
+        }
+        if(!this.m_popupState.records().empty()){
+            for(usize index = ids.size(); index > 0u; --index){
+                in WidgetId id = ids[index - 1u];
+                b8 matchesPopup = false;
+                for(in PopupRecord popup : this.m_popupState.records()){
+                    if(popup.scope.token.widget == id){
+                        matchesPopup = true;
+                        break;
+                    }
+                }
+                if(matchesPopup)
+                    this.retirePopup(id);
+                if(this.m_popupState.records().empty())
+                    break;
+            }
+        }
+        if(this.m_targetTable.invalidateBatch(ids))
+            this.reconcileTargets();
+    }
     public void clearFocus(){
         this.m_commandSources.clearFocus();
     }

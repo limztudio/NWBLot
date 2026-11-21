@@ -7,6 +7,8 @@ extern class World{
     T addComponent<T>(...);
     T addSystem<T>(...);
     b8 alive(...)const;
+    Optional<mut T> borrowComponent<T>(...);
+    Optional<in T> borrowComponent<T>(...)const;
     Optional<mut T> borrowSystem<T>();
     void clear(...);
     void clearMessages(...);

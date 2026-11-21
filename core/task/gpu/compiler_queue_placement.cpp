@@ -211,13 +211,15 @@ namespace GpuTaskGraphCompilerDetail{
             }
             return nullptr;
         }
-        for(u64 remaining = groupMask; remaining != 0u; remaining &= remaining - 1u){
-            const usize queueIndex = static_cast<usize>(CountTrailingZeros(remaining));
-            const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
-            if(HasCapabilities(candidate.capabilities, group.requiredCapabilities) && IsBetterQueue(candidate, result))
-                result = &candidate;
+        for(u8 i = 0u; i < legalityCache->orderedAllQueueCount; ++i){
+            const u8 queueIndex = legalityCache->orderedAllQueueIndices[i];
+            if((groupMask & BitMask<u64>(queueIndex)) != 0u){
+                const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
+                if(HasCapabilities(candidate.capabilities, group.requiredCapabilities))
+                    return &candidate;
+            }
         }
-        return result;
+        return nullptr;
     }
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
         const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];

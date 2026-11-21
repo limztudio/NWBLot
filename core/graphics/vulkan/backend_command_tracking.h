@@ -76,7 +76,7 @@ public:
         : RefCounter<GraphicsResource>(context.cpuScheduler)
         , m_cmdPool(commandPool)
         , m_sharedCommandPoolMutex(sharedCommandPoolMutex)
-        , m_resourceReferences(context.objectArena)
+        , m_resourceReferences(context)
         , m_referencedStagingBuffers(context.objectArena)
         , m_referencedDescriptorHeaps(context.objectArena)
         , m_retainedTextureStateCommits(context.objectArena)

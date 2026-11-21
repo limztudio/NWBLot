@@ -36,7 +36,7 @@ void RendererMeshSystem::pruneRuntimeMeshResources(){
 
     auto it = this.m_meshState.m_meshes.begin();
     while(it != this.m_meshState.m_meshes.end()){
-        mut MeshResources mesh = this.m_meshState.m_meshes.at(it.key());
+        mut MeshResources mesh = it.value();
         if(!mesh.runtimeMesh || (meshSystem.has_value() && requests.containsLive(mesh.meshName, mesh.runtimeMeshVersion))){
             ++it;
             continue;

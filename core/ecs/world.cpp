@@ -126,6 +126,14 @@ void World::addEntityComponentType(EntityID entityId, ComponentTypeId typeId, IC
     headNode = acquireEntityComponentNode(typeId, headNode, pool);
 }
 
+void World::addEntityComponentTypeUnchecked(EntityID entityId, ComponentTypeId typeId, IComponentPool& pool){
+    ensureEntityComponentHead(entityId);
+
+    const usize index = static_cast<usize>(entityId.index());
+    u32& headNode = m_entityComponentHeads[index];
+    headNode = acquireEntityComponentNode(typeId, headNode, pool);
+}
+
 void World::removeEntityComponentType(EntityID entityId, ComponentTypeId typeId)noexcept{
     const usize index = static_cast<usize>(entityId.index());
     if(index >= m_entityComponentHeads.size())

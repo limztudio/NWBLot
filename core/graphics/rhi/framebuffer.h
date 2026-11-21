@@ -85,7 +85,15 @@ public:
     constexpr FramebufferInfo& setDepthFormat(Format::Enum format)noexcept{ depthFormat = format; return *this; }
 
 };
-[[nodiscard]] b8 operator==(const FramebufferInfo& lhs, const FramebufferInfo& rhs)noexcept;
+[[nodiscard]] inline b8 operator==(const FramebufferInfo& lhs, const FramebufferInfo& rhs)noexcept{
+    if(lhs.sampleQuality != rhs.sampleQuality || lhs.sampleCount != rhs.sampleCount || lhs.depthFormat != rhs.depthFormat || lhs.colorFormats.size() != rhs.colorFormats.size())
+        return false;
+    for(usize i = 0u; i < lhs.colorFormats.size(); ++i){
+        if(lhs.colorFormats[i] != rhs.colorFormats[i])
+            return false;
+    }
+    return true;
+}
 
 inline b8 operator!=(const FramebufferInfo& lhs, const FramebufferInfo& rhs)noexcept{ return !(lhs == rhs); }
 

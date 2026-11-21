@@ -216,8 +216,8 @@ Expected<mut MeshResources> RendererMeshSystem::createMeshResources(in AssetRef<
     if(result)
         retireUnpublished.release();
 
-    assert(this.m_meshState.m_meshes.at(meshPath).valid());
     mut MeshResources stored = this.m_meshState.m_meshes.at(meshPath);
+    assert(stored.valid());
     return Expected<mut MeshResources>(stored);
 }
 
@@ -229,9 +229,9 @@ Expected<mut MeshResources> RendererMeshSystem::findMeshResources(in Name meshKe
     if(foundMesh == this.m_meshState.m_meshes.end())
         return MakeUnexpected(Failure());
 
-    assert(this.meshRenderBindingsReady(foundMesh.value()));
-    assert(foundMesh.value().valid());
     mut MeshResources stored = this.m_meshState.m_meshes.at(meshKey);
+    assert(this.meshRenderBindingsReady(stored));
+    assert(stored.valid());
     return Expected<mut MeshResources>(stored);
 }
 
@@ -250,8 +250,8 @@ Expected<mut MeshResources> RendererMeshSystem::createRuntimeMeshResources(in Ru
             this.m_meshState.m_meshes.erase(foundMesh);
         }
         else{
-            assert(this.meshRenderBindingsReady(foundMesh.value()));
             mut MeshResources mesh = this.m_meshState.m_meshes.at(desc.meshKey);
+            assert(this.meshRenderBindingsReady(mesh));
             RefreshRuntimeMeshContent(mesh, desc);
             assert(mesh.valid());
             return Expected<mut MeshResources>(mesh);
@@ -287,8 +287,8 @@ Expected<mut MeshResources> RendererMeshSystem::createRuntimeMeshResources(in Ru
     if(result)
         retireUnpublished.release();
 
-    assert(this.m_meshState.m_meshes.at(desc.meshKey).valid());
     mut MeshResources stored = this.m_meshState.m_meshes.at(desc.meshKey);
+    assert(stored.valid());
     return Expected<mut MeshResources>(stored);
 }
 

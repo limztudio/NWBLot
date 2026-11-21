@@ -44,7 +44,7 @@ class ListLayoutPreparer{
         this.m_paint = paint;
     }
 
-    [owner_result, cpp_unwind]
+    [cpp_unwind]
     private Expected<BuilderListRow> prepareListRow(in BuilderListFrame frame, in u64 index)const{
         BuilderListRow row;
         if(!this.m_scope.listMatches(this.m_context, frame) || index >= frame.rowCount)
@@ -69,17 +69,14 @@ class ListLayoutPreparer{
         request.direction = TextDirection::LeftToRight;
         if(!this.m_scope.listStateMatches(this.m_context, frame))
             return MakeUnexpected(Failure());
-        auto layout = this.m_text.layout(request);
-        if(!layout.has_value() || !this.m_scope.listMatches(this.m_context, frame))
-            return MakeUnexpected(Failure());
-        const auto bounds = this.m_text.measure(layout.value(), this.m_paint.displayMetrics());
-        if(!bounds.has_value())
+        const auto measured = this.m_text.layoutAndMeasureShared(request, this.m_paint.displayMetrics());
+        if(!measured.has_value() || !this.m_scope.listMatches(this.m_context, frame))
             return MakeUnexpected(Failure());
         row.index = index;
         row.key = key;
         row.enabled = enabled;
-        row.textBounds = bounds.value();
-        MoveInto<TextLayout>(row.text, layout.value());
+        row.text = measured.value().layout;
+        row.textBounds = measured.value().bounds;
         if(!this.m_scope.listMatches(this.m_context, frame))
             return MakeUnexpected(Failure());
         return row;
@@ -127,7 +124,7 @@ class ListLayoutPreparer{
                     return MakeUnexpected(Failure());
                 height = ComputeListRowPaddedHeight(row.value().textBounds.height, frame.style.row.padding, height);
                 rows.emplace(rows.begin() + cast<isize>(found));
-                MoveInto<BuilderListRow>(rows[found], row.value());
+                rows[found] = row.value();
             }
             if(!IsFinite(height) || height <= 0.0f || !this.m_scope.listMatches(this.m_context, frame))
                 return MakeUnexpected(Failure());

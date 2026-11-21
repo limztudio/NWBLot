@@ -129,9 +129,10 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
     ShadowOccluderMaterialGather occluderMaterials(this.m_materialSystem, sampledTextureCollector, shadowMaterialTypedBytes, shadowConstantTypedRanges, shadowMutableTypedRanges, opticalScene, contentComplete);
 
     for(in auto row : this.m_world.view<RendererComponent>()){
+        if(!Get<1>(row).visible)
+            continue;
         const EntityID entity = Get<0>(row);
-        in RendererComponent renderer = this.m_world.getComponent<RendererComponent>(entity);
-        if(!renderer.visible || this.m_opticalVolumes.isSuppressed(entity))
+        if(this.m_opticalVolumes.isSuppressed(entity))
             continue;
 
         const auto meshResult = ResolveRenderableMeshResources(meshSystem.value(), this.m_meshSystem, entity);
@@ -149,8 +150,9 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
         mut Buffer meshIndexBuffer = meshResult.value().meshResources.triangleIndexBuffer.deref();
         const usize meshKey = meshResult.value().meshResources.triangleIndexBuffer.identity();
         u32 meshSlot = 0u;
-        if(meshSlotLookup.contains(meshKey))
-            meshSlot = meshSlotLookup.at(meshKey);
+        const auto foundMeshSlot = meshSlotLookup.find(meshKey);
+        if(foundMeshSlot != meshSlotLookup.end())
+            meshSlot = foundMeshSlot.value();
         else{
             const auto indexHandle = meshHeapHandles.acquire(meshResult.value().meshResources.triangleIndexBuffer);
             if(!indexHandle.has_value()){
@@ -192,8 +194,9 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
         instanceDesc.setInstanceMask(s_RayTracingAllInstanceMask);
 
         Optional<in TransformComponent> transform;
-        if(this.m_world.hasComponent<TransformComponent>(entity))
-            transform.emplace(this.m_world.getComponent<TransformComponent>(entity));
+        const Optional<mut TransformComponent> borrowedTransform = this.m_world.borrowComponent<TransformComponent>(entity);
+        if(borrowedTransform.has_value())
+            transform.emplace(borrowedTransform.value());
         MatrixSingle objectToWorld = MatrixIdentity();
         if(transform.has_value()){
             objectToWorld = LoadTransformMatrix(transform.value());
@@ -203,7 +206,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
         const u32 meshInstanceIndex = cast<u32>(instances.size());
         NwbRtInstanceMaterialGpu instanceMaterial;
         InstanceGpuData shadowInstance;
-        if(!occluderMaterials.resolve(entity, renderer.material, transform, meshInstanceIndex, instanceMaterial, shadowInstance, Optional<mut b8>(this.m_rayTracingState.sceneBvh.m_sceneHasTransparentOccluder)))
+        if(!occluderMaterials.resolve(entity, Get<1>(row).material, transform, meshInstanceIndex, instanceMaterial, shadowInstance, Optional<mut b8>(this.m_rayTracingState.sceneBvh.m_sceneHasTransparentOccluder)))
             return false;
         instanceMaterial.indexSlot = this.m_rayTracingState.shadow.m_shadowMeshIndexHandles[meshSlot].slot();
         instanceMaterial.attributeSlot = this.m_rayTracingState.shadow.m_shadowMeshAttributeHandles[meshSlot].slot();
@@ -244,9 +247,9 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
         const b8 runtimeOpticalBounds = transparent && (meshResult.value().resolvedMesh.runtime || meshResult.value().meshResources.runtimeMesh) && meshResult.value().meshResources.runtimeLocalBoundsBuffer.valid()
             && meshResult.value().meshResources.runtimeLocalBoundsHeapHandle.valid();
         if(runtimeOpticalBounds)
-            opticalScene.appendRuntime(entity, renderer, meshResult.value().meshResources.runtimeLocalBoundsBuffer, meshResult.value().meshResources.runtimeLocalBoundsHeapHandle, objectToWorld);
+            opticalScene.appendRuntime(entity, Get<1>(row), meshResult.value().meshResources.runtimeLocalBoundsBuffer, meshResult.value().meshResources.runtimeLocalBoundsHeapHandle, objectToWorld);
         else
-            opticalScene.append(entity, renderer, transparent, opticalMin, opticalMax, opticalBoundsValid);
+            opticalScene.append(entity, Get<1>(row), transparent, opticalMin, opticalMax, opticalBoundsValid);
 
         instances.push_back(instanceDesc);
         instanceBlases.push_back(meshResult.value().meshResources.blas);
@@ -403,9 +406,10 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
     ShadowOccluderMaterialGather occluderMaterials(this.m_materialSystem, sampledTextureCollector, shadowMaterialTypedBytes, shadowConstantTypedRanges, shadowMutableTypedRanges, opticalScene, contentComplete);
 
     for(in auto row : this.m_world.view<RendererComponent>()){
+        if(!Get<1>(row).visible)
+            continue;
         const EntityID entity = Get<0>(row);
-        in RendererComponent renderer = this.m_world.getComponent<RendererComponent>(entity);
-        if(!renderer.visible || this.m_opticalVolumes.isSuppressed(entity))
+        if(this.m_opticalVolumes.isSuppressed(entity))
             continue;
 
         const auto meshResult = ResolveRenderableMeshResources(meshSystem.value(), this.m_meshSystem, entity);
@@ -433,8 +437,9 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
         mut Buffer meshNodeBuffer = meshResult.value().meshResources.swBvhNodeBuffer.deref();
         const usize meshKey = meshResult.value().meshResources.swBvhNodeBuffer.identity();
         u32 meshSlot = 0u;
-        if(meshSlotLookup.contains(meshKey))
-            meshSlot = meshSlotLookup.at(meshKey);
+        const auto foundMeshSlot = meshSlotLookup.find(meshKey);
+        if(foundMeshSlot != meshSlotLookup.end())
+            meshSlot = foundMeshSlot.value();
         else{
             const GpuDescriptorHandle nodeHandle = meshResult.value().meshResources.swBvhNodeHeapHandle;
             const GpuDescriptorHandle positionHandle = meshResult.value().meshResources.swBvhPositionHeapHandle;
@@ -494,8 +499,9 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
         }
 
         Optional<in TransformComponent> transform;
-        if(this.m_world.hasComponent<TransformComponent>(entity))
-            transform.emplace(this.m_world.getComponent<TransformComponent>(entity));
+        const Optional<mut TransformComponent> borrowedTransform = this.m_world.borrowComponent<TransformComponent>(entity);
+        if(borrowedTransform.has_value())
+            transform.emplace(borrowedTransform.value());
         MatrixSingle objectToWorld = MatrixIdentity();
         if(transform.has_value())
             objectToWorld = LoadTransformMatrix(transform.value());
@@ -520,7 +526,7 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
         const u32 meshInstanceIndex = cast<u32>(instances.size());
         NwbRtInstanceMaterialGpu instanceMaterial;
         InstanceGpuData shadowInstance;
-        if(!occluderMaterials.resolve(entity, renderer.material, transform, meshInstanceIndex, instanceMaterial, shadowInstance, Optional<mut b8>()))
+        if(!occluderMaterials.resolve(entity, Get<1>(row).material, transform, meshInstanceIndex, instanceMaterial, shadowInstance, Optional<mut b8>()))
             return false;
         instanceMaterial.indexSlot = this.m_rayTracingState.shadow.m_swShadowMeshIndexHandles[meshSlot].slot();
         instanceMaterial.attributeSlot = this.m_rayTracingState.shadow.m_swShadowMeshAttributeHandles[meshSlot].slot();
@@ -544,9 +550,9 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
             && meshResult.value().meshResources.runtimeLocalBoundsBuffer.valid() && meshResult.value().meshResources.runtimeLocalBoundsHeapHandle.valid()
         ;
         if(runtimeOpticalBounds)
-            opticalScene.appendRuntime(entity, renderer, meshResult.value().meshResources.runtimeLocalBoundsBuffer, meshResult.value().meshResources.runtimeLocalBoundsHeapHandle, objectToWorld);
+            opticalScene.appendRuntime(entity, Get<1>(row), meshResult.value().meshResources.runtimeLocalBoundsBuffer, meshResult.value().meshResources.runtimeLocalBoundsHeapHandle, objectToWorld);
         else
-            opticalScene.append(entity, renderer, bvhPrimitive.transparentOccluder, opticalMin, opticalMax, opticalBoundsValid);
+            opticalScene.append(entity, Get<1>(row), bvhPrimitive.transparentOccluder, opticalMin, opticalMax, opticalBoundsValid);
 
         lightSpaceGather.appendSoftwareCaptureIdentity(entity, meshResult.value().resolvedMesh.runtime || meshResult.value().meshResources.runtimeMesh, meshResult.value().meshResources, instanceMaterial, shadowInstance, opticalScene.instances.back());
         lightSpaceGather.appendSoftwareReceiver(entity, bvhPrimitive.transparentOccluder, objectToWorld, worldToObject, localMin, localMax, meshResult.value().meshResources);

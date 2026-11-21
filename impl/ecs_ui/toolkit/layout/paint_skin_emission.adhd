@@ -80,6 +80,60 @@ void EmitPaintNineSlice(
     }
 }
 
+void EmitPaintSkinRegion(
+    in b8 recording,
+    in Rect clip,
+    in UiSkinRegion region,
+    in Rect rectangle,
+    in Color tint,
+    in u32 atlasWidth,
+    in u32 atlasHeight,
+    in f32 referenceDensity,
+    in u32 layer,
+    mut Vector<Vertex> vertices,
+    mut Vector<u32> indices,
+    mut Vector<DrawCommand> commands,
+    mut b8 inOutCommandsOrdered
+){
+    if(region.drawMode == UiSkinDrawMode::NineSlice){
+        EmitPaintNineSlice(
+            recording,
+            clip,
+            region,
+            rectangle,
+            tint,
+            atlasWidth,
+            atlasHeight,
+            referenceDensity,
+            layer,
+            vertices,
+            indices,
+            commands,
+            inOutCommandsOrdered
+        );
+    }
+    else{
+        const Rect uv = ResolveSkinRegionUv(region.rectangle, atlasWidth, atlasHeight);
+        EmitPaintQuad(
+            recording,
+            clip,
+            rectangle,
+            uv,
+            tint,
+            PaintMaterial::Skin,
+            layer,
+            u32.max,
+            u32.max,
+            0u,
+            u32.max,
+            vertices,
+            indices,
+            commands,
+            inOutCommandsOrdered
+        );
+    }
+}
+
 b8 DrawPaintSkinRegion(
     in b8 recording,
     in Rect clip,
@@ -100,46 +154,63 @@ b8 DrawPaintSkinRegion(
     for(in UiSkinRegion region : regions){
         if(region.name != regionName)
             continue;
-        if(region.drawMode == UiSkinDrawMode::NineSlice){
-            EmitPaintNineSlice(
-                recording,
-                clip,
-                region,
-                rectangle,
-                tint,
-                atlasWidth,
-                atlasHeight,
-                referenceDensity,
-                layer,
-                vertices,
-                indices,
-                commands,
-                inOutCommandsOrdered
-            );
-        }
-        else{
-            const Rect uv = ResolveSkinRegionUv(region.rectangle, atlasWidth, atlasHeight);
-            EmitPaintQuad(
-                recording,
-                clip,
-                rectangle,
-                uv,
-                tint,
-                PaintMaterial::Skin,
-                layer,
-                u32.max,
-                u32.max,
-                0u,
-                u32.max,
-                vertices,
-                indices,
-                commands,
-                inOutCommandsOrdered
-            );
-        }
+        EmitPaintSkinRegion(
+            recording,
+            clip,
+            region,
+            rectangle,
+            tint,
+            atlasWidth,
+            atlasHeight,
+            referenceDensity,
+            layer,
+            vertices,
+            indices,
+            commands,
+            inOutCommandsOrdered
+        );
         return true;
     }
     return false;
+}
+
+b8 DrawPaintSkinRegionIndexed(
+    in b8 recording,
+    in Rect clip,
+    in Span<UiSkinRegion> regions,
+    in HashMap<Name, usize> regionLookup,
+    in Name regionName,
+    in Rect rectangle,
+    in Color tint,
+    in u32 atlasWidth,
+    in u32 atlasHeight,
+    in f32 referenceDensity,
+    in u32 layer,
+    mut Vector<Vertex> vertices,
+    mut Vector<u32> indices,
+    mut Vector<DrawCommand> commands,
+    mut b8 inOutCommandsOrdered
+){
+    assert(recording);
+    const auto found = regionLookup.find(regionName);
+    if(found == regionLookup.end())
+        return false;
+    EmitPaintSkinRegion(
+        recording,
+        clip,
+        regions[found.value()],
+        rectangle,
+        tint,
+        atlasWidth,
+        atlasHeight,
+        referenceDensity,
+        layer,
+        vertices,
+        indices,
+        commands,
+        inOutCommandsOrdered
+    );
+    return true;
 }
 
 b8 IsPaintDrawCommandBefore(in DrawCommand lhs, in DrawCommand rhs){
@@ -161,6 +232,45 @@ b8 IsPaintImageInvisible(in Rect rectangle, in Rect clip, in Color tint){
         || !HasVisibleUiRectIntersection(rectangle, clip);
 }
 
+void RefreshPaintBuilderSkinRegions(
+    in Span<UiSkinRegion> skinRegions,
+    mut Vector<UiSkinRegion> outRegions,
+    mut HashMap<Name, usize> outRegionLookup
+){
+    outRegions.clear();
+    outRegions.reserve(skinRegions.size());
+    outRegionLookup.clear();
+    outRegionLookup.reserve(skinRegions.size());
+    for(usize index = 0u; index < skinRegions.size(); ++index){
+        outRegions.push_back(skinRegions[index]);
+        outRegionLookup.try_emplace(skinRegions[index].name, index);
+    }
+}
+
+void BeginPaintBuilderRecordingCached(
+    in DisplayMetrics metrics,
+    mut Vector<Vertex> outVertices,
+    mut Vector<u32> outIndices,
+    mut Vector<DrawCommand> outCommands,
+    mut Vector<Rect> outClips,
+    mut usize outOverlayDepth,
+    mut u32 outLayer,
+    mut b8 outCommandsOrdered,
+    mut b8 outRecording
+){
+    assert(IsFinite(VectorSingle(metrics.logicalWidth, metrics.logicalHeight, metrics.pixelScaleX, metrics.pixelScaleY)));
+    assert(metrics.logicalWidth >= 0.0f && metrics.logicalHeight >= 0.0f && metrics.pixelScaleX > 0.0f && metrics.pixelScaleY > 0.0f);
+    outVertices.clear();
+    outIndices.clear();
+    outCommands.clear();
+    outClips.clear();
+    outClips.push_back(Rect(0.0f, 0.0f, metrics.logicalWidth, metrics.logicalHeight));
+    outOverlayDepth = 0u;
+    outLayer = 0u;
+    outCommandsOrdered = true;
+    outRecording = true;
+}
+
 void BeginPaintBuilderRecording(
     in DisplayMetrics metrics,
     in Span<UiSkinRegion> skinRegions,
@@ -174,21 +284,11 @@ void BeginPaintBuilderRecording(
     mut b8 outCommandsOrdered,
     mut b8 outRecording
 ){
-    assert(IsFinite(VectorSingle(metrics.logicalWidth, metrics.logicalHeight, metrics.pixelScaleX, metrics.pixelScaleY)));
-    assert(metrics.logicalWidth >= 0.0f && metrics.logicalHeight >= 0.0f && metrics.pixelScaleX > 0.0f && metrics.pixelScaleY > 0.0f);
-    outVertices.clear();
-    outIndices.clear();
-    outCommands.clear();
+    BeginPaintBuilderRecordingCached(metrics, outVertices, outIndices, outCommands, outClips, outOverlayDepth, outLayer, outCommandsOrdered, outRecording);
     outRegions.clear();
     outRegions.reserve(skinRegions.size());
     for(in UiSkinRegion region : skinRegions)
         outRegions.push_back(region);
-    outClips.clear();
-    outClips.push_back(Rect(0.0f, 0.0f, metrics.logicalWidth, metrics.logicalHeight));
-    outOverlayDepth = 0u;
-    outLayer = 0u;
-    outCommandsOrdered = true;
-    outRecording = true;
 }
 
 void FinalizePaintBuilderRecording(
@@ -199,17 +299,8 @@ void FinalizePaintBuilderRecording(
     mut b8 inOutRecording
 ){
     [essential] assert(inOutRecording && inOutClips.size() == 1u && overlayDepth == 0u);
-    if(!commandsOrdered){
-        for(usize i = 1u; i < inOutCommands.size(); ++i){
-            const DrawCommand current = inOutCommands[i];
-            usize j = i;
-            while(j > 0u && IsPaintDrawCommandBefore(current, inOutCommands[j - 1u])){
-                inOutCommands[j] = inOutCommands[j - 1u];
-                --j;
-            }
-            inOutCommands[j] = current;
-        }
-    }
+    if(!commandsOrdered)
+        SortSequence<DrawCommand>(inOutCommands, IsPaintDrawCommandBefore);
     inOutRecording = false;
     inOutClips.clear();
 }

@@ -163,23 +163,26 @@ template<typename GetVertexBindingFn>
     }
 
     state.task = taskId;
-    state.pipeline = pipeline;
-    state.colorAttachment = colorAttachment;
-    state.indexResource = indexResource;
     state.framebufferOwnerIndex = framebufferOwnerIndex;
-    state.indexOffset = indexOffset;
-    state.indexFormat = indexFormat;
-    state.vertexBindingCount = vertexBindingCount;
-    for(u8 bindingIndex = 0u; bindingIndex < vertexBindingCount; ++bindingIndex){
-        const GpuCommandIrRasterVertexBinding binding = getVertexBinding(bindingIndex);
-        state.vertexBuffers[bindingIndex] = GpuCommandIrDetail::RasterVertexCacheEntry{
-            .resourceGeneration = binding.resource.generation,
-            .resourceIndex = binding.resource.index,
-            .slot = binding.slot,
-        };
+    if(!matchesCachedState){
+        state.pipeline = pipeline;
+        state.colorAttachment = colorAttachment;
+        state.indexResource = indexResource;
+        state.indexOffset = indexOffset;
+        state.indexFormat = indexFormat;
+        state.vertexBindingCount = vertexBindingCount;
+        for(u8 bindingIndex = 0u; bindingIndex < vertexBindingCount; ++bindingIndex){
+            const GpuCommandIrRasterVertexBinding binding = getVertexBinding(bindingIndex);
+            state.vertexBuffers[bindingIndex] = GpuCommandIrDetail::RasterVertexCacheEntry{
+                .resourceGeneration = binding.resource.generation,
+                .resourceIndex = binding.resource.index,
+                .slot = binding.slot,
+            };
+        }
     }
     state.active = true;
-    state.heapBound = false;
+    if(!matchesCachedState)
+        state.heapBound = false;
     state.pushConstantsSet = false;
     return GpuCommandIrReplayError::None;
 }
@@ -261,9 +264,8 @@ GpuCommandIrReplayError::Enum ValidateRasterGraphOperation(const GpuCommandIrRas
     }
 }
 
-GpuCommandIrReplayError::Enum ValidateRasterWireGraphOperation(
-    const GpuCommandIrWireOpcode::Enum opcode,
-    const WireRecordStorage& record,
+GpuCommandIrReplayError::Enum ValidateSetGraphicsStateWireGraphOperation(
+    const u8* const recordPtr,
     const GpuTaskId taskId,
     const BinaryByteView blobBytes,
     const GpuTaskGraphDeclarationReadView& graph,
@@ -274,76 +276,44 @@ GpuCommandIrReplayError::Enum ValidateRasterWireGraphOperation(
         return GpuCommandIrReplayError::InvalidRasterState;
 
     const u64 generation = taskId.generation;
-    switch(opcode){
-    case GpuCommandIrWireOpcode::SetGraphicsState:{
-        const GpuCommandIrSetGraphicsStateRecord& wire = record.setGraphicsState;
-        const u8* const vertexPtr = wire.vertexBindingCount != 0u ? blobBytes.data() + static_cast<usize>(wire.blobOffsetBytes) : nullptr;
-        const auto getBinding = [generation, vertexPtr](const u8 index)noexcept -> GpuCommandIrRasterVertexBinding{
-            GpuCommandIrRasterVertexWire vertexWire;
-            FOUNDATION_MEMCPY(&vertexWire, sizeof(vertexWire), vertexPtr + index * sizeof(GpuCommandIrRasterVertexWire), sizeof(GpuCommandIrRasterVertexWire));
-            return GpuCommandIrRasterVertexBinding{
-                .resource = GpuGraphResourceId{ .generation = generation, .index = vertexWire.resourceIndex },
-                .slot = vertexWire.slot,
-                .offset = vertexWire.offset,
-            };
+    const auto wire = ReadWirePod<GpuCommandIrSetGraphicsStateRecord>(recordPtr);
+    const u8* const vertexPtr = wire.vertexBindingCount != 0u ? blobBytes.data() + static_cast<usize>(wire.blobOffsetBytes) : nullptr;
+    const auto getBinding = [generation, vertexPtr](const u8 index)noexcept -> GpuCommandIrRasterVertexBinding{
+        const auto vertexWire = ReadWirePod<GpuCommandIrRasterVertexWire>(vertexPtr + index * sizeof(GpuCommandIrRasterVertexWire));
+        return GpuCommandIrRasterVertexBinding{
+            .resource = GpuGraphResourceId{ .generation = generation, .index = vertexWire.resourceIndex },
+            .slot = vertexWire.slot,
+            .offset = vertexWire.offset,
         };
-        const GpuGraphPipelineId pipeline{ .generation = generation, .index = wire.pipelineIndex };
-        const GpuGraphResourceId colorAttachment{ .generation = generation, .index = wire.colorAttachmentIndex };
-        const GpuGraphResourceId indexResource = wire.indexResourceIndex != Limit<u32>::s_Max
-            ? GpuGraphResourceId{ .generation = generation, .index = wire.indexResourceIndex }
-            : GpuGraphResourceId{}
-        ;
-        const Viewport viewport{ wire.viewportMinX, wire.viewportMaxX, wire.viewportMinY, wire.viewportMaxY, wire.viewportMinZ, wire.viewportMaxZ };
-        const Rect scissor{ wire.scissor.minX, wire.scissor.maxX, wire.scissor.minY, wire.scissor.maxY };
-        const Color blendConstantColor{ wire.blendConstantColor.r, wire.blendConstantColor.g, wire.blendConstantColor.b, wire.blendConstantColor.a };
-        return __hidden_gpu_command_ir_raster_preflight::ValidateSetGraphicsStateGraph(
-            taskId,
-            pipeline,
-            colorAttachment,
-            wire.framebufferOwnerIndex,
-            indexResource,
-            static_cast<Format::Enum>(wire.indexFormat),
-            wire.indexOffset,
-            viewport,
-            scissor,
-            blendConstantColor,
-            wire.vertexBindingCount,
-            wire.hasScissor != 0u,
-            false,
-            getBinding,
-            graph,
-            task,
-            state
-        );
-    }
-    case GpuCommandIrWireOpcode::BindGraphicsHeap:
-        if(!state.active || GpuGraphPipelineId{ .generation = generation, .index = record.bindGraphicsHeap.pipelineIndex } != state.pipeline)
-            return GpuCommandIrReplayError::InvalidRasterState;
-        state.heapBound = true;
-        return GpuCommandIrReplayError::None;
-    case GpuCommandIrWireOpcode::SetPushConstants:
-        if(!state.active || record.setPushConstants.blobSizeBytes > s_MaxPushConstantSize)
-            return GpuCommandIrReplayError::InvalidRasterState;
-        state.pushConstantsSet = true;
-        return GpuCommandIrReplayError::None;
-    case GpuCommandIrWireOpcode::Draw:
-    case GpuCommandIrWireOpcode::DrawIndexed:
-        if(!state.active || !state.heapBound || !state.pushConstantsSet || record.draw.vertexCount == 0u || record.draw.instanceCount == 0u)
-            return GpuCommandIrReplayError::InvalidRasterDraw;
-        if(opcode == GpuCommandIrWireOpcode::DrawIndexed && (!state.indexResource.valid() || record.draw.startVertexLocation > static_cast<u32>(Limit<i32>::s_Max)))
-            return GpuCommandIrReplayError::InvalidRasterDraw;
-        return GpuCommandIrReplayError::None;
-    case GpuCommandIrWireOpcode::EndRenderPass:
-        if(!state.active)
-            return GpuCommandIrReplayError::InvalidRasterState;
-        state.active = false;
-        state.task = {};
-        state.heapBound = false;
-        state.pushConstantsSet = false;
-        return GpuCommandIrReplayError::None;
-    default:
-        return GpuCommandIrReplayError::InvalidRasterState;
-    }
+    };
+    const GpuGraphPipelineId pipeline{ .generation = generation, .index = wire.pipelineIndex };
+    const GpuGraphResourceId colorAttachment{ .generation = generation, .index = wire.colorAttachmentIndex };
+    const GpuGraphResourceId indexResource = wire.indexResourceIndex != Limit<u32>::s_Max
+        ? GpuGraphResourceId{ .generation = generation, .index = wire.indexResourceIndex }
+        : GpuGraphResourceId{}
+    ;
+    const Viewport viewport{ wire.viewportMinX, wire.viewportMaxX, wire.viewportMinY, wire.viewportMaxY, wire.viewportMinZ, wire.viewportMaxZ };
+    const Rect scissor{ wire.scissor.minX, wire.scissor.maxX, wire.scissor.minY, wire.scissor.maxY };
+    const Color blendConstantColor{ wire.blendConstantColor.r, wire.blendConstantColor.g, wire.blendConstantColor.b, wire.blendConstantColor.a };
+    return __hidden_gpu_command_ir_raster_preflight::ValidateSetGraphicsStateGraph(
+        taskId,
+        pipeline,
+        colorAttachment,
+        wire.framebufferOwnerIndex,
+        indexResource,
+        static_cast<Format::Enum>(wire.indexFormat),
+        wire.indexOffset,
+        viewport,
+        scissor,
+        blendConstantColor,
+        wire.vertexBindingCount,
+        wire.hasScissor != 0u,
+        false,
+        getBinding,
+        graph,
+        task,
+        state
+    );
 }
 
 GpuCommandIrReplayError::Enum ValidateRasterBuiltinBoundary(const GpuTaskId&, const RasterReplayState& state)noexcept{

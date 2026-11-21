@@ -286,8 +286,15 @@ b8 CommandList::tryWriteBuffer(Buffer& buffer, const void* data, usize dataSize,
         rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, FOUNDATION_TEXT("copy offset and size must be 4-byte aligned"));
         return false;
     }
-    if(!validateBufferForGpuState(&buffer, ResourceStates::CopyDest, VulkanArenaScope::s_WriteBufferCommandLabel, VK_BUFFER_USAGE_TRANSFER_DST_BIT))
+    if(!isBufferReadyForCommandQueue(&buffer, VK_BUFFER_USAGE_TRANSFER_DST_BIT)){
+        rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, s_BufferNotReadyForQueueReason);
         return false;
+    }
+    const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(&buffer);
+    if(permanentState != ResourceStates::Unknown && permanentState != ResourceStates::CopyDest){
+        rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, FOUNDATION_TEXT("state conflicts with the permanent buffer state"));
+        return false;
+    }
 
     const auto staging = prepareUploadStaging(data, dataSize, FOUNDATION_TEXT("writeBuffer"));
     if(!staging){
@@ -296,7 +303,7 @@ b8 CommandList::tryWriteBuffer(Buffer& buffer, const void* data, usize dataSize,
     }
 
     endActiveRenderPass();
-    queueWriteBufferCopyAndBarrier(buffer, staging->buffer->m_buffer, staging->offset, destOffsetBytes, dataSize);
+    queueWriteBufferCopyAndBarrier(buffer, staging->buffer->m_buffer, staging->offset, destOffsetBytes, dataSize, permanentState);
     if(m_commandRecordingFailed)
         return false;
 
@@ -317,7 +324,7 @@ void CommandList::clearBufferUInt(Buffer& buffer, u32 clearValue){
         rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("buffer size is not 4-byte aligned"));
         return;
     }
-    if(!validateBufferForGpuState(&buffer, ResourceStates::CopyDest, s_OperationName, VK_BUFFER_USAGE_TRANSFER_DST_BIT))
+    if(!validateBufferForGpuStateValidated(&buffer, ResourceStates::CopyDest, s_OperationName, VK_BUFFER_USAGE_TRANSFER_DST_BIT))
         return;
 
     endActiveRenderPass();
@@ -361,9 +368,9 @@ void CommandList::copyBuffer(Buffer& dest, u64 destOffsetBytes, Buffer& src, u64
     const ResourceStates::Mask sourceState = sameNativeBuffer ? ResourceStates::CopySource | ResourceStates::CopyDest : ResourceStates::CopySource;
     const ResourceStates::Mask destinationState = sameNativeBuffer ? ResourceStates::CopySource | ResourceStates::CopyDest : ResourceStates::CopyDest;
     const VkBufferUsageFlags sourceUsage = sameNativeBuffer ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT : VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    if(!validateBufferForGpuState(&src, sourceState, s_CopyBufferOperation, sourceUsage))
+    if(!validateBufferForGpuStateValidated(&src, sourceState, s_CopyBufferOperation, sourceUsage))
         return;
-    if(&dest != &src && !validateBufferForGpuState(&dest, destinationState, s_CopyBufferOperation, VK_BUFFER_USAGE_TRANSFER_DST_BIT))
+    if(&dest != &src && !validateBufferForGpuStateValidated(&dest, destinationState, s_CopyBufferOperation, VK_BUFFER_USAGE_TRANSFER_DST_BIT))
         return;
 
     endActiveRenderPass();
@@ -414,7 +421,7 @@ inline constexpr usize s_CopyHostMemoryChunkSize = 256u * 1024u;
     if(!outDst || !src || size == 0)
         return {};
 
-    if(cpuScheduler.isParallelEnabled() && size >= s_CopyHostMemoryParallelThreshold){
+    if(size >= s_CopyHostMemoryParallelThreshold && cpuScheduler.isParallelEnabled()){
         const auto dstBytes = MakeNotNull(static_cast<u8*>(outDst));
         const auto srcBytes = MakeNotNull(static_cast<const u8*>(src));
         const usize chunkCount = DivideUp(size, s_CopyHostMemoryChunkSize);

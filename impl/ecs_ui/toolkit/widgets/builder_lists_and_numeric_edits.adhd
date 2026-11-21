@@ -162,13 +162,10 @@ b8 Builder::prepareListMetrics(mut BuilderListFrame frame){
     frame.measureKey = key;
     mut ListState state = frame.state.value();
     if(key != state.m_measureKey || state.m_rowHeight <= 0.0f){
-        auto empty = this.m_text.layout(this.textShapeRequest("", key.fontSize));
-        if(!empty.has_value())
+        const auto measuredEmpty = this.m_text.layoutAndMeasureShared(this.textShapeRequest("", key.fontSize), this.m_paint.displayMetrics());
+        if(!measuredEmpty.has_value())
             return false;
-        const auto bounds = this.m_text.measure(empty.value(), this.m_paint.displayMetrics());
-        if(!bounds.has_value())
-            return false;
-        const f32 height = ResolveListRowBaseHeight(metrics.value(), bounds.value().height);
+        const f32 height = ResolveListRowBaseHeight(metrics.value(), measuredEmpty.value().bounds.height);
         if(!IsFinite(height) || height <= 0.0f || !this.listMatches(frame))
             return false;
         state.m_measureKey = key;
@@ -377,7 +374,7 @@ b8 Builder::paintListRows(in BuilderItem item, in BuilderListFrame frame, in Scr
         flags.selected = frame.state.value().selectedKey() == key;
         flags.hover = this.m_context.input().hover() == part.value();
         flags.focused = focused && frame.state.value().cursorKey() == key;
-        if(!PaintSelectable(this.m_paint, this.m_text, this.m_skin.value(), row.text, row.textBounds, frame.style.row.padding, rectangle.value(), placement.contentClip, frame.style.row, flags, frame.widgetStyle.text, frame.widgetStyle.disabledText))
+        if(!row.text.valid() || !PaintSelectable(this.m_paint, this.m_text, this.m_skin.value(), row.text.deref(), row.textBounds, frame.style.row.padding, rectangle.value(), placement.contentClip, frame.style.row, flags, frame.widgetStyle.text, frame.widgetStyle.disabledText))
             return false;
         if(item.enabled){
             const HitTarget target = targets.makeListRowHitTarget(rectangle.value(), placement.contentClip, enabled, frame.token, key);

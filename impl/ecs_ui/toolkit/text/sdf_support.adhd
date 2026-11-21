@@ -43,8 +43,17 @@ b8 TryIncludeTextInk(in VectorDouble ink, mut VectorDouble inoutBounds, mut b8 i
     return true;
 }
 
-Expected<VectorDouble> TryLoadSdfGlyphSupport(
-    in VectorDouble plane,
+class SdfGlyphSupportOffset{
+    public f64 minX = 0.0;
+    public f64 minY = 0.0;
+    public f64 maxX = 0.0;
+    public f64 maxY = 0.0;
+    public b8 visible = false;
+}
+
+Expected<SdfGlyphSupportOffset> TryComputeSdfGlyphSupportOffset(
+    in f64 planeWidth,
+    in f64 planeHeight,
     in FontAtlasGlyph glyph,
     in u32 pageWidth,
     in u32 pageHeight,
@@ -53,10 +62,8 @@ Expected<VectorDouble> TryLoadSdfGlyphSupport(
     in Span<u8> pixels,
     in DisplayMetrics display
 ){
-    if(plane.z <= 0.0 || plane.w <= 0.0)
-        return plane;
     const VectorDouble glyphExtent(cast<f64>(glyph.width), cast<f64>(glyph.height), cast<f64>(glyph.width), cast<f64>(glyph.height));
-    const VectorDouble texelSize = VectorDouble(plane.z, plane.w, plane.z, plane.w) / glyphExtent;
+    const VectorDouble texelSize = VectorDouble(planeWidth, planeHeight, planeWidth, planeHeight) / glyphExtent;
     const VectorDouble pixelScale(cast<f64>(display.pixelScaleX), cast<f64>(display.pixelScaleY), cast<f64>(display.pixelScaleX), cast<f64>(display.pixelScaleY));
     const VectorDouble physicalStep = VectorDouble(1.0) / (texelSize * pixelScale);
     if(!IsFinite(physicalStep.xy))
@@ -125,17 +132,49 @@ Expected<VectorDouble> TryLoadSdfGlyphSupport(
             visible = true;
         }
     }
+    SdfGlyphSupportOffset result;
     if(!visible)
-        return VectorDouble(0.0, 0.0, 0.0, 0.0);
-    const VectorDouble planeOrigin(plane.x, plane.y, plane.x, plane.y);
+        return result;
     const VectorDouble scaledMin = supportMin * texelSize;
     const VectorDouble scaledMax = supportMax * texelSize;
-    const VectorDouble minXY = scaledMin + planeOrigin;
-    const VectorDouble maxXY = scaledMax + planeOrigin;
+    result.minX = scaledMin.x;
+    result.minY = scaledMin.y;
+    result.maxX = scaledMax.x;
+    result.maxY = scaledMax.y;
+    result.visible = true;
+    return result;
+}
+
+Expected<VectorDouble> ResolveSdfGlyphSupportBounds(in VectorDouble plane, in SdfGlyphSupportOffset offset){
+    if(plane.z <= 0.0 || plane.w <= 0.0)
+        return plane;
+    if(!offset.visible)
+        return VectorDouble(0.0, 0.0, 0.0, 0.0);
+    const VectorDouble planeOrigin(plane.x, plane.y, plane.x, plane.y);
+    const VectorDouble minXY = VectorDouble(offset.minX, offset.minY, offset.minX, offset.minY) + planeOrigin;
+    const VectorDouble maxXY = VectorDouble(offset.maxX, offset.maxY, offset.maxX, offset.maxY) + planeOrigin;
     const Expected<Rect> measured = TryMakeMeasuredTextRect(minXY.x, minXY.y, maxXY.x, maxXY.y);
     if(!measured.has_value())
         return MakeUnexpected(Failure());
     return VectorDouble(cast<f64>(measured.value().x), cast<f64>(measured.value().y), cast<f64>(measured.value().width), cast<f64>(measured.value().height));
+}
+
+Expected<VectorDouble> TryLoadSdfGlyphSupport(
+    in VectorDouble plane,
+    in FontAtlasGlyph glyph,
+    in u32 pageWidth,
+    in u32 pageHeight,
+    in u32 channelCount,
+    in u32 spreadPixels,
+    in Span<u8> pixels,
+    in DisplayMetrics display
+){
+    if(plane.z <= 0.0 || plane.w <= 0.0)
+        return plane;
+    const Expected<SdfGlyphSupportOffset> offset = TryComputeSdfGlyphSupportOffset(plane.z, plane.w, glyph, pageWidth, pageHeight, channelCount, spreadPixels, pixels, display);
+    if(!offset.has_value())
+        return MakeUnexpected(Failure());
+    return ResolveSdfGlyphSupportBounds(plane, offset.value());
 }
 
 

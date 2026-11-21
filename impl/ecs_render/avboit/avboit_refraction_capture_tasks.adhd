@@ -365,7 +365,8 @@ Expected<GpuTaskId> DeclareAvboitRefractionCapture(
     in b8 enabled,
     mut DeferredFrameTargets targets,
     mut ObjectGeometryCacheGraph objectGeometry,
-    mut AvboitGeneratedGeometryReuse generatedGeometry
+    mut AvboitGeneratedGeometryReuse generatedGeometry,
+    mut AvboitUploadedStreamState uploadedStreams
 ){
     GpuTaskId dependency = initialDependency;
     const RefractionCaptureValidationPolicy validationPolicy();
@@ -410,6 +411,7 @@ Expected<GpuTaskId> DeclareAvboitRefractionCapture(
         typedRanges,
         typedBytes
     );
+    const u64 streamToken = materialSystem.lastGatheredStreamToken();
     if(drawItems.empty())
         return attachments.finalize(graph, dependency);
     const b8 hasCsg = !drawItems.csg.empty();
@@ -464,6 +466,11 @@ Expected<GpuTaskId> DeclareAvboitRefractionCapture(
     Vector<GpuTaskResourceUse> csgUses;
     if(hasCsg && !AppendRefractionCaptureCsg(graph, dependency, csgSystem, targets, csgFrameData, csgResources, frameBindings, csgUses))
         return MakeUnexpected(Failure());
+    uploadedStreams.markMaterialUploaded(streamToken);
+    if(hasCsg){
+        in FramebufferInfoEx refractionFbInfo = targets.avboit.refractionFramebuffer.deref().getFramebufferInfo();
+        uploadedStreams.markCsgUploaded(refractionFbInfo.width, refractionFbInfo.height, CsgFrameGpuDataView(csgFrameData));
+    }
 
     if(!objectGeometry.prepare(drawItems.regular.indexedDrawItems, frameBindings, dependency, commonUses, GraphicsPrefixTimingTicket(), Optional<in GraphicsPrefixTimingTicket>()))
         return MakeUnexpected(Failure());

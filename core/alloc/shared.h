@@ -73,7 +73,7 @@ public:
     {}
 
     void destroy()noexcept override{
-        const Pool owner = m_owner;
+        const Pool owner = Move(m_owner);
         DestroyArenaObject(owner->arena, this);
     }
 

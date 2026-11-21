@@ -8,6 +8,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+Optional<in BakedFontAtlas> BorrowSelectedAtlas(in borrow PlacedGlyph glyph, in f32 physicalSize){
+    if(!glyph.face.valid() || !glyph.face.deref().valid())
+        return Optional<in BakedFontAtlas>();
+    if(!glyph.face.deref().bakedAtlas().valid() || !glyph.face.deref().bakedAtlas().deref().valid() || !CanUseBakedFontAtlasAtPhysicalSize(glyph.face.deref().bakedAtlas().deref().bakePpem(), physicalSize) || !glyph.face.deref().bakedAtlas().deref().hasGlyph(glyph.glyphId))
+        return Optional<in BakedFontAtlas>();
+    return Optional<in BakedFontAtlas>(glyph.face.deref().bakedAtlas().deref());
+}
+
 SharedBakedFontAtlas SelectAtlas(in PlacedGlyph glyph, in f32 physicalSize){
     if(!glyph.face.valid() || !glyph.face.deref().valid())
         return SharedBakedFontAtlas();
@@ -30,12 +38,12 @@ Expected<Rect> AtlasRectangle(in PlacedGlyph glyph, in BakedFontAtlas atlas, in 
     return ToTextGlyphAtlasRect(rectangle.value());
 }
 
-TextGlyphIntersection Candidate(in PlacedGlyph glyph, in SharedBakedFontAtlas selectedAtlas, in f32 fontSize, in f32 physicalSize, in Point topLeft, in Rect clip, in Point pixelScale){
+TextGlyphIntersection CandidateBorrowed(in PlacedGlyph glyph, in Optional<in BakedFontAtlas> selectedAtlas, in f32 fontSize, in f32 physicalSize, in Point topLeft, in Rect clip, in Point pixelScale){
     const TextGlyphIntersection input = ValidateTextGlyphCandidateInputs(glyph.position, topLeft, fontSize, physicalSize, clip, pixelScale);
     if(input != TextGlyphIntersection::Visible)
         return input;
-    if(selectedAtlas.valid()){
-        const Expected<VectorDouble> rectangle = LoadAtlasRectangle(glyph, selectedAtlas.deref(), fontSize, topLeft);
+    if(selectedAtlas.has_value()){
+        const Expected<VectorDouble> rectangle = LoadAtlasRectangle(glyph, selectedAtlas.value(), fontSize, topLeft);
         if(!rectangle.has_value())
             return TextGlyphIntersection::Invalid;
         return IntersectGlyphAtlasRectangle(rectangle.value(), clip);
@@ -46,6 +54,12 @@ TextGlyphIntersection Candidate(in PlacedGlyph glyph, in SharedBakedFontAtlas se
     if(hasValidFace)
         faceUnitsPerEm = glyph.face.deref().unitsPerEm();
     return EvaluateUnselectedAtlasGlyphCandidate(glyph.position, topLeft, glyph.ink, glyph.coverage, hasValidFace, coverageInkReliable, faceUnitsPerEm, fontSize, physicalSize, clip, pixelScale);
+}
+
+TextGlyphIntersection Candidate(in PlacedGlyph glyph, in SharedBakedFontAtlas selectedAtlas, in f32 fontSize, in f32 physicalSize, in Point topLeft, in Rect clip, in Point pixelScale){
+    if(selectedAtlas.valid())
+        return CandidateBorrowed(glyph, Optional<in BakedFontAtlas>(selectedAtlas.deref()), fontSize, physicalSize, topLeft, clip, pixelScale);
+    return CandidateBorrowed(glyph, Optional<in BakedFontAtlas>(), fontSize, physicalSize, topLeft, clip, pixelScale);
 }
 
 TextGlyphIntersection Candidate(in PlacedGlyph glyph, in SharedBakedFontAtlas selectedAtlas, in f32 fontSize, in f32 physicalSize, in Point topLeft, in Rect clip){

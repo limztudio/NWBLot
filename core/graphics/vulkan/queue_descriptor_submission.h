@@ -18,7 +18,9 @@ public:
 
 
 public:
+    [[nodiscard]] b8 hasReferencedHeaps()const noexcept{ return m_submissionDescriptorHeap != nullptr; }
     [[nodiscard]] b8 prepareBatch(Span<const Queue::BatchSubmitEntry> entries);
+    [[nodiscard]] b8 lockAndValidate(Span<const Queue::BatchSubmitEntry> entries, GpuDescriptorHeap* submissionDescriptorHeap, b8 requiresDescriptorBufferLifecycle, b8 requiresDescriptorBufferValidation);
     [[nodiscard]] b8 validateHeapUses(TrackedCommandBuffer& tracked, const QueueSubmissionToken& submissionToken);
     void releaseLocks()noexcept;
     void commitAndRelease()noexcept;

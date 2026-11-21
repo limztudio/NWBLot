@@ -62,6 +62,10 @@ Expected<usize> CountNewPaintBindings<T, TPolicy : IPaintBindingPolicy<T>>(in Sp
             return MakeUnexpected(Failure());
         b8 found = false;
         for(in Shared<T> existing : bound){
+            if(existing == candidate){
+                found = true;
+                break;
+            }
             if(policy.same(candidate.deref(), existing.deref())){
                 if(!policy.compatible(candidate.deref(), existing.deref()))
                     return MakeUnexpected(Failure());
@@ -96,6 +100,34 @@ void PublishPaintBindings<T, TPolicy : IPaintBindingPolicy<T>>(in Span<Shared<T>
         }
         if(!found)
             bound.push_back(candidate);
+    }
+}
+
+void PublishAndResolvePaintBindings<T, TPolicy : IPaintBindingPolicy<T>>(
+    in Span<Shared<T>> batch,
+    mut Vector<Shared<T>> bound,
+    in TPolicy policy,
+    mut Vector<u32> outIndices
+){
+    outIndices.clear();
+    outIndices.reserve(batch.size());
+    for(in Shared<T> candidate : batch){
+        usize resolvedIndex = bound.size();
+        for(usize index = 0u; index < bound.size(); ++index){
+            if(bound[index] == candidate){
+                resolvedIndex = index;
+                break;
+            }
+            if(policy.same(bound[index].deref(), candidate.deref())){
+                if(policy.upgrade(bound[index].deref(), candidate.deref()))
+                    bound[index] = candidate;
+                resolvedIndex = index;
+                break;
+            }
+        }
+        if(resolvedIndex == bound.size())
+            bound.push_back(candidate);
+        outIndices.push_back(cast<u32>(resolvedIndex));
     }
 }
 
@@ -169,6 +201,28 @@ class PaintImageBindings{
         PublishPaintBindings<GlyphPage, CoverageBindingPolicy>(glyphs, this.m_glyphPages, CoverageBindingPolicy());
         PublishPaintBindings<SdfAtlasPage, SdfBindingPolicy>(sdf, this.m_sdfPages, SdfBindingPolicy());
         PublishPaintBindings<ImageSource, TextureBindingPolicy>(textures, this.m_textureImages, TextureBindingPolicy());
+        return true;
+    }
+
+    [cpp_unwind]
+    public b8 prepareAndResolveGlyphs(
+        in Span<SharedGlyphPage> glyphs,
+        in Span<SharedSdfAtlasPage> sdf,
+        mut Vector<u32> outGlyphIndices,
+        mut Vector<u32> outSdfIndices
+    ){
+        if(!WithinPaintImageSpanLimits(glyphs.size(), sdf.size(), 0u))
+            return false;
+        const Expected<usize> addedGlyphs = CountNewPaintBindings<GlyphPage, CoverageBindingPolicy>(glyphs, this.m_glyphPages, CoverageBindingPolicy());
+        if(!addedGlyphs.has_value())
+            return false;
+        const Expected<usize> addedSdf = CountNewPaintBindings<SdfAtlasPage, SdfBindingPolicy>(sdf, this.m_sdfPages, SdfBindingPolicy());
+        if(!addedSdf.has_value() || !CanAdmitPaintImageBindingCounts(this.m_glyphPages.size(), this.m_sdfPages.size(), this.m_textureImages.size(), addedGlyphs.value(), addedSdf.value(), 0u))
+            return false;
+        this.m_glyphPages.reserve(this.m_glyphPages.size() + addedGlyphs.value());
+        this.m_sdfPages.reserve(this.m_sdfPages.size() + addedSdf.value());
+        PublishAndResolvePaintBindings<GlyphPage, CoverageBindingPolicy>(glyphs, this.m_glyphPages, CoverageBindingPolicy(), outGlyphIndices);
+        PublishAndResolvePaintBindings<SdfAtlasPage, SdfBindingPolicy>(sdf, this.m_sdfPages, SdfBindingPolicy(), outSdfIndices);
         return true;
     }
 }

@@ -22,6 +22,7 @@ private:
     struct RawEdgeMeta{
         u32 nextRawEdge = Limit<u32>::s_Max;
         u32 firstInferred = Limit<u32>::s_Max;
+        u32 producerIndex = Limit<u32>::s_Max;
     };
     struct InferredDependencyHasher{
         NotNull<const GraphicsVector<GpuTaskDependencyEdge>*> edges;

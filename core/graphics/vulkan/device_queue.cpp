@@ -158,6 +158,11 @@ Device::GraphCommandListBatchResult Device::executeGraphCommandListsBatch(
         return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
     }
 
+    UniqueLock<Futex> submissionWorkspaceLock(queue->m_submissionWorkspaceMutex);
+    u64 executeBatchStamp = queue->m_nextExecuteBatchStamp++;
+    if(executeBatchStamp == 0u)
+        executeBatchStamp = queue->m_nextExecuteBatchStamp++;
+
     usize totalWaitTokens = 0u;
     for(usize entryIndex = 0u; entryIndex < entries.size(); ++entryIndex){
         const GraphCommandListBatchEntry& entry = entries[entryIndex];
@@ -185,25 +190,15 @@ Device::GraphCommandListBatchResult Device::executeGraphCommandListsBatch(
                 NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Command list {} lease provenance does not match execution queue"), i);
                 return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
             }
-            for(usize previous = 0u; previous < i; ++previous){
-                if(entry.commandLists[previous] == commandList){
-                    NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: command list {} is duplicated"), i);
-                    return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
-                }
+            if(commandList->m_lastExecuteBatchStamp == executeBatchStamp){
+                NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: command list {} is duplicated"), i);
+                return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
             }
-            for(usize earlierEntry = 0u; earlierEntry < entryIndex; ++earlierEntry){
-                for(usize k = 0u; k < entries[earlierEntry].numCommandLists; ++k){
-                    if(entries[earlierEntry].commandLists[k] == commandList){
-                        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: command list is duplicated in batch"));
-                        return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
-                    }
-                }
-            }
+            commandList->m_lastExecuteBatchStamp = executeBatchStamp;
         }
         totalWaitTokens += entry.submitDesc.waitTokenCount;
     }
 
-    UniqueLock<Futex> submissionWorkspaceLock(queue->m_submissionWorkspaceMutex);
     auto& localWaits = queue->m_executeLocalWaits;
     auto& expectedCommandLists = queue->m_executeExpectedCommandLists;
     localWaits.clear();
@@ -358,14 +353,17 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
         NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: command list count exceeds Vulkan limit"));
         return MakeUnexpected(Failure{});
     }
+    if(submitDesc.waitTokenCount > 0u && !submitDesc.waitTokens){
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: submission wait token array is null"));
+        return MakeUnexpected(Failure{});
+    }
+
+    UniqueLock<Futex> submissionWorkspaceLock(queue->m_submissionWorkspaceMutex);
+    u64 executeBatchStamp = queue->m_nextExecuteBatchStamp++;
+    if(executeBatchStamp == 0u)
+        executeBatchStamp = queue->m_nextExecuteBatchStamp++;
     for(usize i = 0u; i < numCommandLists; ++i){
         CommandList* const commandList = commandLists[i];
-        for(usize previous = 0u; previous < i; ++previous){
-            if(commandLists[previous] == commandList){
-                NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: command list {} is duplicated"), i);
-                return MakeUnexpected(Failure{});
-            }
-        }
         if(!commandList || &commandList->m_device != this){
             NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: command list {} is null or foreign"), i);
             return MakeUnexpected(Failure{});
@@ -374,14 +372,13 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
             NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Command list {} lease provenance does not match execution queue"), i);
             return MakeUnexpected(Failure{});
         }
+        if(commandList->m_lastExecuteBatchStamp == executeBatchStamp){
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: command list {} is duplicated"), i);
+            return MakeUnexpected(Failure{});
+        }
+        commandList->m_lastExecuteBatchStamp = executeBatchStamp;
     }
 
-    if(submitDesc.waitTokenCount > 0u && !submitDesc.waitTokens){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: submission wait token array is null"));
-        return MakeUnexpected(Failure{});
-    }
-
-    UniqueLock<Futex> submissionWorkspaceLock(queue->m_submissionWorkspaceMutex);
     auto& localWaits = queue->m_executeLocalWaits;
     auto& expectedCommandLists = queue->m_executeExpectedCommandLists;
     localWaits.clear();

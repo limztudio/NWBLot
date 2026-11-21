@@ -64,18 +64,13 @@ b8 Builder::beginWindow(in StringView stableKey, in StringView title, mut Window
         this.m_context.fail();
         return false;
     }
-    auto titleLayout = this.m_text.layout(request);
-    if(!titleLayout.has_value()){
+    const auto measuredTitle = this.m_text.layoutAndMeasureShared(request, this.m_paint.displayMetrics());
+    if(!measuredTitle.has_value() || !ControlStyleMetrics().windowMetrics(this.m_skin.value(), this.m_style, options, Point(measuredTitle.value().bounds.width, measuredTitle.value().bounds.height), this.m_scope.value().m_window.metrics)){
         this.m_context.fail();
         return false;
     }
-    MoveInto<TextLayout>(this.m_scope.value().m_window.title, titleLayout.value());
-    const auto titleBounds = this.m_text.measure(this.m_scope.value().m_window.title, this.m_paint.displayMetrics());
-    if(!titleBounds.has_value() || !ControlStyleMetrics().windowMetrics(this.m_skin.value(), this.m_style, options, Point(titleBounds.value().width, titleBounds.value().height), this.m_scope.value().m_window.metrics)){
-        this.m_context.fail();
-        return false;
-    }
-    this.m_scope.value().m_window.titleBounds = titleBounds.value();
+    this.m_scope.value().m_window.title = measuredTitle.value().layout;
+    this.m_scope.value().m_window.titleBounds = measuredTitle.value().bounds;
     this.m_scope.value().m_panelState = window.value();
     this.m_scope.value().m_window.state = Optional<mut WindowState>(state);
     this.m_scope.value().m_window.options = options;
@@ -214,6 +209,8 @@ b8 Builder::paintWindowTitle(){
     const b8 collapseHovered = input.hover() == this.m_scope.value().m_window.collapseState.id;
     const b8 collapsePressed = input.pressed(this.m_scope.value().m_window.collapseState.id);
     const b8 collapseFocused = input.focus() == this.m_scope.value().m_window.collapseState.id;
+    if(!this.m_scope.value().m_window.title.valid())
+        return false;
     const b8 painted = painter.paintWindowTitleHeader(
         this.m_paint,
         this.m_text,
@@ -225,7 +222,7 @@ b8 Builder::paintWindowTitle(){
         collapseHovered,
         collapsePressed,
         collapseFocused,
-        this.m_scope.value().m_window.title,
+        this.m_scope.value().m_window.title.deref(),
         this.m_scope.value().m_window.titleBounds,
         header,
         clip
@@ -384,12 +381,13 @@ ComboResult Builder::declareCombo(
     if(selected)
         label = source.text(index.value());
     const ShapeRequest request = this.textShapeRequest(label, item.style.fontSize);
-    auto layout = this.m_text.layout(request);
-    if(!layout.has_value()){
+    const auto measuredLabel = this.m_text.layoutAndMeasureShared(request, this.m_paint.displayMetrics());
+    if(!measuredLabel.has_value()){
         this.m_context.fail();
         return ComboResult();
     }
-    MoveInto<TextLayout>(item.text, layout.value());
+    item.text = measuredLabel.value().layout;
+    item.textBounds = measuredLabel.value().bounds;
     if(!this.comboMatches(frame)){
         this.m_context.fail();
         return ComboResult();
@@ -407,13 +405,7 @@ ComboResult Builder::declareCombo(
         this.m_context.fail();
         return ComboResult();
     }
-    const auto textBounds = this.m_text.measure(item.text, this.m_paint.displayMetrics());
-    if(!textBounds.has_value()){
-        this.m_context.fail();
-        return ComboResult();
-    }
-    item.textBounds = textBounds.value();
-    const Point measured = Point(textBounds.value().width, textBounds.value().height);
+    const Point measured = Point(item.textBounds.width, item.textBounds.height);
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
@@ -668,7 +660,7 @@ b8 Builder::paintCombo(in BuilderItem item, in LayoutBox box){
     if(item.combo >= this.m_scope.value().m_combos.size())
         return false;
     mut BuilderComboFrame frame = this.m_scope.value().m_combos[item.combo];
-    if(!this.comboMatches(frame))
+    if(!this.comboMatches(frame) || !item.text.valid())
         return false;
     in InputRouter input = this.m_context.input();
     const b8 focused = input.focus() == item.state.id;
@@ -680,7 +672,7 @@ b8 Builder::paintCombo(in BuilderItem item, in LayoutBox box){
         this.m_skin.value(),
         frame.style,
         item.style,
-        item.text,
+        item.text.deref(),
         item.textBounds,
         item.padding,
         frame.arrowExtent,

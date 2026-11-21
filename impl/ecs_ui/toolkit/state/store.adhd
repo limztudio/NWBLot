@@ -12,6 +12,7 @@ class WidgetStateStore : NoCopy{
     private Vector<WidgetState> m_entries;
     private HashMap<u64, usize> m_index;
     private b8 m_indexDirty = false;
+    private b8 m_lastTouchKindChanged = false;
     private u64 m_nextDeclarationGeneration = 1u;
 
     [cpp_unwind]
@@ -22,8 +23,9 @@ class WidgetStateStore : NoCopy{
     [cpp_unwind]
     public Expected<mut WidgetState> touch(in WidgetId id, in WidgetRoot root, in WidgetKind kind, in u64 frameGeneration){
         b8 invariantFailed = false;
+        this.m_lastTouchKindChanged = false;
         const Expected<usize> index = WidgetStateIndexPolicy().touch(
-            id, root, kind, frameGeneration, this.m_entries, this.m_index, this.m_nextDeclarationGeneration, this.m_indexDirty, invariantFailed
+            id, root, kind, frameGeneration, this.m_entries, this.m_index, this.m_nextDeclarationGeneration, this.m_indexDirty, invariantFailed, this.m_lastTouchKindChanged
         );
         if(invariantFailed)
             TerminateInvariant();
@@ -31,6 +33,7 @@ class WidgetStateStore : NoCopy{
             return MakeUnexpected(Failure());
         return Expected<mut WidgetState>(this.m_entries[index.value()]);
     }
+    public b8 lastTouchKindChanged()const{ return this.m_lastTouchKindChanged; }
     public Optional<mut WidgetState> find(in WidgetId id){
         this.finishRetirement();
         const Expected<usize> index = WidgetStateIndexPolicy().lookup(this.m_entries, id, this.m_index);
@@ -57,6 +60,14 @@ class WidgetStateStore : NoCopy{
             TerminateInvariant();
     }
     public void erase(in usize index){ WidgetStateIndexPolicy().eraseAt(index, this.m_entries, this.m_indexDirty); }
+    [cpp_unwind]
+    public void retireUnseen(in u64 frameGeneration, mut Vector<WidgetId> outRetiredIds){
+        WidgetStateIndexPolicy().compactRetireUnseen(frameGeneration, this.m_entries, this.m_indexDirty, outRetiredIds);
+    }
+    [cpp_unwind]
+    public void retainRoots(in HashSet<WidgetRoot> retainedRoots, mut Vector<WidgetId> outRetiredIds){
+        WidgetStateIndexPolicy().compactRetainRoots(retainedRoots, this.m_entries, this.m_indexDirty, outRetiredIds);
+    }
 }
 
 

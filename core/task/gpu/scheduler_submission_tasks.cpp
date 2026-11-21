@@ -18,8 +18,11 @@ NWB_CORE_BEGIN
 
 
 b8 GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
+    const GpuTaskGraph::DeclarationReadView& declarationAccess,
     const GpuCompiledGraph& compiledGraph,
+    const GpuCompiledGraph::ReadView& planAccess,
     const GpuRecordedGraph& recordedGraph,
+    const GpuRecordedGraph::ArtifactOperation& artifactOperation,
     const GpuSubmissionPacketRange& range,
     const Span<const GpuTaskGraphTaskTimingTicket> taskTimingTickets,
     const Span<const GpuTaskGraphTaskAcceptedCallback> taskAcceptedCallbacks,
@@ -32,17 +35,12 @@ b8 GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
     if(outFailedPacket)
         *outFailedPacket = {};
     SubmissionAttemptExceptionFinalizer exceptionFinalizer(graph, transaction, compiledGraph, recordedGraph);
-    GpuRecordedGraph::ArtifactOperation artifactOperation(recordedGraph, GpuRecordedGraph::ArtifactOperationMode::Read);
-    if(!artifactOperation.valid()){
-        return false;
-    }
-    if(!GpuGraphSubmissionTransaction::SubmissionOperation::ActiveExclusiveFor(transaction))
-        return false;
-    GpuCompiledGraph::ReadView planAccess(compiledGraph);
-    if(!planAccess.valid())
-        return false;
-    GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
-    if(!declarationAccess.valid())
+    if(
+        !artifactOperation.validFor(recordedGraph)
+        || !GpuGraphSubmissionTransaction::SubmissionOperation::ActiveExclusiveFor(transaction)
+        || !planAccess.validFor(compiledGraph)
+        || !declarationAccess.validFor(graph)
+    )
         return false;
 
     SubmissionAttemptExceptionScope preflightExceptionScope(compiledGraph, recordedGraph, graph, transaction, outFailedPacket);

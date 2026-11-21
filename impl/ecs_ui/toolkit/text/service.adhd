@@ -10,6 +10,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const usize s_TextSdfSupportCacheMaxEntries = 4096u;
+const usize s_TextLayoutCacheMaxEntries = 1024u;
+const usize s_TextLayoutCacheMaxTextBytes = 512u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Rect MakeCachedCoverageGlyphBounds(in i32 bearingX, in i32 bearingY, in Rect pixels){
     return Rect(cast<f32>(bearingX), -cast<f32>(bearingY), pixels.width, pixels.height);
 }
@@ -24,6 +32,14 @@ Point MakeDisplayPixelScalePoint(in DisplayMetrics metrics){
 
 b8 HasPositivePreparedGlyphExtent(in Rect rectangle){
     return rectangle.width > 0.0f && rectangle.height > 0.0f;
+}
+
+usize ComputeTextLayoutCacheHash(in ShapeRequest request){
+    usize seed = HashValue(request.text);
+    seed = HashCombineValue(seed, request.language);
+    seed = HashCombineValue(seed, bit_cast<u32>(request.fontSize));
+    seed = HashCombineValue(seed, request.scriptTag);
+    return HashCombineValue(seed, cast<u8>(request.direction));
 }
 
 
@@ -56,9 +72,69 @@ u32 InternPreparedPage<TPage>(mut Vector<Shared<TPage>> pages, in Shared<TPage> 
 class PreparedGlyph{
     public Rect rectangle = Rect();
     public Rect uv = Rect();
-    public SharedSdfAtlasPage sdfPage = SharedSdfAtlasPage();
     public u32 pageIndex = 0u;
     public u32 channel = 0u;
+    public b8 isSdf = false;
+}
+
+class SdfSupportCacheKey{
+    public u64 atlasIdentity;
+    public u32 glyphId;
+    public u32 fontSizeBits;
+    public u32 pixelScaleXBits;
+    public u32 pixelScaleYBits;
+
+    public SdfSupportCacheKey(in u64 atlasIdentity, in u32 glyphId, in u32 fontSizeBits, in u32 pixelScaleXBits, in u32 pixelScaleYBits){
+        this.atlasIdentity = atlasIdentity;
+        this.glyphId = glyphId;
+        this.fontSizeBits = fontSizeBits;
+        this.pixelScaleXBits = pixelScaleXBits;
+        this.pixelScaleYBits = pixelScaleYBits;
+    }
+
+    public b8 operator==(in SdfSupportCacheKey other)const{
+        return this.atlasIdentity == other.atlasIdentity
+            && this.glyphId == other.glyphId
+            && this.fontSizeBits == other.fontSizeBits
+            && this.pixelScaleXBits == other.pixelScaleXBits
+            && this.pixelScaleYBits == other.pixelScaleYBits;
+    }
+
+    public usize hash()const{
+        usize seed = HashValue(this.atlasIdentity);
+        seed = HashCombineValue(seed, this.glyphId);
+        seed = HashCombineValue(seed, this.fontSizeBits);
+        seed = HashCombineValue(seed, this.pixelScaleXBits);
+        return HashCombineValue(seed, this.pixelScaleYBits);
+    }
+}
+
+class CachedMeasuredText{
+    public SharedTextLayout layout;
+    public Rect bounds = Rect();
+}
+
+class CachedTextLayout{
+    public String text;
+    public String language;
+    public SharedTextLayout layout;
+    public Rect measuredBounds = Rect();
+    public usize measuredAtlasGlyphCount = 0u;
+    public u32 fontSizeBits = 0u;
+    public u32 scriptTag = 0u;
+    public u32 measuredPixelScaleXBits = 0u;
+    public u32 measuredPixelScaleYBits = 0u;
+    public u32 next = u32.max;
+    public TextDirection direction = TextDirection::LeftToRight;
+    public b8 hasMeasured = false;
+
+    public b8 matches(in ShapeRequest request)const{
+        return this.fontSizeBits == bit_cast<u32>(request.fontSize)
+            && this.scriptTag == request.scriptTag
+            && this.direction == request.direction
+            && StringView(this.language) == request.language
+            && StringView(this.text) == request.text;
+    }
 }
 
 
@@ -66,10 +142,18 @@ class PreparedGlyph{
 
 
 class TextService : NoCopy{
+    private SharedPool m_layoutPool = SharedPool();
     private TextShaper m_shaper = TextShaper();
     private GlyphAtlas m_atlas = GlyphAtlas();
     private Vector<SharedGlyphPage> m_pages;
     private Vector<SharedSdfAtlasPage> m_sdfPages;
+    private HashMap<SdfSupportCacheKey, SdfGlyphSupportOffset> m_sdfSupportCache;
+    private HashMap<usize, u32> m_layoutCacheHead;
+    private Vector<CachedTextLayout> m_layoutCacheEntries;
+    private Vector<PreparedGlyph> m_preparedGlyphs;
+    private Vector<u32> m_coverageCandidateSlots;
+    private Vector<u32> m_resolvedGlyphPageIndices;
+    private Vector<u32> m_resolvedSdfPageIndices;
     private u64 m_identity = AllocateServiceIdentity();
     private u64 m_generation = 0u;
 
@@ -87,6 +171,9 @@ class TextService : NoCopy{
             return false;
         this.m_pages.clear();
         this.m_sdfPages.clear();
+        this.m_sdfSupportCache.clear();
+        this.m_layoutCacheHead.clear();
+        this.m_layoutCacheEntries.clear();
         this.m_atlas.reset();
         ++this.m_generation;
         return true;
@@ -99,6 +186,129 @@ class TextService : NoCopy{
     }
 
     [cpp_unwind]
+    private Expected<SharedTextLayout, TextLayoutStatus> layoutSharedUncached(in ShapeRequest request){
+        Expected<SharedTextLayout> created = this.m_layoutPool.make<TextLayout>();
+        if(!created.has_value())
+            return MakeUnexpected(TextLayoutStatus::FontFailure);
+        const TextLayoutStatus status = created.value().deref().shapeInto(request, this.m_shaper);
+        if(status != TextLayoutStatus::Success)
+            return MakeUnexpected(status);
+        return created.value();
+    }
+
+    [cpp_unwind]
+    private Expected<usize, TextLayoutStatus> resolveCachedLayoutEntry(in ShapeRequest request){
+        const usize hash = ComputeTextLayoutCacheHash(request);
+        const auto headIt = this.m_layoutCacheHead.find(hash);
+        if(headIt != this.m_layoutCacheHead.end()){
+            u32 entryIndex = headIt.value();
+            while(entryIndex != u32.max){
+                in CachedTextLayout entry = this.m_layoutCacheEntries[entryIndex];
+                if(entry.matches(request))
+                    return cast<usize>(entryIndex);
+                entryIndex = entry.next;
+            }
+        }
+        Expected<SharedTextLayout, TextLayoutStatus> shaped = this.layoutSharedUncached(request);
+        if(!shaped.has_value())
+            return MakeUnexpected(shaped.error());
+        if(this.m_layoutCacheEntries.size() >= s_TextLayoutCacheMaxEntries){
+            this.m_layoutCacheHead.clear();
+            this.m_layoutCacheEntries.clear();
+        }
+        const u32 newIndex = cast<u32>(this.m_layoutCacheEntries.size());
+        this.m_layoutCacheEntries.emplace_back();
+        mut CachedTextLayout entry = this.m_layoutCacheEntries[newIndex];
+        entry.text.assign(request.text);
+        entry.language.assign(request.language);
+        entry.layout = shaped.value();
+        entry.fontSizeBits = bit_cast<u32>(request.fontSize);
+        entry.scriptTag = request.scriptTag;
+        entry.direction = request.direction;
+        const auto insertIt = this.m_layoutCacheHead.find(hash);
+        if(insertIt != this.m_layoutCacheHead.end()){
+            entry.next = insertIt.value();
+            insertIt.value() = newIndex;
+        }
+        else{
+            entry.next = u32.max;
+            this.m_layoutCacheHead.try_emplace(hash, newIndex);
+        }
+        return cast<usize>(newIndex);
+    }
+
+    [cpp_unwind]
+    public Expected<SharedTextLayout, TextLayoutStatus> layoutShared(in ShapeRequest request){
+        if(request.text.size() > s_TextLayoutCacheMaxTextBytes)
+            return this.layoutSharedUncached(request);
+        const Expected<usize, TextLayoutStatus> entryIndex = this.resolveCachedLayoutEntry(request);
+        if(!entryIndex.has_value())
+            return MakeUnexpected(entryIndex.error());
+        return this.m_layoutCacheEntries[entryIndex.value()].layout;
+    }
+
+    [cpp_unwind]
+    public Expected<CachedMeasuredText> layoutAndMeasureShared(in ShapeRequest request, in DisplayMetrics display){
+        if(request.text.size() > s_TextLayoutCacheMaxTextBytes){
+            Expected<SharedTextLayout, TextLayoutStatus> shaped = this.layoutSharedUncached(request);
+            if(!shaped.has_value())
+                return MakeUnexpected(Failure());
+            const Expected<Rect> bounds = this.measure(shaped.value().deref(), display);
+            if(!bounds.has_value())
+                return MakeUnexpected(Failure());
+            CachedMeasuredText result;
+            result.layout = shaped.value();
+            result.bounds = bounds.value();
+            return result;
+        }
+        const Expected<usize, TextLayoutStatus> entryIndex = this.resolveCachedLayoutEntry(request);
+        if(!entryIndex.has_value())
+            return MakeUnexpected(Failure());
+        mut CachedTextLayout entry = this.m_layoutCacheEntries[entryIndex.value()];
+        const u32 scaleXBits = bit_cast<u32>(display.pixelScaleX);
+        const u32 scaleYBits = bit_cast<u32>(display.pixelScaleY);
+        const usize atlasGlyphCount = this.m_atlas.glyphCount();
+        if(!entry.hasMeasured || entry.measuredPixelScaleXBits != scaleXBits || entry.measuredPixelScaleYBits != scaleYBits || entry.measuredAtlasGlyphCount != atlasGlyphCount){
+            const Expected<Rect> bounds = this.measure(entry.layout.deref(), display);
+            if(!bounds.has_value())
+                return MakeUnexpected(Failure());
+            entry.measuredBounds = bounds.value();
+            entry.measuredPixelScaleXBits = scaleXBits;
+            entry.measuredPixelScaleYBits = scaleYBits;
+            entry.measuredAtlasGlyphCount = atlasGlyphCount;
+            entry.hasMeasured = true;
+        }
+        CachedMeasuredText result;
+        result.layout = entry.layout;
+        result.bounds = entry.measuredBounds;
+        return result;
+    }
+
+    [cpp_unwind]
+    private Expected<VectorDouble> loadSdfSupportCached(in PlacedGlyph placed, in BakedFontAtlas atlas, in f32 fontSize, in DisplayMetrics display){
+        const Expected<VectorDouble> plane = LoadAtlasRectangle(placed, atlas, fontSize, Point());
+        if(!plane.has_value())
+            return MakeUnexpected(Failure());
+        const VectorDouble rectangle = plane.value();
+        if(rectangle.z <= 0.0 || rectangle.w <= 0.0)
+            return plane;
+        const SdfSupportCacheKey key(atlas.identity(), placed.glyphId, bit_cast<u32>(fontSize), bit_cast<u32>(display.pixelScaleX), bit_cast<u32>(display.pixelScaleY));
+        const auto found = this.m_sdfSupportCache.find(key);
+        if(found != this.m_sdfSupportCache.end())
+            return ResolveSdfGlyphSupportBounds(rectangle, found.value());
+        in FontAtlasGlyph glyph = atlas.glyph(placed.glyphId);
+        in SdfAtlasPage page = atlas.page(glyph.group).deref();
+        in SdfAtlasPageBindingRecord<Font> binding = page.binding();
+        const Expected<SdfGlyphSupportOffset> offset = TryComputeSdfGlyphSupportOffset(rectangle.z, rectangle.w, glyph, binding.width, binding.height, binding.channelCount, binding.spreadPixels, Span<u8>(page.pixels()), display);
+        if(!offset.has_value())
+            return MakeUnexpected(Failure());
+        if(this.m_sdfSupportCache.size() >= s_TextSdfSupportCacheMaxEntries)
+            this.m_sdfSupportCache.clear();
+        this.m_sdfSupportCache.try_emplace(key, offset.value());
+        return ResolveSdfGlyphSupportBounds(rectangle, offset.value());
+    }
+
+    [cpp_unwind]
     public Expected<Rect> measure(in TextLayout layout, in DisplayMetrics display){
         if(layout.lines().empty())
             return MakeUnexpected(Failure());
@@ -108,9 +318,9 @@ class TextService : NoCopy{
         const TextRasterMetrics raster = rasterMetrics.value();
         VectorDouble bounds = ComputeInitialMeasuredTextBounds(layout.measure(), layout.inkBounds());
         for(in PlacedGlyph glyph : layout.glyphs()){
-            const SharedBakedFontAtlas atlas = SelectAtlas(glyph, raster.physicalSize);
-            if(atlas.valid()){
-                const Expected<VectorDouble> support = LoadSdfSupport(glyph, atlas.deref(), layout.fontSize(), display);
+            const Optional<in BakedFontAtlas> atlas = BorrowSelectedAtlas(glyph, raster.physicalSize);
+            if(atlas.has_value()){
+                const Expected<VectorDouble> support = this.loadSdfSupportCached(glyph, atlas.value(), layout.fontSize(), display);
                 if(!support.has_value())
                     return MakeUnexpected(Failure());
                 ExpandMeasuredTextBoundsWithSdfSupport(support.value(), bounds);
@@ -152,85 +362,106 @@ class TextService : NoCopy{
             return true;
         const TextRasterMetrics raster = rasterMetrics.value();
         const Point deviceScale = MakeDisplayPixelScalePoint(display);
-        Vector<usize> candidates;
-        candidates.reserve(layout.glyphs().size());
-        for(usize index = 0u; index < layout.glyphs().size(); ++index){
-            in PlacedGlyph glyph = layout.glyphs()[index];
-            const SharedBakedFontAtlas atlas = SelectAtlas(glyph, raster.physicalSize);
-            const TextGlyphIntersection status = Candidate(glyph, atlas, layout.fontSize(), raster.rasterPpem, topLeft, clip, deviceScale);
-            if(status == TextGlyphIntersection::Invalid)
-                return false;
-            if(status == TextGlyphIntersection::Visible)
-                candidates.push_back(index);
-        }
-        if(candidates.empty())
-            return true;
-        for(in usize index : candidates){
-            in PlacedGlyph glyph = layout.glyphs()[index];
-            if(!SelectAtlas(glyph, raster.physicalSize).valid() && !this.m_atlas.prepare(glyph.face, glyph.glyphId, raster.pixelSize))
-                return false;
-        }
-        Vector<PreparedGlyph> prepared;
-        prepared.reserve(candidates.size());
-        for(in usize index : candidates){
-            in PlacedGlyph glyph = layout.glyphs()[index];
-            PreparedGlyph item;
-            const SharedBakedFontAtlas atlas = SelectAtlas(glyph, raster.physicalSize);
-            if(atlas.valid()){
-                const Expected<Rect> rectangle = AtlasRectangle(glyph, atlas.deref(), layout.fontSize(), topLeft);
-                if(!rectangle.has_value())
-                    return false;
-                item.rectangle = rectangle.value();
-                if(HasPositivePreparedGlyphExtent(item.rectangle)){
-                    in FontAtlasGlyph record = atlas.deref().glyph(glyph.glyphId);
-                    item.sdfPage = atlas.deref().page(record.group);
-                    item.channel = record.channel;
-                    in SdfAtlasPageBindingRecord<Font> binding = item.sdfPage.deref().binding();
-                    item.uv = ResolveSdfGlyphUv(record, binding.width, binding.height);
-                }
-            }
-            else{
-                const Optional<in AtlasGlyph> slot = this.m_atlas.find(glyph.face, glyph.glyphId, raster.pixelSize);
-                if(!slot.has_value()){
-                    [essential] assert(false, "Prepared UI glyph must be present");
-                    return false;
-                }
-                in AtlasGlyph record = slot.value();
-                const Expected<Rect> rectangle = CoverageRectangle(glyph, record, raster.rasterScale, topLeft, deviceScale);
-                if(!rectangle.has_value())
-                    return false;
-                item.rectangle = rectangle.value();
-                item.pageIndex = record.pageIndex;
-                item.uv = ResolveCoverageGlyphUv(record.pixels);
-            }
-            const TextGlyphIntersection status = TryIntersectTextRects(item.rectangle, clip);
-            if(status == TextGlyphIntersection::Invalid)
-                return false;
-            if(status == TextGlyphIntersection::Visible)
-                prepared.push_back(item);
-        }
-        if(prepared.empty())
-            return true;
+        this.m_preparedGlyphs.clear();
+        this.m_coverageCandidateSlots.clear();
         this.m_pages.clear();
         this.m_sdfPages.clear();
-        for(mut PreparedGlyph glyph : prepared){
-            if(glyph.sdfPage.valid())
-                glyph.pageIndex = InternPreparedPage<SdfAtlasPage>(this.m_sdfPages, glyph.sdfPage);
-            else{
-                const Expected<SharedGlyphPage> page = this.m_atlas.page(glyph.pageIndex);
-                if(!page.has_value())
+        in Vector<PlacedGlyph> glyphs = layout.glyphs();
+        for(usize index = 0u; index < glyphs.size(); ++index){
+            in PlacedGlyph glyph = glyphs[index];
+            const Optional<in BakedFontAtlas> atlas = BorrowSelectedAtlas(glyph, raster.physicalSize);
+            if(atlas.has_value()){
+                const TextGlyphIntersection inputStatus = ValidateTextGlyphCandidateInputs(glyph.position, topLeft, layout.fontSize(), raster.rasterPpem, clip, deviceScale);
+                if(inputStatus == TextGlyphIntersection::Invalid)
                     return false;
-                glyph.pageIndex = InternPreparedPage<GlyphPage>(this.m_pages, page.value());
+                if(inputStatus == TextGlyphIntersection::Invisible)
+                    continue;
+                in BakedFontAtlas baked = atlas.value();
+                const Expected<VectorDouble> rawRectangle = LoadAtlasRectangle(glyph, baked, layout.fontSize(), topLeft);
+                if(!rawRectangle.has_value())
+                    return false;
+                const TextGlyphIntersection candidateStatus = IntersectGlyphAtlasRectangle(rawRectangle.value(), clip);
+                if(candidateStatus == TextGlyphIntersection::Invalid)
+                    return false;
+                if(candidateStatus == TextGlyphIntersection::Invisible)
+                    continue;
+                const Expected<Rect> rectangle = ToTextGlyphAtlasRect(rawRectangle.value());
+                if(!rectangle.has_value())
+                    return false;
+                const TextGlyphIntersection rectStatus = TryIntersectTextRects(rectangle.value(), clip);
+                if(rectStatus == TextGlyphIntersection::Invalid)
+                    return false;
+                if(rectStatus == TextGlyphIntersection::Invisible)
+                    continue;
+                PreparedGlyph item;
+                item.rectangle = rectangle.value();
+                if(HasPositivePreparedGlyphExtent(item.rectangle)){
+                    in FontAtlasGlyph record = baked.glyph(glyph.glyphId);
+                    in SharedSdfAtlasPage sdfPage = baked.page(record.group);
+                    in SdfAtlasPageBindingRecord<Font> binding = sdfPage.deref().binding();
+                    item.channel = record.channel;
+                    item.uv = ResolveSdfGlyphUv(record, binding.width, binding.height);
+                    item.pageIndex = InternPreparedPage<SdfAtlasPage>(this.m_sdfPages, sdfPage);
+                    item.isSdf = true;
+                }
+                this.m_preparedGlyphs.push_back(item);
+            }
+            else{
+                const TextGlyphIntersection status = CandidateBorrowed(glyph, atlas, layout.fontSize(), raster.rasterPpem, topLeft, clip, deviceScale);
+                if(status == TextGlyphIntersection::Invalid)
+                    return false;
+                if(status == TextGlyphIntersection::Visible){
+                    this.m_coverageCandidateSlots.push_back(cast<u32>(this.m_preparedGlyphs.size()));
+                    PreparedGlyph placeholder;
+                    placeholder.pageIndex = cast<u32>(index);
+                    this.m_preparedGlyphs.push_back(placeholder);
+                }
             }
         }
-        if(!paint.prepareImages(Span<SharedGlyphPage>(this.m_pages), Span<SharedSdfAtlasPage>(this.m_sdfPages)))
+        if(this.m_preparedGlyphs.empty())
+            return true;
+        for(in u32 slotIndex : this.m_coverageCandidateSlots){
+            mut PreparedGlyph item = this.m_preparedGlyphs[slotIndex];
+            in PlacedGlyph glyph = glyphs[item.pageIndex];
+            const Optional<in AtlasGlyph> preparedSlot = this.m_atlas.prepareAndFind(glyph.face, glyph.glyphId, raster.pixelSize);
+            if(!preparedSlot.has_value())
+                return false;
+            in AtlasGlyph record = preparedSlot.value();
+            const Expected<Rect> rectangle = CoverageRectangle(glyph, record, raster.rasterScale, topLeft, deviceScale);
+            if(!rectangle.has_value())
+                return false;
+            const TextGlyphIntersection status = TryIntersectTextRects(rectangle.value(), clip);
+            if(status == TextGlyphIntersection::Invalid)
+                return false;
+            if(status == TextGlyphIntersection::Invisible){
+                item.pageIndex = u32.max;
+                continue;
+            }
+            item.rectangle = rectangle.value();
+            item.uv = ResolveCoverageGlyphUv(record.pixels);
+            item.pageIndex = record.pageIndex;
+        }
+        for(in u32 slotIndex : this.m_coverageCandidateSlots){
+            mut PreparedGlyph item = this.m_preparedGlyphs[slotIndex];
+            if(item.pageIndex == u32.max)
+                continue;
+            const Expected<SharedGlyphPage> page = this.m_atlas.page(item.pageIndex);
+            if(!page.has_value())
+                return false;
+            item.pageIndex = InternPreparedPage<GlyphPage>(this.m_pages, page.value());
+        }
+        if(this.m_pages.empty() && this.m_sdfPages.empty())
+            return true;
+        if(!paint.prepareAndResolveTextImages(Span<SharedGlyphPage>(this.m_pages), Span<SharedSdfAtlasPage>(this.m_sdfPages), this.m_resolvedGlyphPageIndices, this.m_resolvedSdfPageIndices))
             return false;
-        for(in PreparedGlyph glyph : prepared){
+        for(in PreparedGlyph glyph : this.m_preparedGlyphs){
+            if(glyph.pageIndex == u32.max)
+                continue;
             b8 drawn = false;
-            if(glyph.sdfPage.valid())
-                drawn = paint.drawSdfGlyph(this.m_sdfPages[glyph.pageIndex], glyph.channel, glyph.rectangle, glyph.uv, color);
+            if(glyph.isSdf)
+                drawn = paint.drawResolvedSdfGlyph(this.m_resolvedSdfPageIndices[glyph.pageIndex], glyph.channel, glyph.rectangle, glyph.uv, color);
             else
-                drawn = paint.drawGlyph(this.m_pages[glyph.pageIndex], glyph.rectangle, glyph.uv, color);
+                drawn = paint.drawResolvedGlyph(this.m_resolvedGlyphPageIndices[glyph.pageIndex], glyph.rectangle, glyph.uv, color);
             if(!drawn){
                 [essential] assert(false, "Admitted UI glyph draw must succeed");
                 return false;

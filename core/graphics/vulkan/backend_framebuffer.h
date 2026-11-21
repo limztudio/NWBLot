@@ -22,6 +22,7 @@ NWB_VULKAN_BEGIN
 class Framebuffer final : public RefCounter<GraphicsResource>{
     friend class Device;
     friend class CommandList;
+    friend class CommandBufferResourceReferences;
     friend class FramebufferRenderingPreparation;
 
 
@@ -46,6 +47,7 @@ private:
     [[nodiscard]] Expected<VkImageView> resolveAttachmentView(const FramebufferAttachment& attachment, CachedAttachmentView& cached);
     [[nodiscard]] Expected<VkImageView> resolveColorAttachmentView(u32 index);
     [[nodiscard]] Expected<VkImageView> resolveDepthAttachmentView();
+    void cacheStaticValidationState(const VulkanAllocator& allocator)noexcept;
 
 
 private:
@@ -56,6 +58,10 @@ private:
     VkRenderPass m_renderPass = VK_NULL_HANDLE;
     Array<CachedAttachmentView, s_MaxRenderTargets> m_cachedColorViews{};
     CachedAttachmentView m_cachedDepthView{};
+    Atomic<b8> m_allViewsCached{ false };
+    b8 m_staticStructureValid = false;
+    b8 m_allAttachmentsManagedNonVirtual = false;
+    b8 m_allAttachmentsExclusiveSharing = false;
 
     Vector<TextureHandle, Alloc::GlobalArena> m_resources;
 

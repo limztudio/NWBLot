@@ -676,17 +676,15 @@ Expected<void, CpuTaskAdmissionError> UiLayerSystem::update(mut World world, in 
     context.deltaSeconds = frameDelta;
     SortSequence<UiLiveRoot>(this.m_liveRoots, IsUiLiveRootOrderedBefore);
     for(in UiLiveRoot root : this.m_liveRoots){
-        if(!this.m_world.hasComponent<UiPaintComponent>(root.entity))
-            continue;
-        mut UiPaintComponent component = this.m_world.getComponent<UiPaintComponent>(root.entity);
-        if(!component.visible || !component.paint.present())
+        const Optional<mut UiPaintComponent> component = this.m_world.borrowComponent<UiPaintComponent>(root.entity);
+        if(!component.has_value() || !component.value().visible || !component.value().paint.present())
             continue;
         WidgetRoot id;
         id.value = root.entity.id;
         if(!this.m_context.beginRoot(id))
             break;
         context.entity = root.entity;
-        component.paint.invoke(context);
+        component.value().paint.invoke(context);
         if(!this.m_ui.balanced())
             this.m_context.fail();
         if(!this.m_context.endRoot())
@@ -704,6 +702,7 @@ Expected<void, CpuTaskAdmissionError> UiLayerSystem::update(mut World world, in 
         abandon.release();
         return Expected<void, CpuTaskAdmissionError>();
     }
+    this.m_paint.recycle(snapshot);
     abandon.release();
     return Expected<void, CpuTaskAdmissionError>();
 }
@@ -713,12 +712,11 @@ void UiLayerSystem::collectRoots(){
     this.m_rootIdentities.clear();
     for(in auto row : this.m_world.view<UiPaintComponent>()){
         const EntityID entity = Get<0>(row);
-        in UiPaintComponent component = this.m_world.getComponent<UiPaintComponent>(entity);
-        if(!component.visible || !component.paint.present())
+        if(!Get<1>(row).visible || !Get<1>(row).paint.present())
             continue;
         UiLiveRoot live;
         live.entity = entity;
-        live.order = component.order;
+        live.order = Get<1>(row).order;
         this.m_liveRoots.push_back(live);
         WidgetRoot identity;
         identity.value = entity.id;

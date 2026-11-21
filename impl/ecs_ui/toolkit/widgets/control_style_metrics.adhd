@@ -104,6 +104,7 @@ class ControlStyleMetrics{
         mut f32 outArrowExtent
     )const{
         Point minimumSize;
+        Insets padding = style.padding;
         Array<Name, 5> names;
         names[0u] = style.normal;
         names[1u] = style.hover;
@@ -116,12 +117,13 @@ class ControlStyleMetrics{
                 return false;
             const VectorSingle minimum = Max(VectorSingle(minimumSize.x, minimumSize.y, minimumSize.x, minimumSize.y), VectorSingle(skinRegion.value().minimumWidth, skinRegion.value().minimumHeight, skinRegion.value().minimumWidth, skinRegion.value().minimumHeight));
             minimumSize = Point(minimum.x, minimum.y);
+            padding = MaxUiPadding(padding, skinRegion.value().padding);
         }
         const Expected<UiSkinRegion> arrow = TryResolveSelectableStateRegion(skin, style.arrow, style.arrowFallback);
         if(!arrow.has_value())
             return false;
         outMinimumSize = minimumSize;
-        outPadding = this.skinRegionsMaxPadding(skin, style.padding, names, style.fallback);
+        outPadding = padding;
         outArrowExtent = ResolveUiSkinSquareExtent(style.arrowExtent, arrow.value());
         return true;
     }

@@ -91,9 +91,17 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: local wait array is null"));
             return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
         }
-        if(entry.localSignalCount > 0u && !entry.localSignals){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: local signal array is null"));
-            return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
+        if(entry.localSignalCount > 0u){
+            if(!entry.localSignals){
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: local signal array is null"));
+                return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
+            }
+            for(usize i = 0u; i < entry.localSignalCount; ++i){
+                if(entry.localSignals[i].semaphore == VK_NULL_HANDLE){
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: local signal semaphore is null"));
+                    return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
+                }
+            }
         }
         if(hasCommands && entry.numCmd > UINT32_MAX){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: command list count exceeds Vulkan limit"));
@@ -126,62 +134,36 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
     if(entries.size() > static_cast<usize>(Limit<u32>::s_Max))
         return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
 
-    static Atomic<u64> s_NextSubmitBatchStamp{ 1u };
-    const u64 batchStamp = s_NextSubmitBatchStamp.fetch_add(1u, MemoryOrder::relaxed);
-    validatedTimerQueryCommandBuffers.reserve(totalCmdCount);
-    const SubmissionValidator validator(*this);
-    for(const BatchSubmitEntry& entry : entries){
-        if(entry.numCmd == 0u)
-            continue;
-        if(!validator.validate(entry.ppCmd, entry.numCmd, entry.expectedCommandLists, batchStamp))
-            return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
-
-        const Span<const SubmissionWait> entryWaits = entry.localWaits ? Span<const SubmissionWait>(entry.localWaits, entry.localWaitCount) : Span<const SubmissionWait>{};
-        for(usize i = 0u; i < entry.numCmd; ++i){
-            auto& tracked = *MakeNotNull(entry.ppCmd[i]->m_currentCmdBuf.get());
-            if((tracked.m_pendingCommitFlags & TrackedCommandBuffer::s_CommitTimerQueries) != 0u){
-                if(!tracked.validateTimerQueryRecordingClaims(*this, entryWaits, validatedTimerQueryCommandBuffers)){
-                    NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: timer-query recording order is stale or unresolved"));
-                    return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
-                }
-                validatedTimerQueryCommandBuffers.push_back(MakeNotNull(&tracked));
-            }
-        }
-    }
-
-    if(!descriptorSubmission.prepareBatch(entries))
-        return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
-
-    for(const BatchSubmitEntry& entry : entries){
-        for(usize i = 0u; i < entry.localSignalCount; ++i){
-            if(entry.localSignals[i].semaphore == VK_NULL_HANDLE){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: local signal semaphore is null"));
-                return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
-            }
-        }
-    }
-
     if(nativeEntryCount == 0u){
         for(SubmissionReceipt& receipt : outReceipts)
             receipt = SubmissionReceipt{ m_lastSubmittedID, 0u, false };
         return BatchSubmissionResult{ BatchSubmissionResult::Status::Accepted, m_lastSubmittedID, VK_SUCCESS };
     }
-
     if(m_trackingSemaphore == VK_NULL_HANDLE){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Queue submission skipped because timeline semaphore is unavailable."));
         return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
     }
 
+    u64 batchStamp = m_nextSubmitBatchStamp++;
+    if(batchStamp == 0u)
+        batchStamp = m_nextSubmitBatchStamp++;
+    if(totalCmdCount > 0u)
+        validatedTimerQueryCommandBuffers.reserve(totalCmdCount);
     waitInfos.reserve(totalWaitCount);
     signalInfos.reserve(totalSignalCount);
     cmdBufInfos.reserve(totalCmdCount);
     batchEntries.reserve(entries.size());
     submitInfos.reserve(entries.size());
-    descriptorHeapUseCommitTickets.reserve(totalCmdCount);
 
     if(totalWaitCount > 0u)
         m_submitBatchAcceptedTimelineWaits.assign(m_acceptedTimelineWaits.begin(), m_acceptedTimelineWaits.end());
 
+    const SubmissionValidator validator(*this);
+    u64 batchDirectCmdCount = 0u;
+    GpuDescriptorHeap* submissionDescriptorHeap = nullptr;
+    b8 requiresDescriptorBufferLifecycle = false;
+    b8 requiresDescriptorBufferValidation = false;
+    b8 hasRetainedTlas = false;
     for(usize entryIndex = 0u; entryIndex < entries.size(); ++entryIndex){
         const BatchSubmitEntry& entry = entries[entryIndex];
 
@@ -230,24 +212,48 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
 
         const usize cmdOffset = cmdBufInfos.size();
         b8 hasTimerQueries = false;
+        const Span<const SubmissionWait> entryWaits = entry.localWaits ? Span<const SubmissionWait>(entry.localWaits, entry.localWaitCount) : Span<const SubmissionWait>{};
         for(usize i = 0u; i < entry.numCmd; ++i){
-            auto& commandList = *MakeNotNull(entry.ppCmd[i]);
-            auto& tracked = *MakeNotNull(commandList.m_currentCmdBuf.get());
-            if(!validateCommandBufferSubmissionState(tracked))
+            CommandList* const commandList = entry.ppCmd[i];
+            if(!validator.validateCommandList(commandList, entry.expectedCommandLists[i], i, batchStamp))
                 return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
-            if((tracked.m_pendingCommitFlags & TrackedCommandBuffer::s_CommitAccelStructBuilds) != 0u && !tracked.validatePendingAccelStructBuildCommits()){
+            TrackedCommandBuffer& tracked = *MakeNotNull(commandList->m_currentCmdBuf.get());
+            if(tracked.m_recordingWorkerIndex == 0u)
+                ++batchDirectCmdCount;
+            else{
+                const WorkerCommandArena* const workerArena = tracked.m_workerCommandArena
+                    ? static_cast<const WorkerCommandArena*>(tracked.m_workerCommandArena)
+                    : findWorkerCommandArena(tracked.m_recordingWorkerDomain, tracked.m_recordingWorkerIndex);
+                if(!workerArena || workerArena->leasedCommandBufferCount.load(MemoryOrder::relaxed) == 0u){
+                    NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Native submission could not validate its worker command-buffer arena"));
+                    return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
+                }
+            }
+            const u8 commitFlags = tracked.m_pendingCommitFlags;
+            if((commitFlags & TrackedCommandBuffer::s_CommitTimerQueries) != 0u){
+                if(!tracked.validateTimerQueryRecordingClaims(*this, entryWaits, validatedTimerQueryCommandBuffers)){
+                    NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: timer-query recording order is stale or unresolved"));
+                    return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
+                }
+                validatedTimerQueryCommandBuffers.push_back(MakeNotNull(&tracked));
+                hasTimerQueries = true;
+            }
+            if((commitFlags & TrackedCommandBuffer::s_CommitAccelStructBuilds) != 0u && !tracked.validatePendingAccelStructBuildCommits()){
                 NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Native submission cannot publish acceleration-structure signatures across allocator domains"));
                 return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
             }
-            if(tracked.hasRetainedTopLevelAccelStructs()){
-                tracked.retainAcceptedTopLevelAccelStructReferences();
-                for(usize buildEntry = 0u; buildEntry <= entryIndex; ++buildEntry){
-                    for(usize buildIndex = 0u; buildIndex < entries[buildEntry].numCmd; ++buildIndex)
-                        tracked.retainPendingTopLevelAccelStructReferences(*entries[buildEntry].ppCmd[buildIndex]->m_currentCmdBuf);
+            if(tracked.hasRetainedTopLevelAccelStructs())
+                hasRetainedTlas = true;
+
+            requiresDescriptorBufferLifecycle |= tracked.m_descriptorBufferManager != nullptr;
+            requiresDescriptorBufferValidation |= (tracked.m_descriptorBufferManager != nullptr || commandList->m_descriptorBuffersBound || tracked.m_descriptorBufferGeneration != 0u);
+            for(const auto heap : tracked.m_referencedDescriptorHeaps){
+                if(heap.get() != &m_device.m_gpuDescriptorHeap){
+                    NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Command buffer references a foreign descriptor heap."));
+                    return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
                 }
+                submissionDescriptorHeap = heap.get();
             }
-            if((tracked.m_pendingCommitFlags & TrackedCommandBuffer::s_CommitTimerQueries) != 0u)
-                hasTimerQueries = true;
 
             auto commandBufferInfo = VulkanDetail::MakeVkStruct<VkCommandBufferSubmitInfo>(VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO);
             commandBufferInfo.commandBuffer = tracked.m_cmdBuf;
@@ -268,6 +274,39 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
         });
     }
 
+    if(totalCmdCount > 0u){
+        if(m_leasedCommandBufferCount.load(MemoryOrder::relaxed) < totalCmdCount){
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Native submission observed an empty leased command-buffer count"));
+            return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
+        }
+        if(batchDirectCmdCount != 0u && m_directLeasedCommandBufferCount.load(MemoryOrder::relaxed) < batchDirectCmdCount){
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Native submission observed an empty direct leased command-buffer count"));
+            return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
+        }
+    }
+
+    if(!descriptorSubmission.lockAndValidate(entries, submissionDescriptorHeap, requiresDescriptorBufferLifecycle, requiresDescriptorBufferValidation))
+        return BatchSubmissionResult{ BatchSubmissionResult::Status::ValidationFailed, m_lastSubmittedID, VK_SUCCESS };
+
+    if(hasRetainedTlas){
+        for(usize entryIndex = 0u; entryIndex < entries.size(); ++entryIndex){
+            const BatchSubmitEntry& entry = entries[entryIndex];
+            for(usize i = 0u; i < entry.numCmd; ++i){
+                TrackedCommandBuffer& tracked = *MakeNotNull(entry.ppCmd[i]->m_currentCmdBuf.get());
+                if(!tracked.hasRetainedTopLevelAccelStructs())
+                    continue;
+                tracked.retainAcceptedTopLevelAccelStructReferences();
+                for(usize buildEntry = 0u; buildEntry <= entryIndex; ++buildEntry){
+                    for(usize buildIndex = 0u; buildIndex < entries[buildEntry].numCmd; ++buildIndex)
+                        tracked.retainPendingTopLevelAccelStructReferences(*entries[buildEntry].ppCmd[buildIndex]->m_currentCmdBuf);
+                }
+            }
+        }
+    }
+
+    if(descriptorSubmission.hasReferencedHeaps())
+        descriptorHeapUseCommitTickets.reserve(totalCmdCount);
+
     usize groupStart = 0u;
     u64 groupIndex = 0u;
     while(groupStart < entries.size()){
@@ -286,8 +325,11 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
         const u64 groupSubmissionID = m_lastSubmittedID + 1u + groupIndex;
         const QueueSubmissionToken groupToken{ .value = groupSubmissionID, .physicalQueueIndex = m_physicalQueue.index, .deviceGeneration = m_physicalQueue.deviceGeneration, .queue = m_queueID, };
 
+        const b8 validateDescriptorHeaps = descriptorSubmission.hasReferencedHeaps();
         for(usize k = groupStart; k <= groupEnd; ++k){
             batchEntries[k].submissionID = groupSubmissionID;
+            if(!validateDescriptorHeaps)
+                continue;
             const BatchSubmitEntry& groupEntry = entries[k];
             for(usize i = 0u; i < groupEntry.numCmd; ++i){
                 auto& tracked = *MakeNotNull(groupEntry.ppCmd[i]->m_currentCmdBuf.get());
@@ -330,51 +372,18 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
         ++groupIndex;
     }
 
-    const auto finalizeDetachedRecordingAttempts = [&](const b8 accepted)noexcept{
-        for(const BatchSubmitEntry& entry : entries){
-            for(usize i = 0u; i < entry.numCmd; ++i){
-                CommandList* const commandList = entry.ppCmd[i];
-                if(!commandList || commandList->m_recordingLeaseSerial != entry.expectedCommandLists[i].recordingLeaseSerial)
-                    TerminateInvariant();
-
-                if(accepted)
-                    commandList->m_stateTracker.commitRecordingAttempt();
-                else
-                    commandList->m_stateTracker.rollbackRecordingAttempt();
-            }
-        }
-    };
     const usize batchStartIndex = m_commandBuffersInFlight.size();
     if(totalCmdCount > 0u){
-        ScopeExit rollbackInFlightPush([&]()noexcept{
-            while(m_commandBuffersInFlight.size() > batchStartIndex){
-                TrackedCommandBufferPtr movedBack = Move(m_commandBuffersInFlight.back());
-                m_commandBuffersInFlight.pop_back();
-                const usize revertedOffset = m_commandBuffersInFlight.size() - batchStartIndex;
-                usize scan = 0u;
-                for(const BatchSubmitEntry& entry : entries){
-                    if(revertedOffset < scan + entry.numCmd){
-                        entry.ppCmd[revertedOffset - scan]->m_currentCmdBuf = Move(movedBack);
-                        break;
-                    }
-                    scan += entry.numCmd;
-                }
-            }
-        });
+        m_commandBuffersInFlight.reserve(batchStartIndex + totalCmdCount);
         for(usize entryIndex = 0u; entryIndex < entries.size(); ++entryIndex){
             const BatchSubmitEntry& entry = entries[entryIndex];
             const u64 entrySubmissionID = batchEntries[entryIndex].submissionID;
             for(usize i = 0u; i < entry.numCmd; ++i){
                 auto& commandList = *MakeNotNull(entry.ppCmd[i]);
-                m_commandBuffersInFlight.push_back(Move(commandList.m_currentCmdBuf));
+                m_commandBuffersInFlight.push_back_reserved(Move(commandList.m_currentCmdBuf));
                 m_commandBuffersInFlight.back()->m_submissionID = entrySubmissionID;
+                commandList.m_nativeRecordingID = 0u;
             }
-        }
-        rollbackInFlightPush.release();
-
-        for(const BatchSubmitEntry& entry : entries){
-            for(usize i = 0u; i < entry.numCmd; ++i)
-                entry.ppCmd[i]->m_nativeRecordingID = 0u;
         }
     }
 
@@ -391,7 +400,14 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
         descriptorSubmission.releaseLocks();
         if(res == VK_ERROR_DEVICE_LOST)
             m_device.markDeviceLost();
-        finalizeDetachedRecordingAttempts(false);
+        for(const BatchSubmitEntry& entry : entries){
+            for(usize i = 0u; i < entry.numCmd; ++i){
+                CommandList* const commandList = entry.ppCmd[i];
+                if(!commandList || commandList->m_recordingLeaseSerial != entry.expectedCommandLists[i].recordingLeaseSerial)
+                    TerminateInvariant();
+                commandList->m_stateTracker.rollbackRecordingAttempt();
+            }
+        }
         for(usize i = 0u; i < totalCmdCount; ++i){
             TrackedCommandBufferPtr rejected = Move(m_commandBuffersInFlight.back());
             m_commandBuffersInFlight.pop_back();
@@ -416,7 +432,6 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
         Swap(m_acceptedTimelineWaits, m_submitBatchAcceptedTimelineWaits);
 
     descriptorSubmission.commitAndRelease();
-    finalizeDetachedRecordingAttempts(true);
 
     usize cmdCursor = batchStartIndex;
     u64 directTransitionCount = 0u;
@@ -425,6 +440,11 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
         const BatchPreparedEntry& prepared = batchEntries[entryIndex];
         const QueueSubmissionToken entryToken{ .value = prepared.submissionID, .physicalQueueIndex = m_physicalQueue.index, .deviceGeneration = m_physicalQueue.deviceGeneration, .queue = m_queueID, };
         for(usize i = 0u; i < entry.numCmd; ++i, ++cmdCursor){
+            CommandList* const commandList = entry.ppCmd[i];
+            if(!commandList || commandList->m_recordingLeaseSerial != entry.expectedCommandLists[i].recordingLeaseSerial)
+                TerminateInvariant();
+            commandList->m_stateTracker.commitRecordingAttempt();
+
             TrackedCommandBufferPtr& tracked = m_commandBuffersInFlight[cmdCursor];
             const u8 commitFlags = tracked->m_pendingCommitFlags;
             if((commitFlags & TrackedCommandBuffer::s_CommitTimerQueries) != 0u)

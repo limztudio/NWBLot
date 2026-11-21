@@ -461,15 +461,12 @@ b8 Builder::prepareRadioGroup(mut RadioGroupFrame frame){
         const StringView text = frame.m_source.text(index);
         if(!this.radioGroupStateMatches(frame))
             return false;
-        auto label = this.m_text.layout(this.textShapeRequest(text, frame.m_widgetStyle.fontSize));
-        if(!label.has_value() || !this.radioGroupMatches(frame))
+        const auto measuredLabel = this.m_text.layoutAndMeasureShared(this.textShapeRequest(text, frame.m_widgetStyle.fontSize), this.m_paint.displayMetrics());
+        if(!measuredLabel.has_value() || !this.radioGroupMatches(frame))
             return false;
-        const auto textBounds = this.m_text.measure(label.value(), this.m_paint.displayMetrics());
-        if(!textBounds.has_value())
-            return false;
-        maximumLabel.x = Max(maximumLabel.x, textBounds.value().width);
-        maximumLabel.y = Max(maximumLabel.y, textBounds.value().height);
-        frame.m_labels.emplace_back(label.value(), textBounds.value());
+        maximumLabel.x = Max(maximumLabel.x, measuredLabel.value().bounds.width);
+        maximumLabel.y = Max(maximumLabel.y, measuredLabel.value().bounds.height);
+        frame.m_labels.emplace_back(measuredLabel.value().layout, measuredLabel.value().bounds);
     }
     if(!this.m_skin.has_value() || !ControlStyleMetrics().radioGroupMetrics(this.m_skin.value(), frame.m_choices.count, maximumLabel, frame.m_options, frame.m_style, frame.m_metrics))
         return false;
@@ -519,7 +516,7 @@ b8 Builder::paintRadioGroup(in BuilderItem item, in LayoutBox box){
             input.focus(),
             item.state.id
         );
-        if(!mark.has_value() || !painter.paintRadioGroupChoiceRow(
+        if(!mark.has_value() || !frame.m_labels[index].text.valid() || !painter.paintRadioGroupChoiceRow(
             this.m_paint,
             this.m_text,
             this.m_skin.value(),
@@ -527,7 +524,7 @@ b8 Builder::paintRadioGroup(in BuilderItem item, in LayoutBox box){
             frame.m_widgetStyle,
             frame.m_metrics,
             row,
-            frame.m_labels[index].text,
+            frame.m_labels[index].text.deref(),
             frame.m_labels[index].bounds,
             mark.value().name,
             visualFlags.enabled,

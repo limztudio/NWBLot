@@ -8,6 +8,7 @@
 #include "queue_barrier_scope_policy.h"
 #include "buffer_ownership_transfer.h"
 
+#include <global/algorithm.h>
 #include <global/containers.h>
 
 
@@ -90,6 +91,21 @@ StateTracker::BufferRangeStates* StateTracker::findBufferRangesCachedMutable(Buf
     return const_cast<BufferRangeStates*>(findBufferRangesCached(buffer));
 }
 
+const StateTracker::BufferRangeState* StateTracker::FindFirstPotentiallyOverlappingRange(const BufferRangeStates& ranges, const u64 byteOffset)noexcept{
+    const BufferRangeState* const begin = ranges.begin();
+    const BufferRangeState* const end = ranges.end();
+    if(ranges.size() <= 4u){
+        for(const BufferRangeState* it = begin; it != end; ++it){
+            if(it->range.end() > byteOffset)
+                return it;
+        }
+        return end;
+    }
+    return LowerBound(begin, end, byteOffset, [](const BufferRangeState& entry, const u64 offset)noexcept{
+        return entry.range.end() <= offset;
+    });
+}
+
 ResourceStates::Mask StateTracker::getBufferStateFromRanges(Buffer& buffer, const BufferRangeStates* const ranges, const BufferRange& resolvedRange)const noexcept{
     const ResourceStates::Mask fallbackState = buffer.isRetainedStateKnown() ? buffer.m_creationDesc.initialState : ResourceStates::Unknown;
     if(!ranges || ranges->empty())
@@ -106,13 +122,15 @@ ResourceStates::Mask StateTracker::getBufferStateFromRanges(Buffer& buffer, cons
         return state == resolvedState;
     };
     u64 cursor = resolvedRange.byteOffset;
-    for(const BufferRangeState& entry : *ranges){
-        const BufferRange overlap = entry.range.intersect(resolvedRange);
+    for(const BufferRangeState* it = FindFirstPotentiallyOverlappingRange(*ranges, resolvedRange.byteOffset); it != ranges->end(); ++it){
+        if(it->range.byteOffset >= resolvedRange.end())
+            break;
+        const BufferRange overlap = it->range.intersect(resolvedRange);
         if(!overlap.hasExtent())
             continue;
         if(overlap.byteOffset > cursor && !accumulate(fallbackState))
             return ResourceStates::Unknown;
-        if(!accumulate(entry.state))
+        if(!accumulate(it->state))
             return ResourceStates::Unknown;
         cursor = overlap.end();
     }
@@ -126,12 +144,12 @@ b8 StateTracker::hasExplicitBufferStateFromRanges(const BufferRangeStates* const
         return false;
 
     u64 cursor = resolvedRange.byteOffset;
-    for(const BufferRangeState& entry : *ranges){
-        if(entry.range.end() <= cursor)
+    for(const BufferRangeState* it = FindFirstPotentiallyOverlappingRange(*ranges, cursor); it != ranges->end(); ++it){
+        if(it->range.end() <= cursor)
             continue;
-        if(entry.range.byteOffset > cursor || (requireKnown && entry.state == ResourceStates::Unknown))
+        if(it->range.byteOffset > cursor || (requireKnown && it->state == ResourceStates::Unknown))
             return false;
-        cursor = entry.range.end();
+        cursor = it->range.end();
         if(cursor >= resolvedRange.end())
             return true;
     }
@@ -184,6 +202,10 @@ void StateTracker::beginTrackingTransientBufferWithRanges(Buffer& buffer, Resour
         auto [it, inserted] = m_bufferStates.emplace(MakeNotNull(&buffer), BufferRangeStates(m_context.objectArena));
         (void)inserted;
         it.value().push_back(BufferRangeState{ resolvedRange, state });
+        if(buffer.m_creationDesc.cpuAccess == CpuAccessMode::Read)
+            m_hasReadbackBuffers = true;
+        if(buffer.m_creationDesc.keepInitialState)
+            m_hasKeepInitialStateBuffers = true;
         m_lastBufferKey = &buffer;
         m_lastBufferRanges = &it.value();
         return;
@@ -195,10 +217,6 @@ void StateTracker::beginTrackingTransientBufferWithRanges(Buffer& buffer, Resour
             (*existingRanges)[0u] = BufferRangeState{ resolvedRange, state };
             return;
         }
-        if(hasExplicitBufferStateFromRanges(existingRanges, resolvedRange)){
-            if(seedOnly || (state != ResourceStates::Unknown && getBufferStateFromRanges(buffer, existingRanges, resolvedRange) == state))
-                return;
-        }
         if(resolvedRange.byteOffset >= existingRanges->back().range.end()){
             if(resolvedRange.byteOffset == existingRanges->back().range.end() && existingRanges->back().state == state){
                 existingRanges->back().range.byteSize += resolvedRange.byteSize;
@@ -206,6 +224,10 @@ void StateTracker::beginTrackingTransientBufferWithRanges(Buffer& buffer, Resour
             }
             existingRanges->push_back(BufferRangeState{ resolvedRange, state });
             return;
+        }
+        if(hasExplicitBufferStateFromRanges(existingRanges, resolvedRange)){
+            if(seedOnly || (state != ResourceStates::Unknown && getBufferStateFromRanges(buffer, existingRanges, resolvedRange) == state))
+                return;
         }
     }
 
@@ -286,7 +308,7 @@ void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask st
     constexpr TStringView s_OperationName = FOUNDATION_TEXT("set buffer state");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
-    if(!validateBufferForGpuState(bufferResource, stateBits, s_OperationName))
+    if(!validateBufferForGpuStateValidated(bufferResource, stateBits, s_OperationName))
         return;
 
     Buffer& buffer = *bufferResource;
@@ -322,14 +344,16 @@ void CommandList::setBufferStateValidated(Buffer& buffer, const ResourceStates::
     else{
         StateTracker::BufferRangeStates* const existingRanges = m_stateTracker.findBufferRangesCachedMutable(buffer);
         u64 cursor = resolvedRange.byteOffset;
-        if(existingRanges){
-            for(const StateTracker::BufferRangeState& entry : *existingRanges){
-                const BufferRange overlap = entry.range.intersect(resolvedRange);
+        if(existingRanges && !existingRanges->empty() && resolvedRange.byteOffset < existingRanges->back().range.end()){
+            for(const StateTracker::BufferRangeState* it = StateTracker::FindFirstPotentiallyOverlappingRange(*existingRanges, resolvedRange.byteOffset); it != existingRanges->end(); ++it){
+                if(it->range.byteOffset >= resolvedRange.end())
+                    break;
+                const BufferRange overlap = it->range.intersect(resolvedRange);
                 if(!overlap.hasExtent())
                     continue;
                 if(cursor < overlap.byteOffset)
                     append(BufferRange(cursor, overlap.byteOffset - cursor), fallbackState);
-                append(overlap, entry.state);
+                append(overlap, it->state);
                 cursor = overlap.end();
             }
         }
@@ -346,12 +370,12 @@ void CommandList::setBufferStateValidated(Buffer& buffer, const ResourceStates::
     m_pendingBufferBarriers.resize(firstBarrierIndex);
 }
 
-void CommandList::queueWriteBufferCopyAndBarrier(Buffer& buffer, const VkBuffer srcVkBuf, const u64 stagingOffset, const u64 destOffsetBytes, const u64 dataSize){
+void CommandList::queueWriteBufferCopyAndBarrier(Buffer& buffer, const VkBuffer srcVkBuf, const u64 stagingOffset, const u64 destOffsetBytes, const u64 dataSize, const ResourceStates::Mask permanentState){
     const VkBuffer dstVkBuf = buffer.m_buffer;
     const BufferRange resolvedRange(destOffsetBytes, dataSize);
     if(m_hasPendingBufferCopies){
         b8 needFlush = !m_enableAutomaticBarriers || m_pendingCopySrc != srcVkBuf || m_pendingCopyDst != dstVkBuf || m_pendingBufferCopyCount >= s_MaxPendingBufferCopies;
-        if(!needFlush){
+        if(!needFlush && destOffsetBytes < m_pendingCopyMaxDstEnd){
             for(u32 copyIndex = 0u; copyIndex < m_pendingBufferCopyCount; ++copyIndex){
                 if(UnsignedRangesOverlap(destOffsetBytes, dataSize, m_pendingBufferCopies[copyIndex].dstOffset, m_pendingBufferCopies[copyIndex].size)){
                     needFlush = true;
@@ -366,7 +390,6 @@ void CommandList::queueWriteBufferCopyAndBarrier(Buffer& buffer, const VkBuffer 
     m_graphicsBuffersValidatedInPass = false;
     registerHostReadbackBuffer(buffer);
 
-    const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(&buffer);
     const ResourceStates::Mask fallbackState = buffer.isRetainedStateKnown() ? buffer.m_creationDesc.initialState : ResourceStates::Unknown;
     const GpuQueueCapability::Mask exactQueueCapabilities = m_hasCachedPhysicalQueueInfo ? m_cachedPhysicalQueueInfo.capabilities : GpuQueueCapability::None;
     const usize firstManualBarrierIndex = m_pendingBufferBarriers.size();
@@ -415,14 +438,16 @@ void CommandList::queueWriteBufferCopyAndBarrier(Buffer& buffer, const VkBuffer 
     else{
         StateTracker::BufferRangeStates* const existingRanges = m_stateTracker.findBufferRangesCachedMutable(buffer);
         u64 cursor = resolvedRange.byteOffset;
-        if(existingRanges){
-            for(const StateTracker::BufferRangeState& entry : *existingRanges){
-                const BufferRange overlap = entry.range.intersect(resolvedRange);
+        if(existingRanges && !existingRanges->empty() && resolvedRange.byteOffset < existingRanges->back().range.end()){
+            for(const StateTracker::BufferRangeState* it = StateTracker::FindFirstPotentiallyOverlappingRange(*existingRanges, resolvedRange.byteOffset); it != existingRanges->end(); ++it){
+                if(it->range.byteOffset >= resolvedRange.end())
+                    break;
+                const BufferRange overlap = it->range.intersect(resolvedRange);
                 if(!overlap.hasExtent())
                     continue;
                 if(cursor < overlap.byteOffset)
                     appendBarrier(BufferRange(cursor, overlap.byteOffset - cursor), fallbackState);
-                appendBarrier(overlap, entry.state);
+                appendBarrier(overlap, it->state);
                 cursor = overlap.end();
             }
         }
@@ -445,7 +470,9 @@ void CommandList::queueWriteBufferCopyAndBarrier(Buffer& buffer, const VkBuffer 
         return;
     }
 
+    const u64 dstEnd = destOffsetBytes + dataSize;
     if(m_hasPendingBufferCopies){
+        m_pendingCopyMaxDstEnd = Max(m_pendingCopyMaxDstEnd, dstEnd);
         VkBufferCopy& last = m_pendingBufferCopies[m_pendingBufferCopyCount - 1u];
         if(last.srcOffset + last.size == stagingOffset && last.dstOffset + last.size == destOffsetBytes){
             last.size += dataSize;
@@ -457,6 +484,7 @@ void CommandList::queueWriteBufferCopyAndBarrier(Buffer& buffer, const VkBuffer 
 
     m_pendingCopySrc = srcVkBuf;
     m_pendingCopyDst = dstVkBuf;
+    m_pendingCopyMaxDstEnd = dstEnd;
     m_pendingBufferCopies[0u] = VkBufferCopy{ stagingOffset, destOffsetBytes, dataSize };
     m_pendingBufferCopyCount = 1u;
     m_hasPendingBufferCopies = true;
@@ -503,7 +531,7 @@ void CommandList::beginTrackingBufferState(Buffer* buffer, ResourceStates::Mask 
         rejectCommandRecording(s_OperationName, VulkanStateTrackingDetail::s_InitialStateUnknownReason);
         return;
     }
-    if(!validateBufferForGpuState(buffer, stateBits, s_OperationName))
+    if(!validateBufferForGpuStateValidated(buffer, stateBits, s_OperationName))
         return;
     if(!VulkanStateTrackingDetail::IsBufferStateRangeValid(range, buffer->m_creationDesc)){
         rejectCommandRecording(s_OperationName, __hidden_state_tracking_buffers::s_ByteRangeOutsideBufferReason);
@@ -528,7 +556,7 @@ void CommandList::seedBufferState(Buffer* buffer, ResourceStates::Mask stateBits
         rejectCommandRecording(s_OperationName, VulkanStateTrackingDetail::s_InitialStateUnknownReason);
         return;
     }
-    if(!validateBufferForGpuState(buffer, stateBits, s_OperationName))
+    if(!validateBufferForGpuStateValidated(buffer, stateBits, s_OperationName))
         return;
     if(!VulkanStateTrackingDetail::IsBufferStateRangeValid(range, buffer->m_creationDesc)){
         rejectCommandRecording(s_OperationName, __hidden_state_tracking_buffers::s_ByteRangeOutsideBufferReason);

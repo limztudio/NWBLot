@@ -160,12 +160,12 @@ b8 Builder::tooltip(in StringView stableKey, in StringView anchorKey, in StringV
     frame.anchorIndex = cast<u32>(anchorIndex.value());
     frame.layer = this.m_context.popupLayer() + 1u;
     const ShapeRequest request = this.textShapeRequest(text, this.m_style.fontSize);
-    auto layout = this.m_text.layout(request);
+    auto layout = this.m_text.layoutShared(request);
     if(!layout.has_value()){
         this.m_context.fail();
         return false;
     }
-    MoveInto<TextLayout>(frame.text, layout.value());
+    frame.text = layout.value();
     anchor.annotated = true;
     mut Vector<BuilderTooltipFrame> tooltips = this.m_scope.value().m_tooltips;
     tooltips.emplace_back();
@@ -209,7 +209,9 @@ b8 Builder::paintTooltips(){
         if(!background.has_value())
             return false;
         const Insets padding = MaxUiPadding(frame.style.padding, background.value().padding);
-        const auto textBounds = this.m_text.measure(frame.text, this.m_paint.displayMetrics());
+        if(!frame.text.valid())
+            return false;
+        const auto textBounds = this.m_text.measure(frame.text.deref(), this.m_paint.displayMetrics());
         if(!textBounds.has_value())
             return false;
         const Point measured = Point(textBounds.value().width, textBounds.value().height);
@@ -217,7 +219,7 @@ b8 Builder::paintTooltips(){
         const auto placement = PlacePopup(options, this.m_paint.displayMetrics());
         if(!placement.has_value())
             return false;
-        if(!painter.paintTooltipOverlay(this.m_paint, this.m_text, frame.layer, background.value().name, placement.value().bounds, padding, frame.text, textBounds.value(), frame.style.text) || frame.state.value().revision() != frame.revision)
+        if(!painter.paintTooltipOverlay(this.m_paint, this.m_text, frame.layer, background.value().name, placement.value().bounds, padding, frame.text.deref(), textBounds.value(), frame.style.text) || frame.state.value().revision() != frame.revision)
             return false;
         frame.state.value().m_placement = placement.value();
     }

@@ -38,10 +38,8 @@ class WidgetStateIndexPolicy{
     private b8 rebuildIndex(in Span<WidgetState> entries, mut HashMap<u64, usize> outIndex)const{
         outIndex.clear();
         for(usize index = 0u; index < entries.size(); ++index){
-            const u64 idValue = entries[index].id.value;
-            if(outIndex.contains(idValue))
+            if(!outIndex.try_emplace(entries[index].id.value, index).second)
                 return false;
-            outIndex.try_emplace(idValue, index);
         }
         return true;
     }
@@ -56,9 +54,10 @@ class WidgetStateIndexPolicy{
     }
 
     public Expected<usize> lookup(in Span<WidgetState> entries, in WidgetId id, in HashMap<u64, usize> indexById)const{
-        if(!indexById.contains(id.value))
+        const auto found = indexById.find(id.value);
+        if(found == indexById.end())
             return MakeUnexpected(Failure());
-        const usize index = indexById.at(id.value);
+        const usize index = found.value();
         [essential] assert(index < entries.size() && entries[index].id == id);
         return index;
     }
@@ -89,6 +88,54 @@ class WidgetStateIndexPolicy{
         outIndexDirty = true;
     }
 
+    public void compactRetireUnseen(
+        in u64 frameGeneration,
+        mut Vector<WidgetState> inOutEntries,
+        mut b8 outIndexDirty,
+        mut Vector<WidgetId> outRetiredIds
+    )const{
+        outRetiredIds.clear();
+        usize kept = 0u;
+        for(usize index = 0u; index < inOutEntries.size(); ++index){
+            in WidgetState entry = inOutEntries[index];
+            if(entry.lastSeenFrame != frameGeneration){
+                outRetiredIds.push_back(entry.id);
+                continue;
+            }
+            if(kept != index)
+                inOutEntries[kept] = entry;
+            ++kept;
+        }
+        if(!outRetiredIds.empty()){
+            inOutEntries.resize(kept);
+            outIndexDirty = true;
+        }
+    }
+
+    public void compactRetainRoots(
+        in HashSet<WidgetRoot> retainedRoots,
+        mut Vector<WidgetState> inOutEntries,
+        mut b8 outIndexDirty,
+        mut Vector<WidgetId> outRetiredIds
+    )const{
+        outRetiredIds.clear();
+        usize kept = 0u;
+        for(usize index = 0u; index < inOutEntries.size(); ++index){
+            in WidgetState entry = inOutEntries[index];
+            if(!retainedRoots.contains(entry.root)){
+                outRetiredIds.push_back(entry.id);
+                continue;
+            }
+            if(kept != index)
+                inOutEntries[kept] = entry;
+            ++kept;
+        }
+        if(!outRetiredIds.empty()){
+            inOutEntries.resize(kept);
+            outIndexDirty = true;
+        }
+    }
+
     public Expected<usize> touch(
         in WidgetId id,
         in WidgetRoot root,
@@ -98,9 +145,11 @@ class WidgetStateIndexPolicy{
         mut HashMap<u64, usize> inOutIndex,
         mut u64 inOutNextDeclarationGeneration,
         mut b8 inOutIndexDirty,
-        mut b8 outInvariantFailed
+        mut b8 outInvariantFailed,
+        mut b8 outKindChanged
     )const{
         outInvariantFailed = false;
+        outKindChanged = false;
         if(!this.validTouchRequest(id, root, kind, frameGeneration))
             return MakeUnexpected(Failure());
         const Expected<usize> foundIndex = this.findIndex(inOutEntries, id, inOutIndex, inOutIndexDirty, outInvariantFailed);
@@ -109,6 +158,7 @@ class WidgetStateIndexPolicy{
         if(foundIndex.has_value()){
             const usize index = foundIndex.value();
             WidgetState entry = inOutEntries[index];
+            outKindChanged = entry.kind != kind;
             if(!this.canTouchExisting(entry, root, frameGeneration))
                 return MakeUnexpected(Failure());
             if(entry.kind != kind){
@@ -132,14 +182,28 @@ class WidgetStateIndexPolicy{
         }
         const usize newIndex = inOutEntries.size();
         inOutEntries.push_back(WidgetState(id, root, inOutNextDeclarationGeneration, frameGeneration, kind));
-        if(inOutIndex.contains(id.value)){
+        if(!inOutIndex.try_emplace(id.value, newIndex).second){
             inOutEntries.pop_back();
             outInvariantFailed = true;
             return MakeUnexpected(Failure());
         }
-        inOutIndex.try_emplace(id.value, newIndex);
         ++inOutNextDeclarationGeneration;
         return newIndex;
+    }
+
+    public Expected<usize> touch(
+        in WidgetId id,
+        in WidgetRoot root,
+        in WidgetKind kind,
+        in u64 frameGeneration,
+        mut Vector<WidgetState> inOutEntries,
+        mut HashMap<u64, usize> inOutIndex,
+        mut u64 inOutNextDeclarationGeneration,
+        mut b8 inOutIndexDirty,
+        mut b8 outInvariantFailed
+    )const{
+        b8 kindChanged = false;
+        return this.touch(id, root, kind, frameGeneration, inOutEntries, inOutIndex, inOutNextDeclarationGeneration, inOutIndexDirty, outInvariantFailed, kindChanged);
     }
 };
 

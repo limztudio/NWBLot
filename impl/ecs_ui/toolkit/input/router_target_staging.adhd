@@ -14,26 +14,33 @@ b8 LessTargetLookup(in TargetLookup lhs, in TargetLookup rhs){
 }
 
 void SortTargetLookupVector(mut Vector<TargetLookup> inOutLookup){
-    for(usize i = 1u; i < inOutLookup.size(); ++i){
-        const TargetLookup current = inOutLookup[i];
-        usize j = i;
-        while(j > 0u && LessTargetLookup(current, inOutLookup[j - 1u])){
-            inOutLookup[j] = inOutLookup[j - 1u];
-            --j;
+    b8 sorted = true;
+    for(usize index = 1u; index < inOutLookup.size(); ++index){
+        if(LessTargetLookup(inOutLookup[index], inOutLookup[index - 1u])){
+            sorted = false;
+            break;
         }
-        inOutLookup[j] = current;
     }
+    if(sorted)
+        return;
+    SortSequence<TargetLookup>(inOutLookup, LessTargetLookup);
 }
 
 void RebuildRouterTargetLookup(in Span<HitTarget> targets, mut Vector<TargetLookup> outLookup){
     outLookup.clear();
+    b8 needsSort = false;
+    u64 previousIdValue = 0u;
     for(usize index = 0u; index < targets.size(); ++index){
         TargetLookup entry;
         entry.value = targets[index].id.value;
         entry.index = cast<u32>(index);
+        if(index > 0u && entry.value < previousIdValue)
+            needsSort = true;
+        previousIdValue = entry.value;
         outLookup.push_back(entry);
     }
-    SortTargetLookupVector(outLookup);
+    if(needsSort)
+        SortTargetLookupVector(outLookup);
 }
 
 b8 StageRouterHitTargets(
@@ -44,6 +51,8 @@ b8 StageRouterHitTargets(
 ){
     stagedTargets.clear();
     stagedLookup.clear();
+    b8 needsSort = false;
+    u64 previousIdValue = 0u;
     for(usize index = 0u; index < targets.size(); ++index){
         const HitTarget target = targets[index];
         if(
@@ -56,9 +65,13 @@ b8 StageRouterHitTargets(
         TargetLookup entry;
         entry.value = target.id.value;
         entry.index = cast<u32>(index);
+        if(index > 0u && entry.value < previousIdValue)
+            needsSort = true;
+        previousIdValue = entry.value;
         stagedLookup.push_back(entry);
     }
-    SortTargetLookupVector(stagedLookup);
+    if(needsSort)
+        SortTargetLookupVector(stagedLookup);
     return true;
 }
 
@@ -121,6 +134,31 @@ b8 EraseInvalidatedRouterTargets(in WidgetId id, in Span<TargetLookup> lookup, m
     usize keptTargets = 0u;
     for(usize index = 0u; index < targets.size(); ++index){
         if(targets[index].id != id && targets[index].owner != id){
+            if(keptTargets != index)
+                targets[keptTargets] = targets[index];
+            ++keptTargets;
+        }
+    }
+    targets.resize(keptTargets);
+    return true;
+}
+
+[cpp_unwind]
+b8 EraseInvalidatedRouterTargetsBatch(
+    in Span<WidgetId> ids,
+    in Span<TargetLookup> lookup,
+    mut Vector<HitTarget> targets
+){
+    HashSet<u64> invalidatedIds;
+    for(in WidgetId id : ids){
+        if(FindTargetIndexInTable(targets, lookup, id, 0u).has_value())
+            invalidatedIds.insert(id.value);
+    }
+    if(invalidatedIds.empty())
+        return false;
+    usize keptTargets = 0u;
+    for(usize index = 0u; index < targets.size(); ++index){
+        if(!invalidatedIds.contains(targets[index].id.value) && !invalidatedIds.contains(targets[index].owner.value)){
             if(keptTargets != index)
                 targets[keptTargets] = targets[index];
             ++keptTargets;

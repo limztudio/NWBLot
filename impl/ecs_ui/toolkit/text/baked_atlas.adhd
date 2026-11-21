@@ -13,12 +13,14 @@ type SharedBakedFontAtlas = Shared<BakedFontAtlas>;
 class BakedFontAtlas : NoCopy{
     private Vector<FontAtlasGlyph> m_glyphs;
     private Vector<SharedSdfAtlasPage> m_pages;
+    private u64 m_identity;
     private u32 m_unitsPerEm;
     private u32 m_bakePpem;
     private b8 m_ready;
 
     public BakedFontAtlas(in SharedPool pool, in FontAtlas atlas, in u64 fontGeneration){
         in FontAtlasPayload payload = atlas.payload();
+        this.m_identity = AllocateServiceIdentity();
         this.m_unitsPerEm = payload.unitsPerEm;
         this.m_bakePpem = payload.bakePpem;
         this.m_glyphs = payload.glyphs;
@@ -28,9 +30,8 @@ class BakedFontAtlas : NoCopy{
     private b8 installPages(in SharedPool pool, in FontAtlas atlas, in u64 fontGeneration){
         in FontAtlasPayload payload = atlas.payload();
         this.m_pages.reserve(payload.groups.size());
-        const u64 identity = AllocateServiceIdentity();
         for(u32 group = 0u; group < payload.groups.size(); ++group){
-            Expected<SharedSdfAtlasPage> page = CreateSdfAtlasPage(pool, atlas, fontGeneration, identity, group);
+            Expected<SharedSdfAtlasPage> page = CreateSdfAtlasPage(pool, atlas, fontGeneration, this.m_identity, group);
             if(!page.has_value())
                 return false;
             this.m_pages.push_back(page.value());
@@ -39,6 +40,7 @@ class BakedFontAtlas : NoCopy{
     }
 
     public b8 valid()const{ return this.m_ready; }
+    public u64 identity()const{ return this.m_identity; }
     public u32 unitsPerEm()const{ return this.m_unitsPerEm; }
     public u32 bakePpem()const{ return this.m_bakePpem; }
     public b8 hasGlyph(in u32 glyphId)const{ return glyphId < this.m_glyphs.size(); }

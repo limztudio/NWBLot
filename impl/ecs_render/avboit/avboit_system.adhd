@@ -115,6 +115,7 @@ class RendererAvboitSystem : NoCopy{
     public b8 registerAvboitFrameTargetDescriptors(mut DeferredFrameTargets createdTargets, mut AvboitFrameTargets avboitTargets);
     public mut RhiSampler linearSampler();
     public b8 prepareAvboitPassResources(in CsgFrameState csgFrameState, mut DeferredFrameTargets targets);
+    public b8 prepareAvboitPassResources(in CsgFrameState csgFrameState, mut DeferredFrameTargets targets, in Optional<in MeshViewGpuData> csgWorkRegionMeshViewState);
     public void renderAvboitTransparentCsgIntervals(
         mut CommandList commandList,
         mut DeferredFrameTargets targets,

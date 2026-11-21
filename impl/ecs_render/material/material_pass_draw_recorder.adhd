@@ -8,6 +8,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 CanPrepareMaterialPassTargets(in b8 hasFramebuffer, in MaterialPipelinePass pass, in b8 avboitTargetsValid){
+    if(!hasFramebuffer)
+        return false;
+    if(MaterialPipelinePassUsesRendererAvboit(pass) && !avboitTargetsValid)
+        return false;
+    return true;
+}
+
+
 [modular]
 class MaterialPassDrawRecorder : NoCopy{
     private mut GraphicsRuntime m_graphics;
@@ -52,6 +61,8 @@ class MaterialPassDrawRecorder : NoCopy{
         return this.prepareMaterialPassResourceBindingsImpl(drawItems, true);
     }
 
+    public void setMaterialPassMeshBufferStates(mut MaterialPassDrawContext context, in MaterialPassMeshResourceSnapshot mesh);
+    public void setMaterialPassFrameBufferStates(mut MaterialPassDrawContext context);
     public void setMaterialPassCommonBufferStates(mut MaterialPassDrawContext context, in MaterialPassMeshResourceSnapshot mesh);
     public b8 setMaterialPassDrawPushConstants(mut MaterialPassDrawContext context, in MaterialPassDrawItem drawItem, in MaterialPassMeshResourceSnapshot mesh);
     public void dispatchComputeMaterialPassDrawItem(mut MaterialPassDrawContext context, in MaterialPassDrawItem drawItem, in MaterialPassMeshResourceSnapshot mesh, in MaterialPassPipelineResourceSnapshot pipelineResources);
@@ -63,6 +74,39 @@ class MaterialPassDrawRecorder : NoCopy{
     public void renderComputeMaterialPassDrawItemsRasterOnly(mut MaterialPassDrawContext context, in Span<MaterialPassDrawItem> drawItems);
     public void renderComputeMaterialPassDrawItems(mut MaterialPassDrawContext context, in Span<MaterialPassDrawItem> drawItems);
     public b8 prepareMaterialPassResourceBindingsImpl(in Span<MaterialPassDrawItem> drawItems, in b8 computeEmulation);
+
+    private b8 setMaterialPassDrawPushConstantsPrepared(
+        mut MaterialPassDrawContext context,
+        in MaterialPassDrawItem drawItem,
+        in MaterialPassMeshResourceSnapshot mesh,
+        in MeshFrameHeapSlots baseFrameHeapSlots,
+        in b8 usesAvboit,
+        in b8 hdr10OutputActive,
+        in b8 isRefractionCapture,
+        in Optional<u32> clipContextHeapSlot
+    );
+    private void dispatchComputeMaterialPassDrawItemPrepared(
+        mut MaterialPassDrawContext context,
+        in MaterialPassDrawItem drawItem,
+        in MaterialPassMeshResourceSnapshot mesh,
+        in MaterialPassPipelineResourceSnapshot pipelineResources,
+        in MeshFrameHeapSlots baseFrameHeapSlots
+    );
+    private void drawComputeMaterialPassDrawItemPrepared(
+        mut MaterialPassDrawContext context,
+        in MaterialPassDrawItem drawItem,
+        in MaterialPassMeshResourceSnapshot mesh,
+        in MaterialPassPipelineResourceSnapshot pipelineResources,
+        in MeshFrameHeapSlots baseFrameHeapSlots,
+        in b8 usesAvboit,
+        in b8 hdr10OutputActive,
+        in b8 isRefractionCapture,
+        in Optional<u32> clipContextHeapSlot,
+        mut GraphicsPipelineHandle lastPipeline,
+        mut BufferHandle lastBuffer,
+        mut u32 lastIndexByteOffset,
+        mut b8 lastIndexed
+    );
 }
 
 

@@ -152,6 +152,10 @@ Expected<f32x4x4> RendererMeshSystem::snapshotAcceptedMeshViewWorldToClip()const
     return acceptedView.value().worldToClip;
 }
 
+MeshViewGpuData RendererMeshSystem::resolveMeshViewState(in f32 fallbackAspectRatio)const{
+    return ResolveMeshViewState(fallbackAspectRatio, this.m_world);
+}
+
 MeshViewBufferUpload RendererMeshSystem::prepareMeshViewBufferUpload(in f32 fallbackAspectRatio)const{
     assert(this.m_meshState.m_meshViewBuffer.valid());
 

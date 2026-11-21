@@ -8,6 +8,9 @@
 #include "command_ir.h"
 #include "command_ir_raster.h"
 
+#include <cstddef>
+#include <cstring>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -194,40 +197,69 @@ struct BackendRasterReplayState{
     BackendRasterReplayState()noexcept{}
 };
 
-[[nodiscard]] inline b8 IsRasterOpcode(const GpuCommandIrWireOpcode::Enum opcode)noexcept{
-    return
-        opcode == GpuCommandIrWireOpcode::SetGraphicsState
-        || opcode == GpuCommandIrWireOpcode::BindGraphicsHeap
-        || opcode == GpuCommandIrWireOpcode::SetPushConstants
-        || opcode == GpuCommandIrWireOpcode::Draw
-        || opcode == GpuCommandIrWireOpcode::DrawIndexed
-        || opcode == GpuCommandIrWireOpcode::EndRenderPass
-    ;
+template<typename T>
+[[nodiscard]] FOUNDATION_INLINE T ReadWirePod(const u8* const ptr)noexcept{
+    static_assert(IsTriviallyCopyable_V<T>, "Wire POD decode requires a trivially copyable type");
+    T value;
+    std::memcpy(&value, ptr, sizeof(T));
+    return value;
 }
 
-[[nodiscard]] inline usize RasterRecordWireByteSize(const GpuCommandIrWireOpcode::Enum opcode)noexcept{
-    switch(opcode){
-    case GpuCommandIrWireOpcode::SetGraphicsState: return sizeof(GpuCommandIrSetGraphicsStateRecord);
-    case GpuCommandIrWireOpcode::BindGraphicsHeap: return sizeof(GpuCommandIrBindGraphicsHeapRecord);
-    case GpuCommandIrWireOpcode::SetPushConstants: return sizeof(GpuCommandIrSetPushConstantsRecord);
-    case GpuCommandIrWireOpcode::Draw:
-    case GpuCommandIrWireOpcode::DrawIndexed: return sizeof(GpuCommandIrDrawRecord);
-    case GpuCommandIrWireOpcode::EndRenderPass: return sizeof(GpuCommandIrEndRenderPassRecord);
-    default: return 0u;
-    }
+static_assert(offsetof(GpuCommandIrSetGraphicsStateRecord, context) == sizeof(GpuCommandIrHeader));
+static_assert(offsetof(GpuCommandIrBindGraphicsHeapRecord, context) == sizeof(GpuCommandIrHeader));
+static_assert(offsetof(GpuCommandIrSetPushConstantsRecord, context) == sizeof(GpuCommandIrHeader));
+static_assert(offsetof(GpuCommandIrDrawRecord, context) == sizeof(GpuCommandIrHeader));
+static_assert(offsetof(GpuCommandIrEndRenderPassRecord, context) == sizeof(GpuCommandIrHeader));
+static_assert(static_cast<usize>(GpuCommandIrWireOpcode::Count) <= 32u, "Command IR opcode bitmask requires <= 32 opcodes");
+
+inline constexpr u32 s_RasterOpcodeBitMask =
+    (1u << static_cast<u32>(GpuCommandIrWireOpcode::SetGraphicsState))
+    | (1u << static_cast<u32>(GpuCommandIrWireOpcode::Draw))
+    | (1u << static_cast<u32>(GpuCommandIrWireOpcode::DrawIndexed))
+    | (1u << static_cast<u32>(GpuCommandIrWireOpcode::BindGraphicsHeap))
+    | (1u << static_cast<u32>(GpuCommandIrWireOpcode::SetPushConstants))
+    | (1u << static_cast<u32>(GpuCommandIrWireOpcode::EndRenderPass))
+;
+
+[[nodiscard]] constexpr Array<usize, GpuCommandIrWireOpcode::Count> MakeRasterWireSizeTable()noexcept{
+    Array<usize, GpuCommandIrWireOpcode::Count> table{};
+    table[GpuCommandIrWireOpcode::SetGraphicsState] = sizeof(GpuCommandIrSetGraphicsStateRecord);
+    table[GpuCommandIrWireOpcode::BindGraphicsHeap] = sizeof(GpuCommandIrBindGraphicsHeapRecord);
+    table[GpuCommandIrWireOpcode::SetPushConstants] = sizeof(GpuCommandIrSetPushConstantsRecord);
+    table[GpuCommandIrWireOpcode::Draw] = sizeof(GpuCommandIrDrawRecord);
+    table[GpuCommandIrWireOpcode::DrawIndexed] = sizeof(GpuCommandIrDrawRecord);
+    table[GpuCommandIrWireOpcode::EndRenderPass] = sizeof(GpuCommandIrEndRenderPassRecord);
+    return table;
 }
 
-[[nodiscard]] inline usize BuiltinRecordWireByteSize(const GpuCommandIrWireOpcode::Enum opcode)noexcept{
-    switch(opcode){
-    case GpuCommandIrWireOpcode::CopyBuffer: return sizeof(GpuCommandIrCopyBufferRecord);
-    case GpuCommandIrWireOpcode::CopyTexture: return sizeof(GpuCommandIrCopyTextureRecord);
-    case GpuCommandIrWireOpcode::ClearBuffer: return sizeof(GpuCommandIrClearBufferRecord);
-    case GpuCommandIrWireOpcode::ClearTexture: return sizeof(GpuCommandIrClearTextureRecord);
-    case GpuCommandIrWireOpcode::ClearTextureRectUInt: return sizeof(GpuCommandIrClearTextureRectUIntRecord);
-    case GpuCommandIrWireOpcode::UploadBuffer: return sizeof(GpuCommandIrUploadBufferRecord);
-    case GpuCommandIrWireOpcode::UploadTexture: return sizeof(GpuCommandIrUploadTextureRecord);
-    default: return 0u;
-    }
+[[nodiscard]] constexpr Array<usize, GpuCommandIrWireOpcode::Count> MakeBuiltinWireSizeTable()noexcept{
+    Array<usize, GpuCommandIrWireOpcode::Count> table{};
+    table[GpuCommandIrWireOpcode::CopyBuffer] = sizeof(GpuCommandIrCopyBufferRecord);
+    table[GpuCommandIrWireOpcode::CopyTexture] = sizeof(GpuCommandIrCopyTextureRecord);
+    table[GpuCommandIrWireOpcode::ClearBuffer] = sizeof(GpuCommandIrClearBufferRecord);
+    table[GpuCommandIrWireOpcode::ClearTexture] = sizeof(GpuCommandIrClearTextureRecord);
+    table[GpuCommandIrWireOpcode::ClearTextureRectUInt] = sizeof(GpuCommandIrClearTextureRectUIntRecord);
+    table[GpuCommandIrWireOpcode::UploadBuffer] = sizeof(GpuCommandIrUploadBufferRecord);
+    table[GpuCommandIrWireOpcode::UploadTexture] = sizeof(GpuCommandIrUploadTextureRecord);
+    return table;
+}
+
+inline constexpr Array<usize, GpuCommandIrWireOpcode::Count> s_RasterRecordWireByteSizes = MakeRasterWireSizeTable();
+inline constexpr Array<usize, GpuCommandIrWireOpcode::Count> s_BuiltinRecordWireByteSizes = MakeBuiltinWireSizeTable();
+
+[[nodiscard]] FOUNDATION_INLINE b8 IsRasterOpcode(const GpuCommandIrWireOpcode::Enum opcode)noexcept{
+    const u32 value = static_cast<u32>(opcode);
+    return value < 32u && ((s_RasterOpcodeBitMask >> value) & 1u) != 0u;
+}
+
+[[nodiscard]] FOUNDATION_INLINE usize RasterRecordWireByteSize(const GpuCommandIrWireOpcode::Enum opcode)noexcept{
+    const usize index = static_cast<usize>(opcode);
+    return index < s_RasterRecordWireByteSizes.size() ? s_RasterRecordWireByteSizes[index] : 0u;
+}
+
+[[nodiscard]] FOUNDATION_INLINE usize BuiltinRecordWireByteSize(const GpuCommandIrWireOpcode::Enum opcode)noexcept{
+    const usize index = static_cast<usize>(opcode);
+    return index < s_BuiltinRecordWireByteSizes.size() ? s_BuiltinRecordWireByteSizes[index] : 0u;
 }
 
 union WireRecordStorage{
@@ -328,8 +360,7 @@ namespace WireStepStatus{
         Array<u32, s_MaxVertexAttributes> usedSlots{};
         b8 useFallbackSlotScan = false;
         for(usize index = 0u; index < record.vertexBindingCount; ++index){
-            GpuCommandIrRasterVertexWire wireBinding;
-            FOUNDATION_MEMCPY(&wireBinding, sizeof(wireBinding), vertexPtr + index * sizeof(GpuCommandIrRasterVertexWire), sizeof(GpuCommandIrRasterVertexWire));
+            const auto wireBinding = ReadWirePod<GpuCommandIrRasterVertexWire>(vertexPtr + index * sizeof(GpuCommandIrRasterVertexWire));
             if(wireBinding.resourceIndex == Limit<u32>::s_Max){
                 outError = GpuCommandIrStreamValidationError::InvalidRecord;
                 return false;
@@ -378,8 +409,7 @@ namespace WireStepStatus{
         outValidation.complete = true;
         return false;
     }
-    GpuCommandIrStreamHeaderPrefix prefix;
-    FOUNDATION_MEMCPY(&prefix, sizeof(prefix), headerSource.data(), sizeof(prefix));
+    const auto prefix = ReadWirePod<GpuCommandIrStreamHeaderPrefix>(headerSource.data());
     if(prefix.magic != s_GpuCommandIrStreamMagic){
         outValidation.error = GpuCommandIrStreamValidationError::InvalidMagic;
         outValidation.byteOffset = 0u;
@@ -408,7 +438,7 @@ namespace WireStepStatus{
         outValidation.complete = true;
         return false;
     }
-    FOUNDATION_MEMCPY(&outHeader, sizeof(outHeader), headerSource.data(), sizeof(outHeader));
+    outHeader = ReadWirePod<GpuCommandIrStreamHeader>(headerSource.data());
     if(outHeader.commandBytes > static_cast<u64>(Limit<usize>::s_Max) || outHeader.blobBytes > static_cast<u64>(Limit<usize>::s_Max)){
         outValidation.error = GpuCommandIrStreamValidationError::PayloadSizeMismatch;
         outValidation.byteOffset = 0u;
@@ -468,11 +498,64 @@ public:
 
 
 public:
+    [[nodiscard]] WireStepStatus::Enum nextView(
+        const u8*& outRecordPtr,
+        GpuCommandIrWireOpcode::Enum& outOpcode,
+        DecodedRecordContext& outContext,
+        Optional<GpuCommandIrBuiltinTaskRecord>& outBuiltin
+    )noexcept{
+        return stepRecord<true>(outRecordPtr, outOpcode, outContext, outBuiltin);
+    }
+
+    [[nodiscard]] WireStepStatus::Enum nextReplayFast(
+        const u8*& outRecordPtr,
+        GpuCommandIrWireOpcode::Enum& outOpcode,
+        DecodedRecordContext& outContext,
+        Optional<GpuCommandIrBuiltinTaskRecord>& outBuiltin
+    )noexcept{
+        return stepRecord<false>(outRecordPtr, outOpcode, outContext, outBuiltin);
+    }
+
     [[nodiscard]] WireStepStatus::Enum next(
         WireRecordStorage& outStorage,
         GpuCommandIrWireOpcode::Enum& outOpcode,
         DecodedRecordContext& outContext,
         GpuCommandIrBuiltinTaskRecord* const outBuiltin
+    )noexcept{
+        const u8* recordPtr = nullptr;
+        Optional<GpuCommandIrBuiltinTaskRecord> builtin;
+        const WireStepStatus::Enum status = stepRecord<true>(recordPtr, outOpcode, outContext, builtin);
+        if(status == WireStepStatus::Record){
+            if(recordPtr)
+                std::memcpy(&outStorage, recordPtr, RasterRecordWireByteSize(outOpcode));
+            else if(outBuiltin && builtin)
+                *outBuiltin = *builtin;
+        }
+        return status;
+    }
+
+    void drain()noexcept{
+        const u8* recordPtr = nullptr;
+        Optional<GpuCommandIrBuiltinTaskRecord> builtin;
+        GpuCommandIrWireOpcode::Enum opcode = GpuCommandIrWireOpcode::Count;
+        DecodedRecordContext context;
+        while(stepRecord<true>(recordPtr, opcode, context, builtin) == WireStepStatus::Record){}
+    }
+
+    [[nodiscard]] const GpuCommandIrStreamValidationResult& validation()const noexcept{ return m_validation; }
+    [[nodiscard]] BinaryByteView blobBytes()const noexcept{ return m_validation.failed() || m_blobBytes.empty() ? BinaryByteView{} : m_blobBytes; }
+    [[nodiscard]] u64 graphGeneration()const noexcept{ return m_graphGeneration; }
+    [[nodiscard]] u64 planGeneration()const noexcept{ return m_planGeneration; }
+    [[nodiscard]] u64 recordCount()const noexcept{ return m_recordCount; }
+
+
+private:
+    template<b8 FullWireValidation>
+    [[nodiscard]] WireStepStatus::Enum stepRecord(
+        const u8*& outRecordPtr,
+        GpuCommandIrWireOpcode::Enum& outOpcode,
+        DecodedRecordContext& outContext,
+        Optional<GpuCommandIrBuiltinTaskRecord>& outBuiltin
     )noexcept{
         if(m_validation.failed())
             return WireStepStatus::Error;
@@ -496,8 +579,8 @@ public:
             fail(GpuCommandIrStreamValidationError::TruncatedRecord, recordOffset, m_nextRecordIndex);
             return WireStepStatus::Error;
         }
-        GpuCommandIrHeader header;
-        FOUNDATION_MEMCPY(&header, sizeof(header), m_commandBytes.data() + recordOffset, sizeof(header));
+        const u8* const recordPtr = m_commandBytes.data() + recordOffset;
+        const auto header = ReadWirePod<GpuCommandIrHeader>(recordPtr);
         outOpcode = header.opcode;
 
         const b8 raster = IsRasterOpcode(header.opcode);
@@ -520,11 +603,11 @@ public:
         }
 
         if(!raster){
-            GpuCommandIrBuiltinTaskRecord localBuiltin;
-            GpuCommandIrBuiltinTaskRecord& targetBuiltin = outBuiltin ? *outBuiltin : localBuiltin;
+            outRecordPtr = nullptr;
+            GpuCommandIrBuiltinTaskRecord& targetBuiltin = outBuiltin.emplace();
             if(!DecodeAndValidateBuiltinWireRecord(
                 header.opcode,
-                m_commandBytes.data() + recordOffset,
+                recordPtr,
                 m_blobBytes,
                 m_graphGeneration,
                 m_planGeneration,
@@ -541,8 +624,8 @@ public:
             return WireStepStatus::Record;
         }
 
-        FOUNDATION_MEMCPY(&outStorage, sizeof(outStorage), m_commandBytes.data() + recordOffset, expectedByteSize);
-        const auto decodedContext = DecodeRecordContext(outStorage.endRenderPass.context, m_graphGeneration, m_planGeneration);
+        const auto rawContext = ReadWirePod<GpuCommandIrRecordContext>(recordPtr + sizeof(GpuCommandIrHeader));
+        const auto decodedContext = DecodeRecordContext(rawContext, m_graphGeneration, m_planGeneration);
         if(!decodedContext){
             fail(GpuCommandIrStreamValidationError::InvalidRecord, recordOffset, m_nextRecordIndex);
             return WireStepStatus::Error;
@@ -552,24 +635,52 @@ public:
         usize nextBlobOffset = m_nextBlobOffset;
         switch(header.opcode){
         case GpuCommandIrWireOpcode::SetGraphicsState:{
-            GpuCommandIrStreamValidationError::Enum fieldError = GpuCommandIrStreamValidationError::None;
-            if(!ValidateSetGraphicsStateWireFields(outStorage.setGraphicsState, m_blobBytes, m_nextBlobOffset, fieldError)){
-                fail(fieldError, recordOffset, m_nextRecordIndex);
-                return WireStepStatus::Error;
+            const auto wire = ReadWirePod<GpuCommandIrSetGraphicsStateRecord>(recordPtr);
+            if constexpr(FullWireValidation){
+                GpuCommandIrStreamValidationError::Enum fieldError = GpuCommandIrStreamValidationError::None;
+                if(!ValidateSetGraphicsStateWireFields(wire, m_blobBytes, m_nextBlobOffset, fieldError)){
+                    fail(fieldError, recordOffset, m_nextRecordIndex);
+                    return WireStepStatus::Error;
+                }
             }
-            nextBlobOffset += static_cast<usize>(outStorage.setGraphicsState.blobSizeBytes);
+            else{
+                if(
+                    wire.pipelineIndex == Limit<u32>::s_Max
+                    || wire.colorAttachmentIndex == Limit<u32>::s_Max
+                    || wire.framebufferOwnerIndex == Limit<u32>::s_Max
+                    || wire.vertexBindingCount > s_MaxVertexAttributes
+                ){
+                    fail(GpuCommandIrStreamValidationError::InvalidRecord, recordOffset, m_nextRecordIndex);
+                    return WireStepStatus::Error;
+                }
+                const u64 expectedBlobBytes = static_cast<u64>(wire.vertexBindingCount) * sizeof(GpuCommandIrRasterVertexWire);
+                if(
+                    wire.blobSizeBytes != expectedBlobBytes
+                    || wire.blobOffsetBytes != m_nextBlobOffset
+                    || wire.blobSizeBytes > m_blobBytes.size() - m_nextBlobOffset
+                    || (wire.vertexBindingCount != 0u && !m_blobBytes.data())
+                ){
+                    fail(GpuCommandIrStreamValidationError::InvalidBlobRange, recordOffset, m_nextRecordIndex);
+                    return WireStepStatus::Error;
+                }
+            }
+            nextBlobOffset += static_cast<usize>(wire.blobSizeBytes);
             break;
         }
         case GpuCommandIrWireOpcode::BindGraphicsHeap:
-            if(outStorage.bindGraphicsHeap.pipelineIndex == Limit<u32>::s_Max || outStorage.bindGraphicsHeap.heapOwnerIndex == Limit<u32>::s_Max){
-                fail(GpuCommandIrStreamValidationError::InvalidRecord, recordOffset, m_nextRecordIndex);
-                return WireStepStatus::Error;
+            if constexpr(FullWireValidation){
+                const auto wire = ReadWirePod<GpuCommandIrBindGraphicsHeapRecord>(recordPtr);
+                if(wire.pipelineIndex == Limit<u32>::s_Max || wire.heapOwnerIndex == Limit<u32>::s_Max){
+                    fail(GpuCommandIrStreamValidationError::InvalidRecord, recordOffset, m_nextRecordIndex);
+                    return WireStepStatus::Error;
+                }
             }
             break;
         case GpuCommandIrWireOpcode::SetPushConstants:{
-            const u64 sizeBytes = outStorage.setPushConstants.blobSizeBytes;
+            const auto wire = ReadWirePod<GpuCommandIrSetPushConstantsRecord>(recordPtr);
+            const u64 sizeBytes = wire.blobSizeBytes;
             const b8 sizeValid = sizeBytes != 0u && sizeBytes <= Limit<u32>::s_Max && (sizeBytes & (s_PushConstantSizeAlignment - 1u)) == 0u;
-            if(sizeValid && (outStorage.setPushConstants.blobOffsetBytes != m_nextBlobOffset || sizeBytes > m_blobBytes.size() - m_nextBlobOffset)){
+            if(sizeValid && (wire.blobOffsetBytes != m_nextBlobOffset || sizeBytes > m_blobBytes.size() - m_nextBlobOffset || !m_blobBytes.data())){
                 fail(GpuCommandIrStreamValidationError::InvalidBlobRange, recordOffset, m_nextRecordIndex);
                 return WireStepStatus::Error;
             }
@@ -589,27 +700,13 @@ public:
             return WireStepStatus::Error;
         }
 
+        outRecordPtr = recordPtr;
         m_cursor = recordOffset + expectedByteSize;
         m_nextBlobOffset = nextBlobOffset;
         ++m_nextRecordIndex;
         return WireStepStatus::Record;
     }
 
-    void drain()noexcept{
-        WireRecordStorage storage;
-        GpuCommandIrWireOpcode::Enum opcode = GpuCommandIrWireOpcode::Count;
-        DecodedRecordContext context;
-        while(next(storage, opcode, context, nullptr) == WireStepStatus::Record){}
-    }
-
-    [[nodiscard]] const GpuCommandIrStreamValidationResult& validation()const noexcept{ return m_validation; }
-    [[nodiscard]] BinaryByteView blobBytes()const noexcept{ return m_validation.failed() || m_blobBytes.empty() ? BinaryByteView{} : m_blobBytes; }
-    [[nodiscard]] u64 graphGeneration()const noexcept{ return m_graphGeneration; }
-    [[nodiscard]] u64 planGeneration()const noexcept{ return m_planGeneration; }
-    [[nodiscard]] u64 recordCount()const noexcept{ return m_recordCount; }
-
-
-private:
     void finalizeHeader(const GpuCommandIrStreamHeader& header, const BinaryByteView commandBytes, const BinaryByteView blobBytes)noexcept{
         if((header.recordCount == 0u && header.graphGeneration != 0u) || (header.recordCount != 0u && header.graphGeneration == 0u)){
             fail(GpuCommandIrStreamValidationError::InvalidGraphGeneration, 0u, Limit<u64>::s_Max);
@@ -656,9 +753,8 @@ private:
 };
 
 [[nodiscard]] GpuCommandIrReplayError::Enum ValidateRasterGraphOperation(const GpuCommandIrRasterTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, const GpuTaskGraphTaskView& task, RasterReplayState& state)noexcept;
-[[nodiscard]] GpuCommandIrReplayError::Enum ValidateRasterWireGraphOperation(
-    GpuCommandIrWireOpcode::Enum opcode,
-    const WireRecordStorage& record,
+[[nodiscard]] GpuCommandIrReplayError::Enum ValidateSetGraphicsStateWireGraphOperation(
+    const u8* recordPtr,
     GpuTaskId taskId,
     BinaryByteView blobBytes,
     const GpuTaskGraphDeclarationReadView& graph,
@@ -669,7 +765,7 @@ private:
 [[nodiscard]] GpuCommandIrReplayError::Enum ValidateBuiltinBackendOperand(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, const GpuPhysicalQueueInfo& queue, CommandList& commandList)noexcept;
 [[nodiscard]] GpuCommandIrReplayError::Enum ValidateRasterWireBackendOperand(
     GpuCommandIrWireOpcode::Enum opcode,
-    const WireRecordStorage& record,
+    const u8* recordPtr,
     BinaryByteView blobBytes,
     GpuTaskId taskId,
     const RasterOwnerTableView& owners,
@@ -695,10 +791,9 @@ private:
 
 [[nodiscard]] const GpuTaskResourceUse* FindTaskResourceUse(const GpuTaskGraphTaskView& task, GpuGraphResourceId resource, ResourceStates::Mask state, GpuTaskResourceAccess::Enum access)noexcept;
 
-[[nodiscard]] b8 LowerRasterWireOperation(
-    GpuCommandIrWireOpcode::Enum opcode,
-    const WireRecordStorage& record,
-    const RasterOwnerTableView& owners,
+void LowerSetGraphicsStateWireRecord(
+    const u8* recordPtr,
+    const GpuCommandIrRasterStateOwner& owner,
     BinaryByteView blobBytes,
     CommandList& commandList,
     GraphicsState& reusableState

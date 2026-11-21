@@ -62,10 +62,15 @@ private:
 
 
 private:
-    MallocMutex m_mutex;
+    static constexpr usize s_FreeBinCount = 64u;
+
+
+private:
+    Futex m_mutex;
     void* m_bucket = nullptr;
     usize m_maxSize = 0u;
-    void* m_freeHead = nullptr;
+    Array<void*, s_FreeBinCount> m_freeBins{};
+    u64 m_nonEmptyBinMask = 0u;
 };
 
 

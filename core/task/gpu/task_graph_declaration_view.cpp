@@ -58,14 +58,6 @@ b8 GpuTaskGraphDeclarationReadView::validExternalCompletion(const GpuExternalCom
     return m_graph && m_graph->validExternalCompletion(id);
 }
 
-usize GpuTaskGraphDeclarationReadView::taskCount()const noexcept{
-    return m_graph ? m_graph->m_tasks.size() : 0u;
-}
-
-usize GpuTaskGraphDeclarationReadView::resourceCount()const noexcept{
-    return m_graph ? m_graph->m_resources.size() : 0u;
-}
-
 usize GpuTaskGraphDeclarationReadView::resourceVersionCount()const noexcept{
     return m_graph ? m_graph->m_resourceVersions.size() : 0u;
 }

@@ -61,6 +61,30 @@ b8 GpuTaskGraphCompiler::assignQueues(
     GpuTaskGraphQueueAssignments& outAssignments
 )const{
     using namespace GpuTaskGraphCompilerDetail;
+    b8 hasNonHazardDomainResource = false;
+    if(graph.valid()){
+        const usize resourceCount = CompilerGraphAccess::ResourceCount(graph);
+        for(usize resourceIndex = 0u; resourceIndex < resourceCount; ++resourceIndex){
+            if(CompilerGraphAccess::ResourceNode(graph, resourceIndex).type != GpuGraphResourceType::HazardDomain){
+                hasNonHazardDomainResource = true;
+                break;
+            }
+        }
+    }
+    return assignQueuesInternal(graph, analysis, topology, options, scratchArena, outAssignments, nullptr, hasNonHazardDomainResource);
+}
+
+b8 GpuTaskGraphCompiler::assignQueuesInternal(
+    const GpuTaskGraph::DeclarationReadView& graph,
+    const GpuTaskGraphAnalysis& analysis,
+    const GpuPhysicalQueueTopology& topology,
+    const GpuTaskGraphQueueAssignmentOptions& options,
+    Alloc::ScratchArena& scratchArena,
+    GpuTaskGraphQueueAssignments& outAssignments,
+    const GpuTaskGraphCompilerDetail::DenseDescendantBitMatrix* const denseDesc,
+    const b8 hasNonHazardDomainResource
+)const{
+    using namespace GpuTaskGraphCompilerDetail;
 
     if(!graph.valid())
         return false;
@@ -169,9 +193,9 @@ b8 GpuTaskGraphCompiler::assignQueues(
         }
     }
     GpuTaskSchedulingReachability schedulingReachability(scratchArena);
-    if(needsSchedulingReachability && !BuildGpuTaskSchedulingReachability(graph, analysis, schedulingReachability))
+    if(needsSchedulingReachability && !BuildGpuTaskSchedulingReachability(graph, analysis, schedulingReachability, denseDesc))
         return fail(GpuTaskGraphQueueAssignmentStatus::InvalidGraphAnalysis);
-    GpuTaskQueueScoringData scoringData(graph, analysis, schedulingReachability, options, scratchArena, &topology);
+    GpuTaskQueueScoringData scoringData(graph, analysis, schedulingReachability, options, scratchArena, &topology, hasNonHazardDomainResource);
 
     for(const GpuTaskQueuePlacementGroup& group : groups){
         auto& selectedQueue = *MakeNotNull(FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, group, CommandQueue::kCount, &legalityCache));
@@ -206,27 +230,33 @@ b8 GpuTaskGraphCompiler::assignQueues(
         const GpuTaskQueuePlacementGroup& group = groups[groupIndex];
         const GpuPhysicalQueueInfo* selectedQueue = nullptr;
         GpuQueueAssignmentScore selectedScore;
-        b8 allTasksTiny = true;
-        b8 conservative = false;
-        for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
-            const GpuTaskGraphDetail::GpuTaskNode& task = CompilerGraphAccess::TaskNode(graph, analysis.topologicalOrder()[group.assignmentOffset + taskOffset].index);
-            allTasksTiny = allTasksTiny && task.scheduling.cost == GpuTaskCostHint::Tiny;
-            conservative = conservative || !task.scheduling.overlapPreferred || task.scheduling.avoidQueueCrossing;
-        }
-        conservative = conservative || allTasksTiny;
         struct Candidate{
             const GpuPhysicalQueueInfo* queue = nullptr;
             GpuQueueAssignmentScore score;
         };
         Array<Candidate, CommandQueue::kCount> candidates{};
         usize candidateCount = 0u;
+        const b8 filterClassesByGroupMask = legalityCache.active && group.legalQueueMask != 0u && !group.initialOwnershipQueue.valid();
         for(u8 queueClassValue = 0u; queueClassValue < CommandQueue::kCount; ++queueClassValue){
+            if(filterClassesByGroupMask && (group.legalQueueMask & legalityCache.classQueueMasks[queueClassValue]) == 0u)
+                continue;
             Candidate& candidate = candidates[queueClassValue];
             candidate.queue = FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, group, static_cast<CommandQueue::Enum>(queueClassValue), &legalityCache);
             if(candidate.queue){
                 selectedQueue = candidate.queue;
                 ++candidateCount;
             }
+        }
+        const b8 requiresGraphics = HasCapabilities(group.requiredCapabilities, GpuQueueCapability::Graphics);
+        b8 conservative = false;
+        if(candidateCount > 1u || !requiresGraphics){
+            b8 allTasksTiny = true;
+            for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
+                const GpuTaskGraphDetail::GpuTaskNode& task = CompilerGraphAccess::TaskNode(graph, analysis.topologicalOrder()[group.assignmentOffset + taskOffset].index);
+                allTasksTiny = allTasksTiny && task.scheduling.cost == GpuTaskCostHint::Tiny;
+                conservative = conservative || !task.scheduling.overlapPreferred || task.scheduling.avoidQueueCrossing;
+            }
+            conservative = conservative || allTasksTiny;
         }
         if(candidateCount > 1u){
             selectedQueue = nullptr;
@@ -265,7 +295,7 @@ b8 GpuTaskGraphCompiler::assignQueues(
         }
         FOUNDATION_ASSERT(selectedQueue);
         scoredQueues[groupIndex] = selectedQueue->id;
-        scoredReasons[groupIndex] = HasCapabilities(group.requiredCapabilities, GpuQueueCapability::Graphics) ? GpuTaskQueueAssignmentReason::RequiredGraphics : conservative ? GpuTaskQueueAssignmentReason::Conservative : GpuTaskQueueAssignmentReason::Scored;
+        scoredReasons[groupIndex] = requiresGraphics ? GpuTaskQueueAssignmentReason::RequiredGraphics : conservative ? GpuTaskQueueAssignmentReason::Conservative : GpuTaskQueueAssignmentReason::Scored;
     }
     b8 anyAssignmentChanged = false;
     for(usize groupIndex = 0u; groupIndex < groups.size(); ++groupIndex){

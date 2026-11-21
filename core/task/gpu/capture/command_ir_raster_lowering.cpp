@@ -90,8 +90,7 @@ namespace __hidden_gpu_command_ir_raster_lowering{
 
     const u64 generation = colorAttachment.generation;
     for(u8 bindingIndex = 0u; bindingIndex < wire.vertexBindingCount; ++bindingIndex){
-        GpuCommandIrRasterVertexWire vertexWire;
-        FOUNDATION_MEMCPY(&vertexWire, sizeof(vertexWire), vertexPtr + bindingIndex * sizeof(GpuCommandIrRasterVertexWire), sizeof(GpuCommandIrRasterVertexWire));
+        const auto vertexWire = GpuCommandIrDetail::ReadWirePod<GpuCommandIrRasterVertexWire>(vertexPtr + bindingIndex * sizeof(GpuCommandIrRasterVertexWire));
         Buffer* const buffer = owner.vertexBuffers[bindingIndex].get();
         if(buffer != graph.bufferForResource(GpuGraphResourceId{ .generation = generation, .index = vertexWire.resourceIndex }))
             return GpuCommandIrReplayError::InvalidRasterOwner;
@@ -172,7 +171,7 @@ namespace GpuCommandIrDetail{
 
 GpuCommandIrReplayError::Enum ValidateRasterWireBackendOperand(
     const GpuCommandIrWireOpcode::Enum opcode,
-    const WireRecordStorage& record,
+    const u8* const recordPtr,
     const BinaryByteView blobBytes,
     const GpuTaskId taskId,
     const RasterOwnerTableView& owners,
@@ -185,7 +184,7 @@ GpuCommandIrReplayError::Enum ValidateRasterWireBackendOperand(
     const u64 generation = taskId.generation;
     switch(opcode){
     case GpuCommandIrWireOpcode::SetGraphicsState:{
-        const GpuCommandIrSetGraphicsStateRecord& wire = record.setGraphicsState;
+        const auto wire = ReadWirePod<GpuCommandIrSetGraphicsStateRecord>(recordPtr);
         const GpuCommandIrRasterStateOwner* const owner = owners.rasterStateOwner(wire.framebufferOwnerIndex);
         if(!owner)
             return GpuCommandIrReplayError::InvalidRasterOwner;
@@ -216,8 +215,7 @@ GpuCommandIrReplayError::Enum ValidateRasterWireBackendOperand(
         ;
         if(matchesCachedOwner){
             for(u8 bindingIndex = 0u; bindingIndex < wire.vertexBindingCount; ++bindingIndex){
-                GpuCommandIrRasterVertexWire vertexWire;
-                FOUNDATION_MEMCPY(&vertexWire, sizeof(vertexWire), vertexPtr + bindingIndex * sizeof(GpuCommandIrRasterVertexWire), sizeof(GpuCommandIrRasterVertexWire));
+                const auto vertexWire = ReadWirePod<GpuCommandIrRasterVertexWire>(vertexPtr + bindingIndex * sizeof(GpuCommandIrRasterVertexWire));
                 if(
                     owner->vertexBuffers[bindingIndex].get() != previousOwner->vertexBuffers[bindingIndex].get()
                     || vertexWire.resourceIndex != state.vertexBuffers[bindingIndex].resourceIndex
@@ -233,8 +231,7 @@ GpuCommandIrReplayError::Enum ValidateRasterWireBackendOperand(
             if(!GraphicsBackend::IsViewportValid(viewport, device) || (wire.hasScissor == 0u && !GraphicsBackend::IsImplicitScissorValid(viewport)))
                 return GpuCommandIrReplayError::InvalidRasterState;
             for(u8 bindingIndex = 0u; bindingIndex < wire.vertexBindingCount; ++bindingIndex){
-                GpuCommandIrRasterVertexWire vertexWire;
-                FOUNDATION_MEMCPY(&vertexWire, sizeof(vertexWire), vertexPtr + bindingIndex * sizeof(GpuCommandIrRasterVertexWire), sizeof(GpuCommandIrRasterVertexWire));
+                const auto vertexWire = ReadWirePod<GpuCommandIrRasterVertexWire>(vertexPtr + bindingIndex * sizeof(GpuCommandIrRasterVertexWire));
                 FOUNDATION_ASSERT(state.vertexBufferDescs[bindingIndex]);
                 if(vertexWire.offset >= state.vertexBufferDescs[bindingIndex]->byteSize)
                     return GpuCommandIrReplayError::BackendResourceNotReady;
@@ -245,8 +242,7 @@ GpuCommandIrReplayError::Enum ValidateRasterWireBackendOperand(
                     return GpuCommandIrReplayError::BackendResourceNotReady;
             }
             for(CachedRasterVertexValidation& entry : state.cachedVertexValidations){
-                GpuCommandIrRasterVertexWire vertexWire;
-                FOUNDATION_MEMCPY(&vertexWire, sizeof(vertexWire), vertexPtr + entry.vertexBindingIndex * sizeof(GpuCommandIrRasterVertexWire), sizeof(GpuCommandIrRasterVertexWire));
+                const auto vertexWire = ReadWirePod<GpuCommandIrRasterVertexWire>(vertexPtr + entry.vertexBindingIndex * sizeof(GpuCommandIrRasterVertexWire));
                 entry.offset = vertexWire.offset;
             }
             state.task = taskId;
@@ -258,7 +254,6 @@ GpuCommandIrReplayError::Enum ValidateRasterWireBackendOperand(
             state.indexFormat = indexFormat;
             state.indexElementBytes = indexResource.valid() ? GraphicsBackend::GetIndexElementByteSize(indexFormat) : 0u;
             state.active = true;
-            state.heapBound = false;
             state.pushConstantsSet = false;
             state.cachedValidatedOwner = owner;
             return GpuCommandIrReplayError::None;
@@ -291,8 +286,7 @@ GpuCommandIrReplayError::Enum ValidateRasterWireBackendOperand(
         state.indexElementBytes = indexResource.valid() ? GraphicsBackend::GetIndexElementByteSize(indexFormat) : 0u;
         state.vertexBindingCount = wire.vertexBindingCount;
         for(u8 bindingIndex = 0u; bindingIndex < wire.vertexBindingCount; ++bindingIndex){
-            GpuCommandIrRasterVertexWire vertexWire;
-            FOUNDATION_MEMCPY(&vertexWire, sizeof(vertexWire), vertexPtr + bindingIndex * sizeof(GpuCommandIrRasterVertexWire), sizeof(GpuCommandIrRasterVertexWire));
+            const auto vertexWire = ReadWirePod<GpuCommandIrRasterVertexWire>(vertexPtr + bindingIndex * sizeof(GpuCommandIrRasterVertexWire));
             state.vertexBuffers[bindingIndex] = RasterVertexCacheEntry{
                 .resourceGeneration = generation,
                 .resourceIndex = vertexWire.resourceIndex,
@@ -341,8 +335,7 @@ GpuCommandIrReplayError::Enum ValidateRasterWireBackendOperand(
                     state.cachedInputLayoutError = GpuCommandIrReplayError::InvalidRasterDraw;
                     break;
                 }
-                GpuCommandIrRasterVertexWire vertexWire;
-                FOUNDATION_MEMCPY(&vertexWire, sizeof(vertexWire), vertexPtr + bindingIndex * sizeof(GpuCommandIrRasterVertexWire), sizeof(GpuCommandIrRasterVertexWire));
+                const auto vertexWire = ReadWirePod<GpuCommandIrRasterVertexWire>(vertexPtr + bindingIndex * sizeof(GpuCommandIrRasterVertexWire));
                 state.cachedVertexValidations.push_back(CachedRasterVertexValidation{
                     .bufferDesc = state.vertexBufferDescs[bindingIndex],
                     .offset = vertexWire.offset,
@@ -357,7 +350,7 @@ GpuCommandIrReplayError::Enum ValidateRasterWireBackendOperand(
         return GpuCommandIrReplayError::None;
     }
     case GpuCommandIrWireOpcode::BindGraphicsHeap:{
-        const GpuCommandIrBindGraphicsHeapRecord& wire = record.bindGraphicsHeap;
+        const auto wire = ReadWirePod<GpuCommandIrBindGraphicsHeapRecord>(recordPtr);
         if(!state.active || state.pipeline != GpuGraphPipelineId{ .generation = generation, .index = wire.pipelineIndex } || !state.cachedValidatedOwner)
             return GpuCommandIrReplayError::InvalidRasterState;
         if(!state.cachedDescriptorHeap){
@@ -382,8 +375,9 @@ GpuCommandIrReplayError::Enum ValidateRasterWireBackendOperand(
     case GpuCommandIrWireOpcode::SetPushConstants:{
         if(!state.active || !state.cachedValidatedOwner)
             return GpuCommandIrReplayError::InvalidRasterState;
+        const auto wire = ReadWirePod<GpuCommandIrSetPushConstantsRecord>(recordPtr);
         FOUNDATION_ASSERT(state.cachedValidatedOwner->pipeline);
-        if(record.setPushConstants.blobSizeBytes > state.cachedValidatedOwner->pipeline->pushConstantByteSize)
+        if(wire.blobSizeBytes > state.cachedValidatedOwner->pipeline->pushConstantByteSize)
             return GpuCommandIrReplayError::InvalidRasterState;
         state.pushConstantsSet = true;
         return GpuCommandIrReplayError::None;
@@ -392,7 +386,8 @@ GpuCommandIrReplayError::Enum ValidateRasterWireBackendOperand(
     case GpuCommandIrWireOpcode::DrawIndexed:{
         if(!state.active || !state.heapBound || !state.pushConstantsSet)
             return GpuCommandIrReplayError::InvalidRasterState;
-        return __hidden_gpu_command_ir_raster_lowering::ValidateDraw(opcode, record.draw, state);
+        const auto wire = ReadWirePod<GpuCommandIrDrawRecord>(recordPtr);
+        return __hidden_gpu_command_ir_raster_lowering::ValidateDraw(opcode, wire, state);
     }
     case GpuCommandIrWireOpcode::EndRenderPass:
         state.active = false;
@@ -408,86 +403,51 @@ GpuCommandIrReplayError::Enum ValidateRasterWireBackendOperand(
     }
 }
 
-b8 LowerRasterWireOperation(
-    const GpuCommandIrWireOpcode::Enum opcode,
-    const WireRecordStorage& record,
-    const RasterOwnerTableView& owners,
+void LowerSetGraphicsStateWireRecord(
+    const u8* const recordPtr,
+    const GpuCommandIrRasterStateOwner& owner,
     const BinaryByteView blobBytes,
     CommandList& commandList,
     GraphicsState& reusableState
 ){
-    switch(opcode){
-    case GpuCommandIrWireOpcode::SetGraphicsState:{
-        const GpuCommandIrSetGraphicsStateRecord& wire = record.setGraphicsState;
-        auto& owner = *MakeNotNull(owners.rasterStateOwner(wire.framebufferOwnerIndex));
-        FOUNDATION_ASSERT(owner.pipeline && owner.framebuffer);
-        reusableState.pipeline = owner.pipeline.get();
-        reusableState.framebuffer = owner.framebuffer.get();
-        reusableState.viewport.viewports.resize(1u);
-        reusableState.viewport.viewports[0u] = Viewport{ wire.viewportMinX, wire.viewportMaxX, wire.viewportMinY, wire.viewportMaxY, wire.viewportMinZ, wire.viewportMaxZ };
-        if(wire.hasScissor != 0u){
-            reusableState.viewport.scissorRects.resize(1u);
-            reusableState.viewport.scissorRects[0u] = Rect{ wire.scissor.minX, wire.scissor.maxX, wire.scissor.minY, wire.scissor.maxY };
-        }
-        else{
-            reusableState.viewport.scissorRects.clear();
-        }
-        reusableState.blendConstantColor = Color(wire.blendConstantColor.r, wire.blendConstantColor.g, wire.blendConstantColor.b, wire.blendConstantColor.a);
-        reusableState.dynamicStencilRefValue = wire.stencilRef;
-        reusableState.vertexBuffers.resize(wire.vertexBindingCount);
-        if(wire.vertexBindingCount != 0u){
-            const u8* const vertexPtr = blobBytes.data() + static_cast<usize>(wire.blobOffsetBytes);
-            for(u8 index = 0u; index < wire.vertexBindingCount; ++index){
-                GpuCommandIrRasterVertexWire vertexWire;
-                FOUNDATION_MEMCPY(&vertexWire, sizeof(vertexWire), vertexPtr + index * sizeof(GpuCommandIrRasterVertexWire), sizeof(GpuCommandIrRasterVertexWire));
-                reusableState.vertexBuffers[index] = VertexBufferBinding{
-                    .buffer = owner.vertexBuffers[index].get(),
-                    .offset = vertexWire.offset,
-                    .slot = vertexWire.slot,
-                };
-            }
-        }
-        if(wire.indexResourceIndex != Limit<u32>::s_Max){
-            reusableState.indexBuffer = IndexBufferBinding{
-                .buffer = owner.indexBuffer.get(),
-                .offset = wire.indexOffset,
-                .format = static_cast<Format::Enum>(wire.indexFormat),
+    const auto wire = ReadWirePod<GpuCommandIrSetGraphicsStateRecord>(recordPtr);
+    FOUNDATION_ASSERT(owner.pipeline && owner.framebuffer);
+    reusableState.pipeline = owner.pipeline.get();
+    reusableState.framebuffer = owner.framebuffer.get();
+    reusableState.viewport.viewports.resize(1u);
+    reusableState.viewport.viewports[0u] = Viewport{ wire.viewportMinX, wire.viewportMaxX, wire.viewportMinY, wire.viewportMaxY, wire.viewportMinZ, wire.viewportMaxZ };
+    if(wire.hasScissor != 0u){
+        reusableState.viewport.scissorRects.resize(1u);
+        reusableState.viewport.scissorRects[0u] = Rect{ wire.scissor.minX, wire.scissor.maxX, wire.scissor.minY, wire.scissor.maxY };
+    }
+    else{
+        reusableState.viewport.scissorRects.clear();
+    }
+    reusableState.blendConstantColor = Color(wire.blendConstantColor.r, wire.blendConstantColor.g, wire.blendConstantColor.b, wire.blendConstantColor.a);
+    reusableState.dynamicStencilRefValue = wire.stencilRef;
+    reusableState.vertexBuffers.resize(wire.vertexBindingCount);
+    if(wire.vertexBindingCount != 0u){
+        const u8* const vertexPtr = blobBytes.data() + static_cast<usize>(wire.blobOffsetBytes);
+        for(u8 index = 0u; index < wire.vertexBindingCount; ++index){
+            const auto vertexWire = ReadWirePod<GpuCommandIrRasterVertexWire>(vertexPtr + index * sizeof(GpuCommandIrRasterVertexWire));
+            reusableState.vertexBuffers[index] = VertexBufferBinding{
+                .buffer = owner.vertexBuffers[index].get(),
+                .offset = vertexWire.offset,
+                .slot = vertexWire.slot,
             };
         }
-        else{
-            reusableState.indexBuffer = IndexBufferBinding{};
-        }
-        commandList.setGraphicsState(reusableState);
-        return !commandList.commandRecordingFailed();
     }
-    case GpuCommandIrWireOpcode::BindGraphicsHeap:{
-        auto& owner = *MakeNotNull(owners.rasterHeapOwner(record.bindGraphicsHeap.heapOwnerIndex));
-        FOUNDATION_ASSERT(owner.heap && owner.pipeline);
-        owner.heap->bindGraphics(commandList, *owner.pipeline);
-        return !commandList.commandRecordingFailed();
+    if(wire.indexResourceIndex != Limit<u32>::s_Max){
+        reusableState.indexBuffer = IndexBufferBinding{
+            .buffer = owner.indexBuffer.get(),
+            .offset = wire.indexOffset,
+            .format = static_cast<Format::Enum>(wire.indexFormat),
+        };
     }
-    case GpuCommandIrWireOpcode::SetPushConstants:{
-        const GpuCommandIrSetPushConstantsRecord& wire = record.setPushConstants;
-        FOUNDATION_ASSERT(blobBytes.data() && wire.blobOffsetBytes <= static_cast<u64>(blobBytes.size()) && wire.blobSizeBytes <= static_cast<u64>(blobBytes.size()) - wire.blobOffsetBytes);
-        commandList.setPushConstants(blobBytes.data() + static_cast<usize>(wire.blobOffsetBytes), static_cast<usize>(wire.blobSizeBytes));
-        return !commandList.commandRecordingFailed();
+    else{
+        reusableState.indexBuffer = IndexBufferBinding{};
     }
-    case GpuCommandIrWireOpcode::Draw:{
-        const GpuCommandIrDrawRecord& wire = record.draw;
-        commandList.draw(DrawArguments{ wire.vertexCount, wire.instanceCount, wire.startIndexLocation, wire.startVertexLocation, wire.startInstanceLocation });
-        return !commandList.commandRecordingFailed();
-    }
-    case GpuCommandIrWireOpcode::DrawIndexed:{
-        const GpuCommandIrDrawRecord& wire = record.draw;
-        commandList.drawIndexed(DrawArguments{ wire.vertexCount, wire.instanceCount, wire.startIndexLocation, wire.startVertexLocation, wire.startInstanceLocation });
-        return !commandList.commandRecordingFailed();
-    }
-    case GpuCommandIrWireOpcode::EndRenderPass:
-        commandList.endRenderPass();
-        return !commandList.commandRecordingFailed();
-    default:
-        return false;
-    }
+    commandList.setGraphicsState(reusableState);
 }
 
 

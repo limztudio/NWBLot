@@ -302,10 +302,20 @@ b8 RendererFramePipeline::prepareResources(in FramebufferPtr framebuffer){
     if(hasCsgFrameWork)
         csgReceiverRangeCount = this.m_world.view<RendererComponent>().candidateCount();
 
-    if(!this.m_materialSystem.prepareMaterialPassResources(deferredTargets.framebuffer, MaterialPipelinePass::Opaque, false, this.m_preparedCsgFrameState))
+    this.m_materialSystem.beginPreparedFrameCache();
+    f32 meshViewAspectRatio = s_CameraFallbackAspectRatio;
+    if(deferredTargets.framebuffer.valid()){
+        in FramebufferInfoEx meshViewFramebufferInfo = deferredTargets.framebuffer.deref().getFramebufferInfo();
+        if(meshViewFramebufferInfo.width != 0u && meshViewFramebufferInfo.height != 0u)
+            meshViewAspectRatio = cast<f32>(meshViewFramebufferInfo.width) / cast<f32>(meshViewFramebufferInfo.height);
+    }
+    const MeshViewGpuData preparedMeshView = this.m_meshSystem.resolveMeshViewState(meshViewAspectRatio);
+    const Optional<in MeshViewGpuData> preparedMeshViewOpt(preparedMeshView);
+
+    if(!this.m_materialSystem.prepareMaterialPassResources(deferredTargets.framebuffer, MaterialPipelinePass::Opaque, false, this.m_preparedCsgFrameState, preparedMeshViewOpt))
         return false;
 
-    if(this.m_preparedHasTransparentRenderers && !this.m_avboitSystem.prepareAvboitPassResources(this.m_preparedCsgFrameState, deferredTargets))
+    if(this.m_preparedHasTransparentRenderers && !this.m_avboitSystem.prepareAvboitPassResources(this.m_preparedCsgFrameState, deferredTargets, preparedMeshViewOpt))
         return false;
 
     const MaterialPassBufferSnapshot materialBuffers = this.m_materialSystem.materialPassBufferSnapshot();

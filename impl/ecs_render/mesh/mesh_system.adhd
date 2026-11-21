@@ -126,6 +126,8 @@ class RendererMeshSystem : NoCopy{
 
     public Expected<f32x4x4> snapshotAcceptedMeshViewWorldToClip()const;
 
+    public MeshViewGpuData resolveMeshViewState(in f32 fallbackAspectRatio)const;
+
     public MeshViewBufferUpload prepareMeshViewBufferUpload(in f32 fallbackAspectRatio)const;
 
     public void confirmMeshViewBufferUpload(in MeshViewGpuData viewState);

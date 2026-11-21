@@ -8,6 +8,7 @@
 #include "module.h"
 #include "backend_forward.h"
 
+#include <global/allocation_size.h>
 #include <core/task/cpu/scheduler.h>
 
 #include "command_buffer_resource_references.h"
@@ -42,7 +43,84 @@ private:
 
 
 private:
-    using InFlightCommandBufferQueue = Deque<TrackedCommandBufferPtr, Alloc::GlobalArena>;
+    class InFlightCommandBufferQueue final : NoCopy{
+    public:
+        explicit InFlightCommandBufferQueue(Alloc::GlobalArena& arena)noexcept
+            : m_storage(arena)
+            , m_arena(arena)
+        {}
+
+        [[nodiscard]] b8 empty()const noexcept{ return m_count == 0u; }
+        [[nodiscard]] usize size()const noexcept{ return m_count; }
+        [[nodiscard]] TrackedCommandBufferPtr& front()noexcept{
+            FOUNDATION_ASSERT(m_count != 0u);
+            return m_storage[m_head];
+        }
+        [[nodiscard]] TrackedCommandBufferPtr& back()noexcept{
+            FOUNDATION_ASSERT(m_count != 0u);
+            return m_storage[(m_head + m_count - 1u) & m_mask];
+        }
+        [[nodiscard]] TrackedCommandBufferPtr& operator[](const usize index)noexcept{
+            FOUNDATION_ASSERT(index < m_count);
+            return m_storage[(m_head + index) & m_mask];
+        }
+        void reserve(const usize requiredCapacity){
+            if(requiredCapacity <= m_storage.size())
+                return;
+            usize nextCapacity = m_storage.empty() ? 16u : m_storage.size();
+            while(nextCapacity < requiredCapacity){
+                if(nextCapacity > Limit<usize>::s_Max / 2u)
+                    throw AllocationSizeException{};
+                nextCapacity *= 2u;
+            }
+            Vector<TrackedCommandBufferPtr, Alloc::GlobalArena> nextStorage(m_arena);
+            nextStorage.resize(nextCapacity);
+            for(usize i = 0u; i < m_count; ++i)
+                nextStorage[i] = Move(m_storage[(m_head + i) & m_mask]);
+            m_storage.swap(nextStorage);
+            m_head = 0u;
+            m_mask = nextCapacity - 1u;
+        }
+        void push_back(TrackedCommandBufferPtr&& value){
+            if(m_count == m_storage.size())
+                reserve(m_count + 1u);
+            push_back_reserved(Move(value));
+        }
+        void push_back_reserved(TrackedCommandBufferPtr&& value)noexcept{
+            FOUNDATION_ASSERT(m_count < m_storage.size());
+            m_storage[(m_head + m_count) & m_mask] = Move(value);
+            ++m_count;
+        }
+        void pop_front()noexcept{
+            FOUNDATION_ASSERT(m_count != 0u);
+            m_storage[m_head].reset();
+            m_head = (m_head + 1u) & m_mask;
+            --m_count;
+            if(m_count == 0u)
+                m_head = 0u;
+        }
+        void pop_back()noexcept{
+            FOUNDATION_ASSERT(m_count != 0u);
+            --m_count;
+            m_storage[(m_head + m_count) & m_mask].reset();
+            if(m_count == 0u)
+                m_head = 0u;
+        }
+        void clear()noexcept{
+            for(usize i = 0u; i < m_count; ++i)
+                m_storage[(m_head + i) & m_mask].reset();
+            m_head = 0u;
+            m_count = 0u;
+        }
+
+
+    private:
+        Vector<TrackedCommandBufferPtr, Alloc::GlobalArena> m_storage;
+        Alloc::GlobalArena& m_arena;
+        usize m_head = 0u;
+        usize m_count = 0u;
+        usize m_mask = 0u;
+    };
     using CommandBufferPoolList = Vector<TrackedCommandBufferPtr, Alloc::GlobalArena>;
 
 
@@ -206,6 +284,8 @@ private:
     Vector<u32, Alloc::GlobalArena> m_submitDescriptorHeapUseStamps;
     Vector<NotNull<TrackedCommandBuffer*>, Alloc::GlobalArena> m_submitValidatedTimerQueryCommandBuffers;
     u32 m_submitDescriptorHeapUseStamp = 0u;
+    u64 m_nextExecuteBatchStamp = 1u;
+    u64 m_nextSubmitBatchStamp = 1u;
     Vector<BatchPreparedEntry, Alloc::GlobalArena> m_submitBatchEntries;
     Vector<VkSubmitInfo2, Alloc::GlobalArena> m_submitBatchInfos;
     Vector<VkSemaphoreSubmitInfo, Alloc::GlobalArena> m_submitWaitInfos;

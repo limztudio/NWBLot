@@ -75,6 +75,7 @@ public:
         , m_referencedBottomLevelReferenceSets(arena)
     {}
     [[nodiscard]] b8 hasRetainedTopLevelAccelStructs()const noexcept{ return !m_referencedTopLevelAccelStructs.empty(); }
+    [[nodiscard]] b8 pendingEmpty()const noexcept{ return m_pendingAccelStructBuildCommits.empty(); }
 
 
 private:

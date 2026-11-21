@@ -44,12 +44,13 @@ u32 ComputeObjectGeometryDecodeGroupCount(in u32 meshletCount){
     return Max(meshletCount, 1u);
 }
 
-b8 CanPrepareMaterialPassTargets(in b8 hasFramebuffer, in MaterialPipelinePass pass, in b8 avboitTargetsValid){
-    if(!hasFramebuffer)
-        return false;
-    if(MaterialPipelinePassUsesRendererAvboit(pass) && !avboitTargetsValid)
-        return false;
-    return true;
+Optional<u32> ResolveClipContextHeapSlot(in Optional<CsgGraphResourceSnapshot> csgResources){
+    if(!csgResources.has_value())
+        return Optional<u32>();
+    const Expected<u32> resolved = csgResources.value().findClipContextHeapSlot();
+    if(!resolved.has_value())
+        return Optional<u32>();
+    return Optional<u32>(resolved.value());
 }
 
 
@@ -84,12 +85,15 @@ b8 MaterialPassDrawRecorder::computeMaterialPassDrawResourcesReady(in Span<Mater
     return true;
 }
 
-void MaterialPassDrawRecorder::setMaterialPassCommonBufferStates(mut MaterialPassDrawContext context, in MaterialPassMeshResourceSnapshot mesh){
+void MaterialPassDrawRecorder::setMaterialPassMeshBufferStates(mut MaterialPassDrawContext context, in MaterialPassMeshResourceSnapshot mesh){
     if(!context.materialGeometryStatesGraphOwned){
         ForEachMaterialPassMeshSourceBuffer(mesh, lambda[mut context](in BufferHandle buffer) -> void{
             context.commandList.setBufferState(buffer.deref(), ResourceStates::ShaderResource);
         });
     }
+}
+
+void MaterialPassDrawRecorder::setMaterialPassFrameBufferStates(mut MaterialPassDrawContext context){
     if(!context.materialFrameStatesGraphOwned){
         assert(context.frameBindings.bindingValid());
         context.commandList.setBufferState(context.frameBindings.instanceBuffer.deref(), ResourceStates::ShaderResource);
@@ -98,7 +102,21 @@ void MaterialPassDrawRecorder::setMaterialPassCommonBufferStates(mut MaterialPas
     }
 }
 
-b8 MaterialPassDrawRecorder::setMaterialPassDrawPushConstants(mut MaterialPassDrawContext context, in MaterialPassDrawItem drawItem, in MaterialPassMeshResourceSnapshot mesh){
+void MaterialPassDrawRecorder::setMaterialPassCommonBufferStates(mut MaterialPassDrawContext context, in MaterialPassMeshResourceSnapshot mesh){
+    this.setMaterialPassMeshBufferStates(context, mesh);
+    this.setMaterialPassFrameBufferStates(context);
+}
+
+b8 MaterialPassDrawRecorder::setMaterialPassDrawPushConstantsPrepared(
+    mut MaterialPassDrawContext context,
+    in MaterialPassDrawItem drawItem,
+    in MaterialPassMeshResourceSnapshot mesh,
+    in MeshFrameHeapSlots baseFrameHeapSlots,
+    in b8 usesAvboit,
+    in b8 hdr10OutputActive,
+    in b8 isRefractionCapture,
+    in Optional<u32> clipContextHeapSlot
+){
     const u32 dispatchFlags = ResolveMaterialPassDrawDispatchFlags(
         mesh.runtimeMesh,
         mesh.dynamicMeshletBoundsFresh,
@@ -114,14 +132,12 @@ b8 MaterialPassDrawRecorder::setMaterialPassDrawPushConstants(mut MaterialPassDr
     if(csgBindingUse.clip){
         if(!context.csgResources.has_value())
             return false;
-        const Expected<u32> resolvedClipContext = context.csgResources.value().findClipContextHeapSlot();
-        assert(resolvedClipContext.has_value());
-        if(!resolvedClipContext.has_value())
+        assert(clipContextHeapSlot.has_value());
+        if(!clipContextHeapSlot.has_value())
             return false;
-        csgContextHeapSlot = resolvedClipContext.value();
+        csgContextHeapSlot = clipContextHeapSlot.value();
     }
-    MeshFrameHeapSlots frameHeapSlots = ResolveMeshFrameHeapSlots(context.frameBindings);
-    if(MaterialPipelinePassUsesRendererAvboit(context.pass)){
+    if(usesAvboit){
         SetTransparentDrawPushConstants(
             context.commandList,
             mesh.meshletCount,
@@ -129,29 +145,45 @@ b8 MaterialPassDrawRecorder::setMaterialPassDrawPushConstants(mut MaterialPassDr
             drawItem.materialConstantByteOffset,
             context.viewportState,
             context.avboitTargets.value(),
-            frameHeapSlots,
+            baseFrameHeapSlots,
             dispatchFlags,
-            this.m_graphics.isHDR10OutputActive(),
+            hdr10OutputActive,
             csgContextHeapSlot,
-            context.pass == MaterialPipelinePass::AvboitRefractionCapture
+            isRefractionCapture
         );
         return true;
     }
 
+    MeshFrameHeapSlots frameHeapSlots = baseFrameHeapSlots;
     frameHeapSlots.generatedVertex = csgContextHeapSlot;
 
     SetShaderDrivenPushConstants(context.commandList, mesh.meshletCount, drawItem.instanceIndex, drawItem.materialConstantByteOffset, context.viewportState, frameHeapSlots, dispatchFlags);
     return true;
 }
 
-void MaterialPassDrawRecorder::dispatchComputeMaterialPassDrawItem(mut MaterialPassDrawContext context, in MaterialPassDrawItem drawItem, in MaterialPassMeshResourceSnapshot mesh, in MaterialPassPipelineResourceSnapshot pipelineResources){
-    ComputeState computeState;
-    computeState.setPipeline(pipelineResources.computePipeline.deref());
+b8 MaterialPassDrawRecorder::setMaterialPassDrawPushConstants(mut MaterialPassDrawContext context, in MaterialPassDrawItem drawItem, in MaterialPassMeshResourceSnapshot mesh){
+    const Optional<u32> clipContextHeapSlot = ResolveClipContextHeapSlot(context.csgResources);
+    return this.setMaterialPassDrawPushConstantsPrepared(
+        context,
+        drawItem,
+        mesh,
+        ResolveMeshFrameHeapSlots(context.frameBindings),
+        MaterialPipelinePassUsesRendererAvboit(context.pass),
+        this.m_graphics.isHDR10OutputActive(),
+        context.pass == MaterialPipelinePass::AvboitRefractionCapture,
+        clipContextHeapSlot
+    );
+}
 
-    context.commandList.setComputeState(computeState);
-    this.m_graphics.getDevice().getDescriptorHeap().bindCompute(context.commandList, pipelineResources.computePipeline.deref());
-
-    const MeshFrameHeapSlots frameHeapSlots = ResolveMeshFrameHeapSlots(context.frameBindings, mesh.emulationVertexHeapHandle.slot());
+void MaterialPassDrawRecorder::dispatchComputeMaterialPassDrawItemPrepared(
+    mut MaterialPassDrawContext context,
+    in MaterialPassDrawItem drawItem,
+    in MaterialPassMeshResourceSnapshot mesh,
+    in MaterialPassPipelineResourceSnapshot pipelineResources,
+    in MeshFrameHeapSlots baseFrameHeapSlots
+){
+    MeshFrameHeapSlots frameHeapSlots = baseFrameHeapSlots;
+    frameHeapSlots.generatedVertex = mesh.emulationVertexHeapHandle.slot();
     ShaderDrivenPushConstants pushConstants = BuildShaderDrivenPushConstants(
         mesh.meshletCount,
         drawItem.instanceIndex,
@@ -181,48 +213,108 @@ void MaterialPassDrawRecorder::dispatchComputeMaterialPassDrawItem(mut MaterialP
     }
     else
         context.commandList.setPushConstants(pushConstants);
+    context.commandList.dispatch(mesh.meshletCount, 1u, 1u);
+}
+
+void MaterialPassDrawRecorder::dispatchComputeMaterialPassDrawItem(mut MaterialPassDrawContext context, in MaterialPassDrawItem drawItem, in MaterialPassMeshResourceSnapshot mesh, in MaterialPassPipelineResourceSnapshot pipelineResources){
+    ComputeState computeState;
+    computeState.setPipeline(pipelineResources.computePipeline.deref());
+
+    context.commandList.setComputeState(computeState);
+    this.m_graphics.getDevice().getDescriptorHeap().bindCompute(context.commandList, pipelineResources.computePipeline.deref());
+
+    const MeshFrameHeapSlots baseFrameHeapSlots = ResolveMeshFrameHeapSlots(context.frameBindings);
     {
         GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeMeshDispatch, this.m_graphics.getDevice(), context.commandList);
 
-        context.commandList.dispatch(mesh.meshletCount, 1u, 1u);
+        this.dispatchComputeMaterialPassDrawItemPrepared(context, drawItem, mesh, pipelineResources, baseFrameHeapSlots);
     }
 }
 
-void MaterialPassDrawRecorder::drawComputeMaterialPassDrawItem(mut MaterialPassDrawContext context, in MaterialPassDrawItem drawItem, in MaterialPassMeshResourceSnapshot mesh, in MaterialPassPipelineResourceSnapshot pipelineResources){
-    GraphicsState graphicsState;
-    graphicsState.setPipeline(pipelineResources.emulationPipeline.deref());
-    graphicsState.setFramebuffer(context.framebuffer.deref());
-    graphicsState.setViewport(context.viewportState);
-    VertexBufferBinding vertexBinding;
-    vertexBinding.setBuffer(mesh.emulationVertexBuffer.deref());
-    vertexBinding.setSlot(s_MeshEmulationVertexBufferIndex);
-    vertexBinding.setOffset(0u);
-    graphicsState.addVertexBuffer(vertexBinding);
-    if(pipelineResources.indexedGeometryOutput){
-        assert(mesh.emulationIndexByteOffset != 0u);
-        IndexBufferBinding indexBinding;
-        indexBinding.setBuffer(mesh.emulationVertexBuffer.deref());
-        indexBinding.setFormat(Format::R32_UINT);
-        indexBinding.setOffset(mesh.emulationIndexByteOffset);
-        graphicsState.setIndexBuffer(indexBinding);
+void MaterialPassDrawRecorder::drawComputeMaterialPassDrawItemPrepared(
+    mut MaterialPassDrawContext context,
+    in MaterialPassDrawItem drawItem,
+    in MaterialPassMeshResourceSnapshot mesh,
+    in MaterialPassPipelineResourceSnapshot pipelineResources,
+    in MeshFrameHeapSlots baseFrameHeapSlots,
+    in b8 usesAvboit,
+    in b8 hdr10OutputActive,
+    in b8 isRefractionCapture,
+    in Optional<u32> clipContextHeapSlot,
+    mut GraphicsPipelineHandle lastPipeline,
+    mut BufferHandle lastBuffer,
+    mut u32 lastIndexByteOffset,
+    mut b8 lastIndexed
+){
+    in GraphicsPipelineHandle pipeline = pipelineResources.emulationPipeline;
+    const b8 indexed = pipelineResources.indexedGeometryOutput;
+    if(
+        pipeline != lastPipeline
+        || mesh.emulationVertexBuffer != lastBuffer
+        || indexed != lastIndexed
+        || (indexed && mesh.emulationIndexByteOffset != lastIndexByteOffset)
+    ){
+        GraphicsState graphicsState;
+        graphicsState.setPipeline(pipeline.deref());
+        graphicsState.setFramebuffer(context.framebuffer.deref());
+        graphicsState.setViewport(context.viewportState);
+        VertexBufferBinding vertexBinding;
+        vertexBinding.setBuffer(mesh.emulationVertexBuffer.deref());
+        vertexBinding.setSlot(s_MeshEmulationVertexBufferIndex);
+        vertexBinding.setOffset(0u);
+        graphicsState.addVertexBuffer(vertexBinding);
+        if(indexed){
+            assert(mesh.emulationIndexByteOffset != 0u);
+            IndexBufferBinding indexBinding;
+            indexBinding.setBuffer(mesh.emulationVertexBuffer.deref());
+            indexBinding.setFormat(Format::R32_UINT);
+            indexBinding.setOffset(mesh.emulationIndexByteOffset);
+            graphicsState.setIndexBuffer(indexBinding);
+        }
+        context.commandList.setGraphicsState(graphicsState);
+        lastBuffer = mesh.emulationVertexBuffer;
+        lastIndexed = indexed;
+        lastIndexByteOffset = mesh.emulationIndexByteOffset;
+    }
+    if(pipeline != lastPipeline){
+        this.m_graphics.getDevice().getDescriptorHeap().bindGraphics(context.commandList, pipeline.deref());
+        lastPipeline = pipeline;
     }
 
-    context.commandList.setGraphicsState(graphicsState);
-    this.m_graphics.getDevice().getDescriptorHeap().bindGraphics(context.commandList, pipelineResources.emulationPipeline.deref());
-
-    if(!this.setMaterialPassDrawPushConstants(context, drawItem, mesh))
+    if(!this.setMaterialPassDrawPushConstantsPrepared(context, drawItem, mesh, baseFrameHeapSlots, usesAvboit, hdr10OutputActive, isRefractionCapture, clipContextHeapSlot))
         return;
 
     DrawArguments drawArgs;
     drawArgs.setVertexCount(mesh.meshletPrimitiveIndexCount);
-    {
-        GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeRaster, this.m_graphics.getDevice(), context.commandList);
+    if(indexed)
+        context.commandList.drawIndexed(drawArgs);
+    else
+        context.commandList.draw(drawArgs);
+}
 
-        if(pipelineResources.indexedGeometryOutput)
-            context.commandList.drawIndexed(drawArgs);
-        else
-            context.commandList.draw(drawArgs);
-    }
+void MaterialPassDrawRecorder::drawComputeMaterialPassDrawItem(mut MaterialPassDrawContext context, in MaterialPassDrawItem drawItem, in MaterialPassMeshResourceSnapshot mesh, in MaterialPassPipelineResourceSnapshot pipelineResources){
+    GraphicsPipelineHandle lastPipeline;
+    BufferHandle lastBuffer;
+    u32 lastIndexByteOffset = 0u;
+    b8 lastIndexed = false;
+    const Optional<u32> clipContextHeapSlot = ResolveClipContextHeapSlot(context.csgResources);
+    GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeRaster, this.m_graphics.getDevice(), context.commandList);
+
+    this.drawComputeMaterialPassDrawItemPrepared(
+        context,
+        drawItem,
+        mesh,
+        pipelineResources,
+        ResolveMeshFrameHeapSlots(context.frameBindings),
+        MaterialPipelinePassUsesRendererAvboit(context.pass),
+        this.m_graphics.isHDR10OutputActive(),
+        context.pass == MaterialPipelinePass::AvboitRefractionCapture,
+        clipContextHeapSlot,
+        lastPipeline,
+        lastBuffer,
+        lastIndexByteOffset,
+        lastIndexed
+    );
 }
 
 void MaterialPassDrawRecorder::renderMaterialPassDrawItems(mut MaterialPassDrawContext context, in MaterialPassDrawItemsView drawItems){
@@ -235,28 +327,45 @@ void MaterialPassDrawRecorder::renderMaterialPassDrawItems(mut MaterialPassDrawC
 }
 
 void MaterialPassDrawRecorder::renderMeshMaterialPassDrawItems(mut MaterialPassDrawContext context, in Span<MaterialPassDrawItem> drawItems){
+    if(drawItems.empty())
+        return;
+
+    this.setMaterialPassFrameBufferStates(context);
+    if(!context.materialGeometryStatesGraphOwned){
+        for(in MaterialPassDrawItem drawItem : drawItems)
+            this.setMaterialPassMeshBufferStates(context, drawItem.meshResources);
+    }
+
+    const MeshFrameHeapSlots baseFrameHeapSlots = ResolveMeshFrameHeapSlots(context.frameBindings);
+    const b8 usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
+    const b8 hdr10OutputActive = this.m_graphics.isHDR10OutputActive();
+    const b8 isRefractionCapture = context.pass == MaterialPipelinePass::AvboitRefractionCapture;
+    const Optional<u32> clipContextHeapSlot = ResolveClipContextHeapSlot(context.csgResources);
+    mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
+
+    MeshletState meshletState;
+    meshletState.setFramebuffer(context.framebuffer.deref());
+    meshletState.setViewport(context.viewportState);
+    MeshletPipelineHandle lastPipeline;
+
+    GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeMeshDispatch, this.m_graphics.getDevice(), context.commandList);
     for(in MaterialPassDrawItem drawItem : drawItems){
         in MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
         in MaterialPassPipelineResourceSnapshot pipelineResources = drawItem.pipelineResources;
         assert(this.materialPassDrawResourcesReady(mesh, context.frameBindings));
         assert(pipelineResources.meshletPipeline.valid());
-        this.setMaterialPassCommonBufferStates(context, mesh);
 
-        MeshletState meshletState;
-        meshletState.setPipeline(pipelineResources.meshletPipeline.deref());
-        meshletState.setFramebuffer(context.framebuffer.deref());
-        meshletState.setViewport(context.viewportState);
-
-        context.commandList.setMeshletState(meshletState);
-        this.m_graphics.getDevice().getDescriptorHeap().bindGraphics(context.commandList, pipelineResources.meshletPipeline.deref());
-
-        if(!this.setMaterialPassDrawPushConstants(context, drawItem, mesh))
-            continue;
-        {
-            GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeMeshDispatch, this.m_graphics.getDevice(), context.commandList);
-
-            context.commandList.dispatchMesh(mesh.meshletCount, 1u, 1u);
+        if(pipelineResources.meshletPipeline != lastPipeline){
+            meshletState.setPipeline(pipelineResources.meshletPipeline.deref());
+            context.commandList.setMeshletState(meshletState);
+            heap.bindGraphics(context.commandList, pipelineResources.meshletPipeline.deref());
+            lastPipeline = pipelineResources.meshletPipeline;
         }
+
+        if(!this.setMaterialPassDrawPushConstantsPrepared(context, drawItem, mesh, baseFrameHeapSlots, usesAvboit, hdr10OutputActive, isRefractionCapture, clipContextHeapSlot))
+            continue;
+
+        context.commandList.dispatchMesh(mesh.meshletCount, 1u, 1u);
     }
 }
 
@@ -266,6 +375,18 @@ void MaterialPassDrawRecorder::generateComputeMaterialPassDrawItems(mut Material
     assert(context.emulationOutputEntryStateGraphOwned);
     assert(context.frameBindings.meshView.buffer.valid());
 
+    this.setMaterialPassFrameBufferStates(context);
+    if(!context.materialGeometryStatesGraphOwned){
+        for(in MaterialPassDrawItem drawItem : drawItems)
+            this.setMaterialPassMeshBufferStates(context, drawItem.meshResources);
+    }
+
+    const MeshFrameHeapSlots baseFrameHeapSlots = ResolveMeshFrameHeapSlots(context.frameBindings);
+    mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
+    ComputeState computeState;
+    ComputePipelineHandle lastPipeline;
+
+    GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeMeshDispatch, this.m_graphics.getDevice(), context.commandList);
     for(in MaterialPassDrawItem drawItem : drawItems){
         in MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
         in MaterialPassPipelineResourceSnapshot pipelineResources = drawItem.pipelineResources;
@@ -273,8 +394,14 @@ void MaterialPassDrawRecorder::generateComputeMaterialPassDrawItems(mut Material
         assert(pipelineResources.computePipeline.valid());
         assert(mesh.emulationVertexHeapHandle.valid());
         assert(mesh.emulationVertexBuffer.valid());
-        this.setMaterialPassCommonBufferStates(context, mesh);
-        this.dispatchComputeMaterialPassDrawItem(context, drawItem, mesh, pipelineResources);
+
+        if(pipelineResources.computePipeline != lastPipeline){
+            computeState.setPipeline(pipelineResources.computePipeline.deref());
+            context.commandList.setComputeState(computeState);
+            heap.bindCompute(context.commandList, pipelineResources.computePipeline.deref());
+            lastPipeline = pipelineResources.computePipeline;
+        }
+        this.dispatchComputeMaterialPassDrawItemPrepared(context, drawItem, mesh, pipelineResources, baseFrameHeapSlots);
     }
 }
 
@@ -284,14 +411,44 @@ void MaterialPassDrawRecorder::renderComputeMaterialPassDrawItemsRasterOnly(mut 
     assert(context.emulationOutputEntryStateGraphOwned);
     assert(context.frameBindings.meshView.buffer.valid());
 
+    this.setMaterialPassFrameBufferStates(context);
+    if(!context.materialGeometryStatesGraphOwned){
+        for(in MaterialPassDrawItem drawItem : drawItems)
+            this.setMaterialPassMeshBufferStates(context, drawItem.meshResources);
+    }
+
+    const MeshFrameHeapSlots baseFrameHeapSlots = ResolveMeshFrameHeapSlots(context.frameBindings);
+    const b8 usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
+    const b8 hdr10OutputActive = this.m_graphics.isHDR10OutputActive();
+    const b8 isRefractionCapture = context.pass == MaterialPipelinePass::AvboitRefractionCapture;
+    const Optional<u32> clipContextHeapSlot = ResolveClipContextHeapSlot(context.csgResources);
+    GraphicsPipelineHandle lastPipeline;
+    BufferHandle lastBuffer;
+    u32 lastIndexByteOffset = 0u;
+    b8 lastIndexed = false;
+
+    GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeRaster, this.m_graphics.getDevice(), context.commandList);
     for(in MaterialPassDrawItem drawItem : drawItems){
         in MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
         in MaterialPassPipelineResourceSnapshot pipelineResources = drawItem.pipelineResources;
         assert(this.materialPassDrawResourcesReady(mesh, context.frameBindings));
         assert(pipelineResources.emulationPipeline.valid());
         assert(mesh.emulationVertexBuffer.valid());
-        this.setMaterialPassCommonBufferStates(context, mesh);
-        this.drawComputeMaterialPassDrawItem(context, drawItem, mesh, pipelineResources);
+        this.drawComputeMaterialPassDrawItemPrepared(
+            context,
+            drawItem,
+            mesh,
+            pipelineResources,
+            baseFrameHeapSlots,
+            usesAvboit,
+            hdr10OutputActive,
+            isRefractionCapture,
+            clipContextHeapSlot,
+            lastPipeline,
+            lastBuffer,
+            lastIndexByteOffset,
+            lastIndexed
+        );
     }
 }
 
@@ -300,6 +457,12 @@ void MaterialPassDrawRecorder::renderComputeMaterialPassDrawItems(mut MaterialPa
         return;
     assert(!context.emulationOutputEntryStateGraphOwned);
     assert(context.frameBindings.meshView.buffer.valid());
+
+    this.setMaterialPassFrameBufferStates(context);
+    if(!context.materialGeometryStatesGraphOwned){
+        for(in MaterialPassDrawItem drawItem : drawItems)
+            this.setMaterialPassMeshBufferStates(context, drawItem.meshResources);
+    }
 
     for(in MaterialPassDrawItem drawItem : drawItems){
         in MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
@@ -310,7 +473,6 @@ void MaterialPassDrawRecorder::renderComputeMaterialPassDrawItems(mut MaterialPa
         assert(mesh.emulationVertexHeapHandle.valid());
         assert(mesh.emulationVertexBuffer.valid());
 
-        this.setMaterialPassCommonBufferStates(context, mesh);
         context.commandList.setBufferState(mesh.emulationVertexBuffer.deref(), ResourceStates::UnorderedAccess);
         this.dispatchComputeMaterialPassDrawItem(context, drawItem, mesh, pipelineResources);
 
@@ -333,36 +495,52 @@ void MaterialPassDrawRecorder::renderIndexedMaterialPassDrawItems(mut MaterialPa
         return;
     assert(context.materialGeometryStatesGraphOwned);
     assert(this.indexedMaterialPassDrawResourcesReady(drawItems, context.frameBindings));
+
+    this.setMaterialPassFrameBufferStates(context);
+
+    const MeshFrameHeapSlots baseFrameHeapSlots = ResolveMeshFrameHeapSlots(context.frameBindings);
+    const b8 usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
+    const b8 hdr10OutputActive = this.m_graphics.isHDR10OutputActive();
+    const b8 isRefractionCapture = context.pass == MaterialPipelinePass::AvboitRefractionCapture;
+    const Optional<u32> clipContextHeapSlot = ResolveClipContextHeapSlot(context.csgResources);
+    mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
+    GraphicsPipelineHandle lastPipeline;
+    BufferHandle lastBuffer;
+    u32 lastIndexByteOffset = 0u;
+
+    GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeRaster, this.m_graphics.getDevice(), context.commandList);
     for(in MaterialPassDrawItem drawItem : drawItems){
         in MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
         in ObjectGeometryCacheSnapshot cache = mesh.objectGeometryCache;
         in GraphicsPipelineHandle pipeline = drawItem.pipelineResources.indexedPipeline;
-        this.setMaterialPassCommonBufferStates(context, mesh);
-        GraphicsState state;
-        state.setPipeline(pipeline.deref());
-        state.setFramebuffer(context.framebuffer.deref());
-        state.setViewport(context.viewportState);
-        VertexBufferBinding vertexBinding;
-        vertexBinding.setBuffer(cache.buffer.deref());
-        vertexBinding.setSlot(s_MeshEmulationVertexBufferIndex);
-        vertexBinding.setOffset(0u);
-        state.addVertexBuffer(vertexBinding);
-        IndexBufferBinding indexBinding;
-        indexBinding.setBuffer(cache.buffer.deref());
-        indexBinding.setFormat(Format::R32_UINT);
-        indexBinding.setOffset(cache.indexByteOffset);
-        state.setIndexBuffer(indexBinding);
-        context.commandList.setGraphicsState(state);
-        this.m_graphics.getDevice().getDescriptorHeap().bindGraphics(context.commandList, pipeline.deref());
-        if(!this.setMaterialPassDrawPushConstants(context, drawItem, mesh))
+        if(pipeline != lastPipeline || cache.buffer != lastBuffer || cache.indexByteOffset != lastIndexByteOffset){
+            GraphicsState state;
+            state.setPipeline(pipeline.deref());
+            state.setFramebuffer(context.framebuffer.deref());
+            state.setViewport(context.viewportState);
+            VertexBufferBinding vertexBinding;
+            vertexBinding.setBuffer(cache.buffer.deref());
+            vertexBinding.setSlot(s_MeshEmulationVertexBufferIndex);
+            vertexBinding.setOffset(0u);
+            state.addVertexBuffer(vertexBinding);
+            IndexBufferBinding indexBinding;
+            indexBinding.setBuffer(cache.buffer.deref());
+            indexBinding.setFormat(Format::R32_UINT);
+            indexBinding.setOffset(cache.indexByteOffset);
+            state.setIndexBuffer(indexBinding);
+            context.commandList.setGraphicsState(state);
+            lastBuffer = cache.buffer;
+            lastIndexByteOffset = cache.indexByteOffset;
+        }
+        if(pipeline != lastPipeline){
+            heap.bindGraphics(context.commandList, pipeline.deref());
+            lastPipeline = pipeline;
+        }
+        if(!this.setMaterialPassDrawPushConstantsPrepared(context, drawItem, mesh, baseFrameHeapSlots, usesAvboit, hdr10OutputActive, isRefractionCapture, clipContextHeapSlot))
             continue;
         DrawArguments arguments;
         arguments.setVertexCount(cache.indexCount);
-        {
-            GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeRaster, this.m_graphics.getDevice(), context.commandList);
-
-            context.commandList.drawIndexed(arguments);
-        }
+        context.commandList.drawIndexed(arguments);
     }
 }
 
@@ -519,48 +697,6 @@ void RendererMaterialSystem::renderPreparedAvboitMaterialPass(
 
         recordPreparedDraws();
     }
-}
-
-b8 RendererMaterialSystem::prepareMaterialPassResources(in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in b8 transparent, in CsgFrameState csgFrameState){
-    return this.prepareMaterialPassResourcesImpl(framebuffer, pass, transparent, csgFrameState, false);
-}
-
-b8 RendererMaterialSystem::prepareMaterialPassResources(in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in b8 transparent, in CsgFrameState csgFrameState, in AvboitFrameTargets avboitTargets){
-    return this.prepareMaterialPassResourcesImpl(framebuffer, pass, transparent, csgFrameState, avboitTargets.valid());
-}
-
-b8 RendererMaterialSystem::prepareMaterialPassResourcesImpl(in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in b8 transparent, in CsgFrameState csgFrameState, in b8 avboitTargetsValid){
-    if(!CanPrepareMaterialPassTargets(framebuffer.valid(), pass, avboitTargetsValid))
-        return false;
-
-    MaterialPassDrawItemPartitions drawItems;
-    InstanceGpuDataVector instanceData;
-    CsgFrameGpuData csgFrameData;
-    MaterialTypedInstanceRangeVector materialTypedRanges;
-    MaterialTypedByteDataVector materialTypedBytes;
-
-    this.gatherMaterialPassDrawItems(
-        framebuffer,
-        pass,
-        transparent,
-        csgFrameState,
-        RendererResourceLookupMode::CreateMissing,
-        Optional<in MeshViewGpuData>(),
-        drawItems,
-        instanceData,
-        csgFrameData,
-        materialTypedRanges,
-        materialTypedBytes
-    );
-    if(drawItems.empty())
-        return true;
-
-    const b8 drawBuffersReady = this.prepareMaterialPassDrawBuffers(instanceData, materialTypedBytes);
-    const b8 regularDrawResourcesReady = this.m_drawRecorder.prepareMaterialPassResourceBindings(drawItems.regular);
-    const b8 csgDrawResourcesReady = drawItems.csg.empty() || this.m_drawRecorder.prepareMaterialPassResourceBindings(drawItems.csg);
-    const b8 csgReceiverSurfaceDrawResourcesReady = drawItems.csgReceiverSurface.empty() || this.m_drawRecorder.prepareMaterialPassResourceBindings(drawItems.csgReceiverSurface);
-
-    return drawBuffersReady && regularDrawResourcesReady && csgDrawResourcesReady && csgReceiverSurfaceDrawResourcesReady;
 }
 
 void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(in CsgGraphResourceSnapshot csgResources, mut Span<InstanceGpuData> instanceData){

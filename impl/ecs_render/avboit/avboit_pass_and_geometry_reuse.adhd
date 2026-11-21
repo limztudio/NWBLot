@@ -125,20 +125,25 @@ void DispatchAvboitCompute(
 }
 
 b8 RendererAvboitSystem::prepareAvboitPassResources(in CsgFrameState csgFrameState, mut DeferredFrameTargets targets){
+    return this.prepareAvboitPassResources(csgFrameState, targets, Optional<in MeshViewGpuData>());
+}
+
+b8 RendererAvboitSystem::prepareAvboitPassResources(in CsgFrameState csgFrameState, mut DeferredFrameTargets targets, in Optional<in MeshViewGpuData> csgWorkRegionMeshViewState){
     mut AvboitFrameTargets avboitTargets = targets.avboit;
     if(!avboitTargets.valid())
         return false;
 
+    FixedVector<TransparentPassPrepareDesc, 5u> passes;
     const b8 hasTransparentCsgWork = HasTransparentCsgWork(csgFrameState.hasTransparentStaticWork, csgFrameState.hasTransparentSkinnedWork);
-    if(hasTransparentCsgWork && !this.m_materialSystem.prepareMaterialPassResources(targets.framebuffer, MaterialPipelinePass::CsgReceiverSurface, true, csgFrameState))
-        return false;
+    if(hasTransparentCsgWork)
+        passes.push_back(TransparentPassPrepareDesc(targets.framebuffer, MaterialPipelinePass::CsgReceiverSurface));
+    passes.push_back(TransparentPassPrepareDesc(avboitTargets.lowFramebuffer, MaterialPipelinePass::AvboitOccupancy));
+    passes.push_back(TransparentPassPrepareDesc(avboitTargets.lowFramebuffer, MaterialPipelinePass::AvboitExtinction));
+    passes.push_back(TransparentPassPrepareDesc(avboitTargets.accumulationFramebuffer, MaterialPipelinePass::AvboitAccumulate));
+    if(avboitTargets.refractionFramebuffer.valid())
+        passes.push_back(TransparentPassPrepareDesc(avboitTargets.refractionFramebuffer, MaterialPipelinePass::AvboitRefractionCapture));
 
-    return
-        this.m_materialSystem.prepareMaterialPassResources(avboitTargets.lowFramebuffer, MaterialPipelinePass::AvboitOccupancy, true, csgFrameState, avboitTargets)
-        && this.m_materialSystem.prepareMaterialPassResources(avboitTargets.lowFramebuffer, MaterialPipelinePass::AvboitExtinction, true, csgFrameState, avboitTargets)
-        && this.m_materialSystem.prepareMaterialPassResources(avboitTargets.accumulationFramebuffer, MaterialPipelinePass::AvboitAccumulate, true, csgFrameState, avboitTargets)
-        && (!avboitTargets.refractionFramebuffer.valid() || this.m_materialSystem.prepareMaterialPassResources(avboitTargets.refractionFramebuffer, MaterialPipelinePass::AvboitRefractionCapture, true, csgFrameState, avboitTargets))
-    ;
+    return this.m_materialSystem.prepareTransparentMaterialPasses(Span<TransparentPassPrepareDesc>(passes), csgFrameState, avboitTargets.valid(), csgWorkRegionMeshViewState);
 }
 
 void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(

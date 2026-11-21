@@ -23,6 +23,39 @@ b8 FramebufferRenderingPreparation::validateFramebuffer(Framebuffer* const frame
     }
 
     const FramebufferDesc& framebufferDesc = framebuffer->m_desc;
+    if(framebuffer->m_staticStructureValid){
+        if(!framebuffer->m_allAttachmentsManagedNonVirtual || !framebuffer->m_allAttachmentsExclusiveSharing || !m_commandList.cachedPhysicalQueueInfo()){
+            for(const FramebufferAttachment& colorAttachment : framebufferDesc.colorAttachments){
+                if(!m_commandList.isTextureReadyForCommandQueue(colorAttachment.texture)){
+                    m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment is not ready for this exact command queue"));
+                    return false;
+                }
+            }
+            if(framebufferDesc.depthAttachment.valid() && !m_commandList.isTextureReadyForCommandQueue(framebufferDesc.depthAttachment.texture)){
+                m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment is not ready for this exact command queue"));
+                return false;
+            }
+        }
+        if(m_commandList.m_stateTracker.hasPermanentTextureStates()){
+            for(const FramebufferAttachment& colorAttachment : framebufferDesc.colorAttachments){
+                const ResourceStates::Mask permanentState = m_commandList.m_stateTracker.getPermanentTextureState(colorAttachment.texture);
+                if(permanentState != ResourceStates::Unknown && permanentState != ResourceStates::RenderTarget){
+                    m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment permanent state is incompatible"));
+                    return false;
+                }
+            }
+            if(framebufferDesc.depthAttachment.valid()){
+                const ResourceStates::Mask requiredDepthState = framebufferDesc.depthAttachment.isReadOnly ? ResourceStates::DepthRead : ResourceStates::DepthWrite;
+                const ResourceStates::Mask permanentState = m_commandList.m_stateTracker.getPermanentTextureState(framebufferDesc.depthAttachment.texture);
+                if(permanentState != ResourceStates::Unknown && permanentState != requiredDepthState){
+                    m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment permanent state is incompatible"));
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     const FramebufferInfoEx& framebufferInfo = framebuffer->m_framebufferInfo;
     if(framebufferInfo.width == 0u || framebufferInfo.height == 0u || framebufferInfo.arraySize == 0u){
         m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer dimensions are invalid"));
@@ -133,7 +166,7 @@ b8 FramebufferRenderingPreparation::validateFramebuffer(Framebuffer* const frame
             m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment view description is invalid"));
             return false;
         }
-        const ResourceStates::Mask permanentState = m_commandList.getPermanentTextureState(texture);
+        const ResourceStates::Mask permanentState = m_commandList.m_stateTracker.getPermanentTextureState(texture);
         if(permanentState != ResourceStates::Unknown && permanentState != requiredState){
             m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment permanent state is incompatible"));
             return false;
@@ -249,6 +282,8 @@ b8 FramebufferRenderingPreparation::validateRenderPassBegin(Framebuffer& framebu
 b8 FramebufferRenderingPreparation::prepareFramebuffer(Framebuffer* const framebuffer, const TStringView operationName){
     if(!framebuffer)
         return true;
+    if(framebuffer->m_allAttachmentsManagedNonVirtual && framebuffer->m_allViewsCached.load(MemoryOrder::acquire))
+        return true;
 
     for(u32 i = 0u; i < static_cast<u32>(framebuffer->m_desc.colorAttachments.size()); ++i){
         if(framebuffer->m_desc.colorAttachments[i].texture && !framebuffer->resolveColorAttachmentView(i)){
@@ -260,6 +295,8 @@ b8 FramebufferRenderingPreparation::prepareFramebuffer(Framebuffer* const frameb
         m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment view could not be created"));
         return false;
     }
+    if(framebuffer->m_allAttachmentsManagedNonVirtual)
+        framebuffer->m_allViewsCached.store(true, MemoryOrder::release);
     return true;
 }
 

@@ -69,7 +69,7 @@ public:
 
 
 private:
-    [[nodiscard]] b8 isRetainedStateKnown()const noexcept{ return m_retainedStateKnown.load(MemoryOrder::acquire); }
+    [[nodiscard]] b8 isRetainedStateKnown()const noexcept{ return m_creationDesc.keepInitialState && m_retainedStateKnown.load(MemoryOrder::acquire); }
     void setRetainedStateKnown(b8 known)noexcept;
 
 

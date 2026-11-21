@@ -476,6 +476,7 @@ private:
     );
     void commitAcceptedPacket(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, GpuSubmissionPacketId packetID, const QueueSubmissionToken& token, const NativeSubmissionInfo& nativeSubmissionInfo)noexcept;
     void commitAcceptedPacketBatch(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, Span<const GpuSubmissionPacketId> packets, const QueueSubmissionReceipt* receipts, const NativeSubmissionInfo* nativeSubmissionInfos)noexcept;
+    void commitAcceptedPacketBatchLocked(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, Span<const GpuSubmissionPacketId> packets, const QueueSubmissionReceipt* receipts, const NativeSubmissionInfo* nativeSubmissionInfos)noexcept;
     void abandonTimingTicketsWithoutCallbacks(const NotNull<GpuTimingSubmissionTicket*>* timingTickets, usize timingTicketCount)noexcept;
     void rejectPacket(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packetID, u64 recordingAttemptGeneration);
     void rejectSubmittingPacket(GpuTaskGraph& graph, GpuPacketSubmissionLease& lease, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packetID);

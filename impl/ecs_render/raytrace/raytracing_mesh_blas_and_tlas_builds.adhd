@@ -490,8 +490,9 @@ Expected<GpuDescriptorHandle> MeshHeapHandleGather::acquire(in BufferHandle buff
         return MakeUnexpected(Failure());
     mut Buffer buffer = bufferHandle.deref();
     const usize key = bufferHandle.identity();
-    if(this.m_cache.contains(key)){
-        mut RtMeshHeapHandleCacheEntry entry = this.m_cache.at(key);
+    const auto found = this.m_cache.find(key);
+    if(found != this.m_cache.end()){
+        mut RtMeshHeapHandleCacheEntry entry = found.value();
         assert(entry.handle.valid());
         entry.seenThisFrame = true;
         return entry.handle;

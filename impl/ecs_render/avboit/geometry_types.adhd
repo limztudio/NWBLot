@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/csg/renderer_csg_types.adhd>
 #include <impl/ecs_render/material/renderer_draw_types.adhd>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.adhd>
 #include <impl/ecs_render/shared/frame_types.adhd>
@@ -45,11 +46,63 @@ class FrameGraphAvboitMaterialUploadResult{
     public usize sharedComputeEmulationInstanceCount = 0u;
     public usize sharedComputeEmulationMaterialTypedByteCount = 0u;
     public b8 streamsUploaded = false;
+    public b8 declaredUploadTask = false;
     public b8 csgStreamsUploaded = false;
     public b8 regularComputeEmulationPlanCaptured = false;
     public b8 producesReusableGeometry = false;
     public b8 csgComputeEmulationPlanCaptured = false;
     public b8 sharedComputeEmulationPlanCaptured = false;
+}
+
+b8 EqualCsgFrameWorkRegion(in CsgFrameWorkRegion lhs, in CsgFrameWorkRegion rhs){
+    return lhs.minX == rhs.minX
+        && lhs.minY == rhs.minY
+        && lhs.maxX == rhs.maxX
+        && lhs.maxY == rhs.maxY
+        && lhs.fullFrame == rhs.fullFrame;
+}
+
+class AvboitUploadedStreamState{
+    public u64 materialStreamToken = 0u;
+    public u32 csgFramebufferWidth = 0u;
+    public u32 csgFramebufferHeight = 0u;
+    public usize csgReceiverCount = 0u;
+    public usize csgCutterCount = 0u;
+    public CsgFrameWorkRegion csgWorkRegion;
+    public b8 materialStreamsUploaded = false;
+    public b8 csgStreamsUploaded = false;
+
+    public AvboitUploadedStreamState(){
+        this.csgWorkRegion = CsgFrameWorkRegion();
+    }
+
+    public b8 matchesMaterial(in u64 streamToken)const{
+        return this.materialStreamsUploaded && streamToken != 0u && this.materialStreamToken == streamToken;
+    }
+
+    public b8 matchesCsg(in u64 streamToken, in u32 fbWidth, in u32 fbHeight, in CsgFrameGpuDataView csgFrameData)const{
+        return this.csgStreamsUploaded
+            && this.matchesMaterial(streamToken)
+            && this.csgFramebufferWidth == fbWidth
+            && this.csgFramebufferHeight == fbHeight
+            && this.csgReceiverCount == csgFrameData.receiverRanges.size()
+            && this.csgCutterCount == csgFrameData.cutters.size()
+            && EqualCsgFrameWorkRegion(this.csgWorkRegion, csgFrameData.workRegion);
+    }
+
+    public void markMaterialUploaded(in u64 streamToken){
+        this.materialStreamsUploaded = streamToken != 0u;
+        this.materialStreamToken = streamToken;
+    }
+
+    public void markCsgUploaded(in u32 fbWidth, in u32 fbHeight, in CsgFrameGpuDataView csgFrameData){
+        this.csgFramebufferWidth = fbWidth;
+        this.csgFramebufferHeight = fbHeight;
+        this.csgReceiverCount = csgFrameData.receiverRanges.size();
+        this.csgCutterCount = csgFrameData.cutters.size();
+        this.csgWorkRegion = csgFrameData.workRegion;
+        this.csgStreamsUploaded = true;
+    }
 }
 
 class AvboitGeometryPreparationResult{

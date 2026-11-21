@@ -277,6 +277,7 @@ void Queue::unregisterCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept
 
 
 void Queue::collectCompletedCommandBuffers(){
+    u64 directRetiredCount = 0u;
     while(!m_commandBuffersInFlight.empty()){
         auto& cmdBuf = *MakeNotNull(m_commandBuffersInFlight.front().get());
         if(cmdBuf.m_submissionID > m_lastFinishedID)
@@ -284,7 +285,26 @@ void Queue::collectCompletedCommandBuffers(){
 
         TrackedCommandBufferPtr completed = Move(m_commandBuffersInFlight.front());
         m_commandBuffersInFlight.pop_front();
-        recycleCommandBuffer(Move(completed));
+        if(completed->m_recordingWorkerIndex == 0u && &completed->m_queue == this && &completed->m_context == &m_context){
+            completed->clearTrackedReferences();
+            if(completed->m_arenaState == TrackedCommandBufferArenaState::Pending){
+                completed->m_arenaState = TrackedCommandBufferArenaState::Reusable;
+                ++directRetiredCount;
+            }
+            else
+                commitCommandBufferStateTransition(*completed, TrackedCommandBufferArenaState::Reusable);
+            m_commandBuffersPool.push_back(Move(completed));
+        }
+        else
+            recycleCommandBuffer(Move(completed));
+    }
+    if(directRetiredCount != 0u){
+        if(m_pendingCommandBufferCount.fetch_sub(directRetiredCount, MemoryOrder::relaxed) < directRetiredCount)
+            TerminateInvariant();
+        if(m_pendingDirectCommandBufferCount.fetch_sub(directRetiredCount, MemoryOrder::relaxed) < directRetiredCount)
+            TerminateInvariant();
+        m_reusableCommandBufferCount.fetch_add(directRetiredCount, MemoryOrder::relaxed);
+        m_directReusableCommandBufferCount.fetch_add(directRetiredCount, MemoryOrder::relaxed);
     }
 }
 
@@ -410,14 +430,18 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateDirectCommandBuffe
         m_commandBuffersPool.pop_back();
         FOUNDATION_ASSERT(cmdBuf && cmdBuf->m_cmdBuf != VK_NULL_HANDLE);
 
+        transitionCommandBufferState(*cmdBuf, TrackedCommandBufferArenaState::Leased);
+        lock.unlock();
+
         const VkResult res = m_context.deviceDispatch.vkResetCommandBuffer(cmdBuf->m_cmdBuf, 0);
         if(res != VK_SUCCESS){
             NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to reset command buffer, creating a new one: {}"), ResultToString(res));
+            cmdBuf.reset();
+            lock.lock();
             __hidden_vulkan_queue::EnsureCommandBufferPoolCapacity(m_commandBuffersPool, m_currentCommandBufferCount.load(MemoryOrder::relaxed));
             return createCommandBuffer(VK_NULL_HANDLE, nullptr, 0u, 0u);
         }
 
-        transitionCommandBufferState(*cmdBuf, TrackedCommandBufferArenaState::Leased);
         m_commandBufferResetEventCount.fetch_add(1u, MemoryOrder::relaxed);
         m_directCommandBufferResetEventCount.fetch_add(1u, MemoryOrder::relaxed);
         cmdBuf->m_recordingID = NextAtomicWrappingNonzero(m_lastRecordingID);

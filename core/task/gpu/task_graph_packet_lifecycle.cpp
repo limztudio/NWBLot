@@ -201,7 +201,6 @@ Expected<void, GpuTaskGraph::RecordTaskFailure> GpuTaskGraph::recordTask(const G
         || m_activeRecordingAttemptGeneration.load(MemoryOrder::acquire) != context.recordingAttemptGeneration
         || task.lifecycleAttemptGeneration != context.recordingAttemptGeneration
         || task.recordingClaimGeneration != lease.m_claimGeneration
-        || !context.compiledPlan.validFor(context.declarations)
     ){
         u16 rollbackWord = inProgressWord;
         if(!task.compareExchangeLifecycleWord(rollbackWord, expectedWord, MemoryOrder::acq_rel, MemoryOrder::acquire))
@@ -221,7 +220,6 @@ Expected<void, GpuTaskGraph::RecordTaskFailure> GpuTaskGraph::recordTask(const G
     }
 
     const b8 recordingAttemptValid = !isTeardownInProgress(MemoryOrder::acquire)
-        && context.compiledPlan.validFor(context.declarations)
         && m_activeRecordingPlanGeneration.load(MemoryOrder::acquire) == planGeneration
         && m_activeRecordingAttemptGeneration.load(MemoryOrder::acquire) == context.recordingAttemptGeneration
     ;

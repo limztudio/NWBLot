@@ -24,6 +24,7 @@ class UiSkin{
     private RegionVector m_regions;
     private Vector<u32> m_regionIndex;
     private AssetRef<Texture> m_texture = AssetRef<Texture>();
+    private u64 m_regionVersion = AllocateServiceIdentity();
     private u32 m_atlasWidth = 0u;
     private u32 m_atlasHeight = 0u;
     private f32 m_referenceDensity = 1.0f;
@@ -50,11 +51,13 @@ class UiSkin{
             this.m_palette,
             this.m_typography
         );
+        this.m_regionVersion = AllocateServiceIdentity();
     }
     public void setPalette(in UiSkinPalette palette){ this.m_palette = palette; }
     public void setTypography(in UiSkinTypography typography){ this.m_typography = typography; }
 
     public in AssetRef<Texture> texture()const{ return this.m_texture; }
+    public u64 regionVersion()const{ return this.m_regionVersion; }
     public u32 atlasWidth()const{ return this.m_atlasWidth; }
     public u32 atlasHeight()const{ return this.m_atlasHeight; }
     public f32 referenceDensity()const{ return this.m_referenceDensity; }

@@ -52,6 +52,7 @@ class Context : NoCopy{
     private usize m_retainedRootCapacity = 0u;
     private Vector<HitTarget> m_commitTargets;
     private Vector<PopupScope> m_commitPopups;
+    private Vector<WidgetId> m_retiredIds;
     private PopupToken m_currentPopup;
     private Array<PopupToken, s_InputMaxPopups> m_popupStack;
     private usize m_popupDepth = 0u;
@@ -330,14 +331,11 @@ class Context : NoCopy{
         if(this.m_states.entries().empty() && this.m_targets.empty() && this.m_popups.empty())
             return;
         PrepareRetainedContextRoots(roots, this.m_retainedRoots, this.m_retainedRootCapacity);
-        for(usize index = this.m_states.entries().size(); index > 0u; --index){
-            in WidgetState state = this.m_states.entries()[index - 1u];
-            if(!this.m_retainedRoots.contains(state.root)){
-                this.m_input.invalidateTarget(state.id);
-                this.m_states.erase(index - 1u);
-            }
+        this.m_states.retainRoots(this.m_retainedRoots, this.m_retiredIds);
+        if(!this.m_retiredIds.empty()){
+            this.m_input.invalidateTargets(Span<WidgetId>(this.m_retiredIds));
+            this.m_states.finishRetirement();
         }
-        this.m_states.finishRetirement();
         PruneUnretainedContextTargetsAndPopups(this.m_retainedRoots, this.m_targets, this.m_popups);
     }
     public void fail(){ this.m_failed = true; }
@@ -353,10 +351,9 @@ class Context : NoCopy{
             this.fail();
             return MakeUnexpected(Failure());
         }
-        const Optional<mut WidgetState> previous = this.m_states.find(id);
-        if(previous.has_value() && ShouldInvalidateContextWidgetKind(previous.value().kind, kind))
-            this.m_input.invalidateTarget(id);
         const Expected<mut WidgetState> state = this.m_states.touch(id, this.m_root, kind, this.m_frameGeneration);
+        if(this.m_states.lastTouchKindChanged())
+            this.m_input.invalidateTarget(id);
         if(!state.has_value())
             this.fail();
         else
@@ -371,14 +368,11 @@ class Context : NoCopy{
     private void retireUnseenStates(){
         if(this.m_frameGeneration == 0u)
             return;
-        for(usize index = this.m_states.entries().size(); index > 0u; --index){
-            in WidgetState state = this.m_states.entries()[index - 1u];
-            if(ShouldRetireUnseenWidgetState(state, this.m_frameGeneration)){
-                this.m_input.invalidateTarget(state.id);
-                this.m_states.erase(index - 1u);
-            }
+        this.m_states.retireUnseen(this.m_frameGeneration, this.m_retiredIds);
+        if(!this.m_retiredIds.empty()){
+            this.m_input.invalidateTargets(Span<WidgetId>(this.m_retiredIds));
+            this.m_states.finishRetirement();
         }
-        this.m_states.finishRetirement();
     }
 }
 

@@ -64,7 +64,8 @@ class FrameGraphAvboitPassUploadChain : NoCopy{
         in b8 hasTransparentRenderers,
         mut AvboitRasterPassTaskPayload rasterPayload,
         mut AvboitComputeEmulationTaskPayload computeEmulationPayload,
-        mut AvboitGeneratedGeometryReuse generatedGeometry
+        mut AvboitGeneratedGeometryReuse generatedGeometry,
+        mut AvboitUploadedStreamState uploadedStreams
     );
 }
 

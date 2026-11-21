@@ -186,12 +186,12 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacketStream(
     RasterReplayState graphRasterState;
     GpuCommandIrReplayError::Enum firstBackendError = GpuCommandIrReplayError::None;
     u64 firstBackendErrorRecordIndex = Limit<u64>::s_Max;
-    WireRecordStorage wireStorage;
-    GpuCommandIrBuiltinTaskRecord builtinRecord;
+    const u8* recordPtr = nullptr;
+    Optional<GpuCommandIrBuiltinTaskRecord> builtinRecord;
     GpuCommandIrWireOpcode::Enum wireOpcode = GpuCommandIrWireOpcode::Count;
     DecodedRecordContext decodedContext;
     for(;;){
-        const WireStepStatus::Enum step = cursor.next(wireStorage, wireOpcode, decodedContext, &builtinRecord);
+        const WireStepStatus::Enum step = cursor.nextView(recordPtr, wireOpcode, decodedContext, builtinRecord);
         if(step == WireStepStatus::End){
             if(graphRasterState.active)
                 return ReplayFailure(GpuCommandIrReplayError::InvalidRasterState, cursor.validation(), recordIndex);
@@ -236,16 +236,66 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacketStream(
         if(raster){
             if(!__hidden_gpu_command_ir_replay_preflight::QueueHasGraphicsCapability(*queue))
                 operationError = GpuCommandIrReplayError::MissingGraphicsCapability;
-            else
-                operationError = ValidateRasterWireGraphOperation(wireOpcode, wireStorage, decodedContext.task, cursor.blobBytes(), graph, task, graphRasterState);
+            else if(graphRasterState.active && graphRasterState.task != decodedContext.task)
+                operationError = GpuCommandIrReplayError::InvalidRasterState;
+            else{
+                switch(wireOpcode){
+                case GpuCommandIrWireOpcode::SetGraphicsState:
+                    operationError = ValidateSetGraphicsStateWireGraphOperation(recordPtr, decodedContext.task, cursor.blobBytes(), graph, task, graphRasterState);
+                    break;
+                case GpuCommandIrWireOpcode::BindGraphicsHeap:{
+                    const auto wire = ReadWirePod<GpuCommandIrBindGraphicsHeapRecord>(recordPtr);
+                    if(!graphRasterState.active || GpuGraphPipelineId{ .generation = decodedContext.task.generation, .index = wire.pipelineIndex } != graphRasterState.pipeline)
+                        operationError = GpuCommandIrReplayError::InvalidRasterState;
+                    else
+                        graphRasterState.heapBound = true;
+                    break;
+                }
+                case GpuCommandIrWireOpcode::SetPushConstants:{
+                    const auto wire = ReadWirePod<GpuCommandIrSetPushConstantsRecord>(recordPtr);
+                    if(!graphRasterState.active || wire.blobSizeBytes > s_MaxPushConstantSize)
+                        operationError = GpuCommandIrReplayError::InvalidRasterState;
+                    else
+                        graphRasterState.pushConstantsSet = true;
+                    break;
+                }
+                case GpuCommandIrWireOpcode::Draw:{
+                    const auto wire = ReadWirePod<GpuCommandIrDrawRecord>(recordPtr);
+                    if(!graphRasterState.active || !graphRasterState.heapBound || !graphRasterState.pushConstantsSet || wire.vertexCount == 0u || wire.instanceCount == 0u)
+                        operationError = GpuCommandIrReplayError::InvalidRasterDraw;
+                    break;
+                }
+                case GpuCommandIrWireOpcode::DrawIndexed:{
+                    const auto wire = ReadWirePod<GpuCommandIrDrawRecord>(recordPtr);
+                    if(!graphRasterState.active || !graphRasterState.heapBound || !graphRasterState.pushConstantsSet || wire.vertexCount == 0u || wire.instanceCount == 0u || !graphRasterState.indexResource.valid() || wire.startVertexLocation > static_cast<u32>(Limit<i32>::s_Max))
+                        operationError = GpuCommandIrReplayError::InvalidRasterDraw;
+                    break;
+                }
+                case GpuCommandIrWireOpcode::EndRenderPass:
+                    if(!graphRasterState.active)
+                        operationError = GpuCommandIrReplayError::InvalidRasterState;
+                    else{
+                        graphRasterState.active = false;
+                        graphRasterState.task = {};
+                        graphRasterState.heapBound = false;
+                        graphRasterState.pushConstantsSet = false;
+                    }
+                    break;
+                default:
+                    operationError = GpuCommandIrReplayError::InvalidRasterState;
+                    break;
+                }
+            }
         }
         else{
             if(!__hidden_gpu_command_ir_replay_preflight::QueueHasTransferCapability(*queue))
                 operationError = GpuCommandIrReplayError::MissingTransferCapability;
             else{
                 operationError = ValidateRasterBuiltinBoundary(decodedContext.task, graphRasterState);
-                if(operationError == GpuCommandIrReplayError::None)
-                    operationError = GpuCommandIrBuiltinPreflight::Validate(builtinRecord, cursor.blobBytes(), graph, task, *queue);
+                if(operationError == GpuCommandIrReplayError::None){
+                    FOUNDATION_ASSERT(builtinRecord.has_value());
+                    operationError = GpuCommandIrBuiltinPreflight::Validate(*builtinRecord, cursor.blobBytes(), graph, task, *queue);
+                }
             }
         }
         if(operationError != GpuCommandIrReplayError::None)
@@ -253,10 +303,23 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacketStream(
 
         if(commandList && commandListError == GpuCommandIrReplayError::None && firstBackendError == GpuCommandIrReplayError::None){
             FOUNDATION_ASSERT(backendCommandQueue && backendRasterState.has_value());
-            const GpuCommandIrReplayError::Enum operandError = raster
-                ? ValidateRasterWireBackendOperand(wireOpcode, wireStorage, cursor.blobBytes(), decodedContext.task, owners, graph, *backendCommandQueue, recordIndex, *commandList, *backendRasterState)
-                : ValidateBuiltinBackendOperand(builtinRecord, graph, *backendCommandQueue, *commandList)
-            ;
+            GpuCommandIrReplayError::Enum operandError = GpuCommandIrReplayError::None;
+            if(raster){
+                if(wireOpcode == GpuCommandIrWireOpcode::Draw){
+                    if(!backendRasterState->active || !backendRasterState->heapBound || !backendRasterState->pushConstantsSet)
+                        operandError = GpuCommandIrReplayError::InvalidRasterState;
+                    else if(backendRasterState->cachedVertexValidations.empty())
+                        operandError = backendRasterState->cachedInputLayoutError;
+                    else
+                        operandError = ValidateRasterWireBackendOperand(wireOpcode, recordPtr, cursor.blobBytes(), decodedContext.task, owners, graph, *backendCommandQueue, recordIndex, *commandList, *backendRasterState);
+                }
+                else
+                    operandError = ValidateRasterWireBackendOperand(wireOpcode, recordPtr, cursor.blobBytes(), decodedContext.task, owners, graph, *backendCommandQueue, recordIndex, *commandList, *backendRasterState);
+            }
+            else{
+                FOUNDATION_ASSERT(builtinRecord.has_value());
+                operandError = ValidateBuiltinBackendOperand(*builtinRecord, graph, *backendCommandQueue, *commandList);
+            }
             if(operandError != GpuCommandIrReplayError::None){
                 firstBackendError = operandError;
                 firstBackendErrorRecordIndex = recordIndex;

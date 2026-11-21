@@ -90,6 +90,7 @@ class FrameGraphAvboitStage : NoCopy{
         in b8 avboitIntervalOutputsGraphOwned,
         mut ObjectGeometryCacheGraph objectGeometry,
         mut AvboitGeneratedGeometryReuse generatedGeometry,
+        mut AvboitUploadedStreamState uploadedStreams,
         mut AvboitComputeEffectChainBuilder avboitComputeEffectChainBuilder
     );
     [cpp_unwind]
@@ -98,7 +99,8 @@ class FrameGraphAvboitStage : NoCopy{
         in FrameGraphAvboitStageTiming timing,
         in b8 avboitIntervalOutputsGraphOwned,
         mut ObjectGeometryCacheGraph objectGeometry,
-        mut AvboitGeneratedGeometryReuse generatedGeometry
+        mut AvboitGeneratedGeometryReuse generatedGeometry,
+        mut AvboitUploadedStreamState uploadedStreams
     );
 }
 

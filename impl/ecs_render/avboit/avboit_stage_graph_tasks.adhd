@@ -119,11 +119,12 @@ Expected<GpuTaskId> FrameGraphAvboitStage::declare(in FrameGraphAvboitStageInput
     avboitOccupancyComputeEmulationPayload.csgResources = inputs.csgResources;
 
     AvboitGeneratedGeometryReuse generatedGeometry;
+    AvboitUploadedStreamState uploadedStreams;
     const auto refractionCaptureTaskResult = DeclareAvboitRefractionCapture(
         this.m_graph, this.m_materialSystem, this.m_csgSystem,
         inputs.csgFrameState, inputs.csgResources, inputs.frameBindings, inputs.meshViewState, avboitIntervalCompletionTask,
         inputs.refractionCaptureEnabled,
-        inputs.targets, objectGeometry, generatedGeometry
+        inputs.targets, objectGeometry, generatedGeometry, uploadedStreams
     );
     if(!refractionCaptureTaskResult.has_value())
         return MakeUnexpected(Failure());
@@ -134,7 +135,8 @@ Expected<GpuTaskId> FrameGraphAvboitStage::declare(in FrameGraphAvboitStageInput
         inputs.targets.avboit.lowFramebuffer, MaterialPipelinePass::AvboitOccupancy, AvboitGeometryPhase::Occupancy, refractionCaptureTask, avboitIntervalOutputsGraphOwned, inputs.hasTransparentRenderers,
         avboitOccupancyPayload,
         avboitOccupancyComputeEmulationPayload,
-        generatedGeometry
+        generatedGeometry,
+        uploadedStreams
     );
     if(!occupancyUploadChainResult.has_value()){
         warning("RendererSystem: could not declare AVBOIT occupancy upload chain");
@@ -197,9 +199,9 @@ Expected<GpuTaskId> FrameGraphAvboitStage::declare(in FrameGraphAvboitStageInput
     const GpuTaskId avboitDepthWarpCompletionTask = avboitDepthWarpStageResult.value().completionTask;
 
     if(inputs.hasTransparentRenderers){
-        if(!this.declareExtinction(inputs, timing, avboitDepthWarpCompletionTask, avboitIntervalOutputsGraphOwned, objectGeometry, generatedGeometry, avboitComputeEffectChainBuilder))
+        if(!this.declareExtinction(inputs, timing, avboitDepthWarpCompletionTask, avboitIntervalOutputsGraphOwned, objectGeometry, generatedGeometry, uploadedStreams, avboitComputeEffectChainBuilder))
             return MakeUnexpected(Failure());
-        if(!this.declareAccumulation(inputs, timing, avboitIntervalOutputsGraphOwned, objectGeometry, generatedGeometry))
+        if(!this.declareAccumulation(inputs, timing, avboitIntervalOutputsGraphOwned, objectGeometry, generatedGeometry, uploadedStreams))
             return MakeUnexpected(Failure());
         return this.m_avboitSystem.taskGraphStage().m_accumulationFinalizeTask;
     }
@@ -213,6 +215,7 @@ b8 FrameGraphAvboitStage::declareExtinction(
     in b8 avboitIntervalOutputsGraphOwned,
     mut ObjectGeometryCacheGraph objectGeometry,
     mut AvboitGeneratedGeometryReuse generatedGeometry,
+    mut AvboitUploadedStreamState uploadedStreams,
     mut AvboitComputeEffectChainBuilder avboitComputeEffectChainBuilder
 ){
 
@@ -230,7 +233,8 @@ b8 FrameGraphAvboitStage::declareExtinction(
         inputs.targets.avboit.lowFramebuffer, MaterialPipelinePass::AvboitExtinction, AvboitGeometryPhase::Extinction, avboitDepthWarpCompletionTask, avboitIntervalOutputsGraphOwned, inputs.hasTransparentRenderers,
         avboitExtinctionPayload,
         avboitExtinctionComputeEmulationPayload,
-        generatedGeometry
+        generatedGeometry,
+        uploadedStreams
     );
     if(!extinctionUploadChainResult.has_value()){
         warning("RendererSystem: could not declare AVBOIT extinction upload chain");
@@ -273,7 +277,8 @@ b8 FrameGraphAvboitStage::declareAccumulation(
     in FrameGraphAvboitStageTiming timing,
     in b8 avboitIntervalOutputsGraphOwned,
     mut ObjectGeometryCacheGraph objectGeometry,
-    mut AvboitGeneratedGeometryReuse generatedGeometry
+    mut AvboitGeneratedGeometryReuse generatedGeometry,
+    mut AvboitUploadedStreamState uploadedStreams
 ){
 
     AvboitRasterPassTaskPayload avboitAccumulationPayload(this.m_avboitSystem, inputs.targets, timing.accumulationTimingTicket, MaterialPipelinePass::AvboitAccumulate);
@@ -290,7 +295,8 @@ b8 FrameGraphAvboitStage::declareAccumulation(
         inputs.targets.avboit.accumulationFramebuffer, MaterialPipelinePass::AvboitAccumulate, AvboitGeometryPhase::Accumulation, this.m_avboitSystem.taskGraphStage().m_integrationTask, avboitIntervalOutputsGraphOwned, true,
         avboitAccumulationPayload,
         avboitAccumulationComputeEmulationPayload,
-        generatedGeometry
+        generatedGeometry,
+        uploadedStreams
     );
     if(!accumulationUploadChainResult.has_value()){
         warning("RendererSystem: could not declare AVBOIT accumulation upload chain");

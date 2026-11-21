@@ -23,6 +23,9 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct DenseDescendantBitMatrix;
+
+
 struct TaskDependencyAdjacency{
     Vector<usize, Alloc::ScratchArena> offsets;
     Vector<usize, Alloc::ScratchArena> edgeIndices;
@@ -52,7 +55,8 @@ void BuildSchedulingEdges(
     const TaskDependencyAdjacency& adjacency,
     Span<const GpuTaskId> topologicalOrder,
     Alloc::ScratchArena& scratchArena,
-    GraphicsVector<GpuTaskDependencyEdge>& outSchedulingEdges
+    GraphicsVector<GpuTaskDependencyEdge>& outSchedulingEdges,
+    DenseDescendantBitMatrix* outDenseDesc = nullptr
 );
 
 void BuildSchedulingTaskAdjacency(

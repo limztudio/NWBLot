@@ -250,9 +250,57 @@ private:
     GraphicsVector<VulkanPhysicalQueueDesc> m_sameClassQueues;
     AcquireSyncSlotVector m_acquireSyncSlots;
     SemaphoreVector m_presentSemaphores;
+    class FrameInFlightQueue final : NoCopy{
+    public:
+        explicit FrameInFlightQueue(Alloc::GlobalArena& arena)noexcept
+            : m_storage(arena)
+            , m_arena(arena)
+        {}
+
+        [[nodiscard]] b8 empty()const noexcept{ return m_count == 0u; }
+        [[nodiscard]] usize size()const noexcept{ return m_count; }
+        [[nodiscard]] const QueueSubmissionToken& front()const noexcept{
+            FOUNDATION_ASSERT(m_count != 0u);
+            return m_storage[m_head];
+        }
+        void push(const QueueSubmissionToken& token){
+            if(m_count == m_storage.size()){
+                const usize nextCapacity = m_storage.empty() ? 8u : m_storage.size() * 2u;
+                Vector<QueueSubmissionToken, Alloc::GlobalArena> nextStorage(m_arena);
+                nextStorage.resize(nextCapacity);
+                for(usize i = 0u; i < m_count; ++i)
+                    nextStorage[i] = m_storage[(m_head + i) & m_mask];
+                m_storage.swap(nextStorage);
+                m_head = 0u;
+                m_mask = nextCapacity - 1u;
+            }
+            m_storage[(m_head + m_count) & m_mask] = token;
+            ++m_count;
+        }
+        void pop()noexcept{
+            FOUNDATION_ASSERT(m_count != 0u);
+            m_head = (m_head + 1u) & m_mask;
+            --m_count;
+            if(m_count == 0u)
+                m_head = 0u;
+        }
+        void clear()noexcept{
+            m_head = 0u;
+            m_count = 0u;
+        }
+
+
+    private:
+        Vector<QueueSubmissionToken, Alloc::GlobalArena> m_storage;
+        Alloc::GlobalArena& m_arena;
+        usize m_head = 0u;
+        usize m_count = 0u;
+        usize m_mask = 0u;
+    };
+
     CommandListHandle m_directPresentCommandList;
     GpuPhysicalQueueId m_directPresentQueue;
-    ::Queue<QueueSubmissionToken, Alloc::GlobalArena> m_framesInFlight;
+    FrameInFlightQueue m_framesInFlight;
     u32 m_swapChainIndex = Limit<u32>::s_Max;
     u32 m_acquireSyncSlotIndex = 0u;
     u32 m_maxFramesInFlight = s_MaxFramesInFlight;

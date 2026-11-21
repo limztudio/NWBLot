@@ -232,18 +232,13 @@ Expected<mut BuilderItem> Builder::addItem(in StringView stableKey, in StringVie
     item.state = state.value();
     item.enabled = options.enabled && this.synchronizePopup();
     const ShapeRequest request = this.textShapeRequest(text, this.m_style.fontSize);
-    auto layout = this.m_text.layout(request);
-    if(!layout.has_value()){
+    const auto measuredText = this.m_text.layoutAndMeasureShared(request, this.m_paint.displayMetrics());
+    if(!measuredText.has_value()){
         this.m_context.fail();
         return MakeUnexpected(Failure());
     }
-    MoveInto<TextLayout>(item.text, layout.value());
-    const auto textBounds = this.m_text.measure(item.text, this.m_paint.displayMetrics());
-    if(!textBounds.has_value()){
-        this.m_context.fail();
-        return MakeUnexpected(Failure());
-    }
-    item.textBounds = textBounds.value();
+    item.text = measuredText.value().layout;
+    item.textBounds = measuredText.value().bounds;
     const Point textSize = Point(item.textBounds.width, item.textBounds.height);
     Point intrinsicSize = textSize;
     if(kind == WidgetKind::Selectable){
@@ -592,6 +587,15 @@ b8 Builder::paintItem(in BuilderItem item, in LayoutBox box){
         return this.paintProgress(item, box);
     if(item.state.kind == WidgetKind::Image)
         return this.paintImage(item, box);
+    if(item.state.kind == WidgetKind::Separator){
+        const Rect clip = this.visibleClip(box.clip);
+        this.m_paint.pushClip(clip);
+        const b8 painted = this.m_paint.drawRegion(item.style.separator, box.rectangle);
+        const b8 popped = this.m_paint.popClip();
+        return painted && popped;
+    }
+    if(!item.text.valid())
+        return false;
     in InputRouter input = this.m_context.input();
     const b8 hover = input.hover() == item.state.id;
     const b8 pressed = input.pressed(item.state.id);
@@ -604,7 +608,7 @@ b8 Builder::paintItem(in BuilderItem item, in LayoutBox box){
         this.m_skin.value(),
         item.state.kind,
         item.style,
-        item.text,
+        item.text.deref(),
         item.textBounds,
         item.padding,
         item.checkboxExtent,
@@ -618,8 +622,6 @@ b8 Builder::paintItem(in BuilderItem item, in LayoutBox box){
         interactive
     ))
         return false;
-    if(item.state.kind == WidgetKind::Separator)
-        return true;
     if(NeedsBasicControlHitTarget(interactive, item.annotated)){
         const HitTarget target = targets.makeBasicControlHitTarget(box.rectangle, clip, item.enabled, interactive, item.contextMenu);
         return this.m_context.addTarget(item.state, target);
@@ -628,6 +630,8 @@ b8 Builder::paintItem(in BuilderItem item, in LayoutBox box){
 }
 
 b8 Builder::paintSelectable(in BuilderItem item, in LayoutBox box){
+    if(!item.text.valid())
+        return false;
     HitTargetFactory targets;
     in InputRouter input = this.m_context.input();
     SelectablePaintFlags flags;
@@ -636,7 +640,7 @@ b8 Builder::paintSelectable(in BuilderItem item, in LayoutBox box){
     flags.hover = input.hover() == item.state.id;
     flags.focused = input.focus() == item.state.id;
     const Rect clip = this.visibleClip(box.clip);
-    if(!PaintSelectable(this.m_paint, this.m_text, this.m_skin.value(), item.text, item.textBounds, item.padding, box.rectangle, clip, item.selectableStyle, flags, item.style.text, item.style.disabledText))
+    if(!PaintSelectable(this.m_paint, this.m_text, this.m_skin.value(), item.text.deref(), item.textBounds, item.padding, box.rectangle, clip, item.selectableStyle, flags, item.style.text, item.style.disabledText))
         return false;
     const HitTarget target = targets.makeBasicControlHitTarget(box.rectangle, clip, item.enabled, true, item.contextMenu);
     return this.m_context.addTarget(item.state, target);

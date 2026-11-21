@@ -63,7 +63,7 @@ b8 GpuTaskSchedulingReachability::hasRelatedBit(const u32 sourceIndex, const u32
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, GpuTaskSchedulingReachability& outReachability){
+b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, GpuTaskSchedulingReachability& outReachability, const DenseDescendantBitMatrix* const precomputedStrictDesc){
     const auto reset = [&outReachability]()noexcept{
         outReachability.m_words.clear();
         outReachability.m_topologicalRanks.clear();
@@ -128,6 +128,30 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
     outReachability.m_graphGeneration = graph.generation();
     outReachability.m_taskCount = taskCount;
     outReachability.m_wordsPerRow = wordsPerRow;
+    if(precomputedStrictDesc && precomputedStrictDesc->valid && precomputedStrictDesc->taskCount == taskCount && precomputedStrictDesc->wordsPerRow == wordsPerRow && precomputedStrictDesc->strictDesc.size() == totalWordCount){
+        outReachability.m_words.resize(totalWordCount);
+        FOUNDATION_MEMCPY(outReachability.m_words.data(), totalWordCount * sizeof(u64), precomputedStrictDesc->strictDesc.data(), totalWordCount * sizeof(u64));
+        SymmetrizeDenseBitMatrix(outReachability.m_words, taskCount, wordsPerRow);
+        outReachability.m_topologicalRanks.resize(taskCount);
+        for(usize orderIndex = 0u; orderIndex < analysis.topologicalOrder().size(); ++orderIndex)
+            outReachability.m_topologicalRanks[analysis.topologicalOrder()[orderIndex].index] = static_cast<u32>(orderIndex);
+        outReachability.m_relatedWordRanges.resize(taskCount);
+        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+            const usize rowOffset = taskIndex * wordsPerRow;
+            outReachability.m_words[rowOffset + taskIndex / s_BitsPerWord] |= static_cast<u64>(1u) << (taskIndex % s_BitsPerWord);
+            auto& range = outReachability.m_relatedWordRanges[taskIndex];
+            range = { .begin = wordsPerRow, .end = 0u };
+            for(usize wordIndex = 0u; wordIndex < wordsPerRow; ++wordIndex){
+                const u64 word = outReachability.m_words[rowOffset + wordIndex];
+                if(word != 0u){
+                    range.begin = Min(range.begin, wordIndex);
+                    range.end = wordIndex + 1u;
+                }
+            }
+        }
+        outReachability.m_valid = true;
+        return true;
+    }
     constexpr usize s_SmallDenseWordCount = 4u;
     if(wordsPerRow > s_SmallDenseWordCount){
         outReachability.m_relatedWordRanges.resize(taskCount);

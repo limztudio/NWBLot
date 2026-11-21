@@ -54,6 +54,8 @@ void Device::runGarbageCollection(){
         VkResult completionResult = VK_SUCCESS;
         {
             ScopedLock lock(queue->m_mutex);
+            if(queue->m_lastFinishedID == queue->m_lastSubmittedID && queue->m_commandBuffersInFlight.empty())
+                continue;
             completionResult = queue->updateLastFinishedID();
             if(completionResult == VK_SUCCESS)
                 queue->collectCompletedCommandBuffers();

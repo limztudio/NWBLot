@@ -112,7 +112,8 @@ Expected<FrameGraphAvboitMaterialUploadResult> FrameGraphAvboitPassUploadChain::
     in b8 hasTransparentRenderers,
     mut AvboitRasterPassTaskPayload rasterPayload,
     mut AvboitComputeEmulationTaskPayload computeEmulationPayload,
-    mut AvboitGeneratedGeometryReuse generatedGeometry
+    mut AvboitGeneratedGeometryReuse generatedGeometry,
+    mut AvboitUploadedStreamState uploadedStreams
 ){
     FrameGraphAvboitMaterialUploadResult result;
     result.uploadTask = uploadTask;
@@ -131,6 +132,7 @@ Expected<FrameGraphAvboitMaterialUploadResult> FrameGraphAvboitPassUploadChain::
         materialTypedRanges,
         materialTypedBytes
     );
+    const u64 streamToken = this.m_materialSystem.lastGatheredStreamToken();
     if(!uploadResult.has_value()){
         warning("RendererSystem: prepared AVBOIT pass resources were unavailable during graph declaration");
         return MakeUnexpected(Failure());
@@ -173,24 +175,7 @@ Expected<FrameGraphAvboitMaterialUploadResult> FrameGraphAvboitPassUploadChain::
         ValidateMaterialTypedUploadRanges(materialTypedRanges, materialTypedBytes);
     }
 
-    const auto csgStreamsUploadedResult = DeclareAvboitMaterialUploads(this.m_graph, this.m_csgSystem, inputs, phase,
-        instanceData,
-        materialTypedBytes,
-        csgFrameData,
-        hasCsgDrawItems,
-        result.uploadTask
-    );
-    if(!csgStreamsUploadedResult.has_value()){
-        warning("RendererSystem: could not declare AVBOIT material upload");
-        return MakeUnexpected(Failure());
-    }
-    result.csgStreamsUploaded = csgStreamsUploadedResult.value();
-
-    rasterPayload.snapshot.capture(drawItems, csgFrameData, instanceData.size(), materialTypedBytes.size());
-    rasterPayload.phasePrepared = true;
-    rasterPayload.streamsUploaded = true;
-    result.streamsUploaded = true;
-
+    result.csgStreamsUploaded = hasCsgDrawItems;
     CaptureAvboitEmulationPlans(MaterialPassDrawItemPartitionsView(drawItems), CsgFrameGpuDataView(csgFrameData),
         rasterPayload.materialGeometryStatesGraphOwned, sampledTexturesCollected, intervalOutputsGraphOwned, instanceData.size(), materialTypedBytes.size(),
         computeEmulationPayload.plan, computeEmulationPayload.csgPlan, result);
@@ -204,6 +189,40 @@ Expected<FrameGraphAvboitMaterialUploadResult> FrameGraphAvboitPassUploadChain::
         computeEmulationPayload.instanceCount = instanceData.size();
         computeEmulationPayload.materialTypedByteCount = materialTypedBytes.size();
     }
+
+    const b8 requiresPhaseStreamTask =
+        (result.regularComputeEmulationPlanCaptured && !result.reusedGeometryProducer.valid())
+        || result.csgComputeEmulationPlanCaptured
+        || result.sharedComputeEmulationPlanCaptured;
+    in FramebufferInfoEx fbInfo = framebuffer.deref().getFramebufferInfo();
+    const CsgFrameGpuDataView csgFrameDataView(csgFrameData);
+    const b8 uploadMaterialStreams = requiresPhaseStreamTask || !uploadedStreams.matchesMaterial(streamToken);
+    const b8 uploadCsgStreams = hasCsgDrawItems && (requiresPhaseStreamTask || !uploadedStreams.matchesCsg(streamToken, fbInfo.width, fbInfo.height, csgFrameDataView));
+
+    if(uploadMaterialStreams || uploadCsgStreams){
+        const auto csgStreamsUploadedResult = DeclareAvboitMaterialUploads(this.m_graph, this.m_csgSystem, inputs, phase,
+            instanceData,
+            materialTypedBytes,
+            csgFrameDataView,
+            uploadMaterialStreams,
+            uploadCsgStreams,
+            result.uploadTask
+        );
+        if(!csgStreamsUploadedResult.has_value()){
+            warning("RendererSystem: could not declare AVBOIT material upload");
+            return MakeUnexpected(Failure());
+        }
+        result.declaredUploadTask = true;
+        if(uploadMaterialStreams)
+            uploadedStreams.markMaterialUploaded(streamToken);
+        if(uploadCsgStreams)
+            uploadedStreams.markCsgUploaded(fbInfo.width, fbInfo.height, csgFrameDataView);
+    }
+
+    rasterPayload.snapshot.capture(drawItems, csgFrameData, instanceData.size(), materialTypedBytes.size());
+    rasterPayload.phasePrepared = true;
+    rasterPayload.streamsUploaded = true;
+    result.streamsUploaded = true;
     return result;
 }
 
@@ -249,7 +268,8 @@ Expected<b8> DeclareAvboitMaterialUploads(
     in Span<InstanceGpuData> instanceData,
     in Span<u8> materialTypedBytes,
     in CsgFrameGpuDataView csgFrameData,
-    in b8 hasCsgDrawItems,
+    in b8 uploadMaterialStreams,
+    in b8 uploadCsgStreams,
     mut GpuTaskId inOutUploadTask
 ){
     if(!inOutUploadTask.valid())
@@ -267,25 +287,27 @@ Expected<b8> DeclareAvboitMaterialUploads(
     }
 
     const AvboitMaterialUploadIdentities identities = ResolveAvboitMaterialUploadIdentities(phase);
-    const auto instanceBlobResult = graph.copyUploadElements<InstanceGpuData>(instanceData);
-    const auto materialTypedBlobResult = graph.copyUploadBytes<u32>(materialTypedBytes);
-    if(!instanceBlobResult.has_value() || !materialTypedBlobResult.has_value()){
-        warning("RendererSystem: could not retain immutable AVBOIT material upload data");
-        return MakeUnexpected(Failure());
-    }
-    const GpuUploadBlobId instanceBlob = instanceBlobResult.value();
-    const GpuUploadBlobId materialTypedBlob = materialTypedBlobResult.value();
+    if(uploadMaterialStreams){
+        const auto instanceBlobResult = graph.copyUploadElements<InstanceGpuData>(instanceData);
+        const auto materialTypedBlobResult = graph.copyUploadBytes<u32>(materialTypedBytes);
+        if(!instanceBlobResult.has_value() || !materialTypedBlobResult.has_value()){
+            warning("RendererSystem: could not retain immutable AVBOIT material upload data");
+            return MakeUnexpected(Failure());
+        }
+        const GpuUploadBlobId instanceBlob = instanceBlobResult.value();
+        const GpuUploadBlobId materialTypedBlob = materialTypedBlobResult.value();
 
-    if(!AppendImmutableBufferUpload(graph, instanceBlob, inputs.resources.materialInstances, identities.instanceIdentity, identities.instanceLabel, inOutUploadTask)){
-        warning("RendererSystem: could not declare AVBOIT material instance upload");
-        return MakeUnexpected(Failure());
-    }
-    if(!AppendImmutableBufferUpload(graph, materialTypedBlob, inputs.resources.materialTyped, identities.typedIdentity, identities.typedLabel, inOutUploadTask)){
-        warning("RendererSystem: could not declare AVBOIT material typed upload");
-        return MakeUnexpected(Failure());
+        if(!AppendImmutableBufferUpload(graph, instanceBlob, inputs.resources.materialInstances, identities.instanceIdentity, identities.instanceLabel, inOutUploadTask)){
+            warning("RendererSystem: could not declare AVBOIT material instance upload");
+            return MakeUnexpected(Failure());
+        }
+        if(!AppendImmutableBufferUpload(graph, materialTypedBlob, inputs.resources.materialTyped, identities.typedIdentity, identities.typedLabel, inOutUploadTask)){
+            warning("RendererSystem: could not declare AVBOIT material typed upload");
+            return MakeUnexpected(Failure());
+        }
     }
 
-    if(!hasCsgDrawItems)
+    if(!uploadCsgStreams)
         return false;
 
     const auto clipContextSlotData = csgSystem.prepareCsgClipContextSlotData(inputs.targets, csgFrameData, inputs.csgResources, inputs.frameBindings);

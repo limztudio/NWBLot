@@ -508,12 +508,13 @@ b8 RendererRayTracingSystem::prepareCausticEmissionTargetResources(){
     VectorSingle combinedMax = VectorSingle(-s_RayTracingFiniteInfinity);
 
     for(in auto row : rendererView){
+        if(!Get<1>(row).visible)
+            continue;
         const EntityID entity = Get<0>(row);
-        in RendererComponent renderer = this.m_world.getComponent<RendererComponent>(entity);
-        if(!renderer.visible || this.m_opticalVolumes.isSuppressed(entity))
+        if(this.m_opticalVolumes.isSuppressed(entity))
             continue;
 
-        const auto materialInfoResult = this.m_materialSystem.findMaterialSurfaceInfo(renderer.material);
+        const auto materialInfoResult = this.m_materialSystem.findMaterialSurfaceInfo(Get<1>(row).material);
         if(!materialInfoResult.has_value())
             continue;
         if(!materialInfoResult.value().refractive)
@@ -522,13 +523,14 @@ b8 RendererRayTracingSystem::prepareCausticEmissionTargetResources(){
         const auto meshResult = ResolveRenderableMeshResources(meshSystem.value(), this.m_meshSystem, entity);
         if(!meshResult.has_value())
             continue;
-        CausticEmissionTargetBuilder().recordUnsupportedVolume(entity.id, renderer.opticalBoundaryMode, this.m_firstUnsupportedCausticVolumeEntity, this.m_unsupportedCausticVolumeCount, this.m_unsupportedCausticVolumeHash);
+        CausticEmissionTargetBuilder().recordUnsupportedVolume(entity.id, Get<1>(row).opticalBoundaryMode, this.m_firstUnsupportedCausticVolumeEntity, this.m_unsupportedCausticVolumeCount, this.m_unsupportedCausticVolumeHash);
         if(!meshResult.value().meshResources.csgLocalBounds.valid())
             continue;
 
         MatrixSingle objectToWorld = MatrixIdentity();
-        if(this.m_world.hasComponent<TransformComponent>(entity))
-            objectToWorld = LoadTransformMatrix(this.m_world.getComponent<TransformComponent>(entity));
+        const Optional<mut TransformComponent> borrowedTransform = this.m_world.borrowComponent<TransformComponent>(entity);
+        if(borrowedTransform.has_value())
+            objectToWorld = LoadTransformMatrix(borrowedTransform.value());
         VectorSingle localMin(meshResult.value().meshResources.csgLocalBounds.minBounds);
         VectorSingle localMax(meshResult.value().meshResources.csgLocalBounds.maxBounds);
         CausticEmissionTargetBuilder().resolveLocalBounds(meshResult.value().resolvedMesh.runtime, localMin, localMax);

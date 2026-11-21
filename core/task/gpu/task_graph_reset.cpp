@@ -111,39 +111,44 @@ void GpuTaskGraph::completeResetWithinLock()noexcept{
         const b8 recordingAttemptResolved = m_activeCompiledGraph->resolveRecordingAttempt(*this, activePlanGeneration, activeAttemptGeneration);
         FOUNDATION_FATAL_ASSERT_MSG(recordingAttemptResolved, "GPU task graph reset cleanup must release its exact recording-plan lease");
     }
-    m_tasks.clear();
-    m_dependencies.clear();
+    const auto clearIfNonEmpty = [](auto& container)noexcept{
+        if(!container.empty())
+            container.clear();
+    };
+    clearIfNonEmpty(m_tasks);
+    clearIfNonEmpty(m_dependencies);
     m_normalExecutionPrelude = {};
-    m_externalDependencies.clear();
-    m_externalStateSources.clear();
-    m_resourceUses.clear();
-    m_resourceVersionUses.clear();
+    clearIfNonEmpty(m_externalDependencies);
+    clearIfNonEmpty(m_externalStateSources);
+    clearIfNonEmpty(m_resourceUses);
+    clearIfNonEmpty(m_resourceVersionUses);
     m_resourceImportIndexes.clearResources();
-    m_resources.clear();
-    m_resourceVersions.clear();
-    m_initialOwnerHandoffSources.clear();
-    m_queueFamilyIndices.clear();
+    clearIfNonEmpty(m_resources);
+    clearIfNonEmpty(m_resourceVersions);
+    clearIfNonEmpty(m_initialOwnerHandoffSources);
+    clearIfNonEmpty(m_queueFamilyIndices);
     m_resourceImportIndexes.clearResourceSets();
-    m_resourceSets.clear();
-    m_resourceSetMembers.clear();
-    if(m_pipelineIdentityIndex)
+    clearIfNonEmpty(m_resourceSets);
+    clearIfNonEmpty(m_resourceSetMembers);
+    if(m_pipelineIdentityIndex && !m_pipelineIdentityIndex->empty())
         m_pipelineIdentityIndex->clear();
-    if(m_pipelinePointerIndex)
+    if(m_pipelinePointerIndex && !m_pipelinePointerIndex->empty())
         m_pipelinePointerIndex->clear();
-    m_pipelines.clear();
-    if(m_externalCompletionIdentityIndex)
+    clearIfNonEmpty(m_pipelines);
+    if(m_externalCompletionIdentityIndex && !m_externalCompletionIdentityIndex->empty())
         m_externalCompletionIdentityIndex->clear();
-    m_externalCompletions.clear();
+    clearIfNonEmpty(m_externalCompletions);
     m_externalCompletionDeviceGeneration = 0u;
-    m_uploadBlobs.clear();
-    m_uploadBlobStorage.clear();
-    m_overalignedUploadBlobs.clear();
+    clearIfNonEmpty(m_uploadBlobs);
+    clearIfNonEmpty(m_uploadBlobStorage);
+    clearIfNonEmpty(m_overalignedUploadBlobs);
     m_uploadBlobStorageByteSize = 0u;
-    m_markerText.clear();
+    clearIfNonEmpty(m_markerText);
     m_presentEndpoint = {};
-    m_generation = AllocateGeneration();
+    const u64 nextGenerationBlock = AllocateGenerationBlock(2u);
+    m_generation = nextGenerationBlock;
     bumpDeclarationRevision();
-    m_activeRecordingAttemptGeneration.store(AllocateGeneration(), MemoryOrder::release);
+    m_activeRecordingAttemptGeneration.store(nextGenerationBlock + 1u, MemoryOrder::release);
     m_activeRecordingPlanGeneration.store(0u, MemoryOrder::release);
     m_activeRecordingPreparationSerial = 0u;
     FOUNDATION_FATAL_ASSERT_MSG(m_activePacketRecordingClaimCount.load(MemoryOrder::relaxed) == 0u, "GPU task graph reset publication requires every packet recording claim to drain");
@@ -157,7 +162,7 @@ void GpuTaskGraph::completeResetWithinLock()noexcept{
     m_hasDiscardCallbacks = false;
     m_hasAcceptedQueueFrontierOrRecoveryTask = false;
     m_hasTaskLifecycleActivity = false;
-    m_declarationAdmissionState.fetch_and(~(s_AdmissionTeardownBit | s_AdmissionPlanActiveBit), MemoryOrder::acq_rel);
+    m_declarationAdmissionState.fetch_and(~(s_AdmissionTeardownBit | s_AdmissionPlanActiveBit | s_AdmissionReaderStripesDirtyBit), MemoryOrder::acq_rel);
 }
 
 void GpuTaskGraph::completeResetWithoutCallbacks(const b8 payloadsAlreadyDestroyed)noexcept{

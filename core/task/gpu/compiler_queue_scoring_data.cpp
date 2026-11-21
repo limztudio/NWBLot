@@ -28,7 +28,8 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
     const GpuTaskSchedulingReachability& reachability,
     const GpuTaskGraphQueueAssignmentOptions& options,
     Alloc::ScratchArena& scratchArena,
-    const GpuPhysicalQueueTopology* const topology
+    const GpuPhysicalQueueTopology* const topology,
+    const b8 hasNonHazardDomainResource
 )
     : taskCosts(CompilerGraphAccess::TaskCount(graph), scratchArena)
     , taskCostGroups(reachability.m_words.empty() ? 0u : CompilerGraphAccess::TaskCount(graph), scratchArena)
@@ -80,7 +81,7 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
             return;
     }
 
-    if(analysis.inferredEdges().empty())
+    if(!hasNonHazardDomainResource || analysis.inferredEdges().empty())
         return;
 
     const usize taskCount = CompilerGraphAccess::TaskCount(graph);
@@ -297,6 +298,61 @@ u64 GpuTaskQueueScoringData::independentQueueCostByIndex(const GpuTaskScheduling
 
     FOUNDATION_ASSERT(costWordsPerGroup == reachability.m_wordsPerRow);
     const usize queueOffset = (queueIndex + 1u) * GpuTaskCostHint::Count * costWordsPerGroup;
+    const b8 singleCostGroup = (nonEmptyCostGroupMask & (nonEmptyCostGroupMask - 1u)) == 0u;
+    if(singleCostGroup){
+        const usize costGroup = static_cast<usize>(CountTrailingZeros(static_cast<u32>(nonEmptyCostGroupMask)));
+        const usize groupBase = costGroup * costWordsPerGroup;
+        const u64 groupWeight = costGroupWeights[costGroup];
+        u64 matchedBits = 0u;
+        if(members.size() == 1u){
+            const usize taskIndex = members[0u].task.index;
+            const auto& range = reachability.m_relatedWordRanges[taskIndex];
+            const usize firstWord = range.begin;
+            const usize lastWord = range.end;
+            const usize rowOffset = reachability.m_rowOffsets.empty() ? (taskIndex * costWordsPerGroup) : reachability.m_rowOffsets[taskIndex];
+            for(usize wordIndex = firstWord; wordIndex < lastWord; ++wordIndex){
+                const u64 related = reachability.m_rowOffsets.empty()
+                    ? reachability.m_words[rowOffset + wordIndex]
+                    : reachability.m_words[rowOffset + wordIndex - firstWord];
+                if(related == 0u)
+                    continue;
+                const usize costWord = groupBase + wordIndex;
+                const u64 offQueue = assignedCostWords[costWord] & ~assignedCostWords[queueOffset + costWord];
+                matchedBits += static_cast<u64>(CountSetBits(related & offQueue));
+            }
+            return independentCost - matchedBits * groupWeight;
+        }
+
+        usize firstWord = costWordsPerGroup;
+        usize lastWord = 0u;
+        for(const GpuTaskQueueAssignment& member : members){
+            const auto& range = reachability.m_relatedWordRanges[member.task.index];
+            firstWord = Min(firstWord, range.begin);
+            lastWord = Max(lastWord, range.end);
+        }
+        for(usize wordIndex = firstWord; wordIndex < lastWord; ++wordIndex){
+            u64 related = 0u;
+            if(reachability.m_rowOffsets.empty()){
+                for(const GpuTaskQueueAssignment& member : members)
+                    related |= reachability.m_words[member.task.index * costWordsPerGroup + wordIndex];
+            }
+            else{
+                for(const GpuTaskQueueAssignment& member : members){
+                    const usize taskIndex = member.task.index;
+                    const auto& range = reachability.m_relatedWordRanges[taskIndex];
+                    if(wordIndex >= range.begin && wordIndex < range.end)
+                        related |= reachability.m_words[reachability.m_rowOffsets[taskIndex] + wordIndex - range.begin];
+                }
+            }
+            if(related == 0u)
+                continue;
+            const usize costWord = groupBase + wordIndex;
+            const u64 offQueue = assignedCostWords[costWord] & ~assignedCostWords[queueOffset + costWord];
+            matchedBits += static_cast<u64>(CountSetBits(related & offQueue));
+        }
+        return independentCost - matchedBits * groupWeight;
+    }
+
     if(members.size() == 1u){
         const usize taskIndex = members[0u].task.index;
         const auto& range = reachability.m_relatedWordRanges[taskIndex];

@@ -192,8 +192,7 @@ b8 SwapChainLifecycle::commitSwapChainResize(SwapChainTransitionTicket&& ticket)
         return false;
 
     m_context.commitPreparedSwapChainDestruction();
-    while(!m_context.m_framesInFlight.empty())
-        m_context.m_framesInFlight.pop();
+    m_context.m_framesInFlight.clear();
     m_context.clearSemaphores(m_context.m_presentSemaphores);
     m_context.clearAcquireSyncSlots();
 
@@ -228,8 +227,7 @@ b8 SwapChainLifecycle::commitDestroy(SwapChainTransitionTicket&& ticket)noexcept
 
     m_context.commitPreparedSwapChainDestruction();
 
-    while(!m_context.m_framesInFlight.empty())
-        m_context.m_framesInFlight.pop();
+    m_context.m_framesInFlight.clear();
 
     m_context.clearSemaphores(m_context.m_presentSemaphores);
     m_context.clearAcquireSyncSlots();
@@ -287,8 +285,7 @@ b8 SwapChainLifecycle::createSwapChainResources(Alloc::ScratchArena& scratchAren
         return false;
     }
 
-    while(!m_context.m_framesInFlight.empty())
-        m_context.m_framesInFlight.pop();
+    m_context.m_framesInFlight.clear();
 
     m_context.resetDirectPresentCommandList();
     {

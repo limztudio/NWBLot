@@ -32,6 +32,7 @@ NWB_VULKAN_BEGIN
 class BindingLayout final : public RefCounter<GraphicsResource>{
     friend class Device;
     friend class CommandList;
+    friend class GpuDescriptorHeap;
 
 
 public:
@@ -371,12 +372,17 @@ public:
             m_textureStates.clear();
         if(!m_bufferStates.empty())
             m_bufferStates.clear();
+        m_hasReadbackBuffers = false;
+        m_hasKeepInitialStateTextures = false;
+        m_hasKeepInitialStateBuffers = false;
     }
     void beginRecordingAttempt()noexcept;
     void commitRecordingAttempt()noexcept;
     void rollbackRecordingAttempt()noexcept;
     void setPermanentTextureState(Texture& texture, ResourceStates::Mask state);
     void setPermanentBufferState(Buffer& buffer, ResourceStates::Mask state);
+
+    [[nodiscard]] b8 hasPermanentTextureStates()const noexcept{ return !m_permanentTextureStates.empty(); }
 
     [[nodiscard]] b8 isPermanentTexture(Texture& texture)const noexcept{
         return !m_permanentTextureStates.empty() && m_permanentTextureStates.find(MakeNotNull(&texture)) != m_permanentTextureStates.end();
@@ -417,6 +423,7 @@ private:
     [[nodiscard]] BufferRangeStates* findBufferRangesCachedMutable(Buffer& buffer)noexcept;
     [[nodiscard]] ResourceStates::Mask getBufferStateFromRanges(Buffer& buffer, const BufferRangeStates* ranges, const BufferRange& resolvedRange)const noexcept;
     [[nodiscard]] b8 hasExplicitBufferStateFromRanges(const BufferRangeStates* ranges, const BufferRange& resolvedRange, b8 requireKnown = false)const noexcept;
+    [[nodiscard]] static const BufferRangeState* FindFirstPotentiallyOverlappingRange(const BufferRangeStates& ranges, u64 byteOffset)noexcept;
     void beginTrackingTransientBuffer(Buffer& buffer, ResourceStates::Mask state, BufferRange range = s_EntireBuffer, b8 seedOnly = false);
     void beginTrackingTransientBufferWithRanges(Buffer& buffer, ResourceStates::Mask state, const BufferRange& resolvedRange, b8 seedOnly, BufferRangeStates* existingRanges);
 
@@ -435,6 +442,9 @@ private:
 
     const VulkanContext& m_context;
     b8 m_recordingAttemptActive = false;
+    b8 m_hasReadbackBuffers = false;
+    b8 m_hasKeepInitialStateTextures = false;
+    b8 m_hasKeepInitialStateBuffers = false;
 };
 
 

@@ -19,6 +19,8 @@
 #include <global/arena_object.h>
 #include <global/binary.h>
 #include <global/sync.h>
+#include <global/termination.h>
+#include <global/thread.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -90,7 +92,7 @@ private:
 
     class DeclarationMutationScope final : NoCopy{
     public:
-        explicit DeclarationMutationScope(GpuTaskGraph& graph);
+        explicit DeclarationMutationScope(GpuTaskGraph& graph)noexcept;
         ~DeclarationMutationScope()noexcept;
 
 
@@ -98,6 +100,11 @@ private:
         [[nodiscard]] b8 valid()const noexcept{ return m_valid; }
 
         [[nodiscard]] b8 validFor(const GpuTaskGraph& graph)const noexcept{ return m_valid && &m_graph == &graph; }
+
+
+    private:
+        void acquireSlow(u32 threadId, u64 state)noexcept;
+        void releaseSlow()noexcept;
 
 
     private:
@@ -206,6 +213,7 @@ private:
 
 private:
     [[nodiscard]] static u64 AllocateGeneration()noexcept;
+    [[nodiscard]] static u64 AllocateGenerationBlock(u64 count)noexcept;
     [[nodiscard]] static PipelinePointerKey MakePipelinePointerKey(const GpuGraphPipelineNode& pipeline)noexcept;
 
     [[nodiscard]] static Expected<GpuCompiledPacketView> ResolvePacketView(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet)noexcept;
@@ -519,26 +527,65 @@ private:
 
 
 private:
-    static constexpr u64 s_AdmissionReaderMask = (1ull << 30u) - 1ull;
+    static constexpr usize s_ReaderStripeCount = 16u;
+    static constexpr u64 s_AdmissionReaderStripesDirtyBit = 1ull << 59u;
     static constexpr u64 s_AdmissionWriterBit = 1ull << 60u;
     static constexpr u64 s_AdmissionWriterMask = s_AdmissionWriterBit;
     static constexpr u64 s_AdmissionWaiterBit = 1ull << 61u;
     static constexpr u64 s_AdmissionPlanActiveBit = 1ull << 62u;
     static constexpr u64 s_AdmissionTeardownBit = 1ull << 63u;
 
+    struct alignas(64) DeclarationReaderStripe{
+        Atomic<u32> count{ 0u };
+    };
+
 
 private:
+    [[nodiscard]] static u32 CachedCurrentThreadId()noexcept{
+        thread_local const u32 id = []()noexcept{
+            const u32 tid = CurrentThreadId();
+            return tid != 0u ? tid : 1u;
+        }();
+        return id;
+    }
+
+    [[nodiscard]] static u8 LocalReaderStripeIndex()noexcept{
+        static Atomic<u32> s_NextStripe{ 0u };
+        thread_local const u8 stripe = static_cast<u8>(s_NextStripe.fetch_add(1u, MemoryOrder::relaxed) & (s_ReaderStripeCount - 1u));
+        return stripe;
+    }
+
+    [[nodiscard]] b8 hasAnyActiveDeclarationReader(const MemoryOrder order)const noexcept{
+        for(usize stripeIndex = 0u; stripeIndex < s_ReaderStripeCount; ++stripeIndex){
+            if(m_readerStripes[stripeIndex].count.load(order) != 0u)
+                return true;
+        }
+        return false;
+    }
+
     [[nodiscard]] b8 isTeardownInProgress(const MemoryOrder order = MemoryOrder::acquire)const noexcept{
         return (m_declarationAdmissionState.load(order) & s_AdmissionTeardownBit) != 0u;
     }
 
     [[nodiscard]] b8 tryBeginTeardownWithinLock()const noexcept{
         u64 state = m_declarationAdmissionState.load(MemoryOrder::acquire);
-        while((state & (s_AdmissionTeardownBit | s_AdmissionWriterBit | s_AdmissionReaderMask)) == 0u){
-            if(m_declarationAdmissionState.compare_exchange_weak(state, state | s_AdmissionTeardownBit, MemoryOrder::acq_rel, MemoryOrder::acquire))
+        for(;;){
+            if((state & (s_AdmissionTeardownBit | s_AdmissionWriterBit)) != 0u)
+                return false;
+            const b8 dirty = (state & s_AdmissionReaderStripesDirtyBit) != 0u;
+            if(dirty && hasAnyActiveDeclarationReader(MemoryOrder::relaxed))
+                return false;
+            if(m_declarationAdmissionState.compare_exchange_weak(state, state | s_AdmissionTeardownBit, MemoryOrder::seq_cst, MemoryOrder::acquire)){
+                if(dirty){
+                    if(hasAnyActiveDeclarationReader(MemoryOrder::seq_cst)){
+                        m_declarationAdmissionState.fetch_and(~s_AdmissionTeardownBit, MemoryOrder::acq_rel);
+                        return false;
+                    }
+                    m_declarationAdmissionState.fetch_and(~s_AdmissionReaderStripesDirtyBit, MemoryOrder::release);
+                }
                 return true;
+            }
         }
-        return false;
     }
 
     [[nodiscard]] b8 matchesPacketAttemptWithinLock(const GpuCompiledGraph& compiledGraph, const u64 planGeneration, const u64 recordingAttemptGeneration)const noexcept{
@@ -790,7 +837,8 @@ private:
     mutable u64 m_activeRecordingPreparationSerial = 0u;
     mutable const GpuCompiledGraph* m_activeCompiledGraph = nullptr;
     mutable GpuGraphSubmissionBinding m_activeSubmissionBinding;
-    mutable Atomic<u64> m_declarationAdmissionState{ 0u };
+    alignas(64) mutable Atomic<u64> m_declarationAdmissionState{ 0u };
+    mutable Array<DeclarationReaderStripe, s_ReaderStripeCount> m_readerStripes{};
     mutable u32 m_activeDiscardNotificationCount = 0u;
     mutable u32 m_exceptionRecordingClaimWaiters = 0u;
     mutable Atomic<u32> m_activePacketRecordingClaimCount{ 0u };
@@ -803,6 +851,52 @@ private:
     b8 m_hasAcceptedQueueFrontierOrRecoveryTask = false;
     mutable b8 m_hasTaskLifecycleActivity = false;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline GpuTaskGraph::DeclarationMutationScope::DeclarationMutationScope(GpuTaskGraph& graph)noexcept
+    : m_graph(graph)
+{
+    static_assert(Atomic<u64>::is_always_lock_free, "GpuTaskGraph declaration admission atomic must remain lock-free");
+
+    const u32 threadId = GpuTaskGraph::CachedCurrentThreadId();
+    if(m_graph.m_writerOwnerThread.load(MemoryOrder::relaxed) == threadId){
+        ++m_graph.m_writerRecursionDepth;
+        m_valid = true;
+        return;
+    }
+
+    u64 expected = 0u;
+    if(m_graph.m_declarationAdmissionState.compare_exchange_strong(expected, GpuTaskGraph::s_AdmissionWriterBit, MemoryOrder::seq_cst, MemoryOrder::acquire)){
+        m_graph.m_writerOwnerThread.store(threadId, MemoryOrder::relaxed);
+        m_graph.m_writerRecursionDepth = 1u;
+        m_valid = true;
+        m_isRootWriter = true;
+        return;
+    }
+
+    acquireSlow(threadId, expected);
+}
+
+inline GpuTaskGraph::DeclarationMutationScope::~DeclarationMutationScope()noexcept{
+    if(!m_valid)
+        return;
+
+    if(!m_isRootWriter){
+        if(m_graph.m_writerRecursionDepth == 0u)
+            FOUNDATION_FATAL_ASSERT_MSG(false, "GpuTaskGraph declaration mutation recursion depth must stay balanced");
+        --m_graph.m_writerRecursionDepth;
+        return;
+    }
+
+    m_graph.m_writerRecursionDepth = 0u;
+    m_graph.m_writerOwnerThread.store(0u, MemoryOrder::relaxed);
+    u64 expected = GpuTaskGraph::s_AdmissionWriterBit;
+    if(!m_graph.m_declarationAdmissionState.compare_exchange_strong(expected, 0u, MemoryOrder::release, MemoryOrder::relaxed))
+        releaseSlow();
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

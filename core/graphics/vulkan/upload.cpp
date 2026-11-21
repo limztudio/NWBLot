@@ -23,9 +23,11 @@ UploadManagerChunk::UploadManagerChunk(CpuTaskScheduler& pool, BufferHandle buf,
     , owner(&chunkOwner)
     , previousListChunk(nullptr)
     , nextListChunk(nullptr)
+    , nextOwnerChunk(nullptr)
     , nativeRecordingID(chunkNativeRecordingID)
     , size(sz)
     , allocated(0)
+    , ownerStartAllocated(0)
     , version(0)
     , physicalQueue(queue)
 {}
@@ -62,11 +64,13 @@ void UploadManager::clear()noexcept{
     const usize chunkSlot = static_cast<usize>(m_chunkKind);
     for(QueueChunkLedger& entry : m_queueChunkLedgers){
         for(BufferChunk* chunk = entry.firstActiveChunk; chunk; chunk = chunk->nextListChunk){
-            if(chunk->owner && chunk->owner->m_activeUploadChunks[chunkSlot] == chunk)
+            chunk->nextOwnerChunk = nullptr;
+            if(chunk->owner)
                 chunk->owner->m_activeUploadChunks[chunkSlot] = nullptr;
         }
         entry.firstActiveChunk = nullptr;
         entry.firstRetiredChunk = nullptr;
+        entry.lastRetiredChunk = nullptr;
         entry.chunks.clear();
     }
     m_queueChunkLedgers.clear();
@@ -78,13 +82,14 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
     if(!owner || nativeRecordingID == 0u)
         return MakeUnexpected(Failure{});
     const usize chunkSlot = static_cast<usize>(m_chunkKind);
+    const u8 slotBit = static_cast<u8>(1u << chunkSlot);
     FOUNDATION_ASSERT(chunkSlot < owner->m_activeUploadChunks.size());
 
     BufferChunk* const cachedChunk = owner->m_activeUploadChunks[chunkSlot];
     if(cachedChunk && cachedChunk->manager == this && cachedChunk->owner == owner && cachedChunk->nativeRecordingID == nativeRecordingID && cachedChunk->physicalQueue == queue){
         const auto fastResult = trySuballocateFromChunk(*cachedChunk, size, alignment);
         if(fastResult){
-            FOUNDATION_ASSERT((owner->m_usedUploadChunkMask & static_cast<u8>(1u << chunkSlot)) != 0u);
+            FOUNDATION_ASSERT((owner->m_usedUploadChunkMask & slotBit) != 0u);
             return fastResult;
         }
     }
@@ -95,66 +100,85 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
     UniqueLock<Futex> lock(m_mutex);
     QueueChunkLedger* activeLedger = &findOrCreateQueueLedgerLocked(queue);
 
-    for(BufferChunk* chunk = activeLedger->firstActiveChunk; chunk; chunk = chunk->nextListChunk){
-        if(chunk != cachedChunk && chunk->owner == owner && chunk->nativeRecordingID == nativeRecordingID){
-            const auto result = trySuballocateFromChunk(*chunk, size, alignment);
-            if(result){
-                owner->m_activeUploadChunks[chunkSlot] = chunk;
-                owner->m_usedUploadChunkMask |= static_cast<u8>(1u << chunkSlot);
-                return result;
+    if((owner->m_usedUploadChunkMask & slotBit) != 0u){
+        for(BufferChunk* prev = nullptr, *chunk = owner->m_activeUploadChunks[chunkSlot]; chunk; prev = chunk, chunk = chunk->nextOwnerChunk){
+            if(chunk != cachedChunk && chunk->owner == owner && chunk->nativeRecordingID == nativeRecordingID && chunk->physicalQueue == queue){
+                const auto result = trySuballocateFromChunk(*chunk, size, alignment);
+                if(result){
+                    if(prev){
+                        prev->nextOwnerChunk = chunk->nextOwnerChunk;
+                        chunk->nextOwnerChunk = owner->m_activeUploadChunks[chunkSlot];
+                        owner->m_activeUploadChunks[chunkSlot] = chunk;
+                    }
+                    return result;
+                }
             }
         }
     }
 
-    const auto findRetiredMatch = [](QueueChunkLedger& ledger, const u64 requiredSize, const u64 completedVersion, b8& outHasSizedPending)noexcept -> BufferChunk*{
+    if(Queue* const queueObj = m_device.getQueue(queue)){
+        const u64 observedVersion = queueObj->lastObservedFinishedID();
+        if(observedVersion > activeLedger->lastKnownCompletedVersion)
+            activeLedger->lastKnownCompletedVersion = observedVersion;
+    }
+
+    const b8 allowTailContinuation = supportsTailContinuation();
+    const auto findRetiredMatch = [size, alignment, allowTailContinuation](QueueChunkLedger& ledger, const u64 completedVersion, BufferChunk*& outTailCandidate, b8& outHasSizedPending)noexcept -> BufferChunk*{
+        outTailCandidate = nullptr;
         outHasSizedPending = false;
         for(BufferChunk* chunk = ledger.firstRetiredChunk; chunk; chunk = chunk->nextListChunk){
             FOUNDATION_ASSERT(!chunk->owner && chunk->nativeRecordingID == 0u && chunk->physicalQueue == ledger.queue);
-            if(chunk->size < requiredSize)
+            if(chunk->version <= completedVersion){
+                if(chunk->size >= size)
+                    return chunk;
                 continue;
-            if(chunk->version <= completedVersion)
-                return chunk;
-            outHasSizedPending = true;
+            }
+            if(chunk->size >= size)
+                outHasSizedPending = true;
+            if(allowTailContinuation && !outTailCandidate){
+                const auto alignedOffset = AlignUpChecked<u64>(chunk->allocated, static_cast<u64>(alignment));
+                if(alignedOffset && *alignedOffset <= chunk->size && size <= chunk->size - *alignedOffset)
+                    outTailCandidate = chunk;
+            }
         }
         return nullptr;
     };
 
+    BufferChunk* tailCandidate = nullptr;
     b8 hasSizedPending = false;
-    BufferChunk* reusableChunk = findRetiredMatch(*activeLedger, size, activeLedger->lastKnownCompletedVersion, hasSizedPending);
-    if(!reusableChunk && hasSizedPending){
-        if(Queue* const queueObj = m_device.getQueue(queue)){
-            const u64 observedVersion = queueObj->lastObservedFinishedID();
-            if(observedVersion > activeLedger->lastKnownCompletedVersion){
-                activeLedger->lastKnownCompletedVersion = observedVersion;
-                reusableChunk = findRetiredMatch(*activeLedger, size, observedVersion, hasSizedPending);
-            }
-        }
-        if(!reusableChunk && hasSizedPending){
-            lock.unlock();
-            const Expected<u64> completedVersion = m_device.queueGetCompletedInstance(queue);
-            lock.lock();
-            activeLedger = &findOrCreateQueueLedgerLocked(queue);
-            if(completedVersion){
-                activeLedger->lastKnownCompletedVersion = Max(activeLedger->lastKnownCompletedVersion, *completedVersion);
-                reusableChunk = findRetiredMatch(*activeLedger, size, activeLedger->lastKnownCompletedVersion, hasSizedPending);
-            }
+    BufferChunk* reusableChunk = findRetiredMatch(*activeLedger, activeLedger->lastKnownCompletedVersion, tailCandidate, hasSizedPending);
+    if(!reusableChunk && !tailCandidate && hasSizedPending){
+        lock.unlock();
+        const Expected<u64> completedVersion = m_device.queueGetCompletedInstance(queue);
+        lock.lock();
+        activeLedger = &findOrCreateQueueLedgerLocked(queue);
+        if(completedVersion){
+            activeLedger->lastKnownCompletedVersion = Max(activeLedger->lastKnownCompletedVersion, *completedVersion);
+            reusableChunk = findRetiredMatch(*activeLedger, activeLedger->lastKnownCompletedVersion, tailCandidate, hasSizedPending);
         }
     }
 
-    if(reusableChunk){
-        unlinkRetiredChunkLocked(*activeLedger, *reusableChunk);
-        m_retiredChunkBytes = SubtractSaturating(m_retiredChunkBytes, reusableChunk->size);
-        reusableChunk->owner = owner;
-        reusableChunk->nativeRecordingID = nativeRecordingID;
-        reusableChunk->allocated = 0u;
-        reusableChunk->version = activeLedger->lastKnownCompletedVersion;
-        linkActiveChunkLocked(*activeLedger, *reusableChunk);
-        owner->m_activeUploadChunks[chunkSlot] = reusableChunk;
-        owner->m_usedUploadChunkMask |= static_cast<u8>(1u << chunkSlot);
-        return trySuballocateFromChunk(*reusableChunk, size, alignment);
+    if(reusableChunk || tailCandidate){
+        const b8 completedReuse = reusableChunk != nullptr;
+        BufferChunk* const claimedChunk = completedReuse ? reusableChunk : tailCandidate;
+        unlinkRetiredChunkLocked(*activeLedger, *claimedChunk);
+        m_retiredChunkBytes = SubtractSaturating(m_retiredChunkBytes, claimedChunk->size);
+        claimedChunk->owner = owner;
+        claimedChunk->nativeRecordingID = nativeRecordingID;
+        if(completedReuse){
+            claimedChunk->allocated = 0u;
+            claimedChunk->ownerStartAllocated = 0u;
+            claimedChunk->version = 0u;
+        }
+        else
+            claimedChunk->ownerStartAllocated = claimedChunk->allocated;
+        linkActiveChunkLocked(*activeLedger, *claimedChunk);
+        claimedChunk->nextOwnerChunk = owner->m_activeUploadChunks[chunkSlot];
+        owner->m_activeUploadChunks[chunkSlot] = claimedChunk;
+        owner->m_usedUploadChunkMask |= slotBit;
+        return trySuballocateFromChunk(*claimedChunk, size, alignment);
     }
 
-    const u64 versionForNewChunk = activeLedger->lastKnownCompletedVersion;
     lock.unlock();
 
     auto chunkSize = Max<u64>(size, m_defaultChunkSize);
@@ -186,7 +210,8 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
     BufferHandle bufferHandle = Move(*bufferHandleResult);
 
     BufferChunkPtr createdChunk = MakeRefCount<BufferChunk>(m_device.m_context.cpuScheduler, Move(bufferHandle), this, *owner, nativeRecordingID, queue, chunkSize);
-    createdChunk->version = versionForNewChunk;
+    createdChunk->version = 0u;
+    createdChunk->ownerStartAllocated = 0u;
     const Expected<BufferSuballocation> result = trySuballocateFromChunk(*createdChunk, size, alignment);
     if(!result)
         return MakeUnexpected(Failure{});
@@ -197,8 +222,9 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
     activeLedger->chunks.push_back(Move(createdChunk));
     BufferChunk& installedChunk = *activeLedger->chunks.back();
     linkActiveChunkLocked(*activeLedger, installedChunk);
+    installedChunk.nextOwnerChunk = owner->m_activeUploadChunks[chunkSlot];
     owner->m_activeUploadChunks[chunkSlot] = &installedChunk;
-    owner->m_usedUploadChunkMask |= static_cast<u8>(1u << chunkSlot);
+    owner->m_usedUploadChunkMask |= slotBit;
     m_hasAnyChunks.store(true, MemoryOrder::release);
     return result;
 }
@@ -222,7 +248,7 @@ void UploadManager::discardChunks(const GpuPhysicalQueueId queue, TrackedCommand
         return;
 
     ScopedLock lock(m_mutex);
-    retireOwnerChunksLocked(queue, reusableVersion, true, nativeRecordingID, *owner);
+    retireOwnerChunksLocked(queue, reusableVersion, nativeRecordingID, *owner);
     trimRetiredChunksLocked(queue, reusableVersion);
 }
 
@@ -231,7 +257,7 @@ void UploadManager::abandonChunks(const GpuPhysicalQueueId queue, TrackedCommand
         return;
 
     NothrowScopedLock lock(m_mutex);
-    retireOwnerChunksLocked(queue, 0u, true, nativeRecordingID, *owner);
+    retireOwnerChunksLocked(queue, 0u, nativeRecordingID, *owner);
 }
 
 void UploadManager::collectCompletedChunks(){
@@ -334,12 +360,24 @@ void UploadManager::unlinkActiveChunkLocked(QueueChunkLedger& ledger, BufferChun
     chunk.nextListChunk = nullptr;
 }
 
-void UploadManager::linkRetiredChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk)noexcept{
+void UploadManager::linkRetiredChunkHeadLocked(QueueChunkLedger& ledger, BufferChunk& chunk)noexcept{
     chunk.previousListChunk = nullptr;
     chunk.nextListChunk = ledger.firstRetiredChunk;
     if(ledger.firstRetiredChunk)
         ledger.firstRetiredChunk->previousListChunk = &chunk;
+    else
+        ledger.lastRetiredChunk = &chunk;
     ledger.firstRetiredChunk = &chunk;
+}
+
+void UploadManager::linkRetiredChunkTailLocked(QueueChunkLedger& ledger, BufferChunk& chunk)noexcept{
+    chunk.previousListChunk = ledger.lastRetiredChunk;
+    chunk.nextListChunk = nullptr;
+    if(ledger.lastRetiredChunk)
+        ledger.lastRetiredChunk->nextListChunk = &chunk;
+    else
+        ledger.firstRetiredChunk = &chunk;
+    ledger.lastRetiredChunk = &chunk;
 }
 
 void UploadManager::unlinkRetiredChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk)noexcept{
@@ -349,22 +387,22 @@ void UploadManager::unlinkRetiredChunkLocked(QueueChunkLedger& ledger, BufferChu
         ledger.firstRetiredChunk = chunk.nextListChunk;
     if(chunk.nextListChunk)
         chunk.nextListChunk->previousListChunk = chunk.previousListChunk;
+    else
+        ledger.lastRetiredChunk = chunk.previousListChunk;
     chunk.previousListChunk = nullptr;
     chunk.nextListChunk = nullptr;
 }
 
-void UploadManager::retireChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk, const u64 version, const b8 resetAllocated)noexcept{
-    const usize chunkSlot = static_cast<usize>(m_chunkKind);
-    if(chunk.owner && chunk.owner->m_activeUploadChunks[chunkSlot] == &chunk)
-        chunk.owner->m_activeUploadChunks[chunkSlot] = nullptr;
+void UploadManager::retireChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk, const u64 version, const b8 linkAtHead)noexcept{
     unlinkActiveChunkLocked(ledger, chunk);
 
     chunk.owner = nullptr;
     chunk.nativeRecordingID = 0u;
-    if(resetAllocated)
-        chunk.allocated = 0u;
     chunk.version = version;
-    linkRetiredChunkLocked(ledger, chunk);
+    if(linkAtHead)
+        linkRetiredChunkHeadLocked(ledger, chunk);
+    else
+        linkRetiredChunkTailLocked(ledger, chunk);
     m_retiredChunkBytes = AddSaturating<u64>(m_retiredChunkBytes, chunk.size);
 }
 
@@ -374,44 +412,63 @@ void UploadManager::retireSubmittedChunksLocked(
     const Span<const Queue::SubmissionCommandListIdentity> submittedCommandLists,
     const VulkanDetail::SubmittedCommandBufferOwnerLookup& submittedOwners
 )noexcept{
+    (void)submittedOwners;
     QueueChunkLedger* const ledger = findQueueLedgerLocked(queue);
     if(!ledger)
         return;
 
-    BufferChunk* chunk = ledger->firstActiveChunk;
-    while(chunk){
-        BufferChunk* const nextChunk = chunk->nextListChunk;
-        FOUNDATION_ASSERT(chunk->owner && chunk->nativeRecordingID != 0u);
-        b8 submitted = false;
-        if(submittedOwners.indexed())
-            submitted = submittedOwners.contains(*chunk->owner, chunk->nativeRecordingID);
-        else{
-            for(const Queue::SubmissionCommandListIdentity& commandList : submittedCommandLists){
-                if(commandList.owner == chunk->owner && commandList.nativeRecordingID == chunk->nativeRecordingID){
-                    submitted = true;
-                    break;
-                }
-            }
-        }
+    const usize chunkSlot = static_cast<usize>(m_chunkKind);
+    const u8 slotBit = static_cast<u8>(1u << chunkSlot);
+    for(const Queue::SubmissionCommandListIdentity& commandList : submittedCommandLists){
+        TrackedCommandBuffer* const owner = commandList.owner;
+        if(!owner || (owner->m_usedUploadChunkMask & slotBit) == 0u)
+            continue;
 
-        if(submitted)
-            retireChunkLocked(*ledger, *chunk, version, false);
-        chunk = nextChunk;
+        BufferChunk** link = &owner->m_activeUploadChunks[chunkSlot];
+        while(BufferChunk* const chunk = *link){
+            if(chunk->owner == owner && chunk->nativeRecordingID == commandList.nativeRecordingID && chunk->physicalQueue == queue){
+                *link = chunk->nextOwnerChunk;
+                chunk->nextOwnerChunk = nullptr;
+                chunk->ownerStartAllocated = chunk->allocated;
+                retireChunkLocked(*ledger, *chunk, Max(chunk->version, version), false);
+            }
+            else
+                link = &chunk->nextOwnerChunk;
+        }
+        if(!owner->m_activeUploadChunks[chunkSlot])
+            owner->m_usedUploadChunkMask = static_cast<u8>(owner->m_usedUploadChunkMask & ~slotBit);
     }
 }
 
-void UploadManager::retireOwnerChunksLocked(const GpuPhysicalQueueId queue, const u64 version, const b8 resetAllocated, const u64 nativeRecordingID, TrackedCommandBuffer& owner)noexcept{
+void UploadManager::retireOwnerChunksLocked(const GpuPhysicalQueueId queue, const u64 reusableVersion, const u64 nativeRecordingID, TrackedCommandBuffer& owner)noexcept{
+    const usize chunkSlot = static_cast<usize>(m_chunkKind);
+    const u8 slotBit = static_cast<u8>(1u << chunkSlot);
+    if((owner.m_usedUploadChunkMask & slotBit) == 0u)
+        return;
+
     QueueChunkLedger* const ledger = findQueueLedgerLocked(queue);
     if(!ledger)
         return;
 
-    BufferChunk* chunk = ledger->firstActiveChunk;
-    while(chunk){
-        BufferChunk* const nextChunk = chunk->nextListChunk;
-        if(chunk->owner == &owner && chunk->nativeRecordingID == nativeRecordingID)
-            retireChunkLocked(*ledger, *chunk, version, resetAllocated);
-        chunk = nextChunk;
+    BufferChunk** link = &owner.m_activeUploadChunks[chunkSlot];
+    while(BufferChunk* const chunk = *link){
+        if(chunk->owner == &owner && chunk->nativeRecordingID == nativeRecordingID && chunk->physicalQueue == queue){
+            *link = chunk->nextOwnerChunk;
+            chunk->nextOwnerChunk = nullptr;
+            chunk->allocated = chunk->ownerStartAllocated;
+            if(chunk->version <= reusableVersion){
+                chunk->allocated = 0u;
+                chunk->ownerStartAllocated = 0u;
+                retireChunkLocked(*ledger, *chunk, 0u, true);
+            }
+            else
+                retireChunkLocked(*ledger, *chunk, chunk->version, false);
+        }
+        else
+            link = &chunk->nextOwnerChunk;
     }
+    if(!owner.m_activeUploadChunks[chunkSlot])
+        owner.m_usedUploadChunkMask = static_cast<u8>(owner.m_usedUploadChunkMask & ~slotBit);
 }
 
 

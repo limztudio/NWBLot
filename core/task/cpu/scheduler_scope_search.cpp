@@ -51,9 +51,10 @@ void CpuTaskScheduler::invalidateScopeSearchLocked(const b8 publication)noexcept
     m_scopeSearchGeneration = s_ScopeSearchGenerationStep;
 }
 
-b8 CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait& wait)noexcept{
+b8 CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait& wait){
     if(m_slabs.meta(index).scope == &wait.scope)
         return true;
+    ensureSearchBuffersLocked();
     if(m_scopeSearchIdentity != wait.scopeIdentity){
         m_scopeSearchIdentity = wait.scopeIdentity;
         invalidateScopeSearchLocked(false);

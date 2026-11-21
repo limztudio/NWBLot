@@ -3,6 +3,7 @@
 
 
 #include "compiler_analysis_internal.h"
+#include "compiler_internal.h"
 
 #include <global/bit.h>
 #include <global/hierarchical_index_set.h>
@@ -201,14 +202,16 @@ void BuildSchedulingEdges(
     const TaskDependencyAdjacency& adjacency,
     const Span<const GpuTaskId> topologicalOrder,
     Alloc::ScratchArena& scratchArena,
-    GraphicsVector<GpuTaskDependencyEdge>& outSchedulingEdges
+    GraphicsVector<GpuTaskDependencyEdge>& outSchedulingEdges,
+    DenseDescendantBitMatrix* const outDenseDesc
 ){
     const usize taskCount = topologicalOrder.size();
     Vector<u8, Alloc::ScratchArena> retained(rawEdges.size(), 0u, scratchArena);
-    constexpr usize s_BitsetFastMaxTasks = 512u;
-    if(taskCount <= s_BitsetFastMaxTasks && taskCount != 0u && !rawEdges.empty()){
+    if(taskCount <= DenseDescendantBitMatrix::s_MaxTasks && taskCount != 0u && !rawEdges.empty()){
         const usize wordsPerRow = (taskCount - 1u) / s_BitsPerWord + 1u;
-        Vector<u64, Alloc::ScratchArena> strictDesc(taskCount * wordsPerRow, 0u, scratchArena);
+        const b8 usePreallocated = outDenseDesc && outDenseDesc->taskCount == taskCount && outDenseDesc->wordsPerRow == wordsPerRow && outDenseDesc->strictDesc.size() == taskCount * wordsPerRow;
+        Vector<u64, Alloc::ScratchArena> localStrictDesc(usePreallocated ? 0u : taskCount * wordsPerRow, 0u, scratchArena);
+        u64* const strictDescData = usePreallocated ? outDenseDesc->strictDesc.data() : localStrictDesc.data();
         for(usize orderIndex = taskCount; orderIndex > 0u; --orderIndex){
             const u32 producerIndex = topologicalOrder[orderIndex - 1u].index;
             const usize firstEdge = adjacency.offsets[producerIndex];
@@ -216,12 +219,12 @@ void BuildSchedulingEdges(
             if(edgeEnd == firstEdge)
                 continue;
 
-            u64* const producerRow = strictDesc.data() + static_cast<usize>(producerIndex) * wordsPerRow;
+            u64* const producerRow = strictDescData + static_cast<usize>(producerIndex) * wordsPerRow;
             if(edgeEnd == firstEdge + 1u){
                 const usize edgeIdx = adjacency.edgeIndices[firstEdge];
                 retained[edgeIdx] = 1u;
                 const u32 consumerIndex = rawEdges[edgeIdx].consumer.index;
-                const u64* const consumerRow = strictDesc.data() + static_cast<usize>(consumerIndex) * wordsPerRow;
+                const u64* const consumerRow = strictDescData + static_cast<usize>(consumerIndex) * wordsPerRow;
                 for(usize wordIndex = 0u; wordIndex < wordsPerRow; ++wordIndex)
                     producerRow[wordIndex] = consumerRow[wordIndex];
                 producerRow[consumerIndex / s_BitsPerWord] |= static_cast<u64>(1u) << (consumerIndex % s_BitsPerWord);
@@ -230,7 +233,7 @@ void BuildSchedulingEdges(
 
             for(usize adjacencyIndex = firstEdge; adjacencyIndex < edgeEnd; ++adjacencyIndex){
                 const u32 consumerIndex = rawEdges[adjacency.edgeIndices[adjacencyIndex]].consumer.index;
-                const u64* const consumerRow = strictDesc.data() + static_cast<usize>(consumerIndex) * wordsPerRow;
+                const u64* const consumerRow = strictDescData + static_cast<usize>(consumerIndex) * wordsPerRow;
                 for(usize wordIndex = 0u; wordIndex < wordsPerRow; ++wordIndex)
                     producerRow[wordIndex] |= consumerRow[wordIndex];
             }
@@ -246,6 +249,8 @@ void BuildSchedulingEdges(
                 producerRow[consumerIndex / s_BitsPerWord] |= static_cast<u64>(1u) << (consumerIndex % s_BitsPerWord);
             }
         }
+        if(usePreallocated)
+            outDenseDesc->valid = true;
         outSchedulingEdges.clear();
         outSchedulingEdges.reserve(rawEdges.size());
         for(usize edgeIndex = 0u; edgeIndex < rawEdges.size(); ++edgeIndex){

@@ -41,6 +41,37 @@ namespace ECSDetail{
 
 struct ViewTupleAccess;
 
+inline constexpr u32 s_InvalidDenseIndex = s_EntityIndexMask;
+
+[[nodiscard]] FOUNDATION_INLINE constexpr u32 PackSparseEntry(const EntityID entityId, const u32 denseIndex)noexcept{
+    return (entityId.id & ~s_EntityIndexMask) | (denseIndex & s_EntityIndexMask);
+}
+
+[[nodiscard]] FOUNDATION_INLINE u32 FindPackedSparseDenseIndex(const u32* const sparseData, const usize sparseSize, const EntityID entityId)noexcept{
+    const u32 index = entityId.index();
+    if(index >= sparseSize)
+        return s_InvalidDenseIndex;
+
+    const u32 packed = sparseData[index];
+    const u32 denseIndex = packed & s_EntityIndexMask;
+    if(denseIndex == s_InvalidDenseIndex || ((packed ^ entityId.id) >> s_EntityIndexBits) != 0u)
+        return s_InvalidDenseIndex;
+
+    return denseIndex;
+}
+
+template<typename T>
+struct PoolSlice{
+    const u32* sparseData = nullptr;
+    usize sparseSize = 0u;
+    T* components = nullptr;
+
+
+    [[nodiscard]] FOUNDATION_INLINE u32 findDenseIndex(const EntityID entityId)const noexcept{
+        return FindPackedSparseDenseIndex(sparseData, sparseSize, entityId);
+    }
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -70,6 +101,7 @@ public:
 
 template<typename T>
 class ComponentPool final : public IComponentPool{
+    friend class World;
     friend struct ECSDetail::ViewTupleAccess;
 
 
@@ -85,23 +117,11 @@ public:
 public:
     template<typename... Args>
     T& add(EntityID entityId, Args&&... args){
-        if(const auto existingDenseIndex = findDenseIndex(entityId))
-            return m_components[*existingDenseIndex];
+        const u32 existingDenseIndex = findDenseIndexRaw(entityId);
+        if(existingDenseIndex != ECSDetail::s_InvalidDenseIndex)
+            return m_components[existingDenseIndex];
 
-        const u32 index = entityId.index();
-
-        if(index >= static_cast<u32>(m_sparse.size()))
-            m_sparse.resize(static_cast<usize>(index) + 1, ~0u);
-
-        const u32 denseIndex = static_cast<u32>(m_dense.size());
-        m_dense.push_back(entityId);
-        ScopeExit rollbackDense([this]()noexcept{ m_dense.pop_back(); });
-        m_components.emplace_back(Forward<Args>(args)...);
-        m_sparse[index] = denseIndex;
-        ++m_mutationVersion;
-        rollbackDense.release();
-
-        return m_components[denseIndex];
+        return addUnchecked(entityId, Forward<Args>(args)...);
     }
 
     inline T& get(EntityID entityId)noexcept{
@@ -113,28 +133,27 @@ public:
     }
 
     inline T* tryGet(EntityID entityId)noexcept{
-        const auto denseIndex = findDenseIndex(entityId);
-        if(!denseIndex)
+        const u32 denseIndex = findDenseIndexRaw(entityId);
+        if(denseIndex == ECSDetail::s_InvalidDenseIndex)
             return nullptr;
-        return AddressOf(m_components[*denseIndex]);
+        return AddressOf(m_components[denseIndex]);
     }
 
     inline const T* tryGet(EntityID entityId)const noexcept{
-        const auto denseIndex = findDenseIndex(entityId);
-        if(!denseIndex)
+        const u32 denseIndex = findDenseIndexRaw(entityId);
+        if(denseIndex == ECSDetail::s_InvalidDenseIndex)
             return nullptr;
-        return AddressOf(m_components[*denseIndex]);
+        return AddressOf(m_components[denseIndex]);
     }
 
     inline virtual b8 has(EntityID entityId)const noexcept override{
-        return findDenseIndex(entityId).has_value();
+        return findDenseIndexRaw(entityId) != ECSDetail::s_InvalidDenseIndex;
     }
 
     virtual b8 remove(EntityID entityId)noexcept(noexcept(DeclVal<T&>() = DeclVal<T&&>()))override{
-        const auto resolvedDenseIndex = findDenseIndex(entityId);
-        if(!resolvedDenseIndex)
+        const u32 denseIndex = findDenseIndexRaw(entityId);
+        if(denseIndex == ECSDetail::s_InvalidDenseIndex)
             return false;
-        const u32 denseIndex = *resolvedDenseIndex;
 
         const u32 index = entityId.index();
         const u32 lastDense = static_cast<u32>(m_dense.size()) - 1;
@@ -143,7 +162,7 @@ public:
             const EntityID lastEntityId = m_dense[lastDense];
             m_components[denseIndex] = Move(m_components[lastDense]);
             m_dense[denseIndex] = lastEntityId;
-            m_sparse[lastEntityId.index()] = denseIndex;
+            m_sparse[lastEntityId.index()] = ECSDetail::PackSparseEntry(lastEntityId, denseIndex);
         }
 
         m_dense.pop_back();
@@ -167,24 +186,38 @@ public:
 
 
 private:
-    [[nodiscard]] inline Expected<u32> findDenseIndex(EntityID entityId)const noexcept{
+    template<typename... Args>
+    T& addUnchecked(EntityID entityId, Args&&... args){
+        FOUNDATION_ASSERT(findDenseIndexRaw(entityId) == ECSDetail::s_InvalidDenseIndex);
+
         const u32 index = entityId.index();
         if(index >= static_cast<u32>(m_sparse.size()))
-            return MakeUnexpected(Failure{});
-        const u32 denseIndex = m_sparse[index];
-        if(denseIndex >= static_cast<u32>(m_dense.size()))
-            return MakeUnexpected(Failure{});
-        if(m_dense[denseIndex] != entityId)
-            return MakeUnexpected(Failure{});
+            m_sparse.resize(static_cast<usize>(index) + 1, ~0u);
 
-        return denseIndex;
+        const u32 denseIndex = static_cast<u32>(m_dense.size());
+        FOUNDATION_ASSERT(denseIndex < ECSDetail::s_EntityIndexMask);
+        m_dense.push_back(entityId);
+        ScopeExit rollbackDense([this]()noexcept{ m_dense.pop_back(); });
+        m_components.emplace_back(Forward<Args>(args)...);
+        m_sparse[index] = ECSDetail::PackSparseEntry(entityId, denseIndex);
+        ++m_mutationVersion;
+        rollbackDense.release();
+
+        return m_components[denseIndex];
+    }
+
+    [[nodiscard]] FOUNDATION_INLINE u32 findDenseIndexRaw(EntityID entityId)const noexcept{
+        return ECSDetail::FindPackedSparseDenseIndex(m_sparse.data(), m_sparse.size(), entityId);
     }
 
     [[nodiscard]] inline u32 requireDenseIndex(EntityID entityId)const noexcept{
         const u32 index = entityId.index();
         FOUNDATION_ASSERT(index < static_cast<u32>(m_sparse.size()));
 
-        const u32 denseIndex = m_sparse[index];
+        const u32 packed = m_sparse[index];
+        const u32 denseIndex = packed & ECSDetail::s_EntityIndexMask;
+        FOUNDATION_ASSERT(denseIndex != ECSDetail::s_InvalidDenseIndex);
+        FOUNDATION_ASSERT(((packed ^ entityId.id) >> ECSDetail::s_EntityIndexBits) == 0u);
         FOUNDATION_ASSERT(denseIndex < static_cast<u32>(m_dense.size()));
         FOUNDATION_ASSERT(m_dense[denseIndex] == entityId);
         return denseIndex;

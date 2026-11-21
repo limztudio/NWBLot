@@ -87,9 +87,16 @@ class MaterialTypedByteContentRangeMap : NoCopy{
 
     [cpp_unwind]
     public b8 insert(in MaterialTypedByteContentLookup lookup, in MaterialTypedByteRange range){
-        if(this.find(lookup).has_value())
-            return false;
         const auto head = this.m_heads.try_emplace(MaterialTypedByteBucket(lookup), usize.max);
+        if(!head.second){
+            usize chainIndex = head.first.value();
+            while(chainIndex != usize.max){
+                in MaterialTypedByteEntry existing = this.m_entries[chainIndex];
+                if(EqualMaterialTypedByteContent(lookup.byteHash, existing.bytes, lookup.byteHash, lookup.bytes))
+                    return false;
+                chainIndex = existing.next;
+            }
+        }
         PendingMaterialTypedByteEntry pending(this.m_entries);
         const usize index = this.m_entries.size();
         mut MaterialTypedByteEntry entry = this.copyBytes(lookup.bytes);
@@ -105,17 +112,26 @@ class MaterialTypedByteContentRangeMap : NoCopy{
         if(bytes.empty())
             return MaterialTypedByteRange();
         const MaterialTypedByteContentLookup lookup(UpdateFnv64(s_Fnv64OffsetBasis, bytes), bytes);
-        const auto found = this.find(lookup);
-        if(found.has_value())
-            return found.value();
-
         const auto head = this.m_heads.try_emplace(MaterialTypedByteBucket(lookup), usize.max);
+        if(!head.second){
+            usize chainIndex = head.first.value();
+            while(chainIndex != usize.max){
+                in MaterialTypedByteEntry existing = this.m_entries[chainIndex];
+                if(EqualMaterialTypedByteContent(lookup.byteHash, existing.bytes, lookup.byteHash, lookup.bytes))
+                    return existing.range;
+                chainIndex = existing.next;
+            }
+        }
+
         PendingMaterialTypedByteEntry pending(this.m_entries);
         const usize index = this.m_entries.size();
         mut MaterialTypedByteEntry entry = this.copyBytes(bytes);
         const auto range = AppendMaterialTypedByteRange(entry.bytes, upload);
-        if(!range.has_value())
+        if(!range.has_value()){
+            if(head.second)
+                this.m_heads.erase(head.first);
             return MakeUnexpected(Failure());
+        }
         entry.next = head.first.value();
         entry.range = range.value();
         head.first.value() = index;

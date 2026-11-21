@@ -17,29 +17,11 @@ Queue::DescriptorSubmission::DescriptorSubmission(Queue& queue)noexcept
 {}
 
 
-b8 Queue::DescriptorSubmission::prepareBatch(const Span<const Queue::BatchSubmitEntry> entries){
-    b8 requiresDescriptorBufferLifecycle = false;
-    b8 requiresDescriptorBufferValidation = false;
-    b8 hasCommands = false;
-    for(const Queue::BatchSubmitEntry& entry : entries){
-        if(entry.numCmd == 0u)
-            continue;
-        hasCommands = true;
-        for(usize i = 0u; i < entry.numCmd; ++i){
-            auto& cmdList = *MakeNotNull(entry.ppCmd[i]);
-            auto& tracked = *MakeNotNull(cmdList.m_currentCmdBuf.get());
-            requiresDescriptorBufferLifecycle |= tracked.m_descriptorBufferManager != nullptr;
-            requiresDescriptorBufferValidation |= (tracked.m_descriptorBufferManager != nullptr || cmdList.m_descriptorBuffersBound || tracked.m_descriptorBufferGeneration != 0u);
-            for(const auto heap : tracked.m_referencedDescriptorHeaps){
-                if(heap.get() != &m_queue.m_device.m_gpuDescriptorHeap){
-                    NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Command buffer references a foreign descriptor heap."));
-                    return false;
-                }
-                m_submissionDescriptorHeap = heap.get();
-            }
-        }
-    }
+b8 Queue::DescriptorSubmission::lockAndValidate(Span<const Queue::BatchSubmitEntry> entries, GpuDescriptorHeap* const submissionDescriptorHeap, const b8 requiresDescriptorBufferLifecycle, const b8 requiresDescriptorBufferValidation){
+    if(!submissionDescriptorHeap && !requiresDescriptorBufferLifecycle && !requiresDescriptorBufferValidation)
+        return true;
 
+    m_submissionDescriptorHeap = submissionDescriptorHeap;
     if(m_submissionDescriptorHeap){
         m_descriptorHeapLock = UniqueLock<Futex>(m_submissionDescriptorHeap->m_mutex);
         if(++m_queue.m_submitDescriptorHeapUseStamp == 0u){
@@ -51,7 +33,7 @@ b8 Queue::DescriptorSubmission::prepareBatch(const Span<const Queue::BatchSubmit
     if(requiresDescriptorBufferLifecycle && m_descriptorBufferManager)
         m_descriptorBufferLifecycleLock = UniqueLock<Futex>(m_descriptorBufferManager->m_lifecycleMutex);
 
-    if(hasCommands && requiresDescriptorBufferValidation){
+    if(requiresDescriptorBufferValidation){
         for(const Queue::BatchSubmitEntry& entry : entries){
             for(usize i = 0u; i < entry.numCmd; ++i){
                 auto& cmdList = *MakeNotNull(entry.ppCmd[i]);
@@ -79,6 +61,30 @@ b8 Queue::DescriptorSubmission::prepareBatch(const Span<const Queue::BatchSubmit
         }
     }
     return true;
+}
+
+b8 Queue::DescriptorSubmission::prepareBatch(const Span<const Queue::BatchSubmitEntry> entries){
+    b8 requiresDescriptorBufferLifecycle = false;
+    b8 requiresDescriptorBufferValidation = false;
+    GpuDescriptorHeap* submissionDescriptorHeap = nullptr;
+    for(const Queue::BatchSubmitEntry& entry : entries){
+        if(entry.numCmd == 0u)
+            continue;
+        for(usize i = 0u; i < entry.numCmd; ++i){
+            auto& cmdList = *MakeNotNull(entry.ppCmd[i]);
+            auto& tracked = *MakeNotNull(cmdList.m_currentCmdBuf.get());
+            requiresDescriptorBufferLifecycle |= tracked.m_descriptorBufferManager != nullptr;
+            requiresDescriptorBufferValidation |= (tracked.m_descriptorBufferManager != nullptr || cmdList.m_descriptorBuffersBound || tracked.m_descriptorBufferGeneration != 0u);
+            for(const auto heap : tracked.m_referencedDescriptorHeaps){
+                if(heap.get() != &m_queue.m_device.m_gpuDescriptorHeap){
+                    NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Command buffer references a foreign descriptor heap."));
+                    return false;
+                }
+                submissionDescriptorHeap = heap.get();
+            }
+        }
+    }
+    return lockAndValidate(entries, submissionDescriptorHeap, requiresDescriptorBufferLifecycle, requiresDescriptorBufferValidation);
 }
 
 

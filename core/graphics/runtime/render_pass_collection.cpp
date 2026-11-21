@@ -23,8 +23,20 @@ RenderPassCollection::RenderPassCollection(Alloc::GlobalArena& arena)
     : m_passes(arena)
 {}
 
+static void RemoveRenderPassFromList(RenderPassCollection::PassList& passes, const IRenderPass* const target)noexcept{
+    usize writeIndex = 0u;
+    for(usize readIndex = 0u; readIndex < passes.size(); ++readIndex){
+        if(passes[readIndex].get() == target)
+            continue;
+        if(writeIndex != readIndex)
+            passes[writeIndex] = passes[readIndex];
+        ++writeIndex;
+    }
+    passes.erase(passes.begin() + static_cast<isize>(writeIndex), passes.end());
+}
+
 void RenderPassCollection::addToBack(IRenderPass& pass, const u32 width, const u32 height, const u32 samples){
-    m_passes.remove(MakeNotNull(&pass));
+    RemoveRenderPassFromList(m_passes, &pass);
     m_passes.push_back(MakeNotNull(&pass));
 
     pass.backBufferResizing();
@@ -35,7 +47,7 @@ void RenderPassCollection::addToBack(IRenderPass& pass, const u32 width, const u
 
 void RenderPassCollection::remove(IRenderPass& pass){
     pass.invalidateResources();
-    m_passes.remove(MakeNotNull(&pass));
+    RemoveRenderPassFromList(m_passes, &pass);
 }
 
 void RenderPassCollection::clear(){

@@ -126,13 +126,15 @@ void CommandList::setComputeState(const ComputeState& state){
         rejectCommandRecording(VulkanArenaScope::s_SetComputeStateCommandLabel, FOUNDATION_TEXT("indirect buffer has no valid native buffer or indirect-argument usage"));
         return;
     }
-    if(state.indirectParams && !validateBufferForGpuState(state.indirectParams, ResourceStates::IndirectArgument, VulkanArenaScope::s_SetComputeStateCommandLabel, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT))
+    if(state.indirectParams && !validateBufferForGpuStateValidated(state.indirectParams, ResourceStates::IndirectArgument, VulkanArenaScope::s_SetComputeStateCommandLabel, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT))
         return;
 
     endActiveRenderPass();
-    commitBarriers();
-    if(m_commandRecordingFailed)
-        return;
+    if(!m_pendingImageBarriers.empty() || !m_pendingBufferBarriers.empty()){
+        commitBarriers();
+        if(m_commandRecordingFailed)
+            return;
+    }
 
     const b8 bindPipeline = !m_hasBoundComputeState || m_currentComputeState.pipeline != state.pipeline;
     clearDirtyPipelineStates(s_DirtyComputeState);

@@ -89,6 +89,20 @@ public:
     }
 
     template<typename T>
+    [[nodiscard]] Optional<NotNull<T*>> borrowComponent(EntityID entityId)noexcept{
+        if(T* component = tryGetComponent<T>(entityId))
+            return MakeNotNull(component);
+        return {};
+    }
+
+    template<typename T>
+    [[nodiscard]] Optional<NotNull<const T*>> borrowComponent(EntityID entityId)const noexcept{
+        if(const T* component = tryGetComponent<T>(entityId))
+            return MakeNotNull(component);
+        return {};
+    }
+
+    template<typename T>
     [[nodiscard]] u64 componentMutationVersion()const noexcept{
         const auto* pool = getPool<T>();
         return pool ? pool->mutationVersion() : 0u;
@@ -189,9 +203,9 @@ public:
             return *existing;
 
         const ComponentTypeId typeId = ComponentType<T>();
-        addEntityComponentType(entityId, typeId, pool);
+        addEntityComponentTypeUnchecked(entityId, typeId, pool);
         ScopeExit rollbackType([this, entityId, typeId]()noexcept{ removeEntityComponentType(entityId, typeId); });
-        T& component = pool.add(entityId, Forward<Args>(args)...);
+        T& component = pool.addUnchecked(entityId, Forward<Args>(args)...);
         rollbackType.release();
         return component;
     }
@@ -273,6 +287,7 @@ private:
 
     void destroyEntityComponents(EntityID entityId);
     void addEntityComponentType(EntityID entityId, ComponentTypeId typeId, IComponentPool& pool);
+    void addEntityComponentTypeUnchecked(EntityID entityId, ComponentTypeId typeId, IComponentPool& pool);
     void removeEntityComponentType(EntityID entityId, ComponentTypeId typeId)noexcept;
     void ensureEntityComponentHead(EntityID entityId);
     u32 acquireEntityComponentNode(ComponentTypeId typeId, u32 nextNode, IComponentPool& pool);

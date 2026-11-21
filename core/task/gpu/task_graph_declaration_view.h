@@ -213,8 +213,8 @@ public:
     [[nodiscard]] b8 validUploadBlob(const GpuUploadBlobId& id)const noexcept;
     [[nodiscard]] b8 validPipeline(const GpuGraphPipelineId& id)const noexcept;
     [[nodiscard]] b8 validExternalCompletion(const GpuExternalCompletionId& id)const noexcept;
-    [[nodiscard]] usize taskCount()const noexcept;
-    [[nodiscard]] usize resourceCount()const noexcept;
+    [[nodiscard]] usize taskCount()const noexcept{ return m_taskCount; }
+    [[nodiscard]] usize resourceCount()const noexcept{ return m_resourceCount; }
     [[nodiscard]] usize resourceVersionCount()const noexcept;
     [[nodiscard]] usize resourceSetCount()const noexcept;
     [[nodiscard]] usize uploadBlobCount()const noexcept;
@@ -298,6 +298,9 @@ private:
 
 private:
     const GpuTaskGraph* m_graph = nullptr;
+    u32 m_taskCount = 0u;
+    u32 m_resourceCount = 0u;
+    u8 m_readerStripeIndex = 0u;
 };
 
 

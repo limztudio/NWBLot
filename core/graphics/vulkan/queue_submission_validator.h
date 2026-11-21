@@ -18,6 +18,7 @@ public:
 
 
 public:
+    [[nodiscard]] b8 validateCommandList(CommandList* cmdList, const SubmissionCommandListIdentity& expected, usize cmdIndex, u64 batchStamp)const;
     [[nodiscard]] b8 validate(CommandList* const* ppCmd, usize numCmd, const SubmissionCommandListIdentity* expectedCommandLists, u64 batchStamp)const;
 
 

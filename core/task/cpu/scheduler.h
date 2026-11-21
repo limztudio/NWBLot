@@ -126,6 +126,12 @@ private:
             m_trivialBytes = 0u;
         }
 
+        template<typename Func>
+        inline void emplace(Func&& func)noexcept(IsNothrowConstructible_V<Decay_T<Func>, Func&&>){
+            reset();
+            assign(Forward<Func>(func));
+        }
+
 
     private:
         template<typename Func>
@@ -319,11 +325,16 @@ private:
     static constexpr u32 s_WorkerNotIdle = Limit<u32>::s_Max;
     static constexpr u32 s_WorkerSpinIterations = 256u;
     static constexpr u32 s_JoinSpinIterations = 128u;
-    static constexpr usize s_InlineWakePlanSlots = 16u;
+    static constexpr usize s_InlineWakePlanSlots = 32u;
+    static constexpr u32 s_RangeWaiterParkedBit = 1u << 31u;
+    static constexpr u32 s_RangeHelperCountMask = s_RangeWaiterParkedBit - 1u;
+
+    struct ParallelRangeGroup;
 
     struct alignas(64) WorkerWaitSlot{
         Atomic<u32> state{ s_WorkerActive };
     };
+    static_assert(sizeof(WorkerWaitSlot) == 64u, "WorkerWaitSlot must occupy one 64-byte cacheline");
 
     struct WorkerSlotArray final : NoCopy{
         Alloc::GlobalArena& arena;
@@ -397,14 +408,19 @@ private:
         usize remainder = 0u;
         TaskHandle anchorHandle;
         CpuTaskScope* scope = nullptr;
+        CpuTaskScope* lazyChildScope = nullptr;
+        void* lazyChildScopeStorage = nullptr;
         CpuTaskOptions options{};
         ParallelRangeGroup* next = nullptr;
         u32 remainingHelperClaims = 0u;
         b8 linked = false;
+        b8 fastUnscoped = false;
 
         alignas(64) Atomic<usize> nextChunk{ 0u };
 
         alignas(64) Atomic<u32> activeHelpers{ 0u };
+
+        alignas(64) Atomic<b8> hasChildScope{ false };
 
 
     public:
@@ -447,6 +463,21 @@ private:
 
     public:
         [[nodiscard]] b8 hasWork()const noexcept{ return rangeGroup != nullptr || meta != nullptr; }
+
+        void resetFast()noexcept{
+            rangeGroup = nullptr;
+            handle = {};
+            meta = nullptr;
+            payload = nullptr;
+            if(profile)
+                profile.reset();
+            if(readyProfile)
+                readyProfile.reset();
+            wakePlan.parkedCount = 0u;
+            wakePlan.overflowWakeAll = false;
+            invoke = false;
+            parkedFromExecute = false;
+        }
     };
 
     class ProfileMeasure final : NoCopy{
@@ -466,12 +497,13 @@ private:
         TaskHandle task;
         usize workerIndex;
         CpuAffinity::Enum affinity;
+        ParallelRangeGroup* rangeGroup = nullptr;
         b8* spawnedOut = nullptr;
         b8 spawnedChildren = false;
 
 
     public:
-        Execution(CpuTaskScheduler& owner, TaskHandle handle, usize index, CpuAffinity::Enum workerAffinity, b8* spawned = nullptr)noexcept;
+        Execution(CpuTaskScheduler& owner, TaskHandle handle, usize index, CpuAffinity::Enum workerAffinity, b8* spawned = nullptr, ParallelRangeGroup* activeRangeGroup = nullptr)noexcept;
         ~Execution()noexcept;
     };
 
@@ -491,6 +523,11 @@ private:
 
 private:
     static u64 AllocateDomainIdentity()noexcept;
+    static u64 AllocateThreadIdentity()noexcept;
+    [[nodiscard]] static FOUNDATION_INLINE u64 CurrentThreadIdentity()noexcept{
+        thread_local const u64 s_Identity = AllocateThreadIdentity();
+        return s_Identity;
+    }
     static CpuTaskSchedulerConfig WorkerConfig(u32 workerCount)noexcept;
     static usize QueueIndex(const CpuTaskOptions& options)noexcept;
     static usize QueueIndex(CpuTaskCost::Enum cost, CpuTaskPriority::Enum priority, CpuTaskTarget::Enum target)noexcept;
@@ -565,7 +602,8 @@ private:
     [[nodiscard]] b8 hasReadyLocked(CpuAffinity::Enum affinity, b8 mainThread, b8 executing, b8 cooperative, ScopeWait* preferredScope = nullptr)noexcept;
     [[nodiscard]] u32 findScopeReadyLocked(usize queue, ScopeWait& wait, u32& previous)noexcept;
     void invalidateScopeSearchLocked(b8 publication)noexcept;
-    [[nodiscard]] b8 contributesToScopeLocked(u32 index, const ScopeWait& wait)noexcept;
+    void ensureSearchBuffersLocked();
+    [[nodiscard]] b8 contributesToScopeLocked(u32 index, const ScopeWait& wait);
     void addActiveDepthLocked(usize workerIndex, CpuAffinity::Enum affinity, b8& outReachedSaturation)noexcept;
     void removeActiveDepthLocked(usize workerIndex, CpuAffinity::Enum affinity)noexcept;
     void beginClaimedLocked(u32 index, TaskMeta& meta, usize workerIndex, CpuAffinity::Enum affinity, b8 cooperative, b8 computeWakePlan, ClaimedExecution& outClaim, b8 countDepth = true)noexcept;
@@ -576,8 +614,8 @@ private:
         ClaimedExecution* nextClaim = nullptr,
         const ClaimPipeline* pipeline = nullptr
     );
-    void retireNodeLocked(TaskHandle handle, TaskMeta& meta, TaskHandle& outParentHandle, TaskMeta*& outParentToRetire, b8& outMadeReady, b8& outScopeCompleted, b8& outHandleWaited)noexcept;
-    void retire(TaskHandle handle, TaskMeta& first)noexcept;
+    void retireNodeLocked(TaskHandle handle, TaskMeta& meta, TaskHandle& outParentHandle, TaskMeta*& outParentToRetire, TaskPayload*& outParentPayload, b8& outMadeReady, b8& outScopeCompleted, b8& outHandleWaited)noexcept;
+    void retire(TaskHandle handle, TaskMeta& first, TaskPayload& firstPayload)noexcept;
     void unlinkRangeGroupLocked(ParallelRangeGroup& group)noexcept;
     void waitRangeHelpers(ParallelRangeGroup& group)noexcept;
     void pushIdleWorkerLocked(usize slotIndex, CpuAffinity::Enum affinity)noexcept;
@@ -589,7 +627,7 @@ private:
     void drainTask(TaskHandle handle)noexcept;
     void validateWaitLocked(TaskHandle handle, const CpuTaskScope* scope);
     void waitScope(CpuTaskScope& scope);
-    [[nodiscard]] b8 isMainThread()const noexcept;
+    [[nodiscard]] b8 isMainThread()const noexcept{ return CurrentThreadIdentity() == m_mainThreadIdentity; }
     [[nodiscard]] b8 isExecuting()const noexcept{ return s_Execution && &s_Execution->scheduler == this; }
     void takeWorkerWakePlanLocked(WorkerWakePlan& outPlan)noexcept;
     void takeRangeWakePlanLocked(ParallelRangeGroup& range, u32 maxWake, WorkerWakePlan& outPlan)noexcept;
@@ -600,22 +638,26 @@ private:
     void profileReadyLocked(u32 index)noexcept;
     [[nodiscard]] ProfileSample prepareProfileLocked(CpuTaskProfileKind::Enum kind, TaskHandle task, CpuTaskProfileLabel label, usize workerIndex, CpuAffinity::Enum affinity)const noexcept;
     void finishProfileLocked(const ProfileSample& sample, Timer end)noexcept;
-    void beginLockedSearch()noexcept;
+    void beginLockedSearch();
 
 
 private:
     alignas(64) const u64 m_domainIdentity;
-    const ThreadId m_mainThread;
+    const u64 m_mainThreadIdentity;
     Alloc::GlobalArena m_arena;
     Vector<CpuWorkerPlacement, Alloc::GlobalArena> m_placements;
     u32 m_workerCount = 0u;
     alignas(64) Atomic<b8> m_abortingAtomic{ false };
     Atomic<b8> m_stoppingAtomic{ false };
     Atomic<b8> m_profileEnabled{ false };
+    Atomic<u32> m_joinWaitersAtomic{ 0u };
+    alignas(64) Atomic<u32> m_activeFastRanges{ 0u };
+    Atomic<u64> m_fastRangeCompleted{ 0u };
+
+    alignas(64) TaskSlabPool m_slabs;
 
     alignas(64) mutable Futex m_mutex;
 
-    alignas(64) TaskSlabPool m_slabs;
     Array<ReadyQueue, s_QueueCount> m_ready{};
     u16 m_nonEmptyReadyMask = 0u;
     Array<u32, s_CostValueCount> m_readyWorkerCosts{};
@@ -633,8 +675,10 @@ private:
     b8 m_aborting = false;
     b8 m_stopping = false;
     b8 m_scopeSearchActive = false;
+    CpuTaskSchedulerStatistics m_statistics;
     Vector<u32, Alloc::GlobalArena> m_idleNext;
     Vector<u32, Alloc::GlobalArena> m_workerDepth;
+
     Vector<u32, Alloc::GlobalArena> m_searchStack;
     Vector<u64, Alloc::GlobalArena> m_searchVisits;
     Vector<u64, Alloc::GlobalArena> m_scopeContributionVisits;
@@ -645,7 +689,6 @@ private:
     u64 m_scopeSearchIdentity = 0u;
     u64 m_scopeSearchGeneration = s_ScopeSearchGenerationStep;
     u64 m_scopePublicationGeneration = 1u;
-    CpuTaskSchedulerStatistics m_statistics;
     u64 m_profileEpoch = 0u;
     u64 m_profileFrameIndex = 0u;
 

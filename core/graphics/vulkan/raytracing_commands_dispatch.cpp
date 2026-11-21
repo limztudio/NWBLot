@@ -81,9 +81,11 @@ void CommandList::setRayTracingState(const RayTracingState& state){
     }
 
     endActiveRenderPass();
-    commitBarriers();
-    if(m_commandRecordingFailed)
-        return;
+    if(!m_pendingImageBarriers.empty() || !m_pendingBufferBarriers.empty()){
+        commitBarriers();
+        if(m_commandRecordingFailed)
+            return;
+    }
     clearDirtyPipelineStates(s_DirtyRayTracingState);
     invalidateGraphicsDrawValidationCache();
     m_currentRayTracingState = state;

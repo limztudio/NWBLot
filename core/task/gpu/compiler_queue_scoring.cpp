@@ -27,6 +27,7 @@ void GpuTaskQueueLegalityCache::build(const GpuTaskGraph::DeclarationReadView& g
     taskLegalQueueMasks.clear();
     classQueueMasks.fill(0u);
     orderedQueueIndicesByClassCount.fill(0u);
+    orderedAllQueueCount = 0u;
     primaryGraphicsMask = 0u;
     if(topology.queueCount == 0u || topology.queueCount > s_BitsPerWord){
         active = false;
@@ -34,6 +35,17 @@ void GpuTaskQueueLegalityCache::build(const GpuTaskGraph::DeclarationReadView& g
     }
 
     active = true;
+    orderedAllQueueCount = static_cast<u8>(topology.queueCount);
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const u8 key = static_cast<u8>(queueIndex);
+        const GpuPhysicalQueueInfo& keyInfo = topology.queues[key];
+        u8 j = static_cast<u8>(queueIndex);
+        while(j > 0u && IsBetterQueue(keyInfo, &topology.queues[orderedAllQueueIndices[j - 1u]])){
+            orderedAllQueueIndices[j] = orderedAllQueueIndices[j - 1u];
+            --j;
+        }
+        orderedAllQueueIndices[j] = key;
+    }
     const u64 allMask = topology.queueCount == s_BitsPerWord ? ~static_cast<u64>(0u) : ((static_cast<u64>(1u) << topology.queueCount) - 1u);
     Array<u64, 8u> capRequiredMask{};
     Array<u64, 8u> capAnyMask{};

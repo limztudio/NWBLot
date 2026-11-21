@@ -115,38 +115,6 @@ b8 ReplayCaptured(in GpuTaskRecordContext context, in GpuCommandIrCapture captur
 }
 
 [cpp_unwind]
-b8 CaptureRasterState(
-    in GpuRasterTask payload,
-    in GpuTaskRecordContext context,
-    in GpuCommandIrOwnerAnchor descriptorOwner,
-    in Viewport viewport,
-    in GpuScissorRect scissor,
-    mut GpuDescriptorHeap heap,
-    mut GpuCommandIrCapture capture
-){
-    in GpuFrame frame = payload.frame;
-    GpuCommandIrRasterStateDesc state;
-    state.pipeline = payload.pipeline;
-    state.pipelineOwner = frame.deref().m_resources.deref().m_pipeline;
-    state.colorAttachment = payload.color;
-    state.framebufferOwner = frame.deref().m_target.deref().m_framebuffer;
-    state.viewport = viewport;
-    state.scissor = scissor;
-    state.hasScissor = true;
-    GpuCommandIrRasterVertexOwner vertex;
-    vertex.resource = payload.vertices;
-    vertex.buffer = frame.deref().m_vertices;
-    vertex.slot = s_ShaderUiVertexBufferIndex;
-    state.vertexBuffers.push_back(vertex);
-    state.indexResource = payload.indices;
-    state.indexBuffer = frame.deref().m_indices;
-    state.indexFormat = Format::R32_UINT;
-    if(!capture.captureSetGraphicsState(context.task, context.packet, context.queue, state))
-        return false;
-    return capture.captureBindGraphicsHeap(heap, context.task, context.packet, context.queue, payload.pipeline, frame.deref().m_resources.deref().m_pipeline, descriptorOwner);
-}
-
-[cpp_unwind]
 b8 CaptureOutputState(
     in GpuOutputTask payload,
     in GpuTaskRecordContext context,
@@ -216,6 +184,21 @@ b8 RecordRasterCommandIr(in GpuRasterTask payload, in GpuTaskRecordContext conte
         return false;
     GpuPaintPushConstants push = initialPush.value();
     const Viewport viewport(0.0f, cast<f32>(target.width), 0.0f, cast<f32>(target.height), 0.0f, 1.0f);
+    GpuCommandIrRasterStateDesc rasterState;
+    rasterState.pipeline = payload.pipeline;
+    rasterState.pipelineOwner = frame.deref().m_resources.deref().m_pipeline;
+    rasterState.colorAttachment = payload.color;
+    rasterState.framebufferOwner = frame.deref().m_target.deref().m_framebuffer;
+    rasterState.viewport = viewport;
+    rasterState.hasScissor = true;
+    GpuCommandIrRasterVertexOwner vertex;
+    vertex.resource = payload.vertices;
+    vertex.buffer = frame.deref().m_vertices;
+    vertex.slot = s_ShaderUiVertexBufferIndex;
+    rasterState.vertexBuffers.push_back(vertex);
+    rasterState.indexResource = payload.indices;
+    rasterState.indexBuffer = frame.deref().m_indices;
+    rasterState.indexFormat = Format::R32_UINT;
     GpuScissorRect boundScissor = GpuScissorRect();
     b8 hasRasterState = false;
     b8 hasDraw = false;
@@ -225,7 +208,10 @@ b8 RecordRasterCommandIr(in GpuRasterTask payload, in GpuTaskRecordContext conte
             continue;
         in GpuScissorRect scissor = resolvedScissor.value();
         if(!hasRasterState || !SameGpuScissorRect(scissor, boundScissor)){
-            if(!CaptureRasterState(payload, context, descriptorOwner.value(), viewport, scissor, heap, capture))
+            rasterState.scissor = scissor;
+            if(!capture.captureSetGraphicsState(context.task, context.packet, context.queue, rasterState))
+                return false;
+            if(!hasRasterState && !capture.captureBindGraphicsHeap(heap, context.task, context.packet, context.queue, payload.pipeline, frame.deref().m_resources.deref().m_pipeline, descriptorOwner.value()))
                 return false;
             boundScissor = scissor;
             hasRasterState = true;
@@ -362,6 +348,17 @@ b8 RecordGpuRaster(in GpuRasterTask payload, mut CommandList commands, in GpuTas
     GpuPaintPushConstants push = initialPush.value();
     mut GpuDescriptorHeap heap = frame.deref().m_resources.deref().graphics().getDevice().getDescriptorHeap();
     const Viewport viewport(0.0f, cast<f32>(target.width), 0.0f, cast<f32>(target.height), 0.0f, 1.0f);
+    VertexBufferBinding vertices;
+    vertices.setBuffer(frame.deref().m_vertices.deref()).setSlot(s_ShaderUiVertexBufferIndex);
+    IndexBufferBinding indices;
+    indices.setBuffer(frame.deref().m_indices.deref()).setFormat(Format::R32_UINT);
+    GraphicsState state;
+    state
+        .setPipeline(frame.deref().m_resources.deref().m_pipeline.deref())
+        .setFramebuffer(frame.deref().m_target.deref().m_framebuffer.deref())
+        .addVertexBuffer(vertices)
+        .setIndexBuffer(indices)
+    ;
     GpuScissorRect boundScissor = GpuScissorRect();
     b8 heapBound = false;
     for(in DrawCommand draw : frame.deref().m_snapshot.commands()){
@@ -372,18 +369,7 @@ b8 RecordGpuRaster(in GpuRasterTask payload, mut CommandList commands, in GpuTas
         if(!heapBound || !SameGpuScissorRect(scissor, boundScissor)){
             ViewportState view;
             view.addViewport(viewport).addScissorRect(scissor);
-            VertexBufferBinding vertices;
-            vertices.setBuffer(frame.deref().m_vertices.deref()).setSlot(s_ShaderUiVertexBufferIndex);
-            IndexBufferBinding indices;
-            indices.setBuffer(frame.deref().m_indices.deref()).setFormat(Format::R32_UINT);
-            GraphicsState state;
-            state
-                .setPipeline(frame.deref().m_resources.deref().m_pipeline.deref())
-                .setFramebuffer(frame.deref().m_target.deref().m_framebuffer.deref())
-                .setViewport(view)
-                .addVertexBuffer(vertices)
-                .setIndexBuffer(indices)
-            ;
+            state.setViewport(view);
             commands.setGraphicsState(state);
             if(!heapBound){
                 heap.bindGraphics(commands, frame.deref().m_resources.deref().m_pipeline.deref());

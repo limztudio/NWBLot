@@ -173,11 +173,15 @@ template<typename TargetT, typename SrcT>
         }
         else if constexpr(requires{ out.push_back(DeclVal<typename TargetT::value_type>()); }){
             using ElemT = typename TargetT::value_type;
-            for(auto&& elem : src){
-                if constexpr(IsLValueReference_V<SrcT> || IsConst_V<RemoveReference_T<decltype(elem)>>)
-                    out.push_back(AdhdRebindConstruct<ElemT>(targetArena, elem));
-                else
-                    out.push_back(AdhdRebindConstruct<ElemT>(targetArena, Move(elem)));
+            if constexpr(IsTriviallyCopyable_V<ElemT> && !LeadingArenaConstructible<ElemT> && IsSame_V<RemoveCVRef_T<decltype(*src.begin())>, ElemT> && requires{ out.assign(src.begin(), src.end()); })
+                out.assign(src.begin(), src.end());
+            else{
+                for(auto&& elem : src){
+                    if constexpr(IsLValueReference_V<SrcT> || IsConst_V<RemoveReference_T<decltype(elem)>>)
+                        out.push_back(AdhdRebindConstruct<ElemT>(targetArena, elem));
+                    else
+                        out.push_back(AdhdRebindConstruct<ElemT>(targetArena, Move(elem)));
+                }
             }
         }
         else if constexpr(requires{ out.insert(DeclVal<typename TargetT::value_type>()); }){
@@ -339,11 +343,15 @@ FOUNDATION_INLINE LhsT& AdhdAssign(LhsT& lhs, RhsT&& rhs){
         }
         else if constexpr(requires{ lhs.push_back(DeclVal<typename LhsT::value_type>()); }){
             using ElemT = typename LhsT::value_type;
-            for(auto&& elem : rhs){
-                if constexpr(IsLValueReference_V<RhsT> || IsConst_V<RemoveReference_T<decltype(elem)>>)
-                    lhs.push_back(AdhdRebindConstruct<ElemT>(targetArena, elem));
-                else
-                    lhs.push_back(AdhdRebindConstruct<ElemT>(targetArena, Move(elem)));
+            if constexpr(IsTriviallyCopyable_V<ElemT> && !LeadingArenaConstructible<ElemT> && IsSame_V<RemoveCVRef_T<decltype(*rhs.begin())>, ElemT> && requires{ lhs.assign(rhs.begin(), rhs.end()); })
+                lhs.assign(rhs.begin(), rhs.end());
+            else{
+                for(auto&& elem : rhs){
+                    if constexpr(IsLValueReference_V<RhsT> || IsConst_V<RemoveReference_T<decltype(elem)>>)
+                        lhs.push_back(AdhdRebindConstruct<ElemT>(targetArena, elem));
+                    else
+                        lhs.push_back(AdhdRebindConstruct<ElemT>(targetArena, Move(elem)));
+                }
             }
         }
         else if constexpr(requires{ lhs.insert(DeclVal<typename LhsT::value_type>()); }){

@@ -35,7 +35,13 @@ class GpuFrameData{
     public GpuVersion<GpuCommandIrCapture> m_outputCommandIrCapture;
 
     public void reset(mut DrawSnapshot snapshot, in GpuVersion<GpuSkinVersion> skin){
+        DrawSnapshot retired;
+        MoveInto<DrawSnapshot>(retired, this.m_snapshot);
         MoveInto<DrawSnapshot>(this.m_snapshot, snapshot);
+        if(retired.m_ownerIdentity != 0u && retired.m_ownerIdentity == this.m_snapshot.m_ownerIdentity){
+            retired.resetStorage();
+            MoveInto<DrawSnapshot>(snapshot, retired);
+        }
         this.m_skin = skin;
         this.m_glyphPages.clear();
         this.m_sdfPages.clear();

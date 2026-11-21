@@ -35,11 +35,139 @@ void CommandList::setResourceStatesForFramebuffer(Framebuffer& framebuffer){
         setTextureState(desc.shadingRateAttachment.texture, desc.shadingRateAttachment.subresources, ResourceStates::ShadingRateSurface);
 }
 
-void CommandList::setResourceStatesForGraphicsBuffers(const GraphicsState& state){
-    GraphicsBufferStateTable requiredBufferStates{};
-    if(!CollectGraphicsBufferStates(state, requiredBufferStates))
+void CommandList::setResourceStatesForFramebufferValidated(Framebuffer& framebuffer){
+    const FramebufferDesc& desc = framebuffer.m_desc;
+    Array<VkImageMemoryBarrier2, s_MaxRenderTargets + 2u> inlineBarriers;
+    u32 inlineBarrierCount = 0u;
+    const usize firstPendingIndex = m_pendingImageBarriers.size();
+    b8 overflowed = !m_enableAutomaticBarriers;
+    const b8 rayTracingStageAvailable = m_context.extensions.khrRayTracingPipeline;
+
+    const auto flushInlineToPending = [&](){
+        if(!overflowed){
+            overflowed = true;
+            for(u32 i = 0u; i < inlineBarrierCount; ++i)
+                m_pendingImageBarriers.push_back(inlineBarriers[i]);
+            inlineBarrierCount = 0u;
+        }
+    };
+    const auto appendBarrier = [&](const VkImageMemoryBarrier2& barrier){
+        if(!overflowed && inlineBarrierCount < inlineBarriers.size()){
+            inlineBarriers[inlineBarrierCount++] = barrier;
+            return;
+        }
+        flushInlineToPending();
+        m_pendingImageBarriers.push_back(barrier);
+    };
+
+    const auto transitionAttachment = [&](const FramebufferAttachment& attachment, const ResourceStates::Mask stateBits){
+        Texture& texture = *attachment.texture;
+        const TextureSubresourceSet resolved = attachment.subresources.resolve(texture.m_creationDesc, TextureSubresourceMipResolve::Range);
+        if(!VulkanDetail::IsTextureSubresourceRangeValid(resolved)){
+            rejectCommandRecording(FOUNDATION_TEXT("set framebuffer states"), VulkanStateTrackingDetail::s_SubresourceRangeOutsideTextureReason);
+            return false;
+        }
+
+        const ResourceStates::Mask permanentState = m_stateTracker.getPermanentTextureState(&texture);
+        if(permanentState == ResourceStates::Unknown && resolved.numMipLevels == 1u && resolved.numArraySlices == 1u){
+            const MipLevel mipLevel = resolved.baseMipLevel;
+            const ArraySlice arraySlice = resolved.baseArraySlice;
+            const TextureSubresourceStateKey key{ &texture, mipLevel, arraySlice };
+            auto existing = !m_stateTracker.m_textureStates.empty() ? m_stateTracker.m_textureStates.find(key) : m_stateTracker.m_textureStates.end();
+            const ResourceStates::Mask subresourceOldState = existing != m_stateTracker.m_textureStates.end()
+                ? existing.value()
+                : ((texture.m_creationDesc.keepInitialState && texture.isRetainedSubresourceStateKnown(arraySlice, mipLevel)) ? texture.m_creationDesc.initialState : ResourceStates::Unknown);
+
+            retainResource(&texture);
+            if(subresourceOldState == stateBits)
+                return true;
+
+            if(existing != m_stateTracker.m_textureStates.end())
+                existing.value() = stateBits;
+            else{
+                m_stateTracker.m_textureStates.emplace(key, stateBits);
+                if(texture.m_creationDesc.keepInitialState)
+                    m_stateTracker.m_hasKeepInitialStateTextures = true;
+            }
+
+            appendBarrier(VulkanStateTrackingDetail::BuildTextureStateBarrier(texture.m_image, texture.m_aspectMask, resolved, subresourceOldState, stateBits, rayTracingStageAvailable));
+            return true;
+        }
+
+        ResourceStates::Mask oldState = ResourceStates::Unknown;
+        b8 firstSubresource = true;
+        b8 needsBarrier = false;
+        b8 usePerSubresourceBarriers = false;
+        const MipLevel mipEnd = resolved.baseMipLevel + resolved.numMipLevels;
+        const ArraySlice arrayEnd = resolved.baseArraySlice + resolved.numArraySlices;
+        const usize subresourceCount = static_cast<usize>(resolved.numMipLevels) * static_cast<usize>(resolved.numArraySlices);
+
+        for(ArraySlice arraySlice = resolved.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
+            for(MipLevel mipLevel = resolved.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
+                const ResourceStates::Mask subresourceOldState = permanentState == ResourceStates::Unknown ? m_stateTracker.getResolvedTransientTextureState(texture, arraySlice, mipLevel) : permanentState;
+
+                if(firstSubresource){
+                    oldState = subresourceOldState;
+                    firstSubresource = false;
+                }
+                else if(subresourceOldState != oldState && !usePerSubresourceBarriers){
+                    usePerSubresourceBarriers = true;
+                    flushInlineToPending();
+                    ::ContainerDetail::ReserveAdditionalCapacity(m_pendingImageBarriers, subresourceCount);
+                    if(oldState != stateBits){
+                        VulkanStateTrackingDetail::AppendTextureStateBarriersBefore(m_pendingImageBarriers, texture.m_image, texture.m_aspectMask, resolved, mipEnd, arraySlice, mipLevel, oldState, stateBits, rayTracingStageAvailable);
+                    }
+                }
+
+                const b8 subresourceNeedsBarrier = subresourceOldState != stateBits;
+                if(subresourceNeedsBarrier){
+                    needsBarrier = true;
+                    if(usePerSubresourceBarriers){
+                        VulkanStateTrackingDetail::AppendTextureStateBarrier(m_pendingImageBarriers, texture.m_image, texture.m_aspectMask, arraySlice, mipLevel, subresourceOldState, stateBits, rayTracingStageAvailable);
+                    }
+                }
+            }
+        }
+
+        retainResource(&texture);
+        if(!needsBarrier)
+            return true;
+
+        if(!usePerSubresourceBarriers)
+            appendBarrier(VulkanStateTrackingDetail::BuildTextureStateBarrier(texture.m_image, texture.m_aspectMask, resolved, oldState, stateBits, rayTracingStageAvailable));
+        if(permanentState == ResourceStates::Unknown)
+            m_stateTracker.beginTrackingResolvedTransientTexture(texture, resolved, stateBits);
+        return true;
+    };
+
+    for(const FramebufferAttachment& attachment : desc.colorAttachments){
+        if(!attachment.texture)
+            continue;
+        if(!transitionAttachment(attachment, ResourceStates::RenderTarget))
+            return;
+    }
+
+    if(desc.depthAttachment.valid()){
+        if(!transitionAttachment(desc.depthAttachment, desc.depthAttachment.isReadOnly ? ResourceStates::DepthRead : ResourceStates::DepthWrite))
+            return;
+    }
+
+    if(!m_enableAutomaticBarriers)
         return;
 
+    if(overflowed){
+        const usize newBarrierCount = m_pendingImageBarriers.size() - firstPendingIndex;
+        if(newBarrierCount != 0u){
+            executePipelineBarrierValidated({}, { m_pendingImageBarriers.data() + firstPendingIndex, newBarrierCount }, {}, FOUNDATION_TEXT("set framebuffer states"));
+            m_pendingImageBarriers.resize(firstPendingIndex);
+        }
+    }
+    else if(inlineBarrierCount != 0u){
+        executePipelineBarrierValidated({}, { inlineBarriers.data(), inlineBarrierCount }, {}, FOUNDATION_TEXT("set framebuffer states"));
+    }
+}
+
+void CommandList::setResourceStatesForGraphicsBuffers(const GraphicsBufferStateTable& requiredBufferStates){
     for(u32 entryIndex = 0u; entryIndex < requiredBufferStates.count; ++entryIndex){
         auto& buffer = *MakeNotNull(requiredBufferStates.entries[entryIndex].buffer);
         setBufferStateValidated(buffer, requiredBufferStates.entries[entryIndex].state, false, BufferRange(0u, buffer.m_creationDesc.byteSize));
@@ -388,6 +516,8 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
         retainResource(state.texture);
         const TextureSubresourceStateKey key{ state.texture, state.mipLevel, state.arraySlice };
         m_stateTracker.m_textureStates.insert_or_assign(key, state.state);
+        if(state.texture->m_creationDesc.keepInitialState)
+            m_stateTracker.m_hasKeepInitialStateTextures = true;
     }
 
     m_stateTracker.invalidateBufferCache();

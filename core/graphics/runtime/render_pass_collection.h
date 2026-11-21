@@ -24,7 +24,7 @@ namespace GraphicsModuleDetail{
 
 class RenderPassCollection{
 public:
-    using PassList = List<NotNull<IRenderPass*>, Alloc::GlobalArena>;
+    using PassList = Vector<NotNull<IRenderPass*>, Alloc::GlobalArena>;
 
 
 public:

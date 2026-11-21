@@ -70,7 +70,6 @@ class Builder : NoCopy{
     [owner_result]
     private BuilderListFrame makeListFrame()const{ return BuilderListFrame(); }
 
-    [owner_result]
     private BuilderTooltipFrame makeTooltipFrame()const{ return BuilderTooltipFrame(); }
 
     [owner_result]

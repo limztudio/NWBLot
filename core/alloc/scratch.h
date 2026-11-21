@@ -159,41 +159,44 @@ public:
     public:
         explicit Scope(ScratchArena& arena)noexcept
             : m_arena(arena)
+            , m_savedMask(arena.m_activeBucketMask)
         {
-            for(usize i = 0u; i < arena.m_bucket.size(); ++i){
+            for(u32 bits = m_savedMask; bits != 0u; bits &= bits - 1u){
+                const usize i = static_cast<usize>(CountTrailingZeros(bits));
                 const Chunk* const active = arena.m_bucket[i].active;
-                if(active){
-                    m_saved[i] = SavedBucket{
-                        .active = const_cast<Chunk*>(active),
-                        .available = active->m_available.get(),
-                        .remaining = active->m_remaining,
-                    };
-                }
+                m_saved[i] = SavedBucket{
+                    .active = const_cast<Chunk*>(active),
+                    .available = active->m_available.get(),
+                    .remaining = active->m_remaining,
+                };
             }
         }
 
         ~Scope()noexcept{
-            for(usize i = 0u; i < m_arena.m_bucket.size(); ++i){
+            for(u32 bits = m_arena.m_activeBucketMask; bits != 0u; bits &= bits - 1u){
+                const usize i = static_cast<usize>(CountTrailingZeros(bits));
                 auto& bucket = m_arena.m_bucket[i];
-                const SavedBucket& saved = m_saved[i];
-                while(bucket.active && bucket.active != saved.active){
+                const b8 hadSaved = (m_savedMask & static_cast<u16>(1u << i)) != 0u;
+                Chunk* const savedActive = hadSaved ? m_saved[i].active : nullptr;
+                while(bucket.active && bucket.active != savedActive){
                     Chunk& chunk = *bucket.active;
                     const usize unpopped = chunk.m_size - chunk.m_remaining;
                     if(unpopped != 0u)
-                        m_arena.m_memoryStats.recordDeallocation(unpopped);
+                        m_arena.m_memoryStats.recordDeallocationSingleThread(unpopped);
                     chunk.m_available = chunk.m_buffer;
                     chunk.m_remaining = chunk.m_size;
-                    m_arena.cacheEmptyChunk(bucket, chunk);
+                    m_arena.cacheEmptyChunk(i, bucket, chunk);
                 }
-                if(bucket.active && bucket.active == saved.active){
+                if(hadSaved && bucket.active && bucket.active == savedActive){
                     Chunk& chunk = *bucket.active;
+                    const SavedBucket& saved = m_saved[i];
                     if(chunk.m_remaining < saved.remaining){
                         const usize unpopped = saved.remaining - chunk.m_remaining;
-                        m_arena.m_memoryStats.recordDeallocation(unpopped);
+                        m_arena.m_memoryStats.recordDeallocationSingleThread(unpopped);
                         chunk.m_available = MakeNotNull(saved.available);
                         chunk.m_remaining = saved.remaining;
                         if(chunk.m_remaining == chunk.m_size)
-                            m_arena.cacheEmptyChunk(bucket, chunk);
+                            m_arena.cacheEmptyChunk(i, bucket, chunk);
                     }
                 }
             }
@@ -202,7 +205,8 @@ public:
 
     private:
         ScratchArena& m_arena;
-        Array<SavedBucket, FloorLog2(s_MaxAlignSize) + 1> m_saved = {};
+        Array<SavedBucket, FloorLog2(s_MaxAlignSize) + 1> m_saved;
+        u16 m_savedMask = 0u;
     };
 
 
@@ -247,12 +251,12 @@ public:
 
         size = AlignmentPowerOfTwo(align, size);
         if(!bucket.active || size > bucket.active->m_remaining){
-            if(!acquireChunk(bucket, align, size))
+            if(!acquireChunk(bucketIndex, bucket, align, size))
                 return nullptr;
         }
 
         void* p = bucket.active->allocate(size).get();
-        m_memoryStats.recordAllocation(size);
+        m_memoryStats.recordAllocationSingleThread(size);
         return p;
     }
 
@@ -278,9 +282,9 @@ public:
             return nullptr;
 
         if(chunk.tryResizeLifoTop(MakeNotNull(p), size)){
-            m_memoryStats.recordReallocation(oldSize, size);
+            m_memoryStats.recordReallocationSingleThread(oldSize, size);
             if(chunk.m_remaining == chunk.m_size)
-                cacheEmptyChunk(bucket, chunk);
+                cacheEmptyChunk(bucketIndex, bucket, chunk);
             return p;
         }
 
@@ -290,7 +294,7 @@ public:
 
         FOUNDATION_MEMCPY(next, size, p, oldSize);
         if(chunk.tryPopLifo(p, oldSize)){
-            m_memoryStats.recordDeallocation(oldSize);
+            m_memoryStats.recordDeallocationSingleThread(oldSize);
             if(chunk.m_remaining == chunk.m_size)
                 cacheEmptyChunk(bucket, chunk, *MakeNotNull(bucket.active));
         }
@@ -314,15 +318,15 @@ public:
         size = *alignedSize;
         Chunk& chunk = *bucket.active;
         if(chunk.tryPopLifo(p, size)){
-            m_memoryStats.recordDeallocation(size);
+            m_memoryStats.recordDeallocationSingleThread(size);
             if(chunk.m_remaining == chunk.m_size)
-                cacheEmptyChunk(bucket, chunk);
+                cacheEmptyChunk(bucketIndex, bucket, chunk);
         }
     }
 
 
 private:
-    [[nodiscard]] Chunk* acquireChunk(ChunkWrapper& bucket, const usize align, const usize size){
+    [[nodiscard]] Chunk* acquireChunk(const usize bucketIndex, ChunkWrapper& bucket, const usize align, const usize size){
         Chunk* chunk = bucket.cached;
         while(chunk && chunk->m_size < size)
             chunk = chunk->m_next;
@@ -340,27 +344,30 @@ private:
         while(bucket.cached && bucket.cached != chunk){
             Chunk* discarded = bucket.cached;
             bucket.cached = discarded->m_next;
-            m_memoryStats.removeReservedBytes(static_cast<u64>(discarded->m_size));
+            m_memoryStats.removeReservedBytesSingleThread(static_cast<u64>(discarded->m_size));
             Chunk::Destroy(*discarded);
         }
         if(created){
             bucket.size = Max(bucket.size, chunk->m_size);
-            m_memoryStats.addReservedBytes(static_cast<u64>(chunk->m_size));
+            m_memoryStats.addReservedBytesSingleThread(static_cast<u64>(chunk->m_size));
         }
         else
             bucket.cached = chunk->m_next;
 
         chunk->m_next = bucket.active;
         bucket.active = chunk;
+        m_activeBucketMask |= static_cast<u16>(1u << bucketIndex);
         return chunk;
     }
 
-    void cacheEmptyChunk(ChunkWrapper& bucket, Chunk& chunk)noexcept{
+    void cacheEmptyChunk(const usize bucketIndex, ChunkWrapper& bucket, Chunk& chunk)noexcept{
         FOUNDATION_ASSERT(chunk.m_remaining == chunk.m_size);
         FOUNDATION_ASSERT(bucket.active == &chunk);
         bucket.active = chunk.m_next;
         chunk.m_next = bucket.cached;
         bucket.cached = &chunk;
+        if(!bucket.active)
+            m_activeBucketMask &= static_cast<u16>(~(1u << bucketIndex));
     }
 
     void cacheEmptyChunk(ChunkWrapper& bucket, Chunk& chunk, Chunk& newer)noexcept{
@@ -374,6 +381,7 @@ private:
 
 private:
     Array<ChunkWrapper, FloorLog2(s_MaxAlignSize) + 1> m_bucket;
+    u16 m_activeBucketMask = 0u;
 };
 
 

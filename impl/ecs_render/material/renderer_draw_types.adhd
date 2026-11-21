@@ -158,10 +158,23 @@ class MaterialPassDrawItems{
         return this.meshDrawItems.empty() && this.indexedDrawItems.empty() && this.computeDrawItems.empty();
     }
 
+    public void clear(){
+        this.meshDrawItems.clear();
+        this.indexedDrawItems.clear();
+        this.computeDrawItems.clear();
+    }
+
     public void reserve(in usize capacity){
         this.meshDrawItems.reserve(capacity);
         this.indexedDrawItems.reserve(capacity);
         this.computeDrawItems.reserve(capacity);
+    }
+
+    public void reserveForPath(in b8 meshSupported, in usize capacity){
+        if(meshSupported)
+            this.meshDrawItems.reserve(capacity);
+        else
+            this.indexedDrawItems.reserve(capacity);
     }
 }
 
@@ -201,10 +214,25 @@ class MaterialPassDrawItemPartitions{
         return this.regular.empty() && this.csg.empty() && this.csgReceiverSurface.empty();
     }
 
+    public void clear(){
+        this.regular.clear();
+        this.csg.clear();
+        this.csgReceiverSurface.clear();
+    }
+
     public void reserve(in usize capacity){
         this.regular.reserve(capacity);
         this.csg.reserve(capacity);
         this.csgReceiverSurface.reserve(capacity);
+    }
+
+    public void reserveForPath(in b8 meshSupported, in usize regularCapacity, in usize csgCapacity, in usize receiverSurfaceCapacity){
+        if(regularCapacity > 0u)
+            this.regular.reserveForPath(meshSupported, regularCapacity);
+        if(csgCapacity > 0u)
+            this.csg.reserveForPath(meshSupported, csgCapacity);
+        if(receiverSurfaceCapacity > 0u)
+            this.csgReceiverSurface.reserveForPath(meshSupported, receiverSurfaceCapacity);
     }
 }
 
@@ -259,6 +287,59 @@ b8 MatchesRetainedGeneratedGeometryOutputs(
             return false;
     }
     return true;
+}
+
+b8 CompareMaterialPassDrawItems(in MaterialPassDrawItem lhs, in MaterialPassDrawItem rhs){
+    if(lhs.pipelineKey.material != rhs.pipelineKey.material){
+        const usize lhsHash = HashValue(lhs.pipelineKey.material);
+        const usize rhsHash = HashValue(rhs.pipelineKey.material);
+        if(lhsHash != rhsHash)
+            return lhsHash < rhsHash;
+        return lhs.pipelineKey.material.resolvedText() < rhs.pipelineKey.material.resolvedText();
+    }
+    if(lhs.pipelineKey.twoSided != rhs.pipelineKey.twoSided)
+        return !lhs.pipelineKey.twoSided && rhs.pipelineKey.twoSided;
+    const u8 lhsCsg = cast<u8>(lhs.pipelineKey.csgMode);
+    const u8 rhsCsg = cast<u8>(rhs.pipelineKey.csgMode);
+    if(lhsCsg != rhsCsg)
+        return lhsCsg < rhsCsg;
+    if(lhs.pipelineKey.csgEvaluatorVariant != rhs.pipelineKey.csgEvaluatorVariant){
+        const usize lhsHash = HashValue(lhs.pipelineKey.csgEvaluatorVariant);
+        const usize rhsHash = HashValue(rhs.pipelineKey.csgEvaluatorVariant);
+        if(lhsHash != rhsHash)
+            return lhsHash < rhsHash;
+        return lhs.pipelineKey.csgEvaluatorVariant.resolvedText() < rhs.pipelineKey.csgEvaluatorVariant.resolvedText();
+    }
+    if(lhs.pipelineKey.csgShapeRegistryRevision != rhs.pipelineKey.csgShapeRegistryRevision)
+        return lhs.pipelineKey.csgShapeRegistryRevision < rhs.pipelineKey.csgShapeRegistryRevision;
+    if(lhs.meshKey != rhs.meshKey){
+        const usize lhsHash = HashValue(lhs.meshKey);
+        const usize rhsHash = HashValue(rhs.meshKey);
+        if(lhsHash != rhsHash)
+            return lhsHash < rhsHash;
+        return lhs.meshKey.resolvedText() < rhs.meshKey.resolvedText();
+    }
+    return lhs.instanceIndex < rhs.instanceIndex;
+}
+
+void SortMaterialPassDrawItemList(mut Vector<MaterialPassDrawItem> draws){
+    if(draws.size() <= 1u)
+        return;
+    SortSequence<MaterialPassDrawItem>(draws, lambda[](in MaterialPassDrawItem lhs, in MaterialPassDrawItem rhs) -> b8{
+        return CompareMaterialPassDrawItems(lhs, rhs);
+    });
+}
+
+void SortMaterialPassDrawItems(mut MaterialPassDrawItems draws){
+    SortMaterialPassDrawItemList(draws.meshDrawItems);
+    SortMaterialPassDrawItemList(draws.indexedDrawItems);
+    SortMaterialPassDrawItemList(draws.computeDrawItems);
+}
+
+void SortMaterialPassDrawItemPartitions(mut MaterialPassDrawItemPartitions partitions){
+    SortMaterialPassDrawItems(partitions.regular);
+    SortMaterialPassDrawItems(partitions.csg);
+    SortMaterialPassDrawItems(partitions.csgReceiverSurface);
 }
 
 

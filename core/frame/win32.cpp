@@ -169,8 +169,10 @@ static void ResizeWindowForClientExtentOnPrimaryWorkArea(HWND hwnd, const u16 cl
 
 static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
     if(auto* frame = s_Frame){
-        if(uMsg == WM_NCDESTROY && frame->data<Common::WinFrame>().hwnd() == hwnd)
+        if(uMsg == WM_NCDESTROY && frame->data<Common::WinFrame>().hwnd() == hwnd){
             frame->data<Common::WinFrame>().setHwnd(nullptr);
+            frame->data<Common::WinFrame>().setMouseLeaveTracked(false);
+        }
 
         Win32FrameInput input(*frame, hwnd);
         if(uMsg == WM_SETFOCUS || uMsg == WM_KILLFOCUS){
@@ -378,7 +380,16 @@ b8 Frame::mainLoop(){
 
     Timer lateTime(TimerNow());
     for(;;){
-        switch(__hidden_frame_win32::PumpWin32FrameMessages([&]()noexcept{ return data<Common::WinFrame>().isActive() || m_graphics.shouldRenderUnfocused(); })){
+        b8 checkedRenderUnfocused = false;
+        b8 renderUnfocused = false;
+        const auto queryRenderUnfocused = [&]()noexcept -> b8 {
+            if(!checkedRenderUnfocused){
+                renderUnfocused = m_graphics.shouldRenderUnfocused();
+                checkedRenderUnfocused = true;
+            }
+            return renderUnfocused;
+        };
+        switch(__hidden_frame_win32::PumpWin32FrameMessages([&]()noexcept{ return data<Common::WinFrame>().isActive() || queryRenderUnfocused(); })){
         case __hidden_frame_win32::Win32MessagePumpResult::Quit:
             return true;
         case __hidden_frame_win32::Win32MessagePumpResult::Failed:
@@ -390,7 +401,7 @@ b8 Frame::mainLoop(){
         }
 
         const HWND hwnd = data<Common::WinFrame>().hwnd();
-        if(m_graphics.shouldRenderUnfocused() && IsIconic(hwnd)){
+        if(IsIconic(hwnd) && queryRenderUnfocused()){
             ShowWindow(hwnd, SW_RESTORE);
             const auto& frameData = data<Common::WinFrame>();
             FrameDetail::ResizeWindowForClientExtentOnPrimaryWorkArea(hwnd, frameData.width(), frameData.height(), GetDpiForWindow(hwnd));
@@ -448,6 +459,7 @@ void Frame::setupPlatform(void* inst)noexcept{
     FrameDetail::s_Frame = this;
     auto& frameData = data<Common::WinFrame>();
     frameData.setActive(false);
+    frameData.setMouseLeaveTracked(false);
     frameData.setInstance(static_cast<HINSTANCE>(inst));
     frameData.setHwnd(nullptr);
     frameData.setWindowClass(0u);
@@ -462,6 +474,7 @@ void Frame::cleanupPlatform()noexcept{
     frameData.setHwnd(nullptr);
     frameData.setWindowClass(0u);
     frameData.setActive(false);
+    frameData.setMouseLeaveTracked(false);
 
     const b8 windowFailed = window && !DestroyWindow(window);
     const DWORD windowError = windowFailed ? GetLastError() : ERROR_SUCCESS;

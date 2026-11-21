@@ -18,10 +18,22 @@ namespace __hidden_gpu_resource_hazard_tracker{
 using namespace GpuTaskGraphCompilerDetail;
 
 inline constexpr usize s_InvalidAccess = Limit<usize>::s_Max;
+inline constexpr u32 s_InvalidHazardIndex = Limit<u32>::s_Max;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+struct HazardDomainReaderNode{
+    u32 taskIndex = s_InvalidHazardIndex;
+    u32 next = s_InvalidHazardIndex;
+};
+
+struct HazardDomainAccessState{
+    u32 lastWriter = s_InvalidHazardIndex;
+    u32 readerHead = s_InvalidHazardIndex;
+    u32 readerTail = s_InvalidHazardIndex;
+};
 
 struct TrackedResourceAccess{
     GpuTaskId task;
@@ -85,17 +97,76 @@ b8 GpuResourceHazardTracker::Append(const GpuTaskGraph::DeclarationReadView& gra
         return true;
 
     const usize resourceCount = CompilerGraphAccess::ResourceCount(graph);
-    Vector<TrackedResourceAccessLists, Alloc::ScratchArena> resourceAccesses(resourceCount, scratchArena);
+    const u64 generation = CompilerGraphAccess::Generation(graph);
+    Vector<HazardDomainAccessState, Alloc::ScratchArena> hazardDomainStates(resourceCount, scratchArena);
+    Vector<HazardDomainReaderNode, Alloc::ScratchArena> hazardDomainReaders(scratchArena);
+    hazardDomainReaders.reserve(potentialAccessCount);
+    Vector<TrackedResourceAccessLists, Alloc::ScratchArena> resourceAccesses(scratchArena);
     Vector<TrackedResourceAccess, Alloc::ScratchArena> writers(scratchArena);
     Vector<TrackedResourceAccess, Alloc::ScratchArena> readers(scratchArena);
-    writers.reserve(potentialAccessCount);
-    readers.reserve(potentialAccessCount);
 
     for(const GpuTaskId taskID : orderedTasks){
         const GpuTaskGraphDetail::GpuTaskNode& task = CompilerGraphAccess::TaskNode(graph, taskID.index);
         const Span<const GpuTaskResourceUse> resourceUses = CompilerGraphAccess::TaskResourceUses(graph, task);
         for(const GpuTaskResourceUse& use : resourceUses){
             const GpuGraphResourceType::Enum resourceType = CompilerGraphAccess::ResourceNode(graph, use.resource.index).type;
+            if(resourceType == GpuGraphResourceType::HazardDomain){
+                HazardDomainAccessState& state = hazardDomainStates[use.resource.index];
+                const b8 isRead = IsReadAccess(use.access);
+                const b8 isWrite = IsWriteAccess(use.access);
+                if(isRead && state.lastWriter != s_InvalidHazardIndex && state.lastWriter != taskID.index){
+                    edgeCollector.appendInferred(GpuTaskDependencyEdge{
+                        .producer = GpuTaskId{ .generation = generation, .index = state.lastWriter },
+                        .consumer = taskID,
+                        .resource = use.resource,
+                        .resourceVersion = {},
+                        .hazard = GpuTaskHazardType::ReadAfterWrite,
+                    });
+                }
+                if(isWrite){
+                    if(state.lastWriter != s_InvalidHazardIndex && state.lastWriter != taskID.index){
+                        edgeCollector.appendInferred(GpuTaskDependencyEdge{
+                            .producer = GpuTaskId{ .generation = generation, .index = state.lastWriter },
+                            .consumer = taskID,
+                            .resource = use.resource,
+                            .resourceVersion = {},
+                            .hazard = GpuTaskHazardType::WriteAfterWrite,
+                        });
+                    }
+                    for(u32 readerIndex = state.readerHead; readerIndex != s_InvalidHazardIndex; readerIndex = hazardDomainReaders[readerIndex].next){
+                        const u32 readerTask = hazardDomainReaders[readerIndex].taskIndex;
+                        if(readerTask != taskID.index){
+                            edgeCollector.appendInferred(GpuTaskDependencyEdge{
+                                .producer = GpuTaskId{ .generation = generation, .index = readerTask },
+                                .consumer = taskID,
+                                .resource = use.resource,
+                                .resourceVersion = {},
+                                .hazard = GpuTaskHazardType::WriteAfterRead,
+                            });
+                        }
+                    }
+                    state.lastWriter = taskID.index;
+                    state.readerHead = s_InvalidHazardIndex;
+                    state.readerTail = s_InvalidHazardIndex;
+                }
+                else if(isRead && state.lastWriter != taskID.index){
+                    FOUNDATION_FATAL_ASSERT_MSG(hazardDomainReaders.size() < s_InvalidHazardIndex, "HazardDomain reader table overflow");
+                    const u32 nodeIndex = static_cast<u32>(hazardDomainReaders.size());
+                    hazardDomainReaders.push_back(HazardDomainReaderNode{ .taskIndex = taskID.index, .next = s_InvalidHazardIndex });
+                    if(state.readerTail == s_InvalidHazardIndex)
+                        state.readerHead = nodeIndex;
+                    else
+                        hazardDomainReaders[state.readerTail].next = nodeIndex;
+                    state.readerTail = nodeIndex;
+                }
+                continue;
+            }
+
+            if(resourceAccesses.empty()){
+                resourceAccesses.resize(resourceCount);
+                writers.reserve(potentialAccessCount);
+                readers.reserve(potentialAccessCount);
+            }
             Expected<GpuTaskResourceRange> plannedRange = use.range;
             if(resourceType == GpuGraphResourceType::Buffer){
                 const GpuTaskGraphDetail::GpuGraphResourceNode& resource = CompilerGraphAccess::ResourceNode(graph, use.resource.index);

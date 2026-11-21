@@ -93,6 +93,10 @@ b8 CommandList::validateTextureForGpuState(Texture* const texture, const Resourc
 b8 CommandList::validateBufferForGpuState(Buffer* const buffer, const ResourceStates::Mask requiredState, const TStringView operationName, const VkBufferUsageFlags explicitRequiredUsage){
     if(!publicCommandStateAccessible())
         return false;
+    return validateBufferForGpuStateValidated(buffer, requiredState, operationName, explicitRequiredUsage);
+}
+
+b8 CommandList::validateBufferForGpuStateValidated(Buffer* const buffer, const ResourceStates::Mask requiredState, const TStringView operationName, const VkBufferUsageFlags explicitRequiredUsage){
     if(!VulkanBufferDetail::IsBufferResourceStateMaskValid(requiredState)){
         rejectCommandRecording(operationName, FOUNDATION_TEXT("state is invalid for a buffer"));
         return false;

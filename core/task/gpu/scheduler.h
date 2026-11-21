@@ -107,6 +107,7 @@ public:
     GpuTaskScheduler()noexcept = default;
     explicit GpuTaskScheduler(Device& device)noexcept
         : m_device(&device)
+        , m_deviceLifecycleState(s_DeviceAttachedBit)
     {}
 
 
@@ -270,7 +271,10 @@ private:
     [[nodiscard]] Device& device()const noexcept;
     [[nodiscard]] b8 recordPacketRange(
         const GpuTaskGraph& graph,
+        const GpuTaskGraph::DeclarationReadView& declarationAccess,
         const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        const GpuRecordedGraph::ArtifactOperation& artifactOperation,
         const GpuNativePacketRecorder& recorder,
         const GpuSubmissionPacketRange& range,
         CpuTaskScheduler* readyFrontierScheduler,
@@ -305,8 +309,11 @@ private:
         GpuGraphSubmissionTransaction& transaction
     )const;
     [[nodiscard]] b8 submitPacketRangeWithinSubmissionOperation(
+        const GpuTaskGraph::DeclarationReadView& declarationAccess,
         const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
         const GpuRecordedGraph& recordedGraph,
+        const GpuRecordedGraph::ArtifactOperation& artifactOperation,
         const GpuSubmissionPacketRange& range,
         Span<const GpuTaskGraphTaskTimingTicket> taskTimingTickets,
         Span<const GpuTaskGraphTaskAcceptedCallback> taskAcceptedCallbacks,
@@ -350,9 +357,12 @@ private:
 
 
 private:
+    static constexpr u32 s_DeviceAttachedBit = 1u << 31u;
+    static constexpr u32 s_DeviceActiveOpMask = s_DeviceAttachedBit - 1u;
+
     Device* m_device = nullptr;
     mutable Futex m_lifecycleMutex;
-    mutable usize m_activeOperations = 0u;
+    mutable Atomic<u32> m_deviceLifecycleState{ 0u };
 };
 
 

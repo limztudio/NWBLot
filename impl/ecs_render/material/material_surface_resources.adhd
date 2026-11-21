@@ -48,22 +48,25 @@ void LogIncompatibleTexture2dDimension(in Name assetPath){
 Expected<u32> ResolveTextureAssetSlot(mut RendererMaterialResourceState resources, in AssetRef<Texture> asset, mut GraphicsRuntime graphics, in AssetManager assetManager){
     assert(asset.valid());
     const Name path = asset.name();
-    if(resources.textureAssetCache.find(path) == resources.textureAssetCache.end()){
-        UniquePtr<TextureGpuResource> candidate = MakeUnique<TextureGpuResource>();
-        mut GpuDescriptorHeap heap = graphics.getDevice().getDescriptorHeap();
-        GpuDescriptorRetirementGuard loading(heap, candidate.deref().sampledImageHeapHandle);
-        if(!LoadTextureGpuResource(asset, path, s_RendererAssetOwnerName, graphics, assetManager, candidate.deref()))
-            return MakeUnexpected(Failure());
-        if(candidate.deref().sampledImageHeapHandle.descriptorClass() != GpuDescriptorClass::SampledImage){
-            LogIncompatibleTexture2dDimension(path);
-            return MakeUnexpected(Failure());
-        }
-        const GpuDescriptorHandle pending = candidate.deref().sampledImageHeapHandle;
-        GpuDescriptorRetirementGuard unpublished(heap, pending);
-        loading.release();
-        if(TryEmplaceOwned<UniquePtr<TextureGpuResource>>(resources.textureAssetCache, path, candidate))
-            unpublished.release();
+    const auto existing = resources.textureAssetCache.find(path);
+    if(existing != resources.textureAssetCache.end()){
+        assert(existing.value().deref().valid() && existing.value().deref().sampledImageHeapHandle.descriptorClass() == GpuDescriptorClass::SampledImage);
+        return existing.value().deref().sampledImageHeapHandle.slot();
     }
+    UniquePtr<TextureGpuResource> candidate = MakeUnique<TextureGpuResource>();
+    mut GpuDescriptorHeap heap = graphics.getDevice().getDescriptorHeap();
+    GpuDescriptorRetirementGuard loading(heap, candidate.deref().sampledImageHeapHandle);
+    if(!LoadTextureGpuResource(asset, path, s_RendererAssetOwnerName, graphics, assetManager, candidate.deref()))
+        return MakeUnexpected(Failure());
+    if(candidate.deref().sampledImageHeapHandle.descriptorClass() != GpuDescriptorClass::SampledImage){
+        LogIncompatibleTexture2dDimension(path);
+        return MakeUnexpected(Failure());
+    }
+    const GpuDescriptorHandle pending = candidate.deref().sampledImageHeapHandle;
+    GpuDescriptorRetirementGuard unpublished(heap, pending);
+    loading.release();
+    if(TryEmplaceOwned<UniquePtr<TextureGpuResource>>(resources.textureAssetCache, path, candidate))
+        unpublished.release();
     in TextureGpuResource resource = resources.textureAssetCache.at(path).deref();
     assert(resource.valid() && resource.sampledImageHeapHandle.descriptorClass() == GpuDescriptorClass::SampledImage);
     return resource.sampledImageHeapHandle.slot();
@@ -73,18 +76,21 @@ Expected<u32> ResolveTextureAssetSlot(mut RendererMaterialResourceState resource
 Expected<u32> ResolveSamplerAssetSlot(mut RendererMaterialResourceState resources, in AssetRef<Sampler> asset, mut GraphicsRuntime graphics, in AssetManager assetManager){
     assert(asset.valid());
     const Name path = asset.name();
-    if(resources.samplerAssetCache.find(path) == resources.samplerAssetCache.end()){
-        UniquePtr<SamplerGpuResource> candidate = MakeUnique<SamplerGpuResource>();
-        mut GpuDescriptorHeap heap = graphics.getDevice().getDescriptorHeap();
-        GpuDescriptorRetirementGuard loading(heap, candidate.deref().samplerHeapHandle);
-        if(!LoadSamplerGpuResource(asset, path, s_RendererAssetOwnerName, graphics, assetManager, candidate.deref()))
-            return MakeUnexpected(Failure());
-        const GpuDescriptorHandle pending = candidate.deref().samplerHeapHandle;
-        GpuDescriptorRetirementGuard unpublished(heap, pending);
-        loading.release();
-        if(TryEmplaceOwned<UniquePtr<SamplerGpuResource>>(resources.samplerAssetCache, path, candidate))
-            unpublished.release();
+    const auto existing = resources.samplerAssetCache.find(path);
+    if(existing != resources.samplerAssetCache.end()){
+        assert(existing.value().deref().valid() && existing.value().deref().samplerHeapHandle.descriptorClass() == GpuDescriptorClass::Sampler);
+        return existing.value().deref().samplerHeapHandle.slot();
     }
+    UniquePtr<SamplerGpuResource> candidate = MakeUnique<SamplerGpuResource>();
+    mut GpuDescriptorHeap heap = graphics.getDevice().getDescriptorHeap();
+    GpuDescriptorRetirementGuard loading(heap, candidate.deref().samplerHeapHandle);
+    if(!LoadSamplerGpuResource(asset, path, s_RendererAssetOwnerName, graphics, assetManager, candidate.deref()))
+        return MakeUnexpected(Failure());
+    const GpuDescriptorHandle pending = candidate.deref().samplerHeapHandle;
+    GpuDescriptorRetirementGuard unpublished(heap, pending);
+    loading.release();
+    if(TryEmplaceOwned<UniquePtr<SamplerGpuResource>>(resources.samplerAssetCache, path, candidate))
+        unpublished.release();
     in SamplerGpuResource resource = resources.samplerAssetCache.at(path).deref();
     assert(resource.valid() && resource.samplerHeapHandle.descriptorClass() == GpuDescriptorClass::Sampler);
     return resource.samplerHeapHandle.slot();
@@ -215,9 +221,10 @@ Expected<mut MaterialSurfaceInfo> RendererMaterialSystem::createMaterialSurfaceI
     if(!ResolveMaterialResourceReferences(createdInfo, this.m_materialState.m_resourceState, this.m_graphics, this.m_assetManager))
         return MakeUnexpected(Failure());
 
-    if(TryEmplaceOwned<MaterialSurfaceInfo>(this.m_materialState.m_surfaceInfos, materialPath, createdInfo))
-        assert(this.m_materialState.m_surfaceInfos.at(materialPath).resourceReferencesResolved);
+    const b8 inserted = TryEmplaceOwned<MaterialSurfaceInfo>(this.m_materialState.m_surfaceInfos, materialPath, createdInfo);
     mut MaterialSurfaceInfo stored = this.m_materialState.m_surfaceInfos.at(materialPath);
+    if(inserted)
+        assert(stored.resourceReferencesResolved);
     return Expected<mut MaterialSurfaceInfo>(stored);
 }
 
@@ -232,13 +239,28 @@ Expected<mut MaterialSurfaceInfo> RendererMaterialSystem::findMaterialSurfaceInf
 }
 
 [cpp_unwind]
+void PrepareVisibleMaterialInstanceMutableCacheRow(
+    mut RendererMaterialSystem system,
+    in EntityID entity,
+    in RendererComponent renderer,
+    in MaterialInstanceComponent instance
+){
+    if(!renderer.visible || instance.overrides.empty())
+        return;
+    const auto surfaceInfo = system.findMaterialSurfaceInfo(renderer.material);
+    if(!surfaceInfo.has_value())
+        return;
+    if(!system.prepareMaterialInstanceMutableTypedBytes(entity, surfaceInfo.value(), Optional<in MaterialInstanceComponent>(instance)).has_value())
+        return;
+}
+
+[cpp_unwind]
 b8 RendererMaterialSystem::prepareVisibleMaterialSurfaceInfos(){
     b8 transparent = false;
     for(in auto row : this.m_world.view<RendererComponent>()){
-        in RendererComponent renderer = this.m_world.getComponent<RendererComponent>(Get<0>(row));
-        if(!renderer.visible)
+        if(!Get<1>(row).visible)
             continue;
-        const auto surfaceInfo = this.createMaterialSurfaceInfo(renderer.material);
+        const auto surfaceInfo = this.createMaterialSurfaceInfo(Get<1>(row).material);
         if(surfaceInfo.has_value() && surfaceInfo.value().transparent)
             transparent = true;
     }
@@ -248,33 +270,20 @@ b8 RendererMaterialSystem::prepareVisibleMaterialSurfaceInfos(){
 [cpp_unwind]
 void RendererMaterialSystem::prepareVisibleMaterialInstanceMutableCache(){
     this.m_materialState.m_instanceMutableCache.prune(this.m_world);
-    for(in auto row : this.m_world.view<RendererComponent>()){
-        const EntityID entity = Get<0>(row);
-        in RendererComponent renderer = this.m_world.getComponent<RendererComponent>(entity);
-        if(!renderer.visible || !this.m_world.hasComponent<MaterialInstanceComponent>(entity))
-            continue;
-        in MaterialInstanceComponent instance = this.m_world.getComponent<MaterialInstanceComponent>(entity);
-        if(instance.overrides.empty())
-            continue;
-        const auto surfaceInfo = this.findMaterialSurfaceInfo(renderer.material);
-        if(!surfaceInfo.has_value())
-            continue;
-        if(!this.prepareMaterialInstanceMutableTypedBytes(entity, surfaceInfo.value(), Optional<in MaterialInstanceComponent>(instance)).has_value())
-            continue;
-    }
+    for(in auto row : this.m_world.view<RendererComponent, MaterialInstanceComponent>())
+        PrepareVisibleMaterialInstanceMutableCacheRow(this, Get<0>(row), Get<1>(row), Get<2>(row));
 }
 
 [cpp_unwind]
 b8 RendererMaterialSystem::hasTransparentRenderers(in RendererResourceLookupMode lookupMode){
     for(in auto row : this.m_world.view<RendererComponent>()){
-        in RendererComponent renderer = this.m_world.getComponent<RendererComponent>(Get<0>(row));
-        if(!renderer.visible)
+        if(!Get<1>(row).visible)
             continue;
         Expected<mut MaterialSurfaceInfo> surfaceInfo = MakeUnexpected(Failure());
         if(lookupMode == RendererResourceLookupMode::CreateMissing)
-            surfaceInfo = this.createMaterialSurfaceInfo(renderer.material);
+            surfaceInfo = this.createMaterialSurfaceInfo(Get<1>(row).material);
         else
-            surfaceInfo = this.findMaterialSurfaceInfo(renderer.material);
+            surfaceInfo = this.findMaterialSurfaceInfo(Get<1>(row).material);
         if(surfaceInfo.has_value() && surfaceInfo.value().transparent)
             return true;
     }
@@ -294,17 +303,17 @@ Expected<Span<u8>> RendererMaterialSystem::findPreparedMaterialInstanceMutableTy
 void RendererMaterialSystem::releaseMaterialResourceReferences(){
     mut RendererMaterialResourceState resources = this.m_materialState.m_resourceState;
     for(auto it = resources.textureAssetCache.begin(); it != resources.textureAssetCache.end(); ++it){
-        mut TextureGpuResource gpu = resources.textureAssetCache.at(it.key()).deref();
+        mut TextureGpuResource gpu = it.value().deref();
         ReleaseTextureGpuResource(this.m_graphics, gpu);
     }
     resources.textureAssetCache.clear();
     for(auto it = resources.samplerAssetCache.begin(); it != resources.samplerAssetCache.end(); ++it){
-        mut SamplerGpuResource gpu = resources.samplerAssetCache.at(it.key()).deref();
+        mut SamplerGpuResource gpu = it.value().deref();
         ReleaseSamplerGpuResource(this.m_graphics, gpu);
     }
     resources.samplerAssetCache.clear();
     for(auto it = this.m_materialState.m_surfaceInfos.begin(); it != this.m_materialState.m_surfaceInfos.end(); ++it){
-        mut MaterialSurfaceInfo surfaceInfo = this.m_materialState.m_surfaceInfos.at(it.key());
+        mut MaterialSurfaceInfo surfaceInfo = it.value();
         surfaceInfo.constantTypedBytes = surfaceInfo.unpatchedConstantTypedBytes;
         surfaceInfo.resourceReferencesResolved = false;
     }

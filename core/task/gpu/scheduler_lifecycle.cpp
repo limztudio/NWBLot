@@ -19,21 +19,22 @@ NWB_CORE_BEGIN
 GpuTaskScheduler::DeviceOperation::DeviceOperation(const GpuTaskScheduler& scheduler)noexcept
     : m_scheduler(scheduler)
 {
-    NothrowScopedLock lock(m_scheduler.m_lifecycleMutex);
-
-    if(!m_scheduler.m_device)
-        return;
-    ++m_scheduler.m_activeOperations;
-    m_admitted = true;
+    u32 state = m_scheduler.m_deviceLifecycleState.load(MemoryOrder::acquire);
+    while((state & s_DeviceAttachedBit) != 0u){
+        FOUNDATION_FATAL_ASSERT_MSG((state & s_DeviceActiveOpMask) < s_DeviceActiveOpMask, "GPU task scheduler active device operation count overflowed");
+        if(m_scheduler.m_deviceLifecycleState.compare_exchange_weak(state, state + 1u, MemoryOrder::acq_rel, MemoryOrder::acquire)){
+            m_admitted = true;
+            return;
+        }
+    }
 }
 
 GpuTaskScheduler::DeviceOperation::~DeviceOperation()noexcept{
     if(!m_admitted)
         return;
-    NothrowScopedLock lock(m_scheduler.m_lifecycleMutex);
 
-    FOUNDATION_ASSERT(m_scheduler.m_activeOperations != 0u);
-    --m_scheduler.m_activeOperations;
+    const u32 previous = m_scheduler.m_deviceLifecycleState.fetch_sub(1u, MemoryOrder::release);
+    FOUNDATION_ASSERT((previous & s_DeviceAttachedBit) != 0u && (previous & s_DeviceActiveOpMask) != 0u);
 }
 
 
@@ -46,13 +47,17 @@ b8 GpuTaskScheduler::attachDevice(Device& device)noexcept{
     if(m_device)
         return m_device == &device;
     m_device = &device;
+    m_deviceLifecycleState.store(s_DeviceAttachedBit, MemoryOrder::release);
     return true;
 }
 
 b8 GpuTaskScheduler::detachDevice(Device& device)noexcept{
     NothrowScopedLock lock(m_lifecycleMutex);
 
-    if(m_device != &device || m_activeOperations != 0u)
+    if(m_device != &device)
+        return false;
+    u32 expected = s_DeviceAttachedBit;
+    if(!m_deviceLifecycleState.compare_exchange_strong(expected, 0u, MemoryOrder::acq_rel, MemoryOrder::acquire))
         return false;
     m_device = nullptr;
     return true;

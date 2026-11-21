@@ -69,7 +69,13 @@ b8 GpuTaskGraph::destroyTaskPayloads(){
     {
         ScopedLock lock(m_lifecycleMutex);
         const u64 admissionState = m_declarationAdmissionState.load(MemoryOrder::acquire);
-        if((admissionState & s_AdmissionTeardownBit) == 0u || (admissionState & (s_AdmissionWriterMask | s_AdmissionReaderMask)) != 0u || m_activeDiscardNotificationCount != 0u || m_submissionBindingState == SubmissionBindingState::Active)
+        if(
+            (admissionState & s_AdmissionTeardownBit) == 0u
+            || (admissionState & s_AdmissionWriterMask) != 0u
+            || ((admissionState & s_AdmissionReaderStripesDirtyBit) != 0u && hasAnyActiveDeclarationReader(MemoryOrder::seq_cst))
+            || m_activeDiscardNotificationCount != 0u
+            || m_submissionBindingState == SubmissionBindingState::Active
+        )
             return false;
         for(const GpuTaskNode& task : m_tasks){
             const TaskLifecycleState::Enum state = task.lifecycleState();
@@ -110,7 +116,13 @@ b8 GpuTaskGraph::destroyTaskPayloadsWithoutCallbacks()noexcept{
     {
         NothrowScopedLock lock(m_lifecycleMutex);
         const u64 admissionState = m_declarationAdmissionState.load(MemoryOrder::acquire);
-        if((admissionState & s_AdmissionTeardownBit) == 0u || (admissionState & (s_AdmissionWriterMask | s_AdmissionReaderMask)) != 0u || m_activeDiscardNotificationCount != 0u || m_submissionBindingState == SubmissionBindingState::Active)
+        if(
+            (admissionState & s_AdmissionTeardownBit) == 0u
+            || (admissionState & s_AdmissionWriterMask) != 0u
+            || ((admissionState & s_AdmissionReaderStripesDirtyBit) != 0u && hasAnyActiveDeclarationReader(MemoryOrder::seq_cst))
+            || m_activeDiscardNotificationCount != 0u
+            || m_submissionBindingState == SubmissionBindingState::Active
+        )
             return false;
         for(const GpuTaskNode& task : m_tasks){
             const TaskLifecycleState::Enum state = task.lifecycleState();

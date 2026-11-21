@@ -13,6 +13,45 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void TryAppendCoincidentOpticalVolumeCandidate(
+    mut World world,
+    in MeshSystem meshSystem,
+    mut IPreparedMaterialLookup materials,
+    in EntityID entity,
+    in RendererComponent renderer,
+    mut Vector<CoincidentOpticalVolumeCandidate> candidates
+){
+    if(!RendererComponentOpticalVolumeMergingEnabled(renderer))
+        return;
+    const Expected<mut MaterialSurfaceInfo> material = materials.findMaterialSurfaceInfo(renderer.material);
+    if(!material.has_value())
+        return;
+    const b8 closed = OpticalBoundaryModeIsClosed(renderer.opticalBoundaryMode);
+    if(!MaterialParticipatesInOpticalVolumeSelection(material.value().transparent, material.value().refractive, closed))
+        return;
+    const auto mesh = meshSystem.resolveRenderableMeshStatus(entity);
+    if(!mesh.has_value() || mesh.value().runtime || !mesh.value().mesh.valid())
+        return;
+    if(world.hasComponent<StaticCsgMeshComponent>(entity) || world.hasComponent<SkinnedCsgMeshComponent>(entity) || world.hasComponent<CsgReceiverComponent>(entity))
+        return;
+
+    Optional<in MaterialInstanceComponent> materialInstance;
+    const Optional<mut MaterialInstanceComponent> borrowedInstance = world.borrowComponent<MaterialInstanceComponent>(entity);
+    if(borrowedInstance.has_value())
+        materialInstance.emplace(borrowedInstance.value());
+    const auto bytes = materials.findPreparedMaterialInstanceMutableTypedBytes(entity, material.value(), materialInstance);
+    if(!bytes.has_value())
+        return;
+    CoincidentOpticalVolumeCandidate candidate = MakeCoincidentOpticalVolumeCandidate(entity, mesh.value().mesh, renderer, bytes.value());
+    const Optional<mut TransformComponent> borrowedTransform = world.borrowComponent<TransformComponent>(entity);
+    if(borrowedTransform.has_value()){
+        candidate.position = borrowedTransform.value().position;
+        candidate.rotation = borrowedTransform.value().rotation;
+        candidate.scale = borrowedTransform.value().scale;
+    }
+    candidates.push_back(candidate);
+}
+
 class RendererOpticalVolumeSelection : NoCopy{
     private HashSet<EntityID> m_suppressed;
 
@@ -27,7 +66,7 @@ class RendererOpticalVolumeSelection : NoCopy{
 
         usize candidateCapacity = 0u;
         for(in auto row : world.view<RendererComponent>()){
-            if(RendererComponentOpticalVolumeMergingEnabled(world.getComponent<RendererComponent>(Get<0>(row))))
+            if(RendererComponentOpticalVolumeMergingEnabled(Get<1>(row)))
                 ++candidateCapacity;
         }
         if(candidateCapacity < s_MinCoincidentCandidateCount){
@@ -37,38 +76,8 @@ class RendererOpticalVolumeSelection : NoCopy{
 
         Vector<CoincidentOpticalVolumeCandidate> candidates;
         candidates.reserve(candidateCapacity);
-        for(in auto row : world.view<RendererComponent>()){
-            const EntityID entity = Get<0>(row);
-            in RendererComponent renderer = world.getComponent<RendererComponent>(entity);
-            if(!RendererComponentOpticalVolumeMergingEnabled(renderer))
-                continue;
-            const Expected<mut MaterialSurfaceInfo> material = materials.findMaterialSurfaceInfo(renderer.material);
-            if(!material.has_value())
-                continue;
-            const b8 closed = OpticalBoundaryModeIsClosed(renderer.opticalBoundaryMode);
-            if(!MaterialParticipatesInOpticalVolumeSelection(material.value().transparent, material.value().refractive, closed))
-                continue;
-            const auto mesh = meshSystem.value().resolveRenderableMeshStatus(entity);
-            if(!mesh.has_value() || mesh.value().runtime || !mesh.value().mesh.valid())
-                continue;
-            if(world.hasComponent<StaticCsgMeshComponent>(entity) || world.hasComponent<SkinnedCsgMeshComponent>(entity) || world.hasComponent<CsgReceiverComponent>(entity))
-                continue;
-
-            Optional<in MaterialInstanceComponent> materialInstance;
-            if(world.hasComponent<MaterialInstanceComponent>(entity))
-                materialInstance = Optional<in MaterialInstanceComponent>(world.getComponent<MaterialInstanceComponent>(entity));
-            const auto bytes = materials.findPreparedMaterialInstanceMutableTypedBytes(entity, material.value(), materialInstance);
-            if(!bytes.has_value())
-                continue;
-            CoincidentOpticalVolumeCandidate candidate = MakeCoincidentOpticalVolumeCandidate(entity, mesh.value().mesh, renderer, bytes.value());
-            if(world.hasComponent<TransformComponent>(entity)){
-                in TransformComponent transform = world.getComponent<TransformComponent>(entity);
-                candidate.position = transform.position;
-                candidate.rotation = transform.rotation;
-                candidate.scale = transform.scale;
-            }
-            candidates.push_back(candidate);
-        }
+        for(in auto row : world.view<RendererComponent>())
+            TryAppendCoincidentOpticalVolumeCandidate(world, meshSystem.value(), materials, Get<0>(row), Get<1>(row), candidates);
         this.select(Span<CoincidentOpticalVolumeCandidate>(candidates));
     }
 

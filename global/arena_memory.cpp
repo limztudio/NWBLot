@@ -20,10 +20,17 @@ struct ArenaMemoryOwnerRecord{
     ArenaMemoryTracker* liveTrackers = nullptr;
     const ArenaMemoryOwnerRecord* next = nullptr;
     ArenaMemoryOwnerRecord* bucketNext = nullptr;
+    mutable Futex mutex;
     ArenaMemorySource::Enum source = ArenaMemorySource::Arena;
 
 
 public:
+    constexpr ArenaMemoryOwnerRecord()noexcept = default;
+    constexpr ArenaMemoryOwnerRecord(const Name& owner, const ArenaMemorySource::Enum src)noexcept
+        : ownerName(owner)
+        , source(src)
+    {}
+
     void attach(ArenaMemoryTracker& tracker)noexcept;
     void retire(ArenaMemoryTracker& tracker)noexcept;
     [[nodiscard]] ArenaMemoryStats snapshot()const noexcept;
@@ -42,10 +49,10 @@ namespace __hidden_arena_memory{
 inline constexpr usize s_OwnerBucketCount = 256u;
 inline constexpr usize s_HeapShardPadBytes = 80u;
 inline constexpr usize s_HeapShardMinBytes = 128u;
-static constinit ArenaMemoryOwnerRecord s_HeapBacking{ .ownerName = Name("global/arena_memory/heap_backing"), .source = ArenaMemorySource::HeapBacking, };
+static constinit ArenaMemoryOwnerRecord s_HeapBacking{ Name("global/arena_memory/heap_backing"), ArenaMemorySource::HeapBacking };
 static constinit Atomic<const ArenaMemoryOwnerRecord*> s_OwnerHead{ &s_HeapBacking };
 static MallocMutex s_OwnerMutex;
-static Array<ArenaMemoryOwnerRecord*, s_OwnerBucketCount> s_OwnerBuckets = {};
+static Array<Atomic<ArenaMemoryOwnerRecord*>, s_OwnerBucketCount> s_OwnerBuckets = {};
 
 struct HeapMemoryShard{
     Atomic<u64> allocatedBytes{ 0u };
@@ -80,7 +87,14 @@ void AccumulateStats(ArenaMemoryStats& total, const ArenaMemoryStats& contributi
 
 [[nodiscard]] ArenaMemoryOwnerRecord& FindOrCreateOwner(const Name& ownerName){
     const usize bucketIndex = Hasher<Name>{}(ownerName) % s_OwnerBucketCount;
-    for(ArenaMemoryOwnerRecord* record = s_OwnerBuckets[bucketIndex]; record; record = record->bucketNext){
+    for(ArenaMemoryOwnerRecord* record = s_OwnerBuckets[bucketIndex].load(MemoryOrder::acquire); record; record = record->bucketNext){
+        if(record->ownerName == ownerName)
+            return *record;
+    }
+
+    ScopedLock lock(s_OwnerMutex);
+    ArenaMemoryOwnerRecord* const bucketHead = s_OwnerBuckets[bucketIndex].load(MemoryOrder::relaxed);
+    for(ArenaMemoryOwnerRecord* record = bucketHead; record; record = record->bucketNext){
         if(record->ownerName == ownerName)
             return *record;
     }
@@ -91,8 +105,8 @@ void AccumulateStats(ArenaMemoryStats& total, const ArenaMemoryStats& contributi
     auto& record = *new(storage) ArenaMemoryOwnerRecord;
     record.ownerName = ownerName;
     record.next = s_OwnerHead.load(MemoryOrder::relaxed);
-    record.bucketNext = s_OwnerBuckets[bucketIndex];
-    s_OwnerBuckets[bucketIndex] = &record;
+    record.bucketNext = bucketHead;
+    s_OwnerBuckets[bucketIndex].store(&record, MemoryOrder::release);
     s_OwnerHead.store(&record, MemoryOrder::release);
     return record;
 }
@@ -161,16 +175,18 @@ ArenaMemoryStats ArenaMemoryOwnerRecord::snapshot()const noexcept{
 ArenaMemoryTracker::ArenaMemoryTracker(const Name& ownerName, const ArenaMemoryReservation::Enum reservation)
     : m_reservation(reservation)
 {
-    ScopedLock lock(__hidden_arena_memory::s_OwnerMutex);
-    __hidden_arena_memory::FindOrCreateOwner(ownerName).attach(*this);
+    auto& owner = __hidden_arena_memory::FindOrCreateOwner(ownerName);
+    NothrowScopedLock lock(owner.mutex);
+    owner.attach(*this);
 }
 
 ArenaMemoryTracker::~ArenaMemoryTracker()noexcept{
     if(!m_owner)
         return;
 
-    ScopedLock lock(__hidden_arena_memory::s_OwnerMutex);
-    m_owner->retire(*this);
+    auto& owner = *m_owner;
+    NothrowScopedLock lock(owner.mutex);
+    owner.retire(*this);
 }
 
 void ArenaMemoryTracker::releaseRetainedMemory()noexcept{
@@ -180,16 +196,23 @@ void ArenaMemoryTracker::releaseRetainedMemory()noexcept{
 }
 
 void ArenaMemoryTracker::reset(const u64 reservedBytes)noexcept{
-    ScopedLock lock(__hidden_arena_memory::s_OwnerMutex);
-    releaseRetainedMemory();
-    if(m_owner)
-        __hidden_arena_memory::AccumulateStats(m_owner->retiredStats, snapshot());
-    m_reservedBytes.store(reservedBytes, MemoryOrder::relaxed);
-    m_usedBytes.store(0u, MemoryOrder::relaxed);
-    m_peakUsedBytes.store(0u, MemoryOrder::relaxed);
-    m_allocationCount.store(0u, MemoryOrder::relaxed);
-    m_reallocationCount.store(0u, MemoryOrder::relaxed);
-    m_deallocationCount.store(0u, MemoryOrder::relaxed);
+    const auto applyReset = [this, reservedBytes]()noexcept{
+        releaseRetainedMemory();
+        if(m_owner)
+            __hidden_arena_memory::AccumulateStats(m_owner->retiredStats, snapshot());
+        m_reservedBytes.store(reservedBytes, MemoryOrder::relaxed);
+        m_usedBytes.store(0u, MemoryOrder::relaxed);
+        m_peakUsedBytes.store(0u, MemoryOrder::relaxed);
+        m_allocationCount.store(0u, MemoryOrder::relaxed);
+        m_reallocationCount.store(0u, MemoryOrder::relaxed);
+        m_deallocationCount.store(0u, MemoryOrder::relaxed);
+    };
+    if(m_owner){
+        NothrowScopedLock lock(m_owner->mutex);
+        applyReset();
+        return;
+    }
+    applyReset();
 }
 
 void ArenaMemoryTracker::recordAllocation(const u64 bytes)noexcept{
@@ -269,7 +292,7 @@ const ArenaMemoryOwnerRecord* ReadArenaMemoryOwnerRecord(const ArenaMemoryOwnerR
     if(record.source == ArenaMemorySource::HeapBacking)
         outSnapshot.stats = HeapBackingMemoryStats();
     else{
-        ScopedLock lock(__hidden_arena_memory::s_OwnerMutex);
+        NothrowScopedLock lock(record.mutex);
         outSnapshot.stats = record.snapshot();
     }
     return record.next;
@@ -280,6 +303,11 @@ void RecordHeapMemoryAllocation(const u64 bytes)noexcept{
         return;
 
     auto& shard = __hidden_arena_memory::ThreadHeapShard();
+    if(&shard != &__hidden_arena_memory::s_HeapFallback){
+        shard.allocatedBytes.store(shard.allocatedBytes.load(MemoryOrder::relaxed) + bytes, MemoryOrder::relaxed);
+        shard.allocationCount.store(shard.allocationCount.load(MemoryOrder::relaxed) + 1u, MemoryOrder::relaxed);
+        return;
+    }
     shard.allocatedBytes.fetch_add(bytes, MemoryOrder::relaxed);
     shard.allocationCount.fetch_add(1u, MemoryOrder::relaxed);
 }
@@ -297,6 +325,14 @@ void RecordHeapMemoryReallocation(const u64 oldBytes, const u64 newBytes)noexcep
     }
 
     auto& shard = __hidden_arena_memory::ThreadHeapShard();
+    if(&shard != &__hidden_arena_memory::s_HeapFallback){
+        if(newBytes > oldBytes)
+            shard.allocatedBytes.store(shard.allocatedBytes.load(MemoryOrder::relaxed) + (newBytes - oldBytes), MemoryOrder::relaxed);
+        else if(oldBytes > newBytes)
+            shard.releasedBytes.store(shard.releasedBytes.load(MemoryOrder::relaxed) + (oldBytes - newBytes), MemoryOrder::relaxed);
+        shard.reallocationCount.store(shard.reallocationCount.load(MemoryOrder::relaxed) + 1u, MemoryOrder::relaxed);
+        return;
+    }
     if(newBytes > oldBytes)
         shard.allocatedBytes.fetch_add(newBytes - oldBytes, MemoryOrder::relaxed);
     else if(oldBytes > newBytes)
@@ -309,6 +345,11 @@ void RecordHeapMemoryDeallocation(const u64 bytes)noexcept{
         return;
 
     auto& shard = __hidden_arena_memory::ThreadHeapShard();
+    if(&shard != &__hidden_arena_memory::s_HeapFallback){
+        shard.releasedBytes.store(shard.releasedBytes.load(MemoryOrder::relaxed) + bytes, MemoryOrder::relaxed);
+        shard.deallocationCount.store(shard.deallocationCount.load(MemoryOrder::relaxed) + 1u, MemoryOrder::relaxed);
+        return;
+    }
     shard.releasedBytes.fetch_add(bytes, MemoryOrder::relaxed);
     shard.deallocationCount.fetch_add(1u, MemoryOrder::relaxed);
 }

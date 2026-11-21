@@ -49,6 +49,66 @@ inline constexpr TStringView s_MeshShaderUnavailableReason = FOUNDATION_TEXT("me
 inline constexpr u32 s_GraphicsExtraBufferStateCount = 2u;
 
 
+FOUNDATION_INLINE void CommandBufferResourceReferences::retainBuffer(Buffer& buffer){
+    if(m_lastRetainedBuffer == &buffer)
+        return;
+    GraphicsResource* const key = &buffer;
+    const CacheSlot& slot = m_cache[CacheSlotIndex(key)];
+    if(slot.resource == key && slot.generation == m_cacheGeneration && (slot.flags & (s_FlagOwned | s_FlagBuffer)) == (s_FlagOwned | s_FlagBuffer)){
+        m_lastRetainedResource = key;
+        m_lastRetainedBuffer = &buffer;
+        return;
+    }
+    retainBufferSlow(buffer);
+}
+
+FOUNDATION_INLINE void CommandBufferResourceReferences::trackRetainedBuffer(Buffer& buffer){
+    if(m_lastRetainedBuffer == &buffer)
+        return;
+    GraphicsResource* const key = &buffer;
+    const CacheSlot& slot = m_cache[CacheSlotIndex(key)];
+    if(slot.resource == key && slot.generation == m_cacheGeneration && (slot.flags & s_FlagBuffer) != 0u)
+        return;
+    trackRetainedBufferSlow(buffer);
+}
+
+FOUNDATION_INLINE void CommandBufferResourceReferences::retainTexture(Texture& texture){
+    if(m_lastRetainedTexture == &texture)
+        return;
+    GraphicsResource* const key = &texture;
+    const CacheSlot& slot = m_cache[CacheSlotIndex(key)];
+    if(slot.resource == key && slot.generation == m_cacheGeneration && (slot.flags & (s_FlagOwned | s_FlagTexture)) == (s_FlagOwned | s_FlagTexture)){
+        m_lastRetainedResource = key;
+        m_lastRetainedTexture = &texture;
+        return;
+    }
+    retainTextureSlow(texture);
+}
+
+FOUNDATION_INLINE void CommandBufferResourceReferences::trackRetainedTexture(Texture& texture){
+    if(m_lastRetainedTexture == &texture)
+        return;
+    GraphicsResource* const key = &texture;
+    const CacheSlot& slot = m_cache[CacheSlotIndex(key)];
+    if(slot.resource == key && slot.generation == m_cacheGeneration && (slot.flags & s_FlagTexture) != 0u)
+        return;
+    trackRetainedTextureSlow(texture);
+}
+
+FOUNDATION_INLINE void CommandBufferResourceReferences::retainFramebuffer(Framebuffer& framebuffer){
+    if(m_lastRetainedFramebuffer == &framebuffer)
+        return;
+    GraphicsResource* const key = &framebuffer;
+    const CacheSlot& slot = m_cache[CacheSlotIndex(key)];
+    if(slot.resource == key && slot.generation == m_cacheGeneration && (slot.flags & (s_FlagOwned | s_FlagFramebuffer)) == (s_FlagOwned | s_FlagFramebuffer)){
+        m_lastRetainedResource = key;
+        m_lastRetainedFramebuffer = &framebuffer;
+        return;
+    }
+    retainFramebufferSlow(framebuffer);
+}
+
+
 class CommandList final : public RefCounter<GraphicsResource>{
     friend class ::NWB::Core::GpuRecordedGraph;
     friend class ::NWB::Core::GpuTimingMeasure;
@@ -486,8 +546,9 @@ private:
     [[nodiscard]] b8 resolveTrackedTextureSubresources(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits, TStringView operationName, TextureSubresourceSet& outResolvedSubresources);
     [[nodiscard]] b8 validateTextureForGpuState(Texture* texture, ResourceStates::Mask requiredState, TStringView operationName, VkImageUsageFlags explicitRequiredUsage = 0u);
     [[nodiscard]] b8 validateBufferForGpuState(Buffer* buffer, ResourceStates::Mask requiredState, TStringView operationName, VkBufferUsageFlags explicitRequiredUsage = 0u);
+    [[nodiscard]] b8 validateBufferForGpuStateValidated(Buffer* buffer, ResourceStates::Mask requiredState, TStringView operationName, VkBufferUsageFlags explicitRequiredUsage = 0u);
     [[nodiscard]] static b8 CollectGraphicsBufferStates(const GraphicsState& state, GraphicsBufferStateTable& outTable)noexcept;
-    [[nodiscard]] b8 validateGraphicsState(const GraphicsState& state);
+    [[nodiscard]] b8 validateGraphicsState(const GraphicsState& state, GraphicsBufferStateTable& outRequiredBufferStates);
     [[nodiscard]] b8 validateMeshletState(const MeshletState& state);
     [[nodiscard]] b8 validateGraphicsDrawState(TStringView operationName, b8 indexed);
     [[nodiscard]] b8 validateGraphicsDrawArguments(const DrawArguments& arguments, b8 indexed, TStringView operationName);
@@ -501,16 +562,18 @@ private:
     void clearDirtyPipelineStates(u8 keepMask = 0u)noexcept;
     void updateActivePushConstantPipeline(u8 pipelineKind, VkPipelineLayout layout, u32 pushConstantBytes, GpuQueueCapability::Mask capability)noexcept;
     void setBufferStateValidated(Buffer& buffer, ResourceStates::Mask stateBits, b8 forceMemoryDependency, const BufferRange& resolvedRange);
-    void queueWriteBufferCopyAndBarrier(Buffer& buffer, VkBuffer srcVkBuf, u64 stagingOffset, u64 destOffsetBytes, u64 dataSize);
+    void queueWriteBufferCopyAndBarrier(Buffer& buffer, VkBuffer srcVkBuf, u64 stagingOffset, u64 destOffsetBytes, u64 dataSize, ResourceStates::Mask permanentState);
     void flushPendingBufferCopies()noexcept;
     void resetPendingBufferCopies()noexcept{
         m_pendingBufferCopyCount = 0u;
         m_pendingCopyBarrierCount = 0u;
+        m_pendingCopyMaxDstEnd = 0u;
         m_pendingCopySrc = VK_NULL_HANDLE;
         m_pendingCopyDst = VK_NULL_HANDLE;
         m_hasPendingBufferCopies = false;
     }
-    void setResourceStatesForGraphicsBuffers(const GraphicsState& state);
+    void setResourceStatesForFramebufferValidated(Framebuffer& framebuffer);
+    void setResourceStatesForGraphicsBuffers(const GraphicsBufferStateTable& requiredBufferStates);
     [[nodiscard]] b8 isTextureAdmittedToCommandQueue(const Texture& texture)const noexcept;
     [[nodiscard]] b8 isTextureReadyForCommandQueue(Texture* texture, VkImageUsageFlags requiredUsage = 0u)const noexcept;
     [[nodiscard]] b8 isBufferAdmittedToCommandQueue(const Buffer& buffer)const noexcept;
@@ -525,11 +588,29 @@ private:
     void appendHostReadbackBarriers();
     void registerHostReadbackBuffer(Buffer& buffer);
     void registerHostReadbackStagingTexture(StagingTexture& stagingTexture);
-    void retainResource(Buffer* resource);
-    void retainResource(Texture* resource);
-    void retainResource(Framebuffer* resource);
-    void retainResource(GraphicsResource* resource);
-    void retainStagingBuffer(Buffer& buffer);
+    FOUNDATION_INLINE void retainResource(Buffer* const resource){
+        if(resource)
+            m_currentCmdBuf->m_resourceReferences.retainBuffer(*resource);
+    }
+    FOUNDATION_INLINE void retainResource(Texture* const resource){
+        if(resource)
+            m_currentCmdBuf->m_resourceReferences.retainTexture(*resource);
+    }
+    FOUNDATION_INLINE void retainResource(Framebuffer* const resource){
+        if(resource)
+            m_currentCmdBuf->m_resourceReferences.retainFramebuffer(*resource);
+    }
+    FOUNDATION_INLINE void retainResource(GraphicsResource* const resource){
+        if(resource)
+            m_currentCmdBuf->m_resourceReferences.retainResource(*resource);
+    }
+    FOUNDATION_INLINE void retainStagingBuffer(Buffer& buffer){
+        const auto& stagingBuffers = m_currentCmdBuf->m_referencedStagingBuffers;
+        if(!stagingBuffers.empty() && stagingBuffers.back().get() == &buffer)
+            return;
+        retainStagingBufferSlow(buffer);
+    }
+    void retainStagingBufferSlow(Buffer& buffer);
     void bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const ComputePipeline& pipeline, GpuDescriptorHandle accelStructHandle);
     void bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const GraphicsPipeline& pipeline);
     void bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const MeshletPipeline& pipeline);
@@ -640,6 +721,16 @@ private:
         b8 instanceRate = false;
     };
 
+    struct CachedDescriptorBufferOffsets{
+        VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+        u64 descriptorGeneration = 0u;
+        VkDeviceSize resourceOffset = 0u;
+        VkDeviceSize samplerOffset = 0u;
+        VkDeviceSize accelStructOffset = 0u;
+        b8 hasAccelStruct = false;
+        b8 valid = false;
+    };
+
     static constexpr usize s_MaxPendingBufferCopies = 64u;
     static constexpr u8 s_DirtyGraphicsState = 1u << 0u;
     static constexpr u8 s_DirtyComputeState = 1u << 1u;
@@ -684,11 +775,14 @@ private:
     GpuQueueCapability::Mask m_activePipelineRequiredCapability = GpuQueueCapability::None;
     u32 m_activePipelinePushConstantBytes = 0u;
     VkPipelineLayout m_activePipelineLayout = VK_NULL_HANDLE;
+    Array<CachedDescriptorBufferOffsets, 3u> m_boundDescriptorBufferOffsets{};
     u32 m_resolvedVertexBindingCount = 0u;
     Array<ResolvedVertexBinding, s_MaxVertexAttributes> m_resolvedVertexBindings{};
     u64 m_lastSubmitBatchStamp = 0u;
+    u64 m_lastExecuteBatchStamp = 0u;
     u64 m_nativeRecordingID = 0u;
     u64 m_nextMarkerSerial = 0u;
+    u64 m_pendingCopyMaxDstEnd = 0u;
     GraphicsVector<MarkerStackEntry> m_markerStack;
     Framebuffer* m_renderPassFramebuffer = nullptr;
 #if defined(NWB_DEBUG)

@@ -45,7 +45,7 @@ b8 CommandList::CollectGraphicsBufferStates(const GraphicsState& state, Graphics
     return addRequiredBufferState(state.indexBuffer.buffer, ResourceStates::IndexBuffer) && addRequiredBufferState(state.indirectParams, ResourceStates::IndirectArgument);
 }
 
-b8 CommandList::validateGraphicsState(const GraphicsState& state){
+b8 CommandList::validateGraphicsState(const GraphicsState& state, GraphicsBufferStateTable& outRequiredBufferStates){
     if(state.pipeline && &state.pipeline->m_context != &m_context){
         rejectCommandRecording(s_SetGraphicsStateOperation, FOUNDATION_TEXT("graphics pipeline belongs to another device"));
         return false;
@@ -123,15 +123,14 @@ b8 CommandList::validateGraphicsState(const GraphicsState& state){
         return false;
     }
 
-    GraphicsBufferStateTable requiredBufferStates{};
-    if(!CollectGraphicsBufferStates(state, requiredBufferStates)){
+    if(!CollectGraphicsBufferStates(state, outRequiredBufferStates)){
         rejectCommandRecording(s_SetGraphicsStateOperation, s_NativeBufferAliasReason);
         return false;
     }
 
-    for(u32 stateIndex = 0u; stateIndex < requiredBufferStates.count; ++stateIndex){
-        const GraphicsBufferStateEntry& requiredBufferState = requiredBufferStates.entries[stateIndex];
-        if(!validateBufferForGpuState(requiredBufferState.buffer, requiredBufferState.state, s_SetGraphicsStateOperation))
+    for(u32 stateIndex = 0u; stateIndex < outRequiredBufferStates.count; ++stateIndex){
+        const GraphicsBufferStateEntry& requiredBufferState = outRequiredBufferStates.entries[stateIndex];
+        if(!validateBufferForGpuStateValidated(requiredBufferState.buffer, requiredBufferState.state, s_SetGraphicsStateOperation))
             return false;
     }
     return true;
@@ -179,7 +178,7 @@ b8 CommandList::validateMeshletState(const MeshletState& state){
         rejectCommandRecording(s_SetMeshletStateOperation, FOUNDATION_TEXT("mesh indirect-argument buffer is invalid"));
         return false;
     }
-    if(state.indirectParams && !validateBufferForGpuState(state.indirectParams, ResourceStates::IndirectArgument, s_SetMeshletStateOperation))
+    if(state.indirectParams && !validateBufferForGpuStateValidated(state.indirectParams, ResourceStates::IndirectArgument, s_SetMeshletStateOperation))
         return false;
     return true;
 }

@@ -66,6 +66,58 @@ public:
             m_reservedBytes.fetch_sub(bytes, MemoryOrder::relaxed);
     }
 
+    void addReservedBytesSingleThread(const u64 bytes)noexcept{
+        if(bytes != 0u)
+            m_reservedBytes.store(m_reservedBytes.load(MemoryOrder::relaxed) + bytes, MemoryOrder::relaxed);
+    }
+
+    void removeReservedBytesSingleThread(const u64 bytes)noexcept{
+        if(bytes != 0u)
+            m_reservedBytes.store(m_reservedBytes.load(MemoryOrder::relaxed) - bytes, MemoryOrder::relaxed);
+    }
+
+    FOUNDATION_INLINE void recordAllocationSingleThread(const u64 bytes)noexcept{
+        if(bytes == 0u)
+            return;
+
+        const u64 usedBytes = m_usedBytes.load(MemoryOrder::relaxed) + bytes;
+        m_usedBytes.store(usedBytes, MemoryOrder::relaxed);
+        if(usedBytes > m_peakUsedBytes.load(MemoryOrder::relaxed))
+            m_peakUsedBytes.store(usedBytes, MemoryOrder::relaxed);
+        m_allocationCount.store(m_allocationCount.load(MemoryOrder::relaxed) + 1u, MemoryOrder::relaxed);
+    }
+
+    FOUNDATION_INLINE void recordReallocationSingleThread(const u64 oldBytes, const u64 newBytes)noexcept{
+        if(oldBytes == 0u && newBytes == 0u)
+            return;
+        if(oldBytes == 0u){
+            recordAllocationSingleThread(newBytes);
+            return;
+        }
+        if(newBytes == 0u){
+            recordDeallocationSingleThread(oldBytes);
+            return;
+        }
+
+        u64 usedBytes = m_usedBytes.load(MemoryOrder::relaxed);
+        if(newBytes >= oldBytes)
+            usedBytes += newBytes - oldBytes;
+        else
+            usedBytes -= oldBytes - newBytes;
+        m_usedBytes.store(usedBytes, MemoryOrder::relaxed);
+        if(usedBytes > m_peakUsedBytes.load(MemoryOrder::relaxed))
+            m_peakUsedBytes.store(usedBytes, MemoryOrder::relaxed);
+        m_reallocationCount.store(m_reallocationCount.load(MemoryOrder::relaxed) + 1u, MemoryOrder::relaxed);
+    }
+
+    FOUNDATION_INLINE void recordDeallocationSingleThread(const u64 bytes)noexcept{
+        if(bytes == 0u)
+            return;
+
+        m_usedBytes.store(m_usedBytes.load(MemoryOrder::relaxed) - bytes, MemoryOrder::relaxed);
+        m_deallocationCount.store(m_deallocationCount.load(MemoryOrder::relaxed) + 1u, MemoryOrder::relaxed);
+    }
+
     void recordAllocation(u64 bytes)noexcept;
     void recordReallocation(u64 oldBytes, u64 newBytes)noexcept;
     void recordDeallocation(u64 bytes)noexcept;

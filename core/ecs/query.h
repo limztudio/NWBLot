@@ -37,12 +37,18 @@ struct ViewTupleAccess{
     }
 
     template<usize I, typename... Ts>
-    static Expected<u32> FindDenseIndex(const Tuple<ComponentPool<Ts>*...>& pools, usize anchorPoolIndex, usize anchorDenseIndex, EntityID entityId)noexcept{
+    static FOUNDATION_INLINE u32 FindDenseIndexRaw(const Tuple<ComponentPool<Ts>*...>& pools, usize anchorPoolIndex, usize anchorDenseIndex, EntityID entityId)noexcept{
         if(I == anchorPoolIndex)
             return static_cast<u32>(anchorDenseIndex);
 
+        return MakeNotNull(Get<I>(pools))->findDenseIndexRaw(entityId);
+    }
+
+    template<usize I, typename... Ts>
+    static FOUNDATION_INLINE auto MakeSlice(const Tuple<ComponentPool<Ts>*...>& pools)noexcept{
         auto& pool = *MakeNotNull(Get<I>(pools));
-        return pool.findDenseIndex(entityId);
+        using CompT = RemovePointer_T<decltype(pool.m_components.data())>;
+        return PoolSlice<CompT>{ pool.m_sparse.data(), pool.m_sparse.size(), pool.m_components.data() };
     }
 
     template<usize I, typename... Ts>
@@ -128,10 +134,10 @@ public:
 
     template<usize I>
     b8 resolveDenseIndex(EntityID entityId, usize anchorDenseIndex)noexcept{
-        const auto denseIndex = ViewTupleAccess::FindDenseIndex<I>(pools, anchorPoolIndex, anchorDenseIndex, entityId);
-        if(!denseIndex)
+        const u32 denseIndex = ViewTupleAccess::FindDenseIndexRaw<I>(pools, anchorPoolIndex, anchorDenseIndex, entityId);
+        if(denseIndex == s_InvalidDenseIndex)
             return false;
-        Get<I>(denseIndices) = *denseIndex;
+        Get<I>(denseIndices) = denseIndex;
         return true;
     }
 
@@ -202,8 +208,38 @@ public:
         if(!m_valid)
             return;
 
-        for(usize i = 0u; i < m_count; ++i)
-            applyFunc(func, i);
+        const auto slices = makeSlices(IndexSequenceFor<Ts...>{});
+        const EntityID* const anchorData = m_anchorEntities.data();
+        const usize count = m_count;
+        if constexpr(sizeof...(Ts) == 1u){
+            runAnchorLoop<0u>(anchorData, count, slices, func);
+        }
+        else if constexpr(sizeof...(Ts) == 2u){
+            if(m_anchorPoolIndex == 0u)
+                runAnchorLoop<0u>(anchorData, count, slices, func);
+            else
+                runAnchorLoop<1u>(anchorData, count, slices, func);
+        }
+        else if constexpr(sizeof...(Ts) == 3u){
+            switch(m_anchorPoolIndex){
+            case 0u: runAnchorLoop<0u>(anchorData, count, slices, func); break;
+            case 1u: runAnchorLoop<1u>(anchorData, count, slices, func); break;
+            default: runAnchorLoop<2u>(anchorData, count, slices, func); break;
+            }
+        }
+        else if constexpr(sizeof...(Ts) == 4u){
+            switch(m_anchorPoolIndex){
+            case 0u: runAnchorLoop<0u>(anchorData, count, slices, func); break;
+            case 1u: runAnchorLoop<1u>(anchorData, count, slices, func); break;
+            case 2u: runAnchorLoop<2u>(anchorData, count, slices, func); break;
+            default: runAnchorLoop<3u>(anchorData, count, slices, func); break;
+            }
+        }
+        else{
+            const usize anchorPoolIndex = m_anchorPoolIndex;
+            for(usize i = 0u; i < count; ++i)
+                tryApplySliceRuntime<0u>(slices, anchorPoolIndex, func, anchorData[i], i);
+        }
     }
 
     template<typename Func>
@@ -223,15 +259,52 @@ public:
 
 
 private:
-    template<typename Func>
-    void applyFunc(Func& func, const usize denseIndex)const noexcept(noexcept(DeclVal<Func&>()(DeclVal<Conditional_T<sizeof...(Ts) == 1u, const EntityID&, EntityID&>>(), DeclVal<Ts&>()...))){
-        const EntityID entityId = ECSDetail::ViewTupleAccess::EntityAt(m_anchorEntities, denseIndex);
-        if constexpr(sizeof...(Ts) == 1u){
-            auto& component = ECSDetail::ViewTupleAccess::ComponentAtDense<0>(m_pools, static_cast<u32>(denseIndex));
-            func(entityId, component);
+    template<usize... Is>
+    FOUNDATION_INLINE auto makeSlices(IndexSequence<Is...>)const noexcept{
+        return MakeTuple(ECSDetail::ViewTupleAccess::MakeSlice<Is>(m_pools)...);
+    }
+
+    template<usize AnchorIdx, usize I, typename SliceTupleT, typename Func, typename... Args>
+    static FOUNDATION_INLINE void applySlicesAtAnchor(const SliceTupleT& slices, Func& func, EntityID entityId, const usize anchorDenseIndex, Args&... args)noexcept(noexcept(DeclVal<Func&>()(DeclVal<Conditional_T<sizeof...(Ts) == 1u, const EntityID&, EntityID&>>(), DeclVal<Ts&>()...))){
+        if constexpr(I < sizeof...(Ts)){
+            if constexpr(I == AnchorIdx){
+                auto& component = Get<I>(slices).components[anchorDenseIndex];
+                applySlicesAtAnchor<AnchorIdx, I + 1u>(slices, func, entityId, anchorDenseIndex, args..., component);
+            }
+            else{
+                const u32 componentDenseIndex = Get<I>(slices).findDenseIndex(entityId);
+                if(componentDenseIndex == ECSDetail::s_InvalidDenseIndex)
+                    return;
+
+                auto& component = Get<I>(slices).components[componentDenseIndex];
+                applySlicesAtAnchor<AnchorIdx, I + 1u>(slices, func, entityId, anchorDenseIndex, args..., component);
+            }
         }
         else{
-            tryApplyFunc(func, entityId, denseIndex);
+            func(entityId, args...);
+        }
+    }
+
+    template<usize AnchorIdx, typename SliceTupleT, typename Func>
+    static void runAnchorLoop(const EntityID* const anchorData, const usize count, const SliceTupleT& slices, Func& func)noexcept(noexcept(applySlicesAtAnchor<AnchorIdx, 0u>(slices, func, DeclVal<EntityID&>(), 0u))){
+        for(usize i = 0u; i < count; ++i){
+            EntityID entityId = anchorData[i];
+            applySlicesAtAnchor<AnchorIdx, 0u>(slices, func, entityId, i);
+        }
+    }
+
+    template<usize I = 0u, typename SliceTupleT, typename Func, typename... Args>
+    static FOUNDATION_INLINE void tryApplySliceRuntime(const SliceTupleT& slices, const usize anchorPoolIndex, Func& func, EntityID entityId, const usize anchorDenseIndex, Args&... args)noexcept(noexcept(DeclVal<Func&>()(DeclVal<Conditional_T<sizeof...(Ts) == 1u, const EntityID&, EntityID&>>(), DeclVal<Ts&>()...))){
+        if constexpr(I < sizeof...(Ts)){
+            const u32 componentDenseIndex = (I == anchorPoolIndex) ? static_cast<u32>(anchorDenseIndex) : Get<I>(slices).findDenseIndex(entityId);
+            if(componentDenseIndex == ECSDetail::s_InvalidDenseIndex)
+                return;
+
+            auto& component = Get<I>(slices).components[componentDenseIndex];
+            tryApplySliceRuntime<I + 1u>(slices, anchorPoolIndex, func, entityId, anchorDenseIndex, args..., component);
+        }
+        else{
+            func(entityId, args...);
         }
     }
 
@@ -240,9 +313,21 @@ private:
         if(!m_valid)
             return {};
 
-        return dispatch([this, &func](const usize denseIndex)noexcept(noexcept(applyFunc(func, denseIndex))){
-            applyFunc(func, denseIndex);
-        });
+        const auto slices = makeSlices(IndexSequenceFor<Ts...>{});
+        const EntityID* const anchorData = m_anchorEntities.data();
+        const usize anchorPoolIndex = m_anchorPoolIndex;
+        if constexpr(sizeof...(Ts) == 1u){
+            return dispatch([slices, anchorData, &func](const usize denseIndex)noexcept(noexcept(applySlicesAtAnchor<0u, 0u>(slices, func, DeclVal<EntityID&>(), denseIndex))){
+                EntityID entityId = anchorData[denseIndex];
+                applySlicesAtAnchor<0u, 0u>(slices, func, entityId, denseIndex);
+            });
+        }
+        else{
+            return dispatch([slices, anchorData, anchorPoolIndex, &func](const usize denseIndex)noexcept(noexcept(tryApplySliceRuntime<0u>(slices, anchorPoolIndex, func, DeclVal<EntityID&>(), denseIndex))){
+                EntityID entityId = anchorData[denseIndex];
+                tryApplySliceRuntime<0u>(slices, anchorPoolIndex, func, entityId, denseIndex);
+            });
+        }
     }
 
 
@@ -278,21 +363,6 @@ private:
             m_count = poolSize;
             m_anchorEntities = ECSDetail::ViewTupleAccess::EntityVector<I>(m_pools);
             m_anchorPoolIndex = I;
-        }
-    }
-
-    template<usize I = 0, typename Func, typename... Args>
-    void tryApplyFunc(Func& func, EntityID entityId, usize denseIndex, Args&... args)const noexcept(noexcept(DeclVal<Func&>()(DeclVal<EntityID&>(), DeclVal<Ts&>()...))){
-        if constexpr(I < sizeof...(Ts)){
-            const auto componentDenseIndex = ECSDetail::ViewTupleAccess::FindDenseIndex<I>(m_pools, m_anchorPoolIndex, denseIndex, entityId);
-            if(!componentDenseIndex)
-                return;
-
-            auto& component = ECSDetail::ViewTupleAccess::ComponentAtDense<I>(m_pools, *componentDenseIndex);
-            tryApplyFunc<I + 1u>(func, entityId, denseIndex, args..., component);
-        }
-        else{
-            func(entityId, args...);
         }
     }
 

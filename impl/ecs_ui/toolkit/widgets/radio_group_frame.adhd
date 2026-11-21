@@ -11,12 +11,12 @@
 
 [move_only, friend(Builder)]
 class RadioGroupLabel{
-    private TextLayout text;
+    private SharedTextLayout text;
     private Rect bounds;
 
-    public RadioGroupLabel(mut TextLayout layout, in Rect bounds){
+    public RadioGroupLabel(in SharedTextLayout layout, in Rect bounds){
+        this.text = layout;
         this.bounds = bounds;
-        MoveInto<TextLayout>(this.text, layout);
     }
 }
 

@@ -106,6 +106,33 @@ private:
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         GpuCommandIrCapture* outCommandIrCapture = nullptr
     )const;
+    [[nodiscard]] b8 recordPacketRangeInCompileOrderWithAccess(
+        const GpuTaskGraph& graph,
+        const GpuTaskGraph::DeclarationReadView& declarationAccess,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        const GpuRecordedGraph::ArtifactOperation& artifactOperation,
+        const GpuSubmissionPacketRange& range,
+        Alloc::ScratchArena& scratchArena,
+        GpuRecordedGraph& outRecordedGraph,
+        GpuSubmissionPacketId* outFailedPacket = nullptr,
+        GpuCommandIrCapture* outCommandIrCapture = nullptr,
+        b8 alreadyPrepared = false
+    )const;
+    [[nodiscard]] b8 recordPacketRangeInReadyFrontiersWithAccess(
+        const GpuTaskGraph& graph,
+        const GpuTaskGraph::DeclarationReadView& declarationAccess,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        const GpuRecordedGraph::ArtifactOperation& artifactOperation,
+        const GpuSubmissionPacketRange& range,
+        CpuTaskScheduler& cpuScheduler,
+        Alloc::ScratchArena& scratchArena,
+        GpuRecordedGraph& outRecordedGraph,
+        GpuSubmissionPacketId* outFailedPacket = nullptr,
+        GpuCommandIrCapture* outCommandIrCapture = nullptr,
+        b8 alreadyPrepared = false
+    )const;
 
 
 private:

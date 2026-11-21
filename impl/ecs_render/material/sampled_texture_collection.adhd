@@ -4,11 +4,17 @@
 
 #include <impl/assets_sampler/loader.adhd>
 #include <impl/assets_texture/loader.adhd>
+#include <impl/ecs_render/material/compute_emulation_output_index.adhd>
 #include <impl/ecs_render/material/renderer_draw_types.adhd>
 #include <impl/ecs_render/shared/frame_push_constants.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 EqualEmulationOutputIdentity(in Name left, in Name right){
+    return left == right;
+}
 
 
 class RendererMaterialResourceState : NoCopy{
@@ -161,9 +167,12 @@ b8 AppendPreparedDrawSampledTextures(
     in HashMap<Name, MaterialSurfaceInfo> materials,
     in RendererMaterialResourceState resources,
     in Span<MaterialPassDrawItem> draws,
+    mut MaterialPassEmulationOutputIndex<Name> seenMaterials,
     mut MaterialSampledTextureCollector collector
 ){
     for(in MaterialPassDrawItem draw : draws){
+        if(!seenMaterials.insert(draw.pipelineKey.material))
+            continue;
         const auto material = materials.find(draw.pipelineKey.material);
         if(material == materials.end() || !AppendPreparedMaterialSurfaceSampledTextures(material.value(), resources, collector))
             return false;
@@ -178,11 +187,12 @@ Expected<Vector<TextureHandle>> GatherPreparedMaterialPassSampledTextures(
     in Span<MaterialPassDrawItemsView> drawItemSets
 ){
     Vector<TextureHandle> textures;
+    MaterialPassEmulationOutputIndex<Name> seenMaterials;
     MaterialSampledTextureCollector collector(textures);
     for(in MaterialPassDrawItemsView draws : drawItemSets){
-        if(!AppendPreparedDrawSampledTextures(materials, resources, draws.meshDrawItems, collector)
-            || !AppendPreparedDrawSampledTextures(materials, resources, draws.indexedDrawItems, collector)
-            || !AppendPreparedDrawSampledTextures(materials, resources, draws.computeDrawItems, collector))
+        if(!AppendPreparedDrawSampledTextures(materials, resources, draws.meshDrawItems, seenMaterials, collector)
+            || !AppendPreparedDrawSampledTextures(materials, resources, draws.indexedDrawItems, seenMaterials, collector)
+            || !AppendPreparedDrawSampledTextures(materials, resources, draws.computeDrawItems, seenMaterials, collector))
             return MakeUnexpected(Failure());
     }
     return textures;

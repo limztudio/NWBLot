@@ -32,6 +32,11 @@ class InputTargetTable : NoCopy{
         return InvalidateRouterTargetTable(id, this.m_lookup, this.m_targets);
     }
 
+    [cpp_unwind]
+    public b8 invalidateBatch(in Span<WidgetId> ids){
+        return InvalidateRouterTargetTableBatch(ids, this.m_lookup, this.m_targets);
+    }
+
     public b8 fenceControl(in WidgetId host, in u64 declarationGeneration, in ControlToken token){
         return FenceRouterControlTargets(host, declarationGeneration, token, this.m_lookup, this.m_targets);
     }

@@ -6,6 +6,7 @@
 
 #include "backend.h"
 #include "command_validation.h"
+#include "texture_image_policy.h"
 #include "texture_resource_detail.h"
 
 #include <core/common/log.h>
@@ -58,6 +59,122 @@ Expected<VkImageView> Framebuffer::resolveColorAttachmentView(const u32 index){
 
 Expected<VkImageView> Framebuffer::resolveDepthAttachmentView(){
     return resolveAttachmentView(m_desc.depthAttachment, m_cachedDepthView);
+}
+
+void Framebuffer::cacheStaticValidationState(const VulkanAllocator& allocator)noexcept{
+    m_staticStructureValid = false;
+    m_allAttachmentsManagedNonVirtual = false;
+    m_allAttachmentsExclusiveSharing = false;
+
+    if(m_framebufferInfo.width == 0u || m_framebufferInfo.height == 0u || m_framebufferInfo.arraySize == 0u)
+        return;
+
+    const VkPhysicalDeviceLimits& limits = m_context.physicalDeviceProperties.limits;
+    if(m_framebufferInfo.width > limits.maxFramebufferWidth || m_framebufferInfo.height > limits.maxFramebufferHeight || m_framebufferInfo.arraySize > limits.maxFramebufferLayers)
+        return;
+    if(m_desc.shadingRateAttachment.valid())
+        return;
+    if(!m_desc.depthAttachment.valid() && (m_desc.depthAttachment.isReadOnly || m_desc.depthAttachment.format != Format::UNKNOWN || m_desc.depthAttachment.subresources != FramebufferAttachment{}.subresources))
+        return;
+    if(m_desc.colorAttachments.size() > s_MaxRenderTargets || m_desc.colorAttachments.size() > limits.maxColorAttachments)
+        return;
+    if(m_desc.colorAttachments.empty() && !m_desc.depthAttachment.valid())
+        return;
+
+    b8 allManagedNonVirtual = true;
+    b8 allExclusiveSharing = true;
+
+    const auto validateAttachmentStatic = [this, &allocator, &allManagedNonVirtual, &allExclusiveSharing](
+        const FramebufferAttachment& attachment,
+        const b8 requireDepthStencilFormat,
+        const Format::Enum expectedFormat
+    )noexcept -> b8{
+        Texture* const texture = attachment.texture;
+        if(!texture || &texture->m_context != &m_context || &texture->m_allocator != &allocator)
+            return false;
+        if(!texture->m_creationDesc.isRenderTarget)
+            return false;
+        if(!requireDepthStencilFormat && attachment.isReadOnly)
+            return false;
+        if(!VulkanDetail::IsFramebufferAttachmentSubresourceSetValid(texture->m_creationDesc, attachment.subresources))
+            return false;
+
+        const TextureSubresourceSet resolved = attachment.subresources.resolve(texture->m_creationDesc, TextureSubresourceMipResolve::Range);
+        if(resolved.numMipLevels != 1u || resolved.numArraySlices == 0u)
+            return false;
+
+        const Format::Enum format = attachment.format == Format::UNKNOWN ? texture->m_creationDesc.format : attachment.format;
+        if(format != texture->m_creationDesc.format)
+            return false;
+        if(VulkanDetail::ConvertFormat(format) == VK_FORMAT_UNDEFINED || texture->m_imageInfo.format == VK_FORMAT_UNDEFINED)
+            return false;
+
+        const FormatInfo& formatInfo = GetFormatInfo(format);
+        const b8 depthStencilFormat = formatInfo.hasDepth || formatInfo.hasStencil;
+        const b8 depthStencilImage = (texture->m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u;
+        if(depthStencilFormat != requireDepthStencilFormat || depthStencilImage != requireDepthStencilFormat)
+            return false;
+        if(expectedFormat != Format::UNKNOWN && format != expectedFormat)
+            return false;
+
+        const u32 width = Max(texture->m_creationDesc.width >> resolved.baseMipLevel, 1u);
+        const u32 height = Max(texture->m_creationDesc.height >> resolved.baseMipLevel, 1u);
+        if(
+            width != m_framebufferInfo.width
+            || height != m_framebufferInfo.height
+            || resolved.numArraySlices != m_framebufferInfo.arraySize
+            || texture->m_creationDesc.sampleCount != m_framebufferInfo.sampleCount
+            || texture->m_creationDesc.sampleQuality != m_framebufferInfo.sampleQuality
+        )
+            return false;
+
+        const TextureDimension::Enum viewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(texture->m_creationDesc, resolved);
+        if(viewDimension == TextureDimension::Unknown)
+            return false;
+        if(viewDimension == TextureDimension::TextureCube && resolved.numArraySlices != VulkanTextureDetail::s_TextureCubeLayerCount)
+            return false;
+        if(viewDimension == TextureDimension::TextureCubeArray && (resolved.numArraySlices < VulkanTextureDetail::s_TextureCubeLayerCount || (resolved.numArraySlices % VulkanTextureDetail::s_TextureCubeLayerCount) != 0u))
+            return false;
+
+        if(!texture->m_managed || texture->m_creationDesc.isVirtual || !texture->m_gpuReady.load(MemoryOrder::acquire))
+            allManagedNonVirtual = false;
+        const ResourceQueueAdmissionSnapshot admission = texture->getQueueAdmissionSnapshot();
+        if(!admission.valid() || admission.usesConcurrentSharing)
+            allExclusiveSharing = false;
+        return true;
+    };
+
+    for(usize colorIndex = 0u; colorIndex < m_desc.colorAttachments.size(); ++colorIndex){
+        if(!validateAttachmentStatic(m_desc.colorAttachments[colorIndex], false, m_framebufferInfo.colorFormats[colorIndex]))
+            return;
+    }
+
+    if(m_desc.depthAttachment.valid()){
+        if(!validateAttachmentStatic(m_desc.depthAttachment, true, m_framebufferInfo.depthFormat))
+            return;
+    }
+
+    for(usize colorIndex = 0u; colorIndex < m_desc.colorAttachments.size(); ++colorIndex){
+        const FramebufferAttachment& colorAttachment = m_desc.colorAttachments[colorIndex];
+        const TextureSubresourceSet colorRange = colorAttachment.subresources.resolve(colorAttachment.texture->m_creationDesc, TextureSubresourceMipResolve::Range);
+        for(usize priorIndex = 0u; priorIndex < colorIndex; ++priorIndex){
+            const FramebufferAttachment& priorAttachment = m_desc.colorAttachments[priorIndex];
+            if(priorAttachment.texture != colorAttachment.texture)
+                continue;
+            const TextureSubresourceSet priorRange = priorAttachment.subresources.resolve(priorAttachment.texture->m_creationDesc, TextureSubresourceMipResolve::Range);
+            if(VulkanDetail::TextureSubresourceRangesOverlap(colorRange, priorRange))
+                return;
+        }
+        if(m_desc.depthAttachment.texture == colorAttachment.texture){
+            const TextureSubresourceSet depthRange = m_desc.depthAttachment.subresources.resolve(m_desc.depthAttachment.texture->m_creationDesc, TextureSubresourceMipResolve::Range);
+            if(VulkanDetail::TextureSubresourceRangesOverlap(colorRange, depthRange))
+                return;
+        }
+    }
+
+    m_staticStructureValid = true;
+    m_allAttachmentsManagedNonVirtual = allManagedNonVirtual;
+    m_allAttachmentsExclusiveSharing = allExclusiveSharing;
 }
 
 Framebuffer::~Framebuffer()noexcept{
@@ -114,6 +231,7 @@ Expected<FramebufferHandle> Device::createFramebuffer(const FramebufferDesc& des
     if(desc.shadingRateAttachment.texture)
         fb->m_resources.emplace_back(desc.shadingRateAttachment.texture, TextureHandle::deleter_type(&m_context.objectArena));
 
+    fb->cacheStaticValidationState(m_allocator);
     return fb;
 }
 

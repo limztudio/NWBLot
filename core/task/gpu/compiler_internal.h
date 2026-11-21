@@ -21,6 +21,11 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace GpuTaskGraphCompilerDetail{
+    struct DenseDescendantBitMatrix;
+};
+
+
 class GpuTaskGraphCompiler final : NoCopy{
 public:
     [[nodiscard]] b8 analyze(const GpuTaskGraph::DeclarationReadView& graph, Alloc::ScratchArena& scratchArena, GpuTaskGraphAnalysis& outAnalysis)const;
@@ -42,6 +47,26 @@ public:
         GpuTaskGraphAnalysis& outAnalysis,
         GpuTaskGraphQueueAssignments& outAssignments,
         GpuCompiledGraph& outCompiledGraph
+    )const;
+
+
+private:
+    [[nodiscard]] b8 analyzeInternal(
+        const GpuTaskGraph::DeclarationReadView& graph,
+        Alloc::ScratchArena& scratchArena,
+        GpuTaskGraphAnalysis& outAnalysis,
+        GpuTaskGraphCompilerDetail::DenseDescendantBitMatrix* outDenseDesc
+    )const;
+
+    [[nodiscard]] b8 assignQueuesInternal(
+        const GpuTaskGraph::DeclarationReadView& graph,
+        const GpuTaskGraphAnalysis& analysis,
+        const GpuPhysicalQueueTopology& topology,
+        const GpuTaskGraphQueueAssignmentOptions& options,
+        Alloc::ScratchArena& scratchArena,
+        GpuTaskGraphQueueAssignments& outAssignments,
+        const GpuTaskGraphCompilerDetail::DenseDescendantBitMatrix* denseDesc,
+        b8 hasNonHazardDomainResource
     )const;
 };
 
@@ -363,9 +388,22 @@ struct GpuTaskGraphResourceStatePlan{
 
 [[nodiscard]] b8 IsLegalQueueAssignmentCandidate(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology, const GpuTaskGraphTaskView& task, const GpuPhysicalQueueInfo& candidate)noexcept;
 
+struct DenseDescendantBitMatrix{
+    static constexpr usize s_MaxTasks = 512u;
+
+    Vector<u64, Alloc::ScratchArena> strictDesc;
+    usize taskCount = 0u;
+    usize wordsPerRow = 0u;
+    b8 valid = false;
+
+    explicit DenseDescendantBitMatrix(Alloc::ScratchArena& scratchArena)noexcept
+        : strictDesc(scratchArena)
+    {}
+};
+
 class GpuTaskSchedulingReachability final : NoCopy{
     friend struct GpuTaskQueueScoringData;
-    friend b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, GpuTaskSchedulingReachability& outReachability);
+    friend b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, GpuTaskSchedulingReachability& outReachability, const DenseDescendantBitMatrix* precomputedStrictDesc);
 
 
 private:
@@ -402,7 +440,7 @@ private:
     b8 m_valid = false;
 };
 
-[[nodiscard]] b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, GpuTaskSchedulingReachability& outReachability);
+[[nodiscard]] b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, GpuTaskSchedulingReachability& outReachability, const DenseDescendantBitMatrix* precomputedStrictDesc = nullptr);
 
 [[nodiscard]] inline const GpuTaskQueueAssignment* FindQueueAssignment(const Span<const GpuTaskQueueAssignment> assignments, const Span<const u32> assignmentIndicesByTask, const GpuTaskId& task)noexcept{
     if(!task.valid() || task.index >= assignmentIndicesByTask.size())
@@ -420,7 +458,9 @@ struct GpuTaskQueueLegalityCache{
     Array<u64, CommandQueue::kCount> classQueueMasks{};
     Array<u8, CommandQueue::kCount> orderedQueueIndicesByClassCount{};
     Array<Array<u8, 64u>, CommandQueue::kCount> orderedQueueIndicesByClass{};
+    Array<u8, 64u> orderedAllQueueIndices{};
     u64 primaryGraphicsMask = 0u;
+    u8 orderedAllQueueCount = 0u;
     b8 active = false;
 
 
@@ -471,7 +511,8 @@ public:
         const GpuTaskSchedulingReachability& reachability,
         const GpuTaskGraphQueueAssignmentOptions& options,
         Alloc::ScratchArena& scratchArena,
-        const GpuPhysicalQueueTopology* topology = nullptr
+        const GpuPhysicalQueueTopology* topology = nullptr,
+        b8 hasNonHazardDomainResource = true
     );
 
 

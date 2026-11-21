@@ -153,14 +153,55 @@ void CommandList::setMeshletState(const MeshletState& state){
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_SetMeshletStateOperation))
         return;
 
+    const b8 hasPreviousMeshletState = m_hasBoundMeshletState;
     const b8 sameActiveRenderPass = m_renderPassActive && state.framebuffer && m_renderPassFramebuffer == state.framebuffer;
+    const b8 sameFramebuffer = hasPreviousMeshletState && m_currentMeshletState.framebuffer == state.framebuffer;
+    const b8 pipelineChanged = !hasPreviousMeshletState || m_currentMeshletState.pipeline != state.pipeline;
+    const b8 indirectParamsChanged = !hasPreviousMeshletState || m_currentMeshletState.indirectParams != state.indirectParams;
+
     if(
-        m_hasBoundMeshletState
+        hasPreviousMeshletState
         && sameActiveRenderPass
-        && state.pipeline == m_currentMeshletState.pipeline
-        && state.framebuffer == m_currentMeshletState.framebuffer
-        && state.indirectParams == m_currentMeshletState.indirectParams
+        && sameFramebuffer
+        && !indirectParamsChanged
+        && (
+            !pipelineChanged
+            || (
+                state.framebuffer->m_staticStructureValid
+                && state.framebuffer->m_allAttachmentsManagedNonVirtual
+                && state.framebuffer->m_allAttachmentsExclusiveSharing
+                && !m_stateTracker.hasPermanentTextureStates()
+            )
+        )
     ){
+        if(pipelineChanged && state.pipeline){
+            if(&state.pipeline->m_context != &m_context){
+                rejectCommandRecording(s_SetMeshletStateOperation, FOUNDATION_TEXT("meshlet pipeline belongs to another device"));
+                return;
+            }
+            if(!m_context.extensions.extMeshShader || m_context.meshShaderFeatures.meshShader != VK_TRUE || !m_context.deviceDispatch.vkCmdDrawMeshTasksEXT){
+                rejectCommandRecording(s_SetMeshletStateOperation, s_MeshShaderUnavailableReason);
+                return;
+            }
+            if(state.pipeline->m_desc.amplificationShader && m_context.meshShaderFeatures.taskShader != VK_TRUE){
+                rejectCommandRecording(s_SetMeshletStateOperation, FOUNDATION_TEXT("task shader feature is unavailable"));
+                return;
+            }
+            if(state.pipeline->m_pipeline == VK_NULL_HANDLE || state.pipeline->pipelineLayout == VK_NULL_HANDLE){
+                rejectCommandRecording(s_SetMeshletStateOperation, FOUNDATION_TEXT("meshlet pipeline has no native pipeline or layout"));
+                return;
+            }
+            if(state.pipeline->m_framebufferInfo != state.framebuffer->m_framebufferInfo){
+                rejectCommandRecording(s_SetMeshletStateOperation, FOUNDATION_TEXT("meshlet pipeline and framebuffer are incompatible"));
+                return;
+            }
+            const FramebufferAttachment& depthAttachment = state.framebuffer->m_desc.depthAttachment;
+            if(depthAttachment.valid() && depthAttachment.isReadOnly && !VulkanDetail::IsDepthStencilReadOnlyCompatible(state.pipeline->m_desc.renderState.depthStencilState, depthAttachment.texture->m_aspectMask)){
+                rejectCommandRecording(s_SetMeshletStateOperation, FOUNDATION_TEXT("meshlet pipeline writes a read-only depth/stencil attachment"));
+                return;
+            }
+        }
+
         const b8 viewportsEqual = VulkanDetail::ViewportsEqual(m_currentMeshletState.viewport.viewports, state.viewport.viewports);
         const b8 explicitScissorsEqual = VulkanDetail::ScissorsEqual(m_currentMeshletState.viewport.scissorRects, state.viewport.scissorRects);
         const b8 updateViewport = !viewportsEqual;
@@ -169,15 +210,41 @@ void CommandList::setMeshletState(const MeshletState& state){
             if(!validateViewportState(state.viewport, s_SetMeshletStateOperation))
                 return;
             VulkanDetail::CopyViewportStateCompact(m_currentMeshletState.viewport, state.viewport);
-            setViewportState(state.viewport, updateViewport, updateScissor);
         }
+        else if(!explicitScissorsEqual)
+            VulkanDetail::CopyViewportStateCompact(m_currentMeshletState.viewport, state.viewport);
 
         const b8 blendConstantsChanged = !(m_currentMeshletState.blendConstantColor == state.blendConstantColor);
         const b8 dynamicStencilRefChanged = m_currentMeshletState.dynamicStencilRefValue != state.dynamicStencilRefValue;
-        if(blendConstantsChanged)
-            m_currentMeshletState.blendConstantColor = state.blendConstantColor;
-        if(dynamicStencilRefChanged)
-            m_currentMeshletState.dynamicStencilRefValue = state.dynamicStencilRefValue;
+        m_currentMeshletState.blendConstantColor = state.blendConstantColor;
+        m_currentMeshletState.dynamicStencilRefValue = state.dynamicStencilRefValue;
+
+        if(pipelineChanged){
+            invalidateGraphicsDrawValidationCache();
+            m_currentMeshletState.pipeline = state.pipeline;
+            if(state.pipeline){
+                auto& pipeline = *MakeNotNull(state.pipeline);
+                updateActivePushConstantPipeline(s_PipelineKindMeshlet, pipeline.pipelineLayout, pipeline.pushConstantByteSize, GpuQueueCapability::Graphics);
+                m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipeline);
+                retainResource(&pipeline);
+
+                const Array<f32, 4> blendConstants = {{ state.blendConstantColor.r, state.blendConstantColor.g, state.blendConstantColor.b, state.blendConstantColor.a }};
+                m_context.deviceDispatch.vkCmdSetBlendConstants(m_currentCmdBuf->m_cmdBuf, blendConstants.data());
+
+                const DepthStencilState& depthStencilState = pipeline.m_desc.renderState.depthStencilState;
+                const u8 stencilReference = depthStencilState.dynamicStencilRef ? state.dynamicStencilRefValue : depthStencilState.stencilRefValue;
+                m_context.deviceDispatch.vkCmdSetStencilReference(m_currentCmdBuf->m_cmdBuf, VK_STENCIL_FACE_FRONT_AND_BACK, stencilReference);
+            }
+            else
+                updateActivePushConstantPipeline(s_PipelineKindNone, VK_NULL_HANDLE, 0u, GpuQueueCapability::None);
+
+            if(updateViewport || updateScissor)
+                setViewportState(state.viewport, updateViewport, updateScissor);
+            return;
+        }
+
+        if(updateViewport || updateScissor)
+            setViewportState(state.viewport, updateViewport, updateScissor);
 
         if(state.pipeline){
             if(blendConstantsChanged){
@@ -195,7 +262,7 @@ void CommandList::setMeshletState(const MeshletState& state){
 
     if(!validateMeshletState(state))
         return;
-    if(!FramebufferRenderingPreparation(*this).prepareFramebuffer(state.framebuffer, s_SetMeshletStateOperation))
+    if((!sameActiveRenderPass || !state.framebuffer->m_allAttachmentsManagedNonVirtual) && !FramebufferRenderingPreparation(*this).prepareFramebuffer(state.framebuffer, s_SetMeshletStateOperation))
         return;
 
     if(state.indirectParams){
@@ -216,15 +283,12 @@ void CommandList::setMeshletState(const MeshletState& state){
             return;
     }
 
-    const b8 hasPreviousMeshletState = m_hasBoundMeshletState;
-    const b8 pipelineChanged = !hasPreviousMeshletState || m_currentMeshletState.pipeline != state.pipeline;
     const b8 blendConstantsChanged = !(m_currentMeshletState.blendConstantColor == state.blendConstantColor);
     const b8 dynamicStencilRefChanged = m_currentMeshletState.dynamicStencilRefValue != state.dynamicStencilRefValue;
     const b8 viewportsEqual = hasPreviousMeshletState && VulkanDetail::ViewportsEqual(m_currentMeshletState.viewport.viewports, state.viewport.viewports);
     const b8 explicitScissorsEqual = hasPreviousMeshletState && VulkanDetail::ScissorsEqual(m_currentMeshletState.viewport.scissorRects, state.viewport.scissorRects);
     const b8 updateViewport = !viewportsEqual;
     const b8 updateScissor = !explicitScissorsEqual || (state.viewport.scissorRects.empty() && !viewportsEqual);
-    const b8 indirectParamsChanged = !hasPreviousMeshletState || m_currentMeshletState.indirectParams != state.indirectParams;
 
     clearDirtyPipelineStates(s_DirtyMeshletState);
     invalidateGraphicsDrawValidationCache();

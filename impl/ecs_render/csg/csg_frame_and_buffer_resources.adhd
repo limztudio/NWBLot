@@ -370,10 +370,9 @@ CsgFrameState RendererCsgSystem::buildFrameState(mut IMaterialSurfaceLookup mate
         return state;
     }
     for(in auto row : this.m_world.view<RendererComponent>()){
-        const EntityID entity = Get<0>(row);
-        in RendererComponent renderer = this.m_world.getComponent<RendererComponent>(entity);
-        if(!renderer.visible)
+        if(!Get<1>(row).visible)
             continue;
+        const EntityID entity = Get<0>(row);
         const auto receiver = ResolveCsgReceiverComponent(this.m_world, entity);
         if(!receiver.has_value() || !receiver.value().receiver.enabled)
             continue;
@@ -394,7 +393,7 @@ CsgFrameState RendererCsgSystem::buildFrameState(mut IMaterialSurfaceLookup mate
             cacheable = false;
             continue;
         }
-        const auto material = materialSurfaceLookup.findMaterialSurfaceInfo(renderer.material);
+        const auto material = materialSurfaceLookup.findMaterialSurfaceInfo(Get<1>(row).material);
         if(!material.has_value()){
             cacheable = false;
             continue;

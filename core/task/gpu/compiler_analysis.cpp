@@ -153,6 +153,10 @@ b8 GpuTaskGraphAnalysis::hasInferredEdge(const GpuTaskId& producer, const GpuTas
 
 
 b8 GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph, Alloc::ScratchArena& scratchArena, GpuTaskGraphAnalysis& outAnalysis)const{
+    return analyzeInternal(graph, scratchArena, outAnalysis, nullptr);
+}
+
+b8 GpuTaskGraphCompiler::analyzeInternal(const GpuTaskGraph::DeclarationReadView& graph, Alloc::ScratchArena& scratchArena, GpuTaskGraphAnalysis& outAnalysis, GpuTaskGraphCompilerDetail::DenseDescendantBitMatrix* const outDenseDesc)const{
     using namespace GpuTaskGraphCompilerDetail;
     using namespace __hidden_gpu_task_graph_compiler_analysis;
 
@@ -294,7 +298,7 @@ b8 GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph,
         if(dependencyAdjacency.edgeIndices.size() != outAnalysis.m_edges.size()){
             BuildTaskDependencyAdjacency(outAnalysis.m_edges, taskCount, scratchArena, dependencyAdjacency);
         }
-        BuildSchedulingEdges(outAnalysis.m_edges, dependencyAdjacency, outAnalysis.m_topologicalOrder, scratchArena, outAnalysis.m_schedulingEdges);
+        BuildSchedulingEdges(outAnalysis.m_edges, dependencyAdjacency, outAnalysis.m_topologicalOrder, scratchArena, outAnalysis.m_schedulingEdges, outDenseDesc);
         BuildSchedulingTaskAdjacency(
             outAnalysis.m_schedulingEdges,
             taskCount,
@@ -306,17 +310,21 @@ b8 GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph,
             outAnalysis.m_schedulingIncomingProducers
         );
     }
-    const Timer acceptedQueueFrontierValidationBegin = TimerNow();
-    const f64 topologicalOrderSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(semanticTopologySeconds), VectorDoubleReplicate(DurationInSeconds<f64>(acceptedQueueFrontierValidationBegin, finalTopologyBegin))));
-
-    if(!GpuAcceptedQueueFrontierValidator::Validate(graph, outAnalysis.m_schedulingIncomingOffsets, outAnalysis.m_edges, outAnalysis.m_diagnostic))
-        return false;
-    const Timer presentationValidationBegin = TimerNow();
-    validationSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(validationSeconds), VectorDoubleReplicate(DurationInSeconds<f64>(presentationValidationBegin, acceptedQueueFrontierValidationBegin))));
-
-    if(!GpuPresentationEndpointValidator::Validate(graph, outAnalysis.m_topologicalOrder, outAnalysis.m_schedulingIncomingOffsets, outAnalysis.m_schedulingIncomingProducers, scratchArena, outAnalysis.m_diagnostic))
-        return false;
-    validationSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(validationSeconds), VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), presentationValidationBegin))));
+    const Timer postTopologyTime = TimerNow();
+    const f64 topologicalOrderSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(semanticTopologySeconds), VectorDoubleReplicate(DurationInSeconds<f64>(postTopologyTime, finalTopologyBegin))));
+    Timer validationCursor = postTopologyTime;
+    if(CompilerGraphAccess::HasAcceptedQueueFrontierOrRecoveryTask(graph)){
+        if(!GpuAcceptedQueueFrontierValidator::Validate(graph, outAnalysis.m_schedulingIncomingOffsets, outAnalysis.m_edges, outAnalysis.m_diagnostic))
+            return false;
+        const Timer afterFrontierValidation = TimerNow();
+        validationSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(validationSeconds), VectorDoubleReplicate(DurationInSeconds<f64>(afterFrontierValidation, validationCursor))));
+        validationCursor = afterFrontierValidation;
+    }
+    if(CompilerGraphAccess::PresentEndpoint(graph)){
+        if(!GpuPresentationEndpointValidator::Validate(graph, outAnalysis.m_topologicalOrder, outAnalysis.m_schedulingIncomingOffsets, outAnalysis.m_schedulingIncomingProducers, scratchArena, outAnalysis.m_diagnostic))
+            return false;
+        validationSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(validationSeconds), VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), validationCursor))));
+    }
 
     outAnalysis.m_validationSeconds = validationSeconds;
     outAnalysis.m_dependencyAnalysisSeconds = dependencyAnalysisSeconds;

@@ -80,6 +80,8 @@ usize CpuTaskScheduler::readProfileEvents(CpuTaskProfileEvent* const output, con
 
 
 void CpuTaskScheduler::profileReadyLocked(const u32 index)noexcept{
+    if(m_readyProfiles.size() < m_slabs.nodeCount)
+        m_readyProfiles.resize(m_slabs.nodeCount);
     ReadyProfile& ready = m_readyProfiles[index];
     ready.ready = TimerNow();
     ready.frameIndex = m_profileFrameIndex;

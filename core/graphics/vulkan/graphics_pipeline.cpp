@@ -103,12 +103,14 @@ void CommandList::beginRenderPass(Framebuffer& framebuffer, const RenderPassPara
         return;
 
     if(m_enableAutomaticBarriers){
-        setResourceStatesForFramebuffer(framebuffer);
+        setResourceStatesForFramebufferValidated(framebuffer);
         if(m_commandRecordingFailed)
             return;
-        commitBarriers();
-        if(m_commandRecordingFailed)
-            return;
+        if(!m_pendingImageBarriers.empty() || !m_pendingBufferBarriers.empty()){
+            commitBarriers();
+            if(m_commandRecordingFailed)
+                return;
+        }
     }
     if(!beginDynamicRendering(framebuffer, params)){
         rejectCommandRecording(s_OperationName, __hidden_graphics_pipeline::s_DynamicRenderingBeginFailedReason);
@@ -142,18 +144,53 @@ void CommandList::setGraphicsState(const GraphicsState& state){
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_SetGraphicsStateOperation))
         return;
 
+    const b8 hasPreviousGraphicsState = m_hasBoundGraphicsState;
     const b8 sameActiveRenderPass = m_renderPassActive && state.framebuffer && m_renderPassFramebuffer == state.framebuffer;
+    const b8 sameFramebuffer = hasPreviousGraphicsState && m_currentGraphicsState.framebuffer == state.framebuffer;
+    const b8 pipelineChanged = !hasPreviousGraphicsState || m_currentGraphicsState.pipeline != state.pipeline;
+    const b8 indexBufferChanged = !hasPreviousGraphicsState || !(m_currentGraphicsState.indexBuffer == state.indexBuffer);
+    const b8 indirectParamsChanged = !hasPreviousGraphicsState || m_currentGraphicsState.indirectParams != state.indirectParams;
+    const b8 vertexBuffersEqual = hasPreviousGraphicsState && __hidden_graphics_pipeline::VertexBufferBindingsEqual(m_currentGraphicsState.vertexBuffers, state.vertexBuffers);
+
     if(
-        m_hasBoundGraphicsState
+        hasPreviousGraphicsState
         && sameActiveRenderPass
+        && sameFramebuffer
         && m_graphicsBuffersValidatedInPass
         && !state.shadingRateState.enabled
-        && state.pipeline == m_currentGraphicsState.pipeline
-        && state.framebuffer == m_currentGraphicsState.framebuffer
-        && state.indexBuffer == m_currentGraphicsState.indexBuffer
-        && state.indirectParams == m_currentGraphicsState.indirectParams
-        && __hidden_graphics_pipeline::VertexBufferBindingsEqual(m_currentGraphicsState.vertexBuffers, state.vertexBuffers)
+        && vertexBuffersEqual
+        && !indexBufferChanged
+        && !indirectParamsChanged
+        && (
+            !pipelineChanged
+            || (
+                state.framebuffer->m_staticStructureValid
+                && state.framebuffer->m_allAttachmentsManagedNonVirtual
+                && state.framebuffer->m_allAttachmentsExclusiveSharing
+                && !m_stateTracker.hasPermanentTextureStates()
+            )
+        )
     ){
+        if(pipelineChanged && state.pipeline){
+            if(&state.pipeline->m_context != &m_context){
+                rejectCommandRecording(s_SetGraphicsStateOperation, FOUNDATION_TEXT("graphics pipeline belongs to another device"));
+                return;
+            }
+            if(state.pipeline->m_pipeline == VK_NULL_HANDLE || state.pipeline->pipelineLayout == VK_NULL_HANDLE){
+                rejectCommandRecording(s_SetGraphicsStateOperation, FOUNDATION_TEXT("graphics pipeline has no native pipeline or layout"));
+                return;
+            }
+            if(state.pipeline->m_framebufferInfo != state.framebuffer->m_framebufferInfo){
+                rejectCommandRecording(s_SetGraphicsStateOperation, FOUNDATION_TEXT("graphics pipeline and framebuffer are incompatible"));
+                return;
+            }
+            const FramebufferAttachment& depthAttachment = state.framebuffer->m_desc.depthAttachment;
+            if(depthAttachment.valid() && depthAttachment.isReadOnly && !VulkanDetail::IsDepthStencilReadOnlyCompatible(state.pipeline->m_desc.renderState.depthStencilState, depthAttachment.texture->m_aspectMask)){
+                rejectCommandRecording(s_SetGraphicsStateOperation, FOUNDATION_TEXT("graphics pipeline writes a read-only depth/stencil attachment"));
+                return;
+            }
+        }
+
         const b8 viewportsEqual = VulkanDetail::ViewportsEqual(m_currentGraphicsState.viewport.viewports, state.viewport.viewports);
         const b8 explicitScissorsEqual = VulkanDetail::ScissorsEqual(m_currentGraphicsState.viewport.scissorRects, state.viewport.scissorRects);
         const b8 updateViewport = !viewportsEqual;
@@ -162,19 +199,40 @@ void CommandList::setGraphicsState(const GraphicsState& state){
             if(!validateViewportState(state.viewport, s_SetGraphicsStateOperation))
                 return;
             VulkanDetail::CopyViewportStateCompact(m_currentGraphicsState.viewport, state.viewport);
+        }
+        else if(!explicitScissorsEqual)
+            VulkanDetail::CopyViewportStateCompact(m_currentGraphicsState.viewport, state.viewport);
+
+        const b8 blendConstantsChanged = !(m_currentGraphicsState.blendConstantColor == state.blendConstantColor);
+        const b8 dynamicStencilRefChanged = m_currentGraphicsState.dynamicStencilRefValue != state.dynamicStencilRefValue;
+        m_currentGraphicsState.blendConstantColor = state.blendConstantColor;
+        m_currentGraphicsState.dynamicStencilRefValue = state.dynamicStencilRefValue;
+
+        if(pipelineChanged){
+            m_currentGraphicsState.pipeline = state.pipeline;
+            if(state.pipeline){
+                auto& pipeline = *MakeNotNull(state.pipeline);
+                updateActivePushConstantPipeline(s_PipelineKindGraphics, pipeline.pipelineLayout, pipeline.pushConstantByteSize, GpuQueueCapability::Graphics);
+                retainResource(&pipeline);
+                m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipeline);
+                VulkanDetail::SetGraphicsDynamicState(m_context.deviceDispatch, m_currentCmdBuf->m_cmdBuf, pipeline.m_desc, state);
+            }
+            else
+                updateActivePushConstantPipeline(s_PipelineKindNone, VK_NULL_HANDLE, 0u, GpuQueueCapability::None);
+
+            if(updateViewport || updateScissor)
+                setViewportState(state.viewport, updateViewport, updateScissor);
+            rebuildGraphicsDrawValidationCache();
+            return;
+        }
+
+        if(updateViewport || updateScissor){
             if(state.viewport.viewports.size() != 1u || state.viewport.scissorRects.size() > 1u)
                 invalidateGraphicsDrawValidationCache();
             else if(!m_graphicsDrawStateValid)
                 rebuildGraphicsDrawValidationCache();
             setViewportState(state.viewport, updateViewport, updateScissor);
         }
-
-        const b8 blendConstantsChanged = !(m_currentGraphicsState.blendConstantColor == state.blendConstantColor);
-        const b8 dynamicStencilRefChanged = m_currentGraphicsState.dynamicStencilRefValue != state.dynamicStencilRefValue;
-        if(blendConstantsChanged)
-            m_currentGraphicsState.blendConstantColor = state.blendConstantColor;
-        if(dynamicStencilRefChanged)
-            m_currentGraphicsState.dynamicStencilRefValue = state.dynamicStencilRefValue;
 
         if(state.pipeline){
             if(blendConstantsChanged){
@@ -190,35 +248,33 @@ void CommandList::setGraphicsState(const GraphicsState& state){
         return;
     }
 
-    if(!validateGraphicsState(state))
+    GraphicsBufferStateTable requiredBufferStates;
+    if(!validateGraphicsState(state, requiredBufferStates))
         return;
-    if(!FramebufferRenderingPreparation(*this).prepareFramebuffer(state.framebuffer, s_SetGraphicsStateOperation))
-        return;
-
-    setResourceStatesForGraphicsBuffers(state);
-    commitBarriers();
-    if(m_commandRecordingFailed)
+    if((!sameActiveRenderPass || !state.framebuffer->m_allAttachmentsManagedNonVirtual) && !FramebufferRenderingPreparation(*this).prepareFramebuffer(state.framebuffer, s_SetGraphicsStateOperation))
         return;
 
-    if(!ensureGraphicsRenderPass(state.framebuffer))
-        return;
-
-    if(!sameActiveRenderPass){
+    setResourceStatesForGraphicsBuffers(requiredBufferStates);
+    if(!m_pendingImageBarriers.empty() || !m_pendingBufferBarriers.empty()){
         commitBarriers();
         if(m_commandRecordingFailed)
             return;
     }
-    const b8 hasPreviousGraphicsState = m_hasBoundGraphicsState;
-    const b8 pipelineChanged = !hasPreviousGraphicsState || m_currentGraphicsState.pipeline != state.pipeline;
+
+    if(!ensureGraphicsRenderPass(state.framebuffer))
+        return;
+
+    if(!sameActiveRenderPass && (!m_pendingImageBarriers.empty() || !m_pendingBufferBarriers.empty())){
+        commitBarriers();
+        if(m_commandRecordingFailed)
+            return;
+    }
     const b8 blendConstantsChanged = !(m_currentGraphicsState.blendConstantColor == state.blendConstantColor);
     const b8 dynamicStencilRefChanged = m_currentGraphicsState.dynamicStencilRefValue != state.dynamicStencilRefValue;
     const b8 viewportsEqual = hasPreviousGraphicsState && VulkanDetail::ViewportsEqual(m_currentGraphicsState.viewport.viewports, state.viewport.viewports);
     const b8 explicitScissorsEqual = hasPreviousGraphicsState && VulkanDetail::ScissorsEqual(m_currentGraphicsState.viewport.scissorRects, state.viewport.scissorRects);
     const b8 updateViewport = !viewportsEqual;
     const b8 updateScissor = !explicitScissorsEqual || (state.viewport.scissorRects.empty() && !viewportsEqual);
-    const b8 vertexBuffersEqual = hasPreviousGraphicsState && __hidden_graphics_pipeline::VertexBufferBindingsEqual(m_currentGraphicsState.vertexBuffers, state.vertexBuffers);
-    const b8 indexBufferChanged = !hasPreviousGraphicsState || !(m_currentGraphicsState.indexBuffer == state.indexBuffer);
-    const b8 indirectParamsChanged = !hasPreviousGraphicsState || m_currentGraphicsState.indirectParams != state.indirectParams;
 
     clearDirtyPipelineStates(s_DirtyGraphicsState);
     m_currentGraphicsState.pipeline = state.pipeline;
@@ -287,8 +343,8 @@ void CommandList::setGraphicsState(const GraphicsState& state){
         usize startIndex = 0u;
         while(startIndex < orderedCount){
             const u32 firstSlot = orderedData[startIndex].slot;
-            Array<VkBuffer, s_MaxVertexAttributes> nativeBuffers{};
-            Array<VkDeviceSize, s_MaxVertexAttributes> offsets{};
+            Array<VkBuffer, s_MaxVertexAttributes> nativeBuffers;
+            Array<VkDeviceSize, s_MaxVertexAttributes> offsets;
             u32 count = 0u;
             while(startIndex + count < orderedCount && orderedData[startIndex + count].slot == firstSlot + count){
                 nativeBuffers[count] = orderedData[startIndex + count].buffer->m_buffer;
@@ -392,7 +448,7 @@ b8 CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPass
 
     const FramebufferDesc& fbDesc = framebuffer.m_desc;
 
-    Array<VkRenderingAttachmentInfo, s_MaxRenderTargets> colorAttachments = {};
+    Array<VkRenderingAttachmentInfo, s_MaxRenderTargets> colorAttachments;
     const u32 numColorAttachments = static_cast<u32>(fbDesc.colorAttachments.size());
     FOUNDATION_ASSERT(numColorAttachments <= s_MaxRenderTargets);
 
@@ -404,20 +460,21 @@ b8 CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPass
             return false;
         }
 
-        colorAttachments[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        colorAttachments[i].imageView = *view;
-        colorAttachments[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        VkRenderingAttachmentInfo& colorInfo = colorAttachments[i];
+        colorInfo = VulkanDetail::MakeVkStruct<VkRenderingAttachmentInfo>(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO);
+        colorInfo.imageView = *view;
+        colorInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         const VulkanDetail::RenderPassAttachmentOperations operations = VulkanDetail::ConvertRenderPassAttachmentActions(params.colorAttachmentActions[i]);
-        colorAttachments[i].loadOp = operations.loadOp;
-        colorAttachments[i].storeOp = operations.storeOp;
+        colorInfo.loadOp = operations.loadOp;
+        colorInfo.storeOp = operations.storeOp;
         if(operations.loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR){
             const Color& clr = params.colorClearValues[i];
-            colorAttachments[i].clearValue.color = {{ clr.r, clr.g, clr.b, clr.a }};
+            colorInfo.clearValue.color = {{ clr.r, clr.g, clr.b, clr.a }};
         }
     }
 
-    auto depthAttachment = VulkanDetail::MakeVkStruct<VkRenderingAttachmentInfo>(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO);
-    auto stencilAttachment = VulkanDetail::MakeVkStruct<VkRenderingAttachmentInfo>(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO);
+    VkRenderingAttachmentInfo depthAttachment;
+    VkRenderingAttachmentInfo stencilAttachment;
     b8 hasDepth = false;
     b8 hasStencil = false;
 
@@ -433,6 +490,7 @@ b8 CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPass
         const VkImageLayout depthStencilLayout = fbDesc.depthAttachment.isReadOnly ? VulkanDetail::s_ReadOnlyImageLayout : VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         if((depthTex.m_aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) != 0){
             const VulkanDetail::RenderPassAttachmentOperations operations = VulkanDetail::ConvertRenderPassAttachmentActions(params.depthAttachmentActions);
+            depthAttachment = VulkanDetail::MakeVkStruct<VkRenderingAttachmentInfo>(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO);
             depthAttachment.imageView = *depthView;
             depthAttachment.imageLayout = depthStencilLayout;
             depthAttachment.loadOp = operations.loadOp;
@@ -442,6 +500,7 @@ b8 CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPass
         }
         if((depthTex.m_aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) != 0){
             const VulkanDetail::RenderPassAttachmentOperations operations = VulkanDetail::ConvertRenderPassAttachmentActions(params.stencilAttachmentActions);
+            stencilAttachment = VulkanDetail::MakeVkStruct<VkRenderingAttachmentInfo>(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO);
             stencilAttachment.imageView = *depthView;
             stencilAttachment.imageLayout = depthStencilLayout;
             stencilAttachment.loadOp = operations.loadOp;
@@ -450,6 +509,8 @@ b8 CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPass
             hasStencil = true;
         }
     }
+    if(framebuffer.m_allAttachmentsManagedNonVirtual)
+        framebuffer.m_allViewsCached.store(true, MemoryOrder::release);
 
     auto renderingInfo = VulkanDetail::MakeVkStruct<VkRenderingInfo>(VK_STRUCTURE_TYPE_RENDERING_INFO);
     renderingInfo.renderArea.offset = { 0, 0 };
@@ -480,8 +541,9 @@ b8 CommandList::ensureGraphicsRenderPass(Framebuffer* framebuffer){
     endActiveRenderPass();
 
     if(m_enableAutomaticBarriers){
-        setResourceStatesForFramebuffer(*framebuffer);
-        commitBarriers();
+        setResourceStatesForFramebufferValidated(*framebuffer);
+        if(!m_pendingImageBarriers.empty() || !m_pendingBufferBarriers.empty())
+            commitBarriers();
         if(m_commandRecordingFailed)
             return false;
     }

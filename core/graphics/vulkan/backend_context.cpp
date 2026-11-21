@@ -190,7 +190,7 @@ BackendContext::BackendContext(const DeviceCreationParameters& params, SwapChain
     , m_sameClassQueues(m_arena)
     , m_acquireSyncSlots(m_arena)
     , m_presentSemaphores(m_arena)
-    , m_framesInFlight(Deque<QueueSubmissionToken, Alloc::GlobalArena>(m_arena))
+    , m_framesInFlight(m_arena)
     , m_swapChainLifecycle(*this)
     , m_framePresentation(*this)
 {

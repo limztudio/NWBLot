@@ -52,28 +52,7 @@ static void WaitForWriterRelease(Atomic<u64>& admissionState, u64& inOutState, c
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuTaskGraph::DeclarationMutationScope::DeclarationMutationScope(GpuTaskGraph& graph)
-    : m_graph(graph)
-{
-    static_assert(Atomic<u64>::is_always_lock_free, "GpuTaskGraph declaration admission atomic must remain lock-free");
-
-    const u32 threadId = CurrentThreadId();
-    if(m_graph.m_writerOwnerThread.load(MemoryOrder::relaxed) == threadId){
-        ++m_graph.m_writerRecursionDepth;
-        m_valid = true;
-        return;
-    }
-
-    u64 expected = 0u;
-    if(m_graph.m_declarationAdmissionState.compare_exchange_strong(expected, GpuTaskGraph::s_AdmissionWriterBit, MemoryOrder::acq_rel, MemoryOrder::acquire)){
-        m_graph.m_writerOwnerThread.store(threadId, MemoryOrder::relaxed);
-        m_graph.m_writerRecursionDepth = 1u;
-        m_valid = true;
-        m_isRootWriter = true;
-        return;
-    }
-
-    u64 state = expected;
+void GpuTaskGraph::DeclarationMutationScope::acquireSlow(const u32 threadId, u64 state)noexcept{
     for(;;){
         if((state & GpuTaskGraph::s_AdmissionWriterBit) != 0u){
             __hidden_gpu_task_graph_declaration_admission::WaitForWriterRelease(
@@ -84,9 +63,21 @@ GpuTaskGraph::DeclarationMutationScope::DeclarationMutationScope(GpuTaskGraph& g
             );
             continue;
         }
-        if((state & (GpuTaskGraph::s_AdmissionTeardownBit | GpuTaskGraph::s_AdmissionPlanActiveBit | GpuTaskGraph::s_AdmissionReaderMask)) != 0u)
+        if((state & (GpuTaskGraph::s_AdmissionTeardownBit | GpuTaskGraph::s_AdmissionPlanActiveBit)) != 0u)
             return;
-        if(m_graph.m_declarationAdmissionState.compare_exchange_weak(state, state | GpuTaskGraph::s_AdmissionWriterBit, MemoryOrder::acq_rel, MemoryOrder::acquire)){
+        const b8 dirty = (state & GpuTaskGraph::s_AdmissionReaderStripesDirtyBit) != 0u;
+        if(dirty && m_graph.hasAnyActiveDeclarationReader(MemoryOrder::relaxed))
+            return;
+        if(m_graph.m_declarationAdmissionState.compare_exchange_weak(state, state | GpuTaskGraph::s_AdmissionWriterBit, MemoryOrder::seq_cst, MemoryOrder::acquire)){
+            if(dirty){
+                if(m_graph.hasAnyActiveDeclarationReader(MemoryOrder::seq_cst)){
+                    const u64 previous = m_graph.m_declarationAdmissionState.fetch_and(~(GpuTaskGraph::s_AdmissionWriterBit | GpuTaskGraph::s_AdmissionWaiterBit), MemoryOrder::acq_rel);
+                    if((previous & GpuTaskGraph::s_AdmissionWaiterBit) != 0u)
+                        m_graph.m_declarationAdmissionState.notify_all();
+                    return;
+                }
+                m_graph.m_declarationAdmissionState.fetch_and(~GpuTaskGraph::s_AdmissionReaderStripesDirtyBit, MemoryOrder::release);
+            }
             m_graph.m_writerOwnerThread.store(threadId, MemoryOrder::relaxed);
             m_graph.m_writerRecursionDepth = 1u;
             m_valid = true;
@@ -96,20 +87,8 @@ GpuTaskGraph::DeclarationMutationScope::DeclarationMutationScope(GpuTaskGraph& g
     }
 }
 
-GpuTaskGraph::DeclarationMutationScope::~DeclarationMutationScope()noexcept{
-    if(!m_valid)
-        return;
-
-    if(!m_isRootWriter){
-        if(m_graph.m_writerRecursionDepth == 0u)
-            FOUNDATION_FATAL_ASSERT_MSG(false, "GpuTaskGraph declaration mutation recursion depth must stay balanced");
-        --m_graph.m_writerRecursionDepth;
-        return;
-    }
-
-    m_graph.m_writerRecursionDepth = 0u;
-    m_graph.m_writerOwnerThread.store(0u, MemoryOrder::relaxed);
-    const u64 previous = m_graph.m_declarationAdmissionState.fetch_and(~(GpuTaskGraph::s_AdmissionWriterBit | GpuTaskGraph::s_AdmissionWaiterBit), MemoryOrder::acq_rel);
+void GpuTaskGraph::DeclarationMutationScope::releaseSlow()noexcept{
+    const u64 previous = m_graph.m_declarationAdmissionState.fetch_and(~(GpuTaskGraph::s_AdmissionWriterBit | GpuTaskGraph::s_AdmissionWaiterBit | GpuTaskGraph::s_AdmissionReaderStripesDirtyBit), MemoryOrder::acq_rel);
     if((previous & GpuTaskGraph::s_AdmissionWriterBit) == 0u)
         FOUNDATION_FATAL_ASSERT_MSG(false, "GpuTaskGraph declaration mutation admission must retain its exact lifecycle claim");
     if((previous & GpuTaskGraph::s_AdmissionWaiterBit) != 0u)
@@ -126,9 +105,11 @@ GpuTaskGraphDeclarationReadView GpuTaskGraphDeclarationReadView::TryAcquire(cons
 
 
 GpuTaskGraphDeclarationReadView::GpuTaskGraphDeclarationReadView(const GpuTaskGraph& graph){
-    if(graph.m_writerOwnerThread.load(MemoryOrder::relaxed) == CurrentThreadId())
+    if(graph.m_writerOwnerThread.load(MemoryOrder::relaxed) == GpuTaskGraph::CachedCurrentThreadId())
         return;
 
+    const u8 stripeIndex = GpuTaskGraph::LocalReaderStripeIndex();
+    Atomic<u32>& stripeCount = graph.m_readerStripes[stripeIndex].count;
     u64 state = graph.m_declarationAdmissionState.load(MemoryOrder::acquire);
     for(;;){
         if((state & GpuTaskGraph::s_AdmissionTeardownBit) != 0u)
@@ -142,12 +123,28 @@ GpuTaskGraphDeclarationReadView::GpuTaskGraphDeclarationReadView(const GpuTaskGr
             );
             continue;
         }
-        if((state & GpuTaskGraph::s_AdmissionReaderMask) == GpuTaskGraph::s_AdmissionReaderMask)
-            return;
-        if(graph.m_declarationAdmissionState.compare_exchange_weak(state, state + 1ull, MemoryOrder::acq_rel, MemoryOrder::acquire)){
-            m_graph = &graph;
+        if((state & GpuTaskGraph::s_AdmissionReaderStripesDirtyBit) == 0u){
+            if(!graph.m_declarationAdmissionState.compare_exchange_weak(state, state | GpuTaskGraph::s_AdmissionReaderStripesDirtyBit, MemoryOrder::acq_rel, MemoryOrder::acquire))
+                continue;
+            state |= GpuTaskGraph::s_AdmissionReaderStripesDirtyBit;
+        }
+        const u32 prev = stripeCount.fetch_add(1u, MemoryOrder::seq_cst);
+        if(prev == Limit<u32>::s_Max){
+            stripeCount.fetch_sub(1u, MemoryOrder::release);
             return;
         }
+        const u64 recheck = graph.m_declarationAdmissionState.load(MemoryOrder::seq_cst);
+        if((recheck & (GpuTaskGraph::s_AdmissionTeardownBit | GpuTaskGraph::s_AdmissionWriterBit)) == 0u
+            && (recheck & GpuTaskGraph::s_AdmissionReaderStripesDirtyBit) != 0u)
+        {
+            m_graph = &graph;
+            m_taskCount = static_cast<u32>(graph.m_tasks.size());
+            m_resourceCount = static_cast<u32>(graph.m_resources.size());
+            m_readerStripeIndex = stripeIndex;
+            return;
+        }
+        stripeCount.fetch_sub(1u, MemoryOrder::release);
+        state = recheck;
     }
 }
 
@@ -156,8 +153,8 @@ GpuTaskGraphDeclarationReadView::~GpuTaskGraphDeclarationReadView()noexcept{
     if(!m_graph)
         return;
 
-    const u64 previous = m_graph->m_declarationAdmissionState.fetch_sub(1ull, MemoryOrder::acq_rel);
-    if((previous & GpuTaskGraph::s_AdmissionReaderMask) == 0u)
+    const u32 previous = m_graph->m_readerStripes[m_readerStripeIndex].count.fetch_sub(1u, MemoryOrder::release);
+    if(previous == 0u)
         FOUNDATION_FATAL_ASSERT_MSG(false, "GpuTaskGraph declaration read admission must retain its exact lifecycle claim");
 }
 
@@ -166,16 +163,36 @@ GpuTaskGraphDeclarationReadView::GpuTaskGraphDeclarationReadView(const GpuTaskGr
 }
 
 void GpuTaskGraphDeclarationReadView::acquire(const GpuTaskGraph& graph)noexcept{
+    const u8 stripeIndex = GpuTaskGraph::LocalReaderStripeIndex();
+    Atomic<u32>& stripeCount = graph.m_readerStripes[stripeIndex].count;
     u64 state = graph.m_declarationAdmissionState.load(MemoryOrder::acquire);
     for(;;){
         if((state & (GpuTaskGraph::s_AdmissionTeardownBit | GpuTaskGraph::s_AdmissionWriterMask)) != 0u)
             return;
-        if((state & GpuTaskGraph::s_AdmissionReaderMask) == GpuTaskGraph::s_AdmissionReaderMask)
-            return;
-        if(graph.m_declarationAdmissionState.compare_exchange_weak(state, state + 1ull, MemoryOrder::acq_rel, MemoryOrder::acquire)){
-            m_graph = &graph;
+        if((state & GpuTaskGraph::s_AdmissionReaderStripesDirtyBit) == 0u){
+            if(!graph.m_declarationAdmissionState.compare_exchange_weak(state, state | GpuTaskGraph::s_AdmissionReaderStripesDirtyBit, MemoryOrder::acq_rel, MemoryOrder::acquire))
+                continue;
+            state |= GpuTaskGraph::s_AdmissionReaderStripesDirtyBit;
+        }
+        const u32 prev = stripeCount.fetch_add(1u, MemoryOrder::seq_cst);
+        if(prev == Limit<u32>::s_Max){
+            stripeCount.fetch_sub(1u, MemoryOrder::release);
             return;
         }
+        const u64 recheck = graph.m_declarationAdmissionState.load(MemoryOrder::seq_cst);
+        if((recheck & (GpuTaskGraph::s_AdmissionTeardownBit | GpuTaskGraph::s_AdmissionWriterMask)) == 0u
+            && (recheck & GpuTaskGraph::s_AdmissionReaderStripesDirtyBit) != 0u)
+        {
+            m_graph = &graph;
+            m_taskCount = static_cast<u32>(graph.m_tasks.size());
+            m_resourceCount = static_cast<u32>(graph.m_resources.size());
+            m_readerStripeIndex = stripeIndex;
+            return;
+        }
+        stripeCount.fetch_sub(1u, MemoryOrder::release);
+        if((recheck & (GpuTaskGraph::s_AdmissionTeardownBit | GpuTaskGraph::s_AdmissionWriterMask)) != 0u)
+            return;
+        state = recheck;
     }
 }
 

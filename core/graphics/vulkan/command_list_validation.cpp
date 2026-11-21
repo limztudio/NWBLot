@@ -125,17 +125,22 @@ b8 CommandList::validateTrackedResourcesReadyForSubmission()const{
 }
 
 void CommandList::collectHostReadbackBuffers(){
-    for(auto it = m_stateTracker.m_bufferStates.begin(); it != m_stateTracker.m_bufferStates.end(); ++it){
-        for(const StateTracker::BufferRangeState& state : it.value()){
-            if(VulkanDetail::HasBufferDeviceWriteState(state.state)){
-                registerHostReadbackBuffer(*it->first);
-                break;
+    if(m_stateTracker.m_hasReadbackBuffers){
+        for(auto it = m_stateTracker.m_bufferStates.begin(); it != m_stateTracker.m_bufferStates.end(); ++it){
+            Buffer& buffer = *it->first;
+            if(buffer.m_creationDesc.cpuAccess != CpuAccessMode::Read)
+                continue;
+            for(const StateTracker::BufferRangeState& state : it.value()){
+                if(VulkanDetail::HasBufferDeviceWriteState(state.state)){
+                    registerHostReadbackBuffer(buffer);
+                    break;
+                }
             }
         }
     }
     for(auto it = m_stateTracker.m_permanentBufferStates.begin(); it != m_stateTracker.m_permanentBufferStates.end(); ++it){
         auto& buffer = *MakeNotNull(it.value().buffer.get());
-        if(VulkanDetail::HasBufferDeviceWriteState(it.value().state))
+        if(buffer.m_creationDesc.cpuAccess == CpuAccessMode::Read && VulkanDetail::HasBufferDeviceWriteState(it.value().state))
             registerHostReadbackBuffer(buffer);
     }
 }
@@ -155,36 +160,8 @@ void CommandList::registerHostReadbackStagingTexture(StagingTexture& stagingText
         retainResource(&stagingTexture);
 }
 
-void CommandList::retainResource(Buffer* resource){
-    if(resource)
-        m_currentCmdBuf->m_resourceReferences.retainBuffer(*resource);
-}
-
-void CommandList::retainResource(Texture* resource){
-    if(resource)
-        m_currentCmdBuf->m_resourceReferences.retainTexture(*resource);
-}
-
-void CommandList::retainResource(Framebuffer* resource){
-    if(!resource)
-        return;
-
-    m_currentCmdBuf->m_resourceReferences.retainResource(*resource);
-    for(const TextureHandle& texture : resource->m_resources){
-        FOUNDATION_ASSERT(texture);
-        m_currentCmdBuf->m_resourceReferences.trackRetainedTexture(*texture);
-    }
-}
-
-void CommandList::retainResource(GraphicsResource* resource){
-    if(resource)
-        m_currentCmdBuf->m_resourceReferences.retainResource(*resource);
-}
-
-void CommandList::retainStagingBuffer(Buffer& buffer){
+void CommandList::retainStagingBufferSlow(Buffer& buffer){
     auto& stagingBuffers = m_currentCmdBuf->m_referencedStagingBuffers;
-    if(!stagingBuffers.empty() && stagingBuffers.back().get() == &buffer)
-        return;
     for(const BufferHandle& retained : stagingBuffers){
         if(retained.get() == &buffer)
             return;

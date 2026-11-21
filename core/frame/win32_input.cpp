@@ -289,16 +289,22 @@ Optional<LRESULT> Win32FrameInput::handleMessage(const UINT message, const WPARA
     return LRESULT{ 0 };
 
     case WM_MOUSEMOVE: {
-        TRACKMOUSEEVENT tracking = { sizeof(TRACKMOUSEEVENT), TME_LEAVE, m_hwnd, 0u };
-        if(!TrackMouseEvent(&tracking)){
-            const DWORD nativeError = GetLastError();
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Win32 mouse-leave tracking failed; native_domain=Win32 native_code={}"), nativeError);
+        auto& winFrame = m_frame.data<Common::WinFrame>();
+        if(!winFrame.isMouseLeaveTracked()){
+            TRACKMOUSEEVENT tracking = { sizeof(TRACKMOUSEEVENT), TME_LEAVE, m_hwnd, 0u };
+            if(TrackMouseEvent(&tracking))
+                winFrame.setMouseLeaveTracked(true);
+            else{
+                const DWORD nativeError = GetLastError();
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame Win32 mouse-leave tracking failed; native_domain=Win32 native_code={}"), nativeError);
+            }
         }
         dispatchMousePosition(lParam);
     }
     return LRESULT{ 0 };
 
     case WM_MOUSELEAVE:
+        m_frame.data<Common::WinFrame>().setMouseLeaveTracked(false);
         m_frame.input().pointerLeave();
         return LRESULT{ 0 };
 

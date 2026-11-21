@@ -146,7 +146,7 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
         auto existing = !m_stateTracker.m_textureStates.empty() ? m_stateTracker.m_textureStates.find(key) : m_stateTracker.m_textureStates.end();
         const ResourceStates::Mask subresourceOldState = existing != m_stateTracker.m_textureStates.end()
             ? existing.value()
-            : (texture.isRetainedSubresourceStateKnown(arraySlice, mipLevel) ? texture.m_creationDesc.initialState : ResourceStates::Unknown);
+            : ((texture.m_creationDesc.keepInitialState && texture.isRetainedSubresourceStateKnown(arraySlice, mipLevel)) ? texture.m_creationDesc.initialState : ResourceStates::Unknown);
 
         retainResource(&texture);
         if(!VulkanStateTrackingDetail::NeedsResourceStateBarrier(subresourceOldState, stateBits, uavBarrierEnabled, forceMemoryDependency))
@@ -154,8 +154,11 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
 
         if(existing != m_stateTracker.m_textureStates.end())
             existing.value() = stateBits;
-        else
+        else{
             m_stateTracker.m_textureStates.emplace(key, stateBits);
+            if(texture.m_creationDesc.keepInitialState)
+                m_stateTracker.m_hasKeepInitialStateTextures = true;
+        }
 
         VkImageMemoryBarrier2 barrier = VulkanStateTrackingDetail::BuildTextureStateBarrier(texture.m_image, texture.m_aspectMask, resolvedSubresources, subresourceOldState, stateBits, m_context.extensions.khrRayTracingPipeline);
         if(!m_enableAutomaticBarriers){

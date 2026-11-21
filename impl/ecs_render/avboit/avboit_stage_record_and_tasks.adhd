@@ -166,7 +166,7 @@ b8 DeclareAvboitRasterRecordPhase(
     resourceUses.push_back(ReadUse(inputs.resources.avboitMaterialDomain));
     resourceUses.push_back(ReadUse(inputs.resources.avboitCsgDomain));
 
-    if(streamsUploaded)
+    if(streamsUploaded && inputs.upload.declaredUploadTask)
         stageOutputs.streamTask = inputs.upload.uploadTask;
     GpuTaskId rasterDependency = initialRasterDependency;
     if(streamsUploaded && !objectGeometry.prepare(rasterPayload.snapshot.regular.indexedDrawItems, frameBindings, rasterDependency, resourceUses, GraphicsPrefixTimingTicket(inputs.timingTicket), Optional<in GraphicsPrefixTimingTicket>()))

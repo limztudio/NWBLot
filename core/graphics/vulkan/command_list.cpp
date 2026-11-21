@@ -115,7 +115,7 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
         return;
     }
 
-    Queue* queue = m_device.getQueue(m_creationDesc.physicalQueue);
+    Queue* queue = m_cachedQueue ? m_cachedQueue : m_device.getQueue(m_creationDesc.physicalQueue);
     if(!queue){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Requested queue is not available"));
         FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Requested queue is not available"));
@@ -384,6 +384,7 @@ void CommandList::abortRecordingAttemptWithoutCallbacks()noexcept{
     m_activePipelineLayout = VK_NULL_HANDLE;
     m_activePipelinePushConstantBytes = 0u;
     m_activePipelineRequiredCapability = GpuQueueCapability::None;
+    m_boundDescriptorBufferOffsets = {};
     m_stateTracker.rollbackRecordingAttempt();
     resetMarkerStateWithoutCallbacks();
     if(m_currentCmdBuf){
@@ -397,6 +398,7 @@ void CommandList::abortRecordingAttemptWithoutCallbacks()noexcept{
     m_renderPassActive = false;
     m_graphicsBuffersValidatedInPass = false;
     m_renderPassFramebuffer = nullptr;
+    m_boundDescriptorBufferOffsets = {};
     m_hostReadbackBarrierTracker.clear();
 #if defined(NWB_DEBUG)
     m_taskCapabilitiesUsed = GpuQueueCapability::None;
@@ -469,6 +471,7 @@ void CommandList::clearStateInternal(){
     m_activePipelineLayout = VK_NULL_HANDLE;
     m_activePipelinePushConstantBytes = 0u;
     m_activePipelineRequiredCapability = GpuQueueCapability::None;
+    m_boundDescriptorBufferOffsets = {};
     m_hasBoundGraphicsState = false;
     m_graphicsBuffersValidatedInPass = false;
     m_hasBoundComputeState = false;
@@ -546,10 +549,12 @@ b8 CommandList::isBufferReadyForCommandQueue(Buffer* const buffer, const VkBuffe
 }
 
 b8 CommandList::validateTrackedTexturesReadyForClose(){
-    for(const auto texture : m_currentCmdBuf->m_resourceReferences.m_textures){
-        if(!isTextureReadyForCommandQueue(texture.get())){
-            rejectCommandRecording(s_CloseCommandListOperation, FOUNDATION_TEXT("referenced texture is not ready for this exact command queue"));
-            return false;
+    if(m_currentCmdBuf->m_resourceReferences.m_hasCloseValidationTextures || !m_hasCachedPhysicalQueueInfo){
+        for(const auto texture : m_currentCmdBuf->m_resourceReferences.m_textures){
+            if(!isTextureReadyForCommandQueue(texture.get())){
+                rejectCommandRecording(s_CloseCommandListOperation, FOUNDATION_TEXT("referenced texture is not ready for this exact command queue"));
+                return false;
+            }
         }
     }
     for(auto it = m_stateTracker.m_permanentTextureStates.begin(); it != m_stateTracker.m_permanentTextureStates.end(); ++it){
@@ -570,10 +575,12 @@ b8 CommandList::validateTrackedTexturesReadyForClose(){
 }
 
 b8 CommandList::validateTrackedBuffersReadyForClose(){
-    for(const auto buffer : m_currentCmdBuf->m_resourceReferences.m_buffers){
-        if(!isBufferReadyForCommandQueue(buffer.get())){
-            rejectCommandRecording(s_CloseCommandListOperation, FOUNDATION_TEXT("referenced buffer is not ready for this exact command queue"));
-            return false;
+    if(m_currentCmdBuf->m_resourceReferences.m_hasCloseValidationBuffers || !m_hasCachedPhysicalQueueInfo){
+        for(const auto buffer : m_currentCmdBuf->m_resourceReferences.m_buffers){
+            if(!isBufferReadyForCommandQueue(buffer.get())){
+                rejectCommandRecording(s_CloseCommandListOperation, FOUNDATION_TEXT("referenced buffer is not ready for this exact command queue"));
+                return false;
+            }
         }
     }
     for(auto it = m_stateTracker.m_permanentBufferStates.begin(); it != m_stateTracker.m_permanentBufferStates.end(); ++it){
@@ -607,35 +614,52 @@ void CommandList::resetMarkerStateWithoutCallbacks()noexcept{
 }
 
 void CommandList::discardUnsubmittedUploadChunks(){
-    if(!m_currentCmdBuf)
+    if(!m_currentCmdBuf || m_currentCmdBuf->m_usedUploadChunkMask == 0u)
         return;
 
     auto& owner = *MakeNotNull(m_currentCmdBuf.get());
+    const u8 usedMask = owner.m_usedUploadChunkMask;
     const u64 nativeRecordingID = m_nativeRecordingID;
     const GpuPhysicalQueueId ownerQueue = owner.m_queue.m_physicalQueue;
+    constexpr u8 s_UploadBit = static_cast<u8>(1u << static_cast<usize>(UploadManager::ChunkKind::Upload));
+    constexpr u8 s_ScratchBit = static_cast<u8>(1u << static_cast<usize>(UploadManager::ChunkKind::Scratch));
+    constexpr u8 s_AccelInputBit = static_cast<u8>(1u << static_cast<usize>(UploadManager::ChunkKind::AccelStructBuildInput));
     const Expected<u64> reusableVersion = m_device.queueGetCompletedInstance(ownerQueue);
     if(!reusableVersion){
-        m_device.m_uploadManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
-        m_device.m_scratchManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
-        m_device.m_accelStructInputManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
+        if((usedMask & s_UploadBit) != 0u)
+            m_device.m_uploadManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
+        if((usedMask & s_ScratchBit) != 0u)
+            m_device.m_scratchManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
+        if((usedMask & s_AccelInputBit) != 0u)
+            m_device.m_accelStructInputManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
         return;
     }
 
-    m_device.m_uploadManager.discardChunks(ownerQueue, &owner, nativeRecordingID, *reusableVersion);
-    m_device.m_scratchManager.discardChunks(ownerQueue, &owner, nativeRecordingID, *reusableVersion);
-    m_device.m_accelStructInputManager.discardChunks(ownerQueue, &owner, nativeRecordingID, *reusableVersion);
+    if((usedMask & s_UploadBit) != 0u)
+        m_device.m_uploadManager.discardChunks(ownerQueue, &owner, nativeRecordingID, *reusableVersion);
+    if((usedMask & s_ScratchBit) != 0u)
+        m_device.m_scratchManager.discardChunks(ownerQueue, &owner, nativeRecordingID, *reusableVersion);
+    if((usedMask & s_AccelInputBit) != 0u)
+        m_device.m_accelStructInputManager.discardChunks(ownerQueue, &owner, nativeRecordingID, *reusableVersion);
 }
 
 void CommandList::abandonUnsubmittedUploadChunks()noexcept{
-    if(!m_currentCmdBuf)
+    if(!m_currentCmdBuf || m_currentCmdBuf->m_usedUploadChunkMask == 0u)
         return;
 
     auto& owner = *MakeNotNull(m_currentCmdBuf.get());
+    const u8 usedMask = owner.m_usedUploadChunkMask;
     const u64 nativeRecordingID = m_nativeRecordingID;
     const GpuPhysicalQueueId ownerQueue = owner.m_queue.m_physicalQueue;
-    m_device.m_uploadManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
-    m_device.m_scratchManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
-    m_device.m_accelStructInputManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
+    constexpr u8 s_UploadBit = static_cast<u8>(1u << static_cast<usize>(UploadManager::ChunkKind::Upload));
+    constexpr u8 s_ScratchBit = static_cast<u8>(1u << static_cast<usize>(UploadManager::ChunkKind::Scratch));
+    constexpr u8 s_AccelInputBit = static_cast<u8>(1u << static_cast<usize>(UploadManager::ChunkKind::AccelStructBuildInput));
+    if((usedMask & s_UploadBit) != 0u)
+        m_device.m_uploadManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
+    if((usedMask & s_ScratchBit) != 0u)
+        m_device.m_scratchManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
+    if((usedMask & s_AccelInputBit) != 0u)
+        m_device.m_accelStructInputManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
 }
 
 

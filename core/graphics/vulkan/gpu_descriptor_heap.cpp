@@ -326,6 +326,47 @@ b8 GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
     m_pendingRecordingCount = 0u;
     m_retiredCount = 0u;
     m_lastHeapUseID = 0u;
+    const GpuDescriptorHeapAbi& abi = m_desc.bindlessHeapAbi;
+    const u32 maxBoundDescriptorSets = limits.maxBoundDescriptorSets;
+    const BindingLayout* const resLayout = m_resourceLayout.get();
+    const BindingLayout* const sampLayout = m_samplerLayout.get();
+    const BindingLayout* const asLayout = m_accelStructLayout.get();
+    const BindlessLayoutDesc* const resDesc = resLayout ? resLayout->getBindlessDesc() : nullptr;
+    const BindlessLayoutDesc* const sampDesc = sampLayout ? sampLayout->getBindlessDesc() : nullptr;
+    const BindlessLayoutDesc* const asDesc = asLayout ? asLayout->getBindlessDesc() : nullptr;
+    m_staticBindingContractValid =
+        abi.valid()
+        && abi.resourceSetIndex == 0u
+        && abi.samplerSetIndex == abi.resourceSetIndex + 1u
+        && abi.accelStructSetIndex == abi.samplerSetIndex + 1u
+        && abi.resourceSetIndex < maxBoundDescriptorSets
+        && abi.samplerSetIndex < maxBoundDescriptorSets
+        && abi.accelStructSetIndex < maxBoundDescriptorSets
+        && m_descriptorBufferGeneration != 0u
+        && resLayout != nullptr
+        && sampLayout != nullptr
+        && &resLayout->m_context == &m_context
+        && &sampLayout->m_context == &m_context
+        && (!asLayout || &asLayout->m_context == &m_context)
+        && resLayout->m_descriptorBufferCompatible
+        && sampLayout->m_descriptorBufferCompatible
+        && (!asLayout || asLayout->m_descriptorBufferCompatible)
+        && resLayout->m_descriptorBufferSegmentKind == DescriptorBufferSegmentKind::Resource
+        && sampLayout->m_descriptorBufferSegmentKind == DescriptorBufferSegmentKind::Sampler
+        && (!asLayout || asLayout->m_descriptorBufferSegmentKind == DescriptorBufferSegmentKind::Resource)
+        && resDesc != nullptr
+        && sampDesc != nullptr
+        && resDesc->descriptorSetIndex == abi.resourceSetIndex
+        && sampDesc->descriptorSetIndex == abi.samplerSetIndex
+        && resDesc->maxCapacity == m_resourceSlots.capacity
+        && sampDesc->maxCapacity == m_samplerSlots.capacity
+        && (!asLayout || (asDesc != nullptr && asDesc->descriptorSetIndex == abi.accelStructSetIndex && asDesc->maxCapacity == 1u))
+        && m_resourceBufferBlock.sizeBytes == resLayout->m_descriptorBufferSetSizeBytes
+        && m_samplerBufferBlock.sizeBytes == sampLayout->m_descriptorBufferSetSizeBytes
+        && offsetAlignmentBytes != 0u
+        && (m_resourceBufferBlock.offsetBytes % offsetAlignmentBytes) == 0u
+        && (m_samplerBufferBlock.offsetBytes % offsetAlignmentBytes) == 0u
+    ;
     m_initialized = true;
 
     NWB_LOGGER_INFO(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap initialized (descriptor buffer): resource capacity {}, sampler capacity {} (sets {}/{}).")
@@ -628,6 +669,7 @@ void GpuDescriptorHeap::resetStateForShutdownLocked()noexcept{
     m_desc = {};
 
     m_initialized = false;
+    m_staticBindingContractValid = false;
 }
 
 b8 GpuDescriptorHeap::initializeStorage(const u32 resourceCapacity, const u32 samplerCapacity, const u32 accelStructCapacity){

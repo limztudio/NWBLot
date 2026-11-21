@@ -20,12 +20,45 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u64 GpuTaskGraph::AllocateGeneration()noexcept{
+namespace __hidden_gpu_task_graph_declarations{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static Atomic<u64>& NextGenerationCounter()noexcept{
     static Atomic<u64> s_NextGeneration{ 1u };
-    const u64 identity = TryNextAtomicIdentity(s_NextGeneration);
+    return s_NextGeneration;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u64 GpuTaskGraph::AllocateGeneration()noexcept{
+    const u64 identity = TryNextAtomicIdentity(__hidden_gpu_task_graph_declarations::NextGenerationCounter());
     if(identity == 0u)
         FOUNDATION_FATAL_ASSERT_MSG(false, "GPU task graph generation identity space is exhausted");
     return identity;
+}
+
+u64 GpuTaskGraph::AllocateGenerationBlock(const u64 count)noexcept{
+    if(count <= 1u)
+        return AllocateGeneration();
+    Atomic<u64>& nextIdentity = __hidden_gpu_task_graph_declarations::NextGenerationCounter();
+    u64 identity = nextIdentity.load(MemoryOrder::relaxed);
+    while(identity != 0u && identity <= Limit<u64>::s_Max - count){
+        if(nextIdentity.compare_exchange_weak(identity, identity + count, MemoryOrder::relaxed, MemoryOrder::relaxed))
+            return identity;
+    }
+    FOUNDATION_FATAL_ASSERT_MSG(false, "GPU task graph generation identity space is exhausted");
+    return 0u;
 }
 
 GpuTaskGraph::~GpuTaskGraph()noexcept(false){

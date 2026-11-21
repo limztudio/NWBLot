@@ -205,14 +205,13 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
         ContainerDetail::ReserveGrowingCapacity(m_resourceVersionUses, m_resourceVersionUses.size() + desc.resourceVersionUseCount);
     ContainerDetail::ReserveGrowingCapacity(m_tasks, m_tasks.size() + 1u);
 
-    AppendedContainerRollbackScope markerRollback(m_markerText, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
-    AppendedContainerRollbackScope dependencyRollback(m_dependencies, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
-    AppendedContainerRollbackScope externalDependencyRollback(m_externalDependencies, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
-    AppendedContainerRollbackScope externalStateSourceRollback(m_externalStateSources, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
-    AppendedContainerRollbackScope externalStateSnapshotRollback(m_externalStateSnapshots, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
-    AppendedContainerRollbackScope resourceUseRollback(m_resourceUses, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
-    AppendedContainerRollbackScope resourceVersionUseRollback(m_resourceVersionUses, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
-    AppendedContainerRollbackScope taskRollback(m_tasks, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
+    static_assert(std::is_nothrow_default_constructible_v<GpuTaskNode>, "GpuTaskNode default construction must remain no-throw");
+    static_assert(std::is_nothrow_copy_constructible_v<GpuTaskId>, "GpuTaskId copy must remain no-throw");
+    static_assert(std::is_nothrow_copy_constructible_v<GpuExternalCompletionId>, "GpuExternalCompletionId copy must remain no-throw");
+    static_assert(std::is_nothrow_copy_constructible_v<GpuTaskExternalStateSource>, "GpuTaskExternalStateSource copy must remain no-throw");
+    static_assert(std::is_nothrow_copy_constructible_v<NotNull<CommandListResourceStateHandoff*>>, "State snapshot pointer copy must remain no-throw");
+    static_assert(std::is_nothrow_copy_constructible_v<GpuTaskResourceUse>, "GpuTaskResourceUse copy must remain no-throw");
+    static_assert(std::is_nothrow_copy_constructible_v<GpuTaskResourceVersionUse>, "GpuTaskResourceVersionUse copy must remain no-throw");
 
     const MarkerLabelRange markerLabelRange = appendMarkerLabel(desc.markerLabel);
     const u32 index = static_cast<u32>(m_tasks.size());
@@ -244,21 +243,21 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
     task.destroyPayload = destroyPayload;
     task.lifecycleAttemptGeneration = m_activeRecordingAttemptGeneration.load(MemoryOrder::relaxed);
 
-    if(desc.dependencyCount != 0u)
-        m_dependencies.insert(m_dependencies.end(), desc.dependencies, desc.dependencies + desc.dependencyCount);
+    for(usize dependencyIndex = 0u; dependencyIndex < desc.dependencyCount; ++dependencyIndex)
+        m_dependencies.push_back(desc.dependencies[dependencyIndex]);
     if(appendPreludeDependency)
         m_dependencies.push_back(m_normalExecutionPrelude);
-    if(desc.externalDependencyCount != 0u)
-        m_externalDependencies.insert(m_externalDependencies.end(), desc.externalDependencies, desc.externalDependencies + desc.externalDependencyCount);
+    for(usize externalDependencyIndex = 0u; externalDependencyIndex < desc.externalDependencyCount; ++externalDependencyIndex)
+        m_externalDependencies.push_back(desc.externalDependencies[externalDependencyIndex]);
     for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex){
         const CommandListResourceStateHandoff& snapshot = *(*externalStateSnapshots)[sourceIndex];
         m_externalStateSources.push_back(GpuTaskExternalStateSource{ .states = &snapshot, .applicableConsumerQueueClass = desc.externalStateSources[sourceIndex].applicableConsumerQueueClass, });
         m_externalStateSnapshots.push_back(MakeNotNull((*externalStateSnapshots)[sourceIndex].get()));
     }
-    if(desc.resourceUseCount != 0u)
-        m_resourceUses.insert(m_resourceUses.end(), desc.resourceUses, desc.resourceUses + desc.resourceUseCount);
-    if(desc.resourceVersionUseCount != 0u)
-        m_resourceVersionUses.insert(m_resourceVersionUses.end(), desc.resourceVersionUses, desc.resourceVersionUses + desc.resourceVersionUseCount);
+    for(usize resourceUseIndex = 0u; resourceUseIndex < desc.resourceUseCount; ++resourceUseIndex)
+        m_resourceUses.push_back(desc.resourceUses[resourceUseIndex]);
+    for(usize resourceVersionUseIndex = 0u; resourceVersionUseIndex < desc.resourceVersionUseCount; ++resourceVersionUseIndex)
+        m_resourceVersionUses.push_back(desc.resourceVersionUses[resourceVersionUseIndex]);
     for(usize resourceSetUseIndex = 0u; resourceSetUseIndex < desc.resourceSetUseCount; ++resourceSetUseIndex){
         const GpuTaskResourceSetUse& resourceSetUse = desc.resourceSetUses[resourceSetUseIndex];
         const GpuGraphResourceSetNode& resourceSet = m_resourceSets[resourceSetUse.resourceSet.index];
@@ -277,14 +276,6 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
         for(GlobalUniquePtr<CommandListResourceStateHandoff>& snapshot : *externalStateSnapshots)
             snapshot.release();
     }
-    markerRollback.commit();
-    dependencyRollback.commit();
-    externalDependencyRollback.commit();
-    externalStateSourceRollback.commit();
-    externalStateSnapshotRollback.commit();
-    resourceUseRollback.commit();
-    resourceVersionUseRollback.commit();
-    taskRollback.commit();
     if(payload != nullptr)
         m_hasTaskPayloads = true;
     if(destroyPayload != nullptr)
@@ -414,11 +405,15 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
     ContainerDetail::ReserveGrowingCapacity(m_markerText, m_markerText.size() + desc.markerLabel.size());
     ContainerDetail::ReserveGrowingCapacity(m_resources, m_resources.size() + 1u);
 
-    AppendedContainerRollbackScope initialOwnerSourceRollback(m_initialOwnerHandoffSources, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
-    AppendedContainerRollbackScope initialOwnerSnapshotRollback(m_initialOwnerHandoffStateSnapshots, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
-    AppendedContainerRollbackScope queueFamilyRollback(m_queueFamilyIndices, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
-    AppendedContainerRollbackScope markerRollback(m_markerText, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
-    AppendedContainerRollbackScope resourceRollback(m_resources, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
+    static_assert(std::is_nothrow_default_constructible_v<GpuGraphResourceNode>, "GpuGraphResourceNode default construction must remain no-throw");
+    static_assert(std::is_nothrow_copy_constructible_v<GpuTaskGraphInitialOwnerHandoffSourceView>, "Initial owner handoff copy must remain no-throw");
+    static_assert(std::is_nothrow_copy_constructible_v<NotNull<CommandListResourceStateHandoff*>>, "State snapshot pointer copy must remain no-throw");
+
+    const usize prevInitialOwnerSourceCount = m_initialOwnerHandoffSources.size();
+    const usize prevInitialOwnerSnapshotCount = m_initialOwnerHandoffStateSnapshots.size();
+    const usize prevQueueFamilyIndexCount = m_queueFamilyIndices.size();
+    const usize prevMarkerTextSize = m_markerText.size();
+    const usize prevResourceCount = m_resources.size();
 
     const MarkerLabelRange markerLabelRange = appendMarkerLabel(desc.markerLabel);
 
@@ -435,7 +430,8 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
         m_initialOwnerHandoffStateSnapshots.push_back(MakeNotNull((*initialOwnerHandoffStateSnapshots)[sourceIndex].get()));
     }
 
-    GpuGraphResourceNode resource;
+    const u32 index = static_cast<u32>(m_resources.size());
+    GpuGraphResourceNode& resource = m_resources.emplace_back();
     resource.identity = desc.identity;
     if(binding.texture)
         resource.texture = *binding.texture;
@@ -461,27 +457,29 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
         resource.queueFamilyIndexCount = queueAdmission->queueFamilyIndexCount;
         resource.usesConcurrentSharing = queueAdmission->usesConcurrentSharing;
         resource.hasQueueAdmission = true;
-        if(queueFamilyIndexCount != 0u)
-            m_queueFamilyIndices.insert(m_queueFamilyIndices.end(), queueAdmission->queueFamilyIndices, queueAdmission->queueFamilyIndices + queueFamilyIndexCount);
+        for(usize queueFamilyIndex = 0u; queueFamilyIndex < queueFamilyIndexCount; ++queueFamilyIndex)
+            m_queueFamilyIndices.push_back(queueAdmission->queueFamilyIndices[queueFamilyIndex]);
     }
 
     const NameHash& identityKey = desc.identity.identityHash();
     GpuGraphResourceImportIndex::Publication publication;
-    ScopeExit indexRollback([&]()noexcept{ m_resourceImportIndexes.rollbackResource(identityKey, pointerKey, publication); });
-    const u32 index = static_cast<u32>(m_resources.size());
-    m_resources.emplace_back(Move(resource));
-    if(!m_resourceImportIndexes.publishResource(identityKey, pointerKey, index, publication))
+    if(!m_resourceImportIndexes.publishResource(identityKey, pointerKey, index, publication)){
+        m_resourceImportIndexes.rollbackResource(identityKey, pointerKey, publication);
+        const auto rollbackTail = [](auto& container, const usize prevSize)noexcept{
+            while(container.size() > prevSize)
+                container.pop_back();
+        };
+        rollbackTail(m_resources, prevResourceCount);
+        rollbackTail(m_markerText, prevMarkerTextSize);
+        rollbackTail(m_queueFamilyIndices, prevQueueFamilyIndexCount);
+        rollbackTail(m_initialOwnerHandoffStateSnapshots, prevInitialOwnerSnapshotCount);
+        rollbackTail(m_initialOwnerHandoffSources, prevInitialOwnerSourceCount);
         return MakeUnexpected(Failure{});
+    }
     if(initialOwnerHandoffStateSnapshots){
         for(GlobalUniquePtr<CommandListResourceStateHandoff>& snapshot : *initialOwnerHandoffStateSnapshots)
             snapshot.release();
     }
-    initialOwnerSourceRollback.commit();
-    initialOwnerSnapshotRollback.commit();
-    queueFamilyRollback.commit();
-    markerRollback.commit();
-    resourceRollback.commit();
-    indexRollback.release();
     bumpDeclarationRevision();
     return GpuGraphResourceId{ .generation = m_generation, .index = index };
 }

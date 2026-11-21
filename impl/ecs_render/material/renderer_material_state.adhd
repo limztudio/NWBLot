@@ -81,6 +81,10 @@ class RendererMaterialState : NoCopy{
     public u64 m_lastGatheredStreamToken = 0u;
     public usize m_instanceBufferCapacity = 0u;
     public usize m_materialTypedBufferCapacity = 0u;
+    public u64 m_visibleRefractiveRenderersVersion = 0u;
+    public usize m_visibleRefractiveSurfaceCount = 0u;
+    public b8 m_hasVisibleRefractiveRenderers = false;
+    public b8 m_visibleRefractiveRenderersValid = false;
 
     [owner_result]
     public MaterialSurfaceInfo emptySurface()const{ return MaterialSurfaceInfo(); }
@@ -109,6 +113,10 @@ class RendererMaterialState : NoCopy{
         this.m_preparedStreamGeneration = 0u;
         this.m_instanceBufferCapacity = 0u;
         this.m_materialTypedBufferCapacity = 0u;
+        this.m_visibleRefractiveRenderersVersion = 0u;
+        this.m_visibleRefractiveSurfaceCount = 0u;
+        this.m_hasVisibleRefractiveRenderers = false;
+        this.m_visibleRefractiveRenderersValid = false;
     }
 }
 

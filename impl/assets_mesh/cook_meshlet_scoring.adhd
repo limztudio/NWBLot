@@ -66,10 +66,11 @@ void ResolveMeshletDisconnectedCandidateChunkRange(
 void UpdateBestMeshletCandidateFromPrecompute(
     in Span<MeshletTriangleData> triangles,
     in Span<MeshletTriangleCalculation> triangleCalculations,
-    in Span<u32> triangleIndices,
     in MeshletScoreState scoreState,
     in MeshletDesc meshlet,
-    in Span<u32> localVertexRefs,
+    in usize localVertexCount,
+    in Span<u32> vertexMeshletStamps,
+    in u32 currentMeshletStamp,
     in usize frontierOffset,
     in u32 triangleIndex,
     in b8 disconnected,
@@ -77,13 +78,12 @@ void UpdateBestMeshletCandidateFromPrecompute(
     mut MeshletFrontierCandidate outCandidate
 ){
     const MeshletTriangleData triangle = triangles[cast<usize>(triangleIndex)];
-    const Expected<MeshletVertexCounts> vertexCounts = TryMeshletCanFitTriangle(meshlet, localVertexRefs, triangle);
+    const Expected<MeshletVertexCounts> vertexCounts = TryMeshletCanFitTriangleStamped(meshlet, localVertexCount, vertexMeshletStamps, currentMeshletStamp, triangle);
     if(!vertexCounts.has_value())
         return;
 
     const f32 score = ScoreMeshletCandidateFromCalculations(
         triangleCalculations,
-        triangleIndices,
         scoreState,
         triangleIndex,
         vertexCounts.value().shared,
@@ -103,10 +103,11 @@ Expected<MeshletFrontierCandidate> FindBestMeshletFrontierCandidateFromPrecomput
     in Span<MeshletTriangleData> triangles,
     in Span<MeshletTriangleCalculation> triangleCalculations,
     in Span<u32> frontier,
-    in Span<u32> triangleIndices,
     in MeshletScoreState scoreState,
     in MeshletDesc meshlet,
-    in Span<u32> localVertexRefs
+    in usize localVertexCount,
+    in Span<u32> vertexMeshletStamps,
+    in u32 currentMeshletStamp
 ){
     b8 found = false;
     MeshletFrontierCandidate candidate;
@@ -115,10 +116,11 @@ Expected<MeshletFrontierCandidate> FindBestMeshletFrontierCandidateFromPrecomput
         UpdateBestMeshletCandidateFromPrecompute(
             triangles,
             triangleCalculations,
-            triangleIndices,
             scoreState,
             meshlet,
-            localVertexRefs,
+            localVertexCount,
+            vertexMeshletStamps,
+            currentMeshletStamp,
             frontierOffset,
             triangleIndex,
             false,
@@ -138,10 +140,11 @@ Expected<MeshletFrontierCandidate> FindBestDisconnectedMeshletCandidateRangeFrom
     in Span<u8> visitedTriangles,
     in usize searchBegin,
     in usize searchEnd,
-    in Span<u32> triangleIndices,
     in MeshletScoreState scoreState,
     in MeshletDesc meshlet,
-    in Span<u32> localVertexRefs
+    in usize localVertexCount,
+    in Span<u32> vertexMeshletStamps,
+    in u32 currentMeshletStamp
 ){
     b8 found = false;
     MeshletFrontierCandidate candidate;
@@ -152,10 +155,11 @@ Expected<MeshletFrontierCandidate> FindBestDisconnectedMeshletCandidateRangeFrom
         UpdateBestMeshletCandidateFromPrecompute(
             triangles,
             triangleCalculations,
-            triangleIndices,
             scoreState,
             meshlet,
-            localVertexRefs,
+            localVertexCount,
+            vertexMeshletStamps,
+            currentMeshletStamp,
             0u,
             cast<u32>(triangleIndex),
             true,

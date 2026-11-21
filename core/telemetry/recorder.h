@@ -30,6 +30,7 @@ class Recorder;
 class EventView;
 class DiagnosticCaptureGuard;
 class TextLogCaptureLogger;
+struct TelemetryCodecAccess;
 
 inline constexpr usize s_DiagnosticCaptureEventCapacity = 64u;
 inline constexpr usize s_DiagnosticCapturePayloadCapacity = 8192u;
@@ -50,6 +51,9 @@ public:
 
 
 class EventView final{
+    friend TelemetryCodecAccess;
+
+
 public:
     EventView()noexcept = default;
     explicit EventView(const Recorder& recorder)noexcept
@@ -80,6 +84,7 @@ class Recorder final : NoCopy{
     friend EventView;
     friend DiagnosticCaptureGuard;
     friend TextLogCaptureLogger;
+    friend TelemetryCodecAccess;
 
 
 private:
@@ -161,6 +166,8 @@ public:
     [[nodiscard]] b8 recordPayload(EventKind::Enum kind, u64 frameIndex, TelemetryBytes&& payload, u32 streamId = 0u);
     template<typename BuildPayloadT>
     [[nodiscard]] b8 recordBuiltPayload(const EventKind::Enum kind, const u64 frameIndex, const u32 streamId, BuildPayloadT buildPayload){
+        if(!enabled(kind))
+            return false;
         return recordBuiltPayloadResult(kind, frameIndex, streamId, buildPayload) == BuiltPayloadResult::Recorded;
     }
     [[nodiscard]] b8 append(const EventHeader& header, const void* payload, usize payloadBytes);
@@ -199,6 +206,8 @@ private:
     void publishSlotUnlocked(EventSlotLease& lease, const EventHeader& header);
     [[nodiscard]] BuiltPayloadResult::Enum publishBuiltSlot(EventSlotLease& lease, EventKind::Enum kind, u64 frameIndex, u32 streamId);
     [[nodiscard]] const EventRecord* eventAt(usize index)const noexcept;
+    void clearUnlocked()noexcept;
+    [[nodiscard]] b8 appendOwnedPayloadUnlocked(const EventHeader& header, TelemetryBytes&& payload);
 
 
 private:
@@ -209,6 +218,7 @@ private:
     usize m_diagnosticSlotCount = 0u;
     b8 m_diagnosticPrepared = false;
     Atomic<b8> m_diagnosticCaptureEnabled{ false };
+    Atomic<u32> m_enabledKindMask{ 0u };
     Atomic<u64> m_droppedDiagnosticCount{ 0u };
     CaptureOptions m_capture;
     mutable Futex m_mutex;

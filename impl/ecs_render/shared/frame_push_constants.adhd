@@ -256,6 +256,12 @@ class SceneShadingBufferUploads{
     public b8 sceneShadingUploadRequired = false;
 }
 
+class PreflightedSceneLightsView{
+    public Span<SceneLightGpuData> lights;
+    public Span<f32> causticImportance;
+    public b8 valid = false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

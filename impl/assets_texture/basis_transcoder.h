@@ -22,7 +22,9 @@ namespace TextureBasis{
 
 void InitializeBasisTranscoder();
 [[nodiscard]] b8 TranscodeBasisAstcBlock(Span<const u8> source, usize offset, Span<u8> destination, usize outputOffset);
+[[nodiscard]] b8 TranscodeBasisAstcSlice(Span<const u8> source, Span<u8> destination, usize outputOffset);
 [[nodiscard]] b8 UnpackBasisRgbaBlock(Span<const u8> source, usize offset, Array<u8, 64u>& rgba);
+[[nodiscard]] b8 UnpackBasisRgbaSlice(u32 width, u32 height, u32 blockCountX, u32 blockCountY, Span<const u8> source, b8 alphaOnly, Span<u8> destination, usize outputOffset);
 [[nodiscard]] b8 TranscodeBasisImage(Impl::BasisTranscodeFormat::Enum format, const Impl::BasisTranscodeLayout& layout, Span<const u8> source, Span<u8> bytes, usize offset, usize count);
 [[nodiscard]] u16 BasisFloatToHalf(f32 value)noexcept;
 

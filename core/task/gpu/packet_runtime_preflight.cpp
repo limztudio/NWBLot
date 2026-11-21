@@ -210,14 +210,42 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
         scratch.preflightCacheStamp = 1u;
     }
     const u64 preflightStamp = scratch.preflightCacheStamp;
-    const auto getCachedResource = [&](const usize resourceIndex)noexcept -> GpuRecordedGraph::PacketRecordingScratch::PreflightCachedResource&{
-        auto& cached = cachedResources[resourceIndex];
+    const auto getCachedResource = [&](const GpuGraphResourceId resourceID)noexcept -> GpuRecordedGraph::PacketRecordingScratch::PreflightCachedResource&{
+        auto& cached = cachedResources[resourceID.index];
         if(cached.stamp != preflightStamp){
             cached.stamp = preflightStamp;
+            cached.texture = nullptr;
+            cached.buffer = nullptr;
+            cached.accelStruct = nullptr;
             cached.permanentState = ResourceStates::Unknown;
             cached.lastValidatedState = ResourceStates::Unknown;
+            cached.queueSharing = ResourceQueueSharing::Exclusive;
+            cached.type = GpuGraphResourceType::HazardDomain;
+            cached.hasBackendResource = false;
             cached.baseValidated = false;
             cached.hasLastValidatedState = false;
+            cached.resolved = false;
+        }
+        if(!cached.resolved){
+            const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(resourceID.index);
+            cached.type = resource.type;
+            cached.hasBackendResource = resource.hasBackendResource;
+            cached.queueSharing = resource.queueSharing;
+            switch(resource.type){
+            case GpuGraphResourceType::Texture:
+                cached.texture = declarationAccess.textureForResource(resourceID);
+                break;
+            case GpuGraphResourceType::Buffer:
+                cached.buffer = declarationAccess.bufferForResource(resourceID);
+                break;
+            case GpuGraphResourceType::AccelStruct:
+                cached.accelStruct = declarationAccess.accelStructForResource(resourceID);
+                cached.buffer = cached.accelStruct ? cached.accelStruct->getBackingBuffer() : nullptr;
+                break;
+            default:
+                break;
+            }
+            cached.resolved = true;
         }
         return cached;
     };
@@ -232,24 +260,20 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
     const auto validateBufferRange = [](Buffer* const buffer, const BufferRange& range)noexcept{
         return buffer && GpuInitialStateHandoffValidation::ValidBufferRange(range, buffer->getCreationDescription().byteSize);
     };
-    const auto validateResourceReady = [&](const GpuGraphResourceId resourceID, const ResourceStates::Mask requiredState = ResourceStates::Unknown)noexcept -> Expected<ResourceStates::Mask>{
-        if(!declarationAccess.validResource(resourceID))
-            return MakeUnexpected(Failure{});
-        const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(resourceID.index);
-        if(resource.type == GpuGraphResourceType::HazardDomain){
-            if(resource.hasBackendResource)
+    const auto validateCachedResourceReady = [&](GpuRecordedGraph::PacketRecordingScratch::PreflightCachedResource& cached, const ResourceStates::Mask requiredState)noexcept -> Expected<ResourceStates::Mask>{
+        if(cached.type == GpuGraphResourceType::HazardDomain){
+            if(cached.hasBackendResource)
                 return MakeUnexpected(Failure{});
             return ResourceStates::Unknown;
         }
-        if(!resource.hasBackendResource)
+        if(!cached.hasBackendResource)
             return MakeUnexpected(Failure{});
 
-        auto& cached = getCachedResource(resourceID.index);
-        switch(resource.type){
+        switch(cached.type){
         case GpuGraphResourceType::Texture:{
-            Texture* const texture = declarationAccess.textureForResource(resourceID);
+            Texture* const texture = cached.texture;
             if(!cached.baseValidated){
-                if(!(texture && texture->getDeviceGeneration() == planAccess.deviceGeneration() && texture->getCreationDescription().queueSharing == resource.queueSharing && validateTextureForState(texture, ResourceStates::Unknown)))
+                if(!(texture && texture->getDeviceGeneration() == planAccess.deviceGeneration() && texture->getCreationDescription().queueSharing == cached.queueSharing && validateTextureForState(texture, ResourceStates::Unknown)))
                     return MakeUnexpected(Failure{});
                 const auto permanentState = permanentTextureState(texture);
                 if(!permanentState)
@@ -268,9 +292,9 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
             return cached.permanentState;
         }
         case GpuGraphResourceType::Buffer:{
-            Buffer* const buffer = declarationAccess.bufferForResource(resourceID);
+            Buffer* const buffer = cached.buffer;
             if(!cached.baseValidated){
-                if(!(buffer && buffer->getDeviceGeneration() == planAccess.deviceGeneration() && buffer->getCreationDescription().queueSharing == resource.queueSharing && ResourceQueueAdmissionAdmitsQueue(buffer->getQueueAdmissionSnapshot(), *packetQueueInfo) && m_device.isBufferReadyForGpuUse(buffer)))
+                if(!(buffer && buffer->getDeviceGeneration() == planAccess.deviceGeneration() && buffer->getCreationDescription().queueSharing == cached.queueSharing && ResourceQueueAdmissionAdmitsQueue(buffer->getQueueAdmissionSnapshot(), *packetQueueInfo) && m_device.isBufferReadyForGpuUse(buffer)))
                     return MakeUnexpected(Failure{});
                 const auto permanentState = permanentBufferState(buffer);
                 if(!permanentState)
@@ -289,8 +313,8 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
             return cached.permanentState;
         }
         case GpuGraphResourceType::AccelStruct:{
-            RayTracingAccelStruct* const accelStruct = declarationAccess.accelStructForResource(resourceID);
-            Buffer* const backingBuffer = accelStruct ? accelStruct->getBackingBuffer() : nullptr;
+            RayTracingAccelStruct* const accelStruct = cached.accelStruct;
+            Buffer* const backingBuffer = cached.buffer;
             if(!cached.baseValidated){
                 const ResourceQueueSharing::Mask creationQueueSharing = accelStruct ? accelStruct->getCreationQueueSharing() : ResourceQueueSharing::Exclusive;
                 if(!(
@@ -298,7 +322,7 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
                     && backingBuffer
                     && accelStruct->getDeviceGeneration() == planAccess.deviceGeneration()
                     && accelStruct->queueSharingMatchesCreation()
-                    && creationQueueSharing == resource.queueSharing
+                    && creationQueueSharing == cached.queueSharing
                     && backingBuffer->descriptionMatchesCreation()
                     && backingBuffer->getCreationDescription().queueSharing == creationQueueSharing
                     && m_device.isAccelStructReadyForGpuUse(accelStruct)
@@ -326,41 +350,41 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
             return MakeUnexpected(Failure{});
         }
     };
+    const auto validateResourceReady = [&](const GpuGraphResourceId resourceID, const ResourceStates::Mask requiredState = ResourceStates::Unknown)noexcept -> Expected<ResourceStates::Mask>{
+        if(!declarationAccess.validResource(resourceID))
+            return MakeUnexpected(Failure{});
+        return validateCachedResourceReady(getCachedResource(resourceID), requiredState);
+    };
     const auto validateResourceState = [&](const GpuGraphResourceId resourceID, const ResourceStates::Mask requiredState)noexcept{
         if(!declarationAccess.validResource(resourceID))
             return false;
-        const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(resourceID.index);
-        if(resource.type == GpuGraphResourceType::HazardDomain)
-            return !resource.hasBackendResource;
+        auto& cached = getCachedResource(resourceID);
+        if(cached.type == GpuGraphResourceType::HazardDomain)
+            return !cached.hasBackendResource;
         if(requiredState == ResourceStates::Unknown)
             return false;
 
-        const auto permanentState = validateResourceReady(resourceID, requiredState);
+        const auto permanentState = validateCachedResourceReady(cached, requiredState);
         if(!permanentState)
             return false;
         return (*permanentState) == ResourceStates::Unknown || (*permanentState) == requiredState;
     };
     const auto resourcePermanentState = [&](const GpuGraphResourceId resourceID)noexcept -> Expected<ResourceStates::Mask>{
-        const auto& cached = getCachedResource(resourceID.index);
+        const auto& cached = getCachedResource(resourceID);
         if(cached.baseValidated)
             return cached.permanentState;
-        const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(resourceID.index);
-        if(resource.type == GpuGraphResourceType::Texture)
-            return permanentTextureState(declarationAccess.textureForResource(resourceID));
-        if(resource.type == GpuGraphResourceType::Buffer)
-            return permanentBufferState(declarationAccess.bufferForResource(resourceID));
-        if(resource.type == GpuGraphResourceType::AccelStruct){
-            RayTracingAccelStruct* const accelStruct = declarationAccess.accelStructForResource(resourceID);
-            return permanentBufferState(accelStruct ? accelStruct->getBackingBuffer() : nullptr);
-        }
+        if(cached.type == GpuGraphResourceType::Texture)
+            return permanentTextureState(cached.texture);
+        if(cached.type == GpuGraphResourceType::Buffer || cached.type == GpuGraphResourceType::AccelStruct)
+            return permanentBufferState(cached.buffer);
         return MakeUnexpected(Failure{});
     };
     const auto hasExplicitInitialState = [&](const GpuCompiledBarrier& barrier)noexcept{
         if(!initialStates || !declarationAccess.validResource(barrier.resource))
             return false;
-        const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(barrier.resource.index);
-        if(resource.type == GpuGraphResourceType::Texture){
-            Texture* const texture = declarationAccess.textureForResource(barrier.resource);
+        const auto& cached = getCachedResource(barrier.resource);
+        if(cached.type == GpuGraphResourceType::Texture){
+            Texture* const texture = cached.texture;
             if(!validateTextureRange(texture, barrier.range.textureSubresources))
                 return false;
             const auto permanentState = permanentTextureState(texture);
@@ -385,11 +409,7 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
             return true;
         }
 
-        Buffer* buffer = declarationAccess.bufferForResource(barrier.resource);
-        if(resource.type == GpuGraphResourceType::AccelStruct){
-            RayTracingAccelStruct* const accelStruct = declarationAccess.accelStructForResource(barrier.resource);
-            buffer = accelStruct ? accelStruct->getBackingBuffer() : nullptr;
-        }
+        Buffer* const buffer = cached.buffer;
         Expected<ResourceStates::Mask> permanentState = ResourceStates::Unknown;
         if(!buffer || !(permanentState = permanentBufferState(buffer)))
             return false;
@@ -406,12 +426,14 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
 
     const auto validateBarrierList = [&](const Span<const GpuCompiledBarrier> barriers)noexcept{
         for(const GpuCompiledBarrier& barrier : barriers){
-            if(barrier.type >= GpuCompiledBarrierType::Count || !declarationAccess.validResource(barrier.resource) || declarationAccess.resourceAt(barrier.resource.index).type != __hidden_gpu_packet_runtime_preflight::BarrierResourceType(barrier.type))
+            if(barrier.type >= GpuCompiledBarrierType::Count || !declarationAccess.validResource(barrier.resource))
                 return false;
-            const GpuTaskGraphResourceView barrierResource = declarationAccess.resourceAt(barrier.resource.index);
+            const auto& barrierResource = getCachedResource(barrier.resource);
+            if(barrierResource.type != __hidden_gpu_packet_runtime_preflight::BarrierResourceType(barrier.type))
+                return false;
             if(
-                (barrierResource.type == GpuGraphResourceType::Texture && !validateTextureRange(declarationAccess.textureForResource(barrier.resource), barrier.range.textureSubresources))
-                || (barrierResource.type == GpuGraphResourceType::Buffer && !validateBufferRange(declarationAccess.bufferForResource(barrier.resource), barrier.range.bufferRange))
+                (barrierResource.type == GpuGraphResourceType::Texture && !validateTextureRange(barrierResource.texture, barrier.range.textureSubresources))
+                || (barrierResource.type == GpuGraphResourceType::Buffer && !validateBufferRange(barrierResource.buffer, barrier.range.bufferRange))
             )
                 return false;
             const b8 ownershipRelease = __hidden_gpu_packet_runtime_preflight::IsOwnershipRelease(barrier.type);
@@ -475,10 +497,10 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
             const GpuTaskResourceUse& use = taskView.resourceUses[useIndex];
             if(use.access >= GpuTaskResourceAccess::Count || !validateResourceState(use.resource, use.requiredState))
                 return false;
-            const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(use.resource.index);
-            if(resource.type == GpuGraphResourceType::Texture && !validateTextureRange(declarationAccess.textureForResource(use.resource), use.range.textureSubresources))
+            const auto& cached = getCachedResource(use.resource);
+            if(cached.type == GpuGraphResourceType::Texture && !validateTextureRange(cached.texture, use.range.textureSubresources))
                 return false;
-            if(resource.type == GpuGraphResourceType::Buffer && !validateBufferRange(declarationAccess.bufferForResource(use.resource), use.range.bufferRange))
+            if(cached.type == GpuGraphResourceType::Buffer && !validateBufferRange(cached.buffer, use.range.bufferRange))
                 return false;
         }
         const GpuPacketStateSeed* const stateSeeds = compiledTaskView.prologueStateSeeds;
@@ -487,10 +509,10 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
             const GpuPacketStateSeed& seed = stateSeeds[seedIndex];
             if(!planAccess.validPacket(seed.sourcePacket) || seed.sourcePacket.index >= packetID.index || !validateResourceReady(seed.resource))
                 return false;
-            const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(seed.resource.index);
+            const auto& cached = getCachedResource(seed.resource);
             if(
-                (resource.type == GpuGraphResourceType::Texture && !validateTextureRange(declarationAccess.textureForResource(seed.resource), seed.range.textureSubresources))
-                || (resource.type == GpuGraphResourceType::Buffer && !validateBufferRange(declarationAccess.bufferForResource(seed.resource), seed.range.bufferRange))
+                (cached.type == GpuGraphResourceType::Texture && !validateTextureRange(cached.texture, seed.range.textureSubresources))
+                || (cached.type == GpuGraphResourceType::Buffer && !validateBufferRange(cached.buffer, seed.range.bufferRange))
             )
                 return false;
         }

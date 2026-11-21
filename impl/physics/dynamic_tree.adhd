@@ -41,12 +41,14 @@ class TreeNode{
 
 class DynamicTree{
     private Vector<TreeNode> m_nodes;
+    private Vector<u32> m_moveIndices;
     private u32 m_root = s_NullIndex;
     private u32 m_freeList = s_NullIndex;
     private u32 m_nodeCount = 0u;
 
     public void clear(){
         this.m_nodes.clear();
+        this.m_moveIndices.clear();
         this.m_root = s_NullIndex;
         this.m_freeList = s_NullIndex;
         this.m_nodeCount = 0u;
@@ -60,6 +62,7 @@ class DynamicTree{
         this.m_nodes[proxyId].aabbMaxCategory = f32x3_u32(fat.upperBound.x, fat.upperBound.y, fat.upperBound.z, categoryBits);
         this.m_nodes[proxyId].height = 0;
         this.m_nodes[proxyId].moved = false;
+        this.m_moveIndices[proxyId] = s_NullIndex;
         this.insertLeaf(proxyId);
         return proxyId;
     }
@@ -113,6 +116,17 @@ class DynamicTree{
     public void setMoved(in u32 proxyId, in b8 moved){
         if(proxyId < this.m_nodes.size())
             this.m_nodes[proxyId].moved = moved;
+    }
+
+    public u32 moveIndex(in u32 proxyId)const{
+        if(proxyId >= this.m_moveIndices.size())
+            return s_NullIndex;
+        return this.m_moveIndices[proxyId];
+    }
+
+    public void setMoveIndex(in u32 proxyId, in u32 idx){
+        if(proxyId < this.m_moveIndices.size())
+            this.m_moveIndices[proxyId] = idx;
     }
 
     public Aabb3D fatAabb(in u32 proxyId)const{
@@ -176,20 +190,24 @@ class DynamicTree{
             return;
 
         f32 maxFraction = 1.0f;
+        const RayCastSlabData ray = MakeRayCastSlabData(origin, translation);
+        f32 rootTMin = 0.0f;
+        if(!AabbRayCastFast(this.m_nodes[this.m_root].aabb(), ray, maxFraction, rootTMin))
+            return;
+
         Array<u32, 256u> fixedStack;
+        Array<f32, 256u> fixedStackTMin;
         fixedStack[0u] = this.m_root;
+        fixedStackTMin[0u] = rootTMin;
         u32 fixedCount = 1u;
         while(fixedCount > 0u){
             --fixedCount;
             const u32 nodeId = fixedStack[fixedCount];
-            if(nodeId == s_NullIndex)
+            const f32 poppedTMin = fixedStackTMin[fixedCount];
+            if(nodeId == s_NullIndex || poppedTMin > maxFraction)
                 continue;
 
             in TreeNode node = this.m_nodes[nodeId];
-            f32 tMin = 0.0f;
-            if(!AabbRayCast(node.aabb(), origin, translation, maxFraction, tMin))
-                continue;
-
             if(node.isLeaf()){
                 if((node.categoryBits() & maskBits) != 0u){
                     maxFraction = callback(nodeId, node.userData(), maxFraction);
@@ -198,14 +216,11 @@ class DynamicTree{
                 }
             }
             else{
-                if(fixedCount < 256u){
-                    fixedStack[fixedCount] = node.child1;
-                    ++fixedCount;
-                }
-                if(fixedCount < 256u){
-                    fixedStack[fixedCount] = node.child2;
-                    ++fixedCount;
-                }
+                f32 t1 = 0.0f;
+                const b8 hit1 = node.child1 != s_NullIndex && AabbRayCastFast(this.m_nodes[node.child1].aabb(), ray, maxFraction, t1);
+                f32 t2 = 0.0f;
+                const b8 hit2 = node.child2 != s_NullIndex && AabbRayCastFast(this.m_nodes[node.child2].aabb(), ray, maxFraction, t2);
+                PushRayCastChildrenOrdered(fixedStack, fixedStackTMin, fixedCount, node.child1, hit1, t1, node.child2, hit2, t2);
             }
         }
     }
@@ -217,6 +232,7 @@ class DynamicTree{
             if(prevCap != 0u)
                 newCap = prevCap * 2u;
             this.m_nodes.resize(newCap);
+            this.m_moveIndices.resize(newCap, s_NullIndex);
             for(usize i = prevCap; i < newCap - 1u; ++i){
                 this.m_nodes[i].parentOrNext = cast<u32>(i + 1u);
                 this.m_nodes[i].height = -1;
@@ -234,6 +250,7 @@ class DynamicTree{
         this.m_nodes[nodeId].height = 0;
         this.m_nodes[nodeId].aabbMinUser.w = s_NullIndex;
         this.m_nodes[nodeId].moved = false;
+        this.m_moveIndices[nodeId] = s_NullIndex;
         ++this.m_nodeCount;
         return nodeId;
     }
@@ -245,6 +262,8 @@ class DynamicTree{
         this.m_nodes[nodeId].child2 = s_NullIndex;
         this.m_nodes[nodeId].aabbMinUser.w = s_NullIndex;
         this.m_nodes[nodeId].aabbMaxCategory.w = 0u;
+        this.m_nodes[nodeId].moved = false;
+        this.m_moveIndices[nodeId] = s_NullIndex;
         this.m_freeList = nodeId;
         if(this.m_nodeCount > 0u)
             --this.m_nodeCount;

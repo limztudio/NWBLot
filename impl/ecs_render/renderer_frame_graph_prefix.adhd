@@ -212,6 +212,7 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
         timingTickets[cast<usize>(DeferredGraphicsPrefixTimingSlot::MeshViewSetup)], timingTickets[cast<usize>(DeferredGraphicsPrefixTimingSlot::SceneShadingSetup)],
         asyncPrefixTimingSpansOnePacket, context.shadowVisibilityTask, this.m_graphicsPrefixMeshViewSetupReady, this.m_graphicsPrefixSceneShadingSetupReady);
     prefixInputs.rayTracingLightingInput = rayTracingLightingInput;
+    prefixInputs.preflightedLights = context.rayTracing.preflightedSceneLights();
     prefixInputs.meshView = resources.meshView;
     prefixInputs.lights = resources.lights;
     prefixInputs.sceneShading = resources.sceneShading;
@@ -305,7 +306,7 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
     gbufferPayload.materialDrawBuffersUploaded = opaqueUploadChainResult.value().materialDrawBuffersUploaded;
     gbufferPayload.csgFrameBuffersUploaded = opaqueUploadChainResult.value().csgFrameBuffersUploaded;
 
-    gbufferPayload.opaqueDrawSnapshot.capture(opaqueDrawItems, csgFrameData, instanceData.size(), materialTypedBytes.size());
+    gbufferPayload.opaqueDrawSnapshot.captureGbuffer(opaqueDrawItems, csgFrameData, instanceData.size(), materialTypedBytes.size());
     OpaqueCsgIntervalStage opaqueCsgIntervalStage(
         context.graph,
         context.graphics,

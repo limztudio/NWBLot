@@ -75,6 +75,33 @@ class RendererMeshSystem : NoCopy{
         }
     }
 
+    [cpp_unwind]
+    public void collectPendingBlasRayTracingSnapshots(mut MeshRayTracingResourceSnapshotVector outSnapshots, mut u64 outStaticSkippedCount)const{
+        outSnapshots.clear();
+        outStaticSkippedCount = 0u;
+        const MeshAccelerationStatePolicy policy();
+        for(in auto entry : this.m_meshState.m_meshes){
+            in MeshResources mesh = entry.second;
+            if(!policy.requiresBlasUpdate(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision)){
+                if(!mesh.runtimeMesh)
+                    ++outStaticSkippedCount;
+                continue;
+            }
+            outSnapshots.push_back(MeshRayTracingSnapshotPolicy().capture(mesh));
+        }
+    }
+
+    [cpp_unwind]
+    public void collectPendingSwBvhRayTracingSnapshots(mut MeshRayTracingResourceSnapshotVector outSnapshots)const{
+        outSnapshots.clear();
+        const MeshAccelerationStatePolicy policy();
+        for(in auto entry : this.m_meshState.m_meshes){
+            in MeshResources mesh = entry.second;
+            if(policy.requiresSoftwareBvhUpdate(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision))
+                outSnapshots.push_back(MeshRayTracingSnapshotPolicy().capture(mesh));
+        }
+    }
+
     public Expected<MeshRayTracingResourceSnapshot> findRayTracingResourceSnapshot(in Name meshName)const;
 
     public Expected<MeshRayTracingResourceSnapshot> findRenderableRayTracingResourceSnapshot(in RenderableMeshDesc desc)const;

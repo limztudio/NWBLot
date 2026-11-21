@@ -84,21 +84,25 @@ Expected<SkeletonJointMatrix> TryBuildRigidDualQuaternionPayload(in MatrixSingle
     return SkeletonJointMatrix(real.x, real.y, real.z, real.w, dual.x, dual.y, dual.z, dual.w, 0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-Expected<SkeletonJointMatrix> TryBuildSkinJointPaletteEntry(
+Expected<SkeletonJointMatrix> TryBuildSkinJointPaletteEntryValidated(
     in u64 handleValue,
     in usize jointIndex,
     in Span<SkeletonJointMatrix> sourceJoints,
+    in b8 sourceJointsValidated,
     in b8 hasInverseBindMatrices,
     in Span<SkeletonJointMatrix> inverseBindMatrices,
+    in b8 inverseBindValidated,
     in b8 useDualQuaternionPayload
 ){
     MatrixSingle inverseBindMatrix(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
     if(hasInverseBindMatrices)
         inverseBindMatrix = MatrixSingle(inverseBindMatrices[jointIndex]);
-    const Expected<MatrixSingle> jointMatrix = TryResolveSkinningJointMatrix(
+    const Expected<MatrixSingle> jointMatrix = TryResolveSkinningJointMatrixPrevalidated(
         MatrixSingle(sourceJoints[jointIndex]),
+        sourceJointsValidated,
         hasInverseBindMatrices,
         inverseBindMatrix,
+        inverseBindValidated,
         s_SkinValidationEpsilon
     );
     if(!jointMatrix.has_value()){
@@ -116,10 +120,32 @@ Expected<SkeletonJointMatrix> TryBuildSkinJointPaletteEntry(
     return storedJointMatrix.value();
 }
 
-b8 FillSkinJointPaletteSpan(
+Expected<SkeletonJointMatrix> TryBuildSkinJointPaletteEntry(
+    in u64 handleValue,
+    in usize jointIndex,
+    in Span<SkeletonJointMatrix> sourceJoints,
+    in b8 hasInverseBindMatrices,
+    in Span<SkeletonJointMatrix> inverseBindMatrices,
+    in b8 useDualQuaternionPayload
+){
+    return TryBuildSkinJointPaletteEntryValidated(
+        handleValue,
+        jointIndex,
+        sourceJoints,
+        false,
+        hasInverseBindMatrices,
+        inverseBindMatrices,
+        false,
+        useDualQuaternionPayload
+    );
+}
+
+b8 FillSkinJointPaletteSpanValidated(
     in u64 handleValue,
     in Span<SkeletonJointMatrix> sourceJoints,
+    in b8 sourceJointsValidated,
     in Span<SkeletonJointMatrix> inverseBindMatrices,
+    in b8 inverseBindValidated,
     in u32 skinningMode,
     mut Span<SkeletonJointMatrix> outJointPalette
 ){
@@ -130,12 +156,14 @@ b8 FillSkinJointPaletteSpan(
     const b8 hasInverseBindMatrices = !inverseBindMatrices.empty();
 
     for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
-        const Expected<SkeletonJointMatrix> storedJointMatrix = TryBuildSkinJointPaletteEntry(
+        const Expected<SkeletonJointMatrix> storedJointMatrix = TryBuildSkinJointPaletteEntryValidated(
             handleValue,
             jointIndex,
             sourceJoints,
+            sourceJointsValidated,
             hasInverseBindMatrices,
             inverseBindMatrices,
+            inverseBindValidated,
             useDualQuaternionPayload
         );
         if(!storedJointMatrix.has_value())
@@ -146,12 +174,32 @@ b8 FillSkinJointPaletteSpan(
     return true;
 }
 
-b8 BuildSkinJointPaletteToGlobalVector(
+b8 FillSkinJointPaletteSpan(
+    in u64 handleValue,
+    in Span<SkeletonJointMatrix> sourceJoints,
+    in Span<SkeletonJointMatrix> inverseBindMatrices,
+    in u32 skinningMode,
+    mut Span<SkeletonJointMatrix> outJointPalette
+){
+    return FillSkinJointPaletteSpanValidated(
+        handleValue,
+        sourceJoints,
+        false,
+        inverseBindMatrices,
+        false,
+        skinningMode,
+        outJointPalette
+    );
+}
+
+b8 BuildSkinJointPaletteToGlobalVectorValidated(
     in u64 handleValue,
     in u32 skeletonJointCount,
     in usize skinCount,
     in Span<SkeletonJointMatrix> sourceJoints,
+    in b8 sourceJointsValidated,
     in Span<SkeletonJointMatrix> inverseBindMatrices,
+    in b8 inverseBindValidated,
     in u32 skinningMode,
     mut Vector<SkeletonJointMatrix> outJointPalette
 ){
@@ -169,13 +217,51 @@ b8 BuildSkinJointPaletteToGlobalVector(
     ))
         return false;
 
-    outJointPalette.resize(sourceJoints.size(), MakeIdentitySkeletonJointMatrix());
-    if(!FillSkinJointPaletteSpan(handleValue, sourceJoints, inverseBindMatrices, skinningMode, outJointPalette)){
-        outJointPalette.clear();
-        return false;
+    const usize jointCount = sourceJoints.size();
+    const b8 useDualQuaternionPayload = skinningMode == cast<u32>(SkeletonSkinningMode::DualQuaternion);
+    const b8 hasInverseBindMatrices = !inverseBindMatrices.empty();
+    outJointPalette.reserve(jointCount);
+    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
+        const Expected<SkeletonJointMatrix> storedJointMatrix = TryBuildSkinJointPaletteEntryValidated(
+            handleValue,
+            jointIndex,
+            sourceJoints,
+            sourceJointsValidated,
+            hasInverseBindMatrices,
+            inverseBindMatrices,
+            inverseBindValidated,
+            useDualQuaternionPayload
+        );
+        if(!storedJointMatrix.has_value()){
+            outJointPalette.clear();
+            return false;
+        }
+        outJointPalette.push_back(storedJointMatrix.value());
     }
 
     return true;
+}
+
+b8 BuildSkinJointPaletteToGlobalVector(
+    in u64 handleValue,
+    in u32 skeletonJointCount,
+    in usize skinCount,
+    in Span<SkeletonJointMatrix> sourceJoints,
+    in Span<SkeletonJointMatrix> inverseBindMatrices,
+    in u32 skinningMode,
+    mut Vector<SkeletonJointMatrix> outJointPalette
+){
+    return BuildSkinJointPaletteToGlobalVectorValidated(
+        handleValue,
+        skeletonJointCount,
+        skinCount,
+        sourceJoints,
+        false,
+        inverseBindMatrices,
+        false,
+        skinningMode,
+        outJointPalette
+    );
 }
 
 b8 ValidateMeshSkinningInfluenceStream(

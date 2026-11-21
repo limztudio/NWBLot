@@ -179,6 +179,12 @@ Expected<Rect> ResolveEditCaretRangeOnLine(
     return Rect(firstX, line.top, width, line.height);
 }
 
+class EditCaretStopTable{
+    public Vector<EditBoxCaretStop> stops;
+    public Vector<EditCaretLine> lines;
+}
+type SharedEditCaretStopTable = Shared<EditCaretStopTable>;
+
 b8 BuildEditCaretStopsAndLinesInto(
     in StringView expectedText,
     in Span<TextLine> textLines,

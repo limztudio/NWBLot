@@ -104,6 +104,9 @@ b8 WriteBuiltAssets(
     __hidden_built_asset::ScratchBytes artifactBytes(scratchArena);
     __hidden_built_asset::ScratchBytes existingBytes(scratchArena);
     __hidden_built_asset::ScratchBytes manifestBytes(scratchArena);
+    const usize entryLineEstimate = s_HexU64DigitCount * __hidden_built_asset::s_FilenameHexFieldCount + s_Extension.size() + 1u;
+    if(!manifest.entries.empty() && manifest.entries.size() <= Limit<usize>::s_Max / entryLineEstimate)
+        manifestBytes.reserve(manifest.entries.size() * entryLineEstimate);
     ScratchString filename(scratchArena);
     filename.reserve(s_HexU64DigitCount * __hidden_built_asset::s_FilenameHexFieldCount + s_Extension.size());
     const __hidden_built_asset::ScratchPath scratchOutputDirectory(scratchArena, outputDirectory);

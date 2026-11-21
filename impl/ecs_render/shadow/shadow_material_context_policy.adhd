@@ -17,20 +17,13 @@ class ShadowMaterialContextPolicy{
         mut Vector<u8> outInstanceBytes,
         mut Vector<u8> outMaterialTypedBytes
     )const{
-        outInstanceMaterialBytes.clear();
-        outInstanceMaterialBytes.reserve(instanceMaterials.size() * s_NwbRtInstanceMaterialGpuByteSize);
-        for(in NwbRtInstanceMaterialGpu material : instanceMaterials)
-            AppendPOD(outInstanceMaterialBytes, material);
+        const Span<u8> instanceMaterialSpan = PodArrayBytes<NwbRtInstanceMaterialGpu>(instanceMaterials);
+        outInstanceMaterialBytes.assign(instanceMaterialSpan.begin(), instanceMaterialSpan.end());
 
-        outInstanceBytes.clear();
-        outInstanceBytes.reserve(instances.size() * s_InstanceGpuDataByteSize);
-        for(in InstanceGpuData instance : instances)
-            AppendPOD(outInstanceBytes, instance);
+        const Span<u8> instanceSpan = PodArrayBytes<InstanceGpuData>(instances);
+        outInstanceBytes.assign(instanceSpan.begin(), instanceSpan.end());
 
-        outMaterialTypedBytes.clear();
-        outMaterialTypedBytes.reserve(materialTypedBytes.size());
-        for(in u8 b : materialTypedBytes)
-            outMaterialTypedBytes.push_back(b);
+        outMaterialTypedBytes.assign(materialTypedBytes.begin(), materialTypedBytes.end());
     }
 
     public b8 publishAcceptedUpload(

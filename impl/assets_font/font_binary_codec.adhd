@@ -46,8 +46,8 @@ class FontBinaryCodec{
         outBinary.clear();
         outBinary.reserve(s_FontBinaryHeaderBytes + fontBytes.size());
         AppendPOD(outBinary, header);
-        for(in u8 byteValue : fontBytes)
-            outBinary.push_back(byteValue);
+        if(!AppendBinaryVectorPayload(outBinary, fontBytes).has_value())
+            return;
     }
 
     public b8 deserialize(in Span<u8> binary, mut Vector<u8> outFontBytes, mut u32 outFaceIndex)const{
@@ -66,10 +66,8 @@ class FontBinaryCodec{
         if(!this.validatePayloadHeader(header, remainingBytes))
             return false;
 
-        outFontBytes.clear();
-        outFontBytes.resize(remainingBytes);
-        for(usize i = 0u; i < remainingBytes; ++i)
-            outFontBytes[i] = binary[cursor + i];
+        if(!ReadBinaryVectorPayload(binary, remainingBytes, cursor, outFontBytes).has_value())
+            return false;
         outFaceIndex = header.faceIndex;
         return true;
     }

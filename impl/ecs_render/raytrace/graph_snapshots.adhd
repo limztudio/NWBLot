@@ -12,8 +12,12 @@
 
 
 class RayTracingShadowVisibilityGraphPlanSnapshot{
-    public LightSpaceShadowSnapshot lightSpace = LightSpaceShadowSnapshot();
+    public FrozenLightSpaceShadowHandle lightSpace;
     public GraphOwnedAdaptiveShadowPlan adaptivePlan;
+
+    public b8 lightSpaceReady()const{
+        return this.lightSpace.valid() && this.lightSpace.deref().snapshot.ready;
+    }
 
     public b8 hardwareTransparentTrace = false;
     public b8 softTransparentFoldReady = false;

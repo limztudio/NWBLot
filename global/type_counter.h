@@ -14,14 +14,18 @@
 template<typename Tag>
 class TypeCounter{
 private:
-    inline static Atomic<usize> s_NextId{ 0 };
+    inline static constinit Atomic<usize> s_NextId{ 0u };
+
+    template<typename T>
+    struct Slot{
+        inline static const usize s_Value = s_NextId.fetch_add(1u, MemoryOrder::relaxed);
+    };
 
 
 public:
     template<typename T>
-    static usize Id()noexcept{
-        static const usize s_Value = s_NextId.fetch_add(1, MemoryOrder::relaxed);
-        return s_Value;
+    [[nodiscard]] static FOUNDATION_INLINE usize Id()noexcept{
+        return Slot<T>::s_Value;
     }
 };
 

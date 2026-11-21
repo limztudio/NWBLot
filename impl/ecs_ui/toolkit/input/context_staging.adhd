@@ -251,20 +251,24 @@ void PruneUnretainedContextTargetsAndPopups(
     mut Vector<ContextOwnedTarget> inOutTargets,
     mut Vector<ContextOwnedPopup> inOutPopups
 ){
-    for(usize index = inOutTargets.size(); index > 0u; --index){
-        if(!retainedRoots.contains(inOutTargets[index - 1u].root)){
-            for(usize i = index - 1u; i + 1u < inOutTargets.size(); ++i)
-                inOutTargets[i] = inOutTargets[i + 1u];
-            inOutTargets.pop_back();
+    usize keptTargets = 0u;
+    for(usize index = 0u; index < inOutTargets.size(); ++index){
+        if(retainedRoots.contains(inOutTargets[index].root)){
+            if(keptTargets != index)
+                inOutTargets[keptTargets] = inOutTargets[index];
+            ++keptTargets;
         }
     }
-    for(usize index = inOutPopups.size(); index > 0u; --index){
-        if(!retainedRoots.contains(inOutPopups[index - 1u].root)){
-            for(usize i = index - 1u; i + 1u < inOutPopups.size(); ++i)
-                inOutPopups[i] = inOutPopups[i + 1u];
-            inOutPopups.pop_back();
+    inOutTargets.resize(keptTargets);
+    usize keptPopups = 0u;
+    for(usize index = 0u; index < inOutPopups.size(); ++index){
+        if(retainedRoots.contains(inOutPopups[index].root)){
+            if(keptPopups != index)
+                inOutPopups[keptPopups] = inOutPopups[index];
+            ++keptPopups;
         }
     }
+    inOutPopups.resize(keptPopups);
 }
 
 

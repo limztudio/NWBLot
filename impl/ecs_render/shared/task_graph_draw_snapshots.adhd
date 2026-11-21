@@ -37,6 +37,19 @@ class TransparentMaterialPassGraphSnapshot{
         this.materialTypedByteCount = typedByteCount;
         this.captured = true;
     }
+    [cpp_unwind]
+    public void captureRegularAndFrame(in MaterialPassDrawItemsView regularDraws, in CsgFrameGpuDataView frame, in usize instanceCount, in usize typedByteCount){
+        CaptureGraphDrawItems(regularDraws, this.regular);
+        this.csg.meshDrawItems.clear();
+        this.csg.indexedDrawItems.clear();
+        this.csg.computeDrawItems.clear();
+        AssignVector(this.m_receiverRanges, frame.receiverRanges);
+        AssignVector(this.m_cutters, frame.cutters);
+        this.m_workRegion = frame.workRegion;
+        this.instanceCount = instanceCount;
+        this.materialTypedByteCount = typedByteCount;
+        this.captured = true;
+    }
     public CsgFrameGpuDataView csgFrameDataView()const{
         return CsgFrameGpuDataView(this.m_receiverRanges, this.m_cutters, this.m_workRegion);
     }
@@ -48,17 +61,61 @@ class TransparentMaterialPassGraphSnapshot{
 class OpaqueMaterialPassGraphSnapshot{
     public TransparentMaterialPassGraphSnapshot passes;
     private MaterialPassDrawItems m_receivers;
+    public b8 hasCsgDraws = false;
 
     [cpp_unwind]
     public void capture(in MaterialPassDrawItemPartitionsView draws, in CsgFrameGpuDataView frame, in usize instanceCount, in usize typedByteCount){
         this.passes.capture(draws, frame, instanceCount, typedByteCount);
         CaptureGraphDrawItems(draws.csgReceiverSurface, this.m_receivers);
+        this.hasCsgDraws = !draws.csg.empty();
+    }
+    [cpp_unwind]
+    public void captureGbuffer(in MaterialPassDrawItemPartitionsView draws, in CsgFrameGpuDataView frame, in usize instanceCount, in usize typedByteCount){
+        this.passes.captureRegularAndFrame(draws.regular, frame, instanceCount, typedByteCount);
+        CaptureGraphDrawItems(draws.csgReceiverSurface, this.m_receivers);
+        this.hasCsgDraws = !draws.csg.empty();
     }
     public CsgFrameGpuDataView csgFrameDataView()const{
         return this.passes.csgFrameDataView();
     }
     public MaterialPassDrawItemPartitionsView drawItemsView()const{
         return MaterialPassDrawItemPartitionsView(MaterialPassDrawItemsView(this.passes.regular), MaterialPassDrawItemsView(this.passes.csg), MaterialPassDrawItemsView(this.m_receivers));
+    }
+}
+
+class OpaqueCsgIntervalFrameSnapshot{
+    private Vector<CsgReceiverRangeGpuData> m_receiverRanges;
+    private Vector<CsgCutterGpuData> m_cutters;
+    private CsgFrameWorkRegion m_workRegion;
+    public usize instanceCount = 0u;
+    public usize materialTypedByteCount = 0u;
+    public b8 hasDeferredDrawItems = false;
+    public b8 csgReceiverSurfaceEmpty = true;
+    public b8 csgReceiverSurfaceDrawResourcesReady = false;
+    public b8 captured = false;
+
+    [cpp_unwind]
+    public void capture(
+        in CsgFrameGpuDataView frame,
+        in usize instanceCount,
+        in usize typedByteCount,
+        in b8 hasDeferredDrawItems,
+        in b8 csgReceiverSurfaceEmpty,
+        in b8 csgReceiverSurfaceDrawResourcesReady
+    ){
+        AssignVector(this.m_receiverRanges, frame.receiverRanges);
+        AssignVector(this.m_cutters, frame.cutters);
+        this.m_workRegion = frame.workRegion;
+        this.instanceCount = instanceCount;
+        this.materialTypedByteCount = typedByteCount;
+        this.hasDeferredDrawItems = hasDeferredDrawItems;
+        this.csgReceiverSurfaceEmpty = csgReceiverSurfaceEmpty;
+        this.csgReceiverSurfaceDrawResourcesReady = csgReceiverSurfaceDrawResourcesReady;
+        this.captured = true;
+    }
+
+    public CsgFrameGpuDataView csgFrameDataView()const{
+        return CsgFrameGpuDataView(this.m_receiverRanges, this.m_cutters, this.m_workRegion);
     }
 }
 

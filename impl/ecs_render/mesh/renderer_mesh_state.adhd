@@ -15,6 +15,7 @@ class RendererMeshState : NoCopy{
     public BufferHandle m_meshViewBuffer;
     public MeshFrameBindings m_frameBindings;
     public Array<u8, s_MeshViewGpuDataBytes> m_meshViewGpuData;
+    public usize m_runtimeMeshCount = 0u;
     public b8 m_meshViewGpuDataValid = false;
 
     public RendererMeshState(){}
@@ -23,6 +24,7 @@ class RendererMeshState : NoCopy{
         this.m_meshes.clear();
         this.m_meshViewBuffer.reset();
         this.m_frameBindings.reset();
+        this.m_runtimeMeshCount = 0u;
         this.m_meshViewGpuDataValid = false;
     }
 }

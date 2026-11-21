@@ -57,6 +57,7 @@ class RendererRayTracingSystem : NoCopy{
     private b8 m_unsupportedCausticVolumeReported = false;
     private b8 m_shadowVisibilityTraceResourcesPreflighted = false;
     private b8 m_shadowVisibilityBackendPipelinePreflighted = false;
+    private RayTracingSceneGatherScratch m_sceneGatherScratch;
 
     public RendererRayTracingSystem(
         mut World world,
@@ -113,6 +114,9 @@ class RendererRayTracingSystem : NoCopy{
     public b8 setShadowQualitySettings(in ShadowQualitySettings settings);
     public u32 requestedShadowReceiverFactor()const{ return RequestedShadowReceiverResolutionFactor(this.m_shadowQualitySettings.receiverResolution); }
     public LightSpaceShadowSnapshot lightSpaceShadowSnapshot()const;
+    public in LightSpaceShadowSnapshot lightSpaceShadowSnapshotRef()const{ return this.m_lightSpaceShadow.m_snapshot; }
+    public FrozenLightSpaceShadowHandle frozenLightSpaceShadowSnapshot()const{ return this.m_lightSpaceShadow.m_frozenSnapshot; }
+    public PreflightedSceneLightsView preflightedSceneLights()const;
     [cpp_unwind]
     public void acceptLightSpaceShadowCapture(in LightSpaceCaptureTicket ticket, in b8 prepared);
     public void invalidateLightSpaceShadowCapture(){ this.m_lightSpaceShadow.m_captureHistory.invalidate(); }
@@ -252,7 +256,7 @@ class RendererRayTracingSystem : NoCopy{
         in borrow b8 prepared,
         in b8 hardwareShadowSupported,
         in b8 graphOwnsOpaqueTemporalMergeEntryStates,
-        in Optional<in LightSpaceShadowSnapshot> lightSpace,
+        in FrozenLightSpaceShadowHandle lightSpace,
         mut DeferredFrameTargets targets,
         mut GpuTimingSubmissionTicket timingTicket,
         mut Optional<GpuTimingMeasure> asyncTiming,
@@ -343,7 +347,7 @@ class RendererRayTracingSystem : NoCopy{
         in DeferredLightingGraphResources deferredLightingResources,
         in borrow b8 opaqueProduced,
         in borrow u32 opaqueFrameIndex,
-        in Optional<in LightSpaceShadowSnapshot> lightSpace,
+        in FrozenLightSpaceShadowHandle lightSpace,
         mut DeferredFrameTargets targets,
         mut GpuTimingSubmissionTicket timingTicket,
         mut b8 transparentTraceProduced
@@ -987,6 +991,7 @@ class RendererRayTracingSystem : NoCopy{
     private b8 hasCommonCausticWork(in MeshViewBufferSnapshot meshView)const;
     [cpp_unwind]
     private void preflightLightSpaceShadowResources();
+    private Expected<LightSpacePlan> buildLightSpaceShadowPlan(in Span<SceneLightGpuData> lights, mut u32 outDrawCount)const;
     private Expected<LightSpacePlan> buildLightSpaceShadowPlan(in Span<SceneLightGpuData> lights)const;
     [cpp_unwind]
     private void prepareLightSpaceShadows(in Span<SceneLightGpuData> lights);

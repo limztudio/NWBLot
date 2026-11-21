@@ -20,11 +20,20 @@ class PhysicsWorldCpuScratch{
     public Vector<u8> contactTransitionFlags;
     public Vector<Manifold> evaluatedManifolds;
     public Array<Vector<ContactConstraint>, s_GraphColorCount> colorConstraints;
+    public Array<Vector<ContactConstraintStepCache>, s_GraphColorCount> colorConstraintCaches;
     public Vector<JointConstraint> jointConstraints;
+    public Vector<JointConstraintStepCache> jointConstraintCaches;
+    public Vector<u32> activeJointIds;
     public Vector<u32> awakeIndices;
     public Vector<u32> brokenJointIds;
     public Vector<u32> islandsToSleep;
     public Vector<u32> candidateSplitIslands;
+    public IslandSplitScratch islandSplit;
+    public Vector<u32> wakeTargets;
+    public Vector<u32> contactVisitStamps;
+    public u32 contactVisitStamp = 0u;
+    public Vector<u32> jointVisitStamps;
+    public u32 jointVisitStamp = 0u;
     public Vector<u32> parAwakeToLocal;
     public Vector<u32> parDynAwakeIndices;
     public Vector<u32> parKinAwakeIndices;
@@ -55,13 +64,23 @@ class PhysicsWorldCpuScratch{
         this.pruneContactIds.clear();
         this.contactTransitionFlags.clear();
         this.evaluatedManifolds.clear();
-        for(usize c = 0u; c < s_GraphColorCount; ++c)
+        for(usize c = 0u; c < s_GraphColorCount; ++c){
             this.colorConstraints[c].clear();
+            this.colorConstraintCaches[c].clear();
+        }
         this.jointConstraints.clear();
+        this.jointConstraintCaches.clear();
+        this.activeJointIds.clear();
         this.awakeIndices.clear();
         this.brokenJointIds.clear();
         this.islandsToSleep.clear();
         this.candidateSplitIslands.clear();
+        this.islandSplit.clear();
+        this.wakeTargets.clear();
+        this.contactVisitStamps.clear();
+        this.contactVisitStamp = 0u;
+        this.jointVisitStamps.clear();
+        this.jointVisitStamp = 0u;
         this.parAwakeToLocal.clear();
         this.parDynAwakeIndices.clear();
         this.parKinAwakeIndices.clear();
@@ -98,6 +117,7 @@ class PhysicsWorld{
     public Vector<Shape> m_shapes;
     public Vector<u32> m_freeShapeIds;
     public Vector<HullShape> m_hullShapes;
+    public Vector<Aabb3D> m_hullLocalAabbs;
     private Vector<u32> m_freeHullShapeIds;
     public Vector<MeshShape> m_meshShapes;
     private Vector<u32> m_freeMeshShapeIds;
@@ -156,6 +176,7 @@ class PhysicsWorld{
         this.m_shapes.clear();
         this.m_freeShapeIds.clear();
         this.m_hullShapes.clear();
+        this.m_hullLocalAabbs.clear();
         this.m_freeHullShapeIds.clear();
         this.m_meshShapes.clear();
         this.m_freeMeshShapeIds.clear();
@@ -199,8 +220,31 @@ class PhysicsWorld{
         this.m_pendingSensorEndEvents.clear();
     }
 
+    private void drainWakeTargetsFrom(in usize baseOffset, in b8 directGraphWake){
+        const usize endOffset = this.m_cpuScratch.wakeTargets.size();
+        for(usize wi = baseOffset; wi < endOffset; ++wi){
+            const u32 targetIdx = this.m_cpuScratch.wakeTargets[wi];
+            if(directGraphWake){
+                WakeBodyWithGraph(
+                    this.m_graph,
+                    this.m_bodies,
+                    this.m_islands,
+                    this.m_solverSets,
+                    this.m_freeSolverSetIds,
+                    this.m_contacts,
+                    targetIdx
+                );
+            }
+            else{
+                this.wakeBody(this.makeBodyId(targetIdx));
+            }
+        }
+        this.m_cpuScratch.wakeTargets.resize(baseOffset);
+    }
+
     private void wakeOverlappingSleepingBodies(in Aabb3D worldBox, in u32 ignoreBodyIdx){
-        Vector<u32> wakeTargets;
+        const usize wakeBase = this.m_cpuScratch.wakeTargets.size();
+        mut Vector<u32> wakeTargets = this.m_cpuScratch.wakeTargets;
         in PhysicsWorld worldRef = this;
         this.m_broadPhase.trees[s_TreeDynamic].queryAabb(
             worldBox,
@@ -214,8 +258,7 @@ class PhysicsWorld{
                 return true;
             }
         );
-        for(usize wi = 0u; wi < wakeTargets.size(); ++wi)
-            this.wakeBody(this.makeBodyId(wakeTargets[wi]));
+        this.drainWakeTargetsFrom(wakeBase, false);
     }
 
     private u32 broadPhaseQueryMask(in Filter filter)const{
@@ -235,7 +278,7 @@ class PhysicsWorld{
         if(bodyIdx >= this.m_bodies.size() || !this.m_bodies[bodyIdx].alive)
             return;
 
-        Vector<u32> wakeTargets;
+        const usize wakeBase = this.m_cpuScratch.wakeTargets.size();
         u32 cKey = this.m_bodies[bodyIdx].headContactKey;
         while(cKey != s_NullIndex){
             const u32 cId = DecodeContactKeyId(cKey);
@@ -243,7 +286,7 @@ class PhysicsWorld{
             in Contact c = this.m_contacts[cId];
             const u32 otherBody = c.edges[edgeIdx ^ 1u].bodyId;
             if(otherBody < this.m_bodies.size() && this.m_bodies[otherBody].alive && this.m_bodies[otherBody].type == BodyType::Dynamic && this.m_bodies[otherBody].setIndex >= 3u)
-                wakeTargets.push_back(otherBody);
+                this.m_cpuScratch.wakeTargets.push_back(otherBody);
             cKey = c.edges[edgeIdx].nextKey;
         }
 
@@ -254,12 +297,11 @@ class PhysicsWorld{
             in Joint j = this.m_joints[jId];
             const u32 otherBody = j.edges[edgeIdx ^ 1u].bodyId;
             if(otherBody < this.m_bodies.size() && this.m_bodies[otherBody].alive && this.m_bodies[otherBody].type == BodyType::Dynamic && this.m_bodies[otherBody].setIndex >= 3u)
-                wakeTargets.push_back(otherBody);
+                this.m_cpuScratch.wakeTargets.push_back(otherBody);
             jKey = j.edges[edgeIdx].nextKey;
         }
 
-        for(usize wi = 0u; wi < wakeTargets.size(); ++wi)
-            this.wakeBody(this.makeBodyId(wakeTargets[wi]));
+        this.drainWakeTargetsFrom(wakeBase, false);
     }
 
     private void wakeShapeNeighbors(in u32 shapeIdx){
@@ -269,7 +311,7 @@ class PhysicsWorld{
         if(bodyIdx >= this.m_bodies.size() || !this.m_bodies[bodyIdx].alive)
             return;
 
-        Vector<u32> wakeTargets;
+        const usize wakeBase = this.m_cpuScratch.wakeTargets.size();
         u32 cKey = this.m_bodies[bodyIdx].headContactKey;
         while(cKey != s_NullIndex){
             const u32 cId = DecodeContactKeyId(cKey);
@@ -278,13 +320,12 @@ class PhysicsWorld{
             if(c.shapeIdA == shapeIdx || c.shapeIdB == shapeIdx){
                 const u32 otherBody = c.edges[edgeIdx ^ 1u].bodyId;
                 if(otherBody < this.m_bodies.size() && this.m_bodies[otherBody].alive && this.m_bodies[otherBody].type == BodyType::Dynamic && this.m_bodies[otherBody].setIndex >= 3u)
-                    wakeTargets.push_back(otherBody);
+                    this.m_cpuScratch.wakeTargets.push_back(otherBody);
             }
             cKey = c.edges[edgeIdx].nextKey;
         }
 
-        for(usize wi = 0u; wi < wakeTargets.size(); ++wi)
-            this.wakeBody(this.makeBodyId(wakeTargets[wi]));
+        this.drainWakeTargetsFrom(wakeBase, false);
     }
 
     private void zeroShapeContactWarmStart(in u32 shapeIdx){
@@ -664,14 +705,19 @@ class PhysicsWorld{
     }
 
     private u32 allocateHullShape(in HullShape hull){
+        u32 slot = s_NullIndex;
         if(!this.m_freeHullShapeIds.empty()){
-            const u32 slot = this.m_freeHullShapeIds[this.m_freeHullShapeIds.size() - 1u];
+            slot = this.m_freeHullShapeIds[this.m_freeHullShapeIds.size() - 1u];
             this.m_freeHullShapeIds.pop_back();
             this.m_hullShapes[slot] = hull;
-            return slot;
         }
-        const u32 slot = cast<u32>(this.m_hullShapes.size());
-        this.m_hullShapes.push_back(hull);
+        else{
+            slot = cast<u32>(this.m_hullShapes.size());
+            this.m_hullShapes.push_back(hull);
+        }
+        if(this.m_hullLocalAabbs.size() < this.m_hullShapes.size())
+            this.m_hullLocalAabbs.resize(this.m_hullShapes.size());
+        this.m_hullLocalAabbs[slot] = ComputeHullAabb(this.m_hullShapes[slot], Transform3D());
         return slot;
     }
 
@@ -679,6 +725,8 @@ class PhysicsWorld{
         if(slot >= this.m_hullShapes.size())
             return;
         this.m_hullShapes[slot] = HullShape();
+        if(slot < this.m_hullLocalAabbs.size())
+            this.m_hullLocalAabbs[slot] = Aabb3D();
         this.m_freeHullShapeIds.push_back(slot);
     }
 
@@ -947,7 +995,9 @@ class PhysicsWorld{
         VectorSingle weightedCenter = VectorSingle(0.0f);
         VectorSingle minLocal = VectorSingle(s_MaxF32);
         VectorSingle maxLocal = VectorSingle(-s_MaxF32);
-        Vector<MassData> shapeMasses;
+        VectorSingle r0 = VectorSingle(0.0f);
+        VectorSingle r1 = VectorSingle(0.0f);
+        VectorSingle r2 = VectorSingle(0.0f);
 
         u32 shapeIdx = body.headShapeId;
         while(shapeIdx != s_NullIndex){
@@ -965,10 +1015,12 @@ class PhysicsWorld{
                 if(mdMass > 0.0f){
                     totalMass += mdMass;
                     weightedCenter = weightedCenter + md.center() * mdMass;
-                    shapeMasses.push_back(md);
+                    r0 = r0 + VectorSingle(md.inertia.row0);
+                    r1 = r1 + VectorSingle(md.inertia.row1);
+                    r2 = r2 + VectorSingle(md.inertia.row2);
                 }
             }
-            const Aabb3D localBox = ComputeShapeLocalAabb(shape, this.m_hullShapes, this.m_meshShapes);
+            const Aabb3D localBox = ComputeShapeLocalAabbCached(shape, this.m_hullShapes, this.m_hullLocalAabbs, this.m_meshShapes);
             minLocal = Min(minLocal, VectorSingle(localBox.lowerBound));
             maxLocal = Max(maxLocal, VectorSingle(localBox.upperBound));
             shapeIdx = shape.nextShapeId;
@@ -982,15 +1034,6 @@ class PhysicsWorld{
             sim.setLocalCenter(localCom);
             sim.setCenter(worldCom);
             sim.setCenter0(worldCom);
-
-            VectorSingle r0 = VectorSingle(0.0f);
-            VectorSingle r1 = VectorSingle(0.0f);
-            VectorSingle r2 = VectorSingle(0.0f);
-            for(usize i = 0u; i < shapeMasses.size(); ++i){
-                r0 = r0 + VectorSingle(shapeMasses[i].inertia.row0);
-                r1 = r1 + VectorSingle(shapeMasses[i].inertia.row1);
-                r2 = r2 + VectorSingle(shapeMasses[i].inertia.row2);
-            }
 
             const f32 cxx = r0.x - totalMass * (localCom.y * localCom.y + localCom.z * localCom.z);
             const f32 cyy = r1.y - totalMass * (localCom.x * localCom.x + localCom.z * localCom.z);
@@ -1113,7 +1156,7 @@ class PhysicsWorld{
         }
 
         if(Vector3LengthSq(linVel).x > 0.0f || Vector3LengthSq(angVel).x > 0.0f){
-            Vector<u32> wakeTargets;
+            const usize wakeBase = this.m_cpuScratch.wakeTargets.size();
             u32 edgeKey = body.headContactKey;
             while(edgeKey != s_NullIndex){
                 const u32 cId = DecodeContactKeyId(edgeKey);
@@ -1121,20 +1164,10 @@ class PhysicsWorld{
                 in Contact c = this.m_contacts[cId];
                 const u32 otherBodyId = c.edges[edgeIdx ^ 1u].bodyId;
                 if(otherBodyId < this.m_bodies.size() && this.m_bodies[otherBodyId].alive && this.m_bodies[otherBodyId].setIndex >= 3u)
-                    wakeTargets.push_back(otherBodyId);
+                    this.m_cpuScratch.wakeTargets.push_back(otherBodyId);
                 edgeKey = c.edges[edgeIdx].nextKey;
             }
-            for(usize wi = 0u; wi < wakeTargets.size(); ++wi){
-                WakeBodyWithGraph(
-                    this.m_graph,
-                    this.m_bodies,
-                    this.m_islands,
-                    this.m_solverSets,
-                    this.m_freeSolverSetIds,
-                    this.m_contacts,
-                    wakeTargets[wi]
-                );
-            }
+            this.drainWakeTargetsFrom(wakeBase, true);
         }
         return true;
     }
@@ -3537,14 +3570,10 @@ class PhysicsWorld{
         ShapeProxy ptProxy;
         ptProxy.points.push_back(f32x3u(0.0f, 0.0f, 0.0f));
         ptProxy.radius = 0.0f;
-        DistanceInput dIn;
-        dIn.proxyA = ptProxy;
-        dIn.proxyB = MakeShapeProxyFromShape(shape, this.m_hullShapes, this.m_meshShapes);
-        dIn.transformA = Transform3D(worldPoint, VectorSingle(0.0f, 0.0f, 0.0f, 1.0f));
-        dIn.transformB = xf;
-        dIn.useRadii = false;
+        const ShapeProxy targetProxy = MakeShapeProxyFromShape(shape, this.m_hullShapes, this.m_meshShapes);
+        const Transform3D ptXf(worldPoint, VectorSingle(0.0f, 0.0f, 0.0f, 1.0f));
         SimplexCache cache;
-        const DistanceOutput dist = ShapeDistance(dIn, cache);
+        const DistanceOutput dist = ShapeDistanceProxies(ptProxy, ptXf, targetProxy, xf, false, cache);
         return dist.distance() <= this.m_hullShapes[shape.geometryIndex].radius() + 1.0e-5f;
     }
 
@@ -3653,14 +3682,9 @@ class PhysicsWorld{
                                 const u32 endTri = node.leftOrFirst() + node.rightOrCount();
                                 for(u32 ti = node.leftOrFirst(); ti < endTri; ++ti){
                                     in MeshTriangle tri = mesh.triangles[ti];
-                                    DistanceInput dIn;
-                                    dIn.proxyA = queryProxy;
-                                    dIn.proxyB = MakeTriangleProxy(Vec3FromU(tri.v0), Vec3FromU(tri.v1), Vec3FromU(tri.v2), mesh.radius());
-                                    dIn.transformA = queryTransform;
-                                    dIn.transformB = xfB;
-                                    dIn.useRadii = false;
+                                    const ShapeProxy triProxy = MakeTriangleProxy(Vec3FromU(tri.v0), Vec3FromU(tri.v1), Vec3FromU(tri.v2), mesh.radius());
                                     SimplexCache cache;
-                                    const DistanceOutput dist = ShapeDistance(dIn, cache);
+                                    const DistanceOutput dist = ShapeDistanceProxies(queryProxy, queryTransform, triProxy, xfB, false, cache);
                                     if(dist.distance() <= combR){
                                         outShapes.push_back(this.makeShapeId(shapeIdx));
                                         return true;
@@ -3687,14 +3711,8 @@ class PhysicsWorld{
                     }
 
                     const ShapeProxy targetProxy = MakeShapeProxyFromShape(shape, this.m_hullShapes, this.m_meshShapes);
-                    DistanceInput dIn;
-                    dIn.proxyA = queryProxy;
-                    dIn.proxyB = targetProxy;
-                    dIn.transformA = queryTransform;
-                    dIn.transformB = xfB;
-                    dIn.useRadii = false;
                     SimplexCache cache;
-                    const DistanceOutput dist = ShapeDistance(dIn, cache);
+                    const DistanceOutput dist = ShapeDistanceProxies(queryProxy, queryTransform, targetProxy, xfB, false, cache);
                     if(dist.distance() <= queryProxy.radius + targetProxy.radius)
                         outShapes.push_back(this.makeShapeId(shapeIdx));
                     return true;
@@ -3756,14 +3774,8 @@ class PhysicsWorld{
 
                     in Transform3D xfB = this.m_solverSets[body.setIndex].sims[body.localIndex].transform;
                     const ShapeProxy targetProxy = MakeShapeProxyFromShape(shape, this.m_hullShapes, this.m_meshShapes);
-                    DistanceInput dIn;
-                    dIn.proxyA = ptProxy;
-                    dIn.proxyB = targetProxy;
-                    dIn.transformA = ptXf;
-                    dIn.transformB = xfB;
-                    dIn.useRadii = false;
                     SimplexCache cache;
-                    const DistanceOutput distOut = ShapeDistance(dIn, cache);
+                    const DistanceOutput distOut = ShapeDistanceProxies(ptProxy, ptXf, targetProxy, xfB, false, cache);
                     const f32 surfDist = Max(0.0f, distOut.distance() - targetProxy.radius);
                     if(surfDist >= maxR)
                         return true;

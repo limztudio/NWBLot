@@ -96,6 +96,7 @@ class RendererMaterialSystem : IPreparedMaterialLookup{
     public Expected<mut MaterialSurfaceInfo> findMaterialSurfaceInfo(in AssetRef<Material> materialAsset)override;
     [cpp_unwind]
     public b8 prepareVisibleMaterialSurfaceInfos();
+    public b8 hasNoVisibleRefractiveRenderers()const;
     [cpp_unwind]
     public void prepareVisibleMaterialInstanceMutableCache();
     [cpp_unwind]

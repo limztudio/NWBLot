@@ -281,7 +281,8 @@ private:
         Alloc::ScratchArena& scratchArena,
         GpuRecordedGraph& recordedGraph,
         GpuCommandIrCapture* commandIrCapture,
-        GpuSubmissionPacketId* outFailedPacket
+        GpuSubmissionPacketId* outFailedPacket,
+        b8 allowStateSeedElision = false
     )const;
     [[nodiscard]] b8 recordAndSubmitTaskWithinSubmissionOperation(
         const GpuCompiledGraph& compiledGraph,

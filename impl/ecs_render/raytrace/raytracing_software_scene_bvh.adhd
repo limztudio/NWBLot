@@ -183,6 +183,7 @@ b8 RendererRayTracingSystem::matchesPreparedTraversalMesh(in MeshRayTracingResou
         return false;
     in RtMeshHeapHandleCache cache = this.m_rayTracingState.shadow.m_swMeshHeapHandleCache;
     const b8 topologyReady = mesh.swBvhTopologyBuilt || this.preparedMeshSwBvhBuildProducesTopology(mesh);
+    const auto foundAttr = cache.find(prepared.attributeBuffer.identity());
     return
         mesh.meshName == prepared.meshName
         && mesh.runtimeMesh == prepared.runtimeMesh
@@ -195,8 +196,8 @@ b8 RendererRayTracingSystem::matchesPreparedTraversalMesh(in MeshRayTracingResou
         && mesh.swBvhNodeHeapHandle == prepared.nodeHeapHandle
         && mesh.swBvhPositionHeapHandle == prepared.positionHeapHandle
         && mesh.swBvhTriangleIndexHeapHandle == prepared.triangleIndexHeapHandle
-        && cache.contains(prepared.attributeBuffer.identity())
-        && cache.at(prepared.attributeBuffer.identity()).handle == prepared.attributeHeapHandle
+        && foundAttr != cache.end()
+        && foundAttr.value().handle == prepared.attributeHeapHandle
         && topologyReady
         && mesh.meshletPrimitiveIndexCount == prepared.primitiveCount * s_RayTracingTriangleIndexCount
         && mesh.swBvhNodeBuffer.deref().getCreationDescription().byteSize == prepared.nodeByteSize

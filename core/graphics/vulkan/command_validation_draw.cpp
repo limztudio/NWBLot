@@ -19,7 +19,7 @@ NWB_VULKAN_BEGIN
 
 
 b8 CommandList::CollectGraphicsBufferStates(const GraphicsState& state, GraphicsBufferStateTable& outTable)noexcept{
-    outTable = {};
+    outTable.count = 0u;
     const auto addRequiredBufferState = [&outTable](Buffer* const buffer, const ResourceStates::Mask requiredState)noexcept -> b8{
         if(!buffer)
             return true;

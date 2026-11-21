@@ -87,8 +87,8 @@ class PreparedFontBinaryCodec{
 
     private void appendSha256(in Span<u8> sourceBytes, mut Vector<u8> outBinary)const{
         const Array<u8, 32> digest = ComputeFontSha256Bytes(sourceBytes);
-        for(in u8 byteValue : digest)
-            outBinary.push_back(byteValue);
+        if(!AppendBinaryVectorPayload(outBinary, digest).has_value())
+            return;
     }
 
     public void appendSourceBinary(
@@ -116,12 +116,11 @@ class PreparedFontBinaryCodec{
             AppendU32LittleEndian(outBinary, cast<u32>(group.pixels.size()));
             this.appendSha256(group.pixels, outBinary);
         }
-        for(in u8 byteValue : sfnt)
-            outBinary.push_back(byteValue);
+        if(!AppendBinaryVectorPayload(outBinary, sfnt).has_value())
+            return;
         for(usize index = 0u; index < groups.size(); ++index){
-            const Span<u8> pixels = groups[index].pixels;
-            for(in u8 byteValue : pixels)
-                outBinary.push_back(byteValue);
+            if(!AppendBinaryVectorPayload(outBinary, groups[index].pixels).has_value())
+                return;
         }
     }
 

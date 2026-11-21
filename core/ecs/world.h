@@ -37,7 +37,6 @@ class World : NoCopy{
 private:
     struct EntityComponentNode{
         ComponentTypeId typeId;
-        NotNull<IComponentPool*> pool;
         u32 next;
     };
 
@@ -55,6 +54,7 @@ private:
 
 
 private:
+    static constexpr usize s_FastComponentMaskBits = 64u;
     static constexpr u32 s_InvalidEntityComponentNode = Limit<u32>::s_Max;
 
 
@@ -203,7 +203,7 @@ public:
             return *existing;
 
         const ComponentTypeId typeId = ComponentType<T>();
-        addEntityComponentTypeUnchecked(entityId, typeId, pool);
+        addEntityComponentTypeUnchecked(entityId, typeId);
         ScopeExit rollbackType([this, entityId, typeId]()noexcept{ removeEntityComponentType(entityId, typeId); });
         T& component = pool.addUnchecked(entityId, Forward<Args>(args)...);
         rollbackType.release();
@@ -212,9 +212,6 @@ public:
 
     template<typename T>
     void removeComponent(EntityID entityId)noexcept(noexcept(DeclVal<ComponentPool<T>&>().remove(entityId))){
-        if(!m_entityManager.alive(entityId))
-            return;
-
         auto* pool = getPool<T>();
         if(pool && pool->remove(entityId))
             removeEntityComponentType(entityId, ComponentType<T>());
@@ -286,11 +283,29 @@ private:
     }
 
     void destroyEntityComponents(EntityID entityId);
-    void addEntityComponentType(EntityID entityId, ComponentTypeId typeId, IComponentPool& pool);
-    void addEntityComponentTypeUnchecked(EntityID entityId, ComponentTypeId typeId, IComponentPool& pool);
-    void removeEntityComponentType(EntityID entityId, ComponentTypeId typeId)noexcept;
+    FOUNDATION_INLINE void addEntityComponentTypeUnchecked(const EntityID entityId, const ComponentTypeId typeId){
+        if(typeId < s_FastComponentMaskBits){
+            const usize index = static_cast<usize>(entityId.index());
+            if(index < m_entityComponentMasks.size()){
+                m_entityComponentMasks[index] |= (1ull << typeId);
+                return;
+            }
+        }
+        addEntityComponentTypeUncheckedSlow(entityId, typeId);
+    }
+    FOUNDATION_INLINE void removeEntityComponentType(const EntityID entityId, const ComponentTypeId typeId)noexcept{
+        const usize index = static_cast<usize>(entityId.index());
+        if(typeId < s_FastComponentMaskBits){
+            if(index < m_entityComponentMasks.size())
+                m_entityComponentMasks[index] &= ~(1ull << typeId);
+            return;
+        }
+        removeEntityComponentTypeOverflow(index, typeId);
+    }
+    void addEntityComponentTypeUncheckedSlow(EntityID entityId, ComponentTypeId typeId);
+    void removeEntityComponentTypeOverflow(usize index, ComponentTypeId typeId)noexcept;
     void ensureEntityComponentHead(EntityID entityId);
-    u32 acquireEntityComponentNode(ComponentTypeId typeId, u32 nextNode, IComponentPool& pool);
+    u32 acquireEntityComponentNode(ComponentTypeId typeId, u32 nextNode);
     void releaseEntityComponentNode(u32 nodeIndex)noexcept;
 
 
@@ -299,6 +314,7 @@ private:
     CpuTaskScope m_tasks;
 
     EntityManager m_entityManager;
+    Vector<u64, Alloc::GlobalArena> m_entityComponentMasks;
     Vector<u32, Alloc::GlobalArena> m_entityComponentHeads;
     Vector<EntityComponentNode, Alloc::GlobalArena> m_entityComponentNodes;
     Vector<ComponentPoolPtr, Alloc::GlobalArena> m_pools;

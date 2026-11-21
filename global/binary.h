@@ -143,13 +143,42 @@ inline void AppendBytesNoReserveUnchecked(Container& outBinary, const void* byte
 
 template<typename Container>
 inline void ReserveAppendBytesIfSupported(Container& outBinary, const usize byteCount)noexcept([]()consteval noexcept{
-    if constexpr(requires(Container& c, usize n){ c.reserve(n); })
-        return noexcept(DeclVal<Container&>().reserve(DeclVal<Container&>().size() + DeclVal<const usize&>()));
-    else
+    if constexpr(requires(Container& c, usize n){ c.reserve(n); }){
+        if constexpr(requires(Container& c){ c.capacity(); }){
+            if constexpr(requires(Container& c){ c.max_size(); })
+                return noexcept(DeclVal<Container&>().size()) && noexcept(DeclVal<Container&>().capacity()) && noexcept(DeclVal<Container&>().max_size()) && noexcept(DeclVal<Container&>().reserve(DeclVal<usize>()));
+            else
+                return noexcept(DeclVal<Container&>().size()) && noexcept(DeclVal<Container&>().capacity()) && noexcept(DeclVal<Container&>().reserve(DeclVal<usize>()));
+        }
+        else{
+            return noexcept(DeclVal<Container&>().size()) && noexcept(DeclVal<Container&>().reserve(DeclVal<usize>()));
+        }
+    }
+    else{
         return true;
+    }
 }()){
-    if constexpr(requires(Container& c, usize n){ c.reserve(n); })
-        outBinary.reserve(outBinary.size() + byteCount);
+    if constexpr(requires(Container& c, usize n){ c.reserve(n); }){
+        if(byteCount == 0u)
+            return;
+        const usize currentSize = static_cast<usize>(outBinary.size());
+        const usize required = byteCount > Limit<usize>::s_Max - currentSize ? Limit<usize>::s_Max : currentSize + byteCount;
+        if constexpr(requires(Container& c){ c.capacity(); }){
+            const usize currentCapacity = static_cast<usize>(outBinary.capacity());
+            if(required <= currentCapacity)
+                return;
+            usize nextCapacity = NextGrowingCapacity(currentCapacity, required);
+            if constexpr(requires(Container& c){ c.max_size(); }){
+                const usize maxCapacity = static_cast<usize>(outBinary.max_size());
+                if(nextCapacity > maxCapacity)
+                    nextCapacity = required;
+            }
+            outBinary.reserve(nextCapacity);
+        }
+        else{
+            outBinary.reserve(required);
+        }
+    }
 }
 
 template<typename Container>
@@ -396,7 +425,12 @@ template<typename Container, typename ValueContainer>
         else
             return true;
     }();
-    if constexpr(IsDefaultConstructible_V<ValueType> && requires(ValueContainer& c, usize n){ c.resize(n); c.data(); }){
+    if constexpr(IsSame_V<ValueType, u8> && requires(ValueContainer& c, const u8* p){ c.assign(p, p); }){
+        return s_CommonIsNothrow && s_ReserveIsNothrow
+            && noexcept(DeclVal<ValueContainer&>().assign(DeclVal<const u8*>(), DeclVal<const u8*>()))
+        ;
+    }
+    else if constexpr(IsDefaultConstructible_V<ValueType> && requires(ValueContainer& c, usize n){ c.resize(n); c.data(); }){
         return s_CommonIsNothrow && s_ReserveIsNothrow
             && noexcept(DeclVal<ValueContainer&>().resize(DeclVal<const usize&>()))
             && noexcept(FOUNDATION_MEMCPY(DeclVal<ValueContainer&>().data(), DeclVal<const usize&>(), DeclVal<const Container&>().data() + DeclVal<usize&>(), DeclVal<const usize&>()))
@@ -430,7 +464,12 @@ template<typename Container, typename ValueContainer>
         outValues.reserve(valueCount);
 
     usize cursor = inOutOffset;
-    if constexpr(IsDefaultConstructible_V<ValueType> && requires(ValueContainer& c, usize n){ c.resize(n); c.data(); }){
+    if constexpr(IsSame_V<ValueType, u8> && requires(ValueContainer& c, const u8* p){ c.assign(p, p); }){
+        if(*byteCount > 0u)
+            outValues.assign(binary.data() + cursor, binary.data() + cursor + valueCount);
+        cursor += *byteCount;
+    }
+    else if constexpr(IsDefaultConstructible_V<ValueType> && requires(ValueContainer& c, usize n){ c.resize(n); c.data(); }){
         outValues.resize(valueCount);
         if(*byteCount > 0u)
             FOUNDATION_MEMCPY(outValues.data(), *byteCount, binary.data() + cursor, *byteCount);

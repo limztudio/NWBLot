@@ -22,10 +22,11 @@ Expected<MeshletFrontierCandidate> FindBestDisconnectedMeshletCandidate(
     in Span<MeshletTriangleCalculation> triangleCalculations,
     in Span<u8> visitedTriangles,
     in usize searchOffset,
-    in Span<u32> triangleIndices,
     in MeshletScoreState scoreState,
     in MeshletDesc meshlet,
-    in Span<u32> localVertexRefs,
+    in usize localVertexCount,
+    in Span<u32> vertexMeshletStamps,
+    in u32 currentMeshletStamp,
     in b8 isParallelEnabled,
     in u32 workerThreadCount,
     mut Vector<MeshletCandidateSearchResult> parallelCandidates
@@ -42,10 +43,11 @@ Expected<MeshletFrontierCandidate> FindBestDisconnectedMeshletCandidate(
             visitedTriangles,
             searchOffset,
             triangleCount,
-            triangleIndices,
             scoreState,
             meshlet,
-            localVertexRefs
+            localVertexCount,
+            vertexMeshletStamps,
+            currentMeshletStamp
         );
     }
 
@@ -65,10 +67,11 @@ Expected<MeshletFrontierCandidate> FindBestDisconnectedMeshletCandidate(
             visitedTriangles,
             chunkBegin,
             chunkEnd,
-            triangleIndices,
             scoreState,
             meshlet,
-            localVertexRefs
+            localVertexCount,
+            vertexMeshletStamps,
+            currentMeshletStamp
         );
         result.found = foundCandidate.has_value();
         if(foundCandidate.has_value())

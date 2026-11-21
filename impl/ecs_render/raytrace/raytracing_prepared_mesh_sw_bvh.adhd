@@ -282,15 +282,8 @@ b8 RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(){
     this.clearPreparedMeshSwBvhBuilds();
     mut RtSceneBvhState state = this.m_rayTracingState.sceneBvh;
     MeshRayTracingResourceSnapshotVector meshes;
-    this.m_meshSystem.collectRayTracingResourceSnapshots(meshes);
-    b8 hasCandidate = false;
-    for(in MeshRayTracingResourceSnapshot mesh : meshes){
-        if(MeshAccelerationStatePolicy().requiresSoftwareBvhUpdate(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision)){
-            hasCandidate = true;
-            break;
-        }
-    }
-    if(!hasCandidate){
+    this.m_meshSystem.collectPendingSwBvhRayTracingSnapshots(meshes);
+    if(meshes.empty()){
         this.m_preparedMeshSwBvhBuildPlanFrozen = true;
         return true;
     }
@@ -306,8 +299,6 @@ b8 RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(){
         return false;
 
     for(in MeshRayTracingResourceSnapshot mesh : meshes){
-        if(!MeshAccelerationStatePolicy().requiresSoftwareBvhUpdate(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision))
-            continue;
         if(
             mesh.meshName == Name()
             || !mesh.positionBuffer.valid()
@@ -358,11 +349,8 @@ b8 RendererRayTracingSystem::preparePendingMeshSwBvhResources(){
     SoftwareBvhBuilder bvh(this.m_graphics, this.m_shaderSystem, this.m_rayTracingState.sceneBvh);
     b8 allResourcesReady = true;
     MeshRayTracingResourceSnapshotVector meshes;
-    this.m_meshSystem.collectRayTracingResourceSnapshots(meshes);
+    this.m_meshSystem.collectPendingSwBvhRayTracingSnapshots(meshes);
     for(in MeshRayTracingResourceSnapshot meshResources : meshes){
-        if(!MeshAccelerationStatePolicy().requiresSoftwareBvhUpdate(meshResources.swBvhBuildPending, meshResources.swBvhTopologyBuilt, meshResources.swBvhBuildAccepted, meshResources.runtimeMesh, meshResources.runtimeGeometryContentRevision, meshResources.swBvhGeometryContentRevision))
-            continue;
-
         if(!meshResources.positionBuffer.valid() || !meshResources.triangleIndexBuffer.valid()){
             allResourcesReady = false;
             continue;

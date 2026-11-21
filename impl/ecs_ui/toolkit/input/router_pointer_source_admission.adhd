@@ -31,6 +31,7 @@ class RouterPointerSourceAdmission{
         in Span<HitTarget> targets,
         in Span<TargetLookup> lookup,
         in Span<PopupRecord> popups,
+        in TargetSpatialIndex spatial,
         in InputEvent event,
         in b8 primaryDown,
         in b8 pointerSequenceConsumed,
@@ -57,7 +58,7 @@ class RouterPointerSourceAdmission{
         const b8 release = event.type == InputEventType::PrimaryUp || event.type == InputEventType::SecondaryUp;
         b8 hitResolved = false;
         if(event.hoverCapable){
-            const Expected<usize> hitIndex = FindRouterHitTargetIndex(targets, lookup, popups, event.position);
+            const Expected<usize> hitIndex = FindRouterHitTargetIndexIndexed(targets, lookup, popups, spatial, event.position);
             outHasHit = hitIndex.has_value();
             if(outHasHit)
                 outHit = targets[hitIndex.value()];
@@ -99,7 +100,7 @@ class RouterPointerSourceAdmission{
                 }
                 else{
                     if(!hitResolved){
-                        const Expected<usize> hitIndex = FindRouterHitTargetIndex(targets, lookup, popups, event.position);
+                        const Expected<usize> hitIndex = FindRouterHitTargetIndexIndexed(targets, lookup, popups, spatial, event.position);
                         outHasHit = hitIndex.has_value();
                         if(outHasHit)
                             outHit = targets[hitIndex.value()];
@@ -123,7 +124,7 @@ class RouterPointerSourceAdmission{
         else if(release){
             if(!heldFound.has_value()){
                 if(!hitResolved){
-                    const Expected<usize> hitIndex = FindRouterHitTargetIndex(targets, lookup, popups, event.position);
+                    const Expected<usize> hitIndex = FindRouterHitTargetIndexIndexed(targets, lookup, popups, spatial, event.position);
                     outHasHit = hitIndex.has_value();
                     if(outHasHit)
                         outHit = targets[hitIndex.value()];
@@ -157,7 +158,7 @@ class RouterPointerSourceAdmission{
                 return false;
         }
         if((press || release || event.type == InputEventType::PointerWheel) && !hitResolved){
-            const Expected<usize> hitIndex = FindRouterHitTargetIndex(targets, lookup, popups, event.position);
+            const Expected<usize> hitIndex = FindRouterHitTargetIndexIndexed(targets, lookup, popups, spatial, event.position);
             outHasHit = hitIndex.has_value();
             if(outHasHit)
                 outHit = targets[hitIndex.value()];

@@ -60,19 +60,6 @@ CommandList::GraphPublicationReadOwnership::~GraphPublicationReadOwnership()noex
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CommandList::GraphRecordingOwnership::Capability*& CommandList::GraphRecordingOwnership::CurrentCapability()noexcept{
-    thread_local Capability* capability = nullptr;
-    return capability;
-}
-
-b8 CommandList::GraphRecordingOwnership::HasCapability(const CommandList& commandList, const u64 recordingLeaseSerial)noexcept{
-    for(const Capability* capability = CurrentCapability(); capability; capability = capability->previous){
-        if(capability->commandList == &commandList && capability->recordingLeaseSerial == recordingLeaseSerial)
-            return true;
-    }
-    return false;
-}
-
 CommandList::GraphRecordingOwnership::GraphRecordingOwnership(CommandList& commandList, const u64 recordingLeaseSerial)
     : m_commandList(commandList)
     , m_recordingLeaseSerial(recordingLeaseSerial)

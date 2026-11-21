@@ -8,6 +8,171 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const usize s_InputSpatialGridDim = 16u;
+const usize s_InputSpatialGridCells = 256u;
+const usize s_InputSpatialGridOffsetCount = 257u;
+const usize s_InputSpatialGridMinTargets = 64u;
+const usize s_InputSpatialGridMaxCellsPerTarget = 32u;
+
+class TargetSpatialIndex{
+    public Array<u32, s_InputSpatialGridOffsetCount> cellOffsets;
+    public Vector<u32> cellTargets;
+    public Vector<u32> overflowTargets;
+    public Vector<u32> scratchTargetIndices;
+    public Vector<u32> scratchPackedCells;
+    public f32 minX = 0.0f;
+    public f32 minY = 0.0f;
+    public f32 maxX = 0.0f;
+    public f32 maxY = 0.0f;
+    public f32 invCellWidth = 0.0f;
+    public f32 invCellHeight = 0.0f;
+    public b8 active = false;
+    public b8 dirty = true;
+}
+
+void MarkTargetSpatialIndexDirty(mut TargetSpatialIndex outIndex){
+    outIndex.active = false;
+    outIndex.dirty = true;
+}
+
+usize ClampTargetSpatialCellCoord(in f32 scaled){
+    if(!(scaled > 0.0f))
+        return 0u;
+    if(scaled >= cast<f32>(s_InputSpatialGridDim - 1u))
+        return s_InputSpatialGridDim - 1u;
+    return cast<usize>(cast<i32>(scaled));
+}
+
+void BuildTargetSpatialIndex(in Span<HitTarget> targets, mut TargetSpatialIndex outIndex){
+    outIndex.cellTargets.clear();
+    outIndex.overflowTargets.clear();
+    outIndex.scratchTargetIndices.clear();
+    outIndex.scratchPackedCells.clear();
+    outIndex.active = false;
+    outIndex.dirty = false;
+    if(targets.size() < s_InputSpatialGridMinTargets)
+        return;
+
+    f32 minX = 0.0f;
+    f32 minY = 0.0f;
+    f32 maxX = 0.0f;
+    f32 maxY = 0.0f;
+    b8 hasVisible = false;
+    for(in HitTarget target : targets){
+        if(!target.enabled)
+            continue;
+        const f32 x0 = Max(target.rectangle.x, target.clip.x);
+        const f32 y0 = Max(target.rectangle.y, target.clip.y);
+        const f32 x1 = Min(target.rectangle.x + target.rectangle.width, target.clip.x + target.clip.width);
+        const f32 y1 = Min(target.rectangle.y + target.rectangle.height, target.clip.y + target.clip.height);
+        if(!(x1 > x0) || !(y1 > y0))
+            continue;
+        if(!hasVisible){
+            minX = x0;
+            minY = y0;
+            maxX = x1;
+            maxY = y1;
+            hasVisible = true;
+        }
+        else{
+            minX = Min(minX, x0);
+            minY = Min(minY, y0);
+            maxX = Max(maxX, x1);
+            maxY = Max(maxY, y1);
+        }
+    }
+
+    if(!hasVisible){
+        for(usize cell = 0u; cell < s_InputSpatialGridOffsetCount; ++cell)
+            outIndex.cellOffsets[cell] = 0u;
+        outIndex.minX = 0.0f;
+        outIndex.minY = 0.0f;
+        outIndex.maxX = -1.0f;
+        outIndex.maxY = -1.0f;
+        outIndex.invCellWidth = 0.0f;
+        outIndex.invCellHeight = 0.0f;
+        outIndex.active = true;
+        return;
+    }
+
+    const f32 spanX = maxX - minX;
+    const f32 spanY = maxY - minY;
+    if(!IsFinite(spanX) || !IsFinite(spanY) || spanX <= 0.0f || spanY <= 0.0f)
+        return;
+    const f32 invCellWidth = cast<f32>(s_InputSpatialGridDim) / spanX;
+    const f32 invCellHeight = cast<f32>(s_InputSpatialGridDim) / spanY;
+    if(!IsFinite(invCellWidth) || !IsFinite(invCellHeight) || invCellWidth <= 0.0f || invCellHeight <= 0.0f)
+        return;
+
+    Array<u32, s_InputSpatialGridCells> cellCounts;
+    for(usize cell = 0u; cell < s_InputSpatialGridCells; ++cell)
+        cellCounts[cell] = 0u;
+    outIndex.scratchTargetIndices.reserve(targets.size());
+    outIndex.scratchPackedCells.reserve(targets.size());
+    for(usize index = 0u; index < targets.size(); ++index){
+        in HitTarget target = targets[index];
+        if(!target.enabled)
+            continue;
+        const f32 x0 = Max(target.rectangle.x, target.clip.x);
+        const f32 y0 = Max(target.rectangle.y, target.clip.y);
+        const f32 x1 = Min(target.rectangle.x + target.rectangle.width, target.clip.x + target.clip.width);
+        const f32 y1 = Min(target.rectangle.y + target.rectangle.height, target.clip.y + target.clip.height);
+        if(!(x1 > x0) || !(y1 > y0))
+            continue;
+        const usize cx0 = ClampTargetSpatialCellCoord((x0 - minX) * invCellWidth);
+        const usize cy0 = ClampTargetSpatialCellCoord((y0 - minY) * invCellHeight);
+        const usize cx1 = ClampTargetSpatialCellCoord((x1 - minX) * invCellWidth);
+        const usize cy1 = ClampTargetSpatialCellCoord((y1 - minY) * invCellHeight);
+        if((cx1 - cx0 + 1u) * (cy1 - cy0 + 1u) > s_InputSpatialGridMaxCellsPerTarget){
+            outIndex.overflowTargets.push_back(cast<u32>(index));
+            continue;
+        }
+        for(usize cy = cy0; cy <= cy1; ++cy){
+            const usize rowBase = cy * s_InputSpatialGridDim;
+            for(usize cx = cx0; cx <= cx1; ++cx)
+                ++cellCounts[rowBase + cx];
+        }
+        outIndex.scratchTargetIndices.push_back(cast<u32>(index));
+        outIndex.scratchPackedCells.push_back(cast<u32>(cx0) | (cast<u32>(cy0) << 4u) | (cast<u32>(cx1) << 8u) | (cast<u32>(cy1) << 12u));
+    }
+
+    Array<u32, s_InputSpatialGridCells> writeCursors;
+    u32 running = 0u;
+    outIndex.cellOffsets[0u] = 0u;
+    for(usize cell = 0u; cell < s_InputSpatialGridCells; ++cell){
+        writeCursors[cell] = running;
+        running += cellCounts[cell];
+        outIndex.cellOffsets[cell + 1u] = running;
+    }
+
+    outIndex.cellTargets.resize(cast<usize>(running));
+
+    for(usize entry = 0u; entry < outIndex.scratchTargetIndices.size(); ++entry){
+        const u32 targetIndex = outIndex.scratchTargetIndices[entry];
+        const u32 packed = outIndex.scratchPackedCells[entry];
+        const usize cx0 = cast<usize>(packed & 15u);
+        const usize cy0 = cast<usize>((packed >> 4u) & 15u);
+        const usize cx1 = cast<usize>((packed >> 8u) & 15u);
+        const usize cy1 = cast<usize>((packed >> 12u) & 15u);
+        for(usize cy = cy0; cy <= cy1; ++cy){
+            const usize rowBase = cy * s_InputSpatialGridDim;
+            for(usize cx = cx0; cx <= cx1; ++cx){
+                const usize cell = rowBase + cx;
+                outIndex.cellTargets[cast<usize>(writeCursors[cell])] = targetIndex;
+                ++writeCursors[cell];
+            }
+        }
+    }
+
+    outIndex.minX = minX;
+    outIndex.minY = minY;
+    outIndex.maxX = maxX;
+    outIndex.maxY = maxY;
+    outIndex.invCellWidth = invCellWidth;
+    outIndex.invCellHeight = invCellHeight;
+    outIndex.active = true;
+}
+
 void CancelRouterPointerPress(
     mut Vector<PointerGestureRecord> pointerGestures,
     mut u64 inOutActiveGestureSequence,
@@ -45,17 +210,73 @@ Expected<usize> FindRouterHitTargetIndex(
         return MakeUnexpected(Failure());
     b8 hasFound = false;
     usize foundIndex = 0u;
-    HitTarget foundTarget;
+    u32 foundLayer = 0u;
+    u64 foundPaintOrder = 0u;
     for(usize index = 0u; index < targets.size(); ++index){
-        const HitTarget target = targets[index];
+        in HitTarget target = targets[index];
         if(!UiRectContainsPoint(target.rectangle, position) || !UiRectContainsPoint(target.clip, position) || !IsRouterTargetInteractive(targets, lookup, popups, target))
             continue;
-        if(!hasFound || target.layer > foundTarget.layer || (target.layer == foundTarget.layer && target.paintOrder >= foundTarget.paintOrder)){
+        if(!hasFound || target.layer > foundLayer || (target.layer == foundLayer && target.paintOrder >= foundPaintOrder)){
             hasFound = true;
             foundIndex = index;
-            foundTarget = target;
+            foundLayer = target.layer;
+            foundPaintOrder = target.paintOrder;
         }
     }
+    if(!hasFound)
+        return MakeUnexpected(Failure());
+    return foundIndex;
+}
+
+Expected<usize> FindRouterHitTargetIndexIndexed(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    in TargetSpatialIndex spatial,
+    in Point position
+){
+    if(!IsFinite(position.x) || !IsFinite(position.y))
+        return MakeUnexpected(Failure());
+    if(!spatial.active)
+        return FindRouterHitTargetIndex(targets, lookup, popups, position);
+    if(position.x < spatial.minX || position.y < spatial.minY || position.x > spatial.maxX || position.y > spatial.maxY)
+        return MakeUnexpected(Failure());
+
+    const usize cx = ClampTargetSpatialCellCoord((position.x - spatial.minX) * spatial.invCellWidth);
+    const usize cy = ClampTargetSpatialCellCoord((position.y - spatial.minY) * spatial.invCellHeight);
+    const usize cell = cy * s_InputSpatialGridDim + cx;
+    b8 hasFound = false;
+    usize foundIndex = 0u;
+    u32 foundLayer = 0u;
+    u64 foundPaintOrder = 0u;
+
+    const usize cellBegin = cast<usize>(spatial.cellOffsets[cell]);
+    const usize cellEnd = cast<usize>(spatial.cellOffsets[cell + 1u]);
+    for(usize slot = cellBegin; slot < cellEnd; ++slot){
+        const usize index = cast<usize>(spatial.cellTargets[slot]);
+        in HitTarget target = targets[index];
+        if(!UiRectContainsPoint(target.rectangle, position) || !UiRectContainsPoint(target.clip, position) || !IsRouterTargetInteractive(targets, lookup, popups, target))
+            continue;
+        if(!hasFound || target.layer > foundLayer || (target.layer == foundLayer && (target.paintOrder > foundPaintOrder || (target.paintOrder == foundPaintOrder && index >= foundIndex)))){
+            hasFound = true;
+            foundIndex = index;
+            foundLayer = target.layer;
+            foundPaintOrder = target.paintOrder;
+        }
+    }
+    for(usize slot = 0u; slot < spatial.overflowTargets.size(); ++slot){
+        const usize index = cast<usize>(spatial.overflowTargets[slot]);
+        in HitTarget target = targets[index];
+        if(!UiRectContainsPoint(target.rectangle, position) || !UiRectContainsPoint(target.clip, position) || !IsRouterTargetInteractive(targets, lookup, popups, target))
+            continue;
+        if(!hasFound || target.layer > foundLayer || (target.layer == foundLayer && (target.paintOrder > foundPaintOrder || (target.paintOrder == foundPaintOrder && index >= foundIndex)))){
+            hasFound = true;
+            foundIndex = index;
+            foundLayer = target.layer;
+            foundPaintOrder = target.paintOrder;
+        }
+    }
+
     if(!hasFound)
         return MakeUnexpected(Failure());
     return foundIndex;
@@ -71,7 +292,7 @@ b8 TryConsumeRouterActivation(
     const Expected<usize> targetIndex = FindTargetIndexInTable(targets, lookup, id, 0u);
     if(!targetIndex.has_value())
         return false;
-    const HitTarget target = targets[targetIndex.value()];
+    in HitTarget target = targets[targetIndex.value()];
     if(!IsRouterTargetInteractive(targets, lookup, popups, target) || !target.activatable)
         return false;
     for(usize index = 0u; index < actions.size(); ++index){
@@ -98,7 +319,7 @@ Expected<ContextMenuAction> TryConsumeRouterContextMenu(
     const Expected<usize> targetIndex = FindTargetIndexInTable(targets, lookup, id, declarationGeneration);
     if(declarationGeneration == 0u || !windowFocused || !targetIndex.has_value())
         return MakeUnexpected(Failure());
-    const HitTarget target = targets[targetIndex.value()];
+    in HitTarget target = targets[targetIndex.value()];
     if(!target.contextMenu || !IsRouterTargetInteractive(targets, lookup, popups, target))
         return MakeUnexpected(Failure());
     for(usize index = 0u; index < contextMenuActions.size(); ++index){
@@ -124,7 +345,7 @@ Expected<PointerGesture> TryConsumeRouterPointerGesture(
     const Expected<usize> targetIndex = FindTargetIndexInTable(targets, lookup, id, declarationGeneration);
     if(declarationGeneration == 0u || !targetIndex.has_value())
         return MakeUnexpected(Failure());
-    const HitTarget target = targets[targetIndex.value()];
+    in HitTarget target = targets[targetIndex.value()];
     if(!IsRouterTargetInteractive(targets, lookup, popups, target) || !target.pointerGesture)
         return MakeUnexpected(Failure());
     for(usize index = 0u; index < pointerGestures.size(); ++index){
@@ -159,7 +380,7 @@ void ReconcileRouterPointerGestures(
         const Expected<usize> targetIndex = FindTargetIndexInTable(targets, lookup, gesture.id.target, gesture.id.declarationGeneration);
         b8 valid = false;
         if(targetIndex.has_value()){
-            const HitTarget target = targets[targetIndex.value()];
+            in HitTarget target = targets[targetIndex.value()];
             valid = IsRouterTargetInteractive(targets, lookup, popups, target)
                 && target.pointerGesture
                 && gesture.popup == target.popup

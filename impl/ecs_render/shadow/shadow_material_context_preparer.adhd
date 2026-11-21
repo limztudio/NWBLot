@@ -28,6 +28,24 @@ class ShadowMaterialContextPreparer : NoCopy{
         this.m_system = system;
     }
 
+    public Expected<u64> prepareWithTypedHash(
+        in PreparedShadowMaterialContextRoute route,
+        in b8 staticScene,
+        in usize sceneInstanceCount,
+        in Span<NwbRtInstanceMaterialGpu> instanceMaterials,
+        in Span<InstanceGpuData> shadowInstanceData,
+        mut MaterialTypedByteDataVector shadowMaterialTypedBytes,
+        mut u64 outMaterialTypedHash
+    ){
+        if(!IsValidPreparedShadowMaterialContextRoute(route))
+            return MakeUnexpected(Failure());
+        if(shadowMaterialTypedBytes.empty())
+            shadowMaterialTypedBytes.resize(s_MinimumShadowMaterialTypedByteCount, 0u);
+        const Span<u8> typedSpan = Span<u8>(shadowMaterialTypedBytes);
+        outMaterialTypedHash = UpdateFnv64(s_Fnv64OffsetBasis, typedSpan);
+        return this.prepareBytes(route, staticScene, sceneInstanceCount, instanceMaterials, shadowInstanceData, typedSpan, outMaterialTypedHash);
+    }
+
     public Expected<u64> prepare(
         in PreparedShadowMaterialContextRoute route,
         in b8 staticScene,
@@ -36,11 +54,8 @@ class ShadowMaterialContextPreparer : NoCopy{
         in Span<InstanceGpuData> shadowInstanceData,
         mut MaterialTypedByteDataVector shadowMaterialTypedBytes
     ){
-        if(!IsValidPreparedShadowMaterialContextRoute(route))
-            return MakeUnexpected(Failure());
-        if(shadowMaterialTypedBytes.empty())
-            shadowMaterialTypedBytes.resize(s_MinimumShadowMaterialTypedByteCount, 0u);
-        return this.prepareBytes(route, staticScene, sceneInstanceCount, instanceMaterials, shadowInstanceData, Span<u8>(shadowMaterialTypedBytes));
+        u64 materialTypedHash = 0u;
+        return this.prepareWithTypedHash(route, staticScene, sceneInstanceCount, instanceMaterials, shadowInstanceData, shadowMaterialTypedBytes, materialTypedHash);
     }
 
     private Expected<u64> prepareBytes(
@@ -49,7 +64,8 @@ class ShadowMaterialContextPreparer : NoCopy{
         in usize sceneInstanceCount,
         in Span<NwbRtInstanceMaterialGpu> instanceMaterials,
         in Span<InstanceGpuData> shadowInstanceData,
-        in Span<u8> shadowMaterialTypedBytes
+        in Span<u8> shadowMaterialTypedBytes,
+        in u64 materialTypedHash
     );
 }
 

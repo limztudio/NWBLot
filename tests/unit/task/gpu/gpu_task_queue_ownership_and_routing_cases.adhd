@@ -1183,7 +1183,10 @@ void GpuRoutingExpectScoresWithoutMasks(
     in usize taskCount
 ){
     EXPECT_EQ(scoringData.taskCostGroups.capacity(), 0u);
-    EXPECT_EQ(scoringData.assignedCostWords.capacity(), 0u);
+    EXPECT_EQ(scoringData.allCostWords.capacity(), 0u);
+    EXPECT_EQ(scoringData.queueCostWords.capacity(), 0u);
+    EXPECT_EQ(scoringData.queueNonEmptyWordMasks.capacity(), 0u);
+    EXPECT_EQ(scoringData.relatedAllCostByTask.capacity(), 0u);
     for(usize candidateIndex = 0u; candidateIndex < topology.queueCount; ++candidateIndex){
         const GpuPhysicalQueueInfo candidate = queues[candidateIndex];
         for(usize index = 0u; index < taskCount; ++index){

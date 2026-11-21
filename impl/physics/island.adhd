@@ -271,6 +271,37 @@ void UnlinkJointFromIsland(mut Vector<Island> islands, mut Vector<Joint> joints,
     joint.islandIndex = s_NullIndex;
 }
 
+class IslandSplitScratch{
+    public Vector<u32> dsuParents;
+    public Vector<u8> dsuRanks;
+    public Vector<u32> islandBodies;
+    public Vector<ContactLink> islandContacts;
+    public Vector<JointLink> islandJoints;
+    public Vector<u32> rootToIsland;
+    public Vector<u32> bodyAssignedIsland;
+    public Vector<u32> contactTargetIslands;
+    public Vector<u32> jointTargetIslands;
+
+    public void clear(){
+        this.dsuParents.clear();
+        this.dsuRanks.clear();
+        this.islandBodies.clear();
+        this.islandContacts.clear();
+        this.islandJoints.clear();
+        this.rootToIsland.clear();
+        this.bodyAssignedIsland.clear();
+        this.contactTargetIslands.clear();
+        this.jointTargetIslands.clear();
+    }
+}
+
+void CopyIslandVectorInto<T>(in Vector<T> src, mut Vector<T> dst){
+    dst.clear();
+    dst.reserve(src.size());
+    for(usize i = 0u; i < src.size(); ++i)
+        dst.push_back(src[i]);
+}
+
 void SplitIslandInWorld(
     mut Vector<Body> bodies,
     mut Vector<Island> islands,
@@ -278,6 +309,7 @@ void SplitIslandInWorld(
     mut Vector<SolverSet> sets,
     mut Vector<Contact> contacts,
     mut Vector<Joint> joints,
+    mut IslandSplitScratch scratch,
     in u32 baseIslandId
 ){
     if(baseIslandId >= islands.size() || !islands[baseIslandId].alive)
@@ -292,11 +324,12 @@ void SplitIslandInWorld(
     const usize contactCount = islands[baseIslandId].contacts.size();
     const usize jointCount = islands[baseIslandId].joints.size();
 
-    Vector<u32> dsuParents;
+    mut Vector<u32> dsuParents = scratch.dsuParents;
     dsuParents.resize(bodyCount);
     for(usize i = 0u; i < bodyCount; ++i)
         dsuParents[i] = cast<u32>(i);
-    Vector<u8> dsuRanks;
+    mut Vector<u8> dsuRanks = scratch.dsuRanks;
+    dsuRanks.clear();
     dsuRanks.resize(bodyCount, 0u);
 
     in Vector<ContactLink> baseContacts = islands[baseIslandId].contacts;
@@ -330,15 +363,20 @@ void SplitIslandInWorld(
         return;
     }
 
-    Vector<u32> islandBodies = islands[baseIslandId].bodies;
-    Vector<ContactLink> islandContacts = islands[baseIslandId].contacts;
-    Vector<JointLink> islandJoints = islands[baseIslandId].joints;
+    CopyIslandVectorInto<u32>(islands[baseIslandId].bodies, scratch.islandBodies);
+    CopyIslandVectorInto<ContactLink>(islands[baseIslandId].contacts, scratch.islandContacts);
+    CopyIslandVectorInto<JointLink>(islands[baseIslandId].joints, scratch.islandJoints);
+    in Vector<u32> islandBodies = scratch.islandBodies;
+    in Vector<ContactLink> islandContacts = scratch.islandContacts;
+    in Vector<JointLink> islandJoints = scratch.islandJoints;
 
-    Vector<u32> rootToIsland;
+    mut Vector<u32> rootToIsland = scratch.rootToIsland;
+    rootToIsland.clear();
     rootToIsland.resize(bodyCount, s_NullIndex);
     u32 firstIsland = baseIslandId;
     b8 usedBase = false;
-    Vector<u32> bodyAssignedIsland;
+    mut Vector<u32> bodyAssignedIsland = scratch.bodyAssignedIsland;
+    bodyAssignedIsland.clear();
     bodyAssignedIsland.resize(bodyCount, s_NullIndex);
 
     for(usize i = 0u; i < bodyCount; ++i){
@@ -357,7 +395,8 @@ void SplitIslandInWorld(
         bodyAssignedIsland[i] = targetIslandId;
     }
 
-    Vector<u32> contactTargetIslands;
+    mut Vector<u32> contactTargetIslands = scratch.contactTargetIslands;
+    contactTargetIslands.clear();
     contactTargetIslands.resize(contactCount, s_NullIndex);
     for(usize i = 0u; i < contactCount; ++i){
         in ContactLink link = islandContacts[i];
@@ -372,7 +411,8 @@ void SplitIslandInWorld(
         }
     }
 
-    Vector<u32> jointTargetIslands;
+    mut Vector<u32> jointTargetIslands = scratch.jointTargetIslands;
+    jointTargetIslands.clear();
     jointTargetIslands.resize(jointCount, s_NullIndex);
     for(usize i = 0u; i < jointCount; ++i){
         in JointLink link = islandJoints[i];

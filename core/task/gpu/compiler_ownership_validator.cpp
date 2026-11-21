@@ -64,6 +64,12 @@ b8 GpuTaskGraphOwnershipValidator::ValidateInitialOwnership(const GpuTaskGraph::
     };
 
     for(usize resourceIndex = 0u; resourceIndex < graph.resourceCount(); ++resourceIndex){
+        const auto& resourceNode = CompilerGraphAccess::ResourceNode(graph, resourceIndex);
+        if(
+            resourceNode.type == GpuGraphResourceType::HazardDomain
+            || (!resourceNode.externalFinalReleaseDestinationQueue.valid() && resourceNode.initialOwnerHandoffSourceCount == 0u && !resourceNode.initialOwnerQueue.valid())
+        )
+            continue;
         const GpuTaskGraphResourceView resource = graph.resourceAt(resourceIndex);
         const b8 hasExternalFinalRelease = resource.externalFinalReleaseDestinationQueue.valid();
         if(hasExternalFinalRelease && (resource.externalFinalState == ResourceStates::Unknown || ResourceUsesConcurrentQueueSharing(resource, topology) || !FindCompiledQueueInfo(compiledPlan, resource.externalFinalReleaseDestinationQueue))){

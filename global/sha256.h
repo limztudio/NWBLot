@@ -50,9 +50,44 @@ inline constexpr u32 s_LengthFieldOffset = s_BlockByteCount - s_LengthFieldByteC
 inline constexpr u8 s_PaddingMarker = 0x80u;
 inline constexpr u32 s_HexDigitsPerByte = 2u;
 
-inline void UnpackBlockWords(const Array<u8, s_BlockByteCount>& block, u32* const outWords)noexcept{
+inline void UnpackBlockWords(const u8* const block, u32* const outWords)noexcept{
     for(u32 index = 0u; index < s_BlockWordCount; ++index)
-        outWords[index] = ReadU32BigEndian(MakeNotNull(block.data() + index * s_WordByteCount));
+        outWords[index] = ReadU32BigEndian(MakeNotNull(block + index * s_WordByteCount));
+}
+
+inline void UnpackBlockWords(const Array<u8, s_BlockByteCount>& block, u32* const outWords)noexcept{
+    UnpackBlockWords(block.data(), outWords);
+}
+
+template<typename DigestT, u32 StateWordCount, void (*CompressFn)(Array<u32, StateWordCount>&, const u8*)>
+[[nodiscard]] inline DigestT ComputeDigest(const BinaryByteView input, const Array<u32, StateWordCount>& initialState)noexcept{
+    static_assert(DigestT::s_ByteCount == StateWordCount * s_WordByteCount);
+
+    Array<u32, StateWordCount> state = initialState;
+    usize offset = 0u;
+    const usize inputSize = input.size();
+    const u8* const inputData = input.data();
+    while(inputSize - offset >= s_BlockByteCount){
+        CompressFn(state, inputData + offset);
+        offset += s_BlockByteCount;
+    }
+    Array<u8, s_BlockByteCount> block = {};
+    const usize remainder = inputSize - offset;
+    if(remainder > 0u)
+        FOUNDATION_MEMCPY(block.data(), block.size(), inputData + offset, remainder);
+    block[remainder] = s_PaddingMarker;
+    if(remainder >= s_LengthFieldOffset){
+        CompressFn(state, block.data());
+        FOUNDATION_MEMSET(block.data(), 0, block.size());
+    }
+    const u64 bitCount = static_cast<u64>(inputSize) * s_BitsPerByte;
+    for(u32 index = 0u; index < s_LengthFieldByteCount; ++index)
+        block[s_BlockByteCount - 1u - index] = static_cast<u8>(bitCount >> (index * s_BitsPerByte));
+    CompressFn(state, block.data());
+    DigestT digest;
+    for(u32 index = 0u; index < DigestT::s_ByteCount; ++index)
+        digest.bytes[index] = static_cast<u8>(state[index / s_WordByteCount] >> ((s_LastByteInWord - index % s_WordByteCount) * s_BitsPerByte));
+    return digest;
 }
 
 template<typename DigestT, u32 StateWordCount, void (*CompressFn)(Array<u32, StateWordCount>&, const Array<u8, s_BlockByteCount>&)>
@@ -148,8 +183,8 @@ inline constexpr Array<u32, s_StateWordCount> s_InitialState = { 0x6a09e667u, 0x
     return (value >> count) | (value << (ShaBe32Detail::s_WordBits - count));
 }
 
-inline void Compress(Array<u32, s_StateWordCount>& state, const Array<u8, ShaBe32Detail::s_BlockByteCount>& block)noexcept{
-    Array<u32, s_RoundCount> words = {};
+inline void Compress(Array<u32, s_StateWordCount>& state, const u8* const block)noexcept{
+    Array<u32, s_RoundCount> words;
     ShaBe32Detail::UnpackBlockWords(block, words.data());
     for(u32 index = ShaBe32Detail::s_BlockWordCount; index < s_RoundCount; ++index){
         const u32 a = words[index - s_ScheduleLagSigma0];

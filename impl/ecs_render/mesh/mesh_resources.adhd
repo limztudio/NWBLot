@@ -172,7 +172,7 @@ b8 RendererMeshSystem::ensureMeshSwBvhInputHeapHandles(mut MeshResources mesh){
 [cpp_unwind]
 void RendererMeshSystem::releaseAllMeshGeometryHeapHandles(){
     for(auto it = this.m_meshState.m_meshes.begin(); it != this.m_meshState.m_meshes.end(); ++it)
-        this.releaseMeshGeometryHeapHandles(this.m_meshState.m_meshes.at(it.key()));
+        this.releaseMeshGeometryHeapHandles(it.value());
 }
 
 b8 MeshEmulationResources::prepare(mut GraphicsRuntime graphics, mut MeshResources mesh)const{

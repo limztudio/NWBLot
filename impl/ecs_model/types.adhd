@@ -117,16 +117,11 @@ void BuildSortedModelAttachmentParentOrder(
     mut Vector<usize> outOrder
 ){
     BuildModelAttachmentIdentityOrder(jointQueries.size(), outOrder);
-    for(usize i = 1u; i < outOrder.size(); ++i){
-        const usize current = outOrder[i];
-        const EntityID currentParent = jointQueries[current].parentEntity;
-        usize j = i;
-        while(j > 0u && currentParent < jointQueries[outOrder[j - 1u]].parentEntity){
-            outOrder[j] = outOrder[j - 1u];
-            --j;
-        }
-        outOrder[j] = current;
-    }
+    SortSequence<usize>(outOrder, lambda[in jointQueries](in usize lhs, in usize rhs) -> b8{
+        const EntityID lhsParent = jointQueries[lhs].parentEntity;
+        const EntityID rhsParent = jointQueries[rhs].parentEntity;
+        return lhsParent < rhsParent || (lhsParent == rhsParent && lhs < rhs);
+    });
 }
 
 

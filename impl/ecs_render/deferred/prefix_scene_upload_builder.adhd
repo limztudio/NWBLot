@@ -23,6 +23,7 @@ b8 HasValidPrefixSceneUploadInputs(
 
 class PrefixSceneUploadInputs{
     public RayTracingLightingClassificationInput rayTracingLightingInput;
+    public PreflightedSceneLightsView preflightedLights;
     public in MeshViewGpuData meshViewState;
     public GpuGraphResourceId meshView;
     public GpuGraphResourceId lights;
@@ -86,7 +87,7 @@ class PrefixSceneUploadBuilder : NoCopy{
         if(!HasValidPrefixSceneUploadInputs(inputs.meshView.valid(), inputs.lights.valid(), inputs.sceneShading.valid(), inputs.shadowPrepareTask.valid()))
             return MakeUnexpected(Failure());
         PrefixSceneUploadResult result;
-        const SceneShadingBufferUploads uploads = this.m_deferredSystem.prepareSceneShadingBufferUploads(inputs.meshViewAspectRatio, inputs.rayTracingLightingInput);
+        const SceneShadingBufferUploads uploads = this.m_deferredSystem.prepareSceneShadingBufferUploads(inputs.meshViewAspectRatio, inputs.rayTracingLightingInput, inputs.preflightedLights);
         const Span<SceneLightGpuData> allLights = uploads.lightData;
         const Span<SceneLightGpuData> lights = allLights.subspan(0u, uploads.lightCount);
         result.sceneLightingContentHash = ComputeSceneLightingContentHash(uploads.sceneShadingState, lights);

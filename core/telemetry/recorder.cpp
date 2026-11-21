@@ -23,6 +23,23 @@ namespace __hidden_telemetry_recorder{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] static constexpr u32 ComputeEnabledKindMask(const CaptureOptions& options)noexcept{
+    u32 mask = 0u;
+    if(options.enabled()){
+        for(const EventKind::Enum kind : {
+            EventKind::TextLog,
+            EventKind::Diagnostic,
+            EventKind::PerfFrame,
+            EventKind::FrameGraphFrame,
+            EventKind::MemoryFrame,
+        }){
+            if(CaptureAllowsEventKind(options, kind))
+                mask |= (1u << static_cast<u32>(kind));
+        }
+    }
+    return mask;
+}
+
 [[nodiscard]] static EventHeader MakeEventHeader(const EventKind::Enum kind, const u64 frameIndex, const usize payloadBytes, const u32 streamId)noexcept{
     EventHeader header;
     header.kind = kind;
@@ -73,6 +90,7 @@ void Recorder::setCaptureOptions(const CaptureOptions& options){
         prepareDiagnosticSlotsUnlocked();
     m_capture = options;
     m_diagnosticCaptureEnabled.store(options.diagnosticEnabled(), MemoryOrder::release);
+    m_enabledKindMask.store(__hidden_telemetry_recorder::ComputeEnabledKindMask(options), MemoryOrder::release);
     if(!m_capture.enabled()){
         m_events.clear();
         releaseAvailableSlotsUnlocked();
@@ -81,6 +99,10 @@ void Recorder::setCaptureOptions(const CaptureOptions& options){
 
 void Recorder::clear()noexcept{
     NothrowScopedLock lock(m_mutex);
+    clearUnlocked();
+}
+
+void Recorder::clearUnlocked()noexcept{
     for(auto& slot : m_events)
         recycleSlotUnlocked(Move(slot));
     m_events.clear();
@@ -92,13 +114,13 @@ CaptureOptions Recorder::captureOptions()const noexcept{
 }
 
 b8 Recorder::enabled()const noexcept{
-    NothrowScopedLock lock(m_mutex);
-    return enabledUnlocked();
+    return m_enabledKindMask.load(MemoryOrder::acquire) != 0u;
 }
 
 b8 Recorder::enabled(const EventKind::Enum kind)const noexcept{
-    NothrowScopedLock lock(m_mutex);
-    return enabledUnlocked(kind);
+    if(kind == EventKind::Unknown || !IsValidEventKind(kind))
+        return false;
+    return (m_enabledKindMask.load(MemoryOrder::acquire) & (1u << static_cast<u32>(kind))) != 0u;
 }
 
 usize Recorder::eventCount()const noexcept{
@@ -107,6 +129,9 @@ usize Recorder::eventCount()const noexcept{
 }
 
 b8 Recorder::recordBinary(const EventKind::Enum kind, const u64 frameIndex, const void* payload, const usize payloadBytes, const u32 streamId){
+    if(!enabled(kind))
+        return false;
+
     EventSlotLease lease(*this);
     if(!enabledUnlocked(kind))
         return false;
@@ -115,6 +140,9 @@ b8 Recorder::recordBinary(const EventKind::Enum kind, const u64 frameIndex, cons
 }
 
 b8 Recorder::recordPayload(const EventKind::Enum kind, const u64 frameIndex, TelemetryBytes&& payload, const u32 streamId){
+    if(!enabled(kind))
+        return false;
+
     EventSlotLease lease(*this);
     if(!enabledUnlocked(kind))
         return false;
@@ -285,6 +313,25 @@ const EventRecord* Recorder::eventAt(const usize index)const noexcept{
         return nullptr;
 
     return &m_events[index]->record;
+}
+
+b8 Recorder::appendOwnedPayloadUnlocked(const EventHeader& header, TelemetryBytes&& payload){
+    if(!header.valid() || header.payloadBytes != payload.size())
+        return false;
+
+    EventSlotPtr slot = acquireSlotUnlocked();
+    if(!slot)
+        return false;
+
+    if(payload.get_allocator().arenaPtr() == &m_arena)
+        slot->record.payload = Move(payload);
+    else if(!payload.empty()){
+        slot->record.payload.resize(payload.size());
+        FOUNDATION_MEMCPY(slot->record.payload.data(), slot->record.payload.size(), payload.data(), payload.size());
+    }
+    slot->record.header = header;
+    m_events.push_back(Move(slot));
+    return true;
 }
 
 

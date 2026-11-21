@@ -8,18 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 IsValidMeshletDirection3(in VectorSingle value){
-    return IsFinite(value.xyz) && LengthSq(value.xyz) > s_MeshletDirectionEpsilon;
-}
-
-VectorSingle NormalizeMeshletDirection3OrZero(in VectorSingle value){
-    if(IsValidMeshletDirection3(value)){
-        const VectorSingle normalized = Normalize(value.xyz);
-        return VectorSingle(normalized, 0.0f);
-    }
-    return VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-}
-
 VectorSingle MeshletFaceNormal(in Span<f32x4> positions, in Span<u8> primitiveIndices, in Span<MeshletLocalVertexRef> localVertexRefs, in MeshletDesc meshlet, in u32 primitiveIndex){
     const usize primitiveOffset = cast<usize>(meshlet.primitiveOffset) + cast<usize>(primitiveIndex) * cast<usize>(s_MeshletTriangleIndexCount);
     const u8 localVertex0 = primitiveIndices[primitiveOffset + 0u];

@@ -493,16 +493,18 @@ b8 RendererRayTracingSystem::prepareCausticEmissionTargetResources(){
     this.m_rayTracingState.caustics.m_causticRefractiveInstanceCount = 0u;
     this.m_unsupportedCausticVolumeCount = 0u;
     this.m_unsupportedCausticVolumeHash = s_Fnv64OffsetBasis;
+    if(this.m_materialSystem.hasNoVisibleRefractiveRenderers()){
+        this.m_rayTracingState.caustics.m_causticTargetBoundsMin = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        this.m_rayTracingState.caustics.m_causticTargetBoundsMax = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        return true;
+    }
 
     const Optional<mut MeshSystem> meshSystem = this.m_world.borrowSystem<MeshSystem>();
     if(!meshSystem.has_value())
         return true;
 
     auto rendererView = this.m_world.view<RendererComponent>();
-    const usize candidateCount = rendererView.candidateCount();
-
     Vector<NwbCausticEmissionTargetGpu> targets;
-    targets.reserve(candidateCount);
 
     VectorSingle combinedMin = VectorSingle(s_RayTracingFiniteInfinity);
     VectorSingle combinedMax = VectorSingle(-s_RayTracingFiniteInfinity);

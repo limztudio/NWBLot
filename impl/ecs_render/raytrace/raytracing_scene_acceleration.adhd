@@ -82,14 +82,26 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
     const usize candidateCount = this.m_world.view<RendererComponent>().candidateCount();
     LightSpaceShadowSceneGather lightSpaceGather(this.m_lightSpaceShadow, this.m_csgShapeRegistry, this.m_world);
     lightSpaceGather.begin(candidateCount, true);
-    Vector<RayTracingInstanceDesc> instances;
-    Vector<RayTracingAccelStructHandle> instanceBlases;
-    Vector<NwbRtInstanceMaterialGpu> instanceMaterials;
-    InstanceGpuDataVector shadowInstanceData;
-    MaterialTypedByteDataVector shadowMaterialTypedBytes;
-    MaterialTypedConstantRangeMap shadowConstantTypedRanges;
-    MaterialTypedByteContentRangeMap shadowMutableTypedRanges;
-    Vector<RayTracingInstanceWorldBounds> instanceWorldBounds;
+    mut Vector<RayTracingInstanceDesc> instances = this.m_sceneGatherScratch.tlasInstances;
+    mut Vector<RayTracingAccelStructHandle> instanceBlases = this.m_sceneGatherScratch.tlasInstanceBlases;
+    mut Vector<NwbRtInstanceMaterialGpu> instanceMaterials = this.m_sceneGatherScratch.instanceMaterials;
+    mut InstanceGpuDataVector shadowInstanceData = this.m_sceneGatherScratch.shadowInstanceData;
+    mut MaterialTypedByteDataVector shadowMaterialTypedBytes = this.m_sceneGatherScratch.shadowMaterialTypedBytes;
+    mut MaterialTypedConstantRangeMap shadowConstantTypedRanges = this.m_sceneGatherScratch.shadowConstantTypedRanges;
+    mut MaterialTypedByteContentRangeMap shadowMutableTypedRanges = this.m_sceneGatherScratch.shadowMutableTypedRanges;
+    mut Vector<RayTracingInstanceWorldBounds> instanceWorldBounds = this.m_sceneGatherScratch.tlasInstanceWorldBounds;
+    mut MeshBufferSlotLookup meshSlotLookup = this.m_sceneGatherScratch.meshSlotLookup;
+    mut Vector<TextureHandle> pendingSampledTextures = this.m_sceneGatherScratch.pendingSampledTextures;
+    instances.clear();
+    instanceBlases.clear();
+    instanceMaterials.clear();
+    shadowInstanceData.clear();
+    shadowMaterialTypedBytes.clear();
+    shadowConstantTypedRanges.clear();
+    shadowMutableTypedRanges.clear();
+    instanceWorldBounds.clear();
+    meshSlotLookup.clear();
+    pendingSampledTextures.clear();
     instances.reserve(candidateCount);
     instanceBlases.reserve(candidateCount);
     instanceMaterials.reserve(candidateCount);
@@ -97,7 +109,6 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
     instanceWorldBounds.reserve(candidateCount);
     shadowConstantTypedRanges.reserve(candidateCount);
     shadowMutableTypedRanges.reserve(candidateCount);
-    MeshBufferSlotLookup meshSlotLookup;
     meshSlotLookup.reserve(candidateCount);
 
     mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
@@ -123,7 +134,6 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
     u32 singleRefractiveInstanceIndex = u32.max;
     RayTracingOpticalSceneGather opticalScene(candidateCount);
 
-    Vector<TextureHandle> pendingSampledTextures;
     ShadowMaterialSampledTextureCollector sampledTextureCollector(this.m_preparedShadowTraceMaterialSampledTextures, pendingSampledTextures);
     sampledTextureCollector.indexExisting();
     ShadowOccluderMaterialGather occluderMaterials(this.m_materialSystem, sampledTextureCollector, shadowMaterialTypedBytes, shadowConstantTypedRanges, shadowMutableTypedRanges, opticalScene, contentComplete);
@@ -157,18 +167,21 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
             const auto indexHandle = meshHeapHandles.acquire(meshResult.value().meshResources.triangleIndexBuffer);
             if(!indexHandle.has_value()){
                 meshHeapHandles.sweep();
+                this.m_sceneGatherScratch.clearHandles();
                 error("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap");
                 return false;
             }
             const auto attributeHandle = meshHeapHandles.acquire(meshResult.value().meshResources.attributeBuffer);
             if(!attributeHandle.has_value()){
                 meshHeapHandles.sweep();
+                this.m_sceneGatherScratch.clearHandles();
                 error("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap");
                 return false;
             }
             const auto positionHandle = meshHeapHandles.acquire(meshResult.value().meshResources.positionBuffer);
             if(!positionHandle.has_value()){
                 meshHeapHandles.sweep();
+                this.m_sceneGatherScratch.clearHandles();
                 error("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap");
                 return false;
             }
@@ -183,6 +196,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
             if(!meshSlotLookup.try_emplace(meshKey, meshSlot).second){
                 assert(false);
                 meshHeapHandles.sweep();
+                this.m_sceneGatherScratch.clearHandles();
                 return false;
             }
             ++this.m_rayTracingState.shadow.m_shadowMeshCount;
@@ -206,8 +220,10 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
         const u32 meshInstanceIndex = cast<u32>(instances.size());
         NwbRtInstanceMaterialGpu instanceMaterial;
         InstanceGpuData shadowInstance;
-        if(!occluderMaterials.resolve(entity, Get<1>(row).material, transform, meshInstanceIndex, instanceMaterial, shadowInstance, Optional<mut b8>(this.m_rayTracingState.sceneBvh.m_sceneHasTransparentOccluder)))
+        if(!occluderMaterials.resolve(entity, Get<1>(row).material, transform, meshInstanceIndex, instanceMaterial, shadowInstance, Optional<mut b8>(this.m_rayTracingState.sceneBvh.m_sceneHasTransparentOccluder))){
+            this.m_sceneGatherScratch.clearHandles();
             return false;
+        }
         instanceMaterial.indexSlot = this.m_rayTracingState.shadow.m_shadowMeshIndexHandles[meshSlot].slot();
         instanceMaterial.attributeSlot = this.m_rayTracingState.shadow.m_shadowMeshAttributeHandles[meshSlot].slot();
         instanceMaterial.positionSlot = this.m_rayTracingState.shadow.m_shadowMeshPositionHandles[meshSlot].slot();
@@ -258,8 +274,10 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
         instanceWorldBounds.push_back(worldBounds);
     }
 
-    if(!lightSpaceGather.finishHardware(instances, instanceMaterials, contentComplete, this.m_rayTracingState.sceneBvh.m_sceneHasTransparentOccluder))
+    if(!lightSpaceGather.finishHardware(instances, instanceMaterials, contentComplete, this.m_rayTracingState.sceneBvh.m_sceneHasTransparentOccluder)){
+        this.m_sceneGatherScratch.clearHandles();
         return false;
+    }
     in CsgShadowSnapshot csg = this.m_lightSpaceShadow.m_csg.snapshot;
 
     RayTracingDiagnostics().shadowMeshHeapHighWater(true, this.m_rayTracingState.shadow.m_shadowMeshCount, this.m_rayTracingState.shadow.m_shadowMeshHeapHighWater);
@@ -269,6 +287,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
     if(instances.empty()){
         this.m_rayTracingState.sceneBvh.m_tlasStaticSceneHashValid = false;
         this.m_rayTracingState.shadow.m_hwShadowMaterialContextHashValid = false;
+        this.m_sceneGatherScratch.clearHandles();
         return false;
     }
 
@@ -302,6 +321,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
         mut Device device = this.m_graphics.getDevice();
         auto tlasResult = device.createAccelStruct(accelStructDesc);
         if(!tlasResult.has_value()){
+            this.m_sceneGatherScratch.clearHandles();
             error("RendererSystem: failed to create scene TLAS (capacity {})", cast<u64>(capacity));
             return false;
         }
@@ -314,30 +334,38 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
     if(!IsDescriptorClass(this.m_rayTracingState.sceneBvh.m_tlasHeapHandle, GpuDescriptorClass::AccelStruct)){
         RetireDescriptor(heap, this.m_rayTracingState.sceneBvh.m_tlasHeapHandle);
         if(!AssignDescriptor(heap, GpuDescriptorClass::AccelStruct, DescriptorWriteItemRayTracingAccelStruct(0u, this.m_rayTracingState.sceneBvh.m_tlas.deref()), this.m_rayTracingState.sceneBvh.m_tlasHeapHandle)){
+            this.m_sceneGatherScratch.clearHandles();
             error("RendererSystem: failed to register scene TLAS in the descriptor-buffer heap");
             return false;
         }
     }
 
     ShadowMaterialContextPreparer materialContextPreparer(this);
-    const auto materialContextHash = materialContextPreparer.prepare(PreparedShadowMaterialContextRoute::Hardware, staticScene, instances.size(), Span<NwbRtInstanceMaterialGpu>(instanceMaterials),
-        Span<InstanceGpuData>(shadowInstanceData), shadowMaterialTypedBytes);
-    if(!materialContextHash.has_value())
+    u64 materialTypedHash = 0u;
+    const auto materialContextHash = materialContextPreparer.prepareWithTypedHash(PreparedShadowMaterialContextRoute::Hardware, staticScene, instances.size(), Span<NwbRtInstanceMaterialGpu>(instanceMaterials),
+        Span<InstanceGpuData>(shadowInstanceData), shadowMaterialTypedBytes, materialTypedHash);
+    if(!materialContextHash.has_value()){
+        this.m_sceneGatherScratch.clearHandles();
         return false;
+    }
     const u64 hwMaterialContextHash = materialContextHash.value();
 
     if(!canReuseTlas){
         if(!this.m_preparedSceneTlas.capture(this.m_rayTracingState, staticScene, tlasStaticSceneHash, Span<RayTracingInstanceDesc>(instances), Span<RayTracingAccelStructHandle>(instanceBlases))){
+            this.m_sceneGatherScratch.clearHandles();
             error("RendererSystem: could not freeze scene TLAS build after preflight");
             return false;
         }
     }
 
-    if(!this.m_hardwareOpticalScene.prepare(opticalScene) || !this.m_hardwareOpticalScene.prepareRuntimeBounds(opticalScene, this.m_shaderSystem))
+    if(!this.m_hardwareOpticalScene.prepare(opticalScene) || !this.m_hardwareOpticalScene.prepareRuntimeBounds(opticalScene, this.m_shaderSystem)){
+        this.m_sceneGatherScratch.clearHandles();
         return false;
+    }
     this.m_preparedSceneContentStamp = RayTracingSceneIdentityBuilder().buildSoftwareContentStamp(tlasStaticSceneHash, hwMaterialContextHash, opticalScene.contentHash(), csg.hasCsg, csg.identity, staticScene, contentComplete);
     lightSpaceGather.publishHardwareCaptureIdentity(this.m_preparedSceneContentStamp.material, tlasStaticSceneHash, staticScene, contentComplete, Span<NwbRtInstanceMaterialGpu>(instanceMaterials),
-        Span<InstanceGpuData>(shadowInstanceData), Span<u8>(shadowMaterialTypedBytes), Span<TextureHandle>(this.m_preparedShadowTraceMaterialSampledTextures));
+        Span<InstanceGpuData>(shadowInstanceData), shadowMaterialTypedBytes.size(), materialTypedHash, Span<TextureHandle>(this.m_preparedShadowTraceMaterialSampledTextures));
+    this.m_sceneGatherScratch.clearHandles();
 
     return true;
 }
@@ -357,27 +385,38 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
     LightSpaceShadowSceneGather lightSpaceGather(this.m_lightSpaceShadow, this.m_csgShapeRegistry, this.m_world);
     lightSpaceGather.begin(candidateCount, false);
 
-    Vector<SceneSwBvhInstanceGpu> instances;
-    Vector<SoftwareSceneRefitInstanceGpu> sceneRefitInputs;
-    Vector<BufferHandle> sceneRefitRoots;
-    Vector<SceneBvhPrimitiveCalculation> instanceBvhPrimitives;
-    Vector<NwbRtInstanceMaterialGpu> instanceMaterials;
-    InstanceGpuDataVector shadowInstanceData;
-    MaterialTypedByteDataVector shadowMaterialTypedBytes;
-    Vector<PreparedSceneSwBvhMesh> preparedMeshes;
-    MaterialTypedConstantRangeMap shadowConstantTypedRanges;
-    MaterialTypedByteContentRangeMap shadowMutableTypedRanges;
+    mut Vector<SceneSwBvhInstanceGpu> instances = this.m_sceneGatherScratch.swInstances;
+    mut Vector<SoftwareSceneRefitInstanceGpu> sceneRefitInputs = this.m_sceneGatherScratch.swSceneRefitInputs;
+    mut Vector<BufferHandle> sceneRefitRoots = this.m_sceneGatherScratch.swSceneRefitRoots;
+    mut Vector<SceneBvhPrimitiveCalculation> instanceBvhPrimitives = this.m_sceneGatherScratch.swInstanceBvhPrimitives;
+    mut Vector<NwbRtInstanceMaterialGpu> instanceMaterials = this.m_sceneGatherScratch.instanceMaterials;
+    mut InstanceGpuDataVector shadowInstanceData = this.m_sceneGatherScratch.shadowInstanceData;
+    mut MaterialTypedByteDataVector shadowMaterialTypedBytes = this.m_sceneGatherScratch.shadowMaterialTypedBytes;
+    mut Vector<PreparedSceneSwBvhMesh> preparedMeshes = this.m_sceneGatherScratch.swPreparedMeshes;
+    mut MaterialTypedConstantRangeMap shadowConstantTypedRanges = this.m_sceneGatherScratch.shadowConstantTypedRanges;
+    mut MaterialTypedByteContentRangeMap shadowMutableTypedRanges = this.m_sceneGatherScratch.shadowMutableTypedRanges;
+    mut MeshBufferSlotLookup meshSlotLookup = this.m_sceneGatherScratch.meshSlotLookup;
+    mut Vector<TextureHandle> pendingSampledTextures = this.m_sceneGatherScratch.pendingSampledTextures;
+    instances.clear();
+    sceneRefitInputs.clear();
+    sceneRefitRoots.clear();
+    instanceBvhPrimitives.clear();
+    instanceMaterials.clear();
+    shadowInstanceData.clear();
+    shadowMaterialTypedBytes.clear();
+    preparedMeshes.clear();
+    shadowConstantTypedRanges.clear();
+    shadowMutableTypedRanges.clear();
+    meshSlotLookup.clear();
+    pendingSampledTextures.clear();
     instances.reserve(candidateCount);
     sceneRefitInputs.reserve(candidateCount);
-    sceneRefitRoots.reserve(candidateCount);
     lightSpaceGather.reserveSoftwareCasters(candidateCount);
     instanceBvhPrimitives.reserve(candidateCount);
     instanceMaterials.reserve(candidateCount);
     shadowInstanceData.reserve(candidateCount);
-    preparedMeshes.reserve(candidateCount);
     shadowConstantTypedRanges.reserve(candidateCount);
     shadowMutableTypedRanges.reserve(candidateCount);
-    MeshBufferSlotLookup meshSlotLookup;
     meshSlotLookup.reserve(candidateCount);
 
     mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
@@ -400,7 +439,6 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
     b8 contentComplete = true;
     RayTracingOpticalSceneGather opticalScene(candidateCount);
 
-    Vector<TextureHandle> pendingSampledTextures;
     ShadowMaterialSampledTextureCollector sampledTextureCollector(this.m_preparedShadowTraceMaterialSampledTextures, pendingSampledTextures);
     sampledTextureCollector.indexExisting();
     ShadowOccluderMaterialGather occluderMaterials(this.m_materialSystem, sampledTextureCollector, shadowMaterialTypedBytes, shadowConstantTypedRanges, shadowMutableTypedRanges, opticalScene, contentComplete);
@@ -446,6 +484,7 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
             const GpuDescriptorHandle indexHandle = meshResult.value().meshResources.swBvhTriangleIndexHeapHandle;
             if(!positionHandle.valid() || positionHandle.descriptorClass() != GpuDescriptorClass::StorageBuffer || !indexHandle.valid() || indexHandle.descriptorClass() != GpuDescriptorClass::StorageBuffer){
                 meshHeapHandles.sweep();
+                this.m_sceneGatherScratch.clearHandles();
                 error("RendererSystem: failed to register SW scene mesh buffers in the global descriptor heap");
                 return false;
             }
@@ -453,6 +492,7 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
             const auto attributeHandle = meshHeapHandles.acquire(meshResult.value().meshResources.attributeBuffer);
             if(!attributeHandle.has_value()){
                 meshHeapHandles.sweep();
+                this.m_sceneGatherScratch.clearHandles();
                 error("RendererSystem: failed to register SW scene mesh buffers in the global descriptor heap");
                 return false;
             }
@@ -493,8 +533,10 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
             if(!meshSlotLookup.try_emplace(meshKey, meshSlot).second){
                 assert(false);
                 meshHeapHandles.sweep();
+                this.m_sceneGatherScratch.clearHandles();
                 return false;
             }
+            sceneRefitRoots.push_back(meshResult.value().meshResources.swBvhNodeBuffer);
             ++this.m_rayTracingState.shadow.m_swShadowMeshCount;
         }
 
@@ -515,8 +557,10 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
             opticalScene.markIncomplete();
             continue;
         }
-        VectorSingle worldMin = worldBounds.value().minBounds;
-        VectorSingle worldMax = worldBounds.value().maxBounds;
+        const VectorSingle uninflatedWorldMin = worldBounds.value().minBounds;
+        const VectorSingle uninflatedWorldMax = worldBounds.value().maxBounds;
+        VectorSingle worldMin = uninflatedWorldMin;
+        VectorSingle worldMax = uninflatedWorldMax;
         InflateSwShadowSceneBounds(worldMin, worldMax);
 
         SceneSwBvhInstanceGpu instance;
@@ -526,8 +570,10 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
         const u32 meshInstanceIndex = cast<u32>(instances.size());
         NwbRtInstanceMaterialGpu instanceMaterial;
         InstanceGpuData shadowInstance;
-        if(!occluderMaterials.resolve(entity, Get<1>(row).material, transform, meshInstanceIndex, instanceMaterial, shadowInstance, Optional<mut b8>()))
+        if(!occluderMaterials.resolve(entity, Get<1>(row).material, transform, meshInstanceIndex, instanceMaterial, shadowInstance, Optional<mut b8>())){
+            this.m_sceneGatherScratch.clearHandles();
             return false;
+        }
         instanceMaterial.indexSlot = this.m_rayTracingState.shadow.m_swShadowMeshIndexHandles[meshSlot].slot();
         instanceMaterial.attributeSlot = this.m_rayTracingState.shadow.m_swShadowMeshAttributeHandles[meshSlot].slot();
         instanceMaterial.positionSlot = this.m_rayTracingState.shadow.m_swShadowMeshPositionHandles[meshSlot].slot();
@@ -555,12 +601,11 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
             opticalScene.append(entity, Get<1>(row), bvhPrimitive.transparentOccluder, opticalMin, opticalMax, opticalBoundsValid);
 
         lightSpaceGather.appendSoftwareCaptureIdentity(entity, meshResult.value().resolvedMesh.runtime || meshResult.value().meshResources.runtimeMesh, meshResult.value().meshResources, instanceMaterial, shadowInstance, opticalScene.instances.back());
-        lightSpaceGather.appendSoftwareReceiver(entity, bvhPrimitive.transparentOccluder, objectToWorld, worldToObject, localMin, localMax, meshResult.value().meshResources);
+        lightSpaceGather.appendSoftwareReceiver(entity, bvhPrimitive.transparentOccluder, objectToWorld, worldToObject, localMin, localMax, uninflatedWorldMin, uninflatedWorldMax, meshResult.value().meshResources);
         SoftwareSceneRefitInstanceGpu refitInput;
         refitInput.objectToWorld = f32x3x4(objectToWorld);
         refitInput.meshNodeSlot = instanceMaterial.nodeSlot;
         sceneRefitInputs.push_back(refitInput);
-        sceneRefitRoots.push_back(meshResult.value().meshResources.swBvhNodeBuffer);
         lightSpaceGather.appendSoftwareCaster(meshResult.value().meshResources);
         instances.push_back(instance);
         instanceBvhPrimitives.push_back(bvhPrimitive);
@@ -571,14 +616,17 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
     RayTracingDiagnostics().shadowMeshHeapHighWater(false, this.m_rayTracingState.shadow.m_swShadowMeshCount, this.m_rayTracingState.shadow.m_swShadowMeshHeapHighWater);
     meshHeapHandles.sweep();
 
-    if(!lightSpaceGather.finishSoftware(Span<SceneSwBvhInstanceGpu>(instances), instanceMaterials, contentComplete))
+    if(!lightSpaceGather.finishSoftware(Span<SceneSwBvhInstanceGpu>(instances), instanceMaterials, contentComplete)){
+        this.m_sceneGatherScratch.clearHandles();
         return false;
+    }
     in CsgShadowSnapshot csg = this.m_lightSpaceShadow.m_csg.snapshot;
     const u32 instanceCount = cast<u32>(instances.size());
     if(instanceCount == 0u){
         this.m_rayTracingState.sceneBvh.m_sceneBvhInstanceCount = 0u;
         this.m_rayTracingState.sceneBvh.m_sceneSwBvhStaticSceneHashValid = false;
         this.m_rayTracingState.shadow.m_swShadowMaterialContextHashValid = false;
+        this.m_sceneGatherScratch.clearHandles();
         return true;
     }
 
@@ -586,31 +634,41 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
     if(staticScene)
         sceneStaticHash = RayTracingSceneIdentityBuilder().staticSceneHash(Span<SceneSwBvhInstanceGpu>(instances), Span<SceneBvhPrimitiveCalculation>(instanceBvhPrimitives));
     const usize requiredNodeCount = ComputeBinaryBvhNodeCount(cast<usize>(instanceCount));
-    if(!RayTracingBuildPolicy().validateSceneSwBvhNodeCount(requiredNodeCount))
+    if(!RayTracingBuildPolicy().validateSceneSwBvhNodeCount(requiredNodeCount)){
+        this.m_sceneGatherScratch.clearHandles();
         return false;
+    }
     const b8 canReuseSceneBvh = CanReuseStaticSceneSwBvh(
         staticScene, this.m_rayTracingState.sceneBvh.m_sceneSwBvhStaticSceneHashValid, this.m_rayTracingState.sceneBvh.m_sceneSwBvhStaticSceneHash,
         sceneStaticHash, this.m_rayTracingState.sceneBvh.m_sceneBvhInstanceCount, instanceCount, HasPreparedSceneBvhBuffers(this.m_rayTracingState, instanceCount)
     );
     if(!staticScene || !canReuseSceneBvh)
         this.m_rayTracingState.sceneBvh.m_sceneSwBvhStaticSceneHashValid = false;
-    if(canReuseSceneBvh && !this.capturePreparedSceneBvhCacheReuse(sceneStaticHash, instanceCount))
+    if(canReuseSceneBvh && !this.capturePreparedSceneBvhCacheReuse(sceneStaticHash, instanceCount)){
+        this.m_sceneGatherScratch.clearHandles();
         return false;
+    }
 
     if(!canReuseSceneBvh){
         RayTraceMaterialResources materials(this.m_graphics, this.m_rayTracingState.sceneBvh, this.m_rayTracingState.shadow);
         SoftwareBvhBuilder builder(this.m_graphics, this.m_shaderSystem, this.m_rayTracingState.sceneBvh);
-        if(!builder.ensureSceneBvhBuffers(instanceCount, materials) || !HasPreparedSceneBvhBuffers(this.m_rayTracingState, instanceCount))
+        if(!builder.ensureSceneBvhBuffers(instanceCount, materials) || !HasPreparedSceneBvhBuffers(this.m_rayTracingState, instanceCount)){
+            this.m_sceneGatherScratch.clearHandles();
             return false;
-        Vector<u32> indices;
-        Vector<u32> instanceLeafCost;
-        Vector<SceneBvhNodeCalculation> buildNodes;
-        Vector<NwbBvhNodeGpu> nodes;
-        if(!BuildAndPackSceneBvhNodesInto(Span<SceneSwBvhInstanceGpu>(instances), Span<SceneBvhPrimitiveCalculation>(instanceBvhPrimitives), indices, instanceLeafCost, buildNodes, nodes))
+        }
+        mut Vector<u32> indices = this.m_sceneGatherScratch.swBvhIndices;
+        mut Vector<u32> instanceLeafCost = this.m_sceneGatherScratch.swBvhInstanceLeafCost;
+        mut Vector<SceneBvhNodeCalculation> buildNodes = this.m_sceneGatherScratch.swBvhBuildNodes;
+        mut Vector<NwbBvhNodeGpu> nodes = this.m_sceneGatherScratch.swBvhNodes;
+        if(!BuildAndPackSceneBvhNodesInto(Span<SceneSwBvhInstanceGpu>(instances), Span<SceneBvhPrimitiveCalculation>(instanceBvhPrimitives), indices, instanceLeafCost, buildNodes, nodes)){
+            this.m_sceneGatherScratch.clearHandles();
             return false;
+        }
 
-        if(!this.capturePreparedSceneBvh(staticScene, sceneStaticHash, Span<NwbBvhNodeGpu>(nodes), Span<SceneSwBvhInstanceGpu>(instances)))
+        if(!this.capturePreparedSceneBvh(staticScene, sceneStaticHash, Span<NwbBvhNodeGpu>(nodes), Span<SceneSwBvhInstanceGpu>(instances))){
+            this.m_sceneGatherScratch.clearHandles();
             return false;
+        }
     }
 
     if(!staticScene){
@@ -618,16 +676,20 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
             this.m_preparedSceneBvh.nodeHeapHandle(), cast<u32>(requiredNodeCount), this.m_shaderSystem);
         if(!preparedRefit.has_value()){
             this.m_preparedSceneSwBvhRefit.reset();
+            this.m_sceneGatherScratch.clearHandles();
             return false;
         }
         this.m_preparedSceneSwBvhRefit = preparedRefit.value();
     }
 
     ShadowMaterialContextPreparer materialContextPreparer(this);
-    const auto materialContextHash = materialContextPreparer.prepare(PreparedShadowMaterialContextRoute::Software, staticScene, instances.size(), Span<NwbRtInstanceMaterialGpu>(instanceMaterials),
-        Span<InstanceGpuData>(shadowInstanceData), shadowMaterialTypedBytes);
-    if(!materialContextHash.has_value())
+    u64 materialTypedHash = 0u;
+    const auto materialContextHash = materialContextPreparer.prepareWithTypedHash(PreparedShadowMaterialContextRoute::Software, staticScene, instances.size(), Span<NwbRtInstanceMaterialGpu>(instanceMaterials),
+        Span<InstanceGpuData>(shadowInstanceData), shadowMaterialTypedBytes, materialTypedHash);
+    if(!materialContextHash.has_value()){
+        this.m_sceneGatherScratch.clearHandles();
         return false;
+    }
     const u64 swMaterialContextHash = materialContextHash.value();
 
     this.m_rayTracingState.sceneBvh.m_sceneBvhInstanceCount = instanceCount;
@@ -640,17 +702,21 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
             warning("RendererSystem: could not freeze software scene traversal");
             this.clearPreparedSceneBvh();
             this.clearPreparedShadowMaterialContext();
+            this.m_sceneGatherScratch.clearHandles();
             return false;
         }
     }
     else
         this.m_preparedSceneSwBvhTraversal.clear();
-    if(!this.m_softwareOpticalScene.prepare(opticalScene) || !this.m_softwareOpticalScene.prepareRuntimeBounds(opticalScene, this.m_shaderSystem))
+    if(!this.m_softwareOpticalScene.prepare(opticalScene) || !this.m_softwareOpticalScene.prepareRuntimeBounds(opticalScene, this.m_shaderSystem)){
+        this.m_sceneGatherScratch.clearHandles();
         return false;
+    }
     this.m_preparedSceneContentStamp = RayTracingSceneIdentityBuilder().buildSoftwareContentStamp(sceneStaticHash, swMaterialContextHash, opticalScene.contentHash(), csg.hasCsg, csg.identity, staticScene, contentComplete);
     this.m_rayTracingState.shadow.m_softwareTransparentSampling.m_history.prepareScene(this.m_preparedSceneContentStamp);
-    lightSpaceGather.publishSoftwareCaptureIdentity(instanceCount, Span<NwbRtInstanceMaterialGpu>(instanceMaterials), Span<InstanceGpuData>(shadowInstanceData), Span<u8>(shadowMaterialTypedBytes),
-        Span<TextureHandle>(this.m_preparedShadowTraceMaterialSampledTextures), contentComplete);
+    lightSpaceGather.publishSoftwareCaptureIdentity(instanceCount, Span<NwbRtInstanceMaterialGpu>(instanceMaterials), Span<InstanceGpuData>(shadowInstanceData), shadowMaterialTypedBytes.size(),
+        materialTypedHash, Span<TextureHandle>(this.m_preparedShadowTraceMaterialSampledTextures), contentComplete);
+    this.m_sceneGatherScratch.clearHandles();
     return true;
 }
 

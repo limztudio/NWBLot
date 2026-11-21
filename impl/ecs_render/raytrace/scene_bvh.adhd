@@ -116,6 +116,8 @@ u32 ResolveSceneBvhSplitMidpoint(in SceneBvhSahSplit split, in u32 lo, in u32 hi
     return partitionedMid;
 }
 
+const usize s_SceneBvhTotalSahBinCount = cast<usize>(s_SceneBvhAxisCount * s_SceneBvhSahBinCount);
+
 SceneBvhSahSplit SelectSceneBvhSahSplit(
     in u32 lo,
     in u32 hi,
@@ -132,58 +134,111 @@ SceneBvhSahSplit SelectSceneBvhSahSplit(
         centroidMax = Max(centroidMax, centroid);
     }
 
-    Array<f32x4, s_SceneBvhSahBinCount> binMin;
-    Array<f32x4, s_SceneBvhSahBinCount> binMax;
-    Array<f32, s_SceneBvhSahBinCount> binCost;
-    Array<u32, s_SceneBvhSahBinCount> binCount;
+    Array<f32, s_SceneBvhAxisCount> axisLoExtent;
+    Array<f32, s_SceneBvhAxisCount> axisInvExtent;
+    Array<b8, s_SceneBvhAxisCount> axisActive;
+    b8 anyAxisActive = false;
+    for(u32 axis = 0u; axis < s_SceneBvhAxisCount; ++axis){
+        const f32 loExtent = SelectSceneBvhAxisValue(centroidMin, axis);
+        const f32 extent = SelectSceneBvhAxisValue(centroidMax, axis) - loExtent;
+        axisLoExtent[axis] = loExtent;
+        if(extent <= 0.0f){
+            axisInvExtent[axis] = 0.0f;
+            axisActive[axis] = false;
+        }
+        else{
+            axisInvExtent[axis] = cast<f32>(s_SceneBvhSahBinCount) / extent;
+            axisActive[axis] = true;
+            anyAxisActive = true;
+        }
+    }
+    if(!anyAxisActive)
+        return split;
+
+    Array<f32x4, s_SceneBvhTotalSahBinCount> binMin;
+    Array<f32x4, s_SceneBvhTotalSahBinCount> binMax;
+    Array<f32, s_SceneBvhTotalSahBinCount> binCost;
+    Array<u32, s_SceneBvhTotalSahBinCount> binCount;
+    for(u32 axis = 0u; axis < s_SceneBvhAxisCount; ++axis){
+        if(!axisActive[axis])
+            continue;
+        const usize base = cast<usize>(axis * s_SceneBvhSahBinCount);
+        for(u32 b = 0u; b < s_SceneBvhSahBinCount; ++b){
+            const usize idx = base + cast<usize>(b);
+            binMin[idx] = f32x4(s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity);
+            binMax[idx] = f32x4(-s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity);
+            binCost[idx] = 0.0f;
+            binCount[idx] = 0u;
+        }
+    }
+
+    const VectorSingle invExtentVec(axisInvExtent[0u], axisInvExtent[1u], axisInvExtent[2u], 0.0f);
+    const b8 active0 = axisActive[0u];
+    const b8 active1 = axisActive[1u];
+    const b8 active2 = axisActive[2u];
+    for(u32 i = lo; i < hi; ++i){
+        const u32 instance = indices[cast<usize>(i)];
+        in SceneBvhPrimitiveCalculation prim = primitiveBounds[cast<usize>(instance)];
+        const f32 cost = cast<f32>(instanceLeafCost[cast<usize>(instance)]);
+        const VectorSingle scaled = (VectorSingle(prim.centroid) - centroidMin) * invExtentVec;
+        const VectorSingle primMin(prim.aabbMin);
+        const VectorSingle primMax(prim.aabbMax);
+        if(active0){
+            u32 b = cast<u32>(scaled.x);
+            if(b >= s_SceneBvhSahBinCount)
+                b = s_SceneBvhSahBinCount - 1u;
+            const usize binIdx = cast<usize>(b);
+            binMin[binIdx] = f32x4(Min(VectorSingle(binMin[binIdx]), primMin));
+            binMax[binIdx] = f32x4(Max(VectorSingle(binMax[binIdx]), primMax));
+            binCost[binIdx] += cost;
+            ++binCount[binIdx];
+        }
+        if(active1){
+            u32 b = cast<u32>(scaled.y);
+            if(b >= s_SceneBvhSahBinCount)
+                b = s_SceneBvhSahBinCount - 1u;
+            const usize binIdx = cast<usize>(s_SceneBvhSahBinCount + b);
+            binMin[binIdx] = f32x4(Min(VectorSingle(binMin[binIdx]), primMin));
+            binMax[binIdx] = f32x4(Max(VectorSingle(binMax[binIdx]), primMax));
+            binCost[binIdx] += cost;
+            ++binCount[binIdx];
+        }
+        if(active2){
+            u32 b = cast<u32>(scaled.z);
+            if(b >= s_SceneBvhSahBinCount)
+                b = s_SceneBvhSahBinCount - 1u;
+            const usize binIdx = cast<usize>(2u * s_SceneBvhSahBinCount + b);
+            binMin[binIdx] = f32x4(Min(VectorSingle(binMin[binIdx]), primMin));
+            binMax[binIdx] = f32x4(Max(VectorSingle(binMax[binIdx]), primMax));
+            binCost[binIdx] += cost;
+            ++binCount[binIdx];
+        }
+    }
+
     Array<f32x4, s_SceneBvhSahBinCount> suffixMin;
     Array<f32x4, s_SceneBvhSahBinCount> suffixMax;
     Array<f32, s_SceneBvhSahBinCount> suffixCost;
     Array<u32, s_SceneBvhSahBinCount> suffixCount;
-
     f32 bestCost = s_RayTracingFiniteInfinity;
     for(u32 axis = 0u; axis < s_SceneBvhAxisCount; ++axis){
-        const f32 loExtent = SelectSceneBvhAxisValue(centroidMin, axis);
-        const f32 extent = SelectSceneBvhAxisValue(centroidMax, axis) - loExtent;
-        if(extent <= 0.0f)
+        if(!axisActive[axis])
             continue;
-        const f32 invExtent = cast<f32>(s_SceneBvhSahBinCount) / extent;
-
-        for(u32 b = 0u; b < s_SceneBvhSahBinCount; ++b){
-            const usize bIdx = cast<usize>(b);
-            binMin[bIdx] = f32x4(s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity);
-            binMax[bIdx] = f32x4(-s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity);
-            binCost[bIdx] = 0.0f;
-            binCount[bIdx] = 0u;
-        }
-        for(u32 i = lo; i < hi; ++i){
-            const u32 instance = indices[cast<usize>(i)];
-            const SceneBvhPrimitiveCalculation prim = primitiveBounds[cast<usize>(instance)];
-            const f32 c = SelectSceneBvhAxisValue(VectorSingle(prim.centroid), axis);
-            u32 b = cast<u32>((c - loExtent) * invExtent);
-            if(b >= s_SceneBvhSahBinCount)
-                b = s_SceneBvhSahBinCount - 1u;
-            const usize binIdx = cast<usize>(b);
-            binMin[binIdx] = f32x4(Min(VectorSingle(binMin[binIdx]), VectorSingle(prim.aabbMin)));
-            binMax[binIdx] = f32x4(Max(VectorSingle(binMax[binIdx]), VectorSingle(prim.aabbMax)));
-            binCost[binIdx] += cast<f32>(instanceLeafCost[cast<usize>(instance)]);
-            ++binCount[binIdx];
-        }
-
+        const usize base = cast<usize>(axis * s_SceneBvhSahBinCount);
         VectorSingle accMin(s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity);
         VectorSingle accMax(-s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity);
         f32 accCost = 0.0f;
         u32 accCount = 0u;
         for(u32 b = s_SceneBvhSahBinCount; b >= 1u; --b){
-            const usize idx = cast<usize>(b - 1u);
-            accMin = Min(accMin, VectorSingle(binMin[idx]));
-            accMax = Max(accMax, VectorSingle(binMax[idx]));
-            accCost += binCost[idx];
-            accCount += binCount[idx];
-            suffixMin[idx] = f32x4(accMin);
-            suffixMax[idx] = f32x4(accMax);
-            suffixCost[idx] = accCost;
-            suffixCount[idx] = accCount;
+            const usize binIdx = base + cast<usize>(b - 1u);
+            const usize suffixIdx = cast<usize>(b - 1u);
+            accMin = Min(accMin, VectorSingle(binMin[binIdx]));
+            accMax = Max(accMax, VectorSingle(binMax[binIdx]));
+            accCost += binCost[binIdx];
+            accCount += binCount[binIdx];
+            suffixMin[suffixIdx] = f32x4(accMin);
+            suffixMax[suffixIdx] = f32x4(accMax);
+            suffixCost[suffixIdx] = accCost;
+            suffixCount[suffixIdx] = accCount;
         }
 
         const f32 parentArea = ComputeSceneBvhAabbSurfaceArea(VectorSingle(suffixMin[0u]), VectorSingle(suffixMax[0u]));
@@ -191,12 +246,14 @@ SceneBvhSahSplit SelectSceneBvhSahSplit(
         VectorSingle leftMax(-s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity);
         f32 leftCost = 0.0f;
         u32 leftCount = 0u;
+        const f32 loExtent = axisLoExtent[axis];
+        const f32 invExtent = axisInvExtent[axis];
         for(u32 k = 1u; k < s_SceneBvhSahBinCount; ++k){
-            const usize b = cast<usize>(k - 1u);
-            leftMin = Min(leftMin, VectorSingle(binMin[b]));
-            leftMax = Max(leftMax, VectorSingle(binMax[b]));
-            leftCost += binCost[b];
-            leftCount += binCount[b];
+            const usize binIdx = base + cast<usize>(k - 1u);
+            leftMin = Min(leftMin, VectorSingle(binMin[binIdx]));
+            leftMax = Max(leftMax, VectorSingle(binMax[binIdx]));
+            leftCost += binCost[binIdx];
+            leftCount += binCount[binIdx];
 
             const usize kIdx = cast<usize>(k);
             const u32 rightCount = suffixCount[kIdx];

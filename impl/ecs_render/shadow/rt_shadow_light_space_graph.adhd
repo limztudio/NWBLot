@@ -40,20 +40,25 @@ b8 CanDeclareLightSpaceShadowMaps(in b8 snapshotReady, in b8 dependencyValid, in
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AppendLightSpaceSceneRead(mut Vector<GpuTaskResourceUse> outUses, in GpuTaskResourceUse use){
+void AppendLightSpaceSceneReadIndexed(mut Vector<GpuTaskResourceUse> outUses, mut HashMap<u32, usize> resourceIndices, in GpuTaskResourceUse use){
     assert(use.access == GpuTaskResourceAccess::Read);
     assert(use.range.bufferRange == s_EntireBuffer && use.range.textureSubresources == s_AllSubresources);
-    for(mut GpuTaskResourceUse previous : outUses){
-        if(previous.resource == use.resource){
-            previous.requiredState |= use.requiredState;
-            previous.hasIndependentStateSource = previous.hasIndependentStateSource && use.hasIndependentStateSource;
-            return;
-        }
+    if(resourceIndices.contains(use.resource.index)){
+        const usize existingIndex = resourceIndices.at(use.resource.index);
+        assert(outUses[existingIndex].resource == use.resource);
+        mut GpuTaskResourceUse previous = outUses[existingIndex];
+        previous.requiredState |= use.requiredState;
+        previous.hasIndependentStateSource = previous.hasIndependentStateSource && use.hasIndependentStateSource;
+        return;
     }
+    resourceIndices.try_emplace(use.resource.index, outUses.size());
     outUses.push_back(use);
 }
 
 b8 GatherCaptureReads(in GpuTaskGraph graph, in LightSpaceShadowGraphInputs inputs, mut Vector<GpuTaskResourceUse> outUses){
+    if(!inputs.snapshot.valid())
+        return false;
+    in LightSpaceShadowSnapshot snapshot = inputs.snapshot.deref().snapshot;
     GpuTaskGraphDeclarationReadView declarations(graph);
     if(!declarations.valid())
         return false;
@@ -63,11 +68,13 @@ b8 GatherCaptureReads(in GpuTaskGraph graph, in LightSpaceShadowGraphInputs inpu
             return false;
         setMemberCount += declarations.resourceSetAt(use.resourceSet.index).memberCount;
     }
-    const usize capacity = ResolveLightSpaceCaptureReadReserveCount(inputs.sceneReads.size(), inputs.snapshot.casters.size(), setMemberCount);
+    const usize capacity = ResolveLightSpaceCaptureReadReserveCount(inputs.sceneReads.size(), snapshot.casters.size(), setMemberCount);
     outUses.clear();
     outUses.reserve(capacity);
+    HashMap<u32, usize> resourceIndices;
+    resourceIndices.reserve(capacity);
     for(in GpuTaskResourceUse use : inputs.sceneReads)
-        AppendLightSpaceSceneRead(outUses, use);
+        AppendLightSpaceSceneReadIndexed(outUses, resourceIndices, use);
     for(in GpuTaskResourceSetUse use : inputs.sceneReadSets){
         const GpuTaskGraphResourceSetView members = declarations.resourceSetAt(use.resourceSet.index);
         for(in GpuGraphResourceId member : members.memberSpan()){
@@ -77,14 +84,14 @@ b8 GatherCaptureReads(in GpuTaskGraph graph, in LightSpaceShadowGraphInputs inpu
             read.requiredState = use.requiredState;
             read.access = use.access;
             read.hasIndependentStateSource = use.hasIndependentStateSource;
-            AppendLightSpaceSceneRead(outUses, read);
+            AppendLightSpaceSceneReadIndexed(outUses, resourceIndices, read);
         }
     }
-    for(in LightSpaceShadowCaster caster : inputs.snapshot.casters){
+    for(in LightSpaceShadowCaster caster : snapshot.casters){
         const GpuGraphResourceId resource = declarations.findImportedBuffer(caster.triangleIndexBuffer);
         if(!resource.valid())
             return false;
-        AppendLightSpaceSceneRead(outUses, ReadUse(resource, ResourceStates::ShaderResource | ResourceStates::IndexBuffer));
+        AppendLightSpaceSceneReadIndexed(outUses, resourceIndices, ReadUse(resource, ResourceStates::ShaderResource | ResourceStates::IndexBuffer));
     }
     return true;
 }
@@ -98,7 +105,7 @@ GpuTimingScopeDefinition LightSpaceCaptureTimingScope(in b8 transparent){
 class LightSpaceViewTask{
     private mut GraphicsRuntime graphics;
     private in b8 shadowPrepared;
-    private LightSpaceShadowSnapshot snapshot;
+    private FrozenLightSpaceShadowHandle snapshot;
 
     public LightSpaceViewTask(in LightSpaceShadowGraphInputs inputs){
         this.graphics = inputs.graphics;
@@ -114,16 +121,18 @@ class LightSpaceViewTask{
             return false;
         if(!this.shadowPrepared)
             return true;
+        if(!this.snapshot.valid())
+            return false;
         GpuTimingMeasure timing(this.graphics.gpuTiming(), s_TimingScopeLightSpaceShadowViews, this.graphics.getDevice(), commandList);
 
-        return LightSpaceShadowRecorder().views(this.snapshot, commandList, this.graphics.getDevice().getDescriptorHeap());
+        return LightSpaceShadowRecorder().views(this.snapshot.deref().snapshot, commandList, this.graphics.getDevice().getDescriptorHeap());
     }
 }
 
 class LightSpaceShadeTask{
     private mut GraphicsRuntime graphics;
     private in b8 shadowPrepared;
-    private LightSpaceShadowSnapshot snapshot;
+    private FrozenLightSpaceShadowHandle snapshot;
 
     public LightSpaceShadeTask(in LightSpaceShadowGraphInputs inputs){
         this.graphics = inputs.graphics;
@@ -139,12 +148,15 @@ class LightSpaceShadeTask{
             return false;
         if(!this.shadowPrepared)
             return true;
+        if(!this.snapshot.valid())
+            return false;
         GpuTimingMeasure timing(this.graphics.gpuTiming(), s_TimingScopeLightSpaceShadowShade, this.graphics.getDevice(), commandList);
 
-        if(!LightSpaceShadowRecorder().shade(this.snapshot, commandList, this.graphics.getDevice().getDescriptorHeap()))
+        in LightSpaceShadowSnapshot snap = this.snapshot.deref().snapshot;
+        if(!LightSpaceShadowRecorder().shade(snap, commandList, this.graphics.getDevice().getDescriptorHeap()))
             return false;
-        if(this.snapshot.captureHistory.has_value())
-            this.snapshot.captureHistory.value().recordCapture(this.snapshot.captureTicket);
+        if(snap.captureHistory.has_value())
+            snap.captureHistory.value().recordCapture(snap.captureTicket);
         return true;
     }
 }
@@ -158,10 +170,10 @@ class LightSpaceDiagnosticTask{
 
     public LightSpaceDiagnosticTask(in LightSpaceShadowGraphInputs inputs){
         this.shadowPrepared = inputs.shadowPrepared;
-        this.sourceBuffer = inputs.snapshot.csgContext;
-        this.readback = inputs.snapshot.diagnosticReadback;
-        this.diagnostics = inputs.snapshot.diagnostics.value();
-        this.frameIndex = inputs.snapshot.diagnosticFrame;
+        this.sourceBuffer = inputs.snapshot.deref().snapshot.csgContext;
+        this.readback = inputs.snapshot.deref().snapshot.diagnosticReadback;
+        this.diagnostics = inputs.snapshot.deref().snapshot.diagnostics.value();
+        this.frameIndex = inputs.snapshot.deref().snapshot.diagnosticFrame;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute | GpuQueueCapability::Transfer); }
@@ -191,21 +203,12 @@ class LightSpaceDiagnosticTask{
 class LightSpaceCullTask{
     private mut GraphicsRuntime graphics;
     private in b8 shadowPrepared;
-    private LightSpaceShadowSnapshot snapshot;
-    private Vector<LightSpaceShadowCaster> casters;
+    private FrozenLightSpaceShadowHandle snapshot;
 
     public LightSpaceCullTask(in LightSpaceShadowGraphInputs inputs){
         this.graphics = inputs.graphics;
         this.shadowPrepared = inputs.shadowPrepared;
         this.snapshot = inputs.snapshot;
-        this.casters.assign(inputs.snapshot.casters.begin(), inputs.snapshot.casters.end());
-        this.snapshot.casters = Span<LightSpaceShadowCaster>();
-    }
-
-    private LightSpaceShadowSnapshot frozenSnapshot()const{
-        LightSpaceShadowSnapshot frozen = this.snapshot;
-        frozen.casters = Span<LightSpaceShadowCaster>(this.casters);
-        return frozen;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
@@ -216,32 +219,25 @@ class LightSpaceCullTask{
             return false;
         if(!this.shadowPrepared)
             return true;
+        if(!this.snapshot.valid())
+            return false;
         GpuTimingMeasure timing(this.graphics.gpuTiming(), s_TimingScopeLightSpaceShadowCull, this.graphics.getDevice(), commandList);
 
-        return LightSpaceShadowRecorder().cull(this.frozenSnapshot(), commandList, this.graphics.getDevice().getDescriptorHeap());
+        return LightSpaceShadowRecorder().cull(this.snapshot.deref().snapshot, commandList, this.graphics.getDevice().getDescriptorHeap());
     }
 }
 
 class LightSpaceCaptureTask{
     private mut GraphicsRuntime graphics;
     private in b8 shadowPrepared;
-    private LightSpaceShadowSnapshot snapshot;
-    private Vector<LightSpaceShadowCaster> casters;
+    private FrozenLightSpaceShadowHandle snapshot;
     private b8 transparent;
 
     public LightSpaceCaptureTask(in LightSpaceShadowGraphInputs inputs, in b8 transparent){
         this.graphics = inputs.graphics;
         this.shadowPrepared = inputs.shadowPrepared;
         this.snapshot = inputs.snapshot;
-        this.casters.assign(inputs.snapshot.casters.begin(), inputs.snapshot.casters.end());
-        this.snapshot.casters = Span<LightSpaceShadowCaster>();
         this.transparent = transparent;
-    }
-
-    private LightSpaceShadowSnapshot frozenSnapshot()const{
-        LightSpaceShadowSnapshot frozen = this.snapshot;
-        frozen.casters = Span<LightSpaceShadowCaster>(this.casters);
-        return frozen;
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Graphics); }
@@ -252,20 +248,19 @@ class LightSpaceCaptureTask{
             return false;
         if(!this.shadowPrepared)
             return true;
-        const LightSpaceShadowSnapshot snapshot = this.frozenSnapshot();
+        if(!this.snapshot.valid())
+            return false;
         const GpuTimingScopeDefinition scope = LightSpaceCaptureTimingScope(this.transparent);
         GpuTimingMeasure timing(this.graphics.gpuTiming(), scope, this.graphics.getDevice(), commandList);
 
-        for(u32 view = 0u; view < snapshot.plan.viewCount; ++view){
-            if(!LightSpaceShadowRecorder().capture(snapshot, view, this.transparent, commandList, this.graphics.getDevice().getDescriptorHeap()))
-                return false;
-        }
-        return true;
+        return LightSpaceShadowRecorder().captureAllViews(this.snapshot.deref().snapshot, this.transparent, commandList, this.graphics.getDevice().getDescriptorHeap());
     }
 }
 
 Expected<GpuTaskId> DeclareLightSpaceShadowDiagnostics(in LightSpaceShadowGraphInputs inputs, in GpuGraphResourceId context, mut GpuTaskGraph graph){
-    in LightSpaceShadowSnapshot snapshot = inputs.snapshot;
+    if(!inputs.snapshot.valid())
+        return MakeUnexpected(Failure());
+    in LightSpaceShadowSnapshot snapshot = inputs.snapshot.deref().snapshot;
     if(!CanDeclareLightSpaceShadowDiagnostics(snapshot.ready, snapshot.diagnostics.has_value(), snapshot.diagnosticReadback.valid(), inputs.dependency.valid(), context.valid()))
         return MakeUnexpected(Failure());
     GpuGraphResourceDesc readbackDesc = BufferResourceDesc(s_LightSpaceDiagnosticsIdentity, s_LightSpaceDiagnosticsLabel);
@@ -299,7 +294,9 @@ Expected<GpuTaskId> DeclareLightSpaceShadowDiagnostics(in LightSpaceShadowGraphI
 
 
 Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(in LightSpaceShadowGraphInputs inputs, mut GpuTaskGraph graph){
-    in LightSpaceShadowSnapshot snapshot = inputs.snapshot;
+    if(!inputs.snapshot.valid())
+        return MakeUnexpected(Failure());
+    in LightSpaceShadowSnapshot snapshot = inputs.snapshot.deref().snapshot;
     if(!CanDeclareLightSpaceShadowMaps(snapshot.ready, inputs.dependency.valid(), snapshot.casters.empty()))
         return MakeUnexpected(Failure());
     LightSpaceShadowGraph result;
@@ -438,38 +435,45 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(in LightSpaceShadowG
     result.viewFit = viewFitResult.value();
 
     uses.pop_back();
+    uses.reserve(uses.size() + 2u + snapshot.casters.size() * s_LightSpaceMeshletCasterBufferPairCount);
     uses.push_back(ReadUse(result.views, ResourceStates::ShaderResource));
     uses.push_back(WriteUse(result.drawArguments, ResourceStates::UnorderedAccess));
+    HashSet<u32> seenResources;
+    for(in GpuTaskResourceUse use : uses)
+        seenResources.insert(use.resource.index);
     for(in LightSpaceShadowCaster caster : snapshot.casters){
         if(caster.meshletCount == 0u)
             continue;
-        const Array<BufferHandle, s_LightSpaceMeshletCasterBufferPairCount> buffers(caster.meshletDescBuffer, caster.meshletBoundsBuffer);
-        for(in BufferHandle buffer : buffers){
-            if(!buffer.valid())
-                return MakeUnexpected(Failure());
-            GpuGraphResourceId resource;
-            {
-                GpuTaskGraphDeclarationReadView declarations(graph);
-                resource = declarations.findImportedBuffer(buffer);
-            }
-            if(!resource.valid()){
-                const auto importedResource = ImportExternalBuffer(graph, buffer, buffer.deref().getCreationDescription().debugName, "Light-Space Meshlet Bounds", ResourceStates::Common, ResourceStates::Common);
-                if(!importedResource.has_value())
-                    return MakeUnexpected(Failure());
-                resource = importedResource.value();
-            }
-            if(!resource.valid())
-                return MakeUnexpected(Failure());
-            b8 exists = false;
-            for(in GpuTaskResourceUse use : uses){
-                if(use.resource == resource){
-                    exists = true;
-                    break;
+        if(!caster.meshletDescBuffer.valid() || !caster.meshletBoundsBuffer.valid())
+            return MakeUnexpected(Failure());
+    }
+    Vector<BufferHandle> missingMeshletBuffers;
+    HashSet<usize> seenMissingBufferIdentities;
+    {
+        const GpuTaskGraphDeclarationReadView declarations(graph);
+        if(!declarations.valid())
+            return MakeUnexpected(Failure());
+        for(in LightSpaceShadowCaster caster : snapshot.casters){
+            if(caster.meshletCount == 0u)
+                continue;
+            const Array<BufferHandle, s_LightSpaceMeshletCasterBufferPairCount> buffers(caster.meshletDescBuffer, caster.meshletBoundsBuffer);
+            for(in BufferHandle buffer : buffers){
+                const GpuGraphResourceId resource = declarations.findImportedBuffer(buffer);
+                if(resource.valid()){
+                    if(seenResources.insert(resource.index).second)
+                        uses.push_back(ReadUse(resource, ResourceStates::ShaderResource));
                 }
+                else if(seenMissingBufferIdentities.insert(buffer.identity()).second)
+                    missingMeshletBuffers.push_back(buffer);
             }
-            if(!exists)
-                uses.push_back(ReadUse(resource, ResourceStates::ShaderResource));
         }
+    }
+    for(in BufferHandle buffer : missingMeshletBuffers){
+        const auto importedResource = ImportExternalBuffer(graph, buffer, buffer.deref().getCreationDescription().debugName, "Light-Space Meshlet Bounds", ResourceStates::Common, ResourceStates::Common);
+        if(!importedResource.has_value() || !importedResource.value().valid())
+            return MakeUnexpected(Failure());
+        if(seenResources.insert(importedResource.value().index).second)
+            uses.push_back(ReadUse(importedResource.value(), ResourceStates::ShaderResource));
     }
     GpuTaskDesc cullDesc;
     cullDesc

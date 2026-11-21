@@ -200,6 +200,8 @@ b8 RecordRasterCommandIr(in GpuRasterTask payload, in GpuTaskRecordContext conte
     rasterState.indexBuffer = frame.deref().m_indices;
     rasterState.indexFormat = Format::R32_UINT;
     GpuScissorRect boundScissor = GpuScissorRect();
+    GpuPaintPushConstants boundPush;
+    b8 hasPush = false;
     b8 hasRasterState = false;
     b8 hasDraw = false;
     for(in DrawCommand draw : frame.deref().m_snapshot.commands()){
@@ -218,8 +220,12 @@ b8 RecordRasterCommandIr(in GpuRasterTask payload, in GpuTaskRecordContext conte
         }
         if(!ResolvePaintPushConstants(frame.deref(), draw, push))
             return false;
-        if(!capture.capturePushValue(context.task, context.packet, context.queue, push))
-            return false;
+        if(!hasPush || !SameGpuPaintPushConstants(push, boundPush)){
+            if(!capture.capturePushValue(context.task, context.packet, context.queue, push))
+                return false;
+            boundPush = push;
+            hasPush = true;
+        }
         DrawArguments arguments;
         arguments.setVertexCount(draw.indexCount).setStartIndexLocation(draw.firstIndex);
         if(!capture.captureDraw(context.task, context.packet, context.queue, arguments, true))
@@ -360,6 +366,8 @@ b8 RecordGpuRaster(in GpuRasterTask payload, mut CommandList commands, in GpuTas
         .setIndexBuffer(indices)
     ;
     GpuScissorRect boundScissor = GpuScissorRect();
+    GpuPaintPushConstants boundPush;
+    b8 hasPush = false;
     b8 heapBound = false;
     for(in DrawCommand draw : frame.deref().m_snapshot.commands()){
         const auto resolvedScissor = ResolveGpuScissorRect(geometry, draw);
@@ -379,7 +387,11 @@ b8 RecordGpuRaster(in GpuRasterTask payload, mut CommandList commands, in GpuTas
         }
         if(!ResolvePaintPushConstants(frame.deref(), draw, push))
             return false;
-        commands.setPushConstants(push);
+        if(!hasPush || !SameGpuPaintPushConstants(push, boundPush)){
+            commands.setPushConstants(push);
+            boundPush = push;
+            hasPush = true;
+        }
         DrawArguments arguments;
         arguments.setVertexCount(draw.indexCount).setStartIndexLocation(draw.firstIndex);
         commands.drawIndexed(arguments);

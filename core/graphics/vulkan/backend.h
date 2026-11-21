@@ -28,3 +28,65 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+NWB_VULKAN_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline Expected<BufferSuballocation> UploadManager::trySuballocateFromChunk(BufferChunk& chunk, const u64 size, const u32 alignment)noexcept{
+    u64 alignedOffset = chunk.allocated;
+    if(alignment > 1u){
+        const u64 align64 = static_cast<u64>(alignment);
+        if((align64 & (align64 - 1u)) == 0u){
+            const u64 mask = align64 - 1u;
+            if(alignedOffset > Limit<u64>::s_Max - mask)
+                return MakeUnexpected(Failure{});
+            alignedOffset = (alignedOffset + mask) & ~mask;
+        }
+        else{
+            const auto checked = AlignUpChecked<u64>(alignedOffset, align64);
+            if(!checked)
+                return MakeUnexpected(Failure{});
+            alignedOffset = *checked;
+        }
+    }
+    if(alignedOffset > chunk.size || size > chunk.size - alignedOffset)
+        return MakeUnexpected(Failure{});
+
+    Buffer& buffer = *chunk.buffer;
+    void* const cpuAddress = buffer.m_mappedMemory ? static_cast<u8*>(buffer.m_mappedMemory) + alignedOffset : nullptr;
+
+    chunk.allocated = alignedOffset + size;
+    return BufferSuballocation{ MakeNotNull(&buffer), alignedOffset, cpuAddress };
+}
+
+inline Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, TrackedCommandBuffer* const owner, const u64 nativeRecordingID, const GpuPhysicalQueueId queue, const u32 alignment){
+    if(!owner || nativeRecordingID == 0u)
+        return MakeUnexpected(Failure{});
+    const usize chunkSlot = static_cast<usize>(m_chunkKind);
+    const u8 slotBit = static_cast<u8>(1u << chunkSlot);
+    FOUNDATION_ASSERT(chunkSlot < owner->m_activeUploadChunks.size());
+
+    BufferChunk* const cachedChunk = owner->m_activeUploadChunks[chunkSlot];
+    if(cachedChunk && cachedChunk->manager == this && cachedChunk->owner == owner && cachedChunk->nativeRecordingID == nativeRecordingID && cachedChunk->physicalQueue == queue){
+        const auto fastResult = trySuballocateFromChunk(*cachedChunk, size, alignment);
+        if(fastResult){
+            FOUNDATION_ASSERT((owner->m_usedUploadChunkMask & slotBit) != 0u);
+            return fastResult;
+        }
+    }
+
+    return suballocateBufferSlow(size, owner, nativeRecordingID, queue, alignment, chunkSlot, slotBit, cachedChunk);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_VULKAN_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

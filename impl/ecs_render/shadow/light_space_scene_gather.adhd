@@ -65,6 +65,22 @@ class LightSpaceShadowSceneGather : NoCopy{
         in MatrixSingle worldToObject,
         in VectorSingle localMin,
         in VectorSingle localMax,
+        in VectorSingle precomputedWorldMin,
+        in VectorSingle precomputedWorldMax,
+        in MeshRayTracingResourceSnapshot mesh
+    ){
+        AppendLightSpaceSceneBuffers(mesh, this.m_state.m_csg.gathering, this.m_state.m_sceneBuffers);
+        if(this.m_state.m_csg.gathering)
+            AppendLightSpaceCsgReceiverWithBounds(this.m_state.m_csg, entity, transparent, objectToWorld, worldToObject, localMin, localMax, true, precomputedWorldMin, precomputedWorldMax, mesh);
+    }
+
+    public void appendSoftwareReceiver(
+        in EntityID entity,
+        in b8 transparent,
+        in MatrixSingle objectToWorld,
+        in MatrixSingle worldToObject,
+        in VectorSingle localMin,
+        in VectorSingle localMax,
         in MeshRayTracingResourceSnapshot mesh
     ){
         AppendLightSpaceSceneBuffers(mesh, this.m_state.m_csg.gathering, this.m_state.m_sceneBuffers);
@@ -208,25 +224,23 @@ class LightSpaceShadowSceneGather : NoCopy{
         in u32 instanceCount,
         in Span<NwbRtInstanceMaterialGpu> materials,
         in Span<InstanceGpuData> instances,
-        in Span<u8> materialBytes,
+        in usize materialByteCount,
+        in u64 materialTypedHash,
         in Span<TextureHandle> textures,
         in b8 contentComplete
     ){
-        RayTracingSceneIdentityBuilder().appendMaterialBytes(instanceCount, materialBytes, this.m_captureSceneIdentity);
-        for(in auto texture : textures)
-            Fnv64AppendValue(this.m_captureSceneIdentity, texture.get());
-        this.m_state.m_sceneTextures.clear();
-        this.m_state.m_sceneTextures.reserve(textures.size());
-        for(in TextureHandle texture : textures)
-            this.m_state.m_sceneTextures.push_back(texture);
+        this.m_state.m_sceneTextures.assign(textures.begin(), textures.end());
         in CsgShadowSnapshot csg = this.m_state.m_csg.snapshot;
-        if(csg.hasCsg){
-            Fnv64AppendValue(this.m_captureSceneIdentity, csg.identity);
-            if(UsesLightSpaceCaptureReuseCadence(this.m_state.m_settings.captureCadence)){
-                this.m_captureSceneIdentity = BuildLightSpaceCsgCaptureIdentity(this.m_state.m_csg, materials, instances, materialBytes, textures);
-                this.m_captureSceneTrusted = this.m_state.m_csg.captureGeometryTrusted;
-            }
+        if(csg.hasCsg && UsesLightSpaceCaptureReuseCadence(this.m_state.m_settings.captureCadence)){
+            this.m_state.m_captureSceneIdentity = BuildLightSpaceCsgCaptureIdentityWithMaterialHash(this.m_state.m_csg, materials, instances, materialByteCount, materialTypedHash, textures);
+            this.m_state.m_captureSceneTrusted = this.m_state.m_csg.captureGeometryTrusted && contentComplete;
+            return;
         }
+        RayTracingSceneIdentityBuilder().appendMaterialBytesHash(instanceCount, materialByteCount, materialTypedHash, this.m_captureSceneIdentity);
+        for(in TextureHandle texture : textures)
+            Fnv64AppendValue(this.m_captureSceneIdentity, texture.get());
+        if(csg.hasCsg)
+            Fnv64AppendValue(this.m_captureSceneIdentity, csg.identity);
         this.m_state.m_captureSceneIdentity = this.m_captureSceneIdentity;
         this.m_state.m_captureSceneTrusted = this.m_captureSceneTrusted && contentComplete;
     }
@@ -238,30 +252,28 @@ class LightSpaceShadowSceneGather : NoCopy{
         in b8 contentComplete,
         in Span<NwbRtInstanceMaterialGpu> materials,
         in Span<InstanceGpuData> instances,
-        in Span<u8> materialBytes,
+        in usize materialByteCount,
+        in u64 materialTypedHash,
         in Span<TextureHandle> textures
     ){
         in CsgShadowSnapshot csg = this.m_state.m_csg.snapshot;
         if(!csg.hasCsg)
             return;
+        this.m_state.m_sceneTextures.assign(textures.begin(), textures.end());
+        if(UsesLightSpaceCaptureReuseCadence(this.m_state.m_settings.captureCadence)){
+            this.m_state.m_captureSceneIdentity = BuildLightSpaceCsgCaptureIdentityWithMaterialHash(this.m_state.m_csg, materials, instances, materialByteCount, materialTypedHash, textures);
+            this.m_state.m_captureSceneTrusted = this.m_state.m_csg.captureGeometryTrusted && contentComplete;
+            return;
+        }
         u64 captureIdentity = materialHash;
         Fnv64AppendValue(captureIdentity, tlasHash);
         Fnv64AppendValue(captureIdentity, csg.identity);
-        for(in auto buffer : this.m_state.m_sceneBuffers)
+        for(in BufferHandle buffer : this.m_state.m_sceneBuffers)
             Fnv64AppendValue(captureIdentity, buffer.get());
-        for(in auto caster : this.m_state.m_casters)
+        for(in LightSpaceShadowCaster caster : this.m_state.m_casters)
             RayTracingSceneIdentityBuilder().updateHardwareCaster(caster.meshletCount, caster.meshletDescSlot, caster.meshletBoundsSlot, captureIdentity);
-        b8 captureTrusted = staticScene && contentComplete;
-        if(UsesLightSpaceCaptureReuseCadence(this.m_state.m_settings.captureCadence)){
-            captureIdentity = BuildLightSpaceCsgCaptureIdentity(this.m_state.m_csg, materials, instances, materialBytes, textures);
-            captureTrusted = this.m_state.m_csg.captureGeometryTrusted && contentComplete;
-        }
         this.m_state.m_captureSceneIdentity = captureIdentity;
-        this.m_state.m_captureSceneTrusted = captureTrusted;
-        this.m_state.m_sceneTextures.clear();
-        this.m_state.m_sceneTextures.reserve(textures.size());
-        for(in TextureHandle texture : textures)
-            this.m_state.m_sceneTextures.push_back(texture);
+        this.m_state.m_captureSceneTrusted = staticScene && contentComplete;
     }
 }
 

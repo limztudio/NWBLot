@@ -64,12 +64,14 @@ b8 DescriptorBufferManager::initialize(){
         return false;
     }
     m_lifecycleTransitioning = true;
+    publishFastBindingGenerationLocked();
     const auto failInitialization = [this]()noexcept{
         shutdownSegment(m_resourceSegment);
         shutdownSegment(m_samplerSegment);
         m_bindingGeneration = 0u;
         m_enabled = false;
         m_lifecycleTransitioning = false;
+        publishFastBindingGenerationLocked();
         return false;
     };
 
@@ -136,6 +138,7 @@ b8 DescriptorBufferManager::initialize(){
     m_nextBindingGeneration = m_bindingGeneration == UINT64_MAX ? 0u : m_bindingGeneration + 1u;
     m_enabled = true;
     m_lifecycleTransitioning = false;
+    publishFastBindingGenerationLocked();
     return true;
 }
 
@@ -176,12 +179,14 @@ Expected<VkResult, VkResult> DescriptorBufferManager::shutdownForLifecycleOperat
         if(m_resourceSegment.buffer == VK_NULL_HANDLE && m_samplerSegment.buffer == VK_NULL_HANDLE && !m_resourceSegment.allocation && !m_samplerSegment.allocation){
             m_bindingGeneration = 0u;
             m_enabled = false;
+            publishFastBindingGenerationLocked();
             return idleResult;
         }
 
         m_lifecycleTransitioning = true;
         m_bindingGeneration = 0u;
         m_enabled = false;
+        publishFastBindingGenerationLocked();
     }
 
     idleResult = m_device.waitForNativeIdle();
@@ -192,6 +197,7 @@ Expected<VkResult, VkResult> DescriptorBufferManager::shutdownForLifecycleOperat
             ScopedLock lifecycleLock(m_lifecycleMutex);
 
             m_lifecycleTransitioning = false;
+            publishFastBindingGenerationLocked();
         }
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Descriptor-buffer shutdown is refusing to destroy storage after device-idle wait failed."));
         return MakeUnexpected(idleResult == VK_SUCCESS ? VK_ERROR_INITIALIZATION_FAILED : idleResult);
@@ -204,6 +210,7 @@ Expected<VkResult, VkResult> DescriptorBufferManager::shutdownForLifecycleOperat
     shutdownSegment(m_resourceSegment);
     shutdownSegment(m_samplerSegment);
     m_lifecycleTransitioning = false;
+    publishFastBindingGenerationLocked();
     return idleResult;
 }
 
@@ -218,6 +225,7 @@ void DescriptorBufferManager::shutdownForDeviceTeardown()noexcept{
     shutdownSegment(m_resourceSegment);
     shutdownSegment(m_samplerSegment);
     m_lifecycleTransitioning = false;
+    publishFastBindingGenerationLocked();
 }
 
 b8 DescriptorBufferManager::reserveInitialCapacityForBindingGeneration(const u32 resourceBytes, const u32 samplerBytes, const u64 requiredGeneration){
@@ -256,6 +264,7 @@ b8 DescriptorBufferManager::reserveInitialCapacityForBindingGeneration(const u32
         shutdownSegment(m_samplerSegment);
         m_bindingGeneration = 0u;
         m_enabled = false;
+        publishFastBindingGenerationLocked();
         return false;
     };
     if(*resourceCapacityBytes != m_resourceSegment.capacityBytes && !initializeSegment(m_resourceSegment, __hidden_vulkan_resource_bindings_descriptor_buffer::s_ResourceSegmentDebugName, *resourceCapacityBytes))

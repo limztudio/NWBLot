@@ -217,15 +217,9 @@ public:
 
 public:
     explicit ScratchArena(const Name& allocationLog = s_DefaultAllocationLog, usize initSize = s_DefaultInitialChunkBytes)
-        : Base(allocationLog)
-    {
-        for(usize i = 0u; i < LengthOf(m_bucket); ++i){
-            auto& bucket = m_bucket[i];
-            bucket.active = nullptr;
-            bucket.cached = nullptr;
-            bucket.size = AlignmentPowerOfTwo(static_cast<usize>(1) << i, initSize);
-        }
-    }
+        : Base(allocationLog, ArenaMemoryReservation::Separate, true)
+        , m_initSize(initSize)
+    {}
     ~ScratchArena()noexcept override{
         for(auto& bucket : m_bucket){
             for(auto* chunk : { bucket.active, bucket.cached }){
@@ -312,10 +306,10 @@ public:
         if(!bucket.active)
             return;
 
-        const auto alignedSize = AlignUpPowerOfTwoChecked(size, align);
-        if(!alignedSize)
+        const usize alignMask = align - 1u;
+        if(size > Limit<usize>::s_Max - alignMask)
             return;
-        size = *alignedSize;
+        size = (size + alignMask) & ~alignMask;
         Chunk& chunk = *bucket.active;
         if(chunk.tryPopLifo(p, size)){
             m_memoryStats.recordDeallocationSingleThread(size);
@@ -327,6 +321,9 @@ public:
 
 private:
     [[nodiscard]] Chunk* acquireChunk(const usize bucketIndex, ChunkWrapper& bucket, const usize align, const usize size){
+        if(bucket.size == 0u && m_initSize != 0u)
+            bucket.size = AlignmentPowerOfTwo(align, m_initSize);
+
         Chunk* chunk = bucket.cached;
         while(chunk && chunk->m_size < size)
             chunk = chunk->m_next;
@@ -340,6 +337,8 @@ private:
             if(!chunk)
                 return nullptr;
         }
+
+        m_memoryStats.ensureAttached();
 
         while(bucket.cached && bucket.cached != chunk){
             Chunk* discarded = bucket.cached;
@@ -380,7 +379,8 @@ private:
 
 
 private:
-    Array<ChunkWrapper, FloorLog2(s_MaxAlignSize) + 1> m_bucket;
+    Array<ChunkWrapper, FloorLog2(s_MaxAlignSize) + 1> m_bucket{};
+    usize m_initSize = s_DefaultInitialChunkBytes;
     u16 m_activeBucketMask = 0u;
 };
 

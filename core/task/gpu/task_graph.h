@@ -61,35 +61,7 @@ class GpuTaskGraph final : NoCopy{
     friend class GpuTaskScheduler;
 
 
-public:
-    using DeclarationReadView = GpuTaskGraphDeclarationReadView;
-
-    class PayloadLifetimeScope final : NoCopy{
-    public:
-        explicit PayloadLifetimeScope(GpuTaskGraph& graph)noexcept
-            : m_graph(graph)
-        {}
-        ~PayloadLifetimeScope()noexcept(false);
-
-
-    private:
-        GpuTaskGraph& m_graph;
-    };
-
-
 private:
-    struct RecordTaskFailure final{
-        b8 recordThunkInvoked;
-    };
-
-    class RecordThunkClaimGuard;
-    class RecordingAttemptResolutionGuard;
-
-    template<typename PayloadT>
-    using ProvisionalPayloadOwner = GpuTaskGraphDetail::ProvisionalPayloadOwner<PayloadT>;
-    using TaskLifecycleState = GpuTaskGraphDetail::TaskLifecycleState;
-    using SubmissionBindingState = GpuTaskGraphDetail::SubmissionBindingState;
-
     class DeclarationMutationScope final : NoCopy{
     public:
         explicit DeclarationMutationScope(GpuTaskGraph& graph)noexcept;
@@ -112,6 +84,52 @@ private:
         b8 m_valid = false;
         b8 m_isRootWriter = false;
     };
+
+
+public:
+    using DeclarationReadView = GpuTaskGraphDeclarationReadView;
+
+    class PayloadLifetimeScope final : NoCopy{
+    public:
+        explicit PayloadLifetimeScope(GpuTaskGraph& graph)noexcept
+            : m_graph(graph)
+        {}
+        ~PayloadLifetimeScope()noexcept(false);
+
+
+    private:
+        GpuTaskGraph& m_graph;
+    };
+
+    class DeclarationScope final : NoCopy{
+    public:
+        explicit DeclarationScope(GpuTaskGraph& graph)noexcept;
+        ~DeclarationScope()noexcept;
+
+
+    public:
+        [[nodiscard]] b8 valid()const noexcept{ return m_scope.valid(); }
+
+        [[nodiscard]] b8 validFor(const GpuTaskGraph& graph)const noexcept{ return m_scope.validFor(graph); }
+
+
+    private:
+        DeclarationMutationScope m_scope;
+    };
+
+
+private:
+    struct RecordTaskFailure final{
+        b8 recordThunkInvoked;
+    };
+
+    class RecordThunkClaimGuard;
+    class RecordingAttemptResolutionGuard;
+
+    template<typename PayloadT>
+    using ProvisionalPayloadOwner = GpuTaskGraphDetail::ProvisionalPayloadOwner<PayloadT>;
+    using TaskLifecycleState = GpuTaskGraphDetail::TaskLifecycleState;
+    using SubmissionBindingState = GpuTaskGraphDetail::SubmissionBindingState;
 
     class DiscardNotificationScope final : NoCopy{
     public:
@@ -515,6 +533,7 @@ private:
 
     [[nodiscard]] u64 recordingAttemptGeneration()const noexcept;
     [[nodiscard]] b8 beginRecordingAttempt(const GpuCompiledGraph& compiledGraph, GpuSubmissionPacketId packet, const DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, GpuRecordingAttemptScope& outAttempt)const noexcept;
+    [[nodiscard]] b8 beginRecordingAttemptRange(const GpuCompiledGraph& compiledGraph, const GpuSubmissionPacketRange& range, const DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, GpuRecordingAttemptScope& outAttempt)const noexcept;
     void cancelRecordingAttempt(GpuRecordingAttemptScope& attempt)const noexcept;
     void completeRecordingPreparation(GpuRecordingAttemptScope& attempt)const noexcept;
     [[nodiscard]] b8 matchesRecordingAttempt(const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration)const noexcept;
@@ -535,7 +554,7 @@ private:
     static constexpr u64 s_AdmissionPlanActiveBit = 1ull << 62u;
     static constexpr u64 s_AdmissionTeardownBit = 1ull << 63u;
 
-    struct alignas(64) DeclarationReaderStripe{
+    struct alignas(128) DeclarationReaderStripe{
         Atomic<u32> count{ 0u };
     };
 
@@ -837,7 +856,9 @@ private:
     mutable u64 m_activeRecordingPreparationSerial = 0u;
     mutable const GpuCompiledGraph* m_activeCompiledGraph = nullptr;
     mutable GpuGraphSubmissionBinding m_activeSubmissionBinding;
-    alignas(64) mutable Atomic<u64> m_declarationAdmissionState{ 0u };
+    alignas(128) mutable Atomic<u64> m_declarationAdmissionState{ 0u };
+    u32 m_publishedTaskCount = 0u;
+    u32 m_publishedResourceCount = 0u;
     mutable Array<DeclarationReaderStripe, s_ReaderStripeCount> m_readerStripes{};
     mutable u32 m_activeDiscardNotificationCount = 0u;
     mutable u32 m_exceptionRecordingClaimWaiters = 0u;
@@ -869,7 +890,7 @@ inline GpuTaskGraph::DeclarationMutationScope::DeclarationMutationScope(GpuTaskG
     }
 
     u64 expected = 0u;
-    if(m_graph.m_declarationAdmissionState.compare_exchange_strong(expected, GpuTaskGraph::s_AdmissionWriterBit, MemoryOrder::seq_cst, MemoryOrder::acquire)){
+    if(m_graph.m_declarationAdmissionState.compare_exchange_strong(expected, GpuTaskGraph::s_AdmissionWriterBit, MemoryOrder::acquire, MemoryOrder::acquire)){
         m_graph.m_writerOwnerThread.store(threadId, MemoryOrder::relaxed);
         m_graph.m_writerRecursionDepth = 1u;
         m_valid = true;
@@ -897,6 +918,12 @@ inline GpuTaskGraph::DeclarationMutationScope::~DeclarationMutationScope()noexce
     if(!m_graph.m_declarationAdmissionState.compare_exchange_strong(expected, 0u, MemoryOrder::release, MemoryOrder::relaxed))
         releaseSlow();
 }
+
+inline GpuTaskGraph::DeclarationScope::DeclarationScope(GpuTaskGraph& graph)noexcept
+    : m_scope(graph)
+{}
+
+inline GpuTaskGraph::DeclarationScope::~DeclarationScope()noexcept = default;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -31,18 +31,19 @@ class CommandBufferResourceReferences final : NoCopy{
 
 
 private:
-    static constexpr usize s_CacheSlotCount = 64u;
-    static constexpr usize s_CacheSlotMask = s_CacheSlotCount - 1u;
+    static constexpr usize s_CacheSetCount = 16u;
+    static constexpr usize s_CacheWayCount = 4u;
     static constexpr u8 s_FlagOwned = 1u << 0u;
     static constexpr u8 s_FlagBuffer = 1u << 1u;
     static constexpr u8 s_FlagTexture = 1u << 2u;
     static constexpr u8 s_FlagBufferStateCommit = 1u << 3u;
     static constexpr u8 s_FlagFramebuffer = 1u << 4u;
 
-    struct CacheSlot{
-        GraphicsResource* resource = nullptr;
+    struct alignas(64) CacheSet{
+        Array<GraphicsResource*, s_CacheWayCount> resources{};
+        Array<u8, s_CacheWayCount> flags{};
         u32 generation = 0u;
-        u8 flags = 0u;
+        u8 nextVictim = 0u;
     };
 
     struct MembershipEntry{
@@ -51,9 +52,9 @@ private:
         u8 flags = 0u;
     };
 
-    [[nodiscard]] static FOUNDATION_INLINE usize CacheSlotIndex(const GraphicsResource* const ptr)noexcept{
-        const uintptr_t addr = reinterpret_cast<uintptr_t>(ptr);
-        return static_cast<usize>(((addr >> 6u) ^ (addr >> 12u)) & s_CacheSlotMask);
+    [[nodiscard]] static FOUNDATION_INLINE usize CacheSetIndex(const GraphicsResource* const ptr)noexcept{
+        const u64 addr = static_cast<u64>(reinterpret_cast<uintptr_t>(ptr));
+        return static_cast<usize>((addr * 0x9E3779B97F4A7C15ULL) >> 60u);
     }
 
     [[nodiscard]] static FOUNDATION_INLINE u64 HashResourcePointer(const GraphicsResource* const ptr)noexcept{
@@ -77,8 +78,7 @@ public:
         GraphicsResource* const key = &resource;
         if(m_lastRetainedResource == key)
             return;
-        const CacheSlot& slot = m_cache[CacheSlotIndex(key)];
-        if(slot.resource == key && slot.generation == m_cacheGeneration && (slot.flags & s_FlagOwned) != 0u){
+        if((findCacheFlags(key) & s_FlagOwned) != 0u){
             m_lastRetainedResource = key;
             return;
         }
@@ -95,6 +95,16 @@ public:
 
 
 private:
+    [[nodiscard]] FOUNDATION_INLINE u8 findCacheFlags(const GraphicsResource* const key)const noexcept{
+        const CacheSet& set = m_cache[CacheSetIndex(key)];
+        if(set.generation != m_cacheGeneration)
+            return 0u;
+        for(usize way = 0u; way < s_CacheWayCount; ++way){
+            if(set.resources[way] == key)
+                return set.flags[way];
+        }
+        return 0u;
+    }
     void retainResourceSlow(GraphicsResource& resource);
     void retainBufferSlow(Buffer& buffer);
     void trackRetainedBufferSlow(Buffer& buffer);
@@ -102,14 +112,36 @@ private:
     void trackRetainedTextureSlow(Texture& texture);
     void retainFramebufferSlow(Framebuffer& framebuffer);
     FOUNDATION_INLINE void updateCacheFlags(GraphicsResource* const key, const u8 addFlags)noexcept{
-        CacheSlot& slot = m_cache[CacheSlotIndex(key)];
-        if(slot.resource == key && slot.generation == m_cacheGeneration)
-            slot.flags |= addFlags;
-        else{
-            slot.resource = key;
-            slot.generation = m_cacheGeneration;
-            slot.flags = addFlags;
+        CacheSet& set = m_cache[CacheSetIndex(key)];
+        if(set.generation != m_cacheGeneration){
+            set.generation = m_cacheGeneration;
+            set.resources[0u] = key;
+            set.flags[0u] = addFlags;
+            for(usize way = 1u; way < s_CacheWayCount; ++way){
+                set.resources[way] = nullptr;
+                set.flags[way] = 0u;
+            }
+            set.nextVictim = 1u;
+            return;
         }
+        usize emptyWay = s_CacheWayCount;
+        for(usize way = 0u; way < s_CacheWayCount; ++way){
+            if(set.resources[way] == key){
+                set.flags[way] |= addFlags;
+                return;
+            }
+            if(emptyWay == s_CacheWayCount && set.resources[way] == nullptr)
+                emptyWay = way;
+        }
+        if(emptyWay < s_CacheWayCount){
+            set.resources[emptyWay] = key;
+            set.flags[emptyWay] = addFlags;
+            return;
+        }
+        const u8 victim = set.nextVictim;
+        set.resources[victim] = key;
+        set.flags[victim] = addFlags;
+        set.nextVictim = static_cast<u8>((victim + 1u) & (s_CacheWayCount - 1u));
     }
     void promoteMembershipIndex();
     void rehashMembershipTable(usize newCapacity);
@@ -124,7 +156,7 @@ private:
     Vector<NotNull<Buffer*>, Alloc::GlobalArena> m_buffers;
     Vector<NotNull<Texture*>, Alloc::GlobalArena> m_textures;
     Vector<RetainedBufferStateCommit, Alloc::GlobalArena> m_bufferStateCommits;
-    Array<CacheSlot, s_CacheSlotCount> m_cache{};
+    Array<CacheSet, s_CacheSetCount> m_cache{};
     Vector<MembershipEntry, Alloc::GlobalArena> m_membershipTable;
     GraphicsResource* m_lastRetainedResource = nullptr;
     Buffer* m_lastRetainedBuffer = nullptr;

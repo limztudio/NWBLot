@@ -118,8 +118,7 @@ b8 Device::validateSubmissionWaitToken(const QueueSubmissionToken& token)const n
     const auto producerQueue = m_physicalQueues[token.physicalQueueIndex];
     FOUNDATION_ASSERT(producerQueue->m_queueID == token.queue && token.matchesPhysicalQueue(producerQueue->m_physicalQueue.index, producerQueue->m_physicalQueue.deviceGeneration));
 
-    NothrowScopedLock producerLock(producerQueue->m_mutex);
-    return producerQueue->m_trackingSemaphore != VK_NULL_HANDLE && token.value <= producerQueue->m_lastSubmittedID;
+    return producerQueue->m_trackingSemaphore != VK_NULL_HANDLE && token.value <= producerQueue->m_publishedSubmittedID.load(MemoryOrder::acquire);
 }
 
 b8 Device::waitForSubmissionToken(const QueueSubmissionToken& token){
@@ -482,6 +481,11 @@ b8 Device::waitForSubmissionTokenInternal(const QueueSubmissionToken& token, con
     FOUNDATION_ASSERT(token.physicalQueueIndex < m_physicalQueues.size());
     const auto producerQueue = m_physicalQueues[token.physicalQueueIndex];
     FOUNDATION_ASSERT(producerQueue->m_queueID == token.queue);
+
+    if(producerQueue->m_trackingSemaphore == VK_NULL_HANDLE)
+        return false;
+    if(token.value <= producerQueue->lastObservedFinishedID())
+        return true;
 
     VkSemaphore trackingSemaphore = VK_NULL_HANDLE;
     {

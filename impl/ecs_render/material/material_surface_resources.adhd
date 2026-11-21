@@ -257,14 +257,30 @@ void PrepareVisibleMaterialInstanceMutableCacheRow(
 [cpp_unwind]
 b8 RendererMaterialSystem::prepareVisibleMaterialSurfaceInfos(){
     b8 transparent = false;
+    b8 refractive = false;
     for(in auto row : this.m_world.view<RendererComponent>()){
         if(!Get<1>(row).visible)
             continue;
         const auto surfaceInfo = this.createMaterialSurfaceInfo(Get<1>(row).material);
-        if(surfaceInfo.has_value() && surfaceInfo.value().transparent)
-            transparent = true;
+        if(surfaceInfo.has_value()){
+            if(surfaceInfo.value().transparent)
+                transparent = true;
+            if(surfaceInfo.value().refractive)
+                refractive = true;
+        }
     }
+    this.m_materialState.m_hasVisibleRefractiveRenderers = refractive;
+    this.m_materialState.m_visibleRefractiveRenderersVersion = this.m_world.componentMutationVersion<RendererComponent>();
+    this.m_materialState.m_visibleRefractiveSurfaceCount = this.m_materialState.m_surfaceInfos.size();
+    this.m_materialState.m_visibleRefractiveRenderersValid = true;
     return transparent;
+}
+
+b8 RendererMaterialSystem::hasNoVisibleRefractiveRenderers()const{
+    return this.m_materialState.m_visibleRefractiveRenderersValid
+        && !this.m_materialState.m_hasVisibleRefractiveRenderers
+        && this.m_materialState.m_visibleRefractiveRenderersVersion == this.m_world.componentMutationVersion<RendererComponent>()
+        && this.m_materialState.m_visibleRefractiveSurfaceCount == this.m_materialState.m_surfaceInfos.size();
 }
 
 [cpp_unwind]
@@ -317,6 +333,7 @@ void RendererMaterialSystem::releaseMaterialResourceReferences(){
         surfaceInfo.constantTypedBytes = surfaceInfo.unpatchedConstantTypedBytes;
         surfaceInfo.resourceReferencesResolved = false;
     }
+    this.m_materialState.m_visibleRefractiveRenderersValid = false;
 }
 
 

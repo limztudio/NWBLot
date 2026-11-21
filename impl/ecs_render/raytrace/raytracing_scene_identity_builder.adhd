@@ -124,15 +124,23 @@ class RayTracingSceneIdentityBuilder{
         return RayTracingSceneContentStamp(sceneStaticHash, opticalMaterialContentHash, staticScene && contentComplete);
     }
 
+    public void appendMaterialBytesHash(
+        in u32 instanceCount,
+        in usize materialByteCount,
+        in u64 materialTypedHash,
+        mut u64 inOutCaptureSceneIdentity
+    )const{
+        inOutCaptureSceneIdentity = UpdateFnv64U32(inOutCaptureSceneIdentity, instanceCount);
+        inOutCaptureSceneIdentity = UpdateFnv64U64(inOutCaptureSceneIdentity, cast<u64>(materialByteCount));
+        inOutCaptureSceneIdentity = UpdateFnv64U64(inOutCaptureSceneIdentity, materialTypedHash);
+    }
+
     public void appendMaterialBytes(
         in u32 instanceCount,
         in Span<u8> shadowMaterialTypedBytes,
         mut u64 inOutCaptureSceneIdentity
     )const{
-        inOutCaptureSceneIdentity = UpdateFnv64U32(inOutCaptureSceneIdentity, instanceCount);
-        inOutCaptureSceneIdentity = UpdateFnv64U64(inOutCaptureSceneIdentity, cast<u64>(shadowMaterialTypedBytes.size()));
-        for(in u8 byte : shadowMaterialTypedBytes)
-            inOutCaptureSceneIdentity = UpdateFnv64Byte(inOutCaptureSceneIdentity, byte);
+        this.appendMaterialBytesHash(instanceCount, shadowMaterialTypedBytes.size(), UpdateFnv64(s_Fnv64OffsetBasis, shadowMaterialTypedBytes), inOutCaptureSceneIdentity);
     }
 };
 

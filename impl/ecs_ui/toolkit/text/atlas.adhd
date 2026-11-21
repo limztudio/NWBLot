@@ -114,6 +114,7 @@ class GlyphAtlas : NoCopy{
 
     public usize pageCount()const{ return this.m_pages.size(); }
     public usize glyphCount()const{ return this.m_glyphs.size(); }
+    public u64 identity()const{ return this.m_identity; }
 
     public Optional<in AtlasGlyph> find(in SharedFontFace face, in u32 glyphId, in u32 pixelSize)const{
         if(!face.valid())

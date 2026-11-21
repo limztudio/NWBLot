@@ -99,21 +99,45 @@ inline constexpr void UpdateCanonicalNameHashLanes(NameHash& hash, const CharT c
 
 template<typename CharT>
 [[nodiscard]] inline constexpr b8 UpdateCanonicalNameHashText(NameHash& hash, const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+    static_assert(s_NameHashLaneCount == 8u, "UpdateCanonicalNameHashText expects 8 lanes");
+    u64 h0 = hash.qwords[0];
+    u64 h1 = hash.qwords[1];
+    u64 h2 = hash.qwords[2];
+    u64 h3 = hash.qwords[3];
+    u64 h4 = hash.qwords[4];
+    u64 h5 = hash.qwords[5];
+    u64 h6 = hash.qwords[6];
+    u64 h7 = hash.qwords[7];
     for(const CharT ch : text){
         if(ch == CharT{})
             return false;
-        UpdateCanonicalNameHashLanes(hash, ch);
+        const u64 byte = static_cast<u64>(static_cast<u8>(Canonicalize(ch)));
+        h0 = (h0 ^ byte) * s_Fnv64Prime;
+        h1 = (h1 ^ byte) * s_Fnv64Prime;
+        h2 = (h2 ^ byte) * s_Fnv64Prime;
+        h3 = (h3 ^ byte) * s_Fnv64Prime;
+        h4 = (h4 ^ byte) * s_Fnv64Prime;
+        h5 = (h5 ^ byte) * s_Fnv64Prime;
+        h6 = (h6 ^ byte) * s_Fnv64Prime;
+        h7 = (h7 ^ byte) * s_Fnv64Prime;
     }
 
+    hash.qwords[0] = h0;
+    hash.qwords[1] = h1;
+    hash.qwords[2] = h2;
+    hash.qwords[3] = h3;
+    hash.qwords[4] = h4;
+    hash.qwords[5] = h5;
+    hash.qwords[6] = h6;
+    hash.qwords[7] = h7;
     return true;
 }
 
 inline constexpr b8 EqualHash(const NameHash& a, const NameHash& b)noexcept{
-    for(u32 i = 0u; i < s_NameHashLaneCount; ++i){
-        if(a.qwords[i] != b.qwords[i])
-            return false;
-    }
-    return true;
+    u64 diff = 0u;
+    for(u32 i = 0u; i < s_NameHashLaneCount; ++i)
+        diff |= (a.qwords[i] ^ b.qwords[i]);
+    return diff == 0u;
 }
 
 inline constexpr usize HashValue(const NameHash& hash)noexcept{
@@ -135,11 +159,10 @@ inline constexpr usize HashValue(const NameHash& hash)noexcept{
 
 
 inline constexpr b8 IsZeroHash(const NameHash& hash)noexcept{
-    for(u32 i = 0u; i < s_NameHashLaneCount; ++i){
-        if(hash.qwords[i] != 0)
-            return false;
-    }
-    return true;
+    u64 combined = 0u;
+    for(u32 i = 0u; i < s_NameHashLaneCount; ++i)
+        combined |= hash.qwords[i];
+    return combined == 0u;
 }
 
 
@@ -148,11 +171,28 @@ inline constexpr b8 IsZeroHash(const NameHash& hash)noexcept{
 
 template<typename CharT>
 [[nodiscard]] inline constexpr NameHash ComputeNameHash(const NotNull<const CharT*> text)noexcept(IsArithmetic_V<CharT>){
-    NameHash hash;
-    NameDetail::InitializeNameHash(hash);
-    for(usize index = 0u; text.get()[index] != CharT{}; ++index)
-        NameDetail::UpdateCanonicalNameHashLanes(hash, text.get()[index]);
-    return hash;
+    static_assert(s_NameHashLaneCount == 8u, "ComputeNameHash expects 8 lanes");
+    u64 h0 = NameDetail::s_LaneSeeds[0];
+    u64 h1 = NameDetail::s_LaneSeeds[1];
+    u64 h2 = NameDetail::s_LaneSeeds[2];
+    u64 h3 = NameDetail::s_LaneSeeds[3];
+    u64 h4 = NameDetail::s_LaneSeeds[4];
+    u64 h5 = NameDetail::s_LaneSeeds[5];
+    u64 h6 = NameDetail::s_LaneSeeds[6];
+    u64 h7 = NameDetail::s_LaneSeeds[7];
+    const CharT* const ptr = text.get();
+    for(usize index = 0u; ptr[index] != CharT{}; ++index){
+        const u64 byte = static_cast<u64>(static_cast<u8>(Canonicalize(ptr[index])));
+        h0 = (h0 ^ byte) * s_Fnv64Prime;
+        h1 = (h1 ^ byte) * s_Fnv64Prime;
+        h2 = (h2 ^ byte) * s_Fnv64Prime;
+        h3 = (h3 ^ byte) * s_Fnv64Prime;
+        h4 = (h4 ^ byte) * s_Fnv64Prime;
+        h5 = (h5 ^ byte) * s_Fnv64Prime;
+        h6 = (h6 ^ byte) * s_Fnv64Prime;
+        h7 = (h7 ^ byte) * s_Fnv64Prime;
+    }
+    return NameHash{ { h0, h1, h2, h3, h4, h5, h6, h7 } };
 }
 
 template<typename CharT>
@@ -206,11 +246,27 @@ private:
 
 template<typename CharT>
 [[nodiscard]] inline constexpr NameHash ComputeNameHash(const NameText<CharT> text)noexcept(IsArithmetic_V<CharT>){
-    NameHash hash;
-    NameDetail::InitializeNameHash(hash);
-    for(const CharT character : text.m_text)
-        NameDetail::UpdateCanonicalNameHashLanes(hash, character);
-    return hash;
+    static_assert(s_NameHashLaneCount == 8u, "ComputeNameHash expects 8 lanes");
+    u64 h0 = NameDetail::s_LaneSeeds[0];
+    u64 h1 = NameDetail::s_LaneSeeds[1];
+    u64 h2 = NameDetail::s_LaneSeeds[2];
+    u64 h3 = NameDetail::s_LaneSeeds[3];
+    u64 h4 = NameDetail::s_LaneSeeds[4];
+    u64 h5 = NameDetail::s_LaneSeeds[5];
+    u64 h6 = NameDetail::s_LaneSeeds[6];
+    u64 h7 = NameDetail::s_LaneSeeds[7];
+    for(const CharT character : text.m_text){
+        const u64 byte = static_cast<u64>(static_cast<u8>(Canonicalize(character)));
+        h0 = (h0 ^ byte) * s_Fnv64Prime;
+        h1 = (h1 ^ byte) * s_Fnv64Prime;
+        h2 = (h2 ^ byte) * s_Fnv64Prime;
+        h3 = (h3 ^ byte) * s_Fnv64Prime;
+        h4 = (h4 ^ byte) * s_Fnv64Prime;
+        h5 = (h5 ^ byte) * s_Fnv64Prime;
+        h6 = (h6 ^ byte) * s_Fnv64Prime;
+        h7 = (h7 ^ byte) * s_Fnv64Prime;
+    }
+    return NameHash{ { h0, h1, h2, h3, h4, h5, h6, h7 } };
 }
 
 [[nodiscard]] inline constexpr b8 LessNameHash(const NameHash& lhs, const NameHash& rhs)noexcept{

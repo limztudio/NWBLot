@@ -20,8 +20,9 @@ Expected<u32> SplitCsgDeformEdgeVertex(
     if(vertices.size() + 1u > s_MaxDeformVertices)
         return MakeUnexpected(Failure());
     const u64 edge = PackUnorderedU32Pair(first, second);
-    if(edgeSplits.contains(edge))
-        return edgeSplits[edge];
+    const auto found = edgeSplits.find(edge);
+    if(found != edgeSplits.end())
+        return found.value();
     const CsgDeformVertex firstVertex = vertices[cast<usize>(first)];
     const CsgDeformVertex secondVertex = vertices[cast<usize>(second)];
     const Expected<CsgDeformVertex> mixed = TryBuildInterpolatedCsgDeformVertex(firstVertex, secondVertex, firstDistance, secondDistance);
@@ -41,7 +42,7 @@ Expected<b8, CsgDeformViabilityReason> ClipCsgDeformShellWithDistances(
     mut Vector<CsgDeformTriangle> inOutTriangles
 ){
     edgeSplits.clear();
-    edgeSplits.reserve(inOutTriangles.size() * s_EdgesPerTriangle + s_ReserveSlack);
+    edgeSplits.reserve(Min(inOutTriangles.size() / 4u + 64u, inOutTriangles.size() * s_EdgesPerTriangle + s_ReserveSlack));
     scratchKept.clear();
     scratchKept.reserve(inOutTriangles.size() * s_KeptReserveMultiplier + s_ReserveSlack);
 
@@ -70,7 +71,7 @@ Expected<b8, CsgDeformViabilityReason> ClipCsgDeformShellWithDistances(
         if(scratchKept.size() > s_MaxDeformTriangles)
             return MakeUnexpected(CsgDeformViabilityReason::NoKeptGeometry);
     }
-    inOutTriangles = scratchKept;
+    AssignVector(inOutTriangles, scratchKept);
     return true;
 }
 
@@ -87,10 +88,8 @@ void PrepareCsgDeformPreviewBuffers(
     outTriangles.clear();
     outVertices.reserve(inputVertexCount + cutCount * s_RebuildReservePerCut);
     outTriangles.reserve(inputTriangleCount * cast<usize>(s_KeptReserveMultiplier) + cutCount * s_RebuildReservePerCut);
-    for(usize i = 0u; i < inputVertexCount; ++i)
-        outVertices.push_back(inputVertices[i]);
-    for(usize i = 0u; i < inputTriangleCount; ++i)
-        outTriangles.push_back(inputTriangles[i]);
+    AssignVector(outVertices, inputVertices);
+    AssignVector(outTriangles, inputTriangles);
 }
 
 

@@ -25,6 +25,16 @@ u32 BuildSceneBvhNode(
         nodes[cast<usize>(nodeIndex)] = MakeSceneBvhLeafNode(primitiveBounds[cast<usize>(instance)], instance);
         return nodeIndex;
     }
+    if((hi - lo) == 2u){
+        const u32 leftInstance = indices[cast<usize>(lo)];
+        const u32 rightInstance = indices[cast<usize>(lo + 1u)];
+        const u32 leftChild = cast<u32>(nodes.size());
+        nodes.push_back(MakeSceneBvhLeafNode(primitiveBounds[cast<usize>(leftInstance)], leftInstance));
+        const u32 rightChild = cast<u32>(nodes.size());
+        nodes.push_back(MakeSceneBvhLeafNode(primitiveBounds[cast<usize>(rightInstance)], rightInstance));
+        nodes[cast<usize>(nodeIndex)] = MakeSceneBvhInternalNode(nodes[cast<usize>(leftChild)], nodes[cast<usize>(rightChild)], leftChild, rightChild);
+        return nodeIndex;
+    }
 
     const SceneBvhSahSplit split = SelectSceneBvhSahSplit(lo, hi, primitiveBounds, instanceLeafCost, indices);
     u32 mid = lo;

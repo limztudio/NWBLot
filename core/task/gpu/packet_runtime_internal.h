@@ -117,7 +117,8 @@ private:
         GpuRecordedGraph& outRecordedGraph,
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         GpuCommandIrCapture* outCommandIrCapture = nullptr,
-        b8 alreadyPrepared = false
+        b8 alreadyPrepared = false,
+        b8 allowStateSeedElision = false
     )const;
     [[nodiscard]] b8 recordPacketRangeInReadyFrontiersWithAccess(
         const GpuTaskGraph& graph,
@@ -131,7 +132,8 @@ private:
         GpuRecordedGraph& outRecordedGraph,
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         GpuCommandIrCapture* outCommandIrCapture = nullptr,
-        b8 alreadyPrepared = false
+        b8 alreadyPrepared = false,
+        b8 allowStateSeedElision = false
     )const;
 
 
@@ -147,7 +149,8 @@ private:
         GpuRecordedGraph::PacketRecordingScratch& scratch,
         GpuRecordedGraph& outRecordedGraph,
         GpuCommandIrCapture* outCommandIrCapture,
-        GpuSubmissionPacketId* outFailedPacket
+        GpuSubmissionPacketId* outFailedPacket,
+        b8 allowStateSeedElision = false
     )const;
     [[nodiscard]] b8 recordPacket(
         const GpuTaskGraph& graph,
@@ -163,7 +166,8 @@ private:
         GpuRecordedGraph& outRecordedGraph,
         GpuCommandIrCapture* commandIrCapture = nullptr,
         GpuPacketRecordingAbort* deferredAbort = nullptr,
-        const PreclaimedPacketRecording* preclaimed = nullptr
+        const PreclaimedPacketRecording* preclaimed = nullptr,
+        b8 allowStateSeedElision = false
     )const;
     [[nodiscard]] b8 prepareRecordingAttempt(
         const GpuTaskGraph& graph,

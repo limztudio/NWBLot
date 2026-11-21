@@ -35,11 +35,11 @@ class RegularSharedComputeEmulationGraphPlan{
 
         this.drawCount = sourceDrawItems.computeDrawItems.size();
         for(usize drawIndex = 0u; drawIndex < this.drawCount; ++drawIndex){
-            const MaterialPassDrawItem drawItem = sourceDrawItems.computeDrawItems[drawIndex];
+            in MaterialPassDrawItem drawItem = sourceDrawItems.computeDrawItems[drawIndex];
             if(drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None)
                 return false;
 
-            const MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
+            in MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
             if(!mesh.emulationVertexBuffer.valid() || !mesh.emulationVertexHeapHandle.valid())
                 return false;
 
@@ -72,8 +72,8 @@ class RegularSharedComputeEmulationGraphPlan{
         if(!this.captured || drawIndex >= this.drawCount || !this.outputBuffer.valid())
             return false;
 
-        const MaterialPassDrawItem drawItem = this.drawItems[drawIndex];
-        const MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
+        in MaterialPassDrawItem drawItem = this.drawItems[drawIndex];
+        in MaterialPassMeshResourceSnapshot mesh = drawItem.meshResources;
         return
             mesh.emulationVertexBuffer.valid()
             && mesh.emulationVertexHeapHandle.valid()

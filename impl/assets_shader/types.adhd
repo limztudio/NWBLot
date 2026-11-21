@@ -117,8 +117,8 @@ AssetPayloadEncodeFailure EncodeAssetPayload(
     AppendU32LittleEndian(outPayload, s_AssetPayloadVersion);
     if(!AppendString(outPayload, entryPoint))
         return AssetPayloadEncodeFailure::OutputSizeOverflow;
-    for(in u8 byte : bytecode)
-        outPayload.push_back(byte);
+    if(!AppendBinaryVectorPayload(outPayload, bytecode).has_value())
+        return AssetPayloadEncodeFailure::OutputSizeOverflow;
     return AssetPayloadEncodeFailure::None;
 }
 

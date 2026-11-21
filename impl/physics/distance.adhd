@@ -1161,19 +1161,26 @@ LocalRayHit RayCastMesh(in MeshShape mesh, in Transform3D xf, in VectorSingle or
     const Transform3D identMeshXf = Transform3D();
 
     f32 curMax = maxFraction;
+    const RayCastSlabData localRay = MakeRayCastSlabData(localOrigin, localDir);
+    in MeshBvhNode rootNode = mesh.nodes[0u];
+    Aabb3D rootBox(VectorSingle(rootNode.aabbMinLeft, 0.0f), VectorSingle(rootNode.aabbMaxRight, 0.0f));
+    if(meshRadius > 0.0f)
+        rootBox = FattenAabb(rootBox, meshRadius);
+    f32 rootTBox = 0.0f;
+    if(!AabbRayCastFast(rootBox, localRay, curMax, rootTBox))
+        return best;
+
     Array<u32, 256u> fixedStack;
+    Array<f32, 256u> fixedStackTMin;
     fixedStack[0u] = 0u;
+    fixedStackTMin[0u] = rootTBox;
     u32 fixedCount = 1u;
     while(fixedCount > 0u){
         --fixedCount;
         const u32 nodeIdx = fixedStack[fixedCount];
-        in MeshBvhNode node = mesh.nodes[nodeIdx];
-        f32 tBox = 0.0f;
-        Aabb3D testBox(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f));
-        if(meshRadius > 0.0f)
-            testBox = FattenAabb(testBox, meshRadius);
-        if(!AabbRayCast(testBox, localOrigin, localDir, curMax, tBox))
+        if(fixedStackTMin[fixedCount] > curMax)
             continue;
+        in MeshBvhNode node = mesh.nodes[nodeIdx];
 
         if((node.aabbMaxRight.w & 0x80000000u) != 0u){
             const u32 firstTri = node.aabbMinLeft.w;
@@ -1188,7 +1195,7 @@ LocalRayHit RayCastMesh(in MeshShape mesh, in Transform3D xf, in VectorSingle or
                 if(meshRadius > 0.0f){
                     f32 tTriBox = 0.0f;
                     const Aabb3D triBox = FattenAabb(Aabb3D(Min(tv0, Min(tv1, tv2)), Max(tv0, Max(tv1, tv2))), meshRadius);
-                    if(AabbRayCast(triBox, localOrigin, localDir, curMax, tTriBox)){
+                    if(AabbRayCastFast(triBox, localRay, curMax, tTriBox)){
                         const ShapeProxy triProxy = MakeTriangleProxy(tv0, tv1, tv2, meshRadius);
                         h = ShapeCastProxies(rayPtProxy, localRayXf, localDir, triProxy, identMeshXf, VectorSingle(0.0f), curMax);
                         if(h.hit()){
@@ -1213,14 +1220,21 @@ LocalRayHit RayCastMesh(in MeshShape mesh, in Transform3D xf, in VectorSingle or
         else{
             const u32 leftIdx = node.aabbMinLeft.w;
             const u32 rightIdx = node.aabbMaxRight.w & 0x7fffffffu;
-            if(fixedCount < 256u){
-                fixedStack[fixedCount] = leftIdx;
-                ++fixedCount;
-            }
-            if(fixedCount < 256u){
-                fixedStack[fixedCount] = rightIdx;
-                ++fixedCount;
-            }
+            in MeshBvhNode leftNode = mesh.nodes[leftIdx];
+            Aabb3D leftBox(VectorSingle(leftNode.aabbMinLeft, 0.0f), VectorSingle(leftNode.aabbMaxRight, 0.0f));
+            if(meshRadius > 0.0f)
+                leftBox = FattenAabb(leftBox, meshRadius);
+            f32 tLeft = 0.0f;
+            const b8 hitLeft = AabbRayCastFast(leftBox, localRay, curMax, tLeft);
+
+            in MeshBvhNode rightNode = mesh.nodes[rightIdx];
+            Aabb3D rightBox(VectorSingle(rightNode.aabbMinLeft, 0.0f), VectorSingle(rightNode.aabbMaxRight, 0.0f));
+            if(meshRadius > 0.0f)
+                rightBox = FattenAabb(rightBox, meshRadius);
+            f32 tRight = 0.0f;
+            const b8 hitRight = AabbRayCastFast(rightBox, localRay, curMax, tRight);
+
+            PushRayCastChildrenOrdered(fixedStack, fixedStackTMin, fixedCount, leftIdx, hitLeft, tLeft, rightIdx, hitRight, tRight);
         }
     }
     return best;

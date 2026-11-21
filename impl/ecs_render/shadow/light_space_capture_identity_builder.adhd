@@ -103,12 +103,13 @@ class LightSpaceCaptureIdentityBuilder{
         return identity;
     }
 
-    public u64 buildCsgBaseIdentity(
+    public u64 buildCsgBaseIdentityWithMaterialHash(
         in u64 captureGeometryIdentity,
         in u64 snapshotContentIdentity,
         in Span<NwbRtInstanceMaterialGpu> materials,
         in Span<InstanceGpuData> instances,
-        in Span<u8> materialBytes,
+        in usize materialByteCount,
+        in u64 materialTypedHash,
         in usize textureCount
     )const{
         const usize instanceCount = instances.size();
@@ -130,8 +131,28 @@ class LightSpaceCaptureIdentityBuilder{
             for(usize slotIndex = 0u; slotIndex < inst.geometryHeapSlots.size(); ++slotIndex)
                 identity = UpdateFnv64U32(identity, inst.geometryHeapSlots[slotIndex]);
         }
-        identity = this.m_identityBuilder.updateFnv64ByteSpan(identity, materialBytes);
+        identity = UpdateFnv64U64(identity, cast<u64>(materialByteCount));
+        identity = UpdateFnv64U64(identity, materialTypedHash);
         return UpdateFnv64U64(identity, cast<u64>(textureCount));
+    }
+
+    public u64 buildCsgBaseIdentity(
+        in u64 captureGeometryIdentity,
+        in u64 snapshotContentIdentity,
+        in Span<NwbRtInstanceMaterialGpu> materials,
+        in Span<InstanceGpuData> instances,
+        in Span<u8> materialBytes,
+        in usize textureCount
+    )const{
+        return this.buildCsgBaseIdentityWithMaterialHash(
+            captureGeometryIdentity,
+            snapshotContentIdentity,
+            materials,
+            instances,
+            materialBytes.size(),
+            UpdateFnv64(s_Fnv64OffsetBasis, materialBytes),
+            textureCount
+        );
     }
 
     public void updateCsgInstances(

@@ -17,8 +17,8 @@
 
 class ArenaBase : NoCopy{
 protected:
-    explicit ArenaBase(const Name& allocationLog, const ArenaMemoryReservation::Enum reservation = ArenaMemoryReservation::Separate)
-        : m_memoryStats(allocationLog, reservation)
+    explicit ArenaBase(const Name& allocationLog, const ArenaMemoryReservation::Enum reservation = ArenaMemoryReservation::Separate, const b8 deferAttach = false)
+        : m_memoryStats(allocationLog, reservation, deferAttach)
     {
         FOUNDATION_ASSERT_MSG(static_cast<b8>(allocationLog), FOUNDATION_TEXT("ArenaBase allocationLog must be a valid name"));
     }
@@ -55,8 +55,8 @@ protected:
 template<typename Arena>
 class ArenaBaseT : public ArenaBase{
 protected:
-    explicit ArenaBaseT(const Name& allocationLog, const ArenaMemoryReservation::Enum reservation = ArenaMemoryReservation::Separate)
-        : ArenaBase(allocationLog, reservation)
+    explicit ArenaBaseT(const Name& allocationLog, const ArenaMemoryReservation::Enum reservation = ArenaMemoryReservation::Separate, const b8 deferAttach = false)
+        : ArenaBase(allocationLog, reservation, deferAttach)
     {}
     ~ArenaBaseT()noexcept override = default;
 

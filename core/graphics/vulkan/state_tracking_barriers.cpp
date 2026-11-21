@@ -159,6 +159,7 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
             if(texture.m_creationDesc.keepInitialState)
                 m_stateTracker.m_hasKeepInitialStateTextures = true;
         }
+        m_stateTracker.updateRecentTextureCache(key, stateBits);
 
         VkImageMemoryBarrier2 barrier = VulkanStateTrackingDetail::BuildTextureStateBarrier(texture.m_image, texture.m_aspectMask, resolvedSubresources, subresourceOldState, stateBits, m_context.extensions.khrRayTracingPipeline);
         if(!m_enableAutomaticBarriers){

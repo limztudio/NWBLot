@@ -18,15 +18,11 @@ class SceneBvhUploadPolicy{
         mut Vector<u8> outNodeBytes,
         mut Vector<u8> outInstanceBytes
     )const{
-        outNodeBytes.clear();
-        outNodeBytes.reserve(nodes.size() * s_NwbBvhNodeGpuByteSize);
-        for(in NwbBvhNodeGpu node : nodes)
-            AppendPOD(outNodeBytes, node);
+        const Span<u8> nodeSpan = PodArrayBytes<NwbBvhNodeGpu>(nodes);
+        outNodeBytes.assign(nodeSpan.begin(), nodeSpan.end());
 
-        outInstanceBytes.clear();
-        outInstanceBytes.reserve(instances.size() * s_SceneSwBvhInstanceGpuByteSize);
-        for(in SceneSwBvhInstanceGpu instance : instances)
-            AppendPOD(outInstanceBytes, instance);
+        const Span<u8> instanceSpan = PodArrayBytes<SceneSwBvhInstanceGpu>(instances);
+        outInstanceBytes.assign(instanceSpan.begin(), instanceSpan.end());
     }
 
     public b8 publishAcceptedUpload(

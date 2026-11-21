@@ -261,6 +261,42 @@ b8 VolumeFileSystem::readBytesLocked(const u64 offset, void* data, const u64 byt
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpReadBytes, FilesystemVolumeDetail::s_VolumeDetailInvalidArguments);
         return false;
     }
+    if(!m_writable && m_readMappings.size() == m_segmentPaths.size() && m_segmentSize != 0u){
+        const auto endOffsetResult = ::AddNoOverflow(offset, byteCount);
+        if(!endOffsetResult){
+            FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpReadBytes, FilesystemVolumeDetail::s_VolumeDetailOffsetOverflow);
+            return false;
+        }
+        if(static_cast<u64>(m_segmentPaths.size()) > Limit<u64>::s_Max / m_segmentSize){
+            FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpReadBytes, "capacity overflow");
+            return false;
+        }
+        const u64 capacityBytes = static_cast<u64>(m_segmentPaths.size()) * m_segmentSize;
+        if(*endOffsetResult > capacityBytes){
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Filesystem('{}'): {} failed: range [{}..{}) exceeds capacity {}"), ConvertString(m_volumeName), ConvertString(FilesystemVolumeDetail::s_VolumeOpReadBytes), offset, *endOffsetResult, capacityBytes);
+            return false;
+        }
+        u64 currentOffset = offset;
+        u64 remainingBytes = byteCount;
+        u8* outputBytes = static_cast<u8*>(data);
+        while(remainingBytes > 0u){
+            const usize segmentIndex = static_cast<usize>(currentOffset / m_segmentSize);
+            const u64 segmentOffset = currentOffset % m_segmentSize;
+            const u64 chunkBytes = Min(remainingBytes, m_segmentSize - segmentOffset);
+            const ReadOnlySegmentMapping& mapping = m_readMappings[segmentIndex];
+            if(mapping.mappedView && segmentOffset <= mapping.mappedBytes && chunkBytes <= mapping.mappedBytes - segmentOffset && CanRepresentU64<usize>(chunkBytes)){
+                FOUNDATION_MEMCPY(outputBytes, static_cast<usize>(chunkBytes), mapping.mappedView + static_cast<usize>(segmentOffset), static_cast<usize>(chunkBytes));
+            }
+            else{
+                if(!FilesystemVolumeDetail::VolumeSegmentTransfer::Read(m_volumeName, m_segmentPaths, m_segmentSize, currentOffset, chunkBytes, outputBytes))
+                    return false;
+            }
+            outputBytes += chunkBytes;
+            currentOffset += chunkBytes;
+            remainingBytes -= chunkBytes;
+        }
+        return true;
+    }
 
     return FilesystemVolumeDetail::VolumeSegmentTransfer::Read(m_volumeName, m_segmentPaths, m_segmentSize, offset, byteCount, static_cast<u8*>(data));
 }

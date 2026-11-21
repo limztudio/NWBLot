@@ -175,12 +175,24 @@ u64 LightSpaceBufferCapacity(in BufferHandle buffer){
     return 0u;
 }
 
+b8 LightSpacePlanInputsMatch(in Span<SceneLightGpuData> a, in Span<SceneLightGpuData> b){
+    if(a.size() != b.size())
+        return false;
+    for(usize i = 0u; i < a.size(); ++i){
+        if(a[i].params.y != b[i].params.y || a[i].params.z != b[i].params.z)
+            return false;
+    }
+    return true;
+}
+
 b8 RendererRayTracingSystem::setSoftwareShadowSettings(in SoftwareShadowSettings settings){
     if(!ValidateSoftwareShadowSettings(settings))
         return false;
     mut LightSpaceShadowState state = this.m_lightSpaceShadow;
     if(SameSoftwareShadowSettings(state.m_settings, settings))
         return true;
+    state.m_frozenSnapshot.reset();
+    state.m_preflightedPlanValid = false;
     ApplySoftwareShadowSettingsChange(
         settings,
         state.m_settings,
@@ -193,6 +205,24 @@ b8 RendererRayTracingSystem::setSoftwareShadowSettings(in SoftwareShadowSettings
     );
     this.m_rayTracingState.shadow.m_softwareTransparentSampling.m_history.discard();
     return true;
+}
+
+PreflightedSceneLightsView RendererRayTracingSystem::preflightedSceneLights()const{
+    in LightSpaceShadowState state = this.m_lightSpaceShadow;
+    PreflightedSceneLightsView view;
+    if(!state.m_preflightedLightsValid)
+        return view;
+    if(
+        this.m_world.componentMutationVersion<LightComponent>() != state.m_preflightedLightMutationVersion
+        || this.m_world.componentMutationVersion<TransformComponent>() != state.m_preflightedTransformMutationVersion
+        || this.m_world.componentMutationVersion<CameraComponent>() != state.m_preflightedCameraMutationVersion
+        || this.m_world.componentMutationVersion<ActiveCameraComponent>() != state.m_preflightedActiveCameraMutationVersion
+    )
+        return view;
+    view.lights = Span<SceneLightGpuData>(state.m_preflightedLights).first(state.m_preflightedLightCount);
+    view.causticImportance = Span<f32>(state.m_preflightedCausticImportance).first(state.m_preflightedLightCount);
+    view.valid = true;
+    return view;
 }
 
 LightSpaceShadowSnapshot RendererRayTracingSystem::lightSpaceShadowSnapshot()const{
@@ -236,22 +266,32 @@ void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
     }
     state.m_resourcesPrepared = false;
     state.m_csgRequired = false;
+    state.m_preflightedLightsValid = false;
+    state.m_preflightedPlanValid = false;
     if(!ShouldPreflightLightSpaceShadows(state.m_csg.snapshot.hasCsg, this.m_shadowVisibilityHardwareSupported, state.m_settings.backend, state.m_sceneEligible))
         return;
-    Array<SceneLightGpuData, s_SceneMaxLights> lights;
-    Array<f32, s_SceneMaxLights> causticImportance;
-    const u32 lightCount = ResolveSceneLights(this.m_world, lights, causticImportance);
-    const Span<SceneLightGpuData> activeLights = Span<SceneLightGpuData>(lights).first(lightCount);
+    state.m_preflightedLightMutationVersion = this.m_world.componentMutationVersion<LightComponent>();
+    state.m_preflightedTransformMutationVersion = this.m_world.componentMutationVersion<TransformComponent>();
+    state.m_preflightedCameraMutationVersion = this.m_world.componentMutationVersion<CameraComponent>();
+    state.m_preflightedActiveCameraMutationVersion = this.m_world.componentMutationVersion<ActiveCameraComponent>();
+    const u32 lightCount = ResolveSceneLights(this.m_world, state.m_preflightedLights, state.m_preflightedCausticImportance);
+    state.m_preflightedLightCount = lightCount;
+    state.m_preflightedLightsValid = true;
+    const Span<SceneLightGpuData> activeLights = Span<SceneLightGpuData>(state.m_preflightedLights).first(lightCount);
     state.m_csgRequired = HasAnyLightSpaceCsgActiveLight(state.m_csg.snapshot.hasCsg, activeLights);
-    const auto planResult = this.buildLightSpaceShadowPlan(activeLights);
+    u32 drawCount = 0u;
+    const auto planResult = this.buildLightSpaceShadowPlan(activeLights, drawCount);
     if(!planResult.has_value())
         return;
     in LightSpacePlan plan = planResult.value();
+    state.m_preflightedPlan = plan;
+    state.m_preflightedDrawCount = drawCount;
+    state.m_preflightedPlanValid = true;
     LightSpaceResourceSet resources(this.m_graphics, this.m_shaderSystem, this.m_lightSpaceShadow, this.m_shadowVisibilityHardwareSupported);
     state.m_resourcesPrepared = resources.ensureLightSpaceShadowPipelines() && resources.ensureLightSpaceShadowStorage(plan);
 }
 
-Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(in Span<SceneLightGpuData> lights)const{
+Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(in Span<SceneLightGpuData> lights, mut u32 outDrawCount)const{
     in LightSpaceShadowState state = this.m_lightSpaceShadow;
     const usize lightCount = lights.size();
     if(!CanBuildLightSpaceShadowPlan(
@@ -270,14 +310,20 @@ Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(in 
     const auto drawCount = LightSpaceShadowDrawCount(state.m_casters);
     if(!drawCount.has_value())
         return MakeUnexpected(drawCount.error());
+    outDrawCount = drawCount.value();
     return TryBuildLightSpacePlanForSceneLights(
         state.m_settings,
         lights,
         this.m_graphics.getDevice().getMaxStorageBufferRange(),
-        drawCount.value(),
+        outDrawCount,
         state.m_csg.snapshot.hasCsg,
         state.m_csg.bytes.size()
     );
+}
+
+Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(in Span<SceneLightGpuData> lights)const{
+    u32 drawCount = 0u;
+    return this.buildLightSpaceShadowPlan(lights, drawCount);
 }
 
 void RendererRayTracingSystem::prepareLightSpaceShadows(in Span<SceneLightGpuData> lights){
@@ -286,6 +332,7 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(in Span<SceneLightGpuDat
     snapshot.ready = false;
     snapshot.diagnostics.reset();
     snapshot.diagnosticReadback.reset();
+    state.m_frozenSnapshot.reset();
     if(
         !state.m_resourcesPrepared || !snapshot.layout.valid() || !snapshot.viewPipeline.valid() || !snapshot.cullPipeline.valid() || !snapshot.opaqueResolve.valid()
         || !snapshot.transparentResolve.valid() || !snapshot.opaqueFallback.valid() || !snapshot.transparentFallback.valid() || !snapshot.shadePipeline.valid()
@@ -293,12 +340,34 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(in Span<SceneLightGpuDat
         || !snapshot.counts.valid() || !snapshot.events.valid() || !snapshot.views.valid() || !snapshot.drawArguments.valid() || !snapshot.depth
     )
         return;
-    const auto planResult = this.buildLightSpaceShadowPlan(lights);
-    if(!planResult.has_value())
-        return;
-    in LightSpacePlan plan = planResult.value();
-    const auto drawCount = LightSpaceShadowDrawCount(state.m_casters);
-    assert(drawCount.has_value());
+    u32 drawCount = 0u;
+    LightSpacePlan plan;
+    if(
+        state.m_preflightedPlanValid
+        && state.m_preflightedLightsValid
+        && CanBuildLightSpaceShadowPlan(
+            state.m_csg.snapshot.hasCsg,
+            this.m_shadowVisibilityHardwareSupported,
+            state.m_settings.backend,
+            state.m_sceneEligible,
+            this.m_shadowVisibilityPreparedTargets.has_value(),
+            this.m_preparedSceneSwBvhTraversal.ready(),
+            this.m_rayTracingState.softShadow.m_softShadowReady,
+            this.m_rayTracingState.softShadow.m_softTransparentReady,
+            state.m_casters.size(),
+            lights.size()
+        )
+        && LightSpacePlanInputsMatch(lights, Span<SceneLightGpuData>(state.m_preflightedLights).first(state.m_preflightedLightCount))
+    ){
+        plan = state.m_preflightedPlan;
+        drawCount = state.m_preflightedDrawCount;
+    }
+    else{
+        const auto planResult = this.buildLightSpaceShadowPlan(lights, drawCount);
+        if(!planResult.has_value())
+            return;
+        plan = planResult.value();
+    }
     LightSpaceShadowStorageCapacity capacity;
     capacity.countBytes = snapshot.counts.deref().getCreationDescription().byteSize;
     capacity.eventBytes = snapshot.events.deref().getCreationDescription().byteSize;
@@ -342,7 +411,7 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(in Span<SceneLightGpuDat
         snapshot.eventsDescriptor.slot(),
         snapshot.depthDescriptor.slot(),
         cast<u32>(state.m_casters.size()),
-        drawCount.value(),
+        drawCount,
         targets.width,
         targets.shadowReceiverFactor,
         targets.height,
@@ -364,8 +433,30 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(in Span<SceneLightGpuDat
         snapshot.diagnosticReadback = diagnostics.readback;
         snapshot.diagnosticFrame = diagnostics.frameIndex;
     }
+    FrozenLightSpaceShadowHandle frozen;
+    for(in FrozenLightSpaceShadowHandle cached : state.m_frozenSnapshots){
+        if(cached.referenceCount() == 1u){
+            AtomicThreadFence(MemoryOrder::acquire);
+            frozen = cached;
+            break;
+        }
+    }
+    if(!frozen.valid()){
+        const auto created = state.m_frozenPool.make<FrozenLightSpaceShadowSnapshot>();
+        if(!created.has_value())
+            return;
+        frozen = created.value();
+        state.m_frozenSnapshots.push_back(frozen);
+    }
     snapshot.casters = state.m_casters;
     snapshot.ready = true;
+    mut FrozenLightSpaceShadowSnapshot target = frozen.deref();
+    target.casters.assign(state.m_casters.begin(), state.m_casters.end());
+    target.snapshot = snapshot;
+    target.snapshot.casters = Span<LightSpaceShadowCaster>(target.casters);
+    target.snapshot.csgContextBytes = state.m_csg.bytes;
+    target.snapshot.csgDynamicBounds = state.m_csg.dynamicBounds;
+    state.m_frozenSnapshot = frozen;
 }
 
 
@@ -666,10 +757,16 @@ void LightSpaceResourceSet::releaseLightSpaceShadowResources(){
     state.m_captureBuffers.clear();
     state.m_sceneTextures.clear();
     state.m_captureTextures.clear();
+    state.m_frozenSnapshot.reset();
+    state.m_frozenSnapshots.clear();
     state.m_snapshot = LightSpaceShadowSnapshot();
     state.m_casters.clear();
     for(usize i = 0u; i < state.m_shaders.size(); ++i)
         state.m_shaders[i].reset();
+    state.m_preflightedLightCount = 0u;
+    state.m_preflightedDrawCount = 0u;
+    state.m_preflightedLightsValid = false;
+    state.m_preflightedPlanValid = false;
     state.m_sceneEligible = false;
     state.m_resourcesPrepared = false;
     state.m_pipelineFailed = false;

@@ -54,10 +54,14 @@ class SkinBinaryCodec{
 
         const SkinHeaderBinary header = this.makeHeader(meshNameHash, skeletonNameHash, influences.size(), inverseBindMatrices.size());
         AppendPOD(outBinary, header);
-        for(in SkinInfluence4 influence : influences)
-            AppendPOD(outBinary, influence);
-        for(in SkeletonJointMatrix matrix : inverseBindMatrices)
-            AppendPOD(outBinary, matrix);
+        if(!AppendBinaryVectorPayload(outBinary, influences).has_value()){
+            error("SkinAssetCodec::serialize failed: skin payload byte size overflows");
+            return false;
+        }
+        if(!AppendBinaryVectorPayload(outBinary, inverseBindMatrices).has_value()){
+            error("SkinAssetCodec::serialize failed: skin payload byte size overflows");
+            return false;
+        }
         return true;
     }
 
@@ -94,14 +98,8 @@ class SkinBinaryCodec{
             error("Skin::loadBinary failed: malformed 'influences' payload");
             return false;
         }
-        outInfluences.clear();
-        outInfluences.reserve(influenceCount);
-        for(usize i = 0u; i < influenceCount; ++i){
-            const Expected<SkinInfluence4> item = ReadPOD<SkinInfluence4>(binary, cursor);
-            if(!item.has_value())
-                return false;
-            outInfluences.push_back(item.value());
-        }
+        if(!ReadBinaryVectorPayload(binary, influenceCount, cursor, outInfluences).has_value())
+            return false;
 
         if(header.inverseBindMatrixCount > cast<u64>(usize.max / s_SkeletonJointMatrixBinaryBytes)){
             error("Skin::loadBinary failed: 'inverse bind matrices' payload byte size overflows");
@@ -112,14 +110,8 @@ class SkinBinaryCodec{
             error("Skin::loadBinary failed: malformed 'inverse bind matrices' payload");
             return false;
         }
-        outInverseBindMatrices.clear();
-        outInverseBindMatrices.reserve(matrixCount);
-        for(usize i = 0u; i < matrixCount; ++i){
-            const Expected<SkeletonJointMatrix> item = ReadPOD<SkeletonJointMatrix>(binary, cursor);
-            if(!item.has_value())
-                return false;
-            outInverseBindMatrices.push_back(item.value());
-        }
+        if(!ReadBinaryVectorPayload(binary, matrixCount, cursor, outInverseBindMatrices).has_value())
+            return false;
 
         if(cursor != binary.size()){
             error("Skin::loadBinary failed: trailing bytes detected");

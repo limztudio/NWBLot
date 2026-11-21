@@ -74,6 +74,17 @@ class TextShaper : ITextShaper{
         ShapedRun run;
         run.metrics = primaryMetrics.value();
         run.glyphs.reserve(this.m_primary.size());
+        b8 hasMissingGlyph = false;
+        for(in RawShapedGlyph glyph : this.m_primary){
+            if(glyph.glyphId == 0u){
+                hasMissingGlyph = true;
+                break;
+            }
+        }
+        if(!hasMissingGlyph){
+            AppendRawShapedGlyphs<SharedFontFace>(this.m_fonts[0u], Span<RawShapedGlyph>(this.m_primary), 0u, this.m_primary.size(), run.glyphs);
+            return run;
+        }
         this.m_spans.clear();
         this.m_spans.reserve(this.m_primary.size());
         usize begin = 0u;

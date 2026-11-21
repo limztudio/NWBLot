@@ -284,6 +284,7 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
         m_hasDiscardCallbacks = true;
     if(desc.scheduling.joinsAcceptedQueueFrontier || desc.scheduling.isRecoverySubmission)
         m_hasAcceptedQueueFrontierOrRecoveryTask = true;
+    m_publishedTaskCount = static_cast<u32>(m_tasks.size());
     bumpDeclarationRevision();
     return GpuTaskId{ .generation = m_generation, .index = index };
 }
@@ -480,6 +481,7 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
         for(GlobalUniquePtr<CommandListResourceStateHandoff>& snapshot : *initialOwnerHandoffStateSnapshots)
             snapshot.release();
     }
+    m_publishedResourceCount = static_cast<u32>(m_resources.size());
     bumpDeclarationRevision();
     return GpuGraphResourceId{ .generation = m_generation, .index = index };
 }

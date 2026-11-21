@@ -297,10 +297,9 @@ b8 RendererRayTracingSystem::preparePendingMeshBlasResources(){
 
     b8 allResourcesReady = true;
     MeshRayTracingResourceSnapshotVector meshes;
-    this.m_meshSystem.collectRayTracingResourceSnapshots(meshes);
+    u64 staticSkipped = 0u;
+    this.m_meshSystem.collectPendingBlasRayTracingSnapshots(meshes, staticSkipped);
     for(mut MeshRayTracingResourceSnapshot meshResources : meshes){
-        if(!MeshAccelerationStatePolicy().requiresBlasUpdate(meshResources.blasBuildPending, meshResources.blasBuildAccepted, meshResources.runtimeMesh, meshResources.runtimeGeometryContentRevision, meshResources.blasGeometryContentRevision))
-            continue;
         const MeshRayTracingResourceSnapshot expected = meshResources;
         if(!this.prepareMeshBlasResources(meshResources)){
             warning("RendererSystem: BLAS resource preflight failed for mesh '{}'", meshResources.meshName.resolvedText());
@@ -321,14 +320,10 @@ b8 RendererRayTracingSystem::capturePreparedMeshBlasBuilds(){
         return false;
 
     MeshRayTracingResourceSnapshotVector meshes;
-    this.m_meshSystem.collectRayTracingResourceSnapshots(meshes);
+    u64 staticSkipped = 0u;
+    this.m_meshSystem.collectPendingBlasRayTracingSnapshots(meshes, staticSkipped);
+    this.m_blasLedgerStaticSkipped += staticSkipped;
     for(in MeshRayTracingResourceSnapshot meshResources : meshes){
-        if(!MeshAccelerationStatePolicy().requiresBlasUpdate(meshResources.blasBuildPending, meshResources.blasBuildAccepted, meshResources.runtimeMesh, meshResources.runtimeGeometryContentRevision, meshResources.blasGeometryContentRevision)){
-            if(!meshResources.runtimeMesh)
-                ++this.m_blasLedgerStaticSkipped;
-            continue;
-        }
-
         auto build = ResolvePreparedMeshBlasBuild(meshResources);
         if(!build.has_value()){
             warning("RendererSystem: could not freeze BLAS build for mesh '{}'", meshResources.meshName.resolvedText());

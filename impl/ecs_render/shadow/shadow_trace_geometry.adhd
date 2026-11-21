@@ -60,6 +60,44 @@ class ShadowTraceGeometrySelection{
     public b8 includeSoftware = false;
 }
 
+in BufferHandle ShadowTraceMember(in MeshRayTracingResourceSnapshot mesh, in u32 member){
+    switch(member){
+    case s_ShadowTracePositionMember: return mesh.positionBuffer;
+    case s_ShadowTraceIndexMember: return mesh.triangleIndexBuffer;
+    case s_ShadowTraceAttributeMember: return mesh.attributeBuffer;
+    default: return mesh.swBvhNodeBuffer;
+    }
+}
+
+[cpp_unwind]
+b8 AppendShadowTraceBufferRecord(
+    in BufferHandle buffer,
+    in MeshRayTracingResourceSnapshot mesh,
+    in StringView suffix,
+    in PreparedShadowTraceGeometryRole role,
+    mut ShadowTraceBufferRecord record,
+    mut PreparedShadowTraceGeometryBufferVector prepared
+){
+    if(record.preparedIndex != s_ShadowTraceMissingIndex){
+        prepared[record.preparedIndex].roles |= cast<u8>(role);
+        return true;
+    }
+    const auto identity = DeriveName(mesh.meshName, suffix);
+    if(!identity.has_value())
+        return false;
+    PreparedShadowTraceGeometryBuffer item;
+    item.buffer = buffer;
+    item.identity = identity.value();
+    item.roles = cast<u8>(role);
+    item.normalizationPending = !record.accepted;
+    item.initialState = buffer.deref().getCreationDescription().initialState;
+    if(record.accepted)
+        item.initialState = ResourceStates::ShaderResource;
+    record.preparedIndex = prepared.size();
+    prepared.push_back(item);
+    return true;
+}
+
 class ShadowTraceIndexEntry{
     public usize key = 0u;
     public ShadowTraceBufferRecord record;
@@ -76,54 +114,110 @@ class ShadowTraceBufferIndex : NoCopy{
 
     [cpp_unwind]
     public void add(in usize key, in u32 member, in usize meshIndex){
-        const auto indexed = this.find(key);
-        if(indexed.has_value()){
-            if(indexed.value().firstMesh[member] == s_ShadowTraceMissingIndex)
-                indexed.value().firstMesh[member] = meshIndex;
+        if(this.m_map.has_value()){
+            ShadowTraceBufferRecord initial;
+            initial.firstMesh[member] = meshIndex;
+            const auto inserted = this.m_map.value().try_emplace(key, initial);
+            if(!inserted.second && inserted.first.value().firstMesh[member] == s_ShadowTraceMissingIndex)
+                inserted.first.value().firstMesh[member] = meshIndex;
             return;
+        }
+        for(usize i = 0u; i < this.m_entries.size(); ++i){
+            if(this.m_entries[i].key == key){
+                if(this.m_entries[i].record.firstMesh[member] == s_ShadowTraceMissingIndex)
+                    this.m_entries[i].record.firstMesh[member] = meshIndex;
+                return;
+            }
         }
 
         ShadowTraceIndexEntry next;
         next.key = key;
         next.record.firstMesh[member] = meshIndex;
-        if(!this.m_map.has_value()){
-            if(this.m_entries.size() < s_ShadowTraceInlineCapacity){
-                this.m_entries.push_back(next);
-                return;
-            }
-            this.m_map = Optional<HashMap<usize, ShadowTraceBufferRecord>>(HashMap<usize, ShadowTraceBufferRecord>());
-            this.m_map.value().reserve(this.m_capacity);
-            for(in ShadowTraceIndexEntry entry : this.m_entries){
-                if(!this.m_map.value().try_emplace(entry.key, entry.record).second)
-                    TerminateInvariant();
-            }
+        if(this.m_entries.size() < s_ShadowTraceInlineCapacity){
+            this.m_entries.push_back(next);
+            return;
+        }
+        this.m_map = Optional<HashMap<usize, ShadowTraceBufferRecord>>(HashMap<usize, ShadowTraceBufferRecord>());
+        this.m_map.value().reserve(this.m_capacity);
+        for(in ShadowTraceIndexEntry entry : this.m_entries){
+            if(!this.m_map.value().try_emplace(entry.key, entry.record).second)
+                TerminateInvariant();
         }
         this.m_map.value().try_emplace(key, next.record);
     }
 
-    public Optional<mut ShadowTraceBufferRecord> find(in usize key){
+    public b8 markAccepted(in usize key){
         if(this.m_map.has_value()){
-            if(this.m_map.value().contains(key)){
-                mut ShadowTraceBufferRecord record = this.m_map.value().at(key);
-                return Optional<mut ShadowTraceBufferRecord>(record);
+            const auto found = this.m_map.value().find(key);
+            if(found == this.m_map.value().end())
+                return false;
+            found.value().accepted = true;
+            return true;
+        }
+        for(usize i = 0u; i < this.m_entries.size(); ++i){
+            if(this.m_entries[i].key == key){
+                this.m_entries[i].record.accepted = true;
+                return true;
             }
         }
-        else{
-            for(usize i = 0u; i < this.m_entries.size(); ++i){
-                if(this.m_entries[i].key == key)
-                    return Optional<mut ShadowTraceBufferRecord>(this.m_entries[i].record);
-            }
-        }
-        return Optional<mut ShadowTraceBufferRecord>();
+        return false;
     }
-}
 
-in BufferHandle ShadowTraceMember(in MeshRayTracingResourceSnapshot mesh, in u32 member){
-    switch(member){
-    case s_ShadowTracePositionMember: return mesh.positionBuffer;
-    case s_ShadowTraceIndexMember: return mesh.triangleIndexBuffer;
-    case s_ShadowTraceAttributeMember: return mesh.attributeBuffer;
-    default: return mesh.swBvhNodeBuffer;
+    [cpp_unwind]
+    public b8 appendBuffer(
+        in BufferHandle buffer,
+        in MeshRayTracingResourceSnapshot mesh,
+        in StringView suffix,
+        in PreparedShadowTraceGeometryRole role,
+        mut PreparedShadowTraceGeometryBufferVector prepared
+    ){
+        if(!buffer.valid())
+            return false;
+        const usize key = buffer.identity();
+        if(this.m_map.has_value()){
+            const auto found = this.m_map.value().find(key);
+            if(found == this.m_map.value().end())
+                return false;
+            return AppendShadowTraceBufferRecord(buffer, mesh, suffix, role, found.value(), prepared);
+        }
+        for(usize i = 0u; i < this.m_entries.size(); ++i){
+            if(this.m_entries[i].key == key)
+                return AppendShadowTraceBufferRecord(buffer, mesh, suffix, role, this.m_entries[i].record, prepared);
+        }
+        return false;
+    }
+
+    [cpp_unwind]
+    public b8 appendSelectedBuffer(
+        in usize key,
+        in Span<MeshRayTracingResourceSnapshot> meshes,
+        in u32 member,
+        in StringView suffix,
+        in PreparedShadowTraceGeometryRole role,
+        mut PreparedShadowTraceGeometryBufferVector prepared
+    ){
+        if(this.m_map.has_value()){
+            const auto found = this.m_map.value().find(key);
+            if(found == this.m_map.value().end() || found.value().firstMesh[member] == s_ShadowTraceMissingIndex)
+                return false;
+            in MeshRayTracingResourceSnapshot mesh = meshes[found.value().firstMesh[member]];
+            in BufferHandle memberBuffer = ShadowTraceMember(mesh, member);
+            if(!memberBuffer.valid())
+                return false;
+            return AppendShadowTraceBufferRecord(memberBuffer, mesh, suffix, role, found.value(), prepared);
+        }
+        for(usize i = 0u; i < this.m_entries.size(); ++i){
+            if(this.m_entries[i].key == key){
+                if(this.m_entries[i].record.firstMesh[member] == s_ShadowTraceMissingIndex)
+                    return false;
+                in MeshRayTracingResourceSnapshot mesh = meshes[this.m_entries[i].record.firstMesh[member]];
+                in BufferHandle memberBuffer = ShadowTraceMember(mesh, member);
+                if(!memberBuffer.valid())
+                    return false;
+                return AppendShadowTraceBufferRecord(memberBuffer, mesh, suffix, role, this.m_entries[i].record, prepared);
+            }
+        }
+        return false;
     }
 }
 
@@ -136,29 +230,7 @@ b8 AppendShadowTraceBuffer(
     mut ShadowTraceBufferIndex index,
     mut PreparedShadowTraceGeometryBufferVector prepared
 ){
-    if(!buffer.valid())
-        return false;
-    const auto record = index.find(buffer.identity());
-    if(!record.has_value())
-        return false;
-    if(record.value().preparedIndex != s_ShadowTraceMissingIndex){
-        prepared[record.value().preparedIndex].roles |= cast<u8>(role);
-        return true;
-    }
-    const auto identity = DeriveName(mesh.meshName, suffix);
-    if(!identity.has_value())
-        return false;
-    PreparedShadowTraceGeometryBuffer item;
-    item.buffer = buffer;
-    item.identity = identity.value();
-    item.roles = cast<u8>(role);
-    item.normalizationPending = !record.value().accepted;
-    item.initialState = buffer.deref().getCreationDescription().initialState;
-    if(record.value().accepted)
-        item.initialState = ResourceStates::ShaderResource;
-    record.value().preparedIndex = prepared.size();
-    prepared.push_back(item);
-    return true;
+    return index.appendBuffer(buffer, mesh, suffix, role, prepared);
 }
 
 [cpp_unwind]
@@ -173,11 +245,7 @@ b8 AppendSelectedShadowTraceBuffers(
 ){
     for(usize i = 0u; i < selected.size(); ++i){
         mut Buffer buffer = selected[i];
-        const auto record = index.find(ObjectAddressKey(buffer));
-        if(!record.has_value() || record.value().firstMesh[member] == s_ShadowTraceMissingIndex)
-            return false;
-        in MeshRayTracingResourceSnapshot mesh = meshes[record.value().firstMesh[member]];
-        if(!AppendShadowTraceBuffer(ShadowTraceMember(mesh, member), mesh, suffix, role, index, prepared))
+        if(!index.appendSelectedBuffer(ObjectAddressKey(buffer), meshes, member, suffix, role, prepared))
             return false;
     }
     return true;
@@ -202,10 +270,8 @@ b8 FreezePreparedShadowTraceGeometryBuffers(
     }
     usize retained = 0u;
     for(usize i = 0u; i < accepted.size(); ++i){
-        const auto record = index.find(accepted[i].identity());
-        if(!record.has_value())
+        if(!index.markAccepted(accepted[i].identity()))
             continue;
-        record.value().accepted = true;
         if(i != retained)
             accepted[retained] = accepted[i];
         ++retained;
@@ -213,6 +279,13 @@ b8 FreezePreparedShadowTraceGeometryBuffers(
     accepted.resize(retained);
     if(!selection.includeHardware && !selection.includeSoftware)
         return true;
+
+    usize estimatedPrepared = 0u;
+    if(selection.includeHardware)
+        estimatedPrepared += selection.hardwarePositions.size() + selection.hardwareIndices.size() + selection.hardwareAttributes.size();
+    if(selection.includeSoftware)
+        estimatedPrepared += selection.softwareNodes.size() + selection.softwarePositions.size() + selection.softwareIndices.size() + selection.softwareAttributes.size();
+    prepared.reserve(estimatedPrepared);
 
     b8 collected = true;
     if(selection.includeHardware){

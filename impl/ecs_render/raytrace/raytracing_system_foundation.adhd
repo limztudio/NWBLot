@@ -26,6 +26,8 @@
 #include <impl/ecs_render/optics/coincident_volumes.adhd>
 #include <impl/ecs_csg/shape_registry.adhd>
 #include <impl/ecs_render/material/material_system.adhd>
+#include <impl/ecs_render/raytrace/refractive_bounds_isolation.adhd>
+#include <impl/ecs_render/raytrace/scene_bvh.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,6 +47,60 @@ b8 RequiresSurfelResourceInitialization(in b8 surfelEnabled, in b8 surfelResourc
 
 b8 PreparedTraversalStorageMatchesCurrent(in b8 sceneBvhStorageMatches, in b8 shadowMaterialContextStorageMatches){
     return sceneBvhStorageMatches && shadowMaterialContextStorageMatches;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RayTracingSceneGatherScratch : NoCopy{
+    public Vector<NwbRtInstanceMaterialGpu> instanceMaterials;
+    public InstanceGpuDataVector shadowInstanceData;
+    public MaterialTypedByteDataVector shadowMaterialTypedBytes;
+    public MaterialTypedConstantRangeMap shadowConstantTypedRanges;
+    public MaterialTypedByteContentRangeMap shadowMutableTypedRanges;
+    public HashMap<usize, u32> meshSlotLookup;
+    public Vector<TextureHandle> pendingSampledTextures;
+    public MeshRayTracingResourceSnapshotVector rayTracingSnapshots;
+    public Vector<RayTracingInstanceDesc> tlasInstances;
+    public Vector<RayTracingAccelStructHandle> tlasInstanceBlases;
+    public Vector<RayTracingInstanceWorldBounds> tlasInstanceWorldBounds;
+    public Vector<SceneSwBvhInstanceGpu> swInstances;
+    public Vector<SoftwareSceneRefitInstanceGpu> swSceneRefitInputs;
+    public Vector<BufferHandle> swSceneRefitRoots;
+    public Vector<SceneBvhPrimitiveCalculation> swInstanceBvhPrimitives;
+    public Vector<PreparedSceneSwBvhMesh> swPreparedMeshes;
+    public Vector<u32> swBvhIndices;
+    public Vector<u32> swBvhInstanceLeafCost;
+    public Vector<SceneBvhNodeCalculation> swBvhBuildNodes;
+    public Vector<NwbBvhNodeGpu> swBvhNodes;
+
+    public void clearHandles(){
+        this.pendingSampledTextures.clear();
+        this.rayTracingSnapshots.clear();
+        this.tlasInstanceBlases.clear();
+        this.swSceneRefitRoots.clear();
+        this.swPreparedMeshes.clear();
+    }
+
+    public void clear(){
+        this.instanceMaterials.clear();
+        this.shadowInstanceData.clear();
+        this.shadowMaterialTypedBytes.clear();
+        this.shadowConstantTypedRanges.clear();
+        this.shadowMutableTypedRanges.clear();
+        this.meshSlotLookup.clear();
+        this.tlasInstances.clear();
+        this.tlasInstanceWorldBounds.clear();
+        this.swInstances.clear();
+        this.swSceneRefitInputs.clear();
+        this.swInstanceBvhPrimitives.clear();
+        this.swBvhIndices.clear();
+        this.swBvhInstanceLeafCost.clear();
+        this.swBvhBuildNodes.clear();
+        this.swBvhNodes.clear();
+        this.clearHandles();
+    }
 }
 
 

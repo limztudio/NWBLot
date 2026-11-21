@@ -61,18 +61,7 @@ Expected<MeshRayTracingResourceSnapshot> RendererMeshSystem::findRayTracingResou
     return MeshRayTracingSnapshotPolicy().capture(found.value());
 }
 
-Expected<MeshRayTracingResourceSnapshot> RendererMeshSystem::findRenderableRayTracingResourceSnapshot(in RenderableMeshDesc desc)const{
-    if(!desc.valid())
-        return MakeUnexpected(Failure());
-
-    Name meshName = desc.mesh.name();
-    if(desc.runtime)
-        meshName = desc.runtimeMesh.meshKey;
-    const auto found = this.m_meshState.m_meshes.find(meshName);
-    if(found == this.m_meshState.m_meshes.end())
-        return MakeUnexpected(Failure());
-
-    in MeshResources mesh = this.m_meshState.m_meshes.at(meshName);
+Expected<MeshRayTracingResourceSnapshot> CaptureRenderableRayTracingResourceSnapshot(in MeshResources mesh, in RenderableMeshDesc desc, in b8 bindingsReady){
     if(
         (desc.runtime && (
             !MatchesRenderableRuntimeMeshRevisions(
@@ -90,11 +79,25 @@ Expected<MeshRayTracingResourceSnapshot> RendererMeshSystem::findRenderableRayTr
             || mesh.runtimeLocalBoundsBuffer != desc.runtimeMesh.localBoundsBuffer
             || mesh.runtimeMeshletLocalBoundsBuffer != desc.runtimeMesh.meshletLocalBoundsBuffer
         ))
-        || !this.meshRenderBindingsReady(mesh)
+        || !bindingsReady
     )
         return MakeUnexpected(Failure());
 
     return MeshRayTracingSnapshotPolicy().capture(mesh);
+}
+
+Expected<MeshRayTracingResourceSnapshot> RendererMeshSystem::findRenderableRayTracingResourceSnapshot(in RenderableMeshDesc desc)const{
+    if(!desc.valid())
+        return MakeUnexpected(Failure());
+
+    Name meshName = desc.mesh.name();
+    if(desc.runtime)
+        meshName = desc.runtimeMesh.meshKey;
+    const auto found = this.m_meshState.m_meshes.find(meshName);
+    if(found == this.m_meshState.m_meshes.end())
+        return MakeUnexpected(Failure());
+
+    return CaptureRenderableRayTracingResourceSnapshot(found.value(), desc, this.meshRenderBindingsReady(found.value()));
 }
 
 [cpp_unwind]
@@ -156,7 +159,7 @@ b8 RendererMeshSystem::commitRayTracingResourceSnapshot(in MeshRayTracingResourc
     ))
         heap.free(expected.swBvhParentHeapHandle);
 
-    mut MeshResources mesh = this.m_meshState.m_meshes.at(expected.meshName);
+    mut MeshResources mesh = found.value();
     const b8 blasReplaced = mesh.blas != desired.blas;
     const b8 swBvhReplaced = mesh.swBvhNodeBuffer != desired.swBvhNodeBuffer || mesh.swBvhParentBuffer != desired.swBvhParentBuffer;
     mesh.blas = desired.blas;
@@ -202,7 +205,7 @@ Expected<MeshRayTracingResourceSnapshot> RendererMeshSystem::ensureRayTracingInp
 
 void RendererMeshSystem::discardRayTracingBuildState(){
     for(auto meshIt = this.m_meshState.m_meshes.begin(); meshIt != this.m_meshState.m_meshes.end(); ++meshIt){
-        mut MeshResources mesh = this.m_meshState.m_meshes.at(meshIt.key());
+        mut MeshResources mesh = meshIt.value();
         MeshAccelerationStatePolicy().resetBuild(
             mesh.blas.valid(),
             mesh.swBvhNodeBuffer.valid() || mesh.swBvhParentBuffer.valid(),

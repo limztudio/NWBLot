@@ -248,6 +248,8 @@ Expected<mut MeshResources> RendererMeshSystem::createRuntimeMeshResources(in Ru
         if(!RuntimeMeshSourceMatches(foundMesh.value(), desc)){
             this.releaseMeshGeometryHeapHandles(foundMesh.value());
             this.m_meshState.m_meshes.erase(foundMesh);
+            if(this.m_meshState.m_runtimeMeshCount > 0u)
+                --this.m_meshState.m_runtimeMeshCount;
         }
         else{
             mut MeshResources mesh = this.m_meshState.m_meshes.at(desc.meshKey);
@@ -284,8 +286,10 @@ Expected<mut MeshResources> RendererMeshSystem::createRuntimeMeshResources(in Ru
         return MakeUnexpected(Failure());
 
     auto result = TryEmplaceOwned<MeshResources>(this.m_meshState.m_meshes, desc.meshKey, createdMesh);
-    if(result)
+    if(result){
         retireUnpublished.release();
+        ++this.m_meshState.m_runtimeMeshCount;
+    }
 
     mut MeshResources stored = this.m_meshState.m_meshes.at(desc.meshKey);
     assert(stored.valid());

@@ -31,16 +31,25 @@ void RetainSkinningBuffer(in BufferHandle buffer, mut Vector<BufferHandle> buffe
         buffers.push_back(buffer);
 }
 
-void CollectSkinningStateBuffers(in MeshSkinningRuntimeInstance instance, in Optional<in MeshSkinningRuntimeResources> resources, mut Vector<BufferHandle> buffers, mut HashSet<BufferHandle> index){
+void CollectSkinningInstanceStateBuffers(in MeshSkinningRuntimeInstance instance, mut Vector<BufferHandle> buffers, mut HashSet<BufferHandle> index){
     if(!instance.valid())
         return;
     for(in BufferHandle buffer : CaptureMeshSkinningResourceBuffers(instance))
         RetainSkinningBuffer(buffer, buffers, index);
-    if(resources.has_value() && resources.value().editRevision == instance.editRevision){
-        RetainSkinningBuffer(resources.value().skinBuffer, buffers, index);
-        RetainSkinningBuffer(resources.value().jointPaletteBuffer, buffers, index);
-        RetainSkinningBuffer(resources.value().bindlessResourceSlotsBuffer, buffers, index);
-    }
+}
+
+void CollectSkinningResourceStateBuffers(in MeshSkinningRuntimeInstance instance, in MeshSkinningRuntimeResources resources, mut Vector<BufferHandle> buffers, mut HashSet<BufferHandle> index){
+    if(!instance.valid() || resources.editRevision != instance.editRevision)
+        return;
+    RetainSkinningBuffer(resources.skinBuffer, buffers, index);
+    RetainSkinningBuffer(resources.jointPaletteBuffer, buffers, index);
+    RetainSkinningBuffer(resources.bindlessResourceSlotsBuffer, buffers, index);
+}
+
+void CollectSkinningStateBuffers(in MeshSkinningRuntimeInstance instance, in Optional<in MeshSkinningRuntimeResources> resources, mut Vector<BufferHandle> buffers, mut HashSet<BufferHandle> index){
+    CollectSkinningInstanceStateBuffers(instance, buffers, index);
+    if(resources.has_value())
+        CollectSkinningResourceStateBuffers(instance, resources.value(), buffers, index);
 }
 
 
@@ -67,15 +76,9 @@ class SkinningPlansTask{
         if(this.m_plans.empty())
             return false;
         GpuTimingTicketRecordingScope recording(this.m_ticket);
-        for(in MeshSkinningGraphDispatchPlan plan : this.m_plans){
-            if(this.m_deform){
-                if(!this.m_system.recordGraphOwnedSkinningDeformation(plan, context, commands))
-                    return false;
-            }
-            else if(!this.m_system.recordGraphOwnedSkinningPostDispatch(plan, context, commands))
-                return false;
-        }
-        return true;
+        if(this.m_deform)
+            return this.m_system.recordGraphOwnedSkinningDeformationBatch(this.m_plans, context, commands);
+        return this.m_system.recordGraphOwnedSkinningPostDispatchBatch(this.m_plans, context, commands);
     }
 }
 

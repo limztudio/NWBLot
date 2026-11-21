@@ -56,9 +56,9 @@ Queue::Queue(const VulkanContext& context, Device& device, const GpuPhysicalQueu
     , m_executeQueueEntries(context.objectArena)
     , m_executeWaitOffsets(context.objectArena)
     , m_executeQueueReceipts(context.objectArena)
-    , m_executeSubmittedOwners(context.objectArena)
     , m_lastRecordingID(0u)
     , m_lastObservedFinishedID(0u)
+    , m_publishedSubmittedID(0u)
     , m_lastSubmittedID(0)
     , m_lastFinishedID(0)
     , m_commandBuffersInFlight(context.objectArena)
@@ -278,6 +278,35 @@ void Queue::unregisterCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept
 
 void Queue::collectCompletedCommandBuffers(){
     u64 directRetiredCount = 0u;
+    WorkerCommandArena* pendingWorkerArena = nullptr;
+    Array<TrackedCommandBufferPtr, 32u> pendingWorkerBuffers{};
+    u32 pendingWorkerCount = 0u;
+
+    const auto flushPendingWorkerRun = [&](){
+        if(pendingWorkerCount == 0u)
+            return;
+
+        const u64 count = static_cast<u64>(pendingWorkerCount);
+        if(m_pendingCommandBufferCount.fetch_sub(count, MemoryOrder::relaxed) < count)
+            TerminateInvariant();
+        const u64 prevPending = pendingWorkerArena->pendingCommandBufferCount.fetch_sub(count, MemoryOrder::relaxed);
+        if(prevPending < count)
+            TerminateInvariant();
+        if(prevPending == count && m_pendingWorkerEpochCount.fetch_sub(1u, MemoryOrder::relaxed) == 0u)
+            TerminateInvariant();
+        m_reusableCommandBufferCount.fetch_add(count, MemoryOrder::relaxed);
+        pendingWorkerArena->reusableCommandBufferCount.fetch_add(count, MemoryOrder::relaxed);
+
+        {
+            ScopedLock lock(pendingWorkerArena->mutex);
+            for(u32 i = 0u; i < pendingWorkerCount; ++i)
+                pendingWorkerArena->commandBuffersPool.push_back(Move(pendingWorkerBuffers[i]));
+        }
+
+        pendingWorkerCount = 0u;
+        pendingWorkerArena = nullptr;
+    };
+
     while(!m_commandBuffersInFlight.empty()){
         auto& cmdBuf = *MakeNotNull(m_commandBuffersInFlight.front().get());
         if(cmdBuf.m_submissionID > m_lastFinishedID)
@@ -295,9 +324,29 @@ void Queue::collectCompletedCommandBuffers(){
                 commitCommandBufferStateTransition(*completed, TrackedCommandBufferArenaState::Reusable);
             m_commandBuffersPool.push_back(Move(completed));
         }
-        else
+        else if(&completed->m_queue == this && &completed->m_context == &m_context && completed->m_arenaState == TrackedCommandBufferArenaState::Pending){
+            WorkerCommandArena* const workerArena = completed->m_workerCommandArena
+                ? static_cast<WorkerCommandArena*>(completed->m_workerCommandArena)
+                : findWorkerCommandArena(completed->m_recordingWorkerDomain, completed->m_recordingWorkerIndex);
+            if(workerArena){
+                completed->clearTrackedReferences();
+                completed->m_arenaState = TrackedCommandBufferArenaState::Reusable;
+                if(pendingWorkerCount != 0u && (pendingWorkerArena != workerArena || pendingWorkerCount == pendingWorkerBuffers.size()))
+                    flushPendingWorkerRun();
+                pendingWorkerArena = workerArena;
+                pendingWorkerBuffers[pendingWorkerCount++] = Move(completed);
+            }
+            else{
+                flushPendingWorkerRun();
+                recycleCommandBuffer(Move(completed));
+            }
+        }
+        else{
+            flushPendingWorkerRun();
             recycleCommandBuffer(Move(completed));
+        }
     }
+    flushPendingWorkerRun();
     if(directRetiredCount != 0u){
         if(m_pendingCommandBufferCount.fetch_sub(directRetiredCount, MemoryOrder::relaxed) < directRetiredCount)
             TerminateInvariant();

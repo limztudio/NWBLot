@@ -72,23 +72,25 @@ b8 ValidateMeshletPayload(
             return false;
         }
 
-        const Expected<usize> encodedPositionBytes = TryComputeMeshletEncodedPositionRefByteCount(meshlet, false);
-        const Expected<usize> encodedAttributeBytes = TryComputeMeshletEncodedAttributeRefByteCount(meshlet);
-        if(!encodedPositionBytes.has_value() || !encodedAttributeBytes.has_value()){
+        const Expected<MeshletPositionRefEncodingLayout> encodedPositionLayout = TryBuildMeshletPositionRefEncodingLayout(meshlet, false);
+        const Expected<MeshletAttributeRefEncodingLayout> encodedAttributeLayout = TryBuildMeshletAttributeRefEncodingLayout(meshlet);
+        if(!encodedPositionLayout.has_value() || !encodedAttributeLayout.has_value()){
             LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, "has invalid ref encoding width");
             return false;
         }
+        const usize encodedPositionBytes = encodedPositionLayout.value().byteCount;
+        const usize encodedAttributeBytes = encodedAttributeLayout.value().byteCount;
         if(
-            encodedPositionBytes.value() > usize.max - expectedPositionRefByteCount
-            || encodedAttributeBytes.value() > usize.max - expectedAttributeRefByteCount
+            encodedPositionBytes > usize.max - expectedPositionRefByteCount
+            || encodedAttributeBytes > usize.max - expectedAttributeRefByteCount
         ){
             LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, "encoded ref byte counts overflow");
             return false;
         }
 
         expectedLocalVertexRefCount += cast<usize>(vertexCount);
-        expectedPositionRefByteCount += encodedPositionBytes.value();
-        expectedAttributeRefByteCount += encodedAttributeBytes.value();
+        expectedPositionRefByteCount += encodedPositionBytes;
+        expectedAttributeRefByteCount += encodedAttributeBytes;
         expectedPrimitiveIndexCount += cast<usize>(primitiveCount) * cast<usize>(s_MeshletTriangleIndexCount);
         if(
             expectedLocalVertexRefCount > localVertexRefs.size()
@@ -114,12 +116,12 @@ b8 ValidateMeshletPayload(
             return false;
         }
 
-        if(!ValidateMeshletEncodedPositionRefs(positionRefDeltas, meshlet, encodedPositionCount, positionCount)){
+        if(!ValidateMeshletEncodedPositionRefsWithLayout(positionRefDeltas, meshlet, encodedPositionLayout.value(), encodedPositionCount, positionCount)){
             LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, s_InvalidEncodedPositionRefReasonText);
             return false;
         }
 
-        if(!ValidateMeshletEncodedAttributeRefs(attributeRefDeltas, meshlet, attributeCount, normalCount, tangentCount, uv0Count, colorCount)){
+        if(!ValidateMeshletEncodedAttributeRefsWithLayout(attributeRefDeltas, meshlet, encodedAttributeLayout.value(), attributeCount, normalCount, tangentCount, uv0Count, colorCount)){
             LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, s_InvalidEncodedAttributeRefReasonText);
             return false;
         }

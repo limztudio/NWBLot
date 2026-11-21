@@ -107,13 +107,6 @@ b8 CommandList::validateTrackedResourcesReadyForSubmission()const{
             return false;
         }
     }
-    for(const auto heap : m_currentCmdBuf->m_referencedDescriptorHeaps){
-
-        if(!heap->retainedResourcesReadyForQueue(m_creationDesc.physicalQueue)){
-            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command list: descriptor heap contains a resource unavailable to this exact command queue"));
-            return false;
-        }
-    }
     for(auto it = m_stateTracker.m_permanentBufferStates.begin(); it != m_stateTracker.m_permanentBufferStates.end(); ++it){
         if(!isBufferReadyForCommandQueue(it.value().buffer.get())){
             NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command list: permanent buffer is not ready for this exact command queue"));
@@ -270,10 +263,12 @@ void CommandList::invalidateCommandRecording()noexcept{
     resetPendingBufferCopies();
     invalidateGraphicsDrawValidationCache();
     m_commandRecordingFailed = true;
+    m_recordingFastCapabilityMask = 0u;
     m_hostReadbackBarrierTracker.clear();
 }
 
 void CommandList::discardInvalidCommandBuffer(){
+    m_recordingFastCapabilityMask = 0u;
     resetPendingBufferCopies();
     invalidateGraphicsDrawValidationCache();
     m_stateTracker.rollbackRecordingAttempt();
@@ -287,6 +282,7 @@ void CommandList::discardInvalidCommandBuffer(){
 
         const VkResult invalidEndResult = m_context.deviceDispatch.vkEndCommandBuffer(m_currentCmdBuf->m_cmdBuf);
         m_isRecording = false;
+        m_recordingFastCapabilityMask = 0u;
         if(invalidEndResult != VK_SUCCESS){
             NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to end an invalidated command buffer before discarding it: {}"), ResultToString(invalidEndResult));
         }

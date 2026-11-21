@@ -175,16 +175,27 @@ private:
         b8 m_ownsAdmission = false;
     };
     struct PacketRecordingScratch final : NoCopy{
+        static constexpr usize s_CommandListBucketCount = 16u;
+        static constexpr u32 s_InvalidCommandListIndex = Limit<u32>::s_Max;
+
         struct CachedCommandList{
             CommandListParameters parameters;
             CommandListHandle commandList;
+            u32 nextInBucket = s_InvalidCommandListIndex;
         };
         struct PreflightCachedResource{
             u64 stamp = 0u;
+            Texture* texture = nullptr;
+            Buffer* buffer = nullptr;
+            RayTracingAccelStruct* accelStruct = nullptr;
             ResourceStates::Mask permanentState = ResourceStates::Unknown;
             ResourceStates::Mask lastValidatedState = ResourceStates::Unknown;
+            ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
+            GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
+            b8 hasBackendResource = false;
             b8 baseValidated = false;
             b8 hasLastValidatedState = false;
+            b8 resolved = false;
         };
 
         GlobalUniquePtr<Alloc::ScratchArena> stateFanInScratchArena;
@@ -196,8 +207,10 @@ private:
         GraphicsVector<CachedCommandList> commandLists;
         GraphicsVector<CommandListResourceStateHandoff> seedSubsetBatch;
         GraphicsVector<PreflightCachedResource> preflightResourceCache;
+        Array<u32, s_CommandListBucketCount> commandListBucketHeads{};
+        Array<u32, s_CommandListBucketCount> commandListBucketCursors{};
         u64 preflightCacheStamp = 0u;
-        usize nextCommandListCursor = 0u;
+        u16 commandListCacheDeviceGeneration = 0u;
 
 
     public:
@@ -210,12 +223,17 @@ private:
             , commandLists(arena)
             , seedSubsetBatch(arena)
             , preflightResourceCache(arena)
-        {}
+        {
+            commandListBucketHeads.fill(s_InvalidCommandListIndex);
+            commandListBucketCursors.fill(s_InvalidCommandListIndex);
+        }
 
 
     public:
+        [[nodiscard]] static usize CommandListBucketIndex(const CommandListParameters& parameters)noexcept;
         [[nodiscard]] b8 ensureValid(GraphicsArena& arena);
         [[nodiscard]] Expected<CommandListHandle> acquireCommandList(Device& device, const CommandListParameters& parameters);
+        void clearCommandListCache()noexcept;
         void reset()noexcept;
         [[nodiscard]] b8 valid()const noexcept{ return stateFanInScratchArena != nullptr; }
     };

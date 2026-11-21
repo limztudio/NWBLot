@@ -73,14 +73,22 @@ void CommandList::setResourceStatesForFramebufferValidated(Framebuffer& framebuf
             const MipLevel mipLevel = resolved.baseMipLevel;
             const ArraySlice arraySlice = resolved.baseArraySlice;
             const TextureSubresourceStateKey key{ &texture, mipLevel, arraySlice };
+            ResourceStates::Mask recentState = ResourceStates::Unknown;
+            if(m_stateTracker.findRecentTextureState(key, recentState) && recentState == stateBits){
+                retainResource(&texture);
+                return true;
+            }
             auto existing = !m_stateTracker.m_textureStates.empty() ? m_stateTracker.m_textureStates.find(key) : m_stateTracker.m_textureStates.end();
             const ResourceStates::Mask subresourceOldState = existing != m_stateTracker.m_textureStates.end()
                 ? existing.value()
                 : ((texture.m_creationDesc.keepInitialState && texture.isRetainedSubresourceStateKnown(arraySlice, mipLevel)) ? texture.m_creationDesc.initialState : ResourceStates::Unknown);
 
             retainResource(&texture);
-            if(subresourceOldState == stateBits)
+            if(subresourceOldState == stateBits){
+                if(existing != m_stateTracker.m_textureStates.end())
+                    m_stateTracker.updateRecentTextureCache(key, stateBits);
                 return true;
+            }
 
             if(existing != m_stateTracker.m_textureStates.end())
                 existing.value() = stateBits;
@@ -89,6 +97,7 @@ void CommandList::setResourceStatesForFramebufferValidated(Framebuffer& framebuf
                 if(texture.m_creationDesc.keepInitialState)
                     m_stateTracker.m_hasKeepInitialStateTextures = true;
             }
+            m_stateTracker.updateRecentTextureCache(key, stateBits);
 
             appendBarrier(VulkanStateTrackingDetail::BuildTextureStateBarrier(texture.m_image, texture.m_aspectMask, resolved, subresourceOldState, stateBits, rayTracingStageAvailable));
             return true;
@@ -508,6 +517,7 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
             return false;
     }
 
+    m_stateTracker.invalidateTextureCache();
     ::ContainerDetail::ReserveAdditionalCapacity(m_stateTracker.m_textureStates, states.m_textureStates.size());
     for(const CommandListResourceStateHandoff::TextureState& state : states.m_textureStates){
         if(!state.texture)
@@ -547,6 +557,8 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
         retainResource(state.buffer);
         m_stateTracker.setPermanentBufferState(*state.buffer, state.state);
     }
+    m_lastValidatedWriteBuffer = nullptr;
+    m_lastValidatedWriteBufferPermanentState = ResourceStates::Unknown;
 
     if(!acquireImageBarriers.empty() || !acquireBufferBarriers.empty()){
         executePipelineBarrier({}, { acquireImageBarriers.data(), acquireImageBarriers.size() }, { acquireBufferBarriers.data(), acquireBufferBarriers.size() });
@@ -559,6 +571,8 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
 
 void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& states)const{
     states.reset();
+    const b8 hasTextureReleases = !m_textureOwnershipReleaseDestinations.empty();
+    const b8 hasBufferReleases = !m_bufferOwnershipReleaseDestinations.empty();
     struct QueueOwnership{
         GpuPhysicalQueueId owner;
         GpuPhysicalQueueId releaseDestination;
@@ -566,6 +580,8 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
     const auto getTextureOwnership = [&](const TextureSubresourceStateKey& key)noexcept -> QueueOwnership{
         if(key.texture->m_imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT)
             return {};
+        if(!hasTextureReleases)
+            return QueueOwnership{ m_creationDesc.physicalQueue, {} };
 
         const auto release = m_textureOwnershipReleaseDestinations.find(key);
         return QueueOwnership{ m_creationDesc.physicalQueue, release != m_textureOwnershipReleaseDestinations.end() ? release.value() : GpuPhysicalQueueId{} };
@@ -587,7 +603,7 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
     for(auto it = m_stateTracker.m_bufferStates.begin(); it != m_stateTracker.m_bufferStates.end(); ++it){
         auto& buffer = *MakeNotNull(it->first.get());
         const GpuPhysicalQueueId ownerQueue = getBufferOwnership(buffer);
-        const auto releases = m_bufferOwnershipReleaseDestinations.find(MakeNotNull(&buffer));
+        const auto releases = hasBufferReleases ? m_bufferOwnershipReleaseDestinations.find(MakeNotNull(&buffer)) : m_bufferOwnershipReleaseDestinations.end();
         const auto append = [&](const BufferRange range, const ResourceStates::Mask state, const GpuPhysicalQueueId destination){
             if(range.hasExtent()){
                 states.m_bufferStates.push_back(CommandListResourceStateHandoff::BufferState{ &buffer, range, ownerQueue, destination, state, buffer.m_creationDesc.queueSharing });
@@ -595,7 +611,7 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         };
         for(const StateTracker::BufferRangeState& state : it.value()){
             u64 cursor = state.range.byteOffset;
-            if(releases != m_bufferOwnershipReleaseDestinations.end()){
+            if(hasBufferReleases && releases != m_bufferOwnershipReleaseDestinations.end()){
                 for(const BufferOwnershipRelease& release : releases.value()){
                     const BufferRange overlap = state.range.intersect(release.range);
                     if(!overlap.hasExtent())

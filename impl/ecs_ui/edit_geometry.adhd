@@ -48,10 +48,13 @@ class UiEditGeometry{
         in PopupToken popup,
         in Point position
     )const{
+        if(!geometry.stopTable.valid())
+            return MakeUnexpected(Failure());
+        in EditCaretStopTable stopTable = geometry.stopTable.deref();
         const Expected<Point> local = this.localTextPosition(
             geometry.generation,
-            geometry.stops,
-            geometry.lines,
+            stopTable.stops,
+            stopTable.lines,
             geometry.modelGeneration,
             geometry.popup,
             geometry.textMode,
@@ -62,7 +65,7 @@ class UiEditGeometry{
         );
         if(!local.has_value())
             return MakeUnexpected(Failure());
-        return HitEditCaretGeometry(geometry.lines, geometry.stops, local.value());
+        return HitEditCaretGeometry(stopTable.lines, stopTable.stops, local.value());
     }
 
     public Expected<usize> hitWord(
@@ -71,10 +74,13 @@ class UiEditGeometry{
         in PopupToken popup,
         in Point position
     )const{
+        if(!geometry.stopTable.valid())
+            return MakeUnexpected(Failure());
+        in EditCaretStopTable stopTable = geometry.stopTable.deref();
         const Expected<Point> local = this.localTextPosition(
             geometry.generation,
-            geometry.stops,
-            geometry.lines,
+            stopTable.stops,
+            stopTable.lines,
             geometry.modelGeneration,
             geometry.popup,
             geometry.textMode,
@@ -85,14 +91,13 @@ class UiEditGeometry{
         );
         if(!local.has_value())
             return MakeUnexpected(Failure());
-        return TryHitEditWordCaretGeometry(geometry.lines, geometry.stops, local.value());
+        return TryHitEditWordCaretGeometry(stopTable.lines, stopTable.stops, local.value());
     }
 
     public void publish(
         in PopupToken popup,
         in EditBoxPlacement placement,
-        in Span<EditBoxCaretStop> stops,
-        in Span<EditCaretLine> lines,
+        in SharedEditCaretStopTable stopTable,
         in EditTextMode textMode,
         in EditBoxOptions options,
         in u64 generation,
@@ -103,14 +108,7 @@ class UiEditGeometry{
     )const{
         outCandidate.popup = popup;
         outCandidate.placement = placement;
-        outCandidate.stops.clear();
-        outCandidate.stops.reserve(stops.size());
-        for(in EditBoxCaretStop stop : stops)
-            outCandidate.stops.push_back(stop);
-        outCandidate.lines.clear();
-        outCandidate.lines.reserve(lines.size());
-        for(in EditCaretLine line : lines)
-            outCandidate.lines.push_back(line);
+        outCandidate.stopTable = stopTable;
         outCandidate.textMode = textMode;
         outCandidate.options = options;
         outCandidate.generation = generation;
@@ -123,6 +121,7 @@ class UiEditGeometry{
         if(inOutCandidate.generation == generation){
             inOutDisplayed = inOutCandidate;
             inOutCandidate.generation = 0u;
+            inOutCandidate.stopTable = SharedEditCaretStopTable();
         }
     }
 

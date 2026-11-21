@@ -202,6 +202,12 @@ class JointConstraint{
     }
 }
 
+class JointConstraintStepCache{
+    public SymMat3 sumInvI;
+    public SymMat3 kAngInv;
+    public Mat3 pointEffectiveMass0;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -343,6 +349,7 @@ void Solve2DLinearPlaneRows(
 void Solve3DAngularLockRow(
     in SymMat3 invIA,
     in SymMat3 invIB,
+    in SymMat3 kAngInv,
     in VectorSingle qA,
     in VectorSingle qB,
     in VectorSingle refQ,
@@ -372,7 +379,6 @@ void Solve3DAngularLockRow(
         iScale = soft.impulseScale;
     }
 
-    const SymMat3 kAngInv = InvertSymMat3(AddSymMat3(invIA, invIB));
     const VectorSingle oldL = VectorSingle(inOutImpulse, 0.0f);
     const VectorSingle relW = VectorSingle(wB - wA, 0.0f);
     const VectorSingle deltaL = MulSymMat3Vec(kAngInv, -(relW + bias)) * mScale - oldL * iScale;
@@ -401,19 +407,27 @@ void PrepareJointConstraint(
 
     const u32 bodyIdA = joint.edges[0u].bodyId;
     const u32 bodyIdB = joint.edges[1u].bodyId;
-
-    u32 indexA = s_NullIndex;
-    BodySim simA;
-    BodyState stateA;
-    ResolveContactBodyMassAndState(bodies, sets, bodyIdA, indexA, simA, stateA);
-
-    u32 indexB = s_NullIndex;
-    BodySim simB;
-    BodyState stateB;
-    ResolveContactBodyMassAndState(bodies, sets, bodyIdB, indexB, simB, stateB);
+    if(bodyIdA >= bodies.size() || bodyIdB >= bodies.size())
+        return;
 
     in Body bodyA = bodies[bodyIdA];
     in Body bodyB = bodies[bodyIdB];
+    if(
+        bodyA.setIndex >= sets.size() || bodyA.localIndex >= sets[bodyA.setIndex].sims.size()
+        || bodyB.setIndex >= sets.size() || bodyB.localIndex >= sets[bodyB.setIndex].sims.size()
+    )
+        return;
+
+    in BodySim simA = sets[bodyA.setIndex].sims[bodyA.localIndex];
+    in BodySim simB = sets[bodyB.setIndex].sims[bodyB.localIndex];
+
+    u32 indexA = s_NullIndex;
+    if(bodyA.setIndex == s_AwakeSetIndex)
+        indexA = bodyA.localIndex;
+    u32 indexB = s_NullIndex;
+    if(bodyB.setIndex == s_AwakeSetIndex)
+        indexB = bodyB.localIndex;
+
     const u32 flagsA = bodyA.flags;
     const u32 flagsB = bodyB.flags;
     f32 effInvMassA = 0.0f;
@@ -620,7 +634,38 @@ void ComputeJointConstraintTotalImpulses(
     }
 }
 
-void SolveJointConstraint(mut Vector<BodyState> states, mut JointConstraint jc, in f32 h, in b8 useBias){
+void BuildJointConstraintStepCache(in Vector<BodyState> states, in JointConstraint jc, mut JointConstraintStepCache outCache){
+    outCache.sumInvI = AddSymMat3(jc.invIA, jc.invIB);
+    if(jc.type == JointType::Fixed || jc.type == JointType::Prismatic || (jc.type == JointType::Motor && jc.maxTorque > 0.0f))
+        outCache.kAngInv = InvertSymMat3(outCache.sumInvI);
+    if(jc.type == JointType::Spherical || jc.type == JointType::Fixed || jc.type == JointType::Revolute || jc.type == JointType::Motor){
+        u32 flagsA = 0u;
+        if(jc.indexA < states.size())
+            flagsA = states[jc.indexA].flags();
+        u32 flagsB = 0u;
+        if(jc.indexB < states.size())
+            flagsB = states[jc.indexB].flags();
+        outCache.pointEffectiveMass0 = ComputePointEffectiveMass(jc.invMassA(), jc.invMassB(), jc.invIA, jc.invIB, jc.rA0(), jc.rB0(), flagsA, flagsB);
+    }
+}
+
+Mat3 ResolveJointPointEffectiveMass(
+    in JointConstraint jc,
+    in JointConstraintStepCache cache,
+    in f32 invMassA,
+    in f32 invMassB,
+    in VectorSingle rA,
+    in VectorSingle rB,
+    in u32 flagsA,
+    in u32 flagsB,
+    in b8 zeroDeltaRot
+){
+    if(zeroDeltaRot)
+        return cache.pointEffectiveMass0;
+    return ComputePointEffectiveMass(invMassA, invMassB, jc.invIA, jc.invIB, rA, rB, flagsA, flagsB);
+}
+
+void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstraint jc, in JointConstraintStepCache cache, in f32 h, in b8 useBias){
     BodyState stateA;
     BodyState stateB;
     if(jc.indexA != s_NullIndex)
@@ -637,11 +682,17 @@ void SolveJointConstraint(mut Vector<BodyState> states, mut JointConstraint jc, 
 
     const f32 invMassA = jc.invMassA();
     const f32 invMassB = jc.invMassB();
-    const VectorSingle rA = Vector3Rotate(jc.rA0(), VectorSingle(stateA.deltaRotation));
-    const VectorSingle rB = Vector3Rotate(jc.rB0(), VectorSingle(stateB.deltaRotation));
+    const VectorSingle deltaRotA = VectorSingle(stateA.deltaRotation);
+    const VectorSingle deltaRotB = VectorSingle(stateB.deltaRotation);
+    const b8 zeroDeltaRot =
+        (deltaRotA.x * deltaRotA.x + deltaRotA.y * deltaRotA.y + deltaRotA.z * deltaRotA.z) <= 1.0e-12f
+        && (deltaRotB.x * deltaRotB.x + deltaRotB.y * deltaRotB.y + deltaRotB.z * deltaRotB.z) <= 1.0e-12f
+    ;
+    const VectorSingle rA = Vector3Rotate(jc.rA0(), deltaRotA);
+    const VectorSingle rB = Vector3Rotate(jc.rB0(), deltaRotB);
     const VectorSingle d = jc.baseCenterDelta() + stateB.deltaPosition() - stateA.deltaPosition() + rB - rA;
-    const VectorSingle qA = SafeNormalizeQuat(QuaternionMultiply(VectorSingle(stateA.deltaRotation), VectorSingle(jc.qA0)));
-    const VectorSingle qB = SafeNormalizeQuat(QuaternionMultiply(VectorSingle(stateB.deltaRotation), VectorSingle(jc.qB0)));
+    const VectorSingle qA = SafeNormalizeQuat(QuaternionMultiply(deltaRotA, VectorSingle(jc.qA0)));
+    const VectorSingle qB = SafeNormalizeQuat(QuaternionMultiply(deltaRotB, VectorSingle(jc.qB0)));
 
     if(jc.type == JointType::Distance){
         const f32 dist = Vector3Length(VectorSingle(d, 0.0f)).x;
@@ -725,7 +776,7 @@ void SolveJointConstraint(mut Vector<BodyState> states, mut JointConstraint jc, 
     }
     else if(jc.type == JointType::Spherical){
         if(!jc.isSpring() || useBias){
-            const Mat3 kInv = ComputePointEffectiveMass(invMassA, invMassB, jc.invIA, jc.invIB, rA, rB, flagsA, flagsB);
+            const Mat3 kInv = ResolveJointPointEffectiveMass(jc, cache, invMassA, invMassB, rA, rB, flagsA, flagsB, zeroDeltaRot);
             const VectorSingle dv = (vB + Cross(wB, rB)) - (vA + Cross(wA, rA));
             VectorSingle bias(0.0f);
             f32 mScale = 1.0f;
@@ -747,7 +798,7 @@ void SolveJointConstraint(mut Vector<BodyState> states, mut JointConstraint jc, 
         if(jc.enableLimit()){
             const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(jc.localAxisA(), qA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
             const VectorSingle axisB = SafeNormalizeVec3(Vector3Rotate(jc.localAxisB(), qB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-            const SymMat3 sumInvI = AddSymMat3(jc.invIA, jc.invIB);
+            in SymMat3 sumInvI = cache.sumInvI;
 
             if(jc.swingLimit > 0.0f){
                 const f32 swingAngle = ACos(Clamp(Vector3Dot(axisA, axisB).x, -1.0f, 1.0f));
@@ -861,7 +912,7 @@ void SolveJointConstraint(mut Vector<BodyState> states, mut JointConstraint jc, 
     }
     else if(jc.type == JointType::Fixed){
         if(!jc.isSpring() || useBias){
-            const Mat3 kInv = ComputePointEffectiveMass(invMassA, invMassB, jc.invIA, jc.invIB, rA, rB, flagsA, flagsB);
+            const Mat3 kInv = ResolveJointPointEffectiveMass(jc, cache, invMassA, invMassB, rA, rB, flagsA, flagsB, zeroDeltaRot);
             const VectorSingle dv = (vB + Cross(wB, rB)) - (vA + Cross(wA, rA));
             VectorSingle bias(0.0f);
             f32 mScale = 1.0f;
@@ -884,6 +935,7 @@ void SolveJointConstraint(mut Vector<BodyState> states, mut JointConstraint jc, 
         Solve3DAngularLockRow(
             jc.invIA,
             jc.invIB,
+            cache.kAngInv,
             qA,
             qB,
             VectorSingle(jc.referenceRotation),
@@ -899,7 +951,7 @@ void SolveJointConstraint(mut Vector<BodyState> states, mut JointConstraint jc, 
     }
     else if(jc.type == JointType::Revolute){
         if(!jc.isSpring() || useBias){
-            const Mat3 kInv = ComputePointEffectiveMass(invMassA, invMassB, jc.invIA, jc.invIB, rA, rB, flagsA, flagsB);
+            const Mat3 kInv = ResolveJointPointEffectiveMass(jc, cache, invMassA, invMassB, rA, rB, flagsA, flagsB, zeroDeltaRot);
             const VectorSingle dv = (vB + Cross(wB, rB)) - (vA + Cross(wA, rA));
             VectorSingle bias(0.0f);
             f32 mScale = 1.0f;
@@ -930,7 +982,7 @@ void SolveJointConstraint(mut Vector<BodyState> states, mut JointConstraint jc, 
 
         f32 e1 = Vector3Dot(crossAB, u1).x;
         f32 e2 = Vector3Dot(crossAB, u2).x;
-        const SymMat3 sumInvI = AddSymMat3(jc.invIA, jc.invIB);
+        in SymMat3 sumInvI = cache.sumInvI;
         const VectorSingle su1 = MulSymMat3Vec(sumInvI, u1);
         const VectorSingle su2 = MulSymMat3Vec(sumInvI, u2);
         const f32 m00 = Vector3Dot(u1, su1).x;
@@ -1097,6 +1149,7 @@ void SolveJointConstraint(mut Vector<BodyState> states, mut JointConstraint jc, 
         Solve3DAngularLockRow(
             jc.invIA,
             jc.invIB,
+            cache.kAngInv,
             qA,
             qB,
             VectorSingle(jc.referenceRotation),
@@ -1175,7 +1228,7 @@ void SolveJointConstraint(mut Vector<BodyState> states, mut JointConstraint jc, 
         const VectorSingle linTarget = Vector3Rotate(jc.linearOffset(), qA);
         const VectorSingle errLin = d - linTarget;
         const VectorSingle dv = (vB + Cross(wB, rB)) - (vA + Cross(wA, rA));
-        const Mat3 kInv = ComputePointEffectiveMass(invMassA, invMassB, jc.invIA, jc.invIB, rA, rB, flagsA, flagsB);
+        const Mat3 kInv = ResolveJointPointEffectiveMass(jc, cache, invMassA, invMassB, rA, rB, flagsA, flagsB, zeroDeltaRot);
         const f32 corrRate = jc.correctionFactor() / h;
         const VectorSingle linBias = errLin * corrRate;
 
@@ -1199,9 +1252,8 @@ void SolveJointConstraint(mut Vector<BodyState> states, mut JointConstraint jc, 
                 qErr = -qErr;
             const VectorSingle thetaErr = VectorSingle(qErr.x, qErr.y, qErr.z, 0.0f) * 2.0f;
             const VectorSingle angBias = thetaErr * corrRate;
-            const SymMat3 kAngInv = InvertSymMat3(AddSymMat3(jc.invIA, jc.invIB));
             const VectorSingle oldL = jc.angularImpulse();
-            const VectorSingle dL = MulSymMat3Vec(kAngInv, -(VectorSingle(wB - wA, 0.0f) + angBias));
+            const VectorSingle dL = MulSymMat3Vec(cache.kAngInv, -(VectorSingle(wB - wA, 0.0f) + angBias));
             VectorSingle newL = oldL + dL;
             const f32 maxL = jc.maxTorque * h;
             const f32 lenSq = Vector3LengthSq(VectorSingle(newL, 0.0f)).x;
@@ -1321,7 +1373,7 @@ void SolveJointConstraint(mut Vector<BodyState> states, mut JointConstraint jc, 
 
         const f32 e1 = Vector3Dot(crossAB, wU1).x;
         const f32 e2 = Vector3Dot(crossAB, wU2).x;
-        const SymMat3 sumInvI = AddSymMat3(jc.invIA, jc.invIB);
+        in SymMat3 sumInvI = cache.sumInvI;
         const VectorSingle su1 = MulSymMat3Vec(sumInvI, wU1);
         const VectorSingle su2 = MulSymMat3Vec(sumInvI, wU2);
         const f32 m00 = Vector3Dot(wU1, su1).x;
@@ -1403,6 +1455,12 @@ void SolveJointConstraint(mut Vector<BodyState> states, mut JointConstraint jc, 
         states[jc.indexB].linearVelocity = f32x4(ApplyLinearLocks(vB, flagsB), 0.0f);
         states[jc.indexB].angularVelocity = f32x4(ApplyAngularLocks(wB, flagsB), 0.0f);
     }
+}
+
+void SolveJointConstraint(mut Vector<BodyState> states, mut JointConstraint jc, in f32 h, in b8 useBias){
+    JointConstraintStepCache cache;
+    BuildJointConstraintStepCache(states, jc, cache);
+    SolveJointConstraintCached(states, jc, cache, h, useBias);
 }
 
 void StoreJointConstraintImpulses(in JointConstraint jc, in f32 invDt, mut Joint joint){

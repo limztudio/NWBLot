@@ -357,22 +357,12 @@ class PhysicsComponentBinaryCodec{
         hdr.userData = userData;
         AppendPOD(outPayload, hdr);
 
-        for(usize i = 0u; i < hullPoints.size(); ++i){
-            PhysicsVec4Binary v;
-            v.value = hullPoints[i];
-            AppendPOD(outPayload, v);
-        }
-        for(usize i = 0u; i < meshVertices.size(); ++i){
-            PhysicsVec4Binary v;
-            v.value = meshVertices[i];
-            AppendPOD(outPayload, v);
-        }
-        for(usize i = 0u; i < meshIndices.size(); ++i){
-            PhysicsU32Binary idx;
-            idx.value = meshIndices[i];
-            AppendPOD(outPayload, idx);
-        }
-        return true;
+        static_assert(size_of<PhysicsVec4Binary>() == size_of<f32x4>() && size_of<PhysicsU32Binary>() == size_of<u32>());
+        return
+            AppendBinaryVectorPayload(outPayload, hullPoints).has_value()
+            && AppendBinaryVectorPayload(outPayload, meshVertices).has_value()
+            && AppendBinaryVectorPayload(outPayload, meshIndices).has_value()
+        ;
     }
 
     private b8 serializeColliderEntry(in ColliderShapeEntry e, mut Vector<u8> outPayload)const{
@@ -476,30 +466,13 @@ class PhysicsComponentBinaryCodec{
         outUserData = hdr.userData;
         outMeshAsset.virtualPath = Name(hdr.meshAssetHash);
 
-        outHullPoints.clear();
-        outHullPoints.reserve(hdr.hullPointCount);
-        for(u32 i = 0u; i < hdr.hullPointCount; ++i){
-            const Expected<PhysicsVec4Binary> v = ReadPOD<PhysicsVec4Binary>(payload, inOutCursor);
-            if(!v.has_value())
-                return false;
-            outHullPoints.push_back(v.value().value);
-        }
-        outMeshVertices.clear();
-        outMeshVertices.reserve(hdr.meshVertexCount);
-        for(u32 i = 0u; i < hdr.meshVertexCount; ++i){
-            const Expected<PhysicsVec4Binary> v = ReadPOD<PhysicsVec4Binary>(payload, inOutCursor);
-            if(!v.has_value())
-                return false;
-            outMeshVertices.push_back(v.value().value);
-        }
-        outMeshIndices.clear();
-        outMeshIndices.reserve(hdr.meshIndexCount);
-        for(u32 i = 0u; i < hdr.meshIndexCount; ++i){
-            const Expected<PhysicsU32Binary> idx = ReadPOD<PhysicsU32Binary>(payload, inOutCursor);
-            if(!idx.has_value())
-                return false;
-            outMeshIndices.push_back(idx.value().value);
-        }
+        static_assert(size_of<PhysicsVec4Binary>() == size_of<f32x4>() && size_of<PhysicsU32Binary>() == size_of<u32>());
+        if(
+            !ReadBinaryVectorPayload(payload, hdr.hullPointCount, inOutCursor, outHullPoints).has_value()
+            || !ReadBinaryVectorPayload(payload, hdr.meshVertexCount, inOutCursor, outMeshVertices).has_value()
+            || !ReadBinaryVectorPayload(payload, hdr.meshIndexCount, inOutCursor, outMeshIndices).has_value()
+        )
+            return false;
 
         return this.validColliderEntryFields(outShapeType, outCenter, outCenter2, outHalfExtents, outLocalRotation, outRadius, outSkinRadius, outDensity, outFriction, outRestitution, outRollingResistance, outTangentSpeed, outIsBox, outHullPoints, outMeshVertices, outMeshIndices, outMeshAsset);
     }

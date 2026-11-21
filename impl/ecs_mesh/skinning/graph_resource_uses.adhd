@@ -62,6 +62,12 @@ class SkinningResourceUseCollector<const usize Capacity>{
         return this.m_count == 0u;
     }
 
+    public void clear(){
+        this.m_count = 0u;
+        if(this.m_index.has_value())
+            this.m_index.value().clear();
+    }
+
     public b8 add(in GpuGraphResourceId resource, in ResourceStates state, in GpuTaskResourceAccess access){
         if(!resource.valid())
             return false;
@@ -113,13 +119,33 @@ class SkinningResourceUseCollector<const usize Capacity>{
     private b8 promoteIndex(){
         this.m_index = Optional<SkinningResourceUseIndex>(SkinningResourceUseIndex());
         this.m_index.value().reserve(ComputePromotedSkinningResourceUseCapacity(Capacity, s_SkinningPromotedIndexCapacityFactor));
-        for(in SkinningResourceUseEntry entry : this.m_inline){
+        for(usize index = 0u; index < this.m_count; ++index){
+            in SkinningResourceUseEntry entry = this.m_inline[index];
             if(!this.m_index.value().try_emplace(SkinningResourceKey(entry.resource), entry.useInfo).second){
                 assert(false);
                 return false;
             }
         }
         return true;
+    }
+}
+
+class MeshSkinningGraphResourceUseScratch{
+    public MeshSkinningGraphResourceUses uses;
+    public SkinningResourceUseCollector<s_SkinningDeformationUseCapacity> deformation;
+    public SkinningResourceUseCollector<s_SkinningPostDispatchUseCapacity> postDispatch;
+    public SkinningResourceUseCollector<s_SkinningLocalBoundsUseCapacity> localBounds;
+    public SkinningResourceUseCollector<s_SkinningFinalizerUseCapacity> finalizer;
+
+    public void clear(){
+        this.uses.deformation.clear();
+        this.uses.postDispatch.clear();
+        this.uses.localBounds.clear();
+        this.uses.finalizer.clear();
+        this.deformation.clear();
+        this.postDispatch.clear();
+        this.localBounds.clear();
+        this.finalizer.clear();
     }
 }
 
@@ -178,19 +204,19 @@ GpuTaskResourceUse MakeSkinningResourceUse(in GpuGraphResourceId resource, in Sk
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(in Span<MeshSkinningGraphDispatchPlan> plans){
-    MeshSkinningGraphResourceUses uses = MeshSkinningGraphResourceUses();
+b8 BuildMeshSkinningGraphResourceUsesInto(in Span<MeshSkinningGraphDispatchPlan> plans, mut MeshSkinningGraphResourceUseScratch scratch){
+    scratch.clear();
     if(plans.empty())
-        return uses;
+        return true;
     if(!plans.data()){
         ReportSkinningGraphResourceUseError(SkinningGraphResourceUseError::MissingPlans);
-        return MakeUnexpected(Failure());
+        return false;
     }
 
-    SkinningResourceUseCollector<s_SkinningDeformationUseCapacity> deformation = SkinningResourceUseCollector<s_SkinningDeformationUseCapacity>();
-    SkinningResourceUseCollector<s_SkinningPostDispatchUseCapacity> postDispatch = SkinningResourceUseCollector<s_SkinningPostDispatchUseCapacity>();
-    SkinningResourceUseCollector<s_SkinningLocalBoundsUseCapacity> localBounds = SkinningResourceUseCollector<s_SkinningLocalBoundsUseCapacity>();
-    SkinningResourceUseCollector<s_SkinningFinalizerUseCapacity> finalizer = SkinningResourceUseCollector<s_SkinningFinalizerUseCapacity>();
+    mut SkinningResourceUseCollector<s_SkinningDeformationUseCapacity> deformation = scratch.deformation;
+    mut SkinningResourceUseCollector<s_SkinningPostDispatchUseCapacity> postDispatch = scratch.postDispatch;
+    mut SkinningResourceUseCollector<s_SkinningLocalBoundsUseCapacity> localBounds = scratch.localBounds;
+    mut SkinningResourceUseCollector<s_SkinningFinalizerUseCapacity> finalizer = scratch.finalizer;
     for(in MeshSkinningGraphDispatchPlan plan : plans){
         if(!plan.hasActiveSkin)
             continue;
@@ -210,7 +236,7 @@ Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(in Sp
             || !deformation.add(plan.jointPaletteResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read)
         ){
             ReportSkinningGraphResourceUseError(SkinningGraphResourceUseError::DeformationUsesFailed);
-            return MakeUnexpected(Failure());
+            return false;
         }
     }
 
@@ -231,7 +257,7 @@ Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(in Sp
             ))
         ){
             ReportSkinningGraphResourceUseError(SkinningGraphResourceUseError::PostDispatchUsesFailed);
-            return MakeUnexpected(Failure());
+            return false;
         }
     }
 
@@ -244,7 +270,7 @@ Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(in Sp
             || !localBounds.add(plan.localBoundsResource, ResourceStates::UnorderedAccess, GpuTaskResourceAccess::Write)
         ){
             ReportSkinningGraphResourceUseError(SkinningGraphResourceUseError::LocalBoundsUsesFailed);
-            return MakeUnexpected(Failure());
+            return false;
         }
     }
 
@@ -262,19 +288,26 @@ Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(in Sp
             || (plan.repacksNormals && !finalizer.add(plan.attributeResource, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read))
         ){
             ReportSkinningGraphResourceUseError(SkinningGraphResourceUseError::FinalizerUsesFailed);
-            return MakeUnexpected(Failure());
+            return false;
         }
     }
     if(finalizer.empty()){
         ReportSkinningGraphResourceUseError(SkinningGraphResourceUseError::MissingFinalState);
-        return MakeUnexpected(Failure());
+        return false;
     }
 
-    deformation.writeTo(uses.deformation);
-    postDispatch.writeTo(uses.postDispatch);
-    localBounds.writeTo(uses.localBounds);
-    finalizer.writeTo(uses.finalizer);
-    return uses;
+    deformation.writeTo(scratch.uses.deformation);
+    postDispatch.writeTo(scratch.uses.postDispatch);
+    localBounds.writeTo(scratch.uses.localBounds);
+    finalizer.writeTo(scratch.uses.finalizer);
+    return true;
+}
+
+Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(in Span<MeshSkinningGraphDispatchPlan> plans){
+    MeshSkinningGraphResourceUseScratch scratch;
+    if(!BuildMeshSkinningGraphResourceUsesInto(plans, scratch))
+        return MakeUnexpected(Failure());
+    return scratch.uses;
 }
 
 

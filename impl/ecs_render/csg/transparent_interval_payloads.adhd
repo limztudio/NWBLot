@@ -43,6 +43,30 @@ class TransparentCsgIntervalGraphSnapshot{
     }
 }
 
+class TransparentCsgComputeIntervalSnapshot{
+    public CsgFrameGpuData frameData;
+    public usize instanceCount = 0u;
+    public usize materialTypedByteCount = 0u;
+    public b8 hasReceiverSurfaceDrawItems = false;
+    public b8 receiverSurfaceDrawResourcesReady = false;
+    public b8 captured = false;
+
+    public void capture(in CsgFrameGpuDataView frame, in usize instances, in usize materialBytes, in b8 hasReceiverDraws, in b8 receiverDrawsReady){
+        AssignVector(this.frameData.receiverRanges, frame.receiverRanges);
+        AssignVector(this.frameData.cutters, frame.cutters);
+        this.frameData.workRegion = frame.workRegion;
+        this.instanceCount = instances;
+        this.materialTypedByteCount = materialBytes;
+        this.hasReceiverSurfaceDrawItems = hasReceiverDraws;
+        this.receiverSurfaceDrawResourcesReady = receiverDrawsReady;
+        this.captured = true;
+    }
+
+    public CsgFrameGpuDataView csgFrameDataView()const{
+        return CsgFrameGpuDataView(this.frameData);
+    }
+}
+
 
 [modular]
 class AvboitPreGraphTaskPayload{
@@ -94,7 +118,7 @@ class TransparentCsgIntervalRecordInputs{
     public mut Optional<GpuTimingMeasure> transparentCsgIntervalsTiming;
     public MeshFrameBindingSnapshot frameBindings;
     public CsgGraphResourceSnapshot csgResources;
-    public TransparentCsgIntervalGraphSnapshot transparentCsgSnapshot;
+    public TransparentCsgComputeIntervalSnapshot transparentCsgSnapshot;
     public b8 csgFrameBuffersUploaded = false;
 
     public TransparentCsgIntervalRecordInputs(

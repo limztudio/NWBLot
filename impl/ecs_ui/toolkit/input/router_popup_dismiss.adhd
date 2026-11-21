@@ -22,6 +22,10 @@ void InstallRouterPopups(
     mut u64 inOutFocusDeclaration,
     mut ControlToken inOutFocusControl
 ){
+    if(stagedPopups.empty() && popups.empty()){
+        popupDismissals.clear();
+        return;
+    }
     usize keptDismissals = 0u;
     for(usize index = 0u; index < popupDismissals.size(); ++index){
         b8 retained = false;

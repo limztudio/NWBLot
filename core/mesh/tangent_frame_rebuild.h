@@ -102,8 +102,9 @@ static_assert(alignof(Expected<TangentFrameDirections64>) >= alignof(TangentFram
     const SIMDVectorDouble dv1 = VectorDoubleSplatY(uvDelta1);
     const SIMDVectorDouble du2 = VectorDoubleSplatX(uvDelta2);
     const SIMDVectorDouble dv2 = VectorDoubleSplatY(uvDelta2);
-    const SIMDVectorDouble tangent = VectorDoubleDivide(VectorDoubleSubtract(VectorDoubleMultiply(edge01, dv2), VectorDoubleMultiply(edge02, dv1)), determinantVector);
-    const SIMDVectorDouble bitangent = VectorDoubleDivide(VectorDoubleSubtract(VectorDoubleMultiply(edge02, du1), VectorDoubleMultiply(edge01, du2)), determinantVector);
+    const SIMDVectorDouble invDeterminant = VectorDoubleDivide(VectorDoubleReplicate(1.0), determinantVector);
+    const SIMDVectorDouble tangent = VectorDoubleMultiply(VectorDoubleSubtract(VectorDoubleMultiply(edge01, dv2), VectorDoubleMultiply(edge02, dv1)), invDeterminant);
+    const SIMDVectorDouble bitangent = VectorDoubleMultiply(VectorDoubleSubtract(VectorDoubleMultiply(edge02, du1), VectorDoubleMultiply(edge01, du2)), invDeterminant);
     const SIMDVectorDouble tangentLengthSq = VectorDouble3LengthSq(tangent);
     const SIMDVectorDouble bitangentLengthSq = VectorDouble3LengthSq(bitangent);
     if(
@@ -175,13 +176,15 @@ template<typename ScratchArenaT>
         const SIMDVectorSingle p0 = LoadFloat(vertex0.position);
         const SIMDVectorSingle p1 = LoadFloat(vertex1.position);
         const SIMDVectorSingle p2 = LoadFloat(vertex2.position);
-        const SIMDVectorDouble p0d = VectorDoubleAndInt(ConvertVectorSingleToDouble(p0), s_DoubleSIMDMask3);
-        const SIMDVectorDouble edge01 = VectorDoubleSubtract(VectorDoubleAndInt(ConvertVectorSingleToDouble(p1), s_DoubleSIMDMask3), p0d);
-        const SIMDVectorDouble edge02 = VectorDoubleSubtract(VectorDoubleAndInt(ConvertVectorSingleToDouble(p2), s_DoubleSIMDMask3), p0d);
+        const SIMDVectorDouble p0d = ConvertVectorSingleToDouble(VectorAndInt(p0, s_SIMDMask3));
+        const SIMDVectorDouble edge01 = VectorDoubleSubtract(ConvertVectorSingleToDouble(VectorAndInt(p1, s_SIMDMask3)), p0d);
+        const SIMDVectorDouble edge02 = VectorDoubleSubtract(ConvertVectorSingleToDouble(VectorAndInt(p2, s_SIMDMask3)), p0d);
         const SIMDVectorDouble uv0 = ConvertVectorSingleToDouble(LoadFloat(vertex0.uv0));
         const SIMDVectorDouble uv1 = ConvertVectorSingleToDouble(LoadFloat(vertex1.uv0));
         const SIMDVectorDouble uv2 = ConvertVectorSingleToDouble(LoadFloat(vertex2.uv0));
-        const SIMDVectorDouble faceNormal = BuildTriangleAreaNormal64(p0, p1, p2);
+        const SIMDVectorDouble facePositive = VectorDoubleMultiply(VectorDoubleSwizzle<1, 2, 0, 3>(edge01), VectorDoubleSwizzle<2, 0, 1, 3>(edge02));
+        const SIMDVectorDouble faceNegative = VectorDoubleMultiply(VectorDoubleSwizzle<2, 0, 1, 3>(edge01), VectorDoubleSwizzle<1, 2, 0, 3>(edge02));
+        const SIMDVectorDouble faceNormal = VectorDoubleAndInt(VectorDoubleSubtract(facePositive, faceNegative), s_DoubleSIMDMask3);
         const SIMDVectorDouble areaLengthSq = TriangleAreaNormalLengthSquared(faceNormal);
         if(!VectorDoubleIsFinite(areaLengthSq, VectorDoubleComponentMask::s_DoubleXYZW) || !(VectorDoubleGetX(areaLengthSq) > minimumTriangleAreaLengthSquared))
             return MakeUnexpected(Failure{});
@@ -212,9 +215,10 @@ template<typename ScratchArenaT>
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
         TangentFrameRebuildVertex& vertex = vertices[vertexIndex];
         const TangentFrameRebuildDetail::TangentFrameAccumulator& accumulator = accumulators[vertexIndex];
-        const SIMDVectorSingle previousNormal = FrameNormalizeDirection(LoadFloat(vertex.normal), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
         const auto normalizedNormal = VectorDouble3TryNormalize(LoadDouble(accumulator.normal));
-        const SIMDVectorSingle normal = normalizedNormal ? ConvertVectorDoubleToSingle(normalizedNormal->value) : previousNormal;
+        const SIMDVectorSingle normal = normalizedNormal
+            ? ConvertVectorDoubleToSingle(normalizedNormal->value)
+            : FrameNormalizeDirection(LoadFloat(vertex.normal), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
         if(!FrameValidDirection(normal))
             return MakeUnexpected(Failure{});
 

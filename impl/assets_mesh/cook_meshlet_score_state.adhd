@@ -53,6 +53,7 @@ void ResetMeshletScoreState(mut MeshletScoreState state){
     state.centroidSum = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
     state.normalSum = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
     state.normalAxis = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    state.activeUnitNormalCount = 0u;
     state.primitiveCount = 0u;
     state.radius = 0.0f;
     state.coneCutoff = -1.0f;
@@ -118,18 +119,53 @@ Expected<f32> TryComputeMeshletScoreConeCutoffFromCalculations(
     return coneCutoff;
 }
 
-f32 PredictMeshletScoreConeWideningFromCalculations(
-    in Span<MeshletTriangleCalculation> triangleCalculations,
-    in Span<u32> triangleIndices,
+f32 MeshletScoreNormalCoherenceFromUnitNormal(in MeshletScoreState state, in VectorSingle candidateUnitNormal, in b8 candidateHasValidNormal){
+    const VectorSingle stateAxis(state.normalAxis);
+    if(!candidateHasValidNormal || !IsValidMeshletDirection3(stateAxis))
+        return 0.0f;
+    return Dot(stateAxis.xyz, candidateUnitNormal.xyz);
+}
+
+Expected<f32> TryComputeMeshletScoreConeCutoffFromActiveNormals(
     in MeshletScoreState state,
-    in u32 triangleIndex,
-    in VectorSingle triangleAreaNormal
+    in VectorSingle axis,
+    in VectorSingle extraUnitNormal,
+    in b8 hasExtraValidNormal
+){
+    if(!IsValidMeshletDirection3(axis))
+        return MakeUnexpected(Failure());
+
+    const u32 activeCount = state.activeUnitNormalCount;
+    if(activeCount == 0u && !hasExtraValidNormal)
+        return MakeUnexpected(Failure());
+
+    VectorSingle minDot(1.0f);
+    for(u32 i = 0u; i < activeCount; ++i)
+        minDot = Min(minDot, Vector3Dot(axis, VectorSingle(state.activeUnitNormals[cast<usize>(i)])));
+    if(hasExtraValidNormal)
+        minDot = Min(minDot, Vector3Dot(axis, extraUnitNormal));
+
+    const f32 coneCutoff = minDot.x;
+    if(!(coneCutoff > 0.0f))
+        return MakeUnexpected(Failure());
+
+    return coneCutoff;
+}
+
+f32 PredictMeshletScoreConeWideningFromActiveNormals(
+    in MeshletScoreState state,
+    in MeshletTriangleCalculation triangleCalculation
 ){
     if(!state.coneEnabled)
         return 0.0f;
 
-    const VectorSingle predictedAxis = NormalizeMeshletDirection3OrZero(VectorSingle(state.normalSum) + triangleAreaNormal);
-    const Expected<f32> predictedCutoff = TryComputeMeshletScoreConeCutoffFromCalculations(triangleCalculations, triangleIndices, predictedAxis, triangleIndex, true);
+    const VectorSingle predictedAxis = NormalizeMeshletDirection3OrZero(VectorSingle(state.normalSum) + VectorSingle(triangleCalculation.areaNormal));
+    const Expected<f32> predictedCutoff = TryComputeMeshletScoreConeCutoffFromActiveNormals(
+        state,
+        predictedAxis,
+        VectorSingle(triangleCalculation.unitNormal),
+        triangleCalculation.hasValidNormal
+    );
     if(!predictedCutoff.has_value())
         return 1.0f;
 
@@ -139,7 +175,6 @@ f32 PredictMeshletScoreConeWideningFromCalculations(
 
 f32 ScoreMeshletCandidateFromCalculations(
     in Span<MeshletTriangleCalculation> triangleCalculations,
-    in Span<u32> triangleIndices,
     in MeshletScoreState state,
     in u32 triangleIndex,
     in u32 sharedVertexCount,
@@ -147,19 +182,17 @@ f32 ScoreMeshletCandidateFromCalculations(
     in b8 disconnected
 ){
     const MeshletTriangleCalculation triangleCalculation = triangleCalculations[cast<usize>(triangleIndex)];
-    const VectorSingle areaNormal(triangleCalculation.areaNormal);
     const f32 predictedRadius = PredictMeshletScoreRadiusFromCalculation(state, triangleCalculation);
     const VectorSingle radiusGrowth = VectorSingle(predictedRadius) - VectorSingle(state.radius);
     const f32 predictedRadiusGrowth = VectorSelect(VectorSingle(0.0f), radiusGrowth, VectorGreater(radiusGrowth, VectorSingle(0.0f))).x;
     const f32 centroidDistance = MeshletScoreCentroidDistance(state, VectorSingle(triangleCalculation.centroid));
-    const f32 normalCoherence = MeshletScoreNormalCoherence(state, areaNormal);
-    const f32 coneWidening = PredictMeshletScoreConeWideningFromCalculations(triangleCalculations, triangleIndices, state, triangleIndex, areaNormal);
+    const f32 normalCoherence = MeshletScoreNormalCoherenceFromUnitNormal(state, VectorSingle(triangleCalculation.unitNormal), triangleCalculation.hasValidNormal);
+    const f32 coneWidening = PredictMeshletScoreConeWideningFromActiveNormals(state, triangleCalculation);
     return EvaluateMeshletCandidateScore(sharedVertexCount, missingVertexCount, predictedRadiusGrowth, centroidDistance, normalCoherence, coneWidening, disconnected);
 }
 
 void AddMeshletTriangleToScoreStateFromCalculations(
     in Span<MeshletTriangleCalculation> triangleCalculations,
-    in Span<u32> triangleIndices,
     in u32 triangleIndex,
     mut MeshletScoreState state
 ){
@@ -182,8 +215,12 @@ void AddMeshletTriangleToScoreStateFromCalculations(
     state.normalSum = f32x4(normalSum);
     const VectorSingle normalAxis = NormalizeMeshletDirection3OrZero(normalSum);
     state.normalAxis = f32x4(normalAxis);
+    if(triangleCalculation.hasValidNormal){
+        state.activeUnitNormals[cast<usize>(state.activeUnitNormalCount)] = triangleCalculation.unitNormal;
+        ++state.activeUnitNormalCount;
+    }
     ++state.primitiveCount;
-    const Expected<f32> coneCutoff = TryComputeMeshletScoreConeCutoffFromCalculations(triangleCalculations, triangleIndices, normalAxis, 0u, false);
+    const Expected<f32> coneCutoff = TryComputeMeshletScoreConeCutoffFromActiveNormals(state, normalAxis, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), false);
     state.coneEnabled = coneCutoff.has_value();
     if(coneCutoff.has_value())
         state.coneCutoff = coneCutoff.value();

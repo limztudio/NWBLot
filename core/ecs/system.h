@@ -109,13 +109,14 @@ private:
 class SystemScheduler{
 private:
     using SystemList = Vector<NotNull<ISystem*>, Alloc::GlobalArena>;
-    using DependencyList = Vector<usize, Alloc::GlobalArena>;
+    using DependencyOffsetList = Vector<usize, Alloc::GlobalArena>;
+    using DependencyIndexList = Vector<usize, Alloc::GlobalArena>;
 
 
 public:
     explicit SystemScheduler(Alloc::GlobalArena& arena)noexcept
-        : m_arena(arena)
-        , m_dependencies(arena)
+        : m_dependencyOffsets(arena)
+        , m_dependencyIndices(arena)
         , m_allSystems(arena)
         , m_executionHandles(arena)
         , m_executionDependencies(arena)
@@ -134,9 +135,8 @@ public:
 
 
 private:
-    Alloc::GlobalArena& m_arena;
-
-    Vector<DependencyList, Alloc::GlobalArena> m_dependencies;
+    DependencyOffsetList m_dependencyOffsets;
+    DependencyIndexList m_dependencyIndices;
     SystemList m_allSystems;
     Vector<CpuTaskScheduler::TaskHandle, Alloc::GlobalArena> m_executionHandles;
     Vector<CpuTaskScheduler::TaskHandle, Alloc::GlobalArena> m_executionDependencies;

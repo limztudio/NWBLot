@@ -74,6 +74,38 @@ void AppendReceiverCutters(in CsgShadowReceiverInput receiver, in CsgReceiverDra
     const VectorSingle receiverMax = VectorSingle(receiver.worldMax);
     const b8 boundsCanCull = receiver.boundsValid && AabbValid(receiverMin, receiverMax);
     range.firstCutter = cast<u32>(snapshot.cutters.size());
+    if(receiverLookup.hasPrecomputedCutters()){
+        for(in CsgPrecomputedCutter cutter : receiverLookup.precomputedReceiverCutters(drawState)){
+            if(!cutter.valid || !cutter.boundsResolved)
+                continue;
+            if(boundsCanCull && cutter.finiteBounds && !AabbIntersects(receiverMin, receiverMax, VectorSingle(cutter.boundsMin), VectorSingle(cutter.boundsMax)))
+                continue;
+
+            const MatrixSingle shapeToWorld = MatrixSingle(cutter.shapeToWorld);
+            const MatrixSingle worldToShape = MatrixSingle(cutter.worldToShape);
+            const Span<u8> parameters(cutter.parameterBytes);
+            CsgSnapshotIdentityBuilder().updateShadowCutterSnapshotHashes(
+                cutter.entity,
+                cutter.shapeType,
+                worldToShape,
+                shapeToWorld,
+                parameters,
+                snapshot.contentIdentity,
+                snapshot.identity
+            );
+            AppendShadowCutterRecord(
+                cutter.hasShaderModule,
+                cutter.shapeName,
+                worldToShape,
+                shapeToWorld,
+                parameters,
+                range,
+                snapshot.cutters
+            );
+        }
+        FinalizeShadowReceiverCuttersRange(range, snapshot.cutters);
+        return;
+    }
     for(in auto record : receiverLookup.receiverCutters(drawState)){
         assert(record.has_value());
         if(!record.has_value())
@@ -128,7 +160,7 @@ b8 BuildCsgShadowSnapshot(in CsgShapeRegistry shapeRegistry, in Span<CsgShadowRe
     if(receiverCount == 0u || !HasCsgFrameCandidates(world))
         return true;
 
-    const CsgFrameReceiverLookup receiverLookup(world);
+    CsgFrameReceiverLookup receiverLookup(world);
     if(receiverLookup.empty())
         return true;
     Vector<CsgReceiverDrawState> drawStates;
@@ -147,6 +179,7 @@ b8 BuildCsgShadowSnapshot(in CsgShapeRegistry shapeRegistry, in Span<CsgShadowRe
         return true;
     if(cutterCapacity > cast<usize>(u32.max))
         return false;
+    receiverLookup.precomputeCutters(shapeRegistry);
 
     outSnapshot.receiverRanges.resize(receiverCount);
     outSnapshot.cutters.reserve(cutterCapacity);

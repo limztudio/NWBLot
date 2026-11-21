@@ -6,6 +6,7 @@
 #include "framebuffer_rendering_preparation.h"
 #include "arena_names.h"
 #include "command_validation.h"
+#include "state_tracking_detail.h"
 #include "vulkan_viewport_policy.h"
 
 #include <core/common/log.h>
@@ -60,34 +61,100 @@ void CopyVertexBufferBindingsCompact(FixedVector<VertexBufferBinding, s_MaxVerte
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace VulkanDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void SetGraphicsDynamicState(const VolkDeviceTable& deviceDispatch, VkCommandBuffer commandBuffer, const GraphicsPipelineDesc& desc, const GraphicsState& state){
-    const RasterState& rasterState = desc.renderState.rasterState;
-    const DepthStencilState& depthStencilState = desc.renderState.depthStencilState;
-
-    deviceDispatch.vkCmdSetLineWidth(commandBuffer, s_DefaultRasterLineWidth);
-    deviceDispatch.vkCmdSetDepthBias(commandBuffer, static_cast<f32>(rasterState.depthBias), rasterState.depthBiasClamp, rasterState.slopeScaledDepthBias);
-
-    const Array<f32, 4> blendConstants = {{ state.blendConstantColor.r, state.blendConstantColor.g, state.blendConstantColor.b, state.blendConstantColor.a }};
-    deviceDispatch.vkCmdSetBlendConstants(commandBuffer, blendConstants.data());
-    deviceDispatch.vkCmdSetDepthBounds(commandBuffer, 0.f, 1.f);
-    deviceDispatch.vkCmdSetStencilCompareMask(commandBuffer, VK_STENCIL_FACE_FRONT_AND_BACK, depthStencilState.stencilReadMask);
-    deviceDispatch.vkCmdSetStencilWriteMask(commandBuffer, VK_STENCIL_FACE_FRONT_AND_BACK, depthStencilState.stencilWriteMask);
-
-    const u8 stencilRef = depthStencilState.dynamicStencilRef ? state.dynamicStencilRefValue : depthStencilState.stencilRefValue;
-    deviceDispatch.vkCmdSetStencilReference(commandBuffer, VK_STENCIL_FACE_FRONT_AND_BACK, stencilRef);
+void CommandList::bindVertexBuffersNative(const Span<const VertexBufferBinding> vertexBuffers)noexcept{
+    b8 alreadyAscending = true;
+    for(usize i = 1u; i < vertexBuffers.size(); ++i){
+        if(vertexBuffers[i].slot <= vertexBuffers[i - 1u].slot){
+            alreadyAscending = false;
+            break;
+        }
+    }
+    const auto emitBindings = [&](const VertexBufferBinding* const orderedData, const usize orderedCount)noexcept{
+        usize startIndex = 0u;
+        while(startIndex < orderedCount){
+            const u32 firstSlot = orderedData[startIndex].slot;
+            Array<VkBuffer, s_MaxVertexAttributes> nativeBuffers;
+            Array<VkDeviceSize, s_MaxVertexAttributes> offsets;
+            u32 count = 0u;
+            while(startIndex + count < orderedCount && orderedData[startIndex + count].slot == firstSlot + count){
+                nativeBuffers[count] = orderedData[startIndex + count].buffer->m_buffer;
+                offsets[count] = orderedData[startIndex + count].offset;
+                ++count;
+            }
+            m_context.deviceDispatch.vkCmdBindVertexBuffers(m_currentCmdBuf->m_cmdBuf, firstSlot, count, nativeBuffers.data(), offsets.data());
+            startIndex += count;
+        }
+    };
+    if(alreadyAscending){
+        emitBindings(vertexBuffers.data(), vertexBuffers.size());
+        return;
+    }
+    FixedVector<VertexBufferBinding, s_MaxVertexAttributes> sortedBindings;
+    sortedBindings.resize(vertexBuffers.size());
+    for(usize i = 0u; i < vertexBuffers.size(); ++i)
+        sortedBindings.data()[i] = vertexBuffers[i];
+    Sort(sortedBindings.begin(), sortedBindings.end(), [](const VertexBufferBinding& lhs, const VertexBufferBinding& rhs)noexcept{
+        return lhs.slot < rhs.slot;
+    });
+    emitBindings(sortedBindings.data(), sortedBindings.size());
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
+void CommandList::setGraphicsDynamicState(const GraphicsPipelineDesc& desc, const GraphicsState& state)noexcept{
+    const RasterState& rasterState = desc.renderState.rasterState;
+    const DepthStencilState& depthStencilState = desc.renderState.depthStencilState;
+    const VkCommandBuffer commandBuffer = m_currentCmdBuf->m_cmdBuf;
+    const f32 depthBiasConstant = static_cast<f32>(rasterState.depthBias);
+    const u8 stencilRef = depthStencilState.dynamicStencilRef ? state.dynamicStencilRefValue : depthStencilState.stencilRefValue;
+
+    if(!m_cachedDynamicGraphicsState.staticDefaultsBound){
+        m_context.deviceDispatch.vkCmdSetLineWidth(commandBuffer, s_DefaultRasterLineWidth);
+        m_context.deviceDispatch.vkCmdSetDepthBounds(commandBuffer, 0.f, 1.f);
+        m_cachedDynamicGraphicsState.staticDefaultsBound = true;
+    }
+    if(!m_cachedDynamicGraphicsState.valid || m_cachedDynamicGraphicsState.depthBiasConstant != depthBiasConstant || m_cachedDynamicGraphicsState.depthBiasClamp != rasterState.depthBiasClamp || m_cachedDynamicGraphicsState.depthBiasSlope != rasterState.slopeScaledDepthBias){
+        m_context.deviceDispatch.vkCmdSetDepthBias(commandBuffer, depthBiasConstant, rasterState.depthBiasClamp, rasterState.slopeScaledDepthBias);
+        m_cachedDynamicGraphicsState.depthBiasConstant = depthBiasConstant;
+        m_cachedDynamicGraphicsState.depthBiasClamp = rasterState.depthBiasClamp;
+        m_cachedDynamicGraphicsState.depthBiasSlope = rasterState.slopeScaledDepthBias;
+    }
+    if(!m_cachedDynamicGraphicsState.valid || !(m_cachedDynamicGraphicsState.blendConstantColor == state.blendConstantColor)){
+        const Array<f32, 4> blendConstants = {{ state.blendConstantColor.r, state.blendConstantColor.g, state.blendConstantColor.b, state.blendConstantColor.a }};
+        m_context.deviceDispatch.vkCmdSetBlendConstants(commandBuffer, blendConstants.data());
+        m_cachedDynamicGraphicsState.blendConstantColor = state.blendConstantColor;
+    }
+    if(!m_cachedDynamicGraphicsState.valid || m_cachedDynamicGraphicsState.stencilReadMask != depthStencilState.stencilReadMask){
+        m_context.deviceDispatch.vkCmdSetStencilCompareMask(commandBuffer, VK_STENCIL_FACE_FRONT_AND_BACK, depthStencilState.stencilReadMask);
+        m_cachedDynamicGraphicsState.stencilReadMask = depthStencilState.stencilReadMask;
+    }
+    if(!m_cachedDynamicGraphicsState.valid || m_cachedDynamicGraphicsState.stencilWriteMask != depthStencilState.stencilWriteMask){
+        m_context.deviceDispatch.vkCmdSetStencilWriteMask(commandBuffer, VK_STENCIL_FACE_FRONT_AND_BACK, depthStencilState.stencilWriteMask);
+        m_cachedDynamicGraphicsState.stencilWriteMask = depthStencilState.stencilWriteMask;
+    }
+    if(!m_cachedDynamicGraphicsState.valid || m_cachedDynamicGraphicsState.stencilRef != stencilRef){
+        m_context.deviceDispatch.vkCmdSetStencilReference(commandBuffer, VK_STENCIL_FACE_FRONT_AND_BACK, stencilRef);
+        m_cachedDynamicGraphicsState.stencilRef = stencilRef;
+    }
+    m_cachedDynamicGraphicsState.valid = true;
+}
+
+void CommandList::setGraphicsBlendConstantsIfChanged(const Color& blendConstantColor)noexcept{
+    if(!m_cachedDynamicGraphicsState.valid || !(m_cachedDynamicGraphicsState.blendConstantColor == blendConstantColor)){
+        const Array<f32, 4> blendConstants = {{ blendConstantColor.r, blendConstantColor.g, blendConstantColor.b, blendConstantColor.a }};
+        m_context.deviceDispatch.vkCmdSetBlendConstants(m_currentCmdBuf->m_cmdBuf, blendConstants.data());
+        m_cachedDynamicGraphicsState.blendConstantColor = blendConstantColor;
+    }
+}
+
+void CommandList::setGraphicsStencilReferenceIfChanged(const u8 stencilRef)noexcept{
+    if(!m_cachedDynamicGraphicsState.valid || m_cachedDynamicGraphicsState.stencilRef != stencilRef){
+        m_context.deviceDispatch.vkCmdSetStencilReference(m_currentCmdBuf->m_cmdBuf, VK_STENCIL_FACE_FRONT_AND_BACK, stencilRef);
+        m_cachedDynamicGraphicsState.stencilRef = stencilRef;
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -152,14 +219,13 @@ void CommandList::setGraphicsState(const GraphicsState& state){
     const b8 indirectParamsChanged = !hasPreviousGraphicsState || m_currentGraphicsState.indirectParams != state.indirectParams;
     const b8 vertexBuffersEqual = hasPreviousGraphicsState && __hidden_graphics_pipeline::VertexBufferBindingsEqual(m_currentGraphicsState.vertexBuffers, state.vertexBuffers);
 
-    if(
+    b8 canFastHandleBuffers = vertexBuffersEqual && !indexBufferChanged;
+    const b8 samePassFastEligible =
         hasPreviousGraphicsState
         && sameActiveRenderPass
         && sameFramebuffer
         && m_graphicsBuffersValidatedInPass
         && !state.shadingRateState.enabled
-        && vertexBuffersEqual
-        && !indexBufferChanged
         && !indirectParamsChanged
         && (
             !pipelineChanged
@@ -169,8 +235,102 @@ void CommandList::setGraphicsState(const GraphicsState& state){
                 && state.framebuffer->m_allAttachmentsExclusiveSharing
                 && !m_stateTracker.hasPermanentTextureStates()
             )
-        )
-    ){
+        );
+    b8 onlyVertexOffsetsChanged = false;
+    if(!canFastHandleBuffers && samePassFastEligible){
+        const auto bufferReadyNoBarrier = [&](Buffer* const buffer, const ResourceStates::Mask requiredState)noexcept -> b8{
+            if(!buffer || !buffer->m_managed || buffer->m_creationDesc.isVirtual || &buffer->m_context != &m_context || buffer->m_buffer == VK_NULL_HANDLE)
+                return false;
+            if(buffer->m_bufferInfo.sharingMode != VK_SHARING_MODE_CONCURRENT && !isBufferAdmittedToCommandQueue(*buffer))
+                return false;
+            if(!buffer->m_gpuReady.load(MemoryOrder::acquire))
+                return false;
+            const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(buffer);
+            if(permanentState != ResourceStates::Unknown)
+                return permanentState == requiredState && !VulkanStateTrackingDetail::NeedsResourceStateBarrier(permanentState, requiredState, false, false);
+            const StateTracker::BufferRangeStates* const ranges = m_stateTracker.findBufferRangesCached(*buffer);
+            if(!ranges || ranges->size() != 1u)
+                return false;
+            const StateTracker::BufferRangeState& entry = (*ranges)[0u];
+            return entry.range.byteOffset == 0u && entry.range.byteSize == buffer->m_creationDesc.byteSize && entry.state == requiredState;
+        };
+        const auto checkIncrementalBuffers = [&]()noexcept -> b8{
+            onlyVertexOffsetsChanged = state.vertexBuffers.size() == m_currentGraphicsState.vertexBuffers.size();
+            for(usize i = 0u; i < state.vertexBuffers.size(); ++i){
+                const VertexBufferBinding& binding = state.vertexBuffers[i];
+                if(
+                    !binding.buffer
+                    || binding.buffer->m_buffer == VK_NULL_HANDLE
+                    || !binding.buffer->m_creationDesc.isVertexBuffer
+                    || binding.offset >= binding.buffer->m_creationDesc.byteSize
+                    || binding.slot >= m_context.physicalDeviceProperties.limits.maxVertexInputBindings
+                )
+                    return false;
+                for(usize j = 0u; j < i; ++j){
+                    if(state.vertexBuffers[j].slot == binding.slot)
+                        return false;
+                    if(state.vertexBuffers[j].buffer != binding.buffer && state.vertexBuffers[j].buffer->m_buffer == binding.buffer->m_buffer)
+                        return false;
+                }
+                if(onlyVertexOffsetsChanged){
+                    const VertexBufferBinding& prev = m_currentGraphicsState.vertexBuffers[i];
+                    if(prev.buffer != binding.buffer || prev.slot != binding.slot)
+                        onlyVertexOffsetsChanged = false;
+                }
+                if(state.indexBuffer.buffer == binding.buffer || state.indirectParams == binding.buffer)
+                    return false;
+                if(!vertexBuffersEqual && !(i < m_currentGraphicsState.vertexBuffers.size() && state.vertexBuffers[i] == m_currentGraphicsState.vertexBuffers[i])){
+                    const b8 sameBufSlot = i < m_currentGraphicsState.vertexBuffers.size()
+                        && state.vertexBuffers[i].buffer == m_currentGraphicsState.vertexBuffers[i].buffer
+                        && m_currentGraphicsState.indexBuffer.buffer != binding.buffer
+                        && m_currentGraphicsState.indirectParams != binding.buffer
+                    ;
+                    if(!sameBufSlot && !bufferReadyNoBarrier(binding.buffer, ResourceStates::VertexBuffer))
+                        return false;
+                }
+            }
+            if(!state.indexBuffer.buffer){
+                if(state.indexBuffer.offset != 0u || state.indexBuffer.format != Format::UNKNOWN)
+                    return false;
+            }
+            else{
+                const IndexBufferBinding& ib = state.indexBuffer;
+                const u32 indexBytes = VulkanDetail::GetIndexElementByteSize(ib.format);
+                if(
+                    ib.buffer->m_buffer == VK_NULL_HANDLE
+                    || !ib.buffer->m_creationDesc.isIndexBuffer
+                    || !VulkanDetail::IsIndexFormatSupported(ib.format, m_context.fullDrawIndexUint32FeatureEnabled)
+                    || (ib.offset % indexBytes) != 0u
+                    || ib.offset >= ib.buffer->m_creationDesc.byteSize
+                )
+                    return false;
+                if(state.indirectParams == ib.buffer)
+                    return false;
+                for(const VertexBufferBinding& vb : state.vertexBuffers){
+                    if(vb.buffer->m_buffer == ib.buffer->m_buffer)
+                        return false;
+                }
+                if(ib.buffer != m_currentGraphicsState.indexBuffer.buffer){
+                    if(m_currentGraphicsState.indirectParams && m_currentGraphicsState.indirectParams->m_buffer == ib.buffer->m_buffer)
+                        return false;
+                    if(!bufferReadyNoBarrier(ib.buffer, ResourceStates::IndexBuffer))
+                        return false;
+                }
+            }
+            if(state.indirectParams){
+                for(const VertexBufferBinding& vb : state.vertexBuffers){
+                    if(vb.buffer->m_buffer == state.indirectParams->m_buffer)
+                        return false;
+                }
+                if(state.indexBuffer.buffer && state.indexBuffer.buffer->m_buffer == state.indirectParams->m_buffer)
+                    return false;
+            }
+            return true;
+        };
+        canFastHandleBuffers = checkIncrementalBuffers();
+    }
+
+    if(samePassFastEligible && canFastHandleBuffers){
         if(pipelineChanged && state.pipeline){
             if(&state.pipeline->m_context != &m_context){
                 rejectCommandRecording(s_SetGraphicsStateOperation, FOUNDATION_TEXT("graphics pipeline belongs to another device"));
@@ -208,6 +368,25 @@ void CommandList::setGraphicsState(const GraphicsState& state){
         m_currentGraphicsState.blendConstantColor = state.blendConstantColor;
         m_currentGraphicsState.dynamicStencilRefValue = state.dynamicStencilRefValue;
 
+        if(!vertexBuffersEqual){
+            if(!onlyVertexOffsetsChanged){
+                for(const VertexBufferBinding& binding : state.vertexBuffers)
+                    retainResource(binding.buffer);
+            }
+            __hidden_graphics_pipeline::CopyVertexBufferBindingsCompact(m_currentGraphicsState.vertexBuffers, state.vertexBuffers);
+            if(!state.vertexBuffers.empty())
+                bindVertexBuffersNative({ state.vertexBuffers.data(), state.vertexBuffers.size() });
+        }
+        if(indexBufferChanged){
+            m_currentGraphicsState.indexBuffer = state.indexBuffer;
+            if(state.indexBuffer.buffer){
+                auto& ib = *MakeNotNull(state.indexBuffer.buffer);
+                retainResource(&ib);
+                const VkIndexType indexType = state.indexBuffer.format == Format::R16_UINT ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
+                m_context.deviceDispatch.vkCmdBindIndexBuffer(m_currentCmdBuf->m_cmdBuf, ib.m_buffer, state.indexBuffer.offset, indexType);
+            }
+        }
+
         if(pipelineChanged){
             m_currentGraphicsState.pipeline = state.pipeline;
             if(state.pipeline){
@@ -215,7 +394,7 @@ void CommandList::setGraphicsState(const GraphicsState& state){
                 updateActivePushConstantPipeline(s_PipelineKindGraphics, pipeline.pipelineLayout, pipeline.pushConstantByteSize, GpuQueueCapability::Graphics);
                 retainResource(&pipeline);
                 m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipeline);
-                VulkanDetail::SetGraphicsDynamicState(m_context.deviceDispatch, m_currentCmdBuf->m_cmdBuf, pipeline.m_desc, state);
+                setGraphicsDynamicState(pipeline.m_desc, state);
             }
             else
                 updateActivePushConstantPipeline(s_PipelineKindNone, VK_NULL_HANDLE, 0u, GpuQueueCapability::None);
@@ -234,16 +413,22 @@ void CommandList::setGraphicsState(const GraphicsState& state){
             setViewportState(state.viewport, updateViewport, updateScissor);
         }
 
+        if(!vertexBuffersEqual){
+            if(onlyVertexOffsetsChanged && state.vertexBuffers.size() == 1u && m_graphicsDrawStateValid && m_resolvedVertexBindingCount == 1u){
+                m_resolvedVertexBindings[0u].offset = state.vertexBuffers[0u].offset;
+                m_graphicsDrawIndexedValid = m_currentGraphicsState.indexBuffer.buffer != nullptr;
+            }
+            else
+                rebuildGraphicsDrawValidationCache();
+        }
+        else if(indexBufferChanged && m_graphicsDrawStateValid)
+            m_graphicsDrawIndexedValid = m_currentGraphicsState.indexBuffer.buffer != nullptr;
+
         if(state.pipeline){
-            if(blendConstantsChanged){
-                const Array<f32, 4> blendConstants = {{ state.blendConstantColor.r, state.blendConstantColor.g, state.blendConstantColor.b, state.blendConstantColor.a }};
-                m_context.deviceDispatch.vkCmdSetBlendConstants(m_currentCmdBuf->m_cmdBuf, blendConstants.data());
-            }
-            if(dynamicStencilRefChanged){
-                const DepthStencilState& depthStencilState = state.pipeline->m_desc.renderState.depthStencilState;
-                if(depthStencilState.dynamicStencilRef)
-                    m_context.deviceDispatch.vkCmdSetStencilReference(m_currentCmdBuf->m_cmdBuf, VK_STENCIL_FACE_FRONT_AND_BACK, state.dynamicStencilRefValue);
-            }
+            if(blendConstantsChanged)
+                setGraphicsBlendConstantsIfChanged(state.blendConstantColor);
+            if(dynamicStencilRefChanged && state.pipeline->m_desc.renderState.depthStencilState.dynamicStencilRef)
+                setGraphicsStencilReferenceIfChanged(state.dynamicStencilRefValue);
         }
         return;
     }
@@ -298,16 +483,13 @@ void CommandList::setGraphicsState(const GraphicsState& state){
         if(pipelineChanged){
             retainResource(&pipeline);
             m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipeline);
-            VulkanDetail::SetGraphicsDynamicState(m_context.deviceDispatch, m_currentCmdBuf->m_cmdBuf, pipeline.m_desc, state);
+            setGraphicsDynamicState(pipeline.m_desc, state);
         }
         else{
-            if(blendConstantsChanged){
-                const Array<f32, 4> blendConstants = {{ state.blendConstantColor.r, state.blendConstantColor.g, state.blendConstantColor.b, state.blendConstantColor.a }};
-                m_context.deviceDispatch.vkCmdSetBlendConstants(m_currentCmdBuf->m_cmdBuf, blendConstants.data());
-            }
-            const DepthStencilState& depthStencilState = pipeline.m_desc.renderState.depthStencilState;
-            if(depthStencilState.dynamicStencilRef && dynamicStencilRefChanged)
-                m_context.deviceDispatch.vkCmdSetStencilReference(m_currentCmdBuf->m_cmdBuf, VK_STENCIL_FACE_FRONT_AND_BACK, state.dynamicStencilRefValue);
+            if(blendConstantsChanged)
+                setGraphicsBlendConstantsIfChanged(state.blendConstantColor);
+            if(pipeline.m_desc.renderState.depthStencilState.dynamicStencilRef && dynamicStencilRefChanged)
+                setGraphicsStencilReferenceIfChanged(state.dynamicStencilRefValue);
         }
     }
     else
@@ -321,39 +503,7 @@ void CommandList::setGraphicsState(const GraphicsState& state){
     if(!state.vertexBuffers.empty() && !vertexBuffersEqual){
         for(const VertexBufferBinding& binding : state.vertexBuffers)
             retainResource(binding.buffer);
-
-        b8 alreadyAscending = true;
-        for(usize i = 1u; i < state.vertexBuffers.size(); ++i){
-            if(state.vertexBuffers[i].slot <= state.vertexBuffers[i - 1u].slot){
-                alreadyAscending = false;
-                break;
-            }
-        }
-        const VertexBufferBinding* orderedData = state.vertexBuffers.data();
-        const usize orderedCount = state.vertexBuffers.size();
-        FixedVector<VertexBufferBinding, s_MaxVertexAttributes> sortedBindings;
-        if(!alreadyAscending){
-            sortedBindings = state.vertexBuffers;
-            Sort(sortedBindings.begin(), sortedBindings.end(), [](const VertexBufferBinding& lhs, const VertexBufferBinding& rhs)noexcept{
-                return lhs.slot < rhs.slot;
-            });
-            orderedData = sortedBindings.data();
-        }
-
-        usize startIndex = 0u;
-        while(startIndex < orderedCount){
-            const u32 firstSlot = orderedData[startIndex].slot;
-            Array<VkBuffer, s_MaxVertexAttributes> nativeBuffers;
-            Array<VkDeviceSize, s_MaxVertexAttributes> offsets;
-            u32 count = 0u;
-            while(startIndex + count < orderedCount && orderedData[startIndex + count].slot == firstSlot + count){
-                nativeBuffers[count] = orderedData[startIndex + count].buffer->m_buffer;
-                offsets[count] = orderedData[startIndex + count].offset;
-                ++count;
-            }
-            m_context.deviceDispatch.vkCmdBindVertexBuffers(m_currentCmdBuf->m_cmdBuf, firstSlot, count, nativeBuffers.data(), offsets.data());
-            startIndex += count;
-        }
+        bindVertexBuffersNative({ state.vertexBuffers.data(), state.vertexBuffers.size() });
     }
 
     if(state.indexBuffer.buffer && indexBufferChanged){
@@ -509,7 +659,7 @@ b8 CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPass
             hasStencil = true;
         }
     }
-    if(framebuffer.m_allAttachmentsManagedNonVirtual)
+    if(framebuffer.m_allAttachmentsManagedNonVirtual && !framebuffer.m_allViewsCached.load(MemoryOrder::relaxed))
         framebuffer.m_allViewsCached.store(true, MemoryOrder::release);
 
     auto renderingInfo = VulkanDetail::MakeVkStruct<VkRenderingInfo>(VK_STRUCTURE_TYPE_RENDERING_INFO);

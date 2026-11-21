@@ -431,7 +431,7 @@ class MaterialBinaryReader{
             outAvboitExtinctionPixelShader
         ))
             return false;
-        if(!ValidateMaterialPayloadData(
+        if(!ValidateMaterialEnvelopeData(
             outStageShaderCount,
             outMaterialInterface,
             StringView(outShaderVariant),

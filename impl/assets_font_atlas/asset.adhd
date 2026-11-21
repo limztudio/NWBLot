@@ -11,12 +11,16 @@
 [arena, asset("font_atlas")]
 class FontAtlas{
     private FontAtlasPayload m_payload;
+    private b8 m_payloadValidated = false;
 
     public b8 loadBinary(in Span<u8> binary);
     public b8 validatePayload()const;
     public void setPayload(in FontAtlasPayload payload){
         this.m_payload = payload;
+        this.m_payloadValidated = false;
     }
+    public b8 isPayloadValidated()const{ return this.m_payloadValidated; }
+    public void markPayloadValidated(){ this.m_payloadValidated = true; }
 
     public in FontAtlasPayload payload()const{ return this.m_payload; }
 

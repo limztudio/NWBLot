@@ -197,6 +197,30 @@ namespace GpuTaskGraphCompilerDetail{
     if(!hasNonHazardDomainUse)
         return true;
 
+    struct ResourceShareCacheEntry{
+        u64 admittedQueueMask = 0u;
+        b8 initialized = false;
+        b8 isConcurrent = false;
+    };
+    Vector<ResourceShareCacheEntry, Alloc::ScratchArena> shareCache(CompilerGraphAccess::ResourceCount(graph), scratchArena);
+    const b8 useShareBitmask = topology.queueCount <= s_BitsPerWord;
+    const auto resolveResourceShare = [&](const u32 resourceIndex, const GpuTaskGraphResourceView& resource)noexcept -> const ResourceShareCacheEntry&{
+        ResourceShareCacheEntry& entry = shareCache[resourceIndex];
+        if(!entry.initialized){
+            entry.initialized = true;
+            entry.isConcurrent = ResourceUsesConcurrentQueueSharing(resource, topology);
+            if(entry.isConcurrent && useShareBitmask){
+                u64 mask = 0u;
+                for(usize q = 0u; q < topology.queueCount; ++q){
+                    if(ResourceSharingAdmitsQueue(resource, topology, topology.queues[q]))
+                        mask |= BitMask<u64>(static_cast<u32>(q));
+                }
+                entry.admittedQueueMask = mask;
+            }
+        }
+        return entry;
+    };
+
     TaskResourceUseIndex taskUseHistory(CompilerGraphAccess::ResourceCount(graph), CompilerGraphAccess::Generation(graph), taskUseCapacity, scratchArena);
 
     for(usize taskIndex = 0u; taskIndex < topologicalOrder.size(); ++taskIndex){
@@ -206,7 +230,9 @@ namespace GpuTaskGraphCompilerDetail{
 
         const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
         auto& taskQueue = *MakeNotNull(FindCompiledQueueInfo(compiledPlan, compiledTask.queue));
-        if(!taskUseHistory.build(task))
+        const usize taskQueueIndex = static_cast<usize>(&taskQueue - compiledPlan.queueTopology.data());
+        const b8 multipleUses = task.resourceUseCount > 1u;
+        if(multipleUses && !taskUseHistory.build(task))
             return false;
         constexpr usize s_OffsetMax = static_cast<usize>(Limit<u32>::s_Max);
         if(compiledPlan.prologueStateSeeds.size() > s_OffsetMax || compiledPlan.prologueBarriers.size() > s_OffsetMax)
@@ -219,10 +245,11 @@ namespace GpuTaskGraphCompilerDetail{
                 continue;
             const GpuTaskGraphResourceView resource = graph.resourceAt(use.resource.index);
             FOUNDATION_ASSERT(use.requiredState != ResourceStates::Unknown);
+            const ResourceShareCacheEntry& shareInfo = resolveResourceShare(use.resource.index, resource);
             if(
                 (resource.type == GpuGraphResourceType::Texture || resource.type == GpuGraphResourceType::Buffer || resource.type == GpuGraphResourceType::AccelStruct)
-                && ResourceUsesConcurrentQueueSharing(resource, topology)
-                && !ResourceSharingAdmitsQueue(resource, topology, taskQueue)
+                && shareInfo.isConcurrent
+                && !(useShareBitmask && taskQueueIndex < compiledPlan.queueTopology.size() ? ((shareInfo.admittedQueueMask & BitMask<u64>(static_cast<u32>(taskQueueIndex))) != 0u) : ResourceSharingAdmitsQueue(resource, topology, taskQueue))
             ){
                 return false;
             }
@@ -231,7 +258,7 @@ namespace GpuTaskGraphCompilerDetail{
             if(!plannedRange)
                 return false;
 
-            const b8 alreadyPlannedByTask = resource.type == GpuGraphResourceType::AccelStruct && taskUseHistory.first(use.resource) < useIndex;
+            const b8 alreadyPlannedByTask = multipleUses && resource.type == GpuGraphResourceType::AccelStruct && taskUseHistory.first(use.resource) < useIndex;
             if(alreadyPlannedByTask){
                 if(!resourceHistory.append(TrackedCompiledResourceState{ .resource = use.resource, .range = (*plannedRange), .task = taskID, .state = use.requiredState, .access = use.access, .queue = compiledTask.queue, }))
                     return false;
@@ -239,8 +266,14 @@ namespace GpuTaskGraphCompilerDetail{
             }
 
             if(resource.type == GpuGraphResourceType::Texture || resource.type == GpuGraphResourceType::Buffer){
-                if(!CollectResourceFirstUseRangesWithinTaskWithScratch(graph, task, taskUseHistory, useIndex, resource, (*plannedRange), plan.rangeScratch, taskFirstUseRanges))
-                    return false;
+                if(multipleUses){
+                    if(!CollectResourceFirstUseRangesWithinTaskWithScratch(graph, task, taskUseHistory, useIndex, resource, (*plannedRange), plan.rangeScratch, taskFirstUseRanges))
+                        return false;
+                }
+                else{
+                    taskFirstUseRanges.clear();
+                    taskFirstUseRanges.push_back(*plannedRange);
+                }
                 stateFragments.clear();
                 if(!CollectLatestResourceStateFragmentsWithScratch(trackedResourceStates, resourceHistory, resource, taskFirstUseRanges, plan.rangeScratch, stateFragments))
                     return false;
@@ -251,7 +284,8 @@ namespace GpuTaskGraphCompilerDetail{
                     const b8 joinsReadersForInternalStateChange = previousState
                         && previousState->access == GpuTaskResourceAccess::Read
                         && use.access == GpuTaskResourceAccess::Read
-                        && ResourceUsesConcurrentQueueSharing(resource, topology)
+                        && shareInfo.isConcurrent
+                        && multipleUses
                         && !TaskPreservesReadState(graph, task, taskUseHistory, resource, fragment.range, useIndex)
                     ;
                     if(joinsReadersForInternalStateChange && !AppendOverlappingReaderDependencies(plan, resource, fragment.range, *previousState, compiledTask.packet))
@@ -348,7 +382,8 @@ namespace GpuTaskGraphCompilerDetail{
             const b8 joinsReadersForInternalStateChange = previousState
                 && previousState->access == GpuTaskResourceAccess::Read
                 && use.access == GpuTaskResourceAccess::Read
-                && ResourceUsesConcurrentQueueSharing(resource, topology)
+                && shareInfo.isConcurrent
+                && multipleUses
                 && !TaskPreservesReadState(graph, task, taskUseHistory, resource, (*plannedRange), useIndex)
             ;
             if(joinsReadersForInternalStateChange && !AppendOverlappingReaderDependencies(plan, resource, (*plannedRange), *previousState, compiledTask.packet))

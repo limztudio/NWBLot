@@ -319,7 +319,7 @@ static_assert(size_of<RendererCsgState>() == s_RendererCsgStateByteSize, "Render
 u32 CountFrameReceiverCutters(
     in RendererCsgSystem system,
     in CsgFrameReceiverLookup lookup,
-    in World world,
+    mut World world,
     in EntityID entity,
     in CsgResolvedReceiver resolved,
     in b8 transparent,
@@ -332,8 +332,9 @@ u32 CountFrameReceiverCutters(
     if(!draw.has_value() || draw.value().receiverKind != resolved.receiverKind)
         return 0u;
     Expected<CsgReceiverClipDrawInfo> clip = MakeUnexpected(Failure());
-    if(world.hasComponent<TransformComponent>(entity))
-        clip = system.resolveCsgReceiverClipDrawInfo(lookup, draw.value(), bounds, world.getComponent<TransformComponent>(entity));
+    const Optional<mut TransformComponent> borrowedTransform = world.borrowComponent<TransformComponent>(entity);
+    if(borrowedTransform.has_value())
+        clip = system.resolveCsgReceiverClipDrawInfo(lookup, draw.value(), bounds, borrowedTransform.value());
     else
         clip = system.resolveCsgReceiverClipDrawInfo(lookup, draw.value(), bounds);
     if(!clip.has_value())
@@ -369,6 +370,7 @@ CsgFrameState RendererCsgSystem::buildFrameState(mut IMaterialSurfaceLookup mate
         CacheCsgFrameState(this.m_csgState, signature, state, cacheable);
         return state;
     }
+    lookup.precomputeCutters(this.m_csgShapeRegistry);
     for(in auto row : this.m_world.view<RendererComponent>()){
         if(!Get<1>(row).visible)
             continue;

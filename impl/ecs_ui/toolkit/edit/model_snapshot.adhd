@@ -15,24 +15,64 @@ class EditModelSnapshot{
     public TextAreaModelStamp m_expectedStamp;
     public u64 m_expectedRevision = 0u;
     public u64 m_expectedExternalRevision = 0u;
+    private b8 m_hasCompositionSnapshot = false;
 
     public b8 matchesSurrounding(in EditModel model)const{
+        if(this.m_expectedStamp.instanceGeneration != 0u && model.instanceGeneration() == this.m_expectedStamp.instanceGeneration){
+            const TextAreaModelStamp current = model.stamp();
+            return current.revision == this.m_expectedStamp.revision
+                && current.externalRevision == this.m_expectedStamp.externalRevision
+                && current.selectionGeneration == this.m_expectedStamp.selectionGeneration
+                && current.anchor == this.m_expectedStamp.anchor
+                && current.caret == this.m_expectedStamp.caret;
+        }
         return MatchesEditModelSnapshotSurroundingValues(model.text(), model.stamp(), StringView(this.m_expectedText), this.m_expectedStamp);
     }
 
     public b8 matches(in EditModel model)const{
+        if(this.m_expectedStamp.instanceGeneration != 0u && model.instanceGeneration() == this.m_expectedStamp.instanceGeneration)
+            return model.matchesStamp(this.m_expectedStamp);
         return MatchesEditModelSnapshotValues(model.text(), model.stamp(), model.composition(), StringView(this.m_expectedText), StringView(this.m_expectedPreedit), this.m_expectedComposition, this.m_expectedStamp);
     }
 
     public void captureSurrounding(in EditModel model){
-        CaptureEditModelSnapshotSurroundingValues(model.text(), model.stamp(), this.m_expectedText, this.m_expectedStamp, this.m_expectedRevision, this.m_expectedExternalRevision);
+        this.m_hasCompositionSnapshot = false;
+        const TextAreaModelStamp current = model.stamp();
+        if(
+            this.m_expectedStamp.instanceGeneration != 0u
+            && current.instanceGeneration == this.m_expectedStamp.instanceGeneration
+            && current.revision == this.m_expectedStamp.revision
+            && current.externalRevision == this.m_expectedStamp.externalRevision
+        ){
+            this.m_expectedStamp = current;
+            this.m_expectedRevision = current.revision;
+            this.m_expectedExternalRevision = current.externalRevision;
+            return;
+        }
+        CaptureEditModelSnapshotSurroundingValues(model.text(), current, this.m_expectedText, this.m_expectedStamp, this.m_expectedRevision, this.m_expectedExternalRevision);
     }
 
     public void capture(in EditModel model){
-        CaptureEditModelSnapshotValues(model.text(), model.stamp(), model.composition(), this.m_expectedText, this.m_expectedPreedit, this.m_expectedComposition, this.m_expectedStamp, this.m_expectedRevision, this.m_expectedExternalRevision);
+        const TextAreaModelStamp current = model.stamp();
+        if(
+            this.m_hasCompositionSnapshot
+            && this.m_expectedStamp.instanceGeneration != 0u
+            && current.instanceGeneration == this.m_expectedStamp.instanceGeneration
+            && current.revision == this.m_expectedStamp.revision
+            && current.externalRevision == this.m_expectedStamp.externalRevision
+            && current.compositionGeneration == this.m_expectedStamp.compositionGeneration
+        ){
+            this.m_expectedStamp = current;
+            this.m_expectedRevision = current.revision;
+            this.m_expectedExternalRevision = current.externalRevision;
+            return;
+        }
+        this.m_hasCompositionSnapshot = true;
+        CaptureEditModelSnapshotValues(model.text(), current, model.composition(), this.m_expectedText, this.m_expectedPreedit, this.m_expectedComposition, this.m_expectedStamp, this.m_expectedRevision, this.m_expectedExternalRevision);
     }
 
     public void clear(){
+        this.m_hasCompositionSnapshot = false;
         ClearEditModelSnapshotValues(this.m_expectedText, this.m_expectedPreedit, this.m_expectedComposition, this.m_expectedStamp, this.m_expectedRevision, this.m_expectedExternalRevision);
     }
 }

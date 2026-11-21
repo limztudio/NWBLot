@@ -53,8 +53,7 @@ FOUNDATION_INLINE void CommandBufferResourceReferences::retainBuffer(Buffer& buf
     if(m_lastRetainedBuffer == &buffer)
         return;
     GraphicsResource* const key = &buffer;
-    const CacheSlot& slot = m_cache[CacheSlotIndex(key)];
-    if(slot.resource == key && slot.generation == m_cacheGeneration && (slot.flags & (s_FlagOwned | s_FlagBuffer)) == (s_FlagOwned | s_FlagBuffer)){
+    if((findCacheFlags(key) & (s_FlagOwned | s_FlagBuffer)) == (s_FlagOwned | s_FlagBuffer)){
         m_lastRetainedResource = key;
         m_lastRetainedBuffer = &buffer;
         return;
@@ -65,9 +64,7 @@ FOUNDATION_INLINE void CommandBufferResourceReferences::retainBuffer(Buffer& buf
 FOUNDATION_INLINE void CommandBufferResourceReferences::trackRetainedBuffer(Buffer& buffer){
     if(m_lastRetainedBuffer == &buffer)
         return;
-    GraphicsResource* const key = &buffer;
-    const CacheSlot& slot = m_cache[CacheSlotIndex(key)];
-    if(slot.resource == key && slot.generation == m_cacheGeneration && (slot.flags & s_FlagBuffer) != 0u)
+    if((findCacheFlags(&buffer) & s_FlagBuffer) != 0u)
         return;
     trackRetainedBufferSlow(buffer);
 }
@@ -76,8 +73,7 @@ FOUNDATION_INLINE void CommandBufferResourceReferences::retainTexture(Texture& t
     if(m_lastRetainedTexture == &texture)
         return;
     GraphicsResource* const key = &texture;
-    const CacheSlot& slot = m_cache[CacheSlotIndex(key)];
-    if(slot.resource == key && slot.generation == m_cacheGeneration && (slot.flags & (s_FlagOwned | s_FlagTexture)) == (s_FlagOwned | s_FlagTexture)){
+    if((findCacheFlags(key) & (s_FlagOwned | s_FlagTexture)) == (s_FlagOwned | s_FlagTexture)){
         m_lastRetainedResource = key;
         m_lastRetainedTexture = &texture;
         return;
@@ -88,9 +84,7 @@ FOUNDATION_INLINE void CommandBufferResourceReferences::retainTexture(Texture& t
 FOUNDATION_INLINE void CommandBufferResourceReferences::trackRetainedTexture(Texture& texture){
     if(m_lastRetainedTexture == &texture)
         return;
-    GraphicsResource* const key = &texture;
-    const CacheSlot& slot = m_cache[CacheSlotIndex(key)];
-    if(slot.resource == key && slot.generation == m_cacheGeneration && (slot.flags & s_FlagTexture) != 0u)
+    if((findCacheFlags(&texture) & s_FlagTexture) != 0u)
         return;
     trackRetainedTextureSlow(texture);
 }
@@ -99,8 +93,7 @@ FOUNDATION_INLINE void CommandBufferResourceReferences::retainFramebuffer(Frameb
     if(m_lastRetainedFramebuffer == &framebuffer)
         return;
     GraphicsResource* const key = &framebuffer;
-    const CacheSlot& slot = m_cache[CacheSlotIndex(key)];
-    if(slot.resource == key && slot.generation == m_cacheGeneration && (slot.flags & (s_FlagOwned | s_FlagFramebuffer)) == (s_FlagOwned | s_FlagFramebuffer)){
+    if((findCacheFlags(key) & (s_FlagOwned | s_FlagFramebuffer)) == (s_FlagOwned | s_FlagFramebuffer)){
         m_lastRetainedResource = key;
         m_lastRetainedFramebuffer = &framebuffer;
         return;
@@ -187,8 +180,17 @@ private:
 
 
     private:
-        [[nodiscard]] static Capability*& CurrentCapability()noexcept;
-        [[nodiscard]] static b8 HasCapability(const CommandList& commandList, u64 recordingLeaseSerial)noexcept;
+        [[nodiscard]] static Capability*& CurrentCapability()noexcept{
+            static thread_local Capability* s_CurrentCapability = nullptr;
+            return s_CurrentCapability;
+        }
+        [[nodiscard]] static b8 HasCapability(const CommandList& commandList, const u64 recordingLeaseSerial)noexcept{
+            for(const Capability* capability = CurrentCapability(); capability; capability = capability->previous){
+                if(capability->commandList == &commandList && capability->recordingLeaseSerial == recordingLeaseSerial)
+                    return true;
+            }
+            return false;
+        }
 
 
     private:
@@ -265,9 +267,18 @@ public:
         return ownership.m_readable && matchesRecordingLeaseUnchecked(serial);
     }
 
+    [[nodiscard]] FOUNDATION_INLINE b8 isRecordingLeaseHealthy(const u64 serial)const noexcept{
+        if(m_recordingFastCapabilityMask != 0u && serial != 0u && m_recordingLeaseSerial == serial && hasFastGraphRecordingAccess())
+            return true;
+        return matchesRecordingLease(serial) && !commandRecordingFailed();
+    }
+
     [[nodiscard]] b8 isRenderPassActive()const noexcept{
         const GraphPublicationReadOwnership ownership(*this);
         return ownership.m_readable && m_renderPassActive;
+    }
+    [[nodiscard]] b8 hasPendingOwnershipReleases()const noexcept{
+        return !m_textureOwnershipReleaseDestinations.empty() || !m_bufferOwnershipReleaseDestinations.empty();
     }
     [[nodiscard]] const GpuPhysicalQueueInfo* getCachedPhysicalQueueInfo()const noexcept{
         return m_hasCachedPhysicalQueueInfo ? &m_cachedPhysicalQueueInfo : nullptr;
@@ -559,6 +570,9 @@ private:
         m_graphicsHasInstanceVertexBindings = false;
     }
     void rebuildGraphicsDrawValidationCache()noexcept;
+    void setGraphicsDynamicState(const GraphicsPipelineDesc& desc, const GraphicsState& state)noexcept;
+    void setGraphicsBlendConstantsIfChanged(const Color& blendConstantColor)noexcept;
+    void setGraphicsStencilReferenceIfChanged(u8 stencilRef)noexcept;
     void clearDirtyPipelineStates(u8 keepMask = 0u)noexcept;
     void updateActivePushConstantPipeline(u8 pipelineKind, VkPipelineLayout layout, u32 pushConstantBytes, GpuQueueCapability::Mask capability)noexcept;
     void setBufferStateValidated(Buffer& buffer, ResourceStates::Mask stateBits, b8 forceMemoryDependency, const BufferRange& resolvedRange);
@@ -618,6 +632,7 @@ private:
     void bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, VkPipelineBindPoint bindPoint, const PipelineBindingState& pipelineBindings, GpuDescriptorHandle accelStructHandle, TStringView operationName);
     void ensureDescriptorBuffersBound(DescriptorBufferManager& manager, const DescriptorBufferManager::BindingSnapshot& snapshot);
     void setViewportState(const ViewportState& viewportState, b8 updateViewport = true, b8 updateScissor = true);
+    void bindVertexBuffersNative(Span<const VertexBufferBinding> vertexBuffers)noexcept;
 
     b8 beginDynamicRendering(Framebuffer& framebuffer, const RenderPassParameters& params);
     void endDynamicRendering();
@@ -625,46 +640,49 @@ private:
     void endActiveRenderPass();
     void executePipelineBarrier(Span<VkMemoryBarrier2> memoryBarriers, Span<VkImageMemoryBarrier2> imageBarriers, Span<VkBufferMemoryBarrier2> bufferBarriers);
     void executePipelineBarrierValidated(Span<VkMemoryBarrier2> memoryBarriers, Span<VkImageMemoryBarrier2> imageBarriers, Span<VkBufferMemoryBarrier2> bufferBarriers, TStringView operationName);
+    [[nodiscard]] FOUNDATION_INLINE b8 hasFastGraphRecordingAccess()const noexcept{
+        const u8 pubState = m_graphPublicationState.load(MemoryOrder::acquire);
+        if(pubState == s_GraphPublicationUnowned)
+            return true;
+        if(pubState == s_GraphPublicationRecording){
+            const GraphRecordingOwnership::Capability* const cap = GraphRecordingOwnership::CurrentCapability();
+            return cap && cap->commandList == this && cap->recordingLeaseSerial == m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire);
+        }
+        return false;
+    }
     [[nodiscard]] b8 validateCommandRecordingScopeSlow(TStringView operationName);
     [[nodiscard]] b8 recordAndValidateCommandCapabilitySlow(GpuQueueCapability::Mask requiredCapabilities, TStringView operationName);
     [[nodiscard]] FOUNDATION_INLINE b8 validateCommandRecordingScope(const TStringView operationName, const b8 flushPendingCopies = true){
+        if(m_recordingFastCapabilityMask != 0u && hasFastGraphRecordingAccess()){
+            if(flushPendingCopies && m_hasPendingBufferCopies)
+                flushPendingBufferCopies();
+            return true;
+        }
+        if(!validateCommandRecordingScopeSlow(operationName))
+            return false;
         if(flushPendingCopies && m_hasPendingBufferCopies)
             flushPendingBufferCopies();
-        if(
-            m_graphPublicationState.load(MemoryOrder::acquire) == s_GraphPublicationUnowned
-            && !m_commandRecordingFailed
-            && m_isRecording
-            && m_cachedQueueContractValid
-            && descriptionMatchesCreation()
-            && m_currentCmdBuf
-            && m_currentCmdBuf->m_cmdBuf != VK_NULL_HANDLE
-            && m_currentCmdBuf->m_arenaState == TrackedCommandBufferArenaState::Leased
-            && &m_currentCmdBuf->m_context == &m_context
-            && m_recordingLeaseSerial != 0u
-            && m_nativeRecordingID != 0u
-            && m_currentCmdBuf->m_recordingID == m_nativeRecordingID
-            && m_currentCmdBuf->m_recordingWorkerDomain == m_creationDesc.recordingWorkerDomain
-            && m_currentCmdBuf->m_recordingWorkerIndex == m_creationDesc.recordingWorkerIndex
-            && &m_currentCmdBuf->m_queue == m_cachedQueue
-        )
-            return true;
-
-        return validateCommandRecordingScopeSlow(operationName);
+        return true;
     }
     [[nodiscard]] FOUNDATION_INLINE b8 recordAndValidateCommandCapability(const GpuQueueCapability::Mask requiredCapabilities, const TStringView operationName, const b8 flushPendingCopies = true){
         const u8 requiredBits = static_cast<u8>(requiredCapabilities);
         if(
-            validateCommandRecordingScope(operationName, flushPendingCopies)
+            requiredBits != 0u
+            && (m_recordingFastCapabilityMask & requiredBits) == requiredBits
 #if defined(NWB_DEBUG)
             && !m_taskCapabilityTracking
 #endif
-            && requiredBits != 0u
-            && (requiredBits & ~GpuQueueCapability::s_KnownCapabilityBits) == 0u
-            && (static_cast<u8>(m_cachedPhysicalQueueInfo.capabilities) & requiredBits) == requiredBits
-        )
+            && hasFastGraphRecordingAccess()
+        ){
+            if(flushPendingCopies && m_hasPendingBufferCopies)
+                flushPendingBufferCopies();
             return true;
-
-        return recordAndValidateCommandCapabilitySlow(requiredCapabilities, operationName);
+        }
+        if(!recordAndValidateCommandCapabilitySlow(requiredCapabilities, operationName))
+            return false;
+        if(flushPendingCopies && m_hasPendingBufferCopies)
+            flushPendingBufferCopies();
+        return true;
     }
     [[nodiscard]] b8 recordAndValidateAnyCommandCapability(GpuQueueCapability::Mask alternativeCapabilities, TStringView operationName);
     void rejectCommandRecording(TStringView operationName, TStringView reason);
@@ -721,8 +739,21 @@ private:
         b8 instanceRate = false;
     };
 
+    struct CachedDynamicGraphicsState{
+        f32 depthBiasConstant = 0.f;
+        f32 depthBiasClamp = 0.f;
+        f32 depthBiasSlope = 0.f;
+        Color blendConstantColor{};
+        u8 stencilReadMask = 0u;
+        u8 stencilWriteMask = 0u;
+        u8 stencilRef = 0u;
+        b8 staticDefaultsBound = false;
+        b8 valid = false;
+    };
     struct CachedDescriptorBufferOffsets{
+        const GpuDescriptorHeap* heap = nullptr;
         VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+        u64 heapBindingVersion = 0u;
         u64 descriptorGeneration = 0u;
         VkDeviceSize resourceOffset = 0u;
         VkDeviceSize samplerOffset = 0u;
@@ -770,6 +801,7 @@ private:
     b8 m_graphicsDrawIndexedValid = false;
     b8 m_graphicsHasInstanceVertexBindings = false;
     b8 m_hasPendingBufferCopies = false;
+    u8 m_recordingFastCapabilityMask = 0u;
     u8 m_dirtyPipelineStateMask = 0u;
     u8 m_activePipelineKind = s_PipelineKindNone;
     GpuQueueCapability::Mask m_activePipelineRequiredCapability = GpuQueueCapability::None;
@@ -795,6 +827,9 @@ private:
     ComputeState m_currentComputeState;
     MeshletState m_currentMeshletState;
     RayTracingState m_currentRayTracingState;
+    CachedDynamicGraphicsState m_cachedDynamicGraphicsState{};
+    Buffer* m_lastValidatedWriteBuffer = nullptr;
+    ResourceStates::Mask m_lastValidatedWriteBufferPermanentState = ResourceStates::Unknown;
 
     Device& m_device;
     const VulkanContext& m_context;

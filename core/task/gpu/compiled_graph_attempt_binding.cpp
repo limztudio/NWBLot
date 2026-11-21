@@ -26,11 +26,33 @@ b8 GpuCompiledGraph::beginRecordingAttempt(
     const u64 previousRecordingAttemptGeneration,
     const ReadView& planAccess
 )const noexcept{
-    if(!packet.valid() || expectedPlanGeneration == 0u || recordingAttemptGeneration == 0u)
+    if(!packet.valid())
+        return false;
+    return beginRecordingAttemptRange(
+        graph,
+        declarations,
+        GpuSubmissionPacketRange{ packet, 1u },
+        expectedPlanGeneration,
+        recordingAttemptGeneration,
+        previousRecordingAttemptGeneration,
+        planAccess
+    );
+}
+
+b8 GpuCompiledGraph::beginRecordingAttemptRange(
+    const GpuTaskGraph& graph,
+    const GpuTaskGraphDeclarationReadView& declarations,
+    const GpuSubmissionPacketRange& range,
+    const u64 expectedPlanGeneration,
+    const u64 recordingAttemptGeneration,
+    const u64 previousRecordingAttemptGeneration,
+    const ReadView& planAccess
+)const noexcept{
+    if(!range.valid() || expectedPlanGeneration == 0u || recordingAttemptGeneration == 0u)
         return false;
 
     NothrowScopedLock lock(m_attemptBindingMutex);
-    if(!planAccess.validFor(*this) || !declarations.validFor(graph) || !planAccess.validFor(declarations) || m_planGeneration != expectedPlanGeneration || !validPacket(packet))
+    if(!planAccess.validFor(*this) || !declarations.validFor(graph) || !planAccess.validFor(declarations) || m_planGeneration != expectedPlanGeneration || !validPacketRange(range))
         return false;
 
     const b8 exactAttempt = m_attemptGraph == &graph && m_attemptPlanGeneration == expectedPlanGeneration && m_attemptRecordingGeneration == recordingAttemptGeneration;

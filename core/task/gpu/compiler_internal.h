@@ -65,7 +65,7 @@ private:
         const GpuTaskGraphQueueAssignmentOptions& options,
         Alloc::ScratchArena& scratchArena,
         GpuTaskGraphQueueAssignments& outAssignments,
-        const GpuTaskGraphCompilerDetail::DenseDescendantBitMatrix* denseDesc,
+        GpuTaskGraphCompilerDetail::DenseDescendantBitMatrix* denseDesc,
         b8 hasNonHazardDomainResource
     )const;
 };
@@ -389,7 +389,7 @@ struct GpuTaskGraphResourceStatePlan{
 [[nodiscard]] b8 IsLegalQueueAssignmentCandidate(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology, const GpuTaskGraphTaskView& task, const GpuPhysicalQueueInfo& candidate)noexcept;
 
 struct DenseDescendantBitMatrix{
-    static constexpr usize s_MaxTasks = 512u;
+    static constexpr usize s_MaxTasks = 2048u;
 
     Vector<u64, Alloc::ScratchArena> strictDesc;
     usize taskCount = 0u;
@@ -403,7 +403,7 @@ struct DenseDescendantBitMatrix{
 
 class GpuTaskSchedulingReachability final : NoCopy{
     friend struct GpuTaskQueueScoringData;
-    friend b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, GpuTaskSchedulingReachability& outReachability, const DenseDescendantBitMatrix* precomputedStrictDesc);
+    friend b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, GpuTaskSchedulingReachability& outReachability, DenseDescendantBitMatrix* precomputedStrictDesc);
 
 
 private:
@@ -440,7 +440,7 @@ private:
     b8 m_valid = false;
 };
 
-[[nodiscard]] b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, GpuTaskSchedulingReachability& outReachability, const DenseDescendantBitMatrix* precomputedStrictDesc = nullptr);
+[[nodiscard]] b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, GpuTaskSchedulingReachability& outReachability, DenseDescendantBitMatrix* precomputedStrictDesc = nullptr);
 
 [[nodiscard]] inline const GpuTaskQueueAssignment* FindQueueAssignment(const Span<const GpuTaskQueueAssignment> assignments, const Span<const u32> assignmentIndicesByTask, const GpuTaskId& task)noexcept{
     if(!task.valid() || task.index >= assignmentIndicesByTask.size())
@@ -485,6 +485,10 @@ struct GpuTaskQueueScoringData{
         u32 resourceIndex = Limit<u32>::s_Max;
     };
 
+    struct InterleavedCostWord{
+        u64 groups[GpuTaskCostHint::Count]{};
+    };
+
     Vector<u64, Alloc::ScratchArena> taskCosts;
     Vector<u8, Alloc::ScratchArena> taskCostGroups;
     Array<u64, GpuTaskCostHint::Count> costGroupWeights;
@@ -495,7 +499,10 @@ struct GpuTaskQueueScoringData{
     Vector<u64, Alloc::ScratchArena> externalQueueLoadsByIndex;
     Vector<u32, Alloc::ScratchArena> queueFamilyByIndex;
     Vector<u16, Alloc::ScratchArena> assignedQueueIndexByTask;
-    Vector<u64, Alloc::ScratchArena> assignedCostWords;
+    Vector<InterleavedCostWord, Alloc::ScratchArena> allCostWords;
+    Vector<InterleavedCostWord, Alloc::ScratchArena> queueCostWords;
+    Vector<u64, Alloc::ScratchArena> queueNonEmptyWordMasks;
+    mutable Vector<u64, Alloc::ScratchArena> relatedAllCostByTask;
     usize costWordsPerGroup = 0u;
     u64 totalAssignedCost = 0u;
     const GpuTaskQueueLoad* externalQueueLoads = nullptr;
@@ -525,6 +532,7 @@ public:
     void rebuildAssignmentLoads(Span<const GpuTaskQueueAssignment> assignments, const GpuPhysicalQueueTopology& topology);
     void updateAssignmentLoads(const GpuTaskId& task, const GpuPhysicalQueueId& previousQueue, const GpuPhysicalQueueId& selectedQueue)noexcept;
     [[nodiscard]] u64 assignedQueueLoad(const GpuPhysicalQueueId& queue)const noexcept;
+    [[nodiscard]] u64 relatedAllTaskCost(const GpuTaskSchedulingReachability& reachability, usize taskIndex)const noexcept;
     [[nodiscard]] u64 independentQueueCost(const GpuTaskSchedulingReachability& reachability, const GpuPhysicalQueueId& queue, Span<const GpuTaskQueueAssignment> members)const noexcept;
     [[nodiscard]] u64 independentQueueCostByIndex(const GpuTaskSchedulingReachability& reachability, usize queueIndex, Span<const GpuTaskQueueAssignment> members)const noexcept;
 };
@@ -563,6 +571,22 @@ struct GpuTaskQueueScoreExclusions{
     const GpuPhysicalQueueInfo& candidate,
     const GpuTaskQueueScoreExclusions& exclusions = {},
     b8 computeOverlap = true
+)noexcept;
+
+void BuildSingleTaskQueueCandidateScores(
+    const GpuTaskGraph::DeclarationReadView& graph,
+    const GpuTaskGraphAnalysis& analysis,
+    Span<const GpuTaskQueueAssignment> assignments,
+    Span<const u32> assignmentIndicesByTask,
+    const GpuPhysicalQueueTopology& topology,
+    const GpuTaskSchedulingReachability& schedulingReachability,
+    const GpuTaskQueueScoringData& scoringData,
+    GpuTaskId taskId,
+    const GpuTaskSchedulingHint& taskScheduling,
+    const GpuPhysicalQueueInfo* const* candidates,
+    GpuQueueAssignmentScore* outScores,
+    usize candidateCount,
+    b8 computeOverlap
 )noexcept;
 
 struct GpuTaskQueuePlacementGroup{

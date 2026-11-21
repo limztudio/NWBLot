@@ -6,6 +6,7 @@
 #include <impl/ecs_skeleton/components.adhd>
 #include <impl/ecs_mesh/runtime/mesh.adhd>
 #include <impl/ecs_mesh/skinning/graph_dispatch_plan.adhd>
+#include <impl/ecs_mesh/skinning/graph_resource_uses.adhd>
 #include <impl/ecs_mesh/skinning/local_bounds.adhd>
 #include <impl/ecs_mesh/skinning/timing_names.adhd>
 #include <impl/ecs_mesh/skinning/runtime_cache.adhd>
@@ -17,6 +18,13 @@
 type MeshSkinningShaderPathResolveCallback = ShaderArchivePathResolver;
 type MeshSkinningRuntimeResourceMap = HashMap<u64, MeshSkinningRuntimeResources>;
 type MeshSkinningBufferVector = Vector<BufferHandle>;
+
+class CachedSkinningSkeletonPoseEntry{
+    public usize offset = 0u;
+    public usize count = 0u;
+    public u32 skinningMode = cast<u32>(SkeletonSkinningMode::LinearBlend);
+    public b8 valid = false;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -55,6 +63,11 @@ class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
     private Vector<MeshSkinningGraphDispatchPlan> m_frameDeformationPlans;
     private Vector<MeshSkinningLocalBoundsDispatch> m_frameLocalBoundsDispatches;
     private MeshSkinningBufferVector m_frameLiveBuffers;
+    private HashSet<BufferHandle> m_frameLiveBufferIndex;
+    private MeshSkinningGraphResourceUseScratch m_frameResourceUsesScratch;
+    public RuntimeSkinPayloadScratch m_framePayloadScratch;
+    public Vector<SkeletonJointMatrix> m_frameCachedPoseJoints;
+    public HashMap<EntityID, CachedSkinningSkeletonPoseEntry> m_frameCachedPoses;
     private b8 m_runtimeSetupReady = false;
 
     public MeshSkinningSystem(
@@ -174,7 +187,9 @@ class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
         return true;
     }
     public b8 recordGraphOwnedSkinningDeformation(in MeshSkinningGraphDispatchPlan plan, in GpuTaskRecordContext context, mut CommandList commandList);
+    public b8 recordGraphOwnedSkinningDeformationBatch(in Span<MeshSkinningGraphDispatchPlan> plans, in GpuTaskRecordContext context, mut CommandList commandList);
     public b8 recordGraphOwnedSkinningPostDispatch(in MeshSkinningGraphDispatchPlan plan, in GpuTaskRecordContext context, mut CommandList commandList);
+    public b8 recordGraphOwnedSkinningPostDispatchBatch(in Span<MeshSkinningGraphDispatchPlan> plans, in GpuTaskRecordContext context, mut CommandList commandList);
     public void confirmGraphOwnedSkinningDispatch(in MeshSkinningGraphDispatchPlan plan);
     private void collectLiveSkinningStateBuffers();
     private b8 replaceAcceptedSkinningState(in CommandListResourceStateHandoff state);
@@ -195,6 +210,13 @@ class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
         resources.bindlessHeapHandles = MeshSkinningRuntimeBindlessHeapHandles();
         resources.bindlessResourceSlots = MeshSkinningBindlessResourceSlots();
         resources.bindlessResourceSlotsUploaded = false;
+    }
+    public void resetFrameScratchResources(){
+        this.m_framePayloadScratch.reset(cast<u32>(SkeletonSkinningMode::LinearBlend));
+        this.m_frameCachedPoseJoints.clear();
+        this.m_frameCachedPoses.clear();
+        this.m_frameResourceUsesScratch.clear();
+        this.m_frameLiveBufferIndex.clear();
     }
     private void pruneRuntimeResources();
     private void resolveFrameTaskGraphAttempt(in GpuCompiledGraphReadView planAccess){

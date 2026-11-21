@@ -83,7 +83,8 @@ void SystemScheduler::removeSystem(ISystem& system)noexcept{
 
 void SystemScheduler::clear()noexcept{
     m_allSystems.clear();
-    m_dependencies.clear();
+    m_dependencyOffsets.clear();
+    m_dependencyIndices.clear();
     m_executionHandles.clear();
     m_executionDependencies.clear();
     m_executionResults.clear();
@@ -92,20 +93,23 @@ void SystemScheduler::clear()noexcept{
 
 
 void SystemScheduler::rebuild(){
-    m_dependencies.clear();
+    m_dependencyOffsets.clear();
+    m_dependencyIndices.clear();
     const usize systemCount = m_allSystems.size();
-    m_dependencies.reserve(systemCount);
     if(systemCount == 0u){
         m_dirty = false;
         return;
     }
+
+    m_dependencyOffsets.reserve(systemCount + 1u);
+    m_dependencyOffsets.push_back(0u);
 
     Alloc::ScratchArena scratchArena;
     constexpr usize s_BitsPerWord = 64u;
     const usize wordsPerSystem = (systemCount + s_BitsPerWord - 1u) / s_BitsPerWord;
     Vector<u64, Alloc::ScratchArena> reachableAncestors(systemCount * wordsPerSystem, 0u, scratchArena);
     for(usize systemIndex = 0u; systemIndex < systemCount; ++systemIndex){
-        DependencyList predecessors(m_arena);
+        const usize rangeBegin = m_dependencyIndices.size();
         u64* const systemAncestors = reachableAncestors.data() + systemIndex * wordsPerSystem;
         for(usize predecessorIndex = systemIndex; predecessorIndex-- > 0u;){
             const usize wordIndex = predecessorIndex / s_BitsPerWord;
@@ -115,15 +119,16 @@ void SystemScheduler::rebuild(){
             if(!__hidden_ecs_system::SystemsConflict(m_allSystems[predecessorIndex]->m_access, m_allSystems[systemIndex]->m_access))
                 continue;
 
-            predecessors.push_back(predecessorIndex);
+            m_dependencyIndices.push_back(predecessorIndex);
             systemAncestors[wordIndex] |= bitMask;
             const u64* const predAncestors = reachableAncestors.data() + predecessorIndex * wordsPerSystem;
             for(usize word = 0u; word <= wordIndex; ++word)
                 systemAncestors[word] |= predAncestors[word];
         }
-        for(usize lo = 0u, hi = predecessors.size(); lo + 1u < hi; ++lo, --hi)
-            Swap(predecessors[lo], predecessors[hi - 1u]);
-        m_dependencies.push_back(Move(predecessors));
+        const usize rangeEnd = m_dependencyIndices.size();
+        for(usize lo = rangeBegin, hi = rangeEnd; lo + 1u < hi; ++lo, --hi)
+            Swap(m_dependencyIndices[lo], m_dependencyIndices[hi - 1u]);
+        m_dependencyOffsets.push_back(rangeEnd);
     }
 
     m_dirty = false;
@@ -154,13 +159,16 @@ Expected<void, CpuTaskAdmissionError::Enum> SystemScheduler::execute(World& worl
     ScopeExit drainSubmitted([&]()noexcept{ tasks.drain(); });
     const usize systemCount = m_allSystems.size();
     for(usize systemIndex = 0u; systemIndex < systemCount; ++systemIndex){
+        const usize depBegin = m_dependencyOffsets[systemIndex];
+        const usize depEnd = m_dependencyOffsets[systemIndex + 1u];
         dependencies.clear();
-        for(const usize predecessor : m_dependencies[systemIndex])
-            dependencies.push_back(handles[predecessor]);
+        for(usize depIndex = depBegin; depIndex < depEnd; ++depIndex)
+            dependencies.push_back(handles[m_dependencyIndices[depIndex]]);
 
         const auto system = m_allSystems[systemIndex];
-        const auto admitted = tasks.submit([this, system, systemIndex, &world, delta](){
-            for(const usize predecessor : m_dependencies[systemIndex]){
+        const auto admitted = tasks.submit([this, system, systemIndex, depBegin, depEnd, &world, delta](){
+            for(usize depIndex = depBegin; depIndex < depEnd; ++depIndex){
+                const usize predecessor = m_dependencyIndices[depIndex];
                 if(!m_executionResults[predecessor]){
                     m_executionResults[systemIndex] = MakeUnexpected(m_executionResults[predecessor].error());
                     return;

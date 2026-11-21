@@ -367,9 +367,9 @@ b8 GpuNativePacketRecorder::recordPacketRangeInCompileOrderWithAccess(
     GpuRecordedGraph& outRecordedGraph,
     GpuSubmissionPacketId* const outFailedPacket,
     GpuCommandIrCapture* const outCommandIrCapture,
-    const b8 alreadyPrepared
+    const b8 alreadyPrepared,
+    const b8 allowStateSeedElision
 )const{
-    if(outFailedPacket)
         *outFailedPacket = {};
     if(
         !declarationAccess.validFor(graph)
@@ -396,7 +396,7 @@ b8 GpuNativePacketRecorder::recordPacketRangeInCompileOrderWithAccess(
     if(!serialScratch || !serialScratch->stateFanInScratchArena)
         return false;
     Alloc::ScratchArena& stateFanInScratchArena = *serialScratch->stateFanInScratchArena;
-    if(!recordPreparedPacketRangeInCompileOrder(graph, declarationAccess, compiledGraph, planAccess, artifactOperation, range, stateFanInScratchArena, *serialScratch, outRecordedGraph, outCommandIrCapture, outFailedPacket))
+    if(!recordPreparedPacketRangeInCompileOrder(graph, declarationAccess, compiledGraph, planAccess, artifactOperation, range, stateFanInScratchArena, *serialScratch, outRecordedGraph, outCommandIrCapture, outFailedPacket, allowStateSeedElision))
         return false;
     outRecordedGraph.addRecordingElapsedSeconds(DurationInSeconds<f64>(TimerNow(), recordingOperationBegin), artifactOperation);
     return true;
@@ -465,7 +465,8 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiersWithAccess(
     GpuRecordedGraph& outRecordedGraph,
     GpuSubmissionPacketId* const outFailedPacket,
     GpuCommandIrCapture* const outCommandIrCapture,
-    const b8 alreadyPrepared
+    const b8 alreadyPrepared,
+    const b8 allowStateSeedElision
 )const{
     using RecordingEntry = __hidden_gpu_packet_runtime_recording_frontier::PacketRecordingFrontierEntry;
 
@@ -560,7 +561,7 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiersWithAccess(
     };
 
     if(!usesParallelRecording){
-        if(!recordPreparedPacketRangeInCompileOrder(graph, declarationAccess, compiledGraph, planAccess, artifactOperation, range, serialStateFanInScratchArena, *serialScratch, outRecordedGraph, outCommandIrCapture, outFailedPacket))
+        if(!recordPreparedPacketRangeInCompileOrder(graph, declarationAccess, compiledGraph, planAccess, artifactOperation, range, serialStateFanInScratchArena, *serialScratch, outRecordedGraph, outCommandIrCapture, outFailedPacket, allowStateSeedElision))
             return false;
         completeReadyFrontierTelemetry();
         return true;
@@ -620,7 +621,7 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiersWithAccess(
         if(parallelPacketIndices.empty()){
             for(const u32 packetIndex : serialPacketIndices){
                 const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
-                if(!recordPacket(graph, declarationAccess, compiledGraph, planAccess, artifactOperation, packet, 0u, 0u, serialStateFanInScratchArena, *serialScratch, outRecordedGraph)){
+                if(!recordPacket(graph, declarationAccess, compiledGraph, planAccess, artifactOperation, packet, 0u, 0u, serialStateFanInScratchArena, *serialScratch, outRecordedGraph, nullptr, nullptr, nullptr, allowStateSeedElision)){
                     if(outFailedPacket)
                         *outFailedPacket = packet;
                     return false;
@@ -646,7 +647,11 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiersWithAccess(
                         static_cast<u32>(workerSlot + 1u),
                         *scratch->stateFanInScratchArena,
                         *scratch,
-                        outRecordedGraph
+                        outRecordedGraph,
+                        nullptr,
+                        nullptr,
+                        nullptr,
+                        allowStateSeedElision
                     )
                 ){
                     if(outFailedPacket)
@@ -688,7 +693,8 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiersWithAccess(
                         outRecordedGraph,
                         nullptr,
                         &parallelAborts[parallelIndex],
-                        preclaimedBatch.claimed() ? &preclaimed : nullptr
+                        preclaimedBatch.claimed() ? &preclaimed : nullptr,
+                        allowStateSeedElision
                     ) ? 1u : 0u;
                 });
                 b8 anyAbort = false;
@@ -763,7 +769,8 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiersWithAccess(
                         outRecordedGraph,
                         nullptr,
                         deferredAbort,
-                        &preclaimed
+                        &preclaimed,
+                        allowStateSeedElision
                     );
                 }
                 return recordPacket(
@@ -779,13 +786,15 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiersWithAccess(
                     *scratch,
                     outRecordedGraph,
                     nullptr,
-                    deferredAbort
+                    deferredAbort,
+                    nullptr,
+                    allowStateSeedElision
                 );
             };
             if(cpuScheduler.workerThreadCount() == 0u){
                 for(const u32 packetIndex : serialPacketIndices){
                     const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
-                    if(!recordPacket(graph, declarationAccess, compiledGraph, planAccess, artifactOperation, packet, 0u, 0u, serialStateFanInScratchArena, *serialScratch, outRecordedGraph)){
+                    if(!recordPacket(graph, declarationAccess, compiledGraph, planAccess, artifactOperation, packet, 0u, 0u, serialStateFanInScratchArena, *serialScratch, outRecordedGraph, nullptr, nullptr, nullptr, allowStateSeedElision)){
                         if(outFailedPacket)
                             *outFailedPacket = packet;
                         return false;
@@ -857,7 +866,8 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiersWithAccess(
                                     outRecordedGraph,
                                     nullptr,
                                     &serialAbort,
-                                    preclaimedBatch.claimed() ? &serialPreclaimed : nullptr
+                                    preclaimedBatch.claimed() ? &serialPreclaimed : nullptr,
+                                    allowStateSeedElision
                                 )){
                                     serialFailedPacket = packet;
                                     nextParallelIndex.store(parallelCount, MemoryOrder::release);
@@ -948,13 +958,14 @@ b8 GpuNativePacketRecorder::recordPreparedPacketRangeInCompileOrder(
     GpuRecordedGraph::PacketRecordingScratch& scratch,
     GpuRecordedGraph& outRecordedGraph,
     GpuCommandIrCapture* const outCommandIrCapture,
-    GpuSubmissionPacketId* const outFailedPacket
+    GpuSubmissionPacketId* const outFailedPacket,
+    const b8 allowStateSeedElision
 )const{
     const usize rangeBegin = range.first.index;
     const usize rangeEnd = rangeBegin + range.packetCount;
     for(usize packetIndex = rangeBegin; packetIndex < rangeEnd; ++packetIndex){
         const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
-        if(!recordPacket(graph, declarationAccess, compiledGraph, planAccess, artifactAccess, packet, 0u, 0u, stateFanInScratchArena, scratch, outRecordedGraph, outCommandIrCapture)){
+        if(!recordPacket(graph, declarationAccess, compiledGraph, planAccess, artifactAccess, packet, 0u, 0u, stateFanInScratchArena, scratch, outRecordedGraph, outCommandIrCapture, nullptr, nullptr, allowStateSeedElision)){
             if(outFailedPacket)
                 *outFailedPacket = packet;
             return false;

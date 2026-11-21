@@ -295,7 +295,7 @@ b8 FramebufferRenderingPreparation::prepareFramebuffer(Framebuffer* const frameb
         m_commandList.rejectCommandRecording(operationName, FOUNDATION_TEXT("framebuffer attachment view could not be created"));
         return false;
     }
-    if(framebuffer->m_allAttachmentsManagedNonVirtual)
+    if(framebuffer->m_allAttachmentsManagedNonVirtual && !framebuffer->m_allViewsCached.load(MemoryOrder::relaxed))
         framebuffer->m_allViewsCached.store(true, MemoryOrder::release);
     return true;
 }

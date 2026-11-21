@@ -158,7 +158,7 @@ b8 GpuTaskScheduler::submitGraphWithinDeviceOperation(
             return false;
     }
 
-    if(!recordPacketRange(graph, declarationAccess, compiledGraph, planAccess, artifactOperation, recorder, normalRange, desc.readyFrontierScheduler, scratchArena, recordedGraph, desc.commandIrCapture, &failedPacket)){
+    if(!recordPacketRange(graph, declarationAccess, compiledGraph, planAccess, artifactOperation, recorder, normalRange, desc.readyFrontierScheduler, scratchArena, recordedGraph, desc.commandIrCapture, &failedPacket, recordedCallbacks.empty())){
         if(outFailedPacket)
             *outFailedPacket = failedPacket;
         return false;
@@ -341,11 +341,12 @@ b8 GpuTaskScheduler::recordPacketRange(
     Alloc::ScratchArena& scratchArena,
     GpuRecordedGraph& recordedGraph,
     GpuCommandIrCapture* const commandIrCapture,
-    GpuSubmissionPacketId* const outFailedPacket
+    GpuSubmissionPacketId* const outFailedPacket,
+    const b8 allowStateSeedElision
 )const{
     return readyFrontierScheduler
-        ? recorder.recordPacketRangeInReadyFrontiersWithAccess(graph, declarationAccess, compiledGraph, planAccess, artifactOperation, range, *readyFrontierScheduler, scratchArena, recordedGraph, outFailedPacket, commandIrCapture, true)
-        : recorder.recordPacketRangeInCompileOrderWithAccess(graph, declarationAccess, compiledGraph, planAccess, artifactOperation, range, scratchArena, recordedGraph, outFailedPacket, commandIrCapture, true)
+        ? recorder.recordPacketRangeInReadyFrontiersWithAccess(graph, declarationAccess, compiledGraph, planAccess, artifactOperation, range, *readyFrontierScheduler, scratchArena, recordedGraph, outFailedPacket, commandIrCapture, true, allowStateSeedElision)
+        : recorder.recordPacketRangeInCompileOrderWithAccess(graph, declarationAccess, compiledGraph, planAccess, artifactOperation, range, scratchArena, recordedGraph, outFailedPacket, commandIrCapture, true, allowStateSeedElision)
     ;
 }
 
@@ -385,7 +386,7 @@ b8 GpuTaskScheduler::recordAndSubmitTaskWithinSubmissionOperation(
 
     const GpuSubmissionPacketRange taskPacketRange = planAccess.packetRangeForTasks(task, task);
     GpuSubmissionPacketId failedPacket;
-    if(!recorder.recordPacketRangeInCompileOrderWithAccess(graph, declarationAccess, compiledGraph, planAccess, artifactAccess, taskPacketRange, scratchArena, recordedGraph, &failedPacket, nullptr, true)){
+    if(!recorder.recordPacketRangeInCompileOrderWithAccess(graph, declarationAccess, compiledGraph, planAccess, artifactAccess, taskPacketRange, scratchArena, recordedGraph, &failedPacket, nullptr, true, recordedCallback == nullptr)){
         if(outFailedPacket)
             *outFailedPacket = failedPacket;
         rejectTask();

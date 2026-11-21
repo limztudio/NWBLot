@@ -94,8 +94,19 @@ class LightSpaceShadowSnapshot{
     public b8 ready = false;
 }
 
-class LightSpaceShadowState{
+class FrozenLightSpaceShadowSnapshot{
+    public LightSpaceShadowSnapshot snapshot;
+    public Vector<LightSpaceShadowCaster> casters;
+}
+
+type FrozenLightSpaceShadowHandle = Shared<FrozenLightSpaceShadowSnapshot>;
+
+[ordered]
+class LightSpaceShadowState : NoCopy{
+    public SharedPool m_frozenPool = SharedPool();
     public LightSpaceShadowSnapshot m_snapshot;
+    public Vector<FrozenLightSpaceShadowHandle> m_frozenSnapshots;
+    public FrozenLightSpaceShadowHandle m_frozenSnapshot;
     public SoftwareShadowSettings m_settings;
     public LightSpaceCsgState m_csg;
     public u64 m_captureSceneIdentity = 0u;
@@ -107,6 +118,17 @@ class LightSpaceShadowState{
     public Vector<TextureHandle> m_sceneTextures;
     public Vector<TextureHandle> m_captureTextures;
     public Array<ShaderHandle, s_LightSpaceShaderCount> m_shaders;
+    public Array<SceneLightGpuData, s_SceneMaxLights> m_preflightedLights;
+    public Array<f32, s_SceneMaxLights> m_preflightedCausticImportance;
+    public LightSpacePlan m_preflightedPlan;
+    public u32 m_preflightedLightCount = 0u;
+    public u32 m_preflightedDrawCount = 0u;
+    public u64 m_preflightedLightMutationVersion = 0u;
+    public u64 m_preflightedTransformMutationVersion = 0u;
+    public u64 m_preflightedCameraMutationVersion = 0u;
+    public u64 m_preflightedActiveCameraMutationVersion = 0u;
+    public b8 m_preflightedLightsValid = false;
+    public b8 m_preflightedPlanValid = false;
     public b8 m_captureSceneTrusted = false;
     public b8 m_captureReuseLogged = false;
     public b8 m_sceneEligible = false;
@@ -122,6 +144,7 @@ class LightSpaceShadowRecorder{
     public b8 views(in LightSpaceShadowSnapshot snapshot, mut CommandList commandList, mut GpuDescriptorHeap heap)const;
     public b8 cull(in LightSpaceShadowSnapshot snapshot, mut CommandList commandList, mut GpuDescriptorHeap heap)const;
     public b8 capture(in LightSpaceShadowSnapshot snapshot, in u32 viewIndex, in b8 transparent, mut CommandList commandList, mut GpuDescriptorHeap heap)const;
+    public b8 captureAllViews(in LightSpaceShadowSnapshot snapshot, in b8 transparent, mut CommandList commandList, mut GpuDescriptorHeap heap)const;
     public b8 shade(in LightSpaceShadowSnapshot snapshot, mut CommandList commandList, mut GpuDescriptorHeap heap)const;
     public b8 resolve(
         in LightSpaceShadowSnapshot snapshot,

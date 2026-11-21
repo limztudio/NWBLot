@@ -58,6 +58,7 @@ public:
 
 public:
     [[nodiscard]] virtual Expected<usize> readFile(const Name& virtualPath, u64 offset, void* data, usize bytes)const = 0;
+    [[nodiscard]] virtual Expected<usize> readWholeFile(const Name& virtualPath, void* context, u8* (*prepareBuffer)(void* context, usize size))const;
     virtual b8 seekFile(FileCursor& cursor, i64 offset, FileSeekOrigin::Enum origin)const = 0;
     virtual b8 writeFile(const Name& virtualPath, const void* data, usize bytes) = 0;
     virtual b8 writeFileDeferred(const Name& virtualPath, const void* data, usize bytes) = 0;
@@ -99,16 +100,12 @@ b8 IFilesystem::readFile(const Name& virtualPath, ByteContainer& outData)const{
     static_assert(sizeof(typename ByteContainer::value_type) == s_ByteElementSize, "Filesystem buffers must contain bytes");
     outData.clear();
 
-    const auto size = fileSize(virtualPath);
-    if(!size)
-        return false;
-    if(*size > static_cast<u64>(Limit<usize>::s_Max)){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Filesystem: file exceeds the runtime buffer limit"));
-        return false;
-    }
-
-    outData.resize(static_cast<usize>(*size));
-    const auto bytesRead = readFile(virtualPath, 0, outData.empty() ? nullptr : outData.data(), outData.size());
+    const auto bytesRead = readWholeFile(virtualPath, AddressOf(outData), [](void* const context, const usize size) -> u8*{
+        auto& buffer = *static_cast<ByteContainer*>(context);
+        buffer.clear();
+        buffer.resize(size);
+        return buffer.empty() ? nullptr : reinterpret_cast<u8*>(buffer.data());
+    });
     if(!bytesRead || *bytesRead != outData.size()){
         outData.clear();
         return false;

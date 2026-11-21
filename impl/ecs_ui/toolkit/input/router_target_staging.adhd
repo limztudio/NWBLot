@@ -47,20 +47,30 @@ b8 StageRouterHitTargets(
     in Span<HitTarget> targets,
     in Span<PopupRecord> stagedPopups,
     mut Vector<HitTarget> stagedTargets,
-    mut Vector<TargetLookup> stagedLookup
+    mut Vector<TargetLookup> stagedLookup,
+    mut b8 outHasOwners,
+    mut b8 outHasCommandOwners
 ){
     stagedTargets.clear();
     stagedLookup.clear();
+    outHasOwners = false;
+    outHasCommandOwners = false;
     b8 needsSort = false;
     u64 previousIdValue = 0u;
     for(usize index = 0u; index < targets.size(); ++index){
-        const HitTarget target = targets[index];
+        in HitTarget target = targets[index];
         if(
             !target.id.valid() || target.declarationGeneration == 0u
             || !HasValidHitTargetGeometry(target.rectangle, target.clip, target.gestureReference)
             || !ValidStagedPopupTarget(target, stagedPopups)
+            || !HasValidHitTargetControlProperties(target)
+            || !HasValidHitTargetCommandOwnerProperties(target)
         )
             return false;
+        if(target.owner.valid())
+            outHasOwners = true;
+        if(target.commandOwner.valid())
+            outHasCommandOwners = true;
         stagedTargets.push_back(target);
         TargetLookup entry;
         entry.value = target.id.value;
@@ -71,33 +81,53 @@ b8 StageRouterHitTargets(
         stagedLookup.push_back(entry);
     }
     if(needsSort)
-        SortTargetLookupVector(stagedLookup);
+        SortSequence<TargetLookup>(stagedLookup, LessTargetLookup);
     return true;
 }
 
 b8 ValidateSortedStagedRouterTargetsAndPopups(
     in Span<HitTarget> stagedTargets,
     in Span<TargetLookup> stagedLookup,
-    in Span<PopupRecord> stagedPopups
+    in Span<PopupRecord> stagedPopups,
+    in b8 hasOwners,
+    in b8 hasCommandOwners
 ){
     for(usize index = 1u; index < stagedLookup.size(); ++index){
         if(stagedLookup[index - 1u].value == stagedLookup[index].value)
             return false;
     }
-    if(!ValidateStagedHitTargetControlTargets(stagedTargets, stagedLookup) || !ValidateStagedHitTargetCommandOwners(stagedTargets, stagedLookup))
-        return false;
+    if(hasOwners || hasCommandOwners){
+        for(in HitTarget target : stagedTargets){
+            if(target.owner.valid()){
+                const Expected<usize> hostIndex = FindTargetIndexInTable(stagedTargets, stagedLookup, target.owner, target.ownerDeclarationGeneration);
+                if(!hostIndex.has_value())
+                    return false;
+                in HitTarget host = stagedTargets[hostIndex.value()];
+                if(!host.enabled || !host.focusable || host.owner.valid() || host.control != target.control || host.popup != target.popup || host.layer != target.layer)
+                    return false;
+            }
+            if(target.commandOwner.valid()){
+                const Expected<usize> hostIndex = FindTargetIndexInTable(stagedTargets, stagedLookup, target.commandOwner, target.commandOwnerDeclarationGeneration);
+                if(!hostIndex.has_value())
+                    return false;
+                in HitTarget host = stagedTargets[hostIndex.value()];
+                if(!host.enabled || !host.focusable || !host.navigable || host.owner.valid() || host.control != target.commandControl || host.popup != target.popup || host.layer != target.layer)
+                    return false;
+            }
+        }
+    }
     for(in PopupRecord popup : stagedPopups){
         const Expected<usize> ownerIndex = FindTargetIndexInTable(stagedTargets, stagedLookup, popup.scope.token.widget, popup.scope.token.declarationGeneration);
         if(!ownerIndex.has_value())
             return false;
-        const HitTarget ownerTarget = stagedTargets[ownerIndex.value()];
+        in HitTarget ownerTarget = stagedTargets[ownerIndex.value()];
         if(ownerTarget.popup != popup.scope.token || !ownerTarget.enabled)
             return false;
         if(popup.scope.dismissFocusTraversal){
             const Expected<usize> anchorIndex = FindTargetIndexInTable(stagedTargets, stagedLookup, popup.scope.focusAnchor, popup.scope.focusAnchorDeclarationGeneration);
             if(!anchorIndex.has_value())
                 return false;
-            const HitTarget anchorTarget = stagedTargets[anchorIndex.value()];
+            in HitTarget anchorTarget = stagedTargets[anchorIndex.value()];
             if(anchorTarget.popup != popup.scope.parent || !anchorTarget.focusable || !anchorTarget.enabled || anchorTarget.owner.valid())
                 return false;
         }

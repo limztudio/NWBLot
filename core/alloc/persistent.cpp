@@ -30,16 +30,28 @@ constexpr usize s_FreeBinCount = 64u;
 constexpr usize s_SmallBinCount = 32u;
 constexpr usize s_SmallBinMaxSpan = s_SmallBinCount * s_BlockAlignment;
 constexpr usize s_LogBinBaseShift = static_cast<usize>(CountTrailingZeros(s_SmallBinMaxSpan));
+constexpr usize s_MaxBinProbeCount = 16u;
+constexpr usize s_FreeFlagBit = 1u;
 
 static_assert((s_SmallBinMaxSpan & (s_SmallBinMaxSpan - 1u)) == 0u, "Small bin threshold must be a power of two");
 
 
 struct alignas(MaxAlign) Block{
-    usize spanBytes = 0u;
+    usize spanAndFlags = 0u;
     usize requestedBytes = 0u;
     Block* previous = nullptr;
     Block* next = nullptr;
-    b8 isFree = false;
+
+
+    [[nodiscard]] inline usize spanBytes()const noexcept{ return spanAndFlags & ~s_FreeFlagBit; }
+    [[nodiscard]] inline b8 isFree()const noexcept{ return (spanAndFlags & s_FreeFlagBit) != 0u; }
+    inline void setSpanBytes(const usize bytes)noexcept{ spanAndFlags = (bytes & ~s_FreeFlagBit) | (spanAndFlags & s_FreeFlagBit); }
+    inline void setFree(const b8 freeState)noexcept{
+        if(freeState)
+            spanAndFlags |= s_FreeFlagBit;
+        else
+            spanAndFlags &= ~s_FreeFlagBit;
+    }
 };
 
 struct FreeLinks{
@@ -55,10 +67,12 @@ struct AllocationLayout{
 struct FreeBlockSelection{
     Block* block = nullptr;
     AllocationLayout layout;
+    usize bin = 0u;
 };
 
 
 static_assert(alignof(Block) <= alignof(MaxAlign), "PersistentArena block alignment must fit CoreAlloc storage");
+static_assert(sizeof(Block) == sizeof(usize) * 4u, "PersistentArena Block header must stay 4-word compact");
 static_assert(sizeof(Block) % s_BlockAlignment == 0u, "PersistentArena block headers must preserve physical alignment");
 static_assert((s_BlockAlignment & (s_BlockAlignment - 1u)) == 0u, "PersistentArena block alignment must be a power of two");
 static_assert(alignof(FreeLinks) <= alignof(MaxAlign), "PersistentArena free links must fit native block storage");
@@ -107,7 +121,7 @@ inline void StoreBlockForAllocation(NotNull<void*> p, Block& block)noexcept{
     if(blockBegin < bucketBegin || blockBegin - bucketBegin > bucketSize - sizeof(Block))
         return false;
 
-    return !block->isFree;
+    return !block->isFree();
 }
 
 [[nodiscard]] inline Expected<AllocationLayout> BuildAllocationLayout(const Block& block, const usize alignment, const usize requestedBytes)noexcept{
@@ -170,7 +184,7 @@ inline void StoreBlockForAllocation(NotNull<void*> p, Block& block)noexcept{
 }
 
 [[nodiscard]] inline Block& CreateBlock(NotNull<void*> address, const usize spanBytes, Block* const previous, Block* const next, const b8 isFree)noexcept{
-    return *new(address.get()) Block{ .spanBytes = spanBytes, .requestedBytes = 0u, .previous = previous, .next = next, .isFree = isFree, };
+    return *new(address.get()) Block{ .spanAndFlags = (spanBytes & ~s_FreeFlagBit) | (isFree ? s_FreeFlagBit : 0u), .requestedBytes = 0u, .previous = previous, .next = next };
 }
 
 [[nodiscard]] inline usize BinForSpan(const usize spanBytes)noexcept{
@@ -185,9 +199,9 @@ inline void StoreBlockForAllocation(NotNull<void*> p, Block& block)noexcept{
 }
 
 inline void InsertFreeBlock(Array<void*, s_FreeBinCount>& bins, u64& binMask, Block& block)noexcept{
-    FOUNDATION_ASSERT(block.isFree);
+    FOUNDATION_ASSERT(block.isFree());
 
-    const usize bin = BinForSpan(block.spanBytes);
+    const usize bin = BinForSpan(block.spanBytes());
     Block* const next = static_cast<Block*>(bins[bin]);
     new(BlockData(block).get()) FreeLinks{ .previous = nullptr, .next = next, };
     if(next)
@@ -196,10 +210,9 @@ inline void InsertFreeBlock(Array<void*, s_FreeBinCount>& bins, u64& binMask, Bl
     binMask |= (1ull << bin);
 }
 
-inline void RemoveFreeBlock(Array<void*, s_FreeBinCount>& bins, u64& binMask, Block& block)noexcept{
-    FOUNDATION_ASSERT(block.isFree);
+inline void RemoveFreeBlockFromBin(Array<void*, s_FreeBinCount>& bins, u64& binMask, Block& block, const usize bin)noexcept{
+    FOUNDATION_ASSERT(block.isFree());
 
-    const usize bin = BinForSpan(block.spanBytes);
     const FreeLinks links = Links(block);
     if(links.previous)
         Links(*links.previous).next = links.next;
@@ -209,34 +222,38 @@ inline void RemoveFreeBlock(Array<void*, s_FreeBinCount>& bins, u64& binMask, Bl
         Links(*links.next).previous = links.previous;
     if(!bins[bin])
         binMask &= ~(1ull << bin);
-    block.isFree = false;
+    block.setFree(false);
+}
+
+inline void RemoveFreeBlock(Array<void*, s_FreeBinCount>& bins, u64& binMask, Block& block)noexcept{
+    RemoveFreeBlockFromBin(bins, binMask, block, BinForSpan(block.spanBytes()));
 }
 
 inline void MergeNextBlock(Block& block, Block& next)noexcept{
     FOUNDATION_ASSERT(block.next == &next);
 
-    block.spanBytes += sizeof(Block) + next.spanBytes;
+    block.setSpanBytes(block.spanBytes() + sizeof(Block) + next.spanBytes());
     block.next = next.next;
     if(block.next)
         block.next->previous = &block;
 }
 
 inline void SplitUsedBlock(Array<void*, s_FreeBinCount>& bins, u64& binMask, Block& block, const usize requestedSpan)noexcept{
-    FOUNDATION_ASSERT(!block.isFree);
-    FOUNDATION_ASSERT(requestedSpan <= block.spanBytes);
+    FOUNDATION_ASSERT(!block.isFree());
+    FOUNDATION_ASSERT(requestedSpan <= block.spanBytes());
 
-    const usize remainder = block.spanBytes - requestedSpan;
+    const usize remainder = block.spanBytes() - requestedSpan;
     if(remainder < sizeof(Block) + MinimumFreeSpan())
         return;
 
     Block* const oldNext = block.next;
     Block& tail = CreateBlock(MakeNotNull(static_cast<void*>(BlockData(block).get() + requestedSpan)), remainder - sizeof(Block), &block, oldNext, true);
-    block.spanBytes = requestedSpan;
+    block.setSpanBytes(requestedSpan);
     block.next = &tail;
     if(oldNext)
         oldNext->previous = &tail;
 
-    if(oldNext && oldNext->isFree){
+    if(oldNext && oldNext->isFree()){
         RemoveFreeBlock(bins, binMask, *oldNext);
         MergeNextBlock(tail, *oldNext);
     }
@@ -254,20 +271,28 @@ inline void SplitUsedBlock(Array<void*, s_FreeBinCount>& bins, u64& binMask, Blo
             return MakeUnexpected(Failure{});
 
         const usize b0 = BinForSpan(normalLayout->spanBytes);
+        const u64 higherMask = b0 < (s_FreeBinCount - 1u) ? (binMask & (~0ull << (b0 + 1u))) : 0ull;
         if((binMask & (1ull << b0)) != 0ull){
             if(b0 < s_SmallBinCount){
                 selection.block = static_cast<Block*>(bins[b0]);
                 selection.layout = *normalLayout;
+                selection.bin = b0;
                 return selection;
             }
             usize selectedSlackBytes = 0u;
+            usize probed = 0u;
             for(Block* block = static_cast<Block*>(bins[b0]); block; block = Links(*block).next){
-                if(normalLayout->spanBytes > block->spanBytes)
+                if(probed >= s_MaxBinProbeCount && (selection.block != nullptr || higherMask != 0ull))
+                    break;
+                ++probed;
+                const usize blockSpan = block->spanBytes();
+                if(normalLayout->spanBytes > blockSpan)
                     continue;
-                const usize slackBytes = block->spanBytes - normalLayout->spanBytes;
+                const usize slackBytes = blockSpan - normalLayout->spanBytes;
                 if(!selection.block || slackBytes < selectedSlackBytes){
                     selection.block = block;
                     selection.layout = *normalLayout;
+                    selection.bin = b0;
                     selectedSlackBytes = slackBytes;
                     if(slackBytes == 0u)
                         break;
@@ -277,13 +302,13 @@ inline void SplitUsedBlock(Array<void*, s_FreeBinCount>& bins, u64& binMask, Blo
                 return selection;
         }
 
-        const u64 higherMask = b0 < (s_FreeBinCount - 1u) ? (binMask & (~0ull << (b0 + 1u))) : 0ull;
         if(higherMask == 0ull)
             return MakeUnexpected(Failure{});
 
         const usize b1 = static_cast<usize>(CountTrailingZeros(higherMask));
         selection.block = static_cast<Block*>(bins[b1]);
         selection.layout = *normalLayout;
+        selection.bin = b1;
         return selection;
     }
 
@@ -300,17 +325,23 @@ inline void SplitUsedBlock(Array<void*, s_FreeBinCount>& bins, u64& binMask, Blo
         candidateMask &= candidateMask - 1ull;
 
         usize selectedSlackBytes = 0u;
+        usize probed = 0u;
         for(Block* block = static_cast<Block*>(bins[bin]); block; block = Links(*block).next){
+            if(selection.block && probed >= s_MaxBinProbeCount)
+                break;
+            ++probed;
             const auto candidateLayout = BuildAllocationLayout(*block, alignment, requestedBytes);
             if(!candidateLayout)
                 continue;
             const AllocationLayout& layout = *candidateLayout;
-            if(layout.spanBytes > block->spanBytes)
+            const usize blockSpan = block->spanBytes();
+            if(layout.spanBytes > blockSpan)
                 continue;
-            const usize slackBytes = block->spanBytes - layout.spanBytes;
+            const usize slackBytes = blockSpan - layout.spanBytes;
             if(!selection.block || slackBytes < selectedSlackBytes){
                 selection.block = block;
                 selection.layout = layout;
+                selection.bin = bin;
                 selectedSlackBytes = slackBytes;
                 if(slackBytes == 0u)
                     break;
@@ -391,7 +422,7 @@ void* PersistentArena::allocate(const usize align, usize size){
     if(!allocation)
         return nullptr;
     const auto& allocatedBlock = *static_cast<__hidden_persistent::Block*>(allocation->block.get());
-    m_memoryStats.recordAllocationSingleThread(static_cast<u64>(allocatedBlock.spanBytes));
+    m_memoryStats.recordAllocationSingleThread(static_cast<u64>(allocatedBlock.spanBytes()));
     return allocation->pointer.get();
 }
 
@@ -410,7 +441,7 @@ void* PersistentArena::reallocate(void* const p, const usize align, usize size){
         return nullptr;
 
     const NotNull<__hidden_persistent::Block*> block = MakeNotNull(blockPtr);
-    const u64 oldSpanBytes = static_cast<u64>(block->spanBytes);
+    const u64 oldSpanBytes = static_cast<u64>(block->spanBytes());
     if(size == 0u){
         deallocateBlockLocked(MakeNotNull(static_cast<void*>(block.get())));
         m_memoryStats.recordReallocationSingleThread(oldSpanBytes, 0u);
@@ -424,31 +455,31 @@ void* PersistentArena::reallocate(void* const p, const usize align, usize size){
     const usize alignment = __hidden_persistent::EffectiveAlignment(align);
     const usize pointerAddress = reinterpret_cast<usize>(nonNullPtr.get());
     const auto layout = (pointerAddress % alignment == 0u) ? __hidden_persistent::BuildExistingPointerLayout(*block, nonNullPtr, size) : Expected<__hidden_persistent::AllocationLayout>(MakeUnexpected(Failure{}));
-    if(layout && layout->spanBytes <= block->spanBytes){
+    if(layout && layout->spanBytes <= block->spanBytes()){
         __hidden_persistent::SplitUsedBlock(m_freeBins, m_nonEmptyBinMask, *block, layout->spanBytes);
         block->requestedBytes = size;
-        m_memoryStats.recordReallocationSingleThread(oldSpanBytes, static_cast<u64>(block->spanBytes));
+        m_memoryStats.recordReallocationSingleThread(oldSpanBytes, static_cast<u64>(block->spanBytes()));
         return p;
     }
 
-    if(layout && layout->spanBytes > block->spanBytes){
-        usize combinedSpanBytes = block->spanBytes;
-        for(__hidden_persistent::Block* next = block->next; next && next->isFree && combinedSpanBytes < layout->spanBytes; next = next->next){
-            const usize nextTotalBytes = sizeof(__hidden_persistent::Block) + next->spanBytes;
+    if(layout && layout->spanBytes > block->spanBytes()){
+        usize combinedSpanBytes = block->spanBytes();
+        for(__hidden_persistent::Block* next = block->next; next && next->isFree() && combinedSpanBytes < layout->spanBytes; next = next->next){
+            const usize nextTotalBytes = sizeof(__hidden_persistent::Block) + next->spanBytes();
             if(AddOverflows<usize>(combinedSpanBytes, nextTotalBytes))
                 break;
             combinedSpanBytes += nextTotalBytes;
         }
         if(layout->spanBytes <= combinedSpanBytes){
-            while(layout->spanBytes > block->spanBytes){
-                FOUNDATION_ASSERT(block->next && block->next->isFree);
+            while(layout->spanBytes > block->spanBytes()){
+                FOUNDATION_ASSERT(block->next && block->next->isFree());
                 __hidden_persistent::Block* const next = block->next;
                 __hidden_persistent::RemoveFreeBlock(m_freeBins, m_nonEmptyBinMask, *next);
                 __hidden_persistent::MergeNextBlock(*block, *next);
             }
             __hidden_persistent::SplitUsedBlock(m_freeBins, m_nonEmptyBinMask, *block, layout->spanBytes);
             block->requestedBytes = size;
-            m_memoryStats.recordReallocationSingleThread(oldSpanBytes, static_cast<u64>(block->spanBytes));
+            m_memoryStats.recordReallocationSingleThread(oldSpanBytes, static_cast<u64>(block->spanBytes()));
             return p;
         }
     }
@@ -461,7 +492,7 @@ void* PersistentArena::reallocate(void* const p, const usize align, usize size){
     auto& replacementBlock = *static_cast<__hidden_persistent::Block*>(replacement->block.get());
     FOUNDATION_MEMCPY(replacement->pointer.get(), replacementBlock.requestedBytes, nonNullPtr.get(), copyBytes);
     deallocateBlockLocked(MakeNotNull(static_cast<void*>(block.get())));
-    m_memoryStats.recordReallocationSingleThread(oldSpanBytes, static_cast<u64>(replacementBlock.spanBytes));
+    m_memoryStats.recordReallocationSingleThread(oldSpanBytes, static_cast<u64>(replacementBlock.spanBytes()));
     return replacement->pointer.get();
 }
 
@@ -478,7 +509,7 @@ void PersistentArena::deallocate(void* const p, [[maybe_unused]] const usize ali
         return;
 
     const NotNull<__hidden_persistent::Block*> block = MakeNotNull(blockPtr);
-    m_memoryStats.recordDeallocationSingleThread(static_cast<u64>(block->spanBytes));
+    m_memoryStats.recordDeallocationSingleThread(static_cast<u64>(block->spanBytes()));
     deallocateBlockLocked(MakeNotNull(static_cast<void*>(block.get())));
 }
 
@@ -491,7 +522,7 @@ Expected<PersistentArena::Allocation> PersistentArena::allocateLocked(const usiz
     auto& selected = *selection->block;
     const auto& selectedLayout = selection->layout;
 
-    __hidden_persistent::RemoveFreeBlock(m_freeBins, m_nonEmptyBinMask, selected);
+    __hidden_persistent::RemoveFreeBlockFromBin(m_freeBins, m_nonEmptyBinMask, selected, selection->bin);
     __hidden_persistent::SplitUsedBlock(m_freeBins, m_nonEmptyBinMask, selected, selectedLayout.spanBytes);
     selected.requestedBytes = size;
     const auto p = MakeNotNull(__hidden_persistent::BlockData(selected).get() + selectedLayout.userOffset);
@@ -504,18 +535,18 @@ void PersistentArena::deallocateBlockLocked(NotNull<void*> blockPointer)noexcept
     block.requestedBytes = 0u;
 
     __hidden_persistent::Block* merged = &block;
-    if(merged->previous && merged->previous->isFree){
+    if(merged->previous && merged->previous->isFree()){
         __hidden_persistent::Block* const prev = merged->previous;
         __hidden_persistent::RemoveFreeBlock(m_freeBins, m_nonEmptyBinMask, *prev);
         __hidden_persistent::MergeNextBlock(*prev, *merged);
         merged = prev;
     }
-    if(merged->next && merged->next->isFree){
+    if(merged->next && merged->next->isFree()){
         __hidden_persistent::Block* const next = merged->next;
         __hidden_persistent::RemoveFreeBlock(m_freeBins, m_nonEmptyBinMask, *next);
         __hidden_persistent::MergeNextBlock(*merged, *next);
     }
-    merged->isFree = true;
+    merged->setFree(true);
     __hidden_persistent::InsertFreeBlock(m_freeBins, m_nonEmptyBinMask, *merged);
 }
 

@@ -116,6 +116,7 @@ void GpuTaskGraph::completeResetWithinLock()noexcept{
             container.clear();
     };
     clearIfNonEmpty(m_tasks);
+    m_publishedTaskCount = 0u;
     clearIfNonEmpty(m_dependencies);
     m_normalExecutionPrelude = {};
     clearIfNonEmpty(m_externalDependencies);
@@ -124,6 +125,7 @@ void GpuTaskGraph::completeResetWithinLock()noexcept{
     clearIfNonEmpty(m_resourceVersionUses);
     m_resourceImportIndexes.clearResources();
     clearIfNonEmpty(m_resources);
+    m_publishedResourceCount = 0u;
     clearIfNonEmpty(m_resourceVersions);
     clearIfNonEmpty(m_initialOwnerHandoffSources);
     clearIfNonEmpty(m_queueFamilyIndices);

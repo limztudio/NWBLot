@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_csg/frame_types.adhd>
+#include <impl/ecs_csg/shape_registry.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,6 +37,57 @@ class CsgFrameCutterRef{
     }
 }
 
+class CsgPrecomputedCutter{
+    public EntityID entity;
+    public Name shapeType = s_NameNone;
+    public CsgShapeTypeId shapeTypeId = s_InvalidCsgShapeTypeId;
+    public Name shapeName = s_NameNone;
+    public Name shaderModule = s_NameNone;
+    public u32 parameterByteSize = 0u;
+    public FixedVector<u8, s_CsgShapeInlineParameterMaxBytes> parameterBytes;
+    public f32x3x4 worldToShape(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    public f32x3x4 shapeToWorld(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    public f32x4 boundsMin(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 boundsMax(0.0f, 0.0f, 0.0f, 0.0f);
+    public b8 hasShaderModule = false;
+    public b8 boundsResolved = false;
+    public b8 finiteBounds = false;
+    public b8 valid = false;
+}
+
+CsgPrecomputedCutter BuildPrecomputedCsgCutter(in EntityID entity, in CsgCutterComponent cutter, in CsgShapeTypeInfo shapeType){
+    CsgPrecomputedCutter out;
+    Span<u8> resolved = cutter.parameterBytes;
+    if(cutter.parameterBytes.empty())
+        resolved = shapeType.desc.defaultParameterBytes;
+    if(resolved.size() != cast<usize>(shapeType.desc.parameterByteSize) || resolved.size() > s_CsgShapeInlineParameterMaxBytes)
+        return out;
+
+    out.entity = entity;
+    out.shapeType = cutter.shapeType;
+    out.shapeTypeId = shapeType.id;
+    out.shapeName = shapeType.desc.name;
+    out.shaderModule = shapeType.desc.shaderModule;
+    out.parameterByteSize = shapeType.desc.parameterByteSize;
+    for(usize byteIndex = 0u; byteIndex < resolved.size(); ++byteIndex)
+        out.parameterBytes.push_back(resolved[byteIndex]);
+    out.worldToShape = cutter.worldToShape;
+    out.shapeToWorld = cutter.shapeToWorld;
+    out.hasShaderModule = shapeType.desc.shaderModule != s_NameNone;
+    out.valid = true;
+    if(shapeType.desc.boundsCallback.has_value()){
+        const Span<u8> paramSpan(out.parameterBytes);
+        const auto bounds = shapeType.desc.boundsCallback.value()(MatrixSingle(cutter.shapeToWorld), paramSpan);
+        if(bounds.has_value() && (!bounds.value().finiteBounds || AabbValid(LoadFloat(bounds.value().minBounds), LoadFloat(bounds.value().maxBounds)))){
+            out.boundsMin = bounds.value().minBounds;
+            out.boundsMax = bounds.value().maxBounds;
+            out.finiteBounds = bounds.value().finiteBounds;
+            out.boundsResolved = true;
+        }
+    }
+    return out;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -65,6 +117,8 @@ class CsgFrameReceiverLookup : NoCopy{
     private mut World m_world;
     private HashMap<Name, CsgFrameCutterRangeEntry> m_cutterRanges;
     private Vector<Optional<CsgFrameCutterRef>> m_cutterRefs;
+    private Vector<CsgPrecomputedCutter> m_precomputedCutters;
+    private b8 m_cuttersPrecomputed = false;
 
     public CsgFrameReceiverLookup(mut World world){
         this.m_world = world;
@@ -74,8 +128,8 @@ class CsgFrameReceiverLookup : NoCopy{
             this.countCutter(Get<1>(row));
 
         u32 firstCutter = 0u;
-        for(in auto group : this.m_cutterRanges){
-            mut CsgFrameCutterRangeEntry entry = this.m_cutterRanges[group.first];
+        for(auto it = this.m_cutterRanges.begin(); it != this.m_cutterRanges.end(); ++it){
+            mut CsgFrameCutterRangeEntry entry = it.value();
             entry.range.firstCutter = firstCutter;
             firstCutter = AddSaturating<u32>(firstCutter, entry.range.cutterCount);
         }
@@ -114,6 +168,13 @@ class CsgFrameReceiverLookup : NoCopy{
         return cast<u32>(this.m_cutterRefs.size());
     }
 
+    public Expected<CsgFrameCutterRange> resolveReceiverGroupRange(in Name receiverGroup)const{
+        const auto found = this.m_cutterRanges.find(receiverGroup);
+        if(found == this.m_cutterRanges.end() || found.value().range.cutterCount == 0u)
+            return MakeUnexpected(Failure());
+        return found.value().range;
+    }
+
     public Expected<CsgReceiverDrawState> resolveReceiverDrawState(in EntityID entity, in CsgReceiverPass receiverPass)const{
         const Expected<CsgResolvedReceiver> resolved = ResolveCsgReceiverComponent(this.m_world, entity);
         if(!resolved.has_value())
@@ -121,10 +182,10 @@ class CsgFrameReceiverLookup : NoCopy{
         in CsgResolvedReceiver receiver = resolved.value();
         if(!receiver.receiver.enabled || !IsCsgReceiverPassEnabled(receiver.receiver, receiverPass))
             return MakeUnexpected(Failure());
-        const auto found = this.m_cutterRanges.find(receiver.receiver.receiverGroup);
-        if(found == this.m_cutterRanges.end() || found.value().range.cutterCount == 0u)
+        const Expected<CsgFrameCutterRange> range = this.resolveReceiverGroupRange(receiver.receiver.receiverGroup);
+        if(!range.has_value())
             return MakeUnexpected(Failure());
-        return MakeCsgReceiverDrawState(receiver.receiverKind, found.value().range);
+        return MakeCsgReceiverDrawState(receiver.receiverKind, range.value());
     }
 
     public Span<Optional<CsgFrameCutterRef>> receiverCutters(in CsgReceiverDrawState drawState)const{
@@ -135,6 +196,56 @@ class CsgFrameReceiverLookup : NoCopy{
             return Span<Optional<CsgFrameCutterRef>>();
         }
         const Span<Optional<CsgFrameCutterRef>> cutters = Span<Optional<CsgFrameCutterRef>>(this.m_cutterRefs);
+        return cutters.subspan(drawState.firstCutter, drawState.cutterCount);
+    }
+
+    [cpp_unwind]
+    public void precomputeCutters(in CsgShapeRegistry shapeRegistry){
+        this.m_precomputedCutters.clear();
+        this.m_cuttersPrecomputed = true;
+        if(this.m_cutterRefs.empty())
+            return;
+
+        this.m_precomputedCutters.reserve(this.m_cutterRefs.size());
+        HashMap<Name, CsgShapeTypeInfo> shapeTypeCache;
+        HashSet<Name> missingShapeTypes;
+        for(in auto record : this.m_cutterRefs){
+            if(!record.has_value()){
+                this.m_precomputedCutters.push_back(CsgPrecomputedCutter());
+                continue;
+            }
+            in CsgCutterComponent cutter = record.value().cutter;
+            if(missingShapeTypes.contains(cutter.shapeType)){
+                this.m_precomputedCutters.push_back(CsgPrecomputedCutter());
+                continue;
+            }
+            auto shapeIt = shapeTypeCache.find(cutter.shapeType);
+            if(shapeIt == shapeTypeCache.end()){
+                const auto foundShape = shapeRegistry.findShapeType(cutter.shapeType);
+                if(!foundShape.has_value()){
+                    missingShapeTypes.insert(cutter.shapeType);
+                    this.m_precomputedCutters.push_back(CsgPrecomputedCutter());
+                    continue;
+                }
+                const auto inserted = shapeTypeCache.try_emplace(cutter.shapeType, foundShape.value());
+                shapeIt = inserted.first;
+            }
+            this.m_precomputedCutters.push_back(BuildPrecomputedCsgCutter(record.value().entity, cutter, shapeIt.value()));
+        }
+    }
+
+    public b8 hasPrecomputedCutters()const{
+        return this.m_cuttersPrecomputed;
+    }
+
+    public Span<CsgPrecomputedCutter> precomputedReceiverCutters(in CsgReceiverDrawState drawState)const{
+        if(!this.m_cuttersPrecomputed || !drawState.active || drawState.cutterCount == 0u)
+            return Span<CsgPrecomputedCutter>();
+        if(!IsValidCsgReceiverDrawRange(drawState, this.m_precomputedCutters.size())){
+            assert(false);
+            return Span<CsgPrecomputedCutter>();
+        }
+        const Span<CsgPrecomputedCutter> cutters = Span<CsgPrecomputedCutter>(this.m_precomputedCutters);
         return cutters.subspan(drawState.firstCutter, drawState.cutterCount);
     }
 }
@@ -157,25 +268,15 @@ void GatherCsgReceiverState<ReceiverT>(
             continue;
         if(desc.visibility.has_value() && !desc.visibility.value().filter.visible(world, entity, kind, receiver))
             continue;
-        u32 cutterCount = 0u;
-        b8 opaqueWork = false;
-        b8 transparentWork = false;
-        if(desc.includeOpaquePass){
-            const Expected<CsgReceiverDrawState> opaque = lookup.resolveReceiverDrawState(entity, CsgReceiverPass::Opaque);
-            if(opaque.has_value() && opaque.value().receiverKind == kind){
-                cutterCount = opaque.value().cutterCount;
-                opaqueWork = true;
-            }
-        }
-        if(desc.includeTransparentPass){
-            const Expected<CsgReceiverDrawState> transparent = lookup.resolveReceiverDrawState(entity, CsgReceiverPass::Transparent);
-            if(transparent.has_value() && transparent.value().receiverKind == kind){
-                cutterCount = transparent.value().cutterCount;
-                transparentWork = true;
-            }
-        }
-        if(opaqueWork || transparentWork)
-            AddCsgFrameReceiverWork(kind, opaqueWork, transparentWork, cutterCount, state);
+        if(kind == CsgReceiverKind::Skinned && world.hasComponent<StaticCsgMeshComponent>(entity))
+            continue;
+        const b8 wantOpaque = desc.includeOpaquePass && IsCsgReceiverPassEnabled(receiver, CsgReceiverPass::Opaque);
+        const b8 wantTransparent = desc.includeTransparentPass && IsCsgReceiverPassEnabled(receiver, CsgReceiverPass::Transparent);
+        if(!wantOpaque && !wantTransparent)
+            continue;
+        const Expected<CsgFrameCutterRange> range = lookup.resolveReceiverGroupRange(receiver.receiverGroup);
+        if(range.has_value() && range.value().cutterCount != 0u)
+            AddCsgFrameReceiverWork(kind, wantOpaque, wantTransparent, range.value().cutterCount, state);
     }
 }
 

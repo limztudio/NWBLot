@@ -294,12 +294,12 @@ inline void AssignTriviallyCopyableVector(DestinationVector& destination, const 
         return;
     }
 
-    if constexpr(requires(DestinationVector& d, usize n){ d.data(); d.resize(n); } && requires(const SourceVector& s){ s.data(); }){
-        destination.resize(sourceSize);
-        if constexpr(alignof(DestinationValue) >= s_SIMDMemoryCopyAlignment)
-            FOUNDATION_SIMD_MEMCPY(destination.data(), sourceSize * sizeof(DestinationValue), source.data(), sourceSize * sizeof(SourceValue));
-        else
-            FOUNDATION_MEMCPY(destination.data(), sourceSize * sizeof(DestinationValue), source.data(), sourceSize * sizeof(SourceValue));
+    if constexpr(requires(DestinationVector& d, const DestinationValue* p){ d.clear(); d.capacity(); d.assign(p, p); } && requires(const SourceVector& s){ s.data(); }){
+        if(destination.capacity() < sourceSize){
+            destination.clear();
+            ContainerDetail::ReserveGrowingCapacity(destination, sourceSize);
+        }
+        destination.assign(source.data(), source.data() + sourceSize);
     }
     else{
         ContainerDetail::ReserveGrowingCapacity(destination, sourceSize);
@@ -341,12 +341,8 @@ inline void AppendTriviallyCopyableVector(DestinationVector& destination, const 
     }
 
     ContainerDetail::ReserveGrowingCapacity(destination, destinationSize + sourceSize);
-    if constexpr(requires(DestinationVector& d, usize n){ d.data(); d.resize(n); } && requires(const SourceVector& s){ s.data(); }){
-        destination.resize(destinationSize + sourceSize);
-        if constexpr(alignof(DestinationValue) >= s_SIMDMemoryCopyAlignment)
-            FOUNDATION_SIMD_MEMCPY(destination.data() + destinationSize, sourceSize * sizeof(DestinationValue), source.data(), sourceSize * sizeof(SourceValue));
-        else
-            FOUNDATION_MEMCPY(destination.data() + destinationSize, sourceSize * sizeof(DestinationValue), source.data(), sourceSize * sizeof(SourceValue));
+    if constexpr(requires(DestinationVector& d, const DestinationValue* p){ d.insert(d.end(), p, p); } && requires(const SourceVector& s){ s.data(); }){
+        destination.insert(destination.end(), source.data(), source.data() + sourceSize);
     }
     else if constexpr(requires(DestinationVector& d, const SourceVector& s){ d.insert(d.end(), s.begin(), s.end()); }){
         destination.insert(destination.end(), source.begin(), source.end());

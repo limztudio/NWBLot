@@ -74,8 +74,7 @@ class UiTextEditOwner{
 class UiEditBoxGeometry{
     public PopupToken popup;
     public EditBoxPlacement placement;
-    public Vector<EditBoxCaretStop> stops;
-    public Vector<EditCaretLine> lines;
+    public SharedEditCaretStopTable stopTable;
     public EditBoxOptions options;
     public EditTextMode textMode = EditTextMode::SingleLine;
     public u64 generation = 0u;

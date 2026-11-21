@@ -32,7 +32,8 @@ const usize s_SoftwareSceneRefitInstanceGpuByteSize = 64u;
 class SoftwareSceneBvhValidationPolicy{
     public b8 validateSceneRefitCounts(in usize instanceCount, in usize meshNodeCount, in u32 nodeCount)const{
         return instanceCount != 0u
-            && meshNodeCount == instanceCount
+            && meshNodeCount != 0u
+            && meshNodeCount <= instanceCount
             && instanceCount <= cast<usize>(u32.max) / s_SoftwareSceneRefitInstanceGpuByteSize
             && ComputeBinaryBvhNodeCount(instanceCount) == cast<usize>(nodeCount);
     }
@@ -187,15 +188,16 @@ class SoftwareSceneRefitResources : NoCopy{
         snapshot.deref().queue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
         snapshot.deref().nodeCount = nodeCount;
         snapshot.deref().inputs.reserve(instanceCount);
-        snapshot.deref().meshNodes.reserve(instanceCount);
+        snapshot.deref().meshNodes.reserve(meshNodes.size());
         for(usize index = 0u; index < instanceCount; ++index){
-            if(
-                !meshNodes[index].valid() || inputs[index].meshNodeSlot == u32.max
-                || meshNodes[index].deref().getDeviceGeneration() != device.getDeviceGeneration() || meshNodes[index].deref().getCreationDescription().byteSize < s_NwbBvhNodeGpuByteSize
-            )
+            if(inputs[index].meshNodeSlot == u32.max)
                 return MakeUnexpected(Failure());
             snapshot.deref().inputs.push_back(inputs[index]);
-            snapshot.deref().meshNodes.push_back(meshNodes[index]);
+        }
+        for(in BufferHandle root : meshNodes){
+            if(!root.valid() || root.deref().getDeviceGeneration() != device.getDeviceGeneration() || root.deref().getCreationDescription().byteSize < s_NwbBvhNodeGpuByteSize)
+                return MakeUnexpected(Failure());
+            snapshot.deref().meshNodes.push_back(root);
         }
         return snapshot;
     }
@@ -263,25 +265,21 @@ Expected<SoftwareSceneRefitGraphTasks> DeclareSoftwareSceneRefit(in SoftwareScen
     uses.reserve(snapshot.deref().meshNodes.size() + s_SoftwareSceneRefitFixedUseCapacity);
     uses.push_back(ReadUse(input, ResourceStates::ShaderResource));
     uses.push_back(ReadWriteUse(sceneNodes, ResourceStates::UnorderedAccess));
-    for(in BufferHandle root : snapshot.deref().meshNodes){
-        GpuGraphResourceId resource;
-        {
-            const GpuTaskGraphDeclarationReadView declarations(graph);
-            if(!declarations.valid())
-                return MakeUnexpected(Failure());
-            resource = declarations.findImportedBuffer(root);
-        }
-        if(!resource.valid())
+    HashSet<u32> seenResources;
+    seenResources.reserve(snapshot.deref().meshNodes.size() + s_SoftwareSceneRefitFixedUseCapacity);
+    seenResources.insert(input.index);
+    seenResources.insert(sceneNodes.index);
+    {
+        const GpuTaskGraphDeclarationReadView declarations(graph);
+        if(!declarations.valid())
             return MakeUnexpected(Failure());
-        b8 present = false;
-        for(in GpuTaskResourceUse use : uses){
-            if(use.resource == resource){
-                present = true;
-                break;
-            }
+        for(in BufferHandle root : snapshot.deref().meshNodes){
+            const GpuGraphResourceId resource = declarations.findImportedBuffer(root);
+            if(!resource.valid())
+                return MakeUnexpected(Failure());
+            if(seenResources.insert(resource.index).second)
+                uses.push_back(ReadUse(resource, ResourceStates::ShaderResource));
         }
-        if(!present)
-            uses.push_back(ReadUse(resource, ResourceStates::ShaderResource));
     }
     const auto uploadResult = graph.copyUploadBytes<u32>(PodArrayBytes<SoftwareSceneRefitInstanceGpu>(Span<SoftwareSceneRefitInstanceGpu>(snapshot.deref().inputs)));
     if(!uploadResult.has_value())

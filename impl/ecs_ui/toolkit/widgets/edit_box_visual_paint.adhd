@@ -75,7 +75,13 @@ b8 PaintEditBoxViewVisual(
         if(selectionRange.begin == selectionRange.end)
             painted = ResolveEditCaretRangeOnLine(utf8Text, textLines, clusters, boundaries, caretLines, selectionRange, 0u, placement.caret.width).has_value();
         else{
-            for(u32 line = 0u; line < cast<u32>(caretLines.size()); ++line){
+            u32 firstLine = 0u;
+            u32 endLine = cast<u32>(caretLines.size());
+            if(!textLines.empty() && textLines.size() == caretLines.size() && selectionRange.begin <= selectionRange.end && selectionRange.end <= utf8Text.size()){
+                firstLine = LineForEditCaretByte(textLines, selectionRange.begin);
+                endLine = Min(endLine, LineForEditCaretByte(textLines, selectionRange.end) + 1u);
+            }
+            for(u32 line = firstLine; line < endLine; ++line){
                 const Expected<Rect> segmentResult = ResolveEditCaretRangeOnLine(utf8Text, textLines, clusters, boundaries, caretLines, selectionRange, line, placement.caret.width);
                 if(!segmentResult.has_value()){
                     painted = false;
@@ -94,7 +100,13 @@ b8 PaintEditBoxViewVisual(
         painted = painted && text.paint(paint, layout, placement.textOrigin, activeTextColor);
     }
     if(painted && composing && flags.focused && flags.enabled){
-        for(u32 line = 0u; line < cast<u32>(caretLines.size()); ++line){
+        u32 firstPreeditLine = 0u;
+        u32 endPreeditLine = cast<u32>(caretLines.size());
+        if(!textLines.empty() && textLines.size() == caretLines.size() && preeditRange.begin <= preeditRange.end && preeditRange.end <= utf8Text.size()){
+            firstPreeditLine = LineForEditCaretByte(textLines, preeditRange.begin);
+            endPreeditLine = Min(endPreeditLine, LineForEditCaretByte(textLines, preeditRange.end) + 1u);
+        }
+        for(u32 line = firstPreeditLine; line < endPreeditLine; ++line){
             const Expected<Rect> segmentResult = ResolveEditCaretRangeOnLine(utf8Text, textLines, clusters, boundaries, caretLines, preeditRange, line, placement.caret.width);
             if(!segmentResult.has_value()){
                 painted = false;

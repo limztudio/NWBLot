@@ -172,21 +172,36 @@ ArenaMemoryStats ArenaMemoryOwnerRecord::snapshot()const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ArenaMemoryTracker::ArenaMemoryTracker(const Name& ownerName, const ArenaMemoryReservation::Enum reservation)
-    : m_reservation(reservation)
+ArenaMemoryTracker::ArenaMemoryTracker(const Name& ownerName, const ArenaMemoryReservation::Enum reservation, const b8 deferAttach)
+    : m_owner(&__hidden_arena_memory::FindOrCreateOwner(ownerName))
+    , m_reservation(reservation)
 {
-    auto& owner = __hidden_arena_memory::FindOrCreateOwner(ownerName);
-    NothrowScopedLock lock(owner.mutex);
-    owner.attach(*this);
+    if(!deferAttach){
+        NothrowScopedLock lock(m_owner->mutex);
+        m_owner->attach(*this);
+        m_attached = true;
+    }
 }
 
 ArenaMemoryTracker::~ArenaMemoryTracker()noexcept{
-    if(!m_owner)
+    if(!m_owner || !m_attached)
         return;
 
     auto& owner = *m_owner;
     NothrowScopedLock lock(owner.mutex);
     owner.retire(*this);
+    m_attached = false;
+}
+
+void ArenaMemoryTracker::attachToOwnerSlow()noexcept{
+    if(!m_owner)
+        return;
+
+    NothrowScopedLock lock(m_owner->mutex);
+    if(!m_attached){
+        m_owner->attach(*this);
+        m_attached = true;
+    }
 }
 
 void ArenaMemoryTracker::releaseRetainedMemory()noexcept{
@@ -196,9 +211,12 @@ void ArenaMemoryTracker::releaseRetainedMemory()noexcept{
 }
 
 void ArenaMemoryTracker::reset(const u64 reservedBytes)noexcept{
+    if(m_owner && !m_attached && reservedBytes != 0u)
+        attachToOwnerSlow();
+
     const auto applyReset = [this, reservedBytes]()noexcept{
         releaseRetainedMemory();
-        if(m_owner)
+        if(m_owner && m_attached)
             __hidden_arena_memory::AccumulateStats(m_owner->retiredStats, snapshot());
         m_reservedBytes.store(reservedBytes, MemoryOrder::relaxed);
         m_usedBytes.store(0u, MemoryOrder::relaxed);
@@ -207,7 +225,7 @@ void ArenaMemoryTracker::reset(const u64 reservedBytes)noexcept{
         m_reallocationCount.store(0u, MemoryOrder::relaxed);
         m_deallocationCount.store(0u, MemoryOrder::relaxed);
     };
-    if(m_owner){
+    if(m_owner && m_attached){
         NothrowScopedLock lock(m_owner->mutex);
         applyReset();
         return;
@@ -220,7 +238,7 @@ void ArenaMemoryTracker::recordAllocation(const u64 bytes)noexcept{
         return;
 
     const u64 usedBytes = m_usedBytes.fetch_add(bytes, MemoryOrder::relaxed) + bytes;
-    recordPeakUsedBytes(usedBytes);
+    UpdateAtomicMaxRelaxed(m_peakUsedBytes, usedBytes);
     m_allocationCount.fetch_add(1u, MemoryOrder::relaxed);
 }
 
@@ -245,7 +263,7 @@ void ArenaMemoryTracker::recordReallocation(const u64 oldBytes, const u64 newByt
         const u64 shrink = oldBytes - newBytes;
         usedBytes = m_usedBytes.fetch_sub(shrink, MemoryOrder::relaxed) - shrink;
     }
-    recordPeakUsedBytes(usedBytes);
+    UpdateAtomicMaxRelaxed(m_peakUsedBytes, usedBytes);
     m_reallocationCount.fetch_add(1u, MemoryOrder::relaxed);
 }
 
@@ -352,6 +370,24 @@ void RecordHeapMemoryDeallocation(const u64 bytes)noexcept{
     }
     shard.releasedBytes.fetch_add(bytes, MemoryOrder::relaxed);
     shard.deallocationCount.fetch_add(1u, MemoryOrder::relaxed);
+}
+
+void RecordHeapAndArenaAllocation(const u64 bytes, ArenaMemoryTracker* const tracker)noexcept{
+    RecordHeapMemoryAllocation(bytes);
+    if(tracker)
+        tracker->recordAllocation(bytes);
+}
+
+void RecordHeapAndArenaReallocation(const u64 oldBytes, const u64 newBytes, ArenaMemoryTracker* const tracker)noexcept{
+    RecordHeapMemoryReallocation(oldBytes, newBytes);
+    if(tracker)
+        tracker->recordReallocation(oldBytes, newBytes);
+}
+
+void RecordHeapAndArenaDeallocation(const u64 bytes, ArenaMemoryTracker* const tracker)noexcept{
+    RecordHeapMemoryDeallocation(bytes);
+    if(tracker)
+        tracker->recordDeallocation(bytes);
 }
 
 ArenaMemoryStats HeapBackingMemoryStats()noexcept{

@@ -8,6 +8,7 @@
 #include "type_id.h"
 
 #include <global/allocation_size.h>
+#include <global/bit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,6 +29,7 @@ private:
 
 
 private:
+    static constexpr usize s_FastChannelCount = 64u;
     using MessageChannelPtr = GlobalUniquePtr<IMessageChannel>;
 
 
@@ -38,7 +40,7 @@ private:
 
 
     public:
-        virtual void swapBuffers() = 0;
+        virtual b8 swapBuffers() = 0;
         virtual void clear() = 0;
         virtual void discardForDestruction()noexcept = 0;
     };
@@ -126,9 +128,10 @@ private:
 
 
     public:
-        virtual void swapBuffers()override{
+        virtual b8 swapBuffers()override{
             m_readBuffer.clear();
             drainPending([this](T& message){ m_readBuffer.push_back(Move(message)); });
+            return !m_readBuffer.empty();
         }
 
         virtual void clear()override{
@@ -160,13 +163,15 @@ private:
 
 
 private:
-    using ChannelVector = Vector<MessageChannelPtr, Alloc::GlobalArena>;
+    using OwnedChannelVector = Vector<MessageChannelPtr, Alloc::GlobalArena>;
+    using ChannelRawVector = Vector<IMessageChannel*, Alloc::GlobalArena>;
 
 
 public:
     explicit MessageBus(Alloc::GlobalArena& arena)noexcept
         : m_arena(arena)
-        , m_channels(arena)
+        , m_ownedChannels(arena)
+        , m_overflowChannels(arena)
     {}
     ~MessageBus()noexcept = default;
 
@@ -175,22 +180,28 @@ public:
     template<typename T>
     void post(const T& message){
         using MessageT = Decay_T<T>;
-        auto& channel = getOrCreateChannel<MessageT>();
+        const MessageTypeId typeId = MessageType<MessageT>();
+        auto& channel = getOrCreateChannel<MessageT>(typeId);
         channel.post(message);
+        markWriteDirty(typeId);
     }
 
     template<typename T>
     void post(T&& message){
         using MessageT = Decay_T<T>;
-        auto& channel = getOrCreateChannel<MessageT>();
+        const MessageTypeId typeId = MessageType<MessageT>();
+        auto& channel = getOrCreateChannel<MessageT>(typeId);
         channel.post(Forward<T>(message));
+        markWriteDirty(typeId);
     }
 
     template<typename T, typename... Args>
     void emplace(Args&&... args){
         using MessageT = Decay_T<T>;
-        auto& channel = getOrCreateChannel<MessageT>();
+        const MessageTypeId typeId = MessageType<MessageT>();
+        auto& channel = getOrCreateChannel<MessageT>(typeId);
         channel.emplace(Forward<Args>(args)...);
+        markWriteDirty(typeId);
     }
 
     template<typename T, typename Func>
@@ -212,87 +223,138 @@ public:
     }
 
     void swapBuffers(){
-        forEachChannel([](IMessageChannel& ch){ ch.swapBuffers(); });
+        u64 pending = m_dirtyWriteFastMask.exchange(0u, MemoryOrder::acq_rel) | m_activeReadFastMask;
+        u64 nextActive = 0u;
+        while(pending != 0u){
+            const u32 slot = static_cast<u32>(CountTrailingZeros(pending));
+            pending &= pending - 1u;
+            IMessageChannel* const ch = m_fastChannels[slot].load(MemoryOrder::acquire);
+            if(ch && ch->swapBuffers())
+                nextActive |= (1ull << slot);
+        }
+        m_activeReadFastMask = nextActive;
+
+        if(m_hasOverflow.load(MemoryOrder::acquire)){
+            NothrowScopedLock lock(m_channelsMutex);
+            for(IMessageChannel* const channel : m_overflowChannels){
+                if(channel)
+                    (void)channel->swapBuffers();
+            }
+        }
     }
 
     void clear(){
-        forEachChannel([](IMessageChannel& ch){ ch.clear(); });
+        u64 dirty = m_dirtyWriteFastMask.exchange(0u, MemoryOrder::acq_rel) | m_activeReadFastMask;
+        m_activeReadFastMask = 0u;
+        while(dirty != 0u){
+            const u32 slot = static_cast<u32>(CountTrailingZeros(dirty));
+            dirty &= dirty - 1u;
+            IMessageChannel* const ch = m_fastChannels[slot].load(MemoryOrder::acquire);
+            if(ch)
+                ch->clear();
+        }
+
+        if(m_hasOverflow.load(MemoryOrder::acquire)){
+            NothrowScopedLock lock(m_channelsMutex);
+            for(IMessageChannel* const channel : m_overflowChannels){
+                if(channel)
+                    channel->clear();
+            }
+        }
     }
 
 
 private:
-    template<typename Func>
-    void forEachChannel(Func&& func)noexcept(noexcept(DeclVal<Func&>()(DeclVal<IMessageChannel&>()))){
-        if(!m_hasChannels.load(MemoryOrder::acquire))
-            return;
-
-        NothrowScopedLock lock(m_channelsMutex);
-
-        for(auto& channel : m_channels){
-            if(!channel)
-                continue;
-            func(*channel);
+    FOUNDATION_INLINE void markWriteDirty(const MessageTypeId typeId)noexcept{
+        if(typeId < s_FastChannelCount){
+            const u64 bit = 1ull << typeId;
+            if((m_dirtyWriteFastMask.load(MemoryOrder::relaxed) & bit) == 0u)
+                m_dirtyWriteFastMask.fetch_or(bit, MemoryOrder::release);
         }
     }
 
     void discardForDestruction()noexcept{
-        forEachChannel([](IMessageChannel& channel)noexcept{ channel.discardForDestruction(); });
+        m_dirtyWriteFastMask.store(0u, MemoryOrder::relaxed);
+        m_activeReadFastMask = 0u;
+        NothrowScopedLock lock(m_channelsMutex);
+        for(auto& channel : m_ownedChannels){
+            if(channel)
+                channel->discardForDestruction();
+        }
     }
 
     template<typename T>
-    MessageChannel<T>& getOrCreateChannel(){
-        const MessageTypeId typeId = MessageType<T>();
+    MessageChannel<T>& getOrCreateChannel(const MessageTypeId typeId){
+        if(typeId < s_FastChannelCount){
+            if(IMessageChannel* const fast = m_fastChannels[typeId].load(MemoryOrder::acquire))
+                return *checked_cast<MessageChannel<T>*>(fast);
 
-        if(m_hasChannels.load(MemoryOrder::acquire)){
+            ScopedLock writeLock(m_channelsMutex);
+            if(IMessageChannel* const fast = m_fastChannels[typeId].load(MemoryOrder::relaxed))
+                return *checked_cast<MessageChannel<T>*>(fast);
+
+            auto channel = MakeGlobalUnique<MessageChannel<T>>(m_arena, m_arena);
+            if(!channel)
+                throw AllocationException{};
+            auto& created = *channel;
+            m_ownedChannels.push_back(Move(channel));
+            m_fastChannels[typeId].store(&created, MemoryOrder::release);
+            return created;
+        }
+
+        const usize overflowIndex = typeId - s_FastChannelCount;
+        if(m_hasOverflow.load(MemoryOrder::acquire)){
             ScopedLock readLock(m_channelsMutex);
-            if(typeId < m_channels.size()){
-                auto& channel = m_channels[typeId];
-                if(channel)
-                    return *checked_cast<MessageChannel<T>*>(channel.get());
+            if(overflowIndex < m_overflowChannels.size()){
+                if(IMessageChannel* const existing = m_overflowChannels[overflowIndex])
+                    return *checked_cast<MessageChannel<T>*>(existing);
             }
         }
 
         ScopedLock writeLock(m_channelsMutex);
-        if(typeId >= m_channels.size())
-            m_channels.resize(typeId + 1u);
+        if(overflowIndex >= m_overflowChannels.size())
+            m_overflowChannels.resize(overflowIndex + 1u, nullptr);
 
-        auto& slot = m_channels[typeId];
-        if(slot)
-            return *checked_cast<MessageChannel<T>*>(slot.get());
+        if(IMessageChannel* const existing = m_overflowChannels[overflowIndex])
+            return *checked_cast<MessageChannel<T>*>(existing);
 
         auto channel = MakeGlobalUnique<MessageChannel<T>>(m_arena, m_arena);
         if(!channel)
             throw AllocationException{};
         auto& created = *channel;
-        slot = Move(channel);
-        m_hasChannels.store(true, MemoryOrder::release);
+        m_ownedChannels.push_back(Move(channel));
+        m_overflowChannels[overflowIndex] = &created;
+        m_hasOverflow.store(true, MemoryOrder::release);
         return created;
     }
 
     template<typename T>
     const MessageChannel<T>* getChannel()const noexcept{
-        if(!m_hasChannels.load(MemoryOrder::acquire))
-            return nullptr;
-
         const MessageTypeId typeId = MessageType<T>();
+        if(typeId < s_FastChannelCount)
+            return checked_cast<const MessageChannel<T>*>(m_fastChannels[typeId].load(MemoryOrder::acquire));
 
+        if(!m_hasOverflow.load(MemoryOrder::acquire))
+            return nullptr;
+
+        const usize overflowIndex = typeId - s_FastChannelCount;
         NothrowScopedLock lock(m_channelsMutex);
-
-        if(typeId >= m_channels.size())
+        if(overflowIndex >= m_overflowChannels.size())
             return nullptr;
 
-        const auto& channel = m_channels[typeId];
-        if(!channel)
-            return nullptr;
-        return checked_cast<const MessageChannel<T>*>(channel.get());
+        return checked_cast<const MessageChannel<T>*>(m_overflowChannels[overflowIndex]);
     }
 
 
 private:
     Alloc::GlobalArena& m_arena;
+    Array<Atomic<IMessageChannel*>, s_FastChannelCount> m_fastChannels{};
+    Atomic<u64> m_dirtyWriteFastMask{ 0u };
+    u64 m_activeReadFastMask = 0u;
+    Atomic<b8> m_hasOverflow{ false };
     mutable Futex m_channelsMutex;
-    Atomic<b8> m_hasChannels{ false };
-    ChannelVector m_channels;
+    OwnedChannelVector m_ownedChannels;
+    ChannelRawVector m_overflowChannels;
 };
 
 

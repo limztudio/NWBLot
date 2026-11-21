@@ -60,6 +60,16 @@ inline constexpr u32 s_InvalidDenseIndex = s_EntityIndexMask;
     return denseIndex;
 }
 
+struct SparsePoolView{
+    const u32* sparseData = nullptr;
+    usize sparseSize = 0u;
+
+
+    [[nodiscard]] FOUNDATION_INLINE u32 findDenseIndex(const EntityID entityId)const noexcept{
+        return FindPackedSparseDenseIndex(sparseData, sparseSize, entityId);
+    }
+};
+
 template<typename T>
 struct PoolSlice{
     const u32* sparseData = nullptr;

@@ -103,7 +103,7 @@ public:
 public:
     void clear()noexcept;
     [[nodiscard]] Expected<BufferSuballocation> suballocateBuffer(u64 size, TrackedCommandBuffer* owner, u64 nativeRecordingID, GpuPhysicalQueueId queue, u32 alignment = s_DefaultUploadSuballocationAlignment);
-    void submitChunks(GpuPhysicalQueueId queue, u64 submittedVersion, Span<const Queue::SubmissionCommandListIdentity> submittedCommandLists, const VulkanDetail::SubmittedCommandBufferOwnerLookup& submittedOwners)noexcept;
+    void submitChunks(GpuPhysicalQueueId queue, u64 submittedVersion, Span<const Queue::SubmissionCommandListIdentity> submittedCommandLists)noexcept;
     void discardChunks(GpuPhysicalQueueId queue, TrackedCommandBuffer* owner, u64 nativeRecordingID, u64 reusableVersion)noexcept;
     void abandonChunks(GpuPhysicalQueueId queue, TrackedCommandBuffer* owner, u64 nativeRecordingID)noexcept;
 
@@ -113,6 +113,7 @@ private:
         return m_chunkKind == ChunkKind::Upload || m_chunkKind == ChunkKind::AccelStructBuildInput;
     }
     [[nodiscard]] static Expected<BufferSuballocation> trySuballocateFromChunk(BufferChunk& chunk, u64 size, u32 alignment)noexcept;
+    [[nodiscard]] Expected<BufferSuballocation> suballocateBufferSlow(u64 size, TrackedCommandBuffer* owner, u64 nativeRecordingID, GpuPhysicalQueueId queue, u32 alignment, usize chunkSlot, u8 slotBit, BufferChunk* cachedChunk);
     void collectCompletedChunks();
     void trimRetiredChunksLocked(GpuPhysicalQueueId queue, u64 completedVersion)noexcept;
     [[nodiscard]] QueueChunkLedger* findQueueLedgerLocked(GpuPhysicalQueueId queue)noexcept;
@@ -123,7 +124,7 @@ private:
     void linkRetiredChunkTailLocked(QueueChunkLedger& ledger, BufferChunk& chunk)noexcept;
     void unlinkRetiredChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk)noexcept;
     void retireChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk, u64 version, b8 linkAtHead)noexcept;
-    void retireSubmittedChunksLocked(GpuPhysicalQueueId queue, u64 version, Span<const Queue::SubmissionCommandListIdentity> submittedCommandLists, const VulkanDetail::SubmittedCommandBufferOwnerLookup& submittedOwners)noexcept;
+    void retireSubmittedChunksLocked(GpuPhysicalQueueId queue, u64 version, Span<const Queue::SubmissionCommandListIdentity> submittedCommandLists)noexcept;
     void retireOwnerChunksLocked(GpuPhysicalQueueId queue, u64 reusableVersion, u64 nativeRecordingID, TrackedCommandBuffer& owner)noexcept;
 
 

@@ -233,21 +233,55 @@ Expected<Span<SkeletonJointMatrix>> ResolveMeshSkinningGpuJointPalette(
     return Span<SkeletonJointMatrix>(payload.jointMatrices).subspan(0u, jointCount);
 }
 
+b8 BuildMeshSkinningJointPaletteValidated(
+    in MeshSkinningRuntimeInstance instance,
+    in Span<SkeletonJointMatrix> sourceJoints,
+    in u32 skinningMode,
+    in b8 sourceJointsValidated,
+    mut Vector<SkeletonJointMatrix> outJointPalette
+){
+    return BuildSkinJointPaletteToGlobalVectorValidated(
+        instance.handle.value,
+        instance.skeletonJointCount,
+        instance.skin.size(),
+        sourceJoints,
+        sourceJointsValidated,
+        instance.inverseBindMatrices,
+        true,
+        skinningMode,
+        outJointPalette
+    );
+}
+
 b8 BuildMeshSkinningJointPalette(
     in MeshSkinningRuntimeInstance instance,
     in Span<SkeletonJointMatrix> sourceJoints,
     in u32 skinningMode,
     mut Vector<SkeletonJointMatrix> outJointPalette
 ){
-    return BuildSkinJointPaletteToGlobalVector(
-        instance.handle.value,
-        instance.skeletonJointCount,
-        instance.skin.size(),
+    return BuildMeshSkinningJointPaletteValidated(
+        instance,
         sourceJoints,
-        instance.inverseBindMatrices,
         skinningMode,
+        false,
         outJointPalette
     );
+}
+
+b8 PopulateRuntimeSkinPayloadFromCachedPose(
+    in MeshSkinningRuntimeInstance instance,
+    in Span<SkeletonJointMatrix> cachedPoseJoints,
+    in u32 cachedSkinningMode,
+    mut RuntimeSkinPayloadScratch payload
+){
+    payload.skinInfluenceCount = 0u;
+    payload.jointMatrices.clear();
+    payload.resolvedSkinningMode = cachedSkinningMode;
+    if(!BuildMeshSkinningJointPaletteValidated(instance, cachedPoseJoints, cachedSkinningMode, true, payload.jointMatrices))
+        return false;
+    if(!payload.jointMatrices.empty())
+        payload.skinInfluenceCount = instance.skin.size();
+    return true;
 }
 
 b8 PopulateRuntimeSkinPayloadFromPose(
@@ -264,7 +298,7 @@ b8 PopulateRuntimeSkinPayloadFromPose(
         return false;
     }
     payload.resolvedSkinningMode = skinningMode.value();
-    if(!BuildMeshSkinningJointPalette(instance, payload.poseJoints, payload.resolvedSkinningMode, payload.jointMatrices)){
+    if(!BuildMeshSkinningJointPaletteValidated(instance, payload.poseJoints, payload.resolvedSkinningMode, true, payload.jointMatrices)){
         payload.poseJoints.clear();
         return false;
     }
@@ -280,7 +314,7 @@ b8 PopulateRuntimeSkinPayloadFromPalette(
 ){
     payload.reset(jointPalette.skinningMode);
 
-    if(!BuildMeshSkinningJointPalette(instance, jointPalette.joints, payload.resolvedSkinningMode, payload.jointMatrices))
+    if(!BuildMeshSkinningJointPaletteValidated(instance, jointPalette.joints, payload.resolvedSkinningMode, false, payload.jointMatrices))
         return false;
     if(!payload.jointMatrices.empty())
         payload.skinInfluenceCount = instance.skin.size();

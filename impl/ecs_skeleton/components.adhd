@@ -84,22 +84,40 @@ b8 IsAffineSkeletonJointRow3(in VectorSingle row3){
         && Abs(row3.w - 1.0f) <= s_SkeletonAffineEpsilon;
 }
 
+Expected<MatrixSingle> TryResolveSkinningJointMatrixPrevalidated(
+    in MatrixSingle poseJoint,
+    in b8 poseValidated,
+    in b8 hasInverseBind,
+    in MatrixSingle inverseBind,
+    in b8 inverseBindValidated,
+    in f32 inverseBindDeterminantEpsilon
+){
+    if(!poseValidated && !MatrixIsInvertibleAffine(poseJoint, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
+        return MakeUnexpected(Failure());
+    if(!hasInverseBind)
+        return poseJoint;
+    if(!inverseBindValidated && !MatrixIsInvertibleAffine(inverseBind, s_SkeletonAffineEpsilon, inverseBindDeterminantEpsilon))
+        return MakeUnexpected(Failure());
+    const MatrixSingle combined = Mul(poseJoint, inverseBind);
+    if(!MatrixIsInvertibleAffine(combined, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
+        return MakeUnexpected(Failure());
+    return combined;
+}
+
 Expected<MatrixSingle> TryResolveSkinningJointMatrix(
     in MatrixSingle poseJoint,
     in b8 hasInverseBind,
     in MatrixSingle inverseBind,
     in f32 inverseBindDeterminantEpsilon
 ){
-    if(!MatrixIsInvertibleAffine(poseJoint, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
-        return MakeUnexpected(Failure());
-    if(!hasInverseBind)
-        return poseJoint;
-    if(!MatrixIsInvertibleAffine(inverseBind, s_SkeletonAffineEpsilon, inverseBindDeterminantEpsilon))
-        return MakeUnexpected(Failure());
-    const MatrixSingle combined = Mul(poseJoint, inverseBind);
-    if(!MatrixIsInvertibleAffine(combined, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
-        return MakeUnexpected(Failure());
-    return combined;
+    return TryResolveSkinningJointMatrixPrevalidated(
+        poseJoint,
+        false,
+        hasInverseBind,
+        inverseBind,
+        false,
+        inverseBindDeterminantEpsilon
+    );
 }
 
 Expected<MatrixSingle> TryResolveSkeletonPoseJointMatrix(
@@ -180,13 +198,17 @@ Expected<u32> TryBuildStoredJointPaletteVectorFromSkeletonPose(
         return cast<u32>(SkeletonSkinningMode::LinearBlend);
     if(!ValidSkeletonPoseTopology(pose))
         return MakeUnexpected(Failure());
-    outJointPalette.resize(pose.localJoints.size(), MakeIdentitySkeletonJointMatrix());
-    const Expected<u32> resolvedMode = TryFillStoredJointPaletteSpanFromSkeletonPose(pose, outJointPalette);
-    if(!resolvedMode.has_value()){
-        outJointPalette.clear();
-        return MakeUnexpected(Failure());
+    const usize jointCount = pose.localJoints.size();
+    outJointPalette.reserve(jointCount);
+    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
+        const Expected<SkeletonJointMatrix> resolved = TryResolveSkeletonPoseJointMatrixAt(pose, jointIndex, outJointPalette);
+        if(!resolved.has_value()){
+            outJointPalette.clear();
+            return MakeUnexpected(Failure());
+        }
+        outJointPalette.push_back(resolved.value());
     }
-    return resolvedMode.value();
+    return pose.skinningMode;
 }
 
 

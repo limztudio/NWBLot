@@ -40,6 +40,7 @@ class ShadowPrepareGeometryResources : NoCopy{
     private HashMap<usize, usize> m_bufferIndices;
     private HashMap<u32, usize> m_resourceIndices;
     private HashSet<Name> m_names;
+    private Vector<u8> m_traceResourceSelected;
     private u64 m_graphGeneration = 0u;
     private b8 m_promoted = false;
     private b8 m_namesPrepared = false;
@@ -63,8 +64,9 @@ class ShadowPrepareGeometryResources : NoCopy{
     private usize findBuffer(in BufferHandle buffer)const{
         if(buffer.valid()){
             if(this.m_promoted){
-                if(this.m_bufferIndices.contains(buffer.identity()))
-                    return this.m_bufferIndices.at(buffer.identity());
+                const auto found = this.m_bufferIndices.find(buffer.identity());
+                if(found != this.m_bufferIndices.end())
+                    return found.value();
             }
             else{
                 for(usize i = 0u; i < this.m_inlineRequests.size(); ++i){
@@ -77,15 +79,21 @@ class ShadowPrepareGeometryResources : NoCopy{
     }
 
     private void add(in BufferHandle buffer){
-        if(!buffer.valid() || this.findBuffer(buffer) != usize.max)
+        if(!buffer.valid())
             return;
         ShadowPrepareBufferRequest request;
         request.buffer = buffer;
         if(!this.m_promoted){
+            if(this.findBuffer(buffer) != usize.max)
+                return;
             if(this.m_inlineRequests.size() < s_ShadowTraceInlineCapacity){
                 this.m_inlineRequests.push_back(request);
                 return;
             }
+            const usize reserveCapacity = this.m_inputs.blasBuilds.size() * 2u;
+            this.m_requests.reserve(reserveCapacity);
+            this.m_bufferIndices.reserve(reserveCapacity);
+            this.m_resourceIndices.reserve(reserveCapacity);
             for(in ShadowPrepareBufferRequest entry : this.m_inlineRequests){
                 this.m_bufferIndices.try_emplace(entry.buffer.identity(), this.m_requests.size());
                 this.m_requests.push_back(entry);
@@ -93,15 +101,16 @@ class ShadowPrepareGeometryResources : NoCopy{
             this.m_inlineRequests.clear();
             this.m_promoted = true;
         }
-        this.m_bufferIndices.try_emplace(buffer.identity(), this.m_requests.size());
-        this.m_requests.push_back(request);
+        if(this.m_bufferIndices.try_emplace(buffer.identity(), this.m_requests.size()).second)
+            this.m_requests.push_back(request);
     }
 
     private usize findResource(in GpuGraphResourceId resource)const{
         if(CanMatchResolvedShadowPrepareRequest(resource.valid(), resource.generation, this.m_graphGeneration)){
             if(this.m_promoted){
-                if(this.m_resourceIndices.contains(resource.index))
-                    return this.m_resourceIndices.at(resource.index);
+                const auto found = this.m_resourceIndices.find(resource.index);
+                if(found != this.m_resourceIndices.end())
+                    return found.value();
             }
             else{
                 for(usize i = 0u; i < this.m_inlineRequests.size(); ++i){
@@ -122,6 +131,8 @@ class ShadowPrepareGeometryResources : NoCopy{
         }
         this.m_blasBuildInputs.reserve(this.count());
         this.m_remainingTraceGeometry.reserve(this.m_inputs.traceResources.size());
+        if(graphOwned && this.count() != 0u)
+            this.m_traceResourceSelected.resize(this.m_inputs.traceResources.size(), 0u);
     }
 
     public b8 gatherBuildInputs(in GpuTaskGraph graph, in b8 graphOwned){
@@ -138,11 +149,13 @@ class ShadowPrepareGeometryResources : NoCopy{
                 if(this.m_promoted && request.resource.valid() && !this.m_resourceIndices.try_emplace(request.resource.index, i).second)
                     TerminateInvariant();
             }
-        }
-        for(in GpuGraphResourceId resource : this.m_inputs.traceResources){
-            const usize index = this.findResource(resource);
-            if(index != usize.max)
-                this.at(index).listedForTrace = true;
+            for(usize traceIndex = 0u; traceIndex < this.m_inputs.traceResources.size(); ++traceIndex){
+                const usize index = this.findResource(this.m_inputs.traceResources[traceIndex]);
+                if(index != usize.max){
+                    this.at(index).listedForTrace = true;
+                    this.m_traceResourceSelected[traceIndex] = 1u;
+                }
+            }
         }
         for(in PreparedMeshBlasBuild build : this.m_inputs.blasBuilds){
             if(!build.positionBuffer.valid() || !build.triangleIndexBuffer.valid())
@@ -162,11 +175,19 @@ class ShadowPrepareGeometryResources : NoCopy{
     }
 
     public b8 gatherRemainingTraceResources(){
-        for(in GpuGraphResourceId resource : this.m_inputs.traceResources){
+        if(this.count() == 0u || this.m_traceResourceSelected.size() != this.m_inputs.traceResources.size()){
+            for(in GpuGraphResourceId resource : this.m_inputs.traceResources){
+                if(!resource.valid())
+                    return false;
+                this.m_remainingTraceGeometry.push_back(resource);
+            }
+            return true;
+        }
+        for(usize traceIndex = 0u; traceIndex < this.m_inputs.traceResources.size(); ++traceIndex){
+            in GpuGraphResourceId resource = this.m_inputs.traceResources[traceIndex];
             if(!resource.valid())
                 return false;
-            const usize index = this.findResource(resource);
-            if(index == usize.max || !this.at(index).selected)
+            if(this.m_traceResourceSelected[traceIndex] == 0u)
                 this.m_remainingTraceGeometry.push_back(resource);
         }
         return true;

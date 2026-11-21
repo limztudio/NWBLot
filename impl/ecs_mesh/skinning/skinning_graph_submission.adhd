@@ -270,6 +270,8 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
     }
 
     this.resetFrameTaskGraph();
+    this.m_frameCachedPoseJoints.clear();
+    this.m_frameCachedPoses.clear();
     mut GpuTaskGraph graph = this.m_frameTaskGraph;
     mut Vector<MeshSkinningGraphDispatchPlan> dispatchPlans = this.m_frameDispatchPlans;
     dispatchPlans.clear();
@@ -286,9 +288,9 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
     if(dispatchPlans.empty())
         return true;
 
-    const auto resourceUses = BuildMeshSkinningGraphResourceUses(Span<MeshSkinningGraphDispatchPlan>(dispatchPlans));
-    if(!resourceUses.has_value())
+    if(!BuildMeshSkinningGraphResourceUsesInto(Span<MeshSkinningGraphDispatchPlan>(dispatchPlans), this.m_frameResourceUsesScratch))
         return false;
+    in MeshSkinningGraphResourceUses resourceUses = this.m_frameResourceUsesScratch.uses;
 
     Array<GpuTaskExternalStateSource, 1u> previousFrameStateSources;
     const auto source = this.m_acceptedSkinningState.borrowSource();
@@ -315,7 +317,7 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
     SkinningFinalizerTask finalizerPayload(this, allDispatchPlans);
     MeshSkinningLocalBoundsTask localBoundsPayload(this.m_graphics, timingTicket, localBoundsDispatches);
     GpuTaskId postDispatchDependency = terminalTask;
-    if(!resourceUses.value().deformation.empty()){
+    if(!resourceUses.deformation.empty()){
         mut Vector<MeshSkinningGraphDispatchPlan> deformationPlans = this.m_frameDeformationPlans;
         deformationPlans.clear();
         deformationPlans.reserve(dispatchPlans.size());
@@ -330,7 +332,7 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
             .setIdentity(s_FrameDeformationTaskName)
             .setMarkerLabel(s_FrameDeformationTaskLabel)
             .setScheduling(MakeSkinningDispatchScheduling())
-            .setResourceUses(resourceUses.value().deformation)
+            .setResourceUses(resourceUses.deformation)
         ;
         if(source.has_value())
             deformationDesc.setExternalStateSources(Span<GpuTaskExternalStateSource>(previousFrameStateSources));
@@ -351,7 +353,7 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
         .setIdentity(s_FrameBoundsRepackTaskName)
         .setMarkerLabel(s_FrameBoundsRepackTaskLabel)
         .setScheduling(MakeSkinningDispatchScheduling())
-        .setResourceUses(resourceUses.value().postDispatch)
+        .setResourceUses(resourceUses.postDispatch)
     ;
     if(source.has_value())
         postDispatchDesc.setExternalStateSources(Span<GpuTaskExternalStateSource>(previousFrameStateSources));
@@ -370,7 +372,7 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
         .setMarkerLabel(s_FrameLocalBoundsTaskLabel)
         .setScheduling(MakeSkinningDispatchScheduling())
         .setDependency(postDispatchTask)
-        .setResourceUses(resourceUses.value().localBounds)
+        .setResourceUses(resourceUses.localBounds)
     ;
     if(source.has_value())
         localBoundsDesc.setExternalStateSources(Span<GpuTaskExternalStateSource>(previousFrameStateSources));
@@ -387,7 +389,7 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
         .setMarkerLabel(s_FrameFinalizeStatesTaskLabel)
         .setScheduling(MakeSkinningDispatchScheduling())
         .setDependency(localBoundsTask)
-        .setResourceUses(resourceUses.value().finalizer)
+        .setResourceUses(resourceUses.finalizer)
     ;
     const auto finalizerTaskResult = graph.addPreparedPayloadTask(finalizerDesc, finalizerPayload);
     if(!finalizerTaskResult.has_value()){

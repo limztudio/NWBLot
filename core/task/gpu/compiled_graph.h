@@ -440,6 +440,7 @@ private:
             HasPrologueStateSeeds = 1u << 3u,
             HasRetainedInitialStateResource = 1u << 4u,
             HasCrossQueueConsumer = 1u << 5u,
+            HasExportedStateConsumer = 1u << 6u,
         };
     };
 
@@ -532,6 +533,15 @@ private:
         const GpuTaskGraph& graph,
         const GpuTaskGraphDeclarationReadView& declarations,
         GpuSubmissionPacketId packet,
+        u64 expectedPlanGeneration,
+        u64 recordingAttemptGeneration,
+        u64 previousRecordingAttemptGeneration,
+        const ReadView& planAccess
+    )const noexcept;
+    [[nodiscard]] b8 beginRecordingAttemptRange(
+        const GpuTaskGraph& graph,
+        const GpuTaskGraphDeclarationReadView& declarations,
+        const GpuSubmissionPacketRange& range,
         u64 expectedPlanGeneration,
         u64 recordingAttemptGeneration,
         u64 previousRecordingAttemptGeneration,

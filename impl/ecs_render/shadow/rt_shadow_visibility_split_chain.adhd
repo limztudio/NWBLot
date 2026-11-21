@@ -253,7 +253,7 @@ b8 SoftShadowSplitResourceUseBuilder::build(in SoftShadowSplitResourceInputs inp
     const GpuGraphResourceId transparentMomentsIn = SelectSoftShadowGraphResource(transparentHistoryFrontIsA, transparentMomentsA, transparentMomentsB);
     const GpuGraphResourceId transparentHistoryOut = SelectSoftShadowGraphResource(transparentHistoryFrontIsA, transparentHistoryB, transparentHistoryA);
     const GpuGraphResourceId transparentMomentsOut = SelectSoftShadowGraphResource(transparentHistoryFrontIsA, transparentMomentsB, transparentMomentsA);
-    if(ShouldReadSoftwareTransparentSamplingInSplitTrace(inputs.rayTracingPlan.hardwareTransparentTrace, inputs.rayTracingPlan.lightSpace.ready, uses.graphOwnsTransparentTemporalMergeEntryStates, softShadowHistoryReadable)){
+    if(ShouldReadSoftwareTransparentSamplingInSplitTrace(inputs.rayTracingPlan.hardwareTransparentTrace, inputs.rayTracingPlan.lightSpaceReady(), uses.graphOwnsTransparentTemporalMergeEntryStates, softShadowHistoryReadable)){
         uses.transparentTrace.push_back(ReadUse(shadowSoftGeometry, ResourceStates::ShaderResource));
         uses.transparentTrace.push_back(ReadUse(shadowSoftGeometryPrevious, ResourceStates::ShaderResource));
         uses.transparentTrace.push_back(ReadUse(transparentMomentsIn, ResourceStates::ShaderResource));
@@ -325,7 +325,7 @@ b8 SoftShadowSplitTaskChainBuilder::declare(in SoftShadowSplitTaskChainInputs in
 
     GpuTaskId shadowTraceDependency = inputs.prefixTask;
     GpuGraphResourceId csgShadowContext;
-    if(inputs.rayTracingPlan.lightSpace.ready){
+    if(inputs.rayTracingPlan.lightSpaceReady()){
         const auto maps = this.declareLightSpaceShadowMaps(inputs, uses);
         if(!maps.has_value())
             return false;
@@ -348,11 +348,14 @@ b8 SoftShadowSplitTaskChainBuilder::declare(in SoftShadowSplitTaskChainInputs in
 [cpp_unwind]
 Expected<SoftShadowLightSpaceMaps> SoftShadowSplitTaskChainBuilder::declareLightSpaceShadowMaps(in SoftShadowSplitTaskChainInputs inputs, mut SoftShadowSplitResourceUses uses){
 
+    if(!inputs.rayTracingPlan.lightSpace.valid())
+        return MakeUnexpected(Failure());
+    in LightSpaceShadowSnapshot lightSpaceSnapshot = inputs.rayTracingPlan.lightSpace.deref().snapshot;
     in SoftShadowSplitRoute route = inputs.route;
-    if((inputs.rayTracingPlan.lightSpace.push.csgFlags & s_CsgShadowFlagCurrentReceiverCaps) != 0u){
+    if((lightSpaceSnapshot.push.csgFlags & s_CsgShadowFlagCurrentReceiverCaps) != 0u){
         const GpuTaskGraphDeclarationReadView declarations(this.m_graph);
-        const GpuGraphResourceId receiverView = declarations.findImportedBuffer(inputs.rayTracingPlan.lightSpace.receiverView);
-        const GpuGraphResourceId receiverCapState = declarations.findImportedBuffer(inputs.rayTracingPlan.lightSpace.receiverCsgSampleState);
+        const GpuGraphResourceId receiverView = declarations.findImportedBuffer(lightSpaceSnapshot.receiverView);
+        const GpuGraphResourceId receiverCapState = declarations.findImportedBuffer(lightSpaceSnapshot.receiverCsgSampleState);
         const GpuGraphResourceId receiverCapDepth = declarations.findImportedTexture(inputs.targets.csgRemovedIntervalDepth);
         const GpuGraphResourceId receiverCapData = declarations.findImportedTexture(inputs.targets.csgRemovedIntervalData);
         const GpuGraphResourceId receiverCapCount = declarations.findImportedTexture(inputs.targets.csgRemovedIntervalCount);
@@ -372,7 +375,7 @@ Expected<SoftShadowLightSpaceMaps> SoftShadowSplitTaskChainBuilder::declareLight
         }
     }
     Vector<GpuTaskResourceUse> lightSpaceReads;
-    lightSpaceReads.reserve(ResolveShadowTraceGeometryReserveCount(s_SoftShadowLightSpaceReadCapacity + inputs.rayTracingPlan.lightSpace.csgDynamicBounds.size(), route.traceGeometryStatesGraphOwned, inputs.traceGeometryResources.size()));
+    lightSpaceReads.reserve(ResolveShadowTraceGeometryReserveCount(s_SoftShadowLightSpaceReadCapacity + lightSpaceSnapshot.csgDynamicBounds.size(), route.traceGeometryStatesGraphOwned, inputs.traceGeometryResources.size()));
     if(!AppendRayTracingSceneShadowBuffers(inputs.rayTracingResources, this.m_graph, lightSpaceReads))
         return MakeUnexpected(Failure());
     lightSpaceReads.push_back(ReadUse(inputs.materialContextSlots, ResourceStates::ConstantBuffer));
@@ -384,28 +387,35 @@ Expected<SoftShadowLightSpaceMaps> SoftShadowSplitTaskChainBuilder::declareLight
             lightSpaceReads.push_back(ReadUse(resource, ResourceStates::ShaderResource));
     }
     Vector<GpuGraphResourceId> csgBoundsResources;
-    csgBoundsResources.reserve(inputs.rayTracingPlan.lightSpace.csgDynamicBounds.size());
-    for(in BufferHandle buffer : inputs.rayTracingPlan.lightSpace.csgDynamicBounds){
-        GpuGraphResourceId resource;
-        {
-            const GpuTaskGraphDeclarationReadView declarations(this.m_graph);
-            resource = declarations.findImportedBuffer(buffer);
-        }
-        if(!resource.valid()){
-            const auto importedResource = ImportExternalBuffer(this.m_graph, buffer, buffer.deref().getCreationDescription().debugName, s_CsgShadowDynamicBoundsLabel);
-            if(!importedResource.has_value()){
-                warning("RendererSystem: could not import CSG shadow dynamic bounds");
-                return MakeUnexpected(Failure());
+    csgBoundsResources.reserve(lightSpaceSnapshot.csgDynamicBounds.size());
+    Vector<BufferHandle> missingCsgBounds;
+    HashSet<u32> seenCsgBoundsIndices;
+    HashSet<usize> seenMissingBoundsIdentities;
+    {
+        const GpuTaskGraphDeclarationReadView declarations(this.m_graph);
+        if(!declarations.valid())
+            return MakeUnexpected(Failure());
+        for(in BufferHandle buffer : lightSpaceSnapshot.csgDynamicBounds){
+            const GpuGraphResourceId resource = declarations.findImportedBuffer(buffer);
+            if(resource.valid()){
+                if(seenCsgBoundsIndices.insert(resource.index).second)
+                    csgBoundsResources.push_back(resource);
             }
-            resource = importedResource.value();
+            else if(seenMissingBoundsIdentities.insert(buffer.identity()).second)
+                missingCsgBounds.push_back(buffer);
         }
-        if(!resource.valid()){
+    }
+    for(in BufferHandle buffer : missingCsgBounds){
+        const auto importedResource = ImportExternalBuffer(this.m_graph, buffer, buffer.deref().getCreationDescription().debugName, s_CsgShadowDynamicBoundsLabel);
+        if(!importedResource.has_value() || !importedResource.value().valid()){
             warning("RendererSystem: could not import CSG shadow dynamic bounds");
             return MakeUnexpected(Failure());
         }
-        if(HasSoftShadowGraphResource(csgBoundsResources, resource))
-            continue;
-        csgBoundsResources.push_back(resource);
+        const GpuGraphResourceId resource = importedResource.value();
+        if(seenCsgBoundsIndices.insert(resource.index).second)
+            csgBoundsResources.push_back(resource);
+    }
+    for(in GpuGraphResourceId resource : csgBoundsResources){
         lightSpaceReads.push_back(ReadUse(resource, ResourceStates::ShaderResource));
         uses.opaque.push_back(ReadUse(resource, ResourceStates::ShaderResource));
         uses.transparentTrace.push_back(ReadUse(resource, ResourceStates::ShaderResource));
@@ -432,7 +442,7 @@ Expected<SoftShadowLightSpaceMaps> SoftShadowSplitTaskChainBuilder::declareLight
         uses.opaque.push_back(ReadUse(maps.csgOpaqueDepth, ResourceStates::ShaderResource));
         uses.transparentTrace.push_back(ReadUse(maps.csgOpaqueDepth, ResourceStates::ShaderResource));
     }
-    const TextureSubresourceSet layers(0u, 1u, 0u, inputs.rayTracingPlan.lightSpace.plan.viewCount);
+    const TextureSubresourceSet layers(0u, 1u, 0u, lightSpaceSnapshot.plan.viewCount);
     uses.opaque.push_back(ReadTextureUse(maps.depth, layers, ResourceStates::ShaderResource));
     uses.transparentTrace.push_back(ReadTextureUse(maps.depth, layers, ResourceStates::ShaderResource));
     result.shadowTraceDependency = maps.ready;
@@ -472,7 +482,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
         opaqueDesc.setResourceSetUses(singleTraceSet);
     const auto opaqueTaskResult = this.m_raytracingSystem.declareShadowVisibilityOpaqueTask(
         this.m_graph, opaqueDesc, inputs.deferredLightingResources, inputs.shadowPrepared, route.hardwareShadowSupported,
-        route.graphOwnsOpaqueTemporalMergeEntryStates, Optional<in LightSpaceShadowSnapshot>(inputs.rayTracingPlan.lightSpace), inputs.targets, inputs.timingTicket,
+        route.graphOwnsOpaqueTemporalMergeEntryStates, inputs.rayTracingPlan.lightSpace, inputs.targets, inputs.timingTicket,
         inputs.asyncTiming, inputs.shadowVisibilityTiming, inputs.opaqueProduced, inputs.opaqueFrameIndex
     );
     if(!opaqueTaskResult.has_value()){
@@ -555,7 +565,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
     ;
     const auto transparentTraceTaskResult = this.m_raytracingSystem.declareShadowTransparentSoftTraceTask(
         this.m_graph, traceDesc, inputs.deferredLightingResources, inputs.opaqueProduced, inputs.opaqueFrameIndex,
-        Optional<in LightSpaceShadowSnapshot>(inputs.rayTracingPlan.lightSpace), inputs.targets, inputs.timingTicket, inputs.transparentTraceProduced
+        inputs.rayTracingPlan.lightSpace, inputs.targets, inputs.timingTicket, inputs.transparentTraceProduced
     );
     if(!transparentTraceTaskResult.has_value()){
         tasks.transparentTrace = GpuTaskId();
@@ -631,7 +641,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
         return false;
     }
     tasks.fold = foldTaskResult.value();
-    if(inputs.rayTracingPlan.lightSpace.diagnosticReadback.valid()){
+    if(inputs.rayTracingPlan.lightSpaceReady() && inputs.rayTracingPlan.lightSpace.deref().snapshot.diagnosticReadback.valid()){
         const auto diagnosticsTaskResult = DeclareLightSpaceShadowDiagnostics(
             LightSpaceShadowGraphInputs(this.m_graphics, inputs.shadowPrepared, inputs.rayTracingPlan.lightSpace, tasks.fold, Span<GpuTaskResourceUse>(), Span<GpuTaskResourceSetUse>(), inputs.stateSources),
             csgShadowContext,

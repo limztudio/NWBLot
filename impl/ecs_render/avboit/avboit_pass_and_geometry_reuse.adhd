@@ -278,8 +278,8 @@ void RendererAvboitSystem::renderAvboitMaterialPass(
 }
 
 b8 DrawInputsMatch(in MaterialPassDrawItem left, in MaterialPassDrawItem right){
-    const MaterialPassMeshResourceSnapshot leftMesh = left.meshResources;
-    const MaterialPassMeshResourceSnapshot rightMesh = right.meshResources;
+    in MaterialPassMeshResourceSnapshot leftMesh = left.meshResources;
+    in MaterialPassMeshResourceSnapshot rightMesh = right.meshResources;
     if(
         !AvboitReuseDrawScalarComparisonPolicy().matchesScalarDrawFields(
             left.meshKey,

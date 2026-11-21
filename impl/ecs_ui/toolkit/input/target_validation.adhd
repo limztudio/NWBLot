@@ -134,6 +134,8 @@ b8 HasValidHitTargetCommandOwnerProperties(in HitTarget source){
 }
 
 Expected<usize> FindTargetIndexInTable(in Span<HitTarget> targets, in Span<TargetLookup> lookup, in WidgetId id, in u64 declarationGeneration){
+    if(!id.valid() || lookup.empty())
+        return MakeUnexpected(Failure());
     usize begin = 0u;
     usize end = lookup.size();
     while(begin < end){
@@ -148,7 +150,7 @@ Expected<usize> FindTargetIndexInTable(in Span<HitTarget> targets, in Span<Targe
     usize targetIndex = cast<usize>(lookup[begin].index);
     if(targetIndex >= targets.size())
         return MakeUnexpected(Failure());
-    HitTarget target = targets[targetIndex];
+    in HitTarget target = targets[targetIndex];
     if(declarationGeneration != 0u && target.declarationGeneration != declarationGeneration)
         return MakeUnexpected(Failure());
     return targetIndex;
@@ -156,7 +158,7 @@ Expected<usize> FindTargetIndexInTable(in Span<HitTarget> targets, in Span<Targe
 
 b8 ValidateStagedHitTargetControlTargets(in Span<HitTarget> targets, in Span<TargetLookup> lookup){
     for(usize i = 0u; i < targets.size(); ++i){
-        const HitTarget target = targets[i];
+        in HitTarget target = targets[i];
         if(!HasValidHitTargetControlProperties(target))
             return false;
         if(!target.owner.valid())
@@ -164,7 +166,7 @@ b8 ValidateStagedHitTargetControlTargets(in Span<HitTarget> targets, in Span<Tar
         const Expected<usize> hostIndex = FindTargetIndexInTable(targets, lookup, target.owner, target.ownerDeclarationGeneration);
         if(!hostIndex.has_value())
             return false;
-        const HitTarget host = targets[hostIndex.value()];
+        in HitTarget host = targets[hostIndex.value()];
         if(!host.enabled || !host.focusable || host.owner.valid() || host.control != target.control || host.popup != target.popup || host.layer != target.layer)
             return false;
     }
@@ -173,7 +175,7 @@ b8 ValidateStagedHitTargetControlTargets(in Span<HitTarget> targets, in Span<Tar
 
 b8 ValidateStagedHitTargetCommandOwners(in Span<HitTarget> targets, in Span<TargetLookup> lookup){
     for(usize i = 0u; i < targets.size(); ++i){
-        const HitTarget source = targets[i];
+        in HitTarget source = targets[i];
         if(!HasValidHitTargetCommandOwnerProperties(source))
             return false;
         if(!source.commandOwner.valid())
@@ -181,7 +183,7 @@ b8 ValidateStagedHitTargetCommandOwners(in Span<HitTarget> targets, in Span<Targ
         const Expected<usize> hostIndex = FindTargetIndexInTable(targets, lookup, source.commandOwner, source.commandOwnerDeclarationGeneration);
         if(!hostIndex.has_value())
             return false;
-        const HitTarget host = targets[hostIndex.value()];
+        in HitTarget host = targets[hostIndex.value()];
         if(!host.enabled || !host.focusable || !host.navigable || host.owner.valid() || host.control != source.commandControl || host.popup != source.popup || host.layer != source.layer)
             return false;
     }

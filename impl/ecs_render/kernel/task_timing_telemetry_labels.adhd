@@ -319,6 +319,7 @@ b8 AppendPhysicalQueueRuntimeTelemetryEntry(
         AppendCommandArenaWorkerStatistics(directCommandArenaStatistics, label);
 
     const usize packetCount = deferredCompiledPlan.packetCount();
+    HashSet<u64> seenWorkers;
     for(usize packetIndex = 0u; packetIndex < packetCount; ++packetIndex){
         b8 matchesQueue = false;
         b8 hasRecordedWorker = false;
@@ -329,22 +330,8 @@ b8 AppendPhysicalQueueRuntimeTelemetryEntry(
         if(!matchesQueue || !hasRecordedWorker || workerIndex == 0u)
             continue;
 
-        b8 alreadyAppended = false;
-        for(usize previousPacketIndex = 0u; previousPacketIndex < packetIndex; ++previousPacketIndex){
-            b8 previousMatchesQueue = false;
-            b8 previousHasRecordedWorker = false;
-            u32 previousWorkerDomain = 0u;
-            u32 previousWorkerIndex = 0u;
-            if(!InspectCompiledPacketForQueue(deferredCompiledPlan, recordedGraph, previousPacketIndex, queueInfo.id, previousMatchesQueue, previousHasRecordedWorker, previousWorkerDomain, previousWorkerIndex))
-                return false;
-            if(!previousMatchesQueue)
-                continue;
-            if(previousHasRecordedWorker && previousWorkerDomain == workerDomain && previousWorkerIndex == workerIndex){
-                alreadyAppended = true;
-                break;
-            }
-        }
-        if(alreadyAppended)
+        const u64 workerKey = (cast<u64>(workerDomain) << 32u) | cast<u64>(workerIndex);
+        if(!seenWorkers.insert(workerKey).second)
             continue;
 
         const GpuCommandArenaWorkerStatistics workerCommandArenaStatistics = device.getCommandArenaWorkerStatistics(queueInfo.id, workerDomain, workerIndex);
@@ -519,55 +506,57 @@ RendererTaskTimingFeedbackDrainResult DrainRendererTaskTimingPendingSamples(
     mut Vector<RendererTaskTimingPendingSample> pendingSamples
 ){
     RendererTaskTimingFeedbackDrainResult result;
-    usize pendingIndex = 0u;
-    while(pendingIndex < pendingSamples.size()){
-        if(pendingSamples[pendingIndex].expectedQueue.deviceGeneration != deviceGeneration){
-            RetireRendererTaskTimingPendingSample(pendingIndex, pendingSamples);
+    usize writeIndex = 0u;
+    for(usize readIndex = 0u; readIndex < pendingSamples.size(); ++readIndex){
+        mut RendererTaskTimingPendingSample sample = pendingSamples[readIndex];
+        if(sample.expectedQueue.deviceGeneration != deviceGeneration){
             ++result.retiredSampleCount;
             continue;
         }
-        if(!pendingSamples[pendingIndex].submissionResolved){
-            ++pendingIndex;
+        if(!sample.submissionResolved){
+            if(writeIndex != readIndex)
+                pendingSamples[writeIndex] = sample;
+            ++writeIndex;
             continue;
         }
-        if(!pendingSamples[pendingIndex].accepted){
-            RetireRendererTaskTimingPendingSample(pendingIndex, pendingSamples);
+        if(!sample.accepted){
             ++result.retiredSampleCount;
             continue;
         }
 
-        if(!pendingSamples[pendingIndex].recordsNonCommittingTimingSample && !pendingSamples[pendingIndex].assignmentRecorded){
+        if(!sample.recordsNonCommittingTimingSample && !sample.assignmentRecorded){
             if(!history.noteAcceptedAssignment(
-                pendingSamples[pendingIndex].key,
-                pendingSamples[pendingIndex].expectedQueue,
-                pendingSamples[pendingIndex].sourceFrameIndex
+                sample.key,
+                sample.expectedQueue,
+                sample.sourceFrameIndex
             )){
-                RetireRendererTaskTimingPendingSample(pendingIndex, pendingSamples);
                 ++result.retiredSampleCount;
                 ++result.rejectedAssignmentCount;
                 continue;
             }
-            pendingSamples[pendingIndex].assignmentRecorded = true;
+            sample.assignmentRecorded = true;
             ++result.acceptedAssignmentCount;
         }
 
-        if(!pendingSamples[pendingIndex].sampleResolved){
-            ++pendingIndex;
+        if(!sample.sampleResolved){
+            if(writeIndex != readIndex)
+                pendingSamples[writeIndex] = sample;
+            ++writeIndex;
             continue;
         }
-        if(pendingSamples[pendingIndex].hasUsableSample){
+        if(sample.hasUsableSample){
             if(history.recordNonCommittingSample(
-                pendingSamples[pendingIndex].key,
-                pendingSamples[pendingIndex].expectedQueue,
-                pendingSamples[pendingIndex].durationSeconds
+                sample.key,
+                sample.expectedQueue,
+                sample.durationSeconds
             ))
                 ++result.recordedSampleCount;
             else
                 ++result.rejectedSampleCount;
         }
-        RetireRendererTaskTimingPendingSample(pendingIndex, pendingSamples);
         ++result.retiredSampleCount;
     }
+    pendingSamples.resize(writeIndex);
     return result;
 }
 

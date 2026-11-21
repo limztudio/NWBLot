@@ -91,23 +91,13 @@ b8 ValidateFontAtlasGlyphRecord(
     return true;
 }
 
-u64 ComputeFontAtlasGuardedWordMask(in usize begin, in usize last, in usize word){
-    u64 mask = u64.max;
-    if(word == begin / s_BitsPerU64)
-        mask &= u64.max << (begin % s_BitsPerU64);
-    if(word == last / s_BitsPerU64)
-        mask &= u64.max >> (s_FontAtlasOccupiedWordLastBit - (last % s_BitsPerU64));
-    return mask;
-}
-
-b8 TryMarkFontAtlasGuardedWordOccupied(in u32 glyphId, in usize begin, in usize last, in usize word, mut u64 inOutOccupiedWord){
-    const u64 mask = ComputeFontAtlasGuardedWordMask(begin, last, word);
-    if((inOutOccupiedWord & mask) != 0u){
-        error("FontAtlas validation failed: glyph {} overlaps another guarded region", glyphId);
-        return false;
-    }
-    inOutOccupiedWord |= mask;
-    return true;
+class FontAtlasGuardedRect{
+    public u32 channel = 0u;
+    public u32 firstY = 0u;
+    public u32 endY = 0u;
+    public u32 firstX = 0u;
+    public u32 endX = 0u;
+    public u32 glyphId = 0u;
 }
 
 b8 ValidateFontAtlasGroupGuardedOverlap(
@@ -118,24 +108,44 @@ b8 ValidateFontAtlasGroupGuardedOverlap(
     in u32 groupChannelCount,
     in u32 guardTexels
 ){
-    const Expected<usize> groupWords = TryComputeFontAtlasOccupancyWordCount(groupWidth, groupHeight, groupChannelCount);
-    if(!groupWords.has_value())
+    if(!TryComputeFontAtlasOccupancyWordCount(groupWidth, groupHeight, groupChannelCount).has_value())
         return false;
-    Vector<u64> occupiedWords(groupWords.value(), 0u);
-    const usize planePixels = cast<usize>(groupWidth) * cast<usize>(groupHeight);
+    Vector<FontAtlasGuardedRect> rects;
+    rects.reserve(glyphs.size());
     for(in FontAtlasGlyph glyph : glyphs){
         if(glyph.drawable == 0u || glyph.group != groupIndex)
             continue;
-        const u32 firstX = glyph.x - guardTexels;
-        const u32 endX = glyph.x + glyph.width + guardTexels;
-        const u32 firstY = glyph.y - guardTexels;
-        const u32 endY = glyph.y + glyph.height + guardTexels;
-        for(u32 row = firstY; row < endY; ++row){
-            const usize begin = planePixels * cast<usize>(glyph.channel) + cast<usize>(row) * cast<usize>(groupWidth) + cast<usize>(firstX);
-            const usize last = begin + cast<usize>(endX - firstX) - 1u;
-            for(usize word = begin / s_BitsPerU64; word <= last / s_BitsPerU64; ++word){
-                if(!TryMarkFontAtlasGuardedWordOccupied(glyph.glyphId, begin, last, word, occupiedWords[word]))
-                    return false;
+        FontAtlasGuardedRect rect;
+        rect.channel = glyph.channel;
+        rect.firstY = glyph.y - guardTexels;
+        rect.endY = glyph.y + glyph.height + guardTexels;
+        rect.firstX = glyph.x - guardTexels;
+        rect.endX = glyph.x + glyph.width + guardTexels;
+        rect.glyphId = glyph.glyphId;
+        rects.push_back(rect);
+    }
+    if(rects.size() <= 1u)
+        return true;
+
+    SortSequence<FontAtlasGuardedRect>(rects, lambda[](in FontAtlasGuardedRect lhs, in FontAtlasGuardedRect rhs) -> b8{
+        if(lhs.channel != rhs.channel)
+            return lhs.channel < rhs.channel;
+        if(lhs.firstY != rhs.firstY)
+            return lhs.firstY < rhs.firstY;
+        if(lhs.firstX != rhs.firstX)
+            return lhs.firstX < rhs.firstX;
+        return lhs.glyphId < rhs.glyphId;
+    });
+
+    for(usize i = 0u; i < rects.size(); ++i){
+        const FontAtlasGuardedRect a = rects[i];
+        for(usize j = i + 1u; j < rects.size(); ++j){
+            const FontAtlasGuardedRect b = rects[j];
+            if(b.channel != a.channel || b.firstY >= a.endY)
+                break;
+            if(a.firstX < b.endX && b.firstX < a.endX){
+                error("FontAtlas validation failed: glyph {} overlaps another guarded region", Max(a.glyphId, b.glyphId));
+                return false;
             }
         }
     }

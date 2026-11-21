@@ -22,9 +22,7 @@ void* CoreAlloc(usize size, ArenaMemoryTracker* arenaTracker)noexcept{
     void* const result = scalable_malloc(size);
     if(result){
         const u64 bytes = static_cast<u64>(scalable_msize(result));
-        RecordHeapMemoryAllocation(bytes);
-        if(arenaTracker)
-            arenaTracker->recordAllocation(bytes);
+        RecordHeapAndArenaAllocation(bytes, arenaTracker);
     }
     return result;
 }
@@ -34,9 +32,7 @@ void* CoreRealloc(void* p, usize size, ArenaMemoryTracker* arenaTracker)noexcept
     void* const result = scalable_realloc(p, size);
     if(result || size == 0u){
         const u64 newBytes = result ? static_cast<u64>(scalable_msize(result)) : 0u;
-        RecordHeapMemoryReallocation(oldBytes, newBytes);
-        if(arenaTracker)
-            arenaTracker->recordReallocation(oldBytes, newBytes);
+        RecordHeapAndArenaReallocation(oldBytes, newBytes, arenaTracker);
     }
     return result;
 }
@@ -49,9 +45,7 @@ void* CoreReallocAligned(void* p, usize size, usize align, ArenaMemoryTracker* a
     void* const result = scalable_aligned_realloc(p, size, align);
     if(result || size == 0u){
         const u64 newBytes = result ? static_cast<u64>(scalable_msize(result)) : 0u;
-        RecordHeapMemoryReallocation(oldBytes, newBytes);
-        if(arenaTracker)
-            arenaTracker->recordReallocation(oldBytes, newBytes);
+        RecordHeapAndArenaReallocation(oldBytes, newBytes, arenaTracker);
     }
     return result;
 }
@@ -60,9 +54,7 @@ void* CoreAllocAligned(usize size, usize align, ArenaMemoryTracker* arenaTracker
     void* const result = scalable_aligned_malloc(size, align);
     if(result){
         const u64 bytes = static_cast<u64>(scalable_msize(result));
-        RecordHeapMemoryAllocation(bytes);
-        if(arenaTracker)
-            arenaTracker->recordAllocation(bytes);
+        RecordHeapAndArenaAllocation(bytes, arenaTracker);
     }
     return result;
 }
@@ -74,9 +66,7 @@ usize CoreMsize(void* ptr)noexcept{
 void CoreFree(void* ptr, ArenaMemoryTracker* arenaTracker)noexcept{
     if(ptr){
         const u64 bytes = static_cast<u64>(scalable_msize(ptr));
-        RecordHeapMemoryDeallocation(bytes);
-        if(arenaTracker)
-            arenaTracker->recordDeallocation(bytes);
+        RecordHeapAndArenaDeallocation(bytes, arenaTracker);
     }
     scalable_free(ptr);
 }
@@ -88,9 +78,7 @@ void CoreFreeSize(void* ptr, [[maybe_unused]] usize size, ArenaMemoryTracker* ar
 void CoreFreeAligned(void* ptr, ArenaMemoryTracker* arenaTracker)noexcept{
     if(ptr){
         const u64 bytes = static_cast<u64>(scalable_msize(ptr));
-        RecordHeapMemoryDeallocation(bytes);
-        if(arenaTracker)
-            arenaTracker->recordDeallocation(bytes);
+        RecordHeapAndArenaDeallocation(bytes, arenaTracker);
     }
     scalable_aligned_free(ptr);
 }

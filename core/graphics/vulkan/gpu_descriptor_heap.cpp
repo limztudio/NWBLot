@@ -368,6 +368,8 @@ b8 GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         && (m_samplerBufferBlock.offsetBytes % offsetAlignmentBytes) == 0u
     ;
     m_initialized = true;
+    syncDynamicReadinessFlagLocked();
+    publishBindingFastVersionLocked();
 
     NWB_LOGGER_INFO(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap initialized (descriptor buffer): resource capacity {}, sampler capacity {} (sets {}/{}).")
         , resourceCapacity
@@ -576,6 +578,7 @@ void GpuDescriptorHeap::releaseRetainedDescriptorResource(const GpuDescriptorHan
 
     __hidden_vulkan_descriptor_heap::RemoveDescriptorHandle(m_dynamicReadinessSlots, handle);
     __hidden_vulkan_descriptor_heap::RemoveDescriptorHandle(m_concurrentAdmissionSlots, handle);
+    syncDynamicReadinessFlagLocked();
 
     if(handle.descriptorClass() == GpuDescriptorClass::AccelStruct){
         releaseAccelStructDescriptorBlock(handle.slot());
@@ -670,6 +673,8 @@ void GpuDescriptorHeap::resetStateForShutdownLocked()noexcept{
 
     m_initialized = false;
     m_staticBindingContractValid = false;
+    m_hasDynamicReadinessSlots.store(false, MemoryOrder::release);
+    m_bindingFastVersion.store(0u, MemoryOrder::release);
 }
 
 b8 GpuDescriptorHeap::initializeStorage(const u32 resourceCapacity, const u32 samplerCapacity, const u32 accelStructCapacity){

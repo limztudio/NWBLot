@@ -16,6 +16,7 @@ b8 FontAtlas::loadBinary(in Span<u8> binary){
         LogFontAtlasBinaryDeserializeFailed();
         return false;
     }
+    candidate.markPayloadValidated();
     this = candidate;
     return true;
 }

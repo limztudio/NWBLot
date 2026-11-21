@@ -94,6 +94,27 @@ template<typename ArenaT>
     GraphemeBoundaryState state;
     usize offset = 0u;
     while(offset < text.size()){
+        const u8 lead = static_cast<u8>(text[offset]);
+        if(lead >= 0x20u && lead <= 0x7Eu){
+            if(state.first || state.previous != GraphemeBreak::Prepend)
+                candidate.push_back(offset);
+            state.regionalRun = 0u;
+            state.previous = GraphemeBreak::Other;
+            state.pictographExtendRun = false;
+            state.previousZwjAfterPictograph = false;
+            state.indicConsonantRun = false;
+            state.indicLinker = false;
+            state.first = false;
+            ++offset;
+            while(offset < text.size()){
+                const u8 byte = static_cast<u8>(text[offset]);
+                if(byte < 0x20u || byte > 0x7Eu)
+                    break;
+                candidate.push_back(offset);
+                ++offset;
+            }
+            continue;
+        }
         const auto decoded = DecodeUtf8Scalar(text.substr(offset, s_Utf8MaxSequenceBytes));
         if(!decoded)
             return MakeUnexpected(Failure{});

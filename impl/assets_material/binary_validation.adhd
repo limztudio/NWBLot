@@ -105,7 +105,7 @@ b8 LogAndValidateMaterialTypedLayout(
     }
 }
 
-b8 ValidateMaterialPayloadData(
+b8 ValidateMaterialEnvelopeData(
     in u32 stageShaderCount,
     in Name materialInterface,
     in StringView shaderVariant,
@@ -153,6 +153,40 @@ b8 ValidateMaterialPayloadData(
         error("{} failed: material resource reference count exceeds u32 range", failureContext);
         return false;
     }
+    return true;
+}
+
+b8 ValidateMaterialPayloadData(
+    in u32 stageShaderCount,
+    in Name materialInterface,
+    in StringView shaderVariant,
+    in b8 transparent,
+    in AssetRef<PixelShader> avboitAccumulatePixelShader,
+    in AssetRef<PixelShader> avboitOccupancyPixelShader,
+    in AssetRef<PixelShader> avboitExtinctionPixelShader,
+    in u64 typedLayoutHash,
+    in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
+    in Span<MaterialTypedLayoutField> typedLayoutFields,
+    in Span<u8> typedBlockBytes,
+    in Span<MaterialResourceReference> resourceReferences,
+    in StringView failureContext
+){
+    if(!ValidateMaterialEnvelopeData(
+        stageShaderCount,
+        materialInterface,
+        shaderVariant,
+        transparent,
+        avboitAccumulatePixelShader,
+        avboitOccupancyPixelShader,
+        avboitExtinctionPixelShader,
+        typedLayoutHash,
+        typedLayoutBlocks,
+        typedLayoutFields,
+        typedBlockBytes,
+        resourceReferences,
+        failureContext
+    ))
+        return false;
     if(!LogAndValidateMaterialTypedLayout(typedLayoutHash, typedLayoutBlocks, typedLayoutFields, typedBlockBytes, failureContext))
         return false;
     if(!ValidateMaterialResourceReferences(typedLayoutBlocks, typedLayoutFields, resourceReferences)){

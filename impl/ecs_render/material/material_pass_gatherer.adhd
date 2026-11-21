@@ -777,6 +777,7 @@ void RendererMaterialSystem::gatherDraws(
     if(csgActiveForPass){
         CsgFrameReceiverLookup lookup(this.m_world);
         if(!lookup.empty()){
+            lookup.precomputeCutters(this.m_csgShapeRegistry);
             if(pass != MaterialPipelinePass::CsgReceiverSurface)
                 csgCapacity = capacity;
             if(pass == MaterialPipelinePass::Opaque || pass == MaterialPipelinePass::CsgReceiverSurface)
@@ -890,8 +891,10 @@ b8 RendererMaterialSystem::prepareTransparentMaterialPasses(
 
     if(CsgFrameHasReceiverPassWork(csgFrameState, CsgReceiverPass::Transparent)){
         CsgFrameReceiverLookup lookup(this.m_world);
-        if(!lookup.empty())
+        if(!lookup.empty()){
+            lookup.precomputeCutters(this.m_csgShapeRegistry);
             return this.prepareTransparentMaterialPassesImpl(this.m_world, meshes.value(), passes, csgFrameState, csgWorkRegionMeshViewState, Optional<in CsgFrameReceiverLookup>(lookup));
+        }
     }
     return this.prepareTransparentMaterialPassesImpl(this.m_world, meshes.value(), passes, csgFrameState, csgWorkRegionMeshViewState, Optional<in CsgFrameReceiverLookup>());
 }

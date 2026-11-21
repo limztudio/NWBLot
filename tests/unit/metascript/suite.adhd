@@ -1400,7 +1400,7 @@ void RunCoreCppHeaderImportVerification(){
     EXPECT_TRUE(descHeap.value().isExtern);
     EXPECT_FALSE(descHeap.value().isAbstract);
     EXPECT_FALSE(descHeap.value().isCopyConstructible);
-    EXPECT_EQ(descHeap.value().totalSize, 1080u);
+    EXPECT_EQ(descHeap.value().totalSize, 1616u);
     EXPECT_EQ(descHeap.value().totalAlign, 8u);
     EXPECT_TRUE(FindAstDeclaration(unit.classes, "GpuDescriptorHeapPendingRecordingLease").has_value());
 
@@ -1408,8 +1408,8 @@ void RunCoreCppHeaderImportVerification(){
     ASSERT_TRUE(taskGraph.has_value());
     EXPECT_TRUE(taskGraph.value().isExtern);
     EXPECT_FALSE(taskGraph.value().isCopyConstructible);
-    EXPECT_EQ(taskGraph.value().totalSize, 1848u);
-    EXPECT_EQ(taskGraph.value().totalAlign, 8u);
+    EXPECT_EQ(taskGraph.value().totalSize, 3968u);
+    EXPECT_EQ(taskGraph.value().totalAlign, 128u);
     EXPECT_TRUE(FindAstDeclaration(unit.classes, "GpuTaskGraphPayloadLifetimeScope").has_value());
     b8 foundAddTask = false;
     b8 foundDefaultArgMethod = false;
@@ -1428,7 +1428,7 @@ void RunCoreCppHeaderImportVerification(){
     const auto runtime = FindAstDeclaration(unit.classes, "GraphicsRuntime");
     ASSERT_TRUE(runtime.has_value());
     EXPECT_TRUE(runtime.value().isExtern);
-    EXPECT_EQ(runtime.value().totalSize, 1520u);
+    EXPECT_EQ(runtime.value().totalSize, 1528u);
     EXPECT_EQ(runtime.value().totalAlign, 8u);
     usize runtimeCtorCount = 0u;
     for(usize methodIndex = 0u; methodIndex < runtime.value().methods.size(); ++methodIndex){

@@ -33,10 +33,8 @@ class RuntimeMeshRequestSet : NoCopy{
             this.promoteIndex();
         }
         const RuntimeMeshRequestKey key(meshHash, version);
-        if(!this.m_index.value().contains(key)){
-            this.m_index.value().try_emplace(key, false);
+        if(this.m_index.value().try_emplace(key, false).second)
             ++this.m_remainingCount;
-        }
     }
 
     public void markLive(in Name meshKey, in u64 version){
@@ -74,15 +72,17 @@ class RuntimeMeshRequestSet : NoCopy{
 
     private void markIndexedLive(in NameHash meshHash, in u64 version){
         const RuntimeMeshRequestKey key(meshHash, version);
-        if(this.m_index.value().contains(key) && !this.m_index.value().at(key)){
-            this.m_index.value().insert_or_assign(key, true);
+        const auto found = this.m_index.value().find(key);
+        if(found != this.m_index.value().end() && !found.value()){
+            found.value() = true;
             --this.m_remainingCount;
         }
     }
 
     private b8 containsIndexedLive(in NameHash meshHash, in u64 version)const{
         const RuntimeMeshRequestKey key(meshHash, version);
-        return this.m_index.value().contains(key) && this.m_index.value().at(key);
+        const auto found = this.m_index.value().find(key);
+        return found != this.m_index.value().end() && found.value();
     }
 }
 

@@ -24,7 +24,7 @@ namespace __hidden_command_buffer_resource_references{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_LinearCapacity = 32u;
+inline constexpr usize s_LinearCapacity = 8u;
 inline constexpr usize s_InitialMembershipTableCapacity = 128u;
 
 
@@ -163,16 +163,34 @@ void CommandBufferResourceReferences::retainResourceSlow(GraphicsResource& resou
 }
 
 void CommandBufferResourceReferences::retainBufferSlow(Buffer& buffer){
+    using namespace __hidden_command_buffer_resource_references;
     GraphicsResource* const key = &buffer;
     if(!m_usingMembershipTable){
-        retainResource(buffer);
-        trackRetainedBufferSlow(buffer);
-        if(!m_usingMembershipTable){
+        b8 hasOwned = false;
+        for(const Handle<GraphicsResource>& retainedResource : m_resources){
+            if(retainedResource.get() == key){
+                hasOwned = true;
+                break;
+            }
+        }
+        b8 hasBuffer = false;
+        for(const auto retainedBuffer : m_buffers){
+            if(retainedBuffer.get() == &buffer){
+                hasBuffer = true;
+                break;
+            }
+        }
+        if((hasOwned || m_resources.size() < s_LinearCapacity) && (hasBuffer || m_buffers.size() < s_LinearCapacity)){
+            if(!hasOwned)
+                m_resources.emplace_back(key, Handle<GraphicsResource>::deleter_type(&m_context.objectArena));
+            if(!hasBuffer)
+                pushRetainedBuffer(buffer);
             updateCacheFlags(key, s_FlagOwned | s_FlagBuffer);
             m_lastRetainedResource = key;
             m_lastRetainedBuffer = &buffer;
             return;
         }
+        promoteMembershipIndex();
     }
 
     MembershipEntry& membership = findOrInsertMembership(key);
@@ -217,8 +235,7 @@ void CommandBufferResourceReferences::trackRetainedBufferSlow(Buffer& buffer){
 
 void CommandBufferResourceReferences::appendBufferStateCommit(Buffer& buffer){
     GraphicsResource* const key = &buffer;
-    const CacheSlot& slot = m_cache[CacheSlotIndex(key)];
-    if(slot.resource == key && slot.generation == m_cacheGeneration && (slot.flags & (s_FlagOwned | s_FlagBuffer | s_FlagBufferStateCommit)) == (s_FlagOwned | s_FlagBuffer | s_FlagBufferStateCommit))
+    if((findCacheFlags(key) & (s_FlagOwned | s_FlagBuffer | s_FlagBufferStateCommit)) == (s_FlagOwned | s_FlagBuffer | s_FlagBufferStateCommit))
         return;
 
     if(!m_usingMembershipTable){
@@ -265,9 +282,15 @@ void CommandBufferResourceReferences::discardBufferStateCommits()noexcept{
 
     for(const RetainedBufferStateCommit& commit : m_bufferStateCommits){
         GraphicsResource* const key = commit.buffer.get();
-        CacheSlot& slot = m_cache[CacheSlotIndex(key)];
-        if(slot.resource == key && slot.generation == m_cacheGeneration)
-            slot.flags = static_cast<u8>(slot.flags & ~s_FlagBufferStateCommit);
+        CacheSet& set = m_cache[CacheSetIndex(key)];
+        if(set.generation == m_cacheGeneration){
+            for(usize way = 0u; way < s_CacheWayCount; ++way){
+                if(set.resources[way] == key){
+                    set.flags[way] = static_cast<u8>(set.flags[way] & ~s_FlagBufferStateCommit);
+                    break;
+                }
+            }
+        }
         if(m_usingMembershipTable){
             MembershipEntry* const found = findMembershipEntry(key);
             if(!found || (found->flags & s_FlagBufferStateCommit) == 0u)
@@ -279,16 +302,34 @@ void CommandBufferResourceReferences::discardBufferStateCommits()noexcept{
 }
 
 void CommandBufferResourceReferences::retainTextureSlow(Texture& texture){
+    using namespace __hidden_command_buffer_resource_references;
     GraphicsResource* const key = &texture;
     if(!m_usingMembershipTable){
-        retainResource(texture);
-        trackRetainedTextureSlow(texture);
-        if(!m_usingMembershipTable){
+        b8 hasOwned = false;
+        for(const Handle<GraphicsResource>& retainedResource : m_resources){
+            if(retainedResource.get() == key){
+                hasOwned = true;
+                break;
+            }
+        }
+        b8 hasTexture = false;
+        for(const auto retainedTexture : m_textures){
+            if(retainedTexture.get() == &texture){
+                hasTexture = true;
+                break;
+            }
+        }
+        if((hasOwned || m_resources.size() < s_LinearCapacity) && (hasTexture || m_textures.size() < s_LinearCapacity)){
+            if(!hasOwned)
+                m_resources.emplace_back(key, Handle<GraphicsResource>::deleter_type(&m_context.objectArena));
+            if(!hasTexture)
+                pushRetainedTexture(texture);
             updateCacheFlags(key, s_FlagOwned | s_FlagTexture);
             m_lastRetainedResource = key;
             m_lastRetainedTexture = &texture;
             return;
         }
+        promoteMembershipIndex();
     }
 
     MembershipEntry& membership = findOrInsertMembership(key);
@@ -336,8 +377,7 @@ void CommandBufferResourceReferences::retainFramebufferSlow(Framebuffer& framebu
     if(!m_usingMembershipTable){
         retainResource(framebuffer);
         if(!m_usingMembershipTable){
-            const CacheSlot& slot = m_cache[CacheSlotIndex(key)];
-            const b8 alreadyTracked = slot.resource == key && slot.generation == m_cacheGeneration && (slot.flags & s_FlagFramebuffer) != 0u;
+            const b8 alreadyTracked = (findCacheFlags(key) & s_FlagFramebuffer) != 0u;
             if(!alreadyTracked){
                 for(const TextureHandle& texture : framebuffer.m_resources){
                     FOUNDATION_ASSERT(texture);
@@ -362,16 +402,20 @@ void CommandBufferResourceReferences::retainFramebufferSlow(Framebuffer& framebu
         m_resources.emplace_back(key, Handle<GraphicsResource>::deleter_type(&m_context.objectArena));
         membership.flags |= s_FlagOwned;
     }
-    const b8 needsAttachmentScan = (membership.flags & s_FlagFramebuffer) == 0u;
+    u8 resolvedFlags = membership.flags;
+    const b8 needsAttachmentScan = (resolvedFlags & s_FlagFramebuffer) == 0u;
     if(needsAttachmentScan){
-        membership.flags |= s_FlagFramebuffer;
+        resolvedFlags |= s_FlagFramebuffer;
+        membership.flags = resolvedFlags;
+        const usize tableCapacity = m_membershipTable.size();
         for(const TextureHandle& texture : framebuffer.m_resources){
             FOUNDATION_ASSERT(texture);
             trackRetainedTexture(*texture);
         }
+        if(m_membershipTable.size() != tableCapacity)
+            resolvedFlags = findOrInsertMembership(key).flags;
     }
-    MembershipEntry& refreshed = findOrInsertMembership(key);
-    updateCacheFlags(key, refreshed.flags);
+    updateCacheFlags(key, resolvedFlags);
     m_lastRetainedResource = key;
     m_lastRetainedFramebuffer = &framebuffer;
 }
@@ -392,7 +436,7 @@ void CommandBufferResourceReferences::clear()noexcept{
     m_resources.clear();
     if(++m_cacheGeneration == 0u){
         m_cacheGeneration = 1u;
-        m_cache.fill(CacheSlot{});
+        m_cache.fill(CacheSet{});
         for(MembershipEntry& entry : m_membershipTable)
             entry.generation = 0u;
     }
@@ -416,9 +460,13 @@ void CommandBufferResourceReferences::promoteMembershipIndex(){
         findOrInsertMembership(texture.get()).flags |= s_FlagTexture;
     for(const RetainedBufferStateCommit& commit : m_bufferStateCommits)
         findOrInsertMembership(commit.buffer.get()).flags |= s_FlagBufferStateCommit;
-    for(const CacheSlot& slot : m_cache){
-        if(slot.generation == m_cacheGeneration && (slot.flags & s_FlagFramebuffer) != 0u && slot.resource)
-            findOrInsertMembership(slot.resource).flags |= s_FlagFramebuffer;
+    for(const CacheSet& set : m_cache){
+        if(set.generation != m_cacheGeneration)
+            continue;
+        for(usize way = 0u; way < s_CacheWayCount; ++way){
+            if((set.flags[way] & s_FlagFramebuffer) != 0u && set.resources[way])
+                findOrInsertMembership(set.resources[way]).flags |= s_FlagFramebuffer;
+        }
     }
 }
 

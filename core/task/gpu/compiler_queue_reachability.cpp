@@ -63,7 +63,7 @@ b8 GpuTaskSchedulingReachability::hasRelatedBit(const u32 sourceIndex, const u32
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, GpuTaskSchedulingReachability& outReachability, const DenseDescendantBitMatrix* const precomputedStrictDesc){
+b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, GpuTaskSchedulingReachability& outReachability, DenseDescendantBitMatrix* const precomputedStrictDesc){
     const auto reset = [&outReachability]()noexcept{
         outReachability.m_words.clear();
         outReachability.m_topologicalRanks.clear();
@@ -129,8 +129,8 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
     outReachability.m_taskCount = taskCount;
     outReachability.m_wordsPerRow = wordsPerRow;
     if(precomputedStrictDesc && precomputedStrictDesc->valid && precomputedStrictDesc->taskCount == taskCount && precomputedStrictDesc->wordsPerRow == wordsPerRow && precomputedStrictDesc->strictDesc.size() == totalWordCount){
-        outReachability.m_words.resize(totalWordCount);
-        FOUNDATION_MEMCPY(outReachability.m_words.data(), totalWordCount * sizeof(u64), precomputedStrictDesc->strictDesc.data(), totalWordCount * sizeof(u64));
+        outReachability.m_words = Move(precomputedStrictDesc->strictDesc);
+        precomputedStrictDesc->valid = false;
         SymmetrizeDenseBitMatrix(outReachability.m_words, taskCount, wordsPerRow);
         outReachability.m_topologicalRanks.resize(taskCount);
         for(usize orderIndex = 0u; orderIndex < analysis.topologicalOrder().size(); ++orderIndex)

@@ -271,13 +271,15 @@ void MeshSkinningSystem::invalidateResources(){
         this.releaseRuntimeResourceBindlessHeapHandles(it.value());
     this.m_runtimeResources.clear();
     this.m_runtimeMeshCache.clear();
+    this.resetFrameScratchResources();
     this.resetPipelineResources();
 }
 
 Expected<RuntimeMeshDesc> MeshSkinningSystem::resolveRuntimeMesh(in EntityID entity){
-    if(!this.m_world.hasComponent<SkinnedMeshBindingComponent>(entity))
+    const Optional<mut SkinnedMeshBindingComponent> binding = this.m_world.borrowComponent<SkinnedMeshBindingComponent>(entity);
+    if(!binding.has_value())
         return MakeUnexpected(Failure());
-    const RuntimeMeshHandle handle = this.m_world.getComponent<SkinnedMeshBindingComponent>(entity).runtimeMesh;
+    const RuntimeMeshHandle handle = binding.value().runtimeMesh;
     const auto instance = this.m_runtimeMeshCache.findInstance(handle);
     if(!instance.has_value())
         return MakeUnexpected(Failure());
@@ -380,18 +382,16 @@ b8 MeshSkinningSystem::ensureRepackPipeline(){
 
 void MeshSkinningSystem::collectLiveSkinningStateBuffers(){
     this.m_frameLiveBuffers.clear();
-    HashSet<BufferHandle> index;
+    this.m_frameLiveBufferIndex.clear();
     for(in auto row : this.m_world.view<SkinnedMeshBindingComponent>()){
         const RuntimeMeshHandle handle = Get<1>(row).runtimeMesh;
         const auto instance = this.m_runtimeMeshCache.findInstance(handle);
         if(!instance.has_value())
             continue;
-        Optional<in MeshSkinningRuntimeResources> resources;
-        if(this.m_runtimeResources.contains(handle.value)){
-            in MeshSkinningRuntimeResources retained = this.m_runtimeResources.at(handle.value);
-            resources = Optional<in MeshSkinningRuntimeResources>(retained);
-        }
-        CollectSkinningStateBuffers(instance.value(), resources, this.m_frameLiveBuffers, index);
+        CollectSkinningInstanceStateBuffers(instance.value(), this.m_frameLiveBuffers, this.m_frameLiveBufferIndex);
+        const auto foundResources = this.m_runtimeResources.find(handle.value);
+        if(foundResources != this.m_runtimeResources.end())
+            CollectSkinningResourceStateBuffers(instance.value(), foundResources.value(), this.m_frameLiveBuffers, this.m_frameLiveBufferIndex);
     }
 }
 

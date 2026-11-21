@@ -383,11 +383,12 @@ Expected<u64> ShadowMaterialContextPreparer::prepareBytes(
     in usize sceneInstanceCount,
     in Span<NwbRtInstanceMaterialGpu> instanceMaterials,
     in Span<InstanceGpuData> shadowInstanceData,
-    in Span<u8> shadowMaterialTypedBytes
+    in Span<u8> shadowMaterialTypedBytes,
+    in u64 materialTypedHash
 ){
 
     const usize materialTypedUploadBytes = ResolveMaterialTypedUploadByteCount(shadowMaterialTypedBytes);
-    const u64 materialContextHash = ComputeShadowMaterialContextHash(instanceMaterials, shadowInstanceData, shadowMaterialTypedBytes);
+    const u64 materialContextHash = ComputeShadowMaterialContextHashWithTypedHash(instanceMaterials, shadowInstanceData, shadowMaterialTypedBytes.size(), materialTypedHash);
     const b8 hardware = route == PreparedShadowMaterialContextRoute::Hardware;
     const b8 canReuseMaterialContext = CanReusePreparedShadowMaterialContext(
         route, staticScene, this.m_system.m_rayTracingState.sceneBvh.m_sceneHasTransparentOccluder,

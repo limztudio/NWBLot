@@ -252,6 +252,29 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
     }
 
     const b8 bindAccelStruct = accelStructHandle.valid();
+    u32 bindPointIndex = 0u;
+    if(bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE)
+        bindPointIndex = 1u;
+    else if(bindPoint == VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR)
+        bindPointIndex = 2u;
+    CachedDescriptorBufferOffsets& cachedOffsets = m_boundDescriptorBufferOffsets[bindPointIndex];
+    if(
+        !bindAccelStruct
+        && m_descriptorBuffersBound
+        && cachedOffsets.valid
+        && cachedOffsets.heap == &heap
+        && !cachedOffsets.hasAccelStruct
+        && cachedOffsets.pipelineLayout == pipelineBindings.pipelineLayout
+        && cachedOffsets.descriptorGeneration != 0u
+        && cachedOffsets.heapBindingVersion != 0u
+        && m_currentCmdBuf->m_descriptorBufferManager == manager
+        && m_currentCmdBuf->m_descriptorBufferGeneration == cachedOffsets.descriptorGeneration
+        && manager->m_fastBindingGeneration.load(MemoryOrder::acquire) == cachedOffsets.descriptorGeneration
+        && heap.m_bindingFastVersion.load(MemoryOrder::acquire) == cachedOffsets.heapBindingVersion
+        && !heap.m_hasDynamicReadinessSlots.load(MemoryOrder::acquire)
+    )
+        return;
+
     ScopedLock heapLock(heap.m_mutex);
     const GpuDescriptorHeapAbi abi = heap.m_desc.bindlessHeapAbi;
     BindingLayout* const resourceLayout = heap.m_resourceLayout.get();
@@ -421,12 +444,7 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
 
     ensureDescriptorBuffersBound(*manager, *managerSnapshot);
 
-    u32 bindPointIndex = 0u;
-    if(bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE)
-        bindPointIndex = 1u;
-    else if(bindPoint == VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR)
-        bindPointIndex = 2u;
-    CachedDescriptorBufferOffsets& cachedOffsets = m_boundDescriptorBufferOffsets[bindPointIndex];
+    const u64 heapBindingVersion = heap.m_bindingFastVersion.load(MemoryOrder::relaxed);
     if(
         cachedOffsets.valid
         && cachedOffsets.pipelineLayout == pipelineBindings.pipelineLayout
@@ -435,8 +453,11 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
         && cachedOffsets.resourceOffset == resourceBlock.offsetBytes
         && cachedOffsets.samplerOffset == samplerBlock.offsetBytes
         && (!bindAccelStruct || cachedOffsets.accelStructOffset == accelStructBlock.offsetBytes)
-    )
+    ){
+        cachedOffsets.heap = &heap;
+        cachedOffsets.heapBindingVersion = heapBindingVersion;
         return;
+    }
 
     const Array<u32, DescriptorBufferManager::s_DescriptorBufferCountWithAccelStruct> bufferIndices = {{
         DescriptorBufferManager::s_ResourceDescriptorBufferIndex,
@@ -455,7 +476,9 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
         offsets.data()
     );
 
+    cachedOffsets.heap = &heap;
     cachedOffsets.pipelineLayout = pipelineBindings.pipelineLayout;
+    cachedOffsets.heapBindingVersion = heapBindingVersion;
     cachedOffsets.descriptorGeneration = managerSnapshot->generation;
     cachedOffsets.resourceOffset = resourceBlock.offsetBytes;
     cachedOffsets.samplerOffset = samplerBlock.offsetBytes;

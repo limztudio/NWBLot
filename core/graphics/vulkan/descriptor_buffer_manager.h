@@ -111,6 +111,9 @@ private:
     [[nodiscard]] b8 isLiveSegmentLocked(const SegmentStorage& storage, const DescriptorBufferSegment& segment, DescriptorBufferSegmentKind::Enum expectedKind)const noexcept;
     b8 initializeSegment(SegmentStorage& segment, AStringView debugName, u32 capacityBytes);
     void shutdownSegment(SegmentStorage& segment)noexcept;
+    void publishFastBindingGenerationLocked()noexcept{
+        m_fastBindingGeneration.store((m_enabled && !m_lifecycleTransitioning) ? m_bindingGeneration : 0u, MemoryOrder::release);
+    }
 
 
 private:
@@ -119,6 +122,7 @@ private:
     VulkanAllocator& m_allocator;
     Futex m_lifecycleOperationMutex;
     mutable Futex m_lifecycleMutex;
+    Atomic<u64> m_fastBindingGeneration{ 0u };
     u64 m_bindingGeneration = 0u;
     u64 m_nextBindingGeneration = 1u;
     b8 m_enabled = false;

@@ -9,7 +9,7 @@
 
 
 class MeshBinaryCodec{
-    private void appendStreams(
+    private b8 appendStreams(
         in Span<f32x3u> positions,
         in Span<f16x4u> normals,
         in Span<f16x4u> tangents,
@@ -38,30 +38,20 @@ class MeshBinaryCodec{
             meshletPrimitiveIndices.size()
         );
         AppendPOD(outBinary, header);
-        for(in f32x3u v : positions)
-            AppendPOD(outBinary, v);
-        for(in f16x4u v : normals)
-            AppendPOD(outBinary, v);
-        for(in f16x4u v : tangents)
-            AppendPOD(outBinary, v);
-        for(in f32x2u v : uv0)
-            AppendPOD(outBinary, v);
-        for(in f16x4u v : colors)
-            AppendPOD(outBinary, v);
-        for(in MeshletDesc v : meshlets)
-            AppendPOD(outBinary, v);
-        for(in MeshletBounds v : meshletBounds)
-            AppendPOD(outBinary, v);
-        for(in u8 v : meshletPositionRefDeltas)
-            outBinary.push_back(v);
-        for(in u8 v : meshletAttributeRefDeltas)
-            outBinary.push_back(v);
-        for(in MeshletLocalVertexRef v : meshletLocalVertexRefs)
-            AppendPOD(outBinary, v);
-        for(in u8 v : meshletPrimitiveIndices)
-            outBinary.push_back(v);
-        for(in u32 v : solidTriangleWords)
-            AppendPOD(outBinary, v);
+        return
+            AppendBinaryVectorPayload(outBinary, positions).has_value()
+            && AppendBinaryVectorPayload(outBinary, normals).has_value()
+            && AppendBinaryVectorPayload(outBinary, tangents).has_value()
+            && AppendBinaryVectorPayload(outBinary, uv0).has_value()
+            && AppendBinaryVectorPayload(outBinary, colors).has_value()
+            && AppendBinaryVectorPayload(outBinary, meshlets).has_value()
+            && AppendBinaryVectorPayload(outBinary, meshletBounds).has_value()
+            && AppendBinaryVectorPayload(outBinary, meshletPositionRefDeltas).has_value()
+            && AppendBinaryVectorPayload(outBinary, meshletAttributeRefDeltas).has_value()
+            && AppendBinaryVectorPayload(outBinary, meshletLocalVertexRefs).has_value()
+            && AppendBinaryVectorPayload(outBinary, meshletPrimitiveIndices).has_value()
+            && AppendBinaryVectorPayload(outBinary, solidTriangleWords).has_value()
+        ;
     }
 
     private b8 validateStreamRange(
@@ -87,118 +77,49 @@ class MeshBinaryCodec{
     private b8 readPositions(in Span<u8> binary, in u64 count, mut usize inOutCursor, mut Vector<f32x3u> outValues)const{
         if(!this.validateStreamRange(binary, count, s_MeshPositionElementBytes, outValues.max_size(), "positions", inOutCursor))
             return false;
-        const usize valueCount = cast<usize>(count);
-        outValues.clear();
-        outValues.reserve(valueCount);
-        for(usize i = 0u; i < valueCount; ++i){
-            const Expected<f32x3u> item = ReadPOD<f32x3u>(binary, inOutCursor);
-            if(!item.has_value())
-                return false;
-            outValues.push_back(item.value());
-        }
-        return true;
+        return ReadBinaryVectorPayload(binary, cast<usize>(count), inOutCursor, outValues).has_value();
     }
 
     private b8 readHalf4(in Span<u8> binary, in u64 count, in StringView label, mut usize inOutCursor, mut Vector<f16x4u> outValues)const{
         if(!this.validateStreamRange(binary, count, s_MeshHalf4ElementBytes, outValues.max_size(), label, inOutCursor))
             return false;
-        const usize valueCount = cast<usize>(count);
-        outValues.clear();
-        outValues.reserve(valueCount);
-        for(usize i = 0u; i < valueCount; ++i){
-            const Expected<f16x4u> item = ReadPOD<f16x4u>(binary, inOutCursor);
-            if(!item.has_value())
-                return false;
-            outValues.push_back(item.value());
-        }
-        return true;
+        return ReadBinaryVectorPayload(binary, cast<usize>(count), inOutCursor, outValues).has_value();
     }
 
     private b8 readUv0(in Span<u8> binary, in u64 count, mut usize inOutCursor, mut Vector<f32x2u> outValues)const{
         if(!this.validateStreamRange(binary, count, s_MeshUv0ElementBytes, outValues.max_size(), "uv0", inOutCursor))
             return false;
-        const usize valueCount = cast<usize>(count);
-        outValues.clear();
-        outValues.reserve(valueCount);
-        for(usize i = 0u; i < valueCount; ++i){
-            const Expected<f32x2u> item = ReadPOD<f32x2u>(binary, inOutCursor);
-            if(!item.has_value())
-                return false;
-            outValues.push_back(item.value());
-        }
-        return true;
+        return ReadBinaryVectorPayload(binary, cast<usize>(count), inOutCursor, outValues).has_value();
     }
 
     private b8 readMeshlets(in Span<u8> binary, in u64 count, mut usize inOutCursor, mut Vector<MeshletDesc> outValues)const{
         if(!this.validateStreamRange(binary, count, s_MeshletDescElementBytes, outValues.max_size(), "meshlets", inOutCursor))
             return false;
-        const usize valueCount = cast<usize>(count);
-        outValues.clear();
-        outValues.reserve(valueCount);
-        for(usize i = 0u; i < valueCount; ++i){
-            const Expected<MeshletDesc> item = ReadPOD<MeshletDesc>(binary, inOutCursor);
-            if(!item.has_value())
-                return false;
-            outValues.push_back(item.value());
-        }
-        return true;
+        return ReadBinaryVectorPayload(binary, cast<usize>(count), inOutCursor, outValues).has_value();
     }
 
     private b8 readMeshletBounds(in Span<u8> binary, in u64 count, mut usize inOutCursor, mut Vector<MeshletBounds> outValues)const{
         if(!this.validateStreamRange(binary, count, s_MeshletBoundsElementBytes, outValues.max_size(), "meshlet bounds", inOutCursor))
             return false;
-        const usize valueCount = cast<usize>(count);
-        outValues.clear();
-        outValues.reserve(valueCount);
-        for(usize i = 0u; i < valueCount; ++i){
-            const Expected<MeshletBounds> item = ReadPOD<MeshletBounds>(binary, inOutCursor);
-            if(!item.has_value())
-                return false;
-            outValues.push_back(item.value());
-        }
-        return true;
+        return ReadBinaryVectorPayload(binary, cast<usize>(count), inOutCursor, outValues).has_value();
     }
 
     private b8 readBytes(in Span<u8> binary, in u64 count, in StringView label, mut usize inOutCursor, mut Vector<u8> outValues)const{
         if(!this.validateStreamRange(binary, count, 1u, outValues.max_size(), label, inOutCursor))
             return false;
-        const usize valueCount = cast<usize>(count);
-        outValues.clear();
-        outValues.reserve(valueCount);
-        for(usize i = 0u; i < valueCount; ++i)
-            outValues.push_back(binary[inOutCursor + i]);
-        inOutCursor += valueCount;
-        return true;
+        return ReadBinaryVectorPayload(binary, cast<usize>(count), inOutCursor, outValues).has_value();
     }
 
     private b8 readLocalVertexRefs(in Span<u8> binary, in u64 count, mut usize inOutCursor, mut Vector<MeshletLocalVertexRef> outValues)const{
         if(!this.validateStreamRange(binary, count, s_MeshletLocalVertexRefElementBytes, outValues.max_size(), "meshlet local vertex refs", inOutCursor))
             return false;
-        const usize valueCount = cast<usize>(count);
-        outValues.clear();
-        outValues.reserve(valueCount);
-        for(usize i = 0u; i < valueCount; ++i){
-            const Expected<MeshletLocalVertexRef> item = ReadPOD<MeshletLocalVertexRef>(binary, inOutCursor);
-            if(!item.has_value())
-                return false;
-            outValues.push_back(item.value());
-        }
-        return true;
+        return ReadBinaryVectorPayload(binary, cast<usize>(count), inOutCursor, outValues).has_value();
     }
 
     private b8 readSolidTriangleWords(in Span<u8> binary, in u64 count, mut usize inOutCursor, mut Vector<u32> outValues)const{
         if(!this.validateStreamRange(binary, count, s_MeshSolidTriangleWordElementBytes, outValues.max_size(), "solid triangle words", inOutCursor))
             return false;
-        const usize valueCount = cast<usize>(count);
-        outValues.clear();
-        outValues.reserve(valueCount);
-        for(usize i = 0u; i < valueCount; ++i){
-            const Expected<u32> item = ReadPOD<u32>(binary, inOutCursor);
-            if(!item.has_value())
-                return false;
-            outValues.push_back(item.value());
-        }
-        return true;
+        return ReadBinaryVectorPayload(binary, cast<usize>(count), inOutCursor, outValues).has_value();
     }
 
     public b8 deserialize(
@@ -291,7 +212,7 @@ class MeshBinaryCodec{
 
         outBinary.clear();
         outBinary.reserve(reserveBytes);
-        this.appendStreams(
+        return this.appendStreams(
             positions,
             normals,
             tangents,
@@ -306,7 +227,6 @@ class MeshBinaryCodec{
             solidTriangleWords,
             outBinary
         );
-        return true;
     }
 }
 

@@ -296,10 +296,10 @@ private:
     Vector<BatchSubmitEntry, Alloc::GlobalArena> m_executeQueueEntries;
     Vector<usize, Alloc::GlobalArena> m_executeWaitOffsets;
     Vector<SubmissionReceipt, Alloc::GlobalArena> m_executeQueueReceipts;
-    VulkanDetail::SubmittedCommandBufferOwnerLookup m_executeSubmittedOwners;
     u8 m_executeSubmittedUploadMask = 0u;
     Atomic<u64> m_lastRecordingID = 0u;
     Atomic<u64> m_lastObservedFinishedID{ 0u };
+    Atomic<u64> m_publishedSubmittedID{ 0u };
     u64 m_lastSubmittedID = 0;
     u64 m_lastFinishedID = 0;
     InFlightCommandBufferQueue m_commandBuffersInFlight;

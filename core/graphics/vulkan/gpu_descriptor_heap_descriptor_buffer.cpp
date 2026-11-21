@@ -121,6 +121,8 @@ b8 GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWr
                 m_concurrentAdmissionSlots.push_back(handle);
                 m_verifiedConcurrentQueueMask = 0u;
             }
+            syncDynamicReadinessFlagLocked();
+            publishBindingFastVersionLocked();
         }
         return true;
     }
@@ -189,12 +191,16 @@ b8 GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWr
             return false;
         if(!retained){
             retained = Move(candidate);
-            if(needsDynamicReadiness)
+            if(needsDynamicReadiness){
                 m_dynamicReadinessSlots.push_back(handle);
+                syncDynamicReadinessFlagLocked();
+            }
             if(needsConcurrentAdmission){
                 m_concurrentAdmissionSlots.push_back(handle);
                 m_verifiedConcurrentQueueMask = 0u;
             }
+            if(needsDynamicReadiness || needsConcurrentAdmission)
+                publishBindingFastVersionLocked();
         }
         return true;
     }
@@ -254,12 +260,16 @@ b8 GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWr
         return false;
     if(!retained){
         retained = Move(candidate);
-        if(needsDynamicReadiness)
+        if(needsDynamicReadiness){
             m_dynamicReadinessSlots.push_back(handle);
+            syncDynamicReadinessFlagLocked();
+        }
         if(needsConcurrentAdmission){
             m_concurrentAdmissionSlots.push_back(handle);
             m_verifiedConcurrentQueueMask = 0u;
         }
+        if(needsDynamicReadiness || needsConcurrentAdmission)
+            publishBindingFastVersionLocked();
     }
     return true;
 }

@@ -91,7 +91,9 @@ class BroadPhase{
         const u32 treeIdx = DecodeBroadPhaseTreeType(proxyKey);
         const u32 proxyId = DecodeBroadPhaseProxyId(proxyKey);
         if(!this.trees[treeIdx].isMoved(proxyId)){
+            const u32 slot = cast<u32>(this.moveArray.size());
             this.trees[treeIdx].setMoved(proxyId, true);
+            this.trees[treeIdx].setMoveIndex(proxyId, slot);
             this.moveArray.push_back(proxyKey);
         }
     }
@@ -103,11 +105,11 @@ class BroadPhase{
         const u32 proxyId = DecodeBroadPhaseProxyId(proxyKey);
         if(!this.trees[treeIdx].isMoved(proxyId))
             return;
+        const u32 slot = this.trees[treeIdx].moveIndex(proxyId);
         this.trees[treeIdx].setMoved(proxyId, false);
-        for(usize i = 0u; i < this.moveArray.size(); ++i){
-            if(this.moveArray[i] == proxyKey)
-                this.moveArray[i] = s_NullIndex;
-        }
+        this.trees[treeIdx].setMoveIndex(proxyId, s_NullIndex);
+        if(slot < this.moveArray.size() && this.moveArray[slot] == proxyKey)
+            this.moveArray[slot] = s_NullIndex;
     }
 
     public void clearMoves(){
@@ -118,6 +120,7 @@ class BroadPhase{
             const u32 treeIdx = DecodeBroadPhaseTreeType(proxyKey);
             const u32 proxyId = DecodeBroadPhaseProxyId(proxyKey);
             this.trees[treeIdx].setMoved(proxyId, false);
+            this.trees[treeIdx].setMoveIndex(proxyId, s_NullIndex);
         }
         this.moveArray.clear();
     }

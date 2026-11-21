@@ -10,6 +10,10 @@
 #include <core/alloc/scratch.h>
 #include <core/filesystem/volume_naming.h>
 
+#if !defined(FOUNDATION_PLATFORM_WINDOWS)
+#include <pthread.h>
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -35,9 +39,70 @@ private:
         u64 size = 0;
     };
 
+    struct ReadOnlySegmentMapping{
+    #if defined(FOUNDATION_PLATFORM_WINDOWS)
+        void* fileHandle = nullptr;
+        void* mappingHandle = nullptr;
+    #else
+        int fileDescriptor = -1;
+    #endif
+        const u8* mappedView = nullptr;
+        u64 mappedBytes = 0u;
+    };
+
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+    class VolumeRWLock final : NoCopy{
+    public:
+        constexpr VolumeRWLock()noexcept = default;
+        void lockShared()const noexcept{ AcquireSRWLockShared(&m_lock); }
+        void unlockShared()const noexcept{ ReleaseSRWLockShared(&m_lock); }
+        void lockExclusive()const noexcept{ AcquireSRWLockExclusive(&m_lock); }
+        void unlockExclusive()const noexcept{ ReleaseSRWLockExclusive(&m_lock); }
+    private:
+        mutable SRWLOCK m_lock = SRWLOCK_INIT;
+    };
+#else
+    class VolumeRWLock final : NoCopy{
+    public:
+        VolumeRWLock()noexcept{ pthread_rwlock_init(&m_lock, nullptr); }
+        ~VolumeRWLock()noexcept{ pthread_rwlock_destroy(&m_lock); }
+        void lockShared()const noexcept{ pthread_rwlock_rdlock(&m_lock); }
+        void unlockShared()const noexcept{ pthread_rwlock_unlock(&m_lock); }
+        void lockExclusive()const noexcept{ pthread_rwlock_wrlock(&m_lock); }
+        void unlockExclusive()const noexcept{ pthread_rwlock_unlock(&m_lock); }
+    private:
+        mutable pthread_rwlock_t m_lock{};
+    };
+#endif
+
+    class SharedLockGuard final : NoCopy{
+    public:
+        explicit SharedLockGuard(const VolumeRWLock& lock)noexcept
+            : m_lock(lock)
+        {
+            m_lock.lockShared();
+        }
+        ~SharedLockGuard()noexcept{ m_lock.unlockShared(); }
+    private:
+        const VolumeRWLock& m_lock;
+    };
+
+    class ExclusiveLockGuard final : NoCopy{
+    public:
+        explicit ExclusiveLockGuard(const VolumeRWLock& lock)noexcept
+            : m_lock(lock)
+        {
+            m_lock.lockExclusive();
+        }
+        ~ExclusiveLockGuard()noexcept{ m_lock.unlockExclusive(); }
+    private:
+        const VolumeRWLock& m_lock;
+    };
+
 
 private:
     using SegmentPathVector = Vector<Path, Alloc::GlobalArena>;
+    using ReadMappingVector = Vector<ReadOnlySegmentMapping, Alloc::GlobalArena>;
 
     using FileMap = HashMap<Name, FileRecord, Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>;
 
@@ -47,9 +112,10 @@ public:
         : m_mountDirectory(arena)
         , m_arena(arena)
         , m_segmentPaths(m_arena)
+        , m_readMappings(m_arena)
         , m_files(0, Hasher<Name>(), EqualTo<Name>(), m_arena)
     {}
-    virtual ~VolumeFileSystem()noexcept override = default;
+    virtual ~VolumeFileSystem()noexcept override;
 
 
 public:
@@ -77,6 +143,7 @@ public:
     virtual void reserveFileCapacity(usize fileCount)override;
 
     [[nodiscard]] virtual Expected<usize> readFile(const Name& virtualPath, u64 offset, void* data, usize bytes)const override;
+    [[nodiscard]] virtual Expected<usize> readWholeFile(const Name& virtualPath, void* context, u8* (*prepareBuffer)(void* context, usize size))const override;
     virtual b8 seekFile(FileCursor& cursor, i64 offset, FileSeekOrigin::Enum origin)const noexcept(!FOUNDATION_OCCUR_WARNING)override;
     virtual b8 removeFile(const Name& virtualPath)override;
     virtual b8 fileExists(const Name& virtualPath)const noexcept override;
@@ -101,6 +168,8 @@ private:
     b8 readBytesLocked(u64 offset, void* data, u64 byteCount)const;
     b8 writeBytesLocked(u64 offset, const void* data, u64 byteCount);
     b8 trimSegmentsForNextFreeOffsetLocked();
+    void openReadMappingsLocked()noexcept;
+    void closeReadMappingsLocked()noexcept;
 
     void unmountLocked()noexcept;
     Path segmentPath(const usize segmentIndex)const{
@@ -120,8 +189,9 @@ private:
 
     Alloc::GlobalArena& m_arena;
     SegmentPathVector m_segmentPaths;
+    ReadMappingVector m_readMappings;
     FileMap m_files;
-    mutable Futex m_mutex;
+    mutable VolumeRWLock m_mutex;
 
     b8 m_mounted = false;
     b8 m_writable = false;

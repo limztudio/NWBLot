@@ -40,12 +40,12 @@ b8 TransparentCsgIntervalRecordInputs::record(mut CommandList commandList, in Gp
         return true;
     }
 
-    const MaterialPassDrawItemsView drawItems = this.transparentCsgSnapshot.receiverSurfaceDrawItemsView();
     const CsgFrameGpuDataView frame = this.transparentCsgSnapshot.csgFrameDataView();
     const b8 frameReady = this.frameBindings.frameReady(this.transparentCsgSnapshot.instanceCount, this.transparentCsgSnapshot.materialTypedByteCount);
     const b8 csgReady = this.csgResources.frameReady(frame);
-    const b8 drawReady = this.m_drawRecorder.materialPassDrawResourcesReady(drawItems, this.frameBindings);
-    if(!EvaluateTransparentCsgIntervalReadiness(this.csgFrameBuffersUploaded, this.targets.framebuffer.valid(), !drawItems.empty(), frame.hasWork(), frameReady, csgReady, drawReady))
+    const b8 hasReceiverDraws = this.transparentCsgSnapshot.hasReceiverSurfaceDrawItems;
+    const b8 drawReady = this.transparentCsgSnapshot.receiverSurfaceDrawResourcesReady;
+    if(!EvaluateTransparentCsgIntervalReadiness(this.csgFrameBuffersUploaded, this.targets.framebuffer.valid(), hasReceiverDraws, frame.hasWork(), frameReady, csgReady, drawReady))
         DiscardGpuTimingMeasure(this.transparentCsgIntervalsTiming);
     else if(this.m_pass == TransparentCsgIntervalPass::ReceiverSpan)
         this.csgSystem.dispatchCsgReceiverSpanBuild(commandList, this.targets, frame, this.csgResources);

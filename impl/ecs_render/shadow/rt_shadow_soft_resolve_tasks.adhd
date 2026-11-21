@@ -57,7 +57,7 @@ class ShadowVisibilityOpaqueGraphTask{
     private DeferredLightingGraphResources deferredLightingResources;
     private b8 hardwareShadowSupported;
     private b8 graphOwnsOpaqueTemporalMergeEntryStates;
-    private LightSpaceShadowSnapshot lightSpace;
+    private FrozenLightSpaceShadowHandle lightSpace;
     private mut GpuTimingSubmissionTicket timingTicket;
     private mut Optional<GpuTimingMeasure> asyncTiming;
     private mut Optional<GpuTimingMeasure> shadowVisibilityTiming;
@@ -72,7 +72,7 @@ class ShadowVisibilityOpaqueGraphTask{
         in DeferredLightingGraphResources deferredLightingResources,
         in b8 hardwareShadowSupported,
         in b8 graphOwnsOpaqueTemporalMergeEntryStates,
-        in LightSpaceShadowSnapshot lightSpace,
+        in FrozenLightSpaceShadowHandle lightSpace,
         mut GpuTimingSubmissionTicket timingTicket,
         mut Optional<GpuTimingMeasure> asyncTiming,
         mut Optional<GpuTimingMeasure> shadowVisibilityTiming,
@@ -124,11 +124,14 @@ class ShadowVisibilityOpaqueGraphTask{
 
         b8 opaqueRecorded = false;
         if(this.prepared){
+            Optional<in LightSpaceShadowSnapshot> lightSpaceOpt;
+            if(this.lightSpace.valid())
+                lightSpaceOpt = Optional<in LightSpaceShadowSnapshot>(this.lightSpace.deref().snapshot);
             Expected<u32> opaqueFrame = MakeUnexpected(Failure());
             if(this.hardwareShadowSupported)
-                opaqueFrame = this.raytracingSystem.renderShadowVisibilityOpaque(commandList, this.targets, this.deferredLightingResources, this.graphOwnsOpaqueTemporalMergeEntryStates, Optional<in LightSpaceShadowSnapshot>(this.lightSpace));
+                opaqueFrame = this.raytracingSystem.renderShadowVisibilityOpaque(commandList, this.targets, this.deferredLightingResources, this.graphOwnsOpaqueTemporalMergeEntryStates, lightSpaceOpt);
             else
-                opaqueFrame = this.raytracingSystem.renderGpuBvhShadowVisibilityOpaque(commandList, this.targets, this.deferredLightingResources, this.graphOwnsOpaqueTemporalMergeEntryStates, Optional<in LightSpaceShadowSnapshot>(this.lightSpace));
+                opaqueFrame = this.raytracingSystem.renderGpuBvhShadowVisibilityOpaque(commandList, this.targets, this.deferredLightingResources, this.graphOwnsOpaqueTemporalMergeEntryStates, lightSpaceOpt);
             opaqueRecorded = opaqueFrame.has_value();
             if(opaqueFrame.has_value())
                 this.opaqueFrameIndex = opaqueFrame.value();
@@ -334,7 +337,7 @@ class ShadowTransparentSoftTraceGraphTask{
     private mut RendererRayTracingSystem raytracingSystem;
     private mut DeferredFrameTargets targets;
     private DeferredLightingGraphResources deferredLightingResources;
-    private LightSpaceShadowSnapshot lightSpace;
+    private FrozenLightSpaceShadowHandle lightSpace;
     private mut GpuTimingSubmissionTicket timingTicket;
     private in b8 opaqueProduced;
     private in u32 opaqueFrameIndex;
@@ -344,7 +347,7 @@ class ShadowTransparentSoftTraceGraphTask{
         mut RendererRayTracingSystem raytracingSystem,
         mut DeferredFrameTargets targets,
         in DeferredLightingGraphResources deferredLightingResources,
-        in LightSpaceShadowSnapshot lightSpace,
+        in FrozenLightSpaceShadowHandle lightSpace,
         mut GpuTimingSubmissionTicket timingTicket,
         in borrow b8 opaqueProduced,
         in borrow u32 opaqueFrameIndex,
@@ -372,7 +375,10 @@ class ShadowTransparentSoftTraceGraphTask{
             return true;
 
         GpuTimingTicketRecordingScope timingRecording(this.timingTicket);
-        if(!this.raytracingSystem.renderSoftTransparentShadowTrace(commandList, this.targets, this.deferredLightingResources, this.opaqueFrameIndex, true, Optional<in LightSpaceShadowSnapshot>(this.lightSpace))){
+        Optional<in LightSpaceShadowSnapshot> lightSpaceOpt;
+        if(this.lightSpace.valid())
+            lightSpaceOpt = Optional<in LightSpaceShadowSnapshot>(this.lightSpace.deref().snapshot);
+        if(!this.raytracingSystem.renderSoftTransparentShadowTrace(commandList, this.targets, this.deferredLightingResources, this.opaqueFrameIndex, true, lightSpaceOpt)){
             warning("RendererSystem: split transparent soft-shadow trace could not record; preserving opaque visibility");
             return true;
         }
@@ -781,7 +787,7 @@ Expected<GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqueTask(
     in borrow b8 prepared,
     in b8 hardwareShadowSupported,
     in b8 graphOwnsOpaqueTemporalMergeEntryStates,
-    in Optional<in LightSpaceShadowSnapshot> lightSpace,
+    in FrozenLightSpaceShadowHandle lightSpace,
     mut DeferredFrameTargets targets,
     mut GpuTimingSubmissionTicket timingTicket,
     mut Optional<GpuTimingMeasure> asyncTiming,
@@ -789,9 +795,6 @@ Expected<GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqueTask(
     mut b8 opaqueProduced,
     mut u32 opaqueFrameIndex
 ){
-    LightSpaceShadowSnapshot snapshot;
-    if(lightSpace.has_value())
-        snapshot = lightSpace.value();
     return graph.addPayloadTask(desc, ShadowVisibilityOpaqueGraphTask(
         this,
         this.m_graphics,
@@ -799,7 +802,7 @@ Expected<GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqueTask(
         deferredLightingResources,
         hardwareShadowSupported,
         graphOwnsOpaqueTemporalMergeEntryStates,
-        snapshot,
+        lightSpace,
         timingTicket,
         asyncTiming,
         shadowVisibilityTiming,
@@ -971,19 +974,16 @@ Expected<GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftTraceT
     in DeferredLightingGraphResources deferredLightingResources,
     in borrow b8 opaqueProduced,
     in borrow u32 opaqueFrameIndex,
-    in Optional<in LightSpaceShadowSnapshot> lightSpace,
+    in FrozenLightSpaceShadowHandle lightSpace,
     mut DeferredFrameTargets targets,
     mut GpuTimingSubmissionTicket timingTicket,
     mut b8 transparentTraceProduced
 ){
-    LightSpaceShadowSnapshot snapshot;
-    if(lightSpace.has_value())
-        snapshot = lightSpace.value();
     return graph.addPayloadTask(desc, ShadowTransparentSoftTraceGraphTask(
         this,
         targets,
         deferredLightingResources,
-        snapshot,
+        lightSpace,
         timingTicket,
         opaqueProduced,
         opaqueFrameIndex,

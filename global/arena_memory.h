@@ -48,11 +48,16 @@ class ArenaMemoryTracker final : NoCopy{
 
 public:
     constexpr ArenaMemoryTracker()noexcept = default;
-    explicit ArenaMemoryTracker(const Name& ownerName, ArenaMemoryReservation::Enum reservation = ArenaMemoryReservation::Separate);
+    explicit ArenaMemoryTracker(const Name& ownerName, ArenaMemoryReservation::Enum reservation = ArenaMemoryReservation::Separate, b8 deferAttach = false);
     ~ArenaMemoryTracker()noexcept;
 
 
 public:
+    FOUNDATION_INLINE void ensureAttached()noexcept{
+        if(m_attached || !m_owner)
+            return;
+        attachToOwnerSlow();
+    }
     void releaseRetainedMemory()noexcept;
     void reset(u64 reservedBytes = 0u)noexcept;
 
@@ -126,6 +131,7 @@ public:
 
 
 private:
+    void attachToOwnerSlow()noexcept;
     void recordPeakUsedBytes(u64 usedBytes)noexcept;
 
 
@@ -140,6 +146,7 @@ private:
     Atomic<u64> m_reallocationCount{ 0u };
     Atomic<u64> m_deallocationCount{ 0u };
     ArenaMemoryReservation::Enum m_reservation = ArenaMemoryReservation::Separate;
+    b8 m_attached = false;
 };
 
 
@@ -172,6 +179,9 @@ FOUNDATION_INLINE Name ArenaMemoryTracker::ownerName()const noexcept{
 void RecordHeapMemoryAllocation(u64 bytes)noexcept;
 void RecordHeapMemoryReallocation(u64 oldBytes, u64 newBytes)noexcept;
 void RecordHeapMemoryDeallocation(u64 bytes)noexcept;
+void RecordHeapAndArenaAllocation(u64 bytes, ArenaMemoryTracker* tracker)noexcept;
+void RecordHeapAndArenaReallocation(u64 oldBytes, u64 newBytes, ArenaMemoryTracker* tracker)noexcept;
+void RecordHeapAndArenaDeallocation(u64 bytes, ArenaMemoryTracker* tracker)noexcept;
 [[nodiscard]] ArenaMemoryStats HeapBackingMemoryStats()noexcept;
 
 

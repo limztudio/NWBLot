@@ -33,6 +33,18 @@ f64 GpuTaskGraphRecordingStatistics::readyFrontierWorkerUtilization()const noexc
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+usize GpuRecordedGraph::PacketRecordingScratch::CommandListBucketIndex(const CommandListParameters& parameters)noexcept{
+    usize hash = parameters.physicalQueue.index;
+    hash = (hash * 1315423911u) ^ static_cast<usize>(parameters.queueType);
+    hash = (hash * 1315423911u) ^ static_cast<usize>(parameters.recordingWorkerDomain);
+    hash = (hash * 1315423911u) ^ static_cast<usize>(parameters.recordingWorkerIndex);
+    return (hash ^ (hash >> 4u)) & (s_CommandListBucketCount - 1u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 GpuRecordedGraph::PacketRecordingScratch::ensureValid(GraphicsArena& arena){
     if(!stateFanInScratchArena){
         stateFanInScratchArena = MakeGlobalUnique<Alloc::ScratchArena>(arena, GpuPacketRuntimeDetail::s_PacketStateFanInScratchArena);
@@ -43,27 +55,39 @@ b8 GpuRecordedGraph::PacketRecordingScratch::ensureValid(GraphicsArena& arena){
 
 Expected<CommandListHandle> GpuRecordedGraph::PacketRecordingScratch::acquireCommandList(Device& device, const CommandListParameters& parameters){
     const u16 deviceGeneration = device.getDeviceGeneration();
-    const usize count = commandLists.size();
-    if(count != 0u){
-        usize probeCount = 0u;
-        usize index = nextCommandListCursor < count ? nextCommandListCursor : 0u;
-        while(probeCount < count && !commandLists.empty()){
-            CachedCommandList& cached = commandLists[index];
-            if(cached.parameters.physicalQueue.deviceGeneration != deviceGeneration){
-                if(index + 1u < commandLists.size())
-                    cached = Move(commandLists.back());
-                commandLists.pop_back();
-                if(!commandLists.empty()){
-                    if(index >= commandLists.size())
-                        index = 0u;
-                    if(nextCommandListCursor >= commandLists.size())
-                        nextCommandListCursor = 0u;
+    if(commandListCacheDeviceGeneration != deviceGeneration){
+        if(!commandLists.empty()){
+            usize writeIndex = 0u;
+            for(usize readIndex = 0u; readIndex < commandLists.size(); ++readIndex){
+                if(commandLists[readIndex].parameters.physicalQueue.deviceGeneration == deviceGeneration){
+                    if(writeIndex != readIndex)
+                        commandLists[writeIndex] = Move(commandLists[readIndex]);
+                    ++writeIndex;
                 }
-                else{
-                    nextCommandListCursor = 0u;
-                }
-                continue;
             }
+            commandLists.resize(writeIndex);
+            commandListBucketHeads.fill(s_InvalidCommandListIndex);
+            commandListBucketCursors.fill(s_InvalidCommandListIndex);
+            for(usize idx = 0u; idx < commandLists.size(); ++idx){
+                const usize entryBucket = CommandListBucketIndex(commandLists[idx].parameters);
+                commandLists[idx].nextInBucket = commandListBucketHeads[entryBucket];
+                commandListBucketHeads[entryBucket] = static_cast<u32>(idx);
+                commandListBucketCursors[entryBucket] = static_cast<u32>(idx);
+            }
+        }
+        commandListCacheDeviceGeneration = deviceGeneration;
+    }
+
+    const usize bucket = CommandListBucketIndex(parameters);
+    const u32 head = commandListBucketHeads[bucket];
+    if(head != s_InvalidCommandListIndex){
+        u32 cursor = commandListBucketCursors[bucket];
+        if(cursor == s_InvalidCommandListIndex)
+            cursor = head;
+        const u32 start = cursor;
+        do{
+            CachedCommandList& cached = commandLists[cursor];
+            const u32 next = cached.nextInBucket != s_InvalidCommandListIndex ? cached.nextInBucket : head;
             if(
                 cached.parameters.physicalQueue == parameters.physicalQueue
                 && cached.parameters.queueType == parameters.queueType
@@ -72,19 +96,30 @@ Expected<CommandListHandle> GpuRecordedGraph::PacketRecordingScratch::acquireCom
                 && cached.commandList->getReferenceCount() == 1u
             ){
                 AtomicThreadFence(MemoryOrder::acquire);
-                nextCommandListCursor = (index + 1u < commandLists.size()) ? (index + 1u) : 0u;
+                commandListBucketCursors[bucket] = next;
                 return cached.commandList;
             }
-            ++probeCount;
-            index = (index + 1u < commandLists.size()) ? (index + 1u) : 0u;
-        }
+            cursor = next;
+        }while(cursor != start);
     }
+
     auto created = device.createCommandList(parameters);
     if(!created)
         return MakeUnexpected(created.error());
-    commandLists.push_back({ parameters, *created });
-    nextCommandListCursor = 0u;
+    const u32 newIndex = static_cast<u32>(commandLists.size());
+    commandLists.push_back({ parameters, *created, head });
+    commandListBucketHeads[bucket] = newIndex;
+    commandListBucketCursors[bucket] = newIndex;
+    if(parameters.physicalQueue.deviceGeneration != deviceGeneration)
+        commandListCacheDeviceGeneration = 0u;
     return Move(*created);
+}
+
+void GpuRecordedGraph::PacketRecordingScratch::clearCommandListCache()noexcept{
+    commandLists.clear();
+    commandListBucketHeads.fill(s_InvalidCommandListIndex);
+    commandListBucketCursors.fill(s_InvalidCommandListIndex);
+    commandListCacheDeviceGeneration = 0u;
 }
 
 void GpuRecordedGraph::PacketRecordingScratch::reset()noexcept{
@@ -247,12 +282,9 @@ b8 GpuRecordedGraph::releaseCommandListCache()noexcept{
     ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Exclusive);
     if(!artifactOperation.valid())
         return false;
-    m_serialRecordingScratch.commandLists.clear();
-    m_serialRecordingScratch.nextCommandListCursor = 0u;
-    for(PacketRecordingScratch& scratch : m_workerRecordingScratch){
-        scratch.commandLists.clear();
-        scratch.nextCommandListCursor = 0u;
-    }
+    m_serialRecordingScratch.clearCommandListCache();
+    for(PacketRecordingScratch& scratch : m_workerRecordingScratch)
+        scratch.clearCommandListCache();
     return true;
 }
 

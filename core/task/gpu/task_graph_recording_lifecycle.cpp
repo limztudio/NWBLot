@@ -21,7 +21,13 @@ u64 GpuTaskGraph::recordingAttemptGeneration()const noexcept{
 }
 
 b8 GpuTaskGraph::beginRecordingAttempt(const GpuCompiledGraph& compiledGraph, const GpuSubmissionPacketId packet, const DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, GpuRecordingAttemptScope& outAttempt)const noexcept{
-    if(!declarationAccess.validFor(*this) || !planAccess.validFor(compiledGraph) || !packet.valid())
+    if(!packet.valid())
+        return false;
+    return beginRecordingAttemptRange(compiledGraph, GpuSubmissionPacketRange{ packet, 1u }, declarationAccess, planAccess, outAttempt);
+}
+
+b8 GpuTaskGraph::beginRecordingAttemptRange(const GpuCompiledGraph& compiledGraph, const GpuSubmissionPacketRange& range, const DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, GpuRecordingAttemptScope& outAttempt)const noexcept{
+    if(!declarationAccess.validFor(*this) || !planAccess.validFor(compiledGraph) || !range.valid())
         return false;
 
     NothrowScopedLock lock(m_lifecycleMutex);
@@ -36,40 +42,52 @@ b8 GpuTaskGraph::beginRecordingAttempt(const GpuCompiledGraph& compiledGraph, co
     )
         return false;
 
-    if(!planAccess.validFor(declarationAccess))
+    if(!planAccess.validFor(declarationAccess) || !planAccess.validPacketRange(range))
         return false;
-    const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packet);
-    if(!packetView.valid())
-        return false;
-    const GpuSubmissionPacket& packetPlan = *packetView.plan;
-    const GpuTaskId* const tasks = packetView.tasks;
-    for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-        if(!validTask(tasks[taskIndex]))
+
+    const usize rangeBegin = range.first.index;
+    const usize rangeEnd = rangeBegin + range.packetCount;
+    for(usize packetIndex = rangeBegin; packetIndex < rangeEnd; ++packetIndex){
+        const GpuSubmissionPacketId packetID = planAccess.packetIdAt(packetIndex);
+        const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packetID);
+        if(!packetView.valid())
             return false;
+        const GpuSubmissionPacket& packetPlan = *packetView.plan;
+        const GpuTaskId* const tasks = packetView.tasks;
+        for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
+            if(!validTask(tasks[taskIndex]))
+                return false;
+        }
     }
 
-    const u64 requestedPlanGeneration = packet.generation;
+    const u64 requestedPlanGeneration = range.first.generation;
     const b8 samePlan = m_activeCompiledGraph == &compiledGraph && activePlanGeneration == requestedPlanGeneration;
     if(samePlan && m_submissionBindingState != SubmissionBindingState::Resolved){
-        if(!compiledGraph.beginRecordingAttempt(*this, declarationAccess, packet, requestedPlanGeneration, activeAttemptGeneration, 0u, planAccess))
+        if(!compiledGraph.beginRecordingAttemptRange(*this, declarationAccess, range, requestedPlanGeneration, activeAttemptGeneration, 0u, planAccess))
             return false;
 
         b8 selectedTaskWasDiscarded = false;
-        for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-            const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-            if(task.lifecycleAttemptGeneration != activeAttemptGeneration)
-                return false;
-            const TaskLifecycleState::Enum state = task.lifecycleState();
-            if(
-                state == TaskLifecycleState::Recording
-                || state == TaskLifecycleState::Recorded
-                || state == TaskLifecycleState::Submitting
-                || state == TaskLifecycleState::Accepting
-                || state == TaskLifecycleState::Accepted
-            )
-                return false;
-            if(state == TaskLifecycleState::Discarded)
-                selectedTaskWasDiscarded = true;
+        for(usize packetIndex = rangeBegin; packetIndex < rangeEnd; ++packetIndex){
+            const GpuSubmissionPacketId packetID = planAccess.packetIdAt(packetIndex);
+            const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packetID);
+            const GpuSubmissionPacket& packetPlan = *packetView.plan;
+            const GpuTaskId* const tasks = packetView.tasks;
+            for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
+                const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+                if(task.lifecycleAttemptGeneration != activeAttemptGeneration)
+                    return false;
+                const TaskLifecycleState::Enum state = task.lifecycleState();
+                if(
+                    state == TaskLifecycleState::Recording
+                    || state == TaskLifecycleState::Recorded
+                    || state == TaskLifecycleState::Submitting
+                    || state == TaskLifecycleState::Accepting
+                    || state == TaskLifecycleState::Accepted
+                )
+                    return false;
+                if(state == TaskLifecycleState::Discarded)
+                    selectedTaskWasDiscarded = true;
+            }
         }
         if(!selectedTaskWasDiscarded)
             return true;
@@ -100,7 +118,7 @@ b8 GpuTaskGraph::beginRecordingAttempt(const GpuCompiledGraph& compiledGraph, co
     const u64 preparationSerial = AllocateGeneration();
     FOUNDATION_ASSERT(nextRecordingAttemptGeneration != 0u && preparationSerial != 0u);
     const u64 previousRecordingAttemptGeneration = samePlan && m_submissionBindingState == SubmissionBindingState::None ? activeAttemptGeneration : 0u;
-    if(!compiledGraph.beginRecordingAttempt(*this, declarationAccess, packet, requestedPlanGeneration, nextRecordingAttemptGeneration, previousRecordingAttemptGeneration, planAccess))
+    if(!compiledGraph.beginRecordingAttemptRange(*this, declarationAccess, range, requestedPlanGeneration, nextRecordingAttemptGeneration, previousRecordingAttemptGeneration, planAccess))
         return false;
 
     if(m_activeCompiledGraph && m_activeCompiledGraph != &compiledGraph && m_submissionBindingState == SubmissionBindingState::None){

@@ -8,69 +8,24 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static_assert(size_of<LightSpaceCsgContextHeader>() == 32u);
+static_assert(is_standard_layout<LightSpaceCsgContextHeader>());
+static_assert(is_trivially_copyable<LightSpaceCsgContextHeader>());
+static_assert(size_of<CsgShadowReceiverRangeGpu>() == 16u);
+static_assert(is_standard_layout<CsgShadowReceiverRangeGpu>());
+static_assert(is_trivially_copyable<CsgShadowReceiverRangeGpu>());
+static_assert(size_of<CsgCutterGpuData>() == 96u);
+static_assert(is_standard_layout<CsgCutterGpuData>());
+static_assert(is_trivially_copyable<CsgCutterGpuData>());
+static_assert(size_of<LightSpaceCsgInstanceGpu>() == 96u);
+static_assert(is_standard_layout<LightSpaceCsgInstanceGpu>());
+static_assert(is_trivially_copyable<LightSpaceCsgInstanceGpu>());
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class LightSpaceCsgContextPacker{
-    private void appendU32(in u32 value, mut Vector<u8> outBinary)const{
-        outBinary.push_back(cast<u8>(value & 0xffu));
-        outBinary.push_back(cast<u8>((value >> 8u) & 0xffu));
-        outBinary.push_back(cast<u8>((value >> 16u) & 0xffu));
-        outBinary.push_back(cast<u8>((value >> 24u) & 0xffu));
-    }
-
-    private void appendF32(in f32 value, mut Vector<u8> outBinary)const{
-        this.appendU32(bit_cast<u32>(value), outBinary);
-    }
-
-    private void appendVector4(in VectorSingle value, mut Vector<u8> outBinary)const{
-        this.appendF32(value.x, outBinary);
-        this.appendF32(value.y, outBinary);
-        this.appendF32(value.z, outBinary);
-        this.appendF32(value.w, outBinary);
-    }
-
-    private void appendMatrix34(in MatrixSingle value, mut Vector<u8> outBinary)const{
-        this.appendVector4(value[0u], outBinary);
-        this.appendVector4(value[1u], outBinary);
-        this.appendVector4(value[2u], outBinary);
-    }
-
-    private void appendHeader(in LightSpaceCsgContextHeader header, mut Vector<u8> outBinary)const{
-        this.appendU32(header.instanceCount, outBinary);
-        this.appendU32(header.rangeByteOffset, outBinary);
-        this.appendU32(header.cutterByteOffset, outBinary);
-        this.appendU32(header.cutterCount, outBinary);
-        this.appendU32(header.instanceByteOffset, outBinary);
-        this.appendU32(header.activeReceiverByteOffset, outBinary);
-        this.appendU32(header.activeReceiverCount, outBinary);
-        this.appendU32(header.rayFailureFlags, outBinary);
-    }
-
-    private void appendReceiverRange(in CsgShadowReceiverRangeGpu range, in u32 solidTriangleWordOffset, mut Vector<u8> outBinary)const{
-        this.appendU32(range.firstCutter, outBinary);
-        this.appendU32(range.cutterCount, outBinary);
-        this.appendU32(range.flags, outBinary);
-        this.appendU32(solidTriangleWordOffset, outBinary);
-    }
-
-    private void appendCutter(in CsgCutterGpuData cutter, mut Vector<u8> outBinary)const{
-        this.appendU32(cutter.shapeType, outBinary);
-        this.appendF32(cutter.worldToShapeScaleBound, outBinary);
-        this.appendU32(cutter.padding0, outBinary);
-        this.appendU32(cutter.padding1, outBinary);
-        this.appendMatrix34(MatrixSingle(cutter.worldToShape), outBinary);
-        this.appendVector4(VectorSingle(cutter.parameter0), outBinary);
-        this.appendVector4(VectorSingle(cutter.parameter1), outBinary);
-    }
-
-    private void appendInstance(in LightSpaceCsgInstanceGpu instance, mut Vector<u8> outBinary)const{
-        this.appendMatrix34(MatrixSingle(instance.worldToObject), outBinary);
-        this.appendU32(instance.runtimeBoundsSlot, outBinary);
-        this.appendU32(instance.primitiveCount, outBinary);
-        this.appendU32(instance.meshRootSlot, outBinary);
-        this.appendU32(instance.padding, outBinary);
-        this.appendVector4(VectorSingle(instance.localMin), outBinary);
-        this.appendVector4(VectorSingle(instance.localMax), outBinary);
-    }
-
     public b8 pack(
         in Span<CsgShadowReceiverRangeGpu> receiverRanges,
         in Span<CsgCutterGpuData> cutters,
@@ -118,31 +73,30 @@ class LightSpaceCsgContextPacker{
             activeReceiverOffset,
             activeReceiverCount
         );
-        this.appendHeader(header, outBytes);
+        AppendPOD(outBytes, header);
 
         usize maskOffset = membershipOffset;
         for(usize index = 0u; index < receiverRanges.size(); ++index){
-            const CsgShadowReceiverRangeGpu range = receiverRanges[index];
-            u32 wordOffset = range.solidTriangleWordOffset;
+            CsgShadowReceiverRangeGpu range = receiverRanges[index];
             if((range.flags & s_CsgRayReceiverActive) != 0u){
-                wordOffset = cast<u32>(maskOffset);
+                range.solidTriangleWordOffset = cast<u32>(maskOffset);
                 maskOffset += solidTriangleMasks[index].size() * 4u;
             }
-            this.appendReceiverRange(range, wordOffset, outBytes);
+            AppendPOD(outBytes, range);
         }
-        for(in CsgCutterGpuData cutter : cutters)
-            this.appendCutter(cutter, outBytes);
-        for(in LightSpaceCsgInstanceGpu instance : instances)
-            this.appendInstance(instance, outBytes);
+        if(!AppendBinaryVectorPayload(outBytes, cutters).has_value())
+            return false;
+        if(!AppendBinaryVectorPayload(outBytes, instances).has_value())
+            return false;
         for(u32 index = 0u; index < cast<u32>(receiverRanges.size()); ++index){
             if((receiverRanges[cast<usize>(index)].flags & s_CsgRayReceiverActive) != 0u)
-                this.appendU32(index, outBytes);
+                AppendPOD(outBytes, index);
         }
         for(usize index = 0u; index < receiverRanges.size(); ++index){
             if((receiverRanges[index].flags & s_CsgRayReceiverActive) == 0u)
                 continue;
-            for(in u32 word : solidTriangleMasks[index])
-                this.appendU32(word, outBytes);
+            if(!AppendBinaryVectorPayload(outBytes, solidTriangleMasks[index]).has_value())
+                return false;
         }
         return true;
     }

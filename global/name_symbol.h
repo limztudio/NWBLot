@@ -124,10 +124,7 @@ inline void SetNameSymbolResolveCallback(const NameSymbolResolveCallback callbac
 }
 
 [[nodiscard]] inline b8 ResolveNameSymbolText(char* const outText, const usize outTextSize, const NameHash& hash){
-    if(IsZeroHash(hash) || outText == nullptr || outTextSize == 0u)
-        return false;
-
-    if(!SymbolResolverActive().load(MemoryOrder::acquire))
+    if(!SymbolResolverActive().load(MemoryOrder::acquire) || outText == nullptr || outTextSize == 0u || IsZeroHash(hash))
         return false;
 
     b8& inProgress = SymbolResolveInProgress();
@@ -144,10 +141,7 @@ inline void SetNameSymbolResolveCallback(const NameSymbolResolveCallback callbac
 
 template<typename CharT>
 inline void RecordNameSymbolText(const NameHash& hash, const BasicStringView<CharT> text){
-    if(IsZeroHash(hash))
-        return;
-
-    if(!SymbolRecorderActive().load(MemoryOrder::acquire))
+    if(!SymbolRecorderActive().load(MemoryOrder::acquire) || IsZeroHash(hash))
         return;
 
     b8& inProgress = SymbolRecordInProgress();

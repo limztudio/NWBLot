@@ -135,63 +135,65 @@ extern const u32 s_ShaderSurfelTraceIndirectArgsWordCount;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<GpuGraphResourceId> ImportSurfelBuffer(mut GpuTaskGraph graph, mut Vector<GpuTaskResourceUse> uses, in BufferHandle buffer, in Name identity, in StringView label, in ResourceStates state, in b8 writable){
+Expected<GpuGraphResourceId> ImportSurfelBuffer(mut GpuTaskGraph graph, mut Vector<GpuTaskResourceUse> uses, in BufferHandle buffer, in Name identity, in StringView label, in ResourceStates state, in b8 writable, in b8 appendUse){
     if(!buffer.valid())
         return GpuGraphResourceId();
     const auto imported = ImportExternalBuffer(graph, buffer, identity, label);
     if(!imported.has_value())
         return MakeUnexpected(Failure());
-    if(writable)
-        uses.push_back(WriteUse(imported.value(), state));
-    else
-        uses.push_back(ReadUse(imported.value(), state));
+    if(appendUse){
+        if(writable)
+            uses.push_back(WriteUse(imported.value(), state));
+        else
+            uses.push_back(ReadUse(imported.value(), state));
+    }
     return imported.value();
 }
 
-b8 ImportOptionalSurfelBuffers(in SurfelGiResourceInputs inputs, mut GpuTaskGraph graph, mut SurfelGiResourcePlan result){
+b8 ImportOptionalSurfelBuffers(in SurfelGiResourceInputs inputs, mut GpuTaskGraph graph, mut SurfelGiResourcePlan result, in b8 appendUse){
     const auto shadowInstanceMaterialsResult = ImportSurfelBuffer(graph, result.resourceUses, inputs.rayTracingResources.shadowInstanceMaterialBuffer, Name(s_SceneShadowInstanceMaterialName),
-        s_SceneShadowInstanceMaterialLabel, ResourceStates::ShaderResource, false);
+        s_SceneShadowInstanceMaterialLabel, ResourceStates::ShaderResource, false, appendUse);
     if(!shadowInstanceMaterialsResult.has_value())
         return false;
     result.shadowInstanceMaterials = shadowInstanceMaterialsResult.value();
-    const auto shadowMaterialTypedResult = ImportSurfelBuffer(graph, result.resourceUses, inputs.rayTracingResources.shadowMaterialTypedBuffer, Name(s_SceneShadowMaterialTypedName), s_SceneShadowMaterialTypedLabel, ResourceStates::ShaderResource, false);
+    const auto shadowMaterialTypedResult = ImportSurfelBuffer(graph, result.resourceUses, inputs.rayTracingResources.shadowMaterialTypedBuffer, Name(s_SceneShadowMaterialTypedName), s_SceneShadowMaterialTypedLabel, ResourceStates::ShaderResource, false, appendUse);
     if(!shadowMaterialTypedResult.has_value())
         return false;
     result.shadowMaterialTyped = shadowMaterialTypedResult.value();
-    const auto shadowInstancesResult = ImportSurfelBuffer(graph, result.resourceUses, inputs.rayTracingResources.shadowInstanceBuffer, Name(s_SceneShadowInstancesName), s_SceneShadowInstancesLabel, ResourceStates::ShaderResource, false);
+    const auto shadowInstancesResult = ImportSurfelBuffer(graph, result.resourceUses, inputs.rayTracingResources.shadowInstanceBuffer, Name(s_SceneShadowInstancesName), s_SceneShadowInstancesLabel, ResourceStates::ShaderResource, false, appendUse);
     if(!shadowInstancesResult.has_value())
         return false;
     result.shadowInstances = shadowInstancesResult.value();
-    const auto surfelConstantsResult = ImportSurfelBuffer(graph, result.resourceUses, inputs.rayTracingSurfelResources.constantsBuffer, Name(s_SurfelConstantsName), s_SurfelConstantsLabel, ResourceStates::ConstantBuffer, false);
+    const auto surfelConstantsResult = ImportSurfelBuffer(graph, result.resourceUses, inputs.rayTracingSurfelResources.constantsBuffer, Name(s_SurfelConstantsName), s_SurfelConstantsLabel, ResourceStates::ConstantBuffer, false, appendUse);
     if(!surfelConstantsResult.has_value())
         return false;
     result.surfelConstants = surfelConstantsResult.value();
-    const auto surfelPoolResult = ImportSurfelBuffer(graph, result.resourceUses, inputs.rayTracingSurfelResources.poolBuffer, Name(s_SurfelGraphPool), s_SurfelPoolGraphLabel, ResourceStates::UnorderedAccess, true);
+    const auto surfelPoolResult = ImportSurfelBuffer(graph, result.resourceUses, inputs.rayTracingSurfelResources.poolBuffer, Name(s_SurfelGraphPool), s_SurfelPoolGraphLabel, ResourceStates::UnorderedAccess, true, appendUse);
     if(!surfelPoolResult.has_value())
         return false;
     result.surfelPool = surfelPoolResult.value();
-    const auto surfelGuidePoolResult = ImportSurfelBuffer(graph, result.resourceUses, inputs.rayTracingSurfelResources.guidePoolBuffer, Name(s_SurfelGraphGuidePool), s_SurfelGuidePoolGraphLabel, ResourceStates::UnorderedAccess, true);
+    const auto surfelGuidePoolResult = ImportSurfelBuffer(graph, result.resourceUses, inputs.rayTracingSurfelResources.guidePoolBuffer, Name(s_SurfelGraphGuidePool), s_SurfelGuidePoolGraphLabel, ResourceStates::UnorderedAccess, true, appendUse);
     if(!surfelGuidePoolResult.has_value())
         return false;
     result.surfelGuidePool = surfelGuidePoolResult.value();
-    const auto surfelCellHeadResult = ImportSurfelBuffer(graph, result.resourceUses, inputs.rayTracingSurfelResources.cellHeadBuffer, Name(s_SurfelGraphCellHeads), s_SurfelCellHeadsGraphLabel, ResourceStates::UnorderedAccess, true);
+    const auto surfelCellHeadResult = ImportSurfelBuffer(graph, result.resourceUses, inputs.rayTracingSurfelResources.cellHeadBuffer, Name(s_SurfelGraphCellHeads), s_SurfelCellHeadsGraphLabel, ResourceStates::UnorderedAccess, true, appendUse);
     if(!surfelCellHeadResult.has_value())
         return false;
     result.surfelCellHead = surfelCellHeadResult.value();
-    const auto surfelCounterResult = ImportSurfelBuffer(graph, result.resourceUses, inputs.rayTracingSurfelResources.counterBuffer, Name(s_SurfelCounterName), s_SurfelCounterLabel, ResourceStates::UnorderedAccess, true);
+    const auto surfelCounterResult = ImportSurfelBuffer(graph, result.resourceUses, inputs.rayTracingSurfelResources.counterBuffer, Name(s_SurfelCounterName), s_SurfelCounterLabel, ResourceStates::UnorderedAccess, true, appendUse);
     if(!surfelCounterResult.has_value())
         return false;
     result.surfelCounter = surfelCounterResult.value();
-    const auto surfelFreeListResult = ImportSurfelBuffer(graph, result.resourceUses, inputs.rayTracingSurfelResources.freeListBuffer, Name(s_SurfelGraphFreeList), s_SurfelFreeListGraphLabel, ResourceStates::UnorderedAccess, true);
+    const auto surfelFreeListResult = ImportSurfelBuffer(graph, result.resourceUses, inputs.rayTracingSurfelResources.freeListBuffer, Name(s_SurfelGraphFreeList), s_SurfelFreeListGraphLabel, ResourceStates::UnorderedAccess, true, appendUse);
     if(!surfelFreeListResult.has_value())
         return false;
     result.surfelFreeList = surfelFreeListResult.value();
-    const auto surfelPoolSnapshotResult = ImportSurfelBuffer(graph, result.resourceUses, inputs.rayTracingSurfelResources.poolSnapshotBuffer, Name(s_SurfelGraphPoolSnapshot), s_SurfelPoolSnapshotGraphLabel, ResourceStates::ShaderResource, false);
+    const auto surfelPoolSnapshotResult = ImportSurfelBuffer(graph, result.resourceUses, inputs.rayTracingSurfelResources.poolSnapshotBuffer, Name(s_SurfelGraphPoolSnapshot), s_SurfelPoolSnapshotGraphLabel, ResourceStates::ShaderResource, false, appendUse);
     if(!surfelPoolSnapshotResult.has_value())
         return false;
     result.surfelPoolSnapshot = surfelPoolSnapshotResult.value();
     const auto surfelCellHeadSnapshotResult = ImportSurfelBuffer(graph, result.resourceUses, inputs.rayTracingSurfelResources.cellHeadSnapshotBuffer, Name(s_SurfelGraphCellHeadSnapshot),
-        s_SurfelCellHeadSnapshotGraphLabel, ResourceStates::ShaderResource, false);
+        s_SurfelCellHeadSnapshotGraphLabel, ResourceStates::ShaderResource, false, appendUse);
     if(!surfelCellHeadSnapshotResult.has_value())
         return false;
     result.surfelCellHeadSnapshot = surfelCellHeadSnapshotResult.value();
@@ -209,33 +211,43 @@ b8 SurfelGiResourceBuilder::prepare(in SurfelGiResourceInputs inputs, mut Surfel
     result.sceneGeometryDomain = sceneGeometryDomainResult.value();
 
     const b8 hasCsgTraceContext = inputs.rayTracingResources.csgTraceContextBuffer.valid();
-    result.resourceUses.reserve(ComputeSurfelResourceUseReserve(hasCsgTraceContext, inputs.traceGeometryStatesGraphOwned, inputs.traceGeometryResources.size()));
-    result.traceResourceUses.reserve(ComputeSurfelTraceResourceUseReserve(hasCsgTraceContext, inputs.rayTracingResources.csgTraceBoundsBuffers.size(), inputs.traceGeometryStatesGraphOwned, inputs.traceGeometryResources.size()));
-    result.resourceUses.push_back(ReadUse(inputs.worldPosition));
-    result.resourceUses.push_back(ReadUse(inputs.normal));
-    result.resourceUses.push_back(ReadUse(inputs.currentBindlessSlots, ResourceStates::ConstantBuffer));
-    result.resourceUses.push_back(WriteUse(result.surfelIrradianceHalf, ResourceStates::UnorderedAccess));
-    result.resourceUses.push_back(WriteUse(inputs.surfelIrradiance, ResourceStates::UnorderedAccess));
-    result.resourceUses.push_back(ReadUse(inputs.sceneShading, ResourceStates::ConstantBuffer));
-    result.resourceUses.push_back(ReadUse(inputs.lights, ResourceStates::ShaderResource));
-    result.resourceUses.push_back(ReadUse(result.sceneGeometryDomain));
-    if(inputs.materialContextSlots.valid())
-        result.resourceUses.push_back(ReadUse(inputs.materialContextSlots, ResourceStates::ConstantBuffer));
-    for(in GpuGraphResourceId resource : inputs.traceGeometryResources){
-        if(!resource.valid())
-            return false;
-        if(!inputs.traceGeometryStatesGraphOwned)
-            result.resourceUses.push_back(ReadUse(resource, ResourceStates::ShaderResource));
+    const b8 appendFallbackUses = !inputs.hasSurfelWork;
+    if(appendFallbackUses){
+        result.resourceUses.reserve(ComputeSurfelResourceUseReserve(hasCsgTraceContext, inputs.traceGeometryStatesGraphOwned, inputs.traceGeometryResources.size()));
+        result.resourceUses.push_back(ReadUse(inputs.worldPosition));
+        result.resourceUses.push_back(ReadUse(inputs.normal));
+        result.resourceUses.push_back(ReadUse(inputs.currentBindlessSlots, ResourceStates::ConstantBuffer));
+        result.resourceUses.push_back(WriteUse(result.surfelIrradianceHalf, ResourceStates::UnorderedAccess));
+        result.resourceUses.push_back(WriteUse(inputs.surfelIrradiance, ResourceStates::UnorderedAccess));
+        result.resourceUses.push_back(ReadUse(inputs.sceneShading, ResourceStates::ConstantBuffer));
+        result.resourceUses.push_back(ReadUse(inputs.lights, ResourceStates::ShaderResource));
+        result.resourceUses.push_back(ReadUse(result.sceneGeometryDomain));
+        if(inputs.materialContextSlots.valid())
+            result.resourceUses.push_back(ReadUse(inputs.materialContextSlots, ResourceStates::ConstantBuffer));
+        for(in GpuGraphResourceId resource : inputs.traceGeometryResources){
+            if(!resource.valid())
+                return false;
+            if(!inputs.traceGeometryStatesGraphOwned)
+                result.resourceUses.push_back(ReadUse(resource, ResourceStates::ShaderResource));
+        }
+    }
+    else{
+        result.resourceUses.reserve(4u);
+        result.traceResourceUses.reserve(ComputeSurfelTraceResourceUseReserve(hasCsgTraceContext, inputs.rayTracingResources.csgTraceBoundsBuffers.size(), inputs.traceGeometryStatesGraphOwned, inputs.traceGeometryResources.size()));
+        for(in GpuGraphResourceId resource : inputs.traceGeometryResources){
+            if(!resource.valid())
+                return false;
+        }
     }
 
-    b8 optionalResourcesImported = ImportOptionalSurfelBuffers(inputs, this.m_graph, result);
+    b8 optionalResourcesImported = ImportOptionalSurfelBuffers(inputs, this.m_graph, result, appendFallbackUses);
     if(optionalResourcesImported && inputs.rayTracingResources.csgTraceContextBuffer.valid()){
         {
             const GpuTaskGraphDeclarationReadView declarations(this.m_graph);
             result.csgTraceContext = declarations.findImportedBuffer(inputs.rayTracingResources.csgTraceContextBuffer);
         }
         optionalResourcesImported = result.csgTraceContext.valid();
-        if(optionalResourcesImported)
+        if(optionalResourcesImported && appendFallbackUses)
             result.resourceUses.push_back(ReadUse(result.csgTraceContext, ResourceStates::ShaderResource));
     }
     if(optionalResourcesImported && inputs.rayTracingSurfelResources.traceIndirectArgsBuffer.valid()){
@@ -245,13 +257,13 @@ b8 SurfelGiResourceBuilder::prepare(in SurfelGiResourceInputs inputs, mut Surfel
         optionalResourcesImported = surfelTraceIndirectArgsResult.has_value();
     }
     if(optionalResourcesImported && !inputs.useHwTrace){
-        const auto sceneBvhNodesResult = ImportSurfelBuffer(this.m_graph, result.resourceUses, inputs.rayTracingResources.sceneBvhNodeBuffer, Name(s_SceneBvhNodesName), s_SceneBvhNodesLabel, ResourceStates::ShaderResource, false);
+        const auto sceneBvhNodesResult = ImportSurfelBuffer(this.m_graph, result.resourceUses, inputs.rayTracingResources.sceneBvhNodeBuffer, Name(s_SceneBvhNodesName), s_SceneBvhNodesLabel, ResourceStates::ShaderResource, false, appendFallbackUses);
         if(sceneBvhNodesResult.has_value())
             result.sceneBvhNodes = sceneBvhNodesResult.value();
         optionalResourcesImported = sceneBvhNodesResult.has_value();
     }
     if(optionalResourcesImported && !inputs.useHwTrace){
-        const auto sceneInstancesResult = ImportSurfelBuffer(this.m_graph, result.resourceUses, inputs.rayTracingResources.sceneInstanceBuffer, Name(s_SceneInstancesName), s_SceneInstancesLabel, ResourceStates::ShaderResource, false);
+        const auto sceneInstancesResult = ImportSurfelBuffer(this.m_graph, result.resourceUses, inputs.rayTracingResources.sceneInstanceBuffer, Name(s_SceneInstancesName), s_SceneInstancesLabel, ResourceStates::ShaderResource, false, appendFallbackUses);
         if(sceneInstancesResult.has_value())
             result.sceneInstances = sceneInstancesResult.value();
         optionalResourcesImported = sceneInstancesResult.has_value();
@@ -266,7 +278,7 @@ b8 SurfelGiResourceBuilder::prepare(in SurfelGiResourceInputs inputs, mut Surfel
             if(tlasResult.has_value())
                 result.tlas = tlasResult.value();
             optionalResourcesImported = tlasResult.has_value();
-            if(optionalResourcesImported)
+            if(optionalResourcesImported && appendFallbackUses)
                 result.resourceUses.push_back(ReadUse(result.tlas, ResourceStates::AccelStructRead));
         }
     }

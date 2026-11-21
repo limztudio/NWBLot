@@ -8,42 +8,204 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void EraseCsgDeformCutLoopEdgeAt(mut Vector<CsgDeformCutLoopEdge> edges, in usize eraseIndex){
-    for(usize index = eraseIndex; index + 1u < edges.size(); ++index)
-        edges[index] = edges[index + 1u];
-    edges.pop_back();
+class CsgDeformBoundaryEdgeCount{
+    public u32 count;
+    public u32 first;
+    public u32 second;
+
+    public CsgDeformBoundaryEdgeCount(in u32 inCount, in u32 inFirst, in u32 inSecond){
+        this.count = inCount;
+        this.first = inFirst;
+        this.second = inSecond;
+    }
+}
+
+class CsgDeformVertexEdgeHead{
+    public usize head = usize.max;
+    public u32 degree = 0u;
+}
+
+class CsgDeformBoundaryAdjacency{
+    public HashMap<u32, CsgDeformVertexEdgeHead> vertexHeads;
+    public Vector<usize> nextForFirst;
+    public Vector<usize> nextForSecond;
+}
+
+void PrependCsgDeformBoundaryVertexEdge(
+    mut HashMap<u32, CsgDeformVertexEdgeHead> vertexHeads,
+    in u32 vertex,
+    in usize edgeIndex,
+    mut Vector<usize> nextLinks
+){
+    const auto inserted = vertexHeads.try_emplace(vertex, CsgDeformVertexEdgeHead());
+    mut CsgDeformVertexEdgeHead entry = inserted.first.value();
+    nextLinks[edgeIndex] = entry.head;
+    entry.head = edgeIndex;
+    ++entry.degree;
+}
+
+b8 BuildCsgDeformBoundaryAdjacency(in Span<CsgDeformCutLoopEdge> edges, mut CsgDeformBoundaryAdjacency outAdj){
+    outAdj.vertexHeads.clear();
+    outAdj.vertexHeads.reserve(edges.size() + s_ReserveSlack);
+    outAdj.nextForFirst.clear();
+    outAdj.nextForFirst.resize(edges.size(), usize.max);
+    outAdj.nextForSecond.clear();
+    outAdj.nextForSecond.resize(edges.size(), usize.max);
+    b8 hasSelfLoop = false;
+    for(usize reverseStep = edges.size(); reverseStep > 0u; --reverseStep){
+        const usize edgeIndex = reverseStep - 1u;
+        in CsgDeformCutLoopEdge edge = edges[edgeIndex];
+        PrependCsgDeformBoundaryVertexEdge(outAdj.vertexHeads, edge.first, edgeIndex, outAdj.nextForFirst);
+        if(edge.first == edge.second){
+            hasSelfLoop = true;
+            const auto found = outAdj.vertexHeads.find(edge.first);
+            if(found != outAdj.vertexHeads.end())
+                ++found.value().degree;
+            continue;
+        }
+        PrependCsgDeformBoundaryVertexEdge(outAdj.vertexHeads, edge.second, edgeIndex, outAdj.nextForSecond);
+    }
+    return !hasSelfLoop;
+}
+
+void EnqueueIncidentCsgDeformEdges(
+    in Span<CsgDeformCutLoopEdge> edges,
+    in CsgDeformBoundaryAdjacency adj,
+    in u32 vertex,
+    mut Vector<u8> edgeVisited,
+    mut Vector<usize> bfsQueue,
+    mut b8 validComponent
+){
+    const auto found = adj.vertexHeads.find(vertex);
+    if(found == adj.vertexHeads.end()){
+        validComponent = false;
+        return;
+    }
+    if(found.value().degree != 2u)
+        validComponent = false;
+    usize curEdge = found.value().head;
+    while(curEdge != usize.max){
+        if(edgeVisited[curEdge] == 0u){
+            edgeVisited[curEdge] = 1u;
+            bfsQueue.push_back(curEdge);
+        }
+        in CsgDeformCutLoopEdge edge = edges[curEdge];
+        if(edge.first == vertex)
+            curEdge = adj.nextForFirst[curEdge];
+        else
+            curEdge = adj.nextForSecond[curEdge];
+    }
+}
+
+usize PickFirstCsgDeformLoopEdge(
+    in Span<CsgDeformCutLoopEdge> edges,
+    in CsgDeformBoundaryAdjacency adj,
+    in u32 startVertex,
+    in usize preferredEdgeIndex
+){
+    const auto found = adj.vertexHeads.find(startVertex);
+    if(found == adj.vertexHeads.end())
+        return usize.max;
+    usize curEdge = found.value().head;
+    usize earliestEdge = usize.max;
+    while(curEdge != usize.max){
+        if(curEdge == preferredEdgeIndex)
+            return preferredEdgeIndex;
+        if(curEdge < earliestEdge)
+            earliestEdge = curEdge;
+        in CsgDeformCutLoopEdge edge = edges[curEdge];
+        if(edge.first == startVertex)
+            curEdge = adj.nextForFirst[curEdge];
+        else
+            curEdge = adj.nextForSecond[curEdge];
+    }
+    return earliestEdge;
+}
+
+b8 WalkCsgDeformSimpleCycle(
+    in Span<CsgDeformCutLoopEdge> edges,
+    in CsgDeformBoundaryAdjacency adj,
+    in u32 startVertex,
+    in usize firstEdgeIndex,
+    in usize expectedEdgeCount,
+    mut Vector<u8> edgeWalked,
+    mut Vector<u32> outLoop
+){
+    outLoop.clear();
+    if(firstEdgeIndex == usize.max || expectedEdgeCount < 2u)
+        return false;
+    outLoop.reserve(expectedEdgeCount);
+    u32 cursor = startVertex;
+    outLoop.push_back(cursor);
+    usize walkedEdges = 0u;
+    usize currentEdge = firstEdgeIndex;
+    while(currentEdge != usize.max && walkedEdges < expectedEdgeCount){
+        if(edgeWalked[currentEdge] != 0u)
+            return false;
+        in CsgDeformCutLoopEdge edge = edges[currentEdge];
+        if(edge.first == edge.second)
+            return false;
+        edgeWalked[currentEdge] = 1u;
+        ++walkedEdges;
+        cursor = OtherCsgDeformLoopEdgeVertex(edge, cursor);
+        if(cursor == startVertex)
+            break;
+        outLoop.push_back(cursor);
+
+        const auto found = adj.vertexHeads.find(cursor);
+        if(found == adj.vertexHeads.end() || found.value().degree != 2u)
+            return false;
+        usize candidateEdge = found.value().head;
+        usize nextEdge = usize.max;
+        while(candidateEdge != usize.max){
+            if(edgeWalked[candidateEdge] == 0u){
+                nextEdge = candidateEdge;
+                break;
+            }
+            in CsgDeformCutLoopEdge candidate = edges[candidateEdge];
+            if(candidate.first == cursor)
+                candidateEdge = adj.nextForFirst[candidateEdge];
+            else
+                candidateEdge = adj.nextForSecond[candidateEdge];
+        }
+        currentEdge = nextEdge;
+    }
+    return cursor == startVertex && walkedEdges == expectedEdgeCount && outLoop.size() == expectedEdgeCount;
 }
 
 void CollectCsgDeformBoundaryEdges(in Span<CsgDeformTriangle> triangles, mut Vector<CsgDeformCutLoopEdge> outEdges){
     outEdges.clear();
     if(triangles.empty())
         return;
-    HashMap<u64, u32> edgeUses;
-    edgeUses.reserve(triangles.size() * s_EdgesPerTriangle + s_ReserveSlack);
+    HashMap<u64, usize> edgeIndexByKey;
+    Vector<CsgDeformBoundaryEdgeCount> uniqueEdges;
+    edgeIndexByKey.reserve(triangles.size() * 2u + s_ReserveSlack);
+    uniqueEdges.reserve(triangles.size() * 2u + s_ReserveSlack);
     for(in CsgDeformTriangle triangle : triangles){
-        Array<u64, s_TriangleCornerCount> edges;
-        edges[0u] = PackUnorderedU32Pair(triangle.indices[0u], triangle.indices[1u]);
-        edges[1u] = PackUnorderedU32Pair(triangle.indices[1u], triangle.indices[2u]);
-        edges[2u] = PackUnorderedU32Pair(triangle.indices[2u], triangle.indices[0u]);
+        Array<u32, s_TriangleCornerCount> starts;
+        Array<u32, s_TriangleCornerCount> ends;
+        starts[0u] = triangle.indices[0u];
+        ends[0u] = triangle.indices[1u];
+        starts[1u] = triangle.indices[1u];
+        ends[1u] = triangle.indices[2u];
+        starts[2u] = triangle.indices[2u];
+        ends[2u] = triangle.indices[0u];
         for(u32 corner = 0u; corner < s_TriangleCornerCount; ++corner){
-            const u64 edgeKey = edges[cast<usize>(corner)];
-            u32 useCount = 1u;
-            if(edgeUses.contains(edgeKey))
-                useCount = edgeUses[edgeKey] + 1u;
-            edgeUses.insert_or_assign(edgeKey, useCount);
+            const usize c = cast<usize>(corner);
+            const u32 a = starts[c];
+            const u32 b = ends[c];
+            const u64 edgeKey = PackUnorderedU32Pair(a, b);
+            const auto inserted = edgeIndexByKey.try_emplace(edgeKey, uniqueEdges.size());
+            if(inserted.second)
+                uniqueEdges.push_back(CsgDeformBoundaryEdgeCount(1u, a, b));
+            else
+                ++uniqueEdges[inserted.first.value()].count;
         }
     }
     outEdges.reserve(triangles.size());
-    for(in CsgDeformTriangle triangle : triangles){
-        const u64 edge0 = PackUnorderedU32Pair(triangle.indices[0u], triangle.indices[1u]);
-        if(edgeUses.contains(edge0) && edgeUses[edge0] == 1u)
-            outEdges.push_back(MakeCsgDeformCutLoopEdge(triangle.indices[0u], triangle.indices[1u]));
-        const u64 edge1 = PackUnorderedU32Pair(triangle.indices[1u], triangle.indices[2u]);
-        if(edgeUses.contains(edge1) && edgeUses[edge1] == 1u)
-            outEdges.push_back(MakeCsgDeformCutLoopEdge(triangle.indices[1u], triangle.indices[2u]));
-        const u64 edge2 = PackUnorderedU32Pair(triangle.indices[2u], triangle.indices[0u]);
-        if(edgeUses.contains(edge2) && edgeUses[edge2] == 1u)
-            outEdges.push_back(MakeCsgDeformCutLoopEdge(triangle.indices[2u], triangle.indices[0u]));
+    for(in CsgDeformBoundaryEdgeCount entry : uniqueEdges){
+        if(entry.count == 1u)
+            outEdges.push_back(MakeCsgDeformCutLoopEdge(entry.first, entry.second));
     }
 }
 
@@ -51,41 +213,20 @@ b8 OrderCsgDeformBoundaryLoopInto(in Span<CsgDeformCutLoopEdge> edges, mut Vecto
     outLoop.clear();
     if(edges.empty())
         return true;
-    Vector<CsgDeformCutLoopEdge> remaining;
-    remaining.reserve(edges.size());
-    for(in CsgDeformCutLoopEdge edge : edges)
-        remaining.push_back(edge);
-    const u32 start = FindInitialCsgDeformBoundaryLoopVertex(remaining);
-    u32 cursor = start;
-    outLoop.reserve(edges.size());
-    outLoop.push_back(cursor);
-    const Expected<usize> seedIndex = TryFindIncidentCsgDeformLoopEdge(remaining, cursor);
-    if(!seedIndex.has_value())
+    CsgDeformBoundaryAdjacency adj;
+    if(!BuildCsgDeformBoundaryAdjacency(edges, adj))
         return false;
-    cursor = OtherCsgDeformLoopEdgeVertex(remaining[seedIndex.value()], cursor);
-    outLoop.push_back(cursor);
-    EraseCsgDeformCutLoopEdgeAt(remaining, seedIndex.value());
-    while(!remaining.empty()){
-        const Expected<usize> nextIndex = TryFindIncidentCsgDeformLoopEdge(remaining, cursor);
-        if(!nextIndex.has_value())
-            break;
-        const u32 next = OtherCsgDeformLoopEdgeVertex(remaining[nextIndex.value()], cursor);
-        EraseCsgDeformCutLoopEdgeAt(remaining, nextIndex.value());
-        cursor = next;
-        if(cursor == start)
-            break;
-        outLoop.push_back(cursor);
-    }
-    if(cursor != start || !remaining.empty())
-        return false;
-    HashSet<u32> seenLoopVertices;
-    seenLoopVertices.reserve(outLoop.size() + s_ReserveSlack);
-    for(in u32 loopVertex : outLoop){
-        if(seenLoopVertices.contains(loopVertex))
+    u32 start = u32.max;
+    for(auto it = adj.vertexHeads.begin(); it != adj.vertexHeads.end(); ++it){
+        if(it.value().degree != 2u)
             return false;
-        seenLoopVertices.insert(loopVertex);
+        if(it.key() < start)
+            start = it.key();
     }
-    return true;
+    const usize firstEdge = PickFirstCsgDeformLoopEdge(edges, adj, start, usize.max);
+    Vector<u8> edgeWalked;
+    edgeWalked.resize(edges.size(), 0u);
+    return WalkCsgDeformSimpleCycle(edges, adj, start, firstEdge, edges.size(), edgeWalked, outLoop);
 }
 
 b8 OrderCsgDeformBoundaryLoop(in Span<CsgDeformCutLoopEdge> edges, mut Vector<u32> outLoop){
@@ -101,43 +242,52 @@ Expected<u32> FillCsgDeformCutCaps(
     CollectCsgDeformBoundaryEdges(inOutTriangles, scratchEdges);
     if(scratchEdges.empty())
         return capTriangles;
-    Vector<CsgDeformCutLoopEdge> remaining;
-    remaining.reserve(scratchEdges.size());
-    for(usize i = 0u; i < scratchEdges.size(); ++i)
-        remaining.push_back(scratchEdges[i]);
-    Vector<CsgDeformCutLoopEdge> loopEdges;
+
+    const Span<CsgDeformCutLoopEdge> edges(scratchEdges);
+    CsgDeformBoundaryAdjacency adj;
+    BuildCsgDeformBoundaryAdjacency(edges, adj);
+
+    const usize edgeCount = edges.size();
+    Vector<u8> edgeVisited;
+    edgeVisited.resize(edgeCount, 0u);
+    Vector<u8> edgeWalked;
+    edgeWalked.resize(edgeCount, 0u);
+    Vector<usize> componentEdges;
+    componentEdges.reserve(edgeCount);
+    Vector<usize> bfsQueue;
+    bfsQueue.reserve(edgeCount);
     Vector<u32> loop;
-    HashSet<u32> loopMembers;
-    loopEdges.reserve(scratchEdges.size());
-    loop.reserve(scratchEdges.size());
-    loopMembers.reserve(scratchEdges.size() + s_ReserveSlack);
-    while(!remaining.empty()){
-        loopEdges.clear();
-        loopMembers.clear();
-        const CsgDeformCutLoopEdge seedEdge = remaining.back();
-        loopEdges.push_back(seedEdge);
-        loopMembers.insert(seedEdge.first);
-        loopMembers.insert(seedEdge.second);
-        remaining.pop_back();
-        b8 grown = true;
-        while(grown){
-            grown = false;
-            usize edgeIndex = 0u;
-            while(edgeIndex < remaining.size()){
-                const CsgDeformCutLoopEdge candidate = remaining[edgeIndex];
-                const b8 adjacent = loopMembers.contains(candidate.first) || loopMembers.contains(candidate.second);
-                if(adjacent){
-                    loopEdges.push_back(candidate);
-                    loopMembers.insert(candidate.first);
-                    loopMembers.insert(candidate.second);
-                    EraseCsgDeformCutLoopEdgeAt(remaining, edgeIndex);
-                    grown = true;
-                }
-                else
-                    ++edgeIndex;
-            }
+    loop.reserve(edgeCount);
+
+    for(usize reverseSeed = edgeCount; reverseSeed > 0u; --reverseSeed){
+        const usize seedIdx = reverseSeed - 1u;
+        if(edgeVisited[seedIdx] != 0u)
+            continue;
+        componentEdges.clear();
+        bfsQueue.clear();
+        edgeVisited[seedIdx] = 1u;
+        bfsQueue.push_back(seedIdx);
+        b8 validComponent = true;
+        u32 minVertex = u32.max;
+        for(usize q = 0u; q < bfsQueue.size(); ++q){
+            const usize eIdx = bfsQueue[q];
+            componentEdges.push_back(eIdx);
+            in CsgDeformCutLoopEdge edge = edges[eIdx];
+            if(edge.first == edge.second)
+                validComponent = false;
+            if(edge.first < minVertex)
+                minVertex = edge.first;
+            if(edge.second < minVertex)
+                minVertex = edge.second;
+            EnqueueIncidentCsgDeformEdges(edges, adj, edge.first, edgeVisited, bfsQueue, validComponent);
+            EnqueueIncidentCsgDeformEdges(edges, adj, edge.second, edgeVisited, bfsQueue, validComponent);
         }
-        if(!OrderCsgDeformBoundaryLoopInto(loopEdges, loop))
+        if(!validComponent || componentEdges.size() < cast<usize>(s_MinLoopVertices))
+            continue;
+        const usize firstEdge = PickFirstCsgDeformLoopEdge(edges, adj, minVertex, seedIdx);
+        if(!WalkCsgDeformSimpleCycle(edges, adj, minVertex, firstEdge, componentEdges.size(), edgeWalked, loop))
+            continue;
+        if(loop.size() < cast<usize>(s_MinLoopVertices))
             continue;
         const Expected<CsgDeformVertex> center = TryResolveCsgDeformCapLoopCenter(inOutVertices, loop, inOutTriangles.size());
         if(!center.has_value())

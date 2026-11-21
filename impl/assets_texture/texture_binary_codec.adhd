@@ -113,11 +113,10 @@ class TextureBinaryCodec{
             outMipLevels.push_back(level);
         }
 
-        outPayloadBytes.clear();
-        outPayloadBytes.resize(payloadByteCount);
-        for(usize i = 0u; i < payloadByteCount; ++i)
-            outPayloadBytes[i] = binary[inOutCursor + i];
-        inOutCursor += payloadByteCount;
+        if(!ReadBinaryVectorPayload(binary, payloadByteCount, inOutCursor, outPayloadBytes).has_value()){
+            error("Texture::loadBinary failed: texture payload is truncated");
+            return false;
+        }
 
         outDimension = cast<u8>(headerDimension);
         outPayloadFormat = payloadFormat;
@@ -175,8 +174,10 @@ class TextureBinaryCodec{
             AppendPOD(outBinary, mip.sizeBytes);
         }
 
-        for(in u8 byteValue : payloadBytes)
-            outBinary.push_back(byteValue);
+        if(!AppendBinaryVectorPayload(outBinary, payloadBytes).has_value()){
+            error("TextureAssetCodec::serialize failed: cooked payload size overflows");
+            return false;
+        }
         return true;
     }
 

@@ -137,7 +137,7 @@ RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotSh
     );
 
     RayTracingShadowVisibilityGraphPlanSnapshot snapshot;
-    snapshot.lightSpace = this.lightSpaceShadowSnapshot();
+    snapshot.lightSpace = this.frozenLightSpaceShadowSnapshot();
     snapshot.adaptivePlan = adaptivePlan;
     snapshot.hardwareTransparentTrace = hardwareTransparentTrace;
     snapshot.softTransparentFoldReady = softTransparentFoldReady;

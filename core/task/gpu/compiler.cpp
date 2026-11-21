@@ -319,65 +319,70 @@ b8 GpuTaskGraphCompiler::compile(
     statistics.totalSeconds = DurationInSeconds<f64>(compileEnd, compileBegin);
 
     outCompiledGraph.m_packetRuntimeFlags.assign(outCompiledGraph.m_packets.size(), 0u);
-    for(usize packetIndex = 0u; packetIndex < outCompiledGraph.m_packets.size(); ++packetIndex){
-        const GpuSubmissionPacket& packetPlan = outCompiledGraph.m_packets[packetIndex];
-        u8 flags = GpuCompiledGraph::PacketRuntimeFlag::AllowsParallelRecording;
-        if(packetPlan.joinsAcceptedQueueFrontier || (outCompiledGraph.m_hasPresentEndpoint && outCompiledGraph.m_presentEndpoint.packet.index == packetIndex))
-            flags = static_cast<u8>(flags | GpuCompiledGraph::PacketRuntimeFlag::HasCrossQueueConsumer);
-        for(u32 taskOffset = 0u; taskOffset < packetPlan.taskCount; ++taskOffset){
-            const GpuTaskId taskID = outCompiledGraph.m_packetTasks[packetPlan.taskOffset + taskOffset];
-            const GpuTaskGraphDetail::GpuTaskNode& task = CompilerGraphAccess::TaskNode(graph, taskID.index);
-            const u32 compiledTaskIndex = outCompiledGraph.m_compiledTaskIndexByTask[taskID.index];
-            const GpuCompiledTask& compiledTask = outCompiledGraph.m_tasks[compiledTaskIndex];
-            if(!task.scheduling.allowParallelRecording)
-                flags = static_cast<u8>(flags & ~GpuCompiledGraph::PacketRuntimeFlag::AllowsParallelRecording);
-            if(task.externalStateSourceCount != 0u)
-                flags = static_cast<u8>(flags | GpuCompiledGraph::PacketRuntimeFlag::HasExternalStateSource);
-            if(compiledTask.prologueStateSeedCount != 0u)
-                flags = static_cast<u8>(flags | GpuCompiledGraph::PacketRuntimeFlag::HasPrologueStateSeeds);
-            if((flags & GpuCompiledGraph::PacketRuntimeFlag::HasInitialOwnerHandoff) == 0u){
-                for(u32 barrierOffset = 0u; barrierOffset < compiledTask.prologueBarrierCount; ++barrierOffset){
-                    const GpuCompiledBarrier& barrier = outCompiledGraph.m_prologueBarriers[compiledTask.prologueBarrierOffset + barrierOffset];
-                    if(
-                        barrier.isInitialOwnerHandoff
-                        && (
-                            barrier.type == GpuCompiledBarrierType::TextureOwnershipAcquire
-                            || barrier.type == GpuCompiledBarrierType::BufferOwnershipAcquire
-                            || barrier.type == GpuCompiledBarrierType::AccelStructOwnershipAcquire
-                        )
-                    ){
-                        flags = static_cast<u8>(flags | GpuCompiledGraph::PacketRuntimeFlag::HasInitialOwnerHandoff);
-                        break;
+    {
+        Alloc::ScratchArena::Scope flagsScratchScope(scratchArena);
+        Vector<u8, Alloc::ScratchArena> resourceKeepInitialState(hasNonHazardDomainResource ? resourceCount : 0u, static_cast<u8>(255u), scratchArena);
+        for(usize packetIndex = 0u; packetIndex < outCompiledGraph.m_packets.size(); ++packetIndex){
+            const GpuSubmissionPacket& packetPlan = outCompiledGraph.m_packets[packetIndex];
+            u8 flags = GpuCompiledGraph::PacketRuntimeFlag::AllowsParallelRecording;
+            if(packetPlan.joinsAcceptedQueueFrontier || (outCompiledGraph.m_hasPresentEndpoint && outCompiledGraph.m_presentEndpoint.packet.index == packetIndex))
+                flags = static_cast<u8>(flags | GpuCompiledGraph::PacketRuntimeFlag::HasCrossQueueConsumer);
+            for(u32 taskOffset = 0u; taskOffset < packetPlan.taskCount; ++taskOffset){
+                const GpuTaskId taskID = outCompiledGraph.m_packetTasks[packetPlan.taskOffset + taskOffset];
+                const GpuTaskGraphDetail::GpuTaskNode& task = CompilerGraphAccess::TaskNode(graph, taskID.index);
+                const u32 compiledTaskIndex = outCompiledGraph.m_compiledTaskIndexByTask[taskID.index];
+                const GpuCompiledTask& compiledTask = outCompiledGraph.m_tasks[compiledTaskIndex];
+                if(!task.scheduling.allowParallelRecording)
+                    flags = static_cast<u8>(flags & ~GpuCompiledGraph::PacketRuntimeFlag::AllowsParallelRecording);
+                if(task.externalStateSourceCount != 0u)
+                    flags = static_cast<u8>(flags | GpuCompiledGraph::PacketRuntimeFlag::HasExternalStateSource);
+                if(compiledTask.prologueStateSeedCount != 0u)
+                    flags = static_cast<u8>(flags | GpuCompiledGraph::PacketRuntimeFlag::HasPrologueStateSeeds);
+                if((flags & GpuCompiledGraph::PacketRuntimeFlag::HasInitialOwnerHandoff) == 0u){
+                    for(u32 barrierOffset = 0u; barrierOffset < compiledTask.prologueBarrierCount; ++barrierOffset){
+                        const GpuCompiledBarrier& barrier = outCompiledGraph.m_prologueBarriers[compiledTask.prologueBarrierOffset + barrierOffset];
+                        if(
+                            barrier.isInitialOwnerHandoff
+                            && (
+                                barrier.type == GpuCompiledBarrierType::TextureOwnershipAcquire
+                                || barrier.type == GpuCompiledBarrierType::BufferOwnershipAcquire
+                                || barrier.type == GpuCompiledBarrierType::AccelStructOwnershipAcquire
+                            )
+                        ){
+                            flags = static_cast<u8>(flags | GpuCompiledGraph::PacketRuntimeFlag::HasInitialOwnerHandoff);
+                            break;
+                        }
                     }
                 }
-            }
-            if(hasNonHazardDomainResource && (flags & GpuCompiledGraph::PacketRuntimeFlag::HasRetainedInitialStateResource) == 0u){
-                for(const GpuTaskResourceUse& use : CompilerGraphAccess::TaskResourceUses(graph, task)){
-                    const GpuTaskGraphDetail::GpuGraphResourceNode& resource = CompilerGraphAccess::ResourceNode(graph, use.resource.index);
-                    if(resource.type == GpuGraphResourceType::HazardDomain)
-                        continue;
-                    if(resource.type == GpuGraphResourceType::Texture){
-                        Texture* const texture = CompilerGraphAccess::TextureForResourceIndex(graph, use.resource.index);
-                        if(!texture || texture->getCreationDescription().keepInitialState){
+                if(hasNonHazardDomainResource && (flags & GpuCompiledGraph::PacketRuntimeFlag::HasRetainedInitialStateResource) == 0u){
+                    for(const GpuTaskResourceUse& use : CompilerGraphAccess::TaskResourceUses(graph, task)){
+                        u8& cachedKeep = resourceKeepInitialState[use.resource.index];
+                        if(cachedKeep == 255u){
+                            const GpuTaskGraphDetail::GpuGraphResourceNode& resource = CompilerGraphAccess::ResourceNode(graph, use.resource.index);
+                            if(resource.type == GpuGraphResourceType::HazardDomain)
+                                cachedKeep = 0u;
+                            else if(resource.type == GpuGraphResourceType::Texture){
+                                Texture* const texture = CompilerGraphAccess::TextureForResourceIndex(graph, use.resource.index);
+                                cachedKeep = (!texture || texture->getCreationDescription().keepInitialState) ? 1u : 0u;
+                            }
+                            else if(resource.type == GpuGraphResourceType::Buffer){
+                                Buffer* const buffer = CompilerGraphAccess::BufferForResourceIndex(graph, use.resource.index);
+                                cachedKeep = (!buffer || buffer->getCreationDescription().keepInitialState) ? 1u : 0u;
+                            }
+                            else if(resource.type == GpuGraphResourceType::AccelStruct)
+                                cachedKeep = 1u;
+                            else
+                                cachedKeep = 0u;
+                        }
+                        if(cachedKeep != 0u){
                             flags = static_cast<u8>(flags | GpuCompiledGraph::PacketRuntimeFlag::HasRetainedInitialStateResource);
                             break;
                         }
                     }
-                    else if(resource.type == GpuGraphResourceType::Buffer){
-                        Buffer* const buffer = CompilerGraphAccess::BufferForResourceIndex(graph, use.resource.index);
-                        if(!buffer || buffer->getCreationDescription().keepInitialState){
-                            flags = static_cast<u8>(flags | GpuCompiledGraph::PacketRuntimeFlag::HasRetainedInitialStateResource);
-                            break;
-                        }
-                    }
-                    else if(resource.type == GpuGraphResourceType::AccelStruct){
-                        flags = static_cast<u8>(flags | GpuCompiledGraph::PacketRuntimeFlag::HasRetainedInitialStateResource);
-                        break;
-                    }
                 }
             }
+            outCompiledGraph.m_packetRuntimeFlags[packetIndex] = flags;
         }
-        outCompiledGraph.m_packetRuntimeFlags[packetIndex] = flags;
     }
     for(const GpuPacketDependency& dep : outCompiledGraph.m_packetDependencies){
         if(dep.producer.index < outCompiledGraph.m_packets.size() && dep.consumer.index < outCompiledGraph.m_packets.size()){
@@ -388,6 +393,13 @@ b8 GpuTaskGraphCompiler::compile(
             }
         }
     }
+    for(const GpuPacketStateSeed& seed : outCompiledGraph.m_prologueStateSeeds){
+        if(seed.sourcePacket.valid() && seed.sourcePacket.index < outCompiledGraph.m_packetRuntimeFlags.size()){
+            outCompiledGraph.m_packetRuntimeFlags[seed.sourcePacket.index] = static_cast<u8>(
+                outCompiledGraph.m_packetRuntimeFlags[seed.sourcePacket.index] | GpuCompiledGraph::PacketRuntimeFlag::HasExportedStateConsumer
+            );
+        }
+    }
     for(const GpuCompiledExternalResourceExportSource& source : outCompiledGraph.m_externalResourceExportSources){
         if(source.producerTask.valid() && source.producerTask.index < outCompiledGraph.m_compiledTaskIndexByTask.size()){
             const u32 compiledTaskIndex = outCompiledGraph.m_compiledTaskIndexByTask[source.producerTask.index];
@@ -395,7 +407,7 @@ b8 GpuTaskGraphCompiler::compile(
                 const u32 packetIndex = outCompiledGraph.m_tasks[compiledTaskIndex].packet.index;
                 if(packetIndex < outCompiledGraph.m_packetRuntimeFlags.size()){
                     outCompiledGraph.m_packetRuntimeFlags[packetIndex] = static_cast<u8>(
-                        outCompiledGraph.m_packetRuntimeFlags[packetIndex] | GpuCompiledGraph::PacketRuntimeFlag::HasCrossQueueConsumer
+                        outCompiledGraph.m_packetRuntimeFlags[packetIndex] | GpuCompiledGraph::PacketRuntimeFlag::HasCrossQueueConsumer | GpuCompiledGraph::PacketRuntimeFlag::HasExportedStateConsumer
                     );
                 }
             }
@@ -408,7 +420,7 @@ b8 GpuTaskGraphCompiler::compile(
                 const u32 packetIndex = outCompiledGraph.m_tasks[compiledTaskIndex].packet.index;
                 if(packetIndex < outCompiledGraph.m_packetRuntimeFlags.size()){
                     outCompiledGraph.m_packetRuntimeFlags[packetIndex] = static_cast<u8>(
-                        outCompiledGraph.m_packetRuntimeFlags[packetIndex] | GpuCompiledGraph::PacketRuntimeFlag::HasCrossQueueConsumer
+                        outCompiledGraph.m_packetRuntimeFlags[packetIndex] | GpuCompiledGraph::PacketRuntimeFlag::HasCrossQueueConsumer | GpuCompiledGraph::PacketRuntimeFlag::HasExportedStateConsumer
                     );
                 }
             }

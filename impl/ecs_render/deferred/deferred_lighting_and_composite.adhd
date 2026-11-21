@@ -346,12 +346,20 @@ RayTracingLightingClassification ClassifyDeferredSceneLights(in Span<f32> import
     return classification;
 }
 
-SceneShadingBufferUploads RendererDeferredSystem::prepareSceneShadingBufferUploads(in f32 fallbackAspectRatio, in RayTracingLightingClassificationInput rayTracingInput)const{
+SceneShadingBufferUploads RendererDeferredSystem::prepareSceneShadingBufferUploads(in f32 fallbackAspectRatio, in RayTracingLightingClassificationInput rayTracingInput, in PreflightedSceneLightsView preflightedLights)const{
     assert(this.m_deferredState.m_sceneShadingBuffer.valid());
     assert(this.m_deferredState.m_lightBuffer.valid());
     SceneShadingBufferUploads uploads;
     Array<f32, s_DeferredSceneMaxLights> causticLightImportance;
-    uploads.lightCount = ResolveSceneLights(this.m_world, uploads.lightData, causticLightImportance);
+    if(preflightedLights.valid && preflightedLights.lights.size() <= uploads.lightData.size() && preflightedLights.causticImportance.size() == preflightedLights.lights.size()){
+        uploads.lightCount = cast<u32>(preflightedLights.lights.size());
+        for(usize i = 0u; i < preflightedLights.lights.size(); ++i){
+            uploads.lightData[i] = preflightedLights.lights[i];
+            causticLightImportance[i] = preflightedLights.causticImportance[i];
+        }
+    }
+    else
+        uploads.lightCount = ResolveSceneLights(this.m_world, uploads.lightData, causticLightImportance);
     const Span<SceneLightGpuData> lights(uploads.lightData.data(), uploads.lightCount);
     const Span<f32> importance(causticLightImportance.data(), uploads.lightCount);
     uploads.lightingClassification = ClassifyDeferredSceneLights(importance, rayTracingInput.refractiveInstanceCount, uploads.lightData, uploads.lightCount);

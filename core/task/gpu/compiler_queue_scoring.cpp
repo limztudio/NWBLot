@@ -373,6 +373,166 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
     );
 }
 
+void BuildSingleTaskQueueCandidateScores(
+    const GpuTaskGraph::DeclarationReadView& graph,
+    const GpuTaskGraphAnalysis& analysis,
+    const Span<const GpuTaskQueueAssignment> assignments,
+    const Span<const u32> assignmentIndicesByTask,
+    const GpuPhysicalQueueTopology& topology,
+    const GpuTaskSchedulingReachability& schedulingReachability,
+    const GpuTaskQueueScoringData& scoringData,
+    const GpuTaskId taskId,
+    const GpuTaskSchedulingHint& taskScheduling,
+    const GpuPhysicalQueueInfo* const* const candidates,
+    GpuQueueAssignmentScore* const outScores,
+    const usize candidateCount,
+    const b8 computeOverlap
+)noexcept{
+    if(candidateCount == 0u || candidateCount > CommandQueue::kCount)
+        return;
+
+    const u32 taskAssignmentIndex = assignmentIndicesByTask[taskId.index];
+    const GpuTaskQueueAssignment* const ownAssignment = FindQueueAssignment(assignments, assignmentIndicesByTask, taskId);
+    const u64 ownCost = ownAssignment ? scoringData.taskCosts[taskId.index] : 0u;
+    const b8 mayComputeOverlap = computeOverlap && taskScheduling.overlapPreferred && !taskScheduling.avoidQueueCrossing && schedulingReachability.mayContainIndependentTasks();
+    const b8 emptySchedulingEdges = analysis.schedulingEdges().empty();
+    const GpuTaskQueueAssignment unassignedTask{ .task = taskId, .initialQueue = {}, .queue = {}, .score = {} };
+    const Span<const GpuTaskQueueAssignment> memberSpan(ownAssignment ? ownAssignment : &unassignedTask, 1u);
+
+    Array<usize, CommandQueue::kCount> candidateQueueIndices{};
+    Array<usize, CommandQueue::kCount> assignedQueueIndices{};
+    Array<u64, CommandQueue::kCount> overlapByCandidate{};
+    Array<u64, CommandQueue::kCount> queueLoadByCandidate{};
+    b8 allHaveTopologyIndex = true;
+    for(usize c = 0u; c < candidateCount; ++c){
+        const GpuPhysicalQueueInfo& candidate = *candidates[c];
+        const b8 hasTopologyCandidateIndex = topology.queues && &candidate >= topology.queues && &candidate < topology.queues + topology.queueCount;
+        allHaveTopologyIndex = allHaveTopologyIndex && hasTopologyCandidateIndex;
+        const usize candidateQueueIndex = hasTopologyCandidateIndex
+            ? static_cast<usize>(&candidate - topology.queues)
+            : scoringData.findAssignedQueueIndex(candidate.id)
+        ;
+        const usize assignedQueueIndex = hasTopologyCandidateIndex && scoringData.assignedQueueLoads.size() == topology.queueCount
+            ? candidateQueueIndex
+            : scoringData.findAssignedQueueIndex(candidate.id)
+        ;
+        candidateQueueIndices[c] = candidateQueueIndex;
+        assignedQueueIndices[c] = assignedQueueIndex;
+
+        const u64 assignedQueueCost = assignedQueueIndex < scoringData.assignedQueueLoads.size()
+            ? scoringData.assignedQueueLoads[assignedQueueIndex].estimatedCost
+            : 0u
+        ;
+        const u64 excludedCandidateCost = ownAssignment && ownAssignment->queue == candidate.id ? ownCost : 0u;
+        FOUNDATION_ASSERT(assignedQueueCost >= excludedCandidateCost);
+        u64 queueLoad = assignedQueueCost - excludedCandidateCost;
+        const u64 externalQueueLoad = hasTopologyCandidateIndex && !scoringData.externalQueueLoadsByIndex.empty()
+            ? scoringData.externalQueueLoadByIndex(candidateQueueIndex)
+            : scoringData.externalQueueLoad(candidate.id)
+        ;
+        queueLoadByCandidate[c] = AddSaturating<u64>(queueLoad, externalQueueLoad);
+
+        u64 overlap = 0u;
+        if(mayComputeOverlap){
+            u64 otherQueueCost = scoringData.totalAssignedCost - assignedQueueCost - (ownCost - excludedCandidateCost);
+            if(emptySchedulingEdges)
+                overlap = otherQueueCost;
+            else if(otherQueueCost != 0u){
+                overlap = scoringData.independentQueueCostByIndex(schedulingReachability, assignedQueueIndex, memberSpan);
+                if(ownAssignment && ownAssignment->queue != candidate.id && schedulingReachability.transitivelyIndependent(taskId, ownAssignment->task))
+                    overlap -= ownCost;
+            }
+        }
+        overlapByCandidate[c] = overlap;
+    }
+
+    u64 totalExternalProducers = 0u;
+    Array<u64, CommandQueue::kCount> matchingProducers{};
+    const GpuTaskGraphSchedulingTaskIndexView producerIndices = CompilerGraphAccess::SchedulingProducers(analysis, taskId.index);
+    for(usize producerIndex = 0u; producerIndex < producerIndices.taskCount; ++producerIndex){
+        const u32 producerTaskIndex = producerIndices[producerIndex];
+        const u32 producerAssignmentIndex = assignmentIndicesByTask[producerTaskIndex];
+        if(producerAssignmentIndex == taskAssignmentIndex || producerAssignmentIndex >= assignments.size())
+            continue;
+        ++totalExternalProducers;
+        const GpuPhysicalQueueId& producerQueue = assignments[producerAssignmentIndex].queue;
+        for(usize c = 0u; c < candidateCount; ++c){
+            if(producerQueue == candidates[c]->id)
+                ++matchingProducers[c];
+        }
+    }
+
+    u64 totalExternalConsumers = 0u;
+    Array<u64, CommandQueue::kCount> matchingConsumers{};
+    const GpuTaskGraphSchedulingTaskIndexView consumerIndices = CompilerGraphAccess::SchedulingConsumers(analysis, taskId.index);
+    for(usize consumerIndex = 0u; consumerIndex < consumerIndices.taskCount; ++consumerIndex){
+        const u32 consumerTaskIndex = consumerIndices[consumerIndex];
+        const u32 consumerAssignmentIndex = assignmentIndicesByTask[consumerTaskIndex];
+        if(consumerAssignmentIndex == taskAssignmentIndex || consumerAssignmentIndex >= assignments.size())
+            continue;
+        ++totalExternalConsumers;
+        const GpuPhysicalQueueId& consumerQueue = assignments[consumerAssignmentIndex].queue;
+        for(usize c = 0u; c < candidateCount; ++c){
+            if(consumerQueue == candidates[c]->id)
+                ++matchingConsumers[c];
+        }
+    }
+
+    Array<u64, CommandQueue::kCount> ownershipTransfers{};
+    const b8 useFastMask = allHaveTopologyIndex && scoringData.hasResourceConcurrentMasks && scoringData.assignedQueueIndexByTask.size() == CompilerGraphAccess::TaskCount(graph);
+    for(usize edgeIndex = scoringData.ownershipEdgeOffsets[taskId.index]; edgeIndex < scoringData.ownershipEdgeOffsets[taskId.index + 1u]; ++edgeIndex){
+        const GpuTaskQueueScoringData::OwnershipEdge& edge = scoringData.ownershipEdges[edgeIndex];
+        if(edge.producerIndex == taskId.index && edge.consumerIndex == taskId.index)
+            continue;
+        if(useFastMask){
+            const u32 otherTaskIndex = edge.producerIndex == taskId.index ? edge.consumerIndex : edge.producerIndex;
+            const usize otherQ = scoringData.assignedQueueIndexByTask[otherTaskIndex];
+            if(otherQ >= topology.queueCount)
+                continue;
+            const u32 otherFamily = scoringData.queueFamilyByIndex[otherQ];
+            const u64 admittedMask = scoringData.resourceConcurrentAdmittedMasks[edge.resourceIndex];
+            const b8 otherAdmitted = (admittedMask & BitMask<u64>(static_cast<u32>(otherQ))) != 0u;
+            for(usize c = 0u; c < candidateCount; ++c){
+                const usize candidateQ = candidateQueueIndices[c];
+                if(candidateQ >= topology.queueCount || scoringData.queueFamilyByIndex[candidateQ] == otherFamily)
+                    continue;
+                if(!otherAdmitted || (admittedMask & BitMask<u64>(static_cast<u32>(candidateQ))) == 0u)
+                    ++ownershipTransfers[c];
+            }
+            continue;
+        }
+        const u32 producerAssignmentIndex = assignmentIndicesByTask[edge.producerIndex];
+        const u32 consumerAssignmentIndex = assignmentIndicesByTask[edge.consumerIndex];
+        const GpuTaskGraphDetail::GpuGraphResourceNode& resource = CompilerGraphAccess::ResourceNode(graph, edge.resourceIndex);
+        if(resource.type == GpuGraphResourceType::HazardDomain)
+            continue;
+        const GpuPhysicalQueueInfo* const fixedProducer = edge.producerIndex != taskId.index && producerAssignmentIndex < assignments.size()
+            ? FindPhysicalQueueInfo(topology, assignments[producerAssignmentIndex].queue)
+            : nullptr
+        ;
+        const GpuPhysicalQueueInfo* const fixedConsumer = edge.consumerIndex != taskId.index && consumerAssignmentIndex < assignments.size()
+            ? FindPhysicalQueueInfo(topology, assignments[consumerAssignmentIndex].queue)
+            : nullptr
+        ;
+        for(usize c = 0u; c < candidateCount; ++c){
+            const GpuPhysicalQueueInfo* const producerQueue = edge.producerIndex == taskId.index ? candidates[c] : fixedProducer;
+            const GpuPhysicalQueueInfo* const consumerQueue = edge.consumerIndex == taskId.index ? candidates[c] : fixedConsumer;
+            if(!producerQueue || !consumerQueue || producerQueue->familyIndex == consumerQueue->familyIndex)
+                continue;
+            if(!ResourceNodeSharesQueuePairConcurrently(graph, resource, topology, *producerQueue, *consumerQueue))
+                ++ownershipTransfers[c];
+        }
+    }
+
+    for(usize c = 0u; c < candidateCount; ++c){
+        outScores[c].overlap = SaturateU64ToI32(overlapByCandidate[c]);
+        outScores[c].queueLoad = SaturateU64ToI32(queueLoadByCandidate[c]);
+        outScores[c].incomingCrossings = SaturateU64ToI32(totalExternalProducers - matchingProducers[c]);
+        outScores[c].outgoingCrossings = SaturateU64ToI32(totalExternalConsumers - matchingConsumers[c]);
+        outScores[c].ownershipTransfers = SaturateU64ToI32(ownershipTransfers[c]);
+    }
+}
+
 
 b8 IsBetterAutomaticQueueAssignmentCandidate(const GpuQueueAssignmentScore& candidateScore, const GpuPhysicalQueueInfo& candidate, const GpuQueueAssignmentScore& currentScore, const GpuPhysicalQueueInfo* const current, const b8 compareTotalScore)noexcept{
     if(!current)

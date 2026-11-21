@@ -30,6 +30,27 @@ namespace __hidden_state_tracking_buffers{
 static constexpr TStringView s_ByteRangeOutsideBufferReason = FOUNDATION_TEXT("byte range is empty or outside the buffer");
 
 
+[[nodiscard]] VkBufferMemoryBarrier2 BuildCopyDestBufferBarrier(const VkBuffer buffer, const BufferRange range, const ResourceStates::Mask oldState, const b8 rayTracingStageAvailable)noexcept{
+    auto barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
+    if(oldState == ResourceStates::Unknown || oldState == ResourceStates::Common){
+        barrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+        barrier.srcAccessMask = 0;
+    }
+    else{
+        barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(oldState, rayTracingStageAvailable);
+        barrier.srcAccessMask = VulkanDetail::GetVkAccessFlags(oldState);
+    }
+    barrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.buffer = buffer;
+    barrier.offset = range.byteOffset;
+    barrier.size = range.byteSize;
+    return barrier;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -75,16 +96,18 @@ VkBufferMemoryBarrier2 BuildBufferStateBarrier(const VkBuffer buffer, const Buff
 
 
 const StateTracker::BufferRangeStates* StateTracker::findBufferRangesCached(Buffer& buffer)const noexcept{
-    if(m_lastBufferKey == &buffer)
-        return m_lastBufferRanges;
+    for(const RecentBufferCacheEntry& entry : m_recentBufferCache){
+        if(entry.key == &buffer)
+            return entry.ranges;
+    }
     if(m_bufferStates.empty())
         return nullptr;
     const auto found = m_bufferStates.find(MakeNotNull(&buffer));
     if(found == m_bufferStates.end())
         return nullptr;
-    m_lastBufferKey = &buffer;
-    m_lastBufferRanges = const_cast<BufferRangeStates*>(&found.value());
-    return m_lastBufferRanges;
+    BufferRangeStates* const ranges = const_cast<BufferRangeStates*>(&found.value());
+    recordRecentBufferRanges(buffer, *ranges);
+    return ranges;
 }
 
 StateTracker::BufferRangeStates* StateTracker::findBufferRangesCachedMutable(Buffer& buffer)noexcept{
@@ -206,8 +229,7 @@ void StateTracker::beginTrackingTransientBufferWithRanges(Buffer& buffer, Resour
             m_hasReadbackBuffers = true;
         if(buffer.m_creationDesc.keepInitialState)
             m_hasKeepInitialStateBuffers = true;
-        m_lastBufferKey = &buffer;
-        m_lastBufferRanges = &it.value();
+        recordRecentBufferRanges(buffer, it.value());
         return;
     }
 
@@ -401,7 +423,7 @@ void CommandList::queueWriteBufferCopyAndBarrier(Buffer& buffer, const VkBuffer 
         if(!VulkanStateTrackingDetail::NeedsResourceStateBarrier(oldState, ResourceStates::CopyDest, false, false))
             return;
 
-        VkBufferMemoryBarrier2 barrier = VulkanStateTrackingDetail::BuildBufferStateBarrier(dstVkBuf, piece, oldState, ResourceStates::CopyDest, m_context.extensions.khrRayTracingPipeline);
+        VkBufferMemoryBarrier2 barrier = __hidden_state_tracking_buffers::BuildCopyDestBufferBarrier(dstVkBuf, piece, oldState, m_context.extensions.khrRayTracingPipeline);
         if(!m_enableAutomaticBarriers){
             m_pendingBufferBarriers.push_back(barrier);
             return;

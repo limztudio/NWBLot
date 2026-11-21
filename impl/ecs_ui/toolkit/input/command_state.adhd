@@ -38,6 +38,8 @@ class InputCommandState : NoCopy{
     }
 
     public b8 isPressed(in Span<HitTarget> targets, in Span<TargetLookup> lookup, in Span<PopupRecord> popups, in b8 windowFocused, in WidgetId id)const{
+        if(!windowFocused || this.m_sources.empty() || !id.valid() || this.m_focus != id)
+            return false;
         return IsRouterTargetPressedByCommand(targets, lookup, popups, this.m_sources, windowFocused, this.m_focus, this.m_focusDeclaration, id);
     }
 

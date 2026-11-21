@@ -428,11 +428,19 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
     }
 
     m_lastSubmittedID = batchEntries.back().submissionID;
+    m_publishedSubmittedID.store(m_lastSubmittedID, MemoryOrder::release);
     if(totalWaitCount > 0u)
         Swap(m_acceptedTimelineWaits, m_submitBatchAcceptedTimelineWaits);
 
     descriptorSubmission.commitAndRelease();
 
+    struct WorkerTransitionBatch{
+        WorkerCommandArena* arena = nullptr;
+        u64 count = 0u;
+    };
+    Array<WorkerTransitionBatch, 16u> workerBatches{};
+    u32 workerBatchCount = 0u;
+    u64 totalWorkerTransitionCount = 0u;
     usize cmdCursor = batchStartIndex;
     u64 directTransitionCount = 0u;
     for(usize entryIndex = 0u; entryIndex < entries.size(); ++entryIndex){
@@ -457,12 +465,34 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
                 tracked->commitPendingAccelStructBuildCommits();
             if((commitFlags & TrackedCommandBuffer::s_CommitOpacityMicromapBuilds) != 0u)
                 tracked->commitPendingOpacityMicromapBuildCommits();
+            if(&tracked->m_queue != this || &tracked->m_context != &m_context)
+                TerminateInvariant();
             if(tracked->m_recordingWorkerIndex == 0u){
-                if(&tracked->m_queue != this || &tracked->m_context != &m_context)
-                    TerminateInvariant();
                 if(tracked->m_arenaState == TrackedCommandBufferArenaState::Leased){
                     tracked->m_arenaState = TrackedCommandBufferArenaState::Pending;
                     ++directTransitionCount;
+                }
+                else
+                    commitCommandBufferStateTransition(*tracked, TrackedCommandBufferArenaState::Pending);
+            }
+            else if(tracked->m_arenaState == TrackedCommandBufferArenaState::Leased){
+                WorkerCommandArena* const workerArena = tracked->m_workerCommandArena
+                    ? static_cast<WorkerCommandArena*>(tracked->m_workerCommandArena)
+                    : findWorkerCommandArena(tracked->m_recordingWorkerDomain, tracked->m_recordingWorkerIndex);
+                if(!workerArena)
+                    TerminateInvariant();
+                u32 batchIdx = 0u;
+                while(batchIdx < workerBatchCount && workerBatches[batchIdx].arena != workerArena)
+                    ++batchIdx;
+                if(batchIdx < workerBatchCount){
+                    tracked->m_arenaState = TrackedCommandBufferArenaState::Pending;
+                    ++workerBatches[batchIdx].count;
+                    ++totalWorkerTransitionCount;
+                }
+                else if(workerBatchCount < workerBatches.size()){
+                    tracked->m_arenaState = TrackedCommandBufferArenaState::Pending;
+                    workerBatches[workerBatchCount++] = WorkerTransitionBatch{ workerArena, 1u };
+                    ++totalWorkerTransitionCount;
                 }
                 else
                     commitCommandBufferStateTransition(*tracked, TrackedCommandBufferArenaState::Pending);
@@ -472,13 +502,28 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
         }
         outReceipts[entryIndex] = SubmissionReceipt{ prepared.submissionID, prepared.timelineWaitCount, true };
     }
-    if(directTransitionCount != 0u){
-        if(m_leasedCommandBufferCount.fetch_sub(directTransitionCount, MemoryOrder::relaxed) < directTransitionCount)
+    const u64 totalTransitionCount = directTransitionCount + totalWorkerTransitionCount;
+    if(totalTransitionCount != 0u){
+        if(m_leasedCommandBufferCount.fetch_sub(totalTransitionCount, MemoryOrder::relaxed) < totalTransitionCount)
             TerminateInvariant();
+        m_pendingCommandBufferCount.fetch_add(totalTransitionCount, MemoryOrder::relaxed);
+    }
+    if(directTransitionCount != 0u){
         if(m_directLeasedCommandBufferCount.fetch_sub(directTransitionCount, MemoryOrder::relaxed) < directTransitionCount)
             TerminateInvariant();
-        m_pendingCommandBufferCount.fetch_add(directTransitionCount, MemoryOrder::relaxed);
         m_pendingDirectCommandBufferCount.fetch_add(directTransitionCount, MemoryOrder::relaxed);
+    }
+    if(workerBatchCount != 0u){
+        u64 newPendingWorkerEpochCount = 0u;
+        for(u32 batchIdx = 0u; batchIdx < workerBatchCount; ++batchIdx){
+            const WorkerTransitionBatch& batch = workerBatches[batchIdx];
+            if(batch.arena->leasedCommandBufferCount.fetch_sub(batch.count, MemoryOrder::relaxed) < batch.count)
+                TerminateInvariant();
+            if(batch.arena->pendingCommandBufferCount.fetch_add(batch.count, MemoryOrder::relaxed) == 0u)
+                ++newPendingWorkerEpochCount;
+        }
+        if(newPendingWorkerEpochCount != 0u)
+            m_pendingWorkerEpochCount.fetch_add(newPendingWorkerEpochCount, MemoryOrder::relaxed);
     }
     return BatchSubmissionResult{ BatchSubmissionResult::Status::Accepted, m_lastSubmittedID, VK_SUCCESS };
 }

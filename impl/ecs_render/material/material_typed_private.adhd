@@ -71,6 +71,11 @@ class MaterialTypedByteContentRangeMap : NoCopy{
         this.m_entries.reserve(count);
     }
 
+    public void clear(){
+        this.m_heads.clear();
+        this.m_entries.clear();
+    }
+
     public Optional<MaterialTypedByteRange> find(in MaterialTypedByteContentLookup lookup)const{
         const auto head = this.m_heads.find(MaterialTypedByteBucket(lookup));
         if(head != this.m_heads.end()){

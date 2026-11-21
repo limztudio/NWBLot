@@ -22,7 +22,7 @@ class OpaqueCsgIntervalRecordInputs{
     public in b8 sceneShadingSetupReady;
     public MeshFrameBindingSnapshot frameBindings;
     public CsgGraphResourceSnapshot csgResources;
-    public OpaqueMaterialPassGraphSnapshot opaqueDrawSnapshot;
+    public OpaqueCsgIntervalFrameSnapshot csgIntervalSnapshot;
     public b8 materialDrawBuffersUploaded = false;
     public b8 csgFrameBuffersUploaded = false;
 
@@ -70,6 +70,7 @@ class OpaqueCsgComputeIntervalGraphTask{
 class OpaqueCsgIntervalSampleGraphTask{
     public OpaqueCsgIntervalRecordInputs inputs;
     public mut GraphicsRuntime graphics;
+    public MaterialPassDrawItems csgDrawItems;
     public b8 materialFrameStatesGraphOwned = false;
     public b8 materialGeometryStatesGraphOwned = false;
     public b8 csgComputeEmulationOutputStatesGraphOwned = false;

@@ -421,10 +421,12 @@ class InputRouter : NoCopy{
         HitTarget hit;
         usize heldIndex = this.m_pointerState.sources().size();
         b8 advanceHover = false;
+        this.m_targetTable.prepareSpatialIndex();
         const b8 shouldRoute = RouterPointerSourceAdmission().admitEvent(
             this.m_targetTable.targets(),
             this.m_targetTable.lookup(),
             this.m_popupState.records(),
+            this.m_targetTable.spatialIndex(),
             event,
             this.m_pointerState.primaryDown(),
             this.m_pointerState.primaryConsumed(),
@@ -481,7 +483,7 @@ class InputRouter : NoCopy{
             this.m_hoverState.forgetSource();
     }
     private Optional<in HitTarget> findHitTarget(in Point position)const{
-        const Expected<usize> hitIndex = FindRouterHitTargetIndex(this.m_targetTable.targets(), this.m_targetTable.lookup(), this.m_popupState.records(), position);
+        const Expected<usize> hitIndex = FindRouterHitTargetIndexIndexed(this.m_targetTable.targets(), this.m_targetTable.lookup(), this.m_popupState.records(), this.m_targetTable.spatialIndex(), position);
         if(!hitIndex.has_value())
             return Optional<in HitTarget>();
         return Optional<in HitTarget>(this.m_targetTable.targets()[hitIndex.value()]);
@@ -531,10 +533,13 @@ class InputRouter : NoCopy{
     }
     private void reconcileTargets(){
         b8 changedHoverOwner = false;
+        if(this.m_hoverState.known)
+            this.m_targetTable.prepareSpatialIndex();
         ReconcileRouterAllTargets(
             this.m_targetTable.targets(),
             this.m_targetTable.lookup(),
             this.m_popupState.records(),
+            this.m_targetTable.spatialIndex(),
             this.m_windowFocused,
             this.m_hoverState.known,
             this.m_hoverState.position,
@@ -562,6 +567,7 @@ class InputRouter : NoCopy{
     }
     private void updateHover(){
         if(this.m_hoverState.known){
+            this.m_targetTable.prepareSpatialIndex();
             const Optional<in HitTarget> hovered = this.findHitTarget(this.m_hoverState.position);
             if(hovered.has_value()){
                 this.m_hoverState.setTarget(this.m_targetTable.targets(), this.m_targetTable.lookup(), this.m_popupState.records(), true, hovered.value());

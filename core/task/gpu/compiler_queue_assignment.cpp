@@ -81,7 +81,7 @@ b8 GpuTaskGraphCompiler::assignQueuesInternal(
     const GpuTaskGraphQueueAssignmentOptions& options,
     Alloc::ScratchArena& scratchArena,
     GpuTaskGraphQueueAssignments& outAssignments,
-    const GpuTaskGraphCompilerDetail::DenseDescendantBitMatrix* const denseDesc,
+    GpuTaskGraphCompilerDetail::DenseDescendantBitMatrix* const denseDesc,
     const b8 hasNonHazardDomainResource
 )const{
     using namespace GpuTaskGraphCompilerDetail;
@@ -262,14 +262,55 @@ b8 GpuTaskGraphCompiler::assignQueuesInternal(
             selectedQueue = nullptr;
             b8 hasIndependentOverlap = false;
             const b8 computeOverlap = !conservative;
-            for(Candidate& candidate : candidates){
-                if(!candidate.queue)
-                    continue;
-                candidate.score = BuildQueuePlacementGroupScore(graph, analysis, outAssignments.m_assignments, outAssignments.m_assignmentIndicesByTask, topology, schedulingReachability, scoringData, group, *candidate.queue, computeOverlap);
-                hasIndependentOverlap = hasIndependentOverlap || candidate.score.overlap > 0;
-                if(conservative){
-                    candidate.score.overlap = 0;
-                    candidate.score.queueLoad = 0;
+            if(group.assignmentCount == 1u){
+                const GpuTaskId taskID = analysis.topologicalOrder()[group.assignmentOffset];
+                const GpuTaskSchedulingHint& taskScheduling = CompilerGraphAccess::TaskNode(graph, taskID.index).scheduling;
+                Array<const GpuPhysicalQueueInfo*, CommandQueue::kCount> activeQueues{};
+                Array<usize, CommandQueue::kCount> activeIndices{};
+                Array<GpuQueueAssignmentScore, CommandQueue::kCount> activeScores{};
+                usize activeCount = 0u;
+                for(usize c = 0u; c < candidates.size(); ++c){
+                    if(!candidates[c].queue)
+                        continue;
+                    activeQueues[activeCount] = candidates[c].queue;
+                    activeIndices[activeCount] = c;
+                    ++activeCount;
+                }
+                BuildSingleTaskQueueCandidateScores(
+                    graph,
+                    analysis,
+                    outAssignments.m_assignments,
+                    outAssignments.m_assignmentIndicesByTask,
+                    topology,
+                    schedulingReachability,
+                    scoringData,
+                    taskID,
+                    taskScheduling,
+                    activeQueues.data(),
+                    activeScores.data(),
+                    activeCount,
+                    computeOverlap
+                );
+                for(usize i = 0u; i < activeCount; ++i){
+                    Candidate& candidate = candidates[activeIndices[i]];
+                    candidate.score = activeScores[i];
+                    hasIndependentOverlap = hasIndependentOverlap || candidate.score.overlap > 0;
+                    if(conservative){
+                        candidate.score.overlap = 0;
+                        candidate.score.queueLoad = 0;
+                    }
+                }
+            }
+            else{
+                for(Candidate& candidate : candidates){
+                    if(!candidate.queue)
+                        continue;
+                    candidate.score = BuildQueuePlacementGroupScore(graph, analysis, outAssignments.m_assignments, outAssignments.m_assignmentIndicesByTask, topology, schedulingReachability, scoringData, group, *candidate.queue, computeOverlap);
+                    hasIndependentOverlap = hasIndependentOverlap || candidate.score.overlap > 0;
+                    if(conservative){
+                        candidate.score.overlap = 0;
+                        candidate.score.queueLoad = 0;
+                    }
                 }
             }
             const b8 compareTotalScore = !conservative && hasIndependentOverlap;

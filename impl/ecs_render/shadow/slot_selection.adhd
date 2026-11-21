@@ -130,10 +130,11 @@ b8 SoftShadowTemporalHistoryUsable(in b8 softShadowTemporalReady, in b8 prevWorl
     return softShadowTemporalReady && prevWorldToClipValid && softShadowTemporalSeeded;
 }
 
-u64 ComputeShadowMaterialContextHash(
+u64 ComputeShadowMaterialContextHashWithTypedHash(
     in Span<NwbRtInstanceMaterialGpu> instanceMaterials,
     in Span<InstanceGpuData> instanceData,
-    in Span<u8> materialTypedBytes
+    in usize materialTypedByteCount,
+    in u64 materialTypedHash
 ){
     assert(instanceMaterials.size() == instanceData.size());
 
@@ -166,12 +167,24 @@ u64 ComputeShadowMaterialContextHash(
         for(u32 slotIndex = 0u; slotIndex < s_MeshInstanceGeometrySlotCount; ++slotIndex)
             hash = UpdateFnv64U32(hash, instance.geometryHeapSlots[cast<usize>(slotIndex)]);
     }
-    if(!materialTypedBytes.empty()){
-        hash = UpdateFnv64U64(hash, cast<u64>(materialTypedBytes.size()));
-        for(in u8 byte : materialTypedBytes)
-            hash = UpdateFnv64Byte(hash, byte);
+    if(materialTypedByteCount != 0u){
+        hash = UpdateFnv64U64(hash, cast<u64>(materialTypedByteCount));
+        hash = UpdateFnv64U64(hash, materialTypedHash);
     }
     return hash;
+}
+
+u64 ComputeShadowMaterialContextHash(
+    in Span<NwbRtInstanceMaterialGpu> instanceMaterials,
+    in Span<InstanceGpuData> instanceData,
+    in Span<u8> materialTypedBytes
+){
+    return ComputeShadowMaterialContextHashWithTypedHash(
+        instanceMaterials,
+        instanceData,
+        materialTypedBytes.size(),
+        UpdateFnv64(s_Fnv64OffsetBasis, materialTypedBytes)
+    );
 }
 
 

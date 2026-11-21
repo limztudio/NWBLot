@@ -22,7 +22,9 @@ b8 GrowMeshletFromFrontier(
     in Span<u32> positionTriangleIndices,
     mut Vector<u8> visitedTriangles,
     mut Vector<u32> localSourceVertexRefs,
-    mut Vector<u32> localTriangleIndices,
+    mut Vector<u32> vertexMeshletStamps,
+    mut Vector<u8> vertexLocalIndices,
+    in u32 currentMeshletStamp,
     mut MeshletDesc meshlet,
     mut Vector<u8> primitiveIndices,
     mut MeshletScoreState scoreState,
@@ -30,17 +32,21 @@ b8 GrowMeshletFromFrontier(
     mut Vector<u32> frontier,
     mut Vector<u8> frontierFlags
 ){
+    usize disconnectedSearchOffset = seedSearchOffset + 1u;
     while(MeshletPrimitiveCount(meshlet) < s_MeshMaxMeshletTriangles){
         if(frontier.empty()){
+            while(disconnectedSearchOffset < visitedTriangles.size() && visitedTriangles[disconnectedSearchOffset] != 0u)
+                ++disconnectedSearchOffset;
             const Expected<MeshletFrontierCandidate> disconnectedCandidate = FindBestDisconnectedMeshletCandidate(
                 triangles,
                 triangleCalculations,
                 visitedTriangles,
-                seedSearchOffset + 1u,
-                localTriangleIndices,
+                disconnectedSearchOffset,
                 scoreState,
                 meshlet,
-                localSourceVertexRefs,
+                localSourceVertexRefs.size(),
+                vertexMeshletStamps,
+                currentMeshletStamp,
                 isParallelEnabled,
                 workerThreadCount,
                 parallelCandidates
@@ -58,7 +64,9 @@ b8 GrowMeshletFromFrontier(
                 positionTriangleIndices,
                 visitedTriangles,
                 localSourceVertexRefs,
-                localTriangleIndices,
+                vertexMeshletStamps,
+                vertexLocalIndices,
+                currentMeshletStamp,
                 meshlet,
                 primitiveIndices,
                 scoreState,
@@ -73,10 +81,11 @@ b8 GrowMeshletFromFrontier(
             triangles,
             triangleCalculations,
             frontier,
-            localTriangleIndices,
             scoreState,
             meshlet,
-            localSourceVertexRefs
+            localSourceVertexRefs.size(),
+            vertexMeshletStamps,
+            currentMeshletStamp
         );
         if(!bestCandidate.has_value())
             break;
@@ -92,7 +101,9 @@ b8 GrowMeshletFromFrontier(
             positionTriangleIndices,
             visitedTriangles,
             localSourceVertexRefs,
-            localTriangleIndices,
+            vertexMeshletStamps,
+            vertexLocalIndices,
+            currentMeshletStamp,
             meshlet,
             primitiveIndices,
             scoreState,
@@ -146,7 +157,9 @@ b8 BuildCookMeshlets(
 
     MeshletDesc current;
     Vector<u32> localSourceVertexRefs;
-    Vector<u32> localTriangleIndices;
+    Vector<u32> vertexMeshletStamps(vertexRefs.size(), 0u);
+    Vector<u8> vertexLocalIndices(vertexRefs.size(), 0u);
+    u32 currentMeshletStamp = 0u;
     Vector<MeshletCandidateSearchResult> parallelCandidates;
     Vector<u32> frontier;
     Vector<u8> frontierFlags;
@@ -160,7 +173,6 @@ b8 BuildCookMeshlets(
         outMeshletLocalVertexRefs,
         outMeshletPrimitiveIndices,
         localSourceVertexRefs,
-        localTriangleIndices,
         frontier,
         frontierFlags
     );
@@ -175,7 +187,7 @@ b8 BuildCookMeshlets(
 
         seedSearchOffset = cast<usize>(seedTriangleIndex.value());
         ClearMeshletFrontier(frontier, frontierFlags);
-        ResetMeshletBuilderState(outMeshletPrimitiveIndices.size(), current, localSourceVertexRefs, localTriangleIndices, scoreState);
+        ResetMeshletBuilderState(outMeshletPrimitiveIndices.size(), current, localSourceVertexRefs, vertexMeshletStamps, currentMeshletStamp, scoreState);
 
         if(!AddVisitedMeshletTriangle(
             s_MeshMetaKindText,
@@ -187,7 +199,9 @@ b8 BuildCookMeshlets(
             positionTriangleIndices,
             visitedTriangles,
             localSourceVertexRefs,
-            localTriangleIndices,
+            vertexMeshletStamps,
+            vertexLocalIndices,
+            currentMeshletStamp,
             current,
             outMeshletPrimitiveIndices,
             scoreState,
@@ -208,7 +222,9 @@ b8 BuildCookMeshlets(
             positionTriangleIndices,
             visitedTriangles,
             localSourceVertexRefs,
-            localTriangleIndices,
+            vertexMeshletStamps,
+            vertexLocalIndices,
+            currentMeshletStamp,
             current,
             outMeshletPrimitiveIndices,
             scoreState,
@@ -234,8 +250,6 @@ b8 BuildCookMeshlets(
             outMeshletBounds
         ))
             return false;
-
-        ResetMeshletBuilderState(outMeshletPrimitiveIndices.size(), current, localSourceVertexRefs, localTriangleIndices, scoreState);
     }
 
     if(!ValidateBuiltMeshletsNonEmpty(outMeshlets.size(), s_MeshMetaKindText, filePathText))

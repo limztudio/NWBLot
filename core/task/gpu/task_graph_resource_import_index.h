@@ -29,8 +29,50 @@ private:
             return hash;
         }
     };
-    using IdentityIndex = HashMap<NameHash, u32, GraphicsArena>;
-    using PointerIndex = HashMap<ResourcePointerKey, u32, GraphicsArena, ResourcePointerHasher, GpuTaskGraphDetail::ResourcePointerEqual>;
+    struct NameHashEqual{
+        [[nodiscard]] b8 operator()(const NameHash& left, const NameHash& right)const noexcept{
+            return left == right;
+        }
+    };
+    template<typename KeyT, typename HashFn, typename EqualFn>
+    class FlatIndexTable final : NoCopy{
+    public:
+        struct Slot{
+            KeyT key{};
+            u32 value = 0u;
+            u32 stamp = 0u;
+        };
+
+
+    public:
+        explicit FlatIndexTable(GraphicsArena& arena)noexcept
+            : m_arena(arena)
+            , m_slots(arena)
+        {}
+
+
+    public:
+        [[nodiscard]] b8 active()const noexcept{ return !m_slots.empty(); }
+
+        [[nodiscard]] usize size()const noexcept{ return m_count; }
+
+        [[nodiscard]] u32 find(const KeyT& key)const noexcept;
+        void reserveForCount(usize targetCount);
+        [[nodiscard]] b8 emplace(const KeyT& key, u32 value);
+        void erase(const KeyT& key)noexcept;
+        void clear()noexcept;
+
+
+    private:
+        GraphicsArena& m_arena;
+        GraphicsVector<Slot> m_slots;
+        HashFn m_hash{};
+        EqualFn m_equal{};
+        u32 m_count = 0u;
+        u32 m_stamp = 1u;
+    };
+    using IdentityIndex = FlatIndexTable<NameHash, Hasher<NameHash>, NameHashEqual>;
+    using PointerIndex = FlatIndexTable<ResourcePointerKey, ResourcePointerHasher, GpuTaskGraphDetail::ResourcePointerEqual>;
 
 public:
     struct Publication{
@@ -38,7 +80,11 @@ public:
         b8 pointer = false;
     };
 
-    explicit GpuGraphResourceImportIndex(GraphicsArena& arena)noexcept : m_arena(arena){}
+    explicit GpuGraphResourceImportIndex(GraphicsArena& arena)noexcept
+        : m_resourceIdentityIndex(arena)
+        , m_resourcePointerIndex(arena)
+        , m_resourceSetIdentityIndex(arena)
+    {}
     [[nodiscard]] u32 findResourceIdentity(Span<const ResourceNode> resources, const Name& identity)const noexcept;
     [[nodiscard]] ResourceImportMatch findPointerMatch(const Span<const ResourceNode> resources, const ResourcePointerKey& pointer)const noexcept{
         return findResourceImportMatch(resources, nullptr, pointer);
@@ -57,12 +103,11 @@ public:
 private:
     [[nodiscard]] static ResourcePointerKey MakeResourcePointerKey(const ResourceNode& resource)noexcept;
     static constexpr usize s_InlineImportIndexCount = 32u;
-    static constexpr usize s_InitialPointerIndexBucketCount = 2u;
+    static constexpr usize s_MinTableSlotCount = 64u;
     static constexpr u32 s_InvalidImportIndex = Limit<u32>::s_Max;
-    GraphicsArena& m_arena;
-    Optional<IdentityIndex> m_resourceIdentityIndex;
-    Optional<PointerIndex> m_resourcePointerIndex;
-    Optional<IdentityIndex> m_resourceSetIdentityIndex;
+    IdentityIndex m_resourceIdentityIndex;
+    PointerIndex m_resourcePointerIndex;
+    IdentityIndex m_resourceSetIdentityIndex;
 };
 
 

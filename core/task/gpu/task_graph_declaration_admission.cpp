@@ -138,8 +138,8 @@ GpuTaskGraphDeclarationReadView::GpuTaskGraphDeclarationReadView(const GpuTaskGr
             && (recheck & GpuTaskGraph::s_AdmissionReaderStripesDirtyBit) != 0u)
         {
             m_graph = &graph;
-            m_taskCount = static_cast<u32>(graph.m_tasks.size());
-            m_resourceCount = static_cast<u32>(graph.m_resources.size());
+            m_taskCount = graph.m_publishedTaskCount;
+            m_resourceCount = graph.m_publishedResourceCount;
             m_readerStripeIndex = stripeIndex;
             return;
         }
@@ -184,8 +184,8 @@ void GpuTaskGraphDeclarationReadView::acquire(const GpuTaskGraph& graph)noexcept
             && (recheck & GpuTaskGraph::s_AdmissionReaderStripesDirtyBit) != 0u)
         {
             m_graph = &graph;
-            m_taskCount = static_cast<u32>(graph.m_tasks.size());
-            m_resourceCount = static_cast<u32>(graph.m_resources.size());
+            m_taskCount = graph.m_publishedTaskCount;
+            m_resourceCount = graph.m_publishedResourceCount;
             m_readerStripeIndex = stripeIndex;
             return;
         }

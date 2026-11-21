@@ -4,6 +4,7 @@
 
 #include "volume_file_system.h"
 #include "volume_storage_detail.h"
+#include "volume_segment_transfer.h"
 #include "volume_staging.h"
 #include "arena_names.h"
 
@@ -60,7 +61,7 @@ b8 VolumeFileSystem::compact(const b8 shrinkSegments){
     using Layout = __hidden_volume_segment_compact::FileLayout<FileRecord>;
     using Publication = __hidden_volume_segment_compact::CompactPublication<FileRecord, SegmentPathVector>;
 
-    ScopedLock lock(m_mutex);
+    ExclusiveLockGuard lock(m_mutex);
     if(!m_mounted || !m_writable){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCompact, FilesystemVolumeDetail::s_VolumeDetailNotMountedWritable);
         return false;
@@ -149,19 +150,23 @@ b8 VolumeFileSystem::compact(const b8 shrinkSegments){
         if(!stagedVolume.ensureCapacityLocked(requiredBytes))
             return false;
         stagedVolume.m_files.reserve(layouts.size());
-        for(const auto& layout : layouts){
-            if(!stagedVolume.m_files.emplace(layout.path, FileRecord{ layout.destinationOffset, layout.size }).second){
-                FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCompact, "duplicate compacted file identity");
-                return false;
-            }
-            u64 copiedBytes = 0u;
-            while(copiedBytes < layout.size){
-                const u64 bytes = Min(copyChunkBytes, layout.size - copiedBytes);
-                if(!readBytesLocked(layout.sourceOffset + copiedBytes, copyBuffer.data(), bytes))
+        {
+            FilesystemVolumeDetail::SegmentTransferCache sourceReadCache(scratchArena, false);
+            FilesystemVolumeDetail::SegmentTransferCache stagedWriteCache(scratchArena, true);
+            for(const auto& layout : layouts){
+                if(!stagedVolume.m_files.emplace(layout.path, FileRecord{ layout.destinationOffset, layout.size }).second){
+                    FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCompact, "duplicate compacted file identity");
                     return false;
-                if(!stagedVolume.writeBytesLocked(layout.destinationOffset + copiedBytes, copyBuffer.data(), bytes))
-                    return false;
-                copiedBytes += bytes;
+                }
+                u64 copiedBytes = 0u;
+                while(copiedBytes < layout.size){
+                    const u64 bytes = Min(copyChunkBytes, layout.size - copiedBytes);
+                    if(!FilesystemVolumeDetail::VolumeSegmentTransfer::ReadCached(m_volumeName, m_segmentPaths, m_segmentSize, layout.sourceOffset + copiedBytes, bytes, copyBuffer.data(), sourceReadCache))
+                        return false;
+                    if(!FilesystemVolumeDetail::VolumeSegmentTransfer::WriteCached(stagedVolume.m_volumeName, stagedVolume.m_segmentPaths, stagedVolume.m_segmentSize, layout.destinationOffset + copiedBytes, bytes, copyBuffer.data(), stagedWriteCache))
+                        return false;
+                    copiedBytes += bytes;
+                }
             }
         }
         stagedVolume.m_nextFreeOffset = requiredBytes;

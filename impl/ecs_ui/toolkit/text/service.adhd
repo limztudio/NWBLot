@@ -119,6 +119,7 @@ class CachedTextLayout{
     public String language;
     public SharedTextLayout layout;
     public Rect measuredBounds = Rect();
+    public u64 measuredAtlasIdentity = 0u;
     public usize measuredAtlasGlyphCount = 0u;
     public u32 fontSizeBits = 0u;
     public u32 scriptTag = 0u;
@@ -127,6 +128,7 @@ class CachedTextLayout{
     public u32 next = u32.max;
     public TextDirection direction = TextDirection::LeftToRight;
     public b8 hasMeasured = false;
+    public b8 measuredNeedsAtlasRecheck = false;
 
     public b8 matches(in ShapeRequest request)const{
         return this.fontSizeBits == bit_cast<u32>(request.fontSize)
@@ -267,15 +269,25 @@ class TextService : NoCopy{
         mut CachedTextLayout entry = this.m_layoutCacheEntries[entryIndex.value()];
         const u32 scaleXBits = bit_cast<u32>(display.pixelScaleX);
         const u32 scaleYBits = bit_cast<u32>(display.pixelScaleY);
+        const u64 atlasIdentity = this.m_atlas.identity();
         const usize atlasGlyphCount = this.m_atlas.glyphCount();
-        if(!entry.hasMeasured || entry.measuredPixelScaleXBits != scaleXBits || entry.measuredPixelScaleYBits != scaleYBits || entry.measuredAtlasGlyphCount != atlasGlyphCount){
-            const Expected<Rect> bounds = this.measure(entry.layout.deref(), display);
+        if(
+            !entry.hasMeasured
+            || entry.measuredPixelScaleXBits != scaleXBits
+            || entry.measuredPixelScaleYBits != scaleYBits
+            || entry.measuredAtlasIdentity != atlasIdentity
+            || (entry.measuredNeedsAtlasRecheck && entry.measuredAtlasGlyphCount != atlasGlyphCount)
+        ){
+            b8 missingCoverage = false;
+            const Expected<Rect> bounds = this.measureTracked(entry.layout.deref(), display, missingCoverage);
             if(!bounds.has_value())
                 return MakeUnexpected(Failure());
             entry.measuredBounds = bounds.value();
             entry.measuredPixelScaleXBits = scaleXBits;
             entry.measuredPixelScaleYBits = scaleYBits;
+            entry.measuredAtlasIdentity = atlasIdentity;
             entry.measuredAtlasGlyphCount = atlasGlyphCount;
+            entry.measuredNeedsAtlasRecheck = missingCoverage;
             entry.hasMeasured = true;
         }
         CachedMeasuredText result;
@@ -309,7 +321,8 @@ class TextService : NoCopy{
     }
 
     [cpp_unwind]
-    public Expected<Rect> measure(in TextLayout layout, in DisplayMetrics display){
+    private Expected<Rect> measureTracked(in TextLayout layout, in DisplayMetrics display, mut b8 outMissingCoverageAtlasEntry){
+        outMissingCoverageAtlasEntry = false;
         if(layout.lines().empty())
             return MakeUnexpected(Failure());
         const Expected<TextRasterMetrics> rasterMetrics = TryResolveTextRasterMetrics(layout.fontSize(), display);
@@ -333,6 +346,7 @@ class TextService : NoCopy{
             if(cached.has_value())
                 rectangle = MakeCachedCoverageGlyphBounds(cached.value().bearingX, cached.value().bearingY, cached.value().pixels);
             else{
+                outMissingCoverageAtlasEntry = true;
                 const Expected<Rect> measured = glyph.face.deref().rasterBounds(glyph.glyphId, raster.pixelSize);
                 if(!measured.has_value())
                     return MakeUnexpected(Failure());
@@ -341,6 +355,12 @@ class TextService : NoCopy{
             ExpandMeasuredTextBoundsWithRaster(glyph.position, rectangle, raster.rasterScale, display, bounds);
         }
         return TryMakeMeasuredTextRect(bounds.x, bounds.y, bounds.z, bounds.w);
+    }
+
+    [cpp_unwind]
+    public Expected<Rect> measure(in TextLayout layout, in DisplayMetrics display){
+        b8 missingCoverage = false;
+        return this.measureTracked(layout, display, missingCoverage);
     }
 
     [cpp_unwind]
@@ -367,6 +387,9 @@ class TextService : NoCopy{
         this.m_pages.clear();
         this.m_sdfPages.clear();
         in Vector<PlacedGlyph> glyphs = layout.glyphs();
+        u64 lastSdfAtlasId = 0u;
+        u32 lastSdfGroup = u32.max;
+        u32 lastSdfInternedIndex = u32.max;
         for(usize index = 0u; index < glyphs.size(); ++index){
             in PlacedGlyph glyph = glyphs[index];
             const Optional<in BakedFontAtlas> atlas = BorrowSelectedAtlas(glyph, raster.physicalSize);
@@ -401,7 +424,15 @@ class TextService : NoCopy{
                     in SdfAtlasPageBindingRecord<Font> binding = sdfPage.deref().binding();
                     item.channel = record.channel;
                     item.uv = ResolveSdfGlyphUv(record, binding.width, binding.height);
-                    item.pageIndex = InternPreparedPage<SdfAtlasPage>(this.m_sdfPages, sdfPage);
+                    const u64 bakedIdentity = baked.identity();
+                    if(bakedIdentity == lastSdfAtlasId && record.group == lastSdfGroup)
+                        item.pageIndex = lastSdfInternedIndex;
+                    else{
+                        item.pageIndex = InternPreparedPage<SdfAtlasPage>(this.m_sdfPages, sdfPage);
+                        lastSdfAtlasId = bakedIdentity;
+                        lastSdfGroup = record.group;
+                        lastSdfInternedIndex = item.pageIndex;
+                    }
                     item.isSdf = true;
                 }
                 this.m_preparedGlyphs.push_back(item);
@@ -441,14 +472,25 @@ class TextService : NoCopy{
             item.uv = ResolveCoverageGlyphUv(record.pixels);
             item.pageIndex = record.pageIndex;
         }
+        Array<u32, s_GlyphAtlasMaxPages> resolvedCoveragePages;
+        for(usize pageSlot = 0u; pageSlot < s_GlyphAtlasMaxPages; ++pageSlot)
+            resolvedCoveragePages[pageSlot] = u32.max;
         for(in u32 slotIndex : this.m_coverageCandidateSlots){
             mut PreparedGlyph item = this.m_preparedGlyphs[slotIndex];
             if(item.pageIndex == u32.max)
                 continue;
+            const usize rawPageIndex = cast<usize>(item.pageIndex);
+            if(rawPageIndex < s_GlyphAtlasMaxPages && resolvedCoveragePages[rawPageIndex] != u32.max){
+                item.pageIndex = resolvedCoveragePages[rawPageIndex];
+                continue;
+            }
             const Expected<SharedGlyphPage> page = this.m_atlas.page(item.pageIndex);
             if(!page.has_value())
                 return false;
-            item.pageIndex = InternPreparedPage<GlyphPage>(this.m_pages, page.value());
+            const u32 internedPage = InternPreparedPage<GlyphPage>(this.m_pages, page.value());
+            if(rawPageIndex < s_GlyphAtlasMaxPages)
+                resolvedCoveragePages[rawPageIndex] = internedPage;
+            item.pageIndex = internedPage;
         }
         if(this.m_pages.empty() && this.m_sdfPages.empty())
             return true;

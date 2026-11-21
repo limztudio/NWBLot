@@ -97,15 +97,19 @@ void OpaqueCsgIntervalStage::capturePayloads(
     this.m_receiverSpanPayload.inputs.materialDrawBuffersUploaded = materialDrawBuffersUploaded;
     this.m_receiverSpanPayload.inputs.csgFrameBuffersUploaded = csgFrameBuffersUploaded;
     this.m_receiverSpanPayload.inputs.csgResources = csgResources;
-    this.m_receiverSpanPayload.inputs.opaqueDrawSnapshot.capture(opaqueDrawItems, csgFrameData, instanceCount, materialTypedByteCount);
+    const b8 hasDeferredDrawItems = !opaqueDrawItems.empty();
+    const b8 csgReceiverSurfaceEmpty = opaqueDrawItems.csgReceiverSurface.empty();
+    const b8 csgReceiverSurfaceDrawResourcesReady = !csgReceiverSurfaceEmpty && this.m_materialSystem.drawRecorder().materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface, frameBindings);
+    this.m_receiverSpanPayload.inputs.csgIntervalSnapshot.capture(csgFrameData, instanceCount, materialTypedByteCount, hasDeferredDrawItems, csgReceiverSurfaceEmpty, csgReceiverSurfaceDrawResourcesReady);
     this.m_intervalCombinePayload.inputs.materialDrawBuffersUploaded = materialDrawBuffersUploaded;
     this.m_intervalCombinePayload.inputs.csgFrameBuffersUploaded = csgFrameBuffersUploaded;
     this.m_intervalCombinePayload.inputs.csgResources = csgResources;
-    this.m_intervalCombinePayload.inputs.opaqueDrawSnapshot.capture(opaqueDrawItems, csgFrameData, instanceCount, materialTypedByteCount);
+    this.m_intervalCombinePayload.inputs.csgIntervalSnapshot.capture(csgFrameData, instanceCount, materialTypedByteCount, hasDeferredDrawItems, csgReceiverSurfaceEmpty, csgReceiverSurfaceDrawResourcesReady);
     this.m_intervalSamplePayload.inputs.materialDrawBuffersUploaded = materialDrawBuffersUploaded;
     this.m_intervalSamplePayload.inputs.csgFrameBuffersUploaded = csgFrameBuffersUploaded;
     this.m_intervalSamplePayload.materialFrameStatesGraphOwned = hasOpaqueDrawItems;
-    this.m_intervalSamplePayload.inputs.opaqueDrawSnapshot.capture(opaqueDrawItems, csgFrameData, instanceCount, materialTypedByteCount);
+    this.m_intervalSamplePayload.inputs.csgIntervalSnapshot.capture(csgFrameData, instanceCount, materialTypedByteCount, hasDeferredDrawItems, csgReceiverSurfaceEmpty, csgReceiverSurfaceDrawResourcesReady);
+    CaptureGraphDrawItems(opaqueDrawItems.csg, this.m_intervalSamplePayload.csgDrawItems);
 }
 
 Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(in OpaqueCsgIntervalStageInputs inputs, mut ObjectGeometryCacheGraph objectGeometry){
@@ -366,7 +370,6 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(in OpaqueC
 
 
 class OpaqueIntervalReadiness{
-    public MaterialPassDrawItemPartitionsView opaqueDrawItems;
     public CsgFrameGpuDataView csgFrameData;
     public OpaqueCsgIntervalReadinessState state;
 }
@@ -374,17 +377,19 @@ class OpaqueIntervalReadiness{
 OpaqueIntervalReadiness ResolveOpaqueIntervalReadiness(in OpaqueCsgIntervalRecordInputs payload){
     OpaqueIntervalReadiness readiness;
     const b8 frameSetupReady = FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
+    b8 hasDeferredDrawItems = false;
+    b8 csgReceiverSurfaceEmpty = true;
+    b8 csgReceiverSurfaceDrawResourcesReady = false;
     if(frameSetupReady){
-        readiness.opaqueDrawItems = payload.opaqueDrawSnapshot.drawItemsView();
-        readiness.csgFrameData = payload.opaqueDrawSnapshot.csgFrameDataView();
+        readiness.csgFrameData = payload.csgIntervalSnapshot.csgFrameDataView();
+        hasDeferredDrawItems = payload.csgIntervalSnapshot.hasDeferredDrawItems;
+        csgReceiverSurfaceEmpty = payload.csgIntervalSnapshot.csgReceiverSurfaceEmpty;
+        csgReceiverSurfaceDrawResourcesReady = payload.csgIntervalSnapshot.csgReceiverSurfaceDrawResourcesReady;
     }
 
-    const b8 hasDeferredDrawItems = !readiness.opaqueDrawItems.empty();
-    const b8 frameBindingsReady = hasDeferredDrawItems && payload.frameBindings.frameReady(payload.opaqueDrawSnapshot.passes.instanceCount, payload.opaqueDrawSnapshot.passes.materialTypedByteCount);
+    const b8 frameBindingsReady = hasDeferredDrawItems && payload.frameBindings.frameReady(payload.csgIntervalSnapshot.instanceCount, payload.csgIntervalSnapshot.materialTypedByteCount);
     const b8 hasCsgFrameWork = readiness.csgFrameData.hasWork();
     const b8 csgResourcesFrameReady = hasCsgFrameWork && payload.csgResources.frameReady(readiness.csgFrameData);
-    const b8 csgReceiverSurfaceEmpty = readiness.opaqueDrawItems.csgReceiverSurface.empty();
-    const b8 csgReceiverSurfaceDrawResourcesReady = !csgReceiverSurfaceEmpty && payload.materialSystem.drawRecorder().materialPassDrawResourcesReady(readiness.opaqueDrawItems.csgReceiverSurface, payload.frameBindings);
     readiness.state = EvaluateOpaqueCsgIntervalReadiness(
         hasDeferredDrawItems,
         payload.materialDrawBuffersUploaded,
@@ -399,7 +404,7 @@ OpaqueIntervalReadiness ResolveOpaqueIntervalReadiness(in OpaqueCsgIntervalRecor
 }
 
 b8 OpaqueCsgComputeIntervalGraphTask::record(mut CommandList commands, in GpuTaskRecordContext context)const{
-    if(!this.inputs.opaqueDrawSnapshot.passes.captured)
+    if(!this.inputs.csgIntervalSnapshot.captured)
         return false;
     GpuTimingTicketRecordingScope recording(this.inputs.timingTicket.value());
     const OpaqueIntervalReadiness readiness = ResolveOpaqueIntervalReadiness(this.inputs);
@@ -414,14 +419,16 @@ b8 OpaqueCsgComputeIntervalGraphTask::record(mut CommandList commands, in GpuTas
 }
 
 b8 OpaqueCsgIntervalSampleGraphTask::record(mut CommandList commands, in GpuTaskRecordContext context)const{
-    if(!this.inputs.opaqueDrawSnapshot.passes.captured || (this.csgComputeEmulationOutputStatesGraphOwned && !this.opaqueCsgComputeEmulationTiming.has_value()))
+    if(!this.inputs.csgIntervalSnapshot.captured || (this.csgComputeEmulationOutputStatesGraphOwned && !this.opaqueCsgComputeEmulationTiming.has_value()))
         return false;
 
     GpuTimingTicketRecordingScope recording(this.inputs.timingTicket.value());
     const OpaqueIntervalReadiness readiness = ResolveOpaqueIntervalReadiness(this.inputs);
-    const MaterialPassDrawItemPartitionsView opaqueDrawItems = readiness.opaqueDrawItems;
+    MaterialPassDrawItemsView csgDrawItems;
+    if(FrameSetupReady(this.inputs.meshViewSetupReady, this.inputs.sceneShadingSetupReady))
+        csgDrawItems = MaterialPassDrawItemsView(this.csgDrawItems);
     const CsgFrameGpuDataView csgFrameData = readiness.csgFrameData;
-    const b8 csgDrawResourcesReady = readiness.state.csgResourcesReady && (opaqueDrawItems.csg.empty() || this.inputs.materialSystem.drawRecorder().materialPassDrawResourcesReady(opaqueDrawItems.csg, this.inputs.frameBindings));
+    const b8 csgDrawResourcesReady = readiness.state.csgResourcesReady && (csgDrawItems.empty() || this.inputs.materialSystem.drawRecorder().materialPassDrawResourcesReady(csgDrawItems, this.inputs.frameBindings));
     const b8 csgReceiverSurfaceDrawResourcesReady = readiness.state.csgReceiverSurfaceDrawResourcesReady;
     if(this.csgComputeEmulationOutputStatesGraphOwned && this.opaqueCsgComputeEmulationTiming.value().has_value() && !csgDrawResourcesReady){
         this.opaqueCsgComputeEmulationTiming.value().value().discardTiming();
@@ -443,16 +450,16 @@ b8 OpaqueCsgIntervalSampleGraphTask::record(mut CommandList commands, in GpuTask
             this.csgComputeEmulationOutputStatesGraphOwned
         );
         csgDrawContext.setFramebuffer(this.inputs.targets.framebuffer).setCsgResources(this.inputs.csgResources);
-        if(!opaqueDrawItems.csg.empty()){
+        if(!csgDrawItems.empty()){
             if(this.csgComputeEmulationOutputStatesGraphOwned){
-                this.inputs.materialSystem.drawRecorder().renderMaterialPassDrawItems(csgDrawContext, opaqueDrawItems.csg);
+                this.inputs.materialSystem.drawRecorder().renderMaterialPassDrawItems(csgDrawContext, csgDrawItems);
                 this.opaqueCsgComputeEmulationTiming.value().value().finishTiming(commands);
                 this.opaqueCsgComputeEmulationTiming.value().reset();
             }
             else{
                 GpuTimingMeasure timing(this.graphics.gpuTiming(), s_TimingScopeOpaqueCsg, this.graphics.getDevice(), commands);
 
-                this.inputs.materialSystem.drawRecorder().renderMaterialPassDrawItems(csgDrawContext, opaqueDrawItems.csg);
+                this.inputs.materialSystem.drawRecorder().renderMaterialPassDrawItems(csgDrawContext, csgDrawItems);
             }
         }
         if(csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady)

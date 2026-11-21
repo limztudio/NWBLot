@@ -144,33 +144,31 @@ Expected<Span<u8>> TryResolveCsgCutterParameterBytes(
     return resolved;
 }
 
-Expected<MatrixSingle> TryBuildCsgReceiverWorldToLocal(
-    in b8 hasTransform,
-    in VectorSingle position,
-    in VectorSingle rotation,
-    in VectorSingle scale
-){
-    MatrixSingle worldToLocal(
-        VectorSingle(1.0f, 0.0f, 0.0f, 0.0f),
-        VectorSingle(0.0f, 1.0f, 0.0f, 0.0f),
-        VectorSingle(0.0f, 0.0f, 1.0f, 0.0f),
-        VectorSingle(0.0f, 0.0f, 0.0f, 1.0f)
-    );
+Expected<MatrixSingle> TryInvertCsgReceiverLocalToWorld(in b8 hasTransform, in MatrixSingle localToWorld){
     if(!hasTransform)
-        return worldToLocal;
-    const MatrixSingle localToWorld = MatrixAffineTransformation(scale, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), rotation, position);
+        return MatrixIdentity();
     const VectorSingle determinant = MatrixDeterminant(localToWorld);
     if(!IsFinite(determinant) || Abs(determinant.x) <= 0.0f)
         return MakeUnexpected(Failure());
     return Inverse(localToWorld);
 }
 
-CsgClipWorkBounds LoadCsgReceiverWorldBoundsFromTransform(
-    in CsgReceiverCpuBounds receiverBounds,
+Expected<MatrixSingle> TryBuildCsgReceiverWorldToLocal(
     in b8 hasTransform,
     in VectorSingle position,
     in VectorSingle rotation,
     in VectorSingle scale
+){
+    if(!hasTransform)
+        return MatrixIdentity();
+    const MatrixSingle localToWorld = MatrixAffineTransformation(scale, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), rotation, position);
+    return TryInvertCsgReceiverLocalToWorld(true, localToWorld);
+}
+
+CsgClipWorkBounds LoadCsgReceiverWorldBoundsFromMatrix(
+    in CsgReceiverCpuBounds receiverBounds,
+    in b8 hasTransform,
+    in MatrixSingle localToWorld
 ){
     CsgClipWorkBounds worldBounds;
     if(!CsgReceiverBoundsCanCull(receiverBounds))
@@ -188,7 +186,6 @@ CsgClipWorkBounds LoadCsgReceiverWorldBoundsFromTransform(
         return worldBounds;
     }
 
-    const MatrixSingle localToWorld = MatrixAffineTransformation(scale, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), rotation, position);
     VectorSingle transformedMin(0.0f, 0.0f, 0.0f, 0.0f);
     VectorSingle transformedMax(0.0f, 0.0f, 0.0f, 0.0f);
     if(TryTransformAabb(localToWorld, localMinBounds, localMaxBounds, transformedMin, transformedMax)){
@@ -197,6 +194,19 @@ CsgClipWorkBounds LoadCsgReceiverWorldBoundsFromTransform(
         worldBounds.valid = true;
     }
     return worldBounds;
+}
+
+CsgClipWorkBounds LoadCsgReceiverWorldBoundsFromTransform(
+    in CsgReceiverCpuBounds receiverBounds,
+    in b8 hasTransform,
+    in VectorSingle position,
+    in VectorSingle rotation,
+    in VectorSingle scale
+){
+    if(!hasTransform)
+        return LoadCsgReceiverWorldBoundsFromMatrix(receiverBounds, false, MatrixIdentity());
+    const MatrixSingle localToWorld = MatrixAffineTransformation(scale, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), rotation, position);
+    return LoadCsgReceiverWorldBoundsFromMatrix(receiverBounds, true, localToWorld);
 }
 
 b8 TryAccumulateCsgReceiverClipDrawInfo(in Name shaderModule, mut CsgReceiverClipDrawInfo inOutInfo){

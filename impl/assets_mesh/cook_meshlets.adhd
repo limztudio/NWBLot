@@ -41,6 +41,8 @@ class MeshletTriangleCalculation{
     public Array<f32x4, s_MeshletTriangleIndexCount> positions;
     public f32x4 centroid(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 areaNormal(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 unitNormal(0.0f, 0.0f, 0.0f, 0.0f);
+    public b8 hasValidNormal = false;
 }
 
 class MeshletScoreState{
@@ -49,6 +51,8 @@ class MeshletScoreState{
     public f32x4 centroidSum(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 normalSum(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 normalAxis(0.0f, 0.0f, 0.0f, 0.0f);
+    public Array<f32x4, s_MeshMaxMeshletTriangles> activeUnitNormals;
+    public u32 activeUnitNormalCount = 0u;
     public f32 radius = 0.0f;
     public f32 coneCutoff = -1.0f;
     public u32 primitiveCount = 0u;
@@ -58,6 +62,18 @@ class MeshletScoreState{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+b8 IsValidMeshletDirection3(in VectorSingle value){
+    return IsFinite(value.xyz) && LengthSq(value.xyz) > s_MeshletDirectionEpsilon;
+}
+
+VectorSingle NormalizeMeshletDirection3OrZero(in VectorSingle value){
+    if(IsValidMeshletDirection3(value)){
+        const VectorSingle normalized = Normalize(value.xyz);
+        return VectorSingle(normalized, 0.0f);
+    }
+    return VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+}
 
 Expected<u8> TryFindMeshletLocalVertex(in Span<u32> localVertexRefs, in u32 vertexRefIndex){
     for(usize localIndex = 0u; localIndex < localVertexRefs.size(); ++localIndex){
@@ -99,6 +115,53 @@ Expected<MeshletVertexCounts> TryMeshletCanFitTriangle(in MeshletDesc meshlet, i
 
     const MeshletVertexCounts counts = CountMeshletMissingVertices(localVertexRefs, triangle);
     if(localVertexRefs.size() + cast<usize>(counts.missing) > cast<usize>(s_MeshMaxMeshletVertices))
+        return MakeUnexpected(Failure());
+    return counts;
+}
+
+MeshletVertexCounts CountMeshletMissingVerticesStamped(
+    in Span<u32> vertexMeshletStamps,
+    in u32 currentMeshletStamp,
+    in MeshletTriangleData triangle
+){
+    MeshletVertexCounts counts;
+    const u32 v0 = triangle.vertexRefs[0u];
+    if(vertexMeshletStamps[cast<usize>(v0)] == currentMeshletStamp)
+        ++counts.shared;
+    else
+        ++counts.missing;
+
+    const u32 v1 = triangle.vertexRefs[1u];
+    if(v1 != v0){
+        if(vertexMeshletStamps[cast<usize>(v1)] == currentMeshletStamp)
+            ++counts.shared;
+        else
+            ++counts.missing;
+    }
+
+    const u32 v2 = triangle.vertexRefs[2u];
+    if(v2 != v0 && v2 != v1){
+        if(vertexMeshletStamps[cast<usize>(v2)] == currentMeshletStamp)
+            ++counts.shared;
+        else
+            ++counts.missing;
+    }
+
+    return counts;
+}
+
+Expected<MeshletVertexCounts> TryMeshletCanFitTriangleStamped(
+    in MeshletDesc meshlet,
+    in usize localVertexCount,
+    in Span<u32> vertexMeshletStamps,
+    in u32 currentMeshletStamp,
+    in MeshletTriangleData triangle
+){
+    if(MeshletPrimitiveCount(meshlet) + 1u > s_MeshMaxMeshletTriangles)
+        return MakeUnexpected(Failure());
+
+    const MeshletVertexCounts counts = CountMeshletMissingVerticesStamped(vertexMeshletStamps, currentMeshletStamp, triangle);
+    if(localVertexCount + cast<usize>(counts.missing) > cast<usize>(s_MeshMaxMeshletVertices))
         return MakeUnexpected(Failure());
     return counts;
 }
@@ -156,6 +219,14 @@ void ComputeMeshletTriangleDataAndCalculation(
     outCalculation.positions[2u] = f32x4(p2);
     outCalculation.centroid = f32x4(centroid);
     outCalculation.areaNormal = f32x4(areaNormal);
+    if(IsValidMeshletDirection3(areaNormal)){
+        outCalculation.unitNormal = f32x4(VectorSingle(Normalize(areaNormal.xyz), 0.0f));
+        outCalculation.hasValidNormal = true;
+    }
+    else{
+        outCalculation.unitNormal = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        outCalculation.hasValidNormal = false;
+    }
 }
 
 void PrecomputeMeshletTriangleStreams(

@@ -95,7 +95,7 @@ b8 CheckFontAtlasGuardedOverlap(in FontAtlasPayload payload){
     return true;
 }
 
-b8 ValidateFontAtlasPayload(in FontAtlasPayload payload){
+b8 ValidateFontAtlasPayloadWithOptions(in FontAtlasPayload payload, in b8 verifyPixelDigests){
     if(!ValidateFontAtlasIdentityAndFace(payload.font.valid(), IsFontAtlasDigestNonZero(payload.fontSha256.bytes), payload.faceIndex))
         return false;
     if(!ValidateFontAtlasHeaderParameters(
@@ -114,12 +114,13 @@ b8 ValidateFontAtlasPayload(in FontAtlasPayload payload){
         return false;
     u64 pixelBytes = 0u;
     for(in FontAtlasGroup group : payload.groups){
-        if(!ValidateFontAtlasGroupPixelChunk(
+        if(!ValidateFontAtlasGroupPixelChunkWithDigestOption(
             group.width,
             group.height,
             group.channelCount,
             group.pixels,
             group.sha256.bytes,
+            verifyPixelDigests,
             pixelBytes
         ))
             return false;
@@ -153,6 +154,10 @@ b8 ValidateFontAtlasPayload(in FontAtlasPayload payload){
             return false;
     }
     return true;
+}
+
+b8 ValidateFontAtlasPayload(in FontAtlasPayload payload){
+    return ValidateFontAtlasPayloadWithOptions(payload, true);
 }
 
 b8 ValidateFontAtlasSourceMatch(in FontAtlasPayload payload, in Font font){
@@ -215,9 +220,7 @@ Expected<Vector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(in Sp
         tables.emplace_back();
         mut FontAtlasPositioningTable table = tables.back();
         table.tag = tag;
-        table.bytes.reserve(sourceBytes.size());
-        for(in u8 b : sourceBytes)
-            table.bytes.push_back(b);
+        AssignVector(table.bytes, sourceBytes);
         table.sha256 = ComputePositioningTableSha256(table.bytes);
     }
     return tables;
@@ -287,9 +290,7 @@ b8 DeserializeFontAtlasBinaryInto(in Span<u8> bytes, mut FontAtlasPayload outPay
     return HasConsumedExactFontAtlasBinaryPayload(cursor, bytes.size()) && ValidateFontAtlasPayload(outPayload);
 }
 
-b8 SerializeFontAtlasPayloadInto(in FontAtlasPayload payload, mut Vector<u8> outBinary){
-    if(!ValidateFontAtlasPayload(payload))
-        return false;
+b8 SerializeFontAtlasPayloadValidatedInto(in FontAtlasPayload payload, mut Vector<u8> outBinary){
     usize size = ComputeFontAtlasInitialBinaryBytes(s_FontAtlasBinaryHeaderBytes, s_FontAtlasBinaryGlyphBytes, payload.glyphs.size());
     for(in FontAtlasGroup group : payload.groups)
         size = AccumulateFontAtlasChunkBytes(size, s_FontAtlasBinaryGroupHeaderBytes, group.pixels.size());
@@ -302,8 +303,8 @@ b8 SerializeFontAtlasPayloadInto(in FontAtlasPayload payload, mut Vector<u8> out
     for(usize lane = 0u; lane < cast<usize>(s_NameHashLaneCount); ++lane)
         identityQwords[lane] = identity.qwords[lane];
     AppendFontAtlasBinaryPreambleAndIdentity(identityQwords, outBinary);
-    for(usize index = 0u; index < cast<usize>(s_Sha256DigestByteCount); ++index)
-        outBinary.push_back(payload.fontSha256.bytes[index]);
+    if(!AppendBinaryVectorPayload(outBinary, Span<u8>(payload.fontSha256.bytes)).has_value())
+        return false;
     AppendFontAtlasBinaryHeaderTail(
         payload.faceIndex,
         payload.unitsPerEm,
@@ -326,6 +327,12 @@ b8 SerializeFontAtlasPayloadInto(in FontAtlasPayload payload, mut Vector<u8> out
     for(in FontAtlasPositioningTable table : payload.positioningTables)
         AppendFontAtlasTableChunk(table.tag, table.sha256.bytes, table.bytes, outBinary);
     return true;
+}
+
+b8 SerializeFontAtlasPayloadInto(in FontAtlasPayload payload, mut Vector<u8> outBinary){
+    if(!ValidateFontAtlasPayload(payload))
+        return false;
+    return SerializeFontAtlasPayloadValidatedInto(payload, outBinary);
 }
 
 Expected<Vector<u8>> SerializeFontAtlasPayload(in FontAtlasPayload payload){

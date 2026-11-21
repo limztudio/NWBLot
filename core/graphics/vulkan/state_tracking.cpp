@@ -62,6 +62,7 @@ void StateTracker::setPermanentTextureState(Texture& texture, ResourceStates::Ma
     if(state == ResourceStates::Unknown)
         return;
 
+    invalidateTextureCache();
     const auto existing = m_permanentTextureStates.find(MakeNotNull(&texture));
     if(existing != m_permanentTextureStates.end())
         return;
@@ -260,11 +261,15 @@ void StateTracker::beginTrackingResolvedTransientTexture(Texture& texture, const
     ::ContainerDetail::ReserveAdditionalCapacity(m_textureStates, subresourceCount);
     if(texture.m_creationDesc.keepInitialState)
         m_hasKeepInitialStateTextures = true;
+    if(subresourceCount > 4u)
+        invalidateTextureCache();
 
     for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
             const TextureSubresourceStateKey key{ &texture, mipLevel, arraySlice };
             m_textureStates.insert_or_assign(key, state);
+            if(subresourceCount <= 4u)
+                updateRecentTextureCache(key, state);
         }
     }
 }
@@ -280,6 +285,8 @@ void StateTracker::seedResolvedTransientTexture(Texture& texture, const TextureS
     ::ContainerDetail::ReserveAdditionalCapacity(m_textureStates, subresourceCount);
     if(texture.m_creationDesc.keepInitialState)
         m_hasKeepInitialStateTextures = true;
+    if(subresourceCount != 0u)
+        invalidateTextureCache();
 
     for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){

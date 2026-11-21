@@ -367,25 +367,63 @@ Aabb3D FattenAabb(in Aabb3D box, in f32 margin){
     return Aabb3D(VectorSingle(box.lowerBound) - m, VectorSingle(box.upperBound) + m);
 }
 
-b8 AabbRayCast(in Aabb3D box, in VectorSingle origin, in VectorSingle translation, in f32 maxFraction, mut f32 outMinFraction){
-    f32 tMin = 0.0f;
-    f32 tMax = maxFraction;
+class RayCastSlabData{
+    public f32x4 origin(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 invDir(0.0f, 0.0f, 0.0f, 0.0f);
+    public u32 parallelMask = 0u;
+}
 
+RayCastSlabData MakeRayCastSlabData(in VectorSingle origin, in VectorSingle translation){
+    Array<f32, 3u> invAxes;
+    u32 mask = 0u;
+    for(usize axis = 0u; axis < 3u; ++axis){
+        const f32 d = VectorGetByIndex(translation, cast<isize>(axis));
+        if(Abs(d) <= 1.0e-12f){
+            mask |= (1u << cast<u32>(axis));
+            invAxes[axis] = 0.0f;
+        }
+        else{
+            invAxes[axis] = 1.0f / d;
+        }
+    }
+    RayCastSlabData slab;
+    slab.origin = f32x4(origin, 0.0f);
+    slab.invDir = f32x4(invAxes[0u], invAxes[1u], invAxes[2u], 0.0f);
+    slab.parallelMask = mask;
+    return slab;
+}
+
+b8 AabbRayCastFast(in Aabb3D box, in RayCastSlabData ray, in f32 maxFraction, mut f32 outMinFraction){
     const VectorSingle bMin = VectorSingle(box.lowerBound);
     const VectorSingle bMax = VectorSingle(box.upperBound);
+    const VectorSingle origin = VectorSingle(ray.origin);
+    const VectorSingle invDir = VectorSingle(ray.invDir);
 
+    if(ray.parallelMask == 0u){
+        const VectorSingle t1 = (bMin - origin) * invDir;
+        const VectorSingle t2 = (bMax - origin) * invDir;
+        const VectorSingle tNear = Min(t1, t2);
+        const VectorSingle tFar = Max(t1, t2);
+        const f32 tMin = Max(0.0f, Max(tNear.x, Max(tNear.y, tNear.z)));
+        const f32 tMax = Min(maxFraction, Min(tFar.x, Min(tFar.y, tFar.z)));
+        if(tMin > tMax)
+            return false;
+        outMinFraction = tMin;
+        return true;
+    }
+
+    f32 tMin = 0.0f;
+    f32 tMax = maxFraction;
     for(usize axis = 0u; axis < 3u; ++axis){
         const f32 o = VectorGetByIndex(origin, cast<isize>(axis));
-        const f32 d = VectorGetByIndex(translation, cast<isize>(axis));
         const f32 minV = VectorGetByIndex(bMin, cast<isize>(axis));
         const f32 maxV = VectorGetByIndex(bMax, cast<isize>(axis));
-
-        if(Abs(d) <= 1.0e-12f){
+        if((ray.parallelMask & (1u << cast<u32>(axis))) != 0u){
             if(o < minV || o > maxV)
                 return false;
         }
         else{
-            const f32 invD = 1.0f / d;
+            const f32 invD = VectorGetByIndex(invDir, cast<isize>(axis));
             f32 t1 = (minV - o) * invD;
             f32 t2 = (maxV - o) * invD;
             if(t1 > t2){
@@ -404,6 +442,48 @@ b8 AabbRayCast(in Aabb3D box, in VectorSingle origin, in VectorSingle translatio
 
     outMinFraction = tMin;
     return true;
+}
+
+void PushRayCastChildrenOrdered(
+    mut Array<u32, 256u> stackNodes,
+    mut Array<f32, 256u> stackTMins,
+    mut u32 stackCount,
+    in u32 childA,
+    in b8 hitA,
+    in f32 tA,
+    in u32 childB,
+    in b8 hitB,
+    in f32 tB
+){
+    b8 firstHit = hitA;
+    u32 firstChild = childA;
+    f32 firstT = tA;
+    b8 secondHit = hitB;
+    u32 secondChild = childB;
+    f32 secondT = tB;
+    if(hitB && (!hitA || tB > tA)){
+        firstHit = hitB;
+        firstChild = childB;
+        firstT = tB;
+        secondHit = hitA;
+        secondChild = childA;
+        secondT = tA;
+    }
+    if(firstHit && stackCount < 256u){
+        stackNodes[stackCount] = firstChild;
+        stackTMins[stackCount] = firstT;
+        ++stackCount;
+    }
+    if(secondHit && stackCount < 256u){
+        stackNodes[stackCount] = secondChild;
+        stackTMins[stackCount] = secondT;
+        ++stackCount;
+    }
+}
+
+b8 AabbRayCast(in Aabb3D box, in VectorSingle origin, in VectorSingle translation, in f32 maxFraction, mut f32 outMinFraction){
+    const RayCastSlabData ray = MakeRayCastSlabData(origin, translation);
+    return AabbRayCastFast(box, ray, maxFraction, outMinFraction);
 }
 
 VectorSingle ApplyLinearLocks(in VectorSingle v, in u32 flags){

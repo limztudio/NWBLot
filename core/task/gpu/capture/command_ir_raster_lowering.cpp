@@ -199,7 +199,8 @@ GpuCommandIrReplayError::Enum ValidateRasterWireBackendOperand(
         const Viewport viewport{ wire.viewportMinX, wire.viewportMaxX, wire.viewportMinY, wire.viewportMaxY, wire.viewportMinZ, wire.viewportMaxZ };
         const Format::Enum indexFormat = static_cast<Format::Enum>(wire.indexFormat);
 
-        const GpuCommandIrRasterStateOwner* const previousOwner = state.active && state.task == taskId ? state.cachedValidatedOwner : nullptr;
+        const b8 wasActive = state.active;
+        const GpuCommandIrRasterStateOwner* const previousOwner = state.cachedValidatedOwner;
         b8 matchesCachedOwner = previousOwner != nullptr
             && owner->recordIndex == recordIndex
             && owner->pipeline.get() == previousOwner->pipeline.get()
@@ -254,6 +255,8 @@ GpuCommandIrReplayError::Enum ValidateRasterWireBackendOperand(
             state.indexFormat = indexFormat;
             state.indexElementBytes = indexResource.valid() ? GraphicsBackend::GetIndexElementByteSize(indexFormat) : 0u;
             state.active = true;
+            if(!wasActive)
+                state.heapBound = false;
             state.pushConstantsSet = false;
             state.cachedValidatedOwner = owner;
             return GpuCommandIrReplayError::None;
@@ -393,10 +396,6 @@ GpuCommandIrReplayError::Enum ValidateRasterWireBackendOperand(
         state.active = false;
         state.heapBound = false;
         state.pushConstantsSet = false;
-        state.cachedValidatedOwner = nullptr;
-        state.cachedIndexBufferDesc = nullptr;
-        state.cachedVertexValidations.clear();
-        state.cachedInputLayoutError = GpuCommandIrReplayError::None;
         return GpuCommandIrReplayError::None;
     default:
         return GpuCommandIrReplayError::InvalidRasterState;

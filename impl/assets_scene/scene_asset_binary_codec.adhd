@@ -59,16 +59,11 @@ class SceneAssetBinaryCodec{
     )const{
         outEntries.clear();
         outEntries.reserve(assets.size());
-        for(in auto entry : assets){
-            const SceneAssetEntryBinary candidate(entry.first.hash(), entry.second.name().hash());
-            usize insertIndex = outEntries.size();
-            while(insertIndex > 0u && LessSceneAssetEntryBinary(candidate, outEntries[insertIndex - 1u]))
-                --insertIndex;
-            outEntries.push_back(candidate);
-            for(usize moveIndex = outEntries.size() - 1u; moveIndex > insertIndex; --moveIndex)
-                outEntries[moveIndex] = outEntries[moveIndex - 1u];
-            outEntries[insertIndex] = candidate;
-        }
+        for(in auto entry : assets)
+            outEntries.push_back(SceneAssetEntryBinary(entry.first.hash(), entry.second.name().hash()));
+        SortSequence<SceneAssetEntryBinary>(outEntries, lambda[](in SceneAssetEntryBinary lhs, in SceneAssetEntryBinary rhs) -> b8{
+            return LessSceneAssetEntryBinary(lhs, rhs);
+        });
     }
 
     public b8 serializeEntity<TComponent>(in Span<AssetRef<TComponent>> components, mut Vector<u8> outBinary)const{

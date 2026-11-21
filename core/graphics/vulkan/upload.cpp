@@ -34,20 +34,6 @@ UploadManagerChunk::UploadManagerChunk(CpuTaskScheduler& pool, BufferHandle buf,
 
 UploadManagerChunk::~UploadManagerChunk()noexcept = default;
 
-Expected<BufferSuballocation> UploadManager::trySuballocateFromChunk(BufferChunk& chunk, const u64 size, const u32 alignment)noexcept{
-    const auto alignedOffset = AlignUpChecked<u64>(chunk.allocated, static_cast<u64>(alignment));
-    if(!alignedOffset)
-        return MakeUnexpected(Failure{});
-    if(*alignedOffset > chunk.size || size > chunk.size - *alignedOffset)
-        return MakeUnexpected(Failure{});
-
-    Buffer& buffer = *chunk.buffer;
-    void* const cpuAddress = buffer.m_mappedMemory ? static_cast<u8*>(buffer.m_mappedMemory) + *alignedOffset : nullptr;
-
-    chunk.allocated = *alignedOffset + size;
-    return BufferSuballocation{ MakeNotNull(&buffer), *alignedOffset, cpuAddress };
-}
-
 UploadManager::UploadManager(Device& parent, u64 defaultChunkSize, u64 memoryLimit, const ChunkKind::Enum chunkKind)
     : m_device(parent)
     , m_defaultChunkSize(defaultChunkSize)
@@ -78,22 +64,16 @@ void UploadManager::clear()noexcept{
     m_hasAnyChunks.store(false, MemoryOrder::release);
 }
 
-Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, TrackedCommandBuffer* const owner, const u64 nativeRecordingID, const GpuPhysicalQueueId queue, const u32 alignment){
-    if(!owner || nativeRecordingID == 0u)
-        return MakeUnexpected(Failure{});
-    const usize chunkSlot = static_cast<usize>(m_chunkKind);
-    const u8 slotBit = static_cast<u8>(1u << chunkSlot);
-    FOUNDATION_ASSERT(chunkSlot < owner->m_activeUploadChunks.size());
-
-    BufferChunk* const cachedChunk = owner->m_activeUploadChunks[chunkSlot];
-    if(cachedChunk && cachedChunk->manager == this && cachedChunk->owner == owner && cachedChunk->nativeRecordingID == nativeRecordingID && cachedChunk->physicalQueue == queue){
-        const auto fastResult = trySuballocateFromChunk(*cachedChunk, size, alignment);
-        if(fastResult){
-            FOUNDATION_ASSERT((owner->m_usedUploadChunkMask & slotBit) != 0u);
-            return fastResult;
-        }
-    }
-
+Expected<BufferSuballocation> UploadManager::suballocateBufferSlow(
+    const u64 size,
+    TrackedCommandBuffer* const owner,
+    const u64 nativeRecordingID,
+    const GpuPhysicalQueueId queue,
+    const u32 alignment,
+    const usize chunkSlot,
+    const u8 slotBit,
+    BufferChunk* const cachedChunk
+){
     if(!m_device.matchesPhysicalQueueIdentity(queue))
         return MakeUnexpected(Failure{});
 
@@ -232,15 +212,14 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
 void UploadManager::submitChunks(
     const GpuPhysicalQueueId queue,
     const u64 submittedVersion,
-    const Span<const Queue::SubmissionCommandListIdentity> submittedCommandLists,
-    const VulkanDetail::SubmittedCommandBufferOwnerLookup& submittedOwners
+    const Span<const Queue::SubmissionCommandListIdentity> submittedCommandLists
 )noexcept{
-    static_assert(noexcept(retireSubmittedChunksLocked(queue, submittedVersion, submittedCommandLists, submittedOwners)), "accepted upload-chunk retirement must remain non-throwing");
+    static_assert(noexcept(retireSubmittedChunksLocked(queue, submittedVersion, submittedCommandLists)), "accepted upload-chunk retirement must remain non-throwing");
     if(!m_device.matchesPhysicalQueueIdentity(queue) || submittedCommandLists.empty())
         return;
 
     NothrowScopedLock lock(m_mutex);
-    retireSubmittedChunksLocked(queue, submittedVersion, submittedCommandLists, submittedOwners);
+    retireSubmittedChunksLocked(queue, submittedVersion, submittedCommandLists);
 }
 
 void UploadManager::discardChunks(const GpuPhysicalQueueId queue, TrackedCommandBuffer* const owner, const u64 nativeRecordingID, const u64 reusableVersion)noexcept{
@@ -409,10 +388,8 @@ void UploadManager::retireChunkLocked(QueueChunkLedger& ledger, BufferChunk& chu
 void UploadManager::retireSubmittedChunksLocked(
     const GpuPhysicalQueueId queue,
     const u64 version,
-    const Span<const Queue::SubmissionCommandListIdentity> submittedCommandLists,
-    const VulkanDetail::SubmittedCommandBufferOwnerLookup& submittedOwners
+    const Span<const Queue::SubmissionCommandListIdentity> submittedCommandLists
 )noexcept{
-    (void)submittedOwners;
     QueueChunkLedger* const ledger = findQueueLedgerLocked(queue);
     if(!ledger)
         return;

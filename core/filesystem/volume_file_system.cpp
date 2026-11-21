@@ -10,6 +10,10 @@
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
 
+#if !defined(FOUNDATION_PLATFORM_WINDOWS)
+#include <sys/mman.h>
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -20,10 +24,14 @@ NWB_FILESYSTEM_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+VolumeFileSystem::~VolumeFileSystem()noexcept{
+    closeReadMappingsLocked();
+}
+
 b8 VolumeFileSystem::mount(const VolumeMountDesc& desc){
     Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_LoadMetadataScratch);
 
-    ScopedLock lock(m_mutex);
+    ExclusiveLockGuard lock(m_mutex);
     if(m_mounted && m_writable && !flushMetadataLocked(scratchArena))
         return false;
     unmountLocked();
@@ -182,12 +190,15 @@ b8 VolumeFileSystem::mount(const VolumeMountDesc& desc){
         return false;
     }
 
+    if(!m_writable)
+        openReadMappingsLocked();
+
     m_mounted = true;
     return true;
 }
 
 b8 VolumeFileSystem::unmount(){
-    ScopedLock lock(m_mutex);
+    ExclusiveLockGuard lock(m_mutex);
     if(m_mounted && m_writable){
         Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_SaveMetadataScratch);
         if(!flushMetadataLocked(scratchArena))
@@ -198,27 +209,27 @@ b8 VolumeFileSystem::unmount(){
 }
 
 b8 VolumeFileSystem::mounted()const noexcept{
-    NothrowScopedLock lock(m_mutex);
+    SharedLockGuard lock(m_mutex);
     return m_mounted;
 }
 
 b8 VolumeFileSystem::writable()const noexcept{
-    NothrowScopedLock lock(m_mutex);
+    SharedLockGuard lock(m_mutex);
     return m_mounted && m_writable;
 }
 
 usize VolumeFileSystem::segmentCount()const noexcept{
-    NothrowScopedLock lock(m_mutex);
+    SharedLockGuard lock(m_mutex);
     return m_segmentPaths.size();
 }
 
 u64 VolumeFileSystem::fileCount()const noexcept{
-    NothrowScopedLock lock(m_mutex);
+    SharedLockGuard lock(m_mutex);
     return static_cast<u64>(m_files.size());
 }
 
 Expected<u64> VolumeFileSystem::wastedBytes()const noexcept{
-    NothrowScopedLock lock(m_mutex);
+    SharedLockGuard lock(m_mutex);
     if(m_nextFreeOffset <= m_metadataBytes)
         return 0;
 
@@ -239,23 +250,23 @@ Expected<u64> VolumeFileSystem::wastedBytes()const noexcept{
 
 
 b8 VolumeFileSystem::writeFile(const Name& virtualPath, const void* data, const usize bytes){
-    ScopedLock lock(m_mutex);
+    ExclusiveLockGuard lock(m_mutex);
     return writeFileLocked(virtualPath, data, bytes, MetadataFlushMode::Immediate);
 }
 
 b8 VolumeFileSystem::writeFileDeferred(const Name& virtualPath, const void* data, const usize bytes){
-    ScopedLock lock(m_mutex);
+    ExclusiveLockGuard lock(m_mutex);
     return writeFileLocked(virtualPath, data, bytes, MetadataFlushMode::Deferred);
 }
 
 void VolumeFileSystem::reserveFileCapacity(const usize fileCount){
-    ScopedLock lock(m_mutex);
+    ExclusiveLockGuard lock(m_mutex);
     if(fileCount > m_files.size())
         m_files.reserve(fileCount);
 }
 
 Expected<usize> VolumeFileSystem::readFile(const Name& virtualPath, const u64 offset, void* data, const usize bytes)const{
-    ScopedLock lock(m_mutex);
+    SharedLockGuard lock(m_mutex);
     const auto record = readFileRecordLocked(virtualPath);
     if(!record)
         return MakeUnexpected(record.error());
@@ -269,8 +280,28 @@ Expected<usize> VolumeFileSystem::readFile(const Name& virtualPath, const u64 of
     return static_cast<usize>(readSize);
 }
 
+Expected<usize> VolumeFileSystem::readWholeFile(const Name& virtualPath, void* const context, u8* (* const prepareBuffer)(void* context, usize size))const{
+    if(!prepareBuffer)
+        return MakeUnexpected(Failure{});
+    SharedLockGuard lock(m_mutex);
+    const auto record = readFileRecordLocked(virtualPath);
+    if(!record)
+        return MakeUnexpected(record.error());
+    if(record->size > static_cast<u64>(Limit<usize>::s_Max)){
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Filesystem: file exceeds the runtime buffer limit"));
+        return MakeUnexpected(Failure{});
+    }
+    const usize byteCount = static_cast<usize>(record->size);
+    u8* const destination = prepareBuffer(context, byteCount);
+    if(byteCount != 0u && !destination)
+        return MakeUnexpected(Failure{});
+    if(byteCount != 0u && !readBytesLocked(record->offset, destination, record->size))
+        return MakeUnexpected(Failure{});
+    return byteCount;
+}
+
 b8 VolumeFileSystem::seekFile(FileCursor& cursor, const i64 offset, const FileSeekOrigin::Enum origin)const noexcept(!FOUNDATION_OCCUR_WARNING){
-    NothrowScopedLock lock(m_mutex);
+    SharedLockGuard lock(m_mutex);
     if(cursor.filesystem != this)
         return false;
     const auto record = readFileRecordLocked(cursor.virtualPath);
@@ -293,7 +324,7 @@ b8 VolumeFileSystem::seekFile(FileCursor& cursor, const i64 offset, const FileSe
 }
 
 b8 VolumeFileSystem::removeFile(const Name& virtualPath){
-    ScopedLock lock(m_mutex);
+    ExclusiveLockGuard lock(m_mutex);
     if(!m_mounted || !m_writable){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpRemoveFile, FilesystemVolumeDetail::s_VolumeDetailNotMountedWritable);
         return false;
@@ -318,12 +349,12 @@ b8 VolumeFileSystem::removeFile(const Name& virtualPath){
 }
 
 b8 VolumeFileSystem::fileExists(const Name& virtualPath)const noexcept{
-    NothrowScopedLock lock(m_mutex);
+    SharedLockGuard lock(m_mutex);
     return m_mounted && virtualPath && m_files.find(virtualPath) != m_files.end();
 }
 
 Expected<u64> VolumeFileSystem::fileSize(const Name& virtualPath)const noexcept(!FOUNDATION_OCCUR_WARNING){
-    NothrowScopedLock lock(m_mutex);
+    SharedLockGuard lock(m_mutex);
     if(!m_mounted){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFileSize, FilesystemVolumeDetail::s_VolumeDetailNotMounted);
         return MakeUnexpected(Failure{});
@@ -469,6 +500,8 @@ Expected<VolumeFileSystem::FileRecord> VolumeFileSystem::readFileRecordLocked(co
 }
 
 void VolumeFileSystem::unmountLocked()noexcept{
+    closeReadMappingsLocked();
+
     m_mounted = false;
     m_writable = false;
 
@@ -482,6 +515,98 @@ void VolumeFileSystem::unmountLocked()noexcept{
 
     m_segmentPaths.clear();
     m_files.clear();
+}
+
+void VolumeFileSystem::openReadMappingsLocked()noexcept{
+    closeReadMappingsLocked();
+    if(m_segmentPaths.empty())
+        return;
+
+    m_readMappings.resize(m_segmentPaths.size());
+    for(usize index = 0u; index < m_segmentPaths.size(); ++index){
+        ReadOnlySegmentMapping& entry = m_readMappings[index];
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+        const HANDLE fileHandle = CreateFileW(
+            m_segmentPaths[index].c_str(),
+            GENERIC_READ,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            nullptr,
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_RANDOM_ACCESS,
+            nullptr
+        );
+        if(fileHandle == INVALID_HANDLE_VALUE)
+            continue;
+        LARGE_INTEGER fileSize{};
+        if(!GetFileSizeEx(fileHandle, &fileSize) || fileSize.QuadPart <= 0 || !CanRepresentU64<usize>(static_cast<u64>(fileSize.QuadPart))){
+            CloseHandle(fileHandle);
+            continue;
+        }
+        const HANDLE mappingHandle = CreateFileMappingW(fileHandle, nullptr, PAGE_READONLY, 0u, 0u, nullptr);
+        if(!mappingHandle){
+            CloseHandle(fileHandle);
+            continue;
+        }
+        const void* const mappedView = MapViewOfFile(mappingHandle, FILE_MAP_READ, 0u, 0u, 0u);
+        if(!mappedView){
+            CloseHandle(mappingHandle);
+            CloseHandle(fileHandle);
+            continue;
+        }
+        entry.fileHandle = fileHandle;
+        entry.mappingHandle = mappingHandle;
+        entry.mappedView = static_cast<const u8*>(mappedView);
+        entry.mappedBytes = static_cast<u64>(fileSize.QuadPart);
+#else
+        const int fd = ::open(m_segmentPaths[index].c_str(), O_RDONLY | O_CLOEXEC);
+        if(fd < 0)
+            continue;
+        struct stat status{};
+        if(::fstat(fd, &status) != 0 || status.st_size <= 0 || !CanRepresentU64<usize>(static_cast<u64>(status.st_size))){
+            ::close(fd);
+            continue;
+        }
+        const usize mapBytes = static_cast<usize>(status.st_size);
+        void* const mappedView = ::mmap(nullptr, mapBytes, PROT_READ, MAP_PRIVATE, fd, 0);
+        if(mappedView == MAP_FAILED){
+            ::close(fd);
+            continue;
+        }
+        entry.fileDescriptor = fd;
+        entry.mappedView = static_cast<const u8*>(mappedView);
+        entry.mappedBytes = static_cast<u64>(status.st_size);
+#endif
+    }
+}
+
+void VolumeFileSystem::closeReadMappingsLocked()noexcept{
+    for(ReadOnlySegmentMapping& entry : m_readMappings){
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+        if(entry.mappedView){
+            UnmapViewOfFile(entry.mappedView);
+            entry.mappedView = nullptr;
+        }
+        if(entry.mappingHandle){
+            CloseHandle(static_cast<HANDLE>(entry.mappingHandle));
+            entry.mappingHandle = nullptr;
+        }
+        if(entry.fileHandle){
+            CloseHandle(static_cast<HANDLE>(entry.fileHandle));
+            entry.fileHandle = nullptr;
+        }
+#else
+        if(entry.mappedView){
+            ::munmap(const_cast<u8*>(entry.mappedView), static_cast<usize>(entry.mappedBytes));
+            entry.mappedView = nullptr;
+        }
+        if(entry.fileDescriptor >= 0){
+            ::close(entry.fileDescriptor);
+            entry.fileDescriptor = -1;
+        }
+#endif
+        entry.mappedBytes = 0u;
+    }
+    m_readMappings.clear();
 }
 
 

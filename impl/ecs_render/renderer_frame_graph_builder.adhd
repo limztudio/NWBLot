@@ -274,16 +274,17 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const GpuGraphResourceSetId causticTraceGeometrySet = SelectFrameTraceGeometrySet(traceGeometry, declaresHardwareCaustics);
 
     RayTracingShadowVisibilityGraphPlanSnapshot rayTracingShadowVisibilityPlan = this.m_raytracingSystem.snapshotShadowVisibilityGraphPlan(declaresHardwareCaustics);
-    if(rayTracingShadowVisibilityPlan.lightSpace.ready && hasOpaqueCsgFrameWork){
+    if(rayTracingShadowVisibilityPlan.lightSpaceReady() && hasOpaqueCsgFrameWork){
         if(!csgResources.bindingValid() || !frameBindings.meshView.bindingValid()){
             warning("RendererSystem: could not bind the current direct-shadow receiver cap state");
             return;
         }
-        rayTracingShadowVisibilityPlan.lightSpace.push.csgFlags |= s_CsgShadowFlagCurrentReceiverCaps;
-        rayTracingShadowVisibilityPlan.lightSpace.receiverView = frameBindings.meshView.buffer;
-        rayTracingShadowVisibilityPlan.lightSpace.push.receiverViewSlot = frameBindings.meshView.heapHandle.slot();
-        rayTracingShadowVisibilityPlan.lightSpace.push.receiverCsgSampleStateSlot = csgResources.intervalSampleStateHeapHandle.slot();
-        rayTracingShadowVisibilityPlan.lightSpace.receiverCsgSampleState = csgResources.intervalSampleState;
+        mut LightSpaceShadowSnapshot lightSpaceSnapshot = rayTracingShadowVisibilityPlan.lightSpace.deref().snapshot;
+        lightSpaceSnapshot.push.csgFlags |= s_CsgShadowFlagCurrentReceiverCaps;
+        lightSpaceSnapshot.receiverView = frameBindings.meshView.buffer;
+        lightSpaceSnapshot.push.receiverViewSlot = frameBindings.meshView.heapHandle.slot();
+        lightSpaceSnapshot.push.receiverCsgSampleStateSlot = csgResources.intervalSampleStateHeapHandle.slot();
+        lightSpaceSnapshot.receiverCsgSampleState = csgResources.intervalSampleState;
     }
     const RayTracingSceneGraphResources sceneResources = this.m_raytracingSystem.snapshotSceneGraphResources();
     RayTracingSceneGraphReads sceneReads;

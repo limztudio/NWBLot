@@ -13,6 +13,131 @@
 NWB_CORE_BEGIN
 
 
+[[nodiscard]] static constexpr b8 ExceedsImportIndexLoadFactor(const usize count, const usize capacity)noexcept{
+    if(capacity == 0u)
+        return true;
+    const usize maxLoad = (capacity / 10u) * 7u + ((capacity % 10u) * 7u) / 10u;
+    return count > maxLoad;
+}
+
+
+template<typename KeyT, typename HashFn, typename EqualFn>
+u32 GpuGraphResourceImportIndex::FlatIndexTable<KeyT, HashFn, EqualFn>::find(const KeyT& key)const noexcept{
+    if(m_count == 0u || m_slots.empty())
+        return s_InvalidImportIndex;
+
+    const usize mask = m_slots.size() - 1u;
+    usize index = m_hash(key) & mask;
+    const u32 currentStamp = m_stamp;
+    for(;;){
+        const Slot& slot = m_slots[index];
+        if(slot.stamp != currentStamp)
+            return s_InvalidImportIndex;
+        if(m_equal(slot.key, key))
+            return slot.value;
+        index = (index + 1u) & mask;
+    }
+}
+
+template<typename KeyT, typename HashFn, typename EqualFn>
+void GpuGraphResourceImportIndex::FlatIndexTable<KeyT, HashFn, EqualFn>::reserveForCount(const usize targetCount){
+    const usize minSlots = Max<usize>(s_MinTableSlotCount, AddSize(targetCount, AddSize(targetCount >> 1u, 8u)));
+    if(m_slots.size() >= minSlots && !ExceedsImportIndexLoadFactor(targetCount, m_slots.size()))
+        return;
+
+    usize newCapacity = m_slots.empty() ? s_MinTableSlotCount : m_slots.size();
+    while(newCapacity < minSlots || ExceedsImportIndexLoadFactor(targetCount, newCapacity)){
+        if(newCapacity > (Limit<usize>::s_Max >> 1u))
+            break;
+        newCapacity <<= 1u;
+    }
+
+    GraphicsVector<Slot> rehashed(m_arena);
+    rehashed.resize(newCapacity);
+    const usize mask = newCapacity - 1u;
+    const u32 currentStamp = m_stamp;
+    for(const Slot& slot : m_slots){
+        if(slot.stamp != currentStamp)
+            continue;
+        usize index = m_hash(slot.key) & mask;
+        while(rehashed[index].stamp == currentStamp)
+            index = (index + 1u) & mask;
+        rehashed[index] = slot;
+    }
+    m_slots = Move(rehashed);
+}
+
+template<typename KeyT, typename HashFn, typename EqualFn>
+b8 GpuGraphResourceImportIndex::FlatIndexTable<KeyT, HashFn, EqualFn>::emplace(const KeyT& key, const u32 value){
+    if(m_slots.empty() || ExceedsImportIndexLoadFactor(AddSize(m_count, 1u), m_slots.size()))
+        reserveForCount(AddSize(m_count, 1u));
+
+    const usize mask = m_slots.size() - 1u;
+    usize index = m_hash(key) & mask;
+    const u32 currentStamp = m_stamp;
+    for(;;){
+        Slot& slot = m_slots[index];
+        if(slot.stamp != currentStamp){
+            slot.key = key;
+            slot.value = value;
+            slot.stamp = currentStamp;
+            ++m_count;
+            return true;
+        }
+        if(m_equal(slot.key, key))
+            return false;
+        index = (index + 1u) & mask;
+    }
+}
+
+template<typename KeyT, typename HashFn, typename EqualFn>
+void GpuGraphResourceImportIndex::FlatIndexTable<KeyT, HashFn, EqualFn>::erase(const KeyT& key)noexcept{
+    if(m_count == 0u || m_slots.empty())
+        return;
+
+    const usize mask = m_slots.size() - 1u;
+    usize hole = m_hash(key) & mask;
+    const u32 currentStamp = m_stamp;
+    for(;;){
+        const Slot& slot = m_slots[hole];
+        if(slot.stamp != currentStamp)
+            return;
+        if(m_equal(slot.key, key))
+            break;
+        hole = (hole + 1u) & mask;
+    }
+
+    usize scan = (hole + 1u) & mask;
+    for(;;){
+        Slot& candidate = m_slots[scan];
+        if(candidate.stamp != currentStamp){
+            m_slots[hole].stamp = 0u;
+            --m_count;
+            return;
+        }
+        const usize home = m_hash(candidate.key) & mask;
+        if(((scan - home) & mask) >= ((scan - hole) & mask)){
+            m_slots[hole] = candidate;
+            hole = scan;
+        }
+        scan = (scan + 1u) & mask;
+    }
+}
+
+template<typename KeyT, typename HashFn, typename EqualFn>
+void GpuGraphResourceImportIndex::FlatIndexTable<KeyT, HashFn, EqualFn>::clear()noexcept{
+    m_count = 0u;
+    if(m_slots.empty())
+        return;
+    ++m_stamp;
+    if(m_stamp == 0u){
+        m_stamp = 1u;
+        for(Slot& slot : m_slots)
+            slot.stamp = 0u;
+    }
+}
+
+
 GpuGraphResourceImportIndex::ResourcePointerKey GpuGraphResourceImportIndex::MakeResourcePointerKey(const ResourceNode& resource)noexcept{
     switch(resource.type){
     case GpuGraphResourceType::Texture:
@@ -28,10 +153,8 @@ GpuGraphResourceImportIndex::ResourcePointerKey GpuGraphResourceImportIndex::Mak
 
 u32 GpuGraphResourceImportIndex::findResourceIdentity(const Span<const ResourceNode> resources, const Name& identity)const noexcept{
     const NameHash& key = identity.identityHash();
-    if(m_resourceIdentityIndex){
-        const auto found = m_resourceIdentityIndex->find(key);
-        return found == m_resourceIdentityIndex->end() ? s_InvalidImportIndex : found.value();
-    }
+    if(m_resourceIdentityIndex.active())
+        return m_resourceIdentityIndex.find(key);
     for(usize index = 0u; index < resources.size(); ++index){
         if(resources[index].identity.identityHash() == key)
             return static_cast<u32>(index);
@@ -42,17 +165,17 @@ u32 GpuGraphResourceImportIndex::findResourceIdentity(const Span<const ResourceN
 GpuGraphResourceImportIndex::ResourceImportMatch GpuGraphResourceImportIndex::findResourceImportMatch(const Span<const ResourceNode> resources, const NameHash* const identity, const ResourcePointerKey& pointer)const noexcept{
     if(!pointer.pointer)
         return {};
-    if(m_resourceIdentityIndex){
+    if(m_resourceIdentityIndex.active()){
         ResourceImportMatch match;
-        if(m_resourcePointerIndex){
-            const auto found = m_resourcePointerIndex->find(pointer);
-            if(found != m_resourcePointerIndex->end())
-                match = { found.value(), true };
+        if(m_resourcePointerIndex.active()){
+            const u32 pointerIndex = m_resourcePointerIndex.find(pointer);
+            if(pointerIndex != s_InvalidImportIndex)
+                match = { pointerIndex, true };
         }
         if(identity){
-            const auto found = m_resourceIdentityIndex->find(*identity);
-            if(found != m_resourceIdentityIndex->end() && found.value() < match.index)
-                return { found.value(), false };
+            const u32 identityIndex = m_resourceIdentityIndex.find(*identity);
+            if(identityIndex != s_InvalidImportIndex && identityIndex < match.index)
+                return { identityIndex, false };
         }
         return match;
     }
@@ -84,10 +207,8 @@ GpuGraphResourceImportIndex::ResourceImportMatch GpuGraphResourceImportIndex::fi
 
 u32 GpuGraphResourceImportIndex::findResourceSetIdentity(const Span<const ResourceSetNode> sets, const Name& identity)const noexcept{
     const NameHash& key = identity.identityHash();
-    if(m_resourceSetIdentityIndex){
-        const auto found = m_resourceSetIdentityIndex->find(key);
-        return found == m_resourceSetIdentityIndex->end() ? s_InvalidImportIndex : found.value();
-    }
+    if(m_resourceSetIdentityIndex.active())
+        return m_resourceSetIdentityIndex.find(key);
     for(usize index = 0u; index < sets.size(); ++index){
         if(sets[index].identity.identityHash() == key)
             return static_cast<u32>(index);
@@ -96,59 +217,58 @@ u32 GpuGraphResourceImportIndex::findResourceSetIdentity(const Span<const Resour
 }
 
 void GpuGraphResourceImportIndex::prepareResourceIndexes(const Span<const ResourceNode> resources, const ResourcePointerKey& pendingPointer){
-    if(!m_resourceIdentityIndex){
+    const usize identityCount = AddSize(resources.size(), 1u);
+    if(!m_resourceIdentityIndex.active()){
         if(resources.size() < s_InlineImportIndexCount)
             return;
 
-        const usize identityCount = AddSize(resources.size(), 1u);
-        IdentityIndex identities(AddSize(identityCount, identityCount), m_arena);
+        m_resourceIdentityIndex.reserveForCount(identityCount);
         usize pointerCount = pendingPointer.pointer ? 1u : 0u;
         for(usize index = 0u; index < resources.size(); ++index){
             const ResourceNode& resource = resources[index];
-            identities.emplace(resource.identity.identityHash(), static_cast<u32>(index));
+            (void)m_resourceIdentityIndex.emplace(resource.identity.identityHash(), static_cast<u32>(index));
             if(MakeResourcePointerKey(resource).pointer)
                 ++pointerCount;
         }
-        Optional<PointerIndex> pointers;
         if(pointerCount != 0u){
-            pointers.emplace(AddSize(pointerCount, pointerCount), m_arena);
+            m_resourcePointerIndex.reserveForCount(pointerCount);
             for(usize index = 0u; index < resources.size(); ++index){
                 const ResourcePointerKey key = MakeResourcePointerKey(resources[index]);
                 if(key.pointer)
-                    pointers->emplace(key, static_cast<u32>(index));
+                    (void)m_resourcePointerIndex.emplace(key, static_cast<u32>(index));
             }
         }
-
-        static_assert(IsNothrowMoveConstructible_V<IdentityIndex>);
-        static_assert(IsNothrowMoveConstructible_V<PointerIndex>);
-        m_resourceIdentityIndex.emplace(Move(identities));
-        if(pointers)
-            m_resourcePointerIndex.emplace(Move(*pointers));
     }
-    else if(pendingPointer.pointer && !m_resourcePointerIndex)
-        m_resourcePointerIndex.emplace(s_InitialPointerIndexBucketCount, m_arena);
+    else{
+        m_resourceIdentityIndex.reserveForCount(identityCount);
+        if(pendingPointer.pointer)
+            m_resourcePointerIndex.reserveForCount(AddSize(m_resourcePointerIndex.size(), 1u));
+    }
 }
 
 void GpuGraphResourceImportIndex::prepareResourceSetIndex(const Span<const ResourceSetNode> sets){
-    if(m_resourceSetIdentityIndex || sets.size() < s_InlineImportIndexCount)
-        return;
     const usize identityCount = AddSize(sets.size(), 1u);
-    IdentityIndex identities(AddSize(identityCount, identityCount), m_arena);
-    for(usize index = 0u; index < sets.size(); ++index)
-        identities.emplace(sets[index].identity.identityHash(), static_cast<u32>(index));
-    static_assert(IsNothrowMoveConstructible_V<IdentityIndex>);
-    m_resourceSetIdentityIndex.emplace(Move(identities));
+    if(!m_resourceSetIdentityIndex.active()){
+        if(sets.size() < s_InlineImportIndexCount)
+            return;
+
+        m_resourceSetIdentityIndex.reserveForCount(identityCount);
+        for(usize index = 0u; index < sets.size(); ++index)
+            (void)m_resourceSetIdentityIndex.emplace(sets[index].identity.identityHash(), static_cast<u32>(index));
+        return;
+    }
+    m_resourceSetIdentityIndex.reserveForCount(identityCount);
 }
 
 
 b8 GpuGraphResourceImportIndex::publishResource(const NameHash& identity, const ResourcePointerKey& pointer, const u32 index, Publication& publication){
-    if(!m_resourceIdentityIndex)
+    if(!m_resourceIdentityIndex.active())
         return true;
-    publication.identity = m_resourceIdentityIndex->emplace(identity, index).second;
+    publication.identity = m_resourceIdentityIndex.emplace(identity, index);
     if(!publication.identity)
         return false;
     if(pointer.pointer){
-        publication.pointer = m_resourcePointerIndex->emplace(pointer, index).second;
+        publication.pointer = m_resourcePointerIndex.emplace(pointer, index);
         if(!publication.pointer)
             return false;
     }
@@ -157,33 +277,30 @@ b8 GpuGraphResourceImportIndex::publishResource(const NameHash& identity, const 
 
 void GpuGraphResourceImportIndex::rollbackResource(const NameHash& identity, const ResourcePointerKey& pointer, const Publication& publication)noexcept{
     if(publication.pointer)
-        m_resourcePointerIndex->erase(pointer);
+        m_resourcePointerIndex.erase(pointer);
     if(publication.identity)
-        m_resourceIdentityIndex->erase(identity);
+        m_resourceIdentityIndex.erase(identity);
 }
 
 b8 GpuGraphResourceImportIndex::publishResourceSet(const NameHash& identity, const u32 index, b8& inserted){
-    if(!m_resourceSetIdentityIndex)
+    if(!m_resourceSetIdentityIndex.active())
         return true;
-    inserted = m_resourceSetIdentityIndex->emplace(identity, index).second;
+    inserted = m_resourceSetIdentityIndex.emplace(identity, index);
     return inserted;
 }
 
 void GpuGraphResourceImportIndex::rollbackResourceSet(const NameHash& identity, const b8 inserted)noexcept{
     if(inserted)
-        m_resourceSetIdentityIndex->erase(identity);
+        m_resourceSetIdentityIndex.erase(identity);
 }
 
 void GpuGraphResourceImportIndex::clearResources(){
-    if(m_resourceIdentityIndex)
-        m_resourceIdentityIndex->clear();
-    if(m_resourcePointerIndex)
-        m_resourcePointerIndex->clear();
+    m_resourceIdentityIndex.clear();
+    m_resourcePointerIndex.clear();
 }
 
 void GpuGraphResourceImportIndex::clearResourceSets(){
-    if(m_resourceSetIdentityIndex)
-        m_resourceSetIdentityIndex->clear();
+    m_resourceSetIdentityIndex.clear();
 }
 
 

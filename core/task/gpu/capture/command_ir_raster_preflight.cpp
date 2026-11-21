@@ -67,7 +67,9 @@ template<typename GetVertexBindingFn>
     const GpuTaskGraphTaskView& task,
     GpuCommandIrDetail::RasterReplayState& state
 )noexcept{
-    b8 matchesCachedState = state.active
+    const b8 wasActive = state.active;
+    b8 matchesCachedState = state.hasCachedGraphState
+        && state.cachedTask == taskId
         && state.pipeline == pipeline
         && state.colorAttachment == colorAttachment
         && state.indexResource == indexResource
@@ -163,6 +165,7 @@ template<typename GetVertexBindingFn>
     }
 
     state.task = taskId;
+    state.cachedTask = taskId;
     state.framebufferOwnerIndex = framebufferOwnerIndex;
     if(!matchesCachedState){
         state.pipeline = pipeline;
@@ -180,8 +183,9 @@ template<typename GetVertexBindingFn>
             };
         }
     }
+    state.hasCachedGraphState = true;
     state.active = true;
-    if(!matchesCachedState)
+    if(!matchesCachedState || !wasActive)
         state.heapBound = false;
     state.pushConstantsSet = false;
     return GpuCommandIrReplayError::None;

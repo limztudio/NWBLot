@@ -17,8 +17,10 @@
 class EditCaretGeometry{
     private TextLayout m_layout;
     private EditBoundaryVector m_boundaries;
-    private Vector<EditBoxCaretStop> m_stops;
-    private Vector<EditCaretLine> m_lines;
+    private SharedPool m_stopPool = SharedPool();
+    private SharedEditCaretStopTable m_stopTable;
+    private Vector<EditBoxCaretStop> m_emptyStops;
+    private Vector<EditCaretLine> m_emptyLines;
     private EditTextMode m_mode = EditTextMode::SingleLine;
     private b8 m_ready = false;
 
@@ -30,12 +32,17 @@ class EditCaretGeometry{
     public b8 adoptLayout(mut TextLayout layout, in StringView expectedText, in Span<EditCaretMapping> mapping, in usize committedBytes, in EditTextMode mode, in Span<usize> requiredCarets){
         if(!ValidateEditCaretClusterGlyphs(Span<TextCluster>(layout.clusters()), Span<PlacedGlyph>(layout.glyphs())))
             return false;
+        Expected<SharedEditCaretStopTable> nextTable = this.m_stopPool.make<EditCaretStopTable>();
+        if(!nextTable.has_value())
+            return false;
+        mut EditCaretStopTable stopTable = nextTable.value().deref();
         if(!AdoptEditCaretGeometryInto(
             layout.utf8(), layout.fontSize(), Span<TextLine>(layout.lines()), Span<TextCluster>(layout.clusters()),
             layout.glyphs().size(), layout.measure(), layout.inkBounds(), expectedText, mapping, committedBytes,
-            mode, requiredCarets, this.m_boundaries, this.m_stops, this.m_lines
+            mode, requiredCarets, this.m_boundaries, stopTable.stops, stopTable.lines
         ))
             return false;
+        this.m_stopTable = nextTable.value();
         MoveInto<TextLayout>(this.m_layout, layout);
         this.m_mode = mode;
         this.m_ready = true;
@@ -46,19 +53,28 @@ class EditCaretGeometry{
         return TryResolveEditCaretRectWhenReady(this.m_ready, this.m_layout.utf8(), this.m_layout.lines(), this.m_layout.clusters(), this.m_boundaries, displayByte);
     }
     public Expected<usize> hitTest(in Point localPoint)const{
-        return TryHitTestEditCaretGeometryWhenReady(this.m_ready, this.m_lines, this.m_stops, localPoint);
+        return TryHitTestEditCaretGeometryWhenReady(this.m_ready, this.lines(), this.caretStops(), localPoint);
     }
     public Expected<usize> verticalTarget(in usize displayCaret, in b8 down, in f32 preferredX)const{
-        return TryResolveEditCaretVerticalTargetWhenReady(this.m_ready, this.m_layout.utf8(), this.m_layout.lines(), this.m_layout.clusters(), this.m_boundaries, this.m_lines, this.m_stops, displayCaret, down, preferredX);
+        return TryResolveEditCaretVerticalTargetWhenReady(this.m_ready, this.m_layout.utf8(), this.m_layout.lines(), this.m_layout.clusters(), this.m_boundaries, this.lines(), this.caretStops(), displayCaret, down, preferredX);
     }
     public Expected<Rect> rangeOnLine(in EditBoxRange range, in u32 lineIndex, in f32 breakWidth)const{
-        return TryResolveEditCaretRangeOnLineWhenReady(this.m_ready, this.m_layout.utf8(), this.m_layout.lines(), this.m_layout.clusters(), this.m_boundaries, this.m_lines, range, lineIndex, breakWidth);
+        return TryResolveEditCaretRangeOnLineWhenReady(this.m_ready, this.m_layout.utf8(), this.m_layout.lines(), this.m_layout.clusters(), this.m_boundaries, this.lines(), range, lineIndex, breakWidth);
     }
 
     public in TextLayout layout()const{ return this.m_layout; }
     public in EditBoundaryVector boundaries()const{ return this.m_boundaries; }
-    public in Vector<EditBoxCaretStop> caretStops()const{ return this.m_stops; }
-    public in Vector<EditCaretLine> lines()const{ return this.m_lines; }
+    public in Vector<EditBoxCaretStop> caretStops()const{
+        if(this.m_stopTable.valid())
+            return this.m_stopTable.deref().stops;
+        return this.m_emptyStops;
+    }
+    public in Vector<EditCaretLine> lines()const{
+        if(this.m_stopTable.valid())
+            return this.m_stopTable.deref().lines;
+        return this.m_emptyLines;
+    }
+    public SharedEditCaretStopTable sharedStopTable()const{ return this.m_stopTable; }
     public EditTextMode textMode()const{ return this.m_mode; }
     public b8 ready()const{ return this.m_ready; }
 }

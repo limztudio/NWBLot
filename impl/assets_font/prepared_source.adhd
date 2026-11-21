@@ -54,13 +54,16 @@ Expected<PreparedFontSource, StringView> ReadPreparedFontSource(in Path path, in
     Array<u8, s_PreparedFontHeaderBytes> header;
     if(!stream.readBytes(header))
         return MakeUnexpected(PreparedFontReadFailure(path, s_PreparedFontHeaderTruncatedReason));
+    u32 faceIndex = 0u;
     u32 fontByteCount = 0u;
     u32 groupCount = 0u;
-    PreparedFontSource candidate;
     PreparedFontBinaryCodec codec;
-    const Expected<b8, StringView> decoded = codec.decodeHeader(header, candidate.faceIndex, fontByteCount, groupCount);
+    const Expected<b8, StringView> decoded = codec.decodeHeader(header, faceIndex, fontByteCount, groupCount);
     if(!decoded.has_value())
         return MakeUnexpected(PreparedFontReadFailure(path, decoded.error()));
+
+    PreparedFontSource candidate;
+    candidate.faceIndex = faceIndex;
 
     candidate.fontSha256 = ReadPreparedFontDigest(header, s_PreparedFontHeaderFontSha256Offset);
     candidate.groups.reserve(groupCount);

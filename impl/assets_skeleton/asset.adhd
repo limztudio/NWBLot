@@ -32,13 +32,10 @@ class Skeleton{
     public in JointIndexMap jointIndices()const{ return this.m_jointIndices; }
     public u32 jointCount()const{ return cast<u32>(this.m_joints.size()); }
     public u32 findJointIndex(in Name jointName)const{
-        if(!this.m_jointIndices.contains(jointName))
+        const auto found = this.m_jointIndices.find(jointName);
+        if(found == this.m_jointIndices.end())
             return s_SkeletonInvalidJointIndex;
-        for(in auto jointLookup : this.m_jointIndices){
-            if(jointLookup.first == jointName)
-                return jointLookup.second;
-        }
-        return s_SkeletonInvalidJointIndex;
+        return found.value();
     }
 
     public b8 validatePayload()const;

@@ -286,17 +286,22 @@ b8 CommandList::tryWriteBuffer(Buffer& buffer, const void* data, usize dataSize,
         rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, FOUNDATION_TEXT("copy offset and size must be 4-byte aligned"));
         return false;
     }
-    if(!isBufferReadyForCommandQueue(&buffer, VK_BUFFER_USAGE_TRANSFER_DST_BIT)){
-        rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, s_BufferNotReadyForQueueReason);
-        return false;
+    ResourceStates::Mask permanentState = ResourceStates::Unknown;
+    if(m_lastValidatedWriteBuffer != &buffer){
+        if(!isBufferReadyForCommandQueue(&buffer, VK_BUFFER_USAGE_TRANSFER_DST_BIT)){
+            rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, s_BufferNotReadyForQueueReason);
+            return false;
+        }
+        permanentState = m_stateTracker.getPermanentBufferState(&buffer);
+        if(permanentState != ResourceStates::Unknown && permanentState != ResourceStates::CopyDest){
+            rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, FOUNDATION_TEXT("state conflicts with the permanent buffer state"));
+            return false;
+        }
     }
-    const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(&buffer);
-    if(permanentState != ResourceStates::Unknown && permanentState != ResourceStates::CopyDest){
-        rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, FOUNDATION_TEXT("state conflicts with the permanent buffer state"));
-        return false;
-    }
+    else
+        permanentState = m_lastValidatedWriteBufferPermanentState;
 
-    const auto staging = prepareUploadStaging(data, dataSize, FOUNDATION_TEXT("writeBuffer"));
+    const auto staging = prepareUploadStaging(data, dataSize, FOUNDATION_TEXT("writeBuffer"), 4u);
     if(!staging){
         rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, s_StagingAllocationFailedReason);
         return false;
@@ -306,6 +311,11 @@ b8 CommandList::tryWriteBuffer(Buffer& buffer, const void* data, usize dataSize,
     queueWriteBufferCopyAndBarrier(buffer, staging->buffer->m_buffer, staging->offset, destOffsetBytes, dataSize, permanentState);
     if(m_commandRecordingFailed)
         return false;
+
+    if(buffer.m_managed && !buffer.m_creationDesc.isVirtual && &buffer.m_context == &m_context){
+        m_lastValidatedWriteBuffer = &buffer;
+        m_lastValidatedWriteBufferPermanentState = permanentState;
+    }
 
     retainStagingBuffer(*staging->buffer);
     return true;

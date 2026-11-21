@@ -13,7 +13,6 @@ class FrameExecuteStateLifecycleSet : NoCopy{
     public Vector<BufferHandle> meshAccelerationStateBuffers;
     public Vector<BufferHandle> shadowPrepareLiveStateBuffers;
     public Array<TextureHandle, s_SinglePersistentResourceCapacity> shadowVisibilityReturnTextures;
-    public LightSpaceShadowSnapshot lightSpaceShadowResources;
     public Array<TextureHandle, s_ShadowComputeScratchTextureCapacity> shadowComputeScratchTextures;
     public Array<BufferHandle, s_ShadowComputeScratchBufferCapacity> shadowComputeScratchBuffers;
     public Array<TextureHandle, s_CausticsComputeScratchTextureCapacity> causticsComputeScratchTextures;
@@ -52,8 +51,8 @@ class FrameExecuteStateLifecycleSet : NoCopy{
         this.deferredLightingStateLifecycle = DeferredLightingStateLifecycleContext(renderer, targets);
         const Array<TextureHandle, s_SinglePersistentResourceCapacity> shadowVisibilityReturnTextures(targets.shadowVisibility);
         this.shadowVisibilityReturnTextures = shadowVisibilityReturnTextures;
-        this.lightSpaceShadowResources = renderer.m_raytracingSystem.lightSpaceShadowSnapshot();
-        const Array<TextureHandle, s_ShadowComputeScratchTextureCapacity> shadowComputeScratchTextures(this.lightSpaceShadowResources.depth,
+        in LightSpaceShadowSnapshot lightSpaceShadowResources = renderer.m_raytracingSystem.lightSpaceShadowSnapshotRef();
+        const Array<TextureHandle, s_ShadowComputeScratchTextureCapacity> shadowComputeScratchTextures(lightSpaceShadowResources.depth,
             targets.shadowCoarseTransmittance,
             targets.shadowSoftHalfA,
             targets.shadowSoftHalfB,
@@ -69,12 +68,12 @@ class FrameExecuteStateLifecycleSet : NoCopy{
             targets.transparentMomentsA,
             targets.transparentMomentsB);
         this.shadowComputeScratchTextures = shadowComputeScratchTextures;
-        const Array<BufferHandle, s_ShadowComputeScratchBufferCapacity> shadowComputeScratchBuffers(this.lightSpaceShadowResources.counts,
-            this.lightSpaceShadowResources.events,
-            this.lightSpaceShadowResources.views,
-            this.lightSpaceShadowResources.drawArguments,
-            this.lightSpaceShadowResources.csgContext,
-            this.lightSpaceShadowResources.csgOpaqueDepth,
+        const Array<BufferHandle, s_ShadowComputeScratchBufferCapacity> shadowComputeScratchBuffers(lightSpaceShadowResources.counts,
+            lightSpaceShadowResources.events,
+            lightSpaceShadowResources.views,
+            lightSpaceShadowResources.drawArguments,
+            lightSpaceShadowResources.csgContext,
+            lightSpaceShadowResources.csgOpaqueDepth,
             rayTracingShadowResources.swShadowEdgeCounterBuffer,
             rayTracingShadowResources.swShadowEdgeListBuffer,
             rayTracingShadowResources.swShadowIndirectArgsBuffer,
@@ -105,7 +104,7 @@ class FrameExecuteStateLifecycleSet : NoCopy{
         this.shadowVisibilityStateLifecycle.scratchTextures = Span<TextureHandle>(this.shadowComputeScratchTextures);
         this.shadowVisibilityStateLifecycle.scratchBuffers = Span<BufferHandle>(this.shadowComputeScratchBuffers);
         this.shadowVisibilityStateLifecycle.lightSpacePrepared = Optional<in b8>(renderer.m_shadowPrepareGraph.m_shadowPreparationOutcome.ready);
-        this.shadowVisibilityStateLifecycle.lightSpaceCaptureTicket = this.lightSpaceShadowResources.captureTicket;
+        this.shadowVisibilityStateLifecycle.lightSpaceCaptureTicket = lightSpaceShadowResources.captureTicket;
         this.softwareCausticsStateLifecycle.irradianceTextures = Span<TextureHandle>(this.causticIrradianceTextures);
         this.softwareCausticsStateLifecycle.scratchTextures = Span<TextureHandle>(this.causticsComputeScratchTextures);
         this.surfelGiStateLifecycle.returnTextures = Span<TextureHandle>(this.surfelIrradianceReturnTextures);

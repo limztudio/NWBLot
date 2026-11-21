@@ -113,18 +113,29 @@ class ListLayoutPreparer{
             if(!candidate.has_value() || candidate.value().endRow - candidate.value().firstRow > s_ListMaxPreparedRows)
                 return MakeUnexpected(Failure());
             f32 height = frame.rowHeight;
+            usize cursor = ListRowInsertionIndex(rows, candidate.value().firstRow);
             for(u64 index = candidate.value().firstRow; index < candidate.value().endRow; ++index){
-                const usize found = ListRowInsertionIndex(rows, index);
-                if(found != rows.size() && rows[found].index == index)
+                while(cursor < rows.size() && rows[cursor].index < index)
+                    ++cursor;
+                if(cursor < rows.size() && rows[cursor].index == index){
+                    ++cursor;
                     continue;
+                }
                 if(rows.size() >= s_ListMaxPreparedRows)
                     return MakeUnexpected(Failure());
                 auto row = this.prepareListRow(frame, index);
                 if(!row.has_value())
                     return MakeUnexpected(Failure());
                 height = ComputeListRowPaddedHeight(row.value().textBounds.height, frame.style.row.padding, height);
-                rows.emplace(rows.begin() + cast<isize>(found));
-                rows[found] = row.value();
+                if(cursor == rows.size()){
+                    rows.push_back(row.value());
+                    ++cursor;
+                }
+                else{
+                    rows.emplace(rows.begin() + cast<isize>(cursor));
+                    rows[cursor] = row.value();
+                    ++cursor;
+                }
             }
             if(!IsFinite(height) || height <= 0.0f || !this.m_scope.listMatches(this.m_context, frame))
                 return MakeUnexpected(Failure());

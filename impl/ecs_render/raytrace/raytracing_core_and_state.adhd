@@ -105,6 +105,9 @@ b8 RendererRayTracingSystem::preflightShadowVisibilityResources(mut DeferredFram
     this.m_lightSpaceShadow.m_sceneTextures.clear();
     this.m_lightSpaceShadow.m_snapshot.captureTicket = LightSpaceCaptureTicket();
     this.m_lightSpaceShadow.m_snapshot.ready = false;
+    this.m_lightSpaceShadow.m_frozenSnapshot.reset();
+    this.m_lightSpaceShadow.m_preflightedLightsValid = false;
+    this.m_lightSpaceShadow.m_preflightedPlanValid = false;
     this.m_lightSpaceShadow.m_resourcesPrepared = false;
     this.m_lightSpaceShadow.m_sceneEligible = false;
     this.m_lightSpaceShadow.m_casters.clear();
@@ -318,6 +321,9 @@ Expected<b8> RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
 
 void RendererRayTracingSystem::discardPreflightShadowVisibilityResources(){
     this.invalidateLightSpaceShadowCapture();
+    this.m_lightSpaceShadow.m_frozenSnapshot.reset();
+    this.m_lightSpaceShadow.m_preflightedLightsValid = false;
+    this.m_lightSpaceShadow.m_preflightedPlanValid = false;
     this.m_rayTracingState.shadow.m_softwareTransparentSampling.m_history.discard();
     this.m_preparedShadowTraceGeometryBuffers.clear();
     this.clearPreparedShadowTraceMaterialSampledTextures();
@@ -343,17 +349,18 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources(){
     this.m_rayTracingState.shadow.m_swShadowMaterialContextHashValid = false;
     this.m_rayTracingState.surfelGi.m_surfelEnabled = false;
     this.m_rayTracingState.surfelGi.m_surfelUseHwTrace = false;
+    this.m_sceneGatherScratch.clear();
 
     this.m_meshSystem.discardRayTracingBuildState();
 }
 
 [cpp_unwind]
 b8 RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(){
-        this.m_preparedShadowTraceGeometryBuffers.clear();
+    this.m_preparedShadowTraceGeometryBuffers.clear();
     if(!this.m_shadowVisibilityResourcesPreflighted)
         return false;
 
-    MeshRayTracingResourceSnapshotVector meshes;
+    mut MeshRayTracingResourceSnapshotVector meshes = this.m_sceneGatherScratch.rayTracingSnapshots;
     this.m_meshSystem.collectRayTracingResourceSnapshots(meshes);
 
     const ShadowTraceGeometryBackendSelection backendSelection = ResolveShadowTraceGeometryBackendSelection(this.m_shadowVisibilityHardwareSupported, this.m_shadowVisibilityTraceResourcesPreflighted);
@@ -367,7 +374,9 @@ b8 RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(){
     selection.softwareAttributes = this.m_rayTracingState.shadow.m_swShadowMeshAttributeBuffers;
     selection.includeHardware = backendSelection.includeHardware;
     selection.includeSoftware = backendSelection.includeSoftware;
-    return FreezePreparedShadowTraceGeometryBuffers(meshes, selection, this.m_acceptedShadowTraceGeometryBuffers, this.m_preparedShadowTraceGeometryBuffers);
+    const b8 frozen = FreezePreparedShadowTraceGeometryBuffers(meshes, selection, this.m_acceptedShadowTraceGeometryBuffers, this.m_preparedShadowTraceGeometryBuffers);
+    meshes.clear();
+    return frozen;
 }
 
 void RendererRayTracingSystem::confirmPreparedShadowTraceGeometryNormalization(){

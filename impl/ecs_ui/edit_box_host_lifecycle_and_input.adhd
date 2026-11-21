@@ -76,8 +76,7 @@ b8 UiEditBoxHost::publish(in WidgetState widget, in EditBoxView view, in EditBox
     UiEditGeometry().publish(
         entry.value().popup,
         placement,
-        view.caretStops(),
-        view.caretGeometry().lines(),
+        view.sharedCaretStopTable(),
         view.textMode(),
         options,
         this.m_generation,

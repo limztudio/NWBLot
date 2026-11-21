@@ -304,6 +304,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         if(!parallelWork){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: acceleration-structure preparation rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
             m_commandRecordingFailed = true;
+            m_recordingFastCapabilityMask = 0u;
             return;
         }
     }

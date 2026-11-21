@@ -148,7 +148,8 @@ b8 GpuNativePacketRecorder::recordPacket(
     GpuRecordedGraph& outRecordedGraph,
     GpuCommandIrCapture* const commandIrCapture,
     GpuPacketRecordingAbort* const deferredAbort,
-    const PreclaimedPacketRecording* const preclaimed
+    const PreclaimedPacketRecording* const preclaimed,
+    const b8 allowStateSeedElision
 )const{
     if(deferredAbort && deferredAbort->valid()){
         FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Packet recording abort output must be fresh"));
@@ -498,7 +499,11 @@ b8 GpuNativePacketRecorder::recordPacket(
     packetTimingRecordingScope.reset();
     if(recorded && commandList->commandRecordingFailed())
         recorded = false;
-    recorded = graphRecordingOwnership.finish(recorded, packetStateSeed);
+    const b8 needsStateExport = !allowStateSeedElision
+        || (planAccess.packetRuntimeFlags(packetID.index) & GpuCompiledGraph::PacketRuntimeFlag::HasExportedStateConsumer) != 0u
+        || commandList->hasPendingOwnershipReleases()
+    ;
+    recorded = graphRecordingOwnership.finish(recorded, needsStateExport ? packetStateSeed : nullptr);
     if(!recorded){
         packetStateSeed->reset();
         abortPacketRecording();
@@ -558,16 +563,8 @@ b8 GpuNativePacketRecorder::prepareRecordingAttempt(
         return false;
 
     GpuRecordingAttemptScope provisionalAttempt;
-    if(!graph.beginRecordingAttempt(compiledGraph, range.first, declarationAccess, planAccess, provisionalAttempt))
+    if(!graph.beginRecordingAttemptRange(compiledGraph, range, declarationAccess, planAccess, provisionalAttempt))
         return false;
-
-    const usize rangeBegin = range.first.index;
-    const usize rangeEnd = rangeBegin + range.packetCount;
-    for(usize packetIndex = rangeBegin + 1u; packetIndex < rangeEnd; ++packetIndex){
-        const GpuSubmissionPacketId packetID = planAccess.packetIdAt(packetIndex);
-        if(!graph.beginRecordingAttempt(compiledGraph, packetID, declarationAccess, planAccess, provisionalAttempt))
-            return false;
-    }
 
     if(!outRecordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactAccess) && !provisionalAttempt.m_graph)
         return false;

@@ -102,32 +102,37 @@ void ReconcileRouterFocusCaptureAndActions(
     mut ControlToken inOutCaptureControl,
     mut b8 inOutPointerSubmitArmed
 ){
-    const Expected<usize> focusedIndex = FindTargetIndexInTable(targets, lookup, inOutFocus, inOutFocusDeclaration);
     b8 validFocus = false;
-    if(focusedIndex.has_value()){
-        const HitTarget focused = targets[focusedIndex.value()];
-        const b8 focusedText = focused.textEditable && !focused.owner.valid();
-        if(IsRouterTargetInteractive(targets, lookup, popups, focused) && focused.focusable && (focusedText || focused.control == inOutFocusControl)){
-            validFocus = true;
-            inOutFocusControl = focused.control;
+    if(inOutFocus.valid()){
+        const Expected<usize> focusedIndex = FindTargetIndexInTable(targets, lookup, inOutFocus, inOutFocusDeclaration);
+        if(focusedIndex.has_value()){
+            in HitTarget focused = targets[focusedIndex.value()];
+            const b8 focusedText = focused.textEditable && !focused.owner.valid();
+            if(IsRouterTargetInteractive(targets, lookup, popups, focused) && focused.focusable && (focusedText || focused.control == inOutFocusControl)){
+                validFocus = true;
+                inOutFocusControl = focused.control;
+            }
         }
     }
     if(!validFocus){
-        RetireRouterCommandFocus(commandSources);
+        if(!commandSources.empty())
+            RetireRouterCommandFocus(commandSources);
         inOutFocus = WidgetId();
         inOutFocusDeclaration = 0u;
         inOutFocusControl = ControlToken();
     }
-    const Expected<usize> capturedIndex = FindTargetIndexInTable(targets, lookup, inOutCapture, inOutCaptureDeclaration);
     b8 validCapture = false;
-    if(capturedIndex.has_value()){
-        const HitTarget captured = targets[capturedIndex.value()];
-        const b8 capturedText = captured.textEditable && !captured.owner.valid();
-        if(IsRouterTargetInteractive(targets, lookup, popups, captured) && captured.popup == inOutCapturePopup && (capturedText || captured.control == inOutCaptureControl)){
-            validCapture = true;
-            if(captured.control != inOutCaptureControl || !captured.activatable)
-                inOutPointerSubmitArmed = false;
-            inOutCaptureControl = captured.control;
+    if(inOutCapture.valid()){
+        const Expected<usize> capturedIndex = FindTargetIndexInTable(targets, lookup, inOutCapture, inOutCaptureDeclaration);
+        if(capturedIndex.has_value()){
+            in HitTarget captured = targets[capturedIndex.value()];
+            const b8 capturedText = captured.textEditable && !captured.owner.valid();
+            if(IsRouterTargetInteractive(targets, lookup, popups, captured) && captured.popup == inOutCapturePopup && (capturedText || captured.control == inOutCaptureControl)){
+                validCapture = true;
+                if(captured.control != inOutCaptureControl || !captured.activatable)
+                    inOutPointerSubmitArmed = false;
+                inOutCaptureControl = captured.control;
+            }
         }
     }
     if(!validCapture){
@@ -143,7 +148,7 @@ void ReconcileRouterFocusCaptureAndActions(
         const Expected<usize> targetIndex = FindTargetIndexInTable(targets, lookup, action.id.target, action.id.declarationGeneration);
         b8 validAction = false;
         if(targetIndex.has_value()){
-            const HitTarget target = targets[targetIndex.value()];
+            in HitTarget target = targets[targetIndex.value()];
             validAction = IsRouterTargetInteractive(targets, lookup, popups, target)
                 && target.activatable
                 && action.popup == target.popup
@@ -235,6 +240,7 @@ void ReconcileRouterAllTargets(
     in Span<HitTarget> targets,
     in Span<TargetLookup> lookup,
     in Span<PopupRecord> popups,
+    in TargetSpatialIndex spatial,
     in b8 windowFocused,
     in b8 pointerKnown,
     in Point pointer,
@@ -279,7 +285,7 @@ void ReconcileRouterAllTargets(
     b8 hasHovered = false;
     HitTarget hovered;
     if(pointerKnown){
-        const Expected<usize> hoveredIndex = FindRouterHitTargetIndex(targets, lookup, popups, pointer);
+        const Expected<usize> hoveredIndex = FindRouterHitTargetIndexIndexed(targets, lookup, popups, spatial, pointer);
         hasHovered = hoveredIndex.has_value();
         if(hasHovered)
             hovered = targets[hoveredIndex.value()];
@@ -340,22 +346,27 @@ b8 PublishRouterTargetTable(
     mut Vector<HitTarget> stagedTargets,
     mut Vector<TargetLookup> committedLookup,
     mut Vector<TargetLookup> stagedLookup,
+    mut TargetSpatialIndex outSpatialIndex,
     mut u64 inOutGeneration
 ){
-    if(!CanPublishRouterTargetTable(targets.size(), generation, inOutGeneration) || !StageRouterHitTargets(targets, stagedPopups, stagedTargets, stagedLookup))
+    b8 hasOwners = false;
+    b8 hasCommandOwners = false;
+    if(!CanPublishRouterTargetTable(targets.size(), generation, inOutGeneration) || !StageRouterHitTargets(targets, stagedPopups, stagedTargets, stagedLookup, hasOwners, hasCommandOwners))
         return false;
-    if(!ValidateSortedStagedRouterTargetsAndPopups(stagedTargets, stagedLookup, stagedPopups))
+    if(!ValidateSortedStagedRouterTargetsAndPopups(stagedTargets, stagedLookup, stagedPopups, hasOwners, hasCommandOwners))
         return false;
     committedTargets.swap(stagedTargets);
     committedLookup.swap(stagedLookup);
+    MarkTargetSpatialIndexDirty(outSpatialIndex);
     inOutGeneration = generation;
     return true;
 }
 
-b8 InvalidateRouterTargetTable(in WidgetId id, mut Vector<TargetLookup> lookup, mut Vector<HitTarget> targets){
+b8 InvalidateRouterTargetTable(in WidgetId id, mut Vector<TargetLookup> lookup, mut Vector<HitTarget> targets, mut TargetSpatialIndex outSpatialIndex){
     if(!EraseInvalidatedRouterTargets(id, lookup, targets))
         return false;
     RebuildRouterTargetLookup(targets, lookup);
+    MarkTargetSpatialIndexDirty(outSpatialIndex);
     return true;
 }
 
@@ -363,15 +374,17 @@ b8 InvalidateRouterTargetTable(in WidgetId id, mut Vector<TargetLookup> lookup, 
 b8 InvalidateRouterTargetTableBatch(
     in Span<WidgetId> ids,
     mut Vector<TargetLookup> lookup,
-    mut Vector<HitTarget> targets
+    mut Vector<HitTarget> targets,
+    mut TargetSpatialIndex outSpatialIndex
 ){
     if(ids.empty() || targets.empty())
         return false;
     if(ids.size() == 1u)
-        return InvalidateRouterTargetTable(ids[0u], lookup, targets);
+        return InvalidateRouterTargetTable(ids[0u], lookup, targets, outSpatialIndex);
     if(!EraseInvalidatedRouterTargetsBatch(ids, lookup, targets))
         return false;
     RebuildRouterTargetLookup(targets, lookup);
+    MarkTargetSpatialIndexDirty(outSpatialIndex);
     return true;
 }
 
@@ -380,12 +393,14 @@ Optional<InputPopupRetirement> RetireRouterTargetTablePopup(
     mut Vector<PopupRecord> popups,
     mut Vector<HitTarget> targets,
     mut Vector<PopupDismissal> dismissals,
-    mut Vector<TargetLookup> lookup
+    mut Vector<TargetLookup> lookup,
+    mut TargetSpatialIndex outSpatialIndex
 ){
     InputPopupRetirement retirement;
     if(!TryRetireRouterPopupSubtree(id, popups, targets, dismissals, retirement.top, retirement.restore))
         return Optional<InputPopupRetirement>();
     RebuildRouterTargetLookup(targets, lookup);
+    MarkTargetSpatialIndexDirty(outSpatialIndex);
     return Optional<InputPopupRetirement>(retirement);
 }
 
@@ -394,12 +409,19 @@ void ResetRouterTargetTable(
     mut Vector<HitTarget> stagedTargets,
     mut Vector<TargetLookup> lookup,
     mut Vector<TargetLookup> stagedLookup,
+    mut TargetSpatialIndex outSpatialIndex,
     mut u64 outGeneration
 ){
     targets.clear();
     stagedTargets.clear();
     lookup.clear();
     stagedLookup.clear();
+    outSpatialIndex.cellTargets.clear();
+    outSpatialIndex.overflowTargets.clear();
+    outSpatialIndex.scratchTargetIndices.clear();
+    outSpatialIndex.scratchPackedCells.clear();
+    outSpatialIndex.active = false;
+    outSpatialIndex.dirty = false;
     outGeneration = 0u;
 }
 

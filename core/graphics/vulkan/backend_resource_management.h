@@ -368,6 +368,7 @@ public:
 public:
     void reset()noexcept{
         invalidateBufferCache();
+        invalidateTextureCache();
         if(!m_textureStates.empty())
             m_textureStates.clear();
         if(!m_bufferStates.empty())
@@ -415,9 +416,53 @@ private:
     void beginTrackingTransientTexture(Texture& texture, TextureSubresourceSet subresources, ResourceStates::Mask state);
     void beginTrackingResolvedTransientTexture(Texture& texture, const TextureSubresourceSet& resolvedSubresources, ResourceStates::Mask state);
     void seedResolvedTransientTexture(Texture& texture, const TextureSubresourceSet& resolvedSubresources, ResourceStates::Mask state);
+    struct RecentBufferCacheEntry{
+        Buffer* key = nullptr;
+        BufferRangeStates* ranges = nullptr;
+    };
+
+    struct RecentTextureCacheEntry{
+        TextureSubresourceStateKey key{};
+        ResourceStates::Mask state = ResourceStates::Unknown;
+        b8 valid = false;
+    };
+
     void invalidateBufferCache()const noexcept{
-        m_lastBufferKey = nullptr;
-        m_lastBufferRanges = nullptr;
+        m_recentBufferCache.fill(RecentBufferCacheEntry{});
+        m_recentBufferCursor = 0u;
+    }
+    void recordRecentBufferRanges(Buffer& buffer, BufferRangeStates& ranges)const noexcept{
+        for(RecentBufferCacheEntry& entry : m_recentBufferCache){
+            if(entry.key == &buffer){
+                entry.ranges = &ranges;
+                return;
+            }
+        }
+        m_recentBufferCache[m_recentBufferCursor] = RecentBufferCacheEntry{ &buffer, &ranges };
+        m_recentBufferCursor = static_cast<u8>((m_recentBufferCursor + 1u) & 3u);
+    }
+    void invalidateTextureCache()const noexcept{
+        m_recentTextureCache.fill(RecentTextureCacheEntry{});
+        m_recentTextureCursor = 0u;
+    }
+    [[nodiscard]] b8 findRecentTextureState(const TextureSubresourceStateKey& key, ResourceStates::Mask& outState)const noexcept{
+        for(const RecentTextureCacheEntry& entry : m_recentTextureCache){
+            if(entry.valid && TextureSubresourceStateKeyEqualTo{}(entry.key, key)){
+                outState = entry.state;
+                return true;
+            }
+        }
+        return false;
+    }
+    void updateRecentTextureCache(const TextureSubresourceStateKey& key, const ResourceStates::Mask state)const noexcept{
+        for(RecentTextureCacheEntry& entry : m_recentTextureCache){
+            if(entry.valid && TextureSubresourceStateKeyEqualTo{}(entry.key, key)){
+                entry.state = state;
+                return;
+            }
+        }
+        m_recentTextureCache[m_recentTextureCursor] = RecentTextureCacheEntry{ key, state, true };
+        m_recentTextureCursor = static_cast<u8>((m_recentTextureCursor + 1u) & 3u);
     }
     [[nodiscard]] const BufferRangeStates* findBufferRangesCached(Buffer& buffer)const noexcept;
     [[nodiscard]] BufferRangeStates* findBufferRangesCachedMutable(Buffer& buffer)noexcept;
@@ -437,8 +482,10 @@ private:
     HashMap<NotNull<Buffer*>, BufferRangeStates, Alloc::GlobalArena, Hasher<NotNull<Buffer*>>, EqualTo<NotNull<Buffer*>>> m_bufferStates;
     TextureUavBarrierPolicyMap m_textureUavBarriers;
     BufferUavBarrierPolicyMap m_bufferUavBarriers;
-    mutable Buffer* m_lastBufferKey = nullptr;
-    mutable BufferRangeStates* m_lastBufferRanges = nullptr;
+    mutable Array<RecentBufferCacheEntry, 4u> m_recentBufferCache{};
+    mutable Array<RecentTextureCacheEntry, 4u> m_recentTextureCache{};
+    mutable u8 m_recentBufferCursor = 0u;
+    mutable u8 m_recentTextureCursor = 0u;
 
     const VulkanContext& m_context;
     b8 m_recordingAttemptActive = false;

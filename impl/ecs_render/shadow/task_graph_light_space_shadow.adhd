@@ -12,7 +12,7 @@
 class LightSpaceShadowGraphInputs{
     public mut GraphicsRuntime graphics;
     public in b8 shadowPrepared;
-    public in LightSpaceShadowSnapshot snapshot;
+    public FrozenLightSpaceShadowHandle snapshot;
     public GpuTaskId dependency;
     public Span<GpuTaskResourceUse> sceneReads;
     public Span<GpuTaskResourceSetUse> sceneReadSets;
@@ -21,7 +21,7 @@ class LightSpaceShadowGraphInputs{
     public LightSpaceShadowGraphInputs(
         mut GraphicsRuntime graphics,
         in borrow b8 shadowPrepared,
-        in LightSpaceShadowSnapshot snapshot,
+        in FrozenLightSpaceShadowHandle snapshot,
         in GpuTaskId dependency,
         in Span<GpuTaskResourceUse> sceneReads,
         in Span<GpuTaskResourceSetUse> sceneReadSets,

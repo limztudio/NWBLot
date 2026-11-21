@@ -8,17 +8,28 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void AdvanceMeshletVertexStamp(mut Vector<u32> vertexMeshletStamps, mut u32 inOutCurrentStamp){
+    if(inOutCurrentStamp == u32.max){
+        for(usize i = 0u; i < vertexMeshletStamps.size(); ++i)
+            vertexMeshletStamps[i] = 0u;
+        inOutCurrentStamp = 1u;
+        return;
+    }
+    ++inOutCurrentStamp;
+}
+
 void ResetMeshletBuilderState(
     in usize primitiveOffset,
     mut MeshletDesc outCurrent,
     mut Vector<u32> outLocalSourceVertexRefs,
-    mut Vector<u32> outLocalTriangleIndices,
+    mut Vector<u32> vertexMeshletStamps,
+    mut u32 inOutCurrentMeshletStamp,
     mut MeshletScoreState outScoreState
 ){
     outCurrent = MeshletDesc();
     outCurrent.primitiveOffset = cast<u32>(primitiveOffset);
     outLocalSourceVertexRefs.clear();
-    outLocalTriangleIndices.clear();
+    AdvanceMeshletVertexStamp(vertexMeshletStamps, inOutCurrentMeshletStamp);
     ResetMeshletScoreState(outScoreState);
 }
 
@@ -32,7 +43,6 @@ void PrepareMeshletBuildOutputStreams(
     mut Vector<MeshletLocalVertexRef> outLocalVertexRefs,
     mut Vector<u8> outPrimitiveIndices,
     mut Vector<u32> outLocalSourceVertexRefs,
-    mut Vector<u32> outLocalTriangleIndices,
     mut Vector<u32> outFrontier,
     mut Vector<u8> outFrontierFlags
 ){
@@ -51,9 +61,7 @@ void PrepareMeshletBuildOutputStreams(
     outPrimitiveIndices.reserve(indexCount);
 
     outLocalSourceVertexRefs.clear();
-    outLocalTriangleIndices.clear();
     outLocalSourceVertexRefs.reserve(cast<usize>(s_MeshMaxMeshletVertices));
-    outLocalTriangleIndices.reserve(cast<usize>(s_MeshMaxMeshletTriangles));
     outFrontier.clear();
     outFrontier.reserve(triangleCount);
     outFrontierFlags.clear();
@@ -65,14 +73,17 @@ b8 AddMeshletTriangleToBuilder(
     in StringView filePathText,
     in MeshletTriangleData triangle,
     mut Vector<u32> localSourceVertexRefs,
+    mut Vector<u32> vertexMeshletStamps,
+    mut Vector<u8> vertexLocalIndices,
+    in u32 currentMeshletStamp,
     mut MeshletDesc meshlet,
     mut Vector<u8> primitiveIndices
 ){
     for(in u32 vertexRefIndex : triangle.vertexRefs){
         u8 localVertex = 0u;
-        const Expected<u8> foundVertex = TryFindMeshletLocalVertex(localSourceVertexRefs, vertexRefIndex);
-        if(foundVertex.has_value())
-            localVertex = foundVertex.value();
+        const usize vertexSlot = cast<usize>(vertexRefIndex);
+        if(vertexMeshletStamps[vertexSlot] == currentMeshletStamp)
+            localVertex = vertexLocalIndices[vertexSlot];
         else{
             if(localSourceVertexRefs.size() >= cast<usize>(s_MeshMaxMeshletVertices)){
                 error("{} meta '{}': triangle cannot fit within one meshlet", metaKind, filePathText);
@@ -80,6 +91,8 @@ b8 AddMeshletTriangleToBuilder(
             }
             localVertex = cast<u8>(localSourceVertexRefs.size());
             localSourceVertexRefs.push_back(vertexRefIndex);
+            vertexMeshletStamps[vertexSlot] = currentMeshletStamp;
+            vertexLocalIndices[vertexSlot] = localVertex;
         }
         primitiveIndices.push_back(localVertex);
     }
@@ -97,7 +110,9 @@ b8 AddVisitedMeshletTriangle(
     in Span<u32> positionTriangleIndices,
     mut Vector<u8> visitedTriangles,
     mut Vector<u32> localSourceVertexRefs,
-    mut Vector<u32> localTriangleIndices,
+    mut Vector<u32> vertexMeshletStamps,
+    mut Vector<u8> vertexLocalIndices,
+    in u32 currentMeshletStamp,
     mut MeshletDesc meshlet,
     mut Vector<u8> primitiveIndices,
     mut MeshletScoreState scoreState,
@@ -105,13 +120,21 @@ b8 AddVisitedMeshletTriangle(
     mut Vector<u8> frontierFlags
 ){
     const MeshletTriangleData triangle = triangles[cast<usize>(triangleIndex)];
-    if(!AddMeshletTriangleToBuilder(metaKind, filePathText, triangle, localSourceVertexRefs, meshlet, primitiveIndices))
+    if(!AddMeshletTriangleToBuilder(
+        metaKind,
+        filePathText,
+        triangle,
+        localSourceVertexRefs,
+        vertexMeshletStamps,
+        vertexLocalIndices,
+        currentMeshletStamp,
+        meshlet,
+        primitiveIndices
+    ))
         return false;
 
-    localTriangleIndices.push_back(triangleIndex);
     AddMeshletTriangleToScoreStateFromCalculations(
         triangleCalculations,
-        localTriangleIndices,
         triangleIndex,
         scoreState
     );

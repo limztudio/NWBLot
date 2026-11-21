@@ -471,14 +471,10 @@ Manifold CollideSphereAndHull(in SphereShape sphereA, in Transform3D xfA, in Hul
         return m;
     }
 
-    DistanceInput input;
-    input.proxyA = MakePointProxy(sphereA.center(), sphereR);
-    input.proxyB = MakeHullProxy(hullB);
-    input.transformA = xfA;
-    input.transformB = xfB;
-    input.useRadii = false;
+    const ShapeProxy sphereProxy = MakePointProxy(sphereA.center(), sphereR);
+    const ShapeProxy hullProxy = MakeHullProxy(hullB);
     SimplexCache cache;
-    const DistanceOutput dist = ShapeDistance(input, cache);
+    const DistanceOutput dist = ShapeDistanceProxies(sphereProxy, xfA, hullProxy, xfB, false, cache);
     if(dist.distance() > totalR + maxDistance)
         return m;
 
@@ -854,14 +850,10 @@ Manifold CollideCapsuleAndHull(in CapsuleShape capsuleA, in Transform3D xfA, in 
     const VectorSingle l1 = InverseTransformPoint(xfB, w1);
     const VectorSingle l2 = InverseTransformPoint(xfB, w2);
 
-    DistanceInput input;
-    input.proxyA = MakeCapsuleProxy(capsuleA);
-    input.proxyB = MakeHullProxy(hullB);
-    input.transformA = xfA;
-    input.transformB = xfB;
-    input.useRadii = false;
+    const ShapeProxy capProxy = MakeCapsuleProxy(capsuleA);
+    const ShapeProxy hullProxy = MakeHullProxy(hullB);
     SimplexCache cache;
-    const DistanceOutput gjk = ShapeDistance(input, cache);
+    const DistanceOutput gjk = ShapeDistanceProxies(capProxy, xfA, hullProxy, xfB, false, cache);
     if(gjk.distance() > totalR + maxDistance)
         return m;
 
@@ -1212,13 +1204,7 @@ Manifold CollideCapsuleAndMesh(in CapsuleShape capA, in Transform3D xfA, in Mesh
 
                 const ShapeProxy triProxy = MakeTriangleProxy(tv0, tv1, tv2, meshR);
                 SimplexCache cache;
-                DistanceInput input;
-                input.proxyA = capProxy;
-                input.proxyB = triProxy;
-                input.transformA = xfA;
-                input.transformB = xfB;
-                input.useRadii = false;
-                const DistanceOutput gjk = ShapeDistance(input, cache);
+                const DistanceOutput gjk = ShapeDistanceProxies(capProxy, xfA, triProxy, xfB, false, cache);
 
                 VectorSingle triWorldN = SafeNormalizeVec3(Vector3Rotate(triN, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                 const VectorSingle wCapMid = (TransformPoint(xfA, c1) + TransformPoint(xfA, c2)) * 0.5f;

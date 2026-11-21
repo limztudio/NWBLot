@@ -70,14 +70,6 @@ void EntityManager::destroy(EntityID entityId){
 }
 
 
-b8 EntityManager::alive(EntityID entityId)const noexcept{
-    const u32 index = entityId.index();
-    if(index >= static_cast<u32>(m_generations.size()))
-        return false;
-    return static_cast<u32>(m_generations[index]) == entityId.generation();
-}
-
-
 void EntityManager::clear()noexcept{
     for(u32 index = 0u; index < m_nextEntityIndex; ++index){
         u16& generation = m_generations[index];

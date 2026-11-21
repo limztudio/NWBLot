@@ -184,6 +184,7 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacketStream(
     GpuTaskGraphTaskView cachedTaskView;
     u64 recordIndex = 0u;
     RasterReplayState graphRasterState;
+    BuiltinBackendResourceCache builtinResourceCache;
     GpuCommandIrReplayError::Enum firstBackendError = GpuCommandIrReplayError::None;
     u64 firstBackendErrorRecordIndex = Limit<u64>::s_Max;
     const u8* recordPtr = nullptr;
@@ -318,7 +319,7 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacketStream(
             }
             else{
                 FOUNDATION_ASSERT(builtinRecord.has_value());
-                operandError = ValidateBuiltinBackendOperand(*builtinRecord, graph, *backendCommandQueue, *commandList);
+                operandError = ValidateBuiltinBackendOperand(*builtinRecord, graph, *backendCommandQueue, *commandList, builtinResourceCache);
             }
             if(operandError != GpuCommandIrReplayError::None){
                 firstBackendError = operandError;

@@ -11,20 +11,14 @@
 
 [cpp_unwind]
 void RendererMeshSystem::pruneRuntimeMeshResources(){
-    if(this.m_meshState.m_meshes.empty())
+    if(this.m_meshState.m_runtimeMeshCount == 0u || this.m_meshState.m_meshes.empty())
         return;
 
     const Optional<mut MeshSystem> meshSystem = this.m_world.borrowSystem<MeshSystem>();
-    usize runtimeMeshCount = 0u;
-    if(meshSystem.has_value()){
-        for(in auto entry : this.m_meshState.m_meshes){
-            if(entry.second.runtimeMesh)
-                ++runtimeMeshCount;
-        }
-        if(runtimeMeshCount == 0u)
-            return;
-    }
-    RuntimeMeshRequestSet requests(runtimeMeshCount);
+    usize requestCapacity = 0u;
+    if(meshSystem.has_value())
+        requestCapacity = this.m_meshState.m_runtimeMeshCount;
+    RuntimeMeshRequestSet requests(requestCapacity);
     if(meshSystem.has_value()){
         for(in auto entry : this.m_meshState.m_meshes){
             in MeshResources mesh = entry.second;
@@ -43,6 +37,8 @@ void RendererMeshSystem::pruneRuntimeMeshResources(){
         }
         this.releaseMeshGeometryHeapHandles(mesh);
         it = this.m_meshState.m_meshes.erase(it);
+        if(this.m_meshState.m_runtimeMeshCount > 0u)
+            --this.m_meshState.m_runtimeMeshCount;
     }
 }
 

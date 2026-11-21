@@ -94,7 +94,12 @@ public:
 public:
     EntityID create();
     void destroy(EntityID entityId);
-    b8 alive(EntityID entityId)const noexcept;
+    [[nodiscard]] FOUNDATION_INLINE b8 alive(const EntityID entityId)const noexcept{
+        const u32 index = entityId.index();
+        if(index >= static_cast<u32>(m_generations.size()))
+            return false;
+        return static_cast<u32>(m_generations[index]) == entityId.generation();
+    }
     usize count()const noexcept{ return m_aliveCount; }
     void clear()noexcept;
 

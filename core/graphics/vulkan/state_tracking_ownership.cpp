@@ -259,6 +259,10 @@ void CommandList::setPermanentBufferState(Buffer* buffer, ResourceStates::Mask s
         return;
     retainResource(buffer);
     m_stateTracker.setPermanentBufferState(*buffer, stateBits);
+    if(m_lastValidatedWriteBuffer == buffer){
+        m_lastValidatedWriteBuffer = nullptr;
+        m_lastValidatedWriteBufferPermanentState = ResourceStates::Unknown;
+    }
 }
 
 

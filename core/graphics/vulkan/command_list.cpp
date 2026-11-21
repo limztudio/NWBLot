@@ -97,7 +97,11 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
     m_nativeRecordingID = 0u;
     m_isRecording = false;
     m_commandRecordingFailed = false;
+    m_recordingFastCapabilityMask = 0u;
     m_descriptorBuffersBound = false;
+    m_cachedDynamicGraphicsState = {};
+    m_lastValidatedWriteBuffer = nullptr;
+    m_lastValidatedWriteBufferPermanentState = ResourceStates::Unknown;
 
     if(!descriptionMatchesCreation()){
         rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("public description differs from resolved creation identity"));
@@ -153,6 +157,9 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
     }
 
     m_isRecording = true;
+    m_recordingFastCapabilityMask = (m_cachedQueueContractValid && m_cachedPhysicalQueueInfo.queueClass == m_creationDesc.queueType)
+        ? static_cast<u8>(static_cast<u8>(m_cachedPhysicalQueueInfo.capabilities) & GpuQueueCapability::s_KnownCapabilityBits)
+        : 0u;
 
     m_stateTracker.beginRecordingAttempt();
     if(initialStates){
@@ -361,6 +368,7 @@ void CommandList::closeInternal(CommandListResourceStateHandoff* finalStates){
 
     const VkResult res = m_context.deviceDispatch.vkEndCommandBuffer(m_currentCmdBuf->m_cmdBuf);
     m_isRecording = false;
+    m_recordingFastCapabilityMask = 0u;
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to end command buffer recording: {}"), ResultToString(res));
         FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Vulkan: Failed to end command buffer recording"));
@@ -394,6 +402,7 @@ void CommandList::abortRecordingAttemptWithoutCallbacks()noexcept{
     }
     m_isRecording = false;
     m_commandRecordingFailed = true;
+    m_recordingFastCapabilityMask = 0u;
     m_nativeRecordingID = 0u;
     m_renderPassActive = false;
     m_graphicsBuffersValidatedInPass = false;
@@ -479,6 +488,9 @@ void CommandList::clearStateInternal(){
     m_renderPassActive = false;
     m_descriptorBuffersBound = false;
     m_renderPassFramebuffer = nullptr;
+    m_cachedDynamicGraphicsState = {};
+    m_lastValidatedWriteBuffer = nullptr;
+    m_lastValidatedWriteBufferPermanentState = ResourceStates::Unknown;
 #if defined(NWB_DEBUG)
     m_taskCapabilitiesUsed = GpuQueueCapability::None;
     m_taskDeclaredCapabilities = GpuQueueCapability::None;

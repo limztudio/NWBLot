@@ -200,6 +200,18 @@ private:
     void shutdownLocked();
     void resetStateForShutdownLocked()noexcept;
     [[nodiscard]] b8 initializeStorage(u32 resourceCapacity, u32 samplerCapacity, u32 accelStructCapacity);
+    void publishBindingFastVersionLocked()noexcept{
+        if(m_initialized && m_staticBindingContractValid && m_descriptorBufferGeneration != 0u){
+            if(++m_nextBindingFastVersion == 0u)
+                m_nextBindingFastVersion = 1u;
+            m_bindingFastVersion.store(m_nextBindingFastVersion, MemoryOrder::release);
+            return;
+        }
+        m_bindingFastVersion.store(0u, MemoryOrder::release);
+    }
+    void syncDynamicReadinessFlagLocked()noexcept{
+        m_hasDynamicReadinessSlots.store(!m_dynamicReadinessSlots.empty(), MemoryOrder::release);
+    }
 
 
 
@@ -239,6 +251,9 @@ private:
     usize m_activePendingRecordingLeaseCount = 0u;
     u64 m_lastHeapUseID = 0u;
     u64 m_descriptorBufferGeneration = 0u;
+    u64 m_nextBindingFastVersion = 1u;
+    Atomic<u64> m_bindingFastVersion{ 0u };
+    Atomic<b8> m_hasDynamicReadinessSlots{ false };
 
     mutable Futex m_mutex;
     Atomic<b8> m_hasPendingRetirementWork{ false };

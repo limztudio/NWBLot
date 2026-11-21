@@ -49,17 +49,16 @@ class TraceGeometryImportPolicy{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 AppendSoftwareBvhBuildState(in BufferHandle buffer, in Name identity, in StringView label, mut GpuTaskGraph graph, mut Vector<BufferHandle> seen, mut Vector<GpuGraphResourceId> resources){
+b8 AppendSoftwareBvhBuildState(in BufferHandle buffer, in Name identity, in StringView label, mut GpuTaskGraph graph, mut HashSet<usize> seen, mut Vector<GpuGraphResourceId> resources){
     if(!buffer.valid() || identity == Name())
         return false;
-    for(in BufferHandle existing : seen){
-        if(SameAddress(existing.deref(), buffer.deref()))
-            return true;
-    }
+    const usize key = buffer.identity();
+    if(seen.find(key) != seen.end())
+        return true;
     const auto imported = ImportExternalBuffer(graph, buffer, identity, label);
     if(!imported.has_value())
         return false;
-    seen.push_back(buffer);
+    seen.insert(key);
     resources.push_back(imported.value());
     return true;
 }
@@ -72,7 +71,7 @@ Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateI
     FrameGraphSoftwareBvhBuildStateResult result;
     const TraceGeometryImportPolicy importPolicy();
     in RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources = inputs.rayTracingShadowResources;
-    Vector<BufferHandle> softwareBvhBuildStateBuffers;
+    HashSet<usize> softwareBvhBuildStateBuffers;
     if(inputs.softwareTraceResourcesPrepared){
         const auto meshSoftwareBvhParentBuildStates = this.m_meshSystem.collectSoftwareBvhParentBuildStates();
         if(!meshSoftwareBvhParentBuildStates.has_value())

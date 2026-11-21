@@ -185,7 +185,7 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
 ){
 
     const b8 hardwareTransparentTrace = rayTracingPlan.hardwareTransparentTrace;
-    const b8 csgShadow = rayTracingPlan.lightSpace.ready && (rayTracingPlan.lightSpace.push.csgFlags & s_CsgShadowFlagEnabled) != 0u;
+    const b8 csgShadow = rayTracingPlan.lightSpaceReady() && (rayTracingPlan.lightSpace.deref().snapshot.push.csgFlags & s_CsgShadowFlagEnabled) != 0u;
     const b8 hardwareCsgShadow = hardwareShadowSupported && csgShadow;
 
     this.m_deferredShadowVisibilityOpaqueTask = GpuTaskId();
@@ -446,6 +446,45 @@ b8 ShadowVisibilityResourcePlanner::prepare(in ShadowVisibilityResourceInputs in
         return false;
     }
     result.sceneGeometryDomain = sceneGeometryDomainResult.value();
+
+    if(splitSoftTransparentFold){
+        if(inputs.rayTracingShadowResources.sceneTlas.valid()){
+            GpuGraphResourceDesc tlasDesc = AccelStructResourceDesc(Name(s_SceneTlasResourceName), s_SceneTlasResourceLabel);
+            tlasDesc.setInitialState(this.m_raytracingSystem.sceneTlasBackingInitialState());
+            const auto sceneTlasResult = this.m_graph.importAccelStruct(inputs.rayTracingShadowResources.sceneTlas, tlasDesc);
+            if(!sceneTlasResult.has_value()){
+                warning("RendererSystem: could not import a deferred shadow-visibility dynamic resource");
+                return false;
+            }
+            result.sceneTlas = sceneTlasResult.value();
+        }
+        if(hardwareTransparentTrace){
+            const Array<BufferHandle, 3u> buffers(inputs.rayTracingResources.hardwareTransparentCrossingsBuffer, inputs.rayTracingResources.hardwareTransparentOverflowListBuffer, inputs.rayTracingResources.hardwareTransparentOverflowArgsBuffer);
+            for(usize index = 0u; index < buffers.size(); ++index){
+                in BufferHandle buffer = buffers[index];
+                if(!buffer.valid())
+                    return false;
+                in BufferDesc bufferDesc = buffer.deref().getCreationDescription();
+                if(bufferDesc.debugName == s_NameNone)
+                    return false;
+                GpuGraphResourceDesc scratchDesc = BufferResourceDesc(bufferDesc.debugName, s_HardwareTransparentScratchLabel);
+                scratchDesc.setInitialState(bufferDesc.initialState);
+                const auto hardwareTransparentScratchResult = this.m_graph.importBuffer(buffer, scratchDesc);
+                if(!hardwareTransparentScratchResult.has_value()){
+                    result.hardwareTransparentScratch[index] = GpuGraphResourceId();
+                    return false;
+                }
+                result.hardwareTransparentScratch[index] = hardwareTransparentScratchResult.value();
+            }
+        }
+        if(!traceGeometryStatesGraphOwned){
+            for(in GpuGraphResourceId resource : inputs.traceGeometryResources){
+                if(!resource.valid())
+                    return false;
+            }
+        }
+        return true;
+    }
 
     result.resourceUses.reserve(ResolveShadowTraceGeometryReserveCount(s_ShadowVisibilityResourceUseCapacity, traceGeometryStatesGraphOwned, inputs.traceGeometryResources.size()));
     result.resourceUses.push_back(ReadUse(worldPosition));

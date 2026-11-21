@@ -74,6 +74,29 @@ class LightSpaceCsgState{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+u64 BuildLightSpaceCsgCaptureIdentityWithMaterialHash(
+    in LightSpaceCsgState state,
+    in Span<NwbRtInstanceMaterialGpu> materials,
+    in Span<InstanceGpuData> instances,
+    in usize materialByteCount,
+    in u64 materialTypedHash,
+    in Span<TextureHandle> textures
+){
+    assert(materials.size() == instances.size());
+    u64 identity = LightSpaceCaptureIdentityBuilder().buildCsgBaseIdentityWithMaterialHash(
+        state.captureGeometryIdentity,
+        state.snapshot.contentIdentity,
+        materials,
+        instances,
+        materialByteCount,
+        materialTypedHash,
+        textures.size()
+    );
+    for(in TextureHandle texture : textures)
+        Fnv64AppendValue(identity, texture.identity());
+    return identity;
+}
+
 u64 BuildLightSpaceCsgCaptureIdentity(
     in LightSpaceCsgState state,
     in Span<NwbRtInstanceMaterialGpu> materials,
@@ -81,18 +104,14 @@ u64 BuildLightSpaceCsgCaptureIdentity(
     in Span<u8> materialBytes,
     in Span<TextureHandle> textures
 ){
-    assert(materials.size() == instances.size());
-    u64 identity = LightSpaceCaptureIdentityBuilder().buildCsgBaseIdentity(
-        state.captureGeometryIdentity,
-        state.snapshot.contentIdentity,
+    return BuildLightSpaceCsgCaptureIdentityWithMaterialHash(
+        state,
         materials,
         instances,
-        materialBytes,
-        textures.size()
+        materialBytes.size(),
+        UpdateFnv64(s_Fnv64OffsetBasis, materialBytes),
+        textures
     );
-    for(in TextureHandle texture : textures)
-        Fnv64AppendValue(identity, texture.identity());
-    return identity;
 }
 
 [cpp_unwind]
@@ -120,7 +139,7 @@ void BeginLightSpaceCsgGather(mut LightSpaceCsgState state, mut World world, in 
 }
 
 [cpp_unwind]
-void AppendLightSpaceCsgReceiver(
+void AppendLightSpaceCsgReceiverWithBounds(
     mut LightSpaceCsgState state,
     in EntityID entity,
     in b8 transparent,
@@ -128,6 +147,9 @@ void AppendLightSpaceCsgReceiver(
     in MatrixSingle worldToObject,
     in VectorSingle localMin,
     in VectorSingle localMax,
+    in b8 hasPrecomputedWorldBounds,
+    in VectorSingle precomputedWorldMin,
+    in VectorSingle precomputedWorldMax,
     in MeshRayTracingResourceSnapshot mesh
 ){
     if(!state.gathering)
@@ -163,7 +185,16 @@ void AppendLightSpaceCsgReceiver(
         receiver.receiverPass = CsgReceiverPass::Transparent;
     VectorSingle worldMin(0.0f, 0.0f, 0.0f, 0.0f);
     VectorSingle worldMax(0.0f, 0.0f, 0.0f, 0.0f);
-    receiver.boundsValid = !mesh.runtimeMesh && CsgReceiverBoundsCanCull(mesh.csgLocalBounds) && TryTransformAabb(objectToWorld, localMin, localMax, worldMin, worldMax);
+    receiver.boundsValid = false;
+    if(!mesh.runtimeMesh && CsgReceiverBoundsCanCull(mesh.csgLocalBounds)){
+        if(hasPrecomputedWorldBounds){
+            worldMin = precomputedWorldMin;
+            worldMax = precomputedWorldMax;
+            receiver.boundsValid = true;
+        }
+        else
+            receiver.boundsValid = TryTransformAabb(objectToWorld, localMin, localMax, worldMin, worldMax);
+    }
     receiver.worldMin = f32x4(worldMin);
     receiver.worldMax = f32x4(worldMax);
     state.receivers.push_back(receiver);
@@ -189,6 +220,20 @@ void AppendLightSpaceCsgReceiver(
         nodeSlot
     ));
     state.solidTriangleMasks.push_back(mesh.solidTriangleWords);
+}
+
+[cpp_unwind]
+void AppendLightSpaceCsgReceiver(
+    mut LightSpaceCsgState state,
+    in EntityID entity,
+    in b8 transparent,
+    in MatrixSingle objectToWorld,
+    in MatrixSingle worldToObject,
+    in VectorSingle localMin,
+    in VectorSingle localMax,
+    in MeshRayTracingResourceSnapshot mesh
+){
+    AppendLightSpaceCsgReceiverWithBounds(state, entity, transparent, objectToWorld, worldToObject, localMin, localMax, false, VectorZero(), VectorZero(), mesh);
 }
 
 [cpp_unwind]

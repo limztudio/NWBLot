@@ -68,6 +68,9 @@ void CollectCpuTaskProfile(CpuTaskScheduler& scheduler, TimingSink& timing){
         return;
     const b8 enabled = timing.enabled();
     Array<CpuTaskProfileEvent, __hidden_cpu_task_profile::s_ReadBatchSize> events;
+    Array<TimingScopeId, 6u> cachedBuiltInScopes{};
+    Name lastCustomLabel = s_NameNone;
+    TimingScopeId lastCustomScope{};
     while(remaining != 0u){
         const usize count = scheduler.readProfileEvents(events.data(), Min(remaining, __hidden_cpu_task_profile::s_ReadBatchSize));
         if(count == 0u)
@@ -90,12 +93,40 @@ void CollectCpuTaskProfile(CpuTaskScheduler& scheduler, TimingSink& timing){
                 if(!scopeNames[lane])
                     continue;
                 const CpuTaskProfileEvent& event = events[index + lane];
-                const auto scope = timing.registerScope(*scopeNames[lane]);
-                if(!scope){
-                    NWB_LOGGER_WARNING(FOUNDATION_TEXT("CPU task timing scope registration failed"));
-                    continue;
+                TimingScopeId resolvedScope{};
+                const b8 isCustomLabel = (event.kind == CpuTaskProfileKind::Execution && event.label);
+                if(isCustomLabel){
+                    if(event.label == lastCustomLabel && lastCustomScope.valid()){
+                        resolvedScope = lastCustomScope;
+                    }
+                    else{
+                        const auto scope = timing.registerScope(*scopeNames[lane]);
+                        if(!scope){
+                            NWB_LOGGER_WARNING(FOUNDATION_TEXT("CPU task timing scope registration failed"));
+                            continue;
+                        }
+                        resolvedScope = *scope;
+                        lastCustomLabel = event.label;
+                        lastCustomScope = resolvedScope;
+                    }
                 }
-                timing.recordSample(*scope, VectorDoubleGetByIndex(seconds, lane), event.frameIndex);
+                else{
+                    const usize slot = static_cast<usize>(event.kind);
+                    if(slot < cachedBuiltInScopes.size() && cachedBuiltInScopes[slot].valid()){
+                        resolvedScope = cachedBuiltInScopes[slot];
+                    }
+                    else{
+                        const auto scope = timing.registerScope(*scopeNames[lane]);
+                        if(!scope){
+                            NWB_LOGGER_WARNING(FOUNDATION_TEXT("CPU task timing scope registration failed"));
+                            continue;
+                        }
+                        resolvedScope = *scope;
+                        if(slot < cachedBuiltInScopes.size())
+                            cachedBuiltInScopes[slot] = resolvedScope;
+                    }
+                }
+                timing.recordSample(resolvedScope, VectorDoubleGetByIndex(seconds, lane), event.frameIndex);
             }
         }
     }

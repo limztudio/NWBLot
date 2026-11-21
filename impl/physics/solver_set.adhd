@@ -523,6 +523,7 @@ class Island{
 
 class SolverSet{
     public u32 setIndex = s_NullIndex;
+    public u64 membershipVersion = 1u;
     public Vector<BodySim> sims;
     public Vector<BodyState> states;
     public Vector<u32> islands;
@@ -545,12 +546,23 @@ Aabb3D ComputeShapeLocalAabb(in Shape shape, in Vector<HullShape> hullShapes, in
         return ComputeCapsuleAabb(shape.capsuleShape(), Transform3D());
     if(shape.type == ShapeType::Mesh){
         if(shape.geometryIndex < meshShapes.size())
-            return ComputeMeshAabb(meshShapes[shape.geometryIndex], Transform3D());
+            return meshShapes[shape.geometryIndex].localAabb();
         return Aabb3D();
     }
     if(shape.geometryIndex < hullShapes.size())
         return ComputeHullAabb(hullShapes[shape.geometryIndex], Transform3D());
     return Aabb3D();
+}
+
+Aabb3D ComputeShapeLocalAabbCached(
+    in Shape shape,
+    in Vector<HullShape> hullShapes,
+    in Vector<Aabb3D> hullLocalAabbs,
+    in Vector<MeshShape> meshShapes
+){
+    if(shape.type == ShapeType::Hull && shape.geometryIndex < hullLocalAabbs.size())
+        return hullLocalAabbs[shape.geometryIndex];
+    return ComputeShapeLocalAabb(shape, hullShapes, meshShapes);
 }
 
 Aabb3D ComputeShapeWorldAabb(in Shape shape, in Transform3D xf, in Vector<HullShape> hullShapes, in Vector<MeshShape> meshShapes){
@@ -698,6 +710,7 @@ void AddBodyToSolverSet(mut Vector<Body> bodies, mut SolverSet set, in BodySim s
     set.states.push_back(state);
     bodies[sim.bodyId].setIndex = set.setIndex;
     bodies[sim.bodyId].localIndex = localIdx;
+    ++set.membershipVersion;
 }
 
 void RemoveBodyFromSolverSet(mut Vector<Body> bodies, mut SolverSet set, in u32 localIndex){
@@ -716,6 +729,7 @@ void RemoveBodyFromSolverSet(mut Vector<Body> bodies, mut SolverSet set, in u32 
     set.states.pop_back();
     bodies[removedBodyId].setIndex = s_NullIndex;
     bodies[removedBodyId].localIndex = s_NullIndex;
+    ++set.membershipVersion;
 }
 
 

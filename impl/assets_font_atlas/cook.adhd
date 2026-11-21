@@ -213,6 +213,8 @@ b8 ReadFontAtlasSettings(in Path path, in MetascriptValue asset, mut FontAtlasPa
 b8 SerializeFontAtlasAsset(in FontAtlas atlas, mut Vector<u8> outBinary){
     if(!atlas.checkVirtualPath("FontAtlas::validatePayload"))
         return false;
+    if(atlas.isPayloadValidated())
+        return SerializeFontAtlasPayloadValidatedInto(atlas.payload(), outBinary);
     return SerializeFontAtlasPayloadInto(atlas.payload(), outBinary);
 }
 
@@ -221,14 +223,16 @@ Expected<FontAtlas> BuildFontAtlasAssetFromPayload(in Name virtualPath, in FontA
     candidate.setPayload(payload);
     if(!candidate.validatePayload())
         return MakeUnexpected(Failure());
+    candidate.markPayloadValidated();
     return candidate;
 }
 
-b8 PopulateFontAtlasPayloadFromPreparedSource(
+b8 PopulateFontAtlasPayloadFromPreparedSourceWithOptions(
     in Path nwbFilePath,
     in MetascriptValue asset,
     in PreparedFontSource source,
     in Font font,
+    in b8 verifyPixelDigests,
     mut FontAtlasPayload inOutPayload
 ){
     CopySourceGroups(source, inOutPayload);
@@ -254,7 +258,24 @@ b8 PopulateFontAtlasPayloadFromPreparedSource(
     if(!glyphsResult.has_value())
         return false;
     inOutPayload.glyphs = glyphsResult.value();
-    return ValidateFontAtlasPayload(inOutPayload);
+    return ValidateFontAtlasPayloadWithOptions(inOutPayload, verifyPixelDigests);
+}
+
+b8 PopulateFontAtlasPayloadFromPreparedSource(
+    in Path nwbFilePath,
+    in MetascriptValue asset,
+    in PreparedFontSource source,
+    in Font font,
+    mut FontAtlasPayload inOutPayload
+){
+    return PopulateFontAtlasPayloadFromPreparedSourceWithOptions(
+        nwbFilePath,
+        asset,
+        source,
+        font,
+        true,
+        inOutPayload
+    );
 }
 
 
@@ -285,7 +306,7 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(in Name virtualPath
         return MakeUnexpected(Failure());
     Font font(candidate.payload.font.name());
     font.setFontBytes(source.value().fontBytes, source.value().faceIndex);
-    if(!PopulateFontAtlasPayloadFromPreparedSource(path, asset, source.value(), font, candidate.payload))
+    if(!PopulateFontAtlasPayloadFromPreparedSourceWithOptions(path, asset, source.value(), font, false, candidate.payload))
         return MakeUnexpected(Failure());
     candidate.virtualPath = virtualPath;
     return candidate;

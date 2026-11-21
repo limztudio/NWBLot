@@ -33,7 +33,7 @@ b8 GbufferGraphTask::record(mut CommandList commands, in GpuTaskRecordContext co
         csgFrameData = this.opaqueDrawSnapshot.csgFrameDataView();
     }
 
-    const b8 hasDeferredDrawItems = !opaqueDrawItems.empty();
+    const b8 hasDeferredDrawItems = !opaqueDrawItems.empty() || (frameSetupReady && this.opaqueDrawSnapshot.hasCsgDraws);
     const b8 deferredResourcesReady = hasDeferredDrawItems && this.materialDrawBuffersUploaded && this.frameBindings.frameReady(this.opaqueDrawSnapshot.passes.instanceCount, this.opaqueDrawSnapshot.passes.materialTypedByteCount);
     const b8 regularDrawResourcesReady = deferredResourcesReady && this.materialSystem.drawRecorder().materialPassDrawResourcesReady(opaqueDrawItems.regular, this.frameBindings);
     MaterialPassDrawItemsView regularDrawItemsForGbuffer(opaqueDrawItems.regular.meshDrawItems, opaqueDrawItems.regular.indexedDrawItems, opaqueDrawItems.regular.computeDrawItems);

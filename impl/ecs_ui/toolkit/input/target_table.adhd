@@ -21,7 +21,7 @@ class InputTargetTable : NoCopy{
     }
 
     public b8 publish(in Span<HitTarget> targets, in Span<PopupRecord> stagedPopups, in u64 generation){
-        return PublishRouterTargetTable(targets, stagedPopups, generation, this.m_targets, this.m_stagedTargets, this.m_lookup, this.m_stagedLookup, this.m_generation);
+        return PublishRouterTargetTable(targets, stagedPopups, generation, this.m_targets, this.m_stagedTargets, this.m_lookup, this.m_stagedLookup, this.m_spatialIndex, this.m_generation);
     }
 
     public Expected<usize> findIndex(in WidgetId id, in u64 declarationGeneration)const{
@@ -29,12 +29,12 @@ class InputTargetTable : NoCopy{
     }
 
     public b8 invalidate(in WidgetId id){
-        return InvalidateRouterTargetTable(id, this.m_lookup, this.m_targets);
+        return InvalidateRouterTargetTable(id, this.m_lookup, this.m_targets, this.m_spatialIndex);
     }
 
     [cpp_unwind]
     public b8 invalidateBatch(in Span<WidgetId> ids){
-        return InvalidateRouterTargetTableBatch(ids, this.m_lookup, this.m_targets);
+        return InvalidateRouterTargetTableBatch(ids, this.m_lookup, this.m_targets, this.m_spatialIndex);
     }
 
     public b8 fenceControl(in WidgetId host, in u64 declarationGeneration, in ControlToken token){
@@ -42,11 +42,11 @@ class InputTargetTable : NoCopy{
     }
 
     public Optional<InputPopupRetirement> retirePopup(in WidgetId id, mut Vector<PopupRecord> popups, mut Vector<PopupDismissal> dismissals){
-        return RetireRouterTargetTablePopup(id, popups, this.m_targets, dismissals, this.m_lookup);
+        return RetireRouterTargetTablePopup(id, popups, this.m_targets, dismissals, this.m_lookup, this.m_spatialIndex);
     }
 
     public void reset(){
-        ResetRouterTargetTable(this.m_targets, this.m_stagedTargets, this.m_lookup, this.m_stagedLookup, this.m_generation);
+        ResetRouterTargetTable(this.m_targets, this.m_stagedTargets, this.m_lookup, this.m_stagedLookup, this.m_spatialIndex, this.m_generation);
     }
 
     public u64 generation()const{
@@ -61,10 +61,20 @@ class InputTargetTable : NoCopy{
         return this.m_lookup;
     }
 
+    public void prepareSpatialIndex(){
+        if(this.m_spatialIndex.dirty)
+            BuildTargetSpatialIndex(Span<HitTarget>(this.m_targets), this.m_spatialIndex);
+    }
+
+    public in TargetSpatialIndex spatialIndex()const{
+        return this.m_spatialIndex;
+    }
+
     private Vector<HitTarget> m_targets;
     private Vector<HitTarget> m_stagedTargets;
     private Vector<TargetLookup> m_lookup;
     private Vector<TargetLookup> m_stagedLookup;
+    private TargetSpatialIndex m_spatialIndex;
     private u64 m_generation = 0u;
 }
 

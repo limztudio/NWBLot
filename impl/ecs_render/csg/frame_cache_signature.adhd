@@ -28,9 +28,12 @@ Expected<CsgFrameStateCacheSignature> BuildCsgFrameCacheSignature(mut World worl
     for(in auto row : world.view<StaticCsgMeshComponent>()){
         const EntityID entity = Get<0>(row);
         const CsgReceiverComponent receiver = Get<1>(row).asReceiver();
-        const b8 hasRenderer = world.hasComponent<RendererComponent>(entity);
-        const b8 hasMesh = world.hasComponent<MeshComponent>(entity);
-        const b8 hasTransform = world.hasComponent<TransformComponent>(entity);
+        const Optional<mut RendererComponent> borrowedRenderer = world.borrowComponent<RendererComponent>(entity);
+        const Optional<mut MeshComponent> borrowedMesh = world.borrowComponent<MeshComponent>(entity);
+        const Optional<mut TransformComponent> borrowedTransform = world.borrowComponent<TransformComponent>(entity);
+        const b8 hasRenderer = borrowedRenderer.has_value();
+        const b8 hasMesh = borrowedMesh.has_value();
+        const b8 hasTransform = borrowedTransform.has_value();
         b8 visible = false;
         Name material = s_NameNone;
         Name mesh = s_NameNone;
@@ -38,14 +41,14 @@ Expected<CsgFrameStateCacheSignature> BuildCsgFrameCacheSignature(mut World worl
         VectorSingle rotation(0.0f, 0.0f, 0.0f, 0.0f);
         VectorSingle scale(0.0f, 0.0f, 0.0f, 0.0f);
         if(hasRenderer){
-            in RendererComponent renderer = world.getComponent<RendererComponent>(entity);
+            in RendererComponent renderer = borrowedRenderer.value();
             visible = renderer.visible;
             material = renderer.material.name();
         }
         if(hasMesh)
-            mesh = world.getComponent<MeshComponent>(entity).mesh.name();
+            mesh = borrowedMesh.value().mesh.name();
         if(hasTransform){
-            in TransformComponent transform = world.getComponent<TransformComponent>(entity);
+            in TransformComponent transform = borrowedTransform.value();
             position = VectorSingle(transform.position);
             rotation = VectorSingle(transform.rotation);
             scale = VectorSingle(transform.scale);

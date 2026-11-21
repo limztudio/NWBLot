@@ -30,49 +30,39 @@
 
 
 inline void FOUNDATION_SIMD_CALL BoundingBox::TransformBoxValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, const SIMDMatrix& matrix, SIMDVectorSingle& outCenter, SIMDVectorSingle& outExtents)noexcept{
-    SIMDVectorSingle corners[s_CornerCount];
-    CollisionDetail::AabbCorners(boxCenter, boxExtents, corners);
-    SIMDVectorSingle minBounds = Vector3Transform(corners[0], matrix);
-    SIMDVectorSingle maxBounds = minBounds;
-    for(u32 i = 1u; i < s_CornerCount; ++i)
-        CollisionDetail::ExpandMinMax(Vector3Transform(corners[i], matrix), minBounds, maxBounds);
-    CollisionDetail::CenterExtentsFromMinMax(minBounds, maxBounds, outCenter, outExtents);
+    const SIMDMatrix columns = MatrixTranspose(matrix);
+    const SIMDVectorSingle c = VectorAndInt(boxCenter, s_SIMDMask3);
+    const SIMDVectorSingle e = VectorAndInt(VectorAbs(boxExtents), s_SIMDMask3);
+    outCenter = VectorAndInt(VectorMultiplyAdd(columns.v[0], VectorSplatX(c), VectorMultiplyAdd(columns.v[1], VectorSplatY(c), VectorMultiplyAdd(columns.v[2], VectorSplatZ(c), columns.v[3]))), s_SIMDMask3);
+    outExtents = VectorAndInt(VectorMultiplyAdd(VectorAbs(columns.v[0]), VectorSplatX(e), VectorMultiplyAdd(VectorAbs(columns.v[1]), VectorSplatY(e), VectorMultiply(VectorAbs(columns.v[2]), VectorSplatZ(e)))), s_SIMDMask3);
 }
 
 inline void FOUNDATION_SIMD_CALL BoundingBox::TransformBoxValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, f32 scale, SIMDVectorSingle rotation, SIMDVectorSingle translation, SIMDVectorSingle& outCenter, SIMDVectorSingle& outExtents)noexcept{
-    SIMDVectorSingle corners[s_CornerCount];
-    CollisionDetail::AabbCorners(boxCenter, boxExtents, corners);
     const SIMDVectorSingle scaleVector = VectorReplicate(scale);
-    SIMDVectorSingle minBounds = VectorAdd(Vector3Rotate(VectorMultiply(corners[0], scaleVector), rotation), translation);
-    SIMDVectorSingle maxBounds = minBounds;
-    for(u32 i = 1u; i < s_CornerCount; ++i){
-        const SIMDVectorSingle transformed = VectorAdd(Vector3Rotate(VectorMultiply(corners[i], scaleVector), rotation), translation);
-        CollisionDetail::ExpandMinMax(transformed, minBounds, maxBounds);
-    }
-    CollisionDetail::CenterExtentsFromMinMax(minBounds, maxBounds, outCenter, outExtents);
+    outCenter = VectorAndInt(VectorAdd(Vector3Rotate(VectorMultiply(VectorAndInt(boxCenter, s_SIMDMask3), scaleVector), rotation), translation), s_SIMDMask3);
+    const SIMDVectorSingle absExtents = VectorAndInt(VectorAbs(VectorMultiply(boxExtents, scaleVector)), s_SIMDMask3);
+    const SIMDVectorSingle axis0 = Vector3Rotate(s_SIMDIdentityR0, rotation);
+    const SIMDVectorSingle axis1 = Vector3Rotate(s_SIMDIdentityR1, rotation);
+    const SIMDVectorSingle axis2 = Vector3Rotate(s_SIMDIdentityR2, rotation);
+    outExtents = VectorAndInt(VectorMultiplyAdd(VectorAbs(axis0), VectorSplatX(absExtents), VectorMultiplyAdd(VectorAbs(axis1), VectorSplatY(absExtents), VectorMultiply(VectorAbs(axis2), VectorSplatZ(absExtents)))), s_SIMDMask3);
 }
 
 inline void FOUNDATION_SIMD_CALL BoundingDoubleBox::TransformBoxValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, const SIMDMatrixDouble& matrix, SIMDVectorDouble& outCenter, SIMDVectorDouble& outExtents)noexcept{
-    SIMDVectorDouble corners[s_DoubleCornerCount];
-    CollisionDoubleDetail::AabbCorners(boxCenter, boxExtents, corners);
-    SIMDVectorDouble minBounds = VectorDouble3Transform(corners[0], matrix);
-    SIMDVectorDouble maxBounds = minBounds;
-    for(u64 i = 1u; i < s_DoubleCornerCount; ++i)
-        CollisionDoubleDetail::ExpandMinMax(VectorDouble3Transform(corners[i], matrix), minBounds, maxBounds);
-    CollisionDoubleDetail::CenterExtentsFromMinMax(minBounds, maxBounds, outCenter, outExtents);
+    const SIMDMatrixDouble columns = MatrixDoubleTranspose(matrix);
+    const SIMDVectorDouble c = VectorDoubleAndInt(boxCenter, s_DoubleSIMDMask3);
+    const SIMDVectorDouble e = VectorDoubleAndInt(VectorDoubleAbs(boxExtents), s_DoubleSIMDMask3);
+    outCenter = VectorDoubleAndInt(VectorDoubleMultiplyAdd(columns.v[0], VectorDoubleSplatX(c), VectorDoubleMultiplyAdd(columns.v[1], VectorDoubleSplatY(c), VectorDoubleMultiplyAdd(columns.v[2], VectorDoubleSplatZ(c), columns.v[3]))), s_DoubleSIMDMask3);
+    outExtents = VectorDoubleAndInt(VectorDoubleMultiplyAdd(VectorDoubleAbs(columns.v[0]), VectorDoubleSplatX(e), VectorDoubleMultiplyAdd(VectorDoubleAbs(columns.v[1]), VectorDoubleSplatY(e), VectorDoubleMultiply(VectorDoubleAbs(columns.v[2]), VectorDoubleSplatZ(e)))), s_DoubleSIMDMask3);
 }
 
 inline void FOUNDATION_SIMD_CALL BoundingDoubleBox::TransformBoxValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, f64 scale, SIMDVectorDouble rotation, SIMDVectorDouble translation, SIMDVectorDouble& outCenter, SIMDVectorDouble& outExtents)noexcept{
-    SIMDVectorDouble corners[s_DoubleCornerCount];
-    CollisionDoubleDetail::AabbCorners(boxCenter, boxExtents, corners);
     const SIMDVectorDouble scaleVector = VectorDoubleReplicate(scale);
-    SIMDVectorDouble minBounds = VectorDoubleAdd(VectorDouble3Rotate(VectorDoubleMultiply(corners[0], scaleVector), rotation), translation);
-    SIMDVectorDouble maxBounds = minBounds;
-    for(u64 i = 1u; i < s_DoubleCornerCount; ++i){
-        const SIMDVectorDouble transformed = VectorDoubleAdd(VectorDouble3Rotate(VectorDoubleMultiply(corners[i], scaleVector), rotation), translation);
-        CollisionDoubleDetail::ExpandMinMax(transformed, minBounds, maxBounds);
-    }
-    CollisionDoubleDetail::CenterExtentsFromMinMax(minBounds, maxBounds, outCenter, outExtents);
+    outCenter = VectorDoubleAndInt(VectorDoubleAdd(VectorDouble3Rotate(VectorDoubleMultiply(VectorDoubleAndInt(boxCenter, s_DoubleSIMDMask3), scaleVector), rotation), translation), s_DoubleSIMDMask3);
+    const SIMDVectorDouble absExtents = VectorDoubleAndInt(VectorDoubleAbs(VectorDoubleMultiply(boxExtents, scaleVector)), s_DoubleSIMDMask3);
+    const SIMDVectorDouble axis0 = VectorDouble3Rotate(s_DoubleSIMDIdentityR0, rotation);
+    const SIMDVectorDouble axis1 = VectorDouble3Rotate(s_DoubleSIMDIdentityR1, rotation);
+    const SIMDVectorDouble axis2 = VectorDouble3Rotate(s_DoubleSIMDIdentityR2, rotation);
+    outExtents = VectorDoubleAndInt(VectorDoubleMultiplyAdd(VectorDoubleAbs(axis0), VectorDoubleSplatX(absExtents), VectorDoubleMultiplyAdd(VectorDoubleAbs(axis1), VectorDoubleSplatY(absExtents), VectorDoubleMultiply(VectorDoubleAbs(axis2), VectorDoubleSplatZ(absExtents)))), s_DoubleSIMDMask3);
 }
 
 

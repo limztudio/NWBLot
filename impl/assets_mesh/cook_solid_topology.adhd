@@ -230,17 +230,9 @@ b8 BuildSolidTriangleWordsInto(
     Vector<TriangleEdge> edges;
     if(!PrepareMeshTopologyEdges(positions, triangleIndices, parents, ranks, invalidTriangles, edges))
         return false;
-    for(usize gap = edges.size() / 2u; gap > 0u; gap /= 2u){
-        for(usize i = gap; i < edges.size(); ++i){
-            const TriangleEdge current = edges[i];
-            usize j = i;
-            while(j >= gap && current.positions < edges[j - gap].positions){
-                edges[j] = edges[j - gap];
-                j -= gap;
-            }
-            edges[j] = current;
-        }
-    }
+    SortSequence<TriangleEdge>(edges, lambda[](in TriangleEdge lhs, in TriangleEdge rhs) -> b8{
+        return lhs.positions < rhs.positions;
+    });
     FinalizeMeshSolidTriangleWords(positions, triangleIndices, edges, parents, ranks, invalidTriangles, outWords);
     return true;
 }

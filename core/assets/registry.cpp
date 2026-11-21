@@ -20,6 +20,16 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void AssetRegistry::waitForActiveDeserializations()const noexcept{
+    if(m_activeDeserializations.load(MemoryOrder::acquire) == 0u)
+        return;
+
+    m_waitingModifiers.fetch_add(1u, MemoryOrder::acq_rel);
+    UniqueLock idleLock(m_idleMutex);
+    m_idleCondition.wait(idleLock, [this]()noexcept{ return m_activeDeserializations.load(MemoryOrder::acquire) == 0u; });
+    m_waitingModifiers.fetch_sub(1u, MemoryOrder::release);
+}
+
 b8 AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const b8 replaceExisting){
     if(!codec){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetRegistry: rejected null codec registration"));
@@ -34,7 +44,7 @@ b8 AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const b8 replace
 
     UniquePtr<IAssetCodec> replacedCodec;
     {
-        UniqueLock lock(m_mutex);
+        ExclusiveCodecGuard lock(m_codecLock);
         auto found = m_codecs.find(typeName);
         if(found != m_codecs.end()){
             if(!replaceExisting){
@@ -42,7 +52,7 @@ b8 AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const b8 replace
                 return false;
             }
 
-            m_idleCondition.wait(lock, [this]()noexcept{ return m_activeDeserializations == 0u; });
+            waitForActiveDeserializations();
             found = m_codecs.find(typeName);
             if(found != m_codecs.end()){
                 replacedCodec = Move(found.value());
@@ -65,11 +75,11 @@ b8 AssetRegistry::unregisterCodec(const Name& assetType)noexcept{
 
     UniquePtr<IAssetCodec> removedCodec;
     {
-        UniqueLock lock(m_mutex);
+        ExclusiveCodecGuard lock(m_codecLock);
         auto found = m_codecs.find(assetType);
         if(found == m_codecs.end())
             return false;
-        m_idleCondition.wait(lock, [this]()noexcept{ return m_activeDeserializations == 0u; });
+        waitForActiveDeserializations();
         found = m_codecs.find(assetType);
         if(found == m_codecs.end())
             return false;
@@ -87,20 +97,20 @@ Expected<UniquePtr<IAsset>> AssetRegistry::deserializeAsset(const Name& assetTyp
 
     IAssetCodec* rawCodec = nullptr;
     {
-        ScopedLock lock(m_mutex);
+        SharedCodecGuard lock(m_codecLock);
         const auto found = m_codecs.find(assetType);
         if(found == m_codecs.end()){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetRegistry: no codec for type '{}'"), ConvertString(assetType.resolvedText()));
             return MakeUnexpected(Failure{});
         }
         rawCodec = found.value().get();
-        ++m_activeDeserializations;
+        m_activeDeserializations.fetch_add(1u, MemoryOrder::acq_rel);
     }
     ScopeExit releaseActive([this]()noexcept{
-        NothrowScopedLock lock(m_mutex);
-        --m_activeDeserializations;
-        if(m_activeDeserializations == 0u)
+        if(m_activeDeserializations.fetch_sub(1u, MemoryOrder::acq_rel) == 1u && m_waitingModifiers.load(MemoryOrder::acquire) != 0u){
+            NothrowScopedLock lock(m_idleMutex);
             m_idleCondition.notify_all();
+        }
     });
     const NotNull<IAssetCodec*> codec(rawCodec);
 

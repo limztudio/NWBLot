@@ -17,7 +17,6 @@ NWB_VULKAN_BEGIN
 
 void Device::SubmissionWorkspace::prepareBatch(const Span<const Device::GraphCommandListBatchEntry> entries, const b8 graphSubmissionAuthorized){
     auto& expectedCommandLists = m_queue.m_executeExpectedCommandLists;
-    auto& submittedOwners = m_queue.m_executeSubmittedOwners;
     expectedCommandLists.clear();
     m_queue.m_executeSubmittedUploadMask = 0u;
 
@@ -51,16 +50,6 @@ void Device::SubmissionWorkspace::prepareBatch(const Span<const Device::GraphCom
     }
 
     m_queue.m_executeSubmittedUploadMask = uploadMask;
-    if(uploadMask == 0u)
-        return;
-
-    submittedOwners.prepare(expectedCommandLists.size());
-    if(submittedOwners.indexed()){
-        for(const Queue::SubmissionCommandListIdentity& expected : expectedCommandLists){
-            if(expected.owner && expected.owner->m_usedUploadChunkMask != 0u)
-                submittedOwners.add(*expected.owner, expected.nativeRecordingID);
-        }
-    }
 }
 
 void Device::SubmissionWorkspace::finalizeBatch(const Span<const Device::GraphCommandListBatchEntry> entries, const GpuPhysicalQueueId& executionQueue, const u64 submittedID, const b8 submissionAccepted){
@@ -75,11 +64,11 @@ void Device::SubmissionWorkspace::finalizeBatch(const Span<const Device::GraphCo
 
     if(submissionAccepted){
         if((uploadMask & s_UploadBit) != 0u)
-            m_device.m_uploadManager.submitChunks(executionQueue, submittedID, expectedCommandLists, m_queue.m_executeSubmittedOwners);
+            m_device.m_uploadManager.submitChunks(executionQueue, submittedID, expectedCommandLists);
         if((uploadMask & s_ScratchBit) != 0u)
-            m_device.m_scratchManager.submitChunks(executionQueue, submittedID, expectedCommandLists, m_queue.m_executeSubmittedOwners);
+            m_device.m_scratchManager.submitChunks(executionQueue, submittedID, expectedCommandLists);
         if((uploadMask & s_AccelInputBit) != 0u)
-            m_device.m_accelStructInputManager.submitChunks(executionQueue, submittedID, expectedCommandLists, m_queue.m_executeSubmittedOwners);
+            m_device.m_accelStructInputManager.submitChunks(executionQueue, submittedID, expectedCommandLists);
         return;
     }
 

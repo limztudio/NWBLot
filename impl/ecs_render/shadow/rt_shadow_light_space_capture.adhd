@@ -113,18 +113,7 @@ b8 LightSpaceShadowRecorder::cull(in LightSpaceShadowSnapshot snapshot, mut Comm
     return true;
 }
 
-b8 LightSpaceShadowRecorder::capture(in LightSpaceShadowSnapshot snapshot, in u32 viewIndex, in b8 transparent, mut CommandList commandList, mut GpuDescriptorHeap heap)const{
-
-    if(!snapshot.ready || !snapshot.drawArguments.valid() || viewIndex >= snapshot.plan.viewCount)
-        return false;
-    FramebufferHandle framebuffer = snapshot.opaqueFramebuffers[viewIndex];
-    if(transparent)
-        framebuffer = snapshot.transparentFramebuffers[viewIndex];
-    GraphicsPipelineHandle pipeline = snapshot.opaqueCapture;
-    if(transparent)
-        pipeline = snapshot.transparentCapture;
-    if(!framebuffer.valid() || !pipeline.valid())
-        return false;
+b8 ValidateLightSpaceCaptureCasters(in LightSpaceShadowSnapshot snapshot, in b8 transparent){
     for(usize i = 0u; i < snapshot.casters.size(); ++i){
         in LightSpaceShadowCaster caster = snapshot.casters[i];
         if(!LightSpaceCasterEligibleForCapturePass(caster.transparent, caster.csg, transparent, caster.indexCount, snapshot.push.csgFlags))
@@ -132,6 +121,18 @@ b8 LightSpaceShadowRecorder::capture(in LightSpaceShadowSnapshot snapshot, in u3
         if(!caster.triangleIndexBuffer.valid() || !caster.triangleIndexBuffer.deref().getCreationDescription().isIndexBuffer)
             return false;
     }
+    return true;
+}
+
+void RecordLightSpaceCaptureView(
+    in LightSpaceShadowSnapshot snapshot,
+    in u32 viewIndex,
+    in b8 transparent,
+    in GraphicsPipelineHandle pipeline,
+    in FramebufferHandle framebuffer,
+    mut CommandList commandList,
+    mut GpuDescriptorHeap heap
+){
     RenderPassParameters parameters;
     parameters.depthClearValue = 1.0f;
     parameters.depthAttachmentActions.loadAction = RenderPassLoadAction::Clear;
@@ -148,6 +149,8 @@ b8 LightSpaceShadowRecorder::capture(in LightSpaceShadowSnapshot snapshot, in u3
     LightSpaceShadowPush push = snapshot.push;
     push.viewIndex = viewIndex;
     u32 drawOffset = viewIndex * snapshot.push.captureDrawCount;
+    b8 graphicsStateBound = false;
+    BufferHandle boundIndexBuffer;
     for(usize i = 0u; i < snapshot.casters.size(); ++i){
         in LightSpaceShadowCaster caster = snapshot.casters[i];
         const u32 drawCount = LightSpaceCasterDrawCount(caster.meshletCount);
@@ -155,12 +158,18 @@ b8 LightSpaceShadowRecorder::capture(in LightSpaceShadowSnapshot snapshot, in u3
         drawOffset += drawCount;
         if(!LightSpaceCasterEligibleForCapturePass(caster.transparent, caster.csg, transparent, caster.indexCount, snapshot.push.csgFlags))
             continue;
-        IndexBufferBinding indexBuffer;
-        indexBuffer.setBuffer(caster.triangleIndexBuffer.deref());
-        indexBuffer.setFormat(Format::R32_UINT);
-        graphics.setIndexBuffer(indexBuffer);
-        commandList.setGraphicsState(graphics);
-        heap.bindGraphics(commandList, pipeline.deref());
+        if(!graphicsStateBound || caster.triangleIndexBuffer.get() != boundIndexBuffer.get()){
+            IndexBufferBinding indexBuffer;
+            indexBuffer.setBuffer(caster.triangleIndexBuffer.deref());
+            indexBuffer.setFormat(Format::R32_UINT);
+            graphics.setIndexBuffer(indexBuffer);
+            commandList.setGraphicsState(graphics);
+            boundIndexBuffer = caster.triangleIndexBuffer;
+            if(!graphicsStateBound){
+                heap.bindGraphics(commandList, pipeline.deref());
+                graphicsStateBound = true;
+            }
+        }
         push.instanceIndex = caster.instanceIndex;
         commandList.setPushConstants(push);
         const u32 captureCount = ResolveLightSpaceCaptureDrawCount(snapshot.plan.views[viewIndex].light[3], drawCount);
@@ -172,6 +181,48 @@ b8 LightSpaceShadowRecorder::capture(in LightSpaceShadowSnapshot snapshot, in u3
         }
     }
     commandList.endRenderPass();
+}
+
+b8 LightSpaceShadowRecorder::capture(in LightSpaceShadowSnapshot snapshot, in u32 viewIndex, in b8 transparent, mut CommandList commandList, mut GpuDescriptorHeap heap)const{
+    if(!snapshot.ready || !snapshot.drawArguments.valid() || viewIndex >= snapshot.plan.viewCount)
+        return false;
+    FramebufferHandle framebuffer = snapshot.opaqueFramebuffers[viewIndex];
+    if(transparent)
+        framebuffer = snapshot.transparentFramebuffers[viewIndex];
+    GraphicsPipelineHandle pipeline = snapshot.opaqueCapture;
+    if(transparent)
+        pipeline = snapshot.transparentCapture;
+    if(!framebuffer.valid() || !pipeline.valid())
+        return false;
+    if(!ValidateLightSpaceCaptureCasters(snapshot, transparent))
+        return false;
+    RecordLightSpaceCaptureView(snapshot, viewIndex, transparent, pipeline, framebuffer, commandList, heap);
+    return true;
+}
+
+b8 LightSpaceShadowRecorder::captureAllViews(in LightSpaceShadowSnapshot snapshot, in b8 transparent, mut CommandList commandList, mut GpuDescriptorHeap heap)const{
+    if(!snapshot.ready || !snapshot.drawArguments.valid() || snapshot.plan.viewCount == 0u)
+        return false;
+    GraphicsPipelineHandle pipeline = snapshot.opaqueCapture;
+    if(transparent)
+        pipeline = snapshot.transparentCapture;
+    if(!pipeline.valid())
+        return false;
+    for(u32 view = 0u; view < snapshot.plan.viewCount; ++view){
+        FramebufferHandle framebuffer = snapshot.opaqueFramebuffers[view];
+        if(transparent)
+            framebuffer = snapshot.transparentFramebuffers[view];
+        if(!framebuffer.valid())
+            return false;
+    }
+    if(!ValidateLightSpaceCaptureCasters(snapshot, transparent))
+        return false;
+    for(u32 view = 0u; view < snapshot.plan.viewCount; ++view){
+        FramebufferHandle framebuffer = snapshot.opaqueFramebuffers[view];
+        if(transparent)
+            framebuffer = snapshot.transparentFramebuffers[view];
+        RecordLightSpaceCaptureView(snapshot, view, transparent, pipeline, framebuffer, commandList, heap);
+    }
     return true;
 }
 

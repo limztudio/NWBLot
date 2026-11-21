@@ -22,6 +22,9 @@ NWB_VULKAN_BEGIN
 
 
 void GpuDescriptorHeap::collectRetired(){
+    if(!m_hasPendingRetirementWork.load(MemoryOrder::acquire))
+        return;
+
     struct QueueCompletion{
         GpuPhysicalQueueId queue;
         u64 value = 0u;
@@ -31,6 +34,10 @@ void GpuDescriptorHeap::collectRetired(){
 
     {
         ScopedLock lock(m_mutex);
+        if(m_heapUses.empty() && m_retiredCount == 0u){
+            m_hasPendingRetirementWork.store(false, MemoryOrder::release);
+            return;
+        }
         completions.reserve(m_heapUses.size());
         for(const HeapUse& heapUse : m_heapUses){
             const QueueSubmissionToken& token = heapUse.submissionToken;
@@ -129,6 +136,7 @@ void GpuDescriptorHeap::collectRetired(){
         ++keptHeapUses;
     }
     m_heapUses.resize(keptHeapUses);
+    m_hasPendingRetirementWork.store(!m_heapUses.empty() || m_retiredCount != 0u, MemoryOrder::release);
 }
 
 b8 GpuDescriptorHeap::isResourceAdmittedToActiveUsesLocked(const ResourceQueueAdmissionSnapshot& admission)const noexcept{
@@ -221,7 +229,10 @@ b8 GpuDescriptorHeap::trackCommandBufferUseLocked(TrackedCommandBuffer& commandB
     commandBuffer.m_referencedDescriptorHeaps.push_back(MakeNotNull(this));
     ScopeExit rollbackHeapReference([&commandBuffer]()noexcept{ commandBuffer.m_referencedDescriptorHeaps.pop_back(); });
     m_heapUses.push_back(HeapUse{ .commandBuffer = &commandBuffer, .submissionToken = {}, .id = ++m_lastHeapUseID, .physicalQueue = physicalQueue, });
+    m_hasPendingRetirementWork.store(true, MemoryOrder::release);
     commandBuffer.m_trackedDescriptorHeapQueue = physicalQueue;
+    commandBuffer.m_trackedDescriptorHeapUseID = m_lastHeapUseID;
+    commandBuffer.m_trackedDescriptorHeapUseIndexHint = m_heapUses.size() - 1u;
     rollbackHeapReference.release();
     return true;
 }
@@ -230,6 +241,19 @@ Expected<usize> GpuDescriptorHeap::validateCommandBufferUseSubmissionLocked(Trac
     if(!submissionToken.valid() || !m_device.matchesPhysicalQueueIdentity(GpuPhysicalQueueId{ .index = submissionToken.physicalQueueIndex, .deviceGeneration = submissionToken.deviceGeneration })){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap received an invalid physical command-buffer submission token."));
         return MakeUnexpected(Failure{});
+    }
+
+    const usize hint = commandBuffer.m_trackedDescriptorHeapUseIndexHint;
+    if(hint < m_heapUses.size()){
+        const HeapUse& hintUse = m_heapUses[hint];
+        if(hintUse.id == commandBuffer.m_trackedDescriptorHeapUseID && hintUse.commandBuffer == &commandBuffer && !hintUse.submissionToken.valid()){
+            if(!submissionToken.matchesPhysicalQueue(hintUse.physicalQueue.index, hintUse.physicalQueue.deviceGeneration)){
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap command-buffer submission changed its exact physical queue."));
+                return MakeUnexpected(Failure{});
+            }
+
+            return hint;
+        }
     }
 
     for(usize heapUseIndex = 0u; heapUseIndex < m_heapUses.size(); ++heapUseIndex){
@@ -241,6 +265,8 @@ Expected<usize> GpuDescriptorHeap::validateCommandBufferUseSubmissionLocked(Trac
             return MakeUnexpected(Failure{});
         }
 
+        commandBuffer.m_trackedDescriptorHeapUseID = heapUse.id;
+        commandBuffer.m_trackedDescriptorHeapUseIndexHint = heapUseIndex;
         return heapUseIndex;
     }
 
@@ -262,10 +288,24 @@ void GpuDescriptorHeap::commitCommandBufferUseSubmissionLocked(TrackedCommandBuf
 
 void GpuDescriptorHeap::discardCommandBufferUse(TrackedCommandBuffer& commandBuffer)noexcept{
     NothrowScopedLock lock(m_mutex);
+    const usize hint = commandBuffer.m_trackedDescriptorHeapUseIndexHint;
+    if(hint < m_heapUses.size()){
+        HeapUse& hintUse = m_heapUses[hint];
+        if(hintUse.id == commandBuffer.m_trackedDescriptorHeapUseID && hintUse.commandBuffer == &commandBuffer){
+            hintUse.commandBuffer = nullptr;
+            if(commandBuffer.m_referencedDescriptorHeaps.size() <= 1u){
+                commandBuffer.m_trackedDescriptorHeapUseID = 0u;
+                commandBuffer.m_trackedDescriptorHeapUseIndexHint = 0u;
+                return;
+            }
+        }
+    }
     for(HeapUse& heapUse : m_heapUses){
         if(heapUse.commandBuffer == &commandBuffer)
             heapUse.commandBuffer = nullptr;
     }
+    commandBuffer.m_trackedDescriptorHeapUseID = 0u;
+    commandBuffer.m_trackedDescriptorHeapUseIndexHint = 0u;
 }
 
 void GpuDescriptorHeap::releasePendingRecordingLease(const u64 descriptorBufferGeneration)noexcept{
@@ -300,6 +340,8 @@ void GpuDescriptorHeap::releasePendingRecordingLease(const u64 descriptorBufferG
         m_retired[m_retiredCount] = RetiredSlot{ m_lastHeapUseID, handle };
         ++m_retiredCount;
     }
+    if(m_pendingRecordingCount != 0u)
+        m_hasPendingRetirementWork.store(true, MemoryOrder::release);
     m_pendingRecordingCount = 0u;
 }
 

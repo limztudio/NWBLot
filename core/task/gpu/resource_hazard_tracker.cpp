@@ -45,11 +45,16 @@ public:
         last = index;
     }
 
-    void retireCovered(Vector<TrackedResourceAccess, Alloc::ScratchArena>& accesses, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& range)noexcept{
+    void retireCovered(Vector<TrackedResourceAccess, Alloc::ScratchArena>& accesses, const GpuGraphResourceType::Enum resourceType, const GpuTaskResourceRange& range)noexcept{
+        if(resourceType == GpuGraphResourceType::HazardDomain || resourceType == GpuGraphResourceType::AccelStruct){
+            first = s_InvalidAccess;
+            last = s_InvalidAccess;
+            return;
+        }
         usize previous = s_InvalidAccess;
         for(usize index = first; index != s_InvalidAccess; ){
             const usize next = accesses[index].next;
-            if(RangeContains(resource, range, accesses[index].range)){
+            if(RangeContainsForType(resourceType, range, accesses[index].range)){
                 if(previous == s_InvalidAccess)
                     first = next;
                 else
@@ -75,29 +80,34 @@ struct TrackedResourceAccessLists{
 b8 GpuResourceHazardTracker::Append(const GpuTaskGraph::DeclarationReadView& graph, const Span<const GpuTaskId> orderedTasks, Alloc::ScratchArena& scratchArena, GpuInferredDependencyCollector& edgeCollector, GpuTaskId& invalidTask, GpuGraphResourceId& invalidResource){
     using namespace __hidden_gpu_resource_hazard_tracker;
     using namespace GpuTaskGraphCompilerDetail;
-    usize potentialAccessCount = 0u;
-    for(const GpuTaskId task : orderedTasks)
-        potentialAccessCount += graph.taskAt(task.index).resourceUseCount;
-    Vector<TrackedResourceAccessLists, Alloc::ScratchArena> resourceAccesses(potentialAccessCount == 0u ? 0u : graph.resourceCount(), scratchArena);
+    const usize potentialAccessCount = CompilerGraphAccess::TotalResourceUseCount(graph);
+    if(potentialAccessCount == 0u)
+        return true;
+
+    const usize resourceCount = CompilerGraphAccess::ResourceCount(graph);
+    Vector<TrackedResourceAccessLists, Alloc::ScratchArena> resourceAccesses(resourceCount, scratchArena);
     Vector<TrackedResourceAccess, Alloc::ScratchArena> writers(scratchArena);
     Vector<TrackedResourceAccess, Alloc::ScratchArena> readers(scratchArena);
     writers.reserve(potentialAccessCount);
     readers.reserve(potentialAccessCount);
 
     for(const GpuTaskId taskID : orderedTasks){
-        const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
-        for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
-            const GpuTaskResourceUse& use = task.resourceUses[useIndex];
-            const GpuTaskGraphResourceView resource = graph.resourceAt(use.resource.index);
+        const GpuTaskGraphDetail::GpuTaskNode& task = CompilerGraphAccess::TaskNode(graph, taskID.index);
+        const Span<const GpuTaskResourceUse> resourceUses = CompilerGraphAccess::TaskResourceUses(graph, task);
+        for(const GpuTaskResourceUse& use : resourceUses){
+            const GpuGraphResourceType::Enum resourceType = CompilerGraphAccess::ResourceNode(graph, use.resource.index).type;
             Expected<GpuTaskResourceRange> plannedRange = use.range;
-            if(resource.type == GpuGraphResourceType::Buffer && !(plannedRange = ResolveResourceRangeForPlanning(graph, resource, use.range))){
-                invalidTask = task.id;
-                invalidResource = use.resource;
-                return false;
+            if(resourceType == GpuGraphResourceType::Buffer){
+                const GpuTaskGraphDetail::GpuGraphResourceNode& resource = CompilerGraphAccess::ResourceNode(graph, use.resource.index);
+                if(!(plannedRange = ResolveResourceNodeRangeForPlanning(graph, resource, use.resource.index, use.range))){
+                    invalidTask = taskID;
+                    invalidResource = use.resource;
+                    return false;
+                }
             }
             TrackedResourceAccessLists& accesses = resourceAccesses[use.resource.index];
             const auto overlaps = [&](const TrackedResourceAccess& access)noexcept{
-                return access.task != task.id && RangesOverlap(resource, access.range, (*plannedRange));
+                return access.task != taskID && RangesOverlapForType(resourceType, access.range, (*plannedRange));
             };
 
             if(IsReadAccess(use.access)){
@@ -105,7 +115,7 @@ b8 GpuResourceHazardTracker::Append(const GpuTaskGraph::DeclarationReadView& gra
                     const TrackedResourceAccess& writer = writers[index];
                     if(!overlaps(writer))
                         continue;
-                    edgeCollector.appendInferred(GpuTaskDependencyEdge{ .producer = writer.task, .consumer = task.id, .resource = use.resource, .resourceVersion = {}, .hazard = GpuTaskHazardType::ReadAfterWrite, });
+                    edgeCollector.appendInferred(GpuTaskDependencyEdge{ .producer = writer.task, .consumer = taskID, .resource = use.resource, .resourceVersion = {}, .hazard = GpuTaskHazardType::ReadAfterWrite, });
                 }
             }
             if(IsWriteAccess(use.access)){
@@ -113,29 +123,29 @@ b8 GpuResourceHazardTracker::Append(const GpuTaskGraph::DeclarationReadView& gra
                     const TrackedResourceAccess& writer = writers[index];
                     if(!overlaps(writer))
                         continue;
-                    edgeCollector.appendInferred(GpuTaskDependencyEdge{ .producer = writer.task, .consumer = task.id, .resource = use.resource, .resourceVersion = {}, .hazard = GpuTaskHazardType::WriteAfterWrite, });
+                    edgeCollector.appendInferred(GpuTaskDependencyEdge{ .producer = writer.task, .consumer = taskID, .resource = use.resource, .resourceVersion = {}, .hazard = GpuTaskHazardType::WriteAfterWrite, });
                 }
                 for(usize index = accesses.readers.first; index != s_InvalidAccess; index = readers[index].next){
                     const TrackedResourceAccess& reader = readers[index];
                     if(!overlaps(reader))
                         continue;
-                    edgeCollector.appendInferred(GpuTaskDependencyEdge{ .producer = reader.task, .consumer = task.id, .resource = use.resource, .resourceVersion = {}, .hazard = GpuTaskHazardType::WriteAfterRead, });
+                    edgeCollector.appendInferred(GpuTaskDependencyEdge{ .producer = reader.task, .consumer = taskID, .resource = use.resource, .resourceVersion = {}, .hazard = GpuTaskHazardType::WriteAfterRead, });
                 }
-                accesses.writers.retireCovered(writers, resource, (*plannedRange));
-                accesses.readers.retireCovered(readers, resource, (*plannedRange));
-                accesses.writers.append(writers, task.id, (*plannedRange));
+                accesses.writers.retireCovered(writers, resourceType, (*plannedRange));
+                accesses.readers.retireCovered(readers, resourceType, (*plannedRange));
+                accesses.writers.append(writers, taskID, (*plannedRange));
             }
             else if(IsReadAccess(use.access)){
                 b8 alreadyWrittenByTask = false;
                 for(usize index = accesses.writers.first; index != s_InvalidAccess; index = writers[index].next){
                     const TrackedResourceAccess& writer = writers[index];
-                    if(writer.task == task.id && RangeContains(resource, writer.range, (*plannedRange))){
+                    if(writer.task == taskID && RangeContainsForType(resourceType, writer.range, (*plannedRange))){
                         alreadyWrittenByTask = true;
                         break;
                     }
                 }
                 if(!alreadyWrittenByTask)
-                    accesses.readers.append(readers, task.id, (*plannedRange));
+                    accesses.readers.append(readers, taskID, (*plannedRange));
             }
         }
     }

@@ -71,6 +71,7 @@ void UploadManager::clear()noexcept{
     }
     m_queueChunkLedgers.clear();
     m_retiredChunkBytes = 0u;
+    m_hasAnyChunks.store(false, MemoryOrder::release);
 }
 
 Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, TrackedCommandBuffer* const owner, const u64 nativeRecordingID, const GpuPhysicalQueueId queue, const u32 alignment){
@@ -82,8 +83,10 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
     BufferChunk* const cachedChunk = owner->m_activeUploadChunks[chunkSlot];
     if(cachedChunk && cachedChunk->manager == this && cachedChunk->owner == owner && cachedChunk->nativeRecordingID == nativeRecordingID && cachedChunk->physicalQueue == queue){
         const auto fastResult = trySuballocateFromChunk(*cachedChunk, size, alignment);
-        if(fastResult)
+        if(fastResult){
+            FOUNDATION_ASSERT((owner->m_usedUploadChunkMask & static_cast<u8>(1u << chunkSlot)) != 0u);
             return fastResult;
+        }
     }
 
     if(!m_device.matchesPhysicalQueueIdentity(queue))
@@ -97,6 +100,7 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
             const auto result = trySuballocateFromChunk(*chunk, size, alignment);
             if(result){
                 owner->m_activeUploadChunks[chunkSlot] = chunk;
+                owner->m_usedUploadChunkMask |= static_cast<u8>(1u << chunkSlot);
                 return result;
             }
         }
@@ -118,13 +122,22 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
     b8 hasSizedPending = false;
     BufferChunk* reusableChunk = findRetiredMatch(*activeLedger, size, activeLedger->lastKnownCompletedVersion, hasSizedPending);
     if(!reusableChunk && hasSizedPending){
-        lock.unlock();
-        const Expected<u64> completedVersion = m_device.queueGetCompletedInstance(queue);
-        lock.lock();
-        activeLedger = &findOrCreateQueueLedgerLocked(queue);
-        if(completedVersion){
-            activeLedger->lastKnownCompletedVersion = Max(activeLedger->lastKnownCompletedVersion, *completedVersion);
-            reusableChunk = findRetiredMatch(*activeLedger, size, activeLedger->lastKnownCompletedVersion, hasSizedPending);
+        if(Queue* const queueObj = m_device.getQueue(queue)){
+            const u64 observedVersion = queueObj->lastObservedFinishedID();
+            if(observedVersion > activeLedger->lastKnownCompletedVersion){
+                activeLedger->lastKnownCompletedVersion = observedVersion;
+                reusableChunk = findRetiredMatch(*activeLedger, size, observedVersion, hasSizedPending);
+            }
+        }
+        if(!reusableChunk && hasSizedPending){
+            lock.unlock();
+            const Expected<u64> completedVersion = m_device.queueGetCompletedInstance(queue);
+            lock.lock();
+            activeLedger = &findOrCreateQueueLedgerLocked(queue);
+            if(completedVersion){
+                activeLedger->lastKnownCompletedVersion = Max(activeLedger->lastKnownCompletedVersion, *completedVersion);
+                reusableChunk = findRetiredMatch(*activeLedger, size, activeLedger->lastKnownCompletedVersion, hasSizedPending);
+            }
         }
     }
 
@@ -137,6 +150,7 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
         reusableChunk->version = activeLedger->lastKnownCompletedVersion;
         linkActiveChunkLocked(*activeLedger, *reusableChunk);
         owner->m_activeUploadChunks[chunkSlot] = reusableChunk;
+        owner->m_usedUploadChunkMask |= static_cast<u8>(1u << chunkSlot);
         return trySuballocateFromChunk(*reusableChunk, size, alignment);
     }
 
@@ -184,6 +198,8 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
     BufferChunk& installedChunk = *activeLedger->chunks.back();
     linkActiveChunkLocked(*activeLedger, installedChunk);
     owner->m_activeUploadChunks[chunkSlot] = &installedChunk;
+    owner->m_usedUploadChunkMask |= static_cast<u8>(1u << chunkSlot);
+    m_hasAnyChunks.store(true, MemoryOrder::release);
     return result;
 }
 
@@ -219,6 +235,13 @@ void UploadManager::abandonChunks(const GpuPhysicalQueueId queue, TrackedCommand
 }
 
 void UploadManager::collectCompletedChunks(){
+    if(!m_hasAnyChunks.load(MemoryOrder::acquire))
+        return;
+    {
+        ScopedLock lock(m_mutex);
+        if(m_memoryLimit == 0u || m_retiredChunkBytes <= m_memoryLimit)
+            return;
+    }
     for(const GpuPhysicalQueueInfo& queueInfo : m_device.m_physicalQueueInfos){
         const Expected<u64> completedVersion = m_device.queueGetCompletedInstance(queueInfo.id);
         if(!completedVersion)
@@ -259,6 +282,17 @@ void UploadManager::trimRetiredChunksLocked(const GpuPhysicalQueueId queue, cons
         }
         ledger->chunks.pop_back();
         chunk = nextChunk;
+    }
+    if(ledger->chunks.empty()){
+        b8 anyChunks = false;
+        for(const QueueChunkLedger& entry : m_queueChunkLedgers){
+            if(!entry.chunks.empty()){
+                anyChunks = true;
+                break;
+            }
+        }
+        if(!anyChunks)
+            m_hasAnyChunks.store(false, MemoryOrder::release);
     }
 }
 

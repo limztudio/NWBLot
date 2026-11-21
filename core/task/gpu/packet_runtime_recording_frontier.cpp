@@ -21,6 +21,176 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class GpuNativePacketRecorder::PreclaimedFrontierBatch final : NoCopy{
+public:
+    PreclaimedFrontierBatch(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        const Span<const u32> packetIndices,
+        const u64 recordingAttemptGeneration,
+        Alloc::ScratchArena& scratchArena
+    )noexcept
+        : m_graph(graph)
+        , m_compiledGraph(compiledGraph)
+        , m_planAccess(planAccess)
+        , m_scratchArena(scratchArena)
+        , m_count(packetIndices.size())
+    {
+        if(m_count == 0u || MultiplyOverflows<usize>(m_count, sizeof(GpuPacketRecordingLease)))
+            return;
+
+        m_leasesByteSize = m_count * sizeof(GpuPacketRecordingLease);
+        m_accessesByteSize = m_count * sizeof(GpuPacketRecordingAccess);
+        m_packetsByteSize = m_count * sizeof(GpuSubmissionPacketId);
+        m_leasePtrsByteSize = m_count * sizeof(GpuPacketRecordingLease*);
+        m_leases = static_cast<GpuPacketRecordingLease*>(m_scratchArena.allocate(alignof(GpuPacketRecordingLease), m_leasesByteSize));
+        m_accesses = static_cast<GpuPacketRecordingAccess*>(m_scratchArena.allocate(alignof(GpuPacketRecordingAccess), m_accessesByteSize));
+        m_packetIds = static_cast<GpuSubmissionPacketId*>(m_scratchArena.allocate(alignof(GpuSubmissionPacketId), m_packetsByteSize));
+        m_compactPackets = static_cast<GpuSubmissionPacketId*>(m_scratchArena.allocate(alignof(GpuSubmissionPacketId), m_packetsByteSize));
+        m_compactLeases = static_cast<GpuPacketRecordingLease**>(m_scratchArena.allocate(alignof(GpuPacketRecordingLease*), m_leasePtrsByteSize));
+        if(!m_leases || !m_accesses || !m_packetIds || !m_compactPackets || !m_compactLeases)
+            return;
+
+        for(usize index = 0u; index < m_count; ++index){
+            new(m_leases + index) GpuPacketRecordingLease();
+            new(m_accesses + index) GpuPacketRecordingAccess();
+            m_packetIds[index] = m_planAccess.packetIdAt(packetIndices[index]);
+        }
+        m_constructed = true;
+        m_claimed = m_graph.beginPacketRecordingBatch(
+            m_compiledGraph,
+            m_planAccess,
+            Span<const GpuSubmissionPacketId>(m_packetIds, m_count),
+            recordingAttemptGeneration,
+            m_leases,
+            m_accesses
+        );
+    }
+
+    ~PreclaimedFrontierBatch()noexcept{
+        if(m_constructed){
+            for(usize index = m_count; index > 0u; --index){
+                m_accesses[index - 1u].~GpuPacketRecordingAccess();
+                m_leases[index - 1u].~GpuPacketRecordingLease();
+            }
+        }
+        if(m_compactLeases)
+            m_scratchArena.deallocate(m_compactLeases, alignof(GpuPacketRecordingLease*), m_leasePtrsByteSize);
+        if(m_compactPackets)
+            m_scratchArena.deallocate(m_compactPackets, alignof(GpuSubmissionPacketId), m_packetsByteSize);
+        if(m_packetIds)
+            m_scratchArena.deallocate(m_packetIds, alignof(GpuSubmissionPacketId), m_packetsByteSize);
+        if(m_accesses)
+            m_scratchArena.deallocate(m_accesses, alignof(GpuPacketRecordingAccess), m_accessesByteSize);
+        if(m_leases)
+            m_scratchArena.deallocate(m_leases, alignof(GpuPacketRecordingLease), m_leasesByteSize);
+    }
+
+
+public:
+    [[nodiscard]] b8 claimed()const noexcept{ return m_claimed; }
+    [[nodiscard]] GpuPacketRecordingLease* leaseAt(const usize index)noexcept{ return &m_leases[index]; }
+    [[nodiscard]] const GpuPacketRecordingAccess* accessAt(const usize index)const noexcept{ return &m_accesses[index]; }
+
+    void completeAndRollbackAfterJoin(const Span<const u8> results, const Span<const GpuPacketRecordingAbort> aborts)noexcept{
+        if(!m_claimed)
+            return;
+
+        usize completedCount = 0u;
+        usize unstartedCount = 0u;
+        for(usize index = 0u; index < m_count; ++index){
+            if(results[index] != 0u){
+                m_compactPackets[completedCount] = m_packetIds[index];
+                m_compactLeases[completedCount] = &m_leases[index];
+                ++completedCount;
+            }
+            else if(!aborts[index].valid() && m_leases[index].valid()){
+                ++unstartedCount;
+            }
+        }
+        if(completedCount != 0u){
+            const b8 batchCompleted = m_graph.completePacketRecordingBatch(
+                m_compiledGraph,
+                m_planAccess,
+                Span<const GpuSubmissionPacketId>(m_compactPackets, completedCount),
+                m_compactLeases
+            );
+            FOUNDATION_FATAL_ASSERT_MSG(batchCompleted, "recorded artifact publication must retain its exact graph packet batch claim");
+        }
+        if(unstartedCount != 0u){
+            usize writeIndex = 0u;
+            for(usize index = 0u; index < m_count; ++index){
+                if(results[index] == 0u && !aborts[index].valid() && m_leases[index].valid()){
+                    m_compactPackets[writeIndex] = m_packetIds[index];
+                    m_compactLeases[writeIndex] = &m_leases[index];
+                    ++writeIndex;
+                }
+            }
+            m_graph.rollbackUnstartedPacketRecordingBatch(
+                m_compiledGraph,
+                m_planAccess,
+                Span<const GpuSubmissionPacketId>(m_compactPackets, writeIndex),
+                m_compactLeases
+            );
+        }
+    }
+
+    void unwindWithoutCallbacks(
+        const Span<const u8> results,
+        const Span<const GpuPacketRecordingAbort> aborts,
+        GpuRecordedGraph& recordedGraph,
+        const GpuRecordedGraph::ArtifactOperation& artifactOperation
+    )noexcept{
+        if(!m_claimed)
+            return;
+
+        usize unstartedCount = 0u;
+        for(usize index = 0u; index < m_count; ++index){
+            if(!m_leases[index].valid())
+                continue;
+            if(results[index] != 0u){
+                recordedGraph.clearPacketPublicationWithoutCallbacks(m_packetIds[index], artifactOperation);
+                recordedGraph.abandonPacketTimingTicketWithoutCallbacks(m_packetIds[index], artifactOperation);
+                const b8 abandoned = m_graph.abandonPacketRecordingWithoutCallbacks(m_compiledGraph, m_planAccess, m_packetIds[index], m_leases[index]);
+                FOUNDATION_FATAL_ASSERT_MSG(abandoned, "joined packet unwind must abandon every completed preclaimed lease");
+            }
+            else if(!aborts[index].valid()){
+                m_compactPackets[unstartedCount] = m_packetIds[index];
+                m_compactLeases[unstartedCount] = &m_leases[index];
+                ++unstartedCount;
+            }
+        }
+        if(unstartedCount != 0u){
+            m_graph.rollbackUnstartedPacketRecordingBatch(
+                m_compiledGraph,
+                m_planAccess,
+                Span<const GpuSubmissionPacketId>(m_compactPackets, unstartedCount),
+                m_compactLeases
+            );
+        }
+    }
+
+
+private:
+    const GpuTaskGraph& m_graph;
+    const GpuCompiledGraph& m_compiledGraph;
+    const GpuCompiledGraph::ReadView& m_planAccess;
+    Alloc::ScratchArena& m_scratchArena;
+    GpuPacketRecordingLease* m_leases = nullptr;
+    GpuPacketRecordingAccess* m_accesses = nullptr;
+    GpuSubmissionPacketId* m_packetIds = nullptr;
+    GpuSubmissionPacketId* m_compactPackets = nullptr;
+    GpuPacketRecordingLease** m_compactLeases = nullptr;
+    usize m_count = 0u;
+    usize m_leasesByteSize = 0u;
+    usize m_accessesByteSize = 0u;
+    usize m_packetsByteSize = 0u;
+    usize m_leasePtrsByteSize = 0u;
+    b8 m_constructed = false;
+    b8 m_claimed = false;
+};
+
 class GpuNativePacketRecorder::ReadyFrontierRecordingUnwindScope final : NoCopy{
 public:
     ReadyFrontierRecordingUnwindScope(
@@ -31,7 +201,9 @@ public:
         const Span<const u32> packetIndices,
         const u64 recordingAttemptGeneration,
         GpuRecordedGraph& recordedGraph,
+        const Span<const u8> results,
         const Span<GpuPacketRecordingAbort> aborts,
+        PreclaimedFrontierBatch* const preclaimedBatch = nullptr,
         const u32* const serialAbortPacketIndex = nullptr,
         GpuPacketRecordingAbort* const serialAbort = nullptr
     )noexcept
@@ -41,7 +213,9 @@ public:
         , m_recordedGraph(recordedGraph)
         , m_artifactOperation(artifactOperation)
         , m_packetIndices(packetIndices)
+        , m_results(results)
         , m_aborts(aborts)
+        , m_preclaimedBatch(preclaimedBatch)
         , m_serialAbortPacketIndex(serialAbortPacketIndex)
         , m_serialAbort(serialAbort)
         , m_recordingAttemptGeneration(recordingAttemptGeneration)
@@ -66,6 +240,8 @@ public:
             const b8 abortAbandoned = m_graph.abandonPacketRecordingAbortWithoutCallbacks(m_compiledGraph, m_planAccess, abort);
             FOUNDATION_FATAL_ASSERT_MSG(abortAbandoned, "joined packet unwind must consume every deferred recording abort");
         }
+        if(m_preclaimedBatch)
+            m_preclaimedBatch->unwindWithoutCallbacks(m_results, m_aborts, m_recordedGraph, m_artifactOperation);
         const b8 recordingAttemptResolved = m_graph.resolveRecordingAttemptIfTerminal(m_compiledGraph, m_recordingAttemptGeneration);
         FOUNDATION_FATAL_ASSERT_MSG(recordingAttemptResolved, "joined packet unwind must preserve or resolve its exact recording-plan lease");
     }
@@ -82,7 +258,9 @@ private:
     GpuRecordedGraph& m_recordedGraph;
     const GpuRecordedGraph::ArtifactOperation& m_artifactOperation;
     Span<const u32> m_packetIndices;
+    Span<const u8> m_results;
     Span<GpuPacketRecordingAbort> m_aborts;
+    PreclaimedFrontierBatch* m_preclaimedBatch = nullptr;
     const u32* m_serialAbortPacketIndex = nullptr;
     GpuPacketRecordingAbort* m_serialAbort = nullptr;
     u64 m_recordingAttemptGeneration = 0u;
@@ -109,6 +287,7 @@ struct PacketRecordingFrontierEntry{
     GpuSubmissionPacketId packet;
     u32 frontier = 0u;
     b8 allowsParallelRecording = false;
+    b8 hasPrologueStateSeeds = false;
 };
 
 [[nodiscard]] b8 LessPacketRecordingFrontierEntry(const PacketRecordingFrontierEntry& left, const PacketRecordingFrontierEntry& right)noexcept{
@@ -232,46 +411,22 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
             if(!packetView.valid())
                 return false;
 
-            u32 effectiveFrontier = packetView.plan->recordingFrontier;
-            if(effectiveFrontier == Limit<u32>::s_Max)
-                return false;
-            const auto raiseFromSourcePacket = [&](const GpuSubmissionPacketId sourcePacket)noexcept{
-                if(!planAccess.validPacket(sourcePacket) || sourcePacket.index >= packet.index)
-                    return false;
-                if(sourcePacket.index < rangeBegin)
-                    return true;
-
-                const usize sourceDescIndex = sourcePacket.index - rangeBegin;
-                if(sourceDescIndex >= recordingEntries.size())
-                    return false;
-                const u32 sourceFrontier = recordingEntries[sourceDescIndex].frontier;
-                if(sourceFrontier >= Limit<u32>::s_Max - 1u)
-                    return false;
-                effectiveFrontier = Max(effectiveFrontier, sourceFrontier + 1u);
-                return true;
-            };
-
             const GpuSubmissionPacket& packetPlan = *packetView.plan;
-            const GpuTaskId* const tasks = packetView.tasks;
-            if(packetPlan.taskCount == 0u)
+            const u32 effectiveFrontier = packetPlan.recordingFrontier;
+            if(packetPlan.taskCount == 0u || effectiveFrontier == Limit<u32>::s_Max)
                 return false;
-            b8 allowsParallelRecording = true;
-            for(u32 taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-                const GpuTaskGraphTaskView task = declarationAccess.taskAt(tasks[taskIndex].index);
-                const GpuCompiledTaskView compiledTaskView = planAccess.findTask(tasks[taskIndex]);
-                const GpuCompiledTask* const compiledTask = compiledTaskView.plan;
-                const GpuPacketStateSeed* const stateSeeds = compiledTaskView.prologueStateSeeds;
-                if(task.id != tasks[taskIndex] || !compiledTaskView.valid())
-                    return false;
-                allowsParallelRecording = allowsParallelRecording && task.scheduling.allowParallelRecording;
-                for(u32 seedIndex = 0u; seedIndex < compiledTask->prologueStateSeedCount; ++seedIndex){
-                    if(!raiseFromSourcePacket(stateSeeds[seedIndex].sourcePacket))
-                        return false;
-                }
-            }
+
+            const u8 packetFlags = planAccess.packetRuntimeFlags(packetIndex);
+            const b8 allowsParallelRecording = (packetFlags & GpuCompiledGraph::PacketRuntimeFlag::AllowsParallelRecording) != 0u;
+            const b8 hasPrologueStateSeeds = (packetFlags & GpuCompiledGraph::PacketRuntimeFlag::HasPrologueStateSeeds) != 0u;
             if(!recordingEntries.empty() && effectiveFrontier < recordingEntries.back().frontier)
                 recordingFrontiersAreMonotonic = false;
-            recordingEntries.push_back(RecordingEntry{ .packet = packet, .frontier = effectiveFrontier, .allowsParallelRecording = allowsParallelRecording, });
+            recordingEntries.push_back(RecordingEntry{
+                .packet = packet,
+                .frontier = effectiveFrontier,
+                .allowsParallelRecording = allowsParallelRecording,
+                .hasPrologueStateSeeds = hasPrologueStateSeeds,
+            });
             if(allowsParallelRecording)
                 ++parallelPacketCount;
         }
@@ -331,7 +486,9 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
             const GpuPacketStateSeed* const stateSeeds = compiledTaskView.prologueStateSeeds;
             for(u32 stateSeedIndex = 0u; stateSeedIndex < compiledTask.prologueStateSeedCount; ++stateSeedIndex){
                 const GpuSubmissionPacketId sourcePacket = stateSeeds[stateSeedIndex].sourcePacket;
-                if(!planAccess.validPacket(sourcePacket) || sourcePacket.index >= packet.index || !outRecordedGraph.findWithinArtifactOperation(sourcePacket, artifactOperation))
+                if(!planAccess.validPacket(sourcePacket) || sourcePacket.index >= packet.index)
+                    return false;
+                if(sourcePacket.index < rangeBegin && !outRecordedGraph.findWithinArtifactOperation(sourcePacket, artifactOperation))
                     return false;
             }
         }
@@ -351,7 +508,7 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         parallelPacketIndices.clear();
         for(usize recordingIndex = frontierBegin; recordingIndex < frontierEnd; ++recordingIndex){
             const GpuSubmissionPacketId packet = recordingEntries[recordingIndex].packet;
-            if(!packetStateSeedsAreRecorded(packet)){
+            if(recordingEntries[recordingIndex].hasPrologueStateSeeds && rangeBegin > 0u && !packetStateSeedsAreRecorded(packet)){
                 if(outFailedPacket)
                     *outFailedPacket = packet;
                 return false;
@@ -400,10 +557,11 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                 }
             }
             else{
-                parallelResults.resize(parallelPacketIndices.size());
+                parallelResults.assign(parallelPacketIndices.size(), 0u);
                 parallelAborts.resize(parallelPacketIndices.size());
                 const u64 recordingAttemptGeneration = outRecordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactOperation);
-                ReadyFrontierRecordingUnwindScope recordingUnwind(graph, compiledGraph, planAccess, artifactOperation, parallelPacketIndices, recordingAttemptGeneration, outRecordedGraph, parallelAborts);
+                PreclaimedFrontierBatch preclaimedBatch(graph, compiledGraph, planAccess, parallelPacketIndices, recordingAttemptGeneration, scratchArena);
+                ReadyFrontierRecordingUnwindScope recordingUnwind(graph, compiledGraph, planAccess, artifactOperation, parallelPacketIndices, recordingAttemptGeneration, outRecordedGraph, parallelResults, parallelAborts, &preclaimedBatch);
 
                 const auto parallelWork = cpuScheduler.parallelFor(0u, parallelPacketIndices.size(), [&](const usize parallelIndex){
                     const GpuSubmissionPacketId packet = planAccess.packetIdAt(parallelPacketIndices[parallelIndex]);
@@ -413,6 +571,11 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                         parallelResults[parallelIndex] = 0u;
                         return;
                     }
+                    const PreclaimedPacketRecording preclaimed{
+                        .lease = preclaimedBatch.leaseAt(parallelIndex),
+                        .access = preclaimedBatch.accessAt(parallelIndex),
+                        .deferComplete = true,
+                    };
                     parallelResults[parallelIndex] = recordPacket(
                         graph,
                         declarationAccess,
@@ -426,7 +589,8 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                         *scratch,
                         outRecordedGraph,
                         nullptr,
-                        &parallelAborts[parallelIndex]
+                        &parallelAborts[parallelIndex],
+                        preclaimedBatch.claimed() ? &preclaimed : nullptr
                     ) ? 1u : 0u;
                 });
                 for(usize parallelIndex = 0u; parallelIndex < parallelAborts.size(); ++parallelIndex){
@@ -438,6 +602,7 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                     const b8 abortCompleted = graph.completePacketRecordingAbort(compiledGraph, planAccess, abort);
                     FOUNDATION_FATAL_ASSERT_MSG(abortCompleted, "joined packet drain must consume every deferred recording abort");
                 }
+                preclaimedBatch.completeAndRollbackAfterJoin(parallelResults, parallelAborts);
                 const b8 recordingAttemptResolved = graph.resolveRecordingAttemptIfTerminal(compiledGraph, recordingAttemptGeneration);
                 FOUNDATION_FATAL_ASSERT_MSG(recordingAttemptResolved, "joined packet drain must preserve or resolve its exact recording-plan lease");
                 recordingUnwind.release();
@@ -459,12 +624,36 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         }
         else{
             const usize parallelCount = parallelPacketIndices.size();
+            PreclaimedFrontierBatch* activePreclaimedBatch = nullptr;
             const auto recordParallelPacket = [&](const usize parallelIndex, GpuPacketRecordingAbort* const deferredAbort)noexcept(false){
                 const GpuSubmissionPacketId packet = planAccess.packetIdAt(parallelPacketIndices[parallelIndex]);
                 const usize workerSlot = cpuScheduler.currentWorkerIndex();
                 GpuRecordedGraph::PacketRecordingScratch* const scratch = outRecordedGraph.workerRecordingScratch(workerSlot, artifactOperation);
                 if(!scratch || !scratch->stateFanInScratchArena)
                     return false;
+                if(activePreclaimedBatch && activePreclaimedBatch->claimed()){
+                    const PreclaimedPacketRecording preclaimed{
+                        .lease = activePreclaimedBatch->leaseAt(parallelIndex),
+                        .access = activePreclaimedBatch->accessAt(parallelIndex),
+                        .deferComplete = true,
+                    };
+                    return recordPacket(
+                        graph,
+                        declarationAccess,
+                        compiledGraph,
+                        planAccess,
+                        artifactOperation,
+                        packet,
+                        cpuScheduler.domainIdentity(),
+                        static_cast<u32>(workerSlot + 1u),
+                        *scratch->stateFanInScratchArena,
+                        *scratch,
+                        outRecordedGraph,
+                        nullptr,
+                        deferredAbort,
+                        &preclaimed
+                    );
+                }
                 return recordPacket(
                     graph,
                     declarationAccess,
@@ -502,9 +691,11 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                 parallelResults.assign(parallelCount, 0u);
                 parallelAborts.resize(parallelCount);
                 const u64 recordingAttemptGeneration = outRecordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactOperation);
+                PreclaimedFrontierBatch preclaimedBatch(graph, compiledGraph, planAccess, parallelPacketIndices, recordingAttemptGeneration, scratchArena);
+                activePreclaimedBatch = &preclaimedBatch;
                 GpuPacketRecordingAbort serialAbort;
                 u32 serialAbortPacketIndex = Limit<u32>::s_Max;
-                ReadyFrontierRecordingUnwindScope recordingUnwind(graph, compiledGraph, planAccess, artifactOperation, parallelPacketIndices, recordingAttemptGeneration, outRecordedGraph, parallelAborts, &serialAbortPacketIndex, &serialAbort);
+                ReadyFrontierRecordingUnwindScope recordingUnwind(graph, compiledGraph, planAccess, artifactOperation, parallelPacketIndices, recordingAttemptGeneration, outRecordedGraph, parallelResults, parallelAborts, &preclaimedBatch, &serialAbortPacketIndex, &serialAbort);
 
                 alignas(64) Atomic<usize> nextParallelIndex{ 0u };
                 Optional<CpuTaskAdmissionError::Enum> parallelSubmitError;
@@ -565,6 +756,7 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                     const b8 abortCompleted = graph.completePacketRecordingAbort(compiledGraph, planAccess, abort);
                     FOUNDATION_FATAL_ASSERT_MSG(abortCompleted, "joined packet drain must consume every deferred recording abort");
                 }
+                preclaimedBatch.completeAndRollbackAfterJoin(parallelResults, parallelAborts);
                 const b8 recordingAttemptResolved = graph.resolveRecordingAttemptIfTerminal(compiledGraph, recordingAttemptGeneration);
                 FOUNDATION_FATAL_ASSERT_MSG(recordingAttemptResolved, "joined packet drain must preserve or resolve its exact recording-plan lease");
                 recordingUnwind.release();

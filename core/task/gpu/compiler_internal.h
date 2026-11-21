@@ -58,6 +58,164 @@ namespace GpuTaskGraphCompilerDetail{
 inline constexpr usize s_BitsPerWord = sizeof(u64) * s_BitsPerByte;
 
 
+struct CompilerGraphAccess{
+    [[nodiscard]] static inline const GpuTaskGraph* Graph(const GpuTaskGraph::DeclarationReadView& view)noexcept{
+        return view.m_graph;
+    }
+
+    [[nodiscard]] static inline u64 Generation(const GpuTaskGraph::DeclarationReadView& view)noexcept{
+        return view.m_graph ? view.m_graph->m_generation : 0u;
+    }
+
+    [[nodiscard]] static inline u64 DeclarationRevision(const GpuTaskGraph::DeclarationReadView& view)noexcept{
+        return view.m_graph ? view.m_graph->m_declarationRevision : 0u;
+    }
+
+    [[nodiscard]] static inline usize TaskCount(const GpuTaskGraph::DeclarationReadView& view)noexcept{
+        return view.m_graph ? view.m_graph->m_tasks.size() : 0u;
+    }
+
+    [[nodiscard]] static inline usize ResourceCount(const GpuTaskGraph::DeclarationReadView& view)noexcept{
+        return view.m_graph ? view.m_graph->m_resources.size() : 0u;
+    }
+
+    [[nodiscard]] static inline usize ResourceVersionCount(const GpuTaskGraph::DeclarationReadView& view)noexcept{
+        return view.m_graph ? view.m_graph->m_resourceVersions.size() : 0u;
+    }
+
+    [[nodiscard]] static inline usize ResourceSetCount(const GpuTaskGraph::DeclarationReadView& view)noexcept{
+        return view.m_graph ? view.m_graph->m_resourceSets.size() : 0u;
+    }
+
+    [[nodiscard]] static inline usize UploadBlobCount(const GpuTaskGraph::DeclarationReadView& view)noexcept{
+        return view.m_graph ? view.m_graph->m_uploadBlobs.size() : 0u;
+    }
+
+    [[nodiscard]] static inline usize ExternalCompletionCount(const GpuTaskGraph::DeclarationReadView& view)noexcept{
+        return view.m_graph ? view.m_graph->m_externalCompletions.size() : 0u;
+    }
+
+    [[nodiscard]] static inline const GpuTaskGraphDetail::GpuTaskNode& TaskNode(const GpuTaskGraph::DeclarationReadView& view, const usize index)noexcept{
+        FOUNDATION_ASSERT(view.m_graph && index < view.m_graph->m_tasks.size());
+        return view.m_graph->m_tasks[index];
+    }
+
+    [[nodiscard]] static inline const GpuTaskGraphDetail::GpuGraphResourceNode& ResourceNode(const GpuTaskGraph::DeclarationReadView& view, const usize index)noexcept{
+        FOUNDATION_ASSERT(view.m_graph && index < view.m_graph->m_resources.size());
+        return view.m_graph->m_resources[index];
+    }
+
+    [[nodiscard]] static inline GpuTaskId TaskIdAt(const GpuTaskGraph::DeclarationReadView& view, const usize index)noexcept{
+        return GpuTaskId{ .generation = Generation(view), .index = static_cast<u32>(index) };
+    }
+
+    [[nodiscard]] static inline Span<const GpuTaskId> TaskDependencies(const GpuTaskGraph::DeclarationReadView& view, const GpuTaskGraphDetail::GpuTaskNode& node)noexcept{
+        return node.dependencyCount > 0u ? Span<const GpuTaskId>(view.m_graph->m_dependencies.data() + node.dependencyOffset, node.dependencyCount) : Span<const GpuTaskId>();
+    }
+
+    [[nodiscard]] static inline Span<const GpuExternalCompletionId> TaskExternalDependencies(const GpuTaskGraph::DeclarationReadView& view, const GpuTaskGraphDetail::GpuTaskNode& node)noexcept{
+        return node.externalDependencyCount > 0u ? Span<const GpuExternalCompletionId>(view.m_graph->m_externalDependencies.data() + node.externalDependencyOffset, node.externalDependencyCount) : Span<const GpuExternalCompletionId>();
+    }
+
+    [[nodiscard]] static inline Span<const GpuTaskExternalStateSource> TaskExternalStateSources(const GpuTaskGraph::DeclarationReadView& view, const GpuTaskGraphDetail::GpuTaskNode& node)noexcept{
+        return node.externalStateSourceCount > 0u ? Span<const GpuTaskExternalStateSource>(view.m_graph->m_externalStateSources.data() + node.externalStateSourceOffset, node.externalStateSourceCount) : Span<const GpuTaskExternalStateSource>();
+    }
+
+    [[nodiscard]] static inline Span<const GpuTaskResourceUse> TaskResourceUses(const GpuTaskGraph::DeclarationReadView& view, const GpuTaskGraphDetail::GpuTaskNode& node)noexcept{
+        return node.resourceUseCount > 0u ? Span<const GpuTaskResourceUse>(view.m_graph->m_resourceUses.data() + node.resourceUseOffset, node.resourceUseCount) : Span<const GpuTaskResourceUse>();
+    }
+
+    [[nodiscard]] static inline Span<const GpuTaskResourceVersionUse> TaskResourceVersionUses(const GpuTaskGraph::DeclarationReadView& view, const GpuTaskGraphDetail::GpuTaskNode& node)noexcept{
+        return node.resourceVersionUseCount > 0u ? Span<const GpuTaskResourceVersionUse>(view.m_graph->m_resourceVersionUses.data() + node.resourceVersionUseOffset, node.resourceVersionUseCount) : Span<const GpuTaskResourceVersionUse>();
+    }
+
+    [[nodiscard]] static inline usize TotalDependencyCount(const GpuTaskGraph::DeclarationReadView& view)noexcept{
+        return view.m_graph ? view.m_graph->m_dependencies.size() : 0u;
+    }
+
+    [[nodiscard]] static inline usize TotalResourceUseCount(const GpuTaskGraph::DeclarationReadView& view)noexcept{
+        return view.m_graph ? view.m_graph->m_resourceUses.size() : 0u;
+    }
+
+    [[nodiscard]] static inline usize TotalResourceVersionUseCount(const GpuTaskGraph::DeclarationReadView& view)noexcept{
+        return view.m_graph ? view.m_graph->m_resourceVersionUses.size() : 0u;
+    }
+
+    [[nodiscard]] static inline b8 HasAcceptedQueueFrontierOrRecoveryTask(const GpuTaskGraph::DeclarationReadView& view)noexcept{
+        return view.m_graph && view.m_graph->m_hasAcceptedQueueFrontierOrRecoveryTask;
+    }
+
+    [[nodiscard]] static inline ResourceQueueAdmissionSnapshot ResourceQueueAdmission(const GpuTaskGraph::DeclarationReadView& view, const GpuTaskGraphDetail::GpuGraphResourceNode& node)noexcept{
+        return ResourceQueueAdmissionSnapshot{
+            .queueFamilyIndices = node.queueFamilyIndexCount != 0u ? view.m_graph->m_queueFamilyIndices.data() + node.queueFamilyIndexOffset : nullptr,
+            .queueFamilyIndexCount = node.queueFamilyIndexCount,
+            .admittedQueueClasses = node.queueSharing,
+            .usesConcurrentSharing = node.usesConcurrentSharing,
+        };
+    }
+
+    [[nodiscard]] static inline Span<const GpuTaskGraphInitialOwnerHandoffSourceView> ResourceInitialOwnerHandoffSources(const GpuTaskGraph::DeclarationReadView& view, const GpuTaskGraphDetail::GpuGraphResourceNode& node)noexcept{
+        return node.initialOwnerHandoffSourceCount != 0u ? Span<const GpuTaskGraphInitialOwnerHandoffSourceView>(view.m_graph->m_initialOwnerHandoffSources.data() + node.initialOwnerHandoffSourceOffset, node.initialOwnerHandoffSourceCount) : Span<const GpuTaskGraphInitialOwnerHandoffSourceView>();
+    }
+
+    [[nodiscard]] static inline const GpuPresentEndpoint* PresentEndpoint(const GpuTaskGraph::DeclarationReadView& view)noexcept{
+        return view.m_graph && view.m_graph->m_hasPresentEndpoint ? &view.m_graph->m_presentEndpoint : nullptr;
+    }
+
+    [[nodiscard]] static inline b8 ValidTask(const GpuTaskGraph::DeclarationReadView& view, const GpuTaskId& id)noexcept{
+        return view.m_graph && view.m_graph->validTask(id);
+    }
+
+    [[nodiscard]] static inline b8 ValidResource(const GpuTaskGraph::DeclarationReadView& view, const GpuGraphResourceId& id)noexcept{
+        return view.m_graph && view.m_graph->validResource(id);
+    }
+
+    [[nodiscard]] static inline b8 ValidExternalCompletion(const GpuTaskGraph::DeclarationReadView& view, const GpuExternalCompletionId& id)noexcept{
+        return view.m_graph && view.m_graph->validExternalCompletion(id);
+    }
+
+    [[nodiscard]] static inline b8 HasBackendResource(const GpuTaskGraphDetail::GpuGraphResourceNode& node)noexcept{
+        return node.texture != nullptr || node.buffer != nullptr || node.accelStruct != nullptr;
+    }
+
+    [[nodiscard]] static inline Texture* TextureForResourceIndex(const GpuTaskGraph::DeclarationReadView& view, const u32 index)noexcept{
+        const GpuTaskGraphDetail::GpuGraphResourceNode& node = view.m_graph->m_resources[index];
+        return node.type == GpuGraphResourceType::Texture ? node.texture.get() : nullptr;
+    }
+
+    [[nodiscard]] static inline Buffer* BufferForResourceIndex(const GpuTaskGraph::DeclarationReadView& view, const u32 index)noexcept{
+        const GpuTaskGraphDetail::GpuGraphResourceNode& node = view.m_graph->m_resources[index];
+        return node.type == GpuGraphResourceType::Buffer ? node.buffer.get() : nullptr;
+    }
+
+    [[nodiscard]] static inline RayTracingAccelStruct* AccelStructForResourceIndex(const GpuTaskGraph::DeclarationReadView& view, const u32 index)noexcept{
+        const GpuTaskGraphDetail::GpuGraphResourceNode& node = view.m_graph->m_resources[index];
+        return node.type == GpuGraphResourceType::AccelStruct ? node.accelStruct.get() : nullptr;
+    }
+
+    [[nodiscard]] static inline GpuTaskGraphSchedulingTaskIndexView SchedulingConsumers(const GpuTaskGraphAnalysis& analysis, const u32 producerIndex)noexcept{
+        FOUNDATION_ASSERT(analysis.m_valid && producerIndex < analysis.m_taskCount && analysis.m_schedulingOutgoingOffsets.size() == analysis.m_taskCount + 1u);
+        const usize first = analysis.m_schedulingOutgoingOffsets[producerIndex];
+        const usize end = analysis.m_schedulingOutgoingOffsets[producerIndex + 1u];
+        return GpuTaskGraphSchedulingTaskIndexView{ .taskIndices = end != first ? analysis.m_schedulingOutgoingConsumers.data() + first : nullptr, .taskCount = end - first };
+    }
+
+    [[nodiscard]] static inline GpuTaskGraphSchedulingTaskIndexView SchedulingProducers(const GpuTaskGraphAnalysis& analysis, const u32 consumerIndex)noexcept{
+        FOUNDATION_ASSERT(analysis.m_valid && consumerIndex < analysis.m_taskCount && analysis.m_schedulingIncomingOffsets.size() == analysis.m_taskCount + 1u);
+        const usize first = analysis.m_schedulingIncomingOffsets[consumerIndex];
+        const usize end = analysis.m_schedulingIncomingOffsets[consumerIndex + 1u];
+        return GpuTaskGraphSchedulingTaskIndexView{ .taskIndices = end != first ? analysis.m_schedulingIncomingProducers.data() + first : nullptr, .taskCount = end - first };
+    }
+
+    [[nodiscard]] static inline const GpuTaskQueueAssignment* AssignmentForTaskIndex(const GpuTaskGraphQueueAssignments& assignments, const u32 taskIndex)noexcept{
+        if(!assignments.m_valid || taskIndex >= assignments.m_assignmentIndicesByTask.size())
+            return nullptr;
+        const u32 assignmentIndex = assignments.m_assignmentIndicesByTask[taskIndex];
+        return assignmentIndex < assignments.m_assignments.size() ? &assignments.m_assignments[assignmentIndex] : nullptr;
+    }
+};
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -141,9 +299,17 @@ struct GpuTaskGraphResourceStatePlan{
 
 [[nodiscard]] u64 AllocateCompiledPlanGeneration()noexcept;
 
-[[nodiscard]] b8 HasCapabilities(GpuQueueCapability::Mask available, GpuQueueCapability::Mask required)noexcept;
+[[nodiscard]] inline b8 HasCapabilities(const GpuQueueCapability::Mask available, const GpuQueueCapability::Mask required)noexcept{
+    const u8 availableMask = static_cast<u8>(available);
+    const u8 requiredMask = static_cast<u8>(required);
+    return (availableMask & requiredMask) == requiredMask;
+}
 
 [[nodiscard]] inline b8 TaskAllowsPacketMerge(const GpuTaskGraphTaskView& task)noexcept{
+    return task.scheduling.allowPacketMerge && !task.scheduling.forceSubmissionBoundary && !task.scheduling.joinsAcceptedQueueFrontier;
+}
+
+[[nodiscard]] inline b8 TaskNodeAllowsPacketMerge(const GpuTaskGraphDetail::GpuTaskNode& task)noexcept{
     return task.scheduling.allowPacketMerge && !task.scheduling.forceSubmissionBoundary && !task.scheduling.joinsAcceptedQueueFrontier;
 }
 
@@ -161,15 +327,39 @@ struct GpuTaskGraphResourceStatePlan{
 
 [[nodiscard]] b8 ResourceSharesQueuePairConcurrently(const GpuTaskGraphResourceView& resource, const GpuPhysicalQueueTopology& topology, const GpuPhysicalQueueInfo& sourceQueue, const GpuPhysicalQueueInfo& destinationQueue)noexcept;
 
+[[nodiscard]] b8 ResourceNodeSharingAdmitsQueue(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphDetail::GpuGraphResourceNode& resource, const GpuPhysicalQueueTopology& topology, const GpuPhysicalQueueInfo& queue)noexcept;
+
+[[nodiscard]] b8 ResourceNodeUsesConcurrentQueueSharing(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphDetail::GpuGraphResourceNode& resource, const GpuPhysicalQueueTopology& topology)noexcept;
+
+[[nodiscard]] b8 ResourceNodeSharesQueuePairConcurrently(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphDetail::GpuGraphResourceNode& resource, const GpuPhysicalQueueTopology& topology, const GpuPhysicalQueueInfo& sourceQueue, const GpuPhysicalQueueInfo& destinationQueue)noexcept;
+
 [[nodiscard]] b8 IsValidQueueTopology(const GpuPhysicalQueueTopology& topology)noexcept;
 
 [[nodiscard]] const GpuPhysicalQueueInfo* FindDefaultGraphicsQueue(const GpuPhysicalQueueTopology& topology)noexcept;
 
 [[nodiscard]] b8 IsValidCommandRequirements(const GpuTaskCommandRequirements& commands)noexcept;
 [[nodiscard]] b8 IsValidSchedulingHint(const GpuTaskSchedulingHint& hint)noexcept;
-[[nodiscard]] u64 QueueCostWeight(GpuTaskCostHint::Enum cost)noexcept;
 
-[[nodiscard]] const GpuPhysicalQueueInfo* FindPhysicalQueueInfo(const GpuPhysicalQueueTopology& topology, const GpuPhysicalQueueId& queueID)noexcept;
+[[nodiscard]] inline u64 QueueCostWeight(const GpuTaskCostHint::Enum cost)noexcept{
+    switch(cost){
+    case GpuTaskCostHint::Tiny: return 1u;
+    case GpuTaskCostHint::Small: return 2u;
+    case GpuTaskCostHint::Medium: return 4u;
+    case GpuTaskCostHint::Large: return 8u;
+    default: return 0u;
+    }
+}
+
+[[nodiscard]] inline const GpuPhysicalQueueInfo* FindPhysicalQueueInfo(const GpuPhysicalQueueTopology& topology, const GpuPhysicalQueueId& queueID)noexcept{
+    if(queueID.index < topology.queueCount && topology.queues[queueID.index].id == queueID)
+        return &topology.queues[queueID.index];
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
+        if(queue.id == queueID)
+            return &queue;
+    }
+    return nullptr;
+}
 
 [[nodiscard]] b8 IsLegalQueueAssignmentCandidate(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology, const GpuTaskGraphTaskView& task, const GpuPhysicalQueueInfo& candidate)noexcept;
 
@@ -214,11 +404,23 @@ private:
 
 [[nodiscard]] b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, GpuTaskSchedulingReachability& outReachability);
 
-[[nodiscard]] const GpuTaskQueueAssignment* FindQueueAssignment(Span<const GpuTaskQueueAssignment> assignments, Span<const u32> assignmentIndicesByTask, const GpuTaskId& task)noexcept;
+[[nodiscard]] inline const GpuTaskQueueAssignment* FindQueueAssignment(const Span<const GpuTaskQueueAssignment> assignments, const Span<const u32> assignmentIndicesByTask, const GpuTaskId& task)noexcept{
+    if(!task.valid() || task.index >= assignmentIndicesByTask.size())
+        return nullptr;
+    const u32 assignmentIndex = assignmentIndicesByTask[task.index];
+    if(assignmentIndex >= assignments.size())
+        return nullptr;
+    const GpuTaskQueueAssignment& assignment = assignments[assignmentIndex];
+    return assignment.task == task ? &assignment : nullptr;
+}
 
 
 struct GpuTaskQueueLegalityCache{
     Vector<u64, Alloc::ScratchArena> taskLegalQueueMasks;
+    Array<u64, CommandQueue::kCount> classQueueMasks{};
+    Array<u8, CommandQueue::kCount> orderedQueueIndicesByClassCount{};
+    Array<Array<u8, 64u>, CommandQueue::kCount> orderedQueueIndicesByClass{};
+    u64 primaryGraphicsMask = 0u;
     b8 active = false;
 
 
@@ -248,13 +450,18 @@ struct GpuTaskQueueScoringData{
     Array<u64, GpuTaskCostHint::Count> costGroupWeights;
     Vector<usize, Alloc::ScratchArena> ownershipEdgeOffsets;
     Vector<OwnershipEdge, Alloc::ScratchArena> ownershipEdges;
+    Vector<u64, Alloc::ScratchArena> resourceConcurrentAdmittedMasks;
     Vector<GpuTaskQueueLoad, Alloc::ScratchArena> assignedQueueLoads;
+    Vector<u64, Alloc::ScratchArena> externalQueueLoadsByIndex;
+    Vector<u32, Alloc::ScratchArena> queueFamilyByIndex;
+    Vector<u16, Alloc::ScratchArena> assignedQueueIndexByTask;
     Vector<u64, Alloc::ScratchArena> assignedCostWords;
     usize costWordsPerGroup = 0u;
     u64 totalAssignedCost = 0u;
     const GpuTaskQueueLoad* externalQueueLoads = nullptr;
     usize externalQueueLoadCount = 0u;
     u8 nonEmptyCostGroupMask = 0u;
+    b8 hasResourceConcurrentMasks = false;
 
 
 public:
@@ -271,10 +478,14 @@ public:
 public:
     [[nodiscard]] usize findAssignedQueueIndex(const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] u64 externalQueueLoad(const GpuPhysicalQueueId& queue)const noexcept;
+    [[nodiscard]] inline u64 externalQueueLoadByIndex(const usize queueIndex)const noexcept{
+        return queueIndex < externalQueueLoadsByIndex.size() ? externalQueueLoadsByIndex[queueIndex] : 0u;
+    }
     void rebuildAssignmentLoads(Span<const GpuTaskQueueAssignment> assignments, const GpuPhysicalQueueTopology& topology);
     void updateAssignmentLoads(const GpuTaskId& task, const GpuPhysicalQueueId& previousQueue, const GpuPhysicalQueueId& selectedQueue)noexcept;
     [[nodiscard]] u64 assignedQueueLoad(const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] u64 independentQueueCost(const GpuTaskSchedulingReachability& reachability, const GpuPhysicalQueueId& queue, Span<const GpuTaskQueueAssignment> members)const noexcept;
+    [[nodiscard]] u64 independentQueueCostByIndex(const GpuTaskSchedulingReachability& reachability, usize queueIndex, Span<const GpuTaskQueueAssignment> members)const noexcept;
 };
 
 struct GpuTaskQueueScoreExclusions{
@@ -283,6 +494,21 @@ struct GpuTaskQueueScoreExclusions{
     u64 totalCost = 0u;
     u64 candidateQueueCost = 0u;
 };
+
+[[nodiscard]] GpuQueueAssignmentScore BuildTaskQueueAssignmentScore(
+    const GpuTaskGraph::DeclarationReadView& graph,
+    const GpuTaskGraphAnalysis& analysis,
+    Span<const GpuTaskQueueAssignment> assignments,
+    Span<const u32> assignmentIndicesByTask,
+    const GpuPhysicalQueueTopology& topology,
+    const GpuTaskSchedulingReachability& schedulingReachability,
+    const GpuTaskQueueScoringData& scoringData,
+    GpuTaskId taskId,
+    const GpuTaskSchedulingHint& taskScheduling,
+    const GpuPhysicalQueueInfo& candidate,
+    const GpuTaskQueueScoreExclusions& exclusions = {},
+    b8 computeOverlap = true
+)noexcept;
 
 [[nodiscard]] GpuQueueAssignmentScore BuildQueueAssignmentScore(
     const GpuTaskGraph::DeclarationReadView& graph,
@@ -303,6 +529,7 @@ struct GpuTaskQueuePlacementGroup{
     usize assignmentCount = 0u;
     GpuQueueCapability::Mask requiredCapabilities = GpuQueueCapability::None;
     GpuPhysicalQueueId initialOwnershipQueue;
+    u64 legalQueueMask = 0u;
 };
 
 [[nodiscard]] const GpuPhysicalQueueInfo* FindBestLegalQueuePlacementGroupCandidate(
@@ -436,12 +663,41 @@ struct GpuTaskQueuePlacementGroup{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 IsReadAccess(GpuTaskResourceAccess::Enum access)noexcept;
-[[nodiscard]] b8 IsWriteAccess(GpuTaskResourceAccess::Enum access)noexcept;
+[[nodiscard]] inline b8 IsReadAccess(const GpuTaskResourceAccess::Enum access)noexcept{
+    return access == GpuTaskResourceAccess::Read || access == GpuTaskResourceAccess::ReadWrite;
+}
+
+[[nodiscard]] inline b8 IsWriteAccess(const GpuTaskResourceAccess::Enum access)noexcept{
+    return access == GpuTaskResourceAccess::Write || access == GpuTaskResourceAccess::ReadWrite;
+}
+
 [[nodiscard]] Expected<GpuTaskResourceRange> ResolveTextureRangeForPlanning(const Texture* texture, const GpuTaskResourceRange& range)noexcept;
 [[nodiscard]] Expected<GpuTaskResourceRange> ResolveResourceRangeForPlanning(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& range)noexcept;
-[[nodiscard]] b8 RangesOverlap(const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& lhs, const GpuTaskResourceRange& rhs)noexcept;
-[[nodiscard]] b8 RangeContains(const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& outer, const GpuTaskResourceRange& inner)noexcept;
+[[nodiscard]] Expected<GpuTaskResourceRange> ResolveResourceNodeRangeForPlanning(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphDetail::GpuGraphResourceNode& resource, const u32 resourceIndex, const GpuTaskResourceRange& range)noexcept;
+
+[[nodiscard]] inline b8 RangesOverlapForType(const GpuGraphResourceType::Enum type, const GpuTaskResourceRange& lhs, const GpuTaskResourceRange& rhs)noexcept{
+    if(type == GpuGraphResourceType::Texture)
+        return lhs.textureSubresources.overlaps(rhs.textureSubresources);
+    if(type == GpuGraphResourceType::Buffer)
+        return lhs.bufferRange.overlaps(rhs.bufferRange);
+    return true;
+}
+
+[[nodiscard]] inline b8 RangeContainsForType(const GpuGraphResourceType::Enum type, const GpuTaskResourceRange& outer, const GpuTaskResourceRange& inner)noexcept{
+    if(type == GpuGraphResourceType::Texture)
+        return outer.textureSubresources.contains(inner.textureSubresources);
+    if(type == GpuGraphResourceType::Buffer)
+        return outer.bufferRange.contains(inner.bufferRange);
+    return true;
+}
+
+[[nodiscard]] inline b8 RangesOverlap(const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& lhs, const GpuTaskResourceRange& rhs)noexcept{
+    return RangesOverlapForType(resource.type, lhs, rhs);
+}
+
+[[nodiscard]] inline b8 RangeContains(const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& outer, const GpuTaskResourceRange& inner)noexcept{
+    return RangeContainsForType(resource.type, outer, inner);
+}
 [[nodiscard]] const GpuTaskGraphInitialOwnerHandoffSourceView* FindInitialOwnerHandoffSource(
     const GpuTaskGraphResourceView& resource,
     const GpuTaskResourceRange& range,
@@ -513,15 +769,41 @@ struct GpuTaskQueuePlacementGroup{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] u32 FindCompiledTaskIndex(const GpuTaskGraphCompiledPlanStorage& compiledPlan, const GpuTaskId& task)noexcept;
+[[nodiscard]] inline u32 FindCompiledTaskIndex(const GpuTaskGraphCompiledPlanStorage& compiledPlan, const GpuTaskId& task)noexcept{
+    if(!task.valid() || task.generation != compiledPlan.graphGeneration || task.index >= compiledPlan.compiledTaskIndexByTask.size())
+        return Limit<u32>::s_Max;
+    const u32 compiledTaskIndex = compiledPlan.compiledTaskIndexByTask[task.index];
+    if(compiledTaskIndex >= compiledPlan.tasks.size() || compiledPlan.tasks[compiledTaskIndex].task != task)
+        return Limit<u32>::s_Max;
+    return compiledTaskIndex;
+}
 
-[[nodiscard]] const GpuCompiledTask* FindCompiledTask(const GpuTaskGraphCompiledPlanStorage& compiledPlan, const GpuTaskId& task)noexcept;
+[[nodiscard]] inline const GpuCompiledTask* FindCompiledTask(const GpuTaskGraphCompiledPlanStorage& compiledPlan, const GpuTaskId& task)noexcept{
+    const u32 compiledTaskIndex = FindCompiledTaskIndex(compiledPlan, task);
+    return compiledTaskIndex != Limit<u32>::s_Max ? &compiledPlan.tasks[compiledTaskIndex] : nullptr;
+}
 
-[[nodiscard]] GpuCompiledTask* FindCompiledTask(GpuTaskGraphCompiledPlanStorage& compiledPlan, const GpuTaskId& task)noexcept;
+[[nodiscard]] inline GpuCompiledTask* FindCompiledTask(GpuTaskGraphCompiledPlanStorage& compiledPlan, const GpuTaskId& task)noexcept{
+    const u32 compiledTaskIndex = FindCompiledTaskIndex(compiledPlan, task);
+    return compiledTaskIndex != Limit<u32>::s_Max ? &compiledPlan.tasks[compiledTaskIndex] : nullptr;
+}
 
-[[nodiscard]] GpuSubmissionPacketId FindCompiledPacketForTask(const GpuTaskGraphCompiledPlanStorage& compiledPlan, const GpuTaskId& task)noexcept;
+[[nodiscard]] inline GpuSubmissionPacketId FindCompiledPacketForTask(const GpuTaskGraphCompiledPlanStorage& compiledPlan, const GpuTaskId& task)noexcept{
+    const GpuCompiledTask* const compiledTask = FindCompiledTask(compiledPlan, task);
+    return compiledTask ? compiledTask->packet : GpuSubmissionPacketId{};
+}
 
-[[nodiscard]] const GpuPhysicalQueueInfo* FindCompiledQueueInfo(const GpuTaskGraphCompiledPlanStorage& compiledPlan, const GpuPhysicalQueueId& queue)noexcept;
+[[nodiscard]] inline const GpuPhysicalQueueInfo* FindCompiledQueueInfo(const GpuTaskGraphCompiledPlanStorage& compiledPlan, const GpuPhysicalQueueId& queue)noexcept{
+    if(!queue.valid() || queue.deviceGeneration != compiledPlan.deviceGeneration)
+        return nullptr;
+    if(queue.index < compiledPlan.queueTopology.size() && compiledPlan.queueTopology[queue.index].id == queue)
+        return &compiledPlan.queueTopology[queue.index];
+    for(const GpuPhysicalQueueInfo& info : compiledPlan.queueTopology){
+        if(info.id == queue)
+            return &info;
+    }
+    return nullptr;
+}
 
 [[nodiscard]] b8 AppendCompiledOwnershipTransfer(
     GpuTaskGraphResourceStatePlan& plan,

@@ -19,6 +19,7 @@ void Device::SubmissionWorkspace::prepareBatch(const Span<const Device::GraphCom
     auto& expectedCommandLists = m_queue.m_executeExpectedCommandLists;
     auto& submittedOwners = m_queue.m_executeSubmittedOwners;
     expectedCommandLists.clear();
+    m_queue.m_executeSubmittedUploadMask = 0u;
 
     usize totalCommandLists = 0u;
     for(const Device::GraphCommandListBatchEntry& entry : entries){
@@ -26,6 +27,7 @@ void Device::SubmissionWorkspace::prepareBatch(const Span<const Device::GraphCom
             totalCommandLists += entry.numCommandLists;
     }
 
+    u8 uploadMask = 0u;
     if(totalCommandLists > 0u){
         expectedCommandLists.reserve(totalCommandLists);
         for(const Device::GraphCommandListBatchEntry& entry : entries){
@@ -34,6 +36,7 @@ void Device::SubmissionWorkspace::prepareBatch(const Span<const Device::GraphCom
             for(usize i = 0u; i < entry.numCommandLists; ++i){
                 auto& commandList = *MakeNotNull(entry.commandLists[i]);
                 TrackedCommandBuffer& owner = *commandList.m_currentCmdBuf;
+                uploadMask |= owner.m_usedUploadChunkMask;
                 expectedCommandLists.push_back(Queue::SubmissionCommandListIdentity{
                     .owner = &owner,
                     .recordingLeaseSerial = commandList.m_recordingLeaseSerial,
@@ -47,10 +50,14 @@ void Device::SubmissionWorkspace::prepareBatch(const Span<const Device::GraphCom
         }
     }
 
+    m_queue.m_executeSubmittedUploadMask = uploadMask;
+    if(uploadMask == 0u)
+        return;
+
     submittedOwners.prepare(expectedCommandLists.size());
     if(submittedOwners.indexed()){
         for(const Queue::SubmissionCommandListIdentity& expected : expectedCommandLists){
-            if(expected.owner)
+            if(expected.owner && expected.owner->m_usedUploadChunkMask != 0u)
                 submittedOwners.add(*expected.owner, expected.nativeRecordingID);
         }
     }
@@ -58,13 +65,21 @@ void Device::SubmissionWorkspace::prepareBatch(const Span<const Device::GraphCom
 
 void Device::SubmissionWorkspace::finalizeBatch(const Span<const Device::GraphCommandListBatchEntry> entries, const GpuPhysicalQueueId& executionQueue, const u64 submittedID, const b8 submissionAccepted){
     const auto& expectedCommandLists = m_queue.m_executeExpectedCommandLists;
-    if(expectedCommandLists.empty())
+    const u8 uploadMask = m_queue.m_executeSubmittedUploadMask;
+    if(expectedCommandLists.empty() || uploadMask == 0u)
         return;
 
+    constexpr u8 s_UploadBit = static_cast<u8>(1u << static_cast<usize>(UploadManager::ChunkKind::Upload));
+    constexpr u8 s_ScratchBit = static_cast<u8>(1u << static_cast<usize>(UploadManager::ChunkKind::Scratch));
+    constexpr u8 s_AccelInputBit = static_cast<u8>(1u << static_cast<usize>(UploadManager::ChunkKind::AccelStructBuildInput));
+
     if(submissionAccepted){
-        m_device.m_uploadManager.submitChunks(executionQueue, submittedID, expectedCommandLists, m_queue.m_executeSubmittedOwners);
-        m_device.m_scratchManager.submitChunks(executionQueue, submittedID, expectedCommandLists, m_queue.m_executeSubmittedOwners);
-        m_device.m_accelStructInputManager.submitChunks(executionQueue, submittedID, expectedCommandLists, m_queue.m_executeSubmittedOwners);
+        if((uploadMask & s_UploadBit) != 0u)
+            m_device.m_uploadManager.submitChunks(executionQueue, submittedID, expectedCommandLists, m_queue.m_executeSubmittedOwners);
+        if((uploadMask & s_ScratchBit) != 0u)
+            m_device.m_scratchManager.submitChunks(executionQueue, submittedID, expectedCommandLists, m_queue.m_executeSubmittedOwners);
+        if((uploadMask & s_AccelInputBit) != 0u)
+            m_device.m_accelStructInputManager.submitChunks(executionQueue, submittedID, expectedCommandLists, m_queue.m_executeSubmittedOwners);
         return;
     }
 
@@ -88,14 +103,20 @@ void Device::SubmissionWorkspace::finalizeBatch(const Span<const Device::GraphCo
         if(ownerStillRecorded(expected))
             continue;
         if(!reusableVersion){
-            m_device.m_uploadManager.abandonChunks(executionQueue, expected.owner, expected.nativeRecordingID);
-            m_device.m_scratchManager.abandonChunks(executionQueue, expected.owner, expected.nativeRecordingID);
-            m_device.m_accelStructInputManager.abandonChunks(executionQueue, expected.owner, expected.nativeRecordingID);
+            if((uploadMask & s_UploadBit) != 0u)
+                m_device.m_uploadManager.abandonChunks(executionQueue, expected.owner, expected.nativeRecordingID);
+            if((uploadMask & s_ScratchBit) != 0u)
+                m_device.m_scratchManager.abandonChunks(executionQueue, expected.owner, expected.nativeRecordingID);
+            if((uploadMask & s_AccelInputBit) != 0u)
+                m_device.m_accelStructInputManager.abandonChunks(executionQueue, expected.owner, expected.nativeRecordingID);
             continue;
         }
-        m_device.m_uploadManager.discardChunks(executionQueue, expected.owner, expected.nativeRecordingID, *reusableVersion);
-        m_device.m_scratchManager.discardChunks(executionQueue, expected.owner, expected.nativeRecordingID, *reusableVersion);
-        m_device.m_accelStructInputManager.discardChunks(executionQueue, expected.owner, expected.nativeRecordingID, *reusableVersion);
+        if((uploadMask & s_UploadBit) != 0u)
+            m_device.m_uploadManager.discardChunks(executionQueue, expected.owner, expected.nativeRecordingID, *reusableVersion);
+        if((uploadMask & s_ScratchBit) != 0u)
+            m_device.m_scratchManager.discardChunks(executionQueue, expected.owner, expected.nativeRecordingID, *reusableVersion);
+        if((uploadMask & s_AccelInputBit) != 0u)
+            m_device.m_accelStructInputManager.discardChunks(executionQueue, expected.owner, expected.nativeRecordingID, *reusableVersion);
     }
 }
 

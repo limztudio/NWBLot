@@ -208,6 +208,39 @@ struct MeshDispatchLimits{
 
 [[nodiscard]] MeshDispatchLimits GetMeshDispatchLimits(const VkPhysicalDeviceMeshShaderPropertiesEXT& properties, b8 taskShaderActive)noexcept;
 
+[[nodiscard]] inline b8 ViewportsEqual(const FixedVector<Viewport, s_MaxViewports>& lhs, const FixedVector<Viewport, s_MaxViewports>& rhs)noexcept{
+    if(lhs.size() != rhs.size())
+        return false;
+    const Viewport* const lhsData = lhs.data();
+    const Viewport* const rhsData = rhs.data();
+    for(usize i = 0u; i < lhs.size(); ++i){
+        if(!(lhsData[i] == rhsData[i]))
+            return false;
+    }
+    return true;
+}
+
+[[nodiscard]] inline b8 ScissorsEqual(const FixedVector<Rect, s_MaxViewports>& lhs, const FixedVector<Rect, s_MaxViewports>& rhs)noexcept{
+    if(lhs.size() != rhs.size())
+        return false;
+    const Rect* const lhsData = lhs.data();
+    const Rect* const rhsData = rhs.data();
+    for(usize i = 0u; i < lhs.size(); ++i){
+        if(!(lhsData[i] == rhsData[i]))
+            return false;
+    }
+    return true;
+}
+
+inline void CopyViewportStateCompact(ViewportState& dst, const ViewportState& src)noexcept{
+    dst.viewports.resize(src.viewports.size());
+    for(usize i = 0u; i < src.viewports.size(); ++i)
+        dst.viewports.data()[i] = src.viewports.data()[i];
+    dst.scissorRects.resize(src.scissorRects.size());
+    for(usize i = 0u; i < src.scissorRects.size(); ++i)
+        dst.scissorRects.data()[i] = src.scissorRects.data()[i];
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

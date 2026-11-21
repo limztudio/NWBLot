@@ -32,6 +32,15 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
     if(!declarationAccess.validFor(graph) || !planAccess.validFor(declarationAccess) || !validForWithinArtifactOperation(compiledGraph, planAccess, artifactAccess) || !planAccess.validPacket(packetID))
         return MakeUnexpected(Failure{});
 
+    const u8 packetFlags = planAccess.packetRuntimeFlags(packetID.index);
+    constexpr u8 s_AnyStateSeedFlags =
+        GpuCompiledGraph::PacketRuntimeFlag::HasInitialOwnerHandoff
+        | GpuCompiledGraph::PacketRuntimeFlag::HasExternalStateSource
+        | GpuCompiledGraph::PacketRuntimeFlag::HasPrologueStateSeeds
+    ;
+    if((packetFlags & s_AnyStateSeedFlags) == 0u)
+        return nullptr;
+
     scratch.initialStateSeed.reset();
     scratch.stateSubsetScratch.reset();
     scratch.stateMergeScratch.reset();
@@ -174,37 +183,41 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
         return appendMergedExternalSource();
     };
 
-    for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
-        const GpuCompiledTaskView compiledTaskView = planAccess.findTask(tasks[taskIndex]);
-        if(!compiledTaskView.valid())
-            return MakeUnexpected(Failure{});
-        const GpuCompiledTask& compiledTask = *compiledTaskView.plan;
-        const GpuCompiledBarrier* const barriers = compiledTaskView.prologueBarriers;
-        for(u32 barrierIndex = 0u; barrierIndex < compiledTask.prologueBarrierCount; ++barrierIndex){
-            const GpuCompiledBarrier& barrier = barriers[barrierIndex];
-            if(!barrier.isInitialOwnerHandoff || (barrier.type != GpuCompiledBarrierType::TextureOwnershipAcquire && barrier.type != GpuCompiledBarrierType::BufferOwnershipAcquire && barrier.type != GpuCompiledBarrierType::AccelStructOwnershipAcquire))
-                continue;
-            if(!appendInitialOwnerStateSource(barrier))
+    if((packetFlags & GpuCompiledGraph::PacketRuntimeFlag::HasInitialOwnerHandoff) != 0u){
+        for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
+            const GpuCompiledTaskView compiledTaskView = planAccess.findTask(tasks[taskIndex]);
+            if(!compiledTaskView.valid())
                 return MakeUnexpected(Failure{});
+            const GpuCompiledTask& compiledTask = *compiledTaskView.plan;
+            const GpuCompiledBarrier* const barriers = compiledTaskView.prologueBarriers;
+            for(u32 barrierIndex = 0u; barrierIndex < compiledTask.prologueBarrierCount; ++barrierIndex){
+                const GpuCompiledBarrier& barrier = barriers[barrierIndex];
+                if(!barrier.isInitialOwnerHandoff || (barrier.type != GpuCompiledBarrierType::TextureOwnershipAcquire && barrier.type != GpuCompiledBarrierType::BufferOwnershipAcquire && barrier.type != GpuCompiledBarrierType::AccelStructOwnershipAcquire))
+                    continue;
+                if(!appendInitialOwnerStateSource(barrier))
+                    return MakeUnexpected(Failure{});
+            }
         }
     }
 
-    for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
-        const GpuTaskGraphTaskView task = declarationAccess.taskAt(tasks[taskIndex].index);
-        if(task.externalStateSourceCount == 0u)
-            continue;
-
-        const GpuPhysicalQueueInfo* const taskQueue = planAccess.queueInfoForTask(tasks[taskIndex]);
-        if(!taskQueue || taskQueue->queueClass >= CommandQueue::kCount)
-            return MakeUnexpected(Failure{});
-        for(usize sourceIndex = 0u; sourceIndex < task.externalStateSourceCount; ++sourceIndex){
-            const GpuTaskExternalStateSource& source = task.externalStateSources[sourceIndex];
-            if(source.applicableConsumerQueueClass > CommandQueue::kCount)
-                return MakeUnexpected(Failure{});
-            if(source.applicableConsumerQueueClass != CommandQueue::kCount && source.applicableConsumerQueueClass != taskQueue->queueClass)
+    if((packetFlags & GpuCompiledGraph::PacketRuntimeFlag::HasExternalStateSource) != 0u){
+        for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
+            const GpuTaskGraphTaskView task = declarationAccess.taskAt(tasks[taskIndex].index);
+            if(task.externalStateSourceCount == 0u)
                 continue;
-            if(!appendStateSource(source.states, Span<const GpuTaskId>(tasks + taskIndex, 1u)))
+
+            const GpuPhysicalQueueInfo* const taskQueue = planAccess.queueInfoForTask(tasks[taskIndex]);
+            if(!taskQueue || taskQueue->queueClass >= CommandQueue::kCount)
                 return MakeUnexpected(Failure{});
+            for(usize sourceIndex = 0u; sourceIndex < task.externalStateSourceCount; ++sourceIndex){
+                const GpuTaskExternalStateSource& source = task.externalStateSources[sourceIndex];
+                if(source.applicableConsumerQueueClass > CommandQueue::kCount)
+                    return MakeUnexpected(Failure{});
+                if(source.applicableConsumerQueueClass != CommandQueue::kCount && source.applicableConsumerQueueClass != taskQueue->queueClass)
+                    continue;
+                if(!appendStateSource(source.states, Span<const GpuTaskId>(tasks + taskIndex, 1u)))
+                    return MakeUnexpected(Failure{});
+            }
         }
     }
 
@@ -212,6 +225,9 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
     if(scratch.externalMergedStateSeed.valid() && !scratch.initialStateSeed.exchangeSnapshot(scratch.externalMergedStateSeed))
         return MakeUnexpected(Failure{});
     scratch.stateMergeScratch.reset();
+
+    if((packetFlags & GpuCompiledGraph::PacketRuntimeFlag::HasPrologueStateSeeds) == 0u)
+        return scratch.initialStateSeed.valid() ? &scratch.initialStateSeed : nullptr;
 
     const auto appendInitialStateSubset = [&]{
         if(!scratch.initialStateSeed.valid())

@@ -30,11 +30,15 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
     Alloc::ScratchArena& scratchArena,
     const GpuPhysicalQueueTopology* const topology
 )
-    : taskCosts(graph.taskCount(), scratchArena)
-    , taskCostGroups(reachability.m_words.empty() ? 0u : graph.taskCount(), scratchArena)
-    , ownershipEdgeOffsets(graph.taskCount() + 1u, 0u, scratchArena)
+    : taskCosts(CompilerGraphAccess::TaskCount(graph), scratchArena)
+    , taskCostGroups(reachability.m_words.empty() ? 0u : CompilerGraphAccess::TaskCount(graph), scratchArena)
+    , ownershipEdgeOffsets(CompilerGraphAccess::TaskCount(graph) + 1u, 0u, scratchArena)
     , ownershipEdges(scratchArena)
+    , resourceConcurrentAdmittedMasks(scratchArena)
     , assignedQueueLoads(scratchArena)
+    , externalQueueLoadsByIndex(scratchArena)
+    , queueFamilyByIndex(scratchArena)
+    , assignedQueueIndexByTask(CompilerGraphAccess::TaskCount(graph), Limit<u16>::s_Max, scratchArena)
     , assignedCostWords(scratchArena)
     , externalQueueLoads(options.queueLoads)
     , externalQueueLoadCount(options.queueLoadCount)
@@ -42,7 +46,7 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
     for(usize costGroup = 0u; costGroup < GpuTaskCostHint::Count; ++costGroup)
         costGroupWeights[costGroup] = QueueCostWeight(static_cast<GpuTaskCostHint::Enum>(costGroup));
     for(usize taskIndex = 0u; taskIndex < taskCosts.size(); ++taskIndex){
-        const GpuTaskSchedulingHint& scheduling = graph.taskAt(taskIndex).scheduling;
+        const GpuTaskSchedulingHint& scheduling = CompilerGraphAccess::TaskNode(graph, taskIndex).scheduling;
         const auto costGroup = scheduling.cost;
         if(!taskCostGroups.empty())
             taskCostGroups[taskIndex] = static_cast<u8>(costGroup);
@@ -50,10 +54,24 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
     }
 
     if(topology && topology->queueCount > 0u){
+        queueFamilyByIndex.resize(topology->queueCount);
+        for(usize queueIndex = 0u; queueIndex < topology->queueCount; ++queueIndex)
+            queueFamilyByIndex[queueIndex] = topology->queues[queueIndex].familyIndex;
+
+        if(externalQueueLoads && externalQueueLoadCount != 0u){
+            externalQueueLoadsByIndex.assign(topology->queueCount, 0u);
+            for(usize loadIndex = 0u; loadIndex < externalQueueLoadCount; ++loadIndex){
+                if(const GpuPhysicalQueueInfo* const queue = FindPhysicalQueueInfo(*topology, externalQueueLoads[loadIndex].queue)){
+                    const usize queueIndex = static_cast<usize>(queue - topology->queues);
+                    externalQueueLoadsByIndex[queueIndex] = externalQueueLoads[loadIndex].estimatedCost;
+                }
+            }
+        }
+
         b8 singleFamily = true;
-        const u32 firstFamily = topology->queues[0u].familyIndex;
+        const u32 firstFamily = queueFamilyByIndex[0u];
         for(usize queueIndex = 1u; queueIndex < topology->queueCount; ++queueIndex){
-            if(topology->queues[queueIndex].familyIndex != firstFamily){
+            if(queueFamilyByIndex[queueIndex] != firstFamily){
                 singleFamily = false;
                 break;
             }
@@ -62,11 +80,37 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
             return;
     }
 
+    if(analysis.inferredEdges().empty())
+        return;
+
+    const usize taskCount = CompilerGraphAccess::TaskCount(graph);
+    const usize resourceCount = CompilerGraphAccess::ResourceCount(graph);
+    const b8 buildConcurrentMasks = topology && topology->queueCount > 0u && topology->queueCount <= s_BitsPerWord;
+    Vector<u8, Alloc::ScratchArena> computedConcurrentMask(buildConcurrentMasks ? resourceCount : 0u, 0u, scratchArena);
+    if(buildConcurrentMasks){
+        resourceConcurrentAdmittedMasks.assign(resourceCount, 0u);
+        hasResourceConcurrentMasks = true;
+    }
+
     Vector<OwnershipEdge, Alloc::ScratchArena> uniqueEdges(scratchArena);
     uniqueEdges.reserve(analysis.inferredEdges().size());
     for(const GpuTaskDependencyEdge& edge : analysis.inferredEdges()){
         if(edge.hazard == GpuTaskHazardType::VersionDependency || edge.hazard == GpuTaskHazardType::VersionLifetime || !edge.resource.valid())
             continue;
+        const GpuTaskGraphDetail::GpuGraphResourceNode& resource = CompilerGraphAccess::ResourceNode(graph, edge.resource.index);
+        if(resource.type == GpuGraphResourceType::HazardDomain)
+            continue;
+        if(buildConcurrentMasks && !computedConcurrentMask[edge.resource.index]){
+            computedConcurrentMask[edge.resource.index] = 1u;
+            if(ResourceNodeUsesConcurrentQueueSharing(graph, resource, *topology)){
+                u64 admittedMask = 0u;
+                for(usize queueIndex = 0u; queueIndex < topology->queueCount; ++queueIndex){
+                    if(ResourceNodeSharingAdmitsQueue(graph, resource, *topology, topology->queues[queueIndex]))
+                        admittedMask |= BitMask<u64>(static_cast<u32>(queueIndex));
+                }
+                resourceConcurrentAdmittedMasks[edge.resource.index] = admittedMask;
+            }
+        }
         uniqueEdges.push_back(OwnershipEdge{ .producerIndex = edge.producer.index, .consumerIndex = edge.consumer.index, .resourceIndex = edge.resource.index, });
     }
     if(uniqueEdges.empty())
@@ -96,7 +140,7 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
         ownershipEdgeOffsets[taskIndex] += ownershipEdgeOffsets[taskIndex - 1u];
 
     ownershipEdges.resize(ownershipEdgeOffsets.back());
-    Vector<usize, Alloc::ScratchArena> writeOffsets(graph.taskCount(), scratchArena);
+    Vector<usize, Alloc::ScratchArena> writeOffsets(taskCount, scratchArena);
     for(usize taskIndex = 0u; taskIndex < writeOffsets.size(); ++taskIndex)
         writeOffsets[taskIndex] = ownershipEdgeOffsets[taskIndex];
     for(const OwnershipEdge& edge : uniqueEdges){
@@ -119,6 +163,8 @@ usize GpuTaskQueueScoringData::findAssignedQueueIndex(const GpuPhysicalQueueId& 
 }
 
 u64 GpuTaskQueueScoringData::externalQueueLoad(const GpuPhysicalQueueId& queue)const noexcept{
+    if(!externalQueueLoadsByIndex.empty() && queue.index < externalQueueLoadsByIndex.size() && assignedQueueLoads.size() == externalQueueLoadsByIndex.size() && assignedQueueLoads[queue.index].queue == queue)
+        return externalQueueLoadsByIndex[queue.index];
     if(!externalQueueLoads)
         return 0u;
     for(usize queueLoadIndex = 0u; queueLoadIndex < externalQueueLoadCount; ++queueLoadIndex){
@@ -134,17 +180,20 @@ void GpuTaskQueueScoringData::rebuildAssignmentLoads(const Span<const GpuTaskQue
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex)
         assignedQueueLoads[queueIndex] = { .queue = topology.queues[queueIndex].id, .estimatedCost = 0u };
 
+    const b8 trackTaskQueueIndices = topology.queueCount < Limit<u16>::s_Max && assignedQueueIndexByTask.size() == taskCosts.size();
     if(taskCostGroups.empty()){
         assignedCostWords.clear();
         costWordsPerGroup = 0u;
         nonEmptyCostGroupMask = 0u;
         totalAssignedCost = 0u;
         for(const GpuTaskQueueAssignment& assignment : assignments){
+            const usize queueIndex = findAssignedQueueIndex(assignment.queue);
+            if(trackTaskQueueIndices && queueIndex < topology.queueCount)
+                assignedQueueIndexByTask[assignment.task.index] = static_cast<u16>(queueIndex);
             const u64 cost = taskCosts[assignment.task.index];
             if(cost == 0u)
                 continue;
             totalAssignedCost += cost;
-            const usize queueIndex = findAssignedQueueIndex(assignment.queue);
             if(queueIndex < assignedQueueLoads.size())
                 assignedQueueLoads[queueIndex].estimatedCost += cost;
         }
@@ -165,6 +214,9 @@ void GpuTaskQueueScoringData::rebuildAssignmentLoads(const Span<const GpuTaskQue
     nonEmptyCostGroupMask = 0u;
     totalAssignedCost = 0u;
     for(const GpuTaskQueueAssignment& assignment : assignments){
+        const usize queueIndex = findAssignedQueueIndex(assignment.queue);
+        if(trackTaskQueueIndices && queueIndex < topology.queueCount)
+            assignedQueueIndexByTask[assignment.task.index] = static_cast<u16>(queueIndex);
         const u64 cost = taskCosts[assignment.task.index];
         if(cost == 0u)
             continue;
@@ -174,7 +226,6 @@ void GpuTaskQueueScoringData::rebuildAssignmentLoads(const Span<const GpuTaskQue
         const usize wordIndex = costGroup * costWordsPerGroup + assignment.task.index / s_BitsPerWord;
         const u64 mask = static_cast<u64>(1u) << (assignment.task.index % s_BitsPerWord);
         assignedCostWords[wordIndex] |= mask;
-        const usize queueIndex = findAssignedQueueIndex(assignment.queue);
         if(queueIndex < assignedQueueLoads.size()){
             assignedQueueLoads[queueIndex].estimatedCost += cost;
             assignedCostWords[(queueIndex + 1u) * *wordsPerQueue + wordIndex] |= mask;
@@ -185,11 +236,13 @@ void GpuTaskQueueScoringData::rebuildAssignmentLoads(const Span<const GpuTaskQue
 void GpuTaskQueueScoringData::updateAssignmentLoads(const GpuTaskId& task, const GpuPhysicalQueueId& previousQueue, const GpuPhysicalQueueId& selectedQueue)noexcept{
     if(previousQueue == selectedQueue)
         return;
+    const usize selectedQueueIndex = findAssignedQueueIndex(selectedQueue);
+    if(selectedQueueIndex < assignedQueueLoads.size() && assignedQueueLoads.size() < Limit<u16>::s_Max && task.index < assignedQueueIndexByTask.size())
+        assignedQueueIndexByTask[task.index] = static_cast<u16>(selectedQueueIndex);
     const u64 cost = taskCosts[task.index];
     if(cost == 0u)
         return;
     const usize previousQueueIndex = findAssignedQueueIndex(previousQueue);
-    const usize selectedQueueIndex = findAssignedQueueIndex(selectedQueue);
     if(assignedCostWords.empty()){
         if(previousQueueIndex < assignedQueueLoads.size()){
             FOUNDATION_ASSERT(assignedQueueLoads[previousQueueIndex].estimatedCost >= cost);
@@ -219,8 +272,8 @@ u64 GpuTaskQueueScoringData::assignedQueueLoad(const GpuPhysicalQueueId& queue)c
 }
 
 
-u64 GpuTaskQueueScoringData::independentQueueCost(const GpuTaskSchedulingReachability& reachability, const GpuPhysicalQueueId& queue, const Span<const GpuTaskQueueAssignment> members)const noexcept{
-    if(!reachability.m_valid || reachability.m_totalOrder || members.empty() || !members.data())
+u64 GpuTaskQueueScoringData::independentQueueCostByIndex(const GpuTaskSchedulingReachability& reachability, const usize queueIndex, const Span<const GpuTaskQueueAssignment> members)const noexcept{
+    if(!reachability.m_valid || reachability.m_totalOrder || members.empty() || !members.data() || queueIndex >= assignedQueueLoads.size())
         return 0u;
 #if defined(NWB_DEBUG)
     for(const GpuTaskQueueAssignment& member : members){
@@ -228,9 +281,7 @@ u64 GpuTaskQueueScoringData::independentQueueCost(const GpuTaskSchedulingReachab
         FOUNDATION_ASSERT(task.valid() && task.generation == reachability.m_graphGeneration && task.index < reachability.m_taskCount);
     }
 #endif
-    const usize queueIndex = findAssignedQueueIndex(queue);
-    if(queueIndex == assignedQueueLoads.size())
-        return 0u;
+    const GpuPhysicalQueueId queue = assignedQueueLoads[queueIndex].queue;
     u64 independentCost = totalAssignedCost - assignedQueueLoads[queueIndex].estimatedCost;
     if(independentCost == 0u)
         return 0u;
@@ -299,6 +350,11 @@ u64 GpuTaskQueueScoringData::independentQueueCost(const GpuTaskSchedulingReachab
         }
     }
     return independentCost;
+}
+
+u64 GpuTaskQueueScoringData::independentQueueCost(const GpuTaskSchedulingReachability& reachability, const GpuPhysicalQueueId& queue, const Span<const GpuTaskQueueAssignment> members)const noexcept{
+    const usize queueIndex = findAssignedQueueIndex(queue);
+    return independentQueueCostByIndex(reachability, queueIndex, members);
 }
 
 

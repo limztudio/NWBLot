@@ -70,7 +70,10 @@ namespace GpuTaskGraphCompilerDetail{
             continue;
 
         u64 load = prefixQueueCosts[queueIndex];
-        const u64 externalQueueLoad = scoringData.externalQueueLoad(candidate.id);
+        const u64 externalQueueLoad = !scoringData.externalQueueLoadsByIndex.empty()
+            ? scoringData.externalQueueLoadByIndex(queueIndex)
+            : scoringData.externalQueueLoad(candidate.id)
+        ;
         load = AddSaturating<u64>(load, externalQueueLoad);
         const b8 candidateIsNonPrimary = candidate.id != baseQueue.id;
         const b8 resultIsNonPrimary = result && result->id != baseQueue.id;

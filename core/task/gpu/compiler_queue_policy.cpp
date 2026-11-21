@@ -26,12 +26,6 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u64 s_TinyQueueCostWeight = 1u;
-inline constexpr u64 s_SmallQueueCostWeight = 2u;
-inline constexpr u64 s_MediumQueueCostWeight = 4u;
-inline constexpr u64 s_LargeQueueCostWeight = 8u;
-
-
 inline constexpr u8 s_ValidQueueCapabilityMask = static_cast<u8>(GpuQueueCapability::Transfer) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Graphics);
 
 static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
@@ -45,12 +39,6 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
     if(identity == 0u)
         FOUNDATION_FATAL_ASSERT_MSG(false, "GPU compiled plan generation identity space is exhausted");
     return identity;
-}
-
-[[nodiscard]] b8 HasCapabilities(const GpuQueueCapability::Mask available, const GpuQueueCapability::Mask required)noexcept{
-    const u8 availableMask = static_cast<u8>(available);
-    const u8 requiredMask = static_cast<u8>(required);
-    return (availableMask & requiredMask) == requiredMask;
 }
 
 [[nodiscard]] static b8 LogicalSharingIncludesQueueFamily(const ResourceQueueSharing::Mask sharing, const GpuPhysicalQueueTopology& topology, const u32 familyIndex)noexcept{
@@ -97,6 +85,27 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 
 [[nodiscard]] b8 ResourceSharesQueuePairConcurrently(const GpuTaskGraphResourceView& resource, const GpuPhysicalQueueTopology& topology, const GpuPhysicalQueueInfo& sourceQueue, const GpuPhysicalQueueInfo& destinationQueue)noexcept{
     return sourceQueue.familyIndex != destinationQueue.familyIndex && ResourceUsesConcurrentQueueSharing(resource, topology) && ResourceSharingAdmitsQueue(resource, topology, sourceQueue) && ResourceSharingAdmitsQueue(resource, topology, destinationQueue);
+}
+
+[[nodiscard]] b8 ResourceNodeSharingAdmitsQueue(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphDetail::GpuGraphResourceNode& resource, const GpuPhysicalQueueTopology& topology, const GpuPhysicalQueueInfo& queue)noexcept{
+    if(resource.hasQueueAdmission){
+        const ResourceQueueAdmissionSnapshot admission = CompilerGraphAccess::ResourceQueueAdmission(graph, resource);
+        return ResourceQueueAdmissionAdmitsQueue(admission, queue);
+    }
+    return !LogicalSharingUsesConcurrentQueueSharing(resource.queueSharing, topology) || LogicalSharingIncludesQueueFamily(resource.queueSharing, topology, queue.familyIndex);
+}
+
+[[nodiscard]] b8 ResourceNodeUsesConcurrentQueueSharing(const GpuTaskGraph::DeclarationReadView&, const GpuTaskGraphDetail::GpuGraphResourceNode& resource, const GpuPhysicalQueueTopology& topology)noexcept{
+    if(resource.hasQueueAdmission)
+        return resource.usesConcurrentSharing;
+    return LogicalSharingUsesConcurrentQueueSharing(resource.queueSharing, topology);
+}
+
+[[nodiscard]] b8 ResourceNodeSharesQueuePairConcurrently(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphDetail::GpuGraphResourceNode& resource, const GpuPhysicalQueueTopology& topology, const GpuPhysicalQueueInfo& sourceQueue, const GpuPhysicalQueueInfo& destinationQueue)noexcept{
+    return sourceQueue.familyIndex != destinationQueue.familyIndex
+        && ResourceNodeUsesConcurrentQueueSharing(graph, resource, topology)
+        && ResourceNodeSharingAdmitsQueue(graph, resource, topology, sourceQueue)
+        && ResourceNodeSharingAdmitsQueue(graph, resource, topology, destinationQueue);
 }
 
 [[nodiscard]] b8 IsValidQueueTopology(const GpuPhysicalQueueTopology& topology)noexcept{
@@ -166,16 +175,6 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 
 [[nodiscard]] b8 IsValidSchedulingHint(const GpuTaskSchedulingHint& hint)noexcept{
     return hint.cost < GpuTaskCostHint::Count;
-}
-
-[[nodiscard]] u64 QueueCostWeight(const GpuTaskCostHint::Enum cost)noexcept{
-    switch(cost){
-    case GpuTaskCostHint::Tiny: return s_TinyQueueCostWeight;
-    case GpuTaskCostHint::Small: return s_SmallQueueCostWeight;
-    case GpuTaskCostHint::Medium: return s_MediumQueueCostWeight;
-    case GpuTaskCostHint::Large: return s_LargeQueueCostWeight;
-    default: return 0u;
-    }
 }
 
 

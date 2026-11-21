@@ -24,14 +24,6 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 IsReadAccess(const GpuTaskResourceAccess::Enum access)noexcept{
-    return access == GpuTaskResourceAccess::Read || access == GpuTaskResourceAccess::ReadWrite;
-}
-
-[[nodiscard]] b8 IsWriteAccess(const GpuTaskResourceAccess::Enum access)noexcept{
-    return access == GpuTaskResourceAccess::Write || access == GpuTaskResourceAccess::ReadWrite;
-}
-
 [[nodiscard]] Expected<GpuTaskResourceRange> ResolveTextureRangeForPlanning(const Texture* const texture, const GpuTaskResourceRange& range)noexcept{
     GpuTaskResourceRange result = range;
     if(!texture)
@@ -60,20 +52,23 @@ namespace GpuTaskGraphCompilerDetail{
     return result.bufferRange.hasExtent() ? Expected<GpuTaskResourceRange>(result) : MakeUnexpected(Failure{});
 }
 
-[[nodiscard]] b8 RangesOverlap(const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& lhs, const GpuTaskResourceRange& rhs)noexcept{
+[[nodiscard]] Expected<GpuTaskResourceRange> ResolveResourceNodeRangeForPlanning(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphDetail::GpuGraphResourceNode& resource, const u32 resourceIndex, const GpuTaskResourceRange& range)noexcept{
+    GpuTaskResourceRange result = range;
     if(resource.type == GpuGraphResourceType::Texture)
-        return lhs.textureSubresources.overlaps(rhs.textureSubresources);
-    if(resource.type == GpuGraphResourceType::Buffer)
-        return lhs.bufferRange.overlaps(rhs.bufferRange);
-    return true;
-}
+        return ResolveTextureRangeForPlanning(CompilerGraphAccess::TextureForResourceIndex(graph, resourceIndex), range);
+    if(resource.type != GpuGraphResourceType::Buffer)
+        return result;
+    if(!range.bufferRange.hasExtent())
+        return MakeUnexpected(Failure{});
+    const Buffer* const buffer = CompilerGraphAccess::BufferForResourceIndex(graph, resourceIndex);
+    if(!buffer)
+        return result;
 
-[[nodiscard]] b8 RangeContains(const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& outer, const GpuTaskResourceRange& inner)noexcept{
-    if(resource.type == GpuGraphResourceType::Texture)
-        return outer.textureSubresources.contains(inner.textureSubresources);
-    if(resource.type == GpuGraphResourceType::Buffer)
-        return outer.bufferRange.contains(inner.bufferRange);
-    return true;
+    const BufferDesc& description = buffer->getCreationDescription();
+    if(range.bufferRange.byteOffset >= description.byteSize || (range.bufferRange.byteSize != BufferRange::s_AllBytes && range.bufferRange.byteSize > description.byteSize - range.bufferRange.byteOffset))
+        return MakeUnexpected(Failure{});
+    result.bufferRange = range.bufferRange.resolve(description);
+    return result.bufferRange.hasExtent() ? Expected<GpuTaskResourceRange>(result) : MakeUnexpected(Failure{});
 }
 
 [[nodiscard]] const GpuTaskGraphInitialOwnerHandoffSourceView* FindInitialOwnerHandoffSource(

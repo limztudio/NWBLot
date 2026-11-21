@@ -249,6 +249,12 @@ void CommandList::executePipelineBarrier(const Span<VkMemoryBarrier2> memoryBarr
     constexpr TStringView s_OperationName = FOUNDATION_TEXT("pipeline barrier");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
+    executePipelineBarrierValidated(memoryBarriers, imageBarriers, bufferBarriers, s_OperationName);
+}
+
+void CommandList::executePipelineBarrierValidated(const Span<VkMemoryBarrier2> memoryBarriers, const Span<VkImageMemoryBarrier2> imageBarriers, const Span<VkBufferMemoryBarrier2> bufferBarriers, const TStringView operationName){
+    if(m_hasPendingBufferCopies)
+        flushPendingBufferCopies();
 
     m_graphicsBuffersValidatedInPass = false;
 
@@ -286,6 +292,8 @@ void CommandList::executePipelineBarrier(const Span<VkMemoryBarrier2> memoryBarr
         endDynamicRendering();
         m_renderPassActive = false;
         m_renderPassFramebuffer = nullptr;
+        if(!resumeFramebuffer)
+            invalidateGraphicsDrawValidationCache();
     }
 
     const GpuQueueCapability::Mask exactQueueCapabilities = m_hasCachedPhysicalQueueInfo ? m_cachedPhysicalQueueInfo.capabilities : GpuQueueCapability::None;
@@ -310,7 +318,7 @@ void CommandList::executePipelineBarrier(const Span<VkMemoryBarrier2> memoryBarr
             m_renderPassFramebuffer = resumeFramebuffer;
         }
         else
-            rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("dynamic rendering could not resume after the barrier"));
+            rejectCommandRecording(operationName, FOUNDATION_TEXT("dynamic rendering could not resume after the barrier"));
     }
 }
 

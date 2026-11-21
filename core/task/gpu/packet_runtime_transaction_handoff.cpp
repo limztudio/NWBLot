@@ -47,6 +47,54 @@ QueueSubmissionToken GpuGraphSubmissionTransaction::taskToken(const GpuCompiledG
     return packetTokenLocked(planAccess.packetForTask(task));
 }
 
+b8 GpuGraphSubmissionTransaction::appendPacketDependencyWaitTokensWithinSubmissionOperation(
+    const GpuCompiledGraph::ReadView& planAccess,
+    const Span<const GpuPacketDependency> dependencies,
+    const usize batchStart,
+    const usize batchEnd,
+    Vector<QueueSubmissionToken, Alloc::ScratchArena>& outTokens,
+    usize& outElidedCount
+)const{
+    outElidedCount = 0u;
+    if(dependencies.empty())
+        return true;
+
+    const u64 planGeneration = planAccess.planGeneration();
+    usize elidedCount = 0u;
+    b8 hasCrossBatchDependency = false;
+    for(const GpuPacketDependency& dependency : dependencies){
+        const GpuSubmissionPacketId producer = dependency.producer;
+        if(producer.generation == planGeneration && producer.index >= batchStart && producer.index < batchEnd){
+            ++elidedCount;
+            continue;
+        }
+        hasCrossBatchDependency = true;
+    }
+    if(!hasCrossBatchDependency){
+        outElidedCount = elidedCount;
+        return true;
+    }
+
+    const usize initialSize = outTokens.size();
+    ScopedLock lock(m_mutex);
+    if(!validForLocked(planAccess))
+        return false;
+
+    for(const GpuPacketDependency& dependency : dependencies){
+        const GpuSubmissionPacketId producer = dependency.producer;
+        if(producer.generation == planGeneration && producer.index >= batchStart && producer.index < batchEnd)
+            continue;
+        const QueueSubmissionToken token = packetTokenLocked(producer);
+        if(!token.valid()){
+            outTokens.resize(initialSize);
+            return false;
+        }
+        outTokens.push_back(token);
+    }
+    outElidedCount = elidedCount;
+    return true;
+}
+
 b8 GpuGraphSubmissionTransaction::appendAcceptedQueueFrontierWaitTokens(const GpuPhysicalQueueId& destinationQueue, Vector<QueueSubmissionToken, Alloc::ScratchArena>& outTokens)const{
     ScopedLock lock(m_mutex);
     if(!m_valid || !destinationQueue.valid() || destinationQueue.deviceGeneration != m_deviceGeneration)

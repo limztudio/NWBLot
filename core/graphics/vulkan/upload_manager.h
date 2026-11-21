@@ -126,6 +126,7 @@ private:
     Futex m_mutex;
     ChunkKind::Enum m_chunkKind;
     u64 m_retiredChunkBytes = 0;
+    Atomic<b8> m_hasAnyChunks{ false };
 
     GraphicsDeque<QueueChunkLedger> m_queueChunkLedgers;
 };

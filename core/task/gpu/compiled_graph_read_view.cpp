@@ -247,6 +247,10 @@ GpuPhysicalQueueTopology GpuCompiledGraph::ReadView::queueTopology()const & noex
     return m_graph ? m_graph->queueTopology() : GpuPhysicalQueueTopology{};
 }
 
+u8 GpuCompiledGraph::ReadView::packetRuntimeFlags(const usize packetIndex)const noexcept{
+    return m_graph && packetIndex < m_graph->m_packetRuntimeFlags.size() ? m_graph->m_packetRuntimeFlags[packetIndex] : 0u;
+}
+
 
 void GpuCompiledGraph::ReadView::release()noexcept{
     if(!m_graph)

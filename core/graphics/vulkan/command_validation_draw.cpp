@@ -184,6 +184,56 @@ b8 CommandList::validateMeshletState(const MeshletState& state){
     return true;
 }
 
+void CommandList::rebuildGraphicsDrawValidationCache()noexcept{
+    invalidateGraphicsDrawValidationCache();
+
+    GraphicsPipeline* const pipeline = m_currentGraphicsState.pipeline;
+    if(!m_renderPassActive || !m_renderPassFramebuffer || !pipeline || pipeline->m_pipeline == VK_NULL_HANDLE || pipeline->m_framebufferInfo != m_renderPassFramebuffer->m_framebufferInfo)
+        return;
+    if(m_currentGraphicsState.viewport.viewports.size() != 1u || m_currentGraphicsState.viewport.scissorRects.size() > 1u)
+        return;
+
+    InputLayout* const inputLayout = pipeline->m_desc.inputLayout.get();
+    if(inputLayout){
+        const auto& requiredBindings = inputLayout->m_bindings;
+        const auto& requiredElementBytes = inputLayout->m_bindingRequiredElementBytes;
+        const VertexBufferBinding* const vertexData = m_currentGraphicsState.vertexBuffers.data();
+        const usize vertexCount = m_currentGraphicsState.vertexBuffers.size();
+        const usize requiredCount = requiredBindings.size();
+        if(requiredCount > s_MaxVertexAttributes)
+            return;
+
+        for(usize requiredIndex = 0u; requiredIndex < requiredCount; ++requiredIndex){
+            const VkVertexInputBindingDescription& requiredBinding = requiredBindings[requiredIndex];
+            const VertexBufferBinding* bound = nullptr;
+            for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
+                if(vertexData[vertexIndex].slot == requiredBinding.binding){
+                    bound = &vertexData[vertexIndex];
+                    break;
+                }
+            }
+            if(!bound || !bound->buffer){
+                m_resolvedVertexBindingCount = 0u;
+                return;
+            }
+            const b8 instanceRate = requiredBinding.inputRate == VK_VERTEX_INPUT_RATE_INSTANCE;
+            if(instanceRate)
+                m_graphicsHasInstanceVertexBindings = true;
+            m_resolvedVertexBindings[requiredIndex] = ResolvedVertexBinding{
+                .bufferDesc = &bound->buffer->m_creationDesc,
+                .offset = bound->offset,
+                .stride = requiredBinding.stride,
+                .requiredElementBytes = requiredElementBytes[requiredIndex],
+                .instanceRate = instanceRate,
+            };
+        }
+        m_resolvedVertexBindingCount = static_cast<u32>(requiredCount);
+    }
+
+    m_graphicsDrawStateValid = true;
+    m_graphicsDrawIndexedValid = m_currentGraphicsState.indexBuffer.buffer != nullptr;
+}
+
 b8 CommandList::validateGraphicsDrawState(const TStringView operationName, const b8 indexed){
     GraphicsPipeline* const pipeline = m_currentGraphicsState.pipeline;
     if(!m_renderPassActive || !m_renderPassFramebuffer || !pipeline || pipeline->m_pipeline == VK_NULL_HANDLE || pipeline->m_framebufferInfo != m_renderPassFramebuffer->m_framebufferInfo){
@@ -197,10 +247,12 @@ b8 CommandList::validateGraphicsDrawState(const TStringView operationName, const
 
     InputLayout* const inputLayout = pipeline->m_desc.inputLayout.get();
     if(inputLayout){
+        const VertexBufferBinding* const vertexData = m_currentGraphicsState.vertexBuffers.data();
+        const usize vertexCount = m_currentGraphicsState.vertexBuffers.size();
         for(const VkVertexInputBindingDescription& requiredBinding : inputLayout->m_bindings){
             b8 bindingFound = false;
-            for(const VertexBufferBinding& binding : m_currentGraphicsState.vertexBuffers){
-                if(binding.slot == requiredBinding.binding){
+            for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
+                if(vertexData[vertexIndex].slot == requiredBinding.binding){
                     bindingFound = true;
                     break;
                 }
@@ -219,8 +271,11 @@ b8 CommandList::validateGraphicsDrawState(const TStringView operationName, const
 }
 
 b8 CommandList::validateGraphicsDrawArguments(const DrawArguments& arguments, const b8 indexed, const TStringView operationName){
-    if(!validateGraphicsDrawState(operationName, indexed))
-        return false;
+    if(!(indexed ? m_graphicsDrawIndexedValid : m_graphicsDrawStateValid)){
+        if(!validateGraphicsDrawState(operationName, indexed))
+            return false;
+        rebuildGraphicsDrawValidationCache();
+    }
 
     if(indexed){
         if(arguments.startVertexLocation > static_cast<u32>(Limit<i32>::s_Max)){
@@ -233,35 +288,17 @@ b8 CommandList::validateGraphicsDrawArguments(const DrawArguments& arguments, co
             rejectCommandRecording(operationName, FOUNDATION_TEXT("indexed draw range exceeds the index buffer"));
             return false;
         }
+        if(!m_graphicsHasInstanceVertexBindings)
+            return true;
     }
 
-    InputLayout* const inputLayout = m_currentGraphicsState.pipeline->m_desc.inputLayout.get();
-    if(!inputLayout)
-        return true;
-
-    for(const VkVertexInputBindingDescription& requiredBinding : inputLayout->m_bindings){
-        const b8 instanceRate = requiredBinding.inputRate == VK_VERTEX_INPUT_RATE_INSTANCE;
-        if(indexed && !instanceRate)
+    for(u32 bindingIndex = 0u; bindingIndex < m_resolvedVertexBindingCount; ++bindingIndex){
+        const ResolvedVertexBinding& resolved = m_resolvedVertexBindings[bindingIndex];
+        if(indexed && !resolved.instanceRate)
             continue;
-        const VertexBufferBinding* boundBuffer = nullptr;
-        for(const VertexBufferBinding& binding : m_currentGraphicsState.vertexBuffers){
-            if(binding.slot == requiredBinding.binding){
-                boundBuffer = &binding;
-                break;
-            }
-        }
-        u32 requiredElementBytes = 0u;
-        for(const VertexAttributeDesc& attribute : inputLayout->m_attributes){
-            if(attribute.bufferIndex != requiredBinding.binding)
-                continue;
-            const u64 attributeBytes = static_cast<u64>(GetFormatInfo(attribute.format).bytesPerBlock) * attribute.arraySize;
-            const u64 attributeEnd = static_cast<u64>(attribute.offset) + attributeBytes;
-            requiredElementBytes = Max(requiredElementBytes, static_cast<u32>(attributeEnd));
-        }
-
-        const u32 firstElement = instanceRate ? arguments.startInstanceLocation : arguments.startVertexLocation;
-        const u32 elementCount = instanceRate ? arguments.instanceCount : arguments.vertexCount;
-        if(!VulkanDetail::IsStridedBufferRangeValid(boundBuffer->buffer->m_creationDesc, boundBuffer->offset, firstElement, elementCount, requiredBinding.stride, requiredElementBytes)){
+        const u32 firstElement = resolved.instanceRate ? arguments.startInstanceLocation : arguments.startVertexLocation;
+        const u32 elementCount = resolved.instanceRate ? arguments.instanceCount : arguments.vertexCount;
+        if(!VulkanDetail::IsStridedBufferRangeValid(*resolved.bufferDesc, resolved.offset, firstElement, elementCount, resolved.stride, resolved.requiredElementBytes)){
             rejectCommandRecording(operationName, FOUNDATION_TEXT("draw range exceeds a vertex buffer"));
             return false;
         }

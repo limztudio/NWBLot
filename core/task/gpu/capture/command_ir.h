@@ -610,7 +610,7 @@ private:
     [[nodiscard]] b8 append(const GpuCommandIrBuiltinTaskRecord& record);
     [[nodiscard]] b8 appendUpload(GpuCommandIrBuiltinTaskRecord record, BinaryByteView bytes);
     [[nodiscard]] b8 appendCommandBytes(const GpuCommandIrBuiltinTaskRecord& record);
-    [[nodiscard]] b8 appendRasterBytes(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, BinaryByteView encoded, BinaryByteView blob, const GpuCommandIrRasterStateOwner* stateOwner, const GpuCommandIrRasterHeapOwner* heapOwner);
+    [[nodiscard]] b8 appendRasterBytes(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, BinaryByteView encoded, BinaryByteView blob, GpuCommandIrRasterStateOwner* stateOwner, GpuCommandIrRasterHeapOwner* heapOwner);
     void writeStreamHeader()noexcept;
     void rollbackPrefix(usize recordCount, u64 graphGeneration, u64 planGeneration, u64 attemptGeneration)noexcept;
 

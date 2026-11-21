@@ -12,12 +12,16 @@ NWB_CORE_BEGIN
 
 
 b8 GpuTaskGraphFrontierValidator::Validate(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphCompilerDetail::GpuTaskGraphCompiledPlanStorage& compiledPlan, GpuTaskGraphAnalysisDiagnostic& outDiagnostic){
+    using namespace GpuTaskGraphCompilerDetail;
+    if(!CompilerGraphAccess::HasAcceptedQueueFrontierOrRecoveryTask(graph))
+        return true;
+
     const auto failAcceptedQueueFrontierPlan = [&](const GpuTaskId task, const GpuTaskId relatedTask = {}, const GpuGraphResourceId resource = {})noexcept{
         outDiagnostic = GpuTaskGraphAnalysisDiagnostic{ .task = task, .relatedTask = relatedTask, .resource = resource, .resourceVersion = {}, .status = GpuTaskGraphAnalysisStatus::InvalidAcceptedQueueFrontierTask, };
         return false;
     };
     for(const GpuCompiledTask& compiledTask : compiledPlan.tasks){
-        const GpuTaskGraphTaskView task = graph.taskAt(compiledTask.task.index);
+        const GpuTaskGraphDetail::GpuTaskNode& task = CompilerGraphAccess::TaskNode(graph, compiledTask.task.index);
         if(!task.scheduling.joinsAcceptedQueueFrontier)
             continue;
 

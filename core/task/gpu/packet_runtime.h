@@ -406,6 +406,14 @@ public:
 
 
 private:
+    [[nodiscard]] b8 appendPacketDependencyWaitTokensWithinSubmissionOperation(
+        const GpuCompiledGraph::ReadView& planAccess,
+        Span<const GpuPacketDependency> dependencies,
+        usize batchStart,
+        usize batchEnd,
+        Vector<QueueSubmissionToken, Alloc::ScratchArena>& outTokens,
+        usize& outElidedCount
+    )const;
     [[nodiscard]] b8 appendAcceptedQueueFrontierWaitTokens(const GpuPhysicalQueueId& destinationQueue, Vector<QueueSubmissionToken, Alloc::ScratchArena>& outTokens)const;
 
     [[nodiscard]] b8 validForLocked(const GpuCompiledGraph::ReadView& planAccess)const noexcept;

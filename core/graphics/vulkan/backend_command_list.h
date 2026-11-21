@@ -473,7 +473,9 @@ private:
     void closeInternal(CommandListResourceStateHandoff* finalStates);
     void abortRecordingAttemptWithoutCallbacks()noexcept;
     void clearStateInternal();
-    [[nodiscard]] b8 descriptionMatchesCreation()const noexcept;
+    [[nodiscard]] b8 descriptionMatchesCreation()const noexcept{
+        return m_desc.queueType == m_creationDesc.queueType && m_desc.physicalQueue == m_creationDesc.physicalQueue && m_desc.recordingWorkerDomain == m_creationDesc.recordingWorkerDomain && m_desc.recordingWorkerIndex == m_creationDesc.recordingWorkerIndex;
+    }
     [[nodiscard]] const GpuPhysicalQueueInfo* cachedPhysicalQueueInfo()const noexcept{
         return m_hasCachedPhysicalQueueInfo ? &m_cachedPhysicalQueueInfo : nullptr;
     }
@@ -489,6 +491,25 @@ private:
     [[nodiscard]] b8 validateMeshletState(const MeshletState& state);
     [[nodiscard]] b8 validateGraphicsDrawState(TStringView operationName, b8 indexed);
     [[nodiscard]] b8 validateGraphicsDrawArguments(const DrawArguments& arguments, b8 indexed, TStringView operationName);
+    void invalidateGraphicsDrawValidationCache()noexcept{
+        m_graphicsDrawStateValid = false;
+        m_graphicsDrawIndexedValid = false;
+        m_resolvedVertexBindingCount = 0u;
+        m_graphicsHasInstanceVertexBindings = false;
+    }
+    void rebuildGraphicsDrawValidationCache()noexcept;
+    void clearDirtyPipelineStates(u8 keepMask = 0u)noexcept;
+    void updateActivePushConstantPipeline(u8 pipelineKind, VkPipelineLayout layout, u32 pushConstantBytes, GpuQueueCapability::Mask capability)noexcept;
+    void setBufferStateValidated(Buffer& buffer, ResourceStates::Mask stateBits, b8 forceMemoryDependency, const BufferRange& resolvedRange);
+    void queueWriteBufferCopyAndBarrier(Buffer& buffer, VkBuffer srcVkBuf, u64 stagingOffset, u64 destOffsetBytes, u64 dataSize);
+    void flushPendingBufferCopies()noexcept;
+    void resetPendingBufferCopies()noexcept{
+        m_pendingBufferCopyCount = 0u;
+        m_pendingCopyBarrierCount = 0u;
+        m_pendingCopySrc = VK_NULL_HANDLE;
+        m_pendingCopyDst = VK_NULL_HANDLE;
+        m_hasPendingBufferCopies = false;
+    }
     void setResourceStatesForGraphicsBuffers(const GraphicsState& state);
     [[nodiscard]] b8 isTextureAdmittedToCommandQueue(const Texture& texture)const noexcept;
     [[nodiscard]] b8 isTextureReadyForCommandQueue(Texture* texture, VkImageUsageFlags requiredUsage = 0u)const noexcept;
@@ -522,8 +543,48 @@ private:
     b8 ensureGraphicsRenderPass(Framebuffer* framebuffer);
     void endActiveRenderPass();
     void executePipelineBarrier(Span<VkMemoryBarrier2> memoryBarriers, Span<VkImageMemoryBarrier2> imageBarriers, Span<VkBufferMemoryBarrier2> bufferBarriers);
-    [[nodiscard]] b8 validateCommandRecordingScope(TStringView operationName);
-    [[nodiscard]] b8 recordAndValidateCommandCapability(GpuQueueCapability::Mask requiredCapabilities, TStringView operationName);
+    void executePipelineBarrierValidated(Span<VkMemoryBarrier2> memoryBarriers, Span<VkImageMemoryBarrier2> imageBarriers, Span<VkBufferMemoryBarrier2> bufferBarriers, TStringView operationName);
+    [[nodiscard]] b8 validateCommandRecordingScopeSlow(TStringView operationName);
+    [[nodiscard]] b8 recordAndValidateCommandCapabilitySlow(GpuQueueCapability::Mask requiredCapabilities, TStringView operationName);
+    [[nodiscard]] FOUNDATION_INLINE b8 validateCommandRecordingScope(const TStringView operationName, const b8 flushPendingCopies = true){
+        if(flushPendingCopies && m_hasPendingBufferCopies)
+            flushPendingBufferCopies();
+        if(
+            m_graphPublicationState.load(MemoryOrder::acquire) == s_GraphPublicationUnowned
+            && !m_commandRecordingFailed
+            && m_isRecording
+            && m_cachedQueueContractValid
+            && descriptionMatchesCreation()
+            && m_currentCmdBuf
+            && m_currentCmdBuf->m_cmdBuf != VK_NULL_HANDLE
+            && m_currentCmdBuf->m_arenaState == TrackedCommandBufferArenaState::Leased
+            && &m_currentCmdBuf->m_context == &m_context
+            && m_recordingLeaseSerial != 0u
+            && m_nativeRecordingID != 0u
+            && m_currentCmdBuf->m_recordingID == m_nativeRecordingID
+            && m_currentCmdBuf->m_recordingWorkerDomain == m_creationDesc.recordingWorkerDomain
+            && m_currentCmdBuf->m_recordingWorkerIndex == m_creationDesc.recordingWorkerIndex
+            && &m_currentCmdBuf->m_queue == m_cachedQueue
+        )
+            return true;
+
+        return validateCommandRecordingScopeSlow(operationName);
+    }
+    [[nodiscard]] FOUNDATION_INLINE b8 recordAndValidateCommandCapability(const GpuQueueCapability::Mask requiredCapabilities, const TStringView operationName, const b8 flushPendingCopies = true){
+        const u8 requiredBits = static_cast<u8>(requiredCapabilities);
+        if(
+            validateCommandRecordingScope(operationName, flushPendingCopies)
+#if defined(NWB_DEBUG)
+            && !m_taskCapabilityTracking
+#endif
+            && requiredBits != 0u
+            && (requiredBits & ~GpuQueueCapability::s_KnownCapabilityBits) == 0u
+            && (static_cast<u8>(m_cachedPhysicalQueueInfo.capabilities) & requiredBits) == requiredBits
+        )
+            return true;
+
+        return recordAndValidateCommandCapabilitySlow(requiredCapabilities, operationName);
+    }
     [[nodiscard]] b8 recordAndValidateAnyCommandCapability(GpuQueueCapability::Mask alternativeCapabilities, TStringView operationName);
     void rejectCommandRecording(TStringView operationName, TStringView reason);
     void invalidateCommandRecording()noexcept;
@@ -571,9 +632,31 @@ private:
 
 
 private:
+    struct ResolvedVertexBinding{
+        const BufferDesc* bufferDesc = nullptr;
+        u64 offset = 0u;
+        u32 stride = 0u;
+        u32 requiredElementBytes = 0u;
+        b8 instanceRate = false;
+    };
+
+    static constexpr usize s_MaxPendingBufferCopies = 64u;
+    static constexpr u8 s_DirtyGraphicsState = 1u << 0u;
+    static constexpr u8 s_DirtyComputeState = 1u << 1u;
+    static constexpr u8 s_DirtyMeshletState = 1u << 2u;
+    static constexpr u8 s_DirtyRayTracingState = 1u << 3u;
+    static constexpr u8 s_PipelineKindNone = 0u;
+    static constexpr u8 s_PipelineKindGraphics = 1u;
+    static constexpr u8 s_PipelineKindCompute = 2u;
+    static constexpr u8 s_PipelineKindMeshlet = 3u;
+    static constexpr u8 s_PipelineKindRayTracing = 4u;
+
+
+private:
     const CommandListParameters m_creationDesc;
     CommandListParameters m_desc;
     GpuPhysicalQueueInfo m_cachedPhysicalQueueInfo{};
+    Queue* m_cachedQueue = nullptr;
     TrackedCommandBufferPtr m_currentCmdBuf;
     StateTracker m_stateTracker;
     VulkanDetail::HostReadbackBarrierTracker m_hostReadbackBarrierTracker;
@@ -586,10 +669,23 @@ private:
     b8 m_renderPassActive = false;
     b8 m_descriptorBuffersBound = false;
     b8 m_hasCachedPhysicalQueueInfo = false;
+    b8 m_cachedQueueContractValid = false;
     b8 m_universalGraphicsCompute = false;
     b8 m_hasBoundGraphicsState = false;
     b8 m_graphicsBuffersValidatedInPass = false;
     b8 m_hasBoundComputeState = false;
+    b8 m_hasBoundMeshletState = false;
+    b8 m_graphicsDrawStateValid = false;
+    b8 m_graphicsDrawIndexedValid = false;
+    b8 m_graphicsHasInstanceVertexBindings = false;
+    b8 m_hasPendingBufferCopies = false;
+    u8 m_dirtyPipelineStateMask = 0u;
+    u8 m_activePipelineKind = s_PipelineKindNone;
+    GpuQueueCapability::Mask m_activePipelineRequiredCapability = GpuQueueCapability::None;
+    u32 m_activePipelinePushConstantBytes = 0u;
+    VkPipelineLayout m_activePipelineLayout = VK_NULL_HANDLE;
+    u32 m_resolvedVertexBindingCount = 0u;
+    Array<ResolvedVertexBinding, s_MaxVertexAttributes> m_resolvedVertexBindings{};
     u64 m_lastSubmitBatchStamp = 0u;
     u64 m_nativeRecordingID = 0u;
     u64 m_nextMarkerSerial = 0u;
@@ -610,6 +706,12 @@ private:
     const VulkanContext& m_context;
     GpuCrashMarkerTracker m_gpuCrashMarkerTracker;
 
+    VkBuffer m_pendingCopySrc = VK_NULL_HANDLE;
+    VkBuffer m_pendingCopyDst = VK_NULL_HANDLE;
+    u32 m_pendingBufferCopyCount = 0u;
+    u32 m_pendingCopyBarrierCount = 0u;
+    Array<VkBufferCopy, s_MaxPendingBufferCopies> m_pendingBufferCopies{};
+    Array<VkBufferMemoryBarrier2, s_MaxPendingBufferCopies> m_pendingCopyBarriers{};
     Vector<VkImageMemoryBarrier2, Alloc::GlobalArena> m_pendingImageBarriers;
     Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena> m_pendingBufferBarriers;
     HashMap<TextureSubresourceStateKey, GpuPhysicalQueueId, Alloc::GlobalArena, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo> m_textureOwnershipReleaseDestinations;

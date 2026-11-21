@@ -129,6 +129,7 @@ GpuCompiledGraph::GpuCompiledGraph(GraphicsArena& arena)noexcept
     : m_tasks(arena)
     , m_compiledTaskIndexByTask(arena)
     , m_packets(arena)
+    , m_packetRuntimeFlags(arena)
     , m_packetTasks(arena)
     , m_packetDependencies(arena)
     , m_packetExternalDependencies(arena)
@@ -192,6 +193,7 @@ void GpuCompiledGraph::resetPlanStorageWithinPlanWriteScope()noexcept{
     static_assert(noexcept(m_tasks.clear()));
     static_assert(noexcept(m_compiledTaskIndexByTask.clear()));
     static_assert(noexcept(m_packets.clear()));
+    static_assert(noexcept(m_packetRuntimeFlags.clear()));
     static_assert(noexcept(m_packetTasks.clear()));
     static_assert(noexcept(m_packetDependencies.clear()));
     static_assert(noexcept(m_packetExternalDependencies.clear()));
@@ -207,6 +209,7 @@ void GpuCompiledGraph::resetPlanStorageWithinPlanWriteScope()noexcept{
     m_tasks.clear();
     m_compiledTaskIndexByTask.clear();
     m_packets.clear();
+    m_packetRuntimeFlags.clear();
     m_packetTasks.clear();
     m_packetDependencies.clear();
     m_packetExternalDependencies.clear();

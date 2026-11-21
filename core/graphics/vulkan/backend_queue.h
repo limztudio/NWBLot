@@ -92,6 +92,7 @@ public:
         usize localSignalCount = 0u;
         u64 maxSameQueueWaitValue = 0u;
         b8 forceNativeSubmission = false;
+        b8 allowSignalCoalescing = false;
     };
     struct BatchSubmissionResult{
         enum Status : u8{
@@ -112,6 +113,7 @@ public:
         usize signalCount = 0u;
         usize timelineWaitCount = 0u;
         u64 submissionID = 0u;
+        b8 hasTimerQueries = false;
     };
 
 
@@ -167,6 +169,7 @@ public:
     [[nodiscard]] BatchSubmissionResult submitBatch(Span<const BatchSubmitEntry> entries, Span<SubmissionReceipt> outReceipts);
     [[nodiscard]] VkResult updateLastFinishedID();
     void waitForIdle();
+    [[nodiscard]] u64 lastObservedFinishedID()const noexcept{ return m_lastObservedFinishedID.load(MemoryOrder::acquire); }
 
 
 private:
@@ -210,8 +213,13 @@ private:
     Vector<VkCommandBufferSubmitInfo, Alloc::GlobalArena> m_submitCommandBufferInfos;
     Vector<SubmissionWait, Alloc::GlobalArena> m_executeLocalWaits;
     Vector<SubmissionCommandListIdentity, Alloc::GlobalArena> m_executeExpectedCommandLists;
+    Vector<BatchSubmitEntry, Alloc::GlobalArena> m_executeQueueEntries;
+    Vector<usize, Alloc::GlobalArena> m_executeWaitOffsets;
+    Vector<SubmissionReceipt, Alloc::GlobalArena> m_executeQueueReceipts;
     VulkanDetail::SubmittedCommandBufferOwnerLookup m_executeSubmittedOwners;
+    u8 m_executeSubmittedUploadMask = 0u;
     Atomic<u64> m_lastRecordingID = 0u;
+    Atomic<u64> m_lastObservedFinishedID{ 0u };
     u64 m_lastSubmittedID = 0;
     u64 m_lastFinishedID = 0;
     InFlightCommandBufferQueue m_commandBuffersInFlight;

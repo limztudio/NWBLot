@@ -56,6 +56,7 @@ struct QueueSubmissionWait{
 };
 
 class TrackedCommandBuffer final : public RefCounter<GraphicsResource>{
+    friend class Device;
     friend class CommandList;
     friend class DescriptorBufferManager;
     friend class Queue;
@@ -122,9 +123,18 @@ private:
 
 
 private:
+    static constexpr u8 s_CommitTimerQueries = 1u << 0u;
+    static constexpr u8 s_CommitBufferStates = 1u << 1u;
+    static constexpr u8 s_CommitTextureStates = 1u << 2u;
+    static constexpr u8 s_CommitAccelStructBuilds = 1u << 3u;
+    static constexpr u8 s_CommitOpacityMicromapBuilds = 1u << 4u;
+
+
+private:
     VkCommandBuffer m_cmdBuf = VK_NULL_HANDLE;
     VkCommandPool m_cmdPool = VK_NULL_HANDLE;
     Futex* m_sharedCommandPoolMutex = nullptr;
+    void* m_workerCommandArena = nullptr;
 
     CommandBufferResourceReferences m_resourceReferences;
     Vector<BufferHandle, Alloc::GlobalArena> m_referencedStagingBuffers;
@@ -136,6 +146,8 @@ private:
     Array<UploadManagerChunk*, 3u> m_activeUploadChunks{};
     DescriptorBufferManager* m_descriptorBufferManager = nullptr;
     u64 m_descriptorBufferGeneration = 0u;
+    u64 m_trackedDescriptorHeapUseID = 0u;
+    usize m_trackedDescriptorHeapUseIndexHint = 0u;
 
     u64 m_recordingID = 0;
     u64 m_submissionID = 0;
@@ -143,6 +155,8 @@ private:
     u32 m_recordingWorkerIndex = 0u;
     GpuPhysicalQueueId m_trackedDescriptorHeapQueue{};
     TrackedCommandBufferArenaState::Enum m_arenaState = TrackedCommandBufferArenaState::Untracked;
+    u8 m_usedUploadChunkMask = 0u;
+    u8 m_pendingCommitFlags = 0u;
     b8 m_ownsCmdPool = false;
 
     const VulkanContext& m_context;

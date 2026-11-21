@@ -84,16 +84,17 @@ void CommandList::setRayTracingState(const RayTracingState& state){
     commitBarriers();
     if(m_commandRecordingFailed)
         return;
-    m_currentGraphicsState = {};
-    m_currentComputeState = {};
-    m_currentMeshletState = {};
-    m_hasBoundGraphicsState = false;
-    m_hasBoundComputeState = false;
+    clearDirtyPipelineStates(s_DirtyRayTracingState);
+    invalidateGraphicsDrawValidationCache();
     m_currentRayTracingState = state;
+    m_dirtyPipelineStateMask |= s_DirtyRayTracingState;
 
-    if(!shaderTable)
+    if(!shaderTable){
+        updateActivePushConstantPipeline(s_PipelineKindNone, VK_NULL_HANDLE, 0u, GpuQueueCapability::None);
         return;
+    }
 
+    updateActivePushConstantPipeline(s_PipelineKindRayTracing, pipeline->pipelineLayout, pipeline->pushConstantByteSize, GpuQueueCapability::Compute);
     retainResource(shaderTable);
 
     m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline->m_pipeline);

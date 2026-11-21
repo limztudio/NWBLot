@@ -31,6 +31,7 @@ NWB_VULKAN_BEGIN
 class Buffer final : public RefCounter<GraphicsResource>{
     friend class Device;
     friend class CommandList;
+    friend class CommandBufferResourceReferences;
     friend class DescriptorBufferManager;
     friend class GpuDescriptorHeap;
     friend class StateTracker;
@@ -130,6 +131,7 @@ class Texture final : public RefCounter<GraphicsResource>{
     friend class BackendContext;
     friend class Device;
     friend class CommandList;
+    friend class CommandBufferResourceReferences;
     friend class Framebuffer;
     friend class FramebufferRenderingPreparation;
     friend class DescriptorBufferManager;
@@ -167,6 +169,14 @@ public:
 
 
 private:
+    static constexpr u8 s_TransferCapInitialized = 1u << 0u;
+    static constexpr u8 s_TransferCapOptimalTransfer = 1u << 1u;
+    static constexpr u8 s_TransferCapOptimalResolve = 1u << 2u;
+    static constexpr u8 s_TransferCapWithinFormatLimits = 1u << 3u;
+
+
+private:
+    [[nodiscard]] u8 queryTransferCapabilities()const noexcept;
     [[nodiscard]] b8 canRevokeUnmanagedNativeImage(VkImage expectedNativeImage)noexcept;
     [[nodiscard]] b8 prepareRevokeUnmanagedNativeImage(VkImage expectedNativeImage)noexcept;
     void commitRevokeUnmanagedNativeImage(VkImage expectedNativeImage)noexcept;
@@ -191,6 +201,7 @@ private:
     Futex m_memoryBindingMutex;
     Atomic<b8> m_nativeIdentityRegistered{ false };
     Atomic<b8> m_gpuReady{ false };
+    mutable Atomic<u8> m_transferCapabilityCache{ 0u };
 
     Futex m_viewsMutex;
     HashMap<TextureViewKey, VkImageView, Alloc::GlobalArena, TextureViewKeyHasher, EqualTo<TextureViewKey>> m_views;

@@ -42,30 +42,48 @@ b8 GpuRecordedGraph::PacketRecordingScratch::ensureValid(GraphicsArena& arena){
 
 
 Expected<CommandListHandle> GpuRecordedGraph::PacketRecordingScratch::acquireCommandList(Device& device, const CommandListParameters& parameters){
-    for(usize index = 0u; index < commandLists.size();){
-        CachedCommandList& cached = commandLists[index];
-        if(cached.parameters.physicalQueue.deviceGeneration != device.getDeviceGeneration()){
-            if(index + 1u < commandLists.size())
-                cached = Move(commandLists.back());
-            commandLists.pop_back();
-            continue;
+    const u16 deviceGeneration = device.getDeviceGeneration();
+    const usize count = commandLists.size();
+    if(count != 0u){
+        usize probeCount = 0u;
+        usize index = nextCommandListCursor < count ? nextCommandListCursor : 0u;
+        while(probeCount < count && !commandLists.empty()){
+            CachedCommandList& cached = commandLists[index];
+            if(cached.parameters.physicalQueue.deviceGeneration != deviceGeneration){
+                if(index + 1u < commandLists.size())
+                    cached = Move(commandLists.back());
+                commandLists.pop_back();
+                if(!commandLists.empty()){
+                    if(index >= commandLists.size())
+                        index = 0u;
+                    if(nextCommandListCursor >= commandLists.size())
+                        nextCommandListCursor = 0u;
+                }
+                else{
+                    nextCommandListCursor = 0u;
+                }
+                continue;
+            }
+            if(
+                cached.parameters.physicalQueue == parameters.physicalQueue
+                && cached.parameters.queueType == parameters.queueType
+                && cached.parameters.recordingWorkerDomain == parameters.recordingWorkerDomain
+                && cached.parameters.recordingWorkerIndex == parameters.recordingWorkerIndex
+                && cached.commandList->getReferenceCount() == 1u
+            ){
+                AtomicThreadFence(MemoryOrder::acquire);
+                nextCommandListCursor = (index + 1u < commandLists.size()) ? (index + 1u) : 0u;
+                return cached.commandList;
+            }
+            ++probeCount;
+            index = (index + 1u < commandLists.size()) ? (index + 1u) : 0u;
         }
-        if(
-            cached.parameters.physicalQueue == parameters.physicalQueue
-            && cached.parameters.queueType == parameters.queueType
-            && cached.parameters.recordingWorkerDomain == parameters.recordingWorkerDomain
-            && cached.parameters.recordingWorkerIndex == parameters.recordingWorkerIndex
-            && cached.commandList->getReferenceCount() == 1u
-        ){
-            AtomicThreadFence(MemoryOrder::acquire);
-            return cached.commandList;
-        }
-        ++index;
     }
     auto created = device.createCommandList(parameters);
     if(!created)
         return MakeUnexpected(created.error());
     commandLists.push_back({ parameters, *created });
+    nextCommandListCursor = 0u;
     return Move(*created);
 }
 
@@ -89,20 +107,43 @@ void GpuRecordedGraph::RetireStorageWithoutCallbacks(ArtifactStorage& storage)no
     static_assert(IsNothrowDestructible_V<CommandListResourceStateHandoff>);
     static_assert(IsNothrowDestructible_V<PacketRecordingScratch>);
 
-    for(GpuRecordedPacket& packet : storage.packets){
-        static_assert(noexcept(packet = GpuRecordedPacket{}));
-        packet = {};
+    if(storage.retired)
+        return;
+
+    const usize activePacketCount = Min(storage.packetCount, storage.packets.size());
+    for(usize packetIndex = 0u; packetIndex < activePacketCount; ++packetIndex){
+        GpuRecordedPacket& packet = storage.packets[packetIndex];
+        const usize cmdListCount = Min<usize>(packet.commandListCount, GpuRecordedPacket::s_MaxCommandLists);
+        for(usize cmdIndex = 0u; cmdIndex < cmdListCount; ++cmdIndex){
+            packet.ownedCommandLists[cmdIndex].reset();
+            packet.commandLists[cmdIndex] = nullptr;
+            packet.commandListRecordingLeaseSerials[cmdIndex] = 0u;
+        }
+        packet.packet = {};
+        packet.taskCount = 0u;
+        packet.barrierCount = 0u;
+        packet.commandListAcquisitionSeconds = 0.0;
+        packet.graphBarrierRecordingSeconds = 0.0;
+        packet.taskRecordSeconds = 0.0;
+        packet.recordingBeginNanoseconds = 0u;
+        packet.recordingEndNanoseconds = 0u;
+        packet.recordingSeconds = 0.0;
+        packet.recordingWorkerDomain = 0u;
+        packet.recordingWorkerIndex = 0u;
+        packet.commandListCount = 0u;
     }
-    for(u8& overlaps : storage.packetRecordingOverlaps)
-        overlaps = 0u;
+    const usize overlapCount = Min(storage.packetCount, storage.packetRecordingOverlaps.size());
+    for(usize index = 0u; index < overlapCount; ++index)
+        storage.packetRecordingOverlaps[index] = 0u;
     for(GlobalUniquePtr<GpuTimingSubmissionTicket>& ticket : storage.packetTimingTickets){
         static_assert(noexcept(ticket->abandonWithoutCallbacks()));
         if(ticket)
             ticket->abandonWithoutCallbacks();
     }
-    for(CommandListResourceStateHandoff& stateSeed : storage.packetStateSeeds){
-        static_assert(noexcept(stateSeed.reset()));
-        stateSeed.reset();
+    const usize stateSeedCount = Min(storage.packetCount, storage.packetStateSeeds.size());
+    for(usize index = 0u; index < stateSeedCount; ++index){
+        static_assert(noexcept(storage.packetStateSeeds[index].reset()));
+        storage.packetStateSeeds[index].reset();
     }
     storage.timingRecorder = nullptr;
     storage.graphIdentity = nullptr;
@@ -117,6 +158,7 @@ void GpuRecordedGraph::RetireStorageWithoutCallbacks(ArtifactStorage& storage)no
     storage.recordingAttemptGeneration = 0u;
     storage.deviceGeneration = 0u;
     storage.valid = false;
+    storage.retired = true;
 }
 
 GpuRecordedGraph::GpuRecordedGraph(GraphicsArena& arena)noexcept
@@ -206,8 +248,11 @@ b8 GpuRecordedGraph::releaseCommandListCache()noexcept{
     if(!artifactOperation.valid())
         return false;
     m_serialRecordingScratch.commandLists.clear();
-    for(PacketRecordingScratch& scratch : m_workerRecordingScratch)
+    m_serialRecordingScratch.nextCommandListCursor = 0u;
+    for(PacketRecordingScratch& scratch : m_workerRecordingScratch){
         scratch.commandLists.clear();
+        scratch.nextCommandListCursor = 0u;
+    }
     return true;
 }
 
@@ -247,7 +292,8 @@ void GpuRecordedGraph::revokeCommandListPublicationsWithoutCallbacks(ArtifactSto
     const usize packetCount = Min(storage.packetCount, storage.packets.size());
     for(usize packetIndex = 0u; packetIndex < packetCount; ++packetIndex){
         GpuRecordedPacket& packet = storage.packets[packetIndex];
-        for(usize commandListIndex = 0u; commandListIndex < GpuRecordedPacket::s_MaxCommandLists; ++commandListIndex){
+        const usize commandListCount = Min<usize>(packet.commandListCount, GpuRecordedPacket::s_MaxCommandLists);
+        for(usize commandListIndex = 0u; commandListIndex < commandListCount; ++commandListIndex){
             CommandList* const commandList = packet.ownedCommandLists[commandListIndex].get();
             if(commandList){
                 commandList->revokeGraphRecordingPublication(packet.commandListRecordingLeaseSerials[commandListIndex]);
@@ -261,10 +307,8 @@ b8 GpuRecordedGraph::prepareStorageCandidateLayout(const GpuCompiledGraph& compi
         return false;
 
     ArtifactStorage& candidate = *m_candidateStorage;
-    RetireStorageWithoutCallbacks(candidate);
-    m_serialRecordingScratch.reset();
-    for(PacketRecordingScratch& scratch : m_workerRecordingScratch)
-        scratch.reset();
+    if(!candidate.retired)
+        RetireStorageWithoutCallbacks(candidate);
 
     const usize packetCount = planAccess.packetCount();
     if(candidate.packets.size() < packetCount)
@@ -292,6 +336,7 @@ b8 GpuRecordedGraph::prepareStorageCandidateLayout(const GpuCompiledGraph& compi
     candidate.generation = planAccess.generation();
     candidate.planGeneration = planAccess.planGeneration();
     candidate.deviceGeneration = planAccess.deviceGeneration();
+    candidate.retired = false;
     return true;
 }
 

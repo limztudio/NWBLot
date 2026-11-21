@@ -7,6 +7,8 @@
 #include "compiler_ownership_validator.h"
 #include "compiler_frontier_validator.h"
 
+#include <core/graphics/backend_selection/backend.h>
+
 #include <global/simd/vector_arithmetic.h>
 #include <global/scope_exit.h>
 #include <global/simplemath.h>
@@ -66,34 +68,39 @@ b8 GpuTaskGraphCompiler::compile(
     const Timer analysisBegin = compileBegin;
     if(!analyze(graph, scratchArena, outAnalysis))
         return false;
-    const f64 analysisSeconds = DurationInSeconds<f64>(TimerNow(), analysisBegin);
+    const Timer postAnalysisTime = TimerNow();
+    const f64 analysisSeconds = DurationInSeconds<f64>(postAnalysisTime, analysisBegin);
 
+    const usize taskCount = CompilerGraphAccess::TaskCount(graph);
+    const usize resourceCount = CompilerGraphAccess::ResourceCount(graph);
+    const u64 generation = CompilerGraphAccess::Generation(graph);
     if(!options.allowMetadataOnlyTasks){
-        for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
-            const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
-            if(!task.hasPayload || !task.hasRecordPayload){
+        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+            const GpuTaskGraphDetail::GpuTaskNode& task = CompilerGraphAccess::TaskNode(graph, taskIndex);
+            const GpuTaskId taskId{ .generation = generation, .index = static_cast<u32>(taskIndex) };
+            if(!task.payload || !task.recordPayload){
                 outAnalysis.m_diagnostic.status = GpuTaskGraphAnalysisStatus::MissingTaskRecordPayload;
-                outAnalysis.m_diagnostic.task = task.id;
+                outAnalysis.m_diagnostic.task = taskId;
                 outAnalysis.m_diagnostic.relatedTask = {};
                 outAnalysis.m_diagnostic.resource = {};
                 outAnalysis.m_valid = false;
                 return false;
             }
 
-            for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
-                const GpuTaskResourceUse& use = task.resourceUses[useIndex];
-                const GpuTaskGraphResourceView resource = graph.resourceAt(use.resource.index);
+            const Span<const GpuTaskResourceUse> resourceUses = CompilerGraphAccess::TaskResourceUses(graph, task);
+            for(const GpuTaskResourceUse& use : resourceUses){
+                const GpuTaskGraphDetail::GpuGraphResourceNode& resource = CompilerGraphAccess::ResourceNode(graph, use.resource.index);
                 switch(resource.type){
                 case GpuGraphResourceType::Texture:
-                    if(graph.textureForResource(use.resource))
+                    if(CompilerGraphAccess::TextureForResourceIndex(graph, use.resource.index))
                         continue;
                     break;
                 case GpuGraphResourceType::Buffer:
-                    if(graph.bufferForResource(use.resource))
+                    if(CompilerGraphAccess::BufferForResourceIndex(graph, use.resource.index))
                         continue;
                     break;
                 case GpuGraphResourceType::AccelStruct:
-                    if(graph.accelStructForResource(use.resource))
+                    if(CompilerGraphAccess::AccelStructForResourceIndex(graph, use.resource.index))
                         continue;
                     break;
                 case GpuGraphResourceType::HazardDomain:
@@ -103,7 +110,7 @@ b8 GpuTaskGraphCompiler::compile(
                 }
 
                 outAnalysis.m_diagnostic.status = GpuTaskGraphAnalysisStatus::InvalidResourceUse;
-                outAnalysis.m_diagnostic.task = task.id;
+                outAnalysis.m_diagnostic.task = taskId;
                 outAnalysis.m_diagnostic.relatedTask = {};
                 outAnalysis.m_diagnostic.resource = use.resource;
                 outAnalysis.m_valid = false;
@@ -112,11 +119,11 @@ b8 GpuTaskGraphCompiler::compile(
         }
     }
 
-    const Timer queueAssignmentBegin = TimerNow();
+    const Timer queueAssignmentBegin = options.allowMetadataOnlyTasks ? postAnalysisTime : TimerNow();
     if(!assignQueues(graph, outAnalysis, topology, options.queueAssignmentOptions, scratchArena, outAssignments))
         return false;
-    const f64 queueAssignmentSeconds = DurationInSeconds<f64>(TimerNow(), queueAssignmentBegin);
     const Timer planningBegin = TimerNow();
+    const f64 queueAssignmentSeconds = DurationInSeconds<f64>(planningBegin, queueAssignmentBegin);
 
     FOUNDATION_ASSERT(topology.queues && topology.queueCount != 0u);
     if(options.packetizationPolicy >= GpuTaskGraphPacketizationPolicy::Count || !graph.validForDeviceGeneration(topology.queues[0].id.deviceGeneration))
@@ -125,21 +132,22 @@ b8 GpuTaskGraphCompiler::compile(
     if(!GpuTaskGraphOwnershipValidator::ValidateCompletionQueues(graph, topology))
         return false;
 
-    outCompiledGraph.m_generation = graph.generation();
-    outCompiledGraph.m_declarationRevision = graph.declarationRevision();
+    outCompiledGraph.m_generation = generation;
+    outCompiledGraph.m_declarationRevision = CompilerGraphAccess::DeclarationRevision(graph);
     outCompiledGraph.m_planGeneration = AllocateCompiledPlanGeneration();
     outCompiledGraph.m_deviceGeneration = topology.queues[0].id.deviceGeneration;
-    outCompiledGraph.m_graphTaskCount = graph.taskCount();
-    outCompiledGraph.m_compiledTaskIndexByTask.resize(graph.taskCount(), Limit<u32>::s_Max);
-    outCompiledGraph.m_tasks.reserve(graph.taskCount());
-    outCompiledGraph.m_packets.reserve(graph.taskCount());
-    outCompiledGraph.m_packetTasks.reserve(graph.taskCount());
-    outCompiledGraph.m_prologueStateSeeds.reserve(graph.taskCount());
-    outCompiledGraph.m_prologueBarriers.reserve(graph.taskCount());
-    outCompiledGraph.m_epilogueBarriers.reserve(graph.taskCount());
-    outCompiledGraph.m_ownershipTransfers.reserve(graph.taskCount());
-    outCompiledGraph.m_externalResourceExports.reserve(graph.resourceCount());
-    outCompiledGraph.m_externalResourceExportSources.reserve(graph.resourceCount());
+    outCompiledGraph.m_graphTaskCount = taskCount;
+    outCompiledGraph.m_compiledTaskIndexByTask.resize(taskCount, Limit<u32>::s_Max);
+    outCompiledGraph.m_tasks.reserve(taskCount);
+    outCompiledGraph.m_packets.reserve(taskCount);
+    outCompiledGraph.m_packetTasks.reserve(taskCount);
+    outCompiledGraph.m_packetDependencies.reserve(outAnalysis.schedulingEdges().size());
+    outCompiledGraph.m_prologueStateSeeds.reserve(taskCount);
+    outCompiledGraph.m_prologueBarriers.reserve(taskCount);
+    outCompiledGraph.m_epilogueBarriers.reserve(taskCount);
+    outCompiledGraph.m_ownershipTransfers.reserve(taskCount);
+    outCompiledGraph.m_externalResourceExports.reserve(resourceCount);
+    outCompiledGraph.m_externalResourceExportSources.reserve(resourceCount);
     outCompiledGraph.m_queueTopology.reserve(topology.queueCount);
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex)
         outCompiledGraph.m_queueTopology.push_back(topology.queues[queueIndex]);
@@ -165,68 +173,72 @@ b8 GpuTaskGraphCompiler::compile(
         .deviceGeneration = outCompiledGraph.m_deviceGeneration,
     };
 
-    if(!GpuTaskGraphOwnershipValidator::ValidateInitialOwnership(graph, topology, compiledPlan, scratchArena))
-        return false;
-
-    const Timer packetizationBegin = TimerNow();
-    const auto timingEnvelope = BuildSubmissionPackets(graph, outAnalysis, outAssignments, options.packetizationPolicy, options.packetTimingEnvelope, compiledPlan);
-    if(!timingEnvelope)
-        return false;
-    outCompiledGraph.m_packetTimingEnvelopeRange = *timingEnvelope;
-    const f64 packetizationSeconds = DurationInSeconds<f64>(TimerNow(), packetizationBegin);
-
-    const Timer resourceStatePlanningBegin = TimerNow();
-    Vector<TrackedCompiledResourceState, Alloc::ScratchArena> trackedResourceStates(scratchArena);
-    Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena> pendingEpilogueBarriers(scratchArena);
-    Vector<u8, Alloc::ScratchArena> resourceHasPendingEpilogueBarrier(graph.resourceCount(), 0u, scratchArena);
-    Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena> initialOwnershipDependencies(scratchArena);
-    Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena> initialAvailabilityDependencies(scratchArena);
-    Vector<GpuPacketDependency, Alloc::ScratchArena> resourceStateDependencies(scratchArena);
-    Vector<TrackedResourceStateFragment, Alloc::ScratchArena> stateFragments(scratchArena);
-    Vector<GpuTaskResourceRange, Alloc::ScratchArena> taskFirstUseRanges(scratchArena);
-    ResourceRangeScratch rangeScratch(scratchArena);
-    usize trackedStateCapacity = 0u;
-    for(const GpuCompiledTask& compiledTask : compiledPlan.tasks){
-        const usize useCount = graph.taskAt(compiledTask.task.index).resourceUseCount;
-        if(useCount > Limit<usize>::s_Max - trackedStateCapacity)
+    f64 packetizationSeconds = 0.0;
+    f64 resourceStatePlanningSeconds = 0.0;
+    f64 packetDependencyPlanningSeconds = 0.0;
+    usize initialOwnershipExternalDependencyCount = 0u;
+    usize initialAvailabilityExternalDependencyCount = 0u;
+    {
+        Alloc::ScratchArena::Scope compileScratchScope(scratchArena);
+        if(!GpuTaskGraphOwnershipValidator::ValidateInitialOwnership(graph, topology, compiledPlan, scratchArena))
             return false;
-        trackedStateCapacity += useCount;
-    }
-    trackedResourceStates.reserve(trackedStateCapacity);
-    TrackedResourceStateHistory resourceHistory(graph.resourceCount(), graph.generation(), trackedResourceStates, scratchArena);
-    pendingEpilogueBarriers.reserve(graph.taskCount());
-    initialOwnershipDependencies.reserve(graph.taskCount());
-    initialAvailabilityDependencies.reserve(graph.taskCount());
-    resourceStateDependencies.reserve(graph.taskCount());
-    stateFragments.reserve(graph.taskCount());
-    taskFirstUseRanges.reserve(graph.taskCount());
-    GpuTaskGraphResourceStatePlan resourceStatePlan{
-        .graph = graph,
-        .topology = topology,
-        .topologicalOrder = outAnalysis.topologicalOrder(),
-        .compiledPlan = compiledPlan,
-        .scratchArena = scratchArena,
-        .trackedResourceStates = trackedResourceStates,
-        .resourceHistory = resourceHistory,
-        .pendingEpilogueBarriers = pendingEpilogueBarriers,
-        .resourceHasPendingEpilogueBarrier = resourceHasPendingEpilogueBarrier,
-        .initialOwnershipDependencies = initialOwnershipDependencies,
-        .initialAvailabilityDependencies = initialAvailabilityDependencies,
-        .resourceStateDependencies = resourceStateDependencies,
-        .stateFragments = stateFragments,
-        .taskFirstUseRanges = taskFirstUseRanges,
-        .rangeScratch = rangeScratch,
-    };
-    if(!PlanTaskResourceStates(resourceStatePlan) || !PlanExternalResourceExports(resourceStatePlan) || !AppendPendingEpilogueBarriers(resourceStatePlan)){
-        return false;
-    }
-    const f64 resourceStatePlanningSeconds = DurationInSeconds<f64>(TimerNow(), resourceStatePlanningBegin);
 
-    const Timer packetDependencyPlanningBegin = TimerNow();
-    if(!PlanPacketDependencies(graph, outAnalysis, initialOwnershipDependencies, initialAvailabilityDependencies, scratchArena, resourceStateDependencies, compiledPlan)){
-        return false;
+        const Timer packetizationBegin = TimerNow();
+        const auto timingEnvelope = BuildSubmissionPackets(graph, outAnalysis, outAssignments, options.packetizationPolicy, options.packetTimingEnvelope, compiledPlan);
+        if(!timingEnvelope)
+            return false;
+        outCompiledGraph.m_packetTimingEnvelopeRange = *timingEnvelope;
+        const Timer resourceStatePlanningBegin = TimerNow();
+        packetizationSeconds = DurationInSeconds<f64>(resourceStatePlanningBegin, packetizationBegin);
+
+        Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena> initialOwnershipDependencies(scratchArena);
+        Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena> initialAvailabilityDependencies(scratchArena);
+        Vector<GpuPacketDependency, Alloc::ScratchArena> resourceStateDependencies(scratchArena);
+        {
+            const usize totalResourceUseCount = CompilerGraphAccess::TotalResourceUseCount(graph);
+            Vector<TrackedCompiledResourceState, Alloc::ScratchArena> trackedResourceStates(scratchArena);
+            Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena> pendingEpilogueBarriers(scratchArena);
+            Vector<TrackedResourceStateFragment, Alloc::ScratchArena> stateFragments(scratchArena);
+            Vector<GpuTaskResourceRange, Alloc::ScratchArena> taskFirstUseRanges(scratchArena);
+            ResourceRangeScratch rangeScratch(scratchArena);
+            trackedResourceStates.reserve(totalResourceUseCount);
+            pendingEpilogueBarriers.reserve(taskCount);
+            initialOwnershipDependencies.reserve(taskCount);
+            initialAvailabilityDependencies.reserve(taskCount);
+            resourceStateDependencies.reserve(taskCount);
+            stateFragments.reserve(taskCount);
+            taskFirstUseRanges.reserve(taskCount);
+            Vector<u8, Alloc::ScratchArena> resourceHasPendingEpilogueBarrier(resourceCount, 0u, scratchArena);
+            TrackedResourceStateHistory resourceHistory(resourceCount, generation, trackedResourceStates, scratchArena);
+            GpuTaskGraphResourceStatePlan resourceStatePlan{
+                .graph = graph,
+                .topology = topology,
+                .topologicalOrder = outAnalysis.topologicalOrder(),
+                .compiledPlan = compiledPlan,
+                .scratchArena = scratchArena,
+                .trackedResourceStates = trackedResourceStates,
+                .resourceHistory = resourceHistory,
+                .pendingEpilogueBarriers = pendingEpilogueBarriers,
+                .resourceHasPendingEpilogueBarrier = resourceHasPendingEpilogueBarrier,
+                .initialOwnershipDependencies = initialOwnershipDependencies,
+                .initialAvailabilityDependencies = initialAvailabilityDependencies,
+                .resourceStateDependencies = resourceStateDependencies,
+                .stateFragments = stateFragments,
+                .taskFirstUseRanges = taskFirstUseRanges,
+                .rangeScratch = rangeScratch,
+            };
+            if(!PlanTaskResourceStates(resourceStatePlan) || !PlanExternalResourceExports(resourceStatePlan) || !AppendPendingEpilogueBarriers(resourceStatePlan))
+                return false;
+        }
+        const Timer packetDependencyPlanningBegin = TimerNow();
+        resourceStatePlanningSeconds = DurationInSeconds<f64>(packetDependencyPlanningBegin, resourceStatePlanningBegin);
+
+        if(!PlanPacketDependencies(graph, outAnalysis, initialOwnershipDependencies, initialAvailabilityDependencies, scratchArena, resourceStateDependencies, compiledPlan))
+            return false;
+        packetDependencyPlanningSeconds = DurationInSeconds<f64>(TimerNow(), packetDependencyPlanningBegin);
+        initialOwnershipExternalDependencyCount = initialOwnershipDependencies.size();
+        initialAvailabilityExternalDependencyCount = initialAvailabilityDependencies.size();
     }
-    const f64 packetDependencyPlanningSeconds = DurationInSeconds<f64>(TimerNow(), packetDependencyPlanningBegin);
 
     GpuTaskGraphAnalysisDiagnostic frontierDiagnostic;
     if(!GpuTaskGraphFrontierValidator::Validate(graph, compiledPlan, frontierDiagnostic)){
@@ -239,16 +251,16 @@ b8 GpuTaskGraphCompiler::compile(
     statistics.graphGeneration = outCompiledGraph.m_generation;
     statistics.planGeneration = outCompiledGraph.m_planGeneration;
     statistics.deviceGeneration = outCompiledGraph.m_deviceGeneration;
-    statistics.taskCount = graph.taskCount();
-    statistics.resourceCount = graph.resourceCount();
-    statistics.resourceVersionCount = graph.resourceVersionCount();
+    statistics.taskCount = taskCount;
+    statistics.resourceCount = resourceCount;
+    statistics.resourceVersionCount = CompilerGraphAccess::ResourceVersionCount(graph);
     statistics.resourceVersionEdgeCount = outAnalysis.resourceVersionEdgeCount();
-    statistics.resourceSetCount = graph.resourceSetCount();
-    for(usize resourceSetIndex = 0u; resourceSetIndex < graph.resourceSetCount(); ++resourceSetIndex)
+    statistics.resourceSetCount = CompilerGraphAccess::ResourceSetCount(graph);
+    for(usize resourceSetIndex = 0u; resourceSetIndex < statistics.resourceSetCount; ++resourceSetIndex)
         statistics.resourceSetMemberCount += graph.resourceSetAt(resourceSetIndex).memberCount;
-    statistics.uploadBlobCount = graph.uploadBlobCount();
-    for(usize uploadBlobIndex = 0u; uploadBlobIndex < graph.uploadBlobCount(); ++uploadBlobIndex){
-        const auto bytes = graph.uploadBlobData(GpuUploadBlobId{ .generation = graph.generation(), .index = static_cast<u32>(uploadBlobIndex) });
+    statistics.uploadBlobCount = CompilerGraphAccess::UploadBlobCount(graph);
+    for(usize uploadBlobIndex = 0u; uploadBlobIndex < statistics.uploadBlobCount; ++uploadBlobIndex){
+        const auto bytes = graph.uploadBlobData(GpuUploadBlobId{ .generation = generation, .index = static_cast<u32>(uploadBlobIndex) });
         FOUNDATION_ASSERT(bytes);
         statistics.uploadBlobBytes += bytes->size();
     }
@@ -259,8 +271,8 @@ b8 GpuTaskGraphCompiler::compile(
     statistics.packetDependencyCount = outCompiledGraph.m_packetDependencies.size();
     statistics.packetExternalDependencyCount = outCompiledGraph.m_packetExternalDependencies.size();
     statistics.externalDependencyCount = statistics.packetExternalDependencyCount;
-    statistics.initialOwnershipExternalDependencyCount = initialOwnershipDependencies.size();
-    statistics.initialAvailabilityExternalDependencyCount = initialAvailabilityDependencies.size();
+    statistics.initialOwnershipExternalDependencyCount = initialOwnershipExternalDependencyCount;
+    statistics.initialAvailabilityExternalDependencyCount = initialAvailabilityExternalDependencyCount;
     statistics.prologueStateSeedCount = outCompiledGraph.m_prologueStateSeeds.size();
     statistics.prologueBarrierCount = outCompiledGraph.m_prologueBarriers.size();
     statistics.epilogueBarrierCount = outCompiledGraph.m_epilogueBarriers.size();
@@ -276,11 +288,109 @@ b8 GpuTaskGraphCompiler::compile(
     statistics.hazardAnalysisSeconds = outAnalysis.m_hazardAnalysisSeconds;
     statistics.topologicalOrderSeconds = outAnalysis.m_topologicalOrderSeconds;
     statistics.queueAssignmentSeconds = queueAssignmentSeconds;
-    statistics.planningSeconds = DurationInSeconds<f64>(TimerNow(), planningBegin);
+    const Timer compileEnd = TimerNow();
+    statistics.planningSeconds = DurationInSeconds<f64>(compileEnd, planningBegin);
     statistics.packetizationSeconds = packetizationSeconds;
     statistics.resourceStatePlanningSeconds = resourceStatePlanningSeconds;
     statistics.packetDependencyPlanningSeconds = packetDependencyPlanningSeconds;
-    statistics.totalSeconds = DurationInSeconds<f64>(TimerNow(), compileBegin);
+    statistics.totalSeconds = DurationInSeconds<f64>(compileEnd, compileBegin);
+
+    outCompiledGraph.m_packetRuntimeFlags.assign(outCompiledGraph.m_packets.size(), 0u);
+    for(usize packetIndex = 0u; packetIndex < outCompiledGraph.m_packets.size(); ++packetIndex){
+        const GpuSubmissionPacket& packetPlan = outCompiledGraph.m_packets[packetIndex];
+        u8 flags = GpuCompiledGraph::PacketRuntimeFlag::AllowsParallelRecording;
+        if(packetPlan.joinsAcceptedQueueFrontier || (outCompiledGraph.m_hasPresentEndpoint && outCompiledGraph.m_presentEndpoint.packet.index == packetIndex))
+            flags = static_cast<u8>(flags | GpuCompiledGraph::PacketRuntimeFlag::HasCrossQueueConsumer);
+        for(u32 taskOffset = 0u; taskOffset < packetPlan.taskCount; ++taskOffset){
+            const GpuTaskId taskID = outCompiledGraph.m_packetTasks[packetPlan.taskOffset + taskOffset];
+            const GpuTaskGraphDetail::GpuTaskNode& task = CompilerGraphAccess::TaskNode(graph, taskID.index);
+            const u32 compiledTaskIndex = outCompiledGraph.m_compiledTaskIndexByTask[taskID.index];
+            const GpuCompiledTask& compiledTask = outCompiledGraph.m_tasks[compiledTaskIndex];
+            if(!task.scheduling.allowParallelRecording)
+                flags = static_cast<u8>(flags & ~GpuCompiledGraph::PacketRuntimeFlag::AllowsParallelRecording);
+            if(task.externalStateSourceCount != 0u)
+                flags = static_cast<u8>(flags | GpuCompiledGraph::PacketRuntimeFlag::HasExternalStateSource);
+            if(compiledTask.prologueStateSeedCount != 0u)
+                flags = static_cast<u8>(flags | GpuCompiledGraph::PacketRuntimeFlag::HasPrologueStateSeeds);
+            if((flags & GpuCompiledGraph::PacketRuntimeFlag::HasInitialOwnerHandoff) == 0u){
+                for(u32 barrierOffset = 0u; barrierOffset < compiledTask.prologueBarrierCount; ++barrierOffset){
+                    const GpuCompiledBarrier& barrier = outCompiledGraph.m_prologueBarriers[compiledTask.prologueBarrierOffset + barrierOffset];
+                    if(
+                        barrier.isInitialOwnerHandoff
+                        && (
+                            barrier.type == GpuCompiledBarrierType::TextureOwnershipAcquire
+                            || barrier.type == GpuCompiledBarrierType::BufferOwnershipAcquire
+                            || barrier.type == GpuCompiledBarrierType::AccelStructOwnershipAcquire
+                        )
+                    ){
+                        flags = static_cast<u8>(flags | GpuCompiledGraph::PacketRuntimeFlag::HasInitialOwnerHandoff);
+                        break;
+                    }
+                }
+            }
+            if((flags & GpuCompiledGraph::PacketRuntimeFlag::HasRetainedInitialStateResource) == 0u){
+                for(const GpuTaskResourceUse& use : CompilerGraphAccess::TaskResourceUses(graph, task)){
+                    const GpuTaskGraphDetail::GpuGraphResourceNode& resource = CompilerGraphAccess::ResourceNode(graph, use.resource.index);
+                    if(resource.type == GpuGraphResourceType::HazardDomain)
+                        continue;
+                    if(resource.type == GpuGraphResourceType::Texture){
+                        Texture* const texture = CompilerGraphAccess::TextureForResourceIndex(graph, use.resource.index);
+                        if(!texture || texture->getCreationDescription().keepInitialState){
+                            flags = static_cast<u8>(flags | GpuCompiledGraph::PacketRuntimeFlag::HasRetainedInitialStateResource);
+                            break;
+                        }
+                    }
+                    else if(resource.type == GpuGraphResourceType::Buffer){
+                        Buffer* const buffer = CompilerGraphAccess::BufferForResourceIndex(graph, use.resource.index);
+                        if(!buffer || buffer->getCreationDescription().keepInitialState){
+                            flags = static_cast<u8>(flags | GpuCompiledGraph::PacketRuntimeFlag::HasRetainedInitialStateResource);
+                            break;
+                        }
+                    }
+                    else if(resource.type == GpuGraphResourceType::AccelStruct){
+                        flags = static_cast<u8>(flags | GpuCompiledGraph::PacketRuntimeFlag::HasRetainedInitialStateResource);
+                        break;
+                    }
+                }
+            }
+        }
+        outCompiledGraph.m_packetRuntimeFlags[packetIndex] = flags;
+    }
+    for(const GpuPacketDependency& dep : outCompiledGraph.m_packetDependencies){
+        if(dep.producer.index < outCompiledGraph.m_packets.size() && dep.consumer.index < outCompiledGraph.m_packets.size()){
+            if(outCompiledGraph.m_packets[dep.producer.index].queue != outCompiledGraph.m_packets[dep.consumer.index].queue){
+                outCompiledGraph.m_packetRuntimeFlags[dep.producer.index] = static_cast<u8>(
+                    outCompiledGraph.m_packetRuntimeFlags[dep.producer.index] | GpuCompiledGraph::PacketRuntimeFlag::HasCrossQueueConsumer
+                );
+            }
+        }
+    }
+    for(const GpuCompiledExternalResourceExportSource& source : outCompiledGraph.m_externalResourceExportSources){
+        if(source.producerTask.valid() && source.producerTask.index < outCompiledGraph.m_compiledTaskIndexByTask.size()){
+            const u32 compiledTaskIndex = outCompiledGraph.m_compiledTaskIndexByTask[source.producerTask.index];
+            if(compiledTaskIndex < outCompiledGraph.m_tasks.size()){
+                const u32 packetIndex = outCompiledGraph.m_tasks[compiledTaskIndex].packet.index;
+                if(packetIndex < outCompiledGraph.m_packetRuntimeFlags.size()){
+                    outCompiledGraph.m_packetRuntimeFlags[packetIndex] = static_cast<u8>(
+                        outCompiledGraph.m_packetRuntimeFlags[packetIndex] | GpuCompiledGraph::PacketRuntimeFlag::HasCrossQueueConsumer
+                    );
+                }
+            }
+        }
+    }
+    for(const GpuCompiledExternalResourceExport& exportInfo : outCompiledGraph.m_externalResourceExports){
+        if(exportInfo.producerTask.valid() && exportInfo.producerTask.index < outCompiledGraph.m_compiledTaskIndexByTask.size()){
+            const u32 compiledTaskIndex = outCompiledGraph.m_compiledTaskIndexByTask[exportInfo.producerTask.index];
+            if(compiledTaskIndex < outCompiledGraph.m_tasks.size()){
+                const u32 packetIndex = outCompiledGraph.m_tasks[compiledTaskIndex].packet.index;
+                if(packetIndex < outCompiledGraph.m_packetRuntimeFlags.size()){
+                    outCompiledGraph.m_packetRuntimeFlags[packetIndex] = static_cast<u8>(
+                        outCompiledGraph.m_packetRuntimeFlags[packetIndex] | GpuCompiledGraph::PacketRuntimeFlag::HasCrossQueueConsumer
+                    );
+                }
+            }
+        }
+    }
 
     outAssignments.m_compiledPlanGeneration = outCompiledGraph.m_planGeneration;
     compilation.publish();

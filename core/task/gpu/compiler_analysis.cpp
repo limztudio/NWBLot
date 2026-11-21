@@ -159,13 +159,19 @@ b8 GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph,
     if(!graph.valid())
         return false;
     outAnalysis.reset();
+    Alloc::ScratchArena::Scope scratchScope(scratchArena);
 
-    outAnalysis.m_generation = graph.generation();
-    outAnalysis.m_declarationRevision = graph.declarationRevision();
-    outAnalysis.m_taskCount = graph.taskCount();
-    outAnalysis.m_resourceCount = graph.resourceCount();
-    outAnalysis.m_resourceVersionCount = graph.resourceVersionCount();
-    outAnalysis.m_externalCompletionCount = graph.externalCompletionCount();
+    const u64 generation = CompilerGraphAccess::Generation(graph);
+    const usize taskCount = CompilerGraphAccess::TaskCount(graph);
+    const usize resourceCount = CompilerGraphAccess::ResourceCount(graph);
+    const usize resourceVersionCount = CompilerGraphAccess::ResourceVersionCount(graph);
+    const usize externalCompletionCount = CompilerGraphAccess::ExternalCompletionCount(graph);
+    outAnalysis.m_generation = generation;
+    outAnalysis.m_declarationRevision = CompilerGraphAccess::DeclarationRevision(graph);
+    outAnalysis.m_taskCount = taskCount;
+    outAnalysis.m_resourceCount = resourceCount;
+    outAnalysis.m_resourceVersionCount = resourceVersionCount;
+    outAnalysis.m_externalCompletionCount = externalCompletionCount;
 
     const Timer validationBegin = TimerNow();
     const auto fail = [&](const GpuTaskGraphAnalysisStatus::Enum status, const GpuTaskId task = {}, const GpuTaskId relatedTask = {}, const GpuGraphResourceId resource = {}, const GpuGraphResourceVersionId resourceVersion = {})noexcept{
@@ -177,88 +183,92 @@ b8 GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph,
         return false;
     };
 #if defined(NWB_DEBUG)
-    for(usize resourceIndex = 0u; resourceIndex < graph.resourceCount(); ++resourceIndex){
-        const GpuTaskGraphResourceView resource = graph.resourceAt(resourceIndex);
+    for(usize resourceIndex = 0u; resourceIndex < resourceCount; ++resourceIndex){
+        const GpuTaskGraphDetail::GpuGraphResourceNode& resource = CompilerGraphAccess::ResourceNode(graph, resourceIndex);
         FOUNDATION_ASSERT(resource.identity && resource.type < GpuGraphResourceType::Count);
     }
-    for(usize completionIndex = 0u; completionIndex < graph.externalCompletionCount(); ++completionIndex)
+    for(usize completionIndex = 0u; completionIndex < externalCompletionCount; ++completionIndex)
         FOUNDATION_ASSERT(graph.externalCompletionAt(completionIndex).identity);
 #endif
-    for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
-        const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
+    b8 hasTaskExternalDependencies = false;
+    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+        const GpuTaskGraphDetail::GpuTaskNode& task = CompilerGraphAccess::TaskNode(graph, taskIndex);
+        const GpuTaskId taskId{ .generation = generation, .index = static_cast<u32>(taskIndex) };
         FOUNDATION_ASSERT(task.identity);
         if(!IsValidCommandRequirements(task.commands) || !IsValidSchedulingHint(task.scheduling) || task.timing.policy >= GpuTaskTimingPolicy::Count)
-            return fail(GpuTaskGraphAnalysisStatus::InvalidTask, task.id);
-        for(usize dependencyIndex = 0u; dependencyIndex < task.dependencyCount; ++dependencyIndex){
-            if(!graph.validTask(task.dependencies[dependencyIndex]))
-                return fail(GpuTaskGraphAnalysisStatus::InvalidTaskDependency, task.id, task.dependencies[dependencyIndex]);
+            return fail(GpuTaskGraphAnalysisStatus::InvalidTask, taskId);
+        const Span<const GpuTaskId> dependencies = CompilerGraphAccess::TaskDependencies(graph, task);
+        for(const GpuTaskId dependency : dependencies){
+            if(!CompilerGraphAccess::ValidTask(graph, dependency))
+                return fail(GpuTaskGraphAnalysisStatus::InvalidTaskDependency, taskId, dependency);
         }
-        for(usize dependencyIndex = 0u; dependencyIndex < task.externalDependencyCount; ++dependencyIndex){
-            if(!graph.validExternalCompletion(task.externalDependencies[dependencyIndex])){
-                return fail(GpuTaskGraphAnalysisStatus::InvalidExternalCompletionDependency, task.id);
+        const Span<const GpuExternalCompletionId> externalDependencies = CompilerGraphAccess::TaskExternalDependencies(graph, task);
+        if(!externalDependencies.empty()){
+            hasTaskExternalDependencies = true;
+            for(const GpuExternalCompletionId dependency : externalDependencies){
+                if(!CompilerGraphAccess::ValidExternalCompletion(graph, dependency))
+                    return fail(GpuTaskGraphAnalysisStatus::InvalidExternalCompletionDependency, taskId);
             }
         }
-        FOUNDATION_ASSERT(task.externalStateSourceCount == 0u || task.externalStateSources);
+        FOUNDATION_ASSERT(task.externalStateSourceCount == 0u || CompilerGraphAccess::TaskExternalStateSources(graph, task).data());
 #if defined(NWB_DEBUG)
-        for(usize sourceIndex = 0u; sourceIndex < task.externalStateSourceCount; ++sourceIndex)
-            FOUNDATION_ASSERT(task.externalStateSources[sourceIndex].states && task.externalStateSources[sourceIndex].applicableConsumerQueueClass <= CommandQueue::kCount);
+        for(const GpuTaskExternalStateSource& source : CompilerGraphAccess::TaskExternalStateSources(graph, task))
+            FOUNDATION_ASSERT(source.states && source.applicableConsumerQueueClass <= CommandQueue::kCount);
 #endif
-        for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
-            const GpuTaskResourceUse& use = task.resourceUses[useIndex];
-            if(!graph.validResource(use.resource) || use.access >= GpuTaskResourceAccess::Count)
-                return fail(GpuTaskGraphAnalysisStatus::InvalidResourceUse, task.id, {}, use.resource);
+        const Span<const GpuTaskResourceUse> resourceUses = CompilerGraphAccess::TaskResourceUses(graph, task);
+        for(const GpuTaskResourceUse& use : resourceUses){
+            if(!CompilerGraphAccess::ValidResource(graph, use.resource) || use.access >= GpuTaskResourceAccess::Count)
+                return fail(GpuTaskGraphAnalysisStatus::InvalidResourceUse, taskId, {}, use.resource);
 
-            const GpuTaskGraphResourceView resource = graph.resourceAt(use.resource.index);
-            FOUNDATION_ASSERT(resource.type != GpuGraphResourceType::HazardDomain || !resource.hasBackendResource);
+            const GpuTaskGraphDetail::GpuGraphResourceNode& resource = CompilerGraphAccess::ResourceNode(graph, use.resource.index);
+            FOUNDATION_ASSERT(resource.type != GpuGraphResourceType::HazardDomain || !CompilerGraphAccess::HasBackendResource(resource));
             if(
                 (resource.type != GpuGraphResourceType::HazardDomain && use.requiredState == ResourceStates::Unknown)
                 || (resource.type == GpuGraphResourceType::Texture && !use.range.textureSubresources.hasExtent())
                 || (resource.type == GpuGraphResourceType::Buffer && !use.range.bufferRange.hasExtent())
             )
-                return fail(GpuTaskGraphAnalysisStatus::InvalidResourceUse, task.id, {}, use.resource);
+                return fail(GpuTaskGraphAnalysisStatus::InvalidResourceUse, taskId, {}, use.resource);
         }
     }
-    f64 validationSeconds = DurationInSeconds<f64>(TimerNow(), validationBegin);
+    const Timer validationEnd = TimerNow();
+    f64 validationSeconds = DurationInSeconds<f64>(validationEnd, validationBegin);
 
-    const Timer dependencyAnalysisBegin = TimerNow();
+    const Timer dependencyAnalysisBegin = validationEnd;
     Vector<GpuTaskDependencyEdge, Alloc::ScratchArena> resourceVersionDependencyEdges(scratchArena);
-    const auto resourceVersions = BuildResourceVersionDependencyEdges(graph, scratchArena, resourceVersionDependencyEdges);
-    if(!resourceVersions){
-        outAnalysis.m_diagnostic = resourceVersions.error();
-        return false;
+    if(resourceVersionCount != 0u || CompilerGraphAccess::TotalResourceVersionUseCount(graph) != 0u){
+        const auto resourceVersions = BuildResourceVersionDependencyEdges(graph, scratchArena, resourceVersionDependencyEdges);
+        if(!resourceVersions){
+            outAnalysis.m_diagnostic = resourceVersions.error();
+            return false;
+        }
     }
     GpuInferredDependencyCollector edgeCollector(scratchArena, outAnalysis.m_edges, outAnalysis.m_inferredEdges, outAnalysis.m_explicitEdgeCount, outAnalysis.m_inferredEdgeCount, outAnalysis.m_resourceVersionEdgeCount);
-    usize expectedEdgeCount = resourceVersionDependencyEdges.size();
-    for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
-        const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
-        expectedEdgeCount += task.dependencyCount + task.resourceUseCount;
-    }
-    edgeCollector.reserve(expectedEdgeCount, graph.taskCount());
-    Vector<u32, Alloc::ScratchArena> externalDependencyConsumerMarkers(graph.externalCompletionCount(), scratchArena);
-    for(usize completionIndex = 0u; completionIndex < graph.externalCompletionCount(); ++completionIndex)
-        externalDependencyConsumerMarkers[completionIndex] = Limit<u32>::s_Max;
+    const usize expectedEdgeCount = resourceVersionDependencyEdges.size() + CompilerGraphAccess::TotalDependencyCount(graph) + CompilerGraphAccess::TotalResourceUseCount(graph);
+    edgeCollector.reserve(expectedEdgeCount, taskCount);
+    Vector<u32, Alloc::ScratchArena> externalDependencyConsumerMarkers(hasTaskExternalDependencies ? externalCompletionCount : 0u, Limit<u32>::s_Max, scratchArena);
 
-    for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
-        const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
-        for(usize dependencyIndex = 0u; dependencyIndex < task.dependencyCount; ++dependencyIndex){
-            edgeCollector.appendRaw(GpuTaskDependencyEdge{ .producer = task.dependencies[dependencyIndex], .consumer = task.id, .resource = {}, .resourceVersion = {}, .hazard = GpuTaskHazardType::Explicit, });
-        }
-        for(usize dependencyIndex = 0u; dependencyIndex < task.externalDependencyCount; ++dependencyIndex){
-            const GpuExternalCompletionId completion = task.externalDependencies[dependencyIndex];
-            if(externalDependencyConsumerMarkers[completion.index] == task.id.index)
-                continue;
-            outAnalysis.m_externalDependencies.push_back(GpuTaskExternalDependencyEdge{ .completion = completion, .consumer = task.id, });
-            externalDependencyConsumerMarkers[completion.index] = task.id.index;
+    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+        const GpuTaskGraphDetail::GpuTaskNode& task = CompilerGraphAccess::TaskNode(graph, taskIndex);
+        const GpuTaskId taskId{ .generation = generation, .index = static_cast<u32>(taskIndex) };
+        for(const GpuTaskId producer : CompilerGraphAccess::TaskDependencies(graph, task))
+            edgeCollector.appendRaw(GpuTaskDependencyEdge{ .producer = producer, .consumer = taskId, .resource = {}, .resourceVersion = {}, .hazard = GpuTaskHazardType::Explicit, });
+        if(hasTaskExternalDependencies){
+            for(const GpuExternalCompletionId completion : CompilerGraphAccess::TaskExternalDependencies(graph, task)){
+                if(externalDependencyConsumerMarkers[completion.index] == taskId.index)
+                    continue;
+                outAnalysis.m_externalDependencies.push_back(GpuTaskExternalDependencyEdge{ .completion = completion, .consumer = taskId, });
+                externalDependencyConsumerMarkers[completion.index] = taskId.index;
+            }
         }
     }
     for(const GpuTaskDependencyEdge& edge : resourceVersionDependencyEdges)
         edgeCollector.appendInferred(edge);
-    const f64 dependencyAnalysisSeconds = DurationInSeconds<f64>(TimerNow(), dependencyAnalysisBegin);
-
     const Timer semanticTopologyBegin = TimerNow();
+    const f64 dependencyAnalysisSeconds = DurationInSeconds<f64>(semanticTopologyBegin, dependencyAnalysisBegin);
+
     TaskDependencyAdjacency dependencyAdjacency(scratchArena);
     {
-        BuildTaskDependencyAdjacency(outAnalysis.m_edges, graph.taskCount(), scratchArena, dependencyAdjacency);
+        BuildTaskDependencyAdjacency(outAnalysis.m_edges, taskCount, scratchArena, dependencyAdjacency);
         if(!BuildTopologicalOrder(graph, outAnalysis.m_edges, dependencyAdjacency, scratchArena, outAnalysis.m_topologicalOrder, outAnalysis.m_cyclePath, outAnalysis.m_cycleEdges)){
             const GpuTaskDependencyEdge* const cycleEdge = FindCycleDiagnosticEdge(outAnalysis.m_cycleEdges);
             return fail(
@@ -270,25 +280,25 @@ b8 GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph,
             );
         }
     }
-    const f64 semanticTopologySeconds = DurationInSeconds<f64>(TimerNow(), semanticTopologyBegin);
-
     const Timer hazardAnalysisBegin = TimerNow();
+    const f64 semanticTopologySeconds = DurationInSeconds<f64>(hazardAnalysisBegin, semanticTopologyBegin);
+
     GpuTaskId invalidHazardTask;
     GpuGraphResourceId invalidHazardResource;
     if(!GpuResourceHazardTracker::Append(graph, outAnalysis.m_topologicalOrder, scratchArena, edgeCollector, invalidHazardTask, invalidHazardResource))
         return fail(GpuTaskGraphAnalysisStatus::InvalidResourceUse, invalidHazardTask, {}, invalidHazardResource);
-    const f64 hazardAnalysisSeconds = DurationInSeconds<f64>(TimerNow(), hazardAnalysisBegin);
-
     const Timer finalTopologyBegin = TimerNow();
+    const f64 hazardAnalysisSeconds = DurationInSeconds<f64>(finalTopologyBegin, hazardAnalysisBegin);
+
     {
         if(dependencyAdjacency.edgeIndices.size() != outAnalysis.m_edges.size()){
-            BuildTaskDependencyAdjacency(outAnalysis.m_edges, graph.taskCount(), scratchArena, dependencyAdjacency);
+            BuildTaskDependencyAdjacency(outAnalysis.m_edges, taskCount, scratchArena, dependencyAdjacency);
         }
         BuildSchedulingEdges(outAnalysis.m_edges, dependencyAdjacency, outAnalysis.m_topologicalOrder, scratchArena, outAnalysis.m_schedulingEdges);
         BuildSchedulingTaskAdjacency(
             outAnalysis.m_schedulingEdges,
-            graph.taskCount(),
-            graph.generation(),
+            taskCount,
+            generation,
             scratchArena,
             outAnalysis.m_schedulingOutgoingOffsets,
             outAnalysis.m_schedulingOutgoingConsumers,
@@ -296,14 +306,14 @@ b8 GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph,
             outAnalysis.m_schedulingIncomingProducers
         );
     }
-    const f64 topologicalOrderSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(semanticTopologySeconds), VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), finalTopologyBegin))));
-
     const Timer acceptedQueueFrontierValidationBegin = TimerNow();
+    const f64 topologicalOrderSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(semanticTopologySeconds), VectorDoubleReplicate(DurationInSeconds<f64>(acceptedQueueFrontierValidationBegin, finalTopologyBegin))));
+
     if(!GpuAcceptedQueueFrontierValidator::Validate(graph, outAnalysis.m_schedulingIncomingOffsets, outAnalysis.m_edges, outAnalysis.m_diagnostic))
         return false;
-    validationSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(validationSeconds), VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), acceptedQueueFrontierValidationBegin))));
-
     const Timer presentationValidationBegin = TimerNow();
+    validationSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(validationSeconds), VectorDoubleReplicate(DurationInSeconds<f64>(presentationValidationBegin, acceptedQueueFrontierValidationBegin))));
+
     if(!GpuPresentationEndpointValidator::Validate(graph, outAnalysis.m_topologicalOrder, outAnalysis.m_schedulingIncomingOffsets, outAnalysis.m_schedulingIncomingProducers, scratchArena, outAnalysis.m_diagnostic))
         return false;
     validationSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(validationSeconds), VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), presentationValidationBegin))));

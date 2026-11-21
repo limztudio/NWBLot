@@ -65,22 +65,6 @@ namespace __hidden_gpu_command_ir_builtin_preflight{
     return TextureSubresourcesContain(declaration, description, requested);
 }
 
-[[nodiscard]] static b8 TaskDeclaresTextureSlice(
-    const GpuTaskGraphTaskView& task,
-    const GpuGraphResourceId resource,
-    const ResourceStates::Mask state,
-    const GpuTaskResourceAccess::Enum access,
-    const TextureDesc& description,
-    const TextureSlice& resolvedSlice
-)noexcept{
-    for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
-        const GpuTaskResourceUse& use = task.resourceUses[useIndex];
-        if(use.resource == resource && use.requiredState == state && use.access == access && TextureSliceIsDeclared(use.range.textureSubresources, description, resolvedSlice))
-            return true;
-    }
-    return false;
-}
-
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBufferCopyRecord(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, const GpuTaskGraphTaskView& task)noexcept{
     if(!graph.validResource(record.source) || !graph.validResource(record.destination))
         return GpuCommandIrReplayError::InvalidResource;
@@ -95,20 +79,31 @@ namespace __hidden_gpu_command_ir_builtin_preflight{
     if(!source || !destination)
         return GpuCommandIrReplayError::MissingBackendResource;
 
-    const auto declaresRange = [&](const GpuGraphResourceId resource, const BufferDesc& description, const ResourceStates::Mask state, const GpuTaskResourceAccess::Enum access, const u64 offset)noexcept{
-        for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
-            const GpuTaskResourceUse& use = task.resourceUses[useIndex];
-            if(use.resource == resource && use.requiredState == state && use.access == access && BufferRangeContains(description, use.range.bufferRange, offset, record.dataSizeBytes))
-                return true;
+    const BufferDesc& sourceDescription = source->getCreationDescription();
+    const BufferDesc& destinationDescription = destination->getCreationDescription();
+    b8 hasSourceUse = false;
+    b8 hasDestinationUse = false;
+    b8 hasSourceRange = false;
+    b8 hasDestinationRange = false;
+    for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
+        const GpuTaskResourceUse& use = task.resourceUses[useIndex];
+        if(use.resource == record.source && use.requiredState == ResourceStates::CopySource && use.access == GpuTaskResourceAccess::Read){
+            hasSourceUse = true;
+            if(!hasSourceRange && BufferRangeContains(sourceDescription, use.range.bufferRange, record.sourceOffsetBytes, record.dataSizeBytes))
+                hasSourceRange = true;
         }
-        return false;
-    };
-    if(!GpuCommandIrDetail::FindTaskResourceUse(task, record.source, ResourceStates::CopySource, GpuTaskResourceAccess::Read) || !GpuCommandIrDetail::FindTaskResourceUse(task, record.destination, ResourceStates::CopyDest, GpuTaskResourceAccess::Write))
+        if(use.resource == record.destination && use.requiredState == ResourceStates::CopyDest && use.access == GpuTaskResourceAccess::Write){
+            hasDestinationUse = true;
+            if(!hasDestinationRange && BufferRangeContains(destinationDescription, use.range.bufferRange, record.destinationOffsetBytes, record.dataSizeBytes))
+                hasDestinationRange = true;
+        }
+    }
+    if(!hasSourceUse || !hasDestinationUse)
         return GpuCommandIrReplayError::ResourceUseMismatch;
     if(
         record.dataSizeBytes == 0u
-        || !declaresRange(record.source, source->getCreationDescription(), ResourceStates::CopySource, GpuTaskResourceAccess::Read, record.sourceOffsetBytes)
-        || !declaresRange(record.destination, destination->getCreationDescription(), ResourceStates::CopyDest, GpuTaskResourceAccess::Write, record.destinationOffsetBytes)
+        || !hasSourceRange
+        || !hasDestinationRange
         || (source == destination && UnsignedRangesOverlap(record.sourceOffsetBytes, record.dataSizeBytes, record.destinationOffsetBytes, record.dataSizeBytes))
     )
         return GpuCommandIrReplayError::InvalidBufferCopy;
@@ -131,18 +126,31 @@ namespace __hidden_gpu_command_ir_builtin_preflight{
     if(source == destination)
         return GpuCommandIrReplayError::InvalidTextureCopy;
 
-    if(!GpuCommandIrDetail::FindTaskResourceUse(task, record.source, ResourceStates::CopySource, GpuTaskResourceAccess::Read) || !GpuCommandIrDetail::FindTaskResourceUse(task, record.destination, ResourceStates::CopyDest, GpuTaskResourceAccess::Write))
-        return GpuCommandIrReplayError::ResourceUseMismatch;
-
     const TextureDesc& sourceDescription = source->getCreationDescription();
     const TextureDesc& destinationDescription = destination->getCreationDescription();
-    Expected<GraphicsBackend::TextureCopyContract> contract = MakeUnexpected(Failure{});
-    if(!(contract = GraphicsBackend::ResolveTextureCopyContract(sourceDescription, record.sourceSlice, destinationDescription, record.destinationSlice)))
-        return GpuCommandIrReplayError::InvalidTextureCopy;
-    if(
-        !TaskDeclaresTextureSlice(task, record.source, ResourceStates::CopySource, GpuTaskResourceAccess::Read, sourceDescription, contract->sourceSlice)
-        || !TaskDeclaresTextureSlice(task, record.destination, ResourceStates::CopyDest, GpuTaskResourceAccess::Write, destinationDescription, contract->destinationSlice)
-    )
+    const Expected<GraphicsBackend::TextureCopyContract> contract = GraphicsBackend::ResolveTextureCopyContract(sourceDescription, record.sourceSlice, destinationDescription, record.destinationSlice);
+    const b8 hasContract = contract.has_value();
+
+    b8 hasSourceUse = false;
+    b8 hasDestinationUse = false;
+    b8 hasSourceSlice = false;
+    b8 hasDestinationSlice = false;
+    for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
+        const GpuTaskResourceUse& use = task.resourceUses[useIndex];
+        if(use.resource == record.source && use.requiredState == ResourceStates::CopySource && use.access == GpuTaskResourceAccess::Read){
+            hasSourceUse = true;
+            if(hasContract && !hasSourceSlice && TextureSliceIsDeclared(use.range.textureSubresources, sourceDescription, contract->sourceSlice))
+                hasSourceSlice = true;
+        }
+        if(use.resource == record.destination && use.requiredState == ResourceStates::CopyDest && use.access == GpuTaskResourceAccess::Write){
+            hasDestinationUse = true;
+            if(hasContract && !hasDestinationSlice && TextureSliceIsDeclared(use.range.textureSubresources, destinationDescription, contract->destinationSlice))
+                hasDestinationSlice = true;
+        }
+    }
+    if(!hasSourceUse || !hasDestinationUse)
+        return GpuCommandIrReplayError::ResourceUseMismatch;
+    if(!hasContract || !hasSourceSlice || !hasDestinationSlice)
         return GpuCommandIrReplayError::InvalidTextureCopy;
 
     const u8 taskCapabilities = static_cast<u8>(task.commands.allowedCapabilities());

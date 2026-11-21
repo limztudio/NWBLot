@@ -189,44 +189,43 @@ static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const Gp
         return result;
 
     const u64 recordingLeaseSerial = commandList.recordingLeaseSerial();
-    Optional<GpuCommandIrStreamReader> readerStorage;
-    if(splitBuffers)
-        readerStorage.emplace(primaryBytes, secondaryBlobBytes);
-    else
-        readerStorage.emplace(primaryBytes);
-    GpuCommandIrStreamReader& reader = *readerStorage;
+    GpuCommandIrDetail::WireStreamCursor cursor(primaryBytes, secondaryBlobBytes, splitBuffers);
+    if(cursor.validation().failed())
+        return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::StreamChangedDuringReplay, cursor.validation(), cursor.validation().recordIndex);
 
+    GraphicsState reusableGraphicsState;
     u64 recordIndex = 0u;
+    GpuCommandIrDetail::WireRecordStorage wireStorage;
+    GpuCommandIrBuiltinTaskRecord builtinRecord;
+    GpuCommandIrWireOpcode::Enum wireOpcode = GpuCommandIrWireOpcode::Count;
+    GpuCommandIrDetail::DecodedRecordContext decodedContext;
     for(;;){
-        const auto decodedResult = reader.next();
-        if(!decodedResult && decodedResult.error() == GpuCommandIrStreamReadStatus::End)
-            return GpuCommandIrReplayResult{ .streamValidation = reader.validation(), .recordIndex = recordIndex, };
-        if(!decodedResult){
-            return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::StreamChangedDuringReplay, reader.validation(), reader.validation().recordIndex);
-        }
-        const auto& decoded = *decodedResult;
+        const GpuCommandIrDetail::WireStepStatus::Enum step = cursor.next(wireStorage, wireOpcode, decodedContext, &builtinRecord);
+        if(step == GpuCommandIrDetail::WireStepStatus::End)
+            return GpuCommandIrReplayResult{ .streamValidation = cursor.validation(), .recordIndex = recordIndex, };
+        if(step == GpuCommandIrDetail::WireStepStatus::Error)
+            return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::StreamChangedDuringReplay, cursor.validation(), cursor.validation().recordIndex);
 
-        const b8 raster = GpuCommandIrDetail::IsRasterOpcode(decoded.opcode);
-        const GpuSubmissionPacketId recordPacket = raster ? decoded.raster.packet : decoded.builtin.packet;
-        if(recordPacket != packet){
+        if(decodedContext.packet != packet){
             ++recordIndex;
             continue;
         }
 
-        FOUNDATION_ASSERT(raster || (graph.validResource(decoded.builtin.destination) && ((decoded.builtin.opcode != GpuCommandIrOpcode::CopyBuffer && decoded.builtin.opcode != GpuCommandIrOpcode::CopyTexture) || graph.validResource(decoded.builtin.source))));
+        const b8 raster = GpuCommandIrDetail::IsRasterOpcode(wireOpcode);
+        FOUNDATION_ASSERT(raster || (graph.validResource(builtinRecord.destination) && ((builtinRecord.opcode != GpuCommandIrOpcode::CopyBuffer && builtinRecord.opcode != GpuCommandIrOpcode::CopyTexture) || graph.validResource(builtinRecord.source))));
 
         if(raster){
             FOUNDATION_ASSERT(owners.hasOwnerSidecar);
-            if(!GpuCommandIrDetail::LowerRasterOperation(decoded.raster, owners, reader.blobBytes(), commandList))
+            if(!GpuCommandIrDetail::LowerRasterWireOperation(wireOpcode, wireStorage, owners, cursor.blobBytes(), commandList, reusableGraphicsState))
                 return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::CommandListRecordingFailed, result.streamValidation, recordIndex);
         }
-        else if(decoded.builtin.opcode == GpuCommandIrOpcode::UploadBuffer || decoded.builtin.opcode == GpuCommandIrOpcode::UploadTexture){
-            if(!GpuCommandIrDetail::LowerUploadOperation(decoded.builtin, reader.blobBytes(), graph, commandList)){
+        else if(builtinRecord.opcode == GpuCommandIrOpcode::UploadBuffer || builtinRecord.opcode == GpuCommandIrOpcode::UploadTexture){
+            if(!GpuCommandIrDetail::LowerUploadOperation(builtinRecord, cursor.blobBytes(), graph, commandList)){
                 return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::CommandListRecordingFailed, result.streamValidation, recordIndex);
             }
         }
         else
-            __hidden_gpu_command_ir_replay_lowering::LowerOperation(decoded.builtin, graph, commandList);
+            __hidden_gpu_command_ir_replay_lowering::LowerOperation(builtinRecord, graph, commandList);
         if(!commandList.matchesRecordingLease(recordingLeaseSerial) || commandList.commandRecordingFailed()){
             return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::CommandListRecordingFailed, result.streamValidation, recordIndex);
         }

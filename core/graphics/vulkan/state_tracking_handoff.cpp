@@ -41,7 +41,8 @@ void CommandList::setResourceStatesForGraphicsBuffers(const GraphicsState& state
         return;
 
     for(u32 entryIndex = 0u; entryIndex < requiredBufferStates.count; ++entryIndex){
-        setBufferState(requiredBufferStates.entries[entryIndex].buffer, requiredBufferStates.entries[entryIndex].state);
+        auto& buffer = *MakeNotNull(requiredBufferStates.entries[entryIndex].buffer);
+        setBufferStateValidated(buffer, requiredBufferStates.entries[entryIndex].state, false, BufferRange(0u, buffer.m_creationDesc.byteSize));
         if(m_commandRecordingFailed)
             return;
     }
@@ -389,6 +390,7 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
         m_stateTracker.m_textureStates.insert_or_assign(key, state.state);
     }
 
+    m_stateTracker.invalidateBufferCache();
     ::ContainerDetail::ReserveAdditionalCapacity(m_stateTracker.m_bufferStates, states.m_bufferStates.size());
     for(const CommandListResourceStateHandoff::BufferState& state : states.m_bufferStates){
         if(!state.buffer)

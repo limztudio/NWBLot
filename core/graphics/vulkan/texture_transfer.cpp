@@ -30,18 +30,6 @@ static constexpr TStringView s_TexturesNotOwnedReason = FOUNDATION_TEXT("source 
 static constexpr TStringView s_NativeImageNullReason = FOUNDATION_TEXT("source and destination native image handles must be non-null");
 static constexpr TStringView s_NativeImageNotDistinctReason = FOUNDATION_TEXT("source and destination must be distinct native images");
 
-[[nodiscard]] inline b8 TextureTransferImagesWithinFormatLimits(const VulkanContext& context, const VkImageCreateInfo& source, const VkImageCreateInfo& destination){
-    VkImageFormatProperties sourceProperties{};
-    const VkResult sourceResult = context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties(context.physicalDevice, source.format, source.imageType, source.tiling, source.usage, source.flags, &sourceProperties);
-    if(sourceResult != VK_SUCCESS)
-        return false;
-    VkImageFormatProperties destinationProperties{};
-    const VkResult destinationResult = context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties(context.physicalDevice, destination.format, destination.imageType, destination.tiling, destination.usage, destination.flags, &destinationProperties);
-    if(destinationResult != VK_SUCCESS)
-        return false;
-    return VulkanTextureDetail::IsTextureImageWithinFormatLimits(source, sourceProperties) && VulkanTextureDetail::IsTextureImageWithinFormatLimits(destination, destinationProperties);
-}
-
 [[nodiscard]] inline b8 ResolveMipExtentsMatch(const TextureDesc& destinationDesc, const TextureSubresourceSet& destinationSubresources, const TextureDesc& sourceDesc, const TextureSubresourceSet& sourceSubresources)noexcept{
     for(MipLevel mipOffset = 0u; mipOffset < sourceSubresources.numMipLevels; ++mipOffset){
         const VkExtent3D sourceExtent = VulkanDetail::GetTextureMipExtent(sourceDesc, sourceSubresources.baseMipLevel + mipOffset);
@@ -98,6 +86,45 @@ struct TextureUploadCopyAspect{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+u8 Texture::queryTransferCapabilities()const noexcept{
+    const u8 cached = m_transferCapabilityCache.load(MemoryOrder::acquire);
+    if((cached & s_TransferCapInitialized) != 0u)
+        return cached;
+
+    u8 flags = s_TransferCapInitialized;
+    VkFormatProperties formatProperties{};
+    m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, m_imageInfo.format, &formatProperties);
+    constexpr VkFormatFeatureFlags s_TransferFeatures = VK_FORMAT_FEATURE_TRANSFER_SRC_BIT | VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
+    constexpr VkFormatFeatureFlags s_ResolveFeatures = s_TransferFeatures | VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT;
+    if((formatProperties.optimalTilingFeatures & s_TransferFeatures) == s_TransferFeatures)
+        flags |= s_TransferCapOptimalTransfer;
+    if((formatProperties.optimalTilingFeatures & s_ResolveFeatures) == s_ResolveFeatures)
+        flags |= s_TransferCapOptimalResolve;
+
+    VkImageFormatProperties imageProperties{};
+    if(
+        m_context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties(
+            m_context.physicalDevice,
+            m_imageInfo.format,
+            m_imageInfo.imageType,
+            m_imageInfo.tiling,
+            m_imageInfo.usage,
+            m_imageInfo.flags,
+            &imageProperties
+        ) == VK_SUCCESS
+        && VulkanTextureDetail::IsTextureImageWithinFormatLimits(m_imageInfo, imageProperties)
+    ){
+        flags |= s_TransferCapWithinFormatLimits;
+    }
+
+    m_transferCapabilityCache.store(flags, MemoryOrder::release);
+    return flags;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Texture& src, const TextureSlice& srcSlice){
     constexpr TStringView s_OperationName = FOUNDATION_TEXT("copy texture");
     if(!validateTextureTransferResources(dest, ResourceStates::CopyDest, src, ResourceStates::CopySource, s_OperationName))
@@ -126,15 +153,14 @@ void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Text
     );
     FOUNDATION_ASSERT((src.m_imageInfo.usage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0u && (dest.m_imageInfo.usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT) != 0u);
 
-    VkFormatProperties formatProperties{};
-    m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, src.m_imageInfo.format, &formatProperties);
-    constexpr VkFormatFeatureFlags s_RequiredFormatFeatures = VK_FORMAT_FEATURE_TRANSFER_SRC_BIT | VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
-    if((formatProperties.optimalTilingFeatures & s_RequiredFormatFeatures) != s_RequiredFormatFeatures){
+    const u8 srcCapabilities = src.queryTransferCapabilities();
+    if((srcCapabilities & Texture::s_TransferCapOptimalTransfer) == 0u){
         rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("native format lacks optimal-tiling transfer support"));
         return;
     }
 
-    if(!__hidden_texture_transfer::TextureTransferImagesWithinFormatLimits(m_context, src.m_imageInfo, dest.m_imageInfo)){
+    const u8 dstCapabilities = dest.queryTransferCapabilities();
+    if((srcCapabilities & Texture::s_TransferCapWithinFormatLimits) == 0u || (dstCapabilities & Texture::s_TransferCapWithinFormatLimits) == 0u){
         rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("native image formats do not support the requested shapes"));
         return;
     }
@@ -315,15 +341,14 @@ void CommandList::resolveTexture(Texture& dest, const TextureSubresourceSet& dst
         return;
     }
 
-    VkFormatProperties formatProperties{};
-    m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, src.m_imageInfo.format, &formatProperties);
-    constexpr VkFormatFeatureFlags s_RequiredFormatFeatures = VK_FORMAT_FEATURE_TRANSFER_SRC_BIT | VK_FORMAT_FEATURE_TRANSFER_DST_BIT | VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT;
-    if((formatProperties.optimalTilingFeatures & s_RequiredFormatFeatures) != s_RequiredFormatFeatures){
+    const u8 srcCapabilities = src.queryTransferCapabilities();
+    if((srcCapabilities & Texture::s_TransferCapOptimalResolve) == 0u){
         rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("native format lacks optimal-tiling transfer or color-attachment support"));
         return;
     }
 
-    if(!__hidden_texture_transfer::TextureTransferImagesWithinFormatLimits(m_context, src.m_imageInfo, dest.m_imageInfo)){
+    const u8 dstCapabilities = dest.queryTransferCapabilities();
+    if((srcCapabilities & Texture::s_TransferCapWithinFormatLimits) == 0u || (dstCapabilities & Texture::s_TransferCapWithinFormatLimits) == 0u){
         rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("native image formats do not support the requested shapes and sample counts"));
         return;
     }

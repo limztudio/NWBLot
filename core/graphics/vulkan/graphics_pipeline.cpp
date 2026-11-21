@@ -32,34 +32,22 @@ namespace __hidden_graphics_pipeline{
 static constexpr TStringView s_DynamicRenderingBeginFailedReason = FOUNDATION_TEXT("dynamic rendering could not begin");
 
 
-b8 ViewportsEqual(const FixedVector<Viewport, s_MaxViewports>& lhs, const FixedVector<Viewport, s_MaxViewports>& rhs)noexcept{
-    if(lhs.size() != rhs.size())
-        return false;
-    for(usize i = 0u; i < lhs.size(); ++i){
-        if(!(lhs[i] == rhs[i]))
-            return false;
-    }
-    return true;
-}
-
-b8 ScissorsEqual(const FixedVector<Rect, s_MaxViewports>& lhs, const FixedVector<Rect, s_MaxViewports>& rhs)noexcept{
-    if(lhs.size() != rhs.size())
-        return false;
-    for(usize i = 0u; i < lhs.size(); ++i){
-        if(!(lhs[i] == rhs[i]))
-            return false;
-    }
-    return true;
-}
-
 b8 VertexBufferBindingsEqual(const FixedVector<VertexBufferBinding, s_MaxVertexAttributes>& lhs, const FixedVector<VertexBufferBinding, s_MaxVertexAttributes>& rhs)noexcept{
     if(lhs.size() != rhs.size())
         return false;
+    const VertexBufferBinding* const lhsData = lhs.data();
+    const VertexBufferBinding* const rhsData = rhs.data();
     for(usize i = 0u; i < lhs.size(); ++i){
-        if(!(lhs[i] == rhs[i]))
+        if(!(lhsData[i] == rhsData[i]))
             return false;
     }
     return true;
+}
+
+void CopyVertexBufferBindingsCompact(FixedVector<VertexBufferBinding, s_MaxVertexAttributes>& dst, const FixedVector<VertexBufferBinding, s_MaxVertexAttributes>& src)noexcept{
+    dst.resize(src.size());
+    for(usize i = 0u; i < src.size(); ++i)
+        dst.data()[i] = src.data()[i];
 }
 
 
@@ -128,13 +116,10 @@ void CommandList::beginRenderPass(Framebuffer& framebuffer, const RenderPassPara
     }
 
     retainResource(&framebuffer);
-    m_currentGraphicsState = {};
-    m_currentComputeState = {};
-    m_currentMeshletState = {};
-    m_currentRayTracingState = {};
-    m_hasBoundGraphicsState = false;
+    clearDirtyPipelineStates();
+    invalidateGraphicsDrawValidationCache();
+    updateActivePushConstantPipeline(s_PipelineKindNone, VK_NULL_HANDLE, 0u, GpuQueueCapability::None);
     m_graphicsBuffersValidatedInPass = false;
-    m_hasBoundComputeState = false;
     m_renderPassActive = true;
     m_renderPassFramebuffer = &framebuffer;
 }
@@ -169,31 +154,39 @@ void CommandList::setGraphicsState(const GraphicsState& state){
         && state.indirectParams == m_currentGraphicsState.indirectParams
         && __hidden_graphics_pipeline::VertexBufferBindingsEqual(m_currentGraphicsState.vertexBuffers, state.vertexBuffers)
     ){
-        if(!validateViewportState(state.viewport, s_SetGraphicsStateOperation))
-            return;
+        const b8 viewportsEqual = VulkanDetail::ViewportsEqual(m_currentGraphicsState.viewport.viewports, state.viewport.viewports);
+        const b8 explicitScissorsEqual = VulkanDetail::ScissorsEqual(m_currentGraphicsState.viewport.scissorRects, state.viewport.scissorRects);
+        const b8 updateViewport = !viewportsEqual;
+        const b8 updateScissor = !explicitScissorsEqual || (state.viewport.scissorRects.empty() && !viewportsEqual);
+        if(updateViewport || updateScissor){
+            if(!validateViewportState(state.viewport, s_SetGraphicsStateOperation))
+                return;
+            VulkanDetail::CopyViewportStateCompact(m_currentGraphicsState.viewport, state.viewport);
+            if(state.viewport.viewports.size() != 1u || state.viewport.scissorRects.size() > 1u)
+                invalidateGraphicsDrawValidationCache();
+            else if(!m_graphicsDrawStateValid)
+                rebuildGraphicsDrawValidationCache();
+            setViewportState(state.viewport, updateViewport, updateScissor);
+        }
 
         const b8 blendConstantsChanged = !(m_currentGraphicsState.blendConstantColor == state.blendConstantColor);
         const b8 dynamicStencilRefChanged = m_currentGraphicsState.dynamicStencilRefValue != state.dynamicStencilRefValue;
-        const b8 viewportsEqual = __hidden_graphics_pipeline::ViewportsEqual(m_currentGraphicsState.viewport.viewports, state.viewport.viewports);
-        const b8 explicitScissorsEqual = __hidden_graphics_pipeline::ScissorsEqual(m_currentGraphicsState.viewport.scissorRects, state.viewport.scissorRects);
-        const b8 updateViewport = !viewportsEqual;
-        const b8 updateScissor = !explicitScissorsEqual || (state.viewport.scissorRects.empty() && !viewportsEqual);
-
-        m_currentGraphicsState.blendConstantColor = state.blendConstantColor;
-        m_currentGraphicsState.dynamicStencilRefValue = state.dynamicStencilRefValue;
-        m_currentGraphicsState.viewport = state.viewport;
+        if(blendConstantsChanged)
+            m_currentGraphicsState.blendConstantColor = state.blendConstantColor;
+        if(dynamicStencilRefChanged)
+            m_currentGraphicsState.dynamicStencilRefValue = state.dynamicStencilRefValue;
 
         if(state.pipeline){
             if(blendConstantsChanged){
                 const Array<f32, 4> blendConstants = {{ state.blendConstantColor.r, state.blendConstantColor.g, state.blendConstantColor.b, state.blendConstantColor.a }};
                 m_context.deviceDispatch.vkCmdSetBlendConstants(m_currentCmdBuf->m_cmdBuf, blendConstants.data());
             }
-            const DepthStencilState& depthStencilState = state.pipeline->m_desc.renderState.depthStencilState;
-            if(depthStencilState.dynamicStencilRef && dynamicStencilRefChanged)
-                m_context.deviceDispatch.vkCmdSetStencilReference(m_currentCmdBuf->m_cmdBuf, VK_STENCIL_FACE_FRONT_AND_BACK, state.dynamicStencilRefValue);
+            if(dynamicStencilRefChanged){
+                const DepthStencilState& depthStencilState = state.pipeline->m_desc.renderState.depthStencilState;
+                if(depthStencilState.dynamicStencilRef)
+                    m_context.deviceDispatch.vkCmdSetStencilReference(m_currentCmdBuf->m_cmdBuf, VK_STENCIL_FACE_FRONT_AND_BACK, state.dynamicStencilRefValue);
+            }
         }
-        if(updateViewport || updateScissor)
-            setViewportState(state.viewport, updateViewport, updateScissor);
         return;
     }
 
@@ -219,24 +212,33 @@ void CommandList::setGraphicsState(const GraphicsState& state){
     const b8 pipelineChanged = !hasPreviousGraphicsState || m_currentGraphicsState.pipeline != state.pipeline;
     const b8 blendConstantsChanged = !(m_currentGraphicsState.blendConstantColor == state.blendConstantColor);
     const b8 dynamicStencilRefChanged = m_currentGraphicsState.dynamicStencilRefValue != state.dynamicStencilRefValue;
-    const b8 viewportsEqual = hasPreviousGraphicsState && __hidden_graphics_pipeline::ViewportsEqual(m_currentGraphicsState.viewport.viewports, state.viewport.viewports);
-    const b8 explicitScissorsEqual = hasPreviousGraphicsState && __hidden_graphics_pipeline::ScissorsEqual(m_currentGraphicsState.viewport.scissorRects, state.viewport.scissorRects);
+    const b8 viewportsEqual = hasPreviousGraphicsState && VulkanDetail::ViewportsEqual(m_currentGraphicsState.viewport.viewports, state.viewport.viewports);
+    const b8 explicitScissorsEqual = hasPreviousGraphicsState && VulkanDetail::ScissorsEqual(m_currentGraphicsState.viewport.scissorRects, state.viewport.scissorRects);
     const b8 updateViewport = !viewportsEqual;
     const b8 updateScissor = !explicitScissorsEqual || (state.viewport.scissorRects.empty() && !viewportsEqual);
     const b8 vertexBuffersEqual = hasPreviousGraphicsState && __hidden_graphics_pipeline::VertexBufferBindingsEqual(m_currentGraphicsState.vertexBuffers, state.vertexBuffers);
     const b8 indexBufferChanged = !hasPreviousGraphicsState || !(m_currentGraphicsState.indexBuffer == state.indexBuffer);
     const b8 indirectParamsChanged = !hasPreviousGraphicsState || m_currentGraphicsState.indirectParams != state.indirectParams;
 
-    m_currentComputeState = {};
-    m_currentMeshletState = {};
-    m_currentRayTracingState = {};
-    m_hasBoundComputeState = false;
-    m_currentGraphicsState = state;
+    clearDirtyPipelineStates(s_DirtyGraphicsState);
+    m_currentGraphicsState.pipeline = state.pipeline;
+    m_currentGraphicsState.framebuffer = state.framebuffer;
+    if(updateViewport || !explicitScissorsEqual || !hasPreviousGraphicsState)
+        VulkanDetail::CopyViewportStateCompact(m_currentGraphicsState.viewport, state.viewport);
+    m_currentGraphicsState.shadingRateState = state.shadingRateState;
+    m_currentGraphicsState.dynamicStencilRefValue = state.dynamicStencilRefValue;
+    m_currentGraphicsState.blendConstantColor = state.blendConstantColor;
+    if(!vertexBuffersEqual || !hasPreviousGraphicsState)
+        __hidden_graphics_pipeline::CopyVertexBufferBindingsCompact(m_currentGraphicsState.vertexBuffers, state.vertexBuffers);
+    m_currentGraphicsState.indexBuffer = state.indexBuffer;
+    m_currentGraphicsState.indirectParams = state.indirectParams;
+    m_dirtyPipelineStateMask |= s_DirtyGraphicsState;
     m_hasBoundGraphicsState = true;
     m_graphicsBuffersValidatedInPass = m_renderPassActive;
 
     if(state.pipeline){
         auto& pipeline = *MakeNotNull(state.pipeline);
+        updateActivePushConstantPipeline(s_PipelineKindGraphics, pipeline.pipelineLayout, pipeline.pushConstantByteSize, GpuQueueCapability::Graphics);
         if(pipelineChanged){
             retainResource(&pipeline);
             m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipeline);
@@ -252,9 +254,13 @@ void CommandList::setGraphicsState(const GraphicsState& state){
                 m_context.deviceDispatch.vkCmdSetStencilReference(m_currentCmdBuf->m_cmdBuf, VK_STENCIL_FACE_FRONT_AND_BACK, state.dynamicStencilRefValue);
         }
     }
+    else
+        updateActivePushConstantPipeline(s_PipelineKindNone, VK_NULL_HANDLE, 0u, GpuQueueCapability::None);
 
     if(updateViewport || updateScissor)
         setViewportState(state.viewport, updateViewport, updateScissor);
+
+    rebuildGraphicsDrawValidationCache();
 
     if(!state.vertexBuffers.empty() && !vertexBuffersEqual){
         for(const VertexBufferBinding& binding : state.vertexBuffers)
@@ -497,6 +503,7 @@ void CommandList::endActiveRenderPass(){
 
     endDynamicRendering();
     m_graphicsBuffersValidatedInPass = false;
+    invalidateGraphicsDrawValidationCache();
     m_renderPassActive = false;
     m_renderPassFramebuffer = nullptr;
 }

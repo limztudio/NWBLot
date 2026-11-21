@@ -3,8 +3,10 @@
 
 
 #include "compiled_graph.h"
+#include "compiler_internal.h"
 #include "task_graph.h"
 
+#include <global/bit.h>
 #include <global/hash_utils.h>
 
 
@@ -52,6 +54,7 @@ struct OwnershipTransferSignatureEqual{
 
 struct OwnershipResourceStatistics{
     usize lastAdviceQueueIndex = Limit<usize>::s_Max;
+    u64 adviceQueueMask = 0u;
     u8 avoidableSignatureCount = 0u;
     b8 seen = false;
 };
@@ -98,12 +101,12 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
         }
     };
     for(const GpuCompiledTask& compiledTask : m_tasks){
-        const GpuTaskGraphTaskView task = graph.taskAt(compiledTask.task.index);
+        const GpuTaskGraphDetail::GpuTaskNode& task = GpuTaskGraphCompilerDetail::CompilerGraphAccess::TaskNode(graph, compiledTask.task.index);
         statistics.resourceUseCount += task.resourceUseCount;
         statistics.directResourceUseCount += task.directResourceUseCount;
         statistics.declaredResourceSetUseCount += task.declaredResourceSetUseCount;
         statistics.expandedResourceSetMemberUseCount += task.expandedResourceSetMemberUseCount;
-        if(task.hasPayload){
+        if(task.payload != nullptr){
             ++statistics.payloadObjectCount;
             statistics.payloadObjectBytes += task.payloadObjectSize;
         }
@@ -187,14 +190,19 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
     if(m_ownershipTransfers.empty())
         return;
 
-    HashSet<OwnershipTransferKey, Alloc::ScratchArena, OwnershipTransferSignatureHasher, OwnershipTransferSignatureEqual> signatures(0u, OwnershipTransferSignatureHasher(), OwnershipTransferSignatureEqual(), scratchArena);
+    Alloc::ScratchArena::Scope scratchScope(scratchArena);
     Vector<OwnershipResourceStatistics, Alloc::ScratchArena> resources(graph.resourceCount(), scratchArena);
+    Vector<u32, Alloc::ScratchArena> adviceResources(scratchArena);
+    HashSet<OwnershipTransferKey, Alloc::ScratchArena, OwnershipTransferSignatureHasher, OwnershipTransferSignatureEqual> signatures(0u, OwnershipTransferSignatureHasher(), OwnershipTransferSignatureEqual(), scratchArena);
     signatures.reserve(m_ownershipTransfers.size());
-    const auto statisticsForQueue = [&](const GpuPhysicalQueueId& id)noexcept -> GpuTaskGraphPhysicalQueueCompileStatistics&{
+    const auto queueStatisticsIndex = [&](const GpuPhysicalQueueId& id)noexcept -> usize{
         auto& queue = *MakeNotNull(queueInfo(id));
         FOUNDATION_ASSERT(queue.queueClass < CommandQueue::kCount);
-        return m_physicalQueueCompileStatistics[static_cast<usize>(&queue - m_queueTopology.data())];
+        return static_cast<usize>(&queue - m_queueTopology.data());
     };
+    const b8 useAdviceMask = m_physicalQueueCompileStatistics.size() <= GpuTaskGraphCompilerDetail::s_BitsPerWord;
+    if(useAdviceMask)
+        adviceResources.reserve(graph.resourceCount());
     statistics.logicalOwnershipTransferCount = m_ownershipTransfers.size();
     for(const GpuCompiledOwnershipTransfer& transfer : m_ownershipTransfers){
         FOUNDATION_ASSERT(transfer.route < GpuOwnershipTransferRoute::Count);
@@ -202,13 +210,17 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
         if(transfer.concurrentSharingCouldAvoid)
             ++statistics.concurrentSharingCouldAvoidTransferCount;
 
-        GpuTaskGraphPhysicalQueueCompileStatistics& source = statisticsForQueue(transfer.sourceQueue);
-        GpuTaskGraphPhysicalQueueCompileStatistics& destination = statisticsForQueue(transfer.destinationQueue);
+        const usize sourceIndex = queueStatisticsIndex(transfer.sourceQueue);
+        const usize destinationIndex = queueStatisticsIndex(transfer.destinationQueue);
+        GpuTaskGraphPhysicalQueueCompileStatistics& source = m_physicalQueueCompileStatistics[sourceIndex];
+        GpuTaskGraphPhysicalQueueCompileStatistics& destination = m_physicalQueueCompileStatistics[destinationIndex];
         ++source.outgoingLogicalOwnershipTransferCount;
         ++destination.incomingLogicalOwnershipTransferCount;
 
         FOUNDATION_ASSERT(transfer.resource.generation == graph.generation() && transfer.resource.index < resources.size());
         OwnershipResourceStatistics& resource = resources[transfer.resource.index];
+        if(useAdviceMask && transfer.concurrentSharingCouldAvoid)
+            resource.adviceQueueMask |= (u64{ 1u } << sourceIndex) | (u64{ 1u } << destinationIndex);
         const b8 firstForResource = !resource.seen;
         resource.seen = true;
         if(!signatures.insert(OwnershipTransferKey{ &transfer }).second)
@@ -230,22 +242,32 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
             if(resource.avoidableSignatureCount == s_ConcurrentSharingAdviceSignatureThreshold){
                 FOUNDATION_ASSERT(transfer.resource.generation == graph.generation() && transfer.resource.index < graph.resourceCount() && graph.resourceAt(transfer.resource.index).id == transfer.resource);
                 ++statistics.concurrentSharingAdviceResourceCount;
+                if(useAdviceMask)
+                    adviceResources.push_back(transfer.resource.index);
             }
         }
     }
-    for(usize queueIndex = 0u; queueIndex < m_physicalQueueCompileStatistics.size(); ++queueIndex){
-        GpuTaskGraphPhysicalQueueCompileStatistics& physical = m_physicalQueueCompileStatistics[queueIndex];
-        FOUNDATION_ASSERT(physical.queueClass < CommandQueue::kCount);
-        for(const GpuCompiledOwnershipTransfer& transfer : m_ownershipTransfers){
-            if(!transfer.concurrentSharingCouldAvoid || (transfer.sourceQueue != physical.queue && transfer.destinationQueue != physical.queue))
-                continue;
+    if(useAdviceMask){
+        for(const u32 resourceIndex : adviceResources){
+            for(u64 remaining = resources[resourceIndex].adviceQueueMask; remaining != 0u; remaining &= remaining - 1u)
+                ++m_physicalQueueCompileStatistics[static_cast<usize>(CountTrailingZeros(remaining))].concurrentSharingAdviceResourceCount;
+        }
+    }
+    else{
+        for(usize queueIndex = 0u; queueIndex < m_physicalQueueCompileStatistics.size(); ++queueIndex){
+            GpuTaskGraphPhysicalQueueCompileStatistics& physical = m_physicalQueueCompileStatistics[queueIndex];
+            FOUNDATION_ASSERT(physical.queueClass < CommandQueue::kCount);
+            for(const GpuCompiledOwnershipTransfer& transfer : m_ownershipTransfers){
+                if(!transfer.concurrentSharingCouldAvoid || (transfer.sourceQueue != physical.queue && transfer.destinationQueue != physical.queue))
+                    continue;
 
-            OwnershipResourceStatistics& resourceStatistics = resources[transfer.resource.index];
-            FOUNDATION_ASSERT(resourceStatistics.seen);
-            if(resourceStatistics.avoidableSignatureCount < s_ConcurrentSharingAdviceSignatureThreshold || resourceStatistics.lastAdviceQueueIndex == queueIndex)
-                continue;
-            resourceStatistics.lastAdviceQueueIndex = queueIndex;
-            ++physical.concurrentSharingAdviceResourceCount;
+                OwnershipResourceStatistics& resourceStatistics = resources[transfer.resource.index];
+                FOUNDATION_ASSERT(resourceStatistics.seen);
+                if(resourceStatistics.avoidableSignatureCount < s_ConcurrentSharingAdviceSignatureThreshold || resourceStatistics.lastAdviceQueueIndex == queueIndex)
+                    continue;
+                resourceStatistics.lastAdviceQueueIndex = queueIndex;
+                ++physical.concurrentSharingAdviceResourceCount;
+            }
         }
     }
 }

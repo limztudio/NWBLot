@@ -169,8 +169,14 @@ public:
 };
 
 
+namespace GpuTaskGraphCompilerDetail{
+    struct CompilerGraphAccess;
+};
+
+
 class GpuTaskGraphAnalysis final : NoCopy{
     friend class GpuTaskGraphCompiler;
+    friend struct GpuTaskGraphCompilerDetail::CompilerGraphAccess;
 
 
 public:
@@ -252,6 +258,7 @@ private:
 
 class GpuTaskGraphQueueAssignments final : NoCopy{
     friend class GpuTaskGraphCompiler;
+    friend struct GpuTaskGraphCompilerDetail::CompilerGraphAccess;
 
 
 public:

@@ -50,9 +50,9 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static GpuCommandIrReplayResult SemanticFailure(GpuCommandIrStreamReader& reader, const GpuCommandIrReplayError::Enum error, const u64 recordIndex = Limit<u64>::s_Max)noexcept{
-    while(reader.next()){}
-    const GpuCommandIrStreamValidationResult& streamValidation = reader.validation();
+[[nodiscard]] static GpuCommandIrReplayResult SemanticFailure(GpuCommandIrDetail::WireStreamCursor& cursor, const GpuCommandIrReplayError::Enum error, const u64 recordIndex = Limit<u64>::s_Max)noexcept{
+    cursor.drain();
+    const GpuCommandIrStreamValidationResult& streamValidation = cursor.validation();
     if(!streamValidation.valid())
         return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::InvalidStream, streamValidation, streamValidation.recordIndex);
     return GpuCommandIrDetail::ReplayFailure(error, streamValidation, recordIndex);
@@ -135,31 +135,27 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacketStream(
     const GpuSubmissionPacketId packet,
     CommandList* const commandList
 )noexcept{
-    Optional<GpuCommandIrStreamReader> readerStorage;
-    if(splitBuffers)
-        readerStorage.emplace(primaryBytes, secondaryBlobBytes);
-    else
-        readerStorage.emplace(primaryBytes);
-    GpuCommandIrStreamReader& reader = *readerStorage;
+    WireStreamCursor cursor(primaryBytes, secondaryBlobBytes, splitBuffers);
 
-    if(reader.validation().failed())
-        return ReplayFailure(GpuCommandIrReplayError::InvalidStream, reader.validation(), reader.validation().recordIndex);
+    if(cursor.validation().failed())
+        return ReplayFailure(GpuCommandIrReplayError::InvalidStream, cursor.validation(), cursor.validation().recordIndex);
     if(!compiledGraph.validFor(graph))
-        return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(reader, GpuCommandIrReplayError::InvalidCompiledGraph);
+        return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(cursor, GpuCommandIrReplayError::InvalidCompiledGraph);
 
     const GpuCompiledPacketView packetView = compiledGraph.packet(packet);
     if(!packetView.valid())
-        return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(reader, GpuCommandIrReplayError::InvalidPacket);
+        return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(cursor, GpuCommandIrReplayError::InvalidPacket);
     const GpuPhysicalQueueInfo* const queue = compiledGraph.queueInfo(packetView.plan->queue);
     if(!queue || queue->queueClass >= CommandQueue::kCount)
-        return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(reader, GpuCommandIrReplayError::PacketQueueUnavailable);
-    if(reader.recordCount() != 0u && reader.graphGeneration() != graph.generation())
-        return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(reader, GpuCommandIrReplayError::GraphGenerationMismatch);
-    if(reader.recordCount() != 0u && reader.planGeneration() != compiledGraph.planGeneration())
-        return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(reader, GpuCommandIrReplayError::PlanGenerationMismatch);
+        return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(cursor, GpuCommandIrReplayError::PacketQueueUnavailable);
+    if(cursor.recordCount() != 0u && cursor.graphGeneration() != graph.generation())
+        return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(cursor, GpuCommandIrReplayError::GraphGenerationMismatch);
+    if(cursor.recordCount() != 0u && cursor.planGeneration() != compiledGraph.planGeneration())
+        return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(cursor, GpuCommandIrReplayError::PlanGenerationMismatch);
 
     GpuCommandIrReplayError::Enum commandListError = GpuCommandIrReplayError::None;
     const GpuPhysicalQueueInfo* backendCommandQueue = nullptr;
+    Optional<BackendRasterReplayState> backendRasterState;
     if(commandList){
         if(!commandList->isRecording())
             commandListError = GpuCommandIrReplayError::CommandListNotRecording;
@@ -176,6 +172,8 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacketStream(
                     backendCommandQueue = commandList->getDevice().getPhysicalQueueInfo(commandListDescription.physicalQueue);
                 if(!backendCommandQueue)
                     commandListError = GpuCommandIrReplayError::BackendResourceNotReady;
+                else
+                    backendRasterState.emplace();
             }
         }
     }
@@ -186,40 +184,39 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacketStream(
     GpuTaskGraphTaskView cachedTaskView;
     u64 recordIndex = 0u;
     RasterReplayState graphRasterState;
-    RasterReplayState backendRasterState;
     GpuCommandIrReplayError::Enum firstBackendError = GpuCommandIrReplayError::None;
     u64 firstBackendErrorRecordIndex = Limit<u64>::s_Max;
+    WireRecordStorage wireStorage;
+    GpuCommandIrBuiltinTaskRecord builtinRecord;
+    GpuCommandIrWireOpcode::Enum wireOpcode = GpuCommandIrWireOpcode::Count;
+    DecodedRecordContext decodedContext;
     for(;;){
-        const auto decodedResult = reader.next();
-        if(!decodedResult && decodedResult.error() == GpuCommandIrStreamReadStatus::End){
+        const WireStepStatus::Enum step = cursor.next(wireStorage, wireOpcode, decodedContext, &builtinRecord);
+        if(step == WireStepStatus::End){
             if(graphRasterState.active)
-                return ReplayFailure(GpuCommandIrReplayError::InvalidRasterState, reader.validation(), recordIndex);
+                return ReplayFailure(GpuCommandIrReplayError::InvalidRasterState, cursor.validation(), recordIndex);
             if(commandListError != GpuCommandIrReplayError::None)
-                return ReplayFailure(commandListError, reader.validation());
+                return ReplayFailure(commandListError, cursor.validation());
             if(firstBackendError != GpuCommandIrReplayError::None)
-                return ReplayFailure(firstBackendError, reader.validation(), firstBackendErrorRecordIndex);
-            return GpuCommandIrReplayResult{ .streamValidation = reader.validation(), .recordIndex = recordIndex, };
+                return ReplayFailure(firstBackendError, cursor.validation(), firstBackendErrorRecordIndex);
+            return GpuCommandIrReplayResult{ .streamValidation = cursor.validation(), .recordIndex = recordIndex, };
         }
-        if(!decodedResult)
-            return ReplayFailure(GpuCommandIrReplayError::InvalidStream, reader.validation(), reader.validation().recordIndex);
-        const auto& decoded = *decodedResult;
+        if(step == WireStepStatus::Error)
+            return ReplayFailure(GpuCommandIrReplayError::InvalidStream, cursor.validation(), cursor.validation().recordIndex);
 
-        const b8 raster = IsRasterOpcode(decoded.opcode);
-        const GpuSubmissionPacketId recordPacket = raster ? decoded.raster.packet : decoded.builtin.packet;
-        if(recordPacket != packet){
+        if(decodedContext.packet != packet){
             ++recordIndex;
             continue;
         }
+        const b8 raster = IsRasterOpcode(wireOpcode);
         if(raster && !owners.hasOwnerSidecar)
-            return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(reader, GpuCommandIrReplayError::MissingOwnedSidecar, recordIndex);
+            return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(cursor, GpuCommandIrReplayError::MissingOwnedSidecar, recordIndex);
 
-        const GpuTaskId recordTask = raster ? decoded.raster.task : decoded.builtin.task;
-        const GpuPhysicalQueueId recordQueue = raster ? decoded.raster.queue : decoded.builtin.queue;
-        if(!hasPreviousTask || recordTask != cachedRecordTask || recordQueue != queue->id){
+        if(!hasPreviousTask || decodedContext.task != cachedRecordTask || decodedContext.queue != queue->id){
             const GpuCommandIrReplayError::Enum contextError = __hidden_gpu_command_ir_replay_preflight::ValidateRecordContext(
-                recordTask,
-                recordPacket,
-                recordQueue,
+                decodedContext.task,
+                decodedContext.packet,
+                decodedContext.queue,
                 graph,
                 compiledGraph,
                 packet,
@@ -229,9 +226,9 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacketStream(
                 hasPreviousTask
             );
             if(contextError != GpuCommandIrReplayError::None)
-                return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(reader, contextError, recordIndex);
-            cachedRecordTask = recordTask;
-            cachedTaskView = graph.taskAt(recordTask.index);
+                return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(cursor, contextError, recordIndex);
+            cachedRecordTask = decodedContext.task;
+            cachedTaskView = graph.taskAt(decodedContext.task.index);
         }
 
         const GpuTaskGraphTaskView& task = cachedTaskView;
@@ -240,25 +237,25 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacketStream(
             if(!__hidden_gpu_command_ir_replay_preflight::QueueHasGraphicsCapability(*queue))
                 operationError = GpuCommandIrReplayError::MissingGraphicsCapability;
             else
-                operationError = ValidateRasterGraphOperation(decoded.raster, graph, task, graphRasterState);
+                operationError = ValidateRasterWireGraphOperation(wireOpcode, wireStorage, decodedContext.task, cursor.blobBytes(), graph, task, graphRasterState);
         }
         else{
             if(!__hidden_gpu_command_ir_replay_preflight::QueueHasTransferCapability(*queue))
                 operationError = GpuCommandIrReplayError::MissingTransferCapability;
             else{
-                operationError = ValidateRasterBuiltinBoundary(recordTask, graphRasterState);
+                operationError = ValidateRasterBuiltinBoundary(decodedContext.task, graphRasterState);
                 if(operationError == GpuCommandIrReplayError::None)
-                    operationError = GpuCommandIrBuiltinPreflight::Validate(decoded.builtin, reader.blobBytes(), graph, task, *queue);
+                    operationError = GpuCommandIrBuiltinPreflight::Validate(builtinRecord, cursor.blobBytes(), graph, task, *queue);
             }
         }
         if(operationError != GpuCommandIrReplayError::None)
-            return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(reader, operationError, recordIndex);
+            return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(cursor, operationError, recordIndex);
 
         if(commandList && commandListError == GpuCommandIrReplayError::None && firstBackendError == GpuCommandIrReplayError::None){
-            FOUNDATION_ASSERT(backendCommandQueue);
+            FOUNDATION_ASSERT(backendCommandQueue && backendRasterState.has_value());
             const GpuCommandIrReplayError::Enum operandError = raster
-                ? ValidateRasterBackendOperand(decoded.raster, owners, graph, *backendCommandQueue, recordIndex, *commandList, backendRasterState)
-                : ValidateBuiltinBackendOperand(decoded.builtin, graph, *backendCommandQueue, *commandList)
+                ? ValidateRasterWireBackendOperand(wireOpcode, wireStorage, cursor.blobBytes(), decodedContext.task, owners, graph, *backendCommandQueue, recordIndex, *commandList, *backendRasterState)
+                : ValidateBuiltinBackendOperand(builtinRecord, graph, *backendCommandQueue, *commandList)
             ;
             if(operandError != GpuCommandIrReplayError::None){
                 firstBackendError = operandError;

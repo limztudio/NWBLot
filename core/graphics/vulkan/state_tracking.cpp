@@ -181,8 +181,10 @@ void StateTracker::appendKeepInitialStateBarriers(TrackedCommandBuffer& commandB
                 entry.state = desc.initialState;
             }
         }
-        if(buffer.isRetainedStateKnown() || hasExplicitBufferState(&buffer))
+        if(buffer.isRetainedStateKnown() || hasExplicitBufferStateFromRanges(&it.value(), BufferRange(0u, desc.byteSize))){
             commandBuffer.m_resourceReferences.appendBufferStateCommit(buffer);
+            commandBuffer.m_pendingCommitFlags |= TrackedCommandBuffer::s_CommitBufferStates;
+        }
     }
 }
 

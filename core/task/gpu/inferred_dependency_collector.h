@@ -19,9 +19,9 @@ NWB_CORE_BEGIN
 
 class GpuInferredDependencyCollector final : NoCopy{
 private:
-    struct DependencyPairIndices{
-        usize rawEdge = 0u;
-        usize firstInferredEdge = Limit<usize>::s_Max;
+    struct RawEdgeMeta{
+        u32 nextRawEdge = Limit<u32>::s_Max;
+        u32 firstInferred = Limit<u32>::s_Max;
     };
     struct InferredDependencyHasher{
         NotNull<const GraphicsVector<GpuTaskDependencyEdge>*> edges;
@@ -43,17 +43,18 @@ public:
     void appendInferred(const GpuTaskDependencyEdge& edge);
 
 private:
-    [[nodiscard]] DependencyPairIndices& appendRawEdge(const GpuTaskDependencyEdge& edge);
+    [[nodiscard]] u32 appendRawEdge(const GpuTaskDependencyEdge& edge);
     GraphicsVector<GpuTaskDependencyEdge>& m_edges;
     GraphicsVector<GpuTaskDependencyEdge>& m_inferredEdges;
     usize& m_explicitEdgeCount;
     usize& m_inferredEdgeCount;
     usize& m_resourceVersionEdgeCount;
-    Vector<DependencyPairIndices, Alloc::ScratchArena> m_flatDependencyPairs;
-    HashMap<u64, DependencyPairIndices, Alloc::ScratchArena, GpuTaskDependencyPairHasher, EqualTo<u64>> m_dependencyPairs;
-    Vector<usize, Alloc::ScratchArena> m_nextInferredEdges;
+    Vector<u32, Alloc::ScratchArena> m_firstRawEdgeByConsumer;
+    Vector<u8, Alloc::ScratchArena> m_consumerRawEdgeCount;
+    Vector<RawEdgeMeta, Alloc::ScratchArena> m_rawEdgeMeta;
+    Vector<u32, Alloc::ScratchArena> m_nextInferredEdges;
+    HashMap<u64, u32, Alloc::ScratchArena, GpuTaskDependencyPairHasher, EqualTo<u64>> m_dependencyPairs;
     HashSet<usize, Alloc::ScratchArena, InferredDependencyHasher, InferredDependencyEqual> m_inferredEdgeIndices;
-    usize m_flatTaskCount = 0u;
     usize m_expectedEdgeCount = 0u;
 };
 

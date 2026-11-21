@@ -37,6 +37,7 @@ struct GpuRecordedGraph::ArtifactStorage final : NoCopy{
     u64 recordingAttemptGeneration = 0u;
     u16 deviceGeneration = 0u;
     b8 valid = false;
+    b8 retired = false;
 
 
 public:
@@ -60,6 +61,12 @@ private:
     class PacketRecordingExceptionScope;
     class PacketArtifactPublicationScope;
     class ReadyFrontierRecordingUnwindScope;
+    class PreclaimedFrontierBatch;
+    struct PreclaimedPacketRecording{
+        GpuPacketRecordingLease* lease = nullptr;
+        const GpuPacketRecordingAccess* access = nullptr;
+        b8 deferComplete = false;
+    };
 
 
 private:
@@ -128,7 +135,8 @@ private:
         GpuRecordedGraph::PacketRecordingScratch& scratch,
         GpuRecordedGraph& outRecordedGraph,
         GpuCommandIrCapture* commandIrCapture = nullptr,
-        GpuPacketRecordingAbort* deferredAbort = nullptr
+        GpuPacketRecordingAbort* deferredAbort = nullptr,
+        const PreclaimedPacketRecording* preclaimed = nullptr
     )const;
     [[nodiscard]] b8 prepareRecordingAttempt(
         const GpuTaskGraph& graph,

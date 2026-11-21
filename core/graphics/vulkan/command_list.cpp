@@ -53,11 +53,18 @@ CommandList::CommandList(Device& device, const CommandListParameters& params)
     , m_textureOwnershipReleaseDestinations(0u, TextureSubresourceStateKeyHasher(), TextureSubresourceStateKeyEqualTo(), device.m_context.objectArena)
     , m_bufferOwnershipReleaseDestinations(0u, Hasher<NotNull<Buffer*>>(), EqualTo<NotNull<Buffer*>>(), device.m_context.objectArena)
 {
+    m_cachedQueue = m_device.getQueue(m_creationDesc.physicalQueue);
     if(const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue)){
         m_cachedPhysicalQueueInfo = *queueInfo;
         m_hasCachedPhysicalQueueInfo = true;
         const u8 capabilityBits = static_cast<u8>(queueInfo->capabilities);
         m_universalGraphicsCompute = (capabilityBits & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u && (capabilityBits & static_cast<u8>(GpuQueueCapability::Compute)) != 0u;
+        m_cachedQueueContractValid =
+            queueInfo->queueClass == m_creationDesc.queueType
+            && (capabilityBits & GpuQueueCapability::s_KnownCapabilityBits) != 0u
+            && m_cachedQueue != nullptr
+            && m_cachedQueue->m_queueID == m_creationDesc.queueType
+        ;
     }
 }
 
@@ -147,10 +154,7 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
 
     m_isRecording = true;
 
-    m_stateTracker.reset();
     m_stateTracker.beginRecordingAttempt();
-    m_textureOwnershipReleaseDestinations.clear();
-    m_bufferOwnershipReleaseDestinations.clear();
     if(initialStates){
         if(initialStates->empty()){
             if(!initialStates->validForDeviceGeneration(m_context.deviceGeneration)){
@@ -328,22 +332,30 @@ void CommandList::closeInternal(CommandListResourceStateHandoff* finalStates){
     }
 
     endActiveRenderPass();
+    if(m_hasPendingBufferCopies)
+        flushPendingBufferCopies();
     collectHostReadbackBuffers();
     m_stateTracker.appendKeepInitialStateBarriers(*m_currentCmdBuf, m_pendingImageBarriers, m_pendingBufferBarriers);
-    commitBarriers();
-    if(m_commandRecordingFailed){
-        discardInvalidCommandBuffer();
-        return;
+    if(!m_pendingImageBarriers.empty() || !m_pendingBufferBarriers.empty()){
+        commitBarriers();
+        if(m_commandRecordingFailed){
+            discardInvalidCommandBuffer();
+            return;
+        }
     }
-    appendHostReadbackBarriers();
-    if(m_commandRecordingFailed){
-        discardInvalidCommandBuffer();
-        return;
+    if(m_hostReadbackBarrierTracker.size() != 0u){
+        appendHostReadbackBarriers();
+        if(m_commandRecordingFailed){
+            discardInvalidCommandBuffer();
+            return;
+        }
     }
-    appendPendingOwnershipReleaseBarriers();
-    if(m_commandRecordingFailed){
-        discardInvalidCommandBuffer();
-        return;
+    if(!m_textureOwnershipReleaseDestinations.empty() || !m_bufferOwnershipReleaseDestinations.empty()){
+        appendPendingOwnershipReleaseBarriers();
+        if(m_commandRecordingFailed){
+            discardInvalidCommandBuffer();
+            return;
+        }
     }
     resetMarkerState();
 
@@ -365,6 +377,13 @@ void CommandList::closeInternal(CommandListResourceStateHandoff* finalStates){
 }
 
 void CommandList::abortRecordingAttemptWithoutCallbacks()noexcept{
+    resetPendingBufferCopies();
+    invalidateGraphicsDrawValidationCache();
+    clearDirtyPipelineStates();
+    m_activePipelineKind = s_PipelineKindNone;
+    m_activePipelineLayout = VK_NULL_HANDLE;
+    m_activePipelinePushConstantBytes = 0u;
+    m_activePipelineRequiredCapability = GpuQueueCapability::None;
     m_stateTracker.rollbackRecordingAttempt();
     resetMarkerStateWithoutCallbacks();
     if(m_currentCmdBuf){
@@ -386,8 +405,56 @@ void CommandList::abortRecordingAttemptWithoutCallbacks()noexcept{
 #endif
 }
 
+void CommandList::clearDirtyPipelineStates(const u8 keepMask)noexcept{
+    const u8 clearMask = static_cast<u8>(m_dirtyPipelineStateMask & static_cast<u8>(~keepMask));
+    if(clearMask == 0u)
+        return;
+
+    if((clearMask & s_DirtyGraphicsState) != 0u){
+        m_currentGraphicsState.pipeline = nullptr;
+        m_currentGraphicsState.framebuffer = nullptr;
+        m_currentGraphicsState.viewport.viewports.clear();
+        m_currentGraphicsState.viewport.scissorRects.clear();
+        m_currentGraphicsState.shadingRateState = {};
+        m_currentGraphicsState.dynamicStencilRefValue = 0u;
+        m_currentGraphicsState.blendConstantColor = {};
+        m_currentGraphicsState.vertexBuffers.clear();
+        m_currentGraphicsState.indexBuffer = {};
+        m_currentGraphicsState.indirectParams = nullptr;
+        m_hasBoundGraphicsState = false;
+        invalidateGraphicsDrawValidationCache();
+    }
+    if((clearMask & s_DirtyComputeState) != 0u){
+        m_currentComputeState.pipeline = nullptr;
+        m_currentComputeState.indirectParams = nullptr;
+        m_hasBoundComputeState = false;
+    }
+    if((clearMask & s_DirtyMeshletState) != 0u){
+        m_currentMeshletState.pipeline = nullptr;
+        m_currentMeshletState.framebuffer = nullptr;
+        m_currentMeshletState.viewport.viewports.clear();
+        m_currentMeshletState.viewport.scissorRects.clear();
+        m_currentMeshletState.blendConstantColor = {};
+        m_currentMeshletState.indirectParams = nullptr;
+        m_currentMeshletState.dynamicStencilRefValue = 0u;
+        m_hasBoundMeshletState = false;
+    }
+    if((clearMask & s_DirtyRayTracingState) != 0u)
+        m_currentRayTracingState.shaderTable = nullptr;
+
+    m_dirtyPipelineStateMask &= keepMask;
+}
+
+void CommandList::updateActivePushConstantPipeline(const u8 pipelineKind, const VkPipelineLayout layout, const u32 pushConstantBytes, const GpuQueueCapability::Mask capability)noexcept{
+    m_activePipelineKind = pipelineKind;
+    m_activePipelineLayout = layout;
+    m_activePipelinePushConstantBytes = pushConstantBytes;
+    m_activePipelineRequiredCapability = capability;
+}
+
 void CommandList::clearStateInternal(){
     FOUNDATION_ASSERT_MSG(m_markerStack.empty(), FOUNDATION_TEXT("Vulkan: Command-list logical state cleared with unterminated marker scopes"));
+    resetPendingBufferCopies();
     if(m_currentCmdBuf && m_renderPassActive)
         endActiveRenderPass();
     resetMarkerState();
@@ -396,13 +463,16 @@ void CommandList::clearStateInternal(){
         collectHostReadbackBuffers();
     m_stateTracker.reset();
 
-    m_currentGraphicsState = {};
-    m_currentComputeState = {};
-    m_currentMeshletState = {};
-    m_currentRayTracingState = {};
+    clearDirtyPipelineStates();
+    invalidateGraphicsDrawValidationCache();
+    m_activePipelineKind = s_PipelineKindNone;
+    m_activePipelineLayout = VK_NULL_HANDLE;
+    m_activePipelinePushConstantBytes = 0u;
+    m_activePipelineRequiredCapability = GpuQueueCapability::None;
     m_hasBoundGraphicsState = false;
     m_graphicsBuffersValidatedInPass = false;
     m_hasBoundComputeState = false;
+    m_hasBoundMeshletState = false;
     m_renderPassActive = false;
     m_descriptorBuffersBound = false;
     m_renderPassFramebuffer = nullptr;
@@ -414,31 +484,27 @@ void CommandList::clearStateInternal(){
 
     m_pendingImageBarriers.clear();
     m_pendingBufferBarriers.clear();
-    m_textureOwnershipReleaseDestinations.clear();
-    m_bufferOwnershipReleaseDestinations.clear();
-}
-
-b8 CommandList::descriptionMatchesCreation()const noexcept{
-    return m_desc.queueType == m_creationDesc.queueType && m_desc.physicalQueue == m_creationDesc.physicalQueue && m_desc.recordingWorkerDomain == m_creationDesc.recordingWorkerDomain && m_desc.recordingWorkerIndex == m_creationDesc.recordingWorkerIndex;
+    if(!m_textureOwnershipReleaseDestinations.empty())
+        m_textureOwnershipReleaseDestinations.clear();
+    if(!m_bufferOwnershipReleaseDestinations.empty())
+        m_bufferOwnershipReleaseDestinations.clear();
 }
 
 b8 CommandList::matchesNativeLeaseIdentity()const noexcept{
-    if(
-        !descriptionMatchesCreation()
-        || !m_currentCmdBuf
-        || m_currentCmdBuf->m_cmdBuf == VK_NULL_HANDLE
-        || m_currentCmdBuf->m_arenaState != TrackedCommandBufferArenaState::Leased
-        || &m_currentCmdBuf->m_context != &m_context
-        || m_recordingLeaseSerial == 0u
-        || m_nativeRecordingID == 0u
-        || m_currentCmdBuf->m_recordingID != m_nativeRecordingID
-        || m_currentCmdBuf->m_recordingWorkerDomain != m_creationDesc.recordingWorkerDomain
-        || m_currentCmdBuf->m_recordingWorkerIndex != m_creationDesc.recordingWorkerIndex
-    )
-        return false;
-
-    Queue* const expectedQueue = m_device.getQueue(m_creationDesc.physicalQueue);
-    return expectedQueue && expectedQueue->m_queueID == m_creationDesc.queueType && &m_currentCmdBuf->m_queue == expectedQueue;
+    return
+        descriptionMatchesCreation()
+        && m_cachedQueueContractValid
+        && m_currentCmdBuf
+        && m_currentCmdBuf->m_cmdBuf != VK_NULL_HANDLE
+        && m_currentCmdBuf->m_arenaState == TrackedCommandBufferArenaState::Leased
+        && &m_currentCmdBuf->m_context == &m_context
+        && m_recordingLeaseSerial != 0u
+        && m_nativeRecordingID != 0u
+        && m_currentCmdBuf->m_recordingID == m_nativeRecordingID
+        && m_currentCmdBuf->m_recordingWorkerDomain == m_creationDesc.recordingWorkerDomain
+        && m_currentCmdBuf->m_recordingWorkerIndex == m_creationDesc.recordingWorkerIndex
+        && &m_currentCmdBuf->m_queue == m_cachedQueue
+    ;
 }
 
 b8 CommandList::matchesActiveNativeLeaseIdentity()const noexcept{
@@ -486,13 +552,6 @@ b8 CommandList::validateTrackedTexturesReadyForClose(){
             return false;
         }
     }
-    for(auto it = m_stateTracker.m_textureStates.begin(); it != m_stateTracker.m_textureStates.end(); ++it){
-        Texture* const texture = it->first.texture;
-        if(!isTextureReadyForCommandQueue(texture)){
-            rejectCommandRecording(s_CloseCommandListOperation, FOUNDATION_TEXT("tracked texture is not ready for this exact command queue"));
-            return false;
-        }
-    }
     for(auto it = m_stateTracker.m_permanentTextureStates.begin(); it != m_stateTracker.m_permanentTextureStates.end(); ++it){
         auto& texture = *MakeNotNull(it.value().texture.get());
         if(!isTextureReadyForCommandQueue(&texture)){
@@ -500,15 +559,7 @@ b8 CommandList::validateTrackedTexturesReadyForClose(){
             return false;
         }
     }
-    for(auto it = m_textureOwnershipReleaseDestinations.begin(); it != m_textureOwnershipReleaseDestinations.end(); ++it){
-        Texture* const texture = it->first.texture;
-        if(!isTextureReadyForCommandQueue(texture)){
-            rejectCommandRecording(s_CloseCommandListOperation, FOUNDATION_TEXT("released texture is not ready for this exact command queue"));
-            return false;
-        }
-    }
     for(const auto heap : m_currentCmdBuf->m_referencedDescriptorHeaps){
-
         if(!heap->retainedResourcesReadyForQueue(m_creationDesc.physicalQueue)){
             rejectCommandRecording(s_CloseCommandListOperation, FOUNDATION_TEXT("descriptor heap contains a resource unavailable to this exact command queue"));
             return false;
@@ -525,24 +576,10 @@ b8 CommandList::validateTrackedBuffersReadyForClose(){
             return false;
         }
     }
-    for(auto it = m_stateTracker.m_bufferStates.begin(); it != m_stateTracker.m_bufferStates.end(); ++it){
-        auto& buffer = *MakeNotNull(it->first.get());
-        if(!isBufferReadyForCommandQueue(&buffer)){
-            rejectCommandRecording(s_CloseCommandListOperation, FOUNDATION_TEXT("tracked buffer is not ready for this exact command queue"));
-            return false;
-        }
-    }
     for(auto it = m_stateTracker.m_permanentBufferStates.begin(); it != m_stateTracker.m_permanentBufferStates.end(); ++it){
         auto& buffer = *MakeNotNull(it.value().buffer.get());
         if(!isBufferReadyForCommandQueue(&buffer)){
             rejectCommandRecording(s_CloseCommandListOperation, FOUNDATION_TEXT("permanent buffer is not ready for this exact command queue"));
-            return false;
-        }
-    }
-    for(auto it = m_bufferOwnershipReleaseDestinations.begin(); it != m_bufferOwnershipReleaseDestinations.end(); ++it){
-        auto& buffer = *MakeNotNull(it->first.get());
-        if(!isBufferReadyForCommandQueue(&buffer)){
-            rejectCommandRecording(s_CloseCommandListOperation, FOUNDATION_TEXT("released buffer is not ready for this exact command queue"));
             return false;
         }
     }

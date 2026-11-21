@@ -197,6 +197,7 @@ private:
         GraphicsVector<CommandListResourceStateHandoff> seedSubsetBatch;
         GraphicsVector<PreflightCachedResource> preflightResourceCache;
         u64 preflightCacheStamp = 0u;
+        usize nextCommandListCursor = 0u;
 
 
     public:

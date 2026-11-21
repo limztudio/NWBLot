@@ -59,6 +59,7 @@ private:
     GraphicsResource* m_lastRetainedResource = nullptr;
     Buffer* m_lastRetainedBuffer = nullptr;
     Texture* m_lastRetainedTexture = nullptr;
+    b8 m_hasDynamicReadinessResources = false;
     Alloc::GlobalArena& m_arena;
 };
 

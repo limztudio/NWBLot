@@ -171,9 +171,15 @@ struct GpuTaskGraphTelemetryOptions{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace GpuTaskGraphCompilerDetail{
+    struct CompilerGraphAccess;
+};
+
+
 class GpuTaskGraphDeclarationReadView final : NoCopy{
     friend class GpuCompiledGraph::ReadView;
     friend class GpuTaskGraph;
+    friend struct GpuTaskGraphCompilerDetail::CompilerGraphAccess;
 
 
 private:

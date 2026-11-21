@@ -41,8 +41,14 @@ class GpuTaskScheduler;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace GpuTaskGraphCompilerDetail{
+    struct CompilerGraphAccess;
+};
+
+
 class GpuTaskGraph final : NoCopy{
     friend class GpuTaskGraphDeclarationReadView;
+    friend struct GpuTaskGraphCompilerDetail::CompilerGraphAccess;
     friend class GpuRecordingAttemptScope;
     friend class GpuPacketRecordingLease;
     friend class GpuTaskGraphCompiler;
@@ -96,8 +102,8 @@ private:
 
     private:
         GpuTaskGraph& m_graph;
-        UniqueLock<RecursiveMutex> m_declarationLock;
         b8 m_valid = false;
+        b8 m_isRootWriter = false;
     };
 
     class DiscardNotificationScope final : NoCopy{
@@ -141,12 +147,14 @@ private:
 
     public:
         void activateWithinLock()noexcept;
+        void markPayloadsDestroyed()noexcept{ m_payloadsAlreadyDestroyed = true; }
         void complete()noexcept;
 
 
     private:
         GpuTaskGraph& m_graph;
         b8 m_active = false;
+        b8 m_payloadsAlreadyDestroyed = false;
     };
 
 
@@ -177,6 +185,11 @@ private:
     using GpuUploadBlobStorageBlock = GpuTaskGraphDetail::GpuUploadBlobStorageBlock;
     using GpuUploadBlobNode = GpuTaskGraphDetail::GpuUploadBlobNode;
     using MarkerLabelRange = GpuTaskGraphDetail::MarkerLabelRange;
+    struct TaskPayloadPoolBlock{
+        u8* data = nullptr;
+        usize size = 0u;
+        usize used = 0u;
+    };
     using ImportIdentityIndex = HashMap<NameHash, u32, GraphicsArena>;
     using PipelinePointerIndex = HashMap<PipelinePointerKey, u32, GraphicsArena, PipelinePointerHasher, PipelinePointerEqual>;
 
@@ -185,6 +198,9 @@ private:
     static constexpr usize s_InlineImportIndexCount = 32u;
     static constexpr usize s_InitialPointerIndexBucketCount = 2u;
     static constexpr u32 s_InvalidImportIndex = Limit<u32>::s_Max;
+    static constexpr usize s_PayloadPoolBlockBytes = 4096u;
+    static constexpr usize s_PayloadPoolMaxPayloadBytes = 4096u;
+    static constexpr usize s_PayloadPoolMaxAlign = 64u;
     static inline constexpr Name s_DeclarationScratchArena{ "core/task/gpu/declaration_scratch" };
 
 
@@ -227,6 +243,27 @@ private:
         DestroyArenaObjectNoexcept(arena, static_cast<PayloadT*>(payload));
     }
 
+    template<typename PayloadT>
+    static void DestroyPooledTaskPayload(GraphicsArena&, void* payload)noexcept{
+        static_assert(IsNothrowDestructible_V<PayloadT>);
+        static_cast<PayloadT*>(payload)->~PayloadT();
+    }
+
+    [[nodiscard]] void* allocatePooledTaskPayload(const usize byteSize, const usize alignment){
+        if(m_payloadPoolCurrentBlock < m_payloadPoolBlocks.size()){
+            TaskPayloadPoolBlock& block = m_payloadPoolBlocks[m_payloadPoolCurrentBlock];
+            const usize alignMask = alignment - 1u;
+            const usize alignedOffset = (block.used + alignMask) & ~alignMask;
+            if(alignedOffset <= block.size && byteSize <= block.size - alignedOffset){
+                block.used = alignedOffset + byteSize;
+                return block.data + alignedOffset;
+            }
+        }
+        return allocatePooledTaskPayloadSlow(byteSize, alignment);
+    }
+    [[nodiscard]] void* allocatePooledTaskPayloadSlow(usize byteSize, usize alignment);
+    void rewindTaskPayloadPool()noexcept;
+
 
 public:
     explicit GpuTaskGraph(GraphicsArena& arena)
@@ -254,6 +291,7 @@ public:
         , m_uploadBlobStorage(arena)
         , m_overalignedUploadBlobs(arena)
         , m_markerText(arena)
+        , m_payloadPoolBlocks(arena)
         , m_generation(AllocateGeneration())
         , m_declarationRevision(AllocateGeneration())
         , m_activeRecordingAttemptGeneration(AllocateGeneration())
@@ -315,26 +353,21 @@ public:
     template<typename TaskT>
     [[nodiscard]] Expected<GpuTaskId> addTask(const GpuTaskDesc& desc, typename TaskT::Payload&& payload){
         using Payload = typename TaskT::Payload;
-        return declareTaskWithPayload<TaskT>(desc, [&](){
+        return declareTaskWithPayload<TaskT>(desc, [&](void* const storage){
             if constexpr(::LeadingArenaConstructible<Payload> && IsConstructible_V<Payload, GraphicsArena&, Payload&&>)
-                return NewArenaObject<Payload>(m_arena, m_arena, Move(payload));
+                return new(storage) Payload(m_arena, Move(payload));
             else
-                return NewArenaObject<Payload>(m_arena, Move(payload));
+                return new(storage) Payload(Move(payload));
         });
     }
 
     template<typename Payload, typename Factory>
     [[nodiscard]] Expected<GpuTaskId> addPayloadTaskFrom(const GpuTaskDesc& desc, Factory&& factory){
-        return declareTaskWithPayload<GpuGraphTaskContract::MemberTask<Payload>>(desc, [&](){
+        return declareTaskWithPayload<GpuGraphTaskContract::MemberTask<Payload>>(desc, [&](void* const storage){
             if constexpr(::LeadingArenaConstructible<Payload> && IsConstructible_V<Payload, GraphicsArena&, Payload&&>)
-                return NewArenaObject<Payload>(m_arena, m_arena, factory());
-            else{
-                struct Source{
-                    Factory& factory;
-                    operator Payload()&& noexcept(noexcept(factory())){ return factory(); }
-                };
-                return NewArenaObject<Payload>(m_arena, Source{ factory });
-            }
+                return new(storage) Payload(m_arena, factory());
+            else
+                return new(storage) Payload(factory());
         });
     }
 
@@ -391,17 +424,65 @@ public:
 
 
 private:
-    template<typename TaskT, typename AllocatePayload>
-    [[nodiscard]] Expected<GpuTaskId> declareTaskWithPayload(const GpuTaskDesc& desc, AllocatePayload&& allocate){
+    template<typename TaskT, typename ConstructPayloadAt>
+    [[nodiscard]] Expected<GpuTaskId> declareTaskWithPayload(const GpuTaskDesc& desc, ConstructPayloadAt&& constructAt){
         using Payload = typename TaskT::Payload;
         static_assert(IsNothrowDestructible_V<Payload>, "GPU task payload cleanup must remain no-throw");
         DeclarationMutationScope mutation(*this);
         if(!mutation.valid())
             return MakeUnexpected(Failure{});
-        Payload* const payloadObject = allocate();
-        if(!payloadObject)
+
+        constexpr b8 s_UsePool = sizeof(Payload) <= s_PayloadPoolMaxPayloadBytes && alignof(Payload) <= s_PayloadPoolMaxAlign;
+        void* rawStorage = nullptr;
+        if constexpr(s_UsePool){
+            rawStorage = allocatePooledTaskPayload(sizeof(Payload), alignof(Payload));
+        }
+        else{
+            rawStorage = m_arena.allocate(alignof(Payload), sizeof(Payload));
+        }
+        if(!rawStorage)
             return MakeUnexpected(Failure{});
-        ProvisionalPayloadOwner<Payload> storedPayload(m_arena, payloadObject);
+
+        Payload* payloadObject = nullptr;
+        struct UnappendedStorageGuard final : NoCopy{
+            GraphicsArena& arena;
+            void* raw = nullptr;
+            Payload* object = nullptr;
+            GpuTaskPayloadDestroyThunk destroy = nullptr;
+            b8 usePool = false;
+
+            UnappendedStorageGuard(
+                GraphicsArena& inArena,
+                void* const inRaw,
+                Payload* const inObject,
+                const GpuTaskPayloadDestroyThunk inDestroy,
+                const b8 inUsePool
+            )noexcept
+                : arena(inArena)
+                , raw(inRaw)
+                , object(inObject)
+                , destroy(inDestroy)
+                , usePool(inUsePool)
+            {}
+            ~UnappendedStorageGuard()noexcept{
+                if(object && destroy)
+                    destroy(arena, object);
+                else if(raw && !usePool)
+                    arena.deallocate(raw, alignof(Payload), sizeof(Payload));
+            }
+            Payload* release()noexcept{
+                Payload* const released = object;
+                raw = nullptr;
+                object = nullptr;
+                return released;
+            }
+        };
+        constexpr GpuTaskPayloadDestroyThunk s_DestroyThunk = s_UsePool
+            ? (std::is_trivially_destructible_v<Payload> ? nullptr : &DestroyPooledTaskPayload<Payload>)
+            : &DestroyTaskPayload<Payload>;
+        UnappendedStorageGuard guard{ m_arena, rawStorage, nullptr, s_DestroyThunk, s_UsePool };
+        payloadObject = constructAt(rawStorage);
+        guard.object = payloadObject;
 
         GpuTaskRecordThunk recordPayload = nullptr;
         if constexpr(GpuGraphTaskContract::RecordApi<TaskT>)
@@ -415,11 +496,11 @@ private:
         if constexpr(GpuGraphTaskContract::DiscardedApi<TaskT>)
             discardPayload = &DiscardTaskPayload<TaskT>;
 
-        const auto task = appendTaskWithinMutation(desc, GpuGraphTaskContract::CommandRequirements<TaskT>(*storedPayload.get()), recordPayload, acceptPayload, discardPayload, &DestroyTaskPayload<Payload>, sizeof(Payload), mutation, storedPayload.get());
+        const auto task = appendTaskWithinMutation(desc, GpuGraphTaskContract::CommandRequirements<TaskT>(*payloadObject), recordPayload, acceptPayload, discardPayload, s_DestroyThunk, sizeof(Payload), mutation, payloadObject);
         if(task)
-            storedPayload.publish();
+            guard.release();
         else
-            discardAndDestroyUnappendedPayload(storedPayload.release(), discardPayload, &DestroyTaskPayload<Payload>);
+            discardAndDestroyUnappendedPayload(guard.release(), discardPayload, s_DestroyThunk);
         return task;
     }
 
@@ -438,10 +519,10 @@ private:
 
 
 private:
-    static constexpr u64 s_AdmissionReaderMask = (1ull << 31u) - 1ull;
-    static constexpr u32 s_AdmissionWriterShift = 31u;
-    static constexpr u64 s_AdmissionWriterUnit = 1ull << s_AdmissionWriterShift;
-    static constexpr u64 s_AdmissionWriterMask = ((1ull << 31u) - 1ull) << s_AdmissionWriterShift;
+    static constexpr u64 s_AdmissionReaderMask = (1ull << 30u) - 1ull;
+    static constexpr u64 s_AdmissionWriterBit = 1ull << 60u;
+    static constexpr u64 s_AdmissionWriterMask = s_AdmissionWriterBit;
+    static constexpr u64 s_AdmissionWaiterBit = 1ull << 61u;
     static constexpr u64 s_AdmissionPlanActiveBit = 1ull << 62u;
     static constexpr u64 s_AdmissionTeardownBit = 1ull << 63u;
 
@@ -453,7 +534,7 @@ private:
 
     [[nodiscard]] b8 tryBeginTeardownWithinLock()const noexcept{
         u64 state = m_declarationAdmissionState.load(MemoryOrder::acquire);
-        while((state & (s_AdmissionTeardownBit | s_AdmissionWriterMask | s_AdmissionReaderMask)) == 0u){
+        while((state & (s_AdmissionTeardownBit | s_AdmissionWriterBit | s_AdmissionReaderMask)) == 0u){
             if(m_declarationAdmissionState.compare_exchange_weak(state, state | s_AdmissionTeardownBit, MemoryOrder::acq_rel, MemoryOrder::acquire))
                 return true;
         }
@@ -473,8 +554,35 @@ private:
 
     void discardPacketTasksWithinLock(Span<const GpuTaskId> tasks, u64 notificationGeneration = 0u)const noexcept;
 
-    [[nodiscard]] b8 beginPacketRecording(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, u64 recordingAttemptGeneration, GpuPacketRecordingLease& outLease)const noexcept;
+    [[nodiscard]] b8 beginPacketRecording(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        GpuSubmissionPacketId packet,
+        u64 recordingAttemptGeneration,
+        GpuPacketRecordingLease& outLease,
+        GpuPacketRecordingAccess* outAccess = nullptr
+    )const noexcept;
+    [[nodiscard]] b8 beginPacketRecordingBatch(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        Span<const GpuSubmissionPacketId> packets,
+        u64 recordingAttemptGeneration,
+        GpuPacketRecordingLease* outLeases,
+        GpuPacketRecordingAccess* outAccesses
+    )const noexcept;
     [[nodiscard]] b8 completePacketRecording(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketRecordingLease& lease)const noexcept;
+    [[nodiscard]] b8 completePacketRecordingBatch(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        Span<const GpuSubmissionPacketId> packets,
+        GpuPacketRecordingLease* const* leases
+    )const noexcept;
+    void rollbackUnstartedPacketRecordingBatch(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        Span<const GpuSubmissionPacketId> packets,
+        GpuPacketRecordingLease* const* leases
+    )const noexcept;
     [[nodiscard]] b8 deferPacketRecordingAbort(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketRecordingLease& lease, GpuPacketRecordingAbort& outAbort)const noexcept;
     [[nodiscard]] b8 completePacketRecordingAbort(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuPacketRecordingAbort& abort)const;
     [[nodiscard]] b8 abandonPacketRecordingWithoutCallbacks(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketRecordingLease& lease)const noexcept;
@@ -506,6 +614,13 @@ private:
     void notifyPacketSubmissionAccepted(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, const QueueSubmissionToken& token, const GpuPacketSubmissionLease& lease)const;
     void completePacketSubmissionAcceptance(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketSubmissionLease& lease)const noexcept;
     void completePacketSubmissionAcceptanceBatch(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, Span<const GpuSubmissionPacketId> packets, GpuPacketSubmissionLease* const* leases)const noexcept;
+    [[nodiscard]] b8 acceptPacketSubmissionBatchWithoutCallbacks(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        Span<const GpuSubmissionPacketId> packets,
+        const QueueSubmissionReceipt* receipts,
+        GpuPacketSubmissionLease* const* leases
+    )const noexcept;
     void abortPacketSubmission(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketSubmissionLease& lease)const;
     [[nodiscard]] b8 abandonPacketSubmissionWithoutCallbacks(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketSubmissionLease& lease)const noexcept;
     [[nodiscard]] b8 discardUnacceptedPacket(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const;
@@ -624,17 +739,19 @@ private:
     [[nodiscard]] b8 retireTaskPayloads();
     [[nodiscard]] b8 destroyTaskPayloads();
     [[nodiscard]] b8 destroyTaskPayloadsWithoutCallbacks()noexcept;
-    void releasePacketRecordingClaimWithinLock()const noexcept;
+    void releasePacketRecordingClaimWithinLock(u32 releasedCount = 1u)const noexcept;
     void destroyTaskPayloadObjects()noexcept;
     void destroyTaskStateSnapshots()noexcept;
     void destroyResourceStateSnapshots()noexcept;
-    void completeResetWithoutCallbacks()noexcept;
+    void completeResetWithinLock()noexcept;
+    void completeResetWithoutCallbacks(b8 payloadsAlreadyDestroyed = false)noexcept;
 
 
 private:
     GraphicsArena& m_arena;
     Alloc::ScratchArena m_declarationScratch;
-    mutable RecursiveMutex m_declarationMutex;
+    mutable Atomic<u32> m_writerOwnerThread{ 0u };
+    mutable u32 m_writerRecursionDepth = 0u;
     mutable Futex m_lifecycleMutex;
     GraphicsVector<GpuTaskNode> m_tasks;
     GraphicsVector<GpuTaskId> m_dependencies;
@@ -664,6 +781,8 @@ private:
     GraphicsBytes m_markerText;
     GpuPresentEndpoint m_presentEndpoint;
     usize m_uploadBlobStorageByteSize = 0u;
+    GraphicsVector<TaskPayloadPoolBlock> m_payloadPoolBlocks;
+    usize m_payloadPoolCurrentBlock = 0u;
     u64 m_generation = 0u;
     u64 m_declarationRevision = 0u;
     mutable Atomic<u64> m_activeRecordingAttemptGeneration{ 0u };
@@ -673,11 +792,16 @@ private:
     mutable GpuGraphSubmissionBinding m_activeSubmissionBinding;
     mutable Atomic<u64> m_declarationAdmissionState{ 0u };
     mutable u32 m_activeDiscardNotificationCount = 0u;
+    mutable u32 m_exceptionRecordingClaimWaiters = 0u;
     mutable Atomic<u32> m_activePacketRecordingClaimCount{ 0u };
     mutable SubmissionBindingState::Enum m_submissionBindingState = SubmissionBindingState::None;
     u16 m_externalCompletionDeviceGeneration = 0u;
     b8 m_hasPresentEndpoint = false;
     b8 m_hasTaskPayloads = false;
+    b8 m_hasNonTrivialTaskPayloads = false;
+    b8 m_hasDiscardCallbacks = false;
+    b8 m_hasAcceptedQueueFrontierOrRecoveryTask = false;
+    mutable b8 m_hasTaskLifecycleActivity = false;
 };
 
 

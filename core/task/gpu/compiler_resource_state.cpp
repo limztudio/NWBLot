@@ -179,12 +179,25 @@ namespace GpuTaskGraphCompilerDetail{
     Vector<GpuTaskResourceRange, Alloc::ScratchArena>& taskFirstUseRanges = plan.taskFirstUseRanges;
 
     usize taskUseCapacity = 0u;
+    b8 hasNonHazardDomainUse = false;
     for(const GpuCompiledTask& compiledTask : compiledPlan.tasks){
-        const usize useCount = graph.taskAt(compiledTask.task.index).resourceUseCount;
+        const GpuTaskGraphDetail::GpuTaskNode& taskNode = CompilerGraphAccess::TaskNode(graph, compiledTask.task.index);
+        const usize useCount = taskNode.resourceUseCount;
         if(useCount > taskUseCapacity)
             taskUseCapacity = useCount;
+        if(!hasNonHazardDomainUse && useCount != 0u){
+            for(const GpuTaskResourceUse& use : CompilerGraphAccess::TaskResourceUses(graph, taskNode)){
+                if(CompilerGraphAccess::ResourceNode(graph, use.resource.index).type != GpuGraphResourceType::HazardDomain){
+                    hasNonHazardDomainUse = true;
+                    break;
+                }
+            }
+        }
     }
-    TaskResourceUseIndex taskUseHistory(graph.resourceCount(), graph.generation(), taskUseCapacity, scratchArena);
+    if(!hasNonHazardDomainUse)
+        return true;
+
+    TaskResourceUseIndex taskUseHistory(CompilerGraphAccess::ResourceCount(graph), CompilerGraphAccess::Generation(graph), taskUseCapacity, scratchArena);
 
     for(usize taskIndex = 0u; taskIndex < topologicalOrder.size(); ++taskIndex){
         const GpuTaskId taskID = topologicalOrder[taskIndex];
@@ -202,9 +215,9 @@ namespace GpuTaskGraphCompilerDetail{
         compiledTask.prologueBarrierOffset = static_cast<u32>(compiledPlan.prologueBarriers.size());
         for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
             const GpuTaskResourceUse& use = task.resourceUses[useIndex];
-            const GpuTaskGraphResourceView resource = graph.resourceAt(use.resource.index);
-            if(resource.type == GpuGraphResourceType::HazardDomain)
+            if(CompilerGraphAccess::ResourceNode(graph, use.resource.index).type == GpuGraphResourceType::HazardDomain)
                 continue;
+            const GpuTaskGraphResourceView resource = graph.resourceAt(use.resource.index);
             FOUNDATION_ASSERT(use.requiredState != ResourceStates::Unknown);
             if(
                 (resource.type == GpuGraphResourceType::Texture || resource.type == GpuGraphResourceType::Buffer || resource.type == GpuGraphResourceType::AccelStruct)

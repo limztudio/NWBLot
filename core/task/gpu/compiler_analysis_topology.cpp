@@ -78,12 +78,13 @@ b8 BuildTopologicalOrder(
 ){
     using namespace __hidden_gpu_task_graph_compiler_analysis_topology;
 
-    const usize taskCount = graph.taskCount();
+    const usize taskCount = CompilerGraphAccess::TaskCount(graph);
+    const u64 generation = CompilerGraphAccess::Generation(graph);
     Vector<u32, Alloc::ScratchArena> indegrees(taskCount, scratchArena);
     for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex)
         indegrees[taskIndex] = 0u;
-    for(const usize edgeIndex : adjacency.edgeIndices)
-        ++indegrees[edges[edgeIndex].consumer.index];
+    for(const GpuTaskDependencyEdge& edge : edges)
+        ++indegrees[edge.consumer.index];
 
     outOrder.clear();
     outCyclePath.clear();
@@ -114,7 +115,7 @@ b8 BuildTopologicalOrder(
 
         indegrees[nextTask] = Limit<u32>::s_Max;
         firstReadyCandidate = nextTask + 1u;
-        outOrder.push_back(graph.taskAt(nextTask).id);
+        outOrder.push_back(GpuTaskId{ .generation = generation, .index = static_cast<u32>(nextTask) });
         for(usize adjacencyIndex = adjacency.offsets[nextTask]; adjacencyIndex < adjacency.offsets[nextTask + 1u]; ++adjacencyIndex){
             const GpuTaskDependencyEdge& edge = edges[adjacency.edgeIndices[adjacencyIndex]];
             FOUNDATION_ASSERT(indegrees[edge.consumer.index] > 0u);
@@ -203,9 +204,59 @@ void BuildSchedulingEdges(
     GraphicsVector<GpuTaskDependencyEdge>& outSchedulingEdges
 ){
     const usize taskCount = topologicalOrder.size();
+    Vector<u8, Alloc::ScratchArena> retained(rawEdges.size(), 0u, scratchArena);
+    constexpr usize s_BitsetFastMaxTasks = 512u;
+    if(taskCount <= s_BitsetFastMaxTasks && taskCount != 0u && !rawEdges.empty()){
+        const usize wordsPerRow = (taskCount - 1u) / s_BitsPerWord + 1u;
+        Vector<u64, Alloc::ScratchArena> strictDesc(taskCount * wordsPerRow, 0u, scratchArena);
+        for(usize orderIndex = taskCount; orderIndex > 0u; --orderIndex){
+            const u32 producerIndex = topologicalOrder[orderIndex - 1u].index;
+            const usize firstEdge = adjacency.offsets[producerIndex];
+            const usize edgeEnd = adjacency.offsets[producerIndex + 1u];
+            if(edgeEnd == firstEdge)
+                continue;
+
+            u64* const producerRow = strictDesc.data() + static_cast<usize>(producerIndex) * wordsPerRow;
+            if(edgeEnd == firstEdge + 1u){
+                const usize edgeIdx = adjacency.edgeIndices[firstEdge];
+                retained[edgeIdx] = 1u;
+                const u32 consumerIndex = rawEdges[edgeIdx].consumer.index;
+                const u64* const consumerRow = strictDesc.data() + static_cast<usize>(consumerIndex) * wordsPerRow;
+                for(usize wordIndex = 0u; wordIndex < wordsPerRow; ++wordIndex)
+                    producerRow[wordIndex] = consumerRow[wordIndex];
+                producerRow[consumerIndex / s_BitsPerWord] |= static_cast<u64>(1u) << (consumerIndex % s_BitsPerWord);
+                continue;
+            }
+
+            for(usize adjacencyIndex = firstEdge; adjacencyIndex < edgeEnd; ++adjacencyIndex){
+                const u32 consumerIndex = rawEdges[adjacency.edgeIndices[adjacencyIndex]].consumer.index;
+                const u64* const consumerRow = strictDesc.data() + static_cast<usize>(consumerIndex) * wordsPerRow;
+                for(usize wordIndex = 0u; wordIndex < wordsPerRow; ++wordIndex)
+                    producerRow[wordIndex] |= consumerRow[wordIndex];
+            }
+            for(usize adjacencyIndex = firstEdge; adjacencyIndex < edgeEnd; ++adjacencyIndex){
+                const usize edgeIdx = adjacency.edgeIndices[adjacencyIndex];
+                const u32 consumerIndex = rawEdges[edgeIdx].consumer.index;
+                const u64 consumerBit = static_cast<u64>(1u) << (consumerIndex % s_BitsPerWord);
+                if((producerRow[consumerIndex / s_BitsPerWord] & consumerBit) == 0u)
+                    retained[edgeIdx] = 1u;
+            }
+            for(usize adjacencyIndex = firstEdge; adjacencyIndex < edgeEnd; ++adjacencyIndex){
+                const u32 consumerIndex = rawEdges[adjacency.edgeIndices[adjacencyIndex]].consumer.index;
+                producerRow[consumerIndex / s_BitsPerWord] |= static_cast<u64>(1u) << (consumerIndex % s_BitsPerWord);
+            }
+        }
+        outSchedulingEdges.clear();
+        outSchedulingEdges.reserve(rawEdges.size());
+        for(usize edgeIndex = 0u; edgeIndex < rawEdges.size(); ++edgeIndex){
+            if(retained[edgeIndex])
+                outSchedulingEdges.push_back(rawEdges[edgeIndex]);
+        }
+        return;
+    }
+
     Vector<u32, Alloc::ScratchArena> reached(taskCount, Limit<u32>::s_Max, scratchArena);
     Vector<usize, Alloc::ScratchArena> topologicalIndices(taskCount, scratchArena);
-    Vector<u8, Alloc::ScratchArena> retained(rawEdges.size(), 0u, scratchArena);
     Vector<usize, Alloc::ScratchArena> candidates(scratchArena);
     Vector<u32, Alloc::ScratchArena> pending(scratchArena);
     usize maximumConsumerCount = 0u;
@@ -318,16 +369,17 @@ void BuildSchedulingTaskAdjacency(
 
     outOutgoingConsumers.resize(schedulingEdges.size());
     outIncomingProducers.resize(schedulingEdges.size());
-    Vector<usize, Alloc::ScratchArena> writeOffsets(taskCount, scratchArena);
-    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex)
-        writeOffsets[taskIndex] = outOutgoingOffsets[taskIndex];
-    for(const GpuTaskDependencyEdge& edge : schedulingEdges)
-        outOutgoingConsumers[writeOffsets[edge.producer.index]++] = edge.consumer.index;
-
-    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex)
-        writeOffsets[taskIndex] = outIncomingOffsets[taskIndex];
-    for(const GpuTaskDependencyEdge& edge : schedulingEdges)
-        outIncomingProducers[writeOffsets[edge.consumer.index]++] = edge.producer.index;
+    Vector<usize, Alloc::ScratchArena> writeOffsets(taskCount * 2u, scratchArena);
+    usize* const outgoingWrite = writeOffsets.data();
+    usize* const incomingWrite = writeOffsets.data() + taskCount;
+    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+        outgoingWrite[taskIndex] = outOutgoingOffsets[taskIndex];
+        incomingWrite[taskIndex] = outIncomingOffsets[taskIndex];
+    }
+    for(const GpuTaskDependencyEdge& edge : schedulingEdges){
+        outOutgoingConsumers[outgoingWrite[edge.producer.index]++] = edge.consumer.index;
+        outIncomingProducers[incomingWrite[edge.consumer.index]++] = edge.producer.index;
+    }
 }
 
 

@@ -164,12 +164,18 @@ b8 GpuCommandIrCapture::captureBindGraphicsHeap(
 ){
     if(!pipeline.valid() || pipeline.generation != task.generation || !pipelineOwner || !descriptorOwner.valid() || !heap.isInitialized())
         return false;
-    auto* const lease = NewArenaObject<GpuCommandIrRetainedOwnerBox<GpuDescriptorHeap::PendingRecordingLease>>(ownerArena, ownerArena, [&heap](){ return heap.acquirePendingRecordingLease(); });
-    if(!lease)
-        return false;
-    GpuCommandIrOwnerAnchor leaseAnchor(lease, s_AdoptRef);
-    if(!lease->value().valid())
-        return false;
+    GpuCommandIrOwnerAnchor leaseAnchor;
+    if(m_rasterOwners && m_rasterOwners->cachedLeaseHeap == &heap && m_rasterOwners->cachedLeaseArena == &ownerArena && m_rasterOwners->cachedLease.valid()){
+        leaseAnchor = m_rasterOwners->cachedLease;
+    }
+    else{
+        auto* const lease = NewArenaObject<GpuCommandIrRetainedOwnerBox<GpuDescriptorHeap::PendingRecordingLease>>(ownerArena, ownerArena, [&heap](){ return heap.acquirePendingRecordingLease(); });
+        if(!lease)
+            return false;
+        leaseAnchor = GpuCommandIrOwnerAnchor(lease, s_AdoptRef);
+        if(!lease->value().valid())
+            return false;
+    }
     GpuCommandIrRasterHeapOwner owner;
     owner.pipeline = pipelineOwner;
     owner.heap = &heap;
@@ -179,7 +185,14 @@ b8 GpuCommandIrCapture::captureBindGraphicsHeap(
     GpuCommandIrDetail::InitializeRecord(record, GpuCommandIrWireOpcode::BindGraphicsHeap, task, packet, queue);
     record.pipelineIndex = pipeline.index;
     record.heapOwnerIndex = m_rasterOwners ? static_cast<u32>(m_rasterOwners->heapOwners.size()) : 0u;
-    return appendRasterBytes(task, packet, queue, BinaryByteView{ reinterpret_cast<const u8*>(&record), sizeof(record) }, {}, nullptr, &owner);
+    if(!appendRasterBytes(task, packet, queue, BinaryByteView{ reinterpret_cast<const u8*>(&record), sizeof(record) }, {}, nullptr, &owner))
+        return false;
+    if(m_rasterOwners && !m_rasterOwners->heapOwners.empty() && (m_rasterOwners->cachedLeaseHeap != &heap || m_rasterOwners->cachedLeaseArena != &ownerArena)){
+        m_rasterOwners->cachedLeaseHeap = &heap;
+        m_rasterOwners->cachedLeaseArena = &ownerArena;
+        m_rasterOwners->cachedLease = m_rasterOwners->heapOwners.back().lease;
+    }
+    return true;
 }
 
 b8 GpuCommandIrCapture::capturePushConstants(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue, const BinaryByteView bytes){
@@ -215,8 +228,8 @@ b8 GpuCommandIrCapture::appendRasterBytes(
     const GpuPhysicalQueueId queue,
     const BinaryByteView encoded,
     const BinaryByteView blob,
-    const GpuCommandIrRasterStateOwner* const stateOwner,
-    const GpuCommandIrRasterHeapOwner* const heapOwner
+    GpuCommandIrRasterStateOwner* const stateOwner,
+    GpuCommandIrRasterHeapOwner* const heapOwner
 ){
     FOUNDATION_ASSERT(encoded.size() >= sizeof(GpuCommandIrHeader) && encoded.data());
     FOUNDATION_ASSERT(blob.empty() || blob.data());
@@ -271,14 +284,12 @@ b8 GpuCommandIrCapture::appendRasterBytes(
         FOUNDATION_MEMCPY(m_blobBytes.data() + oldBlobSize, blob.size(), source, blob.size());
     }
     if(stateOwner){
-        GpuCommandIrRasterStateOwner owner = *stateOwner;
-        owner.recordIndex = m_recordEndOffsets.size();
-        m_rasterOwners->stateOwners.push_back(Move(owner));
+        stateOwner->recordIndex = m_recordEndOffsets.size();
+        m_rasterOwners->stateOwners.push_back(Move(*stateOwner));
     }
     if(heapOwner){
-        GpuCommandIrRasterHeapOwner owner = *heapOwner;
-        owner.recordIndex = m_recordEndOffsets.size();
-        m_rasterOwners->heapOwners.push_back(Move(owner));
+        heapOwner->recordIndex = m_recordEndOffsets.size();
+        m_rasterOwners->heapOwners.push_back(Move(*heapOwner));
     }
     m_recordEndOffsets.push_back(m_commandBytes.size());
     m_blobEndOffsets.push_back(m_blobBytes.size());

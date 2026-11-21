@@ -187,7 +187,147 @@ private:
 
 
 private:
-    using BufferRangeStates = Vector<BufferRangeState, Alloc::GlobalArena>;
+    class BufferRangeStates final{
+    public:
+        static constexpr usize s_InlineCapacity = 2u;
+
+
+    public:
+        BufferRangeStates()noexcept = default;
+        explicit BufferRangeStates(Alloc::GlobalArena& arena)noexcept
+            : m_arena(&arena)
+        {}
+        BufferRangeStates(const BufferRangeStates& other)
+            : m_arena(other.m_arena)
+        {
+            assign(other.data(), other.size());
+        }
+        BufferRangeStates& operator=(const BufferRangeStates& other){
+            if(this != &other){
+                m_arena = other.m_arena;
+                assign(other.data(), other.size());
+            }
+            return *this;
+        }
+        BufferRangeStates(BufferRangeStates&& other)noexcept
+            : m_inline(other.m_inline)
+            , m_overflow(Move(other.m_overflow))
+            , m_arena(other.m_arena)
+            , m_size(other.m_size)
+        {
+            other.m_size = 0u;
+            other.m_overflow.reset();
+        }
+        BufferRangeStates& operator=(BufferRangeStates&& other)noexcept{
+            if(this != &other){
+                m_inline = other.m_inline;
+                m_overflow = Move(other.m_overflow);
+                m_arena = other.m_arena;
+                m_size = other.m_size;
+                other.m_size = 0u;
+                other.m_overflow.reset();
+            }
+            return *this;
+        }
+
+
+    public:
+        [[nodiscard]] b8 empty()const noexcept{ return size() == 0u; }
+        [[nodiscard]] usize size()const noexcept{ return m_overflow ? m_overflow->size() : m_size; }
+        [[nodiscard]] BufferRangeState* data()noexcept{ return m_overflow ? m_overflow->data() : m_inline.data(); }
+        [[nodiscard]] const BufferRangeState* data()const noexcept{ return m_overflow ? m_overflow->data() : m_inline.data(); }
+        [[nodiscard]] BufferRangeState* begin()noexcept{ return data(); }
+        [[nodiscard]] const BufferRangeState* begin()const noexcept{ return data(); }
+        [[nodiscard]] BufferRangeState* end()noexcept{ return data() + size(); }
+        [[nodiscard]] const BufferRangeState* end()const noexcept{ return data() + size(); }
+        [[nodiscard]] BufferRangeState& operator[](const usize index)noexcept{ return data()[index]; }
+        [[nodiscard]] const BufferRangeState& operator[](const usize index)const noexcept{ return data()[index]; }
+        [[nodiscard]] BufferRangeState& front()noexcept{ return data()[0u]; }
+        [[nodiscard]] const BufferRangeState& front()const noexcept{ return data()[0u]; }
+        [[nodiscard]] BufferRangeState& back()noexcept{ return data()[size() - 1u]; }
+        [[nodiscard]] const BufferRangeState& back()const noexcept{ return data()[size() - 1u]; }
+
+        void clear()noexcept{
+            if(m_overflow)
+                m_overflow->clear();
+            m_size = 0u;
+        }
+
+        void reserve(const usize capacity){
+            if(capacity <= s_InlineCapacity && !m_overflow)
+                return;
+            ensureOverflow();
+            m_overflow->reserve(capacity);
+        }
+
+        void resize(const usize newSize){
+            if(m_overflow){
+                m_overflow->resize(newSize);
+                m_size = newSize;
+                return;
+            }
+            if(newSize <= s_InlineCapacity){
+                for(usize i = m_size; i < newSize; ++i)
+                    m_inline[i] = BufferRangeState{};
+                m_size = newSize;
+                return;
+            }
+            ensureOverflow();
+            m_overflow->resize(newSize);
+            m_size = newSize;
+        }
+
+        void push_back(const BufferRangeState& value){
+            if(m_overflow){
+                m_overflow->push_back(value);
+                m_size = m_overflow->size();
+                return;
+            }
+            if(m_size < s_InlineCapacity){
+                m_inline[m_size++] = value;
+                return;
+            }
+            ensureOverflow();
+            m_overflow->push_back(value);
+            m_size = m_overflow->size();
+        }
+
+        void assign(const BufferRangeState* const src, const usize count){
+            if(!m_overflow && count <= s_InlineCapacity){
+                for(usize i = 0u; i < count; ++i)
+                    m_inline[i] = src[i];
+                m_size = count;
+                return;
+            }
+            ensureOverflow();
+            if(count == 0u)
+                m_overflow->clear();
+            else
+                m_overflow->assign(src, src + count);
+            m_size = count;
+        }
+
+
+    private:
+        void ensureOverflow(){
+            if(m_overflow)
+                return;
+            FOUNDATION_ASSERT(m_arena);
+            m_overflow.emplace(*m_arena);
+            if(m_size != 0u){
+                m_overflow->reserve(Max<usize>(m_size, s_InlineCapacity * 2u));
+                for(usize i = 0u; i < m_size; ++i)
+                    m_overflow->push_back(m_inline[i]);
+            }
+        }
+
+
+    private:
+        Array<BufferRangeState, s_InlineCapacity> m_inline{};
+        Optional<Vector<BufferRangeState, Alloc::GlobalArena>> m_overflow;
+        Alloc::GlobalArena* m_arena = nullptr;
+        usize m_size = 0u;
+    };
 
 
 private:
@@ -226,8 +366,11 @@ public:
 
 public:
     void reset()noexcept{
-        m_textureStates.clear();
-        m_bufferStates.clear();
+        invalidateBufferCache();
+        if(!m_textureStates.empty())
+            m_textureStates.clear();
+        if(!m_bufferStates.empty())
+            m_bufferStates.clear();
     }
     void beginRecordingAttempt()noexcept;
     void commitRecordingAttempt()noexcept;
@@ -266,7 +409,16 @@ private:
     void beginTrackingTransientTexture(Texture& texture, TextureSubresourceSet subresources, ResourceStates::Mask state);
     void beginTrackingResolvedTransientTexture(Texture& texture, const TextureSubresourceSet& resolvedSubresources, ResourceStates::Mask state);
     void seedResolvedTransientTexture(Texture& texture, const TextureSubresourceSet& resolvedSubresources, ResourceStates::Mask state);
+    void invalidateBufferCache()const noexcept{
+        m_lastBufferKey = nullptr;
+        m_lastBufferRanges = nullptr;
+    }
+    [[nodiscard]] const BufferRangeStates* findBufferRangesCached(Buffer& buffer)const noexcept;
+    [[nodiscard]] BufferRangeStates* findBufferRangesCachedMutable(Buffer& buffer)noexcept;
+    [[nodiscard]] ResourceStates::Mask getBufferStateFromRanges(Buffer& buffer, const BufferRangeStates* ranges, const BufferRange& resolvedRange)const noexcept;
+    [[nodiscard]] b8 hasExplicitBufferStateFromRanges(const BufferRangeStates* ranges, const BufferRange& resolvedRange, b8 requireKnown = false)const noexcept;
     void beginTrackingTransientBuffer(Buffer& buffer, ResourceStates::Mask state, BufferRange range = s_EntireBuffer, b8 seedOnly = false);
+    void beginTrackingTransientBufferWithRanges(Buffer& buffer, ResourceStates::Mask state, const BufferRange& resolvedRange, b8 seedOnly, BufferRangeStates* existingRanges);
 
 
 private:
@@ -278,6 +430,8 @@ private:
     HashMap<NotNull<Buffer*>, BufferRangeStates, Alloc::GlobalArena, Hasher<NotNull<Buffer*>>, EqualTo<NotNull<Buffer*>>> m_bufferStates;
     TextureUavBarrierPolicyMap m_textureUavBarriers;
     BufferUavBarrierPolicyMap m_bufferUavBarriers;
+    mutable Buffer* m_lastBufferKey = nullptr;
+    mutable BufferRangeStates* m_lastBufferRanges = nullptr;
 
     const VulkanContext& m_context;
     b8 m_recordingAttemptActive = false;

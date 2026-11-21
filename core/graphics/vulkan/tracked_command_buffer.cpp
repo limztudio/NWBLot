@@ -76,6 +76,7 @@ Expected<void, VkResult> TrackedCommandBuffer::initialize(const u32 queueFamilyI
 }
 
 TrackedCommandBuffer::TimerQueryRecordingClaim& TrackedCommandBuffer::findOrAppendTimerQueryRecordingClaim(TimerQuery& query){
+    m_pendingCommitFlags |= s_CommitTimerQueries;
     return m_timerQueryClaims.findOrAppendTimerQueryRecordingClaim(query);
 }
 
@@ -89,10 +90,12 @@ b8 TrackedCommandBuffer::validateTimerQueryRecordingClaims(const Queue& submissi
 
 void TrackedCommandBuffer::commitTimerQueryRecordingClaims(const QueueSubmissionToken& submissionToken)noexcept{
     m_timerQueryClaims.commitTimerQueryRecordingClaims(submissionToken);
+    m_pendingCommitFlags = static_cast<u8>(m_pendingCommitFlags & ~s_CommitTimerQueries);
 }
 
 void TrackedCommandBuffer::discardTimerQueryRecordingClaims()noexcept{
     m_timerQueryClaims.discardTimerQueryRecordingClaims();
+    m_pendingCommitFlags = static_cast<u8>(m_pendingCommitFlags & ~s_CommitTimerQueries);
 }
 
 void TrackedCommandBuffer::commitRetainedBufferStateCommits()noexcept{
@@ -101,12 +104,14 @@ void TrackedCommandBuffer::commitRetainedBufferStateCommits()noexcept{
         commit.buffer->setRetainedStateKnown(true);
     }
     m_resourceReferences.discardBufferStateCommits();
+    m_pendingCommitFlags = static_cast<u8>(m_pendingCommitFlags & ~s_CommitBufferStates);
 }
 
 void TrackedCommandBuffer::appendRetainedTextureStateCommit(Texture& texture, const MipLevel mipLevel, const ArraySlice arraySlice){
     m_resourceReferences.retainTexture(texture);
 
     m_retainedTextureStateCommits.push_back(RetainedTextureStateCommit{ .texture = MakeNotNull(&texture), .mipLevel = mipLevel, .arraySlice = arraySlice, });
+    m_pendingCommitFlags |= s_CommitTextureStates;
 }
 
 void TrackedCommandBuffer::commitRetainedTextureStateCommits()noexcept{
@@ -115,10 +120,14 @@ void TrackedCommandBuffer::commitRetainedTextureStateCommits()noexcept{
         commit.texture->setRetainedSubresourceStateKnown(commit.arraySlice, commit.mipLevel, true);
     }
     m_retainedTextureStateCommits.clear();
+    m_pendingCommitFlags = static_cast<u8>(m_pendingCommitFlags & ~s_CommitTextureStates);
 }
 
 b8 TrackedCommandBuffer::appendPendingAccelStructBuildCommit(AccelStruct& accelStruct, const VkAccelerationStructureTypeKHR accelStructType, const VkBuildAccelerationStructureFlagsKHR buildFlags, const Span<const AccelStructGeometryBuildSignature> geometrySignatures, const Span<const RayTracingInstanceDesc> instances){
-    return m_accelStructJournal.appendPendingAccelStructBuildCommit(accelStruct, accelStructType, buildFlags, geometrySignatures, instances);
+    if(!m_accelStructJournal.appendPendingAccelStructBuildCommit(accelStruct, accelStructType, buildFlags, geometrySignatures, instances))
+        return false;
+    m_pendingCommitFlags |= s_CommitAccelStructBuilds;
+    return true;
 }
 
 Expected<NotNull<const AccelStructBuildSignatureRole*>> TrackedCommandBuffer::getPendingAccelStructBuildSignature(const AccelStruct& accelStruct)const noexcept{
@@ -131,6 +140,7 @@ b8 TrackedCommandBuffer::validatePendingAccelStructBuildCommits()const noexcept{
 
 void TrackedCommandBuffer::commitPendingAccelStructBuildCommits()noexcept{
     m_accelStructJournal.commitPendingAccelStructBuildCommits();
+    m_pendingCommitFlags = static_cast<u8>(m_pendingCommitFlags & ~s_CommitAccelStructBuilds);
 }
 
 void TrackedCommandBuffer::retainTopLevelAccelStruct(AccelStruct& accelStruct){
@@ -147,11 +157,13 @@ void TrackedCommandBuffer::retainPendingTopLevelAccelStructReferences(const Trac
 
 void TrackedCommandBuffer::abandonPendingAccelStructBuildCommits()noexcept{
     m_accelStructJournal.abandonPendingAccelStructBuildCommits();
+    m_pendingCommitFlags = static_cast<u8>(m_pendingCommitFlags & ~s_CommitAccelStructBuilds);
 }
 
 void TrackedCommandBuffer::appendPendingOpacityMicromapBuildCommit(OpacityMicromap& opacityMicromap){
     m_resourceReferences.retainResource(opacityMicromap);
     m_pendingOpacityMicromapBuildCommits.push_back(PendingOpacityMicromapBuildCommit{ .opacityMicromap = MakeNotNull(&opacityMicromap), });
+    m_pendingCommitFlags |= s_CommitOpacityMicromapBuilds;
 }
 
 b8 TrackedCommandBuffer::hasPendingOpacityMicromapBuild(const OpacityMicromap& opacityMicromap)const noexcept{
@@ -169,6 +181,7 @@ void TrackedCommandBuffer::commitPendingOpacityMicromapBuildCommits()noexcept{
         commit.opacityMicromap->m_acceptedConstructed.store(true, MemoryOrder::release);
     }
     m_pendingOpacityMicromapBuildCommits.clear();
+    m_pendingCommitFlags = static_cast<u8>(m_pendingCommitFlags & ~s_CommitOpacityMicromapBuilds);
 }
 
 void TrackedCommandBuffer::discardPendingRecordingCommits()noexcept{
@@ -177,17 +190,21 @@ void TrackedCommandBuffer::discardPendingRecordingCommits()noexcept{
     m_retainedTextureStateCommits.clear();
     abandonPendingAccelStructBuildCommits();
     m_pendingOpacityMicromapBuildCommits.clear();
+    m_pendingCommitFlags = 0u;
 }
 
 void TrackedCommandBuffer::clearTrackedReferences()noexcept{
     discardPendingRecordingCommits();
 
     for(const auto heap : m_referencedDescriptorHeaps){
-
         heap->discardCommandBufferUse(*this);
     }
     m_referencedDescriptorHeaps.clear();
     m_trackedDescriptorHeapQueue = {};
+    m_trackedDescriptorHeapUseID = 0u;
+    m_trackedDescriptorHeapUseIndexHint = 0u;
+    m_usedUploadChunkMask = 0u;
+    m_pendingCommitFlags = 0u;
     m_activeUploadChunks = {};
     m_descriptorBufferManager = nullptr;
     m_descriptorBufferGeneration = 0u;

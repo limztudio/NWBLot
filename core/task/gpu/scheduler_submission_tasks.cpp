@@ -188,7 +188,8 @@ b8 GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
                 scratchArena,
                 graph,
                 transaction,
-                &batchFailedPacket
+                &batchFailedPacket,
+                true
             )){
                 if(outFailedPacket)
                     *outFailedPacket = batchFailedPacket;

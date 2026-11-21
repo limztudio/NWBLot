@@ -46,6 +46,7 @@ private:
     class SubmittingPacketUnwindScope;
     struct BatchEntryState;
     class BatchEntryBuffer;
+    class BatchOwnershipBuffer;
     class BatchPreparedTimingTicketsUnwindScope;
     class BatchSubmittingPacketsUnwindScope;
 
@@ -228,6 +229,16 @@ private:
         GpuGraphSubmissionTransaction& transaction,
         GpuSubmissionPacketId* outFailedPacket = nullptr
     )const;
+    [[nodiscard]] b8 submitGraphWithinDeviceOperation(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuNativePacketRecorder& recorder,
+        const GpuTaskGraphNormalExecutionDesc& desc,
+        Alloc::ScratchArena& scratchArena,
+        GpuTaskGraph& graph,
+        GpuRecordedGraph& recordedGraph,
+        GpuGraphSubmissionTransaction& transaction,
+        GpuSubmissionPacketId* outFailedPacket = nullptr
+    )const;
 
 
 private:
@@ -333,7 +344,8 @@ private:
         Alloc::ScratchArena& scratchArena,
         GpuTaskGraph& graph,
         GpuGraphSubmissionTransaction& transaction,
-        GpuSubmissionPacketId* outFailedPacket
+        GpuSubmissionPacketId* outFailedPacket,
+        b8 packetsValidatedReady = false
     )const;
 
 

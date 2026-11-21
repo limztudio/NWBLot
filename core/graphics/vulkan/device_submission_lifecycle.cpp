@@ -63,16 +63,11 @@ b8 Device::beginSubmissionOperation()noexcept{
 }
 
 void Device::endSubmissionOperation()noexcept{
-    u64 state = m_submissionOperationState.load(MemoryOrder::relaxed);
-    for(;;){
-        if((state & s_SubmissionOperationCountMask) == 0u)
-            TerminateInvariant();
-        if(m_submissionOperationState.compare_exchange_weak(state, state - 1u, MemoryOrder::release, MemoryOrder::relaxed)){
-            if((state & s_SubmissionOperationCountMask) == 1u)
-                m_submissionOperationState.notify_all();
-            return;
-        }
-    }
+    const u64 prev = m_submissionOperationState.fetch_sub(1u, MemoryOrder::acq_rel);
+    if((prev & s_SubmissionOperationCountMask) == 0u)
+        TerminateInvariant();
+    if(prev == (s_SubmissionDrainBit | 1u))
+        m_submissionOperationState.notify_all();
 }
 
 b8 Device::beginLifecycleDrain()noexcept{

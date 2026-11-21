@@ -29,7 +29,14 @@ u64 GpuTaskGraph::AllocateGeneration()noexcept{
 }
 
 GpuTaskGraph::~GpuTaskGraph()noexcept(false){
-    ScopeExit destroyReusableSnapshots([this]()noexcept{ destroyReusableStateSnapshots(); });
+    ScopeExit destroyReusableResources([this]()noexcept{
+        destroyReusableStateSnapshots();
+        for(const TaskPayloadPoolBlock& block : m_payloadPoolBlocks){
+            if(block.data)
+                m_arena.deallocate(block.data, s_PayloadPoolMaxAlign, block.size);
+        }
+        m_payloadPoolBlocks.clear();
+    });
     ResetCompletionScope resetCompletion(*this);
     b8 teardownValid = true;
     {
@@ -59,6 +66,7 @@ GpuTaskGraph::~GpuTaskGraph()noexcept(false){
     const b8 taskPayloadsDestroyed = UncaughtExceptionCount() != 0 ? destroyTaskPayloadsWithoutCallbacks() : destroyTaskPayloads();
     if(!taskPayloadsDestroyed)
         FOUNDATION_FATAL_ASSERT_MSG(false, "GpuTaskGraph destruction requires in-flight task work to resolve first");
+    resetCompletion.markPayloadsDestroyed();
     resetCompletion.complete();
 }
 

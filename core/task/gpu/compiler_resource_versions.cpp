@@ -261,6 +261,8 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
     using namespace __hidden_gpu_task_graph_compiler_resource_versions;
 
     outEdges.clear();
+    if(CompilerGraphAccess::ResourceVersionCount(graph) == 0u && CompilerGraphAccess::TotalResourceVersionUseCount(graph) == 0u)
+        return {};
     GpuTaskGraphAnalysisDiagnostic diagnostic;
     const auto fail = [&](const GpuTaskGraphAnalysisStatus::Enum status, const GpuTaskId task, const GpuTaskId relatedTask, const GpuGraphResourceId resource, const GpuGraphResourceVersionId version)noexcept{
         diagnostic.status = status;

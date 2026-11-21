@@ -77,6 +77,8 @@ void CommandBufferResourceReferences::retainResource(GraphicsResource& resource)
 
 void CommandBufferResourceReferences::retainBuffer(Buffer& buffer){
     using namespace __hidden_command_buffer_resource_references;
+    if(!buffer.m_managed || buffer.m_creationDesc.isVirtual)
+        m_hasDynamicReadinessResources = true;
     if(m_lastRetainedBuffer == &buffer)
         return;
     if(!m_membership){
@@ -101,6 +103,8 @@ void CommandBufferResourceReferences::retainBuffer(Buffer& buffer){
 
 void CommandBufferResourceReferences::trackRetainedBuffer(Buffer& buffer){
     using namespace __hidden_command_buffer_resource_references;
+    if(!buffer.m_managed || buffer.m_creationDesc.isVirtual)
+        m_hasDynamicReadinessResources = true;
     if(!m_membership){
         for(const auto retainedBuffer : m_buffers){
             if(retainedBuffer.get() == &buffer)
@@ -122,6 +126,8 @@ void CommandBufferResourceReferences::trackRetainedBuffer(Buffer& buffer){
 
 void CommandBufferResourceReferences::appendBufferStateCommit(Buffer& buffer){
     using namespace __hidden_command_buffer_resource_references;
+    if(!buffer.m_managed || buffer.m_creationDesc.isVirtual)
+        m_hasDynamicReadinessResources = true;
     if(!m_membership){
         retainResource(buffer);
         trackRetainedBuffer(buffer);
@@ -165,6 +171,8 @@ void CommandBufferResourceReferences::discardBufferStateCommits()noexcept{
 
 void CommandBufferResourceReferences::retainTexture(Texture& texture){
     using namespace __hidden_command_buffer_resource_references;
+    if(!texture.m_managed || texture.m_creationDesc.isVirtual)
+        m_hasDynamicReadinessResources = true;
     if(m_lastRetainedTexture == &texture)
         return;
     if(!m_membership){
@@ -189,6 +197,8 @@ void CommandBufferResourceReferences::retainTexture(Texture& texture){
 
 void CommandBufferResourceReferences::trackRetainedTexture(Texture& texture){
     using namespace __hidden_command_buffer_resource_references;
+    if(!texture.m_managed || texture.m_creationDesc.isVirtual)
+        m_hasDynamicReadinessResources = true;
     if(!m_membership){
         for(const auto retainedTexture : m_textures){
             if(retainedTexture.get() == &texture)
@@ -212,8 +222,9 @@ void CommandBufferResourceReferences::clear()noexcept{
     m_lastRetainedResource = nullptr;
     m_lastRetainedBuffer = nullptr;
     m_lastRetainedTexture = nullptr;
+    m_hasDynamicReadinessResources = false;
     m_bufferStateCommits.clear();
-    if(m_membership)
+    if(m_membership && !m_membership->empty())
         m_membership->clear();
     m_buffers.clear();
     m_textures.clear();

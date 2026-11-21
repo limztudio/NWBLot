@@ -53,8 +53,12 @@ Queue::Queue(const VulkanContext& context, Device& device, const GpuPhysicalQueu
     , m_submitCommandBufferInfos(context.objectArena)
     , m_executeLocalWaits(context.objectArena)
     , m_executeExpectedCommandLists(context.objectArena)
+    , m_executeQueueEntries(context.objectArena)
+    , m_executeWaitOffsets(context.objectArena)
+    , m_executeQueueReceipts(context.objectArena)
     , m_executeSubmittedOwners(context.objectArena)
     , m_lastRecordingID(0u)
+    , m_lastObservedFinishedID(0u)
     , m_lastSubmittedID(0)
     , m_lastFinishedID(0)
     , m_commandBuffersInFlight(context.objectArena)
@@ -119,7 +123,9 @@ void Queue::registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept{
         UpdateAtomicMaxRelaxed(m_directHighWaterCommandBufferCount, directCurrentCount);
     }
     else{
-        WorkerCommandArena* const arena = findWorkerCommandArena(commandBuffer.m_recordingWorkerDomain, commandBuffer.m_recordingWorkerIndex);
+        WorkerCommandArena* const arena = commandBuffer.m_workerCommandArena
+            ? static_cast<WorkerCommandArena*>(commandBuffer.m_workerCommandArena)
+            : findWorkerCommandArena(commandBuffer.m_recordingWorkerDomain, commandBuffer.m_recordingWorkerIndex);
         if(!arena)
             TerminateInvariant();
         const u64 workerCurrentCount = arena->currentCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed) + 1u;
@@ -150,7 +156,9 @@ b8 Queue::validateCommandBufferSubmissionState(const TrackedCommandBuffer& comma
         return false;
     }
 
-    const WorkerCommandArena* const workerArena = findWorkerCommandArena(commandBuffer.m_recordingWorkerDomain, commandBuffer.m_recordingWorkerIndex);
+    const WorkerCommandArena* const workerArena = commandBuffer.m_workerCommandArena
+        ? static_cast<const WorkerCommandArena*>(commandBuffer.m_workerCommandArena)
+        : findWorkerCommandArena(commandBuffer.m_recordingWorkerDomain, commandBuffer.m_recordingWorkerIndex);
     if(workerArena && workerArena->leasedCommandBufferCount.load(MemoryOrder::relaxed) != 0u)
         return true;
     NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Native submission could not validate its worker command-buffer arena"));
@@ -173,7 +181,13 @@ void Queue::commitCommandBufferStateTransition(TrackedCommandBuffer& commandBuff
     const TrackedCommandBufferArenaState::Enum previousState = commandBuffer.m_arenaState;
     if(previousState == nextState)
         return;
-    WorkerCommandArena* const workerArena = commandBuffer.m_recordingWorkerIndex == 0u ? nullptr : findWorkerCommandArena(commandBuffer.m_recordingWorkerDomain, commandBuffer.m_recordingWorkerIndex);
+    WorkerCommandArena* const workerArena = commandBuffer.m_recordingWorkerIndex == 0u
+        ? nullptr
+        : (
+            commandBuffer.m_workerCommandArena
+            ? static_cast<WorkerCommandArena*>(commandBuffer.m_workerCommandArena)
+            : findWorkerCommandArena(commandBuffer.m_recordingWorkerDomain, commandBuffer.m_recordingWorkerIndex)
+        );
     if(commandBuffer.m_recordingWorkerIndex != 0u && !workerArena)
         TerminateInvariant();
 
@@ -252,7 +266,9 @@ void Queue::unregisterCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept
         DecrementAtomicOrTerminate(m_directCommandBufferCount);
     }
     else{
-        WorkerCommandArena* const arena = findWorkerCommandArena(commandBuffer.m_recordingWorkerDomain, commandBuffer.m_recordingWorkerIndex);
+        WorkerCommandArena* const arena = commandBuffer.m_workerCommandArena
+            ? static_cast<WorkerCommandArena*>(commandBuffer.m_workerCommandArena)
+            : findWorkerCommandArena(commandBuffer.m_recordingWorkerDomain, commandBuffer.m_recordingWorkerIndex);
         if(!arena)
             TerminateInvariant();
         DecrementAtomicOrTerminate(arena->currentCommandBufferCount);
@@ -293,6 +309,7 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::createCommandBuffer(const VkC
         return MakeUnexpected(VK_ERROR_INITIALIZATION_FAILED);
 
     cmdBuf->m_sharedCommandPoolMutex = sharedCommandPoolMutex;
+    cmdBuf->m_workerCommandArena = recordingWorkerIndex == 0u ? nullptr : findWorkerCommandArena(recordingWorkerDomain, recordingWorkerIndex);
     cmdBuf->m_recordingID = NextAtomicWrappingNonzero(m_lastRecordingID);
     cmdBuf->m_recordingWorkerDomain = recordingWorkerDomain;
     cmdBuf->m_recordingWorkerIndex = recordingWorkerIndex;
@@ -359,15 +376,23 @@ Expected<NotNull<Queue::WorkerCommandArena*>, VkResult> Queue::getOrCreateWorker
 Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateDirectCommandBuffer(){
     UniqueLock<Futex> lock(m_mutex);
 
-    const VkResult completionResult = updateLastFinishedID();
-    if(completionResult != VK_SUCCESS){
-        lock.unlock();
-        if(completionResult == VK_ERROR_DEVICE_LOST)
-            m_device.captureDeviceLoss(VulkanArenaScope::s_QueueTimelineQueryContext);
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(completionResult));
-        return MakeUnexpected(completionResult);
+    if(!m_commandBuffersInFlight.empty()){
+        const VkResult completionResult = updateLastFinishedID();
+        if(completionResult != VK_SUCCESS){
+            lock.unlock();
+            if(completionResult == VK_ERROR_DEVICE_LOST)
+                m_device.captureDeviceLoss(VulkanArenaScope::s_QueueTimelineQueryContext);
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(completionResult));
+            return MakeUnexpected(completionResult);
+        }
+        collectCompletedCommandBuffers();
     }
-    collectCompletedCommandBuffers();
+    else if(m_device.isDeviceLost()){
+        lock.unlock();
+        m_device.captureDeviceLoss(VulkanArenaScope::s_QueueTimelineQueryContext);
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(VK_ERROR_DEVICE_LOST));
+        return MakeUnexpected(VK_ERROR_DEVICE_LOST);
+    }
 
     auto available = m_commandBuffersPool.end();
     for(usize index = m_commandBuffersPool.size(); index > 0u; --index){

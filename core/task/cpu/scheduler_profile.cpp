@@ -55,8 +55,8 @@ void CpuTaskScheduler::setProfiling(const b8 enabled, const u64 frameIndex){
 
     if(active){
         m_profileBuffer.ensureAllocatedLocked();
-        if(m_readyProfiles.size() < m_nodes.size())
-            m_readyProfiles.resize(m_nodes.size());
+        if(m_readyProfiles.size() < m_slabs.nodeCount)
+            m_readyProfiles.resize(m_slabs.nodeCount);
     }
     if(active != m_profileEnabled.load(MemoryOrder::relaxed)){
         if(++m_profileEpoch == 0u)
@@ -89,13 +89,13 @@ void CpuTaskScheduler::profileReadyLocked(const u32 index)noexcept{
 CpuTaskScheduler::ProfileSample CpuTaskScheduler::prepareProfileLocked(const CpuTaskProfileKind::Enum kind, const TaskHandle task, CpuTaskProfileLabel label, const usize workerIndex, const CpuAffinity::Enum affinity)const noexcept{
     TaskHandle ancestor = task;
     while(!label.valid()){
-        const TaskNode* const node = resolveLocked(ancestor);
-        if(!node)
+        const TaskMeta* const meta = resolveLocked(ancestor);
+        if(!meta)
             break;
-        label = node->options.profileLabel;
-        if(!label.valid() && node->scope)
-            label = node->scope->m_profileLabel;
-        ancestor = node->parent;
+        label = m_slabs.payload(ancestor.index).profileLabel;
+        if(!label.valid() && meta->scope)
+            label = meta->scope->m_profileLabel;
+        ancestor = meta->parent;
     }
     return { .begin = Timer{}, .task = task, .frameIndex = m_profileFrameIndex, .captureEpoch = m_profileEpoch, .workerIndex = workerIndex, .label = label, .affinity = affinity, .kind = kind, };
 }

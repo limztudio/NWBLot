@@ -143,6 +143,11 @@ public:
 
 
 private:
+    GpuPacketRecordingAccess()noexcept = default;
+    void bind(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuPacketRecordingLease& lease)noexcept;
+
+
+private:
     const GpuTaskGraph* m_graph = nullptr;
     const GpuCompiledGraph* m_compiledGraph = nullptr;
     const GpuPacketRecordingLease* m_lease = nullptr;

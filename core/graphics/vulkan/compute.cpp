@@ -135,15 +135,15 @@ void CommandList::setComputeState(const ComputeState& state){
         return;
 
     const b8 bindPipeline = !m_hasBoundComputeState || m_currentComputeState.pipeline != state.pipeline;
-    m_currentGraphicsState = {};
-    m_currentMeshletState = {};
-    m_currentRayTracingState = {};
-    m_hasBoundGraphicsState = false;
+    clearDirtyPipelineStates(s_DirtyComputeState);
+    invalidateGraphicsDrawValidationCache();
     m_currentComputeState = state;
+    m_dirtyPipelineStateMask |= s_DirtyComputeState;
     m_hasBoundComputeState = true;
     retainResource(state.indirectParams);
 
     auto& pipeline = *MakeNotNull(state.pipeline);
+    updateActivePushConstantPipeline(s_PipelineKindCompute, pipeline.pipelineLayout, pipeline.pushConstantByteSize, GpuQueueCapability::Compute);
     retainResource(&pipeline);
     if(bindPipeline)
         m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.m_pipeline);

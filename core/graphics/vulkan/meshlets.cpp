@@ -152,44 +152,123 @@ Expected<MeshletPipelineHandle> Device::createMeshletPipeline(const MeshletPipel
 void CommandList::setMeshletState(const MeshletState& state){
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_SetMeshletStateOperation))
         return;
+
+    const b8 sameActiveRenderPass = m_renderPassActive && state.framebuffer && m_renderPassFramebuffer == state.framebuffer;
+    if(
+        m_hasBoundMeshletState
+        && sameActiveRenderPass
+        && state.pipeline == m_currentMeshletState.pipeline
+        && state.framebuffer == m_currentMeshletState.framebuffer
+        && state.indirectParams == m_currentMeshletState.indirectParams
+    ){
+        const b8 viewportsEqual = VulkanDetail::ViewportsEqual(m_currentMeshletState.viewport.viewports, state.viewport.viewports);
+        const b8 explicitScissorsEqual = VulkanDetail::ScissorsEqual(m_currentMeshletState.viewport.scissorRects, state.viewport.scissorRects);
+        const b8 updateViewport = !viewportsEqual;
+        const b8 updateScissor = !explicitScissorsEqual || (state.viewport.scissorRects.empty() && !viewportsEqual);
+        if(updateViewport || updateScissor){
+            if(!validateViewportState(state.viewport, s_SetMeshletStateOperation))
+                return;
+            VulkanDetail::CopyViewportStateCompact(m_currentMeshletState.viewport, state.viewport);
+            setViewportState(state.viewport, updateViewport, updateScissor);
+        }
+
+        const b8 blendConstantsChanged = !(m_currentMeshletState.blendConstantColor == state.blendConstantColor);
+        const b8 dynamicStencilRefChanged = m_currentMeshletState.dynamicStencilRefValue != state.dynamicStencilRefValue;
+        if(blendConstantsChanged)
+            m_currentMeshletState.blendConstantColor = state.blendConstantColor;
+        if(dynamicStencilRefChanged)
+            m_currentMeshletState.dynamicStencilRefValue = state.dynamicStencilRefValue;
+
+        if(state.pipeline){
+            if(blendConstantsChanged){
+                const Array<f32, 4> blendConstants = {{ state.blendConstantColor.r, state.blendConstantColor.g, state.blendConstantColor.b, state.blendConstantColor.a }};
+                m_context.deviceDispatch.vkCmdSetBlendConstants(m_currentCmdBuf->m_cmdBuf, blendConstants.data());
+            }
+            if(dynamicStencilRefChanged){
+                const DepthStencilState& depthStencilState = state.pipeline->m_desc.renderState.depthStencilState;
+                if(depthStencilState.dynamicStencilRef)
+                    m_context.deviceDispatch.vkCmdSetStencilReference(m_currentCmdBuf->m_cmdBuf, VK_STENCIL_FACE_FRONT_AND_BACK, state.dynamicStencilRefValue);
+            }
+        }
+        return;
+    }
+
     if(!validateMeshletState(state))
         return;
     if(!FramebufferRenderingPreparation(*this).prepareFramebuffer(state.framebuffer, s_SetMeshletStateOperation))
         return;
 
-    if(state.indirectParams)
-        setBufferState(state.indirectParams, ResourceStates::IndirectArgument);
-    commitBarriers();
-    if(m_commandRecordingFailed)
-        return;
+    if(state.indirectParams){
+        auto& indirect = *MakeNotNull(state.indirectParams);
+        setBufferStateValidated(indirect, ResourceStates::IndirectArgument, false, BufferRange(0u, indirect.m_creationDesc.byteSize));
+    }
+    if(!m_pendingImageBarriers.empty() || !m_pendingBufferBarriers.empty()){
+        commitBarriers();
+        if(m_commandRecordingFailed)
+            return;
+    }
 
     if(!ensureGraphicsRenderPass(state.framebuffer))
         return;
-    commitBarriers();
-    if(m_commandRecordingFailed)
-        return;
-    m_currentGraphicsState = {};
-    m_currentComputeState = {};
-    m_currentRayTracingState = {};
-    m_hasBoundGraphicsState = false;
-    m_hasBoundComputeState = false;
-    m_currentMeshletState = state;
+    if(!sameActiveRenderPass && (!m_pendingImageBarriers.empty() || !m_pendingBufferBarriers.empty())){
+        commitBarriers();
+        if(m_commandRecordingFailed)
+            return;
+    }
+
+    const b8 hasPreviousMeshletState = m_hasBoundMeshletState;
+    const b8 pipelineChanged = !hasPreviousMeshletState || m_currentMeshletState.pipeline != state.pipeline;
+    const b8 blendConstantsChanged = !(m_currentMeshletState.blendConstantColor == state.blendConstantColor);
+    const b8 dynamicStencilRefChanged = m_currentMeshletState.dynamicStencilRefValue != state.dynamicStencilRefValue;
+    const b8 viewportsEqual = hasPreviousMeshletState && VulkanDetail::ViewportsEqual(m_currentMeshletState.viewport.viewports, state.viewport.viewports);
+    const b8 explicitScissorsEqual = hasPreviousMeshletState && VulkanDetail::ScissorsEqual(m_currentMeshletState.viewport.scissorRects, state.viewport.scissorRects);
+    const b8 updateViewport = !viewportsEqual;
+    const b8 updateScissor = !explicitScissorsEqual || (state.viewport.scissorRects.empty() && !viewportsEqual);
+    const b8 indirectParamsChanged = !hasPreviousMeshletState || m_currentMeshletState.indirectParams != state.indirectParams;
+
+    clearDirtyPipelineStates(s_DirtyMeshletState);
+    invalidateGraphicsDrawValidationCache();
+    m_currentMeshletState.pipeline = state.pipeline;
+    m_currentMeshletState.framebuffer = state.framebuffer;
+    if(updateViewport || !explicitScissorsEqual || !hasPreviousMeshletState)
+        VulkanDetail::CopyViewportStateCompact(m_currentMeshletState.viewport, state.viewport);
+    m_currentMeshletState.blendConstantColor = state.blendConstantColor;
+    m_currentMeshletState.indirectParams = state.indirectParams;
+    m_currentMeshletState.dynamicStencilRefValue = state.dynamicStencilRefValue;
+    m_dirtyPipelineStateMask |= s_DirtyMeshletState;
+    m_hasBoundMeshletState = true;
 
     if(state.pipeline){
         auto& pipeline = *MakeNotNull(state.pipeline);
-        m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipeline);
-        retainResource(&pipeline);
+        updateActivePushConstantPipeline(s_PipelineKindMeshlet, pipeline.pipelineLayout, pipeline.pushConstantByteSize, GpuQueueCapability::Graphics);
+        if(pipelineChanged){
+            m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipeline);
+            retainResource(&pipeline);
 
-        const Array<f32, 4> blendConstants = {{ state.blendConstantColor.r, state.blendConstantColor.g, state.blendConstantColor.b, state.blendConstantColor.a }};
-        m_context.deviceDispatch.vkCmdSetBlendConstants(m_currentCmdBuf->m_cmdBuf, blendConstants.data());
+            const Array<f32, 4> blendConstants = {{ state.blendConstantColor.r, state.blendConstantColor.g, state.blendConstantColor.b, state.blendConstantColor.a }};
+            m_context.deviceDispatch.vkCmdSetBlendConstants(m_currentCmdBuf->m_cmdBuf, blendConstants.data());
 
-        const DepthStencilState& depthStencilState = pipeline.m_desc.renderState.depthStencilState;
-        const u8 stencilReference = depthStencilState.dynamicStencilRef ? state.dynamicStencilRefValue : depthStencilState.stencilRefValue;
-        m_context.deviceDispatch.vkCmdSetStencilReference(m_currentCmdBuf->m_cmdBuf, VK_STENCIL_FACE_FRONT_AND_BACK, stencilReference);
+            const DepthStencilState& depthStencilState = pipeline.m_desc.renderState.depthStencilState;
+            const u8 stencilReference = depthStencilState.dynamicStencilRef ? state.dynamicStencilRefValue : depthStencilState.stencilRefValue;
+            m_context.deviceDispatch.vkCmdSetStencilReference(m_currentCmdBuf->m_cmdBuf, VK_STENCIL_FACE_FRONT_AND_BACK, stencilReference);
+        }
+        else{
+            if(blendConstantsChanged){
+                const Array<f32, 4> blendConstants = {{ state.blendConstantColor.r, state.blendConstantColor.g, state.blendConstantColor.b, state.blendConstantColor.a }};
+                m_context.deviceDispatch.vkCmdSetBlendConstants(m_currentCmdBuf->m_cmdBuf, blendConstants.data());
+            }
+            const DepthStencilState& depthStencilState = pipeline.m_desc.renderState.depthStencilState;
+            if(depthStencilState.dynamicStencilRef && dynamicStencilRefChanged)
+                m_context.deviceDispatch.vkCmdSetStencilReference(m_currentCmdBuf->m_cmdBuf, VK_STENCIL_FACE_FRONT_AND_BACK, state.dynamicStencilRefValue);
+        }
     }
+    else
+        updateActivePushConstantPipeline(s_PipelineKindNone, VK_NULL_HANDLE, 0u, GpuQueueCapability::None);
 
-    setViewportState(state.viewport);
-    retainResource(state.indirectParams);
+    if(updateViewport || updateScissor)
+        setViewportState(state.viewport, updateViewport, updateScissor);
+    if(indirectParamsChanged)
+        retainResource(state.indirectParams);
 }
 
 void CommandList::dispatchMesh(u32 groupsX, u32 groupsY, u32 groupsZ){

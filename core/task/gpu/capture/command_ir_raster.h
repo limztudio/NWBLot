@@ -266,6 +266,9 @@ struct GpuCommandIrRasterHeapOwner{
 struct GpuCommandIrRasterOwnerTable{
     GraphicsVector<GpuCommandIrRasterStateOwner> stateOwners;
     GraphicsVector<GpuCommandIrRasterHeapOwner> heapOwners;
+    GpuDescriptorHeap* cachedLeaseHeap = nullptr;
+    GraphicsArena* cachedLeaseArena = nullptr;
+    GpuCommandIrOwnerAnchor cachedLease;
 
 
 public:

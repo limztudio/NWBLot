@@ -159,6 +159,9 @@ void GpuCommandIrCapture::reset()noexcept{
     if(m_rasterOwners){
         m_rasterOwners->stateOwners.clear();
         m_rasterOwners->heapOwners.clear();
+        m_rasterOwners->cachedLeaseHeap = nullptr;
+        m_rasterOwners->cachedLeaseArena = nullptr;
+        m_rasterOwners->cachedLease = {};
     }
     m_packedDirty = true;
     FOUNDATION_FATAL_ASSERT_MSG(m_resetEpoch != Limit<u64>::s_Max, "Command IR capture reset epoch exhausted");
@@ -520,6 +523,9 @@ void GpuCommandIrCapture::rollbackPrefix(const usize recordCount, const u64 grap
             m_rasterOwners->stateOwners.pop_back();
         while(!m_rasterOwners->heapOwners.empty() && m_rasterOwners->heapOwners.back().recordIndex >= recordCount)
             m_rasterOwners->heapOwners.pop_back();
+        m_rasterOwners->cachedLeaseHeap = nullptr;
+        m_rasterOwners->cachedLeaseArena = nullptr;
+        m_rasterOwners->cachedLease = {};
     }
     m_graphGeneration = graphGeneration;
     m_planGeneration = planGeneration;

@@ -224,7 +224,7 @@ Expected<GpuGraphPipelineId> GpuTaskGraph::appendPipeline(const GpuGraphPipeline
     pipeline.markerLabelSize = markerLabelRange.size;
 
     const u32 index = static_cast<u32>(m_pipelines.size());
-    m_pipelines.push_back(Move(pipeline));
+    m_pipelines.emplace_back(Move(pipeline));
     if(m_pipelineIdentityIndex){
         identityInserted = m_pipelineIdentityIndex->emplace(identityKey, index).second;
         if(!identityInserted)

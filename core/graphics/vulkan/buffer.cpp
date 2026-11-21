@@ -270,7 +270,7 @@ b8 CommandList::tryWriteBuffer(Buffer& buffer, const void* data, usize dataSize,
     if(dataSize == 0)
         return false;
 
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, VulkanArenaScope::s_WriteBufferCommandLabel))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, VulkanArenaScope::s_WriteBufferCommandLabel, false))
         return false;
     if(!data){
         rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, s_DataIsNullReason);
@@ -296,18 +296,10 @@ b8 CommandList::tryWriteBuffer(Buffer& buffer, const void* data, usize dataSize,
     }
 
     endActiveRenderPass();
-    setBufferState(&buffer, ResourceStates::CopyDest, false, BufferRange(destOffsetBytes, dataSize));
+    queueWriteBufferCopyAndBarrier(buffer, staging->buffer->m_buffer, staging->offset, destOffsetBytes, dataSize);
     if(m_commandRecordingFailed)
         return false;
 
-    VkBufferCopy region{};
-    region.srcOffset = staging->offset;
-    region.dstOffset = destOffsetBytes;
-    region.size = dataSize;
-
-    m_context.deviceDispatch.vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, staging->buffer->m_buffer, buffer.m_buffer, 1, &region);
-
-    retainResource(&buffer);
     retainStagingBuffer(*staging->buffer);
     return true;
 }
@@ -329,7 +321,7 @@ void CommandList::clearBufferUInt(Buffer& buffer, u32 clearValue){
         return;
 
     endActiveRenderPass();
-    setBufferState(&buffer, ResourceStates::CopyDest);
+    setBufferStateValidated(buffer, ResourceStates::CopyDest, false, BufferRange(0u, buffer.m_creationDesc.byteSize));
     if(m_commandRecordingFailed)
         return;
 
@@ -375,9 +367,9 @@ void CommandList::copyBuffer(Buffer& dest, u64 destOffsetBytes, Buffer& src, u64
         return;
 
     endActiveRenderPass();
-    setBufferState(&src, sourceState, false, BufferRange(srcOffsetBytes, dataSizeBytes));
+    setBufferStateValidated(src, sourceState, false, BufferRange(srcOffsetBytes, dataSizeBytes));
     if(!m_commandRecordingFailed)
-        setBufferState(&dest, destinationState, false, BufferRange(destOffsetBytes, dataSizeBytes));
+        setBufferStateValidated(dest, destinationState, false, BufferRange(destOffsetBytes, dataSizeBytes));
     if(m_commandRecordingFailed)
         return;
 

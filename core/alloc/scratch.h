@@ -147,6 +147,66 @@ private:
 
 
 public:
+    class Scope final : ::NoCopy{
+    private:
+        struct SavedBucket{
+            Chunk* active = nullptr;
+            u8* available = nullptr;
+            usize remaining = 0u;
+        };
+
+
+    public:
+        explicit Scope(ScratchArena& arena)noexcept
+            : m_arena(arena)
+        {
+            for(usize i = 0u; i < arena.m_bucket.size(); ++i){
+                const Chunk* const active = arena.m_bucket[i].active;
+                if(active){
+                    m_saved[i] = SavedBucket{
+                        .active = const_cast<Chunk*>(active),
+                        .available = active->m_available.get(),
+                        .remaining = active->m_remaining,
+                    };
+                }
+            }
+        }
+
+        ~Scope()noexcept{
+            for(usize i = 0u; i < m_arena.m_bucket.size(); ++i){
+                auto& bucket = m_arena.m_bucket[i];
+                const SavedBucket& saved = m_saved[i];
+                while(bucket.active && bucket.active != saved.active){
+                    Chunk& chunk = *bucket.active;
+                    const usize unpopped = chunk.m_size - chunk.m_remaining;
+                    if(unpopped != 0u)
+                        m_arena.m_memoryStats.recordDeallocation(unpopped);
+                    chunk.m_available = chunk.m_buffer;
+                    chunk.m_remaining = chunk.m_size;
+                    m_arena.cacheEmptyChunk(bucket, chunk);
+                }
+                if(bucket.active && bucket.active == saved.active){
+                    Chunk& chunk = *bucket.active;
+                    if(chunk.m_remaining < saved.remaining){
+                        const usize unpopped = saved.remaining - chunk.m_remaining;
+                        m_arena.m_memoryStats.recordDeallocation(unpopped);
+                        chunk.m_available = MakeNotNull(saved.available);
+                        chunk.m_remaining = saved.remaining;
+                        if(chunk.m_remaining == chunk.m_size)
+                            m_arena.cacheEmptyChunk(bucket, chunk);
+                    }
+                }
+            }
+        }
+
+
+    private:
+        ScratchArena& m_arena;
+        Array<SavedBucket, FloorLog2(s_MaxAlignSize) + 1> m_saved = {};
+    };
+
+
+public:
     using Base::allocate;
     using Base::deallocate;
 

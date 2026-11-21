@@ -44,6 +44,7 @@ b8 GpuTaskGraph::retireTaskPayloads(){
             return false;
         if(!tryBeginTeardownWithinLock())
             return false;
+        m_hasTaskLifecycleActivity = true;
         for(const GpuTaskNode& task : m_tasks){
             const TaskLifecycleState::Enum state = task.lifecycleState();
             if(state == TaskLifecycleState::Recording || state == TaskLifecycleState::Submitting || state == TaskLifecycleState::Accepting){
@@ -99,7 +100,7 @@ b8 GpuTaskGraph::destroyTaskPayloads(){
     }
 
     for(GpuTaskNode& task : m_tasks){
-        if(notificationGeneration != 0u && task.discardNotificationGeneration == notificationGeneration && task.payload && task.discardPayload)
+        if(m_hasDiscardCallbacks && notificationGeneration != 0u && task.discardNotificationGeneration == notificationGeneration && task.payload && task.discardPayload)
             task.discardPayload(task.payload);
     }
     return true;
@@ -135,8 +136,9 @@ void GpuTaskGraph::destroyTaskPayloadObjects()noexcept{
     if(!m_hasTaskPayloads)
         return;
 
+    const b8 runDestroyers = m_hasNonTrivialTaskPayloads;
     for(GpuTaskNode& task : m_tasks){
-        if(task.payload && task.destroyPayload)
+        if(runDestroyers && task.payload && task.destroyPayload)
             task.destroyPayload(m_arena, task.payload);
         task.payload = nullptr;
         task.recordPayload = nullptr;
@@ -144,6 +146,8 @@ void GpuTaskGraph::destroyTaskPayloadObjects()noexcept{
         task.discardPayload = nullptr;
         task.destroyPayload = nullptr;
     }
+    m_hasNonTrivialTaskPayloads = false;
+    rewindTaskPayloadPool();
     m_hasTaskPayloads = false;
 }
 

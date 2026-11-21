@@ -345,6 +345,9 @@ public:
 
 
     private:
+        friend class GpuRecordedGraph;
+        friend class GpuNativePacketRecorder;
+        friend class GpuTaskScheduler;
         static thread_local ReadView* s_ActiveView;
 
 
@@ -413,6 +416,10 @@ public:
 
 
     private:
+        [[nodiscard]] u8 packetRuntimeFlags(usize packetIndex)const noexcept;
+
+
+    private:
         void release()noexcept;
 
 
@@ -424,6 +431,18 @@ public:
 
 
 private:
+    struct PacketRuntimeFlag{
+        enum Mask : u8{
+            None = 0u,
+            AllowsParallelRecording = 1u << 0u,
+            HasInitialOwnerHandoff = 1u << 1u,
+            HasExternalStateSource = 1u << 2u,
+            HasPrologueStateSeeds = 1u << 3u,
+            HasRetainedInitialStateResource = 1u << 4u,
+            HasCrossQueueConsumer = 1u << 5u,
+        };
+    };
+
     struct AttemptBindingState{
         enum Enum : u8{
             None,
@@ -530,6 +549,7 @@ private:
     GraphicsVector<GpuCompiledTask> m_tasks;
     GraphicsVector<u32> m_compiledTaskIndexByTask;
     GraphicsVector<GpuSubmissionPacket> m_packets;
+    GraphicsVector<u8> m_packetRuntimeFlags;
     GraphicsVector<GpuTaskId> m_packetTasks;
     GraphicsVector<GpuPacketDependency> m_packetDependencies;
     GraphicsVector<GpuExternalCompletionId> m_packetExternalDependencies;

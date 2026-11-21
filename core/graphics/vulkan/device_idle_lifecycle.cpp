@@ -84,8 +84,10 @@ VkResult Device::waitForNativeIdle()noexcept{
 
     const VkResult result = isDeviceLost() ? VK_ERROR_DEVICE_LOST : m_context.deviceDispatch.vkDeviceWaitIdle(m_context.device);
     if(result == VK_SUCCESS){
-        for(const auto queue : m_physicalQueues)
+        for(const auto queue : m_physicalQueues){
             queue->m_lastFinishedID = queue->m_lastSubmittedID;
+            queue->m_lastObservedFinishedID.store(queue->m_lastFinishedID, MemoryOrder::release);
+        }
     }
 
     for(usize nativeQueueIndex = m_nativeQueueStates.size(); nativeQueueIndex > 0u; --nativeQueueIndex)

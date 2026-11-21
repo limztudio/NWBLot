@@ -46,6 +46,7 @@ public:
 private:
     Vector<VertexAttributeDesc, Alloc::GlobalArena> m_attributes;
     Vector<VkVertexInputBindingDescription, Alloc::GlobalArena> m_bindings;
+    Vector<u32, Alloc::GlobalArena> m_bindingRequiredElementBytes;
     Vector<VkVertexInputAttributeDescription, Alloc::GlobalArena> m_vkAttributes;
 
     const VulkanContext& m_context;

@@ -276,6 +276,7 @@ private:
         CommandList* const* commandLists = nullptr;
         usize numCommandLists = 0u;
         QueueSubmissionDesc submitDesc;
+        b8 allowSignalCoalescing = false;
     };
     struct GraphCommandListBatchResult{
         enum Status : u8{

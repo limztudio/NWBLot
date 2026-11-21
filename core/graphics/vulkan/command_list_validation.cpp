@@ -86,10 +86,18 @@ b8 CommandList::validateTrackedResourcesReadyForSubmission()const{
         return false;
     }
 
-    for(const auto texture : m_currentCmdBuf->m_resourceReferences.m_textures){
-        if(!isTextureReadyForCommandQueue(texture.get())){
-            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command list: referenced texture is not ready for this exact command queue"));
-            return false;
+    if(m_currentCmdBuf->m_resourceReferences.m_hasDynamicReadinessResources){
+        for(const auto texture : m_currentCmdBuf->m_resourceReferences.m_textures){
+            if((!texture->m_managed || texture->m_creationDesc.isVirtual) && !isTextureReadyForCommandQueue(texture.get())){
+                NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command list: referenced texture is not ready for this exact command queue"));
+                return false;
+            }
+        }
+        for(const auto buffer : m_currentCmdBuf->m_resourceReferences.m_buffers){
+            if((!buffer->m_managed || buffer->m_creationDesc.isVirtual) && !isBufferReadyForCommandQueue(buffer.get())){
+                NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command list: referenced buffer is not ready for this exact command queue"));
+                return false;
+            }
         }
     }
     for(auto it = m_stateTracker.m_permanentTextureStates.begin(); it != m_stateTracker.m_permanentTextureStates.end(); ++it){
@@ -103,12 +111,6 @@ b8 CommandList::validateTrackedResourcesReadyForSubmission()const{
 
         if(!heap->retainedResourcesReadyForQueue(m_creationDesc.physicalQueue)){
             NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command list: descriptor heap contains a resource unavailable to this exact command queue"));
-            return false;
-        }
-    }
-    for(const auto buffer : m_currentCmdBuf->m_resourceReferences.m_buffers){
-        if(!isBufferReadyForCommandQueue(buffer.get())){
-            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command list: referenced buffer is not ready for this exact command queue"));
             return false;
         }
     }
@@ -180,11 +182,18 @@ void CommandList::retainResource(GraphicsResource* resource){
 }
 
 void CommandList::retainStagingBuffer(Buffer& buffer){
-    m_currentCmdBuf->m_referencedStagingBuffers.emplace_back(&buffer, BufferHandle::deleter_type(&m_context.objectArena));
+    auto& stagingBuffers = m_currentCmdBuf->m_referencedStagingBuffers;
+    if(!stagingBuffers.empty() && stagingBuffers.back().get() == &buffer)
+        return;
+    for(const BufferHandle& retained : stagingBuffers){
+        if(retained.get() == &buffer)
+            return;
+    }
+    stagingBuffers.emplace_back(&buffer, BufferHandle::deleter_type(&m_context.objectArena));
     m_currentCmdBuf->m_resourceReferences.trackRetainedBuffer(buffer);
 }
 
-b8 CommandList::validateCommandRecordingScope(const TStringView operationName){
+b8 CommandList::validateCommandRecordingScopeSlow(const TStringView operationName){
     if(!publicCommandStateAccessible())
         return false;
     if(m_commandRecordingFailed)
@@ -210,7 +219,7 @@ b8 CommandList::validateCommandRecordingScope(const TStringView operationName){
     return false;
 }
 
-b8 CommandList::recordAndValidateCommandCapability(const GpuQueueCapability::Mask requiredCapabilities, const TStringView operationName){
+b8 CommandList::recordAndValidateCommandCapabilitySlow(const GpuQueueCapability::Mask requiredCapabilities, const TStringView operationName){
     if(!publicCommandStateAccessible())
         return false;
 #if defined(NWB_DEBUG)
@@ -220,7 +229,7 @@ b8 CommandList::recordAndValidateCommandCapability(const GpuQueueCapability::Mas
 #endif
 
     const u8 requiredBits = static_cast<u8>(requiredCapabilities);
-    if(!validateCommandRecordingScope(operationName))
+    if(!validateCommandRecordingScopeSlow(operationName))
         return false;
 
     auto& queueInfo = *MakeNotNull(cachedPhysicalQueueInfo());
@@ -281,11 +290,15 @@ void CommandList::rejectCommandRecording(const TStringView operationName, const 
 void CommandList::invalidateCommandRecording()noexcept{
     if(!publicCommandStateAccessible())
         return;
+    resetPendingBufferCopies();
+    invalidateGraphicsDrawValidationCache();
     m_commandRecordingFailed = true;
     m_hostReadbackBarrierTracker.clear();
 }
 
 void CommandList::discardInvalidCommandBuffer(){
+    resetPendingBufferCopies();
+    invalidateGraphicsDrawValidationCache();
     m_stateTracker.rollbackRecordingAttempt();
     if(!m_currentCmdBuf)
         return;

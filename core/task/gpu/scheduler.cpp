@@ -99,7 +99,24 @@ b8 GpuTaskScheduler::submitGraph(
     if(outFailedPacket)
         *outFailedPacket = {};
     DeviceOperation deviceOperation(*this);
-    if(!deviceOperation.m_admitted || &recorder.m_device != &device())
+    if(!deviceOperation.m_admitted)
+        return false;
+    return submitGraphWithinDeviceOperation(compiledGraph, recorder, desc, scratchArena, graph, recordedGraph, transaction, outFailedPacket);
+}
+
+b8 GpuTaskScheduler::submitGraphWithinDeviceOperation(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuNativePacketRecorder& recorder,
+    const GpuTaskGraphNormalExecutionDesc& desc,
+    Alloc::ScratchArena& scratchArena,
+    GpuTaskGraph& graph,
+    GpuRecordedGraph& recordedGraph,
+    GpuGraphSubmissionTransaction& transaction,
+    GpuSubmissionPacketId* const outFailedPacket
+)const{
+    if(outFailedPacket)
+        *outFailedPacket = {};
+    if(&recorder.m_device != &device())
         return false;
 
     SubmissionAttemptExceptionFinalizer exceptionFinalizer(graph, transaction, compiledGraph, recordedGraph);

@@ -185,18 +185,6 @@ Device::GraphCommandListBatchResult Device::executeGraphCommandListsBatch(
                 NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Command list {} lease provenance does not match execution queue"), i);
                 return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
             }
-            if(!commandList->matchesNativeLeaseIdentity()){
-                NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: command list {} has no native command buffer"), i);
-                return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
-            }
-            if(commandList->m_commandRecordingFailed){
-                NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: command list {} has a sticky native recording failure"), i);
-                return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
-            }
-            if(commandList->m_isRecording){
-                NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: command list {} is still recording"), i);
-                return GraphCommandListBatchResult{ GraphCommandListBatchResult::Status::ValidationFailed };
-            }
             for(usize previous = 0u; previous < i; ++previous){
                 if(entry.commandLists[previous] == commandList){
                     NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: command list {} is duplicated"), i);
@@ -222,8 +210,12 @@ Device::GraphCommandListBatchResult Device::executeGraphCommandListsBatch(
     expectedCommandLists.clear();
     localWaits.reserve(totalWaitTokens);
 
-    Vector<Queue::BatchSubmitEntry, Alloc::GlobalArena> queueEntries(entries.size(), m_context.objectArena);
-    Vector<usize, Alloc::GlobalArena> waitOffsets(entries.size(), m_context.objectArena);
+    auto& queueEntries = queue->m_executeQueueEntries;
+    auto& waitOffsets = queue->m_executeWaitOffsets;
+    auto& queueReceipts = queue->m_executeQueueReceipts;
+    queueEntries.resize(entries.size());
+    waitOffsets.resize(entries.size());
+    queueReceipts.resize(entries.size());
     for(usize entryIndex = 0u; entryIndex < entries.size(); ++entryIndex){
         const GraphCommandListBatchEntry& entry = entries[entryIndex];
         const usize waitOffset = localWaits.size();
@@ -267,6 +259,7 @@ Device::GraphCommandListBatchResult Device::executeGraphCommandListsBatch(
             .localSignalCount = 0u,
             .maxSameQueueWaitValue = maxSameQueueWaitValue,
             .forceNativeSubmission = entry.submitDesc.forceNativeSubmission,
+            .allowSignalCoalescing = entry.allowSignalCoalescing && !entry.submitDesc.preSubmitHook.valid(),
         };
     }
 
@@ -304,7 +297,6 @@ Device::GraphCommandListBatchResult Device::executeGraphCommandListsBatch(
         queueEntries.back().localSignalCount = 1u;
     }
 
-    Vector<Queue::SubmissionReceipt, Alloc::GlobalArena> queueReceipts(entries.size(), m_context.objectArena);
     const Queue::BatchSubmissionResult batchResult = queue->submitBatch(Span<const Queue::BatchSubmitEntry>(queueEntries.data(), queueEntries.size()), Span<Queue::SubmissionReceipt>(queueReceipts.data(), queueReceipts.size()));
     const b8 submissionAccepted = batchResult.status == Queue::BatchSubmissionResult::Status::Accepted;
     const u64 submittedID = batchResult.lastSubmittedID;
@@ -380,18 +372,6 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
         }
         if(!commandList->matchesSubmissionLease(executionQueue, queue->m_queueID, graphSubmissionAuthorized)){
             NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Command list {} lease provenance does not match execution queue"), i);
-            return MakeUnexpected(Failure{});
-        }
-        if(!commandList->matchesNativeLeaseIdentity()){
-            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: command list {} has no native command buffer"), i);
-            return MakeUnexpected(Failure{});
-        }
-        if(commandList->m_commandRecordingFailed){
-            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: command list {} has a sticky native recording failure"), i);
-            return MakeUnexpected(Failure{});
-        }
-        if(commandList->m_isRecording){
-            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to execute command lists: command list {} is still recording"), i);
             return MakeUnexpected(Failure{});
         }
     }
@@ -524,6 +504,7 @@ b8 Device::waitForSubmissionTokenInternal(const QueueSubmissionToken& token, con
     if(result == VK_SUCCESS){
         NothrowScopedLock producerLock(producerQueue->m_mutex);
         producerQueue->m_lastFinishedID = Max(producerQueue->m_lastFinishedID, token.value);
+        producerQueue->m_lastObservedFinishedID.store(producerQueue->m_lastFinishedID, MemoryOrder::release);
         producerQueue->collectCompletedCommandBuffers();
     }
     else if(result == VK_ERROR_DEVICE_LOST)

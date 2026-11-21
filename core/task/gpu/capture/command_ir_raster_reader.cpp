@@ -55,13 +55,8 @@ Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus::Enum> GpuComma
     }
 
     const usize recordOffset = m_cursor;
-    usize probeCursor = m_cursor;
-    const auto wireHeader = ReadPOD<GpuCommandIrHeader>(m_commandBytes, probeCursor);
-    if(!wireHeader){
-        fail(GpuCommandIrStreamValidationError::TruncatedRecord, recordOffset, m_nextRecordIndex);
-        return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
-    }
-    const GpuCommandIrHeader& header = *wireHeader;
+    GpuCommandIrHeader header;
+    FOUNDATION_MEMCPY(&header, sizeof(header), m_commandBytes.data() + recordOffset, sizeof(header));
     if(!GpuCommandIrDetail::IsRasterOpcode(header.opcode)){
         const auto builtin = nextBuiltinTask();
         if(!builtin)
@@ -69,16 +64,7 @@ Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus::Enum> GpuComma
         return GpuCommandIrDecodedRecord{ .opcode = __hidden_gpu_command_ir_raster_reader::BuiltinWireOpcode(builtin->opcode), .builtin = *builtin };
     }
 
-    usize expectedByteSize = 0u;
-    switch(header.opcode){
-    case GpuCommandIrWireOpcode::SetGraphicsState: expectedByteSize = sizeof(GpuCommandIrSetGraphicsStateRecord); break;
-    case GpuCommandIrWireOpcode::BindGraphicsHeap: expectedByteSize = sizeof(GpuCommandIrBindGraphicsHeapRecord); break;
-    case GpuCommandIrWireOpcode::SetPushConstants: expectedByteSize = sizeof(GpuCommandIrSetPushConstantsRecord); break;
-    case GpuCommandIrWireOpcode::Draw:
-    case GpuCommandIrWireOpcode::DrawIndexed: expectedByteSize = sizeof(GpuCommandIrDrawRecord); break;
-    case GpuCommandIrWireOpcode::EndRenderPass: expectedByteSize = sizeof(GpuCommandIrEndRenderPassRecord); break;
-    default: break;
-    }
+    const usize expectedByteSize = GpuCommandIrDetail::RasterRecordWireByteSize(header.opcode);
     if(header.byteSize != expectedByteSize){
         fail(GpuCommandIrStreamValidationError::InvalidRecordSize, recordOffset, m_nextRecordIndex);
         return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
@@ -88,19 +74,16 @@ Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus::Enum> GpuComma
         return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
     }
 
-    GpuCommandIrRasterTaskRecord raster;
-    raster.opcode = header.opcode;
-    usize contextCursor = recordOffset + sizeof(GpuCommandIrHeader);
-    const auto context = ReadPOD<GpuCommandIrRecordContext>(m_commandBytes, contextCursor);
-    if(!context){
-        fail(GpuCommandIrStreamValidationError::InvalidRecord, recordOffset, m_nextRecordIndex);
-        return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
-    }
-    const auto decodedContext = GpuCommandIrDetail::DecodeRecordContext(*context, m_graphGeneration, m_planGeneration);
+    GpuCommandIrDetail::WireRecordStorage wireStorage;
+    FOUNDATION_MEMCPY(&wireStorage, sizeof(wireStorage), m_commandBytes.data() + recordOffset, expectedByteSize);
+    const auto decodedContext = GpuCommandIrDetail::DecodeRecordContext(wireStorage.endRenderPass.context, m_graphGeneration, m_planGeneration);
     if(!decodedContext){
         fail(GpuCommandIrStreamValidationError::InvalidRecord, recordOffset, m_nextRecordIndex);
         return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
     }
+
+    GpuCommandIrRasterTaskRecord raster;
+    raster.opcode = header.opcode;
     raster.task = decodedContext->task;
     raster.packet = decodedContext->packet;
     raster.queue = decodedContext->queue;
@@ -108,18 +91,10 @@ Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus::Enum> GpuComma
     b8 valid = true;
     switch(header.opcode){
     case GpuCommandIrWireOpcode::SetGraphicsState:{
-        usize cursor = recordOffset;
-        const auto wireRecord = ReadPOD<GpuCommandIrSetGraphicsStateRecord>(m_commandBytes, cursor);
-        if(!wireRecord){
-            valid = false;
-            break;
-        }
-        const GpuCommandIrSetGraphicsStateRecord& record = *wireRecord;
-        valid = record.pipelineIndex != Limit<u32>::s_Max && record.colorAttachmentIndex != Limit<u32>::s_Max && record.framebufferOwnerIndex != Limit<u32>::s_Max && record.vertexBindingCount <= s_MaxVertexAttributes && record.hasScissor <= 1u;
-        if(!valid)
-            break;
-        if(record.blobSizeBytes != static_cast<u64>(record.vertexBindingCount) * sizeof(GpuCommandIrRasterVertexWire) || record.blobOffsetBytes != m_nextBlobOffset || record.blobSizeBytes > m_blobBytes.size() - m_nextBlobOffset){
-            fail(GpuCommandIrStreamValidationError::InvalidBlobRange, recordOffset, m_nextRecordIndex);
+        const GpuCommandIrSetGraphicsStateRecord& record = wireStorage.setGraphicsState;
+        GpuCommandIrStreamValidationError::Enum fieldError = GpuCommandIrStreamValidationError::None;
+        if(!GpuCommandIrDetail::ValidateSetGraphicsStateWireFields(record, m_blobBytes, m_nextBlobOffset, fieldError)){
+            fail(fieldError, recordOffset, m_nextRecordIndex);
             return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
         }
         raster.pipeline = { m_graphGeneration, record.pipelineIndex };
@@ -136,57 +111,26 @@ Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus::Enum> GpuComma
         raster.blobSizeBytes = record.blobSizeBytes;
         if(record.indexResourceIndex != Limit<u32>::s_Max)
             raster.indexResource = { m_graphGeneration, record.indexResourceIndex };
-        valid = GpuCommandIrDetail::IsRasterViewportValid(raster.viewport)
-            && IsFinite(raster.blendConstantColor.r) && IsFinite(raster.blendConstantColor.g)
-            && IsFinite(raster.blendConstantColor.b) && IsFinite(raster.blendConstantColor.a)
-            && (!raster.hasScissor || (raster.scissor.minX < raster.scissor.maxX && raster.scissor.minY < raster.scissor.maxY))
-            && (raster.hasScissor || (record.scissor.minX == 0 && record.scissor.maxX == 0 && record.scissor.minY == 0 && record.scissor.maxY == 0))
-            && (raster.indexResource.valid() ? (raster.indexFormat == Format::R16_UINT || raster.indexFormat == Format::R32_UINT) : (raster.indexFormat == Format::UNKNOWN && raster.indexOffset == 0u))
-        ;
-        if(!valid)
-            break;
-        usize vertexCursor = static_cast<usize>(record.blobOffsetBytes);
-        for(u32 index = 0u; index < record.vertexBindingCount; ++index){
-            const auto wireBinding = ReadPOD<GpuCommandIrRasterVertexWire>(m_blobBytes, vertexCursor);
-            if(!wireBinding || wireBinding->resourceIndex == Limit<u32>::s_Max){
-                valid = false;
-                break;
+        if(record.vertexBindingCount != 0u){
+            const u8* const vertexPtr = m_blobBytes.data() + static_cast<usize>(record.blobOffsetBytes);
+            for(u32 index = 0u; index < record.vertexBindingCount; ++index){
+                GpuCommandIrRasterVertexWire binding;
+                FOUNDATION_MEMCPY(&binding, sizeof(binding), vertexPtr + index * sizeof(GpuCommandIrRasterVertexWire), sizeof(GpuCommandIrRasterVertexWire));
+                raster.vertexBuffers.push_back({ { m_graphGeneration, binding.resourceIndex }, binding.slot, binding.offset });
             }
-            const GpuCommandIrRasterVertexWire& binding = *wireBinding;
-            for(const GpuCommandIrRasterVertexBinding& previous : raster.vertexBuffers){
-                if(previous.slot == binding.slot){
-                    valid = false;
-                    break;
-                }
-            }
-            if(!valid)
-                break;
-            raster.vertexBuffers.push_back({ { m_graphGeneration, binding.resourceIndex }, binding.slot, binding.offset });
         }
         nextBlobOffset += static_cast<usize>(record.blobSizeBytes);
         break;
     }
     case GpuCommandIrWireOpcode::BindGraphicsHeap:{
-        usize cursor = recordOffset;
-        const auto wireRecord = ReadPOD<GpuCommandIrBindGraphicsHeapRecord>(m_commandBytes, cursor);
-        if(!wireRecord){
-            valid = false;
-            break;
-        }
-        const GpuCommandIrBindGraphicsHeapRecord& record = *wireRecord;
+        const GpuCommandIrBindGraphicsHeapRecord& record = wireStorage.bindGraphicsHeap;
         valid = record.pipelineIndex != Limit<u32>::s_Max && record.heapOwnerIndex != Limit<u32>::s_Max;
         raster.pipeline = { m_graphGeneration, record.pipelineIndex };
         raster.heapOwnerIndex = record.heapOwnerIndex;
         break;
     }
     case GpuCommandIrWireOpcode::SetPushConstants:{
-        usize cursor = recordOffset;
-        const auto wireRecord = ReadPOD<GpuCommandIrSetPushConstantsRecord>(m_commandBytes, cursor);
-        if(!wireRecord){
-            valid = false;
-            break;
-        }
-        const GpuCommandIrSetPushConstantsRecord& record = *wireRecord;
+        const GpuCommandIrSetPushConstantsRecord& record = wireStorage.setPushConstants;
         valid = record.blobSizeBytes != 0u && record.blobSizeBytes <= Limit<u32>::s_Max && (record.blobSizeBytes & (s_PushConstantSizeAlignment - 1u)) == 0u;
         if(valid && (record.blobOffsetBytes != m_nextBlobOffset || record.blobSizeBytes > m_blobBytes.size() - m_nextBlobOffset)){
             fail(GpuCommandIrStreamValidationError::InvalidBlobRange, recordOffset, m_nextRecordIndex);
@@ -200,23 +144,12 @@ Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus::Enum> GpuComma
     }
     case GpuCommandIrWireOpcode::Draw:
     case GpuCommandIrWireOpcode::DrawIndexed:{
-        usize cursor = recordOffset;
-        const auto wireRecord = ReadPOD<GpuCommandIrDrawRecord>(m_commandBytes, cursor);
-        valid = wireRecord.has_value();
-        if(!valid)
-            break;
-        const GpuCommandIrDrawRecord& record = *wireRecord;
+        const GpuCommandIrDrawRecord& record = wireStorage.draw;
         raster.drawArguments = { record.vertexCount, record.instanceCount, record.startIndexLocation, record.startVertexLocation, record.startInstanceLocation };
         break;
     }
-    case GpuCommandIrWireOpcode::EndRenderPass:{
-        usize cursor = recordOffset;
-        const auto wireRecord = ReadPOD<GpuCommandIrEndRenderPassRecord>(m_commandBytes, cursor);
-        valid = wireRecord.has_value();
-        if(!valid)
-            break;
+    case GpuCommandIrWireOpcode::EndRenderPass:
         break;
-    }
     default:
         valid = false;
         break;

@@ -147,7 +147,8 @@ b8 GpuNativePacketRecorder::recordPacket(
     GpuRecordedGraph::PacketRecordingScratch& scratch,
     GpuRecordedGraph& outRecordedGraph,
     GpuCommandIrCapture* const commandIrCapture,
-    GpuPacketRecordingAbort* const deferredAbort
+    GpuPacketRecordingAbort* const deferredAbort,
+    const PreclaimedPacketRecording* const preclaimed
 )const{
     if(deferredAbort && deferredAbort->valid()){
         FOUNDATION_ASSERT_MSG(false, FOUNDATION_TEXT("Packet recording abort output must be fresh"));
@@ -158,8 +159,7 @@ b8 GpuNativePacketRecorder::recordPacket(
 
     const u64 recordingAttemptGeneration = outRecordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactAccess);
     if(
-        !graph.matchesRecordingAttempt(compiledGraph, recordingAttemptGeneration)
-        || m_device.getDeviceGeneration() != planAccess.deviceGeneration()
+        m_device.getDeviceGeneration() != planAccess.deviceGeneration()
         || !outRecordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactAccess)
     )
         return false;
@@ -190,7 +190,10 @@ b8 GpuNativePacketRecorder::recordPacket(
     CommandListResourceStateHandoff* packetStateSeed = nullptr;
     GpuCommandIrCaptureCheckpoint captureCheckpoint;
     const GpuCommandIrCaptureCheckpoint* capturedPrefix = nullptr;
-    GpuPacketRecordingLease recordingLease;
+    GpuPacketRecordingLease localRecordingLease;
+    GpuPacketRecordingAccess localRecordingAccess;
+    GpuPacketRecordingLease& recordingLease = preclaimed && preclaimed->lease ? *preclaimed->lease : localRecordingLease;
+    const GpuPacketRecordingAccess& recordingAccess = preclaimed && preclaimed->access ? *preclaimed->access : localRecordingAccess;
     const auto abortPacketRecording = [&]{
         if(deferredAbort){
             const b8 abortDeferred = graph.deferPacketRecordingAbort(compiledGraph, planAccess, packetID, recordingLease, *deferredAbort);
@@ -200,9 +203,10 @@ b8 GpuNativePacketRecorder::recordPacket(
         outRecordedGraph.discardPacketTimingTicket(packetID, artifactAccess);
         graph.abortPacketRecording(compiledGraph, planAccess, packetID, recordingLease);
     };
-    if(!graph.beginPacketRecording(compiledGraph, planAccess, packetID, recordingAttemptGeneration, recordingLease))
-        return false;
-    const GpuPacketRecordingAccess recordingAccess(graph, compiledGraph, planAccess, recordingLease);
+    if(!preclaimed || !preclaimed->lease || !preclaimed->access){
+        if(!graph.beginPacketRecording(compiledGraph, planAccess, packetID, recordingAttemptGeneration, localRecordingLease, &localRecordingAccess))
+            return false;
+    }
     if(!recordingAccess.validFor(graph, compiledGraph, planAccess, packetID)){
         abortPacketRecording();
         return false;
@@ -280,6 +284,8 @@ b8 GpuNativePacketRecorder::recordPacket(
     u32 barrierCount = 0u;
     f64 graphBarrierRecordingSeconds = 0.0;
     f64 taskRecordSeconds = 0.0;
+    const u8 packetFlags = planAccess.packetRuntimeFlags(packetID.index);
+    const b8 hasRetainedInitialStateResource = (packetFlags & GpuCompiledGraph::PacketRuntimeFlag::HasRetainedInitialStateResource) != 0u;
     for(u32 taskIndex = 0u; recorded && taskIndex < packet.taskCount; ++taskIndex){
         const GpuTaskId task = tasks[taskIndex];
         const GpuTaskGraphTaskView taskView = declarationAccess.taskAt(task.index);
@@ -301,46 +307,48 @@ b8 GpuNativePacketRecorder::recordPacket(
         };
         const GpuCompiledBarrier* const prologueBarriers = compiledTaskView.prologueBarriers;
         barrierCount += compiledTask->prologueBarrierCount;
-        const Timer graphPrologueRecordingBegin = TimerNow();
-        if(recorded && compiledTask->prologueBarrierCount != 0u){
-            b8 hasUnknownInitialBarrier = false;
-            for(u32 barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
-                if(prologueBarriers[barrierIndex].isGraphInitialState && prologueBarriers[barrierIndex].before == ResourceStates::Unknown){
-                    hasUnknownInitialBarrier = true;
-                    break;
-                }
-            }
-            if(!hasUnknownInitialBarrier){
-                recorded = graph.applyCompiledBarriers(compiledGraph, planAccess, recordingAccess, task, Span<const GpuCompiledBarrier>(prologueBarriers, compiledTask->prologueBarrierCount), *commandList);
-            }
-            else if(!recordingAccess.validForTask(graph, compiledGraph, planAccess, task)){
-                recorded = false;
-            }
-            else{
-                for(u32 barrierIndex = 0u; recorded && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
-                    const GpuCompiledBarrier& barrier = prologueBarriers[barrierIndex];
-                    if(barrier.isGraphInitialState && barrier.before == ResourceStates::Unknown){
-                        if(!GpuPacketRecordingDetail::HasExplicitKnownInitialState(declarationAccess, barrier, *commandList)){
-                            const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(barrier.resource.index);
-                            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Gpu task graph: rejecting task '{}' because first-read resource '{}' has no explicit initial native state source"), ConvertString(taskView.markerLabel), ConvertString(resource.markerLabel));
-                            recorded = false;
-                            break;
-                        }
-
-                        GpuCompiledBarrier loweredBarrier = barrier;
-                        loweredBarrier.isGraphInitialState = false;
-                        recorded = graph.applyCompiledBarrierValidated(planAccess, loweredBarrier, *commandList);
+        if(recorded && (compiledTask->prologueBarrierCount != 0u || hasRetainedInitialStateResource)){
+            const Timer graphPrologueRecordingBegin = TimerNow();
+            if(compiledTask->prologueBarrierCount != 0u){
+                b8 hasUnknownInitialBarrier = false;
+                for(u32 barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+                    if(prologueBarriers[barrierIndex].isGraphInitialState && prologueBarriers[barrierIndex].before == ResourceStates::Unknown){
+                        hasUnknownInitialBarrier = true;
+                        break;
                     }
-                    else
-                        recorded = graph.applyCompiledBarrierValidated(planAccess, barrier, *commandList);
+                }
+                if(!hasUnknownInitialBarrier){
+                    recorded = graph.applyCompiledBarriers(compiledGraph, planAccess, recordingAccess, task, Span<const GpuCompiledBarrier>(prologueBarriers, compiledTask->prologueBarrierCount), *commandList);
+                }
+                else if(!recordingAccess.validForTask(graph, compiledGraph, planAccess, task)){
+                    recorded = false;
+                }
+                else{
+                    for(u32 barrierIndex = 0u; recorded && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+                        const GpuCompiledBarrier& barrier = prologueBarriers[barrierIndex];
+                        if(barrier.isGraphInitialState && barrier.before == ResourceStates::Unknown){
+                            if(!GpuPacketRecordingDetail::HasExplicitKnownInitialState(declarationAccess, barrier, *commandList)){
+                                const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(barrier.resource.index);
+                                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Gpu task graph: rejecting task '{}' because first-read resource '{}' has no explicit initial native state source"), ConvertString(taskView.markerLabel), ConvertString(resource.markerLabel));
+                                recorded = false;
+                                break;
+                            }
+
+                            GpuCompiledBarrier loweredBarrier = barrier;
+                            loweredBarrier.isGraphInitialState = false;
+                            recorded = graph.applyCompiledBarrierValidated(planAccess, loweredBarrier, *commandList);
+                        }
+                        else
+                            recorded = graph.applyCompiledBarrierValidated(planAccess, barrier, *commandList);
+                    }
                 }
             }
+            if(recorded && hasRetainedInitialStateResource)
+                recorded = graph.seedTaskRetainedResourceStates(compiledGraph, planAccess, recordingAccess, task, *commandList);
+            if(recorded)
+                commandList->commitBarriers();
+            graphBarrierRecordingSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(graphBarrierRecordingSeconds), VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), graphPrologueRecordingBegin))));
         }
-        if(recorded)
-            recorded = graph.seedTaskRetainedResourceStates(compiledGraph, planAccess, recordingAccess, task, *commandList);
-        if(recorded)
-            commandList->commitBarriers();
-        graphBarrierRecordingSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(graphBarrierRecordingSeconds), VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), graphPrologueRecordingBegin))));
         const u64 taskRecordingLeaseSerial = commandList->recordingLeaseSerial();
         b8 taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
         if(recorded && (!taskRecordingLeaseIntact || commandList->commandRecordingFailed())){
@@ -445,14 +453,20 @@ b8 GpuNativePacketRecorder::recordPacket(
             else
                 commandList->abandonMarkerLease(taskMarker);
         }
-        const GpuCompiledBarrier* const epilogueBarriers = compiledTaskView.epilogueBarriers;
-        const Timer graphEpilogueRecordingBegin = TimerNow();
-        if(recorded && compiledTask->epilogueBarrierCount != 0u)
-            recorded = graph.applyCompiledBarriers(compiledGraph, planAccess, recordingAccess, task, Span<const GpuCompiledBarrier>(epilogueBarriers, compiledTask->epilogueBarrierCount), *commandList);
-        barrierCount += compiledTask->epilogueBarrierCount;
-        if(recorded)
-            commandList->commitBarriers();
-        graphBarrierRecordingSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(graphBarrierRecordingSeconds), VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), graphEpilogueRecordingBegin))));
+        if(recorded){
+            if(compiledTask->epilogueBarrierCount != 0u){
+                const GpuCompiledBarrier* const epilogueBarriers = compiledTaskView.epilogueBarriers;
+                const Timer graphEpilogueRecordingBegin = TimerNow();
+                recorded = graph.applyCompiledBarriers(compiledGraph, planAccess, recordingAccess, task, Span<const GpuCompiledBarrier>(epilogueBarriers, compiledTask->epilogueBarrierCount), *commandList);
+                barrierCount += compiledTask->epilogueBarrierCount;
+                if(recorded)
+                    commandList->commitBarriers();
+                graphBarrierRecordingSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(graphBarrierRecordingSeconds), VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), graphEpilogueRecordingBegin))));
+            }
+            else{
+                commandList->commitBarriers();
+            }
+        }
     }
     packetRecordingLeaseIntact = commandList->matchesRecordingLease(packetRecordingLeaseSerial);
     if(recorded && (!packetRecordingLeaseIntact || commandList->commandRecordingFailed()))
@@ -512,6 +526,8 @@ b8 GpuNativePacketRecorder::recordPacket(
     recordedPacket.recordingWorkerIndex = recordingWorkerIndex;
     graphRecordingOwnership.publish();
     recordedPacket.commandListCount = 1u;
+    if(preclaimed && preclaimed->deferComplete)
+        return true;
     PacketArtifactPublicationScope artifactPublication(outRecordedGraph, packetID, artifactAccess);
     const b8 packetRecordingCompleted = graph.completePacketRecording(compiledGraph, planAccess, packetID, recordingLease);
     FOUNDATION_FATAL_ASSERT_MSG(packetRecordingCompleted, "recorded artifact publication must retain its exact graph packet claim");

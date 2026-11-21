@@ -150,14 +150,15 @@ namespace GpuTaskGraphCompilerDetail{
             ++consumerPacket.externalDependencyCount;
             return true;
         };
+        u32 frontier = 0u;
         for(u32 taskIndex = 0u; taskIndex < consumerPacket.taskCount; ++taskIndex){
             const GpuTaskId consumerTask = compiledPlan.packetTasks[consumerPacket.taskOffset + taskIndex];
             const GpuCompiledTask* const compiledConsumerTask = FindCompiledTask(compiledPlan, consumerTask);
-            if(!compiledConsumerTask || !graph.validTask(consumerTask))
+            if(!compiledConsumerTask || !CompilerGraphAccess::ValidTask(graph, consumerTask))
                 return false;
-            const GpuTaskGraphTaskView consumerTaskView = graph.taskAt(consumerTask.index);
+            const GpuTaskGraphDetail::GpuTaskNode& consumerTaskNode = CompilerGraphAccess::TaskNode(graph, consumerTask.index);
 
-            const GpuTaskGraphSchedulingTaskIndexView producerIndices = analysis.schedulingProducers(consumerTask);
+            const GpuTaskGraphSchedulingTaskIndexView producerIndices = CompilerGraphAccess::SchedulingProducers(analysis, consumerTask.index);
             for(usize producerIndex = 0u; producerIndex < producerIndices.taskCount; ++producerIndex){
                 const GpuTaskId producerTask{ .generation = consumerTask.generation, .index = static_cast<u32>(producerIndices[producerIndex]) };
                 const GpuSubmissionPacketId producerPacket = FindCompiledPacketForTask(compiledPlan, producerTask);
@@ -169,12 +170,21 @@ namespace GpuTaskGraphCompilerDetail{
             if(compiledConsumerTask->prologueStateSeedCount != 0u && !stateSeeds)
                 return false;
             for(u32 stateSeedIndex = 0u; stateSeedIndex < compiledConsumerTask->prologueStateSeedCount; ++stateSeedIndex){
-                if(!appendPacketDependency(stateSeeds[stateSeedIndex].sourcePacket))
+                const GpuSubmissionPacketId sourcePacket = stateSeeds[stateSeedIndex].sourcePacket;
+                if(!sourcePacket.valid() || sourcePacket.index >= consumerPacketIndex || sourcePacket.generation != compiledPlan.planGeneration)
                     return false;
+                if(!appendPacketDependency(sourcePacket))
+                    return false;
+                const u32 producerFrontier = compiledPlan.packets[sourcePacket.index].recordingFrontier;
+                if(producerFrontier == Limit<u32>::s_Max)
+                    return false;
+                const u32 candidateFrontier = producerFrontier + 1u;
+                if(candidateFrontier > frontier)
+                    frontier = candidateFrontier;
             }
 
-            for(usize dependencyIndex = 0u; dependencyIndex < consumerTaskView.externalDependencyCount; ++dependencyIndex){
-                if(!appendExternalDependency(consumerTaskView.externalDependencies[dependencyIndex]))
+            for(const GpuExternalCompletionId externalDep : CompilerGraphAccess::TaskExternalDependencies(graph, consumerTaskNode)){
+                if(!appendExternalDependency(externalDep))
                     return false;
             }
             while(initialOwnershipDependencyIndex < initialOwnershipDependencies.size() && initialOwnershipDependencies[initialOwnershipDependencyIndex].consumer == consumerTask){
@@ -190,6 +200,7 @@ namespace GpuTaskGraphCompilerDetail{
                     return false;
             }
         }
+        consumerPacket.recordingFrontier = frontier;
         if(!plansResourceStateDependencies)
             continue;
 
@@ -236,53 +247,21 @@ namespace GpuTaskGraphCompilerDetail{
     if(resourceStateDependencyIndex != resourceStateDependencies.size())
         return false;
 
-    for(usize packetIndex = 0u; packetIndex < compiledPlan.packets.size(); ++packetIndex){
-        GpuSubmissionPacket& packet = compiledPlan.packets[packetIndex];
-        for(u32 dependencyIndex = 0u; dependencyIndex < packet.dependencyCount; ++dependencyIndex){
-            const GpuPacketDependency& dependency = compiledPlan.packetDependencies[packet.dependencyOffset + dependencyIndex];
-            if(dependency.consumer.index != packetIndex || dependency.consumer.generation != compiledPlan.planGeneration || dependency.producer.index >= packetIndex || dependency.producer.generation != compiledPlan.planGeneration)
-                return false;
-        }
-
-        u32 frontier = 0u;
-        for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
-            const GpuTaskId task = compiledPlan.packetTasks[packet.taskOffset + taskIndex];
-            const GpuCompiledTask* const compiledTask = FindCompiledTask(compiledPlan, task);
-            if(!compiledTask)
-                return false;
-
-            const GpuPacketStateSeed* const stateSeeds = TaskPrologueStateSeeds(compiledPlan, *compiledTask);
-            if(compiledTask->prologueStateSeedCount != 0u && !stateSeeds)
-                return false;
-            for(u32 stateSeedIndex = 0u; stateSeedIndex < compiledTask->prologueStateSeedCount; ++stateSeedIndex){
-                const GpuSubmissionPacketId sourcePacket = stateSeeds[stateSeedIndex].sourcePacket;
-                if(!sourcePacket.valid() || sourcePacket.index >= packetIndex || sourcePacket.generation != compiledPlan.planGeneration)
-                    return false;
-
-                const u32 producerFrontier = compiledPlan.packets[sourcePacket.index].recordingFrontier;
-                if(producerFrontier == Limit<u32>::s_Max)
-                    return false;
-                const u32 candidateFrontier = producerFrontier + 1u;
-                if(candidateFrontier > frontier)
-                    frontier = candidateFrontier;
-            }
-        }
-        packet.recordingFrontier = frontier;
-    }
-
-    if(const GpuPresentEndpoint* const endpoint = graph.presentEndpoint()){
+    if(const GpuPresentEndpoint* const endpoint = CompilerGraphAccess::PresentEndpoint(graph)){
         const GpuCompiledTask* const producer = FindCompiledTask(compiledPlan, endpoint->producer);
         const GpuPhysicalQueueInfo* const queue = producer ? FindCompiledQueueInfo(compiledPlan, producer->queue) : nullptr;
         if(!producer || !producer->packet.valid() || producer->packet.generation != compiledPlan.planGeneration || !queue || queue->queueClass != CommandQueue::Graphics)
             return false;
 
-        for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
-            const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
-            for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
-                if(task.resourceUses[useIndex].resource != endpoint->backBuffer)
+        const usize taskCount = CompilerGraphAccess::TaskCount(graph);
+        const u64 generation = CompilerGraphAccess::Generation(graph);
+        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+            const GpuTaskGraphDetail::GpuTaskNode& task = CompilerGraphAccess::TaskNode(graph, taskIndex);
+            for(const GpuTaskResourceUse& use : CompilerGraphAccess::TaskResourceUses(graph, task)){
+                if(use.resource != endpoint->backBuffer)
                     continue;
 
-                const GpuCompiledTask* const user = FindCompiledTask(compiledPlan, task.id);
+                const GpuCompiledTask* const user = FindCompiledTask(compiledPlan, GpuTaskId{ .generation = generation, .index = static_cast<u32>(taskIndex) });
                 if(!user || user->queue != producer->queue)
                     return false;
                 break;

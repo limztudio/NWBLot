@@ -241,6 +241,7 @@ private:
     u64 m_descriptorBufferGeneration = 0u;
 
     mutable Futex m_mutex;
+    Atomic<b8> m_hasPendingRetirementWork{ false };
     b8 m_initialized = false;
 };
 

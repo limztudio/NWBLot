@@ -115,12 +115,181 @@ struct GpuTaskScheduler::BatchEntryState final{
     usize timingTicketCount = 0u;
     usize waitTokenOffset = 0u;
     usize waitTokenCount = 0u;
+    usize ownershipBeginCount = 0u;
     usize preparedTimingTicketCount = 0u;
     usize intraBatchSameQueueElisionCount = 0u;
     GpuPacketRuntimeDetail::PacketWaitStatistics waitStatistics;
-    Array<Optional<CommandList::GraphSubmissionOwnership>, GpuRecordedPacket::s_MaxCommandLists> graphSubmissionOwnerships;
     GpuPacketSubmissionLease submissionLease;
     GpuGraphSubmissionTransaction::NativeSubmissionInfo nativeSubmissionInfo;
+};
+
+class GpuTaskScheduler::BatchOwnershipBuffer final : NoCopy{
+private:
+    struct SlabHeader{
+        SlabHeader* prev = nullptr;
+        SlabHeader* next = nullptr;
+        usize capacity = 0u;
+        usize beginIndex = 0u;
+        usize endIndex = 0u;
+        usize byteSize = 0u;
+    };
+
+
+public:
+    BatchOwnershipBuffer(Alloc::ScratchArena& scratchArena, const usize initialEntryCount)noexcept
+        : m_scratchArena(scratchArena)
+        , m_defaultSlabCapacity(Max<usize>(initialEntryCount, 16u))
+    {}
+    ~BatchOwnershipBuffer()noexcept{
+        clear();
+    }
+
+
+public:
+    [[nodiscard]] usize count()const noexcept{ return m_activeCount; }
+
+    [[nodiscard]] b8 acquire(CommandList& commandList)noexcept{
+        if(!m_tail || m_tail->endIndex == m_tail->capacity){
+            if(!appendSlab())
+                return false;
+        }
+        CommandList::GraphSubmissionOwnership* const slot = slabSlots(*m_tail) + m_tail->endIndex;
+        new(slot) CommandList::GraphSubmissionOwnership(commandList);
+        if(!slot->m_acquired){
+            slot->~GraphSubmissionOwnership();
+            return false;
+        }
+        ++m_tail->endIndex;
+        ++m_activeCount;
+        return true;
+    }
+
+    void popTo(const usize targetCount)noexcept{
+        while(m_activeCount > targetCount && m_tail){
+            if(m_tail->endIndex > m_tail->beginIndex){
+                --m_tail->endIndex;
+                slabSlots(*m_tail)[m_tail->endIndex].~GraphSubmissionOwnership();
+                --m_activeCount;
+                continue;
+            }
+            popEmptyTailSlab();
+        }
+    }
+
+    void acceptNext(usize acceptCount)noexcept{
+        while(acceptCount > 0u && m_head){
+            if(m_head->beginIndex < m_head->endIndex){
+                CommandList::GraphSubmissionOwnership& slot = slabSlots(*m_head)[m_head->beginIndex];
+                slot.accept();
+                slot.~GraphSubmissionOwnership();
+                ++m_head->beginIndex;
+                --m_activeCount;
+                --acceptCount;
+                continue;
+            }
+            popEmptyHeadSlab();
+        }
+    }
+
+    void acceptAll()noexcept{
+        while(m_head){
+            CommandList::GraphSubmissionOwnership* const slots = slabSlots(*m_head);
+            while(m_head->beginIndex < m_head->endIndex){
+                slots[m_head->beginIndex].accept();
+                slots[m_head->beginIndex].~GraphSubmissionOwnership();
+                ++m_head->beginIndex;
+                --m_activeCount;
+            }
+            popEmptyHeadSlab();
+        }
+        m_tail = nullptr;
+    }
+
+    void clear()noexcept{
+        while(m_tail){
+            CommandList::GraphSubmissionOwnership* const slots = slabSlots(*m_tail);
+            while(m_tail->endIndex > m_tail->beginIndex){
+                --m_tail->endIndex;
+                slots[m_tail->endIndex].~GraphSubmissionOwnership();
+                --m_activeCount;
+            }
+            popEmptyTailSlab();
+        }
+        m_head = nullptr;
+    }
+
+
+private:
+    [[nodiscard]] static constexpr usize SlabHeaderAlignedBytes()noexcept{
+        constexpr usize headerSize = sizeof(SlabHeader);
+        constexpr usize slotAlign = alignof(CommandList::GraphSubmissionOwnership);
+        return (headerSize + slotAlign - 1u) & ~(slotAlign - 1u);
+    }
+
+    [[nodiscard]] static constexpr usize SlabAlignment()noexcept{
+        return Max(alignof(SlabHeader), alignof(CommandList::GraphSubmissionOwnership));
+    }
+
+    [[nodiscard]] static CommandList::GraphSubmissionOwnership* slabSlots(SlabHeader& slab)noexcept{
+        return reinterpret_cast<CommandList::GraphSubmissionOwnership*>(reinterpret_cast<u8*>(&slab) + SlabHeaderAlignedBytes());
+    }
+
+    [[nodiscard]] b8 appendSlab()noexcept{
+        const usize capacity = m_defaultSlabCapacity;
+        if(MultiplyOverflows<usize>(capacity, sizeof(CommandList::GraphSubmissionOwnership)))
+            return false;
+        const usize payloadBytes = capacity * sizeof(CommandList::GraphSubmissionOwnership);
+        if(AddOverflows<usize>(SlabHeaderAlignedBytes(), payloadBytes))
+            return false;
+        const usize byteSize = SlabHeaderAlignedBytes() + payloadBytes;
+        void* const memory = m_scratchArena.allocate(SlabAlignment(), byteSize);
+        if(!memory)
+            return false;
+        SlabHeader* const slab = new(memory) SlabHeader();
+        slab->capacity = capacity;
+        slab->byteSize = byteSize;
+        slab->prev = m_tail;
+        if(m_tail)
+            m_tail->next = slab;
+        else
+            m_head = slab;
+        m_tail = slab;
+        return true;
+    }
+
+    void popEmptyTailSlab()noexcept{
+        SlabHeader* const dead = m_tail;
+        SlabHeader* const prev = dead->prev;
+        if(prev)
+            prev->next = nullptr;
+        else
+            m_head = nullptr;
+        m_tail = prev;
+        const usize byteSize = dead->byteSize;
+        dead->~SlabHeader();
+        m_scratchArena.deallocate(dead, SlabAlignment(), byteSize);
+    }
+
+    void popEmptyHeadSlab()noexcept{
+        SlabHeader* const dead = m_head;
+        SlabHeader* const next = dead->next;
+        if(next)
+            next->prev = nullptr;
+        else
+            m_tail = nullptr;
+        m_head = next;
+        const usize byteSize = dead->byteSize;
+        dead->~SlabHeader();
+        m_scratchArena.deallocate(dead, SlabAlignment(), byteSize);
+    }
+
+
+private:
+    Alloc::ScratchArena& m_scratchArena;
+    usize m_defaultSlabCapacity = 16u;
+    SlabHeader* m_head = nullptr;
+    SlabHeader* m_tail = nullptr;
+    usize m_activeCount = 0u;
 };
 
 class GpuTaskScheduler::BatchEntryBuffer final : NoCopy{
@@ -450,7 +619,8 @@ b8 GpuTaskScheduler::submitPacketBatchWithinSubmissionOperation(
     Alloc::ScratchArena& scratchArena,
     GpuTaskGraph& graph,
     GpuGraphSubmissionTransaction& transaction,
-    GpuSubmissionPacketId* const outFailedPacket
+    GpuSubmissionPacketId* const outFailedPacket,
+    const b8 packetsValidatedReady
 )const{
     if(!declarationAccess.validFor(graph) || !planAccess.validFor(compiledGraph) || !artifactAccess.validFor(recordedGraph) || !GpuGraphSubmissionTransaction::SubmissionOperation::ActiveFor(transaction))
         return false;
@@ -469,17 +639,58 @@ b8 GpuTaskScheduler::submitPacketBatchWithinSubmissionOperation(
     BatchEntryBuffer entries(scratchArena, initialBatchCount);
     if(!entries.valid())
         return false;
+    BatchOwnershipBuffer ownerships(scratchArena, initialBatchCount);
     Vector<NotNull<GpuTimingSubmissionTicket*>, Alloc::ScratchArena> allTimingTickets(scratchArena);
-    allTimingTickets.reserve(bindings.timingTickets.size() + initialBatchCount);
     Vector<NotNull<GpuTimingSubmissionTicket*>, Alloc::ScratchArena> collectedTimingTickets(scratchArena);
-    collectedTimingTickets.reserve(bindings.timingTickets.size());
+    if(!bindings.timingTickets.empty()){
+        allTimingTickets.reserve(bindings.timingTickets.size() + initialBatchCount);
+        collectedTimingTickets.reserve(bindings.timingTickets.size());
+    }
     Vector<QueueSubmissionToken, Alloc::ScratchArena> allWaitTokens(scratchArena);
-    Vector<QueueSubmissionToken, Alloc::ScratchArena> entryWaitTokens(scratchArena);
+    Optional<HashSet<CommandList*, Alloc::ScratchArena>> seenCommandLists;
+    if(initialBatchCount > 8u)
+        seenCommandLists.emplace(initialBatchCount * 2u, scratchArena);
+    struct ValidatedQueueMaxToken{
+        u64 maxValidatedValue = 0u;
+        u16 physicalQueueIndex = Limit<u16>::s_Max;
+        u16 deviceGeneration = 0u;
+        CommandQueue::Enum queue = CommandQueue::kCount;
+    };
+    Array<ValidatedQueueMaxToken, 16> validatedWaitCache{};
+    usize validatedWaitCacheCount = 0u;
+    const auto validateWaitTokenCached = [&](const QueueSubmissionToken& waitToken)noexcept -> b8{
+        for(usize index = 0u; index < validatedWaitCacheCount; ++index){
+            ValidatedQueueMaxToken& cached = validatedWaitCache[index];
+            if(cached.physicalQueueIndex == waitToken.physicalQueueIndex && cached.deviceGeneration == waitToken.deviceGeneration && cached.queue == waitToken.queue){
+                if(waitToken.value <= cached.maxValidatedValue)
+                    return true;
+                if(!device().validateSubmissionWaitToken(waitToken))
+                    return false;
+                cached.maxValidatedValue = waitToken.value;
+                return true;
+            }
+        }
+        if(!device().validateSubmissionWaitToken(waitToken))
+            return false;
+        if(validatedWaitCacheCount < validatedWaitCache.size())
+            validatedWaitCache[validatedWaitCacheCount++] = ValidatedQueueMaxToken{
+                .maxValidatedValue = waitToken.value,
+                .physicalQueueIndex = waitToken.physicalQueueIndex,
+                .deviceGeneration = waitToken.deviceGeneration,
+                .queue = waitToken.queue,
+            };
+        return true;
+    };
+
     const u64 recordingAttemptGeneration = recordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactAccess);
-    const b8 allBatchPacketsReady = graph.packetsReadyForSubmission(compiledGraph, planAccess, GpuSubmissionPacketRange{ planAccess.packetIdAt(batchStart), initialBatchCount }, recordingAttemptGeneration);
+    const b8 allBatchPacketsReady = packetsValidatedReady || graph.packetsReadyForSubmission(compiledGraph, planAccess, GpuSubmissionPacketRange{ planAccess.packetIdAt(batchStart), initialBatchCount }, recordingAttemptGeneration);
     const auto truncateTimingTickets = [&](const usize targetSize)noexcept{
         while(allTimingTickets.size() > targetSize)
             allTimingTickets.pop_back();
+    };
+    const auto truncateWaitTokens = [&](const usize targetSize)noexcept{
+        while(allWaitTokens.size() > targetSize)
+            allWaitTokens.pop_back();
     };
 
     usize activeBatchCount = 0u;
@@ -511,11 +722,17 @@ b8 GpuTaskScheduler::submitPacketBatchWithinSubmissionOperation(
             CommandList* const commandList = recordedPacket->commandLists[commandListIndex];
             if(!commandList)
                 return false;
-            for(usize earlierEntry = 0u; earlierEntry < entryIndex; ++earlierEntry){
-                const GpuRecordedPacket* const earlierPacket = entries[earlierEntry].recordedPacket;
-                for(u8 earlierCmdIndex = 0u; earlierCmdIndex < earlierPacket->commandListCount; ++earlierCmdIndex){
-                    if(earlierPacket->commandLists[earlierCmdIndex] == commandList)
-                        return false;
+            if(seenCommandLists){
+                if(!seenCommandLists->insert(commandList).second)
+                    return false;
+            }
+            else{
+                for(usize earlierEntry = 0u; earlierEntry < entryIndex; ++earlierEntry){
+                    const GpuRecordedPacket* const earlierPacket = entries[earlierEntry].recordedPacket;
+                    for(u8 earlierCmdIndex = 0u; earlierCmdIndex < earlierPacket->commandListCount; ++earlierCmdIndex){
+                        if(earlierPacket->commandLists[earlierCmdIndex] == commandList)
+                            return false;
+                    }
                 }
             }
         }
@@ -532,86 +749,99 @@ b8 GpuTaskScheduler::submitPacketBatchWithinSubmissionOperation(
         }
         entry.timingTicketCount = allTimingTickets.size() - entry.timingTicketOffset;
 
-        entryWaitTokens.clear();
-        entryWaitTokens.reserve(packet.dependencyCount + packet.externalDependencyCount + (packet.joinsAcceptedQueueFrontier ? planAccess.packetCount() : 0u));
-        const GpuPacketDependency* const dependencies = packetView.dependencies;
-        for(u32 dependencyIndex = 0u; dependencyIndex < packet.dependencyCount; ++dependencyIndex){
-            const GpuSubmissionPacketId producer = dependencies[dependencyIndex].producer;
-            if(producer.generation == planAccess.planGeneration() && producer.index >= batchStart && producer.index < batchStart + entryIndex){
-                ++entry.intraBatchSameQueueElisionCount;
-                continue;
-            }
-            const QueueSubmissionToken token = transaction.packetToken(producer);
-            if(!token.valid()){
+        entry.waitTokenOffset = allWaitTokens.size();
+        if(packet.dependencyCount != 0u){
+            if(!transaction.appendPacketDependencyWaitTokensWithinSubmissionOperation(
+                planAccess,
+                Span<const GpuPacketDependency>(packetView.dependencies, packet.dependencyCount),
+                batchStart,
+                batchStart + entryIndex,
+                allWaitTokens,
+                entry.intraBatchSameQueueElisionCount
+            )){
                 truncateTimingTickets(entry.timingTicketOffset);
+                truncateWaitTokens(entry.waitTokenOffset);
                 return false;
             }
-            entryWaitTokens.push_back(token);
         }
 
-        const GpuExternalCompletionId* const externalDependencies = packetView.externalDependencies;
-        for(u32 dependencyIndex = 0u; dependencyIndex < packet.externalDependencyCount; ++dependencyIndex){
-            const GpuExternalCompletionId completion = externalDependencies[dependencyIndex];
-            const QueueSubmissionToken* const token = declarationAccess.externalCompletionToken(completion);
-            if(!token){
+        if(packet.externalDependencyCount != 0u){
+            const GpuExternalCompletionId* const externalDependencies = packetView.externalDependencies;
+            for(u32 dependencyIndex = 0u; dependencyIndex < packet.externalDependencyCount; ++dependencyIndex){
+                const GpuExternalCompletionId completion = externalDependencies[dependencyIndex];
+                const QueueSubmissionToken* const token = declarationAccess.externalCompletionToken(completion);
+                if(!token){
+                    truncateTimingTickets(entry.timingTicketOffset);
+                    truncateWaitTokens(entry.waitTokenOffset);
+                    return false;
+                }
+                const GpuPhysicalQueueInfo* const externalQueue = device().getPhysicalQueueInfo(GpuPhysicalQueueId{ .index = token->physicalQueueIndex, .deviceGeneration = token->deviceGeneration, });
+                if(!externalQueue || externalQueue->queueClass != token->queue){
+                    truncateTimingTickets(entry.timingTicketOffset);
+                    truncateWaitTokens(entry.waitTokenOffset);
+                    return false;
+                }
+                allWaitTokens.push_back(*token);
+            }
+            if(!GpuPacketRuntimeDetail::ValidateInitialOwnershipCompletions(declarationAccess, planAccess, packetID)){
                 truncateTimingTickets(entry.timingTicketOffset);
+                truncateWaitTokens(entry.waitTokenOffset);
                 return false;
             }
-            const GpuPhysicalQueueInfo* const externalQueue = device().getPhysicalQueueInfo(GpuPhysicalQueueId{ .index = token->physicalQueueIndex, .deviceGeneration = token->deviceGeneration, });
-            if(!externalQueue || externalQueue->queueClass != token->queue){
-                truncateTimingTickets(entry.timingTicketOffset);
-                return false;
-            }
-            entryWaitTokens.push_back(*token);
         }
-
-        if(packet.externalDependencyCount != 0u && !GpuPacketRuntimeDetail::ValidateInitialOwnershipCompletions(declarationAccess, planAccess, packetID)){
+        if(packet.joinsAcceptedQueueFrontier && !transaction.appendAcceptedQueueFrontierWaitTokens(batchQueue, allWaitTokens)){
             truncateTimingTickets(entry.timingTicketOffset);
-            return false;
-        }
-        if(packet.joinsAcceptedQueueFrontier && !transaction.appendAcceptedQueueFrontierWaitTokens(batchQueue, entryWaitTokens)){
-            truncateTimingTickets(entry.timingTicketOffset);
-            return false;
-        }
-
-        for(usize ticketOffset = 0u; ticketOffset < entry.timingTicketCount; ++ticketOffset){
-            if(allTimingTickets[entry.timingTicketOffset + ticketOffset]->prepareSubmissionAfterCommandListValidation(Span<CommandList* const>(recordedPacket->commandLists.data(), recordedPacket->commandListCount), entryWaitTokens)){
-                ++entry.preparedTimingTicketCount;
-                continue;
-            }
-            while(entry.preparedTimingTicketCount > 0u)
-                allTimingTickets[entry.timingTicketOffset + --entry.preparedTimingTicketCount]->rollbackPreparedSubmission();
-            truncateTimingTickets(entry.timingTicketOffset);
+            truncateWaitTokens(entry.waitTokenOffset);
             return false;
         }
 
+        entry.waitTokenCount = allWaitTokens.size() - entry.waitTokenOffset;
+        const Span<const QueueSubmissionToken> entryWaitTokens(
+            entry.waitTokenCount != 0u ? allWaitTokens.data() + entry.waitTokenOffset : nullptr,
+            entry.waitTokenCount
+        );
+
+        if(entry.timingTicketCount != 0u){
+            Vector<QueueSubmissionToken, Alloc::ScratchArena> ticketWaitTokens(scratchArena);
+            ticketWaitTokens.assign(entryWaitTokens.begin(), entryWaitTokens.end());
+            for(usize ticketOffset = 0u; ticketOffset < entry.timingTicketCount; ++ticketOffset){
+                if(allTimingTickets[entry.timingTicketOffset + ticketOffset]->prepareSubmissionAfterCommandListValidation(Span<CommandList* const>(recordedPacket->commandLists.data(), recordedPacket->commandListCount), ticketWaitTokens)){
+                    ++entry.preparedTimingTicketCount;
+                    continue;
+                }
+                while(entry.preparedTimingTicketCount > 0u)
+                    allTimingTickets[entry.timingTicketOffset + --entry.preparedTimingTicketCount]->rollbackPreparedSubmission();
+                truncateTimingTickets(entry.timingTicketOffset);
+                truncateWaitTokens(entry.waitTokenOffset);
+                return false;
+            }
+        }
+
+        entry.ownershipBeginCount = ownerships.count();
         for(u8 commandListIndex = 0u; commandListIndex < recordedPacket->commandListCount; ++commandListIndex){
-            entry.graphSubmissionOwnerships[commandListIndex].emplace(*recordedPacket->commandLists[commandListIndex]);
-            if(entry.graphSubmissionOwnerships[commandListIndex].value().m_acquired)
+            if(ownerships.acquire(*recordedPacket->commandLists[commandListIndex]))
                 continue;
-            for(u8 resetIndex = 0u; resetIndex <= commandListIndex; ++resetIndex)
-                entry.graphSubmissionOwnerships[resetIndex].reset();
+            ownerships.popTo(entry.ownershipBeginCount);
             while(entry.preparedTimingTicketCount > 0u)
                 allTimingTickets[entry.timingTicketOffset + --entry.preparedTimingTicketCount]->rollbackPreparedSubmission();
             truncateTimingTickets(entry.timingTicketOffset);
+            truncateWaitTokens(entry.waitTokenOffset);
             return false;
         }
 
         for(const QueueSubmissionToken& waitToken : entryWaitTokens){
-            if(device().validateSubmissionWaitToken(waitToken))
+            if(validateWaitTokenCached(waitToken))
                 continue;
-            for(u8 resetIndex = 0u; resetIndex < recordedPacket->commandListCount; ++resetIndex)
-                entry.graphSubmissionOwnerships[resetIndex].reset();
+            ownerships.popTo(entry.ownershipBeginCount);
             while(entry.preparedTimingTicketCount > 0u)
                 allTimingTickets[entry.timingTicketOffset + --entry.preparedTimingTicketCount]->rollbackPreparedSubmission();
             truncateTimingTickets(entry.timingTicketOffset);
+            truncateWaitTokens(entry.waitTokenOffset);
             return false;
         }
 
-        entry.waitStatistics = GpuPacketRuntimeDetail::CountPacketWaitStatistics(batchQueue, entryWaitTokens, scratchArena);
-        entry.waitTokenOffset = allWaitTokens.size();
-        entry.waitTokenCount = entryWaitTokens.size();
-        allWaitTokens.insert(allWaitTokens.end(), entryWaitTokens.begin(), entryWaitTokens.end());
+        if(entry.waitTokenCount != 0u)
+            entry.waitStatistics = GpuPacketRuntimeDetail::CountPacketWaitStatistics(batchQueue, entryWaitTokens, scratchArena);
         entry.nativeSubmissionInfo.commandListCount = recordedPacket->commandListCount;
         entry.nativeSubmissionInfo.plannedWaitTokenCount = entry.waitStatistics.plannedWaitTokenCount + entry.intraBatchSameQueueElisionCount;
         entry.nativeSubmissionInfo.sameQueueWaitElisionCount = entry.waitStatistics.sameQueueWaitElisionCount + entry.intraBatchSameQueueElisionCount;
@@ -654,10 +884,9 @@ b8 GpuTaskScheduler::submitPacketBatchWithinSubmissionOperation(
         return false;
     }
     if(claimedBatchCount < preparedBatchCount){
+        ownerships.popTo(entries[claimedBatchCount].ownershipBeginCount);
         for(usize cleanupIndex = claimedBatchCount; cleanupIndex < preparedBatchCount; ++cleanupIndex){
             BatchEntryState& cleanupEntry = entries[cleanupIndex];
-            for(u8 resetIndex = 0u; resetIndex < cleanupEntry.recordedPacket->commandListCount; ++resetIndex)
-                cleanupEntry.graphSubmissionOwnerships[resetIndex].reset();
             while(cleanupEntry.preparedTimingTicketCount > 0u)
                 allTimingTickets[cleanupEntry.timingTicketOffset + --cleanupEntry.preparedTimingTicketCount]->rollbackPreparedSubmission();
         }
@@ -673,6 +902,11 @@ b8 GpuTaskScheduler::submitPacketBatchWithinSubmissionOperation(
         const BatchEntryState& entry = entries[entryIndex];
         deviceEntries[entryIndex].commandLists = entry.recordedPacket->commandLists.data();
         deviceEntries[entryIndex].numCommandLists = entry.recordedPacket->commandListCount;
+        deviceEntries[entryIndex].allowSignalCoalescing =
+            (entryIndex + 1u < activeBatchCount)
+            && entry.timingTicketCount == 0u
+            && (planAccess.packetRuntimeFlags(entry.packet.index) & GpuCompiledGraph::PacketRuntimeFlag::HasCrossQueueConsumer) == 0u
+        ;
         if(entry.waitTokenCount != 0u)
             deviceEntries[entryIndex].submitDesc.setWaitTokens(Span<const QueueSubmissionToken>(allWaitTokens.data() + entry.waitTokenOffset, entry.waitTokenCount));
     }
@@ -695,12 +929,9 @@ b8 GpuTaskScheduler::submitPacketBatchWithinSubmissionOperation(
         batchTimingOffsets.resize(activeBatchCount);
         Vector<usize, Alloc::ScratchArena> batchTimingCounts(scratchArena);
         batchTimingCounts.resize(activeBatchCount);
+        ownerships.acceptAll();
         for(usize entryIndex = 0u; entryIndex < activeBatchCount; ++entryIndex){
             BatchEntryState& entry = entries[entryIndex];
-            for(u8 commandListIndex = 0u; commandListIndex < entry.recordedPacket->commandListCount; ++commandListIndex){
-                entry.graphSubmissionOwnerships[commandListIndex].value().accept();
-                entry.graphSubmissionOwnerships[commandListIndex].reset();
-            }
             FOUNDATION_ASSERT(receipts[entryIndex].token.valid() && receipts[entryIndex].token.matchesPhysicalQueue(batchQueue.index, batchQueue.deviceGeneration));
             if(receipts[entryIndex].timelineWaitCount > entry.waitStatistics.timelineWaitCount)
                 TerminateInvariant();
@@ -731,10 +962,7 @@ b8 GpuTaskScheduler::submitPacketBatchWithinSubmissionOperation(
             return false;
     }
     else if(batchResult.status == Device::GraphCommandListBatchResult::Status::NativeSubmitFailed){
-        for(usize entryIndex = 0u; entryIndex < activeBatchCount; ++entryIndex){
-            for(u8 commandListIndex = 0u; commandListIndex < entries[entryIndex].recordedPacket->commandListCount; ++commandListIndex)
-                entries[entryIndex].graphSubmissionOwnerships[commandListIndex].reset();
-        }
+        ownerships.clear();
         ScopedLock resolutionLock(transaction.m_resolutionMutex);
         batchTimingUnwind.release();
         batchSubmittingUnwind.release();
@@ -763,10 +991,7 @@ b8 GpuTaskScheduler::submitPacketBatchWithinSubmissionOperation(
             const QueueSubmissionToken token = submission ? submission->token : QueueSubmissionToken{};
             const usize emittedTimelineWaitCount = submission ? submission->timelineWaitCount : 0u;
             if(!token.valid()){
-                for(usize rejectIndex = entryIndex; rejectIndex < activeBatchCount; ++rejectIndex){
-                    for(u8 commandListIndex = 0u; commandListIndex < entries[rejectIndex].recordedPacket->commandListCount; ++commandListIndex)
-                        entries[rejectIndex].graphSubmissionOwnerships[commandListIndex].reset();
-                }
+                ownerships.clear();
                 ScopedLock resolutionLock(transaction.m_resolutionMutex);
                 batchTimingUnwind.release();
                 batchSubmittingUnwind.release();
@@ -788,10 +1013,7 @@ b8 GpuTaskScheduler::submitPacketBatchWithinSubmissionOperation(
                 return false;
             }
 
-            for(u8 commandListIndex = 0u; commandListIndex < entry.recordedPacket->commandListCount; ++commandListIndex){
-                entry.graphSubmissionOwnerships[commandListIndex].value().accept();
-                entry.graphSubmissionOwnerships[commandListIndex].reset();
-            }
+            ownerships.acceptNext(entry.recordedPacket->commandListCount);
             FOUNDATION_ASSERT(token.matchesPhysicalQueue(batchQueue.index, batchQueue.deviceGeneration));
             if(emittedTimelineWaitCount > entry.waitStatistics.timelineWaitCount)
                 TerminateInvariant();
@@ -814,10 +1036,7 @@ b8 GpuTaskScheduler::submitPacketBatchWithinSubmissionOperation(
                 taskAcceptedCallbacks
             );
             if(!accepted){
-                for(usize rejectIndex = entryIndex + 1u; rejectIndex < activeBatchCount; ++rejectIndex){
-                    for(u8 commandListIndex = 0u; commandListIndex < entries[rejectIndex].recordedPacket->commandListCount; ++commandListIndex)
-                        entries[rejectIndex].graphSubmissionOwnerships[commandListIndex].reset();
-                }
+                ownerships.clear();
                 batchTimingUnwind.release();
                 batchSubmittingUnwind.release();
                 b8 timingResolved = true;

@@ -119,10 +119,7 @@ void GpuPacketRecordingLease::reset()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuPacketRecordingAccess::GpuPacketRecordingAccess(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPacketRecordingLease& lease)noexcept{
-    if(!lease.validFor(graph, compiledGraph, planAccess, lease.m_packet))
-        return;
-
+void GpuPacketRecordingAccess::bind(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuPacketRecordingLease& lease)noexcept{
     m_graph = &graph;
     m_compiledGraph = &compiledGraph;
     m_lease = &lease;
@@ -130,6 +127,13 @@ GpuPacketRecordingAccess::GpuPacketRecordingAccess(const GpuTaskGraph& graph, co
     m_planGeneration = lease.m_planGeneration;
     m_recordingAttemptGeneration = lease.m_recordingAttemptGeneration;
     m_claimGeneration = lease.m_claimGeneration;
+}
+
+GpuPacketRecordingAccess::GpuPacketRecordingAccess(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPacketRecordingLease& lease)noexcept{
+    if(!lease.validFor(graph, compiledGraph, planAccess, lease.m_packet))
+        return;
+
+    bind(graph, compiledGraph, lease);
 }
 
 b8 GpuPacketRecordingAccess::validFor(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet)const noexcept{

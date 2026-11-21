@@ -483,6 +483,7 @@ void GpuDescriptorHeap::free(const GpuDescriptorHandle handle){
             allocator.slotStates[handle.slot()] = SlotState::Retired;
             m_retired[m_retiredCount] = RetiredSlot{ m_lastHeapUseID, handle };
             ++m_retiredCount;
+            m_hasPendingRetirementWork.store(true, MemoryOrder::release);
         }
     }
 }
@@ -588,6 +589,8 @@ void GpuDescriptorHeap::resetStateForShutdownLocked()noexcept{
             break;
         }
         heapUse.commandBuffer->m_trackedDescriptorHeapQueue = {};
+        heapUse.commandBuffer->m_trackedDescriptorHeapUseID = 0u;
+        heapUse.commandBuffer->m_trackedDescriptorHeapUseIndexHint = 0u;
         heapUse.commandBuffer = nullptr;
     }
 
@@ -621,6 +624,7 @@ void GpuDescriptorHeap::resetStateForShutdownLocked()noexcept{
     m_activePendingRecordingLeaseCount = 0u;
     m_lastHeapUseID = 0u;
     m_descriptorBufferGeneration = 0u;
+    m_hasPendingRetirementWork.store(false, MemoryOrder::release);
     m_desc = {};
 
     m_initialized = false;

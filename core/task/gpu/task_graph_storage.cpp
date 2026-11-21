@@ -77,6 +77,41 @@ void GpuTaskGraph::TaskPayloadDestroyScope::activateWithinLock()noexcept{
     m_active = true;
 }
 
+void* GpuTaskGraph::allocatePooledTaskPayloadSlow(const usize byteSize, const usize alignment){
+    const usize alignMask = alignment - 1u;
+    if(m_payloadPoolCurrentBlock < m_payloadPoolBlocks.size()){
+        for(usize blockIndex = m_payloadPoolCurrentBlock + 1u; blockIndex < m_payloadPoolBlocks.size(); ++blockIndex){
+            TaskPayloadPoolBlock& block = m_payloadPoolBlocks[blockIndex];
+            const usize alignedOffset = (block.used + alignMask) & ~alignMask;
+            if(alignedOffset <= block.size && byteSize <= block.size - alignedOffset){
+                m_payloadPoolCurrentBlock = blockIndex;
+                block.used = alignedOffset + byteSize;
+                return block.data + alignedOffset;
+            }
+        }
+    }
+
+    const usize blockBytes = Max(s_PayloadPoolBlockBytes, byteSize);
+    void* const memory = m_arena.allocate(s_PayloadPoolMaxAlign, blockBytes);
+    if(!memory)
+        return nullptr;
+
+    const usize newIndex = m_payloadPoolBlocks.size();
+    m_payloadPoolBlocks.push_back(TaskPayloadPoolBlock{
+        .data = static_cast<u8*>(memory),
+        .size = blockBytes,
+        .used = byteSize,
+    });
+    m_payloadPoolCurrentBlock = newIndex;
+    return memory;
+}
+
+void GpuTaskGraph::rewindTaskPayloadPool()noexcept{
+    for(TaskPayloadPoolBlock& block : m_payloadPoolBlocks)
+        block.used = 0u;
+    m_payloadPoolCurrentBlock = 0u;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -155,13 +190,19 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
     }
 
     ContainerDetail::ReserveGrowingCapacity(m_markerText, m_markerText.size() + desc.markerLabel.size());
-    ContainerDetail::ReserveGrowingCapacity(m_dependencies, m_dependencies.size() + desc.dependencyCount + preludeDependencyCount);
-    ContainerDetail::ReserveGrowingCapacity(m_externalDependencies, m_externalDependencies.size() + desc.externalDependencyCount);
-    ContainerDetail::ReserveGrowingCapacity(m_externalStateSources, m_externalStateSources.size() + desc.externalStateSourceCount);
-    ContainerDetail::ReserveGrowingCapacity(m_externalStateSnapshots, m_externalStateSnapshots.size() + desc.externalStateSourceCount);
-    ContainerDetail::ReserveGrowingCapacity(m_reusableStateSnapshots, m_reusableStateSnapshots.size() + m_externalStateSnapshots.size() + m_initialOwnerHandoffStateSnapshots.size() + desc.externalStateSourceCount);
-    ContainerDetail::ReserveGrowingCapacity(m_resourceUses, m_resourceUses.size() + expandedResourceUseCount);
-    ContainerDetail::ReserveGrowingCapacity(m_resourceVersionUses, m_resourceVersionUses.size() + desc.resourceVersionUseCount);
+    if(desc.dependencyCount + preludeDependencyCount != 0u)
+        ContainerDetail::ReserveGrowingCapacity(m_dependencies, m_dependencies.size() + desc.dependencyCount + preludeDependencyCount);
+    if(desc.externalDependencyCount != 0u)
+        ContainerDetail::ReserveGrowingCapacity(m_externalDependencies, m_externalDependencies.size() + desc.externalDependencyCount);
+    if(desc.externalStateSourceCount != 0u){
+        ContainerDetail::ReserveGrowingCapacity(m_externalStateSources, m_externalStateSources.size() + desc.externalStateSourceCount);
+        ContainerDetail::ReserveGrowingCapacity(m_externalStateSnapshots, m_externalStateSnapshots.size() + desc.externalStateSourceCount);
+        ContainerDetail::ReserveGrowingCapacity(m_reusableStateSnapshots, m_reusableStateSnapshots.size() + m_externalStateSnapshots.size() + m_initialOwnerHandoffStateSnapshots.size() + desc.externalStateSourceCount);
+    }
+    if(expandedResourceUseCount != 0u)
+        ContainerDetail::ReserveGrowingCapacity(m_resourceUses, m_resourceUses.size() + expandedResourceUseCount);
+    if(desc.resourceVersionUseCount != 0u)
+        ContainerDetail::ReserveGrowingCapacity(m_resourceVersionUses, m_resourceVersionUses.size() + desc.resourceVersionUseCount);
     ContainerDetail::ReserveGrowingCapacity(m_tasks, m_tasks.size() + 1u);
 
     AppendedContainerRollbackScope markerRollback(m_markerText, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
@@ -174,8 +215,8 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
     AppendedContainerRollbackScope taskRollback(m_tasks, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
 
     const MarkerLabelRange markerLabelRange = appendMarkerLabel(desc.markerLabel);
-
-    GpuTaskNode task;
+    const u32 index = static_cast<u32>(m_tasks.size());
+    GpuTaskNode& task = m_tasks.emplace_back();
     task.identity = desc.identity;
     task.commands = commands;
     task.scheduling = desc.scheduling;
@@ -203,21 +244,21 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
     task.destroyPayload = destroyPayload;
     task.lifecycleAttemptGeneration = m_activeRecordingAttemptGeneration.load(MemoryOrder::relaxed);
 
-    for(usize dependencyIndex = 0u; dependencyIndex < desc.dependencyCount; ++dependencyIndex)
-        m_dependencies.push_back(desc.dependencies[dependencyIndex]);
+    if(desc.dependencyCount != 0u)
+        m_dependencies.insert(m_dependencies.end(), desc.dependencies, desc.dependencies + desc.dependencyCount);
     if(appendPreludeDependency)
         m_dependencies.push_back(m_normalExecutionPrelude);
-    for(usize dependencyIndex = 0u; dependencyIndex < desc.externalDependencyCount; ++dependencyIndex)
-        m_externalDependencies.push_back(desc.externalDependencies[dependencyIndex]);
+    if(desc.externalDependencyCount != 0u)
+        m_externalDependencies.insert(m_externalDependencies.end(), desc.externalDependencies, desc.externalDependencies + desc.externalDependencyCount);
     for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex){
         const CommandListResourceStateHandoff& snapshot = *(*externalStateSnapshots)[sourceIndex];
         m_externalStateSources.push_back(GpuTaskExternalStateSource{ .states = &snapshot, .applicableConsumerQueueClass = desc.externalStateSources[sourceIndex].applicableConsumerQueueClass, });
         m_externalStateSnapshots.push_back(MakeNotNull((*externalStateSnapshots)[sourceIndex].get()));
     }
-    for(usize useIndex = 0u; useIndex < desc.resourceUseCount; ++useIndex)
-        m_resourceUses.push_back(desc.resourceUses[useIndex]);
-    for(usize useIndex = 0u; useIndex < desc.resourceVersionUseCount; ++useIndex)
-        m_resourceVersionUses.push_back(desc.resourceVersionUses[useIndex]);
+    if(desc.resourceUseCount != 0u)
+        m_resourceUses.insert(m_resourceUses.end(), desc.resourceUses, desc.resourceUses + desc.resourceUseCount);
+    if(desc.resourceVersionUseCount != 0u)
+        m_resourceVersionUses.insert(m_resourceVersionUses.end(), desc.resourceVersionUses, desc.resourceVersionUses + desc.resourceVersionUseCount);
     for(usize resourceSetUseIndex = 0u; resourceSetUseIndex < desc.resourceSetUseCount; ++resourceSetUseIndex){
         const GpuTaskResourceSetUse& resourceSetUse = desc.resourceSetUses[resourceSetUseIndex];
         const GpuGraphResourceSetNode& resourceSet = m_resourceSets[resourceSetUse.resourceSet.index];
@@ -232,8 +273,6 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
         }
     }
 
-    const u32 index = static_cast<u32>(m_tasks.size());
-    m_tasks.push_back(Move(task));
     if(externalStateSnapshots){
         for(GlobalUniquePtr<CommandListResourceStateHandoff>& snapshot : *externalStateSnapshots)
             snapshot.release();
@@ -248,6 +287,12 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
     taskRollback.commit();
     if(payload != nullptr)
         m_hasTaskPayloads = true;
+    if(destroyPayload != nullptr)
+        m_hasNonTrivialTaskPayloads = true;
+    if(discardPayload != nullptr)
+        m_hasDiscardCallbacks = true;
+    if(desc.scheduling.joinsAcceptedQueueFrontier || desc.scheduling.isRecoverySubmission)
+        m_hasAcceptedQueueFrontierOrRecoveryTask = true;
     bumpDeclarationRevision();
     return GpuTaskId{ .generation = m_generation, .index = index };
 }
@@ -359,10 +404,13 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
         pointerKey.pointer = binding.accelStruct->get();
     m_resourceImportIndexes.prepareResourceIndexes(m_resources, pointerKey);
 
-    ContainerDetail::ReserveGrowingCapacity(m_initialOwnerHandoffSources, m_initialOwnerHandoffSources.size() + desc.initialOwnerHandoffSourceCount);
-    ContainerDetail::ReserveGrowingCapacity(m_initialOwnerHandoffStateSnapshots, m_initialOwnerHandoffStateSnapshots.size() + desc.initialOwnerHandoffSourceCount);
-    ContainerDetail::ReserveGrowingCapacity(m_reusableStateSnapshots, m_reusableStateSnapshots.size() + m_externalStateSnapshots.size() + m_initialOwnerHandoffStateSnapshots.size() + desc.initialOwnerHandoffSourceCount);
-    ContainerDetail::ReserveGrowingCapacity(m_queueFamilyIndices, m_queueFamilyIndices.size() + queueFamilyIndexCount);
+    if(hasInitialOwnerHandoff){
+        ContainerDetail::ReserveGrowingCapacity(m_initialOwnerHandoffSources, m_initialOwnerHandoffSources.size() + desc.initialOwnerHandoffSourceCount);
+        ContainerDetail::ReserveGrowingCapacity(m_initialOwnerHandoffStateSnapshots, m_initialOwnerHandoffStateSnapshots.size() + desc.initialOwnerHandoffSourceCount);
+        ContainerDetail::ReserveGrowingCapacity(m_reusableStateSnapshots, m_reusableStateSnapshots.size() + m_externalStateSnapshots.size() + m_initialOwnerHandoffStateSnapshots.size() + desc.initialOwnerHandoffSourceCount);
+    }
+    if(queueFamilyIndexCount != 0u)
+        ContainerDetail::ReserveGrowingCapacity(m_queueFamilyIndices, m_queueFamilyIndices.size() + queueFamilyIndexCount);
     ContainerDetail::ReserveGrowingCapacity(m_markerText, m_markerText.size() + desc.markerLabel.size());
     ContainerDetail::ReserveGrowingCapacity(m_resources, m_resources.size() + 1u);
 
@@ -413,15 +461,15 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
         resource.queueFamilyIndexCount = queueAdmission->queueFamilyIndexCount;
         resource.usesConcurrentSharing = queueAdmission->usesConcurrentSharing;
         resource.hasQueueAdmission = true;
-        for(usize queueFamilyIndex = 0u; queueFamilyIndex < queueFamilyIndexCount; ++queueFamilyIndex)
-            m_queueFamilyIndices.push_back(queueAdmission->queueFamilyIndices[queueFamilyIndex]);
+        if(queueFamilyIndexCount != 0u)
+            m_queueFamilyIndices.insert(m_queueFamilyIndices.end(), queueAdmission->queueFamilyIndices, queueAdmission->queueFamilyIndices + queueFamilyIndexCount);
     }
 
     const NameHash& identityKey = desc.identity.identityHash();
     GpuGraphResourceImportIndex::Publication publication;
     ScopeExit indexRollback([&]()noexcept{ m_resourceImportIndexes.rollbackResource(identityKey, pointerKey, publication); });
     const u32 index = static_cast<u32>(m_resources.size());
-    m_resources.push_back(Move(resource));
+    m_resources.emplace_back(Move(resource));
     if(!m_resourceImportIndexes.publishResource(identityKey, pointerKey, index, publication))
         return MakeUnexpected(Failure{});
     if(initialOwnerHandoffStateSnapshots){
@@ -501,7 +549,8 @@ Expected<GpuGraphResourceSetId> GpuTaskGraph::appendResourceSet(const GpuGraphRe
     }
 
     ContainerDetail::ReserveGrowingCapacity(m_markerText, m_markerText.size() + desc.markerLabel.size());
-    ContainerDetail::ReserveGrowingCapacity(m_resourceSetMembers, m_resourceSetMembers.size() + desc.memberCount);
+    if(desc.memberCount != 0u)
+        ContainerDetail::ReserveGrowingCapacity(m_resourceSetMembers, m_resourceSetMembers.size() + desc.memberCount);
     ContainerDetail::ReserveGrowingCapacity(m_resourceSets, m_resourceSets.size() + 1u);
     m_resourceImportIndexes.prepareResourceSetIndex(m_resourceSets);
 
@@ -517,14 +566,14 @@ Expected<GpuGraphResourceSetId> GpuTaskGraph::appendResourceSet(const GpuGraphRe
     resourceSet.markerLabelSize = markerLabelRange.size;
     resourceSet.memberOffset = static_cast<u32>(m_resourceSetMembers.size());
     resourceSet.memberCount = static_cast<u32>(desc.memberCount);
-    for(usize memberIndex = 0u; memberIndex < desc.memberCount; ++memberIndex)
-        m_resourceSetMembers.push_back(desc.members[memberIndex]);
+    if(desc.memberCount != 0u)
+        m_resourceSetMembers.insert(m_resourceSetMembers.end(), desc.members, desc.members + desc.memberCount);
 
     const NameHash& identityKey = desc.identity.identityHash();
     b8 identityInserted = false;
     ScopeExit indexRollback([&]()noexcept{ m_resourceImportIndexes.rollbackResourceSet(identityKey, identityInserted); });
     const u32 index = static_cast<u32>(m_resourceSets.size());
-    m_resourceSets.push_back(Move(resourceSet));
+    m_resourceSets.emplace_back(Move(resourceSet));
     if(!m_resourceImportIndexes.publishResourceSet(identityKey, index, identityInserted))
         return MakeUnexpected(Failure{});
     markerRollback.commit();
@@ -567,7 +616,7 @@ Expected<GpuExternalCompletionId> GpuTaskGraph::appendExternalCompletion(const G
             m_externalCompletionIdentityIndex->erase(identityKey);
     });
     const u32 index = static_cast<u32>(m_externalCompletions.size());
-    m_externalCompletions.push_back(Move(completion));
+    m_externalCompletions.emplace_back(Move(completion));
     if(m_externalCompletionIdentityIndex){
         identityInserted = m_externalCompletionIdentityIndex->emplace(identityKey, index).second;
         if(!identityInserted)
@@ -606,9 +655,8 @@ GpuTaskGraph::MarkerLabelRange GpuTaskGraph::appendMarkerLabel(const AStringView
     FOUNDATION_ASSERT(!text.empty() && text.size() <= Limit<u32>::s_Max - m_markerText.size());
 
     const MarkerLabelRange range{ static_cast<u32>(m_markerText.size()), static_cast<u32>(text.size()) };
-    const usize nextSize = m_markerText.size() + text.size();
-    m_markerText.resize(nextSize);
-    FOUNDATION_MEMCPY(m_markerText.data() + range.offset, range.size, text.data(), text.size());
+    const u8* const bytes = reinterpret_cast<const u8*>(text.data());
+    m_markerText.insert(m_markerText.end(), bytes, bytes + text.size());
     return range;
 }
 

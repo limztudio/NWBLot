@@ -42,7 +42,157 @@ private:
 
 
 private:
-    using TaskFunction = InplaceFunction<s_TaskFunctionBytes>;
+    template<usize InlineStorageSize>
+    class TaskCallable final : NoCopy{
+    private:
+        struct Storage{
+            alignas(MaxAlign) u8 data[InlineStorageSize];
+        };
+
+        using InvokeFn = void(*)(Storage&);
+        using DestroyFn = void(*)(Storage&)noexcept;
+        using MoveFn = void(*)(Storage&, Storage&)noexcept;
+
+        struct Ops{
+            InvokeFn invoke = nullptr;
+            DestroyFn destroy = nullptr;
+            MoveFn move = nullptr;
+        };
+
+
+    public:
+        inline TaskCallable()noexcept = default;
+        inline ~TaskCallable()noexcept{ reset(); }
+        inline TaskCallable(TaskCallable&& rhs)noexcept{
+            moveFrom(Move(rhs));
+        }
+        template<
+            typename Func,
+            typename FuncType = Decay_T<Func>,
+            typename = EnableIf_T<
+                !IsSame_V<FuncType, TaskCallable>
+                && IsConstructible_V<FuncType, Func&&>
+                && IsInvocableR_V<void, FuncType&>
+                && IsNothrowMoveConstructible_V<FuncType>
+                && IsNothrowDestructible_V<FuncType>
+            >
+        >
+        inline explicit TaskCallable(Func&& func)noexcept(IsNothrowConstructible_V<FuncType, Func&&>){
+            assign(Forward<Func>(func));
+        }
+
+
+    public:
+        inline TaskCallable& operator=(TaskCallable&& rhs)noexcept{
+            if(this != &rhs){
+                reset();
+                moveFrom(Move(rhs));
+            }
+            return *this;
+        }
+
+        template<
+            typename Func,
+            typename FuncType = Decay_T<Func>,
+            typename = EnableIf_T<
+                !IsSame_V<FuncType, TaskCallable>
+                && IsConstructible_V<FuncType, Func&&>
+                && IsInvocableR_V<void, FuncType&>
+                && IsNothrowMoveConstructible_V<FuncType>
+                && IsNothrowDestructible_V<FuncType>
+            >
+        >
+        inline TaskCallable& operator=(Func&& func)noexcept(IsNothrowConstructible_V<FuncType, Func&&>){
+            reset();
+            assign(Forward<Func>(func));
+            return *this;
+        }
+
+        inline explicit operator b8()const noexcept{ return m_ops != nullptr; }
+
+        inline void operator()()const{
+            FOUNDATION_ASSERT_MSG(m_ops != nullptr, FOUNDATION_TEXT("TaskCallable invoked without target"));
+            m_ops->invoke(m_storage);
+        }
+
+
+    public:
+        inline void reset()noexcept{
+            if(!m_ops)
+                return;
+            if(m_ops->destroy)
+                m_ops->destroy(m_storage);
+            m_ops = nullptr;
+            m_trivialBytes = 0u;
+        }
+
+
+    private:
+        template<typename Func>
+        inline void assign(Func&& func)noexcept(IsNothrowConstructible_V<Decay_T<Func>, Func&&>){
+            using FuncType = Decay_T<Func>;
+
+            static_assert(sizeof(FuncType) <= InlineStorageSize, "TaskCallable capture size exceeds inline storage");
+            static_assert(alignof(FuncType) <= alignof(Storage), "TaskCallable capture alignment exceeds inline storage");
+            static_assert(IsNothrowMoveConstructible_V<FuncType>, "TaskCallable targets must be nothrow move constructible");
+            static_assert(IsNothrowDestructible_V<FuncType>, "TaskCallable targets must be nothrow destructible");
+
+            ::new(static_cast<void*>(m_storage.data)) FuncType(Forward<Func>(func));
+
+            if constexpr(std::is_trivially_move_constructible_v<FuncType> && std::is_trivially_destructible_v<FuncType>){
+                static constexpr Ops s_TrivialOps{
+                    +[](Storage& storage){
+                        FuncType& f = *reinterpret_cast<FuncType*>(storage.data);
+                        f();
+                    },
+                    nullptr,
+                    nullptr,
+                };
+                m_ops = &s_TrivialOps;
+                m_trivialBytes = static_cast<u16>(sizeof(FuncType));
+            }
+            else{
+                static constexpr Ops s_NonTrivialOps{
+                    +[](Storage& storage){
+                        FuncType& f = *reinterpret_cast<FuncType*>(storage.data);
+                        f();
+                    },
+                    +[](Storage& storage)noexcept{
+                        FuncType& f = *reinterpret_cast<FuncType*>(storage.data);
+                        f.~FuncType();
+                    },
+                    +[](Storage& dst, Storage& src)noexcept{
+                        FuncType& source = *reinterpret_cast<FuncType*>(src.data);
+                        ::new(static_cast<void*>(dst.data)) FuncType(Move(source));
+                        source.~FuncType();
+                    },
+                };
+                m_ops = &s_NonTrivialOps;
+                m_trivialBytes = 0u;
+            }
+        }
+
+        inline void moveFrom(TaskCallable&& rhs)noexcept{
+            if(!rhs.m_ops)
+                return;
+            if(rhs.m_trivialBytes != 0u)
+                FOUNDATION_MEMCPY(m_storage.data, InlineStorageSize, rhs.m_storage.data, rhs.m_trivialBytes);
+            else
+                rhs.m_ops->move(m_storage, rhs.m_storage);
+            m_ops = rhs.m_ops;
+            m_trivialBytes = rhs.m_trivialBytes;
+            rhs.m_ops = nullptr;
+            rhs.m_trivialBytes = 0u;
+        }
+
+
+    private:
+        const Ops* m_ops = nullptr;
+        u16 m_trivialBytes = 0u;
+        mutable Storage m_storage;
+    };
+
+    using TaskFunction = TaskCallable<s_TaskFunctionBytes>;
     using RangeFunction = void(*)(NotNull<const void*>, usize, usize);
 
 
@@ -59,24 +209,82 @@ private:
         };
     };
 
-    struct TaskNode{
-        TaskFunction function;
-        Vector<TaskHandle, Alloc::GlobalArena> dependents;
-        Vector<u32, Alloc::GlobalArena> olderCanceledGenerations;
+    static constexpr usize s_SlabShift = 6u;
+    static constexpr usize s_SlabSize = 1u << s_SlabShift;
+    static constexpr usize s_SlabMask = s_SlabSize - 1u;
+
+    struct alignas(64) TaskMeta{
         CpuTaskScope* scope = nullptr;
         TaskHandle parent;
-        CpuTaskOptions options;
         usize dependencies = 0u;
         usize children = 0u;
         u32 generation = 1u;
-        u32 latestCanceledGeneration = 0u;
         u32 next = TaskHandle::s_InvalidIndex;
-        b8 canceled = false;
+        u32 latestCanceledGeneration = 0u;
+        CpuTaskCost::Enum cost = CpuTaskCost::Heavy;
+        CpuTaskPriority::Enum priority = CpuTaskPriority::Normal;
+        CpuTaskTarget::Enum target = CpuTaskTarget::Worker;
         TaskState::Enum state = TaskState::Free;
+        b8 canceled = false;
+        b8 hasHandleWaiter = false;
+        b8 hasDependents = false;
+    };
+    static_assert(sizeof(TaskMeta) == 64u, "TaskMeta must occupy exactly one 64-byte cacheline");
+
+    struct alignas(64) TaskPayload{
+        TaskFunction function;
+        Vector<TaskHandle, Alloc::GlobalArena> dependents;
+        Vector<u32, Alloc::GlobalArena> olderCanceledGenerations;
+        CpuTaskProfileLabel profileLabel;
 
 
     public:
-        explicit TaskNode(Alloc::GlobalArena& arena)noexcept(noexcept(TaskFunction{}) && noexcept(Vector<TaskHandle, Alloc::GlobalArena>(arena)) && noexcept(Vector<u32, Alloc::GlobalArena>(arena)));
+        TaskPayload(Alloc::GlobalArena& arena)noexcept(noexcept(TaskFunction{}) && noexcept(Vector<TaskHandle, Alloc::GlobalArena>(arena)) && noexcept(Vector<u32, Alloc::GlobalArena>(arena)))
+            : dependents(arena)
+            , olderCanceledGenerations(arena)
+        {}
+    };
+
+    struct TaskSlab final : NoCopy{
+        alignas(64) Array<TaskMeta, s_SlabSize> metas{};
+        Array<TaskPayload, s_SlabSize> payloads;
+
+
+    private:
+        template<usize... Indices>
+        TaskSlab(Alloc::GlobalArena& arena, IndexSequence<Indices...>)noexcept(noexcept(TaskPayload(arena)))
+            : payloads{ (static_cast<void>(Indices), arena)... }
+        {}
+
+
+    public:
+        explicit TaskSlab(Alloc::GlobalArena& arena)noexcept(noexcept(TaskPayload(arena)))
+            : TaskSlab(arena, std::make_index_sequence<s_SlabSize>{})
+        {}
+    };
+
+    struct TaskSlabPool final : NoCopy{
+        Alloc::GlobalArena& arena;
+        Vector<NotNull<TaskSlab*>, Alloc::GlobalArena> slabs;
+        usize nodeCount = 0u;
+
+
+    public:
+        explicit TaskSlabPool(Alloc::GlobalArena& ownerArena)noexcept
+            : arena(ownerArena)
+            , slabs(ownerArena)
+        {}
+        ~TaskSlabPool()noexcept{
+            for(usize i = slabs.size(); i > 0u; --i)
+                DestroyArenaObject(arena, slabs[i - 1u].get());
+        }
+
+
+    public:
+        [[nodiscard]] TaskMeta& meta(const u32 index)noexcept{ return slabs[index >> s_SlabShift]->metas[index & s_SlabMask]; }
+        [[nodiscard]] const TaskMeta& meta(const u32 index)const noexcept{ return slabs[index >> s_SlabShift]->metas[index & s_SlabMask]; }
+        [[nodiscard]] TaskPayload& payload(const u32 index)noexcept{ return slabs[index >> s_SlabShift]->payloads[index & s_SlabMask]; }
+        [[nodiscard]] const TaskPayload& payload(const u32 index)const noexcept{ return slabs[index >> s_SlabShift]->payloads[index & s_SlabMask]; }
     };
 
     struct ReadyQueue{
@@ -86,7 +294,8 @@ private:
 
     struct TaskReservation{
         TaskHandle handle;
-        TaskNode& node;
+        TaskMeta& meta;
+        TaskPayload& payload;
     };
 
 private:
@@ -101,9 +310,119 @@ private:
 
 
 private:
+    static constexpr u32 s_WorkerActive = 0u;
+    static constexpr u32 s_WorkerSpinning = 1u;
+    static constexpr u32 s_WorkerParked = 2u;
+    static constexpr u32 s_WorkerNotified = 3u;
+    static constexpr u32 s_IdleTail = Limit<u32>::s_Max - 2u;
+    static constexpr u32 s_WorkerWakingTask = Limit<u32>::s_Max - 1u;
+    static constexpr u32 s_WorkerNotIdle = Limit<u32>::s_Max;
+    static constexpr u32 s_WorkerSpinIterations = 256u;
+    static constexpr u32 s_JoinSpinIterations = 128u;
+    static constexpr usize s_InlineWakePlanSlots = 16u;
+
+    struct alignas(64) WorkerWaitSlot{
+        Atomic<u32> state{ s_WorkerActive };
+    };
+
+    struct WorkerSlotArray final : NoCopy{
+        Alloc::GlobalArena& arena;
+        WorkerWaitSlot* slots = nullptr;
+        usize count = 0u;
+
+
+    public:
+        explicit WorkerSlotArray(Alloc::GlobalArena& ownerArena)noexcept
+            : arena(ownerArena)
+        {}
+        ~WorkerSlotArray()noexcept{
+            reset();
+        }
+
+
+    public:
+        void allocate(const usize slotCount){
+            reset();
+            if(slotCount == 0u)
+                return;
+            void* const memory = arena.allocate(alignof(WorkerWaitSlot), sizeof(WorkerWaitSlot) * slotCount);
+            if(!memory)
+                throw std::bad_alloc();
+            WorkerWaitSlot* const array = static_cast<WorkerWaitSlot*>(memory);
+            for(usize i = 0u; i < slotCount; ++i)
+                ::new(&array[i]) WorkerWaitSlot{};
+            slots = array;
+            count = slotCount;
+        }
+
+        void reset()noexcept{
+            if(!slots)
+                return;
+            for(usize i = 0u; i < count; ++i)
+                slots[i].~WorkerWaitSlot();
+            arena.deallocate(slots, alignof(WorkerWaitSlot), sizeof(WorkerWaitSlot) * count);
+            slots = nullptr;
+            count = 0u;
+        }
+
+        [[nodiscard]] WorkerWaitSlot& operator[](const usize index)noexcept{ return slots[index]; }
+        [[nodiscard]] const WorkerWaitSlot& operator[](const usize index)const noexcept{ return slots[index]; }
+    };
+
+    struct ScopeWait;
+
+    struct ClaimPipeline{
+        ScopeWait* preferredScope = nullptr;
+        const TaskHandle* stopOnCompleteHandle = nullptr;
+        const CpuTaskScope* stopOnCompleteScope = nullptr;
+        b8 stopWhenNoOutstanding = false;
+        b8 mainThread = false;
+        b8 executing = false;
+        b8 cooperative = false;
+        b8 allowPark = false;
+    };
+
     struct WorkerWakePlan{
-        Array<u32, s_AffinitySlotCount> counts{};
-        Array<b8, s_AffinitySlotCount> wakeAll{};
+        Array<u32, s_InlineWakePlanSlots> parkedSlots;
+        u32 parkedCount = 0u;
+        b8 overflowWakeAll = false;
+    };
+
+    struct ParallelRangeGroup final : NoCopy{
+        alignas(64) NotNull<const void*> context;
+        NotNull<RangeFunction> invoke;
+        usize begin = 0u;
+        usize chunkCount = 0u;
+        usize chunkSize = 0u;
+        usize remainder = 0u;
+        TaskHandle anchorHandle;
+        CpuTaskScope* scope = nullptr;
+        CpuTaskOptions options{};
+        ParallelRangeGroup* next = nullptr;
+        u32 remainingHelperClaims = 0u;
+        b8 linked = false;
+
+        alignas(64) Atomic<usize> nextChunk{ 0u };
+
+        alignas(64) Atomic<u32> activeHelpers{ 0u };
+
+
+    public:
+        ParallelRangeGroup(
+            const NotNull<const void*> rangeContext,
+            const NotNull<RangeFunction> rangeInvoke,
+            const usize rangeBegin,
+            const usize rangeChunkCount,
+            const usize rangeChunkSize,
+            const usize rangeRemainder
+        )noexcept
+            : context(rangeContext)
+            , invoke(rangeInvoke)
+            , begin(rangeBegin)
+            , chunkCount(rangeChunkCount)
+            , chunkSize(rangeChunkSize)
+            , remainder(rangeRemainder)
+        {}
     };
 
     struct ReadyProfile{
@@ -115,12 +434,19 @@ private:
     using ProfileSample = CpuTaskProfileBuffer::Sample;
 
     struct ClaimedExecution{
+        ParallelRangeGroup* rangeGroup = nullptr;
         TaskHandle handle;
-        TaskNode* node = nullptr;
+        TaskMeta* meta = nullptr;
+        TaskPayload* payload = nullptr;
         Optional<ProfileSample> profile;
         Optional<ReadyProfile> readyProfile;
         WorkerWakePlan wakePlan;
         b8 invoke = false;
+        b8 parkedFromExecute = false;
+
+
+    public:
+        [[nodiscard]] b8 hasWork()const noexcept{ return rangeGroup != nullptr || meta != nullptr; }
     };
 
     class ProfileMeasure final : NoCopy{
@@ -167,6 +493,7 @@ private:
     static u64 AllocateDomainIdentity()noexcept;
     static CpuTaskSchedulerConfig WorkerConfig(u32 workerCount)noexcept;
     static usize QueueIndex(const CpuTaskOptions& options)noexcept;
+    static usize QueueIndex(CpuTaskCost::Enum cost, CpuTaskPriority::Enum priority, CpuTaskTarget::Enum target)noexcept;
 
 
 public:
@@ -225,23 +552,38 @@ private:
     [[nodiscard]] Expected<TaskReservation, CpuTaskAdmissionError::Enum> reserveTaskLocked();
     [[nodiscard]] Expected<TaskHandle, CpuTaskAdmissionError::Enum> submitTask(TaskFunction&& function, CpuTaskScope* scope, CpuTaskOptions options, const TaskHandle* dependencies, usize dependencyCount);
     [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> parallelRange(usize begin, usize end, usize grainSize, CpuTaskOptions options, NotNull<const void*> context, NotNull<RangeFunction> invoke, CpuTaskScope* callerScope = nullptr);
-    [[nodiscard]] TaskNode* resolveLocked(TaskHandle handle)noexcept;
-    [[nodiscard]] const TaskNode* resolveLocked(TaskHandle handle)const noexcept;
+    [[nodiscard]] TaskMeta* resolveLocked(TaskHandle handle)noexcept;
+    [[nodiscard]] const TaskMeta* resolveLocked(TaskHandle handle)const noexcept;
     [[nodiscard]] b8 wasCanceledLocked(TaskHandle handle)const noexcept;
     [[nodiscard]] b8 isScopeCanceledLocked(const CpuTaskScope* scope)const noexcept;
     [[nodiscard]] b8 isRangeCanceled(const CpuTaskScope* scope)const noexcept;
-    void enqueueLocked(u32 index)noexcept;
-    [[nodiscard]] u16 eligibleQueueMaskLocked(CpuAffinity::Enum affinity, b8 mainThread, b8 cooperative)const noexcept;
-    [[nodiscard]] TaskHandle claimLocked(CpuAffinity::Enum affinity, b8 mainThread, b8 cooperative, ScopeWait* preferredScope = nullptr)noexcept;
-    [[nodiscard]] b8 hasReadyLocked(CpuAffinity::Enum affinity, b8 mainThread, b8 cooperative, ScopeWait* preferredScope = nullptr)noexcept;
+    void enqueueLocked(u32 index, TaskMeta& meta)noexcept;
+    [[nodiscard]] u16 eligibleQueueMaskLocked(CpuAffinity::Enum affinity, b8 mainThread, b8 executing, b8 cooperative)const noexcept;
+    [[nodiscard]] u32 claimTaskLocked(u16 candidateMask, CpuAffinity::Enum affinity, ScopeWait* preferredScope, TaskMeta*& outMeta)noexcept;
+    [[nodiscard]] ParallelRangeGroup* claimRangeLocked(u16 eligibleMask, ScopeWait* preferredScope)noexcept;
+    [[nodiscard]] b8 claimNextLocked(CpuAffinity::Enum affinity, b8 mainThread, b8 executing, b8 cooperative, ScopeWait* preferredScope, usize workerIndex, ClaimedExecution& outClaim, b8 countDepth = true)noexcept;
+    [[nodiscard]] b8 hasReadyLocked(CpuAffinity::Enum affinity, b8 mainThread, b8 executing, b8 cooperative, ScopeWait* preferredScope = nullptr)noexcept;
     [[nodiscard]] u32 findScopeReadyLocked(usize queue, ScopeWait& wait, u32& previous)noexcept;
     void invalidateScopeSearchLocked(b8 publication)noexcept;
     [[nodiscard]] b8 contributesToScopeLocked(u32 index, const ScopeWait& wait)noexcept;
-    [[nodiscard]] b8 queueEligible(usize queue, CpuAffinity::Enum affinity, b8 mainThread, b8 cooperative)const noexcept;
-    [[nodiscard]] ClaimedExecution beginClaimedLocked(TaskHandle handle, usize workerIndex, CpuAffinity::Enum affinity, b8 cooperative, b8 computeWakePlan = true)noexcept;
-    void executeClaimed(ClaimedExecution& claimed, usize workerIndex, CpuAffinity::Enum affinity, ClaimedExecution* nextClaim = nullptr, const StopToken* stop = nullptr);
-    void retireNodeLocked(TaskHandle handle, TaskNode& node, TaskHandle& outParentHandle, TaskNode*& outParentToRetire, b8& outMadeReady, b8& outScopeCompleted)noexcept;
-    void retire(TaskHandle handle, TaskNode& first)noexcept;
+    void addActiveDepthLocked(usize workerIndex, CpuAffinity::Enum affinity, b8& outReachedSaturation)noexcept;
+    void removeActiveDepthLocked(usize workerIndex, CpuAffinity::Enum affinity)noexcept;
+    void beginClaimedLocked(u32 index, TaskMeta& meta, usize workerIndex, CpuAffinity::Enum affinity, b8 cooperative, b8 computeWakePlan, ClaimedExecution& outClaim, b8 countDepth = true)noexcept;
+    void executeClaimed(
+        ClaimedExecution& claimed,
+        usize workerIndex,
+        CpuAffinity::Enum affinity,
+        ClaimedExecution* nextClaim = nullptr,
+        const ClaimPipeline* pipeline = nullptr
+    );
+    void retireNodeLocked(TaskHandle handle, TaskMeta& meta, TaskHandle& outParentHandle, TaskMeta*& outParentToRetire, b8& outMadeReady, b8& outScopeCompleted, b8& outHandleWaited)noexcept;
+    void retire(TaskHandle handle, TaskMeta& first)noexcept;
+    void unlinkRangeGroupLocked(ParallelRangeGroup& group)noexcept;
+    void waitRangeHelpers(ParallelRangeGroup& group)noexcept;
+    void pushIdleWorkerLocked(usize slotIndex, CpuAffinity::Enum affinity)noexcept;
+    [[nodiscard]] b8 popIdleWorkerLocked(CpuAffinity::Enum affinity, WorkerWakePlan& outPlan, b8 countWaking)noexcept;
+    void waitWorkerSlot(usize slotIndex)noexcept;
+    void waitJoinEpoch(u32 expectedEpoch)noexcept;
     void workerLoop(const StopToken& stop, usize workerIndex);
     [[nodiscard]] b8 executeOne(b8 cooperative, ScopeWait* preferredScope = nullptr);
     void drainTask(TaskHandle handle)noexcept;
@@ -249,7 +591,9 @@ private:
     void waitScope(CpuTaskScope& scope);
     [[nodiscard]] b8 isMainThread()const noexcept;
     [[nodiscard]] b8 isExecuting()const noexcept{ return s_Execution && &s_Execution->scheduler == this; }
-    [[nodiscard]] WorkerWakePlan takeWorkerWakePlanLocked()noexcept;
+    void takeWorkerWakePlanLocked(WorkerWakePlan& outPlan)noexcept;
+    void takeRangeWakePlanLocked(ParallelRangeGroup& range, u32 maxWake, WorkerWakePlan& outPlan)noexcept;
+    [[nodiscard]] b8 publishJoinWakeLocked(b8 condition)noexcept;
     void notifyWorkers(const WorkerWakePlan& wakePlan)noexcept;
     void notifyProgress(const WorkerWakePlan& wakePlan, b8 wakeJoiners)noexcept;
     void notifyProgress()noexcept;
@@ -260,46 +604,56 @@ private:
 
 
 private:
-    const u64 m_domainIdentity;
+    alignas(64) const u64 m_domainIdentity;
+    const ThreadId m_mainThread;
     Alloc::GlobalArena m_arena;
-    Deque<TaskNode, Alloc::GlobalArena> m_nodes;
     Vector<CpuWorkerPlacement, Alloc::GlobalArena> m_placements;
+    u32 m_workerCount = 0u;
+    alignas(64) Atomic<b8> m_abortingAtomic{ false };
+    Atomic<b8> m_stoppingAtomic{ false };
+    Atomic<b8> m_profileEnabled{ false };
+
+    alignas(64) mutable Futex m_mutex;
+
+    alignas(64) TaskSlabPool m_slabs;
+    Array<ReadyQueue, s_QueueCount> m_ready{};
+    u16 m_nonEmptyReadyMask = 0u;
+    Array<u32, s_CostValueCount> m_readyWorkerCosts{};
+    Array<u32, s_AffinitySlotCount> m_idleHead{ { s_IdleTail, s_IdleTail, s_IdleTail } };
+    Array<u32, s_AffinitySlotCount> m_idleCount{};
+    Array<u32, s_AffinitySlotCount> m_wakingWorkers{};
+    u32 m_totalIdleWorkers = 0u;
+    u32 m_freeNode = TaskHandle::s_InvalidIndex;
+    u32 m_busyPerformance = 0u;
+    u32 m_busyEfficiency = 0u;
+    u32 m_joinWaiters = 0u;
+    usize m_outstanding = 0u;
+    u64 m_dispatchCount = 0u;
+    ParallelRangeGroup* m_activeRangeHead = nullptr;
+    b8 m_aborting = false;
+    b8 m_stopping = false;
+    b8 m_scopeSearchActive = false;
+    Vector<u32, Alloc::GlobalArena> m_idleNext;
     Vector<u32, Alloc::GlobalArena> m_workerDepth;
     Vector<u32, Alloc::GlobalArena> m_searchStack;
     Vector<u64, Alloc::GlobalArena> m_searchVisits;
     Vector<u64, Alloc::GlobalArena> m_scopeContributionVisits;
     CpuTaskProfileBuffer m_profileBuffer;
     Vector<ReadyProfile, Alloc::GlobalArena> m_readyProfiles;
-    Array<ReadyQueue, s_QueueCount> m_ready;
-    u16 m_nonEmptyReadyMask = 0u;
-    Array<u32, s_CostValueCount> m_readyWorkerCosts{};
-    Array<u32, s_AffinitySlotCount> m_sleepingWorkers{};
-    Array<u32, s_AffinitySlotCount> m_wakingWorkers{};
-    u32 m_freeNode = TaskHandle::s_InvalidIndex;
-    u32 m_workerCount = 0u;
-    u32 m_busyPerformance = 0u;
-    u32 m_busyEfficiency = 0u;
     u64 m_searchGeneration = 0u;
     u64 m_nextScopeIdentity = 0u;
     u64 m_scopeSearchIdentity = 0u;
     u64 m_scopeSearchGeneration = s_ScopeSearchGenerationStep;
     u64 m_scopePublicationGeneration = 1u;
-    u64 m_dispatchCount = 0u;
-    const ThreadId m_mainThread;
-    mutable Futex m_mutex;
-    ConditionVariableAny m_changed;
-    Array<ConditionVariableAny, s_AffinitySlotCount> m_workerChanged;
-    usize m_outstanding = 0u;
-    u32 m_joinWaiters = 0u;
-    u32 m_handleJoinWaiters = 0u;
     CpuTaskSchedulerStatistics m_statistics;
     u64 m_profileEpoch = 0u;
     u64 m_profileFrameIndex = 0u;
-    b8 m_aborting = false;
-    b8 m_scopeSearchActive = false;
+
+    alignas(64) Atomic<u32> m_joinEpoch{ 0u };
+    alignas(64) Atomic<u32> m_rangeHelperEpoch{ 0u };
+    alignas(64) Atomic<usize> m_outstandingAtomic{ 0u };
+    WorkerSlotArray m_slots;
     Vector<JoiningThread, Alloc::GlobalArena> m_workers;
-    alignas(64) Atomic<b8> m_abortingAtomic{ false };
-    Atomic<b8> m_profileEnabled{ false };
 };
 
 
@@ -386,10 +740,10 @@ private:
     CpuTaskScheduler& m_scheduler;
     CpuTaskScope* m_parentScope = nullptr;
     const CpuTaskProfileLabel m_profileLabel;
-    Atomic<usize> m_pending{ 0u };
     u64 m_searchIdentity = 0u;
     Atomic<b8> m_canceled{ false };
     b8 m_allowCallerWork = false;
+    alignas(64) Atomic<usize> m_pending{ 0u };
 };
 
 [[nodiscard]] CpuTaskScheduler& SharedCpuTaskScheduler();

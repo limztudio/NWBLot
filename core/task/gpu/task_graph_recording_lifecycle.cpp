@@ -115,6 +115,7 @@ b8 GpuTaskGraph::beginRecordingAttempt(const GpuCompiledGraph& compiledGraph, co
     m_activeCompiledGraph = &compiledGraph;
     m_activeRecordingPlanGeneration.store(requestedPlanGeneration, MemoryOrder::release);
     m_declarationAdmissionState.fetch_or(s_AdmissionPlanActiveBit, MemoryOrder::acq_rel);
+    m_hasTaskLifecycleActivity = true;
     m_activeRecordingAttemptGeneration.store(nextRecordingAttemptGeneration, MemoryOrder::release);
     m_activeRecordingPreparationSerial = preparationSerial;
     m_activeSubmissionBinding = {};
@@ -319,20 +320,42 @@ b8 GpuTaskGraph::waitForSubmissionExceptionRecordingClaims(const GpuCompiledGrap
     if(recordingAttemptGeneration == 0u || !submissionBinding.valid())
         return false;
 
+    b8 registeredWaiter = false;
+    const auto releaseWaiterWithinLock = [&]()noexcept{
+        if(!registeredWaiter)
+            return;
+        FOUNDATION_FATAL_ASSERT_MSG(m_exceptionRecordingClaimWaiters != 0u, "exception recording claim waiter count must remain balanced");
+        --m_exceptionRecordingClaimWaiters;
+        registeredWaiter = false;
+    };
+
     for(;;){
         u32 activeClaimCount = 0u;
         {
             NothrowScopedLock lock(m_lifecycleMutex);
             const b8 exactBinding = !isTeardownInProgress(MemoryOrder::relaxed) && m_activeCompiledGraph == &compiledGraph && m_activeRecordingAttemptGeneration.load(MemoryOrder::relaxed) == recordingAttemptGeneration && m_activeSubmissionBinding == submissionBinding;
-            if(!exactBinding)
+            if(!exactBinding){
+                releaseWaiterWithinLock();
                 return false;
-            if(m_submissionBindingState == SubmissionBindingState::Resolved)
+            }
+            if(m_submissionBindingState == SubmissionBindingState::Resolved){
+                releaseWaiterWithinLock();
                 return true;
-            if(m_submissionBindingState != SubmissionBindingState::ExceptionClosing)
+            }
+            if(m_submissionBindingState != SubmissionBindingState::ExceptionClosing){
+                releaseWaiterWithinLock();
                 return false;
+            }
             activeClaimCount = m_activePacketRecordingClaimCount.load(MemoryOrder::acquire);
-            if(activeClaimCount == 0u)
+            if(activeClaimCount == 0u){
+                releaseWaiterWithinLock();
                 return true;
+            }
+            if(!registeredWaiter){
+                FOUNDATION_FATAL_ASSERT_MSG(m_exceptionRecordingClaimWaiters != Limit<u32>::s_Max, "exception recording claim waiter count overflowed");
+                ++m_exceptionRecordingClaimWaiters;
+                registeredWaiter = true;
+            }
         }
         m_activePacketRecordingClaimCount.wait(activeClaimCount, MemoryOrder::acquire);
     }

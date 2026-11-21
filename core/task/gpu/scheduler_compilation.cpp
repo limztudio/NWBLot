@@ -140,7 +140,7 @@ b8 GpuTaskScheduler::executeGraph(
     if(!deviceOperation.m_admitted)
         return false;
     const GpuNativePacketRecorder recorder(device(), timingRecorder);
-    return submitGraph(compiledGraph, recorder, desc, scratchArena, graph, recordedGraph, transaction, outFailedPacket);
+    return submitGraphWithinDeviceOperation(compiledGraph, recorder, desc, scratchArena, graph, recordedGraph, transaction, outFailedPacket);
 }
 
 b8 GpuTaskScheduler::executeAcceptedFrontierTask(

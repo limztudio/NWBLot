@@ -64,9 +64,19 @@ namespace __hidden_vulkan_resource_bindings_commands{
 
 
 void CommandList::setPushConstants(const void* data, usize byteSize){
-    if(!publicCommandStateAccessible())
-        return;
     if(byteSize == 0)
+        return;
+    if(m_activePipelineLayout != VK_NULL_HANDLE && data != nullptr && byteSize <= m_activePipelinePushConstantBytes){
+        const u32 pushConstantByteSize = static_cast<u32>(byteSize);
+        if(VulkanDetail::IsPushConstantByteSizeValid(pushConstantByteSize, m_context.physicalDeviceProperties.limits.maxPushConstantsSize)){
+            if(!recordAndValidateCommandCapability(m_activePipelineRequiredCapability, s_SetPushConstantsOperation))
+                return;
+            m_context.deviceDispatch.vkCmdPushConstants(m_currentCmdBuf->m_cmdBuf, m_activePipelineLayout, VK_SHADER_STAGE_ALL, 0, pushConstantByteSize, data);
+            return;
+        }
+    }
+
+    if(!publicCommandStateAccessible())
         return;
     if(data == nullptr){
         rejectCommandRecording(s_SetPushConstantsOperation, s_DataIsNullReason);
@@ -213,9 +223,6 @@ void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const RayTra
 }
 
 void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const VkPipelineBindPoint bindPoint, const PipelineBindingState& pipelineBindings, const GpuDescriptorHandle accelStructHandle, const TStringView operationName){
-    if(!validateCommandRecordingScope(operationName))
-        return;
-
     DescriptorBufferManager* const manager = m_context.descriptorBufferManager;
     const GpuPhysicalQueueInfo* const exactQueueInfo = cachedPhysicalQueueInfo();
     FOUNDATION_ASSERT(!m_commandRecordingFailed && exactQueueInfo && matchesActiveNativeLeaseIdentity());

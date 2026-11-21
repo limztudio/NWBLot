@@ -60,6 +60,7 @@ InputLayout::InputLayout(const VulkanContext& context)noexcept
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_attributes(context.objectArena)
     , m_bindings(context.objectArena)
+    , m_bindingRequiredElementBytes(context.objectArena)
     , m_vkAttributes(context.objectArena)
     , m_context(context)
 {}
@@ -166,12 +167,14 @@ Expected<InputLayoutHandle> Device::createInputLayout(const VertexAttributeDesc*
     }
 
     layout->m_bindings.reserve(bindingInfos.size());
+    layout->m_bindingRequiredElementBytes.reserve(bindingInfos.size());
     for(const auto& [bufferIndex, bindingInfo] : bindingInfos){
         VkVertexInputBindingDescription binding = {};
         binding.binding = bufferIndex;
         binding.stride = bindingInfo.hasExplicitStride ? bindingInfo.explicitStride : static_cast<u32>(bindingInfo.requiredStride);
         binding.inputRate = bindingInfo.isInstanced ? VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX;
         layout->m_bindings.push_back(binding);
+        layout->m_bindingRequiredElementBytes.push_back(static_cast<u32>(bindingInfo.requiredStride));
     }
 
     layout->m_vkAttributes.resize(attributeCount);

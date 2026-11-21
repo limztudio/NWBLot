@@ -19,7 +19,7 @@ NWB_CORE_BEGIN
 u32 CpuTaskScheduler::findScopeReadyLocked(const usize queue, ScopeWait& wait, u32& previous)noexcept{
     m_scopeSearchActive = true;
     previous = TaskHandle::s_InvalidIndex;
-    if(m_nodes[m_ready[queue].head].scope == &wait.scope)
+    if(m_slabs.meta(m_ready[queue].head).scope == &wait.scope)
         return m_ready[queue].head;
     if(wait.publicationGeneration != m_scopePublicationGeneration){
         for(TaskHandle& anchor : wait.unrelatedAnchors)
@@ -27,16 +27,16 @@ u32 CpuTaskScheduler::findScopeReadyLocked(const usize queue, ScopeWait& wait, u
         wait.publicationGeneration = m_scopePublicationGeneration;
     }
     TaskHandle& anchor = wait.unrelatedAnchors[queue];
-    if(const TaskNode* const node = resolveLocked(anchor)){
-        if(node->state == TaskState::Ready && QueueIndex(node->options) == queue)
+    if(const TaskMeta* const meta = resolveLocked(anchor)){
+        if(meta->state == TaskState::Ready && QueueIndex(meta->cost, meta->priority, meta->target) == queue)
             previous = anchor.index;
     }
-    u32 index = previous == TaskHandle::s_InvalidIndex ? m_ready[queue].head : m_nodes[previous].next;
+    u32 index = previous == TaskHandle::s_InvalidIndex ? m_ready[queue].head : m_slabs.meta(previous).next;
     while(index != TaskHandle::s_InvalidIndex && !contributesToScopeLocked(index, wait)){
         previous = index;
-        index = m_nodes[index].next;
+        index = m_slabs.meta(index).next;
     }
-    anchor = previous == TaskHandle::s_InvalidIndex ? TaskHandle{} : TaskHandle{ m_domainIdentity, previous, m_nodes[previous].generation };
+    anchor = previous == TaskHandle::s_InvalidIndex ? TaskHandle{} : TaskHandle{ m_domainIdentity, previous, m_slabs.meta(previous).generation };
     return index;
 }
 
@@ -52,7 +52,7 @@ void CpuTaskScheduler::invalidateScopeSearchLocked(const b8 publication)noexcept
 }
 
 b8 CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait& wait)noexcept{
-    if(m_nodes[index].scope == &wait.scope)
+    if(m_slabs.meta(index).scope == &wait.scope)
         return true;
     if(m_scopeSearchIdentity != wait.scopeIdentity){
         m_scopeSearchIdentity = wait.scopeIdentity;
@@ -63,8 +63,8 @@ b8 CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait& 
         return true;
     if(m_scopeContributionVisits[index] == m_scopeSearchGeneration)
         return false;
-    const TaskNode& origin = m_nodes[index];
-    if(origin.dependents.empty() && !resolveLocked(origin.parent)){
+    const TaskMeta& origin = m_slabs.meta(index);
+    if(!origin.hasDependents && !resolveLocked(origin.parent)){
         m_scopeContributionVisits[index] = m_scopeSearchGeneration;
         return false;
     }
@@ -73,23 +73,25 @@ b8 CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait& 
     m_searchVisits[index] = m_searchGeneration;
     for(usize cursor = 0u; cursor < m_searchStack.size(); ++cursor){
         const u32 current = m_searchStack[cursor];
-        const TaskNode& node = m_nodes[current];
-        if(node.scope == &wait.scope || m_scopeContributionVisits[current] == positiveStamp){
+        const TaskMeta& meta = m_slabs.meta(current);
+        if(meta.scope == &wait.scope || m_scopeContributionVisits[current] == positiveStamp){
             m_scopeContributionVisits[current] = positiveStamp;
             const auto positive = [this, positiveStamp](const TaskHandle handle)noexcept{
                 return resolveLocked(handle) && m_scopeContributionVisits[handle.index] == positiveStamp;
             };
             for(usize previous = cursor; previous != 0u;){
                 const u32 ancestorIndex = m_searchStack[--previous];
-                const TaskNode& ancestor = m_nodes[ancestorIndex];
+                const TaskMeta& ancestor = m_slabs.meta(ancestorIndex);
                 if(ancestor.scope == &wait.scope || positive(ancestor.parent)){
                     m_scopeContributionVisits[ancestorIndex] = positiveStamp;
                     continue;
                 }
-                for(const TaskHandle dependent : ancestor.dependents){
-                    if(positive(dependent)){
-                        m_scopeContributionVisits[ancestorIndex] = positiveStamp;
-                        break;
+                if(ancestor.hasDependents){
+                    for(const TaskHandle dependent : m_slabs.payload(ancestorIndex).dependents){
+                        if(positive(dependent)){
+                            m_scopeContributionVisits[ancestorIndex] = positiveStamp;
+                            break;
+                        }
                     }
                 }
             }
@@ -102,9 +104,11 @@ b8 CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait& 
                 m_searchStack.push_back(handle.index);
             }
         };
-        visit(node.parent);
-        for(const TaskHandle dependent : node.dependents)
-            visit(dependent);
+        visit(meta.parent);
+        if(meta.hasDependents){
+            for(const TaskHandle dependent : m_slabs.payload(current).dependents)
+                visit(dependent);
+        }
     }
     for(const u32 visited : m_searchStack)
         m_scopeContributionVisits[visited] = m_scopeSearchGeneration;

@@ -58,27 +58,82 @@ SymMat3 InvertSymMat3(in SymMat3 a){
     const f32 c11 = a.m11 * a.m22 - a.m12 * a.m12;
     const f32 c12 = a.m02 * a.m12 - a.m01 * a.m22;
     const f32 c13 = a.m01 * a.m12 - a.m02 * a.m11;
-    const f32 det = a.m00 * c11 + a.m01 * c12 + a.m02 * c13;
-
-    if(!IsFinite(det) || Abs(det) <= 1.0e-30f)
-        return ZeroSymMat3();
-
-    const f32 invDet = 1.0f / det;
-    if(!IsFinite(invDet))
-        return ZeroSymMat3();
-
     const f32 c22 = a.m00 * a.m22 - a.m02 * a.m02;
     const f32 c23 = a.m01 * a.m02 - a.m00 * a.m12;
     const f32 c33 = a.m00 * a.m11 - a.m01 * a.m01;
+    const f32 det = a.m00 * c11 + a.m01 * c12 + a.m02 * c13;
+    const f32 tr = a.m00 + a.m11 + a.m22;
+    const f32 s2 = c11 + c22 + c33;
 
-    return SymMat3(
-        c11 * invDet,
-        c12 * invDet,
-        c13 * invDet,
-        c22 * invDet,
-        c23 * invDet,
-        c33 * invDet
-    );
+    if(!IsFinite(det) || !IsFinite(tr) || !IsFinite(s2))
+        return ZeroSymMat3();
+
+    const f32 detTol = Max(1.0e-30f, 1.0e-6f * Abs(tr * s2) + 1.0e-12f * Abs(tr * tr * tr));
+    if(Abs(det) > detTol){
+        const f32 invDet = 1.0f / det;
+        if(!IsFinite(invDet))
+            return ZeroSymMat3();
+        return SymMat3(
+            c11 * invDet,
+            c12 * invDet,
+            c13 * invDet,
+            c22 * invDet,
+            c23 * invDet,
+            c33 * invDet
+        );
+    }
+
+    if(s2 > 1.0e-6f * tr * tr && s2 > 1.0e-30f){
+        f32 nx = c11;
+        f32 ny = c12;
+        f32 nz = c13;
+        f32 bestDiag = Abs(c11);
+        if(Abs(c22) > bestDiag){
+            bestDiag = Abs(c22);
+            nx = c12;
+            ny = c22;
+            nz = c23;
+        }
+        if(Abs(c33) > bestDiag){
+            nx = c13;
+            ny = c23;
+            nz = c33;
+        }
+        const f32 nLenSq = nx * nx + ny * ny + nz * nz;
+        if(nLenSq > 1.0e-30f){
+            const f32 invNLen = Rsqrt(VectorSingle(nLenSq)).x;
+            nx *= invNLen;
+            ny *= invNLen;
+            nz *= invNLen;
+            const f32 invS2 = 1.0f / s2;
+            if(IsFinite(invS2)){
+                return SymMat3(
+                    (tr * (1.0f - nx * nx) - a.m00) * invS2,
+                    (tr * (-nx * ny) - a.m01) * invS2,
+                    (tr * (-nx * nz) - a.m02) * invS2,
+                    (tr * (1.0f - ny * ny) - a.m11) * invS2,
+                    (tr * (-ny * nz) - a.m12) * invS2,
+                    (tr * (1.0f - nz * nz) - a.m22) * invS2
+                );
+            }
+        }
+    }
+
+    if(tr > 1.0e-15f){
+        const f32 invTrSq = 1.0f / (tr * tr);
+        if(IsFinite(invTrSq)){
+            return SymMat3(
+                a.m00 * invTrSq,
+                a.m01 * invTrSq,
+                a.m02 * invTrSq,
+                a.m11 * invTrSq,
+                a.m12 * invTrSq,
+                a.m22 * invTrSq
+            );
+        }
+    }
+
+    return ZeroSymMat3();
 }
 
 
@@ -274,23 +329,79 @@ Mat3 InvertSymmetricMat3(in Mat3 a){
     const f32 c11 = a22 * a33 - a23 * a23;
     const f32 c12 = a13 * a23 - a12 * a33;
     const f32 c13 = a12 * a23 - a13 * a22;
-    const f32 det = a11 * c11 + a12 * c12 + a13 * c13;
-
-    if(!IsFinite(det) || Abs(det) <= 1.0e-30f)
-        return ZeroMat3();
-
-    const f32 invDet = 1.0f / det;
-    if(!IsFinite(invDet))
-        return ZeroMat3();
     const f32 c22 = a11 * a33 - a13 * a13;
     const f32 c23 = a12 * a13 - a11 * a23;
     const f32 c33 = a11 * a22 - a12 * a12;
+    const f32 det = a11 * c11 + a12 * c12 + a13 * c13;
+    const f32 tr = a11 + a22 + a33;
+    const f32 s2 = c11 + c22 + c33;
 
-    return Mat3(
-        VectorSingle(c11 * invDet, c12 * invDet, c13 * invDet, 0.0f),
-        VectorSingle(c12 * invDet, c22 * invDet, c23 * invDet, 0.0f),
-        VectorSingle(c13 * invDet, c23 * invDet, c33 * invDet, 0.0f)
-    );
+    if(!IsFinite(det) || !IsFinite(tr) || !IsFinite(s2))
+        return ZeroMat3();
+
+    const f32 detTol = Max(1.0e-30f, 1.0e-6f * Abs(tr * s2) + 1.0e-12f * Abs(tr * tr * tr));
+    if(Abs(det) > detTol){
+        const f32 invDet = 1.0f / det;
+        if(!IsFinite(invDet))
+            return ZeroMat3();
+        return Mat3(
+            VectorSingle(c11 * invDet, c12 * invDet, c13 * invDet, 0.0f),
+            VectorSingle(c12 * invDet, c22 * invDet, c23 * invDet, 0.0f),
+            VectorSingle(c13 * invDet, c23 * invDet, c33 * invDet, 0.0f)
+        );
+    }
+
+    if(s2 > 1.0e-6f * tr * tr && s2 > 1.0e-30f){
+        f32 nx = c11;
+        f32 ny = c12;
+        f32 nz = c13;
+        f32 bestDiag = Abs(c11);
+        if(Abs(c22) > bestDiag){
+            bestDiag = Abs(c22);
+            nx = c12;
+            ny = c22;
+            nz = c23;
+        }
+        if(Abs(c33) > bestDiag){
+            nx = c13;
+            ny = c23;
+            nz = c33;
+        }
+        const f32 nLenSq = nx * nx + ny * ny + nz * nz;
+        if(nLenSq > 1.0e-30f){
+            const f32 invNLen = Rsqrt(VectorSingle(nLenSq)).x;
+            nx *= invNLen;
+            ny *= invNLen;
+            nz *= invNLen;
+            const f32 invS2 = 1.0f / s2;
+            if(IsFinite(invS2)){
+                const f32 r00 = (tr * (1.0f - nx * nx) - a11) * invS2;
+                const f32 r01 = (tr * (-nx * ny) - a12) * invS2;
+                const f32 r02 = (tr * (-nx * nz) - a13) * invS2;
+                const f32 r11 = (tr * (1.0f - ny * ny) - a22) * invS2;
+                const f32 r12 = (tr * (-ny * nz) - a23) * invS2;
+                const f32 r22 = (tr * (1.0f - nz * nz) - a33) * invS2;
+                return Mat3(
+                    VectorSingle(r00, r01, r02, 0.0f),
+                    VectorSingle(r01, r11, r12, 0.0f),
+                    VectorSingle(r02, r12, r22, 0.0f)
+                );
+            }
+        }
+    }
+
+    if(tr > 1.0e-15f){
+        const f32 invTrSq = 1.0f / (tr * tr);
+        if(IsFinite(invTrSq)){
+            return Mat3(
+                VectorSingle(a11 * invTrSq, a12 * invTrSq, a13 * invTrSq, 0.0f),
+                VectorSingle(a12 * invTrSq, a22 * invTrSq, a23 * invTrSq, 0.0f),
+                VectorSingle(a13 * invTrSq, a23 * invTrSq, a33 * invTrSq, 0.0f)
+            );
+        }
+    }
+
+    return ZeroMat3();
 }
 
 SymMat3 RotateSymMat3(in VectorSingle q, in SymMat3 localMat){
@@ -468,15 +579,23 @@ void PushRayCastChildrenOrdered(
         secondChild = childA;
         secondT = tA;
     }
-    if(firstHit && stackCount < 256u){
-        stackNodes[stackCount] = firstChild;
-        stackTMins[stackCount] = firstT;
-        ++stackCount;
-    }
-    if(secondHit && stackCount < 256u){
-        stackNodes[stackCount] = secondChild;
-        stackTMins[stackCount] = secondT;
-        ++stackCount;
+    if(stackCount < 256u){
+        if(firstHit && secondHit && stackCount == 255u){
+            stackNodes[stackCount] = secondChild;
+            stackTMins[stackCount] = secondT;
+            ++stackCount;
+            return;
+        }
+        if(firstHit){
+            stackNodes[stackCount] = firstChild;
+            stackTMins[stackCount] = firstT;
+            ++stackCount;
+        }
+        if(secondHit && stackCount < 256u){
+            stackNodes[stackCount] = secondChild;
+            stackTMins[stackCount] = secondT;
+            ++stackCount;
+        }
     }
 }
 

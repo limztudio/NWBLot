@@ -63,7 +63,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         else if(subStep > 0u){
             for(uint k = tid; k < contactCount; k += NWB_PHYSICS_ISLAND_WORKGROUP_SIZE)
                 nwbPhysicsClearContactWarmStart(contactOffset + k, constraintSlot);
-            GroupMemoryBarrierWithGroupSync();
+            AllMemoryBarrierWithGroupSync();
         }
 
         nwbPhysicsIslandSolveContactsPass(tid, contactOffset, slice.contactColorCounts0, slice.contactColorCounts1, NWB_PHYSICS_SOLVER_MODE_SOLVE_BIAS, bodyStateSlot, constraintSlot, invH, 0u);
@@ -79,6 +79,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         nwbPhysicsIslandSolveContactsPass(tid, contactOffset, slice.contactColorCounts0, slice.contactColorCounts1, NWB_PHYSICS_SOLVER_MODE_RESTITUTION, bodyStateSlot, constraintSlot, invH, 0u);
 
     const uint impulseOutSlot = g_NwbPhysicsPushConstants.slots1.y;
+    AllMemoryBarrierWithGroupSync();
     for(uint k = tid; k < contactCount; k += NWB_PHYSICS_ISLAND_WORKGROUP_SIZE)
         nwbPhysicsExportContactImpulses(contactOffset + k, constraintSlot, impulseOutSlot);
 

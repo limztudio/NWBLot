@@ -278,59 +278,64 @@ b8 IsAllowedRigidBodyMetadataField(in StringView key){
 
 Expected<RigidBodyComponentCookEntry> ParseRigidBodyComponentCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
     RigidBodyComponentCookEntry entry;
-    if(!CheckMetadataAssetMap(file, value, s_RigidBodyComponentDiagnosticPrefix)
-        || !AssignCookEntryVirtualPath(virtualPath, file, s_RigidBodyComponentDiagnosticPrefix, entry)
-        || !ValidateMetadataAssetFields(file, value, s_RigidBodyComponentDiagnosticPrefix, IsAllowedRigidBodyMetadataField))
+    if(!ValidateOptionalSceneMetadataMap(file, value, s_RigidBodyComponentDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_RigidBodyComponentDiagnosticPrefix, entry))
         return MakeUnexpected(Failure());
 
-    RigidBodyComponent c = entry.component;
-    if(value.hasField("type")){
-        const Expected<MetadataStringField> f = ReadMetadataStringField(file, value, s_RigidBodyComponentDiagnosticPrefix, "type", true);
-        if(!f.has_value())
+    if(value.isMap()){
+        if(!ValidateMetadataAssetFields(file, value, s_RigidBodyComponentDiagnosticPrefix, IsAllowedRigidBodyMetadataField))
             return MakeUnexpected(Failure());
-        if(f.value().text == "static") c.type = BodyType::Static;
-        else if(f.value().text == "kinematic") c.type = BodyType::Kinematic;
-        else if(f.value().text == "dynamic") c.type = BodyType::Dynamic;
-        else{
-            error("{} '{}': field 'type' must be 'static', 'kinematic', or 'dynamic'", s_RigidBodyComponentDiagnosticPrefix, file);
-            return MakeUnexpected(Failure());
+
+        RigidBodyComponent c = entry.component;
+        if(value.hasField("type")){
+            const Expected<MetadataStringField> f = ReadMetadataStringField(file, value, s_RigidBodyComponentDiagnosticPrefix, "type", true);
+            if(!f.has_value())
+                return MakeUnexpected(Failure());
+            if(f.value().text == "static") c.type = BodyType::Static;
+            else if(f.value().text == "kinematic") c.type = BodyType::Kinematic;
+            else if(f.value().text == "dynamic") c.type = BodyType::Dynamic;
+            else{
+                error("{} '{}': field 'type' must be 'static', 'kinematic', or 'dynamic'", s_RigidBodyComponentDiagnosticPrefix, file);
+                return MakeUnexpected(Failure());
+            }
         }
+
+        VectorSingle linVel = VectorSingle(c.linearVelocity);
+        VectorSingle angVel = VectorSingle(c.angularVelocity);
+        VectorSingle customCom = VectorSingle(c.customCenterOfMass);
+        VectorSingle customInertiaD = VectorSingle(c.customInertiaDiag);
+        VectorSingle customInertiaO = VectorSingle(c.customInertiaOffDiag);
+        if(!ReadPhysicsOptionalFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "linear_velocity", linVel)
+            || !ReadPhysicsOptionalFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "angular_velocity", angVel)
+            || !ReadOptionalFiniteF32Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "linear_damping", c.linearDamping)
+            || !ReadOptionalFiniteF32Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "angular_damping", c.angularDamping)
+            || !ReadOptionalFiniteF32Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "gravity_scale", c.gravityScale)
+            || !ReadOptionalFiniteF32Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "sleep_threshold", c.sleepThreshold)
+            || !ReadPhysicsOptionalU32Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "motion_locks", c.motionLocks)
+            || !ReadPhysicsOptionalU64Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "user_data", c.userData)
+            || !ReadPhysicsOptionalNameField(file, value, s_RigidBodyComponentDiagnosticPrefix, "entity_tag", c.entityTag)
+            || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "use_custom_mass", c.useCustomMass)
+            || !ReadOptionalFiniteF32Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "custom_mass", c.customMass)
+            || !ReadPhysicsOptionalFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "custom_center_of_mass", customCom)
+            || !ReadPhysicsOptionalFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "custom_inertia_diag", customInertiaD)
+            || !ReadPhysicsOptionalFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "custom_inertia_off_diag", customInertiaO)
+            || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "enable_sleep", c.enableSleep)
+            || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "is_awake", c.isAwake)
+            || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "is_bullet", c.isBullet)
+            || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "is_enabled", c.isEnabled)
+            || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "allow_fast_rotation", c.allowFastRotation)
+            || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "enable_gyroscopic_torque", c.enableGyroscopicTorque)
+            || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "drive_kinematic_from_transform", c.driveKinematicFromTransform))
+            return MakeUnexpected(Failure());
+        c.linearVelocity = f32x4(linVel, 0.0f);
+        c.angularVelocity = f32x4(angVel, 0.0f);
+        c.customCenterOfMass = f32x4(customCom, 0.0f);
+        c.customInertiaDiag = f32x4(customInertiaD, 0.0f);
+        c.customInertiaOffDiag = f32x4(customInertiaO, 0.0f);
+
+        entry.component = c;
     }
 
-    VectorSingle linVel = VectorSingle(c.linearVelocity);
-    VectorSingle angVel = VectorSingle(c.angularVelocity);
-    VectorSingle customCom = VectorSingle(c.customCenterOfMass);
-    VectorSingle customInertiaD = VectorSingle(c.customInertiaDiag);
-    VectorSingle customInertiaO = VectorSingle(c.customInertiaOffDiag);
-    if(!ReadPhysicsOptionalFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "linear_velocity", linVel)
-        || !ReadPhysicsOptionalFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "angular_velocity", angVel)
-        || !ReadOptionalFiniteF32Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "linear_damping", c.linearDamping)
-        || !ReadOptionalFiniteF32Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "angular_damping", c.angularDamping)
-        || !ReadOptionalFiniteF32Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "gravity_scale", c.gravityScale)
-        || !ReadOptionalFiniteF32Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "sleep_threshold", c.sleepThreshold)
-        || !ReadPhysicsOptionalU32Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "motion_locks", c.motionLocks)
-        || !ReadPhysicsOptionalU64Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "user_data", c.userData)
-        || !ReadPhysicsOptionalNameField(file, value, s_RigidBodyComponentDiagnosticPrefix, "entity_tag", c.entityTag)
-        || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "use_custom_mass", c.useCustomMass)
-        || !ReadOptionalFiniteF32Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "custom_mass", c.customMass)
-        || !ReadPhysicsOptionalFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "custom_center_of_mass", customCom)
-        || !ReadPhysicsOptionalFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "custom_inertia_diag", customInertiaD)
-        || !ReadPhysicsOptionalFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "custom_inertia_off_diag", customInertiaO)
-        || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "enable_sleep", c.enableSleep)
-        || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "is_awake", c.isAwake)
-        || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "is_bullet", c.isBullet)
-        || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "is_enabled", c.isEnabled)
-        || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "allow_fast_rotation", c.allowFastRotation)
-        || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "enable_gyroscopic_torque", c.enableGyroscopicTorque)
-        || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "drive_kinematic_from_transform", c.driveKinematicFromTransform))
-        return MakeUnexpected(Failure());
-    c.linearVelocity = f32x4(linVel, 0.0f);
-    c.angularVelocity = f32x4(angVel, 0.0f);
-    c.customCenterOfMass = f32x4(customCom, 0.0f);
-    c.customInertiaDiag = f32x4(customInertiaD, 0.0f);
-    c.customInertiaOffDiag = f32x4(customInertiaO, 0.0f);
-
-    entry.component = c;
     if(!BuildComponentAssetFromEntry<RigidBodyComponentAsset, RigidBodyComponentCookEntry>(entry).has_value())
         return MakeUnexpected(Failure());
     return entry;
@@ -421,80 +426,83 @@ b8 ParseColliderShapeEntryMap(in Path file, in MetascriptValue mapVal, in b8 all
 
 Expected<ColliderComponentCookEntry> ParseColliderComponentCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
     ColliderComponentCookEntry entry;
-    if(!CheckMetadataAssetMap(file, value, s_ColliderComponentDiagnosticPrefix)
+    if(!ValidateOptionalSceneMetadataMap(file, value, s_ColliderComponentDiagnosticPrefix)
         || !AssignCookEntryVirtualPath(virtualPath, file, s_ColliderComponentDiagnosticPrefix, entry))
         return MakeUnexpected(Failure());
 
-    ColliderShapeEntry primary;
-    if(!ParseColliderShapeEntryMap(file, value, true, primary))
-        return MakeUnexpected(Failure());
-
-    ColliderComponent c;
-    c.shapeType = primary.shapeType;
-    c.center = primary.center;
-    c.center2 = primary.center2;
-    c.halfExtents = primary.halfExtents;
-    c.localRotation = primary.localRotation;
-    c.radius = primary.radius;
-    c.skinRadius = primary.skinRadius;
-    c.density = primary.density;
-    c.friction = primary.friction;
-    c.restitution = primary.restitution;
-    c.rollingResistance = primary.rollingResistance;
-    c.tangentSpeed = primary.tangentSpeed;
-    c.categoryBits = primary.categoryBits;
-    c.maskBits = primary.maskBits;
-    c.groupIndex = primary.groupIndex;
-    c.userData = primary.userData;
-    c.isBox = primary.isBox;
-    c.isSensor = primary.isSensor;
-    c.enableContactEvents = primary.enableContactEvents;
-    c.enableHitEvents = primary.enableHitEvents;
-    c.enableSensorEvents = primary.enableSensorEvents;
-    c.enablePreSolveEvents = primary.enablePreSolveEvents;
-    c.invokeContactCreation = primary.invokeContactCreation;
-    c.hullPoints = primary.hullPoints;
-    c.meshVertices = primary.meshVertices;
-    c.meshIndices = primary.meshIndices;
-    c.meshAsset = primary.meshAsset;
-
-    if(!ReadPhysicsOptionalNameField(file, value, s_ColliderComponentDiagnosticPrefix, "entity_tag", c.entityTag))
-        return MakeUnexpected(Failure());
-
-    if(value.hasField("extra_shapes")){
-        b8 extrasOk = true;
-        value.visitField(
-            "extra_shapes",
-            lambda[in file, mut extrasOk, mut c](in MetascriptValue listVal) -> void{
-                if(!listVal.isList()){
-                    error("{} '{}': field 'extra_shapes' must be a list of collider maps", s_ColliderComponentDiagnosticPrefix, PathToString(file));
-                    extrasOk = false;
-                    return;
-                }
-                const Span<MetascriptValue> items = listVal.listView();
-                c.extraShapes.clear();
-                c.extraShapes.reserve(items.size());
-                for(usize i = 0u; i < items.size(); ++i){
-                    in MetascriptValue item = items[i];
-                    if(!item.isMap()){
-                        error("{} '{}': 'extra_shapes[{}]' must be a map", s_ColliderComponentDiagnosticPrefix, PathToString(file), i);
-                        extrasOk = false;
-                        return;
-                    }
-                    ColliderShapeEntry extra;
-                    if(!ParseColliderShapeEntryMap(file, item, false, extra)){
-                        extrasOk = false;
-                        return;
-                    }
-                    c.extraShapes.push_back(extra);
-                }
-            }
-        );
-        if(!extrasOk)
+    if(value.isMap()){
+        ColliderShapeEntry primary;
+        if(!ParseColliderShapeEntryMap(file, value, true, primary))
             return MakeUnexpected(Failure());
+
+        ColliderComponent c;
+        c.shapeType = primary.shapeType;
+        c.center = primary.center;
+        c.center2 = primary.center2;
+        c.halfExtents = primary.halfExtents;
+        c.localRotation = primary.localRotation;
+        c.radius = primary.radius;
+        c.skinRadius = primary.skinRadius;
+        c.density = primary.density;
+        c.friction = primary.friction;
+        c.restitution = primary.restitution;
+        c.rollingResistance = primary.rollingResistance;
+        c.tangentSpeed = primary.tangentSpeed;
+        c.categoryBits = primary.categoryBits;
+        c.maskBits = primary.maskBits;
+        c.groupIndex = primary.groupIndex;
+        c.userData = primary.userData;
+        c.isBox = primary.isBox;
+        c.isSensor = primary.isSensor;
+        c.enableContactEvents = primary.enableContactEvents;
+        c.enableHitEvents = primary.enableHitEvents;
+        c.enableSensorEvents = primary.enableSensorEvents;
+        c.enablePreSolveEvents = primary.enablePreSolveEvents;
+        c.invokeContactCreation = primary.invokeContactCreation;
+        c.hullPoints = primary.hullPoints;
+        c.meshVertices = primary.meshVertices;
+        c.meshIndices = primary.meshIndices;
+        c.meshAsset = primary.meshAsset;
+
+        if(!ReadPhysicsOptionalNameField(file, value, s_ColliderComponentDiagnosticPrefix, "entity_tag", c.entityTag))
+            return MakeUnexpected(Failure());
+
+        if(value.hasField("extra_shapes")){
+            b8 extrasOk = true;
+            value.visitField(
+                "extra_shapes",
+                lambda[in file, mut extrasOk, mut c](in MetascriptValue listVal) -> void{
+                    if(!listVal.isList()){
+                        error("{} '{}': field 'extra_shapes' must be a list of collider maps", s_ColliderComponentDiagnosticPrefix, PathToString(file));
+                        extrasOk = false;
+                        return;
+                    }
+                    const Span<MetascriptValue> items = listVal.listView();
+                    c.extraShapes.clear();
+                    c.extraShapes.reserve(items.size());
+                    for(usize i = 0u; i < items.size(); ++i){
+                        in MetascriptValue item = items[i];
+                        if(!item.isMap()){
+                            error("{} '{}': 'extra_shapes[{}]' must be a map", s_ColliderComponentDiagnosticPrefix, PathToString(file), i);
+                            extrasOk = false;
+                            return;
+                        }
+                        ColliderShapeEntry extra;
+                        if(!ParseColliderShapeEntryMap(file, item, false, extra)){
+                            extrasOk = false;
+                            return;
+                        }
+                        c.extraShapes.push_back(extra);
+                    }
+                }
+            );
+            if(!extrasOk)
+                return MakeUnexpected(Failure());
+        }
+
+        entry.component = c;
     }
 
-    entry.component = c;
     if(!BuildComponentAssetFromEntry<ColliderComponentAsset, ColliderComponentCookEntry>(entry).has_value())
         return MakeUnexpected(Failure());
     return entry;
@@ -519,74 +527,79 @@ b8 IsAllowedJointMetadataField(in StringView key){
 
 Expected<JointComponentCookEntry> ParseJointComponentCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
     JointComponentCookEntry entry;
-    if(!CheckMetadataAssetMap(file, value, s_JointComponentDiagnosticPrefix)
-        || !AssignCookEntryVirtualPath(virtualPath, file, s_JointComponentDiagnosticPrefix, entry)
-        || !ValidateMetadataAssetFields(file, value, s_JointComponentDiagnosticPrefix, IsAllowedJointMetadataField))
+    if(!ValidateOptionalSceneMetadataMap(file, value, s_JointComponentDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_JointComponentDiagnosticPrefix, entry))
         return MakeUnexpected(Failure());
 
-    JointComponent j = entry.component;
-    if(value.hasField("type")){
-        const Expected<MetadataStringField> f = ReadMetadataStringField(file, value, s_JointComponentDiagnosticPrefix, "type", true);
-        if(!f.has_value())
+    if(value.isMap()){
+        if(!ValidateMetadataAssetFields(file, value, s_JointComponentDiagnosticPrefix, IsAllowedJointMetadataField))
             return MakeUnexpected(Failure());
-        if(f.value().text == "distance") j.type = JointType::Distance;
-        else if(f.value().text == "spherical") j.type = JointType::Spherical;
-        else if(f.value().text == "revolute") j.type = JointType::Revolute;
-        else if(f.value().text == "prismatic") j.type = JointType::Prismatic;
-        else if(f.value().text == "fixed") j.type = JointType::Fixed;
-        else if(f.value().text == "motor") j.type = JointType::Motor;
-        else if(f.value().text == "wheel") j.type = JointType::Wheel;
-        else{
-            error("{} '{}': field 'type' must be 'distance', 'spherical', 'revolute', 'prismatic', 'fixed', 'motor', or 'wheel'", s_JointComponentDiagnosticPrefix, file);
-            return MakeUnexpected(Failure());
+
+        JointComponent j = entry.component;
+        if(value.hasField("type")){
+            const Expected<MetadataStringField> f = ReadMetadataStringField(file, value, s_JointComponentDiagnosticPrefix, "type", true);
+            if(!f.has_value())
+                return MakeUnexpected(Failure());
+            if(f.value().text == "distance") j.type = JointType::Distance;
+            else if(f.value().text == "spherical") j.type = JointType::Spherical;
+            else if(f.value().text == "revolute") j.type = JointType::Revolute;
+            else if(f.value().text == "prismatic") j.type = JointType::Prismatic;
+            else if(f.value().text == "fixed") j.type = JointType::Fixed;
+            else if(f.value().text == "motor") j.type = JointType::Motor;
+            else if(f.value().text == "wheel") j.type = JointType::Wheel;
+            else{
+                error("{} '{}': field 'type' must be 'distance', 'spherical', 'revolute', 'prismatic', 'fixed', 'motor', or 'wheel'", s_JointComponentDiagnosticPrefix, file);
+                return MakeUnexpected(Failure());
+            }
         }
+
+        VectorSingle anchorA = VectorSingle(j.localAnchorA);
+        VectorSingle anchorB = VectorSingle(j.localAnchorB);
+        VectorSingle axisA = VectorSingle(j.localAxisA);
+        VectorSingle axisB = VectorSingle(j.localAxisB);
+        VectorSingle refRot = VectorSingle(j.referenceRotation);
+        VectorSingle linOff = VectorSingle(j.linearOffset);
+        if(!ReadPhysicsOptionalFloat3Field(file, value, s_JointComponentDiagnosticPrefix, "local_anchor_a", anchorA)
+            || !ReadPhysicsOptionalFloat3Field(file, value, s_JointComponentDiagnosticPrefix, "local_anchor_b", anchorB)
+            || !ReadPhysicsOptionalFloat3Field(file, value, s_JointComponentDiagnosticPrefix, "local_axis_a", axisA)
+            || !ReadPhysicsOptionalFloat3Field(file, value, s_JointComponentDiagnosticPrefix, "local_axis_b", axisB)
+            || !ReadPhysicsOptionalRotationField(file, value, s_JointComponentDiagnosticPrefix, "reference_rotation", "reference_rotation_euler", "reference_rotation_euler_degrees", refRot)
+            || !ReadOptionalMetadataBoolField(file, value, s_JointComponentDiagnosticPrefix, "use_reference_rotation", j.useReferenceRotation)
+            || !ReadPhysicsOptionalFloat3Field(file, value, s_JointComponentDiagnosticPrefix, "linear_offset", linOff)
+            || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "length", j.length)
+            || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "min_length", j.minLength)
+            || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "max_length", j.maxLength)
+            || !ReadOptionalMetadataBoolField(file, value, s_JointComponentDiagnosticPrefix, "enable_limit", j.enableLimit)
+            || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "lower_limit", j.lowerLimit)
+            || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "upper_limit", j.upperLimit)
+            || !ReadOptionalMetadataBoolField(file, value, s_JointComponentDiagnosticPrefix, "enable_motor", j.enableMotor)
+            || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "motor_speed", j.motorSpeed)
+            || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "max_motor_force", j.maxMotorForce)
+            || !ReadOptionalMetadataBoolField(file, value, s_JointComponentDiagnosticPrefix, "enable_spring", j.enableSpring)
+            || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "hertz", j.hertz)
+            || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "damping_ratio", j.dampingRatio)
+            || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "correction_factor", j.correctionFactor)
+            || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "max_torque", j.maxTorque)
+            || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "swing_limit", j.swingLimit)
+            || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "suspension_hertz", j.suspensionHertz)
+            || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "suspension_damping_ratio", j.suspensionDampingRatio)
+            || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "break_force", j.breakForce)
+            || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "break_torque", j.breakTorque)
+            || !ReadOptionalMetadataBoolField(file, value, s_JointComponentDiagnosticPrefix, "collide_connected", j.collideConnected)
+            || !ReadPhysicsOptionalNameField(file, value, s_JointComponentDiagnosticPrefix, "body_entity_a", j.bodyEntityNameA)
+            || !ReadPhysicsOptionalNameField(file, value, s_JointComponentDiagnosticPrefix, "body_entity_b", j.bodyEntityNameB)
+            || !ReadPhysicsOptionalU64Field(file, value, s_JointComponentDiagnosticPrefix, "user_data", j.userData))
+            return MakeUnexpected(Failure());
+        j.localAnchorA = f32x4(anchorA, 0.0f);
+        j.localAnchorB = f32x4(anchorB, 0.0f);
+        j.localAxisA = f32x4(axisA, 0.0f);
+        j.localAxisB = f32x4(axisB, 0.0f);
+        j.referenceRotation = f32x4(refRot);
+        j.linearOffset = f32x4(linOff, 0.0f);
+
+        entry.component = j;
     }
 
-    VectorSingle anchorA = VectorSingle(j.localAnchorA);
-    VectorSingle anchorB = VectorSingle(j.localAnchorB);
-    VectorSingle axisA = VectorSingle(j.localAxisA);
-    VectorSingle axisB = VectorSingle(j.localAxisB);
-    VectorSingle refRot = VectorSingle(j.referenceRotation);
-    VectorSingle linOff = VectorSingle(j.linearOffset);
-    if(!ReadPhysicsOptionalFloat3Field(file, value, s_JointComponentDiagnosticPrefix, "local_anchor_a", anchorA)
-        || !ReadPhysicsOptionalFloat3Field(file, value, s_JointComponentDiagnosticPrefix, "local_anchor_b", anchorB)
-        || !ReadPhysicsOptionalFloat3Field(file, value, s_JointComponentDiagnosticPrefix, "local_axis_a", axisA)
-        || !ReadPhysicsOptionalFloat3Field(file, value, s_JointComponentDiagnosticPrefix, "local_axis_b", axisB)
-        || !ReadPhysicsOptionalRotationField(file, value, s_JointComponentDiagnosticPrefix, "reference_rotation", "reference_rotation_euler", "reference_rotation_euler_degrees", refRot)
-        || !ReadOptionalMetadataBoolField(file, value, s_JointComponentDiagnosticPrefix, "use_reference_rotation", j.useReferenceRotation)
-        || !ReadPhysicsOptionalFloat3Field(file, value, s_JointComponentDiagnosticPrefix, "linear_offset", linOff)
-        || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "length", j.length)
-        || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "min_length", j.minLength)
-        || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "max_length", j.maxLength)
-        || !ReadOptionalMetadataBoolField(file, value, s_JointComponentDiagnosticPrefix, "enable_limit", j.enableLimit)
-        || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "lower_limit", j.lowerLimit)
-        || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "upper_limit", j.upperLimit)
-        || !ReadOptionalMetadataBoolField(file, value, s_JointComponentDiagnosticPrefix, "enable_motor", j.enableMotor)
-        || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "motor_speed", j.motorSpeed)
-        || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "max_motor_force", j.maxMotorForce)
-        || !ReadOptionalMetadataBoolField(file, value, s_JointComponentDiagnosticPrefix, "enable_spring", j.enableSpring)
-        || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "hertz", j.hertz)
-        || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "damping_ratio", j.dampingRatio)
-        || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "correction_factor", j.correctionFactor)
-        || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "max_torque", j.maxTorque)
-        || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "swing_limit", j.swingLimit)
-        || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "suspension_hertz", j.suspensionHertz)
-        || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "suspension_damping_ratio", j.suspensionDampingRatio)
-        || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "break_force", j.breakForce)
-        || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "break_torque", j.breakTorque)
-        || !ReadOptionalMetadataBoolField(file, value, s_JointComponentDiagnosticPrefix, "collide_connected", j.collideConnected)
-        || !ReadPhysicsOptionalNameField(file, value, s_JointComponentDiagnosticPrefix, "body_entity_a", j.bodyEntityNameA)
-        || !ReadPhysicsOptionalNameField(file, value, s_JointComponentDiagnosticPrefix, "body_entity_b", j.bodyEntityNameB)
-        || !ReadPhysicsOptionalU64Field(file, value, s_JointComponentDiagnosticPrefix, "user_data", j.userData))
-        return MakeUnexpected(Failure());
-    j.localAnchorA = f32x4(anchorA, 0.0f);
-    j.localAnchorB = f32x4(anchorB, 0.0f);
-    j.localAxisA = f32x4(axisA, 0.0f);
-    j.localAxisB = f32x4(axisB, 0.0f);
-    j.referenceRotation = f32x4(refRot);
-    j.linearOffset = f32x4(linOff, 0.0f);
-
-    entry.component = j;
     if(!BuildComponentAssetFromEntry<JointComponentAsset, JointComponentCookEntry>(entry).has_value())
         return MakeUnexpected(Failure());
     return entry;
@@ -605,46 +618,51 @@ b8 IsAllowedPhysicsWorldConfigMetadataField(in StringView key){
 
 Expected<PhysicsWorldConfigComponentCookEntry> ParsePhysicsWorldConfigComponentCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
     PhysicsWorldConfigComponentCookEntry entry;
-    if(!CheckMetadataAssetMap(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix)
-        || !AssignCookEntryVirtualPath(virtualPath, file, s_PhysicsWorldConfigComponentDiagnosticPrefix, entry)
-        || !ValidateMetadataAssetFields(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, IsAllowedPhysicsWorldConfigMetadataField))
+    if(!ValidateOptionalSceneMetadataMap(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_PhysicsWorldConfigComponentDiagnosticPrefix, entry))
         return MakeUnexpected(Failure());
 
-    PhysicsWorldConfigComponent w = entry.component;
-    if(value.hasField("backend_mode")){
-        const Expected<MetadataStringField> f = ReadMetadataStringField(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "backend_mode", true);
-        if(!f.has_value())
+    if(value.isMap()){
+        if(!ValidateMetadataAssetFields(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, IsAllowedPhysicsWorldConfigMetadataField))
             return MakeUnexpected(Failure());
-        if(f.value().text == "auto") w.backendMode = PhysicsBackendMode::Auto;
-        else if(f.value().text == "cpu_only") w.backendMode = PhysicsBackendMode::CpuOnly;
-        else if(f.value().text == "gpu_preferred") w.backendMode = PhysicsBackendMode::GpuPreferred;
-        else{
-            error("{} '{}': field 'backend_mode' must be 'auto', 'cpu_only', or 'gpu_preferred'", s_PhysicsWorldConfigComponentDiagnosticPrefix, file);
-            return MakeUnexpected(Failure());
+
+        PhysicsWorldConfigComponent w = entry.component;
+        if(value.hasField("backend_mode")){
+            const Expected<MetadataStringField> f = ReadMetadataStringField(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "backend_mode", true);
+            if(!f.has_value())
+                return MakeUnexpected(Failure());
+            if(f.value().text == "auto") w.backendMode = PhysicsBackendMode::Auto;
+            else if(f.value().text == "cpu_only") w.backendMode = PhysicsBackendMode::CpuOnly;
+            else if(f.value().text == "gpu_preferred") w.backendMode = PhysicsBackendMode::GpuPreferred;
+            else{
+                error("{} '{}': field 'backend_mode' must be 'auto', 'cpu_only', or 'gpu_preferred'", s_PhysicsWorldConfigComponentDiagnosticPrefix, file);
+                return MakeUnexpected(Failure());
+            }
         }
+
+        VectorSingle grav = VectorSingle(w.gravity);
+        if(!ReadPhysicsOptionalFloat3Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "gravity", grav)
+            || !ReadOptionalFiniteF32Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "restitution_threshold", w.restitutionThreshold)
+            || !ReadOptionalFiniteF32Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "hit_event_threshold", w.hitEventThreshold)
+            || !ReadOptionalFiniteF32Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "contact_hertz", w.contactHertz)
+            || !ReadOptionalFiniteF32Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "contact_damping_ratio", w.contactDampingRatio)
+            || !ReadOptionalFiniteF32Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "max_linear_velocity", w.maxLinearVelocity)
+            || !ReadOptionalFiniteF32Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "fixed_delta_time", w.fixedDeltaTime)
+            || !ReadPhysicsOptionalU32Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "sub_step_count", w.subStepCount)
+            || !ReadPhysicsOptionalU32Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "max_sub_steps_per_frame", w.maxSubStepsPerFrame)
+            || !ReadPhysicsOptionalU32Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "gpu_dispatch_threshold", w.gpuDispatchThreshold)
+            || !ReadOptionalFiniteF32Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "gpu_workload_fraction", w.gpuWorkloadFraction)
+            || !ReadOptionalMetadataBoolField(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "enable_sleep", w.enableSleep)
+            || !ReadOptionalMetadataBoolField(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "enable_continuous", w.enableContinuous)
+            || !ReadOptionalMetadataBoolField(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "enable_contact_softening", w.enableContactSoftening)
+            || !ReadOptionalMetadataBoolField(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "enable_warm_starting", w.enableWarmStarting)
+            || !ReadOptionalMetadataBoolField(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "paused", w.paused))
+            return MakeUnexpected(Failure());
+        w.gravity = f32x4(grav, 0.0f);
+
+        entry.component = w;
     }
 
-    VectorSingle grav = VectorSingle(w.gravity);
-    if(!ReadPhysicsOptionalFloat3Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "gravity", grav)
-        || !ReadOptionalFiniteF32Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "restitution_threshold", w.restitutionThreshold)
-        || !ReadOptionalFiniteF32Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "hit_event_threshold", w.hitEventThreshold)
-        || !ReadOptionalFiniteF32Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "contact_hertz", w.contactHertz)
-        || !ReadOptionalFiniteF32Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "contact_damping_ratio", w.contactDampingRatio)
-        || !ReadOptionalFiniteF32Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "max_linear_velocity", w.maxLinearVelocity)
-        || !ReadOptionalFiniteF32Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "fixed_delta_time", w.fixedDeltaTime)
-        || !ReadPhysicsOptionalU32Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "sub_step_count", w.subStepCount)
-        || !ReadPhysicsOptionalU32Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "max_sub_steps_per_frame", w.maxSubStepsPerFrame)
-        || !ReadPhysicsOptionalU32Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "gpu_dispatch_threshold", w.gpuDispatchThreshold)
-        || !ReadOptionalFiniteF32Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "gpu_workload_fraction", w.gpuWorkloadFraction)
-        || !ReadOptionalMetadataBoolField(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "enable_sleep", w.enableSleep)
-        || !ReadOptionalMetadataBoolField(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "enable_continuous", w.enableContinuous)
-        || !ReadOptionalMetadataBoolField(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "enable_contact_softening", w.enableContactSoftening)
-        || !ReadOptionalMetadataBoolField(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "enable_warm_starting", w.enableWarmStarting)
-        || !ReadOptionalMetadataBoolField(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "paused", w.paused))
-        return MakeUnexpected(Failure());
-    w.gravity = f32x4(grav, 0.0f);
-
-    entry.component = w;
     if(!BuildComponentAssetFromEntry<PhysicsWorldConfigComponentAsset, PhysicsWorldConfigComponentCookEntry>(entry).has_value())
         return MakeUnexpected(Failure());
     return entry;
@@ -656,17 +674,22 @@ b8 IsAllowedPhysicsParentMetadataField(in StringView key){
 
 Expected<PhysicsParentComponentCookEntry> ParsePhysicsParentComponentCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
     PhysicsParentComponentCookEntry entry;
-    if(!CheckMetadataAssetMap(file, value, s_PhysicsParentComponentDiagnosticPrefix)
-        || !AssignCookEntryVirtualPath(virtualPath, file, s_PhysicsParentComponentDiagnosticPrefix, entry)
-        || !ValidateMetadataAssetFields(file, value, s_PhysicsParentComponentDiagnosticPrefix, IsAllowedPhysicsParentMetadataField))
+    if(!ValidateOptionalSceneMetadataMap(file, value, s_PhysicsParentComponentDiagnosticPrefix)
+        || !AssignCookEntryVirtualPath(virtualPath, file, s_PhysicsParentComponentDiagnosticPrefix, entry))
         return MakeUnexpected(Failure());
 
-    PhysicsParentComponent p = entry.component;
-    if(!ReadPhysicsOptionalNameField(file, value, s_PhysicsParentComponentDiagnosticPrefix, "parent_entity", p.parentEntityName)
-        || !ReadOptionalMetadataBoolField(file, value, s_PhysicsParentComponentDiagnosticPrefix, "inherit_scale", p.inheritScale))
-        return MakeUnexpected(Failure());
+    if(value.isMap()){
+        if(!ValidateMetadataAssetFields(file, value, s_PhysicsParentComponentDiagnosticPrefix, IsAllowedPhysicsParentMetadataField))
+            return MakeUnexpected(Failure());
 
-    entry.component = p;
+        PhysicsParentComponent p = entry.component;
+        if(!ReadPhysicsOptionalNameField(file, value, s_PhysicsParentComponentDiagnosticPrefix, "parent_entity", p.parentEntityName)
+            || !ReadOptionalMetadataBoolField(file, value, s_PhysicsParentComponentDiagnosticPrefix, "inherit_scale", p.inheritScale))
+            return MakeUnexpected(Failure());
+
+        entry.component = p;
+    }
+
     if(!BuildComponentAssetFromEntry<PhysicsParentComponentAsset, PhysicsParentComponentCookEntry>(entry).has_value())
         return MakeUnexpected(Failure());
     return entry;

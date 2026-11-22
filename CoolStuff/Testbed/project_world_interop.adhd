@@ -644,8 +644,11 @@ void CreateStressPhysicsScene(
             jc.bodyEntityA = prevId;
             jc.bodyEntityB = linkId;
             jc.type = JointType::Spherical;
-            jc.localAnchorA = f32x4(0.0f, -0.18f, 0.0f, 0.0f);
-            jc.localAnchorB = f32x4(0.0f, 0.18f, 0.0f, 0.0f);
+            f32 localAnchorAY = -0.18f / 0.22f;
+            if(linkIdx == 0u)
+                localAnchorAY = -0.18f / 0.24f;
+            jc.localAnchorA = f32x4(0.0f, localAnchorAY, 0.0f, 0.0f);
+            jc.localAnchorB = f32x4(0.0f, 0.18f / 0.22f, 0.0f, 0.0f);
             jc.collideConnected = false;
             jc.dirty = true;
             outEntities.push_back(jointEntity.id());
@@ -782,10 +785,11 @@ void PaintPhysicsDebugOverlay(mut NotNullUniquePtr<World> worldHandle, mut UiPai
 
     in TransformComponent camXf = cameraView.components.value().transform;
     in CameraProjection camProj = cameraView.projection;
+    const PhysicsDebugScreenProjector projector(camXf, camProj, metrics.logicalWidth, metrics.logicalHeight);
     for(usize li = 0u; li < debugLines.size(); ++li){
         in PhysicsDebugLine line = debugLines[li];
         VectorSingle seg(0.0f);
-        if(ProjectPhysicsWorldSegmentToScreen(camXf, camProj, metrics.logicalWidth, metrics.logicalHeight, VectorSingle(line.start), VectorSingle(line.end), seg))
+        if(projector.projectSegment(VectorSingle(line.start), VectorSingle(line.end), seg))
             context.paint.drawLine(Point(seg.x, seg.y), Point(seg.z, seg.w), 1.5f, Color(line.color.x, line.color.y, line.color.z, line.color.w));
     }
 }

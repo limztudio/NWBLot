@@ -495,7 +495,60 @@ Aabb3D ComputeHullAabb(in HullShape hull, in Transform3D xf){
     return Aabb3D(minPt - rv, maxPt + rv);
 }
 
-u32 BuildMeshBvhRecursive(mut MeshShape mesh, in Span<Aabb3D> triAabbs, mut Vector<u32> triOrder, in usize beginIdx, in usize endIdx){
+f32 MeshTriCentroidAxis(in Aabb3D box, in usize axis){
+    return (VectorGetByIndex(VectorSingle(box.lowerBound), cast<isize>(axis)) + VectorGetByIndex(VectorSingle(box.upperBound), cast<isize>(axis))) * 0.5f;
+}
+
+void PartitionMeshBvhMedian(
+    in Span<Aabb3D> triAabbs,
+    mut Vector<u32> triOrder,
+    in usize beginIdx,
+    in usize endIdx,
+    in usize axis
+){
+    const usize count = endIdx - beginIdx;
+    if(count <= 2u)
+        return;
+    const usize target = beginIdx + (count / 2u);
+    usize l = beginIdx;
+    usize r = endIdx - 1u;
+    usize maxSteps = count + 4u;
+    while(l < r && maxSteps > 0u){
+        --maxSteps;
+        const usize midP = l + ((r - l) / 2u);
+        const f32 pivot = MeshTriCentroidAxis(triAabbs[triOrder[midP]], axis);
+        usize i = l;
+        usize j = r;
+        while(i <= j){
+            while(i <= r && MeshTriCentroidAxis(triAabbs[triOrder[i]], axis) < pivot)
+                ++i;
+            while(j >= l && MeshTriCentroidAxis(triAabbs[triOrder[j]], axis) > pivot){
+                if(j == 0u)
+                    break;
+                --j;
+            }
+            if(i <= j){
+                const u32 tmp = triOrder[i];
+                triOrder[i] = triOrder[j];
+                triOrder[j] = tmp;
+                ++i;
+                if(j == 0u)
+                    break;
+                --j;
+            }
+        }
+        if(j < l || i > r)
+            break;
+        if(j < target)
+            l = i;
+        else
+            r = j;
+        if(target < i && j < target)
+            break;
+    }
+}
+
+u32 BuildMeshBvhRecursive(mut MeshShape mesh, in Span<Aabb3D> triAabbs, mut Vector<u32> triOrder, in usize beginIdx, in usize endIdx, in u32 depth){
     const u32 nodeIdx = cast<u32>(mesh.nodes.size());
     mesh.nodes.push_back(MeshBvhNode());
 
@@ -517,12 +570,11 @@ u32 BuildMeshBvhRecursive(mut MeshShape mesh, in Span<Aabb3D> triAabbs, mut Vect
     else if(ext.z > ext.x && ext.z > ext.y)
         splitAxis = 2u;
 
-    const f32 splitMid = (VectorGetByIndex(VectorSingle(box.lowerBound), cast<isize>(splitAxis)) + VectorGetByIndex(VectorSingle(box.upperBound), cast<isize>(splitAxis))) * 0.5f;
+    const f32 splitMid = MeshTriCentroidAxis(box, splitAxis);
 
     usize midIdx = beginIdx;
     for(usize i = beginIdx; i < endIdx; ++i){
-        in Aabb3D ta = triAabbs[triOrder[i]];
-        const f32 c = (VectorGetByIndex(VectorSingle(ta.lowerBound), cast<isize>(splitAxis)) + VectorGetByIndex(VectorSingle(ta.upperBound), cast<isize>(splitAxis))) * 0.5f;
+        const f32 c = MeshTriCentroidAxis(triAabbs[triOrder[i]], splitAxis);
         if(c < splitMid){
             const u32 tmp = triOrder[i];
             triOrder[i] = triOrder[midIdx];
@@ -531,11 +583,16 @@ u32 BuildMeshBvhRecursive(mut MeshShape mesh, in Span<Aabb3D> triAabbs, mut Vect
         }
     }
 
-    if(midIdx == beginIdx || midIdx == endIdx)
+    const usize leftCount = midIdx - beginIdx;
+    const usize rightCount = endIdx - midIdx;
+    const b8 heavilySkewed = (depth >= 12u) && (leftCount * 4u < triCount || rightCount * 4u < triCount);
+    if(midIdx == beginIdx || midIdx == endIdx || depth >= 24u || heavilySkewed){
+        PartitionMeshBvhMedian(triAabbs, triOrder, beginIdx, endIdx, splitAxis);
         midIdx = beginIdx + (triCount / 2u);
+    }
 
-    const u32 leftIdx = BuildMeshBvhRecursive(mesh, triAabbs, triOrder, beginIdx, midIdx);
-    const u32 rightIdx = BuildMeshBvhRecursive(mesh, triAabbs, triOrder, midIdx, endIdx);
+    const u32 leftIdx = BuildMeshBvhRecursive(mesh, triAabbs, triOrder, beginIdx, midIdx, depth + 1u);
+    const u32 rightIdx = BuildMeshBvhRecursive(mesh, triAabbs, triOrder, midIdx, endIdx, depth + 1u);
     mesh.nodes[nodeIdx].setChildren(leftIdx, rightIdx, false);
     return nodeIdx;
 }
@@ -705,7 +762,7 @@ Expected<MeshShape> MakeMeshShape(in Span<f32x4> vertices, in Span<u32> indices,
     for(usize i = 0u; i < triOrder.size(); ++i)
         triOrder[i] = cast<u32>(i);
 
-    BuildMeshBvhRecursive(mesh, Span<Aabb3D>(rawTriAabbs), triOrder, 0u, triOrder.size());
+    BuildMeshBvhRecursive(mesh, Span<Aabb3D>(rawTriAabbs), triOrder, 0u, triOrder.size(), 0u);
 
     const u32 bvhCount = cast<u32>(mesh.nodes.size());
     u32 meta = bvhCount & 0x7fffffffu;

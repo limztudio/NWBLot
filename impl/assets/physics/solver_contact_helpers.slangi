@@ -67,18 +67,59 @@ void nwbPhysicsInvertContactRollingMass(
     const float c11 = a22 * a33 - a23 * a23;
     const float c12 = a13 * a23 - a12 * a33;
     const float c13 = a12 * a23 - a13 * a22;
-    const float det = a11 * c11 + a12 * c12 + a13 * c13;
-    if(abs(det) <= 1.0e-30f){
-        out0 = float4(0.0f, 0.0f, 0.0f, 0.0f);
-        out1 = float4(0.0f, 0.0f, 0.0f, 0.0f);
-        return;
-    }
-    const float invDet = 1.0f / det;
     const float c22 = a11 * a33 - a13 * a13;
     const float c23 = a12 * a13 - a11 * a23;
     const float c33 = a11 * a22 - a12 * a12;
-    out0 = float4(c11, c12, c13, c22) * invDet;
-    out1 = float4(c23 * invDet, c33 * invDet, 0.0f, 0.0f);
+    const float det = a11 * c11 + a12 * c12 + a13 * c13;
+    const float tr = a11 + a22 + a33;
+    const float s2 = c11 + c22 + c33;
+    const float detTol = max(1.0e-30f, 1.0e-6f * abs(tr * s2) + 1.0e-12f * abs(tr * tr * tr));
+
+    if(abs(det) > detTol){
+        const float invDet = 1.0f / det;
+        out0 = float4(c11, c12, c13, c22) * invDet;
+        out1 = float4(c23 * invDet, c33 * invDet, 0.0f, 0.0f);
+        return;
+    }
+
+    if(s2 > 1.0e-6f * tr * tr && s2 > 1.0e-30f){
+        float3 nCol = float3(c11, c12, c13);
+        float bestDiag = abs(c11);
+        if(abs(c22) > bestDiag){
+            bestDiag = abs(c22);
+            nCol = float3(c12, c22, c23);
+        }
+        if(abs(c33) > bestDiag)
+            nCol = float3(c13, c23, c33);
+        const float nLenSq = dot(nCol, nCol);
+        if(nLenSq > 1.0e-30f){
+            const float3 n = nCol * rsqrt(nLenSq);
+            const float invS2 = 1.0f / s2;
+            out0 = float4(
+                (tr * (1.0f - n.x * n.x) - a11) * invS2,
+                (tr * (-n.x * n.y) - a12) * invS2,
+                (tr * (-n.x * n.z) - a13) * invS2,
+                (tr * (1.0f - n.y * n.y) - a22) * invS2
+            );
+            out1 = float4(
+                (tr * (-n.y * n.z) - a23) * invS2,
+                (tr * (1.0f - n.z * n.z) - a33) * invS2,
+                0.0f,
+                0.0f
+            );
+            return;
+        }
+    }
+
+    if(tr > 1.0e-15f){
+        const float invTrSq = 1.0f / (tr * tr);
+        out0 = float4(a11, a12, a13, a22) * invTrSq;
+        out1 = float4(a23 * invTrSq, a33 * invTrSq, 0.0f, 0.0f);
+        return;
+    }
+
+    out0 = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    out1 = float4(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
 
@@ -93,6 +134,7 @@ void nwbPhysicsExportContactImpulses(const uint constraintIdx, const uint constr
     float remainingNormal = 0.0f;
     bool anyRestitution = false;
     float maxApproach = 0.0f;
+    uint maxApproachIdx = 0u;
     for(uint i = 0u; i < pointCount; ++i){
         const float4 impMass = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].points[i].impulsesMass;
         const float relVel = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].points[i].rBRelVel.w;
@@ -119,12 +161,14 @@ void nwbPhysicsExportContactImpulses(const uint constraintIdx, const uint constr
         if(ri > 0.0f)
             anyRestitution = true;
         const float approach = -relVel;
-        if(approach > maxApproach && ti > 0.0f)
+        if(approach > maxApproach && ti > 0.0f){
             maxApproach = approach;
+            maxApproachIdx = i;
+        }
     }
     if(anyRestitution && remainingNormal <= 0.0f){
         outImp.frictionTwistRollX = float4(0.0f, 0.0f, 0.0f, 0.0f);
-        outImp.rollYZMaxApproach = float4(0.0f, 0.0f, maxApproach, 0.0f);
+        outImp.rollYZMaxApproach = float4(0.0f, 0.0f, maxApproach, asfloat(maxApproachIdx));
     }
     else{
         const float2 ft = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].tangentMassFriction.zw;
@@ -132,7 +176,7 @@ void nwbPhysicsExportContactImpulses(const uint constraintIdx, const uint constr
         const float rx = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].invIA1RollX.z;
         const float2 ryz = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].invIB1RollYZ.zw;
         outImp.frictionTwistRollX = float4(ft.x, ft.y, twist, rx);
-        outImp.rollYZMaxApproach = float4(ryz.x, ryz.y, maxApproach, 0.0f);
+        outImp.rollYZMaxApproach = float4(ryz.x, ryz.y, maxApproach, asfloat(maxApproachIdx));
     }
     g_NwbPhysicsContactImpulseOutBuffers[outSlot][constraintIdx] = outImp;
 }
@@ -622,7 +666,7 @@ void nwbPhysicsIslandSolveContactsPass(
                     nwbPhysicsSolveSingleContact(off + k, mode, bodyStateSlot, constraintSlot, invH, flags);
             }
             off += cnt;
-            GroupMemoryBarrierWithGroupSync();
+            AllMemoryBarrierWithGroupSync();
         }
     }
 }

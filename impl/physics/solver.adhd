@@ -108,6 +108,7 @@ void UpdateBroadPhasePairsCpu(mut PhysicsWorld world, mut CpuTaskScheduler cpuSc
         return;
 
     usize usedBucketCount = 1u;
+    b8 parBroadPhaseOk = false;
     if(cpuScheduler.isParallelEnabled() && moveCount >= s_CpuParallelThreshold){
         const usize grain = ComputePhysicsGrain(cpuScheduler, moveCount, cast<usize>(16u));
         usedBucketCount = (moveCount + grain - 1u) / grain;
@@ -131,10 +132,11 @@ void UpdateBroadPhasePairsCpu(mut PhysicsWorld world, mut CpuTaskScheduler cpuSc
             },
             CpuTaskOptions()
         );
-        if(!res.has_value())
-            return;
+        if(res.has_value())
+            parBroadPhaseOk = true;
     }
-    else{
+    if(!parBroadPhaseOk){
+        usedBucketCount = 1u;
         if(world.m_broadPhase.workerBuckets.size() < 1u)
             world.m_broadPhase.workerBuckets.resize(1u);
         world.m_broadPhase.workerBuckets[0u].clear();
@@ -188,11 +190,14 @@ void UpdateBroadPhasePairsCpu(mut PhysicsWorld world, mut CpuTaskScheduler cpuSc
 }
 
 VectorSingle ComputePredictedBodyDisplacement(in Body b, in Vector<SolverSet> sets, in VectorSingle gravity, in f32 dt){
-    if(b.type != BodyType::Dynamic || b.setIndex != s_AwakeSetIndex || dt <= 0.0f)
+    if(b.type == BodyType::Static || b.setIndex != s_AwakeSetIndex || dt <= 0.0f)
         return VectorSingle(0.0f);
     in BodySim sim = sets[b.setIndex].sims[b.localIndex];
     in BodyState state = sets[b.setIndex].states[b.localIndex];
-    return ApplyLinearLocks(VectorSingle(state.linearVelocity) * dt + gravity * (0.5f * sim.gravityScale * dt * dt), b.flags);
+    VectorSingle disp = VectorSingle(state.linearVelocity) * dt;
+    if(b.type == BodyType::Dynamic)
+        disp = disp + gravity * (0.5f * sim.gravityScale * dt * dt);
+    return ApplyLinearLocks(disp, b.flags);
 }
 
 void EnlargeFastAndBulletBroadphaseBounds(mut PhysicsWorld world, in f32 dt){
@@ -215,12 +220,15 @@ void EnlargeFastAndBulletBroadphaseBounds(mut PhysicsWorld world, in f32 dt){
         b8 isFast = false;
         b8 enlarge = false;
         VectorSingle disp(0.0f);
-        if(body.type == BodyType::Dynamic && dt > 0.0f && world.m_def.enableContinuous){
-            disp = ApplyLinearLocks(VectorSingle(state.linearVelocity) * dt + gravity * (0.5f * sim.gravityScale * dt * dt), body.flags);
+        if(body.type != BodyType::Static && dt > 0.0f && world.m_def.enableContinuous){
+            disp = VectorSingle(state.linearVelocity) * dt;
+            if(body.type == BodyType::Dynamic)
+                disp = disp + gravity * (0.5f * sim.gravityScale * dt * dt);
+            disp = ApplyLinearLocks(disp, body.flags);
             const f32 dispLenSq = Vector3LengthSq(VectorSingle(disp, 0.0f)).x;
             const f32 fastThresh = Max(sim.minExtent() * 0.5f, s_LinearSlop * 4.0f);
             isFast = dispLenSq > fastThresh * fastThresh;
-            const b8 isBullet = (body.flags & bulletBit) != 0u;
+            const b8 isBullet = (body.type == BodyType::Dynamic) && ((body.flags & bulletBit) != 0u);
             if(isBullet || isFast){
                 f32 maxDist = s_MaxSweptSpeculativeDistance;
                 if(isBullet)
@@ -531,7 +539,11 @@ void ApplyContactManifoldAndEvents(mut PhysicsWorld world, in u32 cId, in Manifo
                 WakeBodyWithGraph(world.m_graph, world.m_bodies, world.m_islands, world.m_solverSets, world.m_freeSolverSetIds, world.m_contacts, bodyIdB);
             else if(awakeB && world.m_bodies[bodyIdA].setIndex >= 3u)
                 WakeBodyWithGraph(world.m_graph, world.m_bodies, world.m_islands, world.m_solverSets, world.m_freeSolverSetIds, world.m_contacts, bodyIdA);
-            if(c.islandId == s_NullIndex && isTouching){
+            const b8 hasAwakeDynamic =
+                (world.m_bodies[bodyIdA].type == BodyType::Dynamic && world.m_bodies[bodyIdA].setIndex == s_AwakeSetIndex)
+                || (world.m_bodies[bodyIdB].type == BodyType::Dynamic && world.m_bodies[bodyIdB].setIndex == s_AwakeSetIndex)
+            ;
+            if(hasAwakeDynamic && c.islandId == s_NullIndex && isTouching){
                 LinkContactToIslandWithGraph(
                     world.m_graph,
                     world.m_bodies,
@@ -544,7 +556,7 @@ void ApplyContactManifoldAndEvents(mut PhysicsWorld world, in u32 cId, in Manifo
                     cId
                 );
             }
-            if(c.colorIndex == s_NullIndex)
+            if(hasAwakeDynamic && c.colorIndex == s_NullIndex)
                 AddContactToGraph(world.m_graph, world.m_bodies, world.m_contacts[cId]);
         }
         else{
@@ -628,6 +640,78 @@ void CollectActiveAwakeJointIds(
     }
 }
 
+void CollideSingleContactNoPreSolve(
+    in PhysicsWorld worldRef,
+    mut Vector<Contact> contactsMut,
+    in VectorSingle gravity,
+    in f32 dt,
+    in b8 enableContinuous,
+    in b8 enableWarmStarting,
+    in usize idx,
+    in u32 cId,
+    mut Vector<u8> contactTransitionFlags
+){
+    mut Contact c = contactsMut[cId];
+    in Shape sA = worldRef.m_shapes[c.shapeIdA];
+    in Shape sB = worldRef.m_shapes[c.shapeIdB];
+    in Body bA = worldRef.m_bodies[c.edges[0u].bodyId];
+    in Body bB = worldRef.m_bodies[c.edges[1u].bodyId];
+    in Transform3D xfA = worldRef.m_solverSets[bA.setIndex].sims[bA.localIndex].transform;
+    in Transform3D xfB = worldRef.m_solverSets[bB.setIndex].sims[bB.localIndex].transform;
+    const b8 isSensor = (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u;
+    const b8 isBulletPair = ((bA.flags | bB.flags) & cast<u32>(BodyFlags::IsBullet)) != 0u;
+
+    Manifold newM = CollideContactPairWithLazySweep(sA, xfA, bA, sB, xfB, bB, worldRef.m_solverSets, gravity, dt, isSensor, enableContinuous, isBulletPair, worldRef.m_hullShapes, worldRef.m_meshShapes);
+    MatchManifoldImpulses(c.manifold, newM, enableWarmStarting);
+    c.manifold = newM;
+    if(!isSensor){
+        c.friction = CombineMaterialFriction(sA.material.friction, sB.material.friction);
+        c.restitution = CombineMaterialRestitution(sA.material.restitution, sB.material.restitution);
+        c.rollingResistance = CombineMaterialRollingResistance(sA.material.rollingResistance, sB.material.rollingResistance);
+        c.tangentSpeed = sA.material.tangentSpeed + sB.material.tangentSpeed;
+    }
+
+    const b8 wasTouching = (c.flags & cast<u32>(ContactFlags::Touching)) != 0u;
+    b8 isTouching = false;
+    const u32 ptCount = newM.pointCount();
+    if(ptCount > 0u){
+        f32 minSep = newM.points[0u].separation();
+        for(u32 p = 1u; p < ptCount; ++p){
+            const f32 pSep = newM.points[p].separation();
+            if(pSep < minSep)
+                minSep = pSep;
+        }
+        f32 touchThreshold = s_LinearSlop;
+        if(isSensor)
+            touchThreshold = 0.0f;
+        if(minSep <= touchThreshold)
+            isTouching = true;
+    }
+    if(isTouching)
+        c.flags |= cast<u32>(ContactFlags::Touching);
+    else
+        c.flags &= ~cast<u32>(ContactFlags::Touching);
+
+    u8 txFlags = 0u;
+    if(isSensor){
+        if((c.flags & cast<u32>(ContactFlags::EnableSensorEvents)) != 0u && wasTouching != isTouching)
+            txFlags |= 2u;
+    }
+    else{
+        if(ptCount > 0u){
+            if((c.islandId == s_NullIndex && isTouching) || c.colorIndex == s_NullIndex || bA.setIndex >= 3u || bB.setIndex >= 3u)
+                txFlags |= 1u;
+        }
+        else{
+            if(c.colorIndex != s_NullIndex || c.islandId != s_NullIndex)
+                txFlags |= 1u;
+        }
+        if((c.flags & cast<u32>(ContactFlags::EnableContactEvents)) != 0u && wasTouching != isTouching)
+            txFlags |= 2u;
+    }
+    contactTransitionFlags[idx] = txFlags;
+}
+
 void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler cpuScheduler){
     mut Vector<u32> activeContactIds = world.m_cpuScratch.activeContactIds;
     mut Vector<u32> pruneContactIds = world.m_cpuScratch.pruneContactIds;
@@ -639,6 +723,7 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
         return;
     activeContactIds.reserve(awakeSims.size() * 4u);
 
+    b8 collectDone = false;
     if(cpuScheduler.isParallelEnabled() && !world.m_customFilterCallback.has_value() && contactCount >= 128u && contactCount <= awakeSims.size() * 16u){
         mut Vector<u8> collectFlags = world.m_cpuScratch.parContactCollectFlags;
         collectFlags.resize(contactCount);
@@ -675,18 +760,18 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
             },
             CpuTaskOptions()
         );
-        if(!collectRes.has_value())
-            return;
-
-        for(usize ci = 0u; ci < contactCount; ++ci){
-            const u8 status = collectFlags[ci];
-            if(status == 1u)
-                activeContactIds.push_back(cast<u32>(ci));
-            else if(status == 2u)
-                pruneContactIds.push_back(cast<u32>(ci));
+        if(collectRes.has_value()){
+            for(usize ci = 0u; ci < contactCount; ++ci){
+                const u8 status = collectFlags[ci];
+                if(status == 1u)
+                    activeContactIds.push_back(cast<u32>(ci));
+                else if(status == 2u)
+                    pruneContactIds.push_back(cast<u32>(ci));
+            }
+            collectDone = true;
         }
     }
-    else{
+    if(!collectDone){
         const u32 visitStamp = NextPhysicsStamp(world.m_cpuScratch.contactVisitStamps, world.m_cpuScratch.contactVisitStamp, contactCount);
         mut Vector<u32> contactVisitStamps = world.m_cpuScratch.contactVisitStamps;
         for(usize bi = 0u; bi < awakeSims.size(); ++bi){
@@ -758,6 +843,7 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
         contactTransitionFlags.resize(count, 0u);
         const b8 enableWarmStarting = world.m_enableWarmStarting;
 
+        b8 narrowDone = false;
         if(cpuScheduler.isParallelEnabled() && count >= s_CpuParallelThreshold){
             const usize grain = ComputePhysicsGrain(cpuScheduler, count, cast<usize>(16u));
             in PhysicsWorld worldRef = world;
@@ -768,135 +854,16 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
                 count,
                 grain,
                 lambda[in worldRef, mut contactsMut, in activeContactSpan, in gravity, in dt, in enableContinuous, in enableWarmStarting, mut contactTransitionFlags](in usize idx) -> void{
-                    const u32 cId = activeContactSpan[idx];
-                    mut Contact c = contactsMut[cId];
-                    in Shape sA = worldRef.m_shapes[c.shapeIdA];
-                    in Shape sB = worldRef.m_shapes[c.shapeIdB];
-                    in Body bA = worldRef.m_bodies[c.edges[0u].bodyId];
-                    in Body bB = worldRef.m_bodies[c.edges[1u].bodyId];
-                    in Transform3D xfA = worldRef.m_solverSets[bA.setIndex].sims[bA.localIndex].transform;
-                    in Transform3D xfB = worldRef.m_solverSets[bB.setIndex].sims[bB.localIndex].transform;
-                    const b8 isSensor = (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u;
-                    const b8 isBulletPair = ((bA.flags | bB.flags) & cast<u32>(BodyFlags::IsBullet)) != 0u;
-
-                    Manifold newM = CollideContactPairWithLazySweep(sA, xfA, bA, sB, xfB, bB, worldRef.m_solverSets, gravity, dt, isSensor, enableContinuous, isBulletPair, worldRef.m_hullShapes, worldRef.m_meshShapes);
-                    MatchManifoldImpulses(c.manifold, newM, enableWarmStarting);
-                    c.manifold = newM;
-                    if(!isSensor){
-                        c.friction = CombineMaterialFriction(sA.material.friction, sB.material.friction);
-                        c.restitution = CombineMaterialRestitution(sA.material.restitution, sB.material.restitution);
-                        c.rollingResistance = CombineMaterialRollingResistance(sA.material.rollingResistance, sB.material.rollingResistance);
-                        c.tangentSpeed = sA.material.tangentSpeed + sB.material.tangentSpeed;
-                    }
-
-                    const b8 wasTouching = (c.flags & cast<u32>(ContactFlags::Touching)) != 0u;
-                    b8 isTouching = false;
-                    const u32 ptCount = newM.pointCount();
-                    if(ptCount > 0u){
-                        f32 minSep = newM.points[0u].separation();
-                        for(u32 p = 1u; p < ptCount; ++p){
-                            const f32 pSep = newM.points[p].separation();
-                            if(pSep < minSep)
-                                minSep = pSep;
-                        }
-                        f32 touchThreshold = s_LinearSlop;
-                        if(isSensor)
-                            touchThreshold = 0.0f;
-                        if(minSep <= touchThreshold)
-                            isTouching = true;
-                    }
-                    if(isTouching)
-                        c.flags |= cast<u32>(ContactFlags::Touching);
-                    else
-                        c.flags &= ~cast<u32>(ContactFlags::Touching);
-
-                    u8 txFlags = 0u;
-                    if(isSensor){
-                        if((c.flags & cast<u32>(ContactFlags::EnableSensorEvents)) != 0u && wasTouching != isTouching)
-                            txFlags |= 2u;
-                    }
-                    else{
-                        if(ptCount > 0u){
-                            if((c.islandId == s_NullIndex && isTouching) || c.colorIndex == s_NullIndex || bA.setIndex >= 3u || bB.setIndex >= 3u)
-                                txFlags |= 1u;
-                        }
-                        else{
-                            if(c.colorIndex != s_NullIndex || c.islandId != s_NullIndex)
-                                txFlags |= 1u;
-                        }
-                        if((c.flags & cast<u32>(ContactFlags::EnableContactEvents)) != 0u && wasTouching != isTouching)
-                            txFlags |= 2u;
-                    }
-                    contactTransitionFlags[idx] = txFlags;
+                    CollideSingleContactNoPreSolve(worldRef, contactsMut, gravity, dt, enableContinuous, enableWarmStarting, idx, activeContactSpan[idx], contactTransitionFlags);
                 },
                 CpuTaskOptions()
             );
-            if(!res.has_value())
-                return;
+            if(res.has_value())
+                narrowDone = true;
         }
-        else{
-            for(usize idx = 0u; idx < count; ++idx){
-                const u32 cId = activeContactIds[idx];
-                mut Contact c = world.m_contacts[cId];
-                in Shape sA = world.m_shapes[c.shapeIdA];
-                in Shape sB = world.m_shapes[c.shapeIdB];
-                in Body bA = world.m_bodies[c.edges[0u].bodyId];
-                in Body bB = world.m_bodies[c.edges[1u].bodyId];
-                in Transform3D xfA = world.m_solverSets[bA.setIndex].sims[bA.localIndex].transform;
-                in Transform3D xfB = world.m_solverSets[bB.setIndex].sims[bB.localIndex].transform;
-                const b8 isSensor = (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u;
-                const b8 isBulletPair = ((bA.flags | bB.flags) & cast<u32>(BodyFlags::IsBullet)) != 0u;
-
-                Manifold newM = CollideContactPairWithLazySweep(sA, xfA, bA, sB, xfB, bB, world.m_solverSets, gravity, dt, isSensor, enableContinuous, isBulletPair, world.m_hullShapes, world.m_meshShapes);
-                MatchManifoldImpulses(c.manifold, newM, enableWarmStarting);
-                c.manifold = newM;
-                if(!isSensor){
-                    c.friction = CombineMaterialFriction(sA.material.friction, sB.material.friction);
-                    c.restitution = CombineMaterialRestitution(sA.material.restitution, sB.material.restitution);
-                    c.rollingResistance = CombineMaterialRollingResistance(sA.material.rollingResistance, sB.material.rollingResistance);
-                    c.tangentSpeed = sA.material.tangentSpeed + sB.material.tangentSpeed;
-                }
-
-                const b8 wasTouching = (c.flags & cast<u32>(ContactFlags::Touching)) != 0u;
-                b8 isTouching = false;
-                const u32 ptCount = newM.pointCount();
-                if(ptCount > 0u){
-                    f32 minSep = newM.points[0u].separation();
-                    for(u32 p = 1u; p < ptCount; ++p){
-                        const f32 pSep = newM.points[p].separation();
-                        if(pSep < minSep)
-                            minSep = pSep;
-                    }
-                    f32 touchThreshold = s_LinearSlop;
-                    if(isSensor)
-                        touchThreshold = 0.0f;
-                    if(minSep <= touchThreshold)
-                        isTouching = true;
-                }
-                if(isTouching)
-                    c.flags |= cast<u32>(ContactFlags::Touching);
-                else
-                    c.flags &= ~cast<u32>(ContactFlags::Touching);
-
-                u8 txFlags = 0u;
-                if(isSensor){
-                    if((c.flags & cast<u32>(ContactFlags::EnableSensorEvents)) != 0u && wasTouching != isTouching)
-                        txFlags |= 2u;
-                }
-                else{
-                    if(ptCount > 0u){
-                        if((c.islandId == s_NullIndex && isTouching) || c.colorIndex == s_NullIndex || bA.setIndex >= 3u || bB.setIndex >= 3u)
-                            txFlags |= 1u;
-                    }
-                    else{
-                        if(c.colorIndex != s_NullIndex || c.islandId != s_NullIndex)
-                            txFlags |= 1u;
-                    }
-                    if((c.flags & cast<u32>(ContactFlags::EnableContactEvents)) != 0u && wasTouching != isTouching)
-                        txFlags |= 2u;
-                }
-                contactTransitionFlags[idx] = txFlags;
-            }
+        if(!narrowDone){
+            for(usize idx = 0u; idx < count; ++idx)
+                CollideSingleContactNoPreSolve(world, world.m_contacts, gravity, dt, enableContinuous, enableWarmStarting, idx, activeContactIds[idx], contactTransitionFlags);
         }
 
         for(usize idx = 0u; idx < count; ++idx){
@@ -917,7 +884,11 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
                         WakeBodyWithGraph(world.m_graph, world.m_bodies, world.m_islands, world.m_solverSets, world.m_freeSolverSetIds, world.m_contacts, bodyIdB);
                     else if(awakeB && world.m_bodies[bodyIdA].setIndex >= 3u)
                         WakeBodyWithGraph(world.m_graph, world.m_bodies, world.m_islands, world.m_solverSets, world.m_freeSolverSetIds, world.m_contacts, bodyIdA);
-                    if(c.islandId == s_NullIndex && isTouching){
+                    const b8 hasAwakeDynamic =
+                        (world.m_bodies[bodyIdA].type == BodyType::Dynamic && world.m_bodies[bodyIdA].setIndex == s_AwakeSetIndex)
+                        || (world.m_bodies[bodyIdB].type == BodyType::Dynamic && world.m_bodies[bodyIdB].setIndex == s_AwakeSetIndex)
+                    ;
+                    if(hasAwakeDynamic && c.islandId == s_NullIndex && isTouching){
                         LinkContactToIslandWithGraph(
                             world.m_graph,
                             world.m_bodies,
@@ -930,7 +901,7 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
                             cId
                         );
                     }
-                    if(c.colorIndex == s_NullIndex)
+                    if(hasAwakeDynamic && c.colorIndex == s_NullIndex)
                         AddContactToGraph(world.m_graph, world.m_bodies, world.m_contacts[cId]);
                 }
                 else{
@@ -964,6 +935,7 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
     mut Vector<Manifold> evaluatedManifolds = world.m_cpuScratch.evaluatedManifolds;
     evaluatedManifolds.resize(count);
 
+    b8 preEvalDone = false;
     if(cpuScheduler.isParallelEnabled() && count >= s_CpuParallelThreshold){
         const usize grain = ComputePhysicsGrain(cpuScheduler, count, cast<usize>(16u));
         in PhysicsWorld worldRef = world;
@@ -987,10 +959,10 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
             },
             CpuTaskOptions()
         );
-        if(!res.has_value())
-            return;
+        if(res.has_value())
+            preEvalDone = true;
     }
-    else{
+    if(!preEvalDone){
         for(usize idx = 0u; idx < count; ++idx){
             const u32 cId = activeContactIds[idx];
             in Contact c = world.m_contacts[cId];
@@ -1014,7 +986,13 @@ void CollideContactsCpu(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler 
         mut Contact c = world.m_contacts[cId];
         if((c.flags & cast<u32>(ContactFlags::Alive)) == 0u || (c.flags & cast<u32>(ContactFlags::Sensor)) != 0u)
             continue;
-        if(c.manifold.pointCount() > 0u && c.colorIndex == s_NullIndex)
+        const u32 bIdA = c.edges[0u].bodyId;
+        const u32 bIdB = c.edges[1u].bodyId;
+        const b8 hasAwakeDynamic =
+            (world.m_bodies[bIdA].type == BodyType::Dynamic && world.m_bodies[bIdA].setIndex == s_AwakeSetIndex)
+            || (world.m_bodies[bIdB].type == BodyType::Dynamic && world.m_bodies[bIdB].setIndex == s_AwakeSetIndex)
+        ;
+        if(hasAwakeDynamic && c.manifold.pointCount() > 0u && c.colorIndex == s_NullIndex)
             AddContactToGraph(world.m_graph, world.m_bodies, c);
     }
 }
@@ -1150,6 +1128,7 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
     outRes.found = false;
     outRes.bestT = 1.0f;
     outRes.bestRestitution = -1.0f;
+    outRes.bestFriction = -1.0f;
     outRes.awakeIdx = cast<u32>(idx);
     outRes.bestShapeIdxA = s_NullIndex;
     outRes.bestShapeIdxB = s_NullIndex;
@@ -1208,6 +1187,7 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
     VectorSingle bestPoint(0.0f);
     Sweep3D bestSweepB;
     f32 bestRestitution = -1.0f;
+    f32 bestFriction = -1.0f;
     in Sweep3D sweepARef = sweepA;
     in PhysicsWorld worldAlias = worldRef;
 
@@ -1215,7 +1195,7 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
         worldRef.m_broadPhase.trees[t].queryAabb(
             queryBox,
             0xffffffffu,
-            lambda[in worldAlias, in bodyIdA, in bodyInit, in sweepARef, mut bestT, mut foundToi, mut bestShapeIdxA, mut bestShapeIdxB, mut bestNormal, mut bestPoint, mut bestSweepB, mut bestRestitution](in u32 proxyId, in u32 shapeIdxB) -> b8{
+            lambda[in worldAlias, in bodyIdA, in bodyInit, in sweepARef, mut bestT, mut foundToi, mut bestShapeIdxA, mut bestShapeIdxB, mut bestNormal, mut bestPoint, mut bestSweepB, mut bestRestitution, mut bestFriction](in u32 proxyId, in u32 shapeIdxB) -> b8{
                 if(shapeIdxB >= worldAlias.m_shapes.size() || !worldAlias.m_shapes[shapeIdxB].alive())
                     return true;
                 in Shape sB = worldAlias.m_shapes[shapeIdxB];
@@ -1230,7 +1210,7 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
                 in BodySim simB = worldAlias.m_solverSets[bB.setIndex].sims[bB.localIndex];
                 const VectorSingle simBCenter = simB.center();
                 Sweep3D sweepB;
-                if(bB.type != BodyType::Static && bB.setIndex == s_AwakeSetIndex){
+                if(bB.type != BodyType::Static && bB.setIndex == s_AwakeSetIndex && (bB.flags & cast<u32>(BodyFlags::HadTimeOfImpact)) == 0u){
                     sweepB.c0 = f32x4(simB.center0(), 0.0f);
                     sweepB.c1 = f32x4(simBCenter, 0.0f);
                     sweepB.q0 = simB.rotation0;
@@ -1288,6 +1268,7 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
                                 }
                             }
                             f32 candidateRest = -1.0f;
+                            f32 candidateFric = -1.0f;
                             if(candidateHit && worldAlias.m_preSolveCallback.has_value() && (sA.enablePreSolveEvents() || sB.enablePreSolveEvents())){
                                 PreSolveContext ctx;
                                 ctx.shapeIdA = worldAlias.makeShapeId(shapeIdxA);
@@ -1308,6 +1289,8 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
                                         candidateN = SafeNormalizeVec3(ctxN, candidateN);
                                     if(IsFinite(ctx.restitution) && ctx.restitution >= 0.0f)
                                         candidateRest = ctx.restitution;
+                                    if(IsFinite(ctx.friction) && ctx.friction >= 0.0f)
+                                        candidateFric = ctx.friction;
                                 }
                             }
                             if(candidateHit){
@@ -1319,6 +1302,7 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
                                 bestPoint = candidatePt;
                                 bestSweepB = sweepB;
                                 bestRestitution = candidateRest;
+                                bestFriction = candidateFric;
                             }
                         }
                     }
@@ -1340,6 +1324,7 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
     outRes.bestPoint = f32x4(bestPoint, 0.0f);
     outRes.bestSweepB = bestSweepB;
     outRes.bestRestitution = bestRestitution;
+    outRes.bestFriction = bestFriction;
 }
 
 void ApplyBulletContinuousToiResult(mut PhysicsWorld world, in BulletToiQueryResult hit){
@@ -1364,6 +1349,17 @@ void ApplyBulletContinuousToiResult(mut PhysicsWorld world, in BulletToiQueryRes
         const Transform3D hitXfB = EvalSweepTransform(hit.bestSweepB, bestT);
         hitCenterB = TransformPoint(hitXfB, simBInit.localCenter());
         hitInvIB = RotateSymMat3(VectorSingle(hitXfB.rotation), simBInit.invInertiaLocal);
+        if(bodyBInit.type == BodyType::Dynamic){
+            mut BodySim mutSimB = world.m_solverSets[s_AwakeSetIndex].sims[bodyBInit.localIndex];
+            mut BodyState mutStateB = world.m_solverSets[s_AwakeSetIndex].states[bodyBInit.localIndex];
+            mut Body mutBodyB = world.m_bodies[bodyIdB];
+            mutSimB.transform = hitXfB;
+            mutSimB.setCenter(hitCenterB);
+            mutSimB.invInertiaWorld = hitInvIB;
+            mutBodyB.flags |= toiBit;
+            mutSimB.flags |= toiBit;
+            mutStateB.setFlags(mutStateB.flags() | toiBit);
+        }
     }
 
     VectorSingle hitCenterA(0.0f);
@@ -1454,10 +1450,69 @@ void ApplyBulletContinuousToiResult(mut PhysicsWorld world, in BulletToiQueryRes
                 in Body awakeB = world.m_bodies[bodyIdB];
                 if(awakeB.setIndex == s_AwakeSetIndex){
                     mut BodyState stateB = world.m_solverSets[s_AwakeSetIndex].states[awakeB.localIndex];
-                    const VectorSingle nvB = ApplyLinearLocks(VectorSingle(stateB.linearVelocity) + impulse * invMassB, flagsB);
-                    const VectorSingle nwB = ApplyAngularLocks(VectorSingle(stateB.angularVelocity) + MulSymMat3Vec(effInvIB, Cross(rB, impulse)), flagsB);
-                    stateB.linearVelocity = f32x4(nvB, 0.0f);
-                    stateB.angularVelocity = f32x4(nwB, 0.0f);
+                    vB = ApplyLinearLocks(VectorSingle(stateB.linearVelocity) + impulse * invMassB, flagsB);
+                    wB = ApplyAngularLocks(VectorSingle(stateB.angularVelocity) + MulSymMat3Vec(effInvIB, Cross(rB, impulse)), flagsB);
+                    stateB.linearVelocity = f32x4(vB, 0.0f);
+                    stateB.angularVelocity = f32x4(wB, 0.0f);
+                }
+            }
+
+            f32 friction = hit.bestFriction;
+            if(friction < 0.0f)
+                friction = CombineMaterialFriction(hitShapeA.material.friction, hitShapeB.material.friction);
+            if(friction > 0.0f){
+                const VectorSingle postVelA = vA + Cross(wA, rA);
+                const VectorSingle postVelB = vB + Cross(wB, rB);
+                const VectorSingle postRelV(postVelB - postVelA, 0.0f);
+                const VectorSingle tangVel(postRelV - bestNormal * Vector3Dot(postRelV, bestNormal).x, 0.0f);
+                const f32 tangLenSq = Vector3LengthSq(tangVel).x;
+                if(tangLenSq > 1.0e-12f){
+                    const VectorSingle tDir = tangVel * Rsqrt(VectorSingle(tangLenSq));
+                    const f32 vt = Sqrt(tangLenSq);
+                    const VectorSingle rtA = Cross(rA, tDir);
+                    const VectorSingle rtB = Cross(rB, tDir);
+                    const f32 kTang =
+                        LinearInvMassDot(tDir, tDir, invMassA, flagsA)
+                        + LinearInvMassDot(tDir, tDir, invMassB, flagsB)
+                        + Vector3Dot(rtA, ApplySymMat3Local(effInvIA, rtA)).x
+                        + Vector3Dot(rtB, ApplySymMat3Local(effInvIB, rtB)).x
+                    ;
+                    if(kTang > s_NormalizeEpsilonSq){
+                        const f32 maxF = friction * jN;
+                        const f32 jT = Clamp(-vt / kTang, -maxF, maxF);
+                        const VectorSingle fImpulse = tDir * jT;
+                        {
+                            mut BodyState stateA = world.m_solverSets[s_AwakeSetIndex].states[idx];
+                            vA = ApplyLinearLocks(vA - fImpulse * invMassA, flagsA);
+                            wA = ApplyAngularLocks(wA - MulSymMat3Vec(effInvIA, Cross(rA, fImpulse)), flagsA);
+                            stateA.linearVelocity = f32x4(vA, 0.0f);
+                            stateA.angularVelocity = f32x4(wA, 0.0f);
+                        }
+                        if(typeB == BodyType::Dynamic){
+                            in Body awakeB = world.m_bodies[bodyIdB];
+                            if(awakeB.setIndex == s_AwakeSetIndex){
+                                mut BodyState stateB = world.m_solverSets[s_AwakeSetIndex].states[awakeB.localIndex];
+                                vB = ApplyLinearLocks(VectorSingle(stateB.linearVelocity) + fImpulse * invMassB, flagsB);
+                                wB = ApplyAngularLocks(VectorSingle(stateB.angularVelocity) + MulSymMat3Vec(effInvIB, Cross(rB, fImpulse)), flagsB);
+                                stateB.linearVelocity = f32x4(vB, 0.0f);
+                                stateB.angularVelocity = f32x4(wB, 0.0f);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        const u32 toiContactId = world.createContactInternal(bestShapeIdxA, bestShapeIdxB);
+        if(toiContactId != s_NullIndex){
+            mut Contact toiContact = world.m_contacts[toiContactId];
+            if((toiContact.flags & cast<u32>(ContactFlags::Touching)) == 0u){
+                toiContact.flags |= cast<u32>(ContactFlags::Touching);
+                if((toiContact.flags & cast<u32>(ContactFlags::EnableContactEvents)) != 0u){
+                    ContactBeginTouchEvent ev;
+                    ev.shapeIdA = world.makeShapeId(toiContact.shapeIdA);
+                    ev.shapeIdB = world.makeShapeId(toiContact.shapeIdB);
+                    world.m_contactBeginEvents.push_back(ev);
                 }
             }
         }
@@ -1471,6 +1526,211 @@ void ApplyBulletContinuousToiResult(mut PhysicsWorld world, in BulletToiQueryRes
             world.m_contactHitEvents.push_back(hitEv);
         }
     }
+}
+
+void ResolveSortedBulletToiResults(mut PhysicsWorld world, in Span<BulletToiQueryResult> results){
+    Vector<usize> hitIndices;
+    hitIndices.reserve(results.size());
+    for(usize i = 0u; i < results.size(); ++i){
+        if(results[i].found)
+            hitIndices.push_back(i);
+    }
+    if(hitIndices.empty())
+        return;
+
+    const Span<BulletToiQueryResult> resultsRef = results;
+    SortSequence<usize>(hitIndices, lambda[in resultsRef](in usize lhs, in usize rhs) -> b8{
+        return resultsRef[lhs].bestT < resultsRef[rhs].bestT;
+    });
+
+    const u32 toiBit = cast<u32>(BodyFlags::HadTimeOfImpact);
+    for(usize ki = 0u; ki < hitIndices.size(); ++ki){
+        in BulletToiQueryResult hit = results[hitIndices[ki]];
+        if(hit.bodyIdA >= world.m_bodies.size() || hit.bestShapeIdxB >= world.m_shapes.size())
+            continue;
+        if((world.m_bodies[hit.bodyIdA].flags & toiBit) != 0u)
+            continue;
+        const u32 bodyIdB = world.m_shapes[hit.bestShapeIdxB].bodyId;
+        if(bodyIdB < world.m_bodies.size() && (world.m_bodies[bodyIdB].flags & toiBit) != 0u){
+            BulletToiQueryResult refreshed;
+            QueryBulletContinuousCandidate(world, cast<usize>(hit.awakeIdx), refreshed);
+            if(refreshed.found)
+                ApplyBulletContinuousToiResult(world, refreshed);
+        }
+        else{
+            ApplyBulletContinuousToiResult(world, hit);
+        }
+    }
+}
+
+b8 HasMovedFastOrBulletBody(in PhysicsWorld world){
+    if(!world.m_def.enableContinuous)
+        return false;
+    const u32 fastOrBulletMask = cast<u32>(BodyFlags::IsBullet) | cast<u32>(BodyFlags::IsFast);
+    in Vector<BodySim> awakeSims = world.m_solverSets[s_AwakeSetIndex].sims;
+    for(usize idx = 0u; idx < awakeSims.size(); ++idx){
+        in BodySim sim = awakeSims[idx];
+        in Body body = world.m_bodies[sim.bodyId];
+        if(!body.alive || body.type == BodyType::Static || (body.flags & fastOrBulletMask) == 0u)
+            continue;
+        const VectorSingle disp = sim.center() - sim.center0();
+        if(Vector3LengthSq(VectorSingle(disp, 0.0f)).x > s_LinearSlop * s_LinearSlop)
+            return true;
+    }
+    return false;
+}
+
+void EmitContinuousSensorPassThroughPairs(mut PhysicsWorld world){
+    const u32 fastOrBulletMask = cast<u32>(BodyFlags::IsBullet) | cast<u32>(BodyFlags::IsFast);
+    in SolverSet awakeSet = world.m_solverSets[s_AwakeSetIndex];
+    const usize awakeCount = awakeSet.sims.size();
+    Vector<u32> candShapeA;
+    Vector<u32> candShapeB;
+    Vector<u64> seenKeys;
+
+    in PhysicsWorld worldRef = world;
+    for(usize idx = 0u; idx < awakeCount; ++idx){
+        in BodySim simA = awakeSet.sims[idx];
+        const u32 bodyIdA = simA.bodyId;
+        in Body bodyA = world.m_bodies[bodyIdA];
+        if(!bodyA.alive || bodyA.type == BodyType::Static || (bodyA.flags & fastOrBulletMask) == 0u)
+            continue;
+        const VectorSingle dispA = simA.center() - simA.center0();
+        if(Vector3LengthSq(VectorSingle(dispA, 0.0f)).x <= s_LinearSlop * s_LinearSlop)
+            continue;
+
+        const VectorSingle c0A = simA.center0();
+        const VectorSingle lcA = simA.localCenter();
+        const Transform3D xfStartA(c0A - Vector3Rotate(lcA, VectorSingle(simA.rotation0)), VectorSingle(simA.rotation0));
+
+        u32 shapeIdxA = bodyA.headShapeId;
+        while(shapeIdxA != s_NullIndex){
+            in Shape sA = world.m_shapes[shapeIdxA];
+            if(sA.alive()){
+                const Aabb3D boxStart = ComputeShapeWorldAabb(sA, xfStartA, world.m_hullShapes, world.m_meshShapes);
+                const Aabb3D boxEnd = ComputeShapeWorldAabb(sA, simA.transform, world.m_hullShapes, world.m_meshShapes);
+                const Aabb3D sweepBox = FattenAabb(AabbUnion(boxStart, boxEnd), s_SpeculativeDistance);
+                for(usize t = 0u; t < s_TreeCount; ++t){
+                    world.m_broadPhase.trees[t].queryAabb(
+                        sweepBox,
+                        0xffffffffu,
+                        lambda[in worldRef, in bodyIdA, in shapeIdxA, in sA, mut candShapeA, mut candShapeB, mut seenKeys](in u32 proxyId, in u32 shapeIdxB) -> b8{
+                            if(shapeIdxB >= worldRef.m_shapes.size() || !worldRef.m_shapes[shapeIdxB].alive())
+                                return true;
+                            in Shape sB = worldRef.m_shapes[shapeIdxB];
+                            if(sB.bodyId == bodyIdA)
+                                return true;
+                            const b8 aSensorEv = sA.isSensor() && sA.enableSensorEvents();
+                            const b8 bSensorEv = sB.isSensor() && sB.enableSensorEvents();
+                            if(!aSensorEv && !bSensorEv)
+                                return true;
+                            in Body bB = worldRef.m_bodies[sB.bodyId];
+                            if(!bB.alive || bB.setIndex == s_DisabledSetIndex)
+                                return true;
+                            if(!ShouldCollideFilters(sA.filter, sB.filter))
+                                return true;
+                            const u64 pairKey = PackUnorderedU32Pair(cast<isize>(shapeIdxA), cast<isize>(shapeIdxB));
+                            for(usize si = 0u; si < seenKeys.size(); ++si){
+                                if(seenKeys[si] == pairKey)
+                                    return true;
+                            }
+                            const auto existing = worldRef.m_pairContactMap.find(pairKey);
+                            if(existing != worldRef.m_pairContactMap.end()){
+                                if((worldRef.m_contacts[existing.value()].flags & cast<u32>(ContactFlags::Touching)) != 0u)
+                                    return true;
+                            }
+                            if(worldRef.m_customFilterCallback.has_value()){
+                                u32 ordA = shapeIdxA;
+                                u32 ordB = shapeIdxB;
+                                if(shapeIdxB < shapeIdxA){
+                                    ordA = shapeIdxB;
+                                    ordB = shapeIdxA;
+                                }
+                                if(!worldRef.m_customFilterCallback.value()(worldRef.makeShapeId(ordA), worldRef.makeShapeId(ordB)))
+                                    return true;
+                            }
+                            seenKeys.push_back(pairKey);
+                            candShapeA.push_back(shapeIdxA);
+                            candShapeB.push_back(shapeIdxB);
+                            return true;
+                        }
+                    );
+                }
+            }
+            shapeIdxA = sA.nextShapeId;
+        }
+    }
+
+    for(usize ci = 0u; ci < candShapeA.size(); ++ci){
+        const u32 shapeIdxA = candShapeA[ci];
+        const u32 shapeIdxB = candShapeB[ci];
+        in Shape sA = world.m_shapes[shapeIdxA];
+        in Shape sB = world.m_shapes[shapeIdxB];
+        in Body bA = world.m_bodies[sA.bodyId];
+        in Body bB = world.m_bodies[sB.bodyId];
+        in BodySim simA = world.m_solverSets[bA.setIndex].sims[bA.localIndex];
+        in BodySim simB = world.m_solverSets[bB.setIndex].sims[bB.localIndex];
+
+        if(CollideShapePair(sA, simA.transform, sB, simB.transform, 0.0f, world.m_hullShapes, world.m_meshShapes).pointCount() > 0u)
+            continue;
+
+        Sweep3D sweepA;
+        sweepA.c0 = f32x4(simA.center0(), 0.0f);
+        sweepA.c1 = f32x4(simA.center(), 0.0f);
+        sweepA.q0 = simA.rotation0;
+        sweepA.q1 = simA.transform.rotation;
+        sweepA.localCenter = f32x4(simA.localCenter(), 0.0f);
+
+        Sweep3D sweepB;
+        if(bB.type != BodyType::Static && bB.setIndex == s_AwakeSetIndex){
+            sweepB.c0 = f32x4(simB.center0(), 0.0f);
+            sweepB.c1 = f32x4(simB.center(), 0.0f);
+            sweepB.q0 = simB.rotation0;
+            sweepB.q1 = simB.transform.rotation;
+        }
+        else{
+            sweepB.c0 = f32x4(simB.center(), 0.0f);
+            sweepB.c1 = f32x4(simB.center(), 0.0f);
+            sweepB.q0 = simB.transform.rotation;
+            sweepB.q1 = simB.transform.rotation;
+        }
+        sweepB.localCenter = f32x4(simB.localCenter(), 0.0f);
+
+        const Transform3D xfStartA = EvalSweepTransform(sweepA, 0.0f);
+        const Transform3D xfStartB = EvalSweepTransform(sweepB, 0.0f);
+        if(CollideShapePair(sA, xfStartA, sB, xfStartB, 0.0f, world.m_hullShapes, world.m_meshShapes).pointCount() > 0u)
+            continue;
+
+        if(sA.type == ShapeType::Mesh && sB.type == ShapeType::Mesh)
+            continue;
+
+        TimeOfImpactOutput toi;
+        if(sB.type == ShapeType::Mesh){
+            if(sB.geometryIndex < world.m_meshShapes.size())
+                toi = ComputeSensorMeshTimeOfImpact(MakeShapeProxyFromShape(sA, world.m_hullShapes, world.m_meshShapes), sweepA, world.m_meshShapes[sB.geometryIndex], sweepB, 1.0f);
+        }
+        else if(sA.type == ShapeType::Mesh){
+            if(sA.geometryIndex < world.m_meshShapes.size())
+                toi = ComputeSensorMeshTimeOfImpact(MakeShapeProxyFromShape(sB, world.m_hullShapes, world.m_meshShapes), sweepB, world.m_meshShapes[sA.geometryIndex], sweepA, 1.0f);
+        }
+        else{
+            toi = ComputeSensorTimeOfImpact(MakeShapeProxyFromShape(sA, world.m_hullShapes, world.m_meshShapes), sweepA, MakeShapeProxyFromShape(sB, world.m_hullShapes, world.m_meshShapes), sweepB, 1.0f);
+        }
+
+        if(toi.hit() && !toi.initialOverlap() && toi.fraction() > 0.0f && toi.fraction() < 1.0f){
+            Contact tmpContact;
+            tmpContact.shapeIdA = shapeIdxA;
+            tmpContact.shapeIdB = shapeIdxB;
+            EmitSensorTouchEvents(world, tmpContact, true);
+            EmitSensorTouchEvents(world, tmpContact, false);
+        }
+    }
+}
+
+void EmitContinuousSensorPassThroughEvents(mut PhysicsWorld world){
+    if(!HasMovedFastOrBulletBody(world))
+        return;
+    EmitContinuousSensorPassThroughPairs(world);
 }
 
 void SolveBulletContinuousCpuWithScheduler(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler cpuScheduler){
@@ -1489,39 +1749,32 @@ void SolveBulletContinuousCpuWithScheduler(mut PhysicsWorld world, in f32 dt, mu
     }
 
     const usize bulletCount = bulletBodyIndices.size();
-    if(bulletCount == 0u)
-        return;
-
-    if(cpuScheduler.isParallelEnabled() && !world.m_customFilterCallback.has_value() && !world.m_preSolveCallback.has_value() && bulletCount >= 8u){
+    if(bulletCount > 0u){
         mut Vector<BulletToiQueryResult> results = world.m_cpuScratch.parBulletResults;
         results.resize(bulletCount);
-        in PhysicsWorld worldRef = world;
-        const Span<u32> bulletIdxSpan = Span<u32>(bulletBodyIndices);
-        const usize grain = ComputePhysicsGrain(cpuScheduler, bulletCount, cast<usize>(2u));
-        const auto res = cpuScheduler.parallelFor(
-            0u,
-            bulletCount,
-            grain,
-            lambda[in worldRef, in bulletIdxSpan, mut results](in usize bi) -> void{
-                QueryBulletContinuousCandidate(worldRef, cast<usize>(bulletIdxSpan[bi]), results[bi]);
-            },
-            CpuTaskOptions()
-        );
-        if(res.has_value()){
-            for(usize bi = 0u; bi < bulletCount; ++bi){
-                if(results[bi].found)
-                    ApplyBulletContinuousToiResult(world, results[bi]);
-            }
-            return;
+        b8 parOk = false;
+        if(cpuScheduler.isParallelEnabled() && !world.m_customFilterCallback.has_value() && !world.m_preSolveCallback.has_value() && bulletCount >= 8u){
+            in PhysicsWorld worldRef = world;
+            const Span<u32> bulletIdxSpan = Span<u32>(bulletBodyIndices);
+            const usize grain = ComputePhysicsGrain(cpuScheduler, bulletCount, cast<usize>(2u));
+            const auto res = cpuScheduler.parallelFor(
+                0u,
+                bulletCount,
+                grain,
+                lambda[in worldRef, in bulletIdxSpan, mut results](in usize bi) -> void{
+                    QueryBulletContinuousCandidate(worldRef, cast<usize>(bulletIdxSpan[bi]), results[bi]);
+                },
+                CpuTaskOptions()
+            );
+            parOk = res.has_value();
         }
+        if(!parOk){
+            for(usize bi = 0u; bi < bulletCount; ++bi)
+                QueryBulletContinuousCandidate(world, cast<usize>(bulletBodyIndices[bi]), results[bi]);
+        }
+        ResolveSortedBulletToiResults(world, Span<BulletToiQueryResult>(results));
     }
-
-    BulletToiQueryResult serialRes;
-    for(usize bi = 0u; bi < bulletCount; ++bi){
-        QueryBulletContinuousCandidate(world, cast<usize>(bulletBodyIndices[bi]), serialRes);
-        if(serialRes.found)
-            ApplyBulletContinuousToiResult(world, serialRes);
-    }
+    EmitContinuousSensorPassThroughEvents(world);
 }
 
 void SolveBulletContinuousCpu(mut PhysicsWorld world, in f32 dt){
@@ -1530,6 +1783,8 @@ void SolveBulletContinuousCpu(mut PhysicsWorld world, in f32 dt){
 
     const u32 bulletBit = cast<u32>(BodyFlags::IsBullet);
     const usize awakeCount = world.m_solverSets[s_AwakeSetIndex].sims.size();
+    mut Vector<BulletToiQueryResult> results = world.m_cpuScratch.parBulletResults;
+    results.clear();
     BulletToiQueryResult res;
     for(usize idx = 0u; idx < awakeCount; ++idx){
         const u32 bodyIdA = world.m_solverSets[s_AwakeSetIndex].sims[idx].bodyId;
@@ -1538,8 +1793,11 @@ void SolveBulletContinuousCpu(mut PhysicsWorld world, in f32 dt){
             continue;
         QueryBulletContinuousCandidate(world, idx, res);
         if(res.found)
-            ApplyBulletContinuousToiResult(world, res);
+            results.push_back(res);
     }
+    if(!results.empty())
+        ResolveSortedBulletToiResults(world, Span<BulletToiQueryResult>(results));
+    EmitContinuousSensorPassThroughEvents(world);
 }
 
 u8 EvaluateAwakeBodyFinalize(
@@ -1558,15 +1816,19 @@ u8 EvaluateAwakeBodyFinalize(
         || Vector4LengthSq(VectorSingle(sim.transform.rotation) - VectorSingle(sim.rotation0)).x > 0.0f;
 
     b8 keepEnlarged = false;
-    if(dt > 0.0f && worldRef.m_def.enableContinuous && body.type == BodyType::Dynamic){
+    const b8 aboutToSleep = worldRef.m_def.enableSleep && ((body.flags & cast<u32>(BodyFlags::EnableSleep)) != 0u) && (body.sleepTime >= s_TimeToSleep);
+    if(dt > 0.0f && worldRef.m_def.enableContinuous && body.type != BodyType::Static && !aboutToSleep){
         const u32 bulletBit = cast<u32>(BodyFlags::IsBullet);
         const u32 fastBit = cast<u32>(BodyFlags::IsFast);
         if((body.flags & (bulletBit | fastBit)) != 0u){
             const VectorSingle gravity = VectorSingle(worldRef.m_def.gravity);
-            const VectorSingle nextDisp = ApplyLinearLocks(VectorSingle(state.linearVelocity) * dt + gravity * (0.5f * sim.gravityScale * dt * dt), body.flags);
+            VectorSingle nextDisp = VectorSingle(state.linearVelocity) * dt;
+            if(body.type == BodyType::Dynamic)
+                nextDisp = nextDisp + gravity * (0.5f * sim.gravityScale * dt * dt);
+            nextDisp = ApplyLinearLocks(nextDisp, body.flags);
             const f32 nextDispSq = Vector3LengthSq(VectorSingle(nextDisp, 0.0f)).x;
             const f32 fastThresh = Max(sim.minExtent() * 0.5f, s_LinearSlop * 4.0f);
-            if((body.flags & bulletBit) != 0u){
+            if(body.type == BodyType::Dynamic && (body.flags & bulletBit) != 0u){
                 if(nextDispSq > s_LinearSlop * s_LinearSlop)
                     keepEnlarged = true;
             }
@@ -1738,9 +2000,24 @@ void EvaluateSleepingIslands(mut PhysicsWorld world){
         const u32 islandId = islandsToSleep[i];
         in Island island = world.m_islands[islandId];
         for(usize bi = 0u; bi < island.bodies.size(); ++bi){
-            in Body body = world.m_bodies[island.bodies[bi]];
+            const u32 bId = island.bodies[bi];
+            in Body body = world.m_bodies[bId];
             if(body.bodyMoveIndex < world.m_bodyMoveEvents.size())
                 world.m_bodyMoveEvents[body.bodyMoveIndex].setFellAsleep(true);
+            if(body.setIndex < world.m_solverSets.size() && body.localIndex < world.m_solverSets[body.setIndex].sims.size()){
+                in Transform3D sleepXf = world.m_solverSets[body.setIndex].sims[body.localIndex].transform;
+                u32 shapeIdx = body.headShapeId;
+                while(shapeIdx != s_NullIndex){
+                    mut Shape shape = world.m_shapes[shapeIdx];
+                    if(shape.enlargeAabb()){
+                        shape.aabb = ComputeShapeWorldAabb(shape, sleepXf, world.m_hullShapes, world.m_meshShapes);
+                        shape.setFlag(ShapeFlags::EnlargeAabb, false);
+                        if(shape.proxyKey != s_NullIndex)
+                            world.m_broadPhase.moveProxy(shape.proxyKey, shape.aabb, VectorSingle(0.0f));
+                    }
+                    shapeIdx = shape.nextShapeId;
+                }
+            }
         }
         SleepIslandWithGraph(
             world.m_graph,

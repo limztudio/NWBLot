@@ -68,7 +68,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
             else if(subStep > 0u){
                 for(uint k = tid; k < contactCount; k += NWB_PHYSICS_ISLAND_WORKGROUP_SIZE)
                     nwbPhysicsClearContactWarmStart(contactOffset + k, constraintSlot);
-                GroupMemoryBarrierWithGroupSync();
+                AllMemoryBarrierWithGroupSync();
             }
         }
         if(jointCount > 0u && (warmStart || subStep > 0u)){
@@ -77,12 +77,12 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
                     for(uint j = 0u; j < jointCount; ++j)
                         nwbPhysicsSolveSingleJoint(jointOffset + j, NWB_PHYSICS_SOLVER_MODE_WARM_START, bodyStateSlot, jointSlot, h, NWB_PHYSICS_SOLVER_FLAG_WARM_START);
                 }
-                GroupMemoryBarrierWithGroupSync();
+                AllMemoryBarrierWithGroupSync();
             }
             else{
                 for(uint j = tid; j < jointCount; j += NWB_PHYSICS_ISLAND_WORKGROUP_SIZE)
                     nwbPhysicsSolveSingleJoint(jointOffset + j, NWB_PHYSICS_SOLVER_MODE_WARM_START, bodyStateSlot, jointSlot, h, 0u);
-                GroupMemoryBarrierWithGroupSync();
+                AllMemoryBarrierWithGroupSync();
             }
         }
 
@@ -93,7 +93,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
                 for(uint j = 0u; j < jointCount; ++j)
                     nwbPhysicsSolveSingleJoint(jointOffset + j, NWB_PHYSICS_SOLVER_MODE_SOLVE_BIAS, bodyStateSlot, jointSlot, h, 0u);
             }
-            GroupMemoryBarrierWithGroupSync();
+            AllMemoryBarrierWithGroupSync();
         }
 
         if(tid < bodyCount)
@@ -107,7 +107,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
                 for(uint j = 0u; j < jointCount; ++j)
                     nwbPhysicsSolveSingleJoint(jointOffset + j, NWB_PHYSICS_SOLVER_MODE_RELAX, bodyStateSlot, jointSlot, h, 0u);
             }
-            GroupMemoryBarrierWithGroupSync();
+            AllMemoryBarrierWithGroupSync();
         }
     }
 
@@ -115,6 +115,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         nwbPhysicsIslandSolveContactsPass(tid, contactOffset, slice.contactColorCounts0, slice.contactColorCounts1, NWB_PHYSICS_SOLVER_MODE_RESTITUTION, bodyStateSlot, constraintSlot, invH, 0u);
 
     const uint contactImpulseOutSlot = g_NwbPhysicsPushConstants.slots1.y;
+    AllMemoryBarrierWithGroupSync();
     for(uint k = tid; k < contactCount; k += NWB_PHYSICS_ISLAND_WORKGROUP_SIZE)
         nwbPhysicsExportContactImpulses(contactOffset + k, constraintSlot, contactImpulseOutSlot);
     for(uint j = tid; j < jointCount; j += NWB_PHYSICS_ISLAND_WORKGROUP_SIZE)

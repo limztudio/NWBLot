@@ -175,7 +175,7 @@ class DynamicTree{
                 continue;
 
             if(node.isLeaf()){
-                if((node.categoryBits() & maskBits) != 0u){
+                if(maskBits == u32.max || (node.categoryBits() & maskBits) != 0u){
                     if(!callback(nodeId, node.userData()))
                         return;
                 }
@@ -222,7 +222,7 @@ class DynamicTree{
 
             in TreeNode node = this.m_nodes[nodeId];
             if(node.isLeaf()){
-                if((node.categoryBits() & maskBits) != 0u){
+                if(maskBits == u32.max || (node.categoryBits() & maskBits) != 0u){
                     maxFraction = callback(nodeId, node.userData(), maxFraction);
                     if(maxFraction <= 0.0f)
                         return;

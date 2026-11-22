@@ -1593,7 +1593,7 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
         }
     }
 
-    if(candidates.empty() && closedMesh && IsPointInsideClosedMesh(meshB, hullCentroidB)){
+    if((candidates.empty() || deepestSep > 0.0f) && closedMesh && IsPointInsideClosedMesh(meshB, hullCentroidB)){
         VectorSingle closePt(0.0f);
         VectorSingle closeN(0.0f, 1.0f, 0.0f, 0.0f);
         u32 closeTri = 0u;
@@ -1607,7 +1607,10 @@ Manifold CollideHullAndMesh(in HullShape hullA, in Transform3D xfA, in MeshShape
             const f32 sep = -(Max(depth, 0.0f) + totalR);
             const VectorSingle wA = supW + nAtoB * hullR;
             const VectorSingle wB = closeW - nAtoB * meshR;
-            chosenNormal = nAtoB;
+            if(candidates.empty() || sep < deepestSep){
+                deepestSep = sep;
+                chosenNormal = nAtoB;
+            }
             PushMeshCandidate((wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), nAtoB, sep, MakeFeatureId(4u, 0u, 3u, cast<u8>(closeTri & 0xffu)), candidates);
         }
     }
@@ -1908,6 +1911,71 @@ Manifold CollideMeshes(
                 if(stackCount < 256u){
                     stack[stackCount] = u32x2u(pair.x, nodeB.rightOrCount());
                     ++stackCount;
+                }
+            }
+        }
+    }
+
+    if(candidates.empty()){
+        if(meshB.isClosed()){
+            const Transform3D xfAtoB = RelativeTransform(xfB, xfA);
+            const Aabb3D boxA = meshA.localAabb();
+            const VectorSingle cAInB = TransformPoint(xfAtoB, (VectorSingle(boxA.lowerBound) + VectorSingle(boxA.upperBound)) * 0.5f);
+            const VectorSingle vAInB = TransformPoint(xfAtoB, Vec3FromU(meshA.triangles[0u].v0));
+            VectorSingle probeB(0.0f);
+            b8 insideB = IsPointInsideClosedMesh(meshB, cAInB);
+            if(insideB){
+                probeB = cAInB;
+            }
+            else if(IsPointInsideClosedMesh(meshB, vAInB)){
+                insideB = true;
+                probeB = vAInB;
+            }
+            if(insideB){
+                VectorSingle closePt(0.0f);
+                VectorSingle closeN(0.0f, 1.0f, 0.0f, 0.0f);
+                u32 closeTri = 0u;
+                if(FindClosestPointOnClosedMesh(meshB, probeB, closePt, closeN, closeTri)){
+                    const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(closeN, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                    const VectorSingle nAtoB = -worldOut;
+                    const VectorSingle wProbe = TransformPoint(xfB, probeB);
+                    const VectorSingle wSurf = TransformPoint(xfB, closePt);
+                    const f32 dist = Sqrt(Vector3LengthSq(VectorSingle(closePt - probeB, 0.0f)).x);
+                    const f32 sep = -(dist + totalR);
+                    const VectorSingle wA = wProbe + nAtoB * rA;
+                    const VectorSingle wB = wSurf - nAtoB * rB;
+                    chosenNormal = nAtoB;
+                    PushMeshCandidate((wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), nAtoB, sep, MakeFeatureId(3u, 0u, 3u, cast<u8>(closeTri & 0xffu)), candidates);
+                }
+            }
+        }
+        else if(meshA.isClosed()){
+            const Aabb3D boxB = meshB.localAabb();
+            const VectorSingle cBInA = TransformPoint(xfBtoA, (VectorSingle(boxB.lowerBound) + VectorSingle(boxB.upperBound)) * 0.5f);
+            const VectorSingle vBInA = TransformPoint(xfBtoA, Vec3FromU(meshB.triangles[0u].v0));
+            VectorSingle probeA(0.0f);
+            b8 insideA = IsPointInsideClosedMesh(meshA, cBInA);
+            if(insideA){
+                probeA = cBInA;
+            }
+            else if(IsPointInsideClosedMesh(meshA, vBInA)){
+                insideA = true;
+                probeA = vBInA;
+            }
+            if(insideA){
+                VectorSingle closePt(0.0f);
+                VectorSingle closeN(0.0f, 1.0f, 0.0f, 0.0f);
+                u32 closeTri = 0u;
+                if(FindClosestPointOnClosedMesh(meshA, probeA, closePt, closeN, closeTri)){
+                    const VectorSingle nAtoB = SafeNormalizeVec3(Vector3Rotate(closeN, VectorSingle(xfA.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                    const VectorSingle wProbe = TransformPoint(xfA, probeA);
+                    const VectorSingle wSurf = TransformPoint(xfA, closePt);
+                    const f32 dist = Sqrt(Vector3LengthSq(VectorSingle(closePt - probeA, 0.0f)).x);
+                    const f32 sep = -(dist + totalR);
+                    const VectorSingle wA = wSurf + nAtoB * rA;
+                    const VectorSingle wB = wProbe - nAtoB * rB;
+                    chosenNormal = nAtoB;
+                    PushMeshCandidate((wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), nAtoB, sep, MakeFeatureId(3u, cast<u8>(closeTri & 0xffu), 3u, 0u), candidates);
                 }
             }
         }

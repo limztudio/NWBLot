@@ -53,8 +53,18 @@ float nwbSurfelGuideRandom(uint seed){
     return (float(nwbSurfelGuideHash(seed) >> NWB_SURFEL_GUIDE_RANDOM_DROPPED_BITS) + 0.5) * NWB_SURFEL_GUIDE_RANDOM_UNIT_SCALE;
 }
 
+float nwbSurfelGuideLaneComponent(const float4 lane, const uint comp){
+    const float lo = comp == 0u ? lane.x : lane.y;
+    const float hi = comp == 2u ? lane.z : lane.w;
+    return comp < 2u ? lo : hi;
+}
+
 float nwbSurfelGuideWeight(const NwbSurfelGuide guide, const uint bin){
-    return max(guide.weights[bin >> NWB_SURFEL_GUIDE_FLOAT4_BIN_SHIFT][bin & NWB_SURFEL_GUIDE_FLOAT4_BIN_MASK], NWB_SURFEL_GUIDE_INITIAL_WEIGHT);
+    const uint laneIndex = bin >> NWB_SURFEL_GUIDE_FLOAT4_BIN_SHIFT;
+    const float4 loLane = laneIndex == 0u ? guide.weights[0] : guide.weights[1];
+    const float4 hiLane = laneIndex == 2u ? guide.weights[2] : guide.weights[3];
+    const float4 lane = laneIndex < 2u ? loLane : hiLane;
+    return max(nwbSurfelGuideLaneComponent(lane, bin & NWB_SURFEL_GUIDE_FLOAT4_BIN_MASK), NWB_SURFEL_GUIDE_INITIAL_WEIGHT);
 }
 
 float nwbSurfelGuideTotal(const NwbSurfelGuide guide){
@@ -67,12 +77,16 @@ float nwbSurfelGuideTotal(const NwbSurfelGuide guide){
 
 uint nwbSurfelGuideSelectBin(const NwbSurfelGuide guide, const float target){
     float cumulative = 0.0;
-    [loop] for(uint bin = 0u; bin < NWB_SURFEL_GUIDE_BIN_COUNT; ++bin){
+    uint selected = NWB_SURFEL_GUIDE_BIN_COUNT - 1u;
+    bool found = false;
+    [unroll] for(uint bin = 0u; bin < NWB_SURFEL_GUIDE_BIN_COUNT; ++bin){
         cumulative += nwbSurfelGuideWeight(guide, bin);
-        if(target < cumulative)
-            return bin;
+        if(!found && target < cumulative){
+            selected = bin;
+            found = true;
+        }
     }
-    return NWB_SURFEL_GUIDE_BIN_COUNT - 1u;
+    return selected;
 }
 
 float3 nwbSurfelGuideDirection(const uint bin, const float2 withinBin){

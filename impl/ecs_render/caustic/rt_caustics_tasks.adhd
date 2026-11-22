@@ -274,7 +274,7 @@ class CausticProducerGraphTask{
         this.hardware = hardware;
     }
 
-    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute | GpuQueueCapability::Transfer); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         this.causticProducerDispatched = false;

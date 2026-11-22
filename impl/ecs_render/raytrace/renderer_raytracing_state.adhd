@@ -286,8 +286,17 @@ class RendererRayTracingState : NoCopy{
         this.caustics.m_hwCausticBindingLayout.reset();
         this.caustics.m_hwCausticShader.reset();
         this.caustics.m_hwCausticPipeline.reset();
+        this.caustics.m_hwCausticFastShader.reset();
+        this.caustics.m_hwCausticFastPipeline.reset();
+        this.caustics.m_hwCausticDeferredShader.reset();
+        this.caustics.m_hwCausticDeferredPipeline.reset();
         this.caustics.m_hwCausticCsgShader.reset();
         this.caustics.m_hwCausticCsgPipeline.reset();
+        this.caustics.m_hwCausticDeferredQueueBuffer.reset();
+        this.caustics.m_hwCausticDeferredQueueHeapHandle = GpuDescriptorHandleInvalid();
+        this.caustics.m_hwCausticDeferredQueueCapacity = 0u;
+        this.caustics.m_hwCausticDeferredArgsBuffer.reset();
+        this.caustics.m_hwCausticDeferredArgsHeapHandle = GpuDescriptorHandleInvalid();
         this.caustics.m_causticResolve = CausticResolveState();
         this.caustics.m_causticGeometryDownsampleBindingLayout.reset();
         this.caustics.m_causticGeometryDownsampleShader.reset();
@@ -371,6 +380,7 @@ class RendererRayTracingState : NoCopy{
         this.caustics.m_swCausticCsgPipelineFailed = false;
         this.caustics.m_swCausticDispatchLogged = false;
         this.caustics.m_hwCausticPipelineFailed = false;
+        this.caustics.m_hwCausticSplitPipelineFailed = false;
         this.caustics.m_hwCausticCsgPipelineFailed = false;
         this.caustics.m_hwCausticDispatchLogged = false;
     }

@@ -10,6 +10,7 @@
 
 
 struct NwbRefractionHardwareBackgroundTrace{
+    [noinline]
     static half3 shadeSurfaceHit(const NwbMeshSurface surface, const float3 position, const float3 direction){
         nwbRefractionCount(NWB_REFRACTION_COUNTER_materialShadeCalls);
         const float3 normal = select(bool3(dot(surface.normal, direction) > 0.0), -surface.normal, surface.normal);

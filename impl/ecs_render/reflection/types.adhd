@@ -10,8 +10,10 @@
 
 const Name s_RenderNameECSRenderReflectionClassify = "ECSRender_ReflectionClassify";
 const Name s_RenderNameECSRenderReflectionBuildArgs = "ECSRender_ReflectionBuildArgs";
+const Name s_RenderNameECSRenderReflectionBuildOpticalArgs = "ECSRender_ReflectionBuildOpticalArgs";
 const Name s_RenderNameECSRenderReflectionDepthReduce = "ECSRender_ReflectionDepthReduce";
 const Name s_RenderNameECSRenderReflectionOpticalHardware = "ECSRender_ReflectionOpticalHardware";
+const Name s_RenderNameECSRenderReflectionFastOpticalHardware = "ECSRender_ReflectionFastOpticalHardware";
 const Name s_RenderNameECSRenderReflectionHardware = "ECSRender_ReflectionHardware";
 const Name s_RenderNameECSRenderReflectionUnspecifiedOpticalHardware = "ECSRender_ReflectionUnspecifiedOpticalHardware";
 const Name s_RenderNameECSRenderReflectionCsgBuildArgs = "ECSRender_ReflectionCsgBuildArgs";
@@ -60,8 +62,10 @@ const u32 s_ReflectionFeedbackPreviousValid = 2u;
 const StringView s_ReflectionHwOpticalVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=1;NWB_RT_CSG_ENABLED=0";
 const StringView s_ReflectionHwPlainVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=0;NWB_RT_CSG_ENABLED=0";
 const StringView s_ReflectionHwUnspecifiedVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=2;NWB_RT_CSG_ENABLED=0";
-const StringView s_ReflectionBuildArgsVariant = "NWB_RT_CSG_ENABLED=0";
-const StringView s_ReflectionCsgBuildArgsVariant = "NWB_RT_CSG_ENABLED=1";
+const StringView s_ReflectionHwFastOpticalVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=3;NWB_RT_CSG_ENABLED=0";
+const StringView s_ReflectionBuildArgsVariant = "NWB_REFLECTION_OPTICAL_ARGS=0;NWB_RT_CSG_ENABLED=0";
+const StringView s_ReflectionOpticalBuildArgsVariant = "NWB_REFLECTION_OPTICAL_ARGS=1;NWB_RT_CSG_ENABLED=0";
+const StringView s_ReflectionCsgBuildArgsVariant = "NWB_REFLECTION_OPTICAL_ARGS=0;NWB_RT_CSG_ENABLED=1";
 const StringView s_ReflectionHwCsgOpticalVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=1;NWB_RT_CSG_ENABLED=1";
 const StringView s_ReflectionHwCsgPlainVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=0;NWB_RT_CSG_ENABLED=1";
 const StringView s_ReflectionHwCsgUnspecifiedVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=2;NWB_RT_CSG_ENABLED=1";
@@ -91,6 +95,8 @@ const Name s_ReflectionParametersUploadTaskName = "render.reflection.parameters_
 const Name s_ReflectionClearCountersTaskName = "render.reflection.clear_counters";
 const Name s_ReflectionClassifyTaskName = "render.reflection.classify";
 const Name s_ReflectionBuildArgsTaskName = "render.reflection.build_args";
+const Name s_ReflectionHardwareFastTaskName = "render.reflection.hardware_fast";
+const Name s_ReflectionBuildOpticalArgsTaskName = "render.reflection.build_optical_args";
 const Name s_ReflectionHardwareTaskName = "render.reflection.hardware";
 const Name s_ReflectionCsgHardwareSliceFamily = "render.reflection.hardware.csg_slice";
 const StringView s_ReflectionBufferLabel = "Reflection Buffer";
@@ -104,6 +110,8 @@ const StringView s_ReflectionParametersUploadTaskLabel = "Reflection Parameters 
 const StringView s_ReflectionClearCountersTaskLabel = "Reflection Clear Counters";
 const StringView s_ReflectionClassifyTaskLabel = "Reflection Classify";
 const StringView s_ReflectionBuildArgsTaskLabel = "Reflection Build Arguments";
+const StringView s_ReflectionHardwareFastTaskLabel = "Reflection Hardware Fast Resolve";
+const StringView s_ReflectionBuildOpticalArgsTaskLabel = "Reflection Build Optical Arguments";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -125,6 +133,8 @@ enum<u32> ReflectionDescriptorIndex{
 enum<u8> ReflectionDispatchStage{
     Classify,
     BuildArgs,
+    HardwareFast,
+    BuildOpticalArgs,
     Hardware
 }
 

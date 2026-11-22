@@ -4,12 +4,26 @@
 
 #include "common.slangi"
 
+#ifndef NWB_REFLECTION_OPTICAL_ARGS
+#define NWB_REFLECTION_OPTICAL_ARGS 0
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [numthreads(1, 1, 1)]
 void main(uint3 dispatchThreadId : SV_DispatchThreadID){
+#if NWB_REFLECTION_OPTICAL_ARGS && !NWB_RT_CSG_ENABLED
+    const uint candidates = g_NwbReflectionCounters.Load(NWB_REFLECTION_COUNTER_OPTICAL_CANDIDATES);
+    const uint rayCount = min(candidates, min(g_NwbReflectionParameters.maxHardwareRays, g_NwbReflectionParameters.queueCapacity));
+    const uint groupCount = (rayCount + NWB_REFLECTION_TRACE_GROUP_SIZE - 1u) / NWB_REFLECTION_TRACE_GROUP_SIZE;
+    const uint groupCountX = min(groupCount, NWB_REFLECTION_MAX_GROUP_COUNT_X);
+    const uint groupCountY = (groupCount + max(groupCountX, 1u) - 1u) / max(groupCountX, 1u);
+    g_NwbHeapStorageBuffers[g_NwbReflectionParameters.argsSlot].Store(NWB_REFLECTION_INDIRECT_ARGUMENT_BYTES + 0u, groupCountX);
+    g_NwbHeapStorageBuffers[g_NwbReflectionParameters.argsSlot].Store(NWB_REFLECTION_INDIRECT_ARGUMENT_BYTES + 4u, groupCountY);
+    g_NwbHeapStorageBuffers[g_NwbReflectionParameters.argsSlot].Store(NWB_REFLECTION_INDIRECT_ARGUMENT_BYTES + 8u, 1u);
+#else
     const uint candidates = g_NwbReflectionCounters.Load(NWB_REFLECTION_COUNTER_CANDIDATES);
     const uint rayCount = min(candidates, min(g_NwbReflectionParameters.maxHardwareRays, g_NwbReflectionParameters.queueCapacity));
 #if NWB_RT_CSG_ENABLED
@@ -35,6 +49,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID){
             g_NwbReflectionParameters.feedbackProbeIndex, tilesX * tilesY, NWB_REFLECTION_FEEDBACK_HEADER_VALID
         ));
     }
+#endif
 }
 
 

@@ -193,7 +193,7 @@ Expected<u32> TryResolveReflectionQueueCapacity(in u32 width, in u32 height, in 
 u32 ResolveReflectionIndirectArgumentCount(in u32 capacity, in b8 sliced){
     if(sliced)
         return DivideUp(capacity, s_ReflectionTraceSliceRays);
-    return 1u;
+    return 2u;
 }
 
 StringView ResolveReflectionSpatialVariant(in u32 radiusIndex){

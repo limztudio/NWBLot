@@ -135,6 +135,10 @@ static_assert(size_of<ReflectionCsgDispatchPushConstants>() == s_ReflectionShade
 in ComputePipelineHandle ReflectionDispatchPipeline(in borrow ReflectionFrameSnapshot resources, in ReflectionDispatchStage stage){
     if(stage == ReflectionDispatchStage::Hardware)
         return resources.hardwarePipeline;
+    if(stage == ReflectionDispatchStage::HardwareFast)
+        return resources.fastHardwarePipeline;
+    if(stage == ReflectionDispatchStage::BuildOpticalArgs)
+        return resources.buildOpticalArgsPipeline;
     if(stage == ReflectionDispatchStage::Classify)
         return resources.classifyPipeline;
     return resources.buildArgsPipeline;
@@ -280,6 +284,87 @@ class ReflectionCsgHardwareSliceTask{
             timing.discard();
         }
         LogHardwareReflectionResolveIfNeeded(this.hardwareDispatchLogged);
+    }
+    public void discarded(){
+        if(this.dispatch.valid())
+            this.dispatch.deref().timing.value().discard();
+    }
+}
+
+class ReflectionOpticalHardwareStageTask{
+    private mut GraphicsRuntime graphics;
+    private ReflectionCsgDispatchHandle dispatch;
+    private ReflectionDispatchStage stage;
+    private in b8 hardwarePreparationReady;
+    private mut b8 hardwareDispatchLogged;
+
+    public ReflectionOpticalHardwareStageTask(
+        mut GraphicsRuntime graphics,
+        in ReflectionGraphInputs inputs,
+        in ReflectionCsgDispatchHandle dispatch,
+        in ReflectionDispatchStage stage
+    ){
+        this.graphics = graphics;
+        this.dispatch = dispatch;
+        this.stage = stage;
+        this.hardwarePreparationReady = inputs.hardwarePreparationReady;
+        this.hardwareDispatchLogged = inputs.hardwareDispatchLogged;
+    }
+    public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
+    [cpp_unwind]
+    public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
+        if(!this.hardwarePreparationReady)
+            return true;
+        if(!this.dispatch.valid())
+            return false;
+        in ReflectionFrameSnapshot resources = this.dispatch.deref().resources;
+        in ComputePipelineHandle pipeline = ReflectionDispatchPipeline(resources, this.stage);
+        if(!pipeline.valid())
+            return false;
+        const b8 buildArgs = this.stage == ReflectionDispatchStage::BuildOpticalArgs;
+        if(!buildArgs && !resources.scene.valid())
+            return false;
+        commandList.endRenderPass();
+        ComputeState state;
+        state.setPipeline(pipeline.deref());
+        GpuDescriptorHandle tlas = GpuDescriptorHandleInvalid();
+        if(!buildArgs){
+            state.setIndirectParams(resources.indirectArgs.deref());
+            tlas = resources.scene.tlasHeapHandle;
+        }
+        commandList.setComputeState(state);
+        this.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, pipeline.deref(), tlas);
+        commandList.setPushConstants(resources.frameParametersSlot);
+        mut GpuTimingFrameTransaction timing = this.dispatch.deref().timing.value();
+        if(this.stage == ReflectionDispatchStage::HardwareFast && !timing.begin(s_TimingScopeReflectionHardware, this.graphics.getDevice(), commandList))
+            return false;
+        if(buildArgs){
+            commandList.dispatch(1u, 1u, 1u);
+            return true;
+        }
+        if(this.stage == ReflectionDispatchStage::HardwareFast){
+            commandList.dispatchIndirect(0u);
+            return true;
+        }
+        commandList.dispatchIndirect(s_ReflectionIndirectArgumentBytes);
+        return timing.recordEnd(commandList);
+    }
+    [cpp_unwind]
+    public void accepted(in QueueSubmissionToken token){
+        if(!this.hardwarePreparationReady)
+            return;
+        mut GpuTimingFrameTransaction timing = this.dispatch.deref().timing.value();
+        if(this.stage == ReflectionDispatchStage::HardwareFast && !timing.confirmBeginSubmission(token)){
+            LogReflectionConfirmTimingBeginFailed();
+            timing.discard();
+        }
+        if(this.stage == ReflectionDispatchStage::Hardware){
+            if(!timing.confirmEndSubmission(token, true)){
+                LogReflectionConfirmTimingEndFailed();
+                timing.discard();
+            }
+            LogHardwareReflectionResolveIfNeeded(this.hardwareDispatchLogged);
+        }
     }
     public void discarded(){
         if(this.dispatch.valid())
@@ -470,6 +555,55 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
                     return MakeUnexpected(Failure());
                 dependency = dependencyResult4.value();
             }
+        }
+        else if(resources.usesSplitOpticalHardware()){
+            const auto dispatchResult = reflectionSystem.acquireCsgDispatchState(resources);
+            if(!dispatchResult.has_value())
+                return MakeUnexpected(dispatchResult.error());
+            in ReflectionCsgDispatchHandle dispatch = dispatchResult.value();
+            if(!dispatch.valid())
+                return MakeUnexpected(Failure());
+
+            SetReflectionSurfaceReads(uses, inputs, result.frameParameters);
+            for(in GpuTaskResourceUse use : inputs.hardwareReads)
+                uses.push_back(use);
+            uses.push_back(ReadWriteUse(queue, ResourceStates::UnorderedAccess));
+            uses.push_back(ReadUse(args, ResourceStates::IndirectArgument));
+            uses.push_back(ReadWriteUse(result.counters, ResourceStates::UnorderedAccess));
+            uses.push_back(ReadWriteUse(result.opaqueRadiance, ResourceStates::UnorderedAccess));
+            uses.push_back(ReadWriteUse(result.glassRadiance, ResourceStates::UnorderedAccess));
+            GpuTaskDesc fastDesc = ReflectionTaskDesc(s_ReflectionHardwareFastTaskName, s_ReflectionHardwareFastTaskLabel, dependency);
+            fastDesc.setResourceUses(uses).setResourceSetUses(inputs.hardwareSetReads).setTiming(ReflectionPacketTiming());
+            const auto fastResult = graph.addPayloadTask(fastDesc, ReflectionOpticalHardwareStageTask(graphics, inputs, dispatch, ReflectionDispatchStage::HardwareFast));
+            if(!fastResult.has_value())
+                return MakeUnexpected(Failure());
+            dependency = fastResult.value();
+
+            uses.clear();
+            uses.push_back(ReadUse(result.frameParameters, ResourceStates::ConstantBuffer));
+            uses.push_back(ReadUse(result.counters));
+            uses.push_back(WriteUse(args, ResourceStates::UnorderedAccess));
+            GpuTaskDesc opticalArgsDesc = ReflectionTaskDesc(s_ReflectionBuildOpticalArgsTaskName, s_ReflectionBuildOpticalArgsTaskLabel, dependency);
+            opticalArgsDesc.setResourceUses(uses).setTiming(ReflectionPacketTiming());
+            const auto opticalArgsResult = graph.addPayloadTask(opticalArgsDesc, ReflectionOpticalHardwareStageTask(graphics, inputs, dispatch, ReflectionDispatchStage::BuildOpticalArgs));
+            if(!opticalArgsResult.has_value())
+                return MakeUnexpected(Failure());
+            dependency = opticalArgsResult.value();
+
+            SetReflectionSurfaceReads(uses, inputs, result.frameParameters);
+            for(in GpuTaskResourceUse use : inputs.hardwareReads)
+                uses.push_back(use);
+            uses.push_back(ReadUse(queue));
+            uses.push_back(ReadUse(args, ResourceStates::IndirectArgument));
+            uses.push_back(ReadWriteUse(result.counters, ResourceStates::UnorderedAccess));
+            uses.push_back(ReadWriteUse(result.opaqueRadiance, ResourceStates::UnorderedAccess));
+            uses.push_back(ReadWriteUse(result.glassRadiance, ResourceStates::UnorderedAccess));
+            GpuTaskDesc opticalDesc = ReflectionTaskDesc(s_ReflectionHardwareTaskName, s_ReflectionHardwareResolveTaskLabel, dependency);
+            opticalDesc.setResourceUses(uses).setResourceSetUses(inputs.hardwareSetReads).setTiming(ReflectionPacketTiming());
+            const auto opticalResult = graph.addPayloadTask(opticalDesc, ReflectionOpticalHardwareStageTask(graphics, inputs, dispatch, ReflectionDispatchStage::Hardware));
+            if(!opticalResult.has_value())
+                return MakeUnexpected(Failure());
+            dependency = opticalResult.value();
         }
         else if(!AddReflectionDispatch(graph, graphics, inputs, resources, Span<GpuTaskResourceUse>(uses), s_ReflectionHardwareTaskName, s_ReflectionHardwareResolveTaskLabel, ReflectionDispatchStage::Hardware,
             feedbackPublicationStage, feedbackReservation, dependency))

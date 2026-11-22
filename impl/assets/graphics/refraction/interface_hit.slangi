@@ -48,7 +48,7 @@ NwbMeshSurface nwbRefractionEvaluateGeometrySurface(const NwbRtInstanceMaterial 
     return nwbRefractionEvaluateTriangleSurface(material, position, direction, geometry.primitive, geometry.barycentrics, geometry.worldToObject);
 }
 
-NwbRayTraceSurfaceHit nwbRefractionClosestEntryInterface(const uint instanceMaterialHeapSlot, const float3 origin, const float3 direction, const float minDistance, const float maxDistance, out uint outAttributeSlot){
+NwbRayTraceSurfaceHit nwbRefractionClosestEntryInterface(const uint instanceMaterialHeapSlot, const float3 origin, const float3 direction, const float minDistance, const float maxDistance, const uint expectedEntityId, out uint outAttributeSlot){
     outAttributeSlot = 0u;
 #if NWB_RT_CSG_ENABLED
     const NwbRayTraceGeometryHit geometry = nwbRayTraceClosestGeometryHit(origin, direction, minDistance, maxDistance);
@@ -98,6 +98,10 @@ NwbRayTraceSurfaceHit nwbRefractionClosestEntryInterface(const uint instanceMate
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[instance];
     if((material.flags & (NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT | NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE)) == 0u)
         return (NwbRayTraceSurfaceHit)0;
+#if !NWB_REFRACTION_DIAGNOSTICS
+    if(g_NwbMeshInstances[material.meshInstanceIndex].entityId != expectedEntityId)
+        return (NwbRayTraceSurfaceHit)0;
+#endif
     outAttributeSlot = material.attributeSlot;
     NwbRayTraceSurfaceHit hit = (NwbRayTraceSurfaceHit)0;
     hit.hit = true;

@@ -14,6 +14,8 @@
 
 [cpp_header("<impl/assets/graphics/reflection/frame_constants.h>"), cpp_name("NWB_REFLECTION_COUNTER_SIZE")]
 extern const usize s_ReflectionReadbackCounterBytes;
+[cpp_header("<impl/assets/graphics/reflection/frame_constants.h>"), cpp_name("NWB_REFLECTION_COUNTER_BUFFER_BYTES")]
+extern const usize s_ReflectionCounterBufferBytes;
 const usize s_ReflectionReadbackCounterCount = s_ReflectionReadbackCounterBytes / size_of<u32>();
 
 b8 ResolveAcceptedReflectionOpticalTransport(in b8 metadataOpticalTransportEnabled, in b8 hardwareReady){

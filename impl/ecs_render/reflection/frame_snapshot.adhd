@@ -23,6 +23,8 @@ class ReflectionFrameSnapshot{
     public BufferHandle frameParameters;
     public ComputePipelineHandle classifyPipeline;
     public ComputePipelineHandle buildArgsPipeline;
+    public ComputePipelineHandle fastHardwarePipeline;
+    public ComputePipelineHandle buildOpticalArgsPipeline;
     public ComputePipelineHandle hardwarePipeline;
     public ReflectionDepthPyramidSnapshot depthPyramid;
     public RayTracingSceneGraphResources scene;
@@ -33,6 +35,10 @@ class ReflectionFrameSnapshot{
 
     public b8 hasHardwareWork()const{
         return this.parameters.hardwareEnabled != 0u && this.parameters.maxHardwareRays > 0u;
+    }
+
+    public b8 usesSplitOpticalHardware()const{
+        return !this.scene.csgTraceContextBuffer.valid() && this.fastHardwarePipeline.valid() && this.buildOpticalArgsPipeline.valid();
     }
 
     public b8 valid()const{

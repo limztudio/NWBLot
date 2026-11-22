@@ -72,6 +72,7 @@ bool nwbOpticalSegmentOutsideBounds(const float3 origin, const float3 normalized
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifndef NWB_OPTICAL_BOUNDS_OUTSIDE_ONLY
 bool nwbOpticalSegmentProvenExterior(const uint opticalSceneHeapSlot, const float3 origin, const float3 initialDirection, const float minDistance, const float maxDistance, const uint maxQueries){
     if(opticalSceneHeapSlot == NWB_BINDLESS_HEAP_INVALID_SLOT || maxQueries == 0u || !all(isfinite(origin)) || !all(isfinite(initialDirection)) || !isfinite(minDistance) || !isfinite(maxDistance) || minDistance < 0.0 || maxDistance <= minDistance)
         return false;
@@ -93,6 +94,53 @@ bool nwbOpticalSegmentProvenExterior(const uint opticalSceneHeapSlot, const floa
     const float3 boundsMax = asfloat(nwbHeapRawBufferUniform(opticalSceneHeapSlot).Load3(NWB_RT_OPTICAL_SCENE_BOUNDS_MAX_OFFSET));
     return nwbOpticalSegmentOutsideBounds(origin, direction, maxDistance, boundsMin, boundsMax);
 }
+
+bool nwbOpticalHalfLineOutsideBounds(const uint opticalSceneHeapSlot, const float3 origin, const float3 forwardDirection, const float sourceTolerance){
+    if(opticalSceneHeapSlot == NWB_BINDLESS_HEAP_INVALID_SLOT || !all(isfinite(origin)) || !all(isfinite(forwardDirection)) || !isfinite(sourceTolerance) || sourceTolerance < 0.0)
+        return false;
+    const float dirLenSq = dot(forwardDirection, forwardDirection);
+    if(!isfinite(dirLenSq) || dirLenSq <= 0.0)
+        return false;
+    const uint headerFlags = nwbHeapRawBufferUniform(opticalSceneHeapSlot).Load(NWB_RT_OPTICAL_SCENE_FLAGS_OFFSET);
+    if((headerFlags & NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID) == 0u)
+        return false;
+    const uint transparentCount = nwbHeapRawBufferUniform(opticalSceneHeapSlot).Load(NWB_RT_OPTICAL_SCENE_TRANSPARENT_COUNT_OFFSET);
+    if(transparentCount == 0u)
+        return true;
+    const float3 boundsMin = asfloat(nwbHeapRawBufferUniform(opticalSceneHeapSlot).Load3(NWB_RT_OPTICAL_SCENE_BOUNDS_MIN_OFFSET));
+    const float3 boundsMax = asfloat(nwbHeapRawBufferUniform(opticalSceneHeapSlot).Load3(NWB_RT_OPTICAL_SCENE_BOUNDS_MAX_OFFSET));
+    if(!all(isfinite(boundsMin)) || !all(isfinite(boundsMax)) || any(boundsMin > boundsMax))
+        return false;
+    const float3 start = origin + forwardDirection * sourceTolerance;
+    const float3 backwardDir = -forwardDirection;
+    const float3 magnitude = abs(start) + abs(origin) + max(abs(boundsMin), abs(boundsMax)) + float3(sourceTolerance + 1.0);
+    const float3 margin = magnitude * (NWB_OPTICAL_BOUNDS_SEGMENT_EPSILON_SCALE * 4.0 * NWB_FLOAT_EPSILON);
+    const float3 boxMin = boundsMin - margin;
+    const float3 boxMax = boundsMax + margin;
+    if(!all(isfinite(start)) || !all(isfinite(boxMin)) || !all(isfinite(boxMax)))
+        return false;
+    if(all(start >= boxMin) && all(start <= boxMax))
+        return false;
+    float tEnter = 0.0;
+    float tExit = NWB_FLOAT_MAX;
+    [unroll] for(uint axis = 0u; axis < 3u; ++axis){
+        const float dirAxis = backwardDir[axis];
+        if(abs(dirAxis) < 1e-20){
+            if(start[axis] < boxMin[axis] || start[axis] > boxMax[axis])
+                return true;
+            continue;
+        }
+        const float invAxis = 1.0 / dirAxis;
+        const float t0 = (boxMin[axis] - start[axis]) * invAxis;
+        const float t1 = (boxMax[axis] - start[axis]) * invAxis;
+        if(!isfinite(t0) || !isfinite(t1))
+            return false;
+        tEnter = max(tEnter, min(t0, t1));
+        tExit = min(tExit, max(t0, t1));
+    }
+    return isfinite(tEnter) && isfinite(tExit) && tEnter > tExit;
+}
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -42,6 +42,9 @@ struct NwbCausticPhotonPushConstants{
     float sceneBoundsMaxY;
     float sceneBoundsMaxZ;
     uint sceneBoundsFlags;
+    uint deferredArgsSlot;
+    uint deferredQueueSlot;
+    uint deferredCapacity;
 };
 
 

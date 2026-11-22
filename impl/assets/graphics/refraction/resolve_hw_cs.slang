@@ -102,7 +102,7 @@ bool nwbRefractionTryResolveHardware(const NwbRefractionEntry entry, out half4 o
     float3 internalOrigin = entry.position;
     if(!nwbRefractionTryAssociateCapturedEntry(instanceMaterialHeapSlot, entry, camera, entryDistance, associationTolerance, primaryInstance, primaryAttributeSlot)){
         nwbRefractionCount(NWB_REFRACTION_COUNTER_entryQueries);
-        const NwbRayTraceSurfaceHit entryHit = nwbRefractionClosestEntryInterface(instanceMaterialHeapSlot, camera, entry.incident, max(entryDistance - associationTolerance, entry.bias), entryDistance + associationTolerance, primaryAttributeSlot);
+        const NwbRayTraceSurfaceHit entryHit = nwbRefractionClosestEntryInterface(instanceMaterialHeapSlot, camera, entry.incident, max(entryDistance - associationTolerance, entry.bias), entryDistance + associationTolerance, entry.primaryEntityId, primaryAttributeSlot);
         nwbRefractionCountQueryWork(entryHit);
 #if NWB_RT_CSG_ENABLED
         if(entryHit.failure != 0u){

@@ -329,7 +329,11 @@ b8 RendererReflectionPipelines::prepare(in b8 prepareHardware, in b8 prepareCsgH
             lambda[](in ReflectionSubsystem s) -> AssetRef<ComputeShader>{ return s.resolveHwCs; }, Name(s_RenderNameECSRenderReflectionHardware), true, this.m_bindingLayout,
             s_ReflectionHwPlainVariant
         ) || !PrepareReflectionPipeline(this.m_shaders, device, this.m_unspecifiedHardwarePipeline, this.m_unspecifiedHardwareShader,
-            lambda[](in ReflectionSubsystem s) -> AssetRef<ComputeShader>{ return s.resolveHwCs; }, Name(s_RenderNameECSRenderReflectionUnspecifiedOpticalHardware), true, this.m_bindingLayout, s_ReflectionHwUnspecifiedVariant))
+            lambda[](in ReflectionSubsystem s) -> AssetRef<ComputeShader>{ return s.resolveHwCs; }, Name(s_RenderNameECSRenderReflectionUnspecifiedOpticalHardware), true, this.m_bindingLayout, s_ReflectionHwUnspecifiedVariant
+        ) || !PrepareReflectionPipeline(this.m_shaders, device, this.m_fastHardwarePipeline, this.m_fastHardwareShader,
+            lambda[](in ReflectionSubsystem s) -> AssetRef<ComputeShader>{ return s.resolveHwCs; }, Name(s_RenderNameECSRenderReflectionFastOpticalHardware), true, this.m_bindingLayout, s_ReflectionHwFastOpticalVariant
+        ) || !PrepareReflectionPipeline(this.m_shaders, device, this.m_buildOpticalArgsPipeline, this.m_buildOpticalArgsShader,
+            lambda[](in ReflectionSubsystem s) -> AssetRef<ComputeShader>{ return s.buildArgsCs; }, Name(s_RenderNameECSRenderReflectionBuildOpticalArgs), false, this.m_bindingLayout, s_ReflectionOpticalBuildArgsVariant))
     )
         return false;
     const b8 csgHardware = CanPrepareReflectionHardwarePipelines(prepareCsgHardware, rayQueryReady, true);
@@ -365,6 +369,10 @@ void RendererReflectionPipelines::invalidate(mut ReflectionFrameSnapshot resourc
     this.m_plainHardwarePipeline.reset();
     this.m_unspecifiedHardwareShader.reset();
     this.m_unspecifiedHardwarePipeline.reset();
+    this.m_fastHardwareShader.reset();
+    this.m_fastHardwarePipeline.reset();
+    this.m_buildOpticalArgsShader.reset();
+    this.m_buildOpticalArgsPipeline.reset();
     this.m_csgBuildArgsShader.reset();
     this.m_csgBuildArgsPipeline.reset();
     this.m_csgHardwareShader.reset();

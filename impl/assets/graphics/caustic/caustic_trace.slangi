@@ -15,6 +15,7 @@
 #include "../optics/ray_precision.slangi"
 #include "photon_push_constants.slangi"
 #include "../raytrace/optical_events.slangi"
+#include "../raytrace/optical_bounds.slangi"
 #include "splat_constants.slangi"
 #include "caustic_photon_emission.slangi"
 
@@ -242,9 +243,12 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
         return splat;
 
     if(photon.finiteOrigin){
-        if(!nwbCausticBootstrapFiniteOrigin(config, origin, direction, media, result)){
-            splat.termination = result.termination;
-            return splat;
+        const float sourceTolerance = NWB_OPTICS_POSITION_TOLERANCE_SCALE * nwbOpticsPositionUncertainty(origin);
+        if(!nwbOpticalHalfLineOutsideBounds(config.opticalSceneHeapSlot, origin, direction, sourceTolerance)){
+            if(!nwbCausticBootstrapFiniteOrigin(config, origin, direction, media, result)){
+                splat.termination = result.termination;
+                return splat;
+            }
         }
     }
     else{
@@ -334,14 +338,14 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
         NwbOpticalInstance optical;
         if(!nwbCausticCheckBoundary(config, origin, direction, hit, boundary, optical, result))
             break;
+        const bool entering = dot(direction, boundary.geometricNormal) < 0.0;
         NwbOpticalMedium medium = (NwbOpticalMedium)0;
         medium.instance = hit.instance;
         medium.entityId = optical.entityId;
         medium.priority = optical.priority;
         medium.mode = optical.mode;
-        if(!nwbOpticalLoadHomogeneousMedium(config, hit.worldPos, direction, medium, result))
+        if(entering && !nwbOpticalLoadHomogeneousMedium(config, hit.worldPos, direction, medium, result))
             break;
-        const bool entering = dot(direction, boundary.geometricNormal) < 0.0;
         const half incidentIor = half(incident.ior);
         if(!nwbOpticalApplyBoundary(medium, entering, media, result))
             break;

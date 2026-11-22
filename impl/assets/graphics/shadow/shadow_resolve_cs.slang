@@ -24,7 +24,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     const uint slotStart = g_NwbShadowResolvePushConstants.lightSlotStart;
     const uint slotEnd = min(slotStart + g_NwbShadowResolvePushConstants.lightSlotCount, NWB_SCENE_SHADOW_SLOT_COUNT);
 #if NWB_SHADOW_RESOLVE_COMPILED_STAGE == NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE
-    NwbShadowGuidedUpsample.run(dispatchThreadID, slotStart, slotEnd);
+    NwbShadowGuidedUpsample.run(dispatchThreadID, groupThreadID, groupID, slotStart, slotEnd);
 #else
     NwbShadowWavelet.run(dispatchThreadID, groupThreadID, groupID, slotStart, slotEnd);
 #endif

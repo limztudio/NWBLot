@@ -154,7 +154,10 @@ CausticPhotonPushConstants MakeCausticPhotonPushConstants(
     in CausticPhotonBudget photonBudget,
     in u32 instanceCount,
     in u32 frameIndex,
-    in u32 temporalPhaseCount
+    in u32 temporalPhaseCount,
+    in u32 deferredArgsSlot,
+    in u32 deferredQueueSlot,
+    in u32 deferredCapacity
 ){
     return ResolveCausticPhotonPushConstants(
         targets.width,
@@ -173,7 +176,10 @@ CausticPhotonPushConstants MakeCausticPhotonPushConstants(
         temporalPhaseCount,
         VectorSingle(state.sceneBvh.m_sceneWorldBoundsMin),
         VectorSingle(state.sceneBvh.m_sceneWorldBoundsMax),
-        state.sceneBvh.m_sceneWorldBoundsFlags
+        state.sceneBvh.m_sceneWorldBoundsFlags,
+        deferredArgsSlot,
+        deferredQueueSlot,
+        deferredCapacity
     );
 }
 
@@ -327,7 +333,10 @@ b8 RendererRayTracingSystem::renderGpuBvhCaustics(mut CommandList commandList, i
         photonBudget,
         this.m_rayTracingState.sceneBvh.m_sceneBvhInstanceCount,
         cast<u32>(this.m_graphics.getFrameIndex()),
-        temporalPhaseCount
+        temporalPhaseCount,
+        s_RtInvalidSlot,
+        s_RtInvalidSlot,
+        0u
     );
     ComputeState computeState;
     computeState.setPipeline(pipeline.deref());
@@ -365,21 +374,88 @@ b8 RendererRayTracingSystem::renderHwCaustics(mut CommandList commandList, in Me
 
     Optional<GpuTimingMeasure> localTiming;
     StartCausticPhotonTiming(this.m_graphics, commandList, causticPhotonTiming, localTiming);
-    const CausticPhotonPushConstants pushConstants = MakeCausticPhotonPushConstants(
-        this.m_rayTracingState,
-        targets,
-        meshView,
-        photonBudget,
-        this.m_rayTracingState.sceneBvh.m_tlasInstanceCount,
-        cast<u32>(this.m_graphics.getFrameIndex()),
-        temporalPhaseCount
-    );
-    ComputeState computeState;
-    computeState.setPipeline(pipeline.deref());
-    commandList.setComputeState(computeState);
-    heap.bindCompute(commandList, pipeline.deref(), this.m_rayTracingState.sceneBvh.m_tlasHeapHandle);
-    commandList.setPushConstants(pushConstants);
-    commandList.dispatch(ComputeCausticSwDispatchGroups(photonBudget, s_ShaderCausticHwGroupSize), 1u, 1u);
+    const b8 splitReady = !csg
+        && this.m_rayTracingState.caustics.m_hwCausticFastPipeline.valid()
+        && this.m_rayTracingState.caustics.m_hwCausticDeferredPipeline.valid()
+        && this.m_rayTracingState.caustics.m_hwCausticDeferredQueueBuffer.valid()
+        && this.m_rayTracingState.caustics.m_hwCausticDeferredQueueHeapHandle.valid()
+        && this.m_rayTracingState.caustics.m_hwCausticDeferredQueueCapacity >= photonBudget.photonsPerFrame
+        && this.m_rayTracingState.caustics.m_hwCausticDeferredArgsBuffer.valid()
+        && this.m_rayTracingState.caustics.m_hwCausticDeferredArgsHeapHandle.valid()
+    ;
+    b8 useSplit = false;
+    if(splitReady){
+        Array<u32, 4u> emptyArgs;
+        emptyArgs[0u] = 0u;
+        emptyArgs[1u] = 1u;
+        emptyArgs[2u] = 1u;
+        emptyArgs[3u] = 0u;
+        mut BufferHandle deferredArgs = this.m_rayTracingState.caustics.m_hwCausticDeferredArgsBuffer;
+        useSplit = commandList.tryWriteBuffer(deferredArgs.deref(), emptyArgs, 0u);
+    }
+    if(useSplit){
+        const CausticPhotonPushConstants splitPushConstants = MakeCausticPhotonPushConstants(
+            this.m_rayTracingState,
+            targets,
+            meshView,
+            photonBudget,
+            this.m_rayTracingState.sceneBvh.m_tlasInstanceCount,
+            cast<u32>(this.m_graphics.getFrameIndex()),
+            temporalPhaseCount,
+            this.m_rayTracingState.caustics.m_hwCausticDeferredArgsHeapHandle.slot(),
+            this.m_rayTracingState.caustics.m_hwCausticDeferredQueueHeapHandle.slot(),
+            this.m_rayTracingState.caustics.m_hwCausticDeferredQueueCapacity
+        );
+        mut BufferHandle deferredArgs = this.m_rayTracingState.caustics.m_hwCausticDeferredArgsBuffer;
+        mut BufferHandle deferredQueue = this.m_rayTracingState.caustics.m_hwCausticDeferredQueueBuffer;
+        commandList.setBufferState(deferredQueue.deref(), ResourceStates::UnorderedAccess, true);
+        commandList.setBufferState(deferredArgs.deref(), ResourceStates::UnorderedAccess);
+        commandList.commitBarriers();
+
+        ComputePipelineHandle fastPipeline = this.m_rayTracingState.caustics.m_hwCausticFastPipeline;
+        ComputeState fastState;
+        fastState.setPipeline(fastPipeline.deref());
+        commandList.setComputeState(fastState);
+        heap.bindCompute(commandList, fastPipeline.deref(), this.m_rayTracingState.sceneBvh.m_tlasHeapHandle);
+        commandList.setPushConstants(splitPushConstants);
+        commandList.dispatch(ComputeCausticSwDispatchGroups(photonBudget, s_ShaderCausticHwGroupSize), 1u, 1u);
+
+        commandList.setBufferState(deferredQueue.deref(), ResourceStates::ShaderResource);
+        commandList.setBufferState(deferredArgs.deref(), ResourceStates::IndirectArgument | ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.causticAccumulator.deref(), s_CausticAccumulatorSubresources, ResourceStates::UnorderedAccess, true);
+        commandList.commitBarriers();
+
+        ComputePipelineHandle deferredPipeline = this.m_rayTracingState.caustics.m_hwCausticDeferredPipeline;
+        ComputeState deferredState;
+        deferredState.setPipeline(deferredPipeline.deref()).setIndirectParams(deferredArgs.deref());
+        commandList.setComputeState(deferredState);
+        heap.bindCompute(commandList, deferredPipeline.deref(), this.m_rayTracingState.sceneBvh.m_tlasHeapHandle);
+        commandList.setPushConstants(splitPushConstants);
+        commandList.dispatchIndirect(0u);
+
+        commandList.setBufferState(deferredQueue.deref(), ResourceStates::UnorderedAccess);
+        commandList.setBufferState(deferredArgs.deref(), ResourceStates::UnorderedAccess);
+    }
+    else{
+        const CausticPhotonPushConstants pushConstants = MakeCausticPhotonPushConstants(
+            this.m_rayTracingState,
+            targets,
+            meshView,
+            photonBudget,
+            this.m_rayTracingState.sceneBvh.m_tlasInstanceCount,
+            cast<u32>(this.m_graphics.getFrameIndex()),
+            temporalPhaseCount,
+            s_RtInvalidSlot,
+            s_RtInvalidSlot,
+            0u
+        );
+        ComputeState computeState;
+        computeState.setPipeline(pipeline.deref());
+        commandList.setComputeState(computeState);
+        heap.bindCompute(commandList, pipeline.deref(), this.m_rayTracingState.sceneBvh.m_tlasHeapHandle);
+        commandList.setPushConstants(pushConstants);
+        commandList.dispatch(ComputeCausticSwDispatchGroups(photonBudget, s_ShaderCausticHwGroupSize), 1u, 1u);
+    }
     FinishCausticPhotonTiming(commandList, causticPhotonTiming, localTiming);
     LogCausticProducerDispatchIfNeeded("hardware", photonBudget, temporalPhaseCount, this.m_rayTracingState.caustics.m_causticLightCount,
         this.m_rayTracingState.caustics.m_causticRefractiveInstanceCount, this.m_rayTracingState.caustics.m_hwCausticDispatchLogged);

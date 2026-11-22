@@ -102,7 +102,7 @@ b8 EnsureCausticResolveStagePipeline(
 }
 
 b8 EnsureHwCausticPipelineVariant(
-    in b8 csg,
+    in StringView variant,
     mut GraphicsRuntime graphics,
     mut RendererShaderSystem shaderSystem,
     mut BindingLayoutHandle inOutBindingLayout,
@@ -123,7 +123,7 @@ b8 EnsureHwCausticPipelineVariant(
         graphics.getDevice(),
         shaderSystem,
         lambda[](in RefractiveSubsystem s) -> AssetRef<ComputeShader>{ return s.causticPhotonHwCs; },
-        SelectRayTracingCsgVariant(csg),
+        variant,
         s_CausticHwPhotonShaderDebugName,
         sizeof(CausticPhotonPushConstants),
         true,
@@ -136,6 +136,58 @@ b8 EnsureHwCausticPipelineVariant(
         return false;
     }
     return true;
+}
+
+b8 EnsureHwCausticScratchBuffer(
+    mut GraphicsRuntime graphics,
+    mut GpuDescriptorHeap heap,
+    in u64 byteSize,
+    in b8 isIndirectArgs,
+    in Name debugName,
+    mut BufferHandle inOutBuffer,
+    mut GpuDescriptorHandle inOutHeapHandle
+){
+    if(!inOutBuffer.valid() || inOutBuffer.deref().getCreationDescription().byteSize < byteSize){
+        BufferDesc desc;
+        desc
+            .setByteSize(byteSize)
+            .setStructStride(sizeof(u32))
+            .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
+            .setIsDrawIndirectArgs(isIndirectArgs)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+            .setDebugName(debugName)
+            .enableAutomaticStateTracking(ResourceStates::UnorderedAccess)
+        ;
+        const Expected<BufferHandle> bufferResult = graphics.createBuffer(desc);
+        if(!bufferResult.has_value())
+            return false;
+        BufferHandle replacement = bufferResult.value();
+        if(!ReplaceDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemRawBufferUav(0u, replacement.deref()), inOutHeapHandle))
+            return false;
+        inOutBuffer = replacement;
+        return true;
+    }
+    if(IsDescriptorClass(inOutHeapHandle, GpuDescriptorClass::StorageBuffer))
+        return true;
+    return AssignDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemRawBufferUav(0u, inOutBuffer.deref()), inOutHeapHandle);
+}
+
+void EnsureHwCausticDeferredScratch(mut GraphicsRuntime graphics, mut RtCausticState caustics, in u32 requiredCapacity){
+    if(requiredCapacity == 0u || caustics.m_hwCausticSplitPipelineFailed)
+        return;
+    mut GpuDescriptorHeap heap = graphics.getDevice().getDescriptorHeap();
+    if(!heap.isInitialized())
+        return;
+    const u64 queueByteSize = cast<u64>(requiredCapacity) * cast<u64>(sizeof(u32));
+    if(
+        !EnsureHwCausticScratchBuffer(graphics, heap, 16u, true, s_RenderNameCausticHwDeferredArgs, caustics.m_hwCausticDeferredArgsBuffer, caustics.m_hwCausticDeferredArgsHeapHandle)
+        || !EnsureHwCausticScratchBuffer(graphics, heap, queueByteSize, false, s_RenderNameCausticHwDeferredQueue, caustics.m_hwCausticDeferredQueueBuffer, caustics.m_hwCausticDeferredQueueHeapHandle)
+    ){
+        warning("RendererSystem: failed to prepare hardware caustic split scratch buffers; falling back to single pass");
+        return;
+    }
+    caustics.m_hwCausticDeferredQueueCapacity = cast<u32>(caustics.m_hwCausticDeferredQueueBuffer.deref().getCreationDescription().byteSize / cast<u64>(sizeof(u32)));
 }
 
 b8 CausticPipelineSet::ensureSwCausticPipeline(){
@@ -231,8 +283,19 @@ b8 CausticPipelineSet::ensureCausticAccumulatorDecayPipeline(){
 
 b8 CausticPipelineSet::ensureHwCausticPipeline(){
     if(this.m_hasCsg)
-        return EnsureHwCausticPipelineVariant(true, this.m_graphics, this.m_shaderSystem, this.m_caustic.m_hwCausticBindingLayout, this.m_caustic.m_hwCausticCsgShader, this.m_caustic.m_hwCausticCsgPipeline, this.m_caustic.m_hwCausticCsgPipelineFailed);
-    return EnsureHwCausticPipelineVariant(false, this.m_graphics, this.m_shaderSystem, this.m_caustic.m_hwCausticBindingLayout, this.m_caustic.m_hwCausticShader, this.m_caustic.m_hwCausticPipeline, this.m_caustic.m_hwCausticPipelineFailed);
+        return EnsureHwCausticPipelineVariant(s_CausticHwCsgVariant, this.m_graphics, this.m_shaderSystem, this.m_caustic.m_hwCausticBindingLayout, this.m_caustic.m_hwCausticCsgShader, this.m_caustic.m_hwCausticCsgPipeline, this.m_caustic.m_hwCausticCsgPipelineFailed);
+    if(!EnsureHwCausticPipelineVariant(s_CausticHwDirectVariant, this.m_graphics, this.m_shaderSystem, this.m_caustic.m_hwCausticBindingLayout, this.m_caustic.m_hwCausticShader, this.m_caustic.m_hwCausticPipeline, this.m_caustic.m_hwCausticPipelineFailed))
+        return false;
+    if(!this.m_caustic.m_hwCausticSplitPipelineFailed){
+        const b8 fastReady = EnsureHwCausticPipelineVariant(s_CausticHwFastVariant, this.m_graphics, this.m_shaderSystem, this.m_caustic.m_hwCausticBindingLayout, this.m_caustic.m_hwCausticFastShader, this.m_caustic.m_hwCausticFastPipeline, this.m_caustic.m_hwCausticSplitPipelineFailed);
+        if(!fastReady || !EnsureHwCausticPipelineVariant(s_CausticHwDeferredVariant, this.m_graphics, this.m_shaderSystem, this.m_caustic.m_hwCausticBindingLayout, this.m_caustic.m_hwCausticDeferredShader, this.m_caustic.m_hwCausticDeferredPipeline, this.m_caustic.m_hwCausticSplitPipelineFailed)){
+            this.m_caustic.m_hwCausticFastShader.reset();
+            this.m_caustic.m_hwCausticFastPipeline.reset();
+            this.m_caustic.m_hwCausticDeferredShader.reset();
+            this.m_caustic.m_hwCausticDeferredPipeline.reset();
+        }
+    }
+    return true;
 }
 
 b8 CausticActivityResources::prepareCausticResolveActivity(in u32 halfWidth, in u32 halfHeight){
@@ -296,6 +359,9 @@ static_assert(s_CausticResolveGroupThreadCount * s_CausticResolveGroupThreadCoun
 [cpp_unwind]
 void RendererRayTracingSystem::releaseCausticEmissionTargetHeapHandle(){
     this.m_rayTracingState.caustics.m_causticEmissionTargets.releaseDescriptor(this.m_graphics);
+    mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
+    RetireDescriptor(heap, this.m_rayTracingState.caustics.m_hwCausticDeferredQueueHeapHandle);
+    RetireDescriptor(heap, this.m_rayTracingState.caustics.m_hwCausticDeferredArgsHeapHandle);
 }
 
 [cpp_unwind]
@@ -443,8 +509,13 @@ b8 RendererRayTracingSystem::prepareCausticResources(in MeshViewBufferSnapshot m
     RayTraceMaterialResources materialResources(this.m_graphics, this.m_rayTracingState.sceneBvh, this.m_rayTracingState.shadow);
     b8 producerReady = materialResources.ensureRayTraceMaterialContextSlotsHeapHandle();
     if(producerReady){
-        if(hardware)
+        if(hardware){
             producerReady = pipelines.ensureHwCausticPipeline();
+            if(producerReady && !this.m_lightSpaceShadow.m_csg.snapshot.hasCsg){
+                const CausticPhotonBudget budget = MakeCausticPhotonBudget(this.m_causticQualitySettings, s_CausticHwPhotonGridSide, s_CausticTemporalPhaseCount);
+                EnsureHwCausticDeferredScratch(this.m_graphics, this.m_rayTracingState.caustics, budget.photonsPerFrame);
+            }
+        }
         else
             producerReady = pipelines.ensureSwCausticPipeline();
     }

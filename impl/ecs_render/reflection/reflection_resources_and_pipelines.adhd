@@ -24,6 +24,10 @@ u64 ReflectionRayQueueByteSize(in u32 capacity){
     return cast<u64>(capacity) * s_ReflectionRayQueueElementBytes;
 }
 
+u64 ReflectionRayQueueBufferByteSize(in u32 capacity){
+    return ReflectionRayQueueByteSize(capacity) * 2u;
+}
+
 u64 ReflectionIndirectArgumentsByteSize(in u32 argumentCount, in u32 argumentStrideBytes){
     return cast<u64>(argumentCount) * cast<u64>(argumentStrideBytes);
 }
@@ -63,16 +67,14 @@ b8 RendererReflectionSystem::prepareResources(in u32 width, in u32 height, in b8
     if(!capacityResult.has_value())
         return false;
     const u32 capacity = capacityResult.value();
-    const b8 csgHardwareWork = IsReflectionCsgHardwareWorkRequested(
-        prepareCsgHardware,
-        settings.maxHardwareRaysPerFrame,
-        settings.traceMode == ReflectionTraceMode::Hardware || settings.traceMode == ReflectionTraceMode::Hybrid
-    );
-    if(csgHardwareWork && !this.prepareCsgDispatchResources())
+    const b8 traceHardware = settings.traceMode == ReflectionTraceMode::Hardware || settings.traceMode == ReflectionTraceMode::Hybrid;
+    const b8 hardwareWork = IsReflectionCsgHardwareWorkRequested(prepareHardware, settings.maxHardwareRaysPerFrame, traceHardware);
+    const b8 csgHardwareWork = IsReflectionCsgHardwareWorkRequested(prepareCsgHardware, settings.maxHardwareRaysPerFrame, traceHardware);
+    if((hardwareWork || csgHardwareWork) && !this.prepareCsgDispatchResources())
         return false;
     if(
         this.m_resources.valid() && this.m_resources.parameters.width == width && this.m_resources.parameters.height == height
-        && (!prepareHardware || (this.m_resources.hardwarePipeline && this.m_pipelines.plainHardwarePipeline() && this.m_pipelines.unspecifiedHardwarePipeline()))
+        && (!prepareHardware || (this.m_resources.hardwarePipeline && this.m_pipelines.plainHardwarePipeline() && this.m_pipelines.unspecifiedHardwarePipeline() && this.m_pipelines.fastHardwarePipeline() && this.m_pipelines.buildOpticalArgsPipeline()))
         && (!csgHardwareWork || (this.m_pipelines.csgBuildArgsPipeline().valid() && this.m_pipelines.csgHardwarePipeline().valid() && this.m_pipelines.csgPlainHardwarePipeline().valid() && this.m_pipelines.csgUnspecifiedHardwarePipeline().valid()))
     )
         return
@@ -130,12 +132,12 @@ b8 RendererReflectionSystem::prepareResources(in u32 width, in u32 height, in b8
         this.m_resources.glassRadiance = glassRadianceResult.value();
     else
         this.m_resources.glassRadiance.reset();
-    auto queueResult = createBuffer(s_ReflectionRayQueueBufferName, ReflectionRayQueueByteSize(capacity), false, false);
+    auto queueResult = createBuffer(s_ReflectionRayQueueBufferName, ReflectionRayQueueBufferByteSize(capacity), false, false);
     if(queueResult.has_value())
         this.m_resources.queue = queueResult.value();
     else
         this.m_resources.queue.reset();
-    auto countersResult = createBuffer(s_ReflectionCountersBufferName, s_ReflectionReadbackCounterBytes, false, false);
+    auto countersResult = createBuffer(s_ReflectionCountersBufferName, s_ReflectionCounterBufferBytes, false, false);
     if(countersResult.has_value())
         this.m_resources.counters = countersResult.value();
     else
@@ -236,7 +238,7 @@ b8 RendererReflectionSystem::prepareResources(in u32 width, in u32 height, in b8
 }
 
 Expected<ReflectionCsgDispatchHandle> RendererReflectionSystem::acquireCsgDispatchState(in ReflectionFrameSnapshot resources){
-    if(!resources.hasHardwareWork() || !resources.scene.csgTraceContextBuffer.valid())
+    if(!resources.hasHardwareWork() || (!resources.scene.csgTraceContextBuffer.valid() && !resources.usesSplitOpticalHardware()))
         return ReflectionCsgDispatchHandle();
     if(!this.m_preparedCsgDispatch.has_value())
         return MakeUnexpected(Failure());
@@ -282,6 +284,10 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
         }
         else if(csg)
             snapshot.hardwarePipeline = this.m_pipelines.csgHardwarePipeline();
+        else{
+            snapshot.fastHardwarePipeline = this.m_pipelines.fastHardwarePipeline();
+            snapshot.buildOpticalArgsPipeline = this.m_pipelines.buildOpticalArgsPipeline();
+        }
     }
     const ReflectionRadianceBinding base(this.m_resources.opaqueRadiance, this.m_resources.parameters.opaqueRadianceSlot, this.m_resources.parameters.opaqueOutputSlot);
     snapshot.postprocess = this.m_postprocess.snapshot(base, stamp, settings, this.m_graphics.getFrameIndex());
@@ -317,11 +323,15 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
         currentFeedbackSlot,
         parameters
     );
-    if(parameters.hardwareEnabled != 0u && parameters.maxHardwareRays > 0u && scene.csgTraceContextBuffer.valid()){
-        const u32 argumentCount = ResolveReflectionIndirectArgumentCount(parameters.maxHardwareRays, true);
-        if(!this.m_pipelines.csgBuildArgsPipeline().valid() || snapshot.indirectArgs.deref().getCreationDescription().byteSize < ReflectionIndirectArgumentsByteSize(argumentCount, s_ReflectionIndirectArgumentBytes))
+    if(parameters.hardwareEnabled != 0u && parameters.maxHardwareRays > 0u){
+        if(scene.csgTraceContextBuffer.valid()){
+            const u32 argumentCount = ResolveReflectionIndirectArgumentCount(parameters.maxHardwareRays, true);
+            if(!this.m_pipelines.csgBuildArgsPipeline().valid() || snapshot.indirectArgs.deref().getCreationDescription().byteSize < ReflectionIndirectArgumentsByteSize(argumentCount, s_ReflectionIndirectArgumentBytes))
+                return ReflectionFrameSnapshot();
+            snapshot.buildArgsPipeline = this.m_pipelines.csgBuildArgsPipeline();
+        }
+        else if(snapshot.usesSplitOpticalHardware() && snapshot.indirectArgs.deref().getCreationDescription().byteSize < ReflectionIndirectArgumentsByteSize(2u, s_ReflectionIndirectArgumentBytes))
             return ReflectionFrameSnapshot();
-        snapshot.buildArgsPipeline = this.m_pipelines.csgBuildArgsPipeline();
     }
     snapshot.postprocess.deferredResourcesSlot = parameters.deferredResourcesSlot;
     snapshot.postprocess.opaqueSpecularSlot = parameters.opaqueSpecularSlot;
@@ -405,7 +415,7 @@ b8 RendererReflectionSystem::prepareQueue(in u32 capacity){
         return true;
     BufferDesc desc;
     desc
-        .setByteSize(ReflectionRayQueueByteSize(capacity))
+        .setByteSize(ReflectionRayQueueBufferByteSize(capacity))
         .setCanHaveUAVs(true)
         .setCanHaveRawViews(true)
         .setDebugName(s_ReflectionRayQueueBufferName)

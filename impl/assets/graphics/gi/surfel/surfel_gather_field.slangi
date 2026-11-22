@@ -41,7 +41,7 @@ bool nwbSurfelGatherField(const float3 worldPosition, const float3 normal, const
 
     const float cellSize = NWB_SURFEL_GATHER_FIELD_CONSTANTS.cellSizeRadiusBiasAccum.x;
     const float safeCellSize = max(cellSize, NWB_SURFEL_HASH_CELL_SIZE_MIN);
-    const uint cellCount = uint(NWB_SURFEL_GATHER_FIELD_CONSTANTS.hashPoolFrameDivisor.x);
+    const uint cellMask = uint(NWB_SURFEL_GATHER_FIELD_CONSTANTS.hashPoolFrameDivisor.x) - 1u;
     const float normalBias = NWB_SURFEL_GATHER_FIELD_CONSTANTS.cellSizeRadiusBiasAccum.z;
     const float radius = max(NWB_SURFEL_GATHER_FIELD_CONSTANTS.cellSizeRadiusBiasAccum.y, NWB_SURFEL_RADIUS_MIN);
     const float radiusSq = radius * radius;
@@ -81,7 +81,7 @@ bool nwbSurfelGatherField(const float3 worldPosition, const float3 normal, const
                     continue;
 
                 const int3 cell = int3(cx, cy, cz);
-                const uint bucket = (hashYZ ^ (uint(cx) * NWB_SURFEL_HASH_PRIME_X)) & (cellCount - 1u);
+                const uint bucket = (hashYZ ^ (uint(cx) * NWB_SURFEL_HASH_PRIME_X)) & cellMask;
                 uint id = NWB_SURFEL_GATHER_FIELD_CELL_HEAD[bucket];
                 uint walk = 0u;
                 [loop] while(NWB_SURFEL_GATHER_FIELD_INDEX_VALID(id, poolCapacity) && walk < NWB_SURFEL_MAX_WALK){
@@ -89,11 +89,11 @@ bool nwbSurfelGatherField(const float3 worldPosition, const float3 normal, const
                     const uint sampleState = NWB_SURFEL_GATHER_FIELD_POOL[id].sampleState;
                     const uint sampleCount = nwbSurfelSampleCount(sampleState);
                     if(nwbSurfelIsAlive(sampleState) && sampleCount != 0u){
-                        const half normalWeight = half(saturate(dot(normal, NWB_SURFEL_GATHER_FIELD_POOL[id].normal)));
-                        if(normalWeight > half(0.0h) && nwbSurfelSameCell(NWB_SURFEL_GATHER_FIELD_POOL[id].cell, cell)){
-                            const float3 delta = biasedPosition - NWB_SURFEL_GATHER_FIELD_POOL[id].position;
-                            const float distSq = dot(delta, delta);
-                            if(distSq < radiusSq){
+                        const float3 delta = biasedPosition - NWB_SURFEL_GATHER_FIELD_POOL[id].position;
+                        const float distSq = dot(delta, delta);
+                        if(distSq < radiusSq){
+                            const half normalWeight = half(saturate(dot(normal, NWB_SURFEL_GATHER_FIELD_POOL[id].normal)));
+                            if(normalWeight > half(0.0h) && nwbSurfelSameCell(NWB_SURFEL_GATHER_FIELD_POOL[id].cell, cell)){
                                 const half distanceWeight = half(saturate(1.0 - sqrt(distSq) * invRadius));
                                 const half confidence = saturate(half(sampleCount) * invFullConf);
                                 const half weight = normalWeight * distanceWeight * confidence;

@@ -27,6 +27,14 @@ class RendererReflectionPipelines : NoCopy{
         return this.m_unspecifiedHardwarePipeline;
     }
 
+    public in ComputePipelineHandle fastHardwarePipeline()const{
+        return this.m_fastHardwarePipeline;
+    }
+
+    public in ComputePipelineHandle buildOpticalArgsPipeline()const{
+        return this.m_buildOpticalArgsPipeline;
+    }
+
     public in ComputePipelineHandle csgBuildArgsPipeline()const{
         return this.m_csgBuildArgsPipeline;
     }
@@ -53,8 +61,12 @@ class RendererReflectionPipelines : NoCopy{
     private ShaderHandle m_hardwareShader;
     private ShaderHandle m_plainHardwareShader;
     private ShaderHandle m_unspecifiedHardwareShader;
+    private ShaderHandle m_fastHardwareShader;
+    private ShaderHandle m_buildOpticalArgsShader;
     private ComputePipelineHandle m_plainHardwarePipeline;
     private ComputePipelineHandle m_unspecifiedHardwarePipeline;
+    private ComputePipelineHandle m_fastHardwarePipeline;
+    private ComputePipelineHandle m_buildOpticalArgsPipeline;
     private ShaderHandle m_csgBuildArgsShader;
     private ComputePipelineHandle m_csgBuildArgsPipeline;
     private ShaderHandle m_csgHardwareShader;

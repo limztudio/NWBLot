@@ -56,10 +56,10 @@ uint nwbMeshFrameViewHeapSlot(){
 #if NWB_GI_CSG_ENABLED
 void nwbGiHwCsgClosest(const float3 origin, const float3 direction, const float minimum, inout NwbGiGeometryHit closest){
     const uint contextSlot = g_NwbGiHwMaterialContextSlots.materialSlots.w;
-    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_BASE_OFFSET);
-    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_COUNT_OFFSET);
+    const uint activeOffset = nwbHeapRawBufferUniform(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_BASE_OFFSET);
+    const uint activeCount = nwbHeapRawBufferUniform(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_COUNT_OFFSET);
     for(uint index = 0u; index < activeCount; ++index){
-        const uint instanceIndex = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * NWB_CSG_RAY_ACTIVE_INDEX_BYTES);
+        const uint instanceIndex = nwbHeapRawBufferUniform(contextSlot).Load(activeOffset + index * NWB_CSG_RAY_ACTIVE_INDEX_BYTES);
         const NwbSwBvhInstance instance = nwbCsgRayLoadInstance(contextSlot, instanceIndex);
         const NwbBvhNode root = nwbCsgRayReceiverRoot(contextSlot, instanceIndex, instance);
         if(!nwbCsgRayBoundsIntersect(instance, root, origin, direction, minimum, closest.distance))
@@ -74,16 +74,15 @@ void nwbGiHwCsgClosest(const float3 origin, const float3 direction, const float 
 
 bool nwbGiHwCsgOccluded(const float3 origin, const float3 direction, const float minimum, const float maximum){
     const uint contextSlot = g_NwbGiHwMaterialContextSlots.materialSlots.w;
-    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_BASE_OFFSET);
-    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_COUNT_OFFSET);
+    const uint activeOffset = nwbHeapRawBufferUniform(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_BASE_OFFSET);
+    const uint activeCount = nwbHeapRawBufferUniform(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_COUNT_OFFSET);
     for(uint index = 0u; index < activeCount; ++index){
-        const uint instanceIndex = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * NWB_CSG_RAY_ACTIVE_INDEX_BYTES);
+        const uint instanceIndex = nwbHeapRawBufferUniform(contextSlot).Load(activeOffset + index * NWB_CSG_RAY_ACTIVE_INDEX_BYTES);
         const NwbSwBvhInstance instance = nwbCsgRayLoadInstance(contextSlot, instanceIndex);
         const NwbBvhNode root = nwbCsgRayReceiverRoot(contextSlot, instanceIndex, instance);
         if(!nwbCsgRayBoundsIntersect(instance, root, origin, direction, minimum, maximum))
             continue;
-        const NwbGiGeometryHit geometry = nwbGiCsgGeometryHit(contextSlot, g_NwbGiHwMaterialContextSlots.sceneSlots.z, instanceIndex, origin, direction, minimum, maximum);
-        if(geometry.hit)
+        if(nwbGiCsgOccluded(contextSlot, g_NwbGiHwMaterialContextSlots.sceneSlots.z, instanceIndex, origin, direction, minimum, maximum))
             return true;
     }
     return false;

@@ -10,8 +10,9 @@
 
 
 b8 ExtractCsgShapeDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
-    return context.visitDocument(lambda[in context](in MetascriptDocument doc) -> b8{
-        return ParseCsgShapeCookMetadata(context.nwbFilePath, doc).has_value();
+    in CookDependencyItemContext contextRef = context;
+    return context.visitDocument(lambda[in contextRef](in MetascriptDocument doc) -> b8{
+        return ParseCsgShapeCookMetadata(contextRef.nwbFilePath, doc).has_value();
     });
 }
 

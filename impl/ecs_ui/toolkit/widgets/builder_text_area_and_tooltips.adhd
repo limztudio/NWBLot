@@ -303,7 +303,7 @@ EditBoxResult Builder::textArea(in StringView stableKey, mut EditModel model, mu
     frame.focused = result.focused;
     this.snapshotTextArea(frame);
     auto item = this.makeItem();
-    item.style = this.m_style;
+    item.styleIndex = this.currentItemStyleIndex();
     item.state = widget.value();
     auto editFrame = this.makeEditBoxFrame();
     editFrame.editStyle = this.m_editStyle;
@@ -324,13 +324,13 @@ EditBoxResult Builder::textArea(in StringView stableKey, mut EditModel model, mu
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    description.intrinsicSize = ResolveEditIntrinsicSize(this.loadEditMinimumSize(), editFrame.editView.visualBounds().height, item.padding);
+    description.intrinsicSize = ResolveEditIntrinsicSize(this.loadEditMinimumSize(), this.editViewForFrame(editFrame).visualBounds().height, item.padding);
     if(!this.addItemNode(description, item)){
         result.valid = false;
         return result;
     }
     frame.item = cast<u32>(this.m_scope.value().m_items.size());
-    AppendOwned<BuilderEditBoxFrame>(this.m_scope.value().m_editBoxes, editFrame);
+    this.m_scope.value().m_editBoxes.push_back(editFrame);
     AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
     this.m_scope.value().m_textAreas.push_back(frame);
     return result;
@@ -374,18 +374,19 @@ b8 Builder::paintTextArea(in BuilderItem item, in LayoutBox box){
     if(!this.textAreaMatches(frame))
         return false;
     mut TextAreaState state = frame.state.value();
+    in EditBoxView view = this.editViewForFrame(editFrame);
     const Rect clip = this.visibleClip(box.clip);
     const f32 caretWidth = 1.0f / this.m_paint.displayMetrics().pixelScaleX;
-    in Rect visualBounds = editFrame.editView.visualBounds();
+    in Rect visualBounds = view.visualBounds();
     const auto viewport = CalculateScrollViewportPlacement(box.rectangle, clip, item.padding, Point(visualBounds.width, visualBounds.height), caretWidth, state.scroll(), editFrame.scrollbarStyle.thickness, editFrame.scrollbarStyle.minimumThumb);
     if(!viewport.has_value())
         return false;
-    in Vector<TextLine> lines = editFrame.editView.layout().lines();
+    in Vector<TextLine> lines = view.layout().lines();
     f32 firstLineHeight = 0.0f;
     if(!lines.empty())
         firstLineHeight = lines[0u].height;
-    const f32 lineHeight = ResolveTextAreaBaseLineHeight(lines.empty(), editFrame.editView.layout().fontSize(), firstLineHeight);
-    const auto stepResult = TryResolveTextAreaScrollStep(editFrame.editView.layout().fontSize(), lineHeight, frame.wheelLines);
+    const f32 lineHeight = ResolveTextAreaBaseLineHeight(lines.empty(), view.layout().fontSize(), firstLineHeight);
+    const auto stepResult = TryResolveTextAreaScrollStep(view.layout().fontSize(), lineHeight, frame.wheelLines);
     if(!stepResult.has_value())
         return false;
     const Point step = stepResult.value();
@@ -393,13 +394,13 @@ b8 Builder::paintTextArea(in BuilderItem item, in LayoutBox box){
     this.m_context.input().fenceControl(item.state.id, item.state.declarationGeneration, token);
     if(!this.applyTextAreaScrollInput(item, frame, token))
         return false;
-    const auto arranged = editFrame.editView.arrangeViewport(box.rectangle, viewport.value().viewport, clip, state.scroll(), caretWidth, state.m_revealCaret);
+    const auto arranged = view.arrangeViewport(box.rectangle, viewport.value().viewport, clip, state.scroll(), caretWidth, state.m_revealCaret);
     if(!arranged.has_value())
         return false;
     in EditBoxPlacement placement = arranged.value();
     if(!TryUpdateScrollViewportOffsets(Point(placement.scroll, placement.scrollY), state.m_scrollInput.placement))
         return false;
-    if(!editFrame.editView.paint(this.m_text, this.m_paint, this.m_skin.value(), placement, editFrame.editStyle, editFrame.editFlags) || !this.textAreaMatches(frame))
+    if(!view.paint(this.m_text, this.m_paint, this.m_skin.value(), placement, editFrame.editStyle, editFrame.editFlags) || !this.textAreaMatches(frame))
         return false;
     state.m_visual.placement = placement;
     state.m_visual.scroll = placement.scroll;
@@ -416,7 +417,7 @@ b8 Builder::paintTextArea(in BuilderItem item, in LayoutBox box){
     );
     if(!this.m_context.addTarget(item.state, target) || !this.paintTextAreaScrollbars(item, state.scrollbars(), clip, token))
         return false;
-    const b8 published = !this.m_editHost.has_value() || this.m_editHost.value().publish(item.state, editFrame.editView, placement, editFrame.editOptions);
+    const b8 published = !this.m_editHost.has_value() || this.m_editHost.value().publish(item.state, view, placement, editFrame.editOptions);
     if(!published || !this.textAreaMatches(frame))
         return false;
     return true;

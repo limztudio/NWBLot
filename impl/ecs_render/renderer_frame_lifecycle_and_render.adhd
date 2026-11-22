@@ -319,6 +319,7 @@ void RendererFramePipeline::render(in FramebufferPtr framebuffer){
             break;
         warning("RendererSystem: deferred graph build with optional lagged lighting-history capture failed; retrying without the tail");
         captureLightingHistory = false;
+        this.resetFrameTaskState();
     }
     this.m_materialSystem.clearPreparedFrameCache();
     const b8 deferredGraphScheduled = this.scheduleDeferredLightingTaskGraphForExecution();

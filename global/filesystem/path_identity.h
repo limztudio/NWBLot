@@ -62,6 +62,173 @@ template<typename ArenaT>
 #endif
 }
 
+struct PathExistingFileIdentity{
+    u64 volumeSerial = 0u;
+    Array<u8, 16u> fileId{};
+    u64 posixDev = 0u;
+    u64 posixIno = 0u;
+    b8 valid = false;
+
+    [[nodiscard]] constexpr b8 operator==(const PathExistingFileIdentity& rhs)const noexcept{
+        if(valid != rhs.valid)
+            return false;
+        if(!valid)
+            return true;
+        if(volumeSerial != rhs.volumeSerial || posixDev != rhs.posixDev || posixIno != rhs.posixIno)
+            return false;
+        for(usize i = 0u; i < fileId.size(); ++i){
+            if(fileId[i] != rhs.fileId[i])
+                return false;
+        }
+        return true;
+    }
+    [[nodiscard]] constexpr b8 operator!=(const PathExistingFileIdentity& rhs)const noexcept{ return !(*this == rhs); }
+};
+
+template<typename ArenaT>
+[[nodiscard]] inline Expected<Optional<PathExistingFileIdentity>, ErrorCode> QueryExistingPathIdentity(const Path<ArenaT>& path)noexcept{
+    if(path.empty())
+        return Optional<PathExistingFileIdentity>{};
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+    const HANDLE handle = CreateFile(
+        path.c_str(),
+        0u,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        nullptr,
+        OPEN_EXISTING,
+        FILE_FLAG_BACKUP_SEMANTICS,
+        nullptr
+    );
+    if(handle == INVALID_HANDLE_VALUE){
+        const ErrorCode error = LastSystemError();
+        if(IsMissingOrInvalidPathLookupError(error))
+            return Optional<PathExistingFileIdentity>{};
+        return MakeUnexpected(error);
+    }
+
+    PathExistingFileIdentity identity;
+    ErrorCode queryError;
+    FILE_ID_INFO idInfo = {};
+    if(GetFileInformationByHandleEx(handle, FileIdInfo, &idInfo, sizeof(idInfo))){
+        identity.volumeSerial = idInfo.VolumeSerialNumber;
+        FOUNDATION_MEMCPY(identity.fileId.data(), sizeof(identity.fileId), &idInfo.FileId, sizeof(idInfo.FileId));
+        identity.valid = true;
+    }
+    else{
+        BY_HANDLE_FILE_INFORMATION fileInfo = {};
+        if(GetFileInformationByHandle(handle, &fileInfo)){
+            identity.volumeSerial = fileInfo.dwVolumeSerialNumber;
+            const u32 hi = fileInfo.nFileIndexHigh;
+            const u32 lo = fileInfo.nFileIndexLow;
+            FOUNDATION_MEMCPY(identity.fileId.data(), sizeof(hi), &hi, sizeof(hi));
+            FOUNDATION_MEMCPY(identity.fileId.data() + sizeof(hi), sizeof(lo), &lo, sizeof(lo));
+            identity.valid = true;
+        }
+        else{
+            queryError = LastSystemError();
+        }
+    }
+
+    const b8 closed = CloseHandle(handle) != 0;
+    const ErrorCode closeError = closed ? ErrorCode{} : LastSystemError();
+    if(queryError)
+        return MakeUnexpected(queryError);
+    if(closeError)
+        return MakeUnexpected(closeError);
+    return identity;
+#else
+    const auto pathStat = GlobalFilesystemDetail::StatPath(path);
+    if(!pathStat){
+        if(IsMissingOrInvalidPathLookupError(pathStat.error()))
+            return Optional<PathExistingFileIdentity>{};
+        return MakeUnexpected(pathStat.error());
+    }
+    PathExistingFileIdentity identity;
+    identity.posixDev = static_cast<u64>(pathStat->st_dev);
+    identity.posixIno = static_cast<u64>(pathStat->st_ino);
+    identity.valid = true;
+    return identity;
+#endif
+}
+
+template<typename ArenaT>
+struct PathOutputIdentity{
+    PathExistingFileIdentity anchor;
+    TString<ArenaT> tailPath;
+    u64 hashValue = 0u;
+
+
+public:
+    explicit PathOutputIdentity(ArenaT& arena)noexcept
+        : tailPath(arena)
+    {}
+
+    [[nodiscard]] Expected<b8, ErrorCode> sameAs(const PathOutputIdentity& rhs)const noexcept{
+        if(anchor != rhs.anchor)
+            return false;
+        const TStringView lhsView(tailPath.data(), tailPath.size());
+        const TStringView rhsView(rhs.tailPath.data(), rhs.tailPath.size());
+        if(lhsView.empty() && rhsView.empty())
+            return true;
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+        return SamePathComponentText(lhsView, rhsView);
+#else
+        return lhsView == rhsView;
+#endif
+    }
+};
+
+template<typename ArenaT>
+[[nodiscard]] inline Expected<PathOutputIdentity<ArenaT>, ErrorCode> ResolvePathOutputIdentity(const Path<ArenaT>& path, ArenaT& arena){
+    PathOutputIdentity<ArenaT> result(arena);
+    Vector<TString<ArenaT>, ArenaT> missingLeaves(arena);
+    Path<ArenaT> cursor = path;
+
+    for(;;){
+        const auto existing = QueryExistingPathIdentity(cursor);
+        if(!existing)
+            return MakeUnexpected(existing.error());
+        if(existing->has_value()){
+            result.anchor = existing->value();
+            break;
+        }
+        const TStringView leaf = cursor.filenameView();
+        const TStringView parentView = cursor.parentPathView();
+        if(leaf.empty() || parentView.empty() || parentView == cursor.native()){
+            result.tailPath.assign(cursor.native().data(), cursor.native().size());
+            break;
+        }
+        missingLeaves.emplace_back(leaf.data(), leaf.size(), arena);
+        cursor = Move(cursor).parentPath();
+    }
+
+    if(!missingLeaves.empty()){
+        for(usize i = missingLeaves.size(); i > 0u; --i){
+            if(!result.tailPath.empty())
+                result.tailPath.push_back(FOUNDATION_TEXT('/'));
+            const TString<ArenaT>& leaf = missingLeaves[i - 1u];
+            result.tailPath.append(leaf.data(), leaf.size());
+        }
+    }
+
+    u64 hash = s_Fnv64OffsetBasis;
+    Fnv64AppendBool(hash, result.anchor.valid);
+    if(result.anchor.valid){
+        Fnv64AppendValue(hash, result.anchor.volumeSerial);
+        Fnv64AppendValue(hash, result.anchor.posixDev);
+        Fnv64AppendValue(hash, result.anchor.posixIno);
+        hash = UpdateFnv64(hash, Span<const u8>(result.anchor.fileId.data(), result.anchor.fileId.size()));
+    }
+    const TStringView tailView(result.tailPath.data(), result.tailPath.size());
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+    hash = UpdateFnv64TextCanonical(hash, tailView);
+#else
+    hash = UpdateFnv64TextExact(hash, tailView);
+#endif
+    result.hashValue = hash;
+    return result;
+}
+
 template<typename ArenaT>
 class PathIdentity final{
 public:
@@ -75,92 +242,17 @@ public:
     [[nodiscard]] Expected<b8, ErrorCode> sameExisting()const noexcept{
         if(m_lhs.empty() || m_rhs.empty())
             return false;
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-        const HANDLE lhsHandle = CreateFile(
-            m_lhs.c_str(),
-            0u,
-            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-            nullptr,
-            OPEN_EXISTING,
-            FILE_FLAG_BACKUP_SEMANTICS,
-            nullptr
-        );
-        if(lhsHandle == INVALID_HANDLE_VALUE){
-            const ErrorCode lhsError = LastSystemError();
-            if(IsMissingOrInvalidPathLookupError(lhsError))
-                return false;
-            return MakeUnexpected(lhsError);
-        }
-        const HANDLE rhsHandle = CreateFile(
-            m_rhs.c_str(),
-            0u,
-            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-            nullptr,
-            OPEN_EXISTING,
-            FILE_FLAG_BACKUP_SEMANTICS,
-            nullptr
-        );
-        if(rhsHandle == INVALID_HANDLE_VALUE){
-            const ErrorCode rhsError = LastSystemError();
-            const b8 lhsClosed = CloseHandle(lhsHandle) != 0;
-            const ErrorCode closeError = lhsClosed ? ErrorCode{} : LastSystemError();
-            if(IsMissingOrInvalidPathLookupError(rhsError)){
-                if(closeError)
-                    return MakeUnexpected(closeError);
-                return false;
-            }
-            return MakeUnexpected(rhsError);
-        }
-
-        b8 same = false;
-        ErrorCode queryError;
-        FILE_ID_INFO lhsId = {};
-        FILE_ID_INFO rhsId = {};
-        if(
-            GetFileInformationByHandleEx(lhsHandle, FileIdInfo, &lhsId, sizeof(lhsId))
-            && GetFileInformationByHandleEx(rhsHandle, FileIdInfo, &rhsId, sizeof(rhsId))
-        ){
-            same = lhsId.VolumeSerialNumber == rhsId.VolumeSerialNumber
-                && FOUNDATION_MEMCMP(&lhsId.FileId, &rhsId.FileId, sizeof(lhsId.FileId)) == 0;
-        }
-        else{
-            BY_HANDLE_FILE_INFORMATION lhsInfo = {};
-            BY_HANDLE_FILE_INFORMATION rhsInfo = {};
-            if(GetFileInformationByHandle(lhsHandle, &lhsInfo) && GetFileInformationByHandle(rhsHandle, &rhsInfo)){
-                same = lhsInfo.dwVolumeSerialNumber == rhsInfo.dwVolumeSerialNumber
-                    && lhsInfo.nFileIndexHigh == rhsInfo.nFileIndexHigh
-                    && lhsInfo.nFileIndexLow == rhsInfo.nFileIndexLow;
-            }
-            else
-                queryError = LastSystemError();
-        }
-
-        const b8 rhsClosed = CloseHandle(rhsHandle) != 0;
-        const ErrorCode rhsCloseError = rhsClosed ? ErrorCode{} : LastSystemError();
-        const b8 lhsClosed = CloseHandle(lhsHandle) != 0;
-        const ErrorCode lhsCloseError = lhsClosed ? ErrorCode{} : LastSystemError();
-        if(queryError)
-            return MakeUnexpected(queryError);
-        if(rhsCloseError)
-            return MakeUnexpected(rhsCloseError);
-        if(lhsCloseError)
-            return MakeUnexpected(lhsCloseError);
-        return same;
-#else
-        const auto lhsStat = GlobalFilesystemDetail::StatPath(m_lhs);
-        if(!lhsStat){
-            if(IsMissingOrInvalidPathLookupError(lhsStat.error()))
-                return false;
-            return MakeUnexpected(lhsStat.error());
-        }
-        const auto rhsStat = GlobalFilesystemDetail::StatPath(m_rhs);
-        if(!rhsStat){
-            if(IsMissingOrInvalidPathLookupError(rhsStat.error()))
-                return false;
-            return MakeUnexpected(rhsStat.error());
-        }
-        return lhsStat->st_dev == rhsStat->st_dev && lhsStat->st_ino == rhsStat->st_ino;
-#endif
+        const auto lhsId = QueryExistingPathIdentity(m_lhs);
+        if(!lhsId)
+            return MakeUnexpected(lhsId.error());
+        if(!lhsId->has_value())
+            return false;
+        const auto rhsId = QueryExistingPathIdentity(m_rhs);
+        if(!rhsId)
+            return MakeUnexpected(rhsId.error());
+        if(!rhsId->has_value())
+            return false;
+        return lhsId->value() == rhsId->value();
     }
 
     [[nodiscard]] Expected<b8, ErrorCode> sameOutput()const{

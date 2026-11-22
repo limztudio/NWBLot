@@ -75,10 +75,11 @@ Expected<Model> BuildModelAssetFromObjects(
 Expected<SkeletonJointMatrix> ReadModelTransformField(in Path nwbFilePath, in MetascriptValue object, in StringView objectKind){
     b8 transformOk = true;
     SkeletonJointMatrix transform = DefaultModelObjectTransform();
+    in auto nwbFilePathRef = nwbFilePath;
     object.visitField(
         s_ModelTransformField,
-        lambda[in nwbFilePath, in objectKind, mut transformOk, mut transform](in MetascriptValue fieldVal) -> void{
-            const Expected<SkeletonJointMatrix> parsed = ParseSkeletonJointMatrix(nwbFilePath, fieldVal, objectKind, s_ModelTransformField);
+        lambda[in nwbFilePathRef, in objectKind, mut transformOk, mut transform](in MetascriptValue fieldVal) -> void{
+            const Expected<SkeletonJointMatrix> parsed = ParseSkeletonJointMatrix(nwbFilePathRef, fieldVal, objectKind, s_ModelTransformField);
             if(!parsed.has_value()){
                 transformOk = false;
                 return;
@@ -190,18 +191,20 @@ b8 ParseModelSkeletonObjectsInto(in Path nwbFilePath, in MetascriptValue asset, 
     outObjects.clear();
     const String filePathText = PathToString(nwbFilePath);
     b8 ok = true;
+    in auto nwbFilePathRef = nwbFilePath;
+    in String filePathTextRef = filePathText;
     asset.visitField(
         s_ModelSkeletonsField,
-        lambda[in nwbFilePath, in filePathText, mut outObjects, mut ok](in MetascriptValue fieldVal) -> void{
-            if(!ValidateModelMetadataMapField(fieldVal.isMap(), filePathText, s_ModelSkeletonsField)){
+        lambda[in nwbFilePathRef, in filePathTextRef, mut outObjects, mut ok](in MetascriptValue fieldVal) -> void{
+            if(!ValidateModelMetadataMapField(fieldVal.isMap(), filePathTextRef, s_ModelSkeletonsField)){
                 ok = false;
                 return;
             }
-            if(!fieldVal.forEachMapEntry(lambda[in nwbFilePath, in filePathText, mut outObjects](in StringView rawName, in MetascriptValue objectValue) -> b8{
-                const Expected<Name> entryName = ValidateModelObjectEntryName(rawName, s_ModelSkeletonObjectKind, filePathText);
+            if(!fieldVal.forEachMapEntry(lambda[in nwbFilePathRef, in filePathTextRef, mut outObjects](in StringView rawName, in MetascriptValue objectValue) -> b8{
+                const Expected<Name> entryName = ValidateModelObjectEntryName(rawName, s_ModelSkeletonObjectKind, filePathTextRef);
                 if(!entryName.has_value())
                     return false;
-                const Expected<ModelSkeletonObject> parsed = ParseModelSkeletonObject(nwbFilePath, objectValue, filePathText);
+                const Expected<ModelSkeletonObject> parsed = ParseModelSkeletonObject(nwbFilePathRef, objectValue, filePathTextRef);
                 if(!parsed.has_value())
                     return false;
                 ModelSkeletonObject item = parsed.value();
@@ -219,18 +222,20 @@ b8 ParseModelStaticMeshObjectsInto(in Path nwbFilePath, in MetascriptValue asset
     outObjects.clear();
     const String filePathText = PathToString(nwbFilePath);
     b8 ok = true;
+    in auto nwbFilePathRef = nwbFilePath;
+    in String filePathTextRef = filePathText;
     asset.visitField(
         s_ModelStaticMeshesField,
-        lambda[in nwbFilePath, in filePathText, mut outObjects, mut ok](in MetascriptValue fieldVal) -> void{
-            if(!ValidateModelMetadataMapField(fieldVal.isMap(), filePathText, s_ModelStaticMeshesField)){
+        lambda[in nwbFilePathRef, in filePathTextRef, mut outObjects, mut ok](in MetascriptValue fieldVal) -> void{
+            if(!ValidateModelMetadataMapField(fieldVal.isMap(), filePathTextRef, s_ModelStaticMeshesField)){
                 ok = false;
                 return;
             }
-            if(!fieldVal.forEachMapEntry(lambda[in nwbFilePath, in filePathText, mut outObjects](in StringView rawName, in MetascriptValue objectValue) -> b8{
-                const Expected<Name> entryName = ValidateModelObjectEntryName(rawName, s_ModelStaticMeshObjectKind, filePathText);
+            if(!fieldVal.forEachMapEntry(lambda[in nwbFilePathRef, in filePathTextRef, mut outObjects](in StringView rawName, in MetascriptValue objectValue) -> b8{
+                const Expected<Name> entryName = ValidateModelObjectEntryName(rawName, s_ModelStaticMeshObjectKind, filePathTextRef);
                 if(!entryName.has_value())
                     return false;
-                const Expected<ModelStaticMeshObject> parsed = ParseModelStaticMeshObject(nwbFilePath, objectValue, filePathText);
+                const Expected<ModelStaticMeshObject> parsed = ParseModelStaticMeshObject(nwbFilePathRef, objectValue, filePathTextRef);
                 if(!parsed.has_value())
                     return false;
                 ModelStaticMeshObject item = parsed.value();
@@ -248,18 +253,20 @@ b8 ParseModelSkinnedMeshObjectsInto(in Path nwbFilePath, in MetascriptValue asse
     outObjects.clear();
     const String filePathText = PathToString(nwbFilePath);
     b8 ok = true;
+    in auto nwbFilePathRef = nwbFilePath;
+    in String filePathTextRef = filePathText;
     asset.visitField(
         s_ModelSkinnedMeshesField,
-        lambda[in nwbFilePath, in filePathText, mut outObjects, mut ok](in MetascriptValue fieldVal) -> void{
-            if(!ValidateModelMetadataMapField(fieldVal.isMap(), filePathText, s_ModelSkinnedMeshesField)){
+        lambda[in nwbFilePathRef, in filePathTextRef, mut outObjects, mut ok](in MetascriptValue fieldVal) -> void{
+            if(!ValidateModelMetadataMapField(fieldVal.isMap(), filePathTextRef, s_ModelSkinnedMeshesField)){
                 ok = false;
                 return;
             }
-            if(!fieldVal.forEachMapEntry(lambda[in nwbFilePath, in filePathText, mut outObjects](in StringView rawName, in MetascriptValue objectValue) -> b8{
-                const Expected<Name> entryName = ValidateModelObjectEntryName(rawName, s_ModelSkinnedMeshObjectKind, filePathText);
+            if(!fieldVal.forEachMapEntry(lambda[in nwbFilePathRef, in filePathTextRef, mut outObjects](in StringView rawName, in MetascriptValue objectValue) -> b8{
+                const Expected<Name> entryName = ValidateModelObjectEntryName(rawName, s_ModelSkinnedMeshObjectKind, filePathTextRef);
                 if(!entryName.has_value())
                     return false;
-                const Expected<ModelSkinnedMeshObject> parsed = ParseModelSkinnedMeshObject(nwbFilePath, objectValue, filePathText);
+                const Expected<ModelSkinnedMeshObject> parsed = ParseModelSkinnedMeshObject(nwbFilePathRef, objectValue, filePathTextRef);
                 if(!parsed.has_value())
                     return false;
                 ModelSkinnedMeshObject item = parsed.value();
@@ -321,8 +328,9 @@ b8 SerializeModelAsset(in Model model, mut Vector<u8> outBinary){
 
 
 Expected<ModelCookEntry> ParseModelCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument document){
-    return ParseCookMetadataDocument<ModelCookEntry>(root, virtualRoot, file, document, s_ModelMetaDiagnosticPrefix, lambda[in file](in Name path, in MetascriptValue value) -> Expected<ModelCookEntry>{
-        return ParseModelCookMetadata(path, file, value);
+    in auto fileRef = file;
+    return ParseCookMetadataDocument<ModelCookEntry>(root, virtualRoot, file, document, s_ModelMetaDiagnosticPrefix, lambda[in fileRef](in Name path, in MetascriptValue value) -> Expected<ModelCookEntry>{
+        return ParseModelCookMetadata(path, fileRef, value);
     });
 }
 

@@ -92,9 +92,10 @@ Expected<mut MaterialPipelineResources> RendererMaterialSystem::createRendererPi
     if(resources.ready())
         return Expected<mut MaterialPipelineResources>(resources);
     const b8 inserted = entry.second;
-    auto failMaterialPipeline = lambda[mut this, in inserted, in pipelineKey]() -> Expected<mut MaterialPipelineResources>{
+    in MaterialPipelineKey pipelineKeyRef = pipelineKey;
+    auto failMaterialPipeline = lambda[mut this, in inserted, in pipelineKeyRef]() -> Expected<mut MaterialPipelineResources>{
         if(inserted)
-            this.m_materialState.m_pipelines.erase(pipelineKey);
+            this.m_materialState.m_pipelines.erase(pipelineKeyRef);
         return MakeUnexpected(Failure());
     };
 

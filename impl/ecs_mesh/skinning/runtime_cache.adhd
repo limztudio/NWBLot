@@ -59,6 +59,7 @@ class MeshSkinningRuntimeCache : NoCopy{
     private SkinningInstanceMap m_instances;
     private HashMap<u64, EntityID> m_handleToEntity;
     private u64 m_nextHandleValue = 1u;
+    private u64 m_topologyGeneration = 1u;
 
     public MeshSkinningRuntimeCache(mut GraphicsRuntime graphics, in AssetManager assets){
         this.m_graphics = graphics;
@@ -68,10 +69,13 @@ class MeshSkinningRuntimeCache : NoCopy{
     [cpp_unwind]
     public void prepareResources(mut World world);
     public void clear(){
+        if(!this.m_instances.empty())
+            ++this.m_topologyGeneration;
         this.m_handleToEntity.clear();
         this.m_instances.clear();
         this.m_sources.clear();
     }
+    public u64 topologyGeneration()const{ return this.m_topologyGeneration; }
 
     public Optional<mut MeshSkinningRuntimeInstance> editInstance(in RuntimeMeshHandle handle){
         const auto entity = TryFindRuntimeMeshEntityByHandle(this.m_handleToEntity, handle.value);
@@ -106,6 +110,7 @@ class MeshSkinningRuntimeCache : NoCopy{
         const Name sourceName = found.value().sourceName;
         this.m_handleToEntity.erase(found.value().handle.value);
         this.m_instances.erase(entity);
+        ++this.m_topologyGeneration;
         const auto source = this.m_sources.find(sourceName);
         if(source != this.m_sources.end() && source.value().referenceCount > 0u)
             --source.value().referenceCount;

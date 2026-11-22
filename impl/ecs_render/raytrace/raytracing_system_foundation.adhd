@@ -62,6 +62,7 @@ class RayTracingSceneGatherScratch : NoCopy{
     public HashMap<usize, u32> meshSlotLookup;
     public Vector<TextureHandle> pendingSampledTextures;
     public MeshRayTracingResourceSnapshotVector rayTracingSnapshots;
+    public MeshRayTracingResourceSnapshotVector pendingMeshBuildSnapshots;
     public Vector<RayTracingInstanceDesc> tlasInstances;
     public Vector<RayTracingAccelStructHandle> tlasInstanceBlases;
     public Vector<RayTracingInstanceWorldBounds> tlasInstanceWorldBounds;
@@ -74,6 +75,7 @@ class RayTracingSceneGatherScratch : NoCopy{
     public Vector<u32> swBvhInstanceLeafCost;
     public Vector<SceneBvhNodeCalculation> swBvhBuildNodes;
     public Vector<NwbBvhNodeGpu> swBvhNodes;
+    public RayTracingOpticalSceneGather opticalScene;
 
     public void clearHandles(){
         this.pendingSampledTextures.clear();
@@ -99,6 +101,8 @@ class RayTracingSceneGatherScratch : NoCopy{
         this.swBvhInstanceLeafCost.clear();
         this.swBvhBuildNodes.clear();
         this.swBvhNodes.clear();
+        this.opticalScene.reset(0u);
+        this.pendingMeshBuildSnapshots.clear();
         this.clearHandles();
     }
 }

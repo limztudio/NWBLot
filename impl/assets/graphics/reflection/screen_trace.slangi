@@ -110,8 +110,8 @@ bool nwbReflectionBuildScreenRay(const NwbReflectionSurface surface, out NwbRefl
     return true;
 }
 
-float nwbReflectionScreenCellExit(const NwbReflectionScreenRay ray, const uint2 cell, const uint2 dimensions){
-    const float2 edge = (float2(cell) + ray.stepEdgeOffset) * rcp(float2(dimensions));
+float nwbReflectionScreenCellExit(const NwbReflectionScreenRay ray, const uint2 cell, const float2 invDimensions){
+    const float2 edge = (float2(cell) + ray.stepEdgeOffset) * invDimensions;
     const float exitX = ray.hasDirection.x ? fma(edge.x, ray.invScreenDirection.x, ray.negOriginInvDir.x) : NWB_REFLECTION_SCREEN_EXIT_FAR;
     const float exitY = ray.hasDirection.y ? fma(edge.y, ray.invScreenDirection.y, ray.negOriginInvDir.y) : NWB_REFLECTION_SCREEN_EXIT_FAR;
     return min(1.0, min(exitX, exitY));
@@ -158,7 +158,9 @@ bool nwbReflectionValidateScreenHit(
     if(any(uv < 0.0) || any(uv >= 1.0))
         return false;
     const uint2 dimensions = uint2(g_NwbReflectionParameters.dimensionsAndRoute.x, g_NwbReflectionParameters.dimensionsAndRoute.y);
-    if(any(uint2(uv * float2(dimensions)) != candidatePixel))
+    const float2 floatDimensions = float2(dimensions);
+    const float2 invDimensions = rcp(floatDimensions);
+    if(any(uint2(uv * floatDimensions) != candidatePixel))
         return false;
     const float parameter = abs(ray.screenDirection.x) >= abs(ray.screenDirection.y) ? (uv.x - ray.screenOrigin.x) / ray.screenDirection.x : (uv.y - ray.screenOrigin.y) / ray.screenDirection.y;
     if(parameter < intervalFirst - ray.parameterEpsilon || parameter > intervalLast + ray.parameterEpsilon)
@@ -178,13 +180,13 @@ bool nwbReflectionValidateScreenHit(
     const float3 positionNdc = positionClip.xyz / positionClip.w;
     const float3 ndcError = (clipError.xyz + abs(positionNdc) * clipError.w) / (positionClip.w - clipError.w);
     const float2 positionUv = float2(positionNdc.x * 0.5 + 0.5, 0.5 - positionNdc.y * 0.5);
-    const float2 sampleUv = (float2(candidatePixel) + 0.5) / float2(dimensions);
-    if(any(abs(positionUv - sampleUv) * float2(dimensions) > 1.0 + ndcError.xy * float2(dimensions) * 0.5) || abs(positionNdc.z - depth) > ndcError.z + NWB_REFLECTION_SCREEN_DEPTH_ROUNDOFF)
+    const float2 sampleUv = (float2(candidatePixel) + 0.5) * invDimensions;
+    if(any(abs(positionUv - sampleUv) * floatDimensions > 1.0 + ndcError.xy * floatDimensions * 0.5) || abs(positionNdc.z - depth) > ndcError.z + NWB_REFLECTION_SCREEN_DEPTH_ROUNDOFF)
         return false;
 
     const float3 cameraObserver = nwbSafeNormalize(g_NwbReflectionView.cameraPosition.xyz - position, normal);
     const float2 projectionScale = float2(length(g_NwbReflectionView.worldToClip[0].xyz), length(g_NwbReflectionView.worldToClip[1].xyz));
-    const float pixelRadius = positionClip.w * length(1.0 / (float2(dimensions) * max(projectionScale, float2(NWB_REFLECTION_SCREEN_PROJECTION_SCALE_MIN))));
+    const float pixelRadius = positionClip.w * length(invDimensions / max(projectionScale, float2(NWB_REFLECTION_SCREEN_PROJECTION_SCALE_MIN)));
     const float footprint = pixelRadius / max(abs(dot(normal, cameraObserver)), NWB_REFLECTION_SCREEN_OBSERVER_COSINE_MIN);
     const float residual = max(length(intersection - position) - footprint - length(positionError), 0.0);
     if(residual >= g_NwbReflectionParameters.screenThickness)
@@ -228,11 +230,14 @@ bool nwbReflectionTraceScreen(const uint2 pixel, const NwbReflectionSurface surf
         return false;
 
     const uint2 fullDimensions = uint2(g_NwbReflectionParameters.dimensionsAndRoute.x, g_NwbReflectionParameters.dimensionsAndRoute.y);
+    const float2 fullFloatDimensions = float2(fullDimensions);
+    const float2 invFullDimensions = rcp(fullFloatDimensions);
     const uint lastMip = min(g_NwbReflectionParameters.depthMipCount, NWB_REFLECTION_MAX_DEPTH_MIPS) - 1u;
     const uint steps = min(g_NwbReflectionParameters.screenMaxSteps, NWB_REFLECTION_SCREEN_MAXIMUM_STEPS);
-    const uint2 firstCell = min(uint2(saturate(ray.screenOrigin.xy) * float2(fullDimensions)), fullDimensions - 1u);
-    float parameter = nwbReflectionScreenCellExit(ray, firstCell, fullDimensions) + ray.parameterEpsilon;
+    const uint2 firstCell = min(uint2(saturate(ray.screenOrigin.xy) * fullFloatDimensions), fullDimensions - 1u);
+    float parameter = nwbReflectionScreenCellExit(ray, firstCell, invFullDimensions) + ray.parameterEpsilon;
     uint mip = 0u;
+    float2 invMipDimensions = invFullDimensions;
     for(uint stepIndex = 0u; stepIndex < steps; ++stepIndex){
         if(!isfinite(parameter) || parameter >= 1.0)
             return false;
@@ -241,7 +246,7 @@ bool nwbReflectionTraceScreen(const uint2 pixel, const NwbReflectionSurface surf
             return false;
         const uint2 dimensions = max(uint2(1u), fullDimensions >> mip);
         const uint2 cell = min(uint2(position.xy * float2(dimensions)), dimensions - 1u);
-        const float cellExit = nwbReflectionScreenCellExit(ray, cell, dimensions);
+        const float cellExit = nwbReflectionScreenCellExit(ray, cell, invMipDimensions);
         if(!isfinite(cellExit) || cellExit <= parameter)
             return false;
         iterations = stepIndex + 1u;
@@ -252,10 +257,16 @@ bool nwbReflectionTraceScreen(const uint2 pixel, const NwbReflectionSurface surf
         const bool empty = depthInterval.x >= 1.0 || max(position.z, exitDepth) < depthInterval.x - NWB_REFLECTION_SCREEN_DEPTH_ROUNDOFF || min(position.z, exitDepth) > depthInterval.y + NWB_REFLECTION_SCREEN_DEPTH_ROUNDOFF;
         if(empty){
             parameter = cellExit + ray.parameterEpsilon;
-            mip = min(mip + 1u, lastMip);
+            const uint nextMip = min(mip + 1u, lastMip);
+            if(nextMip != mip){
+                mip = nextMip;
+                invMipDimensions = rcp(float2(max(uint2(1u), fullDimensions >> mip)));
+            }
         }
-        else if(mip > 0u)
+        else if(mip > 0u){
             --mip;
+            invMipDimensions = rcp(float2(max(uint2(1u), fullDimensions >> mip)));
+        }
         else{
             bool crossedSurface;
             if(nwbReflectionValidateScreenHit(pixel, cell, surface, ray, parameter, cellExit, radiance, confidence, crossedSurface))
@@ -263,7 +274,11 @@ bool nwbReflectionTraceScreen(const uint2 pixel, const NwbReflectionSurface surf
             if(crossedSurface)
                 return false;
             parameter = cellExit + ray.parameterEpsilon;
-            mip = min(1u, lastMip);
+            const uint nextMip = min(1u, lastMip);
+            if(nextMip != mip){
+                mip = nextMip;
+                invMipDimensions = rcp(float2(max(uint2(1u), fullDimensions >> mip)));
+            }
         }
     }
     const float3 remainingPosition = ray.screenOrigin + ray.screenDirection * parameter;

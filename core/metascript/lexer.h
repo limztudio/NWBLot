@@ -112,6 +112,8 @@ public:
 
 public:
     [[nodiscard]] Token next()noexcept;
+    [[nodiscard]] b8 skipBalancedBraceBlock(usize& outBodyEndOffset, b8& outHasAngleBracket)noexcept;
+    [[nodiscard]] MStringView source()const noexcept{ return m_source; }
 
 
 private:

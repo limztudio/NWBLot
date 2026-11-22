@@ -22,7 +22,7 @@ struct NwbCausticResolveUpsample{
         const uint tilesX = (g_NwbCausticResolvePushConstants.halfWidth + NWB_CAUSTIC_RESOLVE_GROUP_SIZE - 1u) / NWB_CAUSTIC_RESOLVE_GROUP_SIZE;
         for(uint y = firstTile.y; y <= lastTile.y; ++y){
             for(uint x = firstTile.x; x <= lastTile.x; ++x){
-                if(nwbHeapRawBuffer(g_NwbCausticResolvePushConstants.activityInputSlot).Load((y * tilesX + x) * NWB_CAUSTIC_RESOLVE_ACTIVITY_WORD_BYTES) != 0u)
+                if(nwbHeapRawBufferUniform(g_NwbCausticResolvePushConstants.activityInputSlot).Load((y * tilesX + x) * NWB_CAUSTIC_RESOLVE_ACTIVITY_WORD_BYTES) != 0u)
                     return false;
             }
         }

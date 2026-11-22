@@ -175,7 +175,7 @@ b8 GpuDescriptorHeap::retainedResourcesReadyForQueueLocked(const GpuPhysicalQueu
     }
 
     const u64 queueBit = queue.id.valid() && queue.id.index < 64u ? (1ull << queue.id.index) : 0u;
-    if(!m_concurrentAdmissionSlots.empty() && (queueBit == 0u || (m_verifiedConcurrentQueueMask & queueBit) == 0u)){
+    if(!m_concurrentAdmissionSlots.empty() && (queueBit == 0u || (m_verifiedConcurrentQueueMask.load(MemoryOrder::relaxed) & queueBit) == 0u)){
         for(const GpuDescriptorHandle handle : m_concurrentAdmissionSlots){
             const u32 slot = handle.slot();
             if(handle.descriptorClass() == GpuDescriptorClass::AccelStruct){
@@ -197,24 +197,28 @@ b8 GpuDescriptorHeap::retainedResourcesReadyForQueueLocked(const GpuPhysicalQueu
             if(retainedTexture && !ResourceQueueAdmissionAdmitsQueue(retainedTexture->getQueueAdmissionSnapshot(), queue))
                 return false;
         }
-        if(queueBit != 0u)
-            m_verifiedConcurrentQueueMask |= queueBit;
     }
+    if(queueBit != 0u)
+        m_verifiedConcurrentQueueMask.fetch_or(queueBit, MemoryOrder::release);
 
     return true;
 }
 
 b8 GpuDescriptorHeap::retainedResourcesReadyForQueue(const GpuPhysicalQueueId& queue)const noexcept{
+    const u64 queueBit = queue.valid() && queue.index < 64u ? (1ull << queue.index) : 0u;
+    if(queueBit != 0u && m_initialized.load(MemoryOrder::acquire) && !m_hasDynamicReadinessSlots.load(MemoryOrder::acquire) && (m_verifiedConcurrentQueueMask.load(MemoryOrder::acquire) & queueBit) != 0u)
+        return m_device.getPhysicalQueueInfo(queue) != nullptr;
+
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(queue);
     if(!queueInfo)
         return false;
 
     NothrowScopedLock lock(m_mutex);
-    return m_initialized && retainedResourcesReadyForQueueLocked(*queueInfo);
+    return m_initialized.load(MemoryOrder::relaxed) && retainedResourcesReadyForQueueLocked(*queueInfo);
 }
 
 b8 GpuDescriptorHeap::trackCommandBufferUseLocked(TrackedCommandBuffer& commandBuffer, const GpuPhysicalQueueId& physicalQueue){
-    if(!m_initialized || !m_device.getPhysicalQueueInfo(physicalQueue))
+    if(!m_initialized.load(MemoryOrder::relaxed) || !m_device.getPhysicalQueueInfo(physicalQueue))
         return false;
 
     for(const auto trackedHeap : commandBuffer.m_referencedDescriptorHeaps){
@@ -310,7 +314,7 @@ void GpuDescriptorHeap::discardCommandBufferUse(TrackedCommandBuffer& commandBuf
 
 void GpuDescriptorHeap::releasePendingRecordingLease(const u64 descriptorBufferGeneration)noexcept{
     NothrowScopedLock lock(m_mutex);
-    if(!m_initialized || descriptorBufferGeneration == 0u || descriptorBufferGeneration != m_descriptorBufferGeneration || m_activePendingRecordingLeaseCount == 0u)
+    if(!m_initialized.load(MemoryOrder::relaxed) || descriptorBufferGeneration == 0u || descriptorBufferGeneration != m_descriptorBufferGeneration || m_activePendingRecordingLeaseCount == 0u)
         TerminateInvariant();
 
     if(m_activePendingRecordingLeaseCount == 1u){

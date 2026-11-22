@@ -190,8 +190,9 @@ class RefractionClearTileArgumentsGraphTask{
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         const GpuGraphResourceId resource = this.m_resource;
-        if(!CaptureGpuTaskCommandsIfEnabled(context, lambda[in context, in resource](mut GpuCommandIrCapture capture) -> b8{
-            return capture.captureClearBuffer(context.task, context.packet, context.queue, resource, 0u);
+        in GpuTaskRecordContext contextRef = context;
+        if(!CaptureGpuTaskCommandsIfEnabled(contextRef, lambda[in contextRef, in resource](mut GpuCommandIrCapture capture) -> b8{
+            return capture.captureClearBuffer(contextRef.task, contextRef.packet, contextRef.queue, resource, 0u);
         }))
             return false;
         commandList.endRenderPass();
@@ -225,8 +226,9 @@ class RefractionClearStatisticsGraphTask{
         if(!this.m_destination.valid())
             return false;
         const GpuGraphResourceId resource = this.m_resource;
-        if(!CaptureGpuTaskCommandsIfEnabled(context, lambda[in context, in resource](mut GpuCommandIrCapture capture) -> b8{
-            return capture.captureClearBuffer(context.task, context.packet, context.queue, resource, 0u);
+        in GpuTaskRecordContext contextRef = context;
+        if(!CaptureGpuTaskCommandsIfEnabled(contextRef, lambda[in contextRef, in resource](mut GpuCommandIrCapture capture) -> b8{
+            return capture.captureClearBuffer(contextRef.task, contextRef.packet, contextRef.queue, resource, 0u);
         }))
             return false;
         commandList.endRenderPass();

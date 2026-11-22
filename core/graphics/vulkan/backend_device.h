@@ -224,6 +224,8 @@ public:
         return false;
     }
     [[nodiscard]] Expected<GpuQueueTimelineSnapshot> getQueueTimelineSnapshot(const GpuPhysicalQueueId& queue);
+    [[nodiscard]] b8 supportsHostTimerQueryReset()const noexcept{ return m_context.hostQueryResetFeatureEnabled && m_context.deviceDispatch.vkResetQueryPool != nullptr; }
+    [[nodiscard]] b8 isQueueSubmissionObservedComplete(const QueueSubmissionToken& token)const noexcept;
     [[nodiscard]] b8 supportsComparableGpuTimestamps()const noexcept{ return m_context.comparableGpuTimestamps; }
     [[nodiscard]] b8 supportsComparableGpuTimestamps(const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] GpuCommandArenaStatistics getCommandArenaStatistics(const GpuPhysicalQueueId& queue)const noexcept;
@@ -316,6 +318,7 @@ private:
     [[nodiscard]] b8 submissionsBlocked()const noexcept{
         return requiresRecreation() || (m_submissionOperationState.load(MemoryOrder::acquire) & s_SubmissionDrainBit) != 0u;
     }
+    [[nodiscard]] Expected<void*> mapBufferInternal(Buffer& buffer, CpuAccessMode::Enum requestedAccess, u64 invalidateOffsetBytes, u64 invalidateSizeBytes);
     [[nodiscard]] Expected<QueueSubmissionToken> consumeAcquiredImageSemaphore(VkSemaphore semaphore);
     [[nodiscard]] Expected<VkResult> presentNativeQueue(u32 nativeQueueIndex, const VkPresentInfoKHR& presentInfo);
     void releaseOwnedResources()noexcept;

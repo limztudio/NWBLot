@@ -307,10 +307,10 @@ void VulkanAllocator::unmapBufferMemory(Buffer& buffer){
     __hidden_vulkan_allocator::UnmapAllocation(m_allocator, buffer.m_allocation);
 }
 
-VkResult VulkanAllocator::invalidateBufferMemory(Buffer& buffer){
-    if(!buffer.m_requiresInvalidate)
+VkResult VulkanAllocator::invalidateBufferMemory(Buffer& buffer, const u64 offset, const u64 size){
+    if(!buffer.m_requiresInvalidate || size == 0u)
         return VK_SUCCESS;
-    return __hidden_vulkan_allocator::InvalidateAllocation(m_allocator, buffer.m_allocation, 0, VK_WHOLE_SIZE);
+    return __hidden_vulkan_allocator::InvalidateAllocation(m_allocator, buffer.m_allocation, offset, size);
 }
 
 VkResult VulkanAllocator::createTexture(Texture& texture, const VkImageCreateInfo& imageInfo){

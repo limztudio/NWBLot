@@ -53,7 +53,7 @@ inline constexpr TStringView s_DestinationQueueUnavailableReason = FOUNDATION_TE
 
 [[nodiscard]] b8 IsBufferStateRangeValid(BufferRange range, const BufferDesc& description)noexcept;
 
-[[nodiscard]] VkBufferMemoryBarrier2 BuildBufferStateBarrier(VkBuffer buffer, BufferRange range, ResourceStates::Mask oldState, ResourceStates::Mask stateBits, b8 rayTracingStageAvailable)noexcept;
+[[nodiscard]] VkBufferMemoryBarrier2 BuildBufferStateBarrier(VkBuffer buffer, BufferRange range, ResourceStates::Mask oldState, ResourceStates::Mask stateBits, b8 rayTracingStageAvailable, b8 computeOnlyQueue = false)noexcept;
 
 [[nodiscard]] VkBufferMemoryBarrier2 BuildBufferOwnershipReleaseBarrier(VkBuffer buffer, ResourceStates::Mask state, u32 sourceQueueFamily, u32 destinationQueueFamily, b8 rayTracingStageAvailable, BufferRange range = s_EntireBuffer)noexcept;
 

@@ -225,7 +225,8 @@ class StressTestSmokeProjectImpl : IProjectEntryCallbacks{
         if(!this.m_scene.update(currentYaw, SmokeWorldRef(this.m_world)))
             return false;
 
-        SetSmokeWindowTitleSuffix(this.m_context, GetProjectWindowTitle(), FormatSmokeYawWindowTitleSuffix(currentYaw, this.m_yaw.manualControl(), s_StressTwoPi));
+        if(this.m_titleThrottle.shouldUpdate(safeDelta, this.m_yaw.manualControl(), false))
+            SetSmokeWindowTitleSuffix(this.m_context, GetProjectWindowTitle(), FormatSmokeYawWindowTitleSuffix(currentYaw, this.m_yaw.manualControl(), s_StressTwoPi));
 
         if(!TickSmokeWorld(safeDelta, SmokeWorldRef(this.m_world)))
             return false;
@@ -342,6 +343,7 @@ class StressTestSmokeProjectImpl : IProjectEntryCallbacks{
     private u64 m_reflectionStatisticsSequence = 0u;
     private u64 m_reflectionStatisticsGeneration = 0u;
     private YawSpinController m_yaw = YawSpinController();
+    private SmokeWindowTitleThrottle m_titleThrottle = SmokeWindowTitleThrottle();
     private f32 m_frozenYaw;
     private u32 m_charactersPerClass = s_StressDefaultCharactersPerClass;
     private u32 m_m4PixelCaptureFreezeFrame;

@@ -26,6 +26,8 @@ NWB_ADHD_BEGIN
 
 
 b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo> scope, const b8 isMutationTarget, MethodDecl& method, Expr& expr, MVector<ParseError>& errors){
+    expr.semanticChecked = false;
+    expr.hasCachedTypeRef = false;
     b8 ok = true;
 
     switch(expr.kind){
@@ -707,6 +709,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
     else if(BuiltinTypeSemantics::IsNumericScalarType(inferredType) || BuiltinTypeSemantics::IsBoolScalarType(inferredType))
         expr.resolvedScalarType = inferredType;
 
+    expr.semanticChecked = true;
     return ok;
 }
 

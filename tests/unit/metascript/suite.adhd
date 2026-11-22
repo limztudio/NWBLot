@@ -1428,7 +1428,7 @@ void RunCoreCppHeaderImportVerification(){
     const auto runtime = FindAstDeclaration(unit.classes, "GraphicsRuntime");
     ASSERT_TRUE(runtime.has_value());
     EXPECT_TRUE(runtime.value().isExtern);
-    EXPECT_EQ(runtime.value().totalSize, 1528u);
+    EXPECT_EQ(runtime.value().totalSize, 1560u);
     EXPECT_EQ(runtime.value().totalAlign, 8u);
     usize runtimeCtorCount = 0u;
     for(usize methodIndex = 0u; methodIndex < runtime.value().methods.size(); ++methodIndex){

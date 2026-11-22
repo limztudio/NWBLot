@@ -162,8 +162,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     this.m_shadowPrepareGraph.resetShadowPrepareTaskState();
     this.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalClearFirstTask = GpuTaskId();
     this.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalClearTask = GpuTaskId();
-    this.resetDeferredFrameTaskIdsAndFlags();
-    this.resetDeferredTaskGraphRuntime();
     const Timer declarationBegin = TimerNow();
     if(!this.declareFrameTimingBeginTask(frameTimingTransaction))
         return;

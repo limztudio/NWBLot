@@ -477,17 +477,25 @@ Expected<GpuTaskId> DeclareAvboitRefractionCapture(
     if(!objectGeometry.prepare(drawItems.csg.indexedDrawItems, frameBindings, dependency, commonUses, GraphicsPrefixTimingTicket(), Optional<in GraphicsPrefixTimingTicket>()))
         return MakeUnexpected(Failure());
 
+    in DeferredFrameTargets targetsRef = targets;
+    in MeshFrameBindingSnapshot frameBindingsRef = frameBindings;
+    in CsgGraphResourceSnapshot csgResourcesRef = csgResources;
+    in Vector<GpuTaskResourceUse> commonUsesRef = commonUses;
+    in Vector<GpuTaskResourceUse> csgUsesRef = csgUses;
+    in RefractionCaptureAttachments attachmentsRef = attachments;
+    const usize instanceCount = instances.size();
+    const usize materialTypedByteCount = typedBytes.size();
     usize drawTaskIndex = 0u;
-    auto appendDraw = lambda[mut graph, mut materialSystem, mut dependency, mut drawTaskIndex, in targets, in frameBindings, in csgResources, in instances, in typedBytes, in validationPolicy, in producesReusableGeometry,
-        in commonUses, in csgUses, in opaqueDepth, in attachments, in setSpan](in Span<MaterialPassDrawItem> items, in b8 csg, in RenderPath renderPath, in b8 generate, in GpuGraphResourceId output) -> b8{
+    auto appendDraw = lambda[mut graph, mut materialSystem, mut dependency, mut drawTaskIndex, in targetsRef, in frameBindingsRef, in csgResourcesRef, in instanceCount, in materialTypedByteCount, in validationPolicy, in producesReusableGeometry,
+        in commonUsesRef, in csgUsesRef, in opaqueDepth, in attachmentsRef, in setSpan](in Span<MaterialPassDrawItem> items, in b8 csg, in RenderPath renderPath, in b8 generate, in GpuGraphResourceId output) -> b8{
         if(items.empty())
             return true;
         Vector<GpuTaskResourceUse> uses;
-        uses.reserve(ComputeRefractionCaptureDrawUseCapacity(commonUses.size(), csg, csgUses.size()));
-        for(in GpuTaskResourceUse use : commonUses)
+        uses.reserve(ComputeRefractionCaptureDrawUseCapacity(commonUsesRef.size(), csg, csgUsesRef.size()));
+        for(in GpuTaskResourceUse use : commonUsesRef)
             uses.push_back(use);
         if(csg){
-            for(in GpuTaskResourceUse use : csgUses)
+            for(in GpuTaskResourceUse use : csgUsesRef)
                 uses.push_back(use);
         }
         if(renderPath == RenderPath::ComputeEmulation){
@@ -497,7 +505,7 @@ Expected<GpuTaskId> DeclareAvboitRefractionCapture(
                 uses.push_back(ReadUse(output, s_ObjectGeometryRasterState));
         }
         if(!generate)
-            attachments.appendRasterUses(opaqueDepth, uses);
+            attachmentsRef.appendRasterUses(opaqueDepth, uses);
         const Expected<Name> identity = FormatRefractionCaptureDrawIdentity(drawTaskIndex);
         ++drawTaskIndex;
         if(!identity.has_value() || identity.value() == s_NameNone){
@@ -507,14 +515,14 @@ Expected<GpuTaskId> DeclareAvboitRefractionCapture(
         GpuTaskDesc desc = TaskDesc(identity.value(), SelectRefractionCaptureDrawMarkerLabel(generate), dependency);
         desc.setResourceUses(uses).setResourceSetUses(setSpan);
         RefractionCaptureDrawTask payload(materialSystem);
-        payload.avboitTargets = targets.avboit;
-        payload.frameBindings = frameBindings;
-        payload.csgResources = csgResources;
+        payload.avboitTargets = targetsRef.avboit;
+        payload.frameBindings = frameBindingsRef;
+        payload.csgResources = csgResourcesRef;
         payload.drawItems.reserve(items.size());
         for(in MaterialPassDrawItem item : items)
             payload.drawItems.push_back(item);
-        payload.instanceCount = instances.size();
-        payload.materialTypedByteCount = typedBytes.size();
+        payload.instanceCount = instanceCount;
+        payload.materialTypedByteCount = materialTypedByteCount;
         payload.csg = csg;
         payload.renderPath = renderPath;
         payload.generate = generate;

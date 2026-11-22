@@ -64,8 +64,10 @@ const u32 s_RtOpticalBaseInstanceMask = 0x1u;
 const u32 s_RtOpticalTransparentInstanceMask = 0x2u;
 const u32 s_RtShadowBaseInstanceMask = 0x4u;
 const u32 s_RtShadowTransparentInstanceMask = 0x8u;
+const u32 s_RtShadowOpaqueInstanceMask = 0x40u;
 const u32 s_RtCsgInstanceMask = 0x10u;
 const u32 s_RtRefractiveInstanceMask = 0x20u;
+const u32 s_RtNonRefractiveInstanceMask = 0x80u;
 const Name s_SceneTlasDebugName = "scene_tlas";
 const f32 s_SwShadowSceneBoundsMinPadding = 0.25f;
 const f32 s_SwShadowSceneBoundsRelativePadding = 0.10f;
@@ -143,8 +145,12 @@ u32 ResolveRayTracingInstanceMask(in b8 transparent, in b8 refractive){
     u32 mask = s_RtOpticalBaseInstanceMask | s_RtShadowBaseInstanceMask;
     if(transparent)
         mask |= s_RtOpticalTransparentInstanceMask | s_RtShadowTransparentInstanceMask;
+    else
+        mask |= s_RtShadowOpaqueInstanceMask;
     if(refractive)
         mask |= s_RtRefractiveInstanceMask;
+    else
+        mask |= s_RtNonRefractiveInstanceMask;
     return mask;
 }
 

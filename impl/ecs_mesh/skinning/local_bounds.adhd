@@ -28,18 +28,22 @@ class MeshSkinningLocalBoundsTask{
         if(this.m_dispatches.empty() || !this.m_graphics.getDevice().getDescriptorHeap().isInitialized())
             return false;
         GpuTimingTicketRecordingScope recording(this.m_ticket);
+        GpuGraphPipelineId boundPipeline;
+        GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeMeshSkinningLocalBounds, this.m_graphics.getDevice(), commands);
         for(in MeshSkinningLocalBoundsDispatch plan : this.m_dispatches){
             const Optional<mut ComputePipeline> pipeline = context.declarations.borrowComputePipeline(plan.localBoundsPipeline);
             if(!pipeline.has_value() || !context.declarations.borrowBuffer(plan.bindlessResourceSlotsResource).has_value()
                 || !context.declarations.borrowBuffer(plan.meshletLocalBoundsResource).has_value() || !context.declarations.borrowBuffer(plan.localBoundsResource).has_value())
                 return false;
-            ComputeState state;
-            state.setPipeline(pipeline.value());
-            commands.setComputeState(state);
-            this.m_graphics.getDevice().getDescriptorHeap().bindCompute(commands, pipeline.value());
+            if(plan.localBoundsPipeline != boundPipeline){
+                ComputeState state;
+                state.setPipeline(pipeline.value());
+                commands.setComputeState(state);
+                this.m_graphics.getDevice().getDescriptorHeap().bindCompute(commands, pipeline.value());
+                boundPipeline = plan.localBoundsPipeline;
+            }
             const MeshletBoundsPushConstants push = MakeMeshletBoundsPushConstants(plan.meshletCount, plan.bindlessResourceSlots);
             commands.setPushConstants(push);
-            GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeMeshSkinningLocalBounds, this.m_graphics.getDevice(), commands);
             commands.dispatch(1u, 1u, 1u);
         }
         return true;

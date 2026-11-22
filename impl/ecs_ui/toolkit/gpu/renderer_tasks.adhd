@@ -217,6 +217,7 @@ b8 RecordRasterCommandIr(in GpuRasterTask payload, in GpuTaskRecordContext conte
                 return false;
             boundScissor = scissor;
             hasRasterState = true;
+            hasPush = false;
         }
         if(!ResolvePaintPushConstants(frame.deref(), draw, push))
             return false;
@@ -346,6 +347,14 @@ b8 RecordGpuRaster(in GpuRasterTask payload, mut CommandList commands, in GpuTas
     }
     if(frame.deref().m_recordingMode == GpuCommandRecordingMode::CommandIrReplay)
         return RecordRasterCommandIr(payload, context, commands);
+    if(frame.deref().m_snapshot.vertices().empty())
+        return frame.deref().m_snapshot.commands().empty() && !commands.commandRecordingFailed();
+    if(
+        !frame.deref().m_vertices.valid() || !frame.deref().m_indices.valid() || !payload.vertices.valid() || !payload.indices.valid()
+        || !GpuBufferMatches(context.declarations, payload.vertices, frame.deref().m_vertices)
+        || !GpuBufferMatches(context.declarations, payload.indices, frame.deref().m_indices)
+    )
+        return false;
     in TextureDesc target = frame.deref().m_target.deref().m_color.deref().getDescription();
     const GpuRasterGeometry geometry(frame.deref().m_snapshot.displayMetrics(), target.width, target.height);
     const auto initialPush = TryInitializeGpuPaintPushConstants(geometry, frame.deref().m_resources.deref().m_samplerDescriptor.slot());
@@ -374,15 +383,17 @@ b8 RecordGpuRaster(in GpuRasterTask payload, mut CommandList commands, in GpuTas
         if(!resolvedScissor.has_value())
             continue;
         in GpuScissorRect scissor = resolvedScissor.value();
-        if(!heapBound || !SameGpuScissorRect(scissor, boundScissor)){
+        if(!heapBound){
             ViewportState view;
             view.addViewport(viewport).addScissorRect(scissor);
             state.setViewport(view);
             commands.setGraphicsState(state);
-            if(!heapBound){
-                heap.bindGraphics(commands, frame.deref().m_resources.deref().m_pipeline.deref());
-                heapBound = true;
-            }
+            heap.bindGraphics(commands, frame.deref().m_resources.deref().m_pipeline.deref());
+            heapBound = true;
+            boundScissor = scissor;
+        }
+        else if(!SameGpuScissorRect(scissor, boundScissor)){
+            commands.setScissorRect(scissor);
             boundScissor = scissor;
         }
         if(!ResolvePaintPushConstants(frame.deref(), draw, push))
@@ -396,7 +407,8 @@ b8 RecordGpuRaster(in GpuRasterTask payload, mut CommandList commands, in GpuTas
         arguments.setVertexCount(draw.indexCount).setStartIndexLocation(draw.firstIndex);
         commands.drawIndexed(arguments);
     }
-    commands.endRenderPass();
+    if(heapBound)
+        commands.endRenderPass();
     return true;
 }
 

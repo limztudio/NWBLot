@@ -38,7 +38,10 @@ CausticPhotonPushConstants ResolveCausticPhotonPushConstants(
     in u32 deferredResourcesHeapSlot,
     in u32 materialContextSlotsHeapSlot,
     in u32 accumulatorStorageSlot,
-    in u32 temporalPhaseCount
+    in u32 temporalPhaseCount,
+    in VectorSingle sceneBoundsMin,
+    in VectorSingle sceneBoundsMax,
+    in u32 sceneBoundsFlags
 ){
     CausticPhotonPushConstants pushConstants;
     pushConstants.width = width;
@@ -56,6 +59,15 @@ CausticPhotonPushConstants ResolveCausticPhotonPushConstants(
     pushConstants.materialContextSlotsHeapSlot = materialContextSlotsHeapSlot;
     pushConstants.accumulatorStorageSlot = accumulatorStorageSlot;
     pushConstants.temporalPhaseCount = temporalPhaseCount;
+    const f32x3u boundsMin(sceneBoundsMin);
+    const f32x3u boundsMax(sceneBoundsMax);
+    pushConstants.sceneBoundsMinX = boundsMin.x;
+    pushConstants.sceneBoundsMinY = boundsMin.y;
+    pushConstants.sceneBoundsMinZ = boundsMin.z;
+    pushConstants.sceneBoundsMaxX = boundsMax.x;
+    pushConstants.sceneBoundsMaxY = boundsMax.y;
+    pushConstants.sceneBoundsMaxZ = boundsMax.z;
+    pushConstants.sceneBoundsFlags = sceneBoundsFlags;
     return pushConstants;
 }
 

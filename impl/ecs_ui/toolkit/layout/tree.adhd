@@ -12,7 +12,7 @@
 
 class LayoutTree : NoCopy{
     private Vector<LayoutTreeNode> m_nodes;
-    private Vector<LayoutTreeWork> m_work;
+    private Vector<Rect> m_inheritedClips;
     private Vector<LayoutBox> m_boxes;
     private Vector<LayoutBox> m_stagedBoxes;
     private u32 m_maxNodes;
@@ -22,7 +22,7 @@ class LayoutTree : NoCopy{
         this.m_maxNodes = s_LayoutMaxNodes;
         const u32 initialReserve = Min(this.m_maxNodes, s_LayoutInitialReserve);
         this.m_nodes.reserve(initialReserve);
-        this.m_work.reserve(initialReserve);
+        this.m_inheritedClips.reserve(initialReserve);
         this.m_boxes.reserve(initialReserve);
         this.m_stagedBoxes.reserve(initialReserve);
     }
@@ -31,14 +31,14 @@ class LayoutTree : NoCopy{
         this.m_maxNodes = Min(maxNodes, s_LayoutMaxNodes);
         const u32 initialReserve = Min(this.m_maxNodes, s_LayoutInitialReserve);
         this.m_nodes.reserve(initialReserve);
-        this.m_work.reserve(initialReserve);
+        this.m_inheritedClips.reserve(initialReserve);
         this.m_boxes.reserve(initialReserve);
         this.m_stagedBoxes.reserve(initialReserve);
     }
 
     public void reset(){
         this.m_nodes.clear();
-        this.m_work.clear();
+        this.m_inheritedClips.clear();
         this.m_stagedBoxes.clear();
         this.m_buildFailed = false;
     }
@@ -57,7 +57,7 @@ class LayoutTree : NoCopy{
             Span<LayoutTreeNode>(this.m_nodes),
             this.m_buildFailed,
             viewport,
-            this.m_work,
+            this.m_inheritedClips,
             this.m_stagedBoxes,
             this.m_boxes
         );

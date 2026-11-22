@@ -25,7 +25,7 @@ b8 Queue::DescriptorSubmission::lockAndValidate(Span<const Queue::BatchSubmitEnt
     if(m_submissionDescriptorHeap){
         m_descriptorHeapLock = UniqueLock<Futex>(m_submissionDescriptorHeap->m_mutex);
         const GpuPhysicalQueueInfo* const queueInfo = m_queue.m_device.getPhysicalQueueInfo(m_queue.m_physicalQueue);
-        if(!queueInfo || !m_submissionDescriptorHeap->m_initialized || !m_submissionDescriptorHeap->retainedResourcesReadyForQueueLocked(*queueInfo)){
+        if(!queueInfo || !m_submissionDescriptorHeap->m_initialized.load(MemoryOrder::relaxed) || !m_submissionDescriptorHeap->retainedResourcesReadyForQueueLocked(*queueInfo)){
             NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Vulkan: Failed to submit command lists: descriptor heap contains a resource unavailable to this exact command queue"));
             return false;
         }

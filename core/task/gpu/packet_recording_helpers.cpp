@@ -42,6 +42,8 @@ Expected<Name> PacketTimingScopeName(const GpuTaskGraph::DeclarationReadView& de
     const GpuCompiledPacketView packetView = planAccess.packet(packet);
     if(!packetView.valid() || packetView.plan->taskCount == 0u)
         return MakeUnexpected(Failure{});
+    if(packetView.plan->packetTimingScopeName)
+        return packetView.plan->packetTimingScopeName;
     const GpuTaskGraphTaskView task = declarationAccess.taskAt(packetView.tasks[0u].index);
     if(task.id != packetView.tasks[0u])
         return MakeUnexpected(Failure{});
@@ -64,22 +66,18 @@ b8 PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& declara
     if(!timingRecorder)
         return false;
 
-    struct ScopeCount{
-        Name name = s_NameNone;
-        u32 count = 0u;
-    };
     HashMap<Name, usize, Alloc::ScratchArena, Hasher<Name>, EqualTo<Name>> scopeIndices(0, Hasher<Name>(), EqualTo<Name>(), scratchArena);
     const usize maxScopeCount = declarationAccess.taskCount() + planAccess.packetCount();
     scopeIndices.reserve(maxScopeCount);
-    Vector<ScopeCount, Alloc::ScratchArena> scopeEntries(scratchArena);
-    scopeEntries.reserve(maxScopeCount);
+    Vector<GpuTimingRecorder::ScopeRequest, Alloc::ScratchArena> scopeRequests(scratchArena);
+    scopeRequests.reserve(maxScopeCount);
     const auto countScopeOccurrence = [&](const Name& scopeName){
         if(!scopeName)
             return false;
-        auto [it, inserted] = scopeIndices.try_emplace(scopeName, scopeEntries.size());
+        auto [it, inserted] = scopeIndices.try_emplace(scopeName, scopeRequests.size());
         if(inserted)
-            scopeEntries.push_back(ScopeCount{ .name = scopeName, .count = 0u, });
-        u32& occurrenceCount = scopeEntries[it.value()].count;
+            scopeRequests.push_back(GpuTimingRecorder::ScopeRequest{ .scopeName = scopeName, .queryCount = 0u, });
+        u32& occurrenceCount = scopeRequests[it.value()].queryCount;
         if(occurrenceCount >= Limit<u32>::s_Max / s_MaxFramesInFlight)
             return false;
         ++occurrenceCount;
@@ -119,11 +117,9 @@ b8 PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& declara
         if(packet.recordsTiming != packetRecordsTiming)
             return false;
     }
-    for(const ScopeCount& scopeEntry : scopeEntries){
-        if(!timingRecorder->requestScopeQueries(scopeEntry.name, scopeEntry.count * s_MaxFramesInFlight))
-            return false;
-    }
-    return true;
+    for(GpuTimingRecorder::ScopeRequest& scopeRequest : scopeRequests)
+        scopeRequest.queryCount *= s_MaxFramesInFlight;
+    return timingRecorder->requestScopeQueriesBatch(Span<const GpuTimingRecorder::ScopeRequest>(scopeRequests.data(), scopeRequests.size()));
 }
 
 

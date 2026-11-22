@@ -9,17 +9,15 @@
 
 
 class RouterPointerSourceAdmission{
-    private void eraseSource(in usize index, mut Vector<PointerSource> pointerSources)const{
-        for(usize moveIndex = index + 1u; moveIndex < pointerSources.size(); ++moveIndex)
-            pointerSources[moveIndex - 1u] = pointerSources[moveIndex];
-        pointerSources.pop_back();
+    private void eraseSource(in usize index, mut PointerSourceTable pointerSources)const{
+        pointerSources.eraseAt(index);
     }
 
     public void finishRelease(
         in usize heldIndex,
         in b8 primaryDown,
         in b8 secondaryDown,
-        mut Vector<PointerSource> pointerSources,
+        mut PointerSourceTable pointerSources,
         mut InputSource inOutActivePointerSource
     )const{
         this.eraseSource(heldIndex, pointerSources);
@@ -27,6 +25,7 @@ class RouterPointerSourceAdmission{
             inOutActivePointerSource = InputSource();
     }
 
+    [cpp_unwind]
     public b8 admitEvent(
         in Span<HitTarget> targets,
         in Span<TargetLookup> lookup,
@@ -41,7 +40,7 @@ class RouterPointerSourceAdmission{
         mut InputSource inOutHoverPointerSource,
         mut HoverIdentity inOutHoverIdentity,
         mut WidgetId inOutHover,
-        mut Vector<PointerSource> inOutPointerSources,
+        mut PointerSourceTable inOutPointerSources,
         mut InputSource inOutActivePointerSource,
         mut Point outInteractionPosition,
         mut InputRoutingResult inOutResult,
@@ -51,7 +50,6 @@ class RouterPointerSourceAdmission{
         mut b8 outAdvanceHoverActivity
     )const{
         outHasHit = false;
-        outHit = HitTarget();
         outHeldIndex = inOutPointerSources.size();
         outAdvanceHoverActivity = false;
         const b8 press = event.type == InputEventType::PrimaryDown || event.type == InputEventType::SecondaryDown;
@@ -84,7 +82,7 @@ class RouterPointerSourceAdmission{
         if(press){
             const Expected<usize> heldFound = FindRouterPointerSourceIndex(inOutPointerSources, event.source, intent);
             if(heldFound.has_value()){
-                inOutResult.pointerConsumed = inOutResult.pointerConsumed || inOutPointerSources[heldFound.value()].consumed;
+                inOutResult.pointerConsumed = inOutResult.pointerConsumed || inOutPointerSources.at(heldFound.value()).consumed;
                 return false;
             }
             if(inOutPointerSources.size() == s_InputMaxSources)
@@ -114,7 +112,7 @@ class RouterPointerSourceAdmission{
             added.intent = intent;
             added.consumed = consumed;
             added.inert = !accepted;
-            inOutPointerSources.push_back(added);
+            inOutPointerSources.pushBack(added);
             inOutResult.pointerConsumed = inOutResult.pointerConsumed || consumed;
             if(!accepted)
                 return false;
@@ -135,7 +133,7 @@ class RouterPointerSourceAdmission{
                 return false;
             }
             const usize heldIndex = heldFound.value();
-            const PointerSource held = inOutPointerSources[heldIndex];
+            const PointerSource held = inOutPointerSources.at(heldIndex);
             inOutResult.pointerConsumed = inOutResult.pointerConsumed || held.consumed;
             if(held.inert || inOutActivePointerSource != event.source){
                 this.eraseSource(heldIndex, inOutPointerSources);
@@ -144,31 +142,29 @@ class RouterPointerSourceAdmission{
             outHeldIndex = heldIndex;
         }
         else{
-            const b8 sourceRejected = !event.source.valid() || (inOutActivePointerSource.valid() && inOutActivePointerSource != event.source);
-            if(sourceRejected && inOutResult.pointerConsumed)
-                return false;
-            b8 anyInert = false;
-            b8 anyConsumed = false;
-            u32 matchedCount = 0u;
-            if(event.source.valid()){
-                for(in PointerSource held : inOutPointerSources){
-                    if(held.source != event.source)
-                        continue;
-                    if(held.inert)
-                        anyInert = true;
-                    if(held.consumed)
-                        anyConsumed = true;
-                    ++matchedCount;
-                    if(matchedCount == 2u || (anyInert && anyConsumed) || (sourceRejected && anyConsumed))
-                        break;
+            if(!inOutActivePointerSource.valid()){
+                if(!inOutPointerSources.empty() && event.source.valid()){
+                    b8 anyInert = false;
+                    b8 anyConsumed = false;
+                    inOutPointerSources.querySourceFlags(event.source, anyInert, anyConsumed);
+                    if(anyInert){
+                        inOutResult.pointerConsumed = inOutResult.pointerConsumed || anyConsumed;
+                        return false;
+                    }
                 }
+                if(!event.hoverCapable && event.type == InputEventType::PointerMove)
+                    return false;
             }
-            if(anyInert || sourceRejected){
+            else if(inOutActivePointerSource != event.source){
+                if(inOutResult.pointerConsumed)
+                    return false;
+                b8 anyInert = false;
+                b8 anyConsumed = false;
+                if(!inOutPointerSources.empty() && event.source.valid())
+                    inOutPointerSources.querySourceFlags(event.source, anyInert, anyConsumed);
                 inOutResult.pointerConsumed = inOutResult.pointerConsumed || anyConsumed;
                 return false;
             }
-            if(!inOutActivePointerSource.valid() && !event.hoverCapable && event.type == InputEventType::PointerMove)
-                return false;
         }
         if((press || release || event.type == InputEventType::PointerWheel) && !hitResolved){
             const Expected<usize> hitIndex = FindRouterHitTargetIndexIndexed(targets, lookup, popups, spatial, event.position);

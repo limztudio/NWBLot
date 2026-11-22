@@ -30,14 +30,14 @@ namespace __hidden_state_tracking_buffers{
 static constexpr TStringView s_ByteRangeOutsideBufferReason = FOUNDATION_TEXT("byte range is empty or outside the buffer");
 
 
-[[nodiscard]] VkBufferMemoryBarrier2 BuildCopyDestBufferBarrier(const VkBuffer buffer, const BufferRange range, const ResourceStates::Mask oldState, const b8 rayTracingStageAvailable)noexcept{
+[[nodiscard]] VkBufferMemoryBarrier2 BuildCopyDestBufferBarrier(const VkBuffer buffer, const BufferRange range, const ResourceStates::Mask oldState, const b8 rayTracingStageAvailable, const b8 computeOnlyQueue)noexcept{
     auto barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
     if(oldState == ResourceStates::Unknown || oldState == ResourceStates::Common){
         barrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
         barrier.srcAccessMask = 0;
     }
     else{
-        barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(oldState, rayTracingStageAvailable);
+        barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(oldState, rayTracingStageAvailable, computeOnlyQueue);
         barrier.srcAccessMask = VulkanDetail::GetVkAccessFlags(oldState);
     }
     barrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
@@ -70,12 +70,12 @@ b8 IsBufferStateRangeValid(const BufferRange range, const BufferDesc& descriptio
     return range.hasExtent() && range.byteOffset < description.byteSize && (range.byteSize == BufferRange::s_AllBytes || range.byteSize <= description.byteSize - range.byteOffset);
 }
 
-VkBufferMemoryBarrier2 BuildBufferStateBarrier(const VkBuffer buffer, const BufferRange range, const ResourceStates::Mask oldState, const ResourceStates::Mask stateBits, const b8 rayTracingStageAvailable)noexcept{
+VkBufferMemoryBarrier2 BuildBufferStateBarrier(const VkBuffer buffer, const BufferRange range, const ResourceStates::Mask oldState, const ResourceStates::Mask stateBits, const b8 rayTracingStageAvailable, const b8 computeOnlyQueue)noexcept{
     const ResourceStates::Mask sourceState = oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common;
     auto barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
-    barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(sourceState, rayTracingStageAvailable);
+    barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(sourceState, rayTracingStageAvailable, computeOnlyQueue);
     barrier.srcAccessMask = VulkanDetail::GetVkAccessFlags(sourceState);
-    barrier.dstStageMask = VulkanDetail::GetVkPipelineStageFlags(stateBits, rayTracingStageAvailable);
+    barrier.dstStageMask = VulkanDetail::GetVkPipelineStageFlags(stateBits, rayTracingStageAvailable, computeOnlyQueue);
     barrier.dstAccessMask = VulkanDetail::GetVkAccessFlags(stateBits);
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -357,7 +357,7 @@ void CommandList::setBufferStateValidated(Buffer& buffer, const ResourceStates::
         if(VulkanDetail::HasBufferDeviceWriteState(oldState) || VulkanDetail::HasBufferDeviceWriteState(stateBits))
             registerHostReadbackBuffer(buffer);
         if(VulkanStateTrackingDetail::NeedsResourceStateBarrier(oldState, stateBits, uavBarrierEnabled, forceMemoryDependency)){
-            m_pendingBufferBarriers.push_back(VulkanStateTrackingDetail::BuildBufferStateBarrier(buffer.m_buffer, piece, oldState, stateBits, m_context.extensions.khrRayTracingPipeline));
+            m_pendingBufferBarriers.push_back(VulkanStateTrackingDetail::BuildBufferStateBarrier(buffer.m_buffer, piece, oldState, stateBits, m_context.extensions.khrRayTracingPipeline, m_creationDesc.queueType == CommandQueue::Compute));
         }
     };
 
@@ -436,7 +436,7 @@ void CommandList::queueWriteBufferCopyAndBarrier(Buffer& buffer, const VkBuffer 
         if(!VulkanStateTrackingDetail::NeedsResourceStateBarrier(oldState, ResourceStates::CopyDest, false, false))
             return;
 
-        VkBufferMemoryBarrier2 barrier = __hidden_state_tracking_buffers::BuildCopyDestBufferBarrier(dstVkBuf, piece, oldState, m_context.extensions.khrRayTracingPipeline);
+        VkBufferMemoryBarrier2 barrier = __hidden_state_tracking_buffers::BuildCopyDestBufferBarrier(dstVkBuf, piece, oldState, m_context.extensions.khrRayTracingPipeline, m_creationDesc.queueType == CommandQueue::Compute);
         if(!m_enableAutomaticBarriers){
             m_pendingBufferBarriers.push_back(barrier);
             return;

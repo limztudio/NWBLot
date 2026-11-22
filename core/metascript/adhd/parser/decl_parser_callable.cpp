@@ -51,10 +51,10 @@ b8 DeclParser::parseCallableOwnerOrTemplateHeader(const b8 failOnInvalidTemplate
     return true;
 }
 
-MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, const Span<const ParsedAttribute> attributes, const b8 isExtern){
+MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, const Span<const ParsedAttribute> attributes, const b8 isExtern, const b8 isImported){
     MethodDecl* decl = AllocateAstNode<MethodDecl>(m_cursor.arena());
     decl->span = span;
-    decl->isImported = isExtern;
+    decl->isImported = isImported || isExtern;
     decl->isExtern = isExtern;
 
     if(!applyCallableAttributes(attributes, *decl))
@@ -78,7 +78,10 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
                 if(!initializeDestructorDecl(*decl, maybeClass, "expected '(' in out-of-line destructor", &parsedOwnerTemplateParams, &parsedOwnerTemplateParamDecls))
                     return nullptr;
                 decl->hasBody = true;
-                if(!m_stmtParser.parseBlockStatements(decl->body))
+                b8 skipped = false;
+                if(!trySkipImportedCallableBody(*decl, decl->ownerTemplateParams.empty(), skipped))
+                    return nullptr;
+                if(!skipped && !m_stmtParser.parseBlockStatements(decl->body))
                     return nullptr;
                 return decl;
             }
@@ -184,7 +187,11 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
             return nullptr;
         }
         decl->hasBody = true;
-        if(!m_stmtParser.parseBlockStatements(decl->body))
+        const b8 allowSkip = !hasExceptionProbe && decl->templateParams.empty() && decl->ownerTemplateParams.empty() && !decl->isConstructor;
+        b8 skipped = false;
+        if(!trySkipImportedCallableBody(*decl, allowSkip, skipped))
+            return nullptr;
+        if(!skipped && !m_stmtParser.parseBlockStatements(decl->body))
             return nullptr;
         if(hasExceptionProbe && decl->exceptionProbes.empty()){
             if(decl->body.size() != 1u || decl->body.front()->kind != StmtKind::Return || !decl->body.front()->expr){

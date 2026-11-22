@@ -122,6 +122,7 @@ private:
 
     const VulkanContext& m_context;
     const ResourceQueueSharing::Mask m_creationQueueSharing;
+    Atomic<b8> m_gpuReady{ false };
     b8 m_isTopLevelAtCreation = false;
 };
 

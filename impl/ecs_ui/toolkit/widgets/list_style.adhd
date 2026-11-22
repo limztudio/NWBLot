@@ -13,6 +13,13 @@ const f32 s_ListDefaultHeight = 240.0f;
 const usize s_ListRowMetricCount = 6u;
 const usize s_ListLanguageBufferBytes = 64u;
 const u32 s_ListMaxPreparedRows = 1024u;
+const Name s_ListRowNormalRegionName = "list.row.normal";
+const Name s_ListRowHoverRegionName = "list.row.hover";
+const Name s_ListRowSelectedRegionName = "list.row.selected";
+const Name s_ListRowDisabledRegionName = "list.row.disabled";
+const Name s_ListBackgroundRegionName = "list.background";
+const Name s_ScrollTrackRegionName = "scroll.track";
+const Name s_ScrollThumbRegionName = "scroll.thumb";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,27 +32,27 @@ enum<u8> ListActionOutcome{
 }
 
 class SelectableStyle{
-    public Name normal = Name("list.row.normal");
-    public Name hover = Name("list.row.hover");
-    public Name selected = Name("list.row.selected");
-    public Name disabled = Name("list.row.disabled");
-    public Name fallback = Name("button.normal");
-    public Name hoverFallback = Name("button.hover");
-    public Name selectedFallback = Name("button.pressed");
-    public Name disabledFallback = Name("button.disabled");
-    public Name focus = Name("focus.overlay");
+    public Name normal = s_ListRowNormalRegionName;
+    public Name hover = s_ListRowHoverRegionName;
+    public Name selected = s_ListRowSelectedRegionName;
+    public Name disabled = s_ListRowDisabledRegionName;
+    public Name fallback = s_StyleButtonNormalRegionName;
+    public Name hoverFallback = s_StyleButtonHoverRegionName;
+    public Name selectedFallback = s_StyleButtonPressedRegionName;
+    public Name disabledFallback = s_StyleButtonDisabledRegionName;
+    public Name focus = s_StyleFocusOverlayRegionName;
     public Insets padding = Insets(s_StyleSpacingMedium, s_StyleSpacingSmall, s_StyleSpacingMedium, s_StyleSpacingSmall);
 }
 
 class ListStyle{
     public SelectableStyle row;
-    public Name background = Name("list.background");
-    public Name backgroundFallback = Name("panel.normal");
-    public Name track = Name("scroll.track");
-    public Name trackFallback = Name("panel.normal");
-    public Name thumb = Name("scroll.thumb");
-    public Name thumbFallback = Name("button.normal");
-    public Name thumbHover = Name("button.hover");
+    public Name background = s_ListBackgroundRegionName;
+    public Name backgroundFallback = s_StylePanelNormalRegionName;
+    public Name track = s_ScrollTrackRegionName;
+    public Name trackFallback = s_StylePanelNormalRegionName;
+    public Name thumb = s_ScrollThumbRegionName;
+    public Name thumbFallback = s_StyleButtonNormalRegionName;
+    public Name thumbHover = s_StyleButtonHoverRegionName;
     public Insets padding = Insets(s_StyleSpacingSmall, s_StyleSpacingSmall, s_StyleSpacingSmall, s_StyleSpacingSmall);
     public f32 scrollbarWidth = s_StyleScrollbarThickness;
     public f32 minimumThumb = s_StyleScrollbarMinimumThumb;

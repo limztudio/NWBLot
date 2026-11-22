@@ -1944,9 +1944,10 @@ void WriteBackPhysicsTransformsToEcs(
     scratch.pendingWriteBackBodyIndices.clear();
 
     in PhysicsWorld worldRef = physicsWorld;
+    in Vector<EcsSlotOwner> bodyIndexToEntityRef = bodyIndexToEntity;
     if(hasAnyPhysicsParents){
         world.view<PhysicsParentComponent>().each(
-            lambda[in worldRef, mut world, in bodyIndexToEntity, in hasAnyPhysicsParents, in stamp, mut scratch, mut maxDeferredDepth](
+            lambda[in worldRef, mut world, in bodyIndexToEntityRef, in hasAnyPhysicsParents, in stamp, mut scratch, mut maxDeferredDepth](
                 in EntityID entity,
                 in PhysicsParentComponent pp
             ) -> void{
@@ -1956,7 +1957,7 @@ void WriteBackPhysicsTransformsToEcs(
                 in RigidBodyComponent rb = rbOpt.value();
                 if(rb.type == BodyType::Static || !rb.isEnabled || !rb.runtimeBodyId.valid())
                     return;
-                WriteBackSinglePhysicsBody(worldRef, world, bodyIndexToEntity, hasAnyPhysicsParents, rb.runtimeBodyId.index, stamp, scratch.writeBackBodyStamps, scratch.writeBackDepthBuckets, maxDeferredDepth);
+                WriteBackSinglePhysicsBody(worldRef, world, bodyIndexToEntityRef, hasAnyPhysicsParents, rb.runtimeBodyId.index, stamp, scratch.writeBackBodyStamps, scratch.writeBackDepthBuckets, maxDeferredDepth);
             }
         );
     }

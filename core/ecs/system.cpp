@@ -144,6 +144,8 @@ Expected<void, CpuTaskAdmissionError::Enum> SystemScheduler::execute(World& worl
 
     if(m_allSystems.empty())
         return {};
+    if(m_allSystems.size() == 1u)
+        return m_allSystems[0u]->update(world, delta);
 
     using TaskHandle = CpuTaskScheduler::TaskHandle;
     m_executionHandles.clear();

@@ -22,11 +22,112 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_adhd_decl_parser{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] b8 SliceMentionsTemplateName(const MStringView slice, const HashSet<MStringView, MetaArena, MStringViewHash>& templateNames)noexcept{
+    usize i = 0u;
+    while(i < slice.size()){
+        if(IsAsciiIdentifierStart(slice[i])){
+            const usize start = i;
+            ++i;
+            while(i < slice.size() && IsAsciiIdentifierChar(slice[i]))
+                ++i;
+            const MStringView ident = slice.substr(start, i - start);
+            usize look = i;
+            while(look < slice.size() && (slice[look] == ' ' || slice[look] == '\t' || slice[look] == '\r' || slice[look] == '\n'))
+                ++look;
+            if(look < slice.size() && slice[look] == '<' && templateNames.find(ident) != templateNames.end())
+                return true;
+            continue;
+        }
+        ++i;
+    }
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 DeclParser::trySkipImportedCallableBody(MethodDecl& method, const b8 allowSkip, b8& outSkipped){
+    outSkipped = false;
+    if(!allowSkip || !m_deferredBodies || !method.isImported || method.isExtern)
+        return true;
+
+    const ParserCursor::Checkpoint bodyCheckpoint = m_cursor.save();
+    usize startOffset = 0u;
+    usize endOffset = 0u;
+    b8 hasAngleBracket = false;
+    outSkipped = true;
+    if(!m_cursor.skipBalancedBraces(startOffset, endOffset, hasAngleBracket))
+        return false;
+
+    m_deferredBodies->push_back(DeferredCallableBody{ &method, bodyCheckpoint, startOffset, endOffset, hasAngleBracket });
+    return true;
+}
+
 b8 DeclParser::parseTranslationUnit(TranslationUnit& outUnit){
+    ScopedAstNodePool astPoolScope(outUnit.astNodePool);
+    MVector<DeferredCallableBody> deferredBodies(m_cursor.arena());
+    MVector<DeferredCallableBody>* const prevDeferredBodies = m_deferredBodies;
+    m_deferredBodies = &deferredBodies;
+    ScopeExit restoreDeferredBodies([&]()noexcept{
+        m_deferredBodies = prevDeferredBodies;
+    });
+
     while(!m_cursor.check(TokenType::EndOfFile)){
         if(!parseTopLevelDeclaration(outUnit))
             return false;
     }
+
+    if(!deferredBodies.empty()){
+        b8 hasAuthoredTemplateClass = false;
+        for(const ClassDecl* cls : outUnit.classes){
+            if(cls && !cls->isExtern && !cls->templateParams.empty()){
+                hasAuthoredTemplateClass = true;
+                break;
+            }
+        }
+        if(hasAuthoredTemplateClass){
+            HashSet<MStringView, MetaArena, MStringViewHash> templateNames(m_cursor.arena());
+            for(const ClassDecl* cls : outUnit.classes){
+                if(cls && !cls->isExtern && !cls->templateParams.empty() && !cls->name.empty())
+                    templateNames.insert(cls->name);
+            }
+            for(const InterfaceDecl* iface : outUnit.interfaces){
+                if(iface && !iface->isExtern && !iface->templateParams.empty() && !iface->name.empty())
+                    templateNames.insert(iface->name);
+            }
+            for(const TypeAliasDecl* aliasDecl : outUnit.typeAliases){
+                if(aliasDecl && !aliasDecl->isExtern && !aliasDecl->templateParams.empty() && !aliasDecl->name.empty())
+                    templateNames.insert(aliasDecl->name);
+            }
+            const ParserCursor::Checkpoint endCheckpoint = m_cursor.save();
+            for(const DeferredCallableBody& deferred : deferredBodies){
+                if(!deferred.hasAngleBracket || !deferred.method || deferred.endOffset <= deferred.startOffset || deferred.endOffset > m_activeSource.size())
+                    continue;
+                const MStringView bodySlice = m_activeSource.substr(deferred.startOffset, deferred.endOffset - deferred.startOffset);
+                if(!__hidden_adhd_decl_parser::SliceMentionsTemplateName(bodySlice, templateNames))
+                    continue;
+                m_cursor.restore(deferred.bodyCheckpoint);
+                m_typeParser.resetPendingRightAngles();
+                if(!m_stmtParser.parseBlockStatements(deferred.method->body))
+                    return false;
+            }
+            m_cursor.restore(endCheckpoint);
+        }
+    }
+
     return !m_cursor.failed();
 }
 
@@ -358,7 +459,7 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
     }
 
     if(m_cursor.matchIdentifier(KeywordSemantics::s_Class)){
-        ClassDecl* classDecl = parseClassDecl(span, attributes, isExtern);
+        ClassDecl* classDecl = parseClassDecl(span, attributes, isExtern, isImported);
         if(!classDecl)
             return false;
         classDecl->cppNamespace = importedNamespace;
@@ -375,7 +476,7 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         return true;
     }
 
-    MethodDecl* callable = parseFreeOrOutOfLineCallable(span, attributes, isExtern);
+    MethodDecl* callable = parseFreeOrOutOfLineCallable(span, attributes, isExtern, isImported);
     if(!callable)
         return false;
     callable->cppNamespace = importedNamespace;

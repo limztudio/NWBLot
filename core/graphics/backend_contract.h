@@ -241,6 +241,7 @@ concept CommandListApi = requires(
     commandList.setPushConstants(data, usize{});
 
     commandList.setGraphicsState(graphicsState);
+    commandList.setScissorRect(rect);
     commandList.draw(drawArguments);
     commandList.drawIndexed(drawArguments);
     commandList.drawIndirect(u32{}, u32{});
@@ -270,6 +271,7 @@ concept CommandListApi = requires(
     commandList.setResourceStatesForFramebuffer(framebuffer);
     commandList.setEnableUavBarriersForTexture(&texture, b8{});
     commandList.setEnableUavBarriersForBuffer(&buffer, b8{});
+    commandList.setEnableAutomaticBarriers(b8{});
     commandList.beginTrackingTextureState(&texture, subresources, ResourceStates::ShaderResource);
     commandList.beginTrackingBufferState(&buffer, ResourceStates::ShaderResource);
     commandList.setTextureState(&texture, subresources, ResourceStates::ShaderResource);

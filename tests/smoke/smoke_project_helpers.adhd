@@ -44,6 +44,29 @@ NotNullUniquePtr<World> TakeSmokeWorld(mut NotNullUniquePtr<World> world){
 
 mut World SmokeWorldRef(mut NotNullUniquePtr<World> world){ return world.deref(); }
 
+const f32 s_SmokeWindowTitleUpdateIntervalSeconds = 0.2f;
+
+class SmokeWindowTitleThrottle{
+    private f32 m_elapsedSeconds = 0.0f;
+    private b8 m_initialized = false;
+    private b8 m_lastManualControl = false;
+
+    public b8 shouldUpdate(in f32 deltaSeconds, in b8 manualControl, in b8 forceUpdate){
+        if(!this.m_initialized || forceUpdate || manualControl != this.m_lastManualControl){
+            this.m_initialized = true;
+            this.m_lastManualControl = manualControl;
+            this.m_elapsedSeconds = 0.0f;
+            return true;
+        }
+        this.m_elapsedSeconds += deltaSeconds;
+        if(this.m_elapsedSeconds >= s_SmokeWindowTitleUpdateIntervalSeconds){
+            this.m_elapsedSeconds = 0.0f;
+            return true;
+        }
+        return false;
+    }
+}
+
 void SetSmokeWindowTitleSuffix(mut ProjectRuntimeContext context, in PlatformStringView projectTitle, in StringView suffix){
     const PlatformOwnedString title = AppendPlatformText(projectTitle, suffix);
     mut GraphicsRuntime graphics = context.graphics;

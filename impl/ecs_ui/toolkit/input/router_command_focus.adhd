@@ -25,30 +25,14 @@ b8 TryRouteRouterContextMenuCommand(
 
 void EraseRouterDeviceInputs(
     in u64 device,
-    mut Vector<PointerSource> pointerSources,
-    mut Vector<PointerBinding> pointerBindings,
+    mut PointerSourceTable pointerSources,
+    mut PointerBindingTable pointerBindings,
     mut Vector<CommandSource> commandSources,
     mut Vector<BoundSource> boundSources,
     mut Vector<InputEvent> events
 ){
-    usize keptPointerSources = 0u;
-    for(usize index = 0u; index < pointerSources.size(); ++index){
-        if(pointerSources[index].source.device != device){
-            if(keptPointerSources != index)
-                pointerSources[keptPointerSources] = pointerSources[index];
-            ++keptPointerSources;
-        }
-    }
-    pointerSources.resize(keptPointerSources);
-    usize keptPointerBindings = 0u;
-    for(usize index = 0u; index < pointerBindings.size(); ++index){
-        if(pointerBindings[index].source.device != device){
-            if(keptPointerBindings != index)
-                pointerBindings[keptPointerBindings] = pointerBindings[index];
-            ++keptPointerBindings;
-        }
-    }
-    pointerBindings.resize(keptPointerBindings);
+    pointerSources.retainDeviceNotEqual(device);
+    pointerBindings.retainDeviceNotEqual(device);
     usize keptCommandSources = 0u;
     for(usize index = 0u; index < commandSources.size(); ++index){
         if(commandSources[index].source.device != device){

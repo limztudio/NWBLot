@@ -124,10 +124,13 @@ class UiEditBoxHost : IEditBoxHost{
     private u64 m_selectionSequence = 0u;
     private u64 m_activeSelectionSequence = 0u;
     private InputSource m_selectionSource;
+    private WidgetId m_syncedFocusId;
+    private u64 m_syncedLayoutGeneration = 0u;
     private usize m_queuedTextBytes = 0u;
     private b8 m_clipboardFailure = false;
     private b8 m_borrowed = false;
     private b8 m_borrowRejected = false;
+    private b8 m_focusSyncDirty = true;
 }
 
 

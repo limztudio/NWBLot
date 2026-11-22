@@ -101,7 +101,12 @@ static b8 PushManifestToVolume(const AssetsVolumeCookDetail::AssetVolumePackMani
     Vector<Core::Filesystem::DeferredWriteItem, ScratchArena> items(scratchArena);
     items.reserve(manifest.entries.size());
     for(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry : manifest.entries){
-        if(entry.identity.cookKeyHash == 0u || entry.identity.payloadSize != static_cast<u64>(entry.payloadBytes.size()) || entry.identity.payloadHash != ComputeFnv64Bytes(entry.payloadBytes.data(), entry.payloadBytes.size())){
+#if defined(NWB_DEBUG)
+        const b8 hashMismatch = entry.identity.payloadHash != ComputeFnv64Bytes(entry.payloadBytes.data(), entry.payloadBytes.size());
+#else
+        const b8 hashMismatch = false;
+#endif
+        if(entry.identity.cookKeyHash == 0u || entry.identity.payloadSize != static_cast<u64>(entry.payloadBytes.size()) || hashMismatch){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: manifest payload identity mismatch '{}'"), ConvertString(entry.virtualPath.resolvedText()));
             return false;
         }

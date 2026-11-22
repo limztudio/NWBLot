@@ -60,6 +60,12 @@ private:
 
 
 public:
+    struct MacroFilter{
+        Array<u8, 256u> firstCharMask{};
+        usize minLen = 0u;
+        usize maxLen = 0u;
+    };
+
     using MacroMap = MStringMap<PreprocessorMacro>;
     using IncludedSet = PreprocessorIncludes::IncludedSet;
     using IncludedList = PreprocessorIncludes::IncludedList;
@@ -90,6 +96,7 @@ public:
 
 
 private:
+    void rebuildMacroFilter()noexcept;
     [[nodiscard]] b8 processInternal(MStringView source, u32 depth, MStringView currentFileKey, MString& outProcessed);
     [[nodiscard]] b8 handleDirective(MStringView directiveLine, u32 line, u32 depth, MStringView currentFileKey, Vector<ConditionalFrame, Alloc::ScratchArena>& condStack, MString& outProcessed);
     [[nodiscard]] b8 handleDefine(MStringView rest, u32 line);
@@ -102,6 +109,7 @@ private:
     Alloc::ScratchArena& m_scratchArena;
     MVector<ParseError>& m_errors;
     MacroMap m_macros;
+    MacroFilter m_macroFilter;
     PreprocessorIncludes m_includes;
     u32 m_functionMacroCount = 0u;
 };

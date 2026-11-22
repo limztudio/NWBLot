@@ -135,6 +135,12 @@ public:
         return m_filesystem.readFile(virtualPath, outBinary);
     }
 
+    [[nodiscard]] virtual b8 visitAssetBinary(const Name& virtualPath, NWB::Core::Assets::AssetArena& fallbackArena, void* const context, b8 (* const visitor)(void* context, Span<const u8> bytes))const override{
+        if(const auto visited = m_filesystem.visitWholeFile(virtualPath, context, visitor); visited.has_value())
+            return *visited;
+        return IAssetBinarySource::visitAssetBinary(virtualPath, fallbackArena, context, visitor);
+    }
+
 
 private:
     NWB::Core::Filesystem::IFilesystem& m_filesystem;

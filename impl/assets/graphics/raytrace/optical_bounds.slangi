@@ -39,7 +39,33 @@ bool nwbOpticalSegmentOutsideBounds(const float3 origin, const float3 normalized
     const float3 segmentMax = max(origin, endpoint) + margin;
     if(!all(isfinite(margin)) || !all(isfinite(segmentMin)) || !all(isfinite(segmentMax)))
         return false;
-    return any(segmentMax < boundsMin) || any(segmentMin > boundsMax);
+    if(any(segmentMax < boundsMin) || any(segmentMin > boundsMax))
+        return true;
+
+    const float3 boxMin = boundsMin - margin * 4.0;
+    const float3 boxMax = boundsMax + margin * 4.0;
+    if(!all(isfinite(boxMin)) || !all(isfinite(boxMax)))
+        return false;
+    if(all(origin >= boxMin) && all(origin <= boxMax))
+        return false;
+    float tEnter = 0.0;
+    float tExit = maxDistance;
+    [unroll] for(uint axis = 0u; axis < 3u; ++axis){
+        const float dirAxis = normalizedDirection[axis];
+        if(abs(dirAxis) < 1e-20){
+            if(origin[axis] < boxMin[axis] || origin[axis] > boxMax[axis])
+                return true;
+            continue;
+        }
+        const float invAxis = 1.0 / dirAxis;
+        const float t0 = (boxMin[axis] - origin[axis]) * invAxis;
+        const float t1 = (boxMax[axis] - origin[axis]) * invAxis;
+        if(!isfinite(t0) || !isfinite(t1))
+            return false;
+        tEnter = max(tEnter, min(t0, t1));
+        tExit = min(tExit, max(t0, t1));
+    }
+    return isfinite(tEnter) && isfinite(tExit) && tEnter > tExit;
 }
 
 
@@ -57,14 +83,14 @@ bool nwbOpticalSegmentProvenExterior(const uint opticalSceneHeapSlot, const floa
     if(!all(isfinite(direction)) || !isfinite(normalizedLengthSquared) || normalizedLengthSquared <= 0.0)
         return false;
 
-    const uint headerFlags = nwbHeapRawBuffer(opticalSceneHeapSlot).Load(NWB_RT_OPTICAL_SCENE_FLAGS_OFFSET);
+    const uint headerFlags = nwbHeapRawBufferUniform(opticalSceneHeapSlot).Load(NWB_RT_OPTICAL_SCENE_FLAGS_OFFSET);
     if((headerFlags & NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID) == 0u)
         return false;
-    const uint transparentCount = nwbHeapRawBuffer(opticalSceneHeapSlot).Load(NWB_RT_OPTICAL_SCENE_TRANSPARENT_COUNT_OFFSET);
+    const uint transparentCount = nwbHeapRawBufferUniform(opticalSceneHeapSlot).Load(NWB_RT_OPTICAL_SCENE_TRANSPARENT_COUNT_OFFSET);
     if(transparentCount == 0u)
         return true;
-    const float3 boundsMin = asfloat(nwbHeapRawBuffer(opticalSceneHeapSlot).Load3(NWB_RT_OPTICAL_SCENE_BOUNDS_MIN_OFFSET));
-    const float3 boundsMax = asfloat(nwbHeapRawBuffer(opticalSceneHeapSlot).Load3(NWB_RT_OPTICAL_SCENE_BOUNDS_MAX_OFFSET));
+    const float3 boundsMin = asfloat(nwbHeapRawBufferUniform(opticalSceneHeapSlot).Load3(NWB_RT_OPTICAL_SCENE_BOUNDS_MIN_OFFSET));
+    const float3 boundsMax = asfloat(nwbHeapRawBufferUniform(opticalSceneHeapSlot).Load3(NWB_RT_OPTICAL_SCENE_BOUNDS_MAX_OFFSET));
     return nwbOpticalSegmentOutsideBounds(origin, direction, maxDistance, boundsMin, boundsMax);
 }
 

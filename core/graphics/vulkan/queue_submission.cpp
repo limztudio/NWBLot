@@ -328,7 +328,6 @@ Queue::BatchSubmissionResult Queue::submitBatch(const Span<const BatchSubmitEntr
             groupEnd + 1u < entries.size()
             && entries[groupEnd].allowSignalCoalescing
             && entries[groupEnd].localSignalCount == 0u
-            && !batchEntries[groupEnd].hasTimerQueries
             && batchEntries[groupEnd + 1u].waitCount == 0u
             && batchEntries[groupEnd + 1u].cmdOffset == batchEntries[groupEnd].cmdOffset + batchEntries[groupEnd].cmdCount
         ){
@@ -637,6 +636,18 @@ b8 Queue::coversTimerQueryPrerequisite(const QueueSubmissionToken& prerequisite,
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+b8 Device::isQueueSubmissionObservedComplete(const QueueSubmissionToken& token)const noexcept{
+    if(!token.valid())
+        return true;
+    if(!token.hasPhysicalQueueIdentity() || token.deviceGeneration != m_deviceGeneration || token.physicalQueueIndex >= m_physicalQueues.size())
+        return false;
+
+    const Queue* const q = m_physicalQueues[token.physicalQueueIndex].get();
+    if(!q || q->m_queueID != token.queue)
+        return false;
+    return q->lastObservedFinishedID() >= token.value;
+}
 
 Expected<u64> Device::queueGetCompletedInstance(CommandQueue::Enum queue){
     return queueGetCompletedInstance(getPrimaryPhysicalQueue(queue));

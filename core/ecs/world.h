@@ -73,20 +73,24 @@ public:
 public:
     template<typename... Ts>
     View<Ts...> view()noexcept{
+        const Array<ComponentTypeId, sizeof...(Ts)> typeIds = { ComponentType<Ts>()... };
+        const usize poolCount = m_pools.size();
+        auto pools = [&]<usize... Is>(IndexSequence<Is...>)noexcept{
+            return MakeTuple((typeIds[Is] < poolCount ? checked_cast<ComponentPool<Ts>*>(m_pools[typeIds[Is]].get()) : nullptr)...);
+        }(IndexSequenceFor<Ts...>{});
         if constexpr(sizeof...(Ts) >= 3u){
             u64 requiredMask = 0u;
             b8 allFastMaskBits = true;
-            const auto collectBit = [&](const ComponentTypeId typeId)noexcept{
+            for(const ComponentTypeId typeId : typeIds){
                 if(typeId < s_FastComponentMaskBits)
                     requiredMask |= (1ull << typeId);
                 else
                     allFastMaskBits = false;
-            };
-            (collectBit(ComponentType<Ts>()), ...);
+            }
             if(allFastMaskBits)
-                return View<Ts...>(MakeTuple(getPool<Ts>()...), m_entityComponentMasks.data(), m_entityComponentMasks.size(), requiredMask);
+                return View<Ts...>(Move(pools), m_entityComponentMasks.data(), m_entityComponentMasks.size(), requiredMask);
         }
-        return View<Ts...>(MakeTuple(getPool<Ts>()...));
+        return View<Ts...>(Move(pools));
     }
 
     template<typename T>

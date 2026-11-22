@@ -169,6 +169,8 @@ CpuTaskScheduler::~CpuTaskScheduler()noexcept(false){
 void CpuTaskScheduler::pumpMainThread(){
     if(!isMainThread())
         throw RuntimeException("CPU main-thread tasks require the scheduler owner thread");
+    if(m_outstandingAtomic.load(MemoryOrder::acquire) == 0u)
+        return;
     const b8 executing = isExecuting();
     const ClaimPipeline pipeline{
         .preferredScope = nullptr,
@@ -402,6 +404,124 @@ Expected<CpuTaskScheduler::TaskHandle, CpuTaskAdmissionError::Enum> CpuTaskSched
     }
     notifyProgress(wakePlan, wakeJoiners);
     return handle;
+}
+
+Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::submitRepeatedImpl(
+    const usize count,
+    CpuTaskScope* scope,
+    const CpuTaskOptions options,
+    const NotNull<const void*> context,
+    void(*construct)(NotNull<const void*>, TaskFunction&)
+){
+    if(count == 0u)
+        return {};
+    if(options.cost > CpuTaskCost::Light || options.priority > CpuTaskPriority::Background || options.target > CpuTaskTarget::MainThread)
+        return MakeUnexpected(CpuTaskAdmissionError::InvalidOptions);
+    if(m_abortingAtomic.load(MemoryOrder::relaxed))
+        return MakeUnexpected(CpuTaskAdmissionError::Aborting);
+    if(scope && isScopeCanceledLocked(scope))
+        return MakeUnexpected(CpuTaskAdmissionError::ScopeCanceled);
+
+    Execution* const activeExec = s_Execution;
+    const b8 inScheduler = activeExec && &activeExec->scheduler == this;
+    WorkerWakePlan wakePlan;
+    b8 wakeJoiners = false;
+    {
+        ScopedLock lock(m_mutex);
+        if(m_aborting)
+            return MakeUnexpected(CpuTaskAdmissionError::Aborting);
+        if(!scope && inScheduler && !activeExec->task.valid() && activeExec->rangeGroup && activeExec->rangeGroup->fastUnscoped){
+            ParallelRangeGroup& activeRange = *activeExec->rangeGroup;
+            if(!activeRange.lazyChildScope){
+                CpuTaskScope* const constructed = ::new(activeRange.lazyChildScopeStorage) CpuTaskScope(*this, {});
+                constructed->m_allowCallerWork = true;
+                activeRange.lazyChildScope = constructed;
+                activeRange.hasChildScope.store(true, MemoryOrder::release);
+            }
+            scope = activeRange.lazyChildScope;
+        }
+        if(isScopeCanceledLocked(scope))
+            return MakeUnexpected(CpuTaskAdmissionError::ScopeCanceled);
+
+        TaskMeta* parent = nullptr;
+        TaskHandle parentHandle{};
+        b8 canceledFromParent = false;
+        if(inScheduler){
+            parent = resolveLocked(activeExec->task);
+            if(parent){
+                parentHandle = activeExec->task;
+                canceledFromParent = parent->canceled;
+            }
+        }
+
+        usize reservedCount = 0u;
+        m_searchStack.clear();
+        m_searchStack.reserve(count);
+        ScopeExit releaseReserved([&]()noexcept{
+            for(usize idx = reservedCount; idx > 0u; --idx){
+                const u32 nodeIndex = m_searchStack[idx - 1u];
+                TaskMeta& meta = m_slabs.meta(nodeIndex);
+                m_slabs.payload(nodeIndex).function.reset();
+                meta.state = TaskState::Free;
+                meta.next = m_freeNode;
+                m_freeNode = nodeIndex;
+            }
+        });
+
+        for(usize item = 0u; item < count; ++item){
+            const auto reservation = reserveTaskLocked();
+            if(!reservation)
+                return MakeUnexpected(reservation.error());
+            const u32 nodeIndex = reservation->handle.index;
+            m_searchStack.push_back(nodeIndex);
+            ++reservedCount;
+
+            TaskMeta& meta = reservation->meta;
+            TaskPayload& payload = reservation->payload;
+            if(meta.latestCanceledGeneration != 0u)
+                ContainerDetail::ReserveGrowingCapacity(payload.olderCanceledGenerations, AddSize(payload.olderCanceledGenerations.size(), 1u));
+            construct(context, payload.function);
+            if(!payload.function)
+                return MakeUnexpected(CpuTaskAdmissionError::InvalidFunction);
+            payload.profileLabel = options.profileLabel;
+            meta.scope = scope;
+            meta.cost = options.cost;
+            meta.priority = options.priority;
+            meta.target = options.target;
+            meta.parent = parentHandle;
+            meta.dependencies = 0u;
+            meta.children = 0u;
+            meta.canceled = canceledFromParent;
+            meta.hasHandleWaiter = false;
+            meta.hasDependents = false;
+            meta.next = TaskHandle::s_InvalidIndex;
+        }
+
+        if(parent){
+            parent->children += count;
+            s_Execution->spawnedChildren = true;
+        }
+        if(m_outstanding == 0u)
+            m_outstandingAtomic.store(1u, MemoryOrder::release);
+        m_outstanding = AddSize(m_outstanding, count);
+        m_statistics.peakOutstandingTasks = Max(m_statistics.peakOutstandingTasks, m_outstanding);
+        if(scope)
+            scope->m_pending.fetch_add(count, MemoryOrder::release);
+        if(m_scopeSearchActive)
+            invalidateScopeSearchLocked(true);
+
+        for(usize idx = 0u; idx < reservedCount; ++idx){
+            const u32 nodeIndex = m_searchStack[idx];
+            TaskMeta& meta = m_slabs.meta(nodeIndex);
+            meta.state = TaskState::Waiting;
+            enqueueLocked(nodeIndex, meta);
+        }
+        releaseReserved.release();
+        takeWorkerWakePlanLocked(wakePlan);
+        wakeJoiners = publishJoinWakeLocked(true);
+    }
+    notifyProgress(wakePlan, wakeJoiners);
+    return {};
 }
 
 CpuTaskScheduler::TaskMeta* CpuTaskScheduler::resolveLocked(const TaskHandle handle)noexcept{
@@ -780,7 +900,6 @@ void CpuTaskScheduler::executeClaimed(ClaimedExecution& claimed, const usize wor
                     if(TaskMeta* const anchorMeta = resolveLocked(handle))
                         anchorMeta->canceled = true;
                 }
-                const b8 profileOn = m_profileEnabled.load(MemoryOrder::relaxed);
                 if(nextClaim && succeeded && pipeline && !m_stopping){
                     const b8 keepRunning =
                         (!pipeline->stopOnCompleteHandle || resolveLocked(*pipeline->stopOnCompleteHandle) != nullptr)
@@ -795,7 +914,7 @@ void CpuTaskScheduler::executeClaimed(ClaimedExecution& claimed, const usize wor
                     takeWorkerWakePlanLocked(wakePlan);
                     wakeJoiners = publishJoinWakeLocked(true);
                 }
-                if(nextClaim && !nextClaim->hasWork() && pipeline && pipeline->allowPark && !m_stopping && !profileOn){
+                if(nextClaim && !nextClaim->hasWork() && pipeline && pipeline->allowPark && !m_stopping){
                     pushIdleWorkerLocked(workerIndex - 1u, affinity);
                     m_slots[workerIndex - 1u].state.store(s_WorkerSpinning, MemoryOrder::release);
                     nextClaim->parkedFromExecute = true;
@@ -852,7 +971,6 @@ void CpuTaskScheduler::executeClaimed(ClaimedExecution& claimed, const usize wor
             payload.function.reset();
         {
             ScopedLock lock(m_mutex);
-            const b8 profileOn = m_profileEnabled.load(MemoryOrder::relaxed);
             if(claimed.profile){
                 if(claimed.readyProfile){
                     ProfileSample queued = *claimed.profile;
@@ -889,7 +1007,7 @@ void CpuTaskScheduler::executeClaimed(ClaimedExecution& claimed, const usize wor
                 if(m_totalIdleWorkers != 0u && m_nonEmptyReadyMask != 0u && (madeReady || !succeeded || !pipeline || pipeline->preferredScope != nullptr))
                     takeWorkerWakePlanLocked(wakePlan);
                 wakeJoiners = publishJoinWakeLocked(madeReady || scopeCompleted || m_outstanding == 0u || handleWaited || !succeeded);
-                if(nextClaim && !nextClaim->hasWork() && !parentToRetire && pipeline && pipeline->allowPark && !m_stopping && !profileOn){
+                if(nextClaim && !nextClaim->hasWork() && !parentToRetire && pipeline && pipeline->allowPark && !m_stopping){
                     pushIdleWorkerLocked(workerIndex - 1u, affinity);
                     m_slots[workerIndex - 1u].state.store(s_WorkerSpinning, MemoryOrder::release);
                     nextClaim->parkedFromExecute = true;
@@ -1097,7 +1215,7 @@ void CpuTaskScheduler::workerLoop(const StopToken& stop, const usize workerIndex
                         idle->begin = TimerNow();
                     }
                     pushIdleWorkerLocked(slotIndex, affinity);
-                    m_slots[slotIndex].state.store(profileOn ? s_WorkerParked : s_WorkerSpinning, MemoryOrder::release);
+                    m_slots[slotIndex].state.store(s_WorkerSpinning, MemoryOrder::release);
                     waited = true;
                     lock.unlock();
                     waitWorkerSlot(slotIndex);

@@ -23,89 +23,134 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#define NWB_LIGHT_SPACE_RESOLVE_LANE_COUNT (NWB_LIGHT_SPACE_GROUP_SIZE * NWB_LIGHT_SPACE_GROUP_SIZE)
+#if NWB_LIGHT_SPACE_RESOLVE_LANE_COUNT != NWB_LIGHT_SPACE_FALLBACK_GROUP_SIZE
+#error "Light-space fallback compaction requires a 64-lane resolve workgroup"
+#endif
+
+groupshared uint g_NwbLightSpaceFallbackMasks[2];
+groupshared uint g_NwbLightSpaceFallbackBase;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [numthreads(NWB_LIGHT_SPACE_GROUP_SIZE, NWB_LIGHT_SPACE_GROUP_SIZE, 1)]
-void main(uint3 dispatchThreadID : SV_DispatchThreadID){
+void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex){
+    const bool compactFallback = g_NwbLightSpacePush.fallbackArgsSlot != NWB_BINDLESS_HEAP_INVALID_SLOT && g_NwbLightSpacePush.fallbackListSlot != NWB_BINDLESS_HEAP_INVALID_SLOT;
+    if(compactFallback && groupIndex < 2u)
+        g_NwbLightSpaceFallbackMasks[groupIndex] = 0u;
     const uint2 pixel = dispatchThreadID.xy;
     const uint2 fullExtent = uint2(g_NwbLightSpacePush.width, g_NwbLightSpacePush.height);
     const uint2 halfExtent = (fullExtent + g_NwbLightSpacePush.receiverFactor - 1u) / g_NwbLightSpacePush.receiverFactor;
-    if(any(pixel >= halfExtent))
-        return;
+    bool anyRequiresFallback = false;
+    if(all(pixel < halfExtent)){
 #if NWB_LIGHT_SPACE_CSG_ENABLED
-    const uint2 receiverPixel = min(pixel * g_NwbLightSpacePush.receiverFactor, fullExtent - 1u);
-    const int3 texel = int3(receiverPixel, 0);
-    const float depth = nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.w).Load(texel).r;
-    const bool background = depth >= NWB_SW_SHADOW_BACKGROUND_DEPTH;
-    float3 position = float3(0.0);
-    float3 positionError = float3(0.0);
-    const bool receiverValid = background || nwbLightSpaceReceiverPosition(receiverPixel, depth, position, positionError);
+        const uint2 receiverPixel = min(pixel * g_NwbLightSpacePush.receiverFactor, fullExtent - 1u);
+        const int3 texel = int3(receiverPixel, 0);
+        const float depth = nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.w).Load(texel).r;
+        const bool background = depth >= NWB_SW_SHADOW_BACKGROUND_DEPTH;
+        float3 position = float3(0.0);
+        float3 positionError = float3(0.0);
+        const bool receiverValid = background || nwbLightSpaceReceiverPosition(receiverPixel, depth, position, positionError);
 #else
-    const int3 texel = int3(min(pixel * g_NwbLightSpacePush.receiverFactor, fullExtent - 1u), 0);
-    const bool background = nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.w).Load(texel).r >= NWB_SW_SHADOW_BACKGROUND_DEPTH;
-    const float3 position = nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.z).Load(texel).xyz;
-    const float3 positionError = float3(0.0);
+        const int3 texel = int3(min(pixel * g_NwbLightSpacePush.receiverFactor, fullExtent - 1u), 0);
+        const bool background = nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.w).Load(texel).r >= NWB_SW_SHADOW_BACKGROUND_DEPTH;
+        const float3 position = nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.z).Load(texel).xyz;
+        const float3 positionError = float3(0.0);
 #endif
-    const float3 normal = normalize(nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.y).Load(texel).xyz * 2.0 - 1.0);
-    const uint sampleCount = clamp(g_NwbLightSpacePush.sampleCount, 1u, NWB_SW_SHADOW_TRANSPARENT_SPP);
-    const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
-    for(uint index = 0u; index < lightCount; ++index){
-        const NwbSceneLight light = g_NwbSceneLights[index];
-        if(light.params.z < 0.0)
-            continue;
-        half3 result = half3(1.0h);
-        bool requiresFallback = false;
+        const float3 normal = normalize(nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.y).Load(texel).xyz * 2.0 - 1.0);
+        const uint sampleCount = clamp(g_NwbLightSpacePush.sampleCount, 1u, NWB_SW_SHADOW_TRANSPARENT_SPP);
+        const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
+        for(uint index = 0u; index < lightCount; ++index){
+            const NwbSceneLight light = g_NwbSceneLights[index];
+            if(light.params.z < 0.0)
+                continue;
+            half3 result = half3(1.0h);
+            bool requiresFallback = false;
 #if NWB_LIGHT_SPACE_CSG_ENABLED
-        if(!receiverValid){
-            result = half3(0.0h);
-            result = nwbCsgShadowRayFailure(NWB_CSG_RAY_FAILURE_UNSUPPORTED);
-        }
-        else
+            if(!receiverValid){
+                result = half3(0.0h);
+                result = nwbCsgShadowRayFailure(NWB_CSG_RAY_FAILURE_UNSUPPORTED);
+            }
+            else
 #endif
-        if(!background){
-            const float3 origin = position + normal * NWB_SHADOW_RAY_MIN_DISTANCE;
-            NwbLightSpaceView centerView;
-            float blockerDistance = 0.0;
-            bool mapReady = nwbLightSpaceFindView(index, origin, centerView);
-            const bool soft = light.params.y < NWB_SCENE_LIGHT_TYPE_DIRECTIONAL_MAX ? light.params2.x > 0.0 : light.params2.y > 0.0;
-            if(mapReady && soft)
-                mapReady = nwbLightSpaceBlockerDistance(index, origin, normal, positionError, light, centerView, blockerDistance);
-            result = half3(0.0h);
-            for(uint sample = 0u; sample < sampleCount; ++sample){
+            if(!background){
+                const float3 origin = position + normal * NWB_SHADOW_RAY_MIN_DISTANCE;
+                NwbLightSpaceView centerView;
+                float blockerDistance = 0.0;
+                bool mapReady = nwbLightSpaceFindView(index, origin, centerView);
+                const bool soft = light.params.y < NWB_SCENE_LIGHT_TYPE_DIRECTIONAL_MAX ? light.params2.x > 0.0 : light.params2.y > 0.0;
+                if(mapReady && soft)
+                    mapReady = nwbLightSpaceBlockerDistance(index, origin, normal, positionError, light, centerView, blockerDistance);
+                result = half3(0.0h);
+                for(uint sample = 0u; sample < sampleCount; ++sample){
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
-                const uint salt = NWB_SW_SHADOW_TRANSPARENT_JITTER_SALT;
+                    const uint salt = NWB_SW_SHADOW_TRANSPARENT_JITTER_SALT;
 #else
-                const uint salt = 0u;
+                    const uint salt = 0u;
 #endif
-                const float2 jitter = nwbShadowLowDiscrepancy2D(pixel, g_NwbLightSpacePush.frameIndex * NWB_SW_SHADOW_TRANSPARENT_SPP + sample + salt);
-                float3 direction;
-                float minimum;
-                float maximum;
-                half3 visibility = half3(1.0h);
-                if(nwbShadowBuildLightRay(position, normal, light, jitter, direction, minimum, maximum)){
-                    if(!mapReady || !nwbLightSpaceEvaluate(index, origin, normal, positionError, direction, blockerDistance, visibility)){
+                    const float2 jitter = nwbShadowLowDiscrepancy2D(pixel, g_NwbLightSpacePush.frameIndex * NWB_SW_SHADOW_TRANSPARENT_SPP + sample + salt);
+                    float3 direction;
+                    float minimum;
+                    float maximum;
+                    half3 visibility = half3(1.0h);
+                    if(nwbShadowBuildLightRay(position, normal, light, jitter, direction, minimum, maximum)){
+                        if(!mapReady || !nwbLightSpaceEvaluate(index, origin, normal, positionError, direction, blockerDistance, visibility)){
 #if NWB_LIGHT_SPACE_CSG_ENABLED && NWB_CSG_SHADOW_HW_TRACE
-                        if(nwbCsgShadowHardwareCompose())
-                            visibility = nwbCsgShadowRayVisibility(origin, direction, minimum, maximum);
-                        else
+                            if(nwbCsgShadowHardwareCompose())
+                                visibility = nwbCsgShadowRayVisibility(origin, direction, minimum, maximum);
+                            else
 #endif
-                        {
-                            requiresFallback = true;
-                            break;
+                            {
+                                requiresFallback = true;
+                                break;
+                            }
                         }
                     }
+                    result += visibility / half(sampleCount);
                 }
-                result += visibility / half(sampleCount);
+            }
+            const uint3 outputPixel = uint3(pixel, uint(light.params.z));
+#if NWB_LIGHT_SPACE_CSG_ENABLED && NWB_CSG_SHADOW_HW_TRACE
+            bool compose = nwbCsgShadowHardwareCompose();
+#if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
+            compose = compose && (g_NwbLightSpacePush.csgFlags & NWB_CSG_SHADOW_FLAG_NO_ORDINARY_TRANSPARENT) == 0u;
+#endif
+            if(compose)
+                result *= half3(nwbHeapStorageImage2DArrayFloat4(g_NwbLightSpacePush.outputSlot)[outputPixel].rgb);
+#endif
+            nwbHeapStorageImage2DArrayFloat4(g_NwbLightSpacePush.outputSlot)[outputPixel] = float4(result, requiresFallback ? 0.0 : 1.0);
+            if(requiresFallback)
+                anyRequiresFallback = true;
+        }
+    }
+    if(compactFallback){
+        GroupMemoryBarrierWithGroupSync();
+        const uint maskIndex = groupIndex >> 5u;
+        const uint bit = 1u << (groupIndex & 31u);
+        if(anyRequiresFallback)
+            InterlockedOr(g_NwbLightSpaceFallbackMasks[maskIndex], bit);
+        GroupMemoryBarrierWithGroupSync();
+        if(groupIndex == 0u){
+            const uint localCount = countbits(g_NwbLightSpaceFallbackMasks[0]) + countbits(g_NwbLightSpaceFallbackMasks[1]);
+            g_NwbLightSpaceFallbackBase = 0u;
+            if(localCount != 0u){
+                uint baseIndex = 0u;
+                g_NwbHeapStorageBuffers[g_NwbLightSpacePush.fallbackArgsSlot].InterlockedAdd(NWB_LIGHT_SPACE_FALLBACK_COUNT_OFFSET, localCount, baseIndex);
+                g_NwbLightSpaceFallbackBase = baseIndex;
+                const uint neededGroups = (baseIndex + localCount + NWB_LIGHT_SPACE_FALLBACK_GROUP_SIZE - 1u) / NWB_LIGHT_SPACE_FALLBACK_GROUP_SIZE;
+                uint previousGroups = 0u;
+                g_NwbHeapStorageBuffers[g_NwbLightSpacePush.fallbackArgsSlot].InterlockedMax(0u, neededGroups, previousGroups);
             }
         }
-        const uint3 outputPixel = uint3(pixel, uint(light.params.z));
-#if NWB_LIGHT_SPACE_CSG_ENABLED && NWB_CSG_SHADOW_HW_TRACE
-        bool compose = nwbCsgShadowHardwareCompose();
-#if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
-        compose = compose && (g_NwbLightSpacePush.csgFlags & NWB_CSG_SHADOW_FLAG_NO_ORDINARY_TRANSPARENT) == 0u;
-#endif
-        if(compose)
-            result *= half3(nwbHeapStorageImage2DArrayFloat4(g_NwbLightSpacePush.outputSlot)[outputPixel].rgb);
-#endif
-        nwbHeapStorageImage2DArrayFloat4(g_NwbLightSpacePush.outputSlot)[outputPixel] = float4(result, requiresFallback ? 0.0 : 1.0);
+        GroupMemoryBarrierWithGroupSync();
+        if(anyRequiresFallback){
+            const uint prefix = countbits(g_NwbLightSpaceFallbackMasks[maskIndex] & (bit - 1u)) + (maskIndex == 0u ? 0u : countbits(g_NwbLightSpaceFallbackMasks[0]));
+            const uint listIndex = g_NwbLightSpaceFallbackBase + prefix;
+            const uint packedPixel = (pixel.x & 0xffffu) | ((pixel.y & 0xffffu) << 16u);
+            g_NwbHeapStorageBuffers[g_NwbLightSpacePush.fallbackListSlot].Store(listIndex * NWB_LIGHT_SPACE_PIXEL_WORD_BYTES, packedPixel);
+        }
     }
 }
 

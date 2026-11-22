@@ -107,13 +107,20 @@ public:
     [[nodiscard]] b8 clearFeedbackCollectionScopes(const GpuTimingSampleSubscription& subscription);
     [[nodiscard]] Expected<GpuTimingSampleAttribution> allocateSampleAttribution()noexcept;
     [[nodiscard]] b8 collectionActive()const noexcept;
+    [[nodiscard]] b8 collectionActiveFast()const noexcept{ return m_collectionActiveAtomic.load(MemoryOrder::relaxed); }
     [[nodiscard]] GpuTimingRecorderStatistics statistics(const Device& device)const noexcept;
     void resetQueries();
     void collect(Device& device);
     void collect(Device& device, u64 publishFrameIndex);
     void beginFrame(u64 frameIndex)noexcept;
+    struct ScopeRequest{
+        Name scopeName = s_NameNone;
+        u32 queryCount = 0u;
+    };
+
     [[nodiscard]] b8 prepareScopeQueries(const Name& scopeName, Device& device, u32 queryCount);
     [[nodiscard]] b8 requestScopeQueries(const Name& scopeName, u32 queryCount);
+    [[nodiscard]] b8 requestScopeQueriesBatch(Span<const ScopeRequest> requests);
     [[nodiscard]] b8 prepareOverlapMetric(const Name& firstScope, const Name& secondScope, const Name& outputScope);
     [[nodiscard]] b8 preparePacketEnvelopeMetrics(
         u64 sourceFrameIndex,
@@ -122,6 +129,7 @@ public:
         Span<const GpuPacketEnvelopeMetricQueueOutput> queueOutputInputs
     );
     [[nodiscard]] b8 materializeRequestedQueries(Device& device);
+    [[nodiscard]] b8 resetDirtyQueriesOnHost(Device& device);
     void recordFrameReset(CommandList& commandList);
     void confirmFrameReset(const QueueSubmissionToken& token);
     void discardFrameReset()noexcept;
@@ -182,12 +190,18 @@ private:
     Atomic<u64> m_sampleSubscriptionIdentityLimit{ 0u };
     u64 m_performanceCaptureEpoch = 1u;
     u64 m_currentFrameIndex = 0u;
+    u64 m_feedbackDemandGeneration = 0u;
+    u64 m_syncedFeedbackDemandGeneration = Limit<u64>::s_Max;
+    u64 m_syncedSubscriptionIdentityLimit = 0u;
     GpuTimingRecorderStatistics m_statistics;
     u32 m_epoch = 1u;
     b8 m_pendingAttributionRetirements = false;
     b8 m_accumulatorsActive = false;
     b8 m_performanceCollectionActive = false;
     b8 m_enabled = false;
+    b8 m_syncedActiveStateValid = false;
+    b8 m_syncedPerformanceCollectionActive = false;
+    Atomic<b8> m_collectionActiveAtomic{ false };
 };
 
 

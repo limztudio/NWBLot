@@ -58,6 +58,7 @@ class Context : NoCopy{
     private usize m_popupDepth = 0u;
     private usize m_declarationCount = 0u;
     private usize m_stateClaimCount = 0u;
+    private WidgetState m_lastDeclaredState;
     private WidgetRoot m_root;
     private u64 m_frameGeneration = 0u;
     private u64 m_focusLossGeneration = 0u;
@@ -66,6 +67,7 @@ class Context : NoCopy{
     private u32 m_popupLayer = 0u;
     private b8 m_rootActive = false;
     private b8 m_failed = false;
+    private b8 m_rootPrunedThisFrame = false;
 
     [cpp_unwind]
     public Context(){
@@ -76,7 +78,7 @@ class Context : NoCopy{
         this.m_commitPopups.reserve(s_InputMaxPopups);
     }
     public b8 beginFrame(in u64 generation){
-        return TryBeginContextFrame(
+        if(!TryBeginContextFrame(
             generation,
             this.m_input.focusLossGeneration(),
             this.m_readyGeneration,
@@ -92,7 +94,11 @@ class Context : NoCopy{
             this.m_popupDepth,
             this.m_currentPopup,
             this.m_popupLayer
-        );
+        ))
+            return false;
+        this.m_lastDeclaredState = WidgetState();
+        this.m_rootPrunedThisFrame = false;
+        return true;
     }
     [cpp_unwind]
     public b8 beginRoot(in WidgetRoot root){
@@ -324,6 +330,7 @@ class Context : NoCopy{
         this.m_scopes.clear();
         this.m_frameGeneration = 0u;
         this.m_failed = false;
+        this.m_lastDeclaredState = WidgetState();
     }
     public void resetInput(){
         this.m_input.reset();
@@ -345,6 +352,8 @@ class Context : NoCopy{
         PrepareRetainedContextRoots(roots, this.m_retainedRoots, this.m_retainedRootCapacity);
         this.m_states.retainRoots(this.m_retainedRoots, this.m_retiredIds);
         if(!this.m_retiredIds.empty()){
+            this.m_lastDeclaredState = WidgetState();
+            this.m_rootPrunedThisFrame = true;
             this.m_input.invalidateTargets(Span<WidgetId>(this.m_retiredIds));
             this.m_states.finishRetirement();
         }
@@ -368,11 +377,15 @@ class Context : NoCopy{
             this.m_input.invalidateTarget(id);
         if(!state.has_value())
             this.fail();
-        else
+        else{
+            this.m_lastDeclaredState = state.value();
             ++this.m_declarationCount;
+        }
         return state;
     }
     private b8 currentDeclaration(in WidgetState state)const{
+        if(this.m_lastDeclaredState.id.valid() && state.id == this.m_lastDeclaredState.id)
+            return WidgetStateIndexPolicy().matchesDeclaration(this.m_rootActive, this.m_root, this.m_frameGeneration, state, this.m_lastDeclaredState);
         const Optional<in WidgetState> current = this.m_states.find(state.id);
         return current.has_value() && WidgetStateIndexPolicy().matchesDeclaration(this.m_rootActive, this.m_root, this.m_frameGeneration, state, current.value());
     }
@@ -380,8 +393,13 @@ class Context : NoCopy{
     private void retireUnseenStates(){
         if(this.m_frameGeneration == 0u)
             return;
+        if(!this.m_rootPrunedThisFrame && this.m_declarationCount == this.m_states.entries().size()){
+            this.m_retiredIds.clear();
+            return;
+        }
         this.m_states.retireUnseen(this.m_frameGeneration, this.m_retiredIds);
         if(!this.m_retiredIds.empty()){
+            this.m_lastDeclaredState = WidgetState();
             this.m_input.invalidateTargets(Span<WidgetId>(this.m_retiredIds));
             this.m_states.finishRetirement();
         }

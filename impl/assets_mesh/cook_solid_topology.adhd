@@ -154,6 +154,20 @@ b8 PrepareMeshTopologyEdges(
     return true;
 }
 
+void CompressMeshTopologyParents(mut Vector<u32> inOutParents){
+    for(u32 triangle = 0u; triangle < cast<u32>(inOutParents.size()); ++triangle){
+        u32 root = triangle;
+        while(inOutParents[cast<usize>(root)] != root)
+            root = inOutParents[cast<usize>(root)];
+        u32 current = triangle;
+        while(current != root){
+            const u32 next = inOutParents[cast<usize>(current)];
+            inOutParents[cast<usize>(current)] = root;
+            current = next;
+        }
+    }
+}
+
 void FinalizeMeshSolidTriangleWords(
     in Span<f32x3u> positions,
     in Span<u32> triangleIndices,
@@ -178,11 +192,13 @@ void FinalizeMeshSolidTriangleWords(
         first = end;
     }
 
+    CompressMeshTopologyParents(inOutParents);
+
     Vector<u8> invalidComponents;
     invalidComponents.resize(triangleCount, 0u);
     for(u32 triangle = 0u; triangle < cast<u32>(triangleCount); ++triangle){
         if(inOutInvalidTriangles[cast<usize>(triangle)] != 0u)
-            invalidComponents[cast<usize>(FindMeshTopologyComponent(triangle, inOutParents))] = 1u;
+            invalidComponents[cast<usize>(inOutParents[cast<usize>(triangle)])] = 1u;
     }
 
     Vector<f64> componentVolumes;
@@ -190,7 +206,7 @@ void FinalizeMeshSolidTriangleWords(
     u32 originComponent = u32.max;
     VectorDouble origin(0.0, 0.0, 0.0, 0.0);
     for(u32 triangle = 0u; triangle < cast<u32>(triangleCount); ++triangle){
-        const u32 component = FindMeshTopologyComponent(triangle, inOutParents);
+        const u32 component = inOutParents[cast<usize>(triangle)];
         if(invalidComponents[cast<usize>(component)] != 0u)
             continue;
         const usize base = cast<usize>(triangle) * cast<usize>(s_MeshletTriangleIndexCount);
@@ -213,10 +229,73 @@ void FinalizeMeshSolidTriangleWords(
     outWords.clear();
     outWords.resize(DivideUp(triangleCount, cast<usize>(s_MeshletSolidTriangleWordBits)), 0u);
     for(u32 triangle = 0u; triangle < cast<u32>(triangleCount); ++triangle){
-        const u32 component = FindMeshTopologyComponent(triangle, inOutParents);
+        const u32 component = inOutParents[cast<usize>(triangle)];
         if(invalidComponents[cast<usize>(component)] == 0u && componentVolumes[cast<usize>(component)] != 0.0)
             outWords[cast<usize>(triangle / s_MeshletSolidTriangleWordBits)] |= (1u << (triangle % s_MeshletSolidTriangleWordBits));
     }
+}
+
+void RadixSortTriangleEdges(mut Vector<TriangleEdge> inOutEdges, in u64 xorDiff){
+    const usize count = inOutEdges.size();
+    Vector<TriangleEdge> scratch;
+    scratch.resize(count);
+    Array<usize, 256u> counts;
+    b8 inScratch = false;
+    for(u32 pass = 0u; pass < 8u; ++pass){
+        const u32 shift = pass * 8u;
+        if(((xorDiff >> shift) & 0xffu) == 0u)
+            continue;
+        for(usize bucket = 0u; bucket < 256u; ++bucket)
+            counts[bucket] = 0u;
+        if(!inScratch){
+            for(in TriangleEdge edge : inOutEdges)
+                ++counts[cast<usize>((edge.positions >> shift) & 0xffu)];
+        }
+        else{
+            for(in TriangleEdge edge : scratch)
+                ++counts[cast<usize>((edge.positions >> shift) & 0xffu)];
+        }
+        usize runningOffset = 0u;
+        for(usize bucket = 0u; bucket < 256u; ++bucket){
+            const usize c = counts[bucket];
+            counts[bucket] = runningOffset;
+            runningOffset += c;
+        }
+        if(!inScratch){
+            for(in TriangleEdge edge : inOutEdges){
+                const usize bucket = cast<usize>((edge.positions >> shift) & 0xffu);
+                scratch[counts[bucket]++] = edge;
+            }
+        }
+        else{
+            for(in TriangleEdge edge : scratch){
+                const usize bucket = cast<usize>((edge.positions >> shift) & 0xffu);
+                inOutEdges[counts[bucket]++] = edge;
+            }
+        }
+        inScratch = !inScratch;
+    }
+    if(inScratch)
+        AssignTriviallyCopyableVector(inOutEdges, Span<TriangleEdge>(scratch));
+}
+
+void SortTriangleEdgesByPositions(mut Vector<TriangleEdge> inOutEdges){
+    const usize count = inOutEdges.size();
+    if(count < 256u){
+        SortSequence<TriangleEdge>(inOutEdges, lambda[](in TriangleEdge lhs, in TriangleEdge rhs) -> b8{
+            return lhs.positions < rhs.positions;
+        });
+        return;
+    }
+
+    u64 xorDiff = 0u;
+    const u64 firstKey = inOutEdges[0u].positions;
+    for(in TriangleEdge edge : inOutEdges)
+        xorDiff |= edge.positions ^ firstKey;
+    if(xorDiff == 0u)
+        return;
+
+    RadixSortTriangleEdges(inOutEdges, xorDiff);
 }
 
 b8 BuildSolidTriangleWordsInto(
@@ -230,9 +309,7 @@ b8 BuildSolidTriangleWordsInto(
     Vector<TriangleEdge> edges;
     if(!PrepareMeshTopologyEdges(positions, triangleIndices, parents, ranks, invalidTriangles, edges))
         return false;
-    SortSequence<TriangleEdge>(edges, lambda[](in TriangleEdge lhs, in TriangleEdge rhs) -> b8{
-        return lhs.positions < rhs.positions;
-    });
+    SortTriangleEdgesByPositions(edges);
     FinalizeMeshSolidTriangleWords(positions, triangleIndices, edges, parents, ranks, invalidTriangles, outWords);
     return true;
 }

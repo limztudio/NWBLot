@@ -588,6 +588,7 @@ public:
 private:
     [[nodiscard]] Expected<TaskReservation, CpuTaskAdmissionError::Enum> reserveTaskLocked();
     [[nodiscard]] Expected<TaskHandle, CpuTaskAdmissionError::Enum> submitTask(TaskFunction&& function, CpuTaskScope* scope, CpuTaskOptions options, const TaskHandle* dependencies, usize dependencyCount);
+    [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> submitRepeatedImpl(usize count, CpuTaskScope* scope, CpuTaskOptions options, NotNull<const void*> context, void(*construct)(NotNull<const void*>, TaskFunction&));
     [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> parallelRange(usize begin, usize end, usize grainSize, CpuTaskOptions options, NotNull<const void*> context, NotNull<RangeFunction> invoke, CpuTaskScope* callerScope = nullptr);
     [[nodiscard]] TaskMeta* resolveLocked(TaskHandle handle)noexcept;
     [[nodiscard]] const TaskMeta* resolveLocked(TaskHandle handle)const noexcept;
@@ -733,6 +734,26 @@ public:
     template<typename Func>
     Expected<TaskHandle, CpuTaskAdmissionError::Enum> submit(Func&& function, CpuTaskOptions options, const TaskHandle* dependencies, usize count){
         return m_scheduler.submitTask(CpuTaskScheduler::TaskFunction(Forward<Func>(function)), this, options, dependencies, count);
+    }
+
+    template<typename Func>
+    Expected<void, CpuTaskAdmissionError::Enum> submitRepeated(const usize count, const Func& function, const CpuTaskOptions options = {}){
+        if(count == 0u)
+            return {};
+        if(count == 1u){
+            const auto submitted = submit(function, options);
+            return submitted ? Expected<void, CpuTaskAdmissionError::Enum>{} : MakeUnexpected(submitted.error());
+        }
+        return m_scheduler.submitRepeatedImpl(
+            count,
+            this,
+            options,
+            MakeNotNull(&function),
+            [](const NotNull<const void*> rawContext, CpuTaskScheduler::TaskFunction& outFn){
+                const auto& fn = *static_cast<const Func*>(rawContext.get());
+                outFn = CpuTaskScheduler::TaskFunction(fn);
+            }
+        );
     }
 
 

@@ -211,6 +211,105 @@ Expected<ResourceStates::Mask> GpuInitialStateHandoffValidation::permanentTextur
     return result;
 }
 
+b8 GpuInitialStateHandoffValidation::hasExplicitTextureRange(Texture* const texture, const TextureSubresourceSet& range)const noexcept{
+    if(!texture || range.numMipLevels == 0u || range.numArraySlices == 0u)
+        return false;
+
+    const MipLevel mipEnd = range.baseMipLevel + range.numMipLevels;
+    const ArraySlice sliceEnd = range.baseArraySlice + range.numArraySlices;
+    if(m_textureIndex){
+        const Span<const usize> index(m_textureIndex->data(), m_textureIndex->size());
+        for(MipLevel mipLevel = range.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
+            usize begin = 0u;
+            usize end = index.size();
+            while(begin < end){
+                const usize middle = begin + (end - begin) / 2u;
+                const auto& entry = m_states.m_textureStates[index[middle]];
+                if(entry.texture != texture ? LessThan<Texture*>{}(entry.texture, texture) : (entry.mipLevel != mipLevel ? entry.mipLevel < mipLevel : entry.arraySlice < range.baseArraySlice))
+                    begin = middle + 1u;
+                else
+                    end = middle;
+            }
+            usize cursor = begin;
+            for(ArraySlice arraySlice = range.baseArraySlice; arraySlice < sliceEnd; ++arraySlice){
+                while(cursor < index.size()){
+                    const auto& entry = m_states.m_textureStates[index[cursor]];
+                    if(entry.texture != texture || entry.mipLevel != mipLevel || entry.arraySlice >= arraySlice)
+                        break;
+                    ++cursor;
+                }
+                b8 found = false;
+                while(cursor < index.size()){
+                    const auto& entry = m_states.m_textureStates[index[cursor]];
+                    if(entry.texture != texture || entry.mipLevel != mipLevel || entry.arraySlice != arraySlice)
+                        break;
+                    if(entry.state != ResourceStates::Unknown){
+                        found = true;
+                        break;
+                    }
+                    ++cursor;
+                }
+                if(!found)
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    for(ArraySlice arraySlice = range.baseArraySlice; arraySlice < sliceEnd; ++arraySlice){
+        for(MipLevel mipLevel = range.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
+            b8 found = false;
+            for(const CommandListResourceStateHandoff::TextureState& state : m_states.m_textureStates){
+                if(state.texture == texture && state.arraySlice == arraySlice && state.mipLevel == mipLevel && state.state != ResourceStates::Unknown){
+                    found = true;
+                    break;
+                }
+            }
+            if(!found)
+                return false;
+        }
+    }
+    return true;
+}
+
+b8 GpuInitialStateHandoffValidation::hasExplicitBufferRange(Buffer* const buffer, const BufferRange& range)const noexcept{
+    if(!buffer || !range.hasExtent())
+        return false;
+
+    if(m_bufferIndex){
+        const Span<const usize> index(m_bufferIndex->data(), m_bufferIndex->size());
+        usize begin = 0u;
+        usize end = index.size();
+        while(begin < end){
+            const usize middle = begin + (end - begin) / 2u;
+            const auto& entry = m_states.m_bufferStates[index[middle]];
+            if(LessThan<Buffer*>{}(entry.buffer, buffer))
+                begin = middle + 1u;
+            else
+                end = middle;
+        }
+        u64 coveredEnd = range.byteOffset;
+        const u64 targetEnd = range.end();
+        for(usize cursor = begin; cursor < index.size(); ++cursor){
+            const auto& entry = m_states.m_bufferStates[index[cursor]];
+            if(entry.buffer != buffer)
+                break;
+            if(entry.state == ResourceStates::Unknown)
+                continue;
+            if(entry.range.byteOffset > coveredEnd)
+                return false;
+            const u64 entryEnd = entry.range.end();
+            if(entryEnd > coveredEnd){
+                coveredEnd = entryEnd;
+                if(coveredEnd >= targetEnd)
+                    return true;
+            }
+        }
+        return coveredEnd >= targetEnd;
+    }
+    return false;
+}
+
 Expected<ResourceStates::Mask> GpuInitialStateHandoffValidation::permanentBufferState(Buffer* const buffer)const noexcept{
     ResourceStates::Mask result = ResourceStates::Unknown;
     if(m_permanentBuffersIndexed && buffer){

@@ -213,6 +213,8 @@ b8 GpuTimingRecorder::feedbackScopeDemandedLocked(const Name& scopeName)const no
 }
 
 void GpuTimingRecorder::addFeedbackScopeDemandsLocked(const Span<const Name> scopeNames)noexcept{
+    if(!scopeNames.empty())
+        AdvanceWrappingNonzero(m_feedbackDemandGeneration);
     for(const Name& scopeName : scopeNames){
         const usize demandIndex = findFeedbackScopeDemandLocked(scopeName);
         if(demandIndex != m_feedbackScopeDemands.size()){
@@ -225,6 +227,8 @@ void GpuTimingRecorder::addFeedbackScopeDemandsLocked(const Span<const Name> sco
 }
 
 void GpuTimingRecorder::removeFeedbackScopeDemandsLocked(const Span<const Name> scopeNames)noexcept{
+    if(!scopeNames.empty())
+        AdvanceWrappingNonzero(m_feedbackDemandGeneration);
     for(const Name& scopeName : scopeNames){
         const usize demandIndex = findFeedbackScopeDemandLocked(scopeName);
         FOUNDATION_ASSERT(demandIndex != m_feedbackScopeDemands.size());

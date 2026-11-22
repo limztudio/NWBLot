@@ -11,6 +11,9 @@
 
 #define NWB_CAUSTIC_TEMPORAL_DISABLED_PHASE_COUNT 1u
 #define NWB_CAUSTIC_TEMPORAL_PHASE_COUNT 2u
+#define NWB_CAUSTIC_SCENE_BOUNDS_INVALID 0u
+#define NWB_CAUSTIC_SCENE_BOUNDS_EXACT 1u
+#define NWB_CAUSTIC_SCENE_BOUNDS_APPROXIMATE 2u
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,6 +35,13 @@ struct NwbCausticPhotonPushConstants{
     uint materialContextSlotsHeapSlot;
     uint accumulatorStorageSlot;
     uint temporalPhaseCount;
+    float sceneBoundsMinX;
+    float sceneBoundsMinY;
+    float sceneBoundsMinZ;
+    float sceneBoundsMaxX;
+    float sceneBoundsMaxY;
+    float sceneBoundsMaxZ;
+    uint sceneBoundsFlags;
 };
 
 

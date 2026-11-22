@@ -70,9 +70,10 @@ bool nwbRefractionTryAssociateCapturedEntry(const uint instanceMaterialHeapSlot,
     const uint candidate = g_NwbRefractionPush.certifiedInstanceIndex;
     if(!entry.frontBoundary || candidate >= g_NwbRefractionMaterialContext.materialSlots.z || associationTolerance > NWB_REFRACTION_CERTIFIED_ASSOCIATION_MAX_TOLERANCE)
         return false;
-    if((nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[candidate].flags & NWB_REFRACTION_CERTIFIED_INSTANCE_MATERIAL_FLAGS) != NWB_REFRACTION_CERTIFIED_INSTANCE_MATERIAL_FLAGS)
+    const NwbRtInstanceMaterial candidateMaterial = nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[candidate];
+    if((candidateMaterial.flags & NWB_REFRACTION_CERTIFIED_INSTANCE_MATERIAL_FLAGS) != NWB_REFRACTION_CERTIFIED_INSTANCE_MATERIAL_FLAGS)
         return false;
-    const uint meshInstanceIndex = nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[candidate].meshInstanceIndex;
+    const uint meshInstanceIndex = candidateMaterial.meshInstanceIndex;
     if(g_NwbMeshInstances[meshInstanceIndex].entityId != entry.primaryEntityId)
         return false;
     const float minDistance = max(entryDistance - associationTolerance, entry.bias);
@@ -80,7 +81,7 @@ bool nwbRefractionTryAssociateCapturedEntry(const uint instanceMaterialHeapSlot,
     if(select(windowStartClip.w <= NWB_REFRACTION_MIN_CLIP_W, true, windowStartClip.z < 0.0))
         return false;
     primaryInstance = candidate;
-    primaryAttributeSlot = nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[candidate].attributeSlot;
+    primaryAttributeSlot = candidateMaterial.attributeSlot;
     return true;
 #endif
 }

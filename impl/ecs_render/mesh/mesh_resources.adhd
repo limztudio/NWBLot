@@ -156,8 +156,9 @@ b8 RendererMeshSystem::createMeshGeometryHeapHandles(mut MeshResources mesh){
     if(!registered)
         return false;
 
-    ForEachMeshSourceBindingSlot(lambda[mut mesh, in acquired](in u32 bindingSlot, in b8 rawView) -> void{
-        mesh.geometryHeapHandles[bindingSlot] = acquired[bindingSlot];
+    in Array<GpuDescriptorHandle, s_MeshInstanceGeometrySlotCount> acquiredRef = acquired;
+    ForEachMeshSourceBindingSlot(lambda[mut mesh, in acquiredRef](in u32 bindingSlot, in b8 rawView) -> void{
+        mesh.geometryHeapHandles[bindingSlot] = acquiredRef[bindingSlot];
     });
     retireAcquired.release();
     assert(GeometryHeapHandlesReady(mesh.geometryHeapHandles));

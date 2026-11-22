@@ -44,6 +44,35 @@ namespace NwbCacheLoadResult{
 };
 
 void CopyPairedSidecarRules(Vector<AssetPairedSidecarRule, ScratchArena>& outRules);
+[[nodiscard]] b8 ComputeNwbFileAssetCacheData(
+    const DiscoveredNwbFile& discoveredNwbFile,
+    AStringView metaText,
+    const Sha256Digest& producerDigest,
+    Span<const AssetPairedSidecarRule> pairedSidecarRules,
+    ScratchArena& scratchArena,
+    ScratchString& outSourcePathText,
+    ScratchString& outCacheFileName,
+    Sha256Digest& outParamSha256
+);
+void PopulateNwbFileAssetCacheRecord(
+    const Path& assetCacheDirectory,
+    AStringView sourcePathText,
+    AStringView cacheFileName,
+    const Sha256Digest& paramSha256,
+    b8 canUseCache,
+    NwbFileAssetCacheRecord& outRecord
+);
+void PrepareNwbFileAssetCacheRecord(
+    const Path& assetCacheDirectory,
+    const DiscoveredNwbFile& discoveredNwbFile,
+    AStringView metaText,
+    const Sha256Digest& producerDigest,
+    Span<const AssetPairedSidecarRule> pairedSidecarRules,
+    ScratchArena& scratchArena,
+    ScratchString& inOutSourcePathText,
+    ScratchString& inOutCacheFileName,
+    NwbFileAssetCacheRecord& outRecord
+);
 void PrepareNwbFileAssetCacheRecord(
     const Path& assetCacheDirectory,
     const DiscoveredNwbFile& discoveredNwbFile,

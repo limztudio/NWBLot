@@ -158,10 +158,11 @@ b8 GraphicsRuntime::prepareFramePreamble(){
         if(!m_gpuTiming.materializeRequestedQueries(device))
             NWB_LOGGER_WARNING(FOUNDATION_TEXT("GraphicsRuntime: failed to materialize one or more requested GPU-timing query pools"));
 
-        m_gpuTiming.discardFrameReset();
-        if(!GraphicsModuleDetail::FrameTimingResetGraph::Submit(*this, *m_standaloneGraphWorkspaces, m_gpuTiming)){
-            m_gpuTiming.discardFrameReset();
-            NWB_LOGGER_WARNING(FOUNDATION_TEXT("GraphicsRuntime: failed to submit the graph-owned frame GPU-timing reset packet"));
+        if(!m_gpuTiming.resetDirtyQueriesOnHost(device)){
+            if(!GraphicsModuleDetail::FrameTimingResetGraph::Submit(*this, *m_standaloneGraphWorkspaces, m_gpuTiming)){
+                m_gpuTiming.discardFrameReset();
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("GraphicsRuntime: failed to submit the graph-owned frame GPU-timing reset packet"));
+            }
         }
     }
 

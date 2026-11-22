@@ -185,7 +185,7 @@ class CausticPipelineSet : NoCopy{
     public b8 ensureCausticResolvePipeline();
     public b8 ensureCausticGeometryDownsamplePipeline();
     public b8 ensureCausticAccumulatorDecayPipeline();
-    public b8 ensureCausticRtPipeline();
+    public b8 ensureHwCausticPipeline();
 }
 
 

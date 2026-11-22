@@ -68,7 +68,11 @@ class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
     public RuntimeSkinPayloadScratch m_framePayloadScratch;
     public Vector<SkeletonJointMatrix> m_frameCachedPoseJoints;
     public HashMap<EntityID, CachedSkinningSkeletonPoseEntry> m_frameCachedPoses;
+    private Vector<GpuTaskId> m_frameUploadTasks;
     private b8 m_runtimeSetupReady = false;
+    private u64 m_runtimeTopologyGeneration = 1u;
+    private u64 m_acceptedSkinningStateTopologyGeneration = 0u;
+    private u64 m_cachedCacheTopologyGeneration = 0u;
 
     public MeshSkinningSystem(
         mut World world,
@@ -183,6 +187,7 @@ class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
             mut RuntimeMeshDirtyFlag dirtyFlags = instance.dirtyFlags;
             MarkRebuiltRuntimeMeshDirtyFlags(dirtyFlags);
             instance.dirtyFlags = dirtyFlags;
+            ++this.m_runtimeTopologyGeneration;
         }
         return true;
     }
@@ -218,7 +223,7 @@ class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
         this.m_frameResourceUsesScratch.clear();
         this.m_frameLiveBufferIndex.clear();
     }
-    private void pruneRuntimeResources();
+    private b8 pruneRuntimeResources();
     private void resolveFrameTaskGraphAttempt(in GpuCompiledGraphReadView planAccess){
         if(!planAccess.valid())
             return;

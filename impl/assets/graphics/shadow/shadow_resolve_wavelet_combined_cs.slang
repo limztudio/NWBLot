@@ -26,7 +26,7 @@ static const int NWB_COMBINED_SHADOW_WAVELET_TILE_SIDE = NWB_SHADOW_RESOLVE_GROU
 static const uint NWB_COMBINED_SHADOW_WAVELET_TILE_TEXELS = NWB_COMBINED_SHADOW_WAVELET_TILE_SIDE * NWB_COMBINED_SHADOW_WAVELET_TILE_SIDE;
 
 groupshared half4 g_NwbCombinedShadowWaveletVis[NWB_COMBINED_SHADOW_WAVELET_TILE_TEXELS];
-groupshared half2 g_NwbCombinedShadowWaveletNormal[NWB_COMBINED_SHADOW_WAVELET_TILE_TEXELS];
+groupshared half3 g_NwbCombinedShadowWaveletNormal[NWB_COMBINED_SHADOW_WAVELET_TILE_TEXELS];
 groupshared half g_NwbCombinedShadowWaveletDist[NWB_COMBINED_SHADOW_WAVELET_TILE_TEXELS];
 groupshared uint g_NwbCombinedShadowWaveletValid[NWB_COMBINED_SHADOW_WAVELET_TILE_TEXELS];
 groupshared uint g_NwbCombinedShadowWaveletNonLit;
@@ -132,7 +132,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         for(uint index = lane; index < tileTexels; index += threadCount){
             const int2 tap = tileOrigin + int2((int)(index % (uint)tileWidth), (int)(index / (uint)tileWidth));
             half4 visibility = half4(1.0h);
-            half2 normal = half2(0.0h);
+            half3 normal = half3(0.0h);
             half distance = half(0.0h);
             uint valid = 0u;
             if(tap.x >= 0 && tap.y >= 0 && tap.x < hw && tap.y < hh){
@@ -140,7 +140,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 if(geometry.w > half(NWB_SHADOW_GEOMETRY_VALID_THRESHOLD)){
                     visibility = nwbCombinedShadowWaveletVisibility(tap, slot);
                     nonLit = nonLit || any(visibility != half4(1.0h));
-                    normal = geometry.xy;
+                    normal = half3(nwbOctDecodeNormal(float2(geometry.xy)));
                     distance = geometry.z;
                     valid = 1u;
                 }
@@ -159,7 +159,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             else{
                 const uint centerIndex = (uint)((int(groupThreadID.y) + NWB_SHADOW_RESOLVE_KERNEL_RADIUS * step) * tileWidth + (int(groupThreadID.x) + NWB_SHADOW_RESOLVE_KERNEL_RADIUS * step));
                 const half4 center = g_NwbCombinedShadowWaveletVis[centerIndex];
+                const half centerRgbLum = nwbLuminance(center.yzw);
                 const float2 sigma = nwbCombinedShadowWaveletSigma(texel, slot);
+                const float invSigmaX = 1.0 / sigma.x;
+                const float invSigmaY = 1.0 / sigma.y;
                 float opaqueSum = 0.0;
                 float3 rgbSum = float3(0.0);
                 half opaqueWeightSum = half(0.0h);
@@ -171,13 +174,16 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                             continue;
                         const half4 tap = g_NwbCombinedShadowWaveletVis[index];
                         const float deltaDistance = float(g_NwbCombinedShadowWaveletDist[index]) - centerDistance;
-                        const half distanceWeight = half(exp(-deltaDistance * deltaDistance * invTwoSigmaDistanceSq));
-                        const float3 tapNormal = nwbOctDecodeNormal(float2(g_NwbCombinedShadowWaveletNormal[index]));
-                        const half normalWeight = half(pow(max(dot(centerNormal, tapNormal), 0.0h), NWB_SHADOW_RESOLVE_NORMAL_POWER));
-                        const half opaqueValueWeight = half(exp(-abs(tap.x - center.x) / half(sigma.x)));
-                        const half rgbValueWeight = half(exp(-abs(nwbLuminance(tap.yzw) - nwbLuminance(center.yzw)) / half(sigma.y)));
-                        const half opaqueWeight = NWB_SHADOW_RESOLVE_KERNEL[kx + NWB_SHADOW_RESOLVE_KERNEL_RADIUS] * NWB_SHADOW_RESOLVE_KERNEL[ky + NWB_SHADOW_RESOLVE_KERNEL_RADIUS] * distanceWeight * normalWeight * opaqueValueWeight;
-                        const half rgbWeight = NWB_SHADOW_RESOLVE_KERNEL[kx + NWB_SHADOW_RESOLVE_KERNEL_RADIUS] * NWB_SHADOW_RESOLVE_KERNEL[ky + NWB_SHADOW_RESOLVE_KERNEL_RADIUS] * distanceWeight * normalWeight * rgbValueWeight;
+                        const float distExp = -deltaDistance * deltaDistance * invTwoSigmaDistanceSq;
+                        const half c = half(max(dot(centerNormal, float3(g_NwbCombinedShadowWaveletNormal[index])), 0.0));
+                        const half c2 = c * c;
+                        const half c4 = c2 * c2;
+                        const half normalWeight = c4 * c4;
+                        const half opaqueExpWeight = half(exp(distExp - abs(float(tap.x - center.x)) * invSigmaX));
+                        const half rgbExpWeight = half(exp(distExp - abs(float(nwbLuminance(tap.yzw) - centerRgbLum)) * invSigmaY));
+                        const half baseWeight = NWB_SHADOW_RESOLVE_KERNEL[kx + NWB_SHADOW_RESOLVE_KERNEL_RADIUS] * NWB_SHADOW_RESOLVE_KERNEL[ky + NWB_SHADOW_RESOLVE_KERNEL_RADIUS] * normalWeight;
+                        const half opaqueWeight = baseWeight * opaqueExpWeight;
+                        const half rgbWeight = baseWeight * rgbExpWeight;
                         opaqueSum += float(opaqueWeight) * float(tap.x);
                         rgbSum += float(rgbWeight) * float3(tap.yzw);
                         opaqueWeightSum += opaqueWeight;

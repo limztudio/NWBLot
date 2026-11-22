@@ -167,6 +167,7 @@ private:
     [[nodiscard]] MStringView inferExprTypeNameFastPrefix(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
     [[nodiscard]] MStringView inferExprTypeNameFallbackSuffix(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
     [[nodiscard]] MStringView inferExprTypeName(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
+    [[nodiscard]] const TypeRef* inferExprTypeRefUncached(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
     [[nodiscard]] const TypeRef* inferExprTypeRef(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
     [[nodiscard]] MStringView inferExprBaseType(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope, const TypeRef** outTypeRef = nullptr)const noexcept;
 

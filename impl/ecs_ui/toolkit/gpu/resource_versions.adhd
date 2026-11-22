@@ -35,6 +35,7 @@ class GpuTextureImageVersion : NoCopy{
     public SharedImageSource m_source;
     public TextureGpuResource m_texture;
     public u64 m_lastUsedTick = 0u;
+    public b8 m_validated = false;
 
     public GpuTextureImageVersion(mut GraphicsRuntime graphics, in SharedImageSource source){
         this.m_graphics = graphics;
@@ -169,8 +170,9 @@ Expected<GpuVersion<GpuTargetVersion>> CreateGpuTarget(in SharedPool versions, m
     const GpuPhysicalQueueId queue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
     if(!queue.valid())
         return MakeUnexpected(Failure());
+    in GpuVersion<GpuTargetVersion> targetRef = target;
     const Expected<QueueSubmissionToken> submitted = graphics.standaloneGraph().submitStandaloneTaskGraph(
-        lambda[in target](mut GpuTaskGraph graph) -> Expected<GpuTaskId>{ return DeclareGpuTargetInitialization(target, graph); }, queue);
+        lambda[in targetRef](mut GpuTaskGraph graph) -> Expected<GpuTaskId>{ return DeclareGpuTargetInitialization(targetRef, graph); }, queue);
     if(!submitted.has_value())
         return MakeUnexpected(submitted.error());
     target.deref().m_readinessToken = submitted.value();

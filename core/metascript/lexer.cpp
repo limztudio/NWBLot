@@ -597,6 +597,86 @@ MChar Lexer::advance()noexcept{
     return c;
 }
 
+b8 Lexer::skipBalancedBraceBlock(usize& outBodyEndOffset, b8& outHasAngleBracket)noexcept{
+    outHasAngleBracket = false;
+    u32 depth = 1u;
+
+    while(!isAtEnd()){
+        const MChar c = peek();
+        if(c == ' ' || c == '\t' || c == '\r' || c == '\n'){
+            advance();
+            continue;
+        }
+        if(c == '/' && (peekNext() == '/' || peekNext() == '*')){
+            skipWhitespaceAndComments();
+            if(m_hasPendingError)
+                return false;
+            continue;
+        }
+        if(IsAsciiIdentifierStart(c)){
+            advance();
+            while(!isAtEnd() && IsAsciiIdentifierChar(peek()))
+                advance();
+            continue;
+        }
+        if(IsAsciiDigit(c)){
+            const Token numTok = readNumber();
+            if(numTok.type == TokenType::Error){
+                m_hasPendingError = true;
+                m_errorLine = numTok.line;
+                m_errorColumn = numTok.column;
+                m_errorMessage = numTok.text;
+                return false;
+            }
+            continue;
+        }
+        if(c == '"'){
+            const Token strTok = readString();
+            if(strTok.type == TokenType::Error){
+                m_hasPendingError = true;
+                m_errorLine = strTok.line;
+                m_errorColumn = strTok.column;
+                m_errorMessage = strTok.text;
+                return false;
+            }
+            continue;
+        }
+        if(c == '\''){
+            const Token chrTok = readCharLiteral();
+            if(chrTok.type == TokenType::Error){
+                m_hasPendingError = true;
+                m_errorLine = chrTok.line;
+                m_errorColumn = chrTok.column;
+                m_errorMessage = chrTok.text;
+                return false;
+            }
+            continue;
+        }
+        if(c == '<'){
+            outHasAngleBracket = true;
+            advance();
+            continue;
+        }
+        if(c == '{'){
+            ++depth;
+            advance();
+            continue;
+        }
+        if(c == '}'){
+            --depth;
+            advance();
+            if(depth == 0u){
+                outBodyEndOffset = m_current;
+                return true;
+            }
+            continue;
+        }
+        advance();
+    }
+
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

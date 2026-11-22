@@ -312,9 +312,10 @@ class GpuImageResources : NoCopy{
             in GpuVersion<GpuTextureImageVersion> existing = this.m_imageCache.textures()[index];
             if(existing.deref().m_source.deref().generation() != source.deref().generation())
                 continue;
-            if(!SameTextureImageKey(existing.deref().m_source.deref(), source.deref()) || !ValidGpuTextureImageVersion(existing.deref()))
+            if(!SameTextureImageKey(existing.deref().m_source.deref(), source.deref()) || (!existing.deref().m_validated && !ValidGpuTextureImageVersion(existing.deref())))
                 return MakeUnexpected(Failure());
             GpuVersion<GpuTextureImageVersion> reused = existing;
+            reused.deref().m_validated = true;
             reused.deref().m_lastUsedTick = this.m_imageCache.nextTick();
             return reused;
         }
@@ -329,6 +330,7 @@ class GpuImageResources : NoCopy{
             error("GpuRenderer: texture image {} has invalid GPU format, geometry, or readiness", source.deref().generation());
             return MakeUnexpected(Failure());
         }
+        version.deref().m_validated = true;
         version.deref().m_lastUsedTick = this.m_imageCache.nextTick();
         if(ShouldEvictGpuImageCacheBeforeInsert(this.m_imageCache.glyphs().size(), this.m_imageCache.sdfs().size(), this.m_imageCache.textures().size()))
             this.m_imageCache.evict();
@@ -472,7 +474,7 @@ Expected<GpuSampledGraphResources> DeclareGpuTextureImages(
     for(usize index = 0u; index < versions.size(); ++index){
         in GpuVersion<GpuTextureImageVersion> image = versions[index];
         in SharedImageSource source = snapshot.textureImages()[index];
-        if(!image.valid() || !source.valid() || !image.deref().m_source.valid() || !SameTextureImageKey(image.deref().m_source.deref(), source.deref()) || !ValidGpuTextureImageVersion(image.deref()))
+        if(!image.valid() || !source.valid() || !image.deref().m_source.valid() || !SameTextureImageKey(image.deref().m_source.deref(), source.deref()) || (!image.deref().m_validated && !ValidGpuTextureImageVersion(image.deref())))
             return MakeUnexpected(Failure());
         Name readyIdentity;
         Name textureIdentity;

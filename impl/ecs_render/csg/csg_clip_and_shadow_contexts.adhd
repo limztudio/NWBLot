@@ -165,14 +165,15 @@ Expected<CsgReceiverRangeGpuData> AppendCsgReceiverClipDataImpl(
     range.localBounds = bounds;
     range.firstCutter = cast<u32>(data.cutters.size());
     CsgFrameWorkRegion receiverRegion;
-    auto append = lambda[mut data, mut range, mut receiverRegion, in frameWidth, in frameHeight, in viewReady, in worldToClip](
+    in MatrixSingle worldToClipRef = worldToClip;
+    auto append = lambda[mut data, mut range, mut receiverRegion, in frameWidth, in frameHeight, in viewReady, in worldToClipRef](
         in CsgShapeTypeId shapeTypeId, in Name shaderModule, in u32 parameterByteSize, in MatrixSingle worldToShape, in Span<u8> parameters, in CsgClipWorkBounds work
     ) -> b8{
         if(data.cutters.size() >= cast<usize>(u32.max))
             return false;
         assert(parameters.size() == cast<usize>(parameterByteSize));
         assert(parameters.empty() || HasSpanStorage<u8>(parameters));
-        const CsgCutterGpuData gpu = BuildCsgReceiverCutterGpuDataAndExpandWorkRegion(shapeTypeId, worldToShape, parameters, work, viewReady, worldToClip, frameWidth, frameHeight, receiverRegion);
+        const CsgCutterGpuData gpu = BuildCsgReceiverCutterGpuDataAndExpandWorkRegion(shapeTypeId, worldToShape, parameters, work, viewReady, worldToClipRef, frameWidth, frameHeight, receiverRegion);
         data.cutters.push_back(gpu);
         ++range.cutterCount;
         return true;

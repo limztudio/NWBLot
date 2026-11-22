@@ -86,6 +86,15 @@ NwbGiGeometryHit nwbGiCsgGeometryHit(const uint contextSlot, const uint material
     }
     return geometry;
 }
+
+bool nwbGiCsgOccluded(const uint contextSlot, const uint materialSlot, const uint instanceIndex, const float3 origin, const float3 direction, const float minimum, const float maximum){
+    const NwbCsgRayBoundary boundary = nwbCsgRayResolveBoundary(contextSlot, materialSlot, instanceIndex, origin, direction, minimum, maximum).boundary;
+    if(boundary.failure != 0u){
+        nwbGiReportGeometryFailure(boundary.failure);
+        return true;
+    }
+    return boundary.hit;
+}
 #endif
 
 NwbGiTraceHit nwbGiReconstructHit(const NwbGiGeometryHit geometry, const uint materialSlot, const float3x4 worldToObject, const float3 origin, const float3 direction){

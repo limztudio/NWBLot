@@ -47,7 +47,7 @@ bool nwbSurfelGatherField(const float3 worldPosition, const float3 normal, const
     const float radiusSq = radius * radius;
     const float invRadius = 1.0 / radius;
     const half invFullConf = half(1.0 / NWB_SURFEL_GATHER_FULL_CONFIDENCE_SAMPLE_COUNT);
-    const half4 shBasis = nwbSurfelShBasis(half3(normal));
+    const half4 shBasis = nwbSurfelShReconstructionBasis(half3(normal));
     const float3 biasedPosition = worldPosition + normal * normalBias;
 
     half3 irradianceSum = half3(0.0h);
@@ -55,42 +55,58 @@ bool nwbSurfelGatherField(const float3 worldPosition, const float3 normal, const
     const int3 baseCell = nwbSurfelCellCoord(biasedPosition, safeCellSize);
     const int3 minCell = max(nwbSurfelCellCoord(biasedPosition - float3(radius), safeCellSize), baseCell - int3(NWB_SURFEL_GATHER_CELL_EXTENT));
     const int3 maxCell = min(nwbSurfelCellCoord(biasedPosition + float3(radius), safeCellSize), baseCell + int3(NWB_SURFEL_GATHER_CELL_EXTENT));
-    for(int cz = minCell.z; cz <= maxCell.z; ++cz)
-    for(int cy = minCell.y; cy <= maxCell.y; ++cy){
-        for(int cx = minCell.x; cx <= maxCell.x; ++cx){
-            const int3 cell = int3(cx, cy, cz);
-            const float3 cellMin = float3(cell) * safeCellSize;
-            const float3 cellMax = cellMin + safeCellSize;
-            const float3 cellDelta = biasedPosition - clamp(biasedPosition, cellMin, cellMax);
-            if(dot(cellDelta, cellDelta) >= radiusSq)
-                continue;
+    for(int cz = minCell.z; cz <= maxCell.z; ++cz){
+        const float minZ = float(cz) * safeCellSize;
+        const float maxZ = minZ + safeCellSize;
+        const float dz = biasedPosition.z - clamp(biasedPosition.z, minZ, maxZ);
+        const float dzSq = dz * dz;
+        if(dzSq >= radiusSq)
+            continue;
+        const uint hashZ = uint(cz) * NWB_SURFEL_HASH_PRIME_Z;
 
-            const uint bucket = nwbSurfelHashCell(cell, cellCount);
-            uint id = NWB_SURFEL_GATHER_FIELD_CELL_HEAD[bucket];
-            uint walk = 0u;
-            [loop] while(NWB_SURFEL_GATHER_FIELD_INDEX_VALID(id, poolCapacity) && walk < NWB_SURFEL_MAX_WALK){
-                const NwbSurfel candidate = NWB_SURFEL_GATHER_FIELD_POOL[id];
-                const uint nextInCell = candidate.nextInCell;
-                const uint sampleState = candidate.sampleState;
-                const uint sampleCount = nwbSurfelSampleCount(sampleState);
-                if(nwbSurfelIsAlive(sampleState) && sampleCount != 0u){
-                    const half normalWeight = half(saturate(dot(normal, candidate.normal)));
-                    if(normalWeight > half(0.0h) && nwbSurfelSameCell(candidate.cell, cell)){
-                        const float3 delta = biasedPosition - candidate.position;
-                        const float distSq = dot(delta, delta);
-                        if(distSq < radiusSq){
-                            const half distanceWeight = half(saturate(1.0 - sqrt(distSq) * invRadius));
-                            const half confidence = saturate(half(sampleCount) * invFullConf);
-                            const half weight = normalWeight * distanceWeight * confidence;
-                            if(weight > half(0.0h)){
-                                irradianceSum += nwbSurfelShReconstructWithBasis(half4(candidate.shR), half4(candidate.shG), half4(candidate.shB), shBasis) * weight;
-                                totalWeight += weight;
+        for(int cy = minCell.y; cy <= maxCell.y; ++cy){
+            const float minY = float(cy) * safeCellSize;
+            const float maxY = minY + safeCellSize;
+            const float dy = biasedPosition.y - clamp(biasedPosition.y, minY, maxY);
+            const float dyzSq = dzSq + dy * dy;
+            if(dyzSq >= radiusSq)
+                continue;
+            const uint hashYZ = (uint(cy) * NWB_SURFEL_HASH_PRIME_Y) ^ hashZ;
+
+            for(int cx = minCell.x; cx <= maxCell.x; ++cx){
+                const float minX = float(cx) * safeCellSize;
+                const float maxX = minX + safeCellSize;
+                const float dx = biasedPosition.x - clamp(biasedPosition.x, minX, maxX);
+                if(dyzSq + dx * dx >= radiusSq)
+                    continue;
+
+                const int3 cell = int3(cx, cy, cz);
+                const uint bucket = (hashYZ ^ (uint(cx) * NWB_SURFEL_HASH_PRIME_X)) & (cellCount - 1u);
+                uint id = NWB_SURFEL_GATHER_FIELD_CELL_HEAD[bucket];
+                uint walk = 0u;
+                [loop] while(NWB_SURFEL_GATHER_FIELD_INDEX_VALID(id, poolCapacity) && walk < NWB_SURFEL_MAX_WALK){
+                    const uint nextInCell = NWB_SURFEL_GATHER_FIELD_POOL[id].nextInCell;
+                    const uint sampleState = NWB_SURFEL_GATHER_FIELD_POOL[id].sampleState;
+                    const uint sampleCount = nwbSurfelSampleCount(sampleState);
+                    if(nwbSurfelIsAlive(sampleState) && sampleCount != 0u){
+                        const half normalWeight = half(saturate(dot(normal, NWB_SURFEL_GATHER_FIELD_POOL[id].normal)));
+                        if(normalWeight > half(0.0h) && nwbSurfelSameCell(NWB_SURFEL_GATHER_FIELD_POOL[id].cell, cell)){
+                            const float3 delta = biasedPosition - NWB_SURFEL_GATHER_FIELD_POOL[id].position;
+                            const float distSq = dot(delta, delta);
+                            if(distSq < radiusSq){
+                                const half distanceWeight = half(saturate(1.0 - sqrt(distSq) * invRadius));
+                                const half confidence = saturate(half(sampleCount) * invFullConf);
+                                const half weight = normalWeight * distanceWeight * confidence;
+                                if(weight > half(0.0h)){
+                                    irradianceSum += nwbSurfelShReconstructWithScaledBasis(half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shR), half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shG), half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shB), shBasis) * weight;
+                                    totalWeight += weight;
+                                }
                             }
                         }
                     }
+                    id = nextInCell;
+                    ++walk;
                 }
-                id = nextInCell;
-                ++walk;
             }
         }
     }

@@ -141,6 +141,9 @@ void CollectAssignedThisMembers(const Span<const Stmt* const> stmts, MVector<MSt
 
 
 b8 TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& errors){
+    if(iface.isImported || iface.isExtern)
+        return true;
+
     MethodDecl ifaceScope(m_arena);
     ifaceScope.templateParams = iface.templateParams;
     MVector<MethodDecl*> inheritedMethods(m_arena);
@@ -493,6 +496,79 @@ b8 TypeChecker::hasFieldInlineOrAutoDefault(const ClassDecl& classDecl, const Fi
 }
 
 b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors){
+    if(classDecl.isExtern)
+        return true;
+    if(classDecl.isImported){
+        b8 ok = true;
+        if(!classDecl.systemTypeName.empty()){
+            for(MethodDecl* m : classDecl.methods){
+                if(!m->isConstructor && !m->isDestructor && m->templateParams.empty() && ContractSemantics::IsAutoOverrideMethod(ClassRoleKind::System, m->name))
+                    m->isOverride = true;
+            }
+        }
+        for(FieldDecl* field : classDecl.fields){
+            if(!field)
+                continue;
+            if(TypeRef* targetFuncType = TypeResolver(m_symbols).extractUnderlyingFuncType(field->type); targetFuncType && field->defaultExpr && field->defaultExpr->kind == ExprKind::Lambda){
+                if(!field->defaultExpr->lambdaCaptures.empty() && targetFuncType->inferredCaptureBytes < s_InferredLambdaCaptureBytes)
+                    targetFuncType->inferredCaptureBytes = s_InferredLambdaCaptureBytes;
+            }
+        }
+        for(MethodDecl* m : classDecl.methods){
+            if(!m)
+                continue;
+            const b8 isLocalMethod = !m->isImported && !m->isExtern && m->hasBody;
+            if(m->isOverride && m->templateParams.empty() && (classDecl.isExtensible || isLocalMethod)){
+                if(classDecl.concreteBase){
+                    const usize arity = m->params.size();
+                    const MethodDecl* inherited = m_symbols.findClassMethod(*classDecl.concreteBase, m->name, &arity, m->isConst);
+                    if(inherited && inherited->isOverride && m->isConst == inherited->isConst
+                        && TypeComparator(m_symbols).areEquivalent(m->returnType, inherited->returnType)
+                        && TypeComparator(m_symbols).doParamListsMatchWithSubst(m->params, inherited->params, {}, {})){
+                        for(usize index = 0u; index < arity; ++index)
+                            m->params[index].cppConstReference |= inherited->params[index].cppConstReference;
+                    }
+                }
+                for(const TypeRef* baseType : classDecl.implementedInterfaces){
+                    if(!baseType)
+                        continue;
+                    const MStringView baseName = m_symbols.resolveBaseTypeName(baseType->name);
+                    if(const ClassDecl* sdk = m_symbols.findClass(baseName); sdk && sdk->isExtern && sdk->isPolymorphicBase){
+                        for(const MethodDecl* candidate : sdk->methods){
+                            if(candidate->name != m->name || candidate->isConst != m->isConst
+                                || !TypeComparator(m_symbols).areEquivalent(m->returnType, candidate->returnType)
+                                || !TypeComparator(m_symbols).doParamListsMatchWithSubst(m->params, candidate->params, {}, {}))
+                                continue;
+                            for(usize pi = 0u; pi < m->params.size(); ++pi)
+                                m->params[pi].cppConstReference |= candidate->params[pi].cppConstReference;
+                            break;
+                        }
+                        continue;
+                    }
+                    const auto* signature = FindBuiltinReceiverSignature(baseName, m->name);
+                    if(!signature || signature->arity != m->params.size())
+                        continue;
+                    for(usize pi = 0u; pi < m->params.size(); ++pi)
+                        m->params[pi].cppConstReference |= (signature->cppConstReferenceMask & (1u << pi)) != 0u;
+                }
+            }
+            if(!isLocalMethod)
+                continue;
+            if(m->isConstructor && !checkConstructorInitialization(classDecl, *m, errors))
+                ok = false;
+            if(!checkCallableSignature(&classDecl, *m, errors))
+                ok = false;
+            const b8 prevRecordHeaders = m_recordGlobalHeaders;
+            m_recordGlobalHeaders = true;
+            if(!m_parallelValidator.validateMethod(*m, errors))
+                ok = false;
+            if(!checkMethodBody(&classDecl, *m, errors))
+                ok = false;
+            m_recordGlobalHeaders = prevRecordHeaders;
+        }
+        return ok;
+    }
+
     b8 ok = checkTemplateParamBounds(classDecl.templateParams, &classDecl, nullptr, errors);
     if((classDecl.isExtensible || classDecl.concreteBase) && (classDecl.isExtern || !classDecl.templateParams.empty() || classDecl.isSerialize
         || classDecl.isReflect || classDecl.recordAlignment || classDecl.isMoveOnly || !classDecl.assetTypeName.empty()

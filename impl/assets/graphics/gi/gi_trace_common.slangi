@@ -50,6 +50,11 @@ half3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
     const float3 facingNormal = dot(normal, rayDir) < 0.0 ? normal : -normal;
 
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
+#if NWB_GI_HIT_SHADOW_RAYS
+    half bestNdotl = half(0.0h);
+    float3 dominantLightDir = float3(0.0, 1.0, 0.0);
+    uint dominantLightIndex = NWB_GI_INVALID_LIGHT_INDEX;
+#endif
     for(uint i = 0u; i < lightCount; ++i){
         const NwbSceneLight light = g_NwbSceneLights[i];
         float3 lightVector;
@@ -59,42 +64,30 @@ half3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
             continue;
         const half ndotl = half(max(dot(facingNormal, lightVector), 0.0h));
         irradiance += lightRadiance * ndotl;
+#if NWB_GI_HIT_SHADOW_RAYS
+        if(ndotl > bestNdotl){
+            bestNdotl = ndotl;
+            dominantLightDir = lightVector;
+            dominantLightIndex = i;
+        }
+#endif
     }
 
 #if NWB_GI_HIT_SHADOW_RAYS
-    {
-        half bestNdotl = half(0.0h);
-        float3 dominantLightDir = float3(0.0, 1.0, 0.0);
-        uint dominantLightIndex = NWB_GI_INVALID_LIGHT_INDEX;
-        for(uint i = 0u; i < lightCount; ++i){
-            const NwbSceneLight light = g_NwbSceneLights[i];
-            float3 lv;
-            half3 lr;
-            nwbSceneResolveLight(light, hit.worldPos, lv, lr);
-            if(all(lr <= half3(0.0h)))
-                continue;
-            const half ndotl = half(max(dot(facingNormal, lv), 0.0h));
-            if(ndotl > bestNdotl){
-                bestNdotl = ndotl;
-                dominantLightDir = lv;
-                dominantLightIndex = i;
-            }
+    if(dominantLightIndex != NWB_GI_INVALID_LIGHT_INDEX && bestNdotl > half(0.0h)){
+        const float3 shadowOrigin = hit.worldPos + facingNormal * NWB_GI_TRACE_RAY_MIN_DISTANCE;
+        float shadowMaximum = NWB_GI_TRACE_RAY_MAX_DISTANCE;
+        const NwbSceneLight dominantLight = g_NwbSceneLights[dominantLightIndex];
+        if(dominantLight.params.y >= NWB_SCENE_LIGHT_TYPE_DIRECTIONAL_MAX){
+            const float3 toLight = dominantLight.position.xyz - shadowOrigin;
+            const float distance = length(toLight);
+            shadowMaximum = min(shadowMaximum, distance - NWB_GI_TRACE_RAY_MIN_DISTANCE);
+            if(distance > 0.0)
+                dominantLightDir = toLight / distance;
         }
-        if(dominantLightIndex != NWB_GI_INVALID_LIGHT_INDEX && bestNdotl > half(0.0h)){
-            const float3 shadowOrigin = hit.worldPos + facingNormal * NWB_GI_TRACE_RAY_MIN_DISTANCE;
-            float shadowMaximum = NWB_GI_TRACE_RAY_MAX_DISTANCE;
-            const NwbSceneLight dominantLight = g_NwbSceneLights[dominantLightIndex];
-            if(dominantLight.params.y >= NWB_SCENE_LIGHT_TYPE_DIRECTIONAL_MAX){
-                const float3 toLight = dominantLight.position.xyz - shadowOrigin;
-                const float distance = length(toLight);
-                shadowMaximum = min(shadowMaximum, distance - NWB_GI_TRACE_RAY_MIN_DISTANCE);
-                if(distance > 0.0)
-                    dominantLightDir = toLight / distance;
-            }
-            const bool occluded = shadowMaximum > NWB_GI_TRACE_RAY_MIN_DISTANCE && nwbGiTraceOccluded(shadowOrigin, dominantLightDir, NWB_GI_TRACE_RAY_MIN_DISTANCE, shadowMaximum);
-            if(occluded)
-                irradiance *= 0.0h;
-        }
+        const bool occluded = shadowMaximum > NWB_GI_TRACE_RAY_MIN_DISTANCE && nwbGiTraceOccluded(shadowOrigin, dominantLightDir, NWB_GI_TRACE_RAY_MIN_DISTANCE, shadowMaximum);
+        if(occluded)
+            irradiance *= 0.0h;
     }
 #endif
 

@@ -13,6 +13,20 @@ class CpuContactSlotRef{
     public u32 index = 0u;
 }
 
+class BulletToiQueryResult{
+    public b8 found = false;
+    public f32 bestT = 1.0f;
+    public f32 bestRestitution = -1.0f;
+    public u32 awakeIdx = s_NullIndex;
+    public u32 bodyIdA = s_NullIndex;
+    public u32 bestShapeIdxA = s_NullIndex;
+    public u32 bestShapeIdxB = s_NullIndex;
+    public f32x4 bestNormal(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32x4 bestPoint(0.0f, 0.0f, 0.0f, 0.0f);
+    public Sweep3D sweepA;
+    public Sweep3D bestSweepB;
+}
+
 class PhysicsWorldCpuScratch{
     public Vector<u64> candidateKeys;
     public Vector<u32> activeContactIds;
@@ -57,6 +71,15 @@ class PhysicsWorldCpuScratch{
     public Vector<usize> parCompOrder;
     public Vector<Vector<usize>> parBuckets;
     public Vector<u64> parBucketLoads;
+    public Vector<u64> parCrossIslandEdges;
+    public Vector<u8> parContactCollectFlags;
+    public Array<Vector<u8>, s_GraphColorCount> parContactHitFlags;
+    public Vector<u8> parJointBreakFlags;
+    public b8 parImpulsesStored = false;
+    public Vector<u32> parBulletBodyIndices;
+    public Vector<BulletToiQueryResult> parBulletResults;
+    public Vector<u8> parBodyFinalizeFlags;
+    public Vector<u8> parBodyKeepEnlargedFlags;
 
     public void clear(){
         this.candidateKeys.clear();
@@ -105,6 +128,16 @@ class PhysicsWorldCpuScratch{
         for(usize b = 0u; b < this.parBuckets.size(); ++b)
             this.parBuckets[b].clear();
         this.parBucketLoads.clear();
+        this.parCrossIslandEdges.clear();
+        this.parContactCollectFlags.clear();
+        for(usize c = 0u; c < s_GraphColorCount; ++c)
+            this.parContactHitFlags[c].clear();
+        this.parJointBreakFlags.clear();
+        this.parImpulsesStored = false;
+        this.parBulletBodyIndices.clear();
+        this.parBulletResults.clear();
+        this.parBodyFinalizeFlags.clear();
+        this.parBodyKeepEnlargedFlags.clear();
     }
 }
 
@@ -3245,18 +3278,19 @@ class PhysicsWorld{
         best.hit = false;
 
         const u32 queryMask = this.broadPhaseQueryMask(input.filter);
+        in RayCastInput inputRef = input;
         for(usize t = 0u; t < s_TreeCount; ++t){
             this.m_broadPhase.trees[t].rayCast(
                 origin,
                 translation,
                 queryMask,
-                lambda[in this, in input, in origin, in translation, mut best](in u32 proxyId, in u32 shapeIdx, in f32 maxFraction) -> f32{
+                lambda[in this, in inputRef, in origin, in translation, mut best](in u32 proxyId, in u32 shapeIdx, in f32 maxFraction) -> f32{
                     if(shapeIdx >= this.m_shapes.size() || !this.m_shapes[shapeIdx].alive())
                         return maxFraction;
                     in Shape shape = this.m_shapes[shapeIdx];
-                    if(shape.isSensor() && !input.hitSensors)
+                    if(shape.isSensor() && !inputRef.hitSensors)
                         return maxFraction;
-                    if(!ShouldCollideFilters(input.filter, shape.filter))
+                    if(!ShouldCollideFilters(inputRef.filter, shape.filter))
                         return maxFraction;
 
                     in Body body = this.m_bodies[shape.bodyId];
@@ -3297,18 +3331,19 @@ class PhysicsWorld{
             return;
 
         const u32 queryMask = this.broadPhaseQueryMask(input.filter);
+        in RayCastInput inputRef = input;
         for(usize t = 0u; t < s_TreeCount; ++t){
             this.m_broadPhase.trees[t].rayCast(
                 origin,
                 translation,
                 queryMask,
-                lambda[in this, in input, in origin, in translation, mut outHits](in u32 proxyId, in u32 shapeIdx, in f32 maxFraction) -> f32{
+                lambda[in this, in inputRef, in origin, in translation, mut outHits](in u32 proxyId, in u32 shapeIdx, in f32 maxFraction) -> f32{
                     if(shapeIdx >= this.m_shapes.size() || !this.m_shapes[shapeIdx].alive())
                         return maxFraction;
                     in Shape shape = this.m_shapes[shapeIdx];
-                    if(shape.isSensor() && !input.hitSensors)
+                    if(shape.isSensor() && !inputRef.hitSensors)
                         return maxFraction;
-                    if(!ShouldCollideFilters(input.filter, shape.filter))
+                    if(!ShouldCollideFilters(inputRef.filter, shape.filter))
                         return maxFraction;
 
                     in Body body = this.m_bodies[shape.bodyId];
@@ -3345,19 +3380,21 @@ class PhysicsWorld{
     public void overlapAabb(in Aabb3D queryBox, in Filter filter, in b8 hitSensors, mut Vector<ShapeId> outShapes)const{
         outShapes.clear();
         const u32 queryMask = this.broadPhaseQueryMask(filter);
+        in Aabb3D queryBoxRef = queryBox;
+        in Filter filterRef = filter;
         for(usize t = 0u; t < s_TreeCount; ++t){
             this.m_broadPhase.trees[t].queryAabb(
                 queryBox,
                 queryMask,
-                lambda[in this, in queryBox, in filter, in hitSensors, mut outShapes](in u32 proxyId, in u32 shapeIdx) -> b8{
+                lambda[in this, in queryBoxRef, in filterRef, in hitSensors, mut outShapes](in u32 proxyId, in u32 shapeIdx) -> b8{
                     if(shapeIdx >= this.m_shapes.size() || !this.m_shapes[shapeIdx].alive())
                         return true;
                     in Shape shape = this.m_shapes[shapeIdx];
                     if(shape.isSensor() && !hitSensors)
                         return true;
-                    if(!ShouldCollideFilters(filter, shape.filter))
+                    if(!ShouldCollideFilters(filterRef, shape.filter))
                         return true;
-                    if(AabbOverlaps(shape.aabb, queryBox))
+                    if(AabbOverlaps(shape.aabb, queryBoxRef))
                         outShapes.push_back(this.makeShapeId(shapeIdx));
                     return true;
                 }
@@ -3390,30 +3427,32 @@ class PhysicsWorld{
         best.hit = false;
 
         const u32 queryMask = this.broadPhaseQueryMask(input.filter);
+        in ShapeProxy effectiveProxyRef = effectiveProxy;
+        in ShapeCastInput inputRef = input;
         for(usize t = 0u; t < s_TreeCount; ++t){
             this.m_broadPhase.trees[t].queryAabb(
                 sweepBox,
                 queryMask,
-                lambda[in this, in effectiveProxy, in input, in trans, mut best](in u32 proxyId, in u32 shapeIdx) -> b8{
+                lambda[in this, in effectiveProxyRef, in inputRef, in trans, mut best](in u32 proxyId, in u32 shapeIdx) -> b8{
                     if(shapeIdx >= this.m_shapes.size() || !this.m_shapes[shapeIdx].alive())
                         return true;
                     in Shape shape = this.m_shapes[shapeIdx];
-                    if(shape.isSensor() && !input.hitSensors)
+                    if(shape.isSensor() && !inputRef.hitSensors)
                         return true;
-                    if(!ShouldCollideFilters(input.filter, shape.filter))
+                    if(!ShouldCollideFilters(inputRef.filter, shape.filter))
                         return true;
 
                     in Body body = this.m_bodies[shape.bodyId];
                     in Transform3D xfB = this.m_solverSets[body.setIndex].sims[body.localIndex].transform;
                     LocalRayHit castHit;
                     if(shape.type == ShapeType::Mesh){
-                        castHit = ShapeCastMesh(effectiveProxy, input.originTransform, trans, this.m_meshShapes[shape.geometryIndex], xfB, best.fraction);
+                        castHit = ShapeCastMesh(effectiveProxyRef, inputRef.originTransform, trans, this.m_meshShapes[shape.geometryIndex], xfB, best.fraction);
                     }
                     else{
                         const ShapeProxy targetProxy = MakeShapeProxyFromShape(shape, this.m_hullShapes, this.m_meshShapes);
                         castHit = ShapeCastProxies(
-                            effectiveProxy,
-                            input.originTransform,
+                            effectiveProxyRef,
+                            inputRef.originTransform,
                             trans,
                             targetProxy,
                             xfB,
@@ -3458,30 +3497,32 @@ class PhysicsWorld{
         effectiveProxy.radius += input.radius;
 
         const u32 queryMask = this.broadPhaseQueryMask(input.filter);
+        in ShapeProxy effectiveProxyRef = effectiveProxy;
+        in ShapeCastInput inputRef = input;
         for(usize t = 0u; t < s_TreeCount; ++t){
             this.m_broadPhase.trees[t].queryAabb(
                 sweepBox,
                 queryMask,
-                lambda[in this, in effectiveProxy, in input, in trans, mut outHits](in u32 proxyId, in u32 shapeIdx) -> b8{
+                lambda[in this, in effectiveProxyRef, in inputRef, in trans, mut outHits](in u32 proxyId, in u32 shapeIdx) -> b8{
                     if(shapeIdx >= this.m_shapes.size() || !this.m_shapes[shapeIdx].alive())
                         return true;
                     in Shape shape = this.m_shapes[shapeIdx];
-                    if(shape.isSensor() && !input.hitSensors)
+                    if(shape.isSensor() && !inputRef.hitSensors)
                         return true;
-                    if(!ShouldCollideFilters(input.filter, shape.filter))
+                    if(!ShouldCollideFilters(inputRef.filter, shape.filter))
                         return true;
 
                     in Body body = this.m_bodies[shape.bodyId];
                     in Transform3D xfB = this.m_solverSets[body.setIndex].sims[body.localIndex].transform;
                     LocalRayHit castHit;
                     if(shape.type == ShapeType::Mesh){
-                        castHit = ShapeCastMesh(effectiveProxy, input.originTransform, trans, this.m_meshShapes[shape.geometryIndex], xfB, 1.0f);
+                        castHit = ShapeCastMesh(effectiveProxyRef, inputRef.originTransform, trans, this.m_meshShapes[shape.geometryIndex], xfB, 1.0f);
                     }
                     else{
                         const ShapeProxy targetProxy = MakeShapeProxyFromShape(shape, this.m_hullShapes, this.m_meshShapes);
                         castHit = ShapeCastProxies(
-                            effectiveProxy,
-                            input.originTransform,
+                            effectiveProxyRef,
+                            inputRef.originTransform,
                             trans,
                             targetProxy,
                             xfB,
@@ -3593,17 +3634,18 @@ class PhysicsWorld{
         const VectorSingle eps(s_LinearSlop, s_LinearSlop, s_LinearSlop, 0.0f);
         const Aabb3D queryBox(worldPoint - eps, worldPoint + eps);
         const u32 queryMask = this.broadPhaseQueryMask(filter);
+        in Filter filterRef = filter;
         for(usize t = 0u; t < s_TreeCount; ++t){
             this.m_broadPhase.trees[t].queryAabb(
                 queryBox,
                 queryMask,
-                lambda[in this, in worldPoint, in filter, in hitSensors, mut outShapes](in u32 proxyId, in u32 shapeIdx) -> b8{
+                lambda[in this, in worldPoint, in filterRef, in hitSensors, mut outShapes](in u32 proxyId, in u32 shapeIdx) -> b8{
                     if(shapeIdx >= this.m_shapes.size() || !this.m_shapes[shapeIdx].alive())
                         return true;
                     in Shape shape = this.m_shapes[shapeIdx];
                     if(shape.isSensor() && !hitSensors)
                         return true;
-                    if(!ShouldCollideFilters(filter, shape.filter))
+                    if(!ShouldCollideFilters(filterRef, shape.filter))
                         return true;
                     in Body body = this.m_bodies[shape.bodyId];
                     in Transform3D xf = this.m_solverSets[body.setIndex].sims[body.localIndex].transform;
@@ -3637,17 +3679,20 @@ class PhysicsWorld{
         const Aabb3D queryBox(minP - rVec, maxP + rVec);
 
         const u32 queryMask = this.broadPhaseQueryMask(filter);
+        in ShapeProxy queryProxyRef = queryProxy;
+        in Transform3D queryTransformRef = queryTransform;
+        in Filter filterRef = filter;
         for(usize t = 0u; t < s_TreeCount; ++t){
             this.m_broadPhase.trees[t].queryAabb(
                 queryBox,
                 queryMask,
-                lambda[in this, in queryProxy, in queryTransform, in filter, in hitSensors, mut outShapes](in u32 proxyId, in u32 shapeIdx) -> b8{
+                lambda[in this, in queryProxyRef, in queryTransformRef, in filterRef, in hitSensors, mut outShapes](in u32 proxyId, in u32 shapeIdx) -> b8{
                     if(shapeIdx >= this.m_shapes.size() || !this.m_shapes[shapeIdx].alive())
                         return true;
                     in Shape shape = this.m_shapes[shapeIdx];
                     if(shape.isSensor() && !hitSensors)
                         return true;
-                    if(!ShouldCollideFilters(filter, shape.filter))
+                    if(!ShouldCollideFilters(filterRef, shape.filter))
                         return true;
 
                     in Body body = this.m_bodies[shape.bodyId];
@@ -3657,15 +3702,15 @@ class PhysicsWorld{
                         in MeshShape mesh = this.m_meshShapes[shape.geometryIndex];
                         if(mesh.nodes.empty() || mesh.triangles.empty())
                             return true;
-                        const Transform3D localQueryXf = RelativeTransform(xfB, queryTransform);
-                        VectorSingle lMin = TransformPoint(localQueryXf, Vec3FromU(queryProxy.points[0u]));
+                        const Transform3D localQueryXf = RelativeTransform(xfB, queryTransformRef);
+                        VectorSingle lMin = TransformPoint(localQueryXf, Vec3FromU(queryProxyRef.points[0u]));
                         VectorSingle lMax = lMin;
-                        for(usize i = 1u; i < queryProxy.points.size(); ++i){
-                            const VectorSingle lp = TransformPoint(localQueryXf, Vec3FromU(queryProxy.points[i]));
+                        for(usize i = 1u; i < queryProxyRef.points.size(); ++i){
+                            const VectorSingle lp = TransformPoint(localQueryXf, Vec3FromU(queryProxyRef.points[i]));
                             lMin = Min(lMin, lp);
                             lMax = Max(lMax, lp);
                         }
-                        const f32 combR = queryProxy.radius + mesh.radius();
+                        const f32 combR = queryProxyRef.radius + mesh.radius();
                         const VectorSingle crVec(combR, combR, combR, 0.0f);
                         const Aabb3D localBox(lMin - crVec, lMax + crVec);
 
@@ -3684,7 +3729,7 @@ class PhysicsWorld{
                                     in MeshTriangle tri = mesh.triangles[ti];
                                     const ShapeProxy triProxy = MakeTriangleProxy(Vec3FromU(tri.v0), Vec3FromU(tri.v1), Vec3FromU(tri.v2), mesh.radius());
                                     SimplexCache cache;
-                                    const DistanceOutput dist = ShapeDistanceProxies(queryProxy, queryTransform, triProxy, xfB, false, cache);
+                                    const DistanceOutput dist = ShapeDistanceProxies(queryProxyRef, queryTransformRef, triProxy, xfB, false, cache);
                                     if(dist.distance() <= combR){
                                         outShapes.push_back(this.makeShapeId(shapeIdx));
                                         return true;
@@ -3703,7 +3748,7 @@ class PhysicsWorld{
                             }
                         }
                         if(mesh.isClosed()){
-                            const VectorSingle localOrigin = TransformPoint(localQueryXf, Vec3FromU(queryProxy.points[0u]));
+                            const VectorSingle localOrigin = TransformPoint(localQueryXf, Vec3FromU(queryProxyRef.points[0u]));
                             if(IsPointInsideClosedMesh(mesh, localOrigin))
                                 outShapes.push_back(this.makeShapeId(shapeIdx));
                         }
@@ -3712,8 +3757,8 @@ class PhysicsWorld{
 
                     const ShapeProxy targetProxy = MakeShapeProxyFromShape(shape, this.m_hullShapes, this.m_meshShapes);
                     SimplexCache cache;
-                    const DistanceOutput dist = ShapeDistanceProxies(queryProxy, queryTransform, targetProxy, xfB, false, cache);
-                    if(dist.distance() <= queryProxy.radius + targetProxy.radius)
+                    const DistanceOutput dist = ShapeDistanceProxies(queryProxyRef, queryTransformRef, targetProxy, xfB, false, cache);
+                    if(dist.distance() <= queryProxyRef.radius + targetProxy.radius)
                         outShapes.push_back(this.makeShapeId(shapeIdx));
                     return true;
                 }
@@ -3754,17 +3799,20 @@ class PhysicsWorld{
         const Aabb3D queryBox(pos - rVec, pos + rVec);
 
         const u32 queryMask = this.broadPhaseQueryMask(def.filter);
+        in ExplosionDef defRef = def;
+        in ShapeProxy ptProxyRef = ptProxy;
+        in Transform3D ptXfRef = ptXf;
         for(usize t = 0u; t < s_TreeCount; ++t){
             this.m_broadPhase.trees[t].queryAabb(
                 queryBox,
                 queryMask,
-                lambda[in this, in def, in ptProxy, in ptXf, in pos, in maxR, mut bestBodyDist, mut bestBodyPoint, mut hitBodyIds](in u32 proxyId, in u32 shapeIdx) -> b8{
+                lambda[in this, in defRef, in ptProxyRef, in ptXfRef, in pos, in maxR, mut bestBodyDist, mut bestBodyPoint, mut hitBodyIds](in u32 proxyId, in u32 shapeIdx) -> b8{
                     if(shapeIdx >= this.m_shapes.size() || !this.m_shapes[shapeIdx].alive())
                         return true;
                     in Shape shape = this.m_shapes[shapeIdx];
                     if(shape.isSensor() || shape.type == ShapeType::Mesh)
                         return true;
-                    if(!ShouldCollideFilters(def.filter, shape.filter))
+                    if(!ShouldCollideFilters(defRef.filter, shape.filter))
                         return true;
 
                     const u32 bodyIdx = shape.bodyId;
@@ -3775,7 +3823,7 @@ class PhysicsWorld{
                     in Transform3D xfB = this.m_solverSets[body.setIndex].sims[body.localIndex].transform;
                     const ShapeProxy targetProxy = MakeShapeProxyFromShape(shape, this.m_hullShapes, this.m_meshShapes);
                     SimplexCache cache;
-                    const DistanceOutput distOut = ShapeDistanceProxies(ptProxy, ptXf, targetProxy, xfB, false, cache);
+                    const DistanceOutput distOut = ShapeDistanceProxies(ptProxyRef, ptXfRef, targetProxy, xfB, false, cache);
                     const f32 surfDist = Max(0.0f, distOut.distance() - targetProxy.radius);
                     if(surfDist >= maxR)
                         return true;

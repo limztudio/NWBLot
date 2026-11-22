@@ -30,8 +30,9 @@ bool nwbShadowBuildLightRay(const float3 worldPosition, const float3 normal, con
         const float3 delta = light.position.xyz - worldPosition;
         tMax = length(delta);
         const float3 centerDir = (tMax > NWB_SHADOW_LIGHT_DIRECTION_EPSILON) ? (delta / tMax) : float3(0.0, 1.0, 0.0);
-        const half sinHalf = (tMax > NWB_SHADOW_LIGHT_DIRECTION_EPSILON) ? half(min(light.params2.y / tMax, NWB_SHADOW_POINT_LIGHT_SINE_HALF_ANGLE_MAX)) : half(0.0h);
-        outDirection = nwbShadowJitterCone(centerDir, asin(float(sinHalf)), jitter);
+        const float sinHalf = (tMax > NWB_SHADOW_LIGHT_DIRECTION_EPSILON) ? min(light.params2.y / tMax, NWB_SHADOW_POINT_LIGHT_SINE_HALF_ANGLE_MAX) : 0.0;
+        const float cosHalf = sqrt(max(1.0 - sinHalf * sinHalf, 0.0));
+        outDirection = (sinHalf > 0.0) ? nwbShadowJitterConeCos(centerDir, cosHalf, jitter) : centerDir;
     }
 
     if(dot(normal, outDirection) <= 0.0)

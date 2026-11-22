@@ -387,23 +387,21 @@ class MeshSkinningFramePlanBuilder : NoCopy{
     private mut MeshSkinningSystem m_system;
     private mut GpuTaskGraph m_graph;
     private mut Vector<MeshSkinningGraphDispatchPlan> m_plans;
-    private GpuTaskId m_terminalTask;
+    private mut Vector<GpuTaskId> m_uploadTasks;
 
     public MeshSkinningFramePlanBuilder(
         mut MeshSkinningSystem system,
         mut GpuTaskGraph graph,
-        mut Vector<MeshSkinningGraphDispatchPlan> plans
+        mut Vector<MeshSkinningGraphDispatchPlan> plans,
+        mut Vector<GpuTaskId> uploadTasks
     ){
         this.m_system = system;
         this.m_graph = graph;
         this.m_plans = plans;
+        this.m_uploadTasks = uploadTasks;
     }
 
     public b8 declare(in EntityID entity, in SkinnedMeshBindingComponent binding);
-
-    public GpuTaskId terminalTask()const{
-        return this.m_terminalTask;
-    }
 
     private b8 declareUploadTask(
         in MeshSkinningRuntimeInstance instance,

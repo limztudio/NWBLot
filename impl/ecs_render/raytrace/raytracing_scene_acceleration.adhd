@@ -6,6 +6,7 @@
 #include <impl/ecs_render/components.adhd>
 #include <impl/ecs_render/kernel/descriptor_register_utils.adhd>
 #include <impl/ecs_render/material/instance_typed_ranges.adhd>
+#include <impl/ecs_render/caustic/caustic_emission_target_builder.adhd>
 #include <impl/ecs_render/mesh/mesh_system.adhd>
 #include <impl/ecs_render/optics/optical_scene_resources.adhd>
 #include <impl/ecs_render/raytrace/prepared_builds.adhd>
@@ -61,6 +62,58 @@ b8 CanReuseStaticSceneTlas(in b8 staticScene, in b8 hashValid, in u64 cachedHash
 
 b8 CanReuseStaticSceneSwBvh(in b8 staticScene, in b8 hashValid, in u64 cachedHash, in u64 currentHash, in u32 cachedInstanceCount, in u32 currentInstanceCount, in b8 hasPreparedBuffers){
     return staticScene && hashValid && cachedHash == currentHash && cachedInstanceCount == currentInstanceCount && hasPreparedBuffers;
+}
+
+class SceneWorldBoundsAccumulator{
+    public f32x4 minimum = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 maximum = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    public b8 hasBounds = false;
+    public b8 valid = true;
+    public b8 approximate = false;
+
+    public void append(in b8 isRuntime, in b8 localBoundsValid, in MatrixSingle objectToWorld, in VectorSingle localMin, in VectorSingle localMax){
+        if(!this.valid)
+            return;
+        if(!localBoundsValid){
+            this.valid = false;
+            return;
+        }
+        VectorSingle resolvedMin = localMin;
+        VectorSingle resolvedMax = localMax;
+        if(isRuntime){
+            CausticEmissionTargetBuilder().resolveLocalBounds(true, resolvedMin, resolvedMax);
+            this.approximate = true;
+        }
+        const auto worldBounds = AabbTransform(objectToWorld, resolvedMin, resolvedMax);
+        if(!worldBounds.has_value()){
+            this.valid = false;
+            return;
+        }
+        if(!this.hasBounds){
+            this.minimum = f32x4(worldBounds.value().minBounds, 0.0f);
+            this.maximum = f32x4(worldBounds.value().maxBounds, 0.0f);
+            this.hasBounds = true;
+        }
+        else{
+            this.minimum = f32x4(Min(VectorSingle(this.minimum), worldBounds.value().minBounds), 0.0f);
+            this.maximum = f32x4(Max(VectorSingle(this.maximum), worldBounds.value().maxBounds), 0.0f);
+        }
+    }
+
+    public void publish(in b8 empty, mut RtSceneBvhState outSceneBvh)const{
+        if(empty || !this.valid || !this.hasBounds){
+            outSceneBvh.m_sceneWorldBoundsMin = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+            outSceneBvh.m_sceneWorldBoundsMax = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+            outSceneBvh.m_sceneWorldBoundsFlags = s_CausticSceneBoundsInvalid;
+            return;
+        }
+        outSceneBvh.m_sceneWorldBoundsMin = this.minimum;
+        outSceneBvh.m_sceneWorldBoundsMax = this.maximum;
+        if(this.approximate)
+            outSceneBvh.m_sceneWorldBoundsFlags = s_CausticSceneBoundsApproximate;
+        else
+            outSceneBvh.m_sceneWorldBoundsFlags = s_CausticSceneBoundsExact;
+    }
 }
 
 
@@ -132,7 +185,9 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
     b8 allInstanceBoundsValid = true;
     u32 refractiveInstanceCount = 0u;
     u32 singleRefractiveInstanceIndex = u32.max;
-    RayTracingOpticalSceneGather opticalScene(candidateCount);
+    SceneWorldBoundsAccumulator sceneBounds;
+    mut RayTracingOpticalSceneGather opticalScene = this.m_sceneGatherScratch.opticalScene;
+    opticalScene.reset(candidateCount);
 
     ShadowMaterialSampledTextureCollector sampledTextureCollector(this.m_preparedShadowTraceMaterialSampledTextures, pendingSampledTextures);
     sampledTextureCollector.indexExisting();
@@ -240,7 +295,9 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
         VectorSingle opticalMax = VectorZero();
         b8 opticalBoundsValid = false;
         RayTracingInstanceWorldBounds worldBounds;
-        if(!meshResult.value().resolvedMesh.runtime && !meshResult.value().meshResources.runtimeMesh && meshResult.value().meshResources.csgLocalBounds.valid()){
+        const b8 isRuntimeMesh = meshResult.value().resolvedMesh.runtime || meshResult.value().meshResources.runtimeMesh;
+        sceneBounds.append(isRuntimeMesh, meshResult.value().meshResources.csgLocalBounds.valid(), objectToWorld, localMin, localMax);
+        if(!isRuntimeMesh && meshResult.value().meshResources.csgLocalBounds.valid()){
             const auto bounds = ComputeOpticalWorldBounds(objectToWorld, localMin, localMax);
             if(bounds.has_value()){
                 worldBounds.minimum = f32x3u(VectorSingle(bounds.value().minimum));
@@ -284,6 +341,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
     meshHeapHandles.sweep();
 
     this.m_rayTracingState.sceneBvh.m_tlasInstanceCount = cast<u32>(instances.size());
+    sceneBounds.publish(instances.empty(), this.m_rayTracingState.sceneBvh);
     if(instances.empty()){
         this.m_rayTracingState.sceneBvh.m_tlasStaticSceneHashValid = false;
         this.m_rayTracingState.shadow.m_hwShadowMaterialContextHashValid = false;
@@ -437,7 +495,9 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
     this.m_rayTracingState.shadow.m_swShadowMeshCount = 0u;
     b8 staticScene = true;
     b8 contentComplete = true;
-    RayTracingOpticalSceneGather opticalScene(candidateCount);
+    SceneWorldBoundsAccumulator sceneBounds;
+    mut RayTracingOpticalSceneGather opticalScene = this.m_sceneGatherScratch.opticalScene;
+    opticalScene.reset(candidateCount);
 
     ShadowMaterialSampledTextureCollector sampledTextureCollector(this.m_preparedShadowTraceMaterialSampledTextures, pendingSampledTextures);
     sampledTextureCollector.indexExisting();
@@ -551,6 +611,7 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
 
         const VectorSingle localMin = VectorSingle(meshResult.value().meshResources.csgLocalBounds.minBounds);
         const VectorSingle localMax = VectorSingle(meshResult.value().meshResources.csgLocalBounds.maxBounds);
+        sceneBounds.append(meshResult.value().resolvedMesh.runtime || meshResult.value().meshResources.runtimeMesh, meshResult.value().meshResources.csgLocalBounds.valid(), objectToWorld, localMin, localMax);
         const auto worldBounds = AabbTransform(objectToWorld, localMin, localMax);
         if(!worldBounds.has_value()){
             contentComplete = false;
@@ -622,6 +683,7 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
     }
     in CsgShadowSnapshot csg = this.m_lightSpaceShadow.m_csg.snapshot;
     const u32 instanceCount = cast<u32>(instances.size());
+    sceneBounds.publish(instanceCount == 0u, this.m_rayTracingState.sceneBvh);
     if(instanceCount == 0u){
         this.m_rayTracingState.sceneBvh.m_sceneBvhInstanceCount = 0u;
         this.m_rayTracingState.sceneBvh.m_sceneSwBvhStaticSceneHashValid = false;

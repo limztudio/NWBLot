@@ -33,6 +33,7 @@ class RendererRayTracingSystem : NoCopy{
     private PreparedSceneTlasBuild m_preparedSceneTlas;
     private PreparedSceneSwBvhTraversal m_preparedSceneSwBvhTraversal;
     private Vector<PreparedMeshBlasBuild> m_preparedMeshBlasBuilds;
+    private u64 m_pendingBlasStaticSkipped = 0u;
     private u64 m_blasLedgerStaticSkipped = 0u;
     private u64 m_blasLedgerFirstBuilds = 0u;
     private u64 m_blasLedgerRefits = 0u;

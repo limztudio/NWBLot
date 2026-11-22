@@ -68,6 +68,7 @@ struct FreeBlockSelection{
     Block* block = nullptr;
     AllocationLayout layout;
     usize bin = 0u;
+    b8 exactFit = false;
 };
 
 
@@ -169,14 +170,13 @@ inline void StoreBlockForAllocation(NotNull<void*> p, Block& block)noexcept{
 
 [[nodiscard]] inline Expected<AllocationLayout> BuildNormalAllocationLayout(const usize requestedBytes)noexcept{
     constexpr usize s_UserOffset = AlignUp(sizeof(Block*), s_BlockAlignment);
-    if(AddOverflows<usize>(s_UserOffset, requestedBytes))
+    constexpr usize s_AlignMask = s_BlockAlignment - 1u;
+    constexpr usize s_MaxAlignedInput = Limit<usize>::s_Max - s_AlignMask;
+    if(requestedBytes > s_MaxAlignedInput - s_UserOffset) [[unlikely]]
         return MakeUnexpected(Failure{});
 
-    usize spanBytes = 0u;
-    const auto spanBytesResult = ::AlignUpPowerOfTwoChecked(s_UserOffset + requestedBytes, s_BlockAlignment);
-    if(!spanBytesResult)
-        return MakeUnexpected(Failure{});
-    spanBytes = *spanBytesResult;
+    const usize total = s_UserOffset + requestedBytes;
+    const usize spanBytes = (total + s_AlignMask) & ~s_AlignMask;
 
     return AllocationLayout{ .userOffset = s_UserOffset, .spanBytes = spanBytes, };
 }
@@ -373,14 +373,16 @@ FOUNDATION_INLINE void SplitUsedBlock(Array<void*, s_FreeBinCount>& bins, u64& b
         return false;
 
     const usize b0 = BinForSpan(normalLayout->spanBytes);
+    if(b0 < s_SmallBinCount && (binMask & (1ull << b0)) != 0ull) [[likely]]{
+        outSelection.block = static_cast<Block*>(bins[b0]);
+        outSelection.layout = *normalLayout;
+        outSelection.bin = b0;
+        outSelection.exactFit = true;
+        return true;
+    }
+
     const u64 higherMask = b0 < (s_FreeBinCount - 1u) ? (binMask & (~0ull << (b0 + 1u))) : 0ull;
     if((binMask & (1ull << b0)) != 0ull){
-        if(b0 < s_SmallBinCount) [[likely]]{
-            outSelection.block = static_cast<Block*>(bins[b0]);
-            outSelection.layout = *normalLayout;
-            outSelection.bin = b0;
-            return true;
-        }
         if(FindFreeBlockSameLargeBin(bins, b0, higherMask, *normalLayout, outSelection))
             return true;
     }
@@ -392,6 +394,7 @@ FOUNDATION_INLINE void SplitUsedBlock(Array<void*, s_FreeBinCount>& bins, u64& b
     outSelection.block = static_cast<Block*>(bins[b1]);
     outSelection.layout = *normalLayout;
     outSelection.bin = b1;
+    outSelection.exactFit = false;
     return true;
 }
 
@@ -491,7 +494,8 @@ void* PersistentArena::allocate(const usize align, usize size){
     auto& selected = *selection.block;
     const auto& selectedLayout = selection.layout;
     __hidden_persistent::RemoveFreeBlockFromBin(m_freeBins, m_nonEmptyBinMask, selected, selection.bin);
-    __hidden_persistent::SplitUsedBlock(m_freeBins, m_nonEmptyBinMask, selected, selectedLayout.spanBytes);
+    if(!selection.exactFit)
+        __hidden_persistent::SplitUsedBlock(m_freeBins, m_nonEmptyBinMask, selected, selectedLayout.spanBytes);
     selected.requestedBytes = size;
     const auto p = MakeNotNull(__hidden_persistent::BlockData(selected).get() + selectedLayout.userOffset);
     __hidden_persistent::StoreBlockForAllocation(MakeNotNull(static_cast<void*>(p.get())), selected);
@@ -596,7 +600,8 @@ Expected<PersistentArena::Allocation> PersistentArena::allocateLocked(const usiz
     const auto& selectedLayout = selection.layout;
 
     __hidden_persistent::RemoveFreeBlockFromBin(m_freeBins, m_nonEmptyBinMask, selected, selection.bin);
-    __hidden_persistent::SplitUsedBlock(m_freeBins, m_nonEmptyBinMask, selected, selectedLayout.spanBytes);
+    if(!selection.exactFit)
+        __hidden_persistent::SplitUsedBlock(m_freeBins, m_nonEmptyBinMask, selected, selectedLayout.spanBytes);
     selected.requestedBytes = size;
     const auto p = MakeNotNull(__hidden_persistent::BlockData(selected).get() + selectedLayout.userOffset);
     __hidden_persistent::StoreBlockForAllocation(MakeNotNull(static_cast<void*>(p.get())), selected);

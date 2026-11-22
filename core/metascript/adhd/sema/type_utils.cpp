@@ -8,7 +8,14 @@
 #include <core/metascript/arena_names.h>
 #include <core/metascript/literal_decoder.h>
 
+#include <global/atomic.h>
 #include <global/filesystem.h>
+#include <global/hash_utils.h>
+
+#if !defined(FOUNDATION_PLATFORM_WINDOWS)
+#include <cstdlib>
+#include <unistd.h>
+#endif
 
 #include "type_utils.h"
 
@@ -449,12 +456,275 @@ private:
 }
 
 class CoreExternRegistry final{
+private:
+    struct WatchedPreludeFile{
+        MString relativePath;
+        u64 fileSize = 0u;
+        i64 mtimeTicks = 0;
+        b8 fromProjectRoot = false;
+
+
+    public:
+        explicit WatchedPreludeFile(MetaArena& arena)noexcept
+            : relativePath(arena)
+        {}
+    };
+
+    struct SerializedStringRef{
+        u32 offset = 0u;
+        u32 length = 0u;
+    };
+
+    static inline constexpr u32 s_BinaryCacheMagic = 0x4E574250u;
+    static inline constexpr u32 s_BinaryCacheVersion = 1u;
+
+    [[nodiscard]] static u64 ComputeBinaryCacheSchemaSignature()noexcept{
+        u64 sig = s_Fnv64OffsetBasis;
+        const auto mix = [&](const u64 val)noexcept{
+            Fnv64AppendValue(sig, val);
+        };
+        mix(s_BinaryCacheMagic);
+        mix(s_BinaryCacheVersion);
+        mix(sizeof(BuiltinObjectTypeInfo));
+        mix(sizeof(BuiltinEnumInfo));
+        mix(sizeof(BuiltinEnumEntryInfo));
+        mix(sizeof(BuiltinFieldInfo));
+        mix(sizeof(BuiltinReceiverMethodInfo));
+        mix(sizeof(BuiltinReceiverSignatureInfo));
+        mix(sizeof(BuiltinFunctionArgRuleInfo));
+        mix(sizeof(BuiltinVisitorRuleInfo));
+        mix(sizeof(BuiltinFunctionInfo));
+        mix(sizeof(BuiltinGlobalConstantInfo));
+        mix(sizeof(TypeRef));
+        mix(sizeof(TemplateParamDecl));
+        mix(sizeof(usize));
+        mix(static_cast<u64>(BuiltinFunctionArgRule::StaticCount));
+        sig = UpdateFnv64TextExact(sig, ContractSemantics::s_GlobalExternPreludePath);
+        sig = UpdateFnv64TextExact(sig, ContractSemantics::s_CoreExternPreludePath);
+#if defined(NWB_PROJECT_SOURCE_DIR)
+        sig = UpdateFnv64TextExact(sig, MStringView(NWB_PROJECT_SOURCE_DIR));
+#endif
+        return sig;
+    }
+
+    [[nodiscard]] static b8 QueryDiskFileStat(const ::Path<MetaArena>& diskPath, u64& outSize, i64& outMtimeTicks)noexcept{
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+        WIN32_FILE_ATTRIBUTE_DATA attrData{};
+        if(!GetFileAttributesExW(diskPath.c_str(), GetFileExInfoStandard, &attrData))
+            return false;
+        if((attrData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0u)
+            return false;
+        outSize = (static_cast<u64>(attrData.nFileSizeHigh) << 32u) | static_cast<u64>(attrData.nFileSizeLow);
+        outMtimeTicks = static_cast<i64>((static_cast<u64>(attrData.ftLastWriteTime.dwHighDateTime) << 32u) | static_cast<u64>(attrData.ftLastWriteTime.dwLowDateTime));
+        return true;
+#else
+        struct stat st{};
+        if(::stat(diskPath.c_str(), &st) != 0 || !S_ISREG(st.st_mode))
+            return false;
+        outSize = static_cast<u64>(st.st_size);
+        outMtimeTicks = static_cast<i64>(st.st_mtime) * 1000000000ll;
+#if defined(__APPLE__)
+        outMtimeTicks += static_cast<i64>(st.st_mtimespec.tv_nsec);
+#elif defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200809L
+        outMtimeTicks += static_cast<i64>(st.st_mtim.tv_nsec);
+#endif
+        return true;
+#endif
+    }
+
+    [[nodiscard]] static ::Path<MetaArena> ResolvePreludeCachePath(MetaArena& arena){
+        u64 rootHash = s_Fnv64OffsetBasis;
+#if defined(NWB_PROJECT_SOURCE_DIR)
+        rootHash = UpdateFnv64TextExact(rootHash, MStringView(NWB_PROJECT_SOURCE_DIR));
+#endif
+        const MString fileName = StringFormat(arena, "nwb_adhd_prelude_{:016x}_v{}.bin", rootHash, s_BinaryCacheVersion);
+
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+        wchar tempBuf[MAX_PATH + 2u] = {};
+        const DWORD len = GetTempPathW(static_cast<DWORD>(MAX_PATH + 1u), tempBuf);
+        if(len > 0u && len <= MAX_PATH){
+            ::Path<MetaArena> dir(arena, TStringView(tempBuf, static_cast<usize>(len)));
+            return dir / ::Path<MetaArena>(arena, MStringView(fileName.data(), fileName.size()));
+        }
+        return ::Path<MetaArena>(arena, MStringView(fileName.data(), fileName.size()));
+#else
+        const char* envTmp = std::getenv("TMPDIR");
+        const MStringView dirText = (envTmp && envTmp[0] != '\0') ? MStringView(envTmp) : MStringView("/tmp");
+        ::Path<MetaArena> dir(arena, dirText);
+        return dir / ::Path<MetaArena>(arena, MStringView(fileName.data(), fileName.size()));
+#endif
+    }
+
+    [[nodiscard]] static b8 BuildProjectCandidatePath(const MStringView relativePath, const b8 fromProjectRoot, MetaArena& arena, ::Path<MetaArena>& outDiskPath){
+        if(fromProjectRoot){
+#if defined(NWB_PROJECT_SOURCE_DIR)
+            const MStringView root = NWB_PROJECT_SOURCE_DIR;
+            if(!root.empty()){
+                MString fullPath(root.data(), root.size(), arena);
+                if(fullPath.back() != '/' && fullPath.back() != '\\')
+                    fullPath.push_back('/');
+                fullPath.append(relativePath.data(), relativePath.size());
+                const TString<MetaArena> nativePath = ConvertString(arena, MStringView(fullPath.data(), fullPath.size()));
+                outDiskPath = ::Path<MetaArena>(arena, TStringView(nativePath.data(), nativePath.size()));
+                return true;
+            }
+#endif
+            return false;
+        }
+        const TString<MetaArena> nativePath = ConvertString(arena, relativePath);
+        outDiskPath = ::Path<MetaArena>(arena, TStringView(nativePath.data(), nativePath.size()));
+        return true;
+    }
+
+    class PreludeBinaryWriter final{
+    public:
+        explicit PreludeBinaryWriter(MetaArena& arena)
+            : m_arena(arena)
+            , m_bytes(arena)
+            , m_stringBlob(arena)
+            , m_stringOffsets(0, MStringViewHash(), EqualTo<MStringView>(), arena)
+            , m_ownedKeys(arena)
+        {}
+
+
+    public:
+        template<typename T>
+        void writeValue(const T& val){
+            static_assert(IsTriviallyCopyable_V<T>, "writeValue requires trivially copyable type");
+            const u8* ptr = reinterpret_cast<const u8*>(&val);
+            m_bytes.insert(m_bytes.end(), ptr, ptr + sizeof(T));
+        }
+
+        void writeBool(const b8 val){
+            const u8 b = val ? 1u : 0u;
+            writeValue(b);
+        }
+
+        void writeRawString(const MStringView sv){
+            const u32 len = static_cast<u32>(sv.size());
+            writeValue(len);
+            if(len > 0u){
+                const u8* ptr = reinterpret_cast<const u8*>(sv.data());
+                m_bytes.insert(m_bytes.end(), ptr, ptr + len);
+            }
+        }
+
+        void writeString(const MStringView sv){
+            if(sv.empty()){
+                const SerializedStringRef emptyRef{ 0u, 0u };
+                writeValue(emptyRef);
+                return;
+            }
+            const auto it = m_stringOffsets.find(sv);
+            if(it != m_stringOffsets.end()){
+                writeValue(it->second);
+                return;
+            }
+            const u32 offset = static_cast<u32>(m_stringBlob.size());
+            const u32 length = static_cast<u32>(sv.size());
+            m_stringBlob.append(sv.data(), sv.size());
+            m_ownedKeys.push_back(MakeGlobalUnique<MString>(m_arena, sv.data(), sv.size(), m_arena));
+            const MString& keyStr = *m_ownedKeys.back();
+            const SerializedStringRef ref{ offset, length };
+            m_stringOffsets.emplace(MStringView(keyStr.data(), keyStr.size()), ref);
+            writeValue(ref);
+        }
+
+        [[nodiscard]] const Vector<u8, MetaArena>& payloadBytes()const noexcept{ return m_bytes; }
+        [[nodiscard]] const MString& stringBlob()const noexcept{ return m_stringBlob; }
+
+
+    private:
+        MetaArena& m_arena;
+        Vector<u8, MetaArena> m_bytes;
+        MString m_stringBlob;
+        HashMap<MStringView, SerializedStringRef, MetaArena, MStringViewHash> m_stringOffsets;
+        MVector<GlobalUniquePtr<MString>> m_ownedKeys;
+    };
+
+    class PreludeBinaryReader final{
+    public:
+        PreludeBinaryReader(const u8* data, const usize size)noexcept
+            : m_data(data)
+            , m_size(size)
+        {}
+
+
+    public:
+        [[nodiscard]] b8 hasRemaining(const usize byteCount)const noexcept{
+            return m_cursor <= m_size && byteCount <= (m_size - m_cursor);
+        }
+
+        template<typename T>
+        [[nodiscard]] b8 readValue(T& outVal)noexcept{
+            static_assert(IsTriviallyCopyable_V<T>, "readValue requires trivially copyable type");
+            if(!hasRemaining(sizeof(T)))
+                return false;
+            FOUNDATION_MEMCPY(&outVal, sizeof(T), m_data + m_cursor, sizeof(T));
+            m_cursor += sizeof(T);
+            return true;
+        }
+
+        [[nodiscard]] b8 readBool(b8& outVal)noexcept{
+            u8 b = 0u;
+            if(!readValue(b))
+                return false;
+            outVal = (b != 0u);
+            return true;
+        }
+
+        [[nodiscard]] b8 readRawStringView(MStringView& outView)noexcept{
+            u32 len = 0u;
+            if(!readValue(len))
+                return false;
+            if(!hasRemaining(len))
+                return false;
+            outView = MStringView(reinterpret_cast<const char*>(m_data + m_cursor), len);
+            m_cursor += len;
+            return true;
+        }
+
+        [[nodiscard]] b8 readStringRef(const MString& blob, MStringView& outView)noexcept{
+            SerializedStringRef ref{};
+            if(!readValue(ref))
+                return false;
+            if(ref.length == 0u){
+                outView = {};
+                return true;
+            }
+            if(static_cast<usize>(ref.offset) > blob.size() || static_cast<usize>(ref.length) > (blob.size() - static_cast<usize>(ref.offset)))
+                return false;
+            outView = MStringView(blob.data() + ref.offset, ref.length);
+            return true;
+        }
+
+        [[nodiscard]] b8 readBytes(void* dst, const usize byteCount)noexcept{
+            if(!hasRemaining(byteCount))
+                return false;
+            if(byteCount > 0u)
+                FOUNDATION_MEMCPY(dst, byteCount, m_data + m_cursor, byteCount);
+            m_cursor += byteCount;
+            return true;
+        }
+
+        [[nodiscard]] b8 atEnd()const noexcept{ return m_cursor == m_size; }
+
+
+    private:
+        const u8* m_data = nullptr;
+        usize m_size = 0u;
+        usize m_cursor = 0u;
+    };
+
+
 public:
     CoreExternRegistry()
         : m_arena(MetascriptArenaScope::s_ParserScratch)
         , m_sourceText(m_arena)
         , m_loadError(m_arena)
         , m_ownedStrings(m_arena)
+        , m_ownedTypeRefs(m_arena)
+        , m_ownedTemplateParamLists(m_arena)
         , m_objectTypes(m_arena)
         , m_enums(m_arena)
         , m_enumEntries(m_arena)
@@ -555,10 +825,23 @@ public:
 
 
 private:
+    struct WatchedPreludeList{
+        MVector<WatchedPreludeFile> files;
+        MetaArena& arena;
+
+
+    public:
+        explicit WatchedPreludeList(MetaArena& inArena)noexcept
+            : files(inArena)
+            , arena(inArena)
+        {}
+    };
+
     class PreludeIncludeResolver final : public IIncludeResolver{
     public:
-        explicit PreludeIncludeResolver(CoreExternRegistry& owner)noexcept
+        PreludeIncludeResolver(CoreExternRegistry& owner, WatchedPreludeList* watchedFiles)noexcept
             : m_owner(owner)
+            , m_watchedFiles(watchedFiles)
         {}
 
 
@@ -567,20 +850,43 @@ private:
             if(includePath.empty())
                 return false;
             outResolvedKey.assign(includePath.data(), includePath.size());
-            return m_owner.tryReadProjectFile(includePath, arena, outContent);
+            return m_owner.tryReadProjectFile(includePath, arena, outContent, m_watchedFiles);
         }
 
 
     private:
         CoreExternRegistry& m_owner;
+        WatchedPreludeList* m_watchedFiles = nullptr;
     };
 
-    [[nodiscard]] b8 tryReadProjectFile(const MStringView relativePath, MetaArena& arena, MString& outText)const{
-        const auto tryReadPath = [&](const MStringView pathText) -> b8{
+    [[nodiscard]] b8 tryReadProjectFile(const MStringView relativePath, MetaArena& arena, MString& outText, WatchedPreludeList* watchedList = nullptr)const{
+        const auto recordWatched = [&](const ::Path<MetaArena>& diskPath, const b8 fromRoot){
+            if(!watchedList)
+                return;
+            u64 fileSize = 0u;
+            i64 mtimeTicks = 0;
+            if(!QueryDiskFileStat(diskPath, fileSize, mtimeTicks))
+                return;
+            for(const WatchedPreludeFile& existing : watchedList->files){
+                if(existing.fromProjectRoot == fromRoot && existing.relativePath == relativePath)
+                    return;
+            }
+            WatchedPreludeFile entry(watchedList->arena);
+            entry.relativePath.assign(relativePath.data(), relativePath.size());
+            entry.fileSize = fileSize;
+            entry.mtimeTicks = mtimeTicks;
+            entry.fromProjectRoot = fromRoot;
+            watchedList->files.push_back(Move(entry));
+        };
+
+        const auto tryReadPath = [&](const MStringView pathText, const b8 fromRoot) -> b8{
             const TString<MetaArena> nativePath = ConvertString(arena, pathText);
             const ::Path<MetaArena> diskPath(arena, TStringView(nativePath.data(), nativePath.size()));
             outText.clear();
-            return static_cast<b8>(ReadTextFile(diskPath, outText));
+            if(!ReadTextFile(diskPath, outText))
+                return false;
+            recordWatched(diskPath, fromRoot);
+            return true;
         };
 
 #if defined(NWB_PROJECT_SOURCE_DIR)
@@ -591,12 +897,12 @@ private:
                 if(fullPath.back() != '/' && fullPath.back() != '\\')
                     fullPath.push_back('/');
                 fullPath.append(relativePath.data(), relativePath.size());
-                if(tryReadPath(MStringView(fullPath.data(), fullPath.size())))
+                if(tryReadPath(MStringView(fullPath.data(), fullPath.size()), true))
                     return true;
             }
         }
 #endif
-        return tryReadPath(relativePath);
+        return tryReadPath(relativePath, false);
     }
 
     template<typename InfoT>
@@ -639,6 +945,46 @@ private:
         m_ownedStrings.push_back(MakeGlobalUnique<MString>(m_arena, Move(text)));
         const MString& stored = *m_ownedStrings.back();
         return MStringView(stored.data(), stored.size());
+    }
+
+    [[nodiscard]] TypeRef* cloneTypeRef(const TypeRef* const src){
+        if(!src)
+            return nullptr;
+        m_ownedTypeRefs.push_back(MakeGlobalUnique<TypeRef>(m_arena, m_arena));
+        TypeRef* const dst = m_ownedTypeRefs.back().get();
+        dst->name = ownString(src->name);
+        dst->refMode = src->refMode;
+        dst->inferredCaptureBytes = src->inferredCaptureBytes;
+        dst->span = src->span;
+        dst->isFuncType = src->isFuncType;
+        dst->isAuto = src->isAuto;
+        dst->templateArgs.reserve(src->templateArgs.size());
+        for(const TypeArg& arg : src->templateArgs)
+            dst->templateArgs.push_back(TypeArg{ cloneTypeRef(arg.type), ownString(arg.constantText) });
+        dst->funcReturnType = cloneTypeRef(src->funcReturnType);
+        dst->funcParams.reserve(src->funcParams.size());
+        for(const FuncParamType& fp : src->funcParams)
+            dst->funcParams.push_back(FuncParamType{ fp.mode, cloneTypeRef(fp.type) });
+        return dst;
+    }
+
+    [[nodiscard]] Span<const TemplateParamDecl> cloneTemplateParams(const Span<const TemplateParamDecl> src){
+        if(src.empty())
+            return {};
+        m_ownedTemplateParamLists.push_back(MakeGlobalUnique<MVector<TemplateParamDecl>>(m_arena, m_arena));
+        MVector<TemplateParamDecl>& dstList = *m_ownedTemplateParamLists.back();
+        dstList.reserve(src.size());
+        for(const TemplateParamDecl& tp : src){
+            dstList.emplace_back(m_arena);
+            TemplateParamDecl& dst = dstList.back();
+            dst.name = ownString(tp.name);
+            dst.constValueType = cloneTypeRef(tp.constValueType);
+            dst.interfaceBounds.reserve(tp.interfaceBounds.size());
+            for(const TypeRef* const bound : tp.interfaceBounds)
+                dst.interfaceBounds.push_back(cloneTypeRef(bound));
+            dst.span = tp.span;
+        }
+        return Span<const TemplateParamDecl>(dstList.data(), dstList.size());
     }
 
     MString buildPairKey(const MStringView a, const MStringView b){
@@ -886,7 +1232,7 @@ private:
             obj.isAbstract = cls->isAbstract;
             obj.isPolymorphicBase = cls->isPolymorphicBase;
             obj.formatArgWrapKind = 0u;
-            obj.templateParams = cls->templateParams;
+            obj.templateParams = cloneTemplateParams(cls->templateParams);
 
             const usize objIdx = m_objectTypes.size();
             m_objectTypes.push_back(obj);
@@ -1122,14 +1468,769 @@ private:
         m_loadError.append(StringFormat(m_arena, ":{}:{}: {}", first.line, first.column, first.message));
     }
 
+    void resetRegistryState(){
+        m_sourceText.clear();
+        m_loadError.clear();
+        m_ownedStrings.clear();
+        m_ownedTypeRefs.clear();
+        m_ownedTemplateParamLists.clear();
+        m_objectTypes.clear();
+        m_enums.clear();
+        m_enumEntries.clear();
+        m_fields.clear();
+        m_receiverMethods.clear();
+        m_receiverSignatures.clear();
+        m_argRules.clear();
+        m_visitorRules.clear();
+        m_functions.clear();
+        m_globalConstants.clear();
+        m_objectTypeByName.clear();
+        m_enumByName.clear();
+        m_enumEntryByKey.clear();
+        m_fieldByKey.clear();
+        m_receiverMethodByKey.clear();
+        m_receiverSigByKey.clear();
+        m_functionByName.clear();
+        m_scopedFunctionByKey.clear();
+        m_globalConstantByName.clear();
+        m_scopedConstantByKey.clear();
+        m_simdFieldTypes.clear();
+        m_exactRuleByKey.clear();
+        m_visitorRuleByKey.clear();
+    }
+
+    void rebuildLookupIndices(){
+        for(usize i = 0u; i < m_enums.size(); ++i)
+            insertUniqueIndex(m_enumByName, m_enums[i].adhdName, i);
+        for(const BuiltinEnumEntryInfo& entry : m_enumEntries)
+            m_enumEntryByKey.insert(StringViewPair{ entry.adhdEnumName, entry.entryName });
+        for(usize i = 0u; i < m_objectTypes.size(); ++i)
+            insertUniqueIndex(m_objectTypeByName, m_objectTypes[i].adhdName, i);
+        for(usize i = 0u; i < m_fields.size(); ++i){
+            const BuiltinFieldInfo& fInfo = m_fields[i];
+            insertUniquePairIndex(m_fieldByKey, fInfo.receiverTypeName, fInfo.fieldName, i);
+            if(SymbolTable::IsSimdRegisterType(fInfo.fieldTypeName) && m_simdFieldTypes.find(fInfo.receiverTypeName) == m_simdFieldTypes.end())
+                m_simdFieldTypes.emplace(MString(fInfo.receiverTypeName.data(), fInfo.receiverTypeName.size(), m_arena), 1u);
+        }
+        for(usize i = 0u; i < m_receiverMethods.size(); ++i)
+            insertUniquePairIndex(m_receiverMethodByKey, m_receiverMethods[i].receiverTypeName, m_receiverMethods[i].methodName, i);
+        for(usize i = 0u; i < m_receiverSignatures.size(); ++i)
+            insertUniquePairIndex(m_receiverSigByKey, m_receiverSignatures[i].receiverTypeName, m_receiverSignatures[i].methodName, i);
+        for(usize i = 0u; i < m_functions.size(); ++i){
+            insertUniqueIndex(m_functionByName, m_functions[i].adhdName, i);
+            IndexScopedSymbolKey(m_scopedFunctionByKey, m_functions[i].cppExportName, i, true);
+        }
+        for(usize i = 0u; i < m_globalConstants.size(); ++i){
+            insertUniqueIndex(m_globalConstantByName, m_globalConstants[i].adhdName, i);
+            IndexScopedSymbolKey(m_scopedConstantByKey, m_globalConstants[i].cppExportName, i, false);
+        }
+    }
+
+    [[nodiscard]] b8 tryLoadBinaryCache(MetaArena& scratchArena){
+        const ::Path<MetaArena> cachePath = ResolvePreludeCachePath(scratchArena);
+        Vector<u8, MetaArena> fileBytes(scratchArena);
+        if(!ReadBinaryFile(cachePath, fileBytes) || fileBytes.size() < 20u)
+            return false;
+
+        PreludeBinaryReader reader(fileBytes.data(), fileBytes.size());
+        u32 magic = 0u;
+        u32 version = 0u;
+        u64 schemaSig = 0u;
+        u32 watchedCount = 0u;
+        if(!reader.readValue(magic) || !reader.readValue(version) || !reader.readValue(schemaSig) || !reader.readValue(watchedCount))
+            return false;
+        if(magic != s_BinaryCacheMagic || version != s_BinaryCacheVersion || schemaSig != ComputeBinaryCacheSchemaSignature())
+            return false;
+        if(watchedCount < 2u || watchedCount > 4096u)
+            return false;
+
+        ::Path<MetaArena> candidateDiskPath(scratchArena);
+        for(u32 wi = 0u; wi < watchedCount; ++wi){
+            MStringView relPath;
+            u64 expectedSize = 0u;
+            i64 expectedMtime = 0;
+            b8 fromRoot = false;
+            if(!reader.readRawStringView(relPath) || !reader.readValue(expectedSize) || !reader.readValue(expectedMtime) || !reader.readBool(fromRoot))
+                return false;
+            if(!BuildProjectCandidatePath(relPath, fromRoot, scratchArena, candidateDiskPath))
+                return false;
+            u64 actualSize = 0u;
+            i64 actualMtime = 0;
+            if(!QueryDiskFileStat(candidateDiskPath, actualSize, actualMtime))
+                return false;
+            if(actualSize != expectedSize || actualMtime != expectedMtime)
+                return false;
+        }
+
+        u32 stringBlobSize = 0u;
+        if(!reader.readValue(stringBlobSize) || !reader.hasRemaining(stringBlobSize))
+            return false;
+
+        resetRegistryState();
+        m_sourceText.resize(stringBlobSize);
+        if(!reader.readBytes(m_sourceText.data(), stringBlobSize)){
+            resetRegistryState();
+            return false;
+        }
+
+        const auto readTypeRefAndPopulate = [&]() -> b8{
+            u32 typeRefCount = 0u;
+            if(!reader.readValue(typeRefCount) || typeRefCount > 65536u)
+                return false;
+            m_ownedTypeRefs.reserve(typeRefCount);
+            for(u32 i = 0u; i < typeRefCount; ++i)
+                m_ownedTypeRefs.push_back(MakeGlobalUnique<TypeRef>(m_arena, m_arena));
+
+            const auto resolveTypePtr = [&](const i32 idx)noexcept -> TypeRef*{
+                if(idx < 0 || static_cast<u32>(idx) >= typeRefCount)
+                    return nullptr;
+                return m_ownedTypeRefs[static_cast<u32>(idx)].get();
+            };
+
+            for(u32 i = 0u; i < typeRefCount; ++i){
+                TypeRef& tr = *m_ownedTypeRefs[i];
+                u8 refModeByte = 0u;
+                u64 captureBytes = 0u;
+                i32 funcRetIdx = -1;
+                u32 tplArgCount = 0u;
+                u32 funcParamCount = 0u;
+                if(!reader.readStringRef(m_sourceText, tr.name)
+                    || !reader.readValue(refModeByte)
+                    || !reader.readValue(captureBytes)
+                    || !reader.readValue(tr.span)
+                    || !reader.readBool(tr.isFuncType)
+                    || !reader.readBool(tr.isAuto)
+                    || !reader.readValue(tplArgCount)
+                    || !reader.readValue(funcRetIdx)
+                    || !reader.readValue(funcParamCount)
+                )
+                    return false;
+                if(tplArgCount > 1024u || funcParamCount > 1024u)
+                    return false;
+                tr.refMode = static_cast<ParamPassingMode::Enum>(refModeByte);
+                tr.inferredCaptureBytes = static_cast<usize>(captureBytes);
+                tr.funcReturnType = resolveTypePtr(funcRetIdx);
+                tr.templateArgs.reserve(tplArgCount);
+                for(u32 a = 0u; a < tplArgCount; ++a){
+                    i32 argTypeIdx = -1;
+                    MStringView constText;
+                    if(!reader.readValue(argTypeIdx) || !reader.readStringRef(m_sourceText, constText))
+                        return false;
+                    tr.templateArgs.push_back(TypeArg{ resolveTypePtr(argTypeIdx), constText });
+                }
+                tr.funcParams.reserve(funcParamCount);
+                for(u32 p = 0u; p < funcParamCount; ++p){
+                    u8 pModeByte = 0u;
+                    i32 pTypeIdx = -1;
+                    if(!reader.readValue(pModeByte) || !reader.readValue(pTypeIdx))
+                        return false;
+                    tr.funcParams.push_back(FuncParamType{ static_cast<ParamPassingMode::Enum>(pModeByte), resolveTypePtr(pTypeIdx) });
+                }
+            }
+
+            u32 tplListCount = 0u;
+            if(!reader.readValue(tplListCount) || tplListCount > 65536u)
+                return false;
+            m_ownedTemplateParamLists.reserve(tplListCount);
+            for(u32 li = 0u; li < tplListCount; ++li){
+                u32 paramCount = 0u;
+                if(!reader.readValue(paramCount) || paramCount > 1024u)
+                    return false;
+                m_ownedTemplateParamLists.push_back(MakeGlobalUnique<MVector<TemplateParamDecl>>(m_arena, m_arena));
+                MVector<TemplateParamDecl>& list = *m_ownedTemplateParamLists.back();
+                list.reserve(paramCount);
+                for(u32 pi = 0u; pi < paramCount; ++pi){
+                    list.emplace_back(m_arena);
+                    TemplateParamDecl& tp = list.back();
+                    i32 constTypeIdx = -1;
+                    u32 boundCount = 0u;
+                    if(!reader.readStringRef(m_sourceText, tp.name)
+                        || !reader.readValue(constTypeIdx)
+                        || !reader.readValue(tp.span)
+                        || !reader.readValue(boundCount)
+                        || boundCount > 1024u
+                    )
+                        return false;
+                    tp.constValueType = resolveTypePtr(constTypeIdx);
+                    tp.interfaceBounds.reserve(boundCount);
+                    for(u32 bi = 0u; bi < boundCount; ++bi){
+                        i32 boundIdx = -1;
+                        if(!reader.readValue(boundIdx))
+                            return false;
+                        tp.interfaceBounds.push_back(resolveTypePtr(boundIdx));
+                    }
+                }
+            }
+            return true;
+        };
+
+        if(!readTypeRefAndPopulate()){
+            resetRegistryState();
+            return false;
+        }
+
+        u32 objCount = 0u;
+        if(!reader.readValue(objCount) || objCount > 65536u){
+            resetRegistryState();
+            return false;
+        }
+        m_objectTypes.reserve(objCount);
+        for(u32 i = 0u; i < objCount; ++i){
+            BuiltinObjectTypeInfo obj{};
+            i32 tplListIdx = -1;
+            if(!reader.readStringRef(m_sourceText, obj.adhdName)
+                || !reader.readStringRef(m_sourceText, obj.cppExportName)
+                || !reader.readStringRef(m_sourceText, obj.requiredHeader)
+                || !reader.readValue(obj.byteSize)
+                || !reader.readValue(obj.byteAlign)
+                || !reader.readBool(obj.isArenaBacked)
+                || !reader.readBool(obj.isSelfDefaulted)
+                || !reader.readBool(obj.isSmallValue)
+                || !reader.readBool(obj.isBorrowView)
+                || !reader.readBool(obj.isBinarySerializable)
+                || !reader.readBool(obj.isSingleValueCtor)
+                || !reader.readBool(obj.emitsBraceFieldInit)
+                || !reader.readBool(obj.isStringLike)
+                || !reader.readBool(obj.isStringSwitch)
+                || !reader.readBool(obj.isNonThreadSafeContainer)
+                || !reader.readBool(obj.isNwbMapKey)
+                || !reader.readBool(obj.requiresTCharAdaptation)
+                || !reader.readValue(obj.arenaCtorMode)
+                || !reader.readBool(obj.isCopyMoveConstructible)
+                || !reader.readBool(obj.isAssignable)
+                || !reader.readBool(obj.isAbstract)
+                || !reader.readBool(obj.isPolymorphicBase)
+                || !reader.readValue(obj.formatArgWrapKind)
+                || !reader.readValue(tplListIdx)
+            ){
+                resetRegistryState();
+                return false;
+            }
+            if(tplListIdx >= 0 && static_cast<usize>(tplListIdx) < m_ownedTemplateParamLists.size()){
+                const MVector<TemplateParamDecl>& list = *m_ownedTemplateParamLists[static_cast<usize>(tplListIdx)];
+                obj.templateParams = Span<const TemplateParamDecl>(list.data(), list.size());
+            }
+            m_objectTypes.push_back(obj);
+        }
+
+        u32 enumCount = 0u;
+        if(!reader.readValue(enumCount) || enumCount > 65536u){
+            resetRegistryState();
+            return false;
+        }
+        m_enums.reserve(enumCount);
+        for(u32 i = 0u; i < enumCount; ++i){
+            BuiltinEnumInfo en{};
+            if(!reader.readStringRef(m_sourceText, en.adhdName)
+                || !reader.readStringRef(m_sourceText, en.cppTypeName)
+                || !reader.readStringRef(m_sourceText, en.cppScopeName)
+                || !reader.readStringRef(m_sourceText, en.requiredHeader)
+                || !reader.readValue(en.byteSize)
+                || !reader.readValue(en.byteAlign)
+                || !reader.readBool(en.isFlag)
+            ){
+                resetRegistryState();
+                return false;
+            }
+            m_enums.push_back(en);
+        }
+
+        u32 enumEntryCount = 0u;
+        if(!reader.readValue(enumEntryCount) || enumEntryCount > 262144u){
+            resetRegistryState();
+            return false;
+        }
+        m_enumEntries.reserve(enumEntryCount);
+        for(u32 i = 0u; i < enumEntryCount; ++i){
+            BuiltinEnumEntryInfo entry{};
+            if(!reader.readStringRef(m_sourceText, entry.adhdEnumName) || !reader.readStringRef(m_sourceText, entry.entryName)){
+                resetRegistryState();
+                return false;
+            }
+            m_enumEntries.push_back(entry);
+        }
+
+        u32 fieldCount = 0u;
+        if(!reader.readValue(fieldCount) || fieldCount > 262144u){
+            resetRegistryState();
+            return false;
+        }
+        m_fields.reserve(fieldCount);
+        for(u32 i = 0u; i < fieldCount; ++i){
+            BuiltinFieldInfo field{};
+            if(!reader.readStringRef(m_sourceText, field.receiverTypeName)
+                || !reader.readStringRef(m_sourceText, field.fieldName)
+                || !reader.readStringRef(m_sourceText, field.fieldTypeName)
+                || !reader.readStringRef(m_sourceText, field.elemTypeName)
+                || !reader.readStringRef(m_sourceText, field.countText)
+            ){
+                resetRegistryState();
+                return false;
+            }
+            m_fields.push_back(field);
+        }
+
+        u32 rmCount = 0u;
+        if(!reader.readValue(rmCount) || rmCount > 262144u){
+            resetRegistryState();
+            return false;
+        }
+        m_receiverMethods.reserve(rmCount);
+        for(u32 i = 0u; i < rmCount; ++i){
+            BuiltinReceiverMethodInfo rm{};
+            u8 retArgRefModeByte = 0u;
+            if(!reader.readStringRef(m_sourceText, rm.receiverTypeName)
+                || !reader.readStringRef(m_sourceText, rm.methodName)
+                || !reader.readStringRef(m_sourceText, rm.returnTypeName)
+                || !reader.readStringRef(m_sourceText, rm.returnTypeArgName)
+                || !reader.readStringRef(m_sourceText, rm.returnNestedTypeArgName)
+                || !reader.readStringRef(m_sourceText, rm.returnErrorTypeName)
+                || !reader.readBool(rm.synthesizeTypeRef)
+                || !reader.readBool(rm.isMutating)
+                || !reader.readBool(rm.returnsReference)
+                || !reader.readValue(retArgRefModeByte)
+            ){
+                resetRegistryState();
+                return false;
+            }
+            rm.returnTypeArgRefMode = static_cast<ParamPassingMode::Enum>(retArgRefModeByte);
+            m_receiverMethods.push_back(rm);
+        }
+
+        u32 sigCount = 0u;
+        if(!reader.readValue(sigCount) || sigCount > 262144u){
+            resetRegistryState();
+            return false;
+        }
+        m_receiverSignatures.reserve(sigCount);
+        for(u32 i = 0u; i < sigCount; ++i){
+            BuiltinReceiverSignatureInfo sig{};
+            if(!reader.readStringRef(m_sourceText, sig.receiverTypeName) || !reader.readStringRef(m_sourceText, sig.methodName)){
+                resetRegistryState();
+                return false;
+            }
+            for(BuiltinFunctionArgRule::Enum& r : sig.argRules){
+                u16 rv = 0u;
+                if(!reader.readValue(rv)){
+                    resetRegistryState();
+                    return false;
+                }
+                r = static_cast<BuiltinFunctionArgRule::Enum>(rv);
+            }
+            if(!reader.readValue(sig.arity)
+                || !reader.readValue(sig.retainedArgMask)
+                || !reader.readValue(sig.cppConstReferenceMask)
+                || !reader.readBool(sig.allowsCppUnwind)
+            ){
+                resetRegistryState();
+                return false;
+            }
+            m_receiverSignatures.push_back(sig);
+        }
+
+        u32 ruleCount = 0u;
+        if(!reader.readValue(ruleCount) || ruleCount > 65536u){
+            resetRegistryState();
+            return false;
+        }
+        m_argRules.reserve(ruleCount);
+        for(u32 i = 0u; i < ruleCount; ++i){
+            BuiltinFunctionArgRuleInfo r{};
+            u16 rv = 0u;
+            if(!reader.readValue(rv)
+                || !reader.readStringRef(m_sourceText, r.expectedParamType)
+                || !reader.readStringRef(m_sourceText, r.requiredExactType)
+                || !reader.readStringRef(m_sourceText, r.errorMessage)
+                || !reader.readBool(r.isMut)
+                || !reader.readBool(r.requiresStringLike)
+                || !reader.readBool(r.requiresIntegerScalar)
+            ){
+                resetRegistryState();
+                return false;
+            }
+            r.rule = static_cast<BuiltinFunctionArgRule::Enum>(rv);
+            m_argRules.push_back(r);
+        }
+
+        u32 visitorCount = 0u;
+        if(!reader.readValue(visitorCount) || visitorCount > 65536u){
+            resetRegistryState();
+            return false;
+        }
+        m_visitorRules.reserve(visitorCount);
+        for(u32 i = 0u; i < visitorCount; ++i){
+            BuiltinVisitorRuleInfo vr{};
+            u16 rv = 0u;
+            if(!reader.readValue(rv)
+                || !reader.readStringRef(m_sourceText, vr.valueType)
+                || !reader.readStringRef(m_sourceText, vr.keyType)
+                || !reader.readBool(vr.mutableWithReceiver)
+            ){
+                resetRegistryState();
+                return false;
+            }
+            vr.rule = static_cast<BuiltinFunctionArgRule::Enum>(rv);
+            m_visitorRules.push_back(vr);
+        }
+
+        u32 fnCount = 0u;
+        if(!reader.readValue(fnCount) || fnCount > 65536u){
+            resetRegistryState();
+            return false;
+        }
+        m_functions.reserve(fnCount);
+        for(u32 i = 0u; i < fnCount; ++i){
+            BuiltinFunctionInfo fn{};
+            u64 minArity = 0u;
+            u64 arity = 0u;
+            u8 retRuleByte = 0u;
+            u8 callLowerByte = 0u;
+            if(!reader.readStringRef(m_sourceText, fn.adhdName)
+                || !reader.readStringRef(m_sourceText, fn.cppExportName)
+                || !reader.readStringRef(m_sourceText, fn.returnTypeName)
+                || !reader.readStringRef(m_sourceText, fn.returnTypeArgName)
+                || !reader.readStringRef(m_sourceText, fn.returnNestedTypeArgName)
+                || !reader.readStringRef(m_sourceText, fn.returnErrorTypeName)
+                || !reader.readStringRef(m_sourceText, fn.requiredHeader)
+                || !reader.readValue(minArity)
+                || !reader.readValue(arity)
+                || !reader.readValue(retRuleByte)
+                || !reader.readValue(callLowerByte)
+                || !reader.readBool(fn.prependsScratchArena)
+                || !reader.readBool(fn.isVariadic)
+                || !reader.readBool(fn.wrapsFormatArgs)
+                || !reader.readBool(fn.requiresExplicitTypeArg)
+                || !reader.readBool(fn.returnsBorrowedView)
+                || !reader.readBool(fn.rejectsSimdStorage)
+                || !reader.readBool(fn.returnsReference)
+            ){
+                resetRegistryState();
+                return false;
+            }
+            fn.minArity = static_cast<usize>(minArity);
+            fn.arity = static_cast<usize>(arity);
+            fn.returnRule = static_cast<BuiltinFunctionReturnRule::Enum>(retRuleByte);
+            fn.callLowering = static_cast<BuiltinCallLowering::Enum>(callLowerByte);
+            for(BuiltinFunctionArgRule::Enum& r : fn.argRules){
+                u16 rv = 0u;
+                if(!reader.readValue(rv)){
+                    resetRegistryState();
+                    return false;
+                }
+                r = static_cast<BuiltinFunctionArgRule::Enum>(rv);
+            }
+            if(!reader.readValue(fn.retainedArgMask) || !reader.readValue(fn.explicitTypeParamMask)){
+                resetRegistryState();
+                return false;
+            }
+            m_functions.push_back(fn);
+        }
+
+        u32 gcCount = 0u;
+        if(!reader.readValue(gcCount) || gcCount > 65536u){
+            resetRegistryState();
+            return false;
+        }
+        m_globalConstants.reserve(gcCount);
+        for(u32 i = 0u; i < gcCount; ++i){
+            BuiltinGlobalConstantInfo gc{};
+            if(!reader.readStringRef(m_sourceText, gc.adhdName)
+                || !reader.readStringRef(m_sourceText, gc.cppExportName)
+                || !reader.readStringRef(m_sourceText, gc.adhdTypeName)
+                || !reader.readStringRef(m_sourceText, gc.requiredHeader)
+            ){
+                resetRegistryState();
+                return false;
+            }
+            m_globalConstants.push_back(gc);
+        }
+
+        if(!reader.atEnd()){
+            resetRegistryState();
+            return false;
+        }
+
+        rebuildLookupIndices();
+        return true;
+    }
+
+    void saveBinaryCache(const WatchedPreludeList& watchedList, MetaArena& scratchArena)const{
+        if(watchedList.files.size() < 2u || !m_loadError.empty())
+            return;
+
+        PreludeBinaryWriter writer(scratchArena);
+
+        MVector<const TypeRef*> flatTypeRefs(scratchArena);
+        HashMap<const TypeRef*, i32, MetaArena> typeRefIndices(scratchArena);
+        const auto registerTypeRef = [&](const auto& self, const TypeRef* const tr) -> i32{
+            if(!tr)
+                return -1;
+            const auto it = typeRefIndices.find(tr);
+            if(it != typeRefIndices.end())
+                return it->second;
+            const i32 idx = static_cast<i32>(flatTypeRefs.size());
+            flatTypeRefs.push_back(tr);
+            typeRefIndices.emplace(tr, idx);
+            for(const TypeArg& arg : tr->templateArgs)
+                (void)self(self, arg.type);
+            (void)self(self, tr->funcReturnType);
+            for(const FuncParamType& fp : tr->funcParams)
+                (void)self(self, fp.type);
+            return idx;
+        };
+
+        for(const auto& tpListPtr : m_ownedTemplateParamLists){
+            for(const TemplateParamDecl& tp : *tpListPtr){
+                (void)registerTypeRef(registerTypeRef, tp.constValueType);
+                for(const TypeRef* const bound : tp.interfaceBounds)
+                    (void)registerTypeRef(registerTypeRef, bound);
+            }
+        }
+
+        HashMap<const TemplateParamDecl*, i32, MetaArena> tplListByFirstPtr(scratchArena);
+        for(usize li = 0u; li < m_ownedTemplateParamLists.size(); ++li){
+            const MVector<TemplateParamDecl>& list = *m_ownedTemplateParamLists[li];
+            if(!list.empty())
+                tplListByFirstPtr.emplace(list.data(), static_cast<i32>(li));
+        }
+
+        writer.writeValue(static_cast<u32>(flatTypeRefs.size()));
+        for(const TypeRef* const tr : flatTypeRefs){
+            writer.writeString(tr->name);
+            writer.writeValue(static_cast<u8>(tr->refMode));
+            writer.writeValue(static_cast<u64>(tr->inferredCaptureBytes));
+            writer.writeValue(tr->span);
+            writer.writeBool(tr->isFuncType);
+            writer.writeBool(tr->isAuto);
+            writer.writeValue(static_cast<u32>(tr->templateArgs.size()));
+            const i32 retIdx = tr->funcReturnType ? typeRefIndices.find(tr->funcReturnType)->second : -1;
+            writer.writeValue(retIdx);
+            writer.writeValue(static_cast<u32>(tr->funcParams.size()));
+            for(const TypeArg& arg : tr->templateArgs){
+                const i32 argIdx = arg.type ? typeRefIndices.find(arg.type)->second : -1;
+                writer.writeValue(argIdx);
+                writer.writeString(arg.constantText);
+            }
+            for(const FuncParamType& fp : tr->funcParams){
+                writer.writeValue(static_cast<u8>(fp.mode));
+                const i32 ptIdx = fp.type ? typeRefIndices.find(fp.type)->second : -1;
+                writer.writeValue(ptIdx);
+            }
+        }
+
+        writer.writeValue(static_cast<u32>(m_ownedTemplateParamLists.size()));
+        for(const auto& tpListPtr : m_ownedTemplateParamLists){
+            const MVector<TemplateParamDecl>& list = *tpListPtr;
+            writer.writeValue(static_cast<u32>(list.size()));
+            for(const TemplateParamDecl& tp : list){
+                writer.writeString(tp.name);
+                const i32 cvIdx = tp.constValueType ? typeRefIndices.find(tp.constValueType)->second : -1;
+                writer.writeValue(cvIdx);
+                writer.writeValue(tp.span);
+                writer.writeValue(static_cast<u32>(tp.interfaceBounds.size()));
+                for(const TypeRef* const bound : tp.interfaceBounds){
+                    const i32 bIdx = bound ? typeRefIndices.find(bound)->second : -1;
+                    writer.writeValue(bIdx);
+                }
+            }
+        }
+
+        writer.writeValue(static_cast<u32>(m_objectTypes.size()));
+        for(const BuiltinObjectTypeInfo& obj : m_objectTypes){
+            writer.writeString(obj.adhdName);
+            writer.writeString(obj.cppExportName);
+            writer.writeString(obj.requiredHeader);
+            writer.writeValue(obj.byteSize);
+            writer.writeValue(obj.byteAlign);
+            writer.writeBool(obj.isArenaBacked);
+            writer.writeBool(obj.isSelfDefaulted);
+            writer.writeBool(obj.isSmallValue);
+            writer.writeBool(obj.isBorrowView);
+            writer.writeBool(obj.isBinarySerializable);
+            writer.writeBool(obj.isSingleValueCtor);
+            writer.writeBool(obj.emitsBraceFieldInit);
+            writer.writeBool(obj.isStringLike);
+            writer.writeBool(obj.isStringSwitch);
+            writer.writeBool(obj.isNonThreadSafeContainer);
+            writer.writeBool(obj.isNwbMapKey);
+            writer.writeBool(obj.requiresTCharAdaptation);
+            writer.writeValue(obj.arenaCtorMode);
+            writer.writeBool(obj.isCopyMoveConstructible);
+            writer.writeBool(obj.isAssignable);
+            writer.writeBool(obj.isAbstract);
+            writer.writeBool(obj.isPolymorphicBase);
+            writer.writeValue(obj.formatArgWrapKind);
+            i32 tplListIdx = -1;
+            if(!obj.templateParams.empty()){
+                const auto it = tplListByFirstPtr.find(obj.templateParams.data());
+                if(it != tplListByFirstPtr.end())
+                    tplListIdx = it->second;
+            }
+            writer.writeValue(tplListIdx);
+        }
+
+        writer.writeValue(static_cast<u32>(m_enums.size()));
+        for(const BuiltinEnumInfo& en : m_enums){
+            writer.writeString(en.adhdName);
+            writer.writeString(en.cppTypeName);
+            writer.writeString(en.cppScopeName);
+            writer.writeString(en.requiredHeader);
+            writer.writeValue(en.byteSize);
+            writer.writeValue(en.byteAlign);
+            writer.writeBool(en.isFlag);
+        }
+
+        writer.writeValue(static_cast<u32>(m_enumEntries.size()));
+        for(const BuiltinEnumEntryInfo& entry : m_enumEntries){
+            writer.writeString(entry.adhdEnumName);
+            writer.writeString(entry.entryName);
+        }
+
+        writer.writeValue(static_cast<u32>(m_fields.size()));
+        for(const BuiltinFieldInfo& f : m_fields){
+            writer.writeString(f.receiverTypeName);
+            writer.writeString(f.fieldName);
+            writer.writeString(f.fieldTypeName);
+            writer.writeString(f.elemTypeName);
+            writer.writeString(f.countText);
+        }
+
+        writer.writeValue(static_cast<u32>(m_receiverMethods.size()));
+        for(const BuiltinReceiverMethodInfo& rm : m_receiverMethods){
+            writer.writeString(rm.receiverTypeName);
+            writer.writeString(rm.methodName);
+            writer.writeString(rm.returnTypeName);
+            writer.writeString(rm.returnTypeArgName);
+            writer.writeString(rm.returnNestedTypeArgName);
+            writer.writeString(rm.returnErrorTypeName);
+            writer.writeBool(rm.synthesizeTypeRef);
+            writer.writeBool(rm.isMutating);
+            writer.writeBool(rm.returnsReference);
+            writer.writeValue(static_cast<u8>(rm.returnTypeArgRefMode));
+        }
+
+        writer.writeValue(static_cast<u32>(m_receiverSignatures.size()));
+        for(const BuiltinReceiverSignatureInfo& sig : m_receiverSignatures){
+            writer.writeString(sig.receiverTypeName);
+            writer.writeString(sig.methodName);
+            for(const BuiltinFunctionArgRule::Enum r : sig.argRules)
+                writer.writeValue(static_cast<u16>(r));
+            writer.writeValue(sig.arity);
+            writer.writeValue(sig.retainedArgMask);
+            writer.writeValue(sig.cppConstReferenceMask);
+            writer.writeBool(sig.allowsCppUnwind);
+        }
+
+        writer.writeValue(static_cast<u32>(m_argRules.size()));
+        for(const BuiltinFunctionArgRuleInfo& r : m_argRules){
+            writer.writeValue(static_cast<u16>(r.rule));
+            writer.writeString(r.expectedParamType);
+            writer.writeString(r.requiredExactType);
+            writer.writeString(r.errorMessage);
+            writer.writeBool(r.isMut);
+            writer.writeBool(r.requiresStringLike);
+            writer.writeBool(r.requiresIntegerScalar);
+        }
+
+        writer.writeValue(static_cast<u32>(m_visitorRules.size()));
+        for(const BuiltinVisitorRuleInfo& vr : m_visitorRules){
+            writer.writeValue(static_cast<u16>(vr.rule));
+            writer.writeString(vr.valueType);
+            writer.writeString(vr.keyType);
+            writer.writeBool(vr.mutableWithReceiver);
+        }
+
+        writer.writeValue(static_cast<u32>(m_functions.size()));
+        for(const BuiltinFunctionInfo& fn : m_functions){
+            writer.writeString(fn.adhdName);
+            writer.writeString(fn.cppExportName);
+            writer.writeString(fn.returnTypeName);
+            writer.writeString(fn.returnTypeArgName);
+            writer.writeString(fn.returnNestedTypeArgName);
+            writer.writeString(fn.returnErrorTypeName);
+            writer.writeString(fn.requiredHeader);
+            writer.writeValue(static_cast<u64>(fn.minArity));
+            writer.writeValue(static_cast<u64>(fn.arity));
+            writer.writeValue(static_cast<u8>(fn.returnRule));
+            writer.writeValue(static_cast<u8>(fn.callLowering));
+            writer.writeBool(fn.prependsScratchArena);
+            writer.writeBool(fn.isVariadic);
+            writer.writeBool(fn.wrapsFormatArgs);
+            writer.writeBool(fn.requiresExplicitTypeArg);
+            writer.writeBool(fn.returnsBorrowedView);
+            writer.writeBool(fn.rejectsSimdStorage);
+            writer.writeBool(fn.returnsReference);
+            for(const BuiltinFunctionArgRule::Enum r : fn.argRules)
+                writer.writeValue(static_cast<u16>(r));
+            writer.writeValue(fn.retainedArgMask);
+            writer.writeValue(fn.explicitTypeParamMask);
+        }
+
+        writer.writeValue(static_cast<u32>(m_globalConstants.size()));
+        for(const BuiltinGlobalConstantInfo& gc : m_globalConstants){
+            writer.writeString(gc.adhdName);
+            writer.writeString(gc.cppExportName);
+            writer.writeString(gc.adhdTypeName);
+            writer.writeString(gc.requiredHeader);
+        }
+
+        PreludeBinaryWriter headerWriter(scratchArena);
+        headerWriter.writeValue(s_BinaryCacheMagic);
+        headerWriter.writeValue(s_BinaryCacheVersion);
+        headerWriter.writeValue(ComputeBinaryCacheSchemaSignature());
+        headerWriter.writeValue(static_cast<u32>(watchedList.files.size()));
+        for(const WatchedPreludeFile& wf : watchedList.files){
+            headerWriter.writeRawString(MStringView(wf.relativePath.data(), wf.relativePath.size()));
+            headerWriter.writeValue(wf.fileSize);
+            headerWriter.writeValue(wf.mtimeTicks);
+            headerWriter.writeBool(wf.fromProjectRoot);
+        }
+        const MString& blob = writer.stringBlob();
+        headerWriter.writeValue(static_cast<u32>(blob.size()));
+
+        const Vector<u8, MetaArena>& headerBytes = headerWriter.payloadBytes();
+        const Vector<u8, MetaArena>& payloadBytes = writer.payloadBytes();
+        Vector<u8, MetaArena> fullImage(scratchArena);
+        fullImage.reserve(headerBytes.size() + blob.size() + payloadBytes.size());
+        fullImage.insert(fullImage.end(), headerBytes.begin(), headerBytes.end());
+        if(!blob.empty()){
+            const u8* blobBytes = reinterpret_cast<const u8*>(blob.data());
+            fullImage.insert(fullImage.end(), blobBytes, blobBytes + blob.size());
+        }
+        fullImage.insert(fullImage.end(), payloadBytes.begin(), payloadBytes.end());
+
+        const ::Path<MetaArena> cachePath = ResolvePreludeCachePath(scratchArena);
+        static Atomic<u64> s_TmpSeq{ 0u };
+        const u64 seq = s_TmpSeq.fetch_add(1u, MemoryOrder::relaxed);
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+        const u64 pid = static_cast<u64>(GetCurrentProcessId());
+        const u64 tid = static_cast<u64>(GetCurrentThreadId());
+#else
+        const u64 pid = static_cast<u64>(::getpid());
+        const u64 tid = 0u;
+#endif
+        const MString tmpName = StringFormat(scratchArena, "{}.tmp.{}.{}.{}", PathToGenericString<MChar>(scratchArena, cachePath), pid, tid, seq);
+        const ::Path<MetaArena> tmpPath(scratchArena, MStringView(tmpName.data(), tmpName.size()));
+        if(!WriteBinaryFile(tmpPath, fullImage)){
+            (void)RemoveFile(tmpPath);
+            return;
+        }
+        if(!RenamePath(tmpPath, cachePath))
+            (void)RemoveFile(tmpPath);
+    }
+
     void load(){
-        Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch);
         MetaArena parseArena(MetascriptArenaScope::s_ParserScratch);
+        if(tryLoadBinaryCache(parseArena))
+            return;
+
+        Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch);
+        WatchedPreludeList watchedList(parseArena);
 
         MString rawGlobalSource(parseArena);
-        const b8 loadedGlobal = tryReadProjectFile(ContractSemantics::s_GlobalExternPreludePath, parseArena, rawGlobalSource);
+        const b8 loadedGlobal = tryReadProjectFile(ContractSemantics::s_GlobalExternPreludePath, parseArena, rawGlobalSource, &watchedList);
         MString rawCoreSource(parseArena);
-        const b8 loadedCore = tryReadProjectFile(ContractSemantics::s_CoreExternPreludePath, parseArena, rawCoreSource);
+        const b8 loadedCore = tryReadProjectFile(ContractSemantics::s_CoreExternPreludePath, parseArena, rawCoreSource, &watchedList);
         if(!loadedGlobal || rawGlobalSource.empty() || !loadedCore || rawCoreSource.empty()){
             const MStringView source = (!loadedGlobal || rawGlobalSource.empty()) ? ContractSemantics::s_GlobalExternPreludePath : ContractSemantics::s_CoreExternPreludePath;
             recordLoadError(source, {}, "file is missing or empty");
@@ -1143,7 +2244,7 @@ private:
         rawPreludeSource.append(rawCoreSource.data(), rawCoreSource.size());
 
         MVector<ParseError> errors(parseArena);
-        PreludeIncludeResolver includeResolver(*this);
+        PreludeIncludeResolver includeResolver(*this, &watchedList);
         Preprocessor preprocessor(parseArena, scratchArena, errors, &includeResolver, false);
         m_sourceText.clear();
         const b8 preprocessed = preprocessor.process(MStringView(rawPreludeSource.data(), rawPreludeSource.size()), m_sourceText);
@@ -1154,7 +2255,7 @@ private:
 
         const MStringView activeSource(m_sourceText.data(), m_sourceText.size());
         TranslationUnit parseUnit(parseArena);
-        ParserCursor cursor(activeSource, m_arena, scratchArena, errors);
+        ParserCursor cursor(activeSource, parseArena, scratchArena, errors);
         DeclParser declParser(cursor, activeSource, nullptr);
         const b8 parsed = declParser.parseTranslationUnit(parseUnit);
         if(!parsed || !errors.empty()){
@@ -1170,6 +2271,7 @@ private:
         loadClasses(parseUnit.classes);
         loadFunctions(parseUnit.freeFunctions);
         loadGlobalConstants(parseUnit.globalConstants);
+        saveBinaryCache(watchedList, parseArena);
     }
 
 
@@ -1178,6 +2280,8 @@ private:
     MString m_sourceText;
     MString m_loadError;
     MVector<GlobalUniquePtr<MString>> m_ownedStrings;
+    MVector<GlobalUniquePtr<TypeRef>> m_ownedTypeRefs;
+    MVector<GlobalUniquePtr<MVector<TemplateParamDecl>>> m_ownedTemplateParamLists;
     MVector<BuiltinObjectTypeInfo> m_objectTypes;
     MVector<BuiltinEnumInfo> m_enums;
     MVector<BuiltinEnumEntryInfo> m_enumEntries;

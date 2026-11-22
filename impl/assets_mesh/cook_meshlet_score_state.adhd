@@ -34,17 +34,14 @@ f32 EvaluateMeshletCandidateScore(
     f32 disconnectedPenalty = 0.0f;
     if(disconnected)
         disconnectedPenalty = s_MeshletScoreDisconnectedPenalty;
-    const VectorSingle shapeTerms = VectorSingle(cast<f32>(sharedVertexCount), cast<f32>(missingVertexCount), s_MeshletScoreRadiusWeight, s_MeshletScoreCentroidWeight)
-        * VectorSingle(s_MeshletScoreSharedVertexWeight, s_MeshletScoreNewVertexWeight, predictedRadiusGrowth, centroidDistance);
-    const VectorSingle normalTerms = VectorSingle(s_MeshletScoreNormalWeight, s_MeshletScoreConePenaltyWeight, s_MeshletScoreNormalWeight, s_MeshletScoreConePenaltyWeight)
-        * VectorSingle(normalCoherence, coneWidening, normalCoherence, coneWidening);
-    VectorSingle score = shapeTerms.xxxx - shapeTerms.yyyy;
-    score = score - shapeTerms.zzzz;
-    score = score - shapeTerms.wwww;
-    score = score + normalTerms.xxxx;
-    score = score - normalTerms.yyyy;
-    score = score - VectorSingle(disconnectedPenalty);
-    return score.x;
+    f32 score = cast<f32>(sharedVertexCount) * s_MeshletScoreSharedVertexWeight;
+    score -= cast<f32>(missingVertexCount) * s_MeshletScoreNewVertexWeight;
+    score -= s_MeshletScoreRadiusWeight * predictedRadiusGrowth;
+    score -= s_MeshletScoreCentroidWeight * centroidDistance;
+    score += s_MeshletScoreNormalWeight * normalCoherence;
+    score -= s_MeshletScoreConePenaltyWeight * coneWidening;
+    score -= disconnectedPenalty;
+    return score;
 }
 
 void ResetMeshletScoreState(mut MeshletScoreState state){
@@ -153,7 +150,7 @@ Expected<f32> TryComputeMeshletScoreConeCutoffFromActiveNormals(
             const usize idx = cast<usize>(groupIndex);
             const VectorSingle dots = (ax * VectorSingle(state.activeUnitNormalX[idx])) + (ay * VectorSingle(state.activeUnitNormalY[idx])) + (az * VectorSingle(state.activeUnitNormalZ[idx]));
             minDot = Min(minDot, dots);
-            if(!(minDot.x > 0.0f && minDot.y > 0.0f && minDot.z > 0.0f && minDot.w > 0.0f))
+            if(VectorMoveMask(VectorGreater(minDot, VectorZero())) != s_XYZW)
                 return MakeUnexpected(Failure());
         }
     }

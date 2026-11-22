@@ -53,6 +53,144 @@ uint nwbSwShadowInstanceCount(){
     return g_NwbSwShadowPush.instanceCount;
 }
 
+#if NWB_SW_SHADOW_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
+bool nwbSwShadowInstanceBlockedOpaque(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax){
+    const NwbSwBvhInstance instance = nwbHeapSwBvhInstances(g_NwbSwShadowMaterialContextSlots.sceneSlots.y)[instanceIndex];
+    const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(g_NwbSwShadowMaterialContextSlots.sceneSlots.z)[instanceIndex];
+#if defined(NWB_SW_SHADOW_SKIP_CSG)
+#if NWB_SW_SHADOW_SKIP_CSG
+    if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW) != 0u)
+        return false;
+#endif
+#endif
+    if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) != 0u)
+        return false;
+    const float3 origin = nwbSwBvhTransformPoint(instance, worldOrigin);
+    const float3 direction = nwbSwBvhTransformVector(instance, worldDirection);
+    const float3 invDir = nwbSwShadowSafeInvDir(direction);
+    const float3 minBias = (-NWB_SW_SHADOW_AABB_PADDING - origin) * invDir;
+    const float3 maxBias = (NWB_SW_SHADOW_AABB_PADDING - origin) * invDir;
+    const NwbSwShadowWoopRay woopRay = nwbSwShadowMakeWoopRay(origin, direction);
+
+    uint stack[NWB_SW_SHADOW_MESH_STACK_SIZE];
+    stack[0u] = 0u;
+    uint stackPointer = 0u;
+
+    NwbBvhNode node = nwbHeapBvhNodes(material.nodeSlot)[0u];
+    if(!nwbSwShadowRayAabbFma(invDir, minBias, maxBias, tMin, tMax, node.aabbMin, node.aabbMax))
+        return false;
+
+    while(true){
+        if(nwbBvhNodeIsLeaf(node)){
+            const uint triangle = nwbBvhLeafPrimitive(node);
+            const uint indexBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
+            const uint3 indices = nwbHeapRawBuffer(material.indexSlot).Load3(indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+            const float3 v0 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+            const float3 v1 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+            const float3 v2 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+            if(nwbSwShadowRayTriangleWoop(woopRay, tMin, tMax, v0, v1, v2).hit)
+                return true;
+            if(stackPointer == 0u)
+                return false;
+            --stackPointer;
+            node = nwbHeapBvhNodes(material.nodeSlot)[stack[stackPointer]];
+        }
+        else{
+            const uint left = node.leftChild;
+            const uint right = nwbBvhNodeRightChildIndex(node);
+            const NwbBvhNode leftNode = nwbHeapBvhNodes(material.nodeSlot)[left];
+            const NwbBvhNode rightNode = nwbHeapBvhNodes(material.nodeSlot)[right];
+            const float tLeft = nwbSwShadowRayAabbEntryTFma(invDir, minBias, maxBias, tMin, tMax, leftNode.aabbMin, leftNode.aabbMax);
+            const float tRight = nwbSwShadowRayAabbEntryTFma(invDir, minBias, maxBias, tMin, tMax, rightNode.aabbMin, rightNode.aabbMax);
+            const bool leftMiss = (tLeft >= NWB_SW_SHADOW_AABB_MISS);
+            const bool rightMiss = (tRight >= NWB_SW_SHADOW_AABB_MISS);
+
+            if(leftMiss && rightMiss){
+                if(stackPointer == 0u)
+                    return false;
+                --stackPointer;
+                node = nwbHeapBvhNodes(material.nodeSlot)[stack[stackPointer]];
+                continue;
+            }
+            const bool leftNear = (tLeft <= tRight);
+            const uint farChild = leftNear ? right : left;
+            const bool farMiss = leftNear ? rightMiss : leftMiss;
+            node = leftNear ? leftNode : rightNode;
+
+            if(farMiss)
+                continue;
+
+            if((stackPointer + 1u) >= NWB_SW_SHADOW_MESH_STACK_SIZE)
+                return true;
+            stack[stackPointer] = farChild;
+            ++stackPointer;
+        }
+    }
+}
+
+bool nwbSwShadowOpaqueBlocked(const float3 origin, const float3 direction, const float tMin, const float tMax){
+    if(nwbSwShadowInstanceCount() == 0u)
+        return false;
+
+    const float3 invDir = nwbSwShadowSafeInvDir(direction);
+    const float3 minBias = (-NWB_SW_SHADOW_AABB_PADDING - origin) * invDir;
+    const float3 maxBias = (NWB_SW_SHADOW_AABB_PADDING - origin) * invDir;
+
+    uint stack[NWB_SW_SHADOW_SCENE_STACK_SIZE];
+    stack[0u] = 0u;
+    uint stackPointer = 0u;
+
+    NwbBvhNode node = nwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[0u];
+    if(!nwbSwShadowRayAabbFma(invDir, minBias, maxBias, tMin, tMax, node.aabbMin, node.aabbMax))
+        return false;
+
+    while(true){
+        if(nwbBvhNodeIsLeaf(node)){
+            if(nwbSwShadowInstanceBlockedOpaque(nwbBvhLeafPrimitive(node), origin, direction, tMin, tMax))
+                return true;
+            if(stackPointer == 0u)
+                return false;
+            --stackPointer;
+            node = nwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[stack[stackPointer]];
+        }
+        else{
+            const uint left = node.leftChild;
+            const uint right = nwbBvhNodeRightChildIndex(node);
+            const NwbBvhNode leftNode = nwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[left];
+            const NwbBvhNode rightNode = nwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[right];
+            const float tLeft = nwbSwShadowRayAabbEntryTFma(invDir, minBias, maxBias, tMin, tMax, leftNode.aabbMin, leftNode.aabbMax);
+            const float tRight = nwbSwShadowRayAabbEntryTFma(invDir, minBias, maxBias, tMin, tMax, rightNode.aabbMin, rightNode.aabbMax);
+            const bool leftMiss = (tLeft >= NWB_SW_SHADOW_AABB_MISS);
+            const bool rightMiss = (tRight >= NWB_SW_SHADOW_AABB_MISS);
+
+            if(leftMiss && rightMiss){
+                if(stackPointer == 0u)
+                    return false;
+                --stackPointer;
+                node = nwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[stack[stackPointer]];
+                continue;
+            }
+            const bool leftNear = (tLeft <= tRight);
+            const uint farChild = leftNear ? right : left;
+            const bool farMiss = leftNear ? rightMiss : leftMiss;
+            node = leftNear ? leftNode : rightNode;
+
+            if(farMiss)
+                continue;
+
+            if((stackPointer + 1u) >= NWB_SW_SHADOW_SCENE_STACK_SIZE)
+                return true;
+            stack[stackPointer] = farChild;
+            ++stackPointer;
+        }
+    }
+}
+
+void nwbSwShadowOccluded(const float3 origin, const float3 direction, const float tMin, const float tMax, inout NwbShadowVisibilityAccumulator acc){
+    if(nwbSwShadowOpaqueBlocked(origin, direction, tMin, tMax))
+        acc.transmittance = half3(0.0h, 0.0h, 0.0h);
+}
+#else
 NwbShadowInstanceStatus nwbSwShadowInstanceOptics(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax, __ref NwbShadowInstanceOptics optics){
     const NwbSwBvhInstance instance = nwbHeapSwBvhInstances(g_NwbSwShadowMaterialContextSlots.sceneSlots.y)[instanceIndex];
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(g_NwbSwShadowMaterialContextSlots.sceneSlots.z)[instanceIndex];
@@ -264,6 +402,7 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
         }
     }
 }
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

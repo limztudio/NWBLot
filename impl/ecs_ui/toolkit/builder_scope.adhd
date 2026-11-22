@@ -42,12 +42,12 @@ class BuilderOperationEnd : NoCopy{
 
 class BuilderItem{
     public WidgetState state;
-    public WidgetStyle style;
-    public SelectableStyle selectableStyle;
     public SharedTextLayout text;
     public Rect textBounds;
     public Insets padding;
     public f32 checkboxExtent = 0.0f;
+    public u32 styleIndex = 0u;
+    public u32 selectableStyleIndex = 0u;
     public u32 node = 0u;
     public u32 editBox = s_LayoutNoParent;
     public u32 list = s_LayoutNoParent;
@@ -68,10 +68,44 @@ class BuilderItem{
 class BuilderEditBoxFrame{
     public EditBoxStyle editStyle;
     public ScrollbarStyle scrollbarStyle;
-    public EditBoxView editView;
     public Optional<mut EditBoxState> editState;
     public EditBoxOptions editOptions;
     public EditBoxPaintFlags editFlags;
+    public u32 editViewCache = u32.max;
+}
+
+[move_only]
+class CachedEditBoxView{
+    public EditBoxView view;
+    public TextAreaModelStamp modelStamp;
+    public String language;
+    public u64 textIdentity = 0u;
+    public u64 textGeneration = 0u;
+    public u64 atlasIdentity = 0u;
+    public usize atlasGlyphCount = 0u;
+    public u64 lastUsedFrame = 0u;
+    public u32 fontSizeBits = 0u;
+    public u32 scriptTag = 0u;
+    public u32 pixelScaleXBits = 0u;
+    public u32 pixelScaleYBits = 0u;
+    public b8 valid = false;
+
+    public b8 matchesShape(in TextAreaModelStamp stamp, in u64 textId, in u64 textGen, in u32 sizeBits, in u32 script, in StringView lang)const{
+        return this.valid
+            && this.modelStamp == stamp
+            && this.textIdentity == textId
+            && this.textGeneration == textGen
+            && this.fontSizeBits == sizeBits
+            && this.scriptTag == script
+            && StringView(this.language) == lang;
+    }
+
+    public b8 matchesMeasure(in u32 scaleXBits, in u32 scaleYBits, in u64 atlasId, in usize atlasGlyphs)const{
+        return this.pixelScaleXBits == scaleXBits
+            && this.pixelScaleYBits == scaleYBits
+            && this.atlasIdentity == atlasId
+            && this.atlasGlyphCount == atlasGlyphs;
+    }
 }
 
 class BuilderWindowFrame{

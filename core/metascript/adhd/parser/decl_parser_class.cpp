@@ -19,7 +19,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const ParsedAttribute> attributes, const b8 isExtern){
+ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const ParsedAttribute> attributes, const b8 isExtern, const b8 isImported){
     if(!m_cursor.check(TokenType::Identifier)){
         m_cursor.errorExpected("expected class name");
         return nullptr;
@@ -28,7 +28,7 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const Pa
     ClassDecl* decl = AllocateAstNode<ClassDecl>(m_cursor.arena());
     decl->name = m_cursor.current().text;
     decl->span = span;
-    decl->isImported = isExtern;
+    decl->isImported = isImported || isExtern;
     decl->isExtern = isExtern;
     m_cursor.advance();
 
@@ -206,14 +206,18 @@ void DeclParser::parseClassMethodQualifiers(MethodDecl& method){
     }
 }
 
-b8 DeclParser::parseClassMemberCallableBody(MethodDecl& method, const MStringView missingTerminatorMessage){
+b8 DeclParser::parseClassMemberCallableBody(const ClassDecl& ownerClass, MethodDecl& method, const MStringView missingTerminatorMessage){
     if(m_cursor.check(TokenType::LeftBrace)){
         if(method.isExtern){
             m_cursor.error(method.span.line, method.span.column, "'extern' methods cannot define a body");
             return false;
         }
         method.hasBody = true;
-        return m_stmtParser.parseBlockStatements(method.body);
+        const b8 allowSkip = ownerClass.templateParams.empty() && method.templateParams.empty() && !method.isConstructor;
+        b8 skipped = false;
+        if(!trySkipImportedCallableBody(method, allowSkip, skipped))
+            return false;
+        return skipped || m_stmtParser.parseBlockStatements(method.body);
     }
     return m_cursor.expect(TokenType::Semicolon, missingTerminatorMessage);
 }
@@ -269,7 +273,7 @@ b8 DeclParser::parseClassMethodOrOperatorTail(
     method->name = name;
     method->isOperator = isOperator;
     method->isStatic = isStatic;
-    method->isImported = isExtern;
+    method->isImported = classDecl.isImported || isExtern;
     method->isExtern = isExtern;
     method->requiredHeader = classDecl.requiredHeader;
     method->span = span;
@@ -282,7 +286,7 @@ b8 DeclParser::parseClassMethodOrOperatorTail(
         return false;
 
     parseClassMethodQualifiers(*method);
-    if(!parseClassMemberCallableBody(*method, missingTerminatorMessage))
+    if(!parseClassMemberCallableBody(classDecl, *method, missingTerminatorMessage))
         return false;
 
     classDecl.methods.push_back(method);
@@ -355,7 +359,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
 
         MethodDecl* dtor = AllocateAstNode<MethodDecl>(m_cursor.arena());
         dtor->access = access;
-        dtor->isImported = isMemberExtern;
+        dtor->isImported = classDecl.isImported || isMemberExtern;
         dtor->isExtern = isMemberExtern;
         dtor->requiredHeader = classDecl.requiredHeader;
         dtor->span = span;
@@ -364,7 +368,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
             return false;
         if(!initializeDestructorDecl(*dtor, classDecl.name, "expected '(' for destructor"))
             return false;
-        if(!parseClassMemberCallableBody(*dtor, "expected '{' or ';' after destructor declaration"))
+        if(!parseClassMemberCallableBody(classDecl, *dtor, "expected '{' or ';' after destructor declaration"))
             return false;
 
         classDecl.methods.push_back(dtor);
@@ -377,7 +381,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         if(m_cursor.check(TokenType::LeftParen)){
             MethodDecl* ctor = AllocateAstNode<MethodDecl>(m_cursor.arena());
             ctor->access = access;
-            ctor->isImported = isMemberExtern;
+            ctor->isImported = classDecl.isImported || isMemberExtern;
             ctor->isExtern = isMemberExtern;
             ctor->requiredHeader = classDecl.requiredHeader;
             ctor->span = span;
@@ -386,7 +390,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
                 return false;
             if(!initializeConstructorDecl(*ctor, classDecl.name))
                 return false;
-            if(!parseClassMemberCallableBody(*ctor, "expected '{' or ';' after constructor declaration"))
+            if(!parseClassMemberCallableBody(classDecl, *ctor, "expected '{' or ';' after constructor declaration"))
                 return false;
 
             classDecl.methods.push_back(ctor);

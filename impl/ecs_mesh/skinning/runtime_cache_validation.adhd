@@ -104,9 +104,10 @@ Expected<EntityID> TryFindRuntimeMeshEntityByHandle(
     in HashMap<u64, EntityID> handleToEntity,
     in u64 handleValue
 ){
-    if(!handleToEntity.contains(handleValue))
+    const auto found = handleToEntity.find(handleValue);
+    if(found == handleToEntity.end())
         return MakeUnexpected(Failure());
-    const EntityID entity = handleToEntity.at(handleValue);
+    const EntityID entity = found.value();
     if(!entity.valid())
         return MakeUnexpected(Failure());
     return entity;

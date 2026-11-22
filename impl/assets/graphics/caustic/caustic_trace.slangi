@@ -53,6 +53,10 @@ struct NwbCausticBoundary{
 };
 
 NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin, float tMax);
+#if !NWB_RT_CSG_ENABLED
+NwbCausticHit nwbCausticTraceBounceZero(float3 origin, float3 direction, float tMin, float tMax);
+#endif
+bool nwbCausticSceneBounds(out float3 boundsMin, out float3 boundsMax, out uint flags);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -73,6 +77,10 @@ NwbOpticalTraceConfig nwbCausticOpticalConfig();
 bool nwbCausticCollectRefractiveEvents(
     const NwbOpticalTraceConfig config, const float3 origin, const float3 direction, const float minimum, const float maximum, const bool reverse,
     __ref NwbOpticalBootstrapEvent events[NWB_OPTICAL_MAX_CANDIDATE_EVENTS], out uint eventCount, out NwbCausticBoundary boundary, out float tolerance, inout NwbOpticalTraceResult result
+);
+bool nwbCausticCheckRefractiveBoundary(
+    const NwbOpticalTraceConfig config, const float3 origin, const float3 direction, const float minimum, const float maximum, const uint expectedInstance,
+    inout bool hasFirst, inout NwbOpticalBootstrapEvent firstEvent, inout uint candidateCount, inout NwbCausticBoundary boundary, inout NwbOpticalInstance outOptical, inout NwbOpticalTraceResult result
 );
 
 bool nwbCausticAppendBoundary(
@@ -112,27 +120,109 @@ bool nwbCausticAppendBoundary(
     return true;
 }
 
-bool nwbCausticCheckBoundary(const NwbOpticalTraceConfig config, const float3 origin, const float3 direction, const NwbCausticHit hit, out NwbCausticBoundary boundary, inout NwbOpticalTraceResult result){
-    const float tolerance = NWB_OPTICS_POSITION_TOLERANCE_SCALE * max(nwbOpticsPositionUncertainty(origin), nwbOpticsPositionUncertainty(hit.worldPos));
-    NwbOpticalBootstrapEvent events[NWB_OPTICAL_MAX_CANDIDATE_EVENTS];
-    uint count;
-    float collectedTolerance;
-    if(!nwbCausticCollectRefractiveEvents(config, origin, direction, max(0.0, hit.t - tolerance), hit.t + tolerance, false, events, count, boundary, collectedTolerance, result))
+bool nwbCausticVisitBoundaryCandidate(
+    const NwbOpticalTraceConfig config,
+    const float3 origin,
+    const float3 direction,
+    const float distance,
+    const uint instance,
+    const uint primitive,
+    const float3 normal,
+    const uint expectedInstance,
+    inout bool hasFirst,
+    inout NwbOpticalBootstrapEvent firstEvent,
+    inout uint candidateCount,
+    inout NwbCausticBoundary boundary,
+    inout NwbOpticalInstance outOptical,
+    inout NwbOpticalTraceResult result
+){
+    if(candidateCount == NWB_OPTICAL_MAX_CANDIDATE_EVENTS){
+        result.termination = NWB_OPTICAL_TERMINATION_EVENT_LIMIT;
         return false;
-    result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
-    if(count == 0u || boundary.instance != hit.instance)
+    }
+    NwbOpticalInstance optical;
+    if(!nwbOpticalReadInstance(config, instance, optical, result))
         return false;
-    [loop] for(uint index = 1u; index < count; ++index){
-        if(
-            events[index].instance != events[0].instance || events[index].entering != events[0].entering
-#if NWB_RT_CSG_ENABLED
-            || events[index].primitive == NWB_CSG_RAY_INVALID_INDEX || events[0].primitive == NWB_CSG_RAY_INVALID_INDEX
-#endif
-            || !nwbRayTraceCoplanarSeam(config.instanceMaterialHeapSlot, events[0].instance, events[0].primitive, events[index].primitive)
-        )
+    if(optical.mode != NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED && optical.mode != NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY){
+        result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
+        return false;
+    }
+    const float facing = dot(direction, normal);
+    const float3 position = origin + direction * distance;
+    if(!isfinite(distance) || !all(isfinite(position)) || !isfinite(facing) || abs(facing) <= NWB_OPTICAL_FACING_EPSILON){
+        result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+        return false;
+    }
+    const uint entering = facing < 0.0 ? 1u : 0u;
+    ++candidateCount;
+    ++result.bootstrapEventCount;
+    if(!hasFirst){
+        if(instance != expectedInstance){
+            result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
             return false;
+        }
+        hasFirst = true;
+        firstEvent.distance = distance;
+        firstEvent.instance = instance;
+        firstEvent.primitive = primitive;
+        firstEvent.entering = entering;
+        boundary.instance = instance;
+        boundary.geometricNormal = normal;
+        outOptical = optical;
+        return true;
+    }
+    if(
+        instance != firstEvent.instance || entering != firstEvent.entering
+#if NWB_RT_CSG_ENABLED
+        || primitive == NWB_CSG_RAY_INVALID_INDEX || firstEvent.primitive == NWB_CSG_RAY_INVALID_INDEX
+#endif
+        || !nwbRayTraceCoplanarSeam(config.instanceMaterialHeapSlot, firstEvent.instance, firstEvent.primitive, primitive)
+    ){
+        result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+        return false;
     }
     return true;
+}
+
+bool nwbCausticCheckBoundary(const NwbOpticalTraceConfig config, const float3 origin, const float3 direction, const NwbCausticHit hit, out NwbCausticBoundary boundary, out NwbOpticalInstance optical, inout NwbOpticalTraceResult result){
+    const float tolerance = NWB_OPTICS_POSITION_TOLERANCE_SCALE * max(nwbOpticsPositionUncertainty(origin), nwbOpticsPositionUncertainty(hit.worldPos));
+    bool hasFirst = false;
+    NwbOpticalBootstrapEvent firstEvent = (NwbOpticalBootstrapEvent)0;
+    uint candidateCount = 0u;
+    boundary = (NwbCausticBoundary)0;
+    optical = (NwbOpticalInstance)0;
+    if(!nwbCausticCheckRefractiveBoundary(config, origin, direction, max(0.0, hit.t - tolerance), hit.t + tolerance, hit.instance, hasFirst, firstEvent, candidateCount, boundary, optical, result))
+        return false;
+    if(!hasFirst){
+        result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+        return false;
+    }
+    return true;
+}
+
+[noinline]
+bool nwbCausticBootstrapFiniteOrigin(const NwbOpticalTraceConfig config, const float3 origin, const float3 direction, out NwbOpticalMedia media, inout NwbOpticalTraceResult result){
+    media = (NwbOpticalMedia)0;
+    NwbOpticalBootstrapEvent events[NWB_OPTICAL_MAX_CANDIDATE_EVENTS];
+    uint count;
+    NwbCausticBoundary boundary;
+    float tolerance;
+    const float sourceTolerance = NWB_OPTICS_POSITION_TOLERANCE_SCALE * nwbOpticsPositionUncertainty(origin);
+    if(!nwbCausticCollectRefractiveEvents(config, origin, direction, 0.0, sourceTolerance, false, events, count, boundary, tolerance, result))
+        return false;
+    if(count != 0u){
+        result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+        return false;
+    }
+    if(!nwbCausticCollectRefractiveEvents(config, origin, -direction, 0.0, NWB_FLOAT_MAX, true, events, count, boundary, tolerance, result))
+        return false;
+    [loop] for(uint index = 0u; index < count; ++index){
+        if(-events[index].distance <= sourceTolerance){
+            result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+            return false;
+        }
+    }
+    return nwbOpticalReplayBootstrap(config, origin, direction, tolerance, events, count, media, result);
 }
 
 NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
@@ -147,60 +237,58 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
     float3 direction = photon.direction;
     half3 flux = photon.flux;
     uint refractiveCrossings = 0u;
+    float backShiftDistance = 0.0;
     if(!all(isfinite(origin)))
         return splat;
 
     if(photon.finiteOrigin){
-        NwbOpticalBootstrapEvent events[NWB_OPTICAL_MAX_CANDIDATE_EVENTS];
-        uint count;
-        NwbCausticBoundary boundary;
-        float tolerance;
-        const float sourceTolerance = NWB_OPTICS_POSITION_TOLERANCE_SCALE * nwbOpticsPositionUncertainty(origin);
-        if(!nwbCausticCollectRefractiveEvents(config, origin, direction, 0.0, sourceTolerance, false, events, count, boundary, tolerance, result)){
-            splat.termination = result.termination;
-            return splat;
-        }
-        if(count != 0u){
-            splat.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
-            return splat;
-        }
-        if(!nwbCausticCollectRefractiveEvents(config, origin, -direction, 0.0, NWB_FLOAT_MAX, true, events, count, boundary, tolerance, result)){
-            splat.termination = result.termination;
-            return splat;
-        }
-        [loop] for(uint index = 0u; index < count; ++index){
-            if(-events[index].distance <= sourceTolerance){
-                splat.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
-                return splat;
-            }
-        }
-        if(!nwbOpticalReplayBootstrap(config, origin, direction, tolerance, events, count, media, result)){
+        if(!nwbCausticBootstrapFiniteOrigin(config, origin, direction, media, result)){
             splat.termination = result.termination;
             return splat;
         }
     }
     else{
-        float minimum = 0.0;
         bool complete = false;
-        [loop] for(uint step = 0u; step <= NWB_CAUSTIC_MAX_BOUNCES; ++step){
-            if(!nwbOpticalConsumeQuery(config, result))
-                break;
-            const NwbCausticHit previous = nwbCausticTraceClosest(photon.origin, -direction, minimum, NWB_FLOAT_MAX);
-#if NWB_RT_CSG_ENABLED
-            if(previous.failure != 0u)
-                break;
-#endif
-            if(!previous.hit){
-                complete = true;
-                break;
+        float3 bMin;
+        float3 bMax;
+        uint bFlags;
+        if(nwbCausticSceneBounds(bMin, bMax, bFlags) && all(isfinite(bMin)) && all(isfinite(bMax)) && all(bMin <= bMax)){
+            const float3 sceneCenter = (bMin + bMax) * 0.5;
+            const float3 sceneHalf = (bMax - bMin) * 0.5;
+            const float backProj = dot(sceneCenter - origin, -direction) + dot(abs(direction), sceneHalf);
+            const float sceneMargin = NWB_CAUSTIC_EXTERIOR_MARGIN_MINIMUM + NWB_OPTICS_POSITION_TOLERANCE_SCALE * max(nwbOpticsPositionUncertainty(bMin), nwbOpticsPositionUncertainty(bMax)) + 1e-3 * length(bMax - bMin);
+            const float backDist = max(0.0, backProj + sceneMargin);
+            const float3 shiftedOrigin = origin - direction * backDist;
+            if(isfinite(backDist) && all(isfinite(shiftedOrigin))){
+                origin = shiftedOrigin;
+                backShiftDistance = backDist;
+                if(bFlags == NWB_CAUSTIC_SCENE_BOUNDS_EXACT)
+                    complete = true;
             }
-            if(step == NWB_CAUSTIC_MAX_BOUNCES || !isfinite(previous.t) || previous.t < minimum)
-                break;
-            minimum = asfloat(asuint(previous.t) + 1u);
-            const float margin = NWB_CAUSTIC_EXTERIOR_MARGIN_MINIMUM + NWB_OPTICS_POSITION_TOLERANCE_SCALE * nwbOpticsPositionUncertainty(previous.worldPos);
-            origin = previous.worldPos - direction * margin;
-            if(!isfinite(minimum) || !all(isfinite(origin)))
-                break;
+        }
+        if(!complete){
+            const float3 traceStart = origin;
+            float minimum = 0.0;
+            [loop] for(uint step = 0u; step <= NWB_CAUSTIC_MAX_BOUNCES; ++step){
+                if(!nwbOpticalConsumeQuery(config, result))
+                    break;
+                const NwbCausticHit previous = nwbCausticTraceClosest(traceStart, -direction, minimum, NWB_FLOAT_MAX);
+#if NWB_RT_CSG_ENABLED
+                if(previous.failure != 0u)
+                    break;
+#endif
+                if(!previous.hit){
+                    complete = true;
+                    break;
+                }
+                if(step == NWB_CAUSTIC_MAX_BOUNCES || !isfinite(previous.t) || previous.t < minimum)
+                    break;
+                minimum = asfloat(asuint(previous.t) + 1u);
+                const float margin = NWB_CAUSTIC_EXTERIOR_MARGIN_MINIMUM + NWB_OPTICS_POSITION_TOLERANCE_SCALE * nwbOpticsPositionUncertainty(previous.worldPos);
+                origin = previous.worldPos - direction * margin;
+                if(!isfinite(minimum) || !all(isfinite(origin)))
+                    break;
+            }
         }
         if(!complete){
             splat.termination = result.termination;
@@ -211,7 +299,14 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
     [loop] for(uint bounce = 0u; bounce < NWB_CAUSTIC_MAX_BOUNCES; ++bounce){
         if(max(max(flux.x, flux.y), flux.z) < NWB_CAUSTIC_FLUX_EPSILON || !nwbOpticalConsumeQuery(config, result))
             break;
-        const NwbCausticHit hit = nwbCausticTraceClosest(origin, direction, 0.0, NWB_CAUSTIC_TRACE_T_MAX);
+        const float maxTraceDistance = bounce == 0u ? max(NWB_CAUSTIC_TRACE_T_MAX, backShiftDistance + NWB_CAUSTIC_TRACE_T_MAX) : NWB_CAUSTIC_TRACE_T_MAX;
+#if NWB_RT_CSG_ENABLED
+        const NwbCausticHit hit = nwbCausticTraceClosest(origin, direction, 0.0, maxTraceDistance);
+#else
+        const NwbCausticHit hit = (bounce == 0u && refractiveCrossings == 0u && media.count == 0u)
+            ? nwbCausticTraceBounceZero(origin, direction, 0.0, maxTraceDistance)
+            : nwbCausticTraceClosest(origin, direction, 0.0, NWB_CAUSTIC_TRACE_T_MAX);
+#endif
 #if NWB_RT_CSG_ENABLED
         if(hit.failure != 0u)
             break;
@@ -224,7 +319,8 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
             break;
         }
         const NwbOpticalMedium incident = nwbOpticalDominantMedium(media);
-        flux *= nwbDielectricBeerTransmission(incident.absorption, segmentDistance);
+        if(media.count != 0u)
+            flux *= nwbDielectricBeerTransmission(incident.absorption, segmentDistance);
         if(!hit.isRefractive){
             if(refractiveCrossings == 0u && media.count == 0u)
                 break;
@@ -235,10 +331,8 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
             return splat;
         }
         NwbCausticBoundary boundary;
-        if(!nwbCausticCheckBoundary(config, origin, direction, hit, boundary, result))
-            break;
         NwbOpticalInstance optical;
-        if(!nwbOpticalReadInstance(config, hit.instance, optical, result))
+        if(!nwbCausticCheckBoundary(config, origin, direction, hit, boundary, optical, result))
             break;
         NwbOpticalMedium medium = (NwbOpticalMedium)0;
         medium.instance = hit.instance;
@@ -248,18 +342,17 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
         if(!nwbOpticalLoadHomogeneousMedium(config, hit.worldPos, direction, medium, result))
             break;
         const bool entering = dot(direction, boundary.geometricNormal) < 0.0;
-        NwbOpticalMedia transmittedMedia = media;
-        if(!nwbOpticalApplyBoundary(medium, entering, transmittedMedia, result))
+        const half incidentIor = half(incident.ior);
+        if(!nwbOpticalApplyBoundary(medium, entering, media, result))
             break;
-        const NwbOpticalMedium transmitted = nwbOpticalDominantMedium(transmittedMedia);
+        const NwbOpticalMedium transmitted = nwbOpticalDominantMedium(media);
         const float3 normal = entering ? boundary.geometricNormal : -boundary.geometricNormal;
-        const NwbDielectricInterface interface = nwbDielectricTransmit(direction, normal, half(incident.ior), half(transmitted.ior));
+        const NwbDielectricInterface interface = nwbDielectricTransmit(direction, normal, incidentIor, half(transmitted.ior));
         if(interface.totalInternalReflection){
             ++result.tirCount;
             break;
         }
         flux *= half(1.0h) - half(interface.reflectedFraction);
-        media = transmittedMedia;
         ++refractiveCrossings;
         physicalOrigin = hit.worldPos;
         direction = interface.direction;

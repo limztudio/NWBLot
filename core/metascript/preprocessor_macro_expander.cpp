@@ -39,8 +39,14 @@ b8 PreprocessorMacroExpander::expand(const MStringView lineText, const u32 line,
     return true;
 }
 
-b8 PreprocessorMacroExpander::expandToView(const MStringView lineText, const u32 line, MString& outStorage, MStringView& outView){
+b8 PreprocessorMacroExpander::expandToView(const MStringView lineText, const u32 line, MString& outStorage, MStringView& outView, LineScanOutcome* const outScanOutcome){
     constexpr u32 s_MaxMacroExpansionPasses = 16u;
+    if(outScanOutcome){
+        outScanOutcome->replaced = false;
+        outScanOutcome->enteredBlockComment = false;
+        outScanOutcome->enteredRawString = false;
+        outScanOutcome->rawStringDelimiter = {};
+    }
 
     MString current(m_arena);
     MStringView currentView = lineText;
@@ -53,10 +59,24 @@ b8 PreprocessorMacroExpander::expandToView(const MStringView lineText, const u32
 
         usize i = 0u;
         while(i < currentView.size()){
+            const usize stepStart = i;
             b8 hitTerminator = false;
             if(PreprocessorSemantics::AdvancePreprocessorScanStep(currentView, i, 0u, true, hitTerminator)){
-                if(hitTerminator)
+                if(hitTerminator){
+                    if(outScanOutcome && pass == 0u && !anyReplaced){
+                        if(currentView[stepStart] == '"' && stepStart > 0u){
+                            MStringView delim;
+                            if(PreprocessorSemantics::TryParseRawStringOpening(currentView, stepStart, delim)){
+                                outScanOutcome->enteredRawString = true;
+                                outScanOutcome->rawStringDelimiter = delim;
+                            }
+                        }
+                        else if(stepStart + 1u < currentView.size() && currentView[stepStart] == '/' && currentView[stepStart + 1u] == '*'){
+                            outScanOutcome->enteredBlockComment = true;
+                        }
+                    }
                     break;
+                }
                 continue;
             }
 
@@ -69,7 +89,13 @@ b8 PreprocessorMacroExpander::expandToView(const MStringView lineText, const u32
                 const usize idStart = i;
                 while(i < currentView.size() && IsAsciiIdentifierChar(currentView[i]))
                     ++i;
-                const MStringView ident(currentView.data() + idStart, i - idStart);
+                const usize idLen = i - idStart;
+                const MStringView ident(currentView.data() + idStart, idLen);
+                if(m_filter && (idLen < m_filter->minLen || idLen > m_filter->maxLen || m_filter->firstCharMask[static_cast<u8>(currentView[idStart])] == 0u)){
+                    if(idLen == PreprocessorSemantics::s_DefinedOperator.size() && ident == PreprocessorSemantics::s_DefinedOperator)
+                        i = PreprocessorSemantics::SkipDefinedOperand(currentView, i);
+                    continue;
+                }
                 const auto it = m_macros.find(ident);
                 if(it == m_macros.end()){
                     if(ident == PreprocessorSemantics::s_DefinedOperator)
@@ -219,6 +245,8 @@ b8 PreprocessorMacroExpander::expandToView(const MStringView lineText, const u32
     }
 
     if(hasOwnedCurrent){
+        if(outScanOutcome)
+            outScanOutcome->replaced = true;
         outStorage = Move(current);
         outView = MStringView(outStorage.data(), outStorage.size());
     }

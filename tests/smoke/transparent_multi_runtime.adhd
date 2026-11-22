@@ -205,7 +205,8 @@ class TransparentMultiSmokeProjectImpl : IProjectEntryCallbacks{
         );
         const f32 currentYaw = this.m_sceneYaw.yaw();
         this.m_sceneTransforms.update(currentYaw, SmokeWorldRef(this.m_world));
-        SetSmokeWindowTitleSuffix(this.m_context, GetProjectWindowTitle(), FormatSmokeYawWindowTitleSuffix(currentYaw, this.m_sceneYaw.manualControl(), s_TransparentMultiTwoPi));
+        if(this.m_titleThrottle.shouldUpdate(safeDelta, this.m_sceneYaw.manualControl(), false))
+            SetSmokeWindowTitleSuffix(this.m_context, GetProjectWindowTitle(), FormatSmokeYawWindowTitleSuffix(currentYaw, this.m_sceneYaw.manualControl(), s_TransparentMultiTwoPi));
 
         if(!TickSmokeWorld(safeDelta, SmokeWorldRef(this.m_world)))
             return false;
@@ -246,6 +247,7 @@ class TransparentMultiSmokeProjectImpl : IProjectEntryCallbacks{
     private TimingProbeUnfocusedPass m_frameLaggedAsyncLightingUnfocusedPass;
     private TransparentMultiSceneTransforms m_sceneTransforms = TransparentMultiSceneTransforms();
     private YawSpinController m_sceneYaw = YawSpinController();
+    private SmokeWindowTitleThrottle m_titleThrottle = SmokeWindowTitleThrottle();
     private f32 m_rotationSpeed;
     private f32 m_frozenAngle;
     private u32 m_rendererBaselineRenderedFrameCount = 0u;

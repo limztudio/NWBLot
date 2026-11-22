@@ -120,6 +120,8 @@ b8 RendererRayTracingSystem::preflightShadowVisibilityResources(mut DeferredFram
     this.m_opticalCausticReaderAdmitted = false;
     this.m_shadowVisibilityTraceResourcesPreflighted = false;
     this.m_shadowVisibilityBackendPipelinePreflighted = false;
+    this.m_pendingBlasStaticSkipped = 0u;
+    this.m_sceneGatherScratch.pendingMeshBuildSnapshots.clear();
     this.clearPreparedShadowTraceMaterialSampledTextures();
     this.clearPreparedShadowMaterialContext();
     this.clearPreparedSceneBvh();
@@ -152,14 +154,17 @@ b8 RendererRayTracingSystem::preflightShadowVisibilityResources(mut DeferredFram
 
         const b8 sceneReady = this.prepareSceneTlasResources();
         if(!sceneReady){
+            this.m_sceneGatherScratch.pendingMeshBuildSnapshots.clear();
             if(!materialResources.ensureRayTraceMaterialContextSlotsHeapHandle())
                 return false;
             this.m_shadowVisibilityPreparedTargets = Optional<mut DeferredFrameTargets>(targets);
             this.m_shadowVisibilityResourcesPreflighted = true;
             return true;
         }
-        if(!this.ensureCsgTraceContextResources())
+        if(!this.ensureCsgTraceContextResources()){
+            this.m_sceneGatherScratch.pendingMeshBuildSnapshots.clear();
             return false;
+        }
 
         if(!this.capturePreparedMeshBlasBuilds()){
             warning("RendererSystem: could not freeze hardware BLAS build plan");
@@ -214,13 +219,16 @@ b8 RendererRayTracingSystem::preflightShadowVisibilityResources(mut DeferredFram
     if(!meshResourcesReady)
         warning("RendererSystem: software shadow BVH resource preparation failed");
     if(!meshResourcesReady || !this.prepareSceneSwBvhResources()){
+        this.m_sceneGatherScratch.pendingMeshBuildSnapshots.clear();
         warning("RendererSystem: software shadow scene BVH build failed");
         this.m_shadowVisibilityPreparedTargets = Optional<mut DeferredFrameTargets>(targets);
         this.m_shadowVisibilityResourcesPreflighted = true;
         return true;
     }
-    if(!this.ensureCsgTraceContextResources())
+    if(!this.ensureCsgTraceContextResources()){
+        this.m_sceneGatherScratch.pendingMeshBuildSnapshots.clear();
         return false;
+    }
 
     if(CanEnableSurfelSceneTrace(true, this.m_rayTracingState.sceneBvh.m_sceneBvhInstanceCount, this.m_rayTracingState.shadow.m_swShadowMeshCount)){
         this.m_rayTracingState.surfelGi.m_surfelEnabled = true;
@@ -230,6 +238,7 @@ b8 RendererRayTracingSystem::preflightShadowVisibilityResources(mut DeferredFram
     }
 
     if(this.m_rayTracingState.sceneBvh.m_sceneBvhInstanceCount == 0u){
+        this.m_sceneGatherScratch.pendingMeshBuildSnapshots.clear();
         if(!materialResources.ensureRayTraceMaterialContextSlotsHeapHandle())
             return false;
         this.m_shadowVisibilityPreparedTargets = Optional<mut DeferredFrameTargets>(targets);

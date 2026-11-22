@@ -35,13 +35,34 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[numthreads(NWB_LIGHT_SPACE_GROUP_SIZE, NWB_LIGHT_SPACE_GROUP_SIZE, 1)]
+[numthreads(NWB_LIGHT_SPACE_FALLBACK_GROUP_SIZE, 1, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
-    const uint2 pixel = dispatchThreadID.xy;
+    const uint itemIndex = dispatchThreadID.x;
+    const uint fallbackCount = nwbHeapRawBuffer(g_NwbLightSpacePush.fallbackArgsSlot).Load(NWB_LIGHT_SPACE_FALLBACK_COUNT_OFFSET);
+    if(itemIndex >= fallbackCount)
+        return;
+    const uint packedPixel = nwbHeapRawBuffer(g_NwbLightSpacePush.fallbackListSlot).Load(itemIndex * NWB_LIGHT_SPACE_PIXEL_WORD_BYTES);
+    const uint2 pixel = uint2(packedPixel & 0xffffu, packedPixel >> 16u);
     const uint2 fullExtent = uint2(g_NwbLightSpacePush.width, g_NwbLightSpacePush.height);
     const uint2 halfExtent = (fullExtent + g_NwbLightSpacePush.receiverFactor - 1u) / g_NwbLightSpacePush.receiverFactor;
     if(any(pixel >= halfExtent))
         return;
+#if NWB_LIGHT_SPACE_CSG_ENABLED
+    const uint2 receiverPixel = min(pixel * g_NwbLightSpacePush.receiverFactor, fullExtent - 1u);
+    const int3 texel = int3(receiverPixel, 0);
+    const float depth = nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.w).Load(texel).r;
+    float3 position = float3(0.0);
+    float3 positionError = float3(0.0);
+    const bool receiverValid = nwbLightSpaceReceiverPosition(receiverPixel, depth, position, positionError);
+    float3 normal = float3(0.0, 0.0, 1.0);
+    if(receiverValid)
+        normal = normalize(nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.y).Load(texel).xyz * 2.0 - 1.0);
+#else
+    const int3 texel = int3(min(pixel * g_NwbLightSpacePush.receiverFactor, fullExtent - 1u), 0);
+    const float3 position = nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.z).Load(texel).xyz;
+    const float3 normal = normalize(nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.y).Load(texel).xyz * 2.0 - 1.0);
+#endif
+    const uint sampleCount = clamp(g_NwbLightSpacePush.sampleCount, 1u, NWB_SW_SHADOW_TRANSPARENT_SPP);
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
     for(uint index = 0u; index < lightCount; ++index){
         const NwbSceneLight light = g_NwbSceneLights[index];
@@ -51,23 +72,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         if(nwbHeapStorageImage2DArrayFloat4(g_NwbLightSpacePush.outputSlot)[outputPixel].a != 0.0)
             continue;
 #if NWB_LIGHT_SPACE_CSG_ENABLED
-        const uint2 receiverPixel = min(pixel * g_NwbLightSpacePush.receiverFactor, fullExtent - 1u);
-        const int3 texel = int3(receiverPixel, 0);
-        const float depth = nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.w).Load(texel).r;
-        float3 position;
-        float3 positionError;
-        if(!nwbLightSpaceReceiverPosition(receiverPixel, depth, position, positionError)){
+        if(!receiverValid){
             half3 visibility = half3(0.0h);
             visibility = nwbCsgShadowRayFailure(NWB_CSG_RAY_FAILURE_UNSUPPORTED);
             nwbHeapStorageImage2DArrayFloat4(g_NwbLightSpacePush.outputSlot)[outputPixel] = float4(visibility, 1.0);
             continue;
         }
-#else
-        const int3 texel = int3(min(pixel * g_NwbLightSpacePush.receiverFactor, fullExtent - 1u), 0);
-        const float3 position = nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.z).Load(texel).xyz;
 #endif
-        const float3 normal = normalize(nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.y).Load(texel).xyz * 2.0 - 1.0);
-        const uint sampleCount = clamp(g_NwbLightSpacePush.sampleCount, 1u, NWB_SW_SHADOW_TRANSPARENT_SPP);
         half3 result = half3(0.0h);
         for(uint sample = 0u; sample < sampleCount; ++sample){
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
@@ -89,9 +100,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 ordinaryRequired = ordinaryRequired && (g_NwbLightSpacePush.csgFlags & NWB_CSG_SHADOW_FLAG_NO_ORDINARY_TRANSPARENT) == 0u;
 #endif
                 if(ordinaryRequired){
+#if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
+                    if(nwbSwShadowOpaqueBlocked(origin, direction, minimum, maximum))
+                        visibility = half3(0.0h);
+#else
                     NwbShadowVisibilityAccumulator accumulator = nwbShadowVisibilityBegin();
                     nwbSwShadowOccluded(origin, direction, minimum, maximum, accumulator);
                     visibility = nwbShadowFinalizeVisibility(accumulator) * visibility;
+#endif
                 }
             }
 #else

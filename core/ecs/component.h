@@ -68,6 +68,13 @@ struct SparsePoolView{
     [[nodiscard]] FOUNDATION_INLINE u32 findDenseIndex(const EntityID entityId)const noexcept{
         return FindPackedSparseDenseIndex(sparseData, sparseSize, entityId);
     }
+
+    [[nodiscard]] FOUNDATION_INLINE u32 denseIndexUnchecked(const usize entityIndex)const noexcept{
+        FOUNDATION_ASSERT(entityIndex < sparseSize);
+        const u32 denseIndex = sparseData[entityIndex] & s_EntityIndexMask;
+        FOUNDATION_ASSERT(denseIndex != s_InvalidDenseIndex);
+        return denseIndex;
+    }
 };
 
 template<typename T>
@@ -79,6 +86,13 @@ struct PoolSlice{
 
     [[nodiscard]] FOUNDATION_INLINE u32 findDenseIndex(const EntityID entityId)const noexcept{
         return FindPackedSparseDenseIndex(sparseData, sparseSize, entityId);
+    }
+
+    [[nodiscard]] FOUNDATION_INLINE u32 denseIndexUnchecked(const usize entityIndex)const noexcept{
+        FOUNDATION_ASSERT(entityIndex < sparseSize);
+        const u32 denseIndex = sparseData[entityIndex] & s_EntityIndexMask;
+        FOUNDATION_ASSERT(denseIndex != s_InvalidDenseIndex);
+        return denseIndex;
     }
 };
 

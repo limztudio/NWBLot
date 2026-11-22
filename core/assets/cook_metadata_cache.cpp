@@ -49,10 +49,13 @@ namespace __hidden_cook_metadata_cache{
     return !outPathText.empty();
 }
 
-[[nodiscard]] static b8 AppendPairedSidecarChecksums(const Path& nwbFilePath, ScratchArena& scratchArena, Vector<u8, ScratchArena>& shaInput){
-    Vector<AssetPairedSidecarRule, ScratchArena> rules(scratchArena);
-    CookMetadataDetail::CopyPairedSidecarRules(rules);
-    for(const AssetPairedSidecarRule& rule : rules){
+[[nodiscard]] static b8 AppendPairedSidecarChecksums(
+    const Path& nwbFilePath,
+    const Span<const AssetPairedSidecarRule> pairedSidecarRules,
+    ScratchArena& scratchArena,
+    Vector<u8, ScratchArena>& shaInput
+){
+    for(const AssetPairedSidecarRule& rule : pairedSidecarRules){
         if(!AppendString(shaInput, rule.sidecarExtension))
             return false;
         ::Path<ScratchArena> sidecarPath(scratchArena, nwbFilePath);
@@ -82,6 +85,7 @@ namespace __hidden_cook_metadata_cache{
     const AStringView sourcePathText,
     const AStringView metaText,
     const Sha256Digest& producerDigest,
+    const Span<const AssetPairedSidecarRule> pairedSidecarRules,
     ScratchArena& scratchArena,
     b8& outCanUseCache
 ){
@@ -111,7 +115,7 @@ namespace __hidden_cook_metadata_cache{
     )
         outCanUseCache = false;
     AppendPOD(shaInput, metaSha256);
-    if(!AppendPairedSidecarChecksums(discoveredNwbFile.filePath, scratchArena, shaInput))
+    if(!AppendPairedSidecarChecksums(discoveredNwbFile.filePath, pairedSidecarRules, scratchArena, shaInput))
         outCanUseCache = false;
 
     return ComputeSha256(BinaryByteView{ shaInput.data(), shaInput.size() });
@@ -133,6 +137,77 @@ namespace CookMetadataDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 ComputeNwbFileAssetCacheData(
+    const DiscoveredNwbFile& discoveredNwbFile,
+    const AStringView metaText,
+    const Sha256Digest& producerDigest,
+    const Span<const AssetPairedSidecarRule> pairedSidecarRules,
+    ScratchArena& scratchArena,
+    ScratchString& outSourcePathText,
+    ScratchString& outCacheFileName,
+    Sha256Digest& outParamSha256
+){
+    const b8 canonicalPathOk = __hidden_cook_metadata_cache::BuildCanonicalAbsolutePathText(discoveredNwbFile.filePath, scratchArena, outSourcePathText);
+    const Sha1Digest pathSha1 = ComputeSha1Text(AStringView(outSourcePathText));
+    outCacheFileName.clear();
+    outCacheFileName.reserve(Sha1Digest::s_HexTextLength + s_BuiltAssetExtension.size());
+    AppendSha1Hex(pathSha1, outCacheFileName);
+    outCacheFileName += s_BuiltAssetExtension;
+
+    b8 canUseCache = false;
+    outParamSha256 = __hidden_cook_metadata_cache::ComputeNwbParamChecksum(
+        discoveredNwbFile,
+        AStringView(outSourcePathText),
+        metaText,
+        producerDigest,
+        pairedSidecarRules,
+        scratchArena,
+        canUseCache
+    );
+    return canonicalPathOk && canUseCache;
+}
+
+void PopulateNwbFileAssetCacheRecord(
+    const Path& assetCacheDirectory,
+    const AStringView sourcePathText,
+    const AStringView cacheFileName,
+    const Sha256Digest& paramSha256,
+    const b8 canUseCache,
+    NwbFileAssetCacheRecord& outRecord
+){
+    outRecord.sourcePathText.assign(sourcePathText.data(), sourcePathText.size());
+    const Path combinedCachePath = assetCacheDirectory / cacheFileName;
+    const auto absoluteCachePath = AbsolutePath(combinedCachePath);
+    outRecord.cacheFilePath = (absoluteCachePath ? *absoluteCachePath : combinedCachePath).lexicallyNormal();
+    outRecord.paramSha256 = paramSha256;
+    outRecord.canWriteCache = canUseCache;
+}
+
+void PrepareNwbFileAssetCacheRecord(
+    const Path& assetCacheDirectory,
+    const DiscoveredNwbFile& discoveredNwbFile,
+    const AStringView metaText,
+    const Sha256Digest& producerDigest,
+    const Span<const AssetPairedSidecarRule> pairedSidecarRules,
+    ScratchArena& scratchArena,
+    ScratchString& inOutSourcePathText,
+    ScratchString& inOutCacheFileName,
+    NwbFileAssetCacheRecord& outRecord
+){
+    Sha256Digest paramSha256 = {};
+    const b8 canUseCache = ComputeNwbFileAssetCacheData(
+        discoveredNwbFile,
+        metaText,
+        producerDigest,
+        pairedSidecarRules,
+        scratchArena,
+        inOutSourcePathText,
+        inOutCacheFileName,
+        paramSha256
+    );
+    PopulateNwbFileAssetCacheRecord(assetCacheDirectory, AStringView(inOutSourcePathText), AStringView(inOutCacheFileName), paramSha256, canUseCache, outRecord);
+}
+
 void PrepareNwbFileAssetCacheRecord(
     const Path& assetCacheDirectory,
     const DiscoveredNwbFile& discoveredNwbFile,
@@ -143,29 +218,19 @@ void PrepareNwbFileAssetCacheRecord(
     ScratchString& inOutCacheFileName,
     NwbFileAssetCacheRecord& outRecord
 ){
-    const b8 canonicalPathOk = __hidden_cook_metadata_cache::BuildCanonicalAbsolutePathText(discoveredNwbFile.filePath, scratchArena, inOutSourcePathText);
-    outRecord.sourcePathText.assign(inOutSourcePathText.data(), inOutSourcePathText.size());
-
-    const Sha1Digest pathSha1 = ComputeSha1Text(AStringView(inOutSourcePathText));
-    inOutCacheFileName.clear();
-    inOutCacheFileName.reserve(Sha1Digest::s_HexTextLength + s_BuiltAssetExtension.size());
-    AppendSha1Hex(pathSha1, inOutCacheFileName);
-    inOutCacheFileName += s_BuiltAssetExtension;
-
-    const Path combinedCachePath = assetCacheDirectory / inOutCacheFileName;
-    const auto absoluteCachePath = AbsolutePath(combinedCachePath);
-    outRecord.cacheFilePath = (absoluteCachePath ? *absoluteCachePath : combinedCachePath).lexicallyNormal();
-
-    b8 canUseCache = false;
-    outRecord.paramSha256 = __hidden_cook_metadata_cache::ComputeNwbParamChecksum(
+    Vector<AssetPairedSidecarRule, ScratchArena> pairedSidecarRules(scratchArena);
+    CopyPairedSidecarRules(pairedSidecarRules);
+    PrepareNwbFileAssetCacheRecord(
+        assetCacheDirectory,
         discoveredNwbFile,
-        AStringView(inOutSourcePathText),
         metaText,
         producerDigest,
+        Span<const AssetPairedSidecarRule>(pairedSidecarRules.data(), pairedSidecarRules.size()),
         scratchArena,
-        canUseCache
+        inOutSourcePathText,
+        inOutCacheFileName,
+        outRecord
     );
-    outRecord.canWriteCache = canonicalPathOk && canUseCache;
 }
 
 NwbCacheLoadResult::Enum TryLoadNwbFileAssetCache(

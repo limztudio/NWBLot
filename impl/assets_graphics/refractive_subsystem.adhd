@@ -6,9 +6,7 @@
 class RefractiveSubsystem{
     public AssetRef<ComputeShader> causticAccumulatorDecayCs;
     public AssetRef<ComputeShader> causticGeometryDownsampleCs;
-    public AssetRef<ClosestHitShader> causticPhotonHwChit;
-    public AssetRef<MissShader> causticPhotonHwMiss;
-    public AssetRef<RayGenerationShader> causticPhotonHwRaygen;
+    public AssetRef<ComputeShader> causticPhotonHwCs;
     public AssetRef<ComputeShader> causticPhotonSwCs;
     public AssetRef<ComputeShader> causticResolveCs;
     public AssetRef<ComputeShader> refractionClassifyTilesCs;

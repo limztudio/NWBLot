@@ -22,10 +22,10 @@ bool nwbCausticCollectCsgEvents(
     const NwbOpticalTraceConfig config, const uint contextSlot, const float3 origin, const float3 direction, const float minimum, const float maximum, const bool reverse,
     __ref NwbOpticalBootstrapEvent events[NWB_OPTICAL_MAX_CANDIDATE_EVENTS], inout uint eventCount, inout NwbCausticBoundary boundary, inout float tolerance, inout NwbOpticalTraceResult result
 ){
-    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_BASE_OFFSET);
-    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_COUNT_OFFSET);
+    const uint activeOffset = nwbHeapRawBufferUniform(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_BASE_OFFSET);
+    const uint activeCount = nwbHeapRawBufferUniform(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_COUNT_OFFSET);
     [loop] for(uint index = 0u; index < activeCount; ++index){
-        const uint instance = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * NWB_CSG_RAY_ACTIVE_INDEX_BYTES);
+        const uint instance = nwbHeapRawBufferUniform(contextSlot).Load(activeOffset + index * NWB_CSG_RAY_ACTIVE_INDEX_BYTES);
         const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(config.instanceMaterialHeapSlot)[instance];
         if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE) == 0u)
             continue;
@@ -50,6 +50,60 @@ bool nwbCausticCollectCsgEvents(
             }
             const float3 normal = geometry.cutter == NWB_CSG_RAY_INVALID_INDEX ? nwbRayTraceTriangleGeometricNormal(material, geometry.primitive, geometry.worldToObject) : geometry.geometricNormal;
             if(!nwbCausticAppendBoundary(config, origin, direction, geometry.distance, instance, geometry.primitive, normal, reverse, events, eventCount, boundary, tolerance, result))
+                return false;
+            nextMinimum = geometry.distance;
+        }
+        if(!complete){
+            result.termination = NWB_OPTICAL_TERMINATION_EVENT_LIMIT;
+            return false;
+        }
+    }
+    return true;
+}
+
+bool nwbCausticCheckCsgBoundary(
+    const NwbOpticalTraceConfig config,
+    const uint contextSlot,
+    const float3 origin,
+    const float3 direction,
+    const float minimum,
+    const float maximum,
+    const uint expectedInstance,
+    inout bool hasFirst,
+    inout NwbOpticalBootstrapEvent firstEvent,
+    inout uint candidateCount,
+    inout NwbCausticBoundary boundary,
+    inout NwbOpticalInstance outOptical,
+    inout NwbOpticalTraceResult result
+){
+    const uint activeOffset = nwbHeapRawBufferUniform(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_BASE_OFFSET);
+    const uint activeCount = nwbHeapRawBufferUniform(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_COUNT_OFFSET);
+    [loop] for(uint index = 0u; index < activeCount; ++index){
+        const uint instance = nwbHeapRawBufferUniform(contextSlot).Load(activeOffset + index * NWB_CSG_RAY_ACTIVE_INDEX_BYTES);
+        const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(config.instanceMaterialHeapSlot)[instance];
+        if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE) == 0u)
+            continue;
+        const NwbSwBvhInstance receiver = nwbCsgRayLoadInstance(contextSlot, instance);
+        const NwbBvhNode root = nwbCsgRayReceiverRoot(contextSlot, instance, receiver);
+        if(!nwbCsgRayBoundsIntersect(receiver, root, origin, direction, minimum, maximum))
+            continue;
+        float nextMinimum = minimum;
+        bool complete = false;
+        [loop] for(uint crossing = 0u; crossing <= NWB_OPTICAL_MAX_CANDIDATE_EVENTS; ++crossing){
+            if(!nwbOpticalConsumeQuery(config, result))
+                return false;
+            const NwbRayTraceGeometryHit geometry = nwbRayTraceCsgGeometryHit(contextSlot, config.instanceMaterialHeapSlot, instance, origin, direction, nextMinimum, maximum);
+            result.physicalQueries += geometry.physicalQueries;
+            if(geometry.failure != 0u){
+                result.termination = (geometry.failure & NWB_CSG_RAY_FAILURE_AMBIGUOUS_NORMAL) != 0u ? NWB_OPTICAL_TERMINATION_AMBIGUOUS : NWB_OPTICAL_TERMINATION_UNSUPPORTED;
+                return false;
+            }
+            if(!geometry.hit){
+                complete = true;
+                break;
+            }
+            const float3 normal = geometry.cutter == NWB_CSG_RAY_INVALID_INDEX ? nwbRayTraceTriangleGeometricNormal(material, geometry.primitive, geometry.worldToObject) : geometry.geometricNormal;
+            if(!nwbCausticVisitBoundaryCandidate(config, origin, direction, geometry.distance, instance, geometry.primitive, normal, expectedInstance, hasFirst, firstEvent, candidateCount, boundary, outOptical, result))
                 return false;
             nextMinimum = geometry.distance;
         }

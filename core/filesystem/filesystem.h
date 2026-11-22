@@ -65,6 +65,7 @@ public:
 public:
     [[nodiscard]] virtual Expected<usize> readFile(const Name& virtualPath, u64 offset, void* data, usize bytes)const = 0;
     [[nodiscard]] virtual Expected<usize> readWholeFile(const Name& virtualPath, void* context, u8* (*prepareBuffer)(void* context, usize size))const;
+    [[nodiscard]] virtual Optional<b8> visitWholeFile(const Name& virtualPath, void* context, b8 (*visitor)(void* context, Span<const u8> bytes))const;
     virtual b8 seekFile(FileCursor& cursor, i64 offset, FileSeekOrigin::Enum origin)const = 0;
     virtual b8 writeFile(const Name& virtualPath, const void* data, usize bytes) = 0;
     virtual b8 writeFileDeferred(const Name& virtualPath, const void* data, usize bytes) = 0;

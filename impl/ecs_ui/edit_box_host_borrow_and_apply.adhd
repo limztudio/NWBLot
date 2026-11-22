@@ -63,7 +63,8 @@ void SynchronizeUiEditBoxSession(
     if(!options.enabled || options.readOnly || !entryFocused){
         if(session.owner() == owner && !session.cancel())
             TerminateInvariant();
-        model.cancelComposition();
+        if(model.composition().active)
+            model.cancelComposition();
         return;
     }
     if(!UiEditGeometry().sessionReady(displayed, owner, popup))
@@ -129,12 +130,14 @@ EditBoxResult UiEditBoxHost::editBorrowed(in WidgetState widget, in EditBoxOptio
         entry.value().expected.capture(model);
         entry.value().navigationResetPending = navigation.has_value();
         abandon = actions.has_value();
+        this.m_focusSyncDirty = true;
     }
     else{
         const b8 rebound = IsUiEditEntryRebound(entry.value().owner, owner, entry.value().popup, popup, entry.value().actionCapable, actions.has_value(), entry.value().navigationInstanceGeneration, navigationInstance);
         const b8 policyChanged = entry.value().enabled != options.enabled || entry.value().readOnly != options.readOnly;
         abandon = actions.has_value() && (rebound || policyChanged);
         if(rebound || policyChanged || !entry.value().expected.matches(model)){
+            this.m_focusSyncDirty = true;
             this.m_context.input().cancelSubmitCommands(widget.id);
             entry.value().navigationResetPending = navigation.has_value();
             if(HasPendingUiEditOwnerTransfer(entry.value().owner, this.m_session.owner(), this.m_clipboard.pending(), this.m_clipboardOwner, this.m_primary.pending(), this.m_primaryOwner))
@@ -163,6 +166,7 @@ EditBoxResult UiEditBoxHost::editBorrowed(in WidgetState widget, in EditBoxOptio
     if(actions.has_value() && result.focused && !entry.value().focused){
         entry.value().focused = true;
         entry.value().focusGeneration = this.nextFocusGeneration();
+        this.m_focusSyncDirty = true;
     }
     const u64 beforeRevision = model.revision();
     const usize beforeAnchor = model.anchor();
@@ -183,7 +187,8 @@ EditBoxResult UiEditBoxHost::editBorrowed(in WidgetState widget, in EditBoxOptio
     if((!result.focused && !actions.has_value()) || options.readOnly || !options.enabled){
         if(this.m_session.owner() == owner)
             this.cancelTransfers();
-        model.cancelComposition();
+        if(model.composition().active)
+            model.cancelComposition();
     }
     b8 inputMethod = false;
     usize index = 0u;
@@ -275,8 +280,10 @@ b8 UiEditBoxHost::apply(in EditBoxOptions options, mut UiEditBoxEvent event, mut
             const b8 cancelFocus = !actions.has_value() || (entry.focused && entry.focusGeneration == event.focusGeneration && this.m_context.input().focus() == entry.widget.id);
             if(actions.has_value()){
                 entry.retiredFocusGeneration = Max(entry.retiredFocusGeneration, event.focusGeneration);
-                if(entry.focusGeneration == event.focusGeneration)
+                if(entry.focusGeneration == event.focusGeneration){
                     entry.focused = false;
+                    this.m_focusSyncDirty = true;
+                }
             }
             if(cancelFocus){
                 if(!this.m_context.input().dismissPopup(PopupDismissReason::Cancel))

@@ -158,6 +158,13 @@ public:
                     ++index;
                     continue;
                 }
+                for(usize k = 0u; k < sizeof...(Ts) - 1u; ++k){
+                    const usize slot = probeOrder[k];
+                    denseIndices[slot] = sparseViews[slot].denseIndexUnchecked(entityIndex);
+                }
+                denseIndices[anchorPoolIndex] = static_cast<u32>(index);
+                entity = entityId;
+                return;
             }
             b8 matched = true;
             for(usize k = 0u; k < sizeof...(Ts) - 1u; ++k){
@@ -500,6 +507,12 @@ private:
                 const usize entityIndex = static_cast<usize>(entityId.index());
                 if(entityIndex >= entityMaskCount || (entityMasks[entityIndex] & requiredMask) != requiredMask)
                     continue;
+                Array<u32, 3u> d{};
+                d[AnchorIdx] = static_cast<u32>(i);
+                d[Probe1] = s1.denseIndexUnchecked(entityIndex);
+                d[Probe2] = s2.denseIndexUnchecked(entityIndex);
+                func(entityId, c0[d[0]], c1[d[1]], c2[d[2]]);
+                continue;
             }
             const u32 d1 = s1.findDenseIndex(entityId);
             if(d1 == ECSDetail::s_InvalidDenseIndex)
@@ -565,6 +578,13 @@ private:
                 const usize entityIndex = static_cast<usize>(entityId.index());
                 if(entityIndex >= entityMaskCount || (entityMasks[entityIndex] & requiredMask) != requiredMask)
                     continue;
+                for(usize k = 0u; k < sizeof...(Ts) - 1u; ++k){
+                    const usize slot = probeOrder[k];
+                    d[slot] = sparseViews[slot].denseIndexUnchecked(entityIndex);
+                }
+                d[anchorPoolIndex] = static_cast<u32>(i);
+                invokeWithDenseIndices(entityId, slices, d, func, IndexSequenceFor<Ts...>{});
+                continue;
             }
             b8 matched = true;
             for(usize k = 0u; k < sizeof...(Ts) - 1u; ++k){

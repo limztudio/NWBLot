@@ -63,11 +63,10 @@ void nwbShadowBuildBasis(const float3 axis, out float3 tangent, out float3 bitan
     bitangent = float3(b, sign + axis.y * axis.y * a, -axis.y);
 }
 
-float3 nwbShadowJitterCone(const float3 axis, const float halfAngle, const float2 u){
-    if(halfAngle <= 0.0)
+float3 nwbShadowJitterConeCos(const float3 axis, const float cosHalfAngle, const float2 u){
+    if(cosHalfAngle >= 1.0)
         return axis;
 
-    const float cosHalfAngle = cos(halfAngle);
     const float cosTheta = lerp(cosHalfAngle, 1.0, u.x);
     const float sinTheta = sqrt(max(1.0 - cosTheta * cosTheta, 0.0));
     const float phi = NWB_SHADOW_FULL_TURN_RADIANS * u.y;
@@ -77,6 +76,13 @@ float3 nwbShadowJitterCone(const float3 axis, const float halfAngle, const float
     nwbShadowBuildBasis(axis, tangent, bitangent);
 
     return normalize(cos(phi) * sinTheta * tangent + sin(phi) * sinTheta * bitangent + cosTheta * axis);
+}
+
+float3 nwbShadowJitterCone(const float3 axis, const float halfAngle, const float2 u){
+    if(halfAngle <= 0.0)
+        return axis;
+
+    return nwbShadowJitterConeCos(axis, cos(halfAngle), u);
 }
 
 

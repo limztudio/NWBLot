@@ -16,10 +16,22 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifndef NWB_CSG_RAY_UNIFORM_CONTEXT
+#define NWB_CSG_RAY_UNIFORM_CONTEXT 1
+#endif
+
+ByteAddressBuffer nwbCsgRayContextBuffer(const uint contextSlot){
+#if NWB_CSG_RAY_UNIFORM_CONTEXT
+    return nwbHeapRawBufferUniform(contextSlot);
+#else
+    return nwbHeapRawBuffer(contextSlot);
+#endif
+}
+
 bool nwbCsgRayPrimitiveClosed(const uint contextSlot, const uint membershipOffset, const uint primitive){
     const uint wordOffset = membershipOffset + (primitive / NWB_CSG_RAY_MEMBERSHIP_WORD_BITS) * NWB_CSG_RAY_MEMBERSHIP_WORD_BYTES;
     const uint bit = primitive % NWB_CSG_RAY_MEMBERSHIP_WORD_BITS;
-    return (nwbHeapRawBuffer(contextSlot).Load(wordOffset) & (1u << bit)) != 0u;
+    return (nwbCsgRayContextBuffer(contextSlot).Load(wordOffset) & (1u << bit)) != 0u;
 }
 
 

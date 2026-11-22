@@ -47,14 +47,19 @@ class GpuImageCache : NoCopy{
     }
     [cpp_unwind]
     public void trim(in DrawSnapshot snapshot){
-        const usize missing = CountMissingCacheEntries(this.m_glyphCache, snapshot.glyphPages(), SameCachedGpuGlyph)
-            + CountMissingCacheEntries(this.m_sdfCache, snapshot.sdfPages(), SameCachedGpuSdf)
-            + CountMissingCacheEntries(this.m_textureCache, snapshot.textureImages(), SameCachedGpuTexture);
+        in Vector<SharedGlyphPage> glyphPages = snapshot.glyphPages();
+        in Vector<SharedSdfAtlasPage> sdfPages = snapshot.sdfPages();
+        in Vector<SharedImageSource> textureImages = snapshot.textureImages();
+        if(!ShouldTrimGpuImageCache(this.m_glyphCache.size(), this.m_sdfCache.size(), this.m_textureCache.size(), glyphPages.size() + sdfPages.size() + textureImages.size()))
+            return;
+        const usize missing = CountMissingCacheEntries(this.m_glyphCache, glyphPages, SameCachedGpuGlyph)
+            + CountMissingCacheEntries(this.m_sdfCache, sdfPages, SameCachedGpuSdf)
+            + CountMissingCacheEntries(this.m_textureCache, textureImages, SameCachedGpuTexture);
         if(!ShouldTrimGpuImageCache(this.m_glyphCache.size(), this.m_sdfCache.size(), this.m_textureCache.size(), missing))
             return;
-        RetainReferencedCacheEntries(snapshot.glyphPages(), SameCachedGpuGlyph, this.m_glyphCache);
-        RetainReferencedCacheEntries(snapshot.sdfPages(), SameCachedGpuSdf, this.m_sdfCache);
-        RetainReferencedCacheEntries(snapshot.textureImages(), SameCachedGpuTexture, this.m_textureCache);
+        RetainReferencedCacheEntries(glyphPages, SameCachedGpuGlyph, this.m_glyphCache);
+        RetainReferencedCacheEntries(sdfPages, SameCachedGpuSdf, this.m_sdfCache);
+        RetainReferencedCacheEntries(textureImages, SameCachedGpuTexture, this.m_textureCache);
     }
     public void evict(){
         if(!this.m_glyphCache.empty()){

@@ -127,6 +127,27 @@ void GpuTimingAccumulator::collect(
     }
 }
 
+b8 GpuTimingAccumulator::resetDirtyQueriesOnHost(Device& device){
+    if(!m_captureEnabled)
+        return true;
+
+    b8 allReady = true;
+    for(QueryRecord& record : m_queries){
+        if(!record.query || record.state != QueryState::Available || record.deviceReady)
+            continue;
+        if(device.resetTimerQuery(*record.query)){
+            record.deviceReady = true;
+            record.frameResetRecorded = false;
+            record.frameResetRecordingQueue = {};
+            record.frameResetSubmission = {};
+        }
+        else{
+            allReady = false;
+        }
+    }
+    return allReady;
+}
+
 void GpuTimingAccumulator::recordFrameReset(CommandList& commandList){
     if(!m_captureEnabled)
         return;
@@ -136,10 +157,14 @@ void GpuTimingAccumulator::recordFrameReset(CommandList& commandList){
     for(QueryRecord& record : m_queries){
         record.frameResetRecorded = false;
         record.frameResetRecordingQueue = {};
-        if(record.state == QueryState::Available)
-            record.frameResetSubmission = {};
-        record.deviceReady = false;
-        if(!canReset || !record.query || record.state != QueryState::Available)
+        if(record.state != QueryState::Available){
+            record.deviceReady = false;
+            continue;
+        }
+        if(record.deviceReady)
+            continue;
+        record.frameResetSubmission = {};
+        if(!canReset || !record.query)
             continue;
 
         if(!commandList.resetTimerQuery(*record.query))
@@ -178,7 +203,20 @@ b8 GpuTimingAccumulator::materializeRequestedQueries(Device& device){
     return !m_captureEnabled || m_requestedQueryCount == 0u || reserveQueries(device, m_requestedQueryCount);
 }
 
-Expected<GpuTimingAccumulator::QueryBegin> GpuTimingAccumulator::beginQuery(CommandList& commandList, const u64 frameIndex, const u32 epoch, const u64 performanceCaptureEpoch, const GpuTimingSampleAttribution attribution){
+Expected<GpuTimingAccumulator::QueryBegin> GpuTimingAccumulator::claimQueryForBegin(
+    const CommandList& commandList,
+    const b8 canRecordHere,
+    const b8 canResetHere,
+    const CommandListParameters& commandListDescription,
+    const u64 frameIndex,
+    const u32 epoch,
+    const u64 performanceCaptureEpoch,
+    const GpuTimingSampleAttribution attribution,
+    TimerQuery*& outQuery,
+    b8& outPreviousDeviceReady
+){
+    outQuery = nullptr;
+    outPreviousDeviceReady = false;
     if(!m_captureEnabled){
         ++m_skippedScopeCountByReason[GpuTimingScopeSkipReason::CollectionInactive];
         return QueryBegin{};
@@ -193,20 +231,17 @@ Expected<GpuTimingAccumulator::QueryBegin> GpuTimingAccumulator::beginQuery(Comm
     QueryRecord& record = m_queries[index];
     if(!commandList.isRecording() || !commandList.hasCommandBuffer() || commandList.commandRecordingFailed())
         return MakeUnexpected(Failure{});
-    if(!commandList.canRecordTimerQueryHere()){
+    if(!canRecordHere){
         ++m_skippedScopeCountByReason[GpuTimingScopeSkipReason::RecordingPositionUnavailable];
         return QueryBegin{};
     }
-    if(!commandList.canResetTimerQueryHere() && !record.deviceReady){
+    if(!canResetHere && !record.deviceReady){
         ++m_skippedScopeCountByReason[GpuTimingScopeSkipReason::RecordingPositionUnavailable];
         return QueryBegin{};
     }
 
-    const auto timerQueryRecording = commandList.beginTimerQuery(*record.query);
-    if(!timerQueryRecording)
-        return MakeUnexpected(Failure{});
-
-    const CommandListParameters commandListDescription = commandList.getResolvedDescription();
+    const QueueSubmissionToken resetSubmission = record.frameResetSubmission;
+    outPreviousDeviceReady = record.deviceReady;
     record.physicalQueue = commandListDescription.physicalQueue;
     record.acceptedSubmission = {};
     record.queueClass = commandListDescription.queueType;
@@ -222,9 +257,55 @@ Expected<GpuTimingAccumulator::QueryBegin> GpuTimingAccumulator::beginQuery(Comm
     record.retirementNotificationPending = false;
     AdvanceWrappingNonzero(m_nextReservation);
     record.reservation = m_nextReservation;
-    const QueryBegin result{ .scope = GpuTimingScope{ .scopeName = m_scopeName, .reservation = record.reservation, .timerQueryRecording = *timerQueryRecording, .index = index, .epoch = epoch, }, .resetSubmission = record.frameResetSubmission, };
+    const u32 queryCount = static_cast<u32>(m_queries.size());
+    m_nextSearchIndex = (index + 1u < queryCount) ? (index + 1u) : 0u;
+    outQuery = record.query.get();
     ++m_recordedScopeCount;
-    return result;
+    return QueryBegin{ .scope = GpuTimingScope{ .scopeName = m_scopeName, .reservation = record.reservation, .timerQueryRecording = {}, .index = index, .epoch = epoch, }, .resetSubmission = resetSubmission, };
+}
+
+void GpuTimingAccumulator::releaseFailedBeginClaim(const GpuTimingScope& scope, const b8 previousDeviceReady)noexcept{
+    if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
+        return;
+
+    QueryRecord& record = m_queries[scope.index];
+    if(record.epoch != scope.epoch || record.reservation != scope.reservation || record.state != QueryState::Recording)
+        return;
+
+    releaseUnacceptedQuery(record);
+    record.deviceReady = previousDeviceReady;
+    if(m_recordedScopeCount > 0u)
+        --m_recordedScopeCount;
+    m_nextSearchIndex = scope.index;
+}
+
+Expected<GpuTimingAccumulator::QueryBegin> GpuTimingAccumulator::beginQuery(CommandList& commandList, const u64 frameIndex, const u32 epoch, const u64 performanceCaptureEpoch, const GpuTimingSampleAttribution attribution){
+    TimerQuery* claimedQuery = nullptr;
+    b8 previousDeviceReady = false;
+    auto claimed = claimQueryForBegin(
+        commandList,
+        commandList.canRecordTimerQueryHere(),
+        commandList.canResetTimerQueryHere(),
+        commandList.getResolvedDescription(),
+        frameIndex,
+        epoch,
+        performanceCaptureEpoch,
+        attribution,
+        claimedQuery,
+        previousDeviceReady
+    );
+    if(!claimed)
+        return MakeUnexpected(Failure{});
+    if(!claimed->scope.valid())
+        return claimed;
+
+    const auto timerQueryRecording = commandList.beginTimerQuery(*claimedQuery);
+    if(!timerQueryRecording){
+        releaseFailedBeginClaim(claimed->scope, previousDeviceReady);
+        return MakeUnexpected(Failure{});
+    }
+    claimed->scope.timerQueryRecording = *timerQueryRecording;
+    return claimed;
 }
 
 GpuTimingAccumulator::QueryEndResult::Enum GpuTimingAccumulator::endQuery(CommandList& commandList, const GpuTimingScope& scope){
@@ -411,7 +492,12 @@ b8 GpuTimingAccumulator::reserveQueries(Device& device, const u32 queryCount){
 }
 
 u32 GpuTimingAccumulator::findAvailableQuery()const noexcept{
-    for(usize i = 0u; i < m_queries.size(); ++i){
+    const usize count = m_queries.size();
+    if(count == 0u)
+        return Limit<u32>::s_Max;
+    const usize start = static_cast<usize>(m_nextSearchIndex) < count ? static_cast<usize>(m_nextSearchIndex) : 0u;
+    for(usize offset = 0u; offset < count; ++offset){
+        const usize i = (start + offset < count) ? (start + offset) : (start + offset - count);
         if(m_queries[i].state == QueryState::Available && !m_queries[i].retirementNotificationPending)
             return static_cast<u32>(i);
     }

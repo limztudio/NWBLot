@@ -38,6 +38,8 @@ public:
     [[nodiscard]] b8 validate();
     [[nodiscard]] Expected<ResourceStates::Mask> permanentTextureState(Texture* texture)const noexcept;
     [[nodiscard]] Expected<ResourceStates::Mask> permanentBufferState(Buffer* buffer)const noexcept;
+    [[nodiscard]] b8 hasExplicitTextureRange(Texture* texture, const TextureSubresourceSet& range)const noexcept;
+    [[nodiscard]] b8 hasExplicitBufferRange(Buffer* buffer, const BufferRange& range)const noexcept;
 
 
 private:

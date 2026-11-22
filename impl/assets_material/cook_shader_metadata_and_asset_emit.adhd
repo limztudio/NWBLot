@@ -119,9 +119,10 @@ b8 ParseMaterialMetadataParametersInto(
     b8 found = false;
     b8 isMap = false;
     b8 ok = true;
+    in auto nwbFilePathRef = nwbFilePath;
     asset.visitField(
         s_MaterialMetaParametersField,
-        lambda[in nwbFilePath, mut found, mut isMap, mut ok, mut outParameters](in MetascriptValue parametersValue) -> void{
+        lambda[in nwbFilePathRef, mut found, mut isMap, mut ok, mut outParameters](in MetascriptValue parametersValue) -> void{
             found = true;
             isMap = parametersValue.isMap();
             if(!isMap){
@@ -129,38 +130,38 @@ b8 ParseMaterialMetadataParametersInto(
                 return;
             }
             if(!parametersValue.forEachMapEntry(
-                lambda[in nwbFilePath, mut ok, mut outParameters](in StringView paramKeyText, in MetascriptValue paramValue) -> b8{
+                lambda[in nwbFilePathRef, mut ok, mut outParameters](in StringView paramKeyText, in MetascriptValue paramValue) -> b8{
                     if(paramValue.isString()){
-                        error("Material meta '{}': interface parameter '{}' must be declared inside a block map", nwbFilePath, paramKeyText);
+                        error("Material meta '{}': interface parameter '{}' must be declared inside a block map", nwbFilePathRef, paramKeyText);
                         ok = false;
                         return false;
                     }
                     if(!paramValue.isMap()){
-                        error("Material meta '{}': parameter '{}' must be a block map", nwbFilePath, paramKeyText);
+                        error("Material meta '{}': parameter '{}' must be a block map", nwbFilePathRef, paramKeyText);
                         ok = false;
                         return false;
                     }
                     if(paramKeyText.empty()){
-                        error("Material meta '{}': parameter block names must not be empty", nwbFilePath);
+                        error("Material meta '{}': parameter block names must not be empty", nwbFilePathRef);
                         ok = false;
                         return false;
                     }
 
                     return paramValue.forEachMapEntry(
-                        lambda[in nwbFilePath, in paramKeyText, mut ok, mut outParameters](in StringView blockParamKeyText, in MetascriptValue blockParamValue) -> b8{
+                        lambda[in nwbFilePathRef, in paramKeyText, mut ok, mut outParameters](in StringView blockParamKeyText, in MetascriptValue blockParamValue) -> b8{
                             if(blockParamKeyText.empty()){
-                                error("Material meta '{}': parameter names in block '{}' must not be empty", nwbFilePath, paramKeyText);
+                                error("Material meta '{}': parameter names in block '{}' must not be empty", nwbFilePathRef, paramKeyText);
                                 ok = false;
                                 return false;
                             }
 
                             const Expected<CompactString> flattenedKey = BuildMaterialBindParameterKey(paramKeyText, blockParamKeyText);
                             if(!flattenedKey.has_value()){
-                                error("Material meta '{}': parameter '{}.{}' exceeds ACompactString capacity", nwbFilePath, paramKeyText, blockParamKeyText);
+                                error("Material meta '{}': parameter '{}.{}' exceeds ACompactString capacity", nwbFilePathRef, paramKeyText, blockParamKeyText);
                                 ok = false;
                                 return false;
                             }
-                            if(!AppendParsedMaterialParameter(nwbFilePath, flattenedKey.value().view(), blockParamValue, outParameters)){
+                            if(!AppendParsedMaterialParameter(nwbFilePathRef, flattenedKey.value().view(), blockParamValue, outParameters)){
                                 ok = false;
                                 return false;
                             }
@@ -258,34 +259,35 @@ b8 ReadMaterialStageShaders(in Path file, in MetascriptValue asset, mut Material
         error("Material meta '{}': shaders must be a map", file);
         return false;
     }
-    if(!field.value().forEachMapEntry(lambda[in file, mut stages](in StringView key, in MetascriptValue value) -> b8{
+    in auto fileRef = file;
+    if(!field.value().forEachMapEntry(lambda[in fileRef, mut stages](in StringView key, in MetascriptValue value) -> b8{
         if(!value.isString()){
-            error("Material meta '{}': shader '{}' must be a string", file, key);
+            error("Material meta '{}': shader '{}' must be a string", fileRef, key);
             return false;
         }
         const StringView path = TrimView(value.asString());
         if(!HasProjectAssetVirtualRoot(path)){
-            error("Material meta '{}': shader stage '{}' must use the project/ virtual root", file, key);
+            error("Material meta '{}': shader stage '{}' must use the project/ virtual root", fileRef, key);
             return false;
         }
         const Expected<Optional<Name>, NameTextError> keyName = ToName(key);
         const Expected<Optional<Name>, NameTextError> pathName = ToName(path);
         if(!keyName.has_value() || !keyName.value().has_value() || !pathName.has_value() || !pathName.value().has_value()){
-            error("Material meta '{}': shader stage entries must not be empty", file);
+            error("Material meta '{}': shader stage entries must not be empty", fileRef);
             return false;
         }
         const ShaderType stage = ShaderTypeFromArchiveStageName(keyName.value().value());
         const AssetRef<IShader> shader(pathName.value().value());
         if(stage == ShaderType::Invalid || !shader.valid()){
-            error("Material meta '{}': shader stage entries must not be empty", file);
+            error("Material meta '{}': shader stage entries must not be empty", fileRef);
             return false;
         }
         if(!IsSupportedMaterialShaderStage(stage)){
-            error("Material meta '{}': shader stage '{}' is not supported by the ECS renderer material contract; only 'mesh' and 'ps' are allowed", file, key);
+            error("Material meta '{}': shader stage '{}' is not supported by the ECS renderer material contract; only 'mesh' and 'ps' are allowed", fileRef, key);
             return false;
         }
         if(!stages.emplace(stage, shader).second){
-            error("Material meta '{}': duplicate shader stage '{}'", file, key);
+            error("Material meta '{}': duplicate shader stage '{}'", fileRef, key);
             return false;
         }
         return true;
@@ -377,8 +379,10 @@ b8 FillMaterialCookEntry(in Path root, in StringView virtualRoot, in Path file, 
 
 Expected<MaterialCookEntry> ParseMaterialCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument doc){
     MaterialCookEntry entry;
-    if(!VisitMetadataAssetMap(file, doc, s_MaterialMetaDiagnosticPrefix, lambda[in root, in virtualRoot, in file, mut entry](in MetascriptValue asset) -> b8{
-        return FillMaterialCookEntry(root, virtualRoot, file, asset, entry);
+    in auto rootRef = root;
+    in auto fileRef = file;
+    if(!VisitMetadataAssetMap(file, doc, s_MaterialMetaDiagnosticPrefix, lambda[in rootRef, in virtualRoot, in fileRef, mut entry](in MetascriptValue asset) -> b8{
+        return FillMaterialCookEntry(rootRef, virtualRoot, fileRef, asset, entry);
     }))
         return MakeUnexpected(Failure());
     return entry;

@@ -384,6 +384,7 @@ struct StaticAssertion{
 
 
 struct TranslationUnit{
+    AstNodePool astNodePool;
     List<MString, MetaArena> substitutedConstantTexts;
     MStringView namespaceWrapper;
     MStringView cppNamespace;
@@ -409,7 +410,8 @@ struct TranslationUnit{
 
 public:
     explicit TranslationUnit(MetaArena& arena)noexcept
-        : substitutedConstantTexts(arena)
+        : astNodePool(arena)
+        , substitutedConstantTexts(arena)
         , staticAssertions(arena)
         , assetRegistrations(arena)
         , registrationBindings(arena)

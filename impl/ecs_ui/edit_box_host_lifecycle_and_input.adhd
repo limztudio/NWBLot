@@ -91,7 +91,8 @@ b8 UiEditBoxHost::publish(in WidgetState widget, in EditBoxView view, in EditBox
 void UiEditBoxHost::beginFrame(in u64 generation, in DisplayMetrics display){
     if(this.rejectBorrowedMutation())
         return;
-    this.drainPublications();
+    if(this.m_publications.pending() != 0u)
+        this.drainPublications();
     this.collectNative();
     this.m_generation = generation;
     this.m_display = display;
@@ -108,6 +109,7 @@ void UiEditBoxHost::finishFrame(){
             this.cancelTransfers();
         this.discard(entry.owner);
         this.m_entries.erase(this.m_entries.begin() + cast<isize>(index - 1u));
+        this.m_focusSyncDirty = true;
     }
     this.synchronizeFocus();
 }
@@ -117,8 +119,10 @@ void UiEditBoxHost::commitFrame(in u64 generation){
         return;
     if(this.m_context.input().layoutGeneration() != generation)
         return;
-    for(mut auto entry : this.m_entries)
-        UiEditGeometry().commit(generation, entry.candidate, entry.displayed);
+    for(mut auto entry : this.m_entries){
+        if(UiEditGeometry().commit(generation, entry.candidate, entry.displayed))
+            this.m_focusSyncDirty = true;
+    }
     if(this.m_session.token().valid()){
         const auto entry = this.findEntry(this.m_session.owner().widget);
         if(entry.has_value() && entry.value().owner == this.m_session.owner() && entry.value().displayed.generation == generation){
@@ -372,6 +376,17 @@ b8 UiEditBoxHost::takeClipboardFailure(){
 void UiEditBoxHost::synchronizeFocus(){
     if(this.rejectBorrowedMutation())
         return;
+    const WidgetId currentFocus = this.m_context.input().focus();
+    const u64 currentLayoutGeneration = this.m_context.input().layoutGeneration();
+    if(
+        !this.m_focusSyncDirty
+        && this.m_syncedFocusId == currentFocus
+        && this.m_syncedLayoutGeneration == currentLayoutGeneration
+        && !this.m_session.token().valid()
+        && !this.m_clipboard.pending()
+        && !this.m_primary.pending()
+    )
+        return;
     const auto entry = this.focusedTextEntry();
     const b8 focused = entry.has_value();
     UiTextEditOwner focusedOwner;
@@ -405,13 +420,16 @@ void UiEditBoxHost::synchronizeFocus(){
         }
         if(active)
             continue;
-        if(!candidate.actionCapable)
+        if(!candidate.actionCapable && !this.m_events.empty())
             this.discard(candidate.owner);
         candidate.dragging = false;
         candidate.wordDragging = false;
     }
     if(ShouldCancelUnfocusedUiEditTransfers(focused, focusedOwner, this.m_session.token().valid(), this.m_session.owner(), this.m_clipboard.pending(), this.m_clipboardOwner, this.m_primary.pending(), this.m_primaryOwner))
         this.cancelTransfers();
+    this.m_syncedFocusId = currentFocus;
+    this.m_syncedLayoutGeneration = currentLayoutGeneration;
+    this.m_focusSyncDirty = false;
 }
 
 void UiEditBoxHost::reset(){
@@ -425,6 +443,9 @@ void UiEditBoxHost::reset(){
     this.m_events.clear();
     this.m_queuedTextBytes = 0u;
     this.m_context.input().clearFocus();
+    this.m_syncedFocusId = WidgetId();
+    this.m_syncedLayoutGeneration = 0u;
+    this.m_focusSyncDirty = true;
 }
 
 Optional<mut UiEditBoxEntry> UiEditBoxHost::findEntry(in WidgetId widget){
@@ -444,7 +465,10 @@ Optional<in UiEditBoxEntry> UiEditBoxHost::findConstEntry(in WidgetId widget)con
 }
 
 Optional<in UiEditBoxEntry> UiEditBoxHost::focusedTextEntry()const{
-    const auto entry = this.findConstEntry(this.m_context.input().focus());
+    const WidgetId focus = this.m_context.input().focus();
+    if(!focus.valid())
+        return Optional<in UiEditBoxEntry>();
+    const auto entry = this.findConstEntry(focus);
     if(!entry.has_value() || !UiEditGeometry().focusedReady(entry.value().displayed, entry.value().owner, entry.value().popup))
         return Optional<in UiEditBoxEntry>();
     const auto target = this.m_context.input().findTarget(entry.value().widget.id, entry.value().owner.declarationGeneration);
@@ -461,6 +485,7 @@ b8 UiEditBoxHost::append(mut UiEditBoxEvent event){
     this.m_queuedTextBytes += event.native.text.size();
     this.m_events.emplace_back();
     MoveInto<UiEditBoxEvent>(this.m_events[this.m_events.size() - 1u], event);
+    this.m_focusSyncDirty = true;
     return true;
 }
 

@@ -56,7 +56,7 @@ b8 TryUpdateRouterPointerGesture(
     if(inOutActiveGestureSequence == 0u)
         return true;
     for(usize index = 0u; index < pointerGestures.size(); ++index){
-        PointerGestureRecord record = pointerGestures[index];
+        mut PointerGestureRecord record = pointerGestures[index];
         if(record.gesture.id.sequence != inOutActiveGestureSequence)
             continue;
         if(completed || record.gesture.position.x != position.x || record.gesture.position.y != position.y){
@@ -70,7 +70,6 @@ b8 TryUpdateRouterPointerGesture(
             record.gesture.updateSequence = inOutNextActionSequence;
             ++inOutNextActionSequence;
             record.pendingUpdate = true;
-            pointerGestures[index] = record;
         }
         break;
     }
@@ -170,32 +169,24 @@ b8 IsCurrentRouterContextMenuOwner(
 
 b8 AcceptsRouterPointerSource(
     in InputSource activePointerSource,
-    in Span<PointerSource> pointerSources,
+    in PointerSourceTable pointerSources,
     in InputSource source
 ){
     if(!source.valid() || (activePointerSource.valid() && activePointerSource != source))
         return false;
-    for(in PointerSource held : pointerSources){
-        if(held.source == source && held.inert)
-            return false;
-    }
-    return true;
+    return !pointerSources.hasInertSource(source);
 }
 
-b8 WantsRouterPointer(in Span<PointerSource> pointerSources, in b8 hasPopup, in WidgetId hover){
-    if(!pointerSources.empty()){
-        for(in PointerSource held : pointerSources){
-            if(held.consumed)
-                return true;
-        }
-        return false;
-    }
+b8 WantsRouterPointer(in PointerSourceTable pointerSources, in b8 hasPopup, in WidgetId hover){
+    if(!pointerSources.empty())
+        return pointerSources.hasAnyConsumed();
     return hasPopup || hover.valid();
 }
 
+[cpp_unwind]
 Expected<InputEvent> TryResolveRouterPointerEvent(
     in InputEvent event,
-    mut Vector<PointerBinding> pointerBindings
+    mut PointerBindingTable pointerBindings
 ){
     if(!IsPointerInputEventType(event.type))
         return event;
@@ -211,46 +202,22 @@ Expected<InputEvent> TryResolveRouterPointerEvent(
         intent = PointerIntent::ContextMenu;
     usize heldIndex = pointerBindings.size();
     usize contactIndex = pointerBindings.size();
-    for(usize index = 0u; index < pointerBindings.size(); ++index){
-        if(pointerBindings[index].source == event.source){
-            if(contactIndex == pointerBindings.size()){
-                contactIndex = index;
-                if(!press && !release)
-                    break;
-            }
-            if(pointerBindings[index].intent == intent && heldIndex == pointerBindings.size()){
-                heldIndex = index;
-                break;
-            }
-        }
-    }
+    pointerBindings.findContactAndHeld(event.source, intent, press || release, contactIndex, heldIndex);
     if(contactIndex != pointerBindings.size())
-        resolved.hoverCapable = pointerBindings[contactIndex].hoverCapable;
+        resolved.hoverCapable = pointerBindings.at(contactIndex).hoverCapable;
     if(press){
         if(heldIndex == pointerBindings.size()){
             if(pointerBindings.size() == s_InputMaxSources)
                 return MakeUnexpected(Failure());
-            pointerBindings.push_back(PointerBinding(event.source, intent, resolved.hoverCapable));
+            pointerBindings.pushBack(PointerBinding(event.source, intent, resolved.hoverCapable));
         }
         else
             resolved.repeat = true;
     }
-    else if(release && heldIndex != pointerBindings.size()){
-        for(usize moveIndex = heldIndex + 1u; moveIndex < pointerBindings.size(); ++moveIndex)
-            pointerBindings[moveIndex - 1u] = pointerBindings[moveIndex];
-        pointerBindings.pop_back();
-    }
-    else if(event.type == InputEventType::PointerCaptureLost){
-        usize keptBindings = 0u;
-        for(usize index = 0u; index < pointerBindings.size(); ++index){
-            if(pointerBindings[index].source != event.source){
-                if(keptBindings != index)
-                    pointerBindings[keptBindings] = pointerBindings[index];
-                ++keptBindings;
-            }
-        }
-        pointerBindings.resize(keptBindings);
-    }
+    else if(release && heldIndex != pointerBindings.size())
+        pointerBindings.eraseAt(heldIndex);
+    else if(event.type == InputEventType::PointerCaptureLost)
+        pointerBindings.retainSourceNotEqual(event.source);
     return resolved;
 }
 

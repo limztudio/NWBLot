@@ -10,16 +10,23 @@
 
 const f64 s_SliderDefaultKeyStepDivisor = 100.0;
 const u32 s_SliderPageStepCount = 10u;
+const Name s_SliderTrackRegionName = "slider.track";
+const Name s_SliderThumbNormalRegionName = "slider.thumb.normal";
+const Name s_SliderThumbHoverRegionName = "slider.thumb.hover";
+const Name s_SliderThumbPressedRegionName = "slider.thumb.pressed";
+const Name s_SliderThumbDisabledRegionName = "slider.thumb.disabled";
+const Name s_SliderTrackFallbackRegionName = "scrollbar.track";
+const Name s_SliderThumbFallbackRegionName = "scrollbar.thumb.normal";
 
 class SliderStyle{
-    public Name track = Name("slider.track");
-    public Name normal = Name("slider.thumb.normal");
-    public Name hover = Name("slider.thumb.hover");
-    public Name pressed = Name("slider.thumb.pressed");
-    public Name disabled = Name("slider.thumb.disabled");
-    public Name trackFallback = Name("scrollbar.track");
-    public Name thumbFallback = Name("scrollbar.thumb.normal");
-    public Name focus = Name("focus.overlay");
+    public Name track = s_SliderTrackRegionName;
+    public Name normal = s_SliderThumbNormalRegionName;
+    public Name hover = s_SliderThumbHoverRegionName;
+    public Name pressed = s_SliderThumbPressedRegionName;
+    public Name disabled = s_SliderThumbDisabledRegionName;
+    public Name trackFallback = s_SliderTrackFallbackRegionName;
+    public Name thumbFallback = s_SliderThumbFallbackRegionName;
+    public Name focus = s_StyleFocusOverlayRegionName;
     public Color hoverTint = s_StyleHoverTint;
     public Color pressedTint = s_StylePressedTint;
     public Color disabledTint = s_StyleDisabledTint;

@@ -77,7 +77,7 @@ static void AccumulatePacketMergeSummary(
 }
 
 
-[[nodiscard]] Expected<GpuSubmissionPacketRange> ResolvePacketTimingEnvelope(const GpuTaskGraphPacketTimingEnvelopeOptions& options, GpuTaskGraphCompilerDetail::GpuTaskGraphCompiledPlanStorage& compiledPlan)noexcept{
+[[nodiscard]] Expected<GpuSubmissionPacketRange> ResolvePacketTimingEnvelope(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphPacketTimingEnvelopeOptions& options, GpuTaskGraphCompilerDetail::GpuTaskGraphCompiledPlanStorage& compiledPlan)noexcept{
     const b8 hasFirstTask = options.firstTask.valid();
     const b8 hasLastTask = options.lastTask.valid();
     if(hasFirstTask != hasLastTask)
@@ -114,6 +114,13 @@ static void AccumulatePacketMergeSummary(
         GpuSubmissionPacket& packet = compiledPlan.packets[firstPacket.index + packetOffset];
         packet.recordsPacketEnvelopeTiming = true;
         packet.recordsTiming = true;
+        if(!packet.packetTimingScopeName && packet.taskCount != 0u){
+            const GpuTaskId firstPacketTask = compiledPlan.packetTasks[packet.taskOffset];
+            const auto scopeName = GpuTaskPacketTimingScopeName(GpuTaskGraphCompilerDetail::CompilerGraphAccess::TaskNode(graph, firstPacketTask.index).identity);
+            if(!scopeName)
+                return MakeUnexpected(Failure{});
+            packet.packetTimingScopeName = *scopeName;
+        }
     }
     return range;
 }
@@ -218,16 +225,31 @@ namespace GpuTaskGraphCompilerDetail{
                 packetID = GpuSubmissionPacketId{ .generation = compiledPlan.planGeneration, .index = static_cast<u32>(compiledPlan.packets.size() - 1u), };
                 ++precedingPacket.taskCount;
                 precedingPacket.recordsTiming = precedingPacket.recordsTiming || taskRecordsTiming;
+                if(precedingPacket.recordsTiming && !precedingPacket.packetTimingScopeName){
+                    const GpuTaskId firstPacketTask = compiledPlan.packetTasks[precedingPacket.taskOffset];
+                    const auto scopeName = GpuTaskPacketTimingScopeName(CompilerGraphAccess::TaskNode(graph, firstPacketTask.index).identity);
+                    if(!scopeName)
+                        return MakeUnexpected(Failure{});
+                    precedingPacket.packetTimingScopeName = *scopeName;
+                }
                 packetizationDecision = scoredMergeRequested ? GpuTaskPacketizationDecision::MergedFrontierScored : GpuTaskPacketizationDecision::MergedExplicit;
             }
         }
 
         if(!packetID.valid()){
+            Name packetTimingScopeName = s_NameNone;
+            if(taskRecordsTiming){
+                const auto scopeName = GpuTaskPacketTimingScopeName(task.identity);
+                if(!scopeName)
+                    return MakeUnexpected(Failure{});
+                packetTimingScopeName = *scopeName;
+            }
             packetID = GpuSubmissionPacketId{ .generation = compiledPlan.planGeneration, .index = static_cast<u32>(compiledPlan.packets.size()), };
             compiledPlan.packets.push_back(GpuSubmissionPacket{
                 .taskOffset = static_cast<u32>(compiledPlan.packetTasks.size()),
                 .taskCount = 1u,
                 .queue = assignment.queue,
+                .packetTimingScopeName = packetTimingScopeName,
                 .joinsAcceptedQueueFrontier = task.scheduling.joinsAcceptedQueueFrontier,
                 .isRecoverySubmission = task.scheduling.isRecoverySubmission,
                 .recordsTiming = taskRecordsTiming,
@@ -249,7 +271,7 @@ namespace GpuTaskGraphCompilerDetail{
         compiledPlan.compiledTaskIndexByTask[taskID.index] = compiledTaskIndex;
     }
     FOUNDATION_ASSERT(compiledPlan.tasks.size() == compiledPlan.compiledTaskIndexByTask.size());
-    return __hidden_gpu_task_graph_compiler_packetization::ResolvePacketTimingEnvelope(timingEnvelope, compiledPlan);
+    return __hidden_gpu_task_graph_compiler_packetization::ResolvePacketTimingEnvelope(graph, timingEnvelope, compiledPlan);
 }
 
 

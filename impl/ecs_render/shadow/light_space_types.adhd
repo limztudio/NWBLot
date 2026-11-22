@@ -90,6 +90,8 @@ class LightSpaceShadowPush{
     public u32 meshletCount = 0u;
     public u32 receiverViewSlot = 0u;
     public u32 receiverCsgSampleStateSlot = 0u;
+    public u32 fallbackListSlot = s_LightSpaceInvalidGpuDescriptorSlot;
+    public u32 fallbackArgsSlot = s_LightSpaceInvalidGpuDescriptorSlot;
 }
 
 class LightSpaceShadowStorageCapacity{

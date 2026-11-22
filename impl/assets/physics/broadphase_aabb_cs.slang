@@ -168,7 +168,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             cMin = int3(floor(minScaled));
             const int3 cMax = int3(floor(maxScaled));
             span = cMax - cMin + int3(1, 1, 1);
-            isLarge = (span.x <= 0 || span.y <= 0 || span.z <= 0 || span.x > 3 || span.y > 3 || span.z > 3);
+            isLarge = (span.x <= 0 || span.y <= 0 || span.z <= 0 || span.x > 27 || span.y > 27 || span.z > 27);
             if(!isLarge){
                 const uint cellCount = uint(span.x) * uint(span.y) * uint(span.z);
                 if(cellCount > NWB_PHYSICS_GPU_GRID_MAX_CELLS_PER_SHAPE)
@@ -228,8 +228,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 const int3 cMinA = int3(floor(minScaledA));
                 const int3 cMaxA = int3(floor(maxScaledA));
                 const int3 spanA = cMaxA - cMinA + int3(1, 1, 1);
-                if(spanA.x > 0 && spanA.y > 0 && spanA.z > 0 && spanA.x <= 3 && spanA.y <= 3 && spanA.z <= 3){
-                    uint bucketEntries[NWB_PHYSICS_GPU_GRID_BUCKET_CAPACITY];
+                if(spanA.x > 0 && spanA.y > 0 && spanA.z > 0 && spanA.x <= 27 && spanA.y <= 27 && spanA.z <= 27){
                     for(int dz = 0; dz < spanA.z; ++dz){
                         const int cz = cMinA.z + dz;
                         for(int dy = 0; dy < spanA.y; ++dy){
@@ -239,22 +238,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                                 const uint bucket = nwbPhysicsHashCell(int3(cx, cy, cz));
                                 const uint entryBase = NWB_PHYSICS_GPU_GRID_TABLE_SIZE + bucket * NWB_PHYSICS_GPU_GRID_BUCKET_CAPACITY;
                                 const uint count = min(g_NwbPhysicsUintBuffers[gridSlot][bucket], NWB_PHYSICS_GPU_GRID_BUCKET_CAPACITY);
-                                for(uint k = 0u; k < count; ++k)
-                                    bucketEntries[k] = g_NwbPhysicsUintBuffers[gridSlot][entryBase + k];
 
                                 for(uint k = 0u; k < count; ++k){
-                                    const uint idxB = bucketEntries[k];
+                                    const uint idxB = g_NwbPhysicsUintBuffers[gridSlot][entryBase + k];
                                     if(idxB == idx)
-                                        continue;
-
-                                    bool seenInBucket = false;
-                                    for(uint p = 0u; p < k; ++p){
-                                        if(bucketEntries[p] == idxB){
-                                            seenInBucket = true;
-                                            break;
-                                        }
-                                    }
-                                    if(seenInBucket)
                                         continue;
 
                                     const float4 minPadB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].aabbMinPad;
@@ -277,6 +264,17 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                                     const float3 maxB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].aabbMaxPad.xyz;
                                     if(!nwbPhysicsAabbOverlaps(minA, maxA, minPadB.xyz, maxB))
                                         continue;
+
+                                    bool seenInBucket = false;
+                                    for(uint p = 0u; p < k; ++p){
+                                        if(g_NwbPhysicsUintBuffers[gridSlot][entryBase + p] == idxB){
+                                            seenInBucket = true;
+                                            break;
+                                        }
+                                    }
+                                    if(seenInBucket)
+                                        continue;
+
                                     const uint outA = idx < idxB ? idx : idxB;
                                     const uint outB = idx < idxB ? idxB : idx;
                                     const uint bodyOutA = idx < idxB ? metaA.x : metaB.x;

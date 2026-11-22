@@ -33,6 +33,23 @@ const Color s_StyleInsetColor = Color(0.08f, 0.10f, 0.14f, 1.0f);
 const Color s_StyleHoverTint = Color(1.08f, 1.08f, 1.08f, 1.0f);
 const Color s_StylePressedTint = Color(0.85f, 0.85f, 0.85f, 1.0f);
 const Color s_StyleDisabledTint = Color(0.55f, 0.55f, 0.55f, 0.6f);
+const Name s_StylePanelNormalRegionName = "panel.normal";
+const Name s_StyleWindowNormalRegionName = "window.normal";
+const Name s_StyleWindowTitleRegionName = "window.title";
+const Name s_StyleWindowCollapseRegionName = "window.collapse";
+const Name s_StyleWindowResizeRegionName = "window.resize";
+const Name s_StyleSeparatorRegionName = "separator";
+const Name s_StyleWhiteRegionName = "white";
+const Name s_StyleButtonNormalRegionName = "button.normal";
+const Name s_StyleButtonHoverRegionName = "button.hover";
+const Name s_StyleButtonPressedRegionName = "button.pressed";
+const Name s_StyleButtonDisabledRegionName = "button.disabled";
+const Name s_StyleCheckboxNormalRegionName = "checkbox.normal";
+const Name s_StyleCheckboxHoverRegionName = "checkbox.hover";
+const Name s_StyleCheckboxCheckedRegionName = "checkbox.checked";
+const Name s_StyleCheckboxDisabledRegionName = "checkbox.disabled";
+const Name s_StyleCheckboxMarkRegionName = "checkbox.mark";
+const Name s_StyleFocusOverlayRegionName = "focus.overlay";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,23 +61,23 @@ enum<u8> SeparatorDirection{
 }
 
 class WidgetStyle{
-    public Name panel = Name("panel.normal");
-    public Name window = Name("window.normal");
-    public Name windowTitle = Name("window.title");
-    public Name windowCollapse = Name("window.collapse");
-    public Name windowResize = Name("window.resize");
-    public Name separator = Name("separator");
-    public Name white = Name("white");
-    public Name button = Name("button.normal");
-    public Name buttonHover = Name("button.hover");
-    public Name buttonPressed = Name("button.pressed");
-    public Name buttonDisabled = Name("button.disabled");
-    public Name checkbox = Name("checkbox.normal");
-    public Name checkboxHover = Name("checkbox.hover");
-    public Name checkboxChecked = Name("checkbox.checked");
-    public Name checkboxDisabled = Name("checkbox.disabled");
-    public Name checkboxMark = Name("checkbox.mark");
-    public Name focus = Name("focus.overlay");
+    public Name panel = s_StylePanelNormalRegionName;
+    public Name window = s_StyleWindowNormalRegionName;
+    public Name windowTitle = s_StyleWindowTitleRegionName;
+    public Name windowCollapse = s_StyleWindowCollapseRegionName;
+    public Name windowResize = s_StyleWindowResizeRegionName;
+    public Name separator = s_StyleSeparatorRegionName;
+    public Name white = s_StyleWhiteRegionName;
+    public Name button = s_StyleButtonNormalRegionName;
+    public Name buttonHover = s_StyleButtonHoverRegionName;
+    public Name buttonPressed = s_StyleButtonPressedRegionName;
+    public Name buttonDisabled = s_StyleButtonDisabledRegionName;
+    public Name checkbox = s_StyleCheckboxNormalRegionName;
+    public Name checkboxHover = s_StyleCheckboxHoverRegionName;
+    public Name checkboxChecked = s_StyleCheckboxCheckedRegionName;
+    public Name checkboxDisabled = s_StyleCheckboxDisabledRegionName;
+    public Name checkboxMark = s_StyleCheckboxMarkRegionName;
+    public Name focus = s_StyleFocusOverlayRegionName;
     public Color text = s_StyleTextColor;
     public Color disabledText = s_StyleDisabledTextColor;
     public f32 fontSize = s_TextDefaultFontSize;

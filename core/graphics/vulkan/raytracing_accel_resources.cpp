@@ -255,6 +255,8 @@ Expected<RayTracingAccelStructHandle> Device::createAccelStruct(const RayTracing
             return MakeUnexpected(Failure{});
         }
         as->m_deviceAddress = m_context.deviceDispatch.vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
+        if(as->m_deviceAddress != 0u)
+            as->m_gpuReady.store(true, MemoryOrder::release);
     }
 
     constexpr usize s_InitialBuildSignatureRoleCount = 2u;
@@ -321,8 +323,10 @@ b8 Device::bindAccelStructMemory(RayTracingAccelStruct& accelerationStructure, H
         auto addressInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureDeviceAddressInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR);
         addressInfo.accelerationStructure = accelerationStructure.m_accelStruct;
         accelerationStructure.m_deviceAddress = m_context.deviceDispatch.vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
-        if(accelerationStructure.m_deviceAddress != 0u)
+        if(accelerationStructure.m_deviceAddress != 0u){
+            accelerationStructure.m_gpuReady.store(true, MemoryOrder::release);
             return true;
+        }
 
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to bind acceleration structure memory: device address is null"));
         return false;
@@ -337,6 +341,9 @@ b8 Device::isAccelStructReadyForGpuUse(RayTracingAccelStruct* accelStructResourc
         return false;
 
     const AccelStruct& accelerationStructure = *accelStructResource;
+    if(&accelerationStructure.m_context == &m_context && accelerationStructure.m_gpuReady.load(MemoryOrder::acquire) && accelerationStructure.queueSharingMatchesCreation())
+        return true;
+
     NothrowScopedLock resourceLock(accelerationStructure.m_memoryBindingMutex);
     Buffer* const backingBuffer = accelerationStructure.m_buffer.get();
     return

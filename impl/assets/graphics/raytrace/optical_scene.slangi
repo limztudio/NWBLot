@@ -30,7 +30,7 @@ bool nwbOpticalReadInstance(const NwbOpticalTraceConfig config, const uint insta
         return false;
     }
     const uint offset = NWB_RT_OPTICAL_SCENE_HEADER_BYTES + instance * NWB_RT_OPTICAL_INSTANCE_BYTES;
-    const uint4 record = nwbHeapRawBuffer(config.opticalSceneHeapSlot).Load4(offset);
+    const uint4 record = nwbHeapRawBufferUniform(config.opticalSceneHeapSlot).Load4(offset);
     optical.entityId = record.x;
     optical.priority = asint(record.y);
     optical.mode = record.z;

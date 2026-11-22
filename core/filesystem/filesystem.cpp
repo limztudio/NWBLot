@@ -33,6 +33,10 @@ Expected<usize> IFilesystem::readWholeFile(const Name& virtualPath, void* const 
     return readFile(virtualPath, 0u, destination, byteCount);
 }
 
+Optional<b8> IFilesystem::visitWholeFile([[maybe_unused]] const Name& virtualPath, [[maybe_unused]] void* const context, [[maybe_unused]] b8 (* const visitor)(void* context, Span<const u8> bytes))const{
+    return {};
+}
+
 Expected<FileCursor> IFilesystem::openFile(const Name& virtualPath)const{
     if(!fileExists(virtualPath))
         return MakeUnexpected(Failure{});

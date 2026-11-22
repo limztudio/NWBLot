@@ -99,6 +99,8 @@ struct NwbPhysicsGpuJointImpulseOut{
 struct NwbPhysicsGpuIslandSlice{
     uint4 bodyContact;
     uint4 jointFlags;
+    uint4 contactColorCounts0;
+    uint4 contactColorCounts1;
 };
 
 struct NwbPhysicsGpuContactConstraint{

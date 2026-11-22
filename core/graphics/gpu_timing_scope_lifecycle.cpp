@@ -28,8 +28,11 @@ Expected<GpuTimingScope> GpuTimingRecorder::beginScope(const Name& scopeName, co
     GpuTimingScope scope;
     GpuTimingSubmissionTicket* ticket = nullptr;
     QueueSubmissionToken resetSubmission;
+    TimerQuery* claimedQuery = nullptr;
+    b8 previousDeviceReady = false;
+    usize publicationIndex = Limit<usize>::s_Max;
     {
-        ScopedLock lock(m_mutex);
+        UniqueLock lock(m_mutex);
         syncActiveState();
         if(!scopeName)
             return scope;
@@ -77,33 +80,53 @@ Expected<GpuTimingScope> GpuTimingRecorder::beginScope(const Name& scopeName, co
             return MakeUnexpected(Failure{});
         }
 
-        const usize publicationIndex = *publicationIndexResult;
+        publicationIndex = *publicationIndexResult;
         GpuTimingAccumulator& accumulator = *found.value();
-        ScopeExit publicationUnwind([this, ticket, &accumulator, &scope, publicationIndex]()noexcept{
+        const auto claimed = accumulator.claimQueryForBegin(
+            commandList,
+            commandList.canRecordTimerQueryHere(),
+            commandList.canResetTimerQueryHere(),
+            commandListDescription,
+            m_currentFrameIndex,
+            m_epoch,
+            m_performanceCaptureEpoch,
+            attribution,
+            claimedQuery,
+            previousDeviceReady
+        );
+        if(!claimed){
             ticket->cancelScopePublication(publicationIndex);
-            if(scope.valid()){
-                if(accumulator.abandonQuery(scope, m_sampleSubscriptionIdentityLimit.load(MemoryOrder::acquire)))
-                    m_pendingAttributionRetirements = true;
-                scope = {};
-            }
             ++m_statistics.beginFailureCount;
-        });
-        const auto began = accumulator.beginQuery(commandList, m_currentFrameIndex, m_epoch, m_performanceCaptureEpoch, attribution);
-        if(!began)
             return MakeUnexpected(Failure{});
-        scope = began->scope;
-        resetSubmission = began->resetSubmission;
+        }
+        scope = claimed->scope;
+        resetSubmission = claimed->resetSubmission;
         if(!scope.valid()){
             ticket->cancelScopePublication(publicationIndex);
-            publicationUnwind.release();
             return scope;
         }
+    }
 
-        scope.submissionTicket = ticket;
-        scope.submissionPublicationIndex = publicationIndex;
-        if(!ticket->bindScopePublication(publicationIndex, scope, commandList))
-            return MakeUnexpected(Failure{});
-        publicationUnwind.release();
+    const auto timerQueryRecording = commandList.beginTimerQuery(*claimedQuery);
+    if(!timerQueryRecording){
+        ticket->cancelScopePublication(publicationIndex);
+        {
+            NothrowScopedLock lock(m_mutex);
+            if(GpuTimingAccumulator* const currentAccumulator = findAccumulator(scope))
+                currentAccumulator->releaseFailedBeginClaim(scope, previousDeviceReady);
+            ++m_statistics.beginFailureCount;
+        }
+        return MakeUnexpected(Failure{});
+    }
+
+    scope.timerQueryRecording = *timerQueryRecording;
+    scope.submissionTicket = ticket;
+    scope.submissionPublicationIndex = publicationIndex;
+    if(!ticket->bindScopePublication(publicationIndex, scope, commandList)){
+        abandonScopeWithoutCallbacks(scope);
+        NothrowScopedLock lock(m_mutex);
+        ++m_statistics.beginFailureCount;
+        return MakeUnexpected(Failure{});
     }
 
     if(scope.valid() && resetSubmission.valid()){

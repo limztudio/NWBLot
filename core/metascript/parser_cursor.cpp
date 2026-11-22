@@ -150,6 +150,29 @@ b8 ParserCursor::expect(TokenType::Enum type, MStringView expected){
     return false;
 }
 
+b8 ParserCursor::skipBalancedBraces(usize& outStartOffset, usize& outEndOffset, b8& outHasAngleBracket){
+    if(m_current.type != TokenType::LeftBrace){
+        errorExpected("expected '{' to begin statement block");
+        return false;
+    }
+
+    const MStringView source = m_lexer.source();
+    outStartOffset = (!source.empty() && m_current.text.data() >= source.data() && m_current.text.data() < source.data() + source.size())
+        ? static_cast<usize>(m_current.text.data() - source.data())
+        : 0u;
+    outEndOffset = outStartOffset;
+
+    if(!m_lexer.skipBalancedBraceBlock(outEndOffset, outHasAngleBracket)){
+        advance();
+        if(!failed())
+            errorExpected("expected '}' to close statement block");
+        return false;
+    }
+
+    advance();
+    return true;
+}
+
 void ParserCursor::error(const u32 line, const u32 column, const MStringView message){
     if(m_suppressErrors)
         return;

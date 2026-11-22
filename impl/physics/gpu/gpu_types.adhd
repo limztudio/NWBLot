@@ -56,12 +56,12 @@ const u32 s_GpuContactConstraintBytes = 384u;
 const u32 s_GpuContactImpulseOutBytes = 64u;
 const u32 s_GpuJointConstraintBytes = 320u;
 const u32 s_GpuJointImpulseOutBytes = 48u;
-const u32 s_GpuIslandSliceBytes = 32u;
+const u32 s_GpuIslandSliceBytes = 64u;
 
 const u32 s_GpuIslandFlagHasRestitution = 0x00000001u;
-const u32 s_GpuIslandMaxBodies = 32u;
-const u32 s_GpuIslandMaxContacts = 96u;
-const u32 s_GpuIslandMaxJoints = 24u;
+const u32 s_GpuIslandMaxBodies = 64u;
+const u32 s_GpuIslandMaxContacts = 255u;
+const u32 s_GpuIslandMaxJoints = 48u;
 const u32 s_GpuIslandWorkgroupSize = 64u;
 
 
@@ -162,6 +162,8 @@ class GpuPhysicsJointImpulseOut{
 class GpuPhysicsIslandSlice{
     public u32x4 bodyContact(0u, 0u, 0u, 0u);
     public u32x4 jointFlags(0u, 0u, 0u, 0u);
+    public u32x4 contactColorCounts0(0u, 0u, 0u, 0u);
+    public u32x4 contactColorCounts1(0u, 0u, 0u, 0u);
 }
 
 [layout(16)]
@@ -269,6 +271,8 @@ static_assert(offset_of<GpuPhysicsJointImpulseOut>(angularImpulseMax) == 16u, "J
 static_assert(offset_of<GpuPhysicsJointImpulseOut>(limitImpulses) == 32u, "JointImpulseOut.limitImpulses offset mismatch");
 static_assert(offset_of<GpuPhysicsIslandSlice>(bodyContact) == 0u, "IslandSlice.bodyContact offset mismatch");
 static_assert(offset_of<GpuPhysicsIslandSlice>(jointFlags) == 16u, "IslandSlice.jointFlags offset mismatch");
+static_assert(offset_of<GpuPhysicsIslandSlice>(contactColorCounts0) == 32u, "IslandSlice.contactColorCounts0 offset mismatch");
+static_assert(offset_of<GpuPhysicsIslandSlice>(contactColorCounts1) == 48u, "IslandSlice.contactColorCounts1 offset mismatch");
 
 static_assert(is_trivially_copyable<GpuPhysicsPushConstants>(), "GpuPhysicsPushConstants must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsBodyState>(), "GpuPhysicsBodyState must stay trivially copyable");

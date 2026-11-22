@@ -12,6 +12,7 @@
 #define NWB_RAY_TRACING_ALL_INSTANCE_MASK 0xFFu
 #define NWB_RT_CSG_INSTANCE_MASK 0x10u
 #define NWB_RT_REFRACTIVE_INSTANCE_MASK 0x20u
+#define NWB_RT_NON_REFRACTIVE_INSTANCE_MASK 0x80u
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

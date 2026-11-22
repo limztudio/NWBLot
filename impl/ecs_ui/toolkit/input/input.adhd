@@ -12,7 +12,7 @@ void RetireRouterQueuedReleases(
     in Span<InputEvent> events,
     in InputSource hoverPointerSource,
     mut Vector<CommandSource> commandSources,
-    mut Vector<PointerSource> pointerSources,
+    mut PointerSourceTable pointerSources,
     mut Vector<PointerGestureRecord> pointerGestures,
     mut u64 inOutActiveGestureSequence,
     mut b8 inOutPointerSubmitArmed,
@@ -68,9 +68,7 @@ void RetireRouterQueuedReleases(
             const Expected<usize> sourceIndex = FindRouterPointerSourceIndex(pointerSources, event.source, intent);
             if(!sourceIndex.has_value())
                 continue;
-            for(usize moveIndex = sourceIndex.value() + 1u; moveIndex < pointerSources.size(); ++moveIndex)
-                pointerSources[moveIndex - 1u] = pointerSources[moveIndex];
-            pointerSources.pop_back();
+            pointerSources.eraseAt(sourceIndex.value());
             if(inOutActivePointerSource != event.source)
                 continue;
             if(intent == PointerIntent::Activate){
@@ -302,10 +300,11 @@ void ReconcileRouterAllTargets(
     );
 }
 
+[cpp_unwind]
 Expected<InputEvent> TryQueueRouterInputEvent(
     in Span<InputKeyBinding> bindings,
     in InputEvent event,
-    mut Vector<PointerBinding> pointerBindings,
+    mut PointerBindingTable pointerBindings,
     mut Vector<BoundSource> boundSources,
     mut Vector<InputEvent> events
 ){
@@ -321,10 +320,11 @@ Expected<InputEvent> TryQueueRouterInputEvent(
     return candidate.value();
 }
 
+[cpp_unwind]
 Expected<InputEvent> TryQueueRouterPointerInput(
     in Span<InputKeyBinding> bindings,
     in PointerInput input,
-    mut Vector<PointerBinding> pointerBindings,
+    mut PointerBindingTable pointerBindings,
     mut Vector<BoundSource> boundSources,
     mut Vector<InputEvent> events
 ){
@@ -356,7 +356,7 @@ b8 PublishRouterTargetTable(
     outHasFocusOnCommit = false;
     if(!CanPublishRouterTargetTable(targets.size(), generation, inOutGeneration) || !StageRouterHitTargets(targets, stagedPopups, stagedTargets, stagedLookup, hasOwners, hasCommandOwners, needsSort, outHasFocusOnCommit))
         return false;
-    if(!ValidateSortedStagedRouterTargetsAndPopups(stagedTargets, stagedLookup, stagedPopups, hasOwners, hasCommandOwners, needsSort))
+    if((hasOwners || hasCommandOwners || needsSort || !stagedPopups.empty()) && !ValidateSortedStagedRouterTargetsAndPopups(stagedTargets, stagedLookup, stagedPopups, hasOwners, hasCommandOwners, needsSort))
         return false;
     committedTargets.swap(stagedTargets);
     committedLookup.swap(stagedLookup);
@@ -423,6 +423,7 @@ void ResetRouterTargetTable(
     outSpatialIndex.overflowTargets.clear();
     outSpatialIndex.scratchTargetIndices.clear();
     outSpatialIndex.scratchPackedCells.clear();
+    outSpatialIndex.scratchClippedRects.clear();
     outSpatialIndex.active = false;
     outSpatialIndex.dirty = false;
     outGeneration = 0u;

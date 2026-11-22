@@ -34,7 +34,7 @@ namespace __hidden_vulkan_descriptor_buffer{
 b8 GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWriteItem& item){
     ScopedLock lock(m_mutex);
 
-    if(!m_initialized){
+    if(!m_initialized.load(MemoryOrder::relaxed)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap::write called before initialize."));
         return false;
     }
@@ -104,11 +104,13 @@ b8 GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWr
             return false;
         }
         const ResourceQueueAdmissionSnapshot& admission = backingBuffer->getQueueAdmissionSnapshot();
+        const b8 needsDynamicReadiness = accelStruct->m_desc.isVirtual || !backingBuffer->m_managed || backingBuffer->m_creationDesc.isVirtual;
         const b8 needsConcurrentAdmission = !admission.valid() || admission.usesConcurrentSharing;
         RayTracingAccelStructHandle candidate(nullptr, RayTracingAccelStructHandle::deleter_type(&m_context.objectArena));
         if(!retained){
             candidate = RayTracingAccelStructHandle(accelStruct, RayTracingAccelStructHandle::deleter_type(&m_context.objectArena));
-            __hidden_vulkan_descriptor_buffer::EnsureDescriptorSlotCapacity(m_dynamicReadinessSlots);
+            if(needsDynamicReadiness)
+                __hidden_vulkan_descriptor_buffer::EnsureDescriptorSlotCapacity(m_dynamicReadinessSlots);
             if(needsConcurrentAdmission)
                 __hidden_vulkan_descriptor_buffer::EnsureDescriptorSlotCapacity(m_concurrentAdmissionSlots);
         }
@@ -116,14 +118,16 @@ b8 GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWr
             return false;
         if(!retained){
             retained = Move(candidate);
-            m_dynamicReadinessSlots.push_back(handle);
+            if(needsDynamicReadiness){
+                m_dynamicReadinessSlots.push_back(handle);
+                syncDynamicReadinessFlagLocked();
+            }
             if(needsConcurrentAdmission){
                 m_concurrentAdmissionSlots.push_back(handle);
-                m_verifiedConcurrentQueueMask = 0u;
+                m_verifiedConcurrentQueueMask.store(0u, MemoryOrder::release);
             }
-            syncDynamicReadinessFlagLocked();
-            publishBindingFastVersionLocked();
         }
+        publishBindingFastVersionLocked();
         return true;
     }
 
@@ -197,11 +201,10 @@ b8 GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWr
             }
             if(needsConcurrentAdmission){
                 m_concurrentAdmissionSlots.push_back(handle);
-                m_verifiedConcurrentQueueMask = 0u;
+                m_verifiedConcurrentQueueMask.store(0u, MemoryOrder::release);
             }
-            if(needsDynamicReadiness || needsConcurrentAdmission)
-                publishBindingFastVersionLocked();
         }
+        publishBindingFastVersionLocked();
         return true;
     }
 
@@ -266,7 +269,7 @@ b8 GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWr
         }
         if(needsConcurrentAdmission){
             m_concurrentAdmissionSlots.push_back(handle);
-            m_verifiedConcurrentQueueMask = 0u;
+            m_verifiedConcurrentQueueMask.store(0u, MemoryOrder::release);
         }
         if(needsDynamicReadiness || needsConcurrentAdmission)
             publishBindingFastVersionLocked();

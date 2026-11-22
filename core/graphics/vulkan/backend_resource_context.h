@@ -178,7 +178,7 @@ inline constexpr VkImageLayout s_ReadOnlyImageLayout = VK_IMAGE_LAYOUT_READ_ONLY
 
 VkFormat ConvertFormat(Format::Enum format)noexcept;
 VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask states)noexcept;
-VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states, b8 rayTracingStageAvailable)noexcept;
+VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states, b8 rayTracingStageAvailable, b8 computeOnlyQueue = false)noexcept;
 VkImageLayout GetVkImageLayout(ResourceStates::Mask states)noexcept;
 VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount)noexcept;
 VkComponentTypeKHR ConvertCoopVecDataType(CooperativeVectorDataType::Enum type);

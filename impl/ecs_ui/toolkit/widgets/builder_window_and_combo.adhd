@@ -361,7 +361,7 @@ ComboResult Builder::declareCombo(
     frame.listFocusOnCommit = ShouldFocusComboRowsOnCommit(options.enabled, previouslyListFocused, currentFocus, frame.rows.id);
     auto item = this.makeItem();
     item.state = field;
-    item.style = this.m_style;
+    item.styleIndex = this.currentItemStyleIndex();
     item.enabled = options.enabled;
     item.combo = cast<u32>(this.m_scope.value().m_combos.size());
     Point minimumSize;
@@ -380,7 +380,7 @@ ComboResult Builder::declareCombo(
     StringView label = options.placeholder;
     if(selected)
         label = source.text(index.value());
-    const ShapeRequest request = this.textShapeRequest(label, item.style.fontSize);
+    const ShapeRequest request = this.textShapeRequest(label, this.itemWidgetStyle(item).fontSize);
     const auto measuredLabel = this.m_text.layoutAndMeasureShared(request, this.m_paint.displayMetrics());
     if(!measuredLabel.has_value()){
         this.m_context.fail();
@@ -460,7 +460,7 @@ b8 Builder::prepareComboSearch(in WidgetState field, mut BuilderComboFrame frame
         return false;
     auto item = this.makeItem();
     item.state = editor;
-    item.style = this.m_style;
+    item.styleIndex = this.currentItemStyleIndex();
     auto editFrame = this.makeEditBoxFrame();
     editFrame.editStyle = this.m_editStyle;
     editFrame.editOptions.enabled = frame.options.enabled;
@@ -497,7 +497,7 @@ b8 Builder::prepareComboSearch(in WidgetState field, mut BuilderComboFrame frame
         return false;
     item.editBox = cast<u32>(this.m_scope.value().m_editBoxes.size());
     frame.editor = cast<u32>(this.m_scope.value().m_comboEditors.size());
-    AppendOwned<BuilderEditBoxFrame>(this.m_scope.value().m_editBoxes, editFrame);
+    this.m_scope.value().m_editBoxes.push_back(editFrame);
     AppendOwned<BuilderItem>(this.m_scope.value().m_comboEditors, item);
     return this.comboMatches(frame);
 }
@@ -516,11 +516,12 @@ b8 Builder::paintComboQuery(mut BuilderComboFrame frame, mut LayoutBox content){
     if(item.editBox >= this.m_scope.value().m_editBoxes.size())
         return false;
     in BuilderEditBoxFrame editFrame = this.m_scope.value().m_editBoxes[item.editBox];
-    const f32 measuredHeight = editFrame.editView.visualBounds().height + item.padding.top + item.padding.bottom;
+    in EditBoxView view = this.editViewForFrame(editFrame);
+    const f32 measuredHeight = view.visualBounds().height + item.padding.top + item.padding.bottom;
     Rect nextContentRect = content.rectangle;
     LayoutBox box = content;
     box.rectangle = ResolveComboQueryBoxAndAdvanceContent(measuredHeight, frame.queryHeight, frame.queryGap, nextContentRect);
-    const HitTarget navigation = targets.makeComboQueryNavigationTarget(frame.options.enabled, editFrame.editView.composing(), frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
+    const HitTarget navigation = targets.makeComboQueryNavigationTarget(frame.options.enabled, view.composing(), frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
     if(!this.paintEditBox(item, box, Optional<in HitTarget>(navigation)))
         return false;
     content.rectangle = nextContentRect;
@@ -627,15 +628,16 @@ b8 Builder::applyComboListInput(mut BuilderComboFrame frame, mut ComboResult res
     ListOptions options;
     options.wheelRows = frame.options.wheelRows;
     options.selectOnNavigate = false;
+    in ListOptions optionsRef = options;
     ListInput inputs(this.m_context);
     const ListInputMatches matches = lambda[in this, mut frame]() -> b8{ return this.comboMatches(frame); };
-    const ListInputApplyAction apply = lambda[mut this, mut frame, in options, mut state, mut result](in ControlAction action) -> ListActionOutcome{
+    const ListInputApplyAction apply = lambda[mut this, mut frame, in optionsRef, mut state, mut result](in ControlAction action) -> ListActionOutcome{
         const b8 fromEditor = frame.editor != s_LayoutNoParent && action.source == this.m_scope.value().m_comboEditors[frame.editor].state.id;
         const b8 composing = frame.search.has_value() && frame.search.value().query().composition().active;
         if(ShouldIgnoreComboEditorAction(fromEditor, composing, action.kind, frame.editorSubmitted))
             return ListActionOutcome::Continue;
         ListResult preview;
-        if(!ApplyListControlAction(frame.results.value(), options, action, state.m_list, preview) || !this.comboMatches(frame))
+        if(!ApplyListControlAction(frame.results.value(), optionsRef, action, state.m_list, preview) || !this.comboMatches(frame))
             return ListActionOutcome::Failed;
         if(!preview.activated)
             return ListActionOutcome::Continue;
@@ -677,7 +679,7 @@ b8 Builder::paintCombo(in BuilderItem item, in LayoutBox box){
         this.m_text,
         this.m_skin.value(),
         frame.style,
-        item.style,
+        this.itemWidgetStyle(item),
         item.text.deref(),
         item.textBounds,
         item.padding,

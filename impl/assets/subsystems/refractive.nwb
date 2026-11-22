@@ -2,9 +2,7 @@ refractive_subsystem asset;
 
 asset.caustic_accumulator_decay_cs = "engine/graphics/caustic/caustic_accumulator_decay_cs";
 asset.caustic_geometry_downsample_cs = "engine/graphics/caustic/caustic_geometry_downsample_cs";
-asset.caustic_photon_hw_chit = "engine/graphics/caustic/caustic_photon_hw_chit";
-asset.caustic_photon_hw_miss = "engine/graphics/caustic/caustic_photon_hw_miss";
-asset.caustic_photon_hw_raygen = "engine/graphics/caustic/caustic_photon_hw_raygen";
+asset.caustic_photon_hw_cs = "engine/graphics/caustic/caustic_photon_hw_cs";
 asset.caustic_photon_sw_cs = "engine/graphics/caustic/caustic_photon_sw_cs";
 asset.caustic_resolve_cs = "engine/graphics/caustic/caustic_resolve_cs";
 asset.refraction_classify_tiles_cs = "engine/graphics/refraction/classify_tiles_cs";

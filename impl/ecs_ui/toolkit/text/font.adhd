@@ -106,15 +106,22 @@ GlyphCoverageBounds MeasureFontOutlineCoverage(mut FreeTypeFaceView face, in b8 
     return ComputeOutlineCoverageBounds(box.xMin, box.yMin, box.xMax, box.yMax, fontSize, face.unitsPerEm());
 }
 
-b8 LoadRasterFontGlyph(mut FreeTypeFaceView face, in u32 glyph, in u32 pixelSize){
-    return face.setPixelSizes(0u, pixelSize) == 0 && face.loadGlyph(glyph, s_FreeTypeLoadNoHinting | s_FreeTypeLoadNoBitmap) == 0;
+b8 LoadRasterFontGlyph(mut FreeTypeFaceView face, in u32 glyph, in u32 pixelSize, mut u32 inOutLastPixelSize){
+    if(pixelSize != inOutLastPixelSize){
+        if(face.setPixelSizes(0u, pixelSize) != 0){
+            inOutLastPixelSize = 0u;
+            return false;
+        }
+        inOutLastPixelSize = pixelSize;
+    }
+    return face.loadGlyph(glyph, s_FreeTypeLoadNoHinting | s_FreeTypeLoadNoBitmap) == 0;
 }
 
 [cpp_unwind]
-Expected<Rect> MeasureRasterFontGlyph(mut FreeTypeFaceView face, in u32 glyph, in u32 pixelSize){
+Expected<Rect> MeasureRasterFontGlyph(mut FreeTypeFaceView face, in u32 glyph, in u32 pixelSize, mut u32 inOutLastPixelSize){
     if(!IsValidTextRasterPixelSize(pixelSize))
         return MakeUnexpected(Failure());
-    if(!LoadRasterFontGlyph(face, glyph, pixelSize)){
+    if(!LoadRasterFontGlyph(face, glyph, pixelSize, inOutLastPixelSize)){
         error("UI glyph raster measurement failed");
         return MakeUnexpected(Failure());
     }
@@ -127,10 +134,10 @@ Expected<Rect> MeasureRasterFontGlyph(mut FreeTypeFaceView face, in u32 glyph, i
 }
 
 [cpp_unwind]
-b8 RasterizeFontGlyph(mut FreeTypeFaceView face, in u32 glyph, in u32 pixelSize, mut GlyphBitmap output){
+b8 RasterizeFontGlyph(mut FreeTypeFaceView face, in u32 glyph, in u32 pixelSize, mut u32 inOutLastPixelSize, mut GlyphBitmap output){
     if(!IsValidTextRasterPixelSize(pixelSize))
         return false;
-    if(!LoadRasterFontGlyph(face, glyph, pixelSize) || face.renderNormal() != 0){
+    if(!LoadRasterFontGlyph(face, glyph, pixelSize, inOutLastPixelSize) || face.renderNormal() != 0){
         error("UI glyph rasterization failed");
         return false;
     }
@@ -190,11 +197,14 @@ b8 HasReliableFontCoverage(in HarfBuzzFont font, in b8 allowOutlineBounds){
         && font.tableLength(HarfBuzzTag("COLR")) == 0u;
 }
 
-Expected<FontMetrics> MeasureShapingFont(mut HarfBuzzFont font, in f32 fontSize){
+Expected<FontMetrics> MeasureShapingFont(mut HarfBuzzFont font, in f32 fontSize, mut i32 inOutLastHbScale){
     if(!IsValidTextFontSize(fontSize))
         return MakeUnexpected(Failure());
     const i32 scale = ComputeTextFixedPointScale(fontSize);
-    font.setScale(scale, scale);
+    if(scale != inOutLastHbScale){
+        font.setScale(scale, scale);
+        inOutLastHbScale = scale;
+    }
     HarfBuzzFontExtents extents;
     if(!font.horizontalExtents(extents))
         return MakeUnexpected(Failure());
@@ -204,6 +214,7 @@ Expected<FontMetrics> MeasureShapingFont(mut HarfBuzzFont font, in f32 fontSize)
 [cpp_unwind]
 b8 ShapeFontGlyphRun(
     mut HarfBuzzFont font,
+    mut i32 inOutLastHbScale,
     mut HarfBuzzBuffer buffer,
     in ShapeRequest request,
     in u32 byteBegin,
@@ -217,7 +228,10 @@ b8 ShapeFontGlyphRun(
     if(!IsValidFontFaceShapeByteRange(byteBegin, byteEnd, request.text.size(), request.fontSize))
         return false;
     const i32 scale = ComputeTextFixedPointScale(request.fontSize);
-    font.setScale(scale, scale);
+    if(scale != inOutLastHbScale){
+        font.setScale(scale, scale);
+        inOutLastHbScale = scale;
+    }
     const HarfBuzzScript script = HarfBuzzScriptFromTag(request.scriptTag);
     if(script == s_HarfBuzzInvalidScript)
         return false;
@@ -336,6 +350,8 @@ class FontFace : NoCopy{
     private SharedBakedFontAtlas m_bakedAtlas = SharedBakedFontAtlas();
     private HashMap<u64, CachedShapedGlyphExtents> m_glyphExtentsCache;
     private u32 m_unitsPerEm = 0u;
+    private u32 m_lastRasterPixelSize = 0u;
+    private i32 m_lastHbScale = 0;
     private b8 m_started = false;
     private b8 m_ready = false;
     private b8 m_allowOutlineBounds = false;
@@ -400,23 +416,23 @@ class FontFace : NoCopy{
     public Expected<FontMetrics> metrics(in f32 fontSize){
         if(!this.m_ready)
             return MakeUnexpected(Failure());
-        return MeasureShapingFont(this.m_hbFont, fontSize);
+        return MeasureShapingFont(this.m_hbFont, fontSize, this.m_lastHbScale);
     }
     [cpp_unwind]
     public b8 shape(in ShapeRequest request, in u32 byteBegin, in u32 byteEnd, mut Vector<RawShapedGlyph> output){
         if(!this.m_ready)
             return false;
-        return ShapeFontGlyphRun(this.m_hbFont, this.m_shapeBuffer, request, byteBegin, byteEnd, this.m_freeType.view(), this.m_allowOutlineBounds, this.m_coverageInkReliable, this.m_glyphExtentsCache, output);
+        return ShapeFontGlyphRun(this.m_hbFont, this.m_lastHbScale, this.m_shapeBuffer, request, byteBegin, byteEnd, this.m_freeType.view(), this.m_allowOutlineBounds, this.m_coverageInkReliable, this.m_glyphExtentsCache, output);
     }
     [cpp_unwind]
     public Expected<Rect> rasterBounds(in u32 glyphId, in u32 pixelSize){
         if(!this.m_ready)
             return MakeUnexpected(Failure());
-        return MeasureRasterFontGlyph(this.m_freeType.view(), glyphId, pixelSize);
+        return MeasureRasterFontGlyph(this.m_freeType.view(), glyphId, pixelSize, this.m_lastRasterPixelSize);
     }
     [cpp_unwind]
     public b8 rasterize(in u32 glyphId, in u32 pixelSize, mut GlyphBitmap output){
-        return this.m_ready && RasterizeFontGlyph(this.m_freeType.view(), glyphId, pixelSize, output);
+        return this.m_ready && RasterizeFontGlyph(this.m_freeType.view(), glyphId, pixelSize, this.m_lastRasterPixelSize, output);
     }
 }
 

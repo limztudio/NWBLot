@@ -82,10 +82,7 @@ b8 RemapMeshStreamRef<T>(
 }
 
 void CopyReorderedMeshStream<T>(in Vector<T> reordered, mut Vector<T> outStream){
-    outStream.clear();
-    outStream.reserve(reordered.size());
-    for(in T value : reordered)
-        outStream.push_back(value);
+    AssignTriviallyCopyableVector(outStream, Span<T>(reordered));
 }
 
 b8 ReorderMeshStreamsByMeshletTraversal(

@@ -76,6 +76,14 @@ class BroadPhase{
         this.trees[treeIdx].destroyProxy(proxyId);
     }
 
+    public b8 needsMove(in u32 proxyKey, in Aabb3D aabb, in b8 keepEnlarged)const{
+        if(proxyKey == s_NullIndex)
+            return false;
+        const u32 treeIdx = DecodeBroadPhaseTreeType(proxyKey);
+        const u32 proxyId = DecodeBroadPhaseProxyId(proxyKey);
+        return this.trees[treeIdx].needsMove(proxyId, aabb, keepEnlarged);
+    }
+
     public void moveProxy(in u32 proxyKey, in Aabb3D aabb, in VectorSingle displacement){
         if(proxyKey == s_NullIndex)
             return;

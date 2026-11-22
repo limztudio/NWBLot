@@ -55,6 +55,7 @@ b8 StageRouterHitTargets(
 ){
     stagedTargets.clear();
     stagedLookup.clear();
+    stagedLookup.reserve(targets.size());
     outHasOwners = false;
     outHasCommandOwners = false;
     outNeedsSort = false;
@@ -63,19 +64,49 @@ b8 StageRouterHitTargets(
     u64 previousIdValue = 0u;
     for(usize index = 0u; index < targets.size(); ++index){
         in HitTarget target = targets[index];
+        const b8 validRect = target.rectangle.width >= 0.0f
+            && target.rectangle.height >= 0.0f
+            && IsFinite(target.rectangle.x + target.rectangle.width)
+            && IsFinite(target.rectangle.y + target.rectangle.height);
+        const b8 validClip = target.clip.width >= 0.0f
+            && target.clip.height >= 0.0f
+            && IsFinite(target.clip.x + target.clip.width)
+            && IsFinite(target.clip.y + target.clip.height);
         const b8 gestureZero = target.gestureReference.x == 0.0f && target.gestureReference.y == 0.0f && target.gestureReference.width == 0.0f && target.gestureReference.height == 0.0f;
-        const b8 validGestureRef = gestureZero || (IsValidUiRect(target.gestureReference) && ((target.gestureReference.width == 0.0f) == (target.gestureReference.height == 0.0f)));
+        const b8 validGestureRef = gestureZero || (
+            target.gestureReference.width >= 0.0f
+            && target.gestureReference.height >= 0.0f
+            && (target.gestureReference.width == 0.0f) == (target.gestureReference.height == 0.0f)
+            && IsFinite(target.gestureReference.x + target.gestureReference.width)
+            && IsFinite(target.gestureReference.y + target.gestureReference.height)
+        );
         b8 validPopup = false;
         if(!target.popup.widget.valid())
             validPopup = target.layer == 0u && target.popup.declarationGeneration == 0u && target.popup.instanceGeneration == 0u && target.popup.openGeneration == 0u;
         else
             validPopup = ValidStagedPopupTarget(target, stagedPopups);
+        b8 validControlProps = false;
+        if(!target.owner.valid() && !target.commandOwner.valid()){
+            validControlProps =
+                (target.control.empty() || target.control.valid())
+                && target.ownerDeclarationGeneration == 0u
+                && target.commandOwnerDeclarationGeneration == 0u
+                && target.commandControl.empty()
+                && IsFinite(target.scrollStep) && target.scrollStep >= 0.0
+                && IsFinite(target.scrollStepX) && target.scrollStepX >= 0.0
+                && IsFinite(target.gestureMaximum) && target.gestureMaximum >= 0.0 && target.pageRows != 0u
+                && IsFinite(target.gestureMaximumX) && target.gestureMaximumX >= 0.0
+                && ((!target.navigable && !target.scrollable) || (target.control.valid() && target.focusable))
+                && (!target.horizontalNavigation || target.navigable)
+                && (!target.focusOnCommit || target.focusable);
+        }
+        else
+            validControlProps = HasValidHitTargetControlProperties(target) && HasValidHitTargetCommandOwnerProperties(target);
         if(
             !target.id.valid() || target.declarationGeneration == 0u
-            || !IsValidUiRect(target.rectangle) || !IsValidUiRect(target.clip) || !validGestureRef
+            || !validRect || !validClip || !validGestureRef
             || !validPopup
-            || !HasValidHitTargetControlProperties(target)
-            || !HasValidHitTargetCommandOwnerProperties(target)
+            || !validControlProps
         )
             return false;
         if(target.owner.valid())
@@ -84,7 +115,6 @@ b8 StageRouterHitTargets(
             outHasCommandOwners = true;
         if(target.focusOnCommit && target.focusable)
             outHasFocusOnCommit = true;
-        stagedTargets.push_back(target);
         TargetLookup entry;
         entry.value = target.id.value;
         entry.index = cast<u32>(index);
@@ -97,6 +127,7 @@ b8 StageRouterHitTargets(
         previousIdValue = entry.value;
         stagedLookup.push_back(entry);
     }
+    AssignTriviallyCopyableVector(stagedTargets, targets);
     if(needsSort)
         SortSequence<TargetLookup>(stagedLookup, LessTargetLookup);
     outNeedsSort = needsSort;

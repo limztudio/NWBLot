@@ -20,9 +20,7 @@ const Name s_CausticSwPhotonShaderDebugName = "ECSRender_SwCausticPhotons";
 const Name s_CausticResolveShaderDebugName = "ECSRender_CausticResolve";
 const Name s_CausticGeometryDownsampleShaderDebugName = "ECSRender_CausticGeometryDownsample";
 const Name s_CausticAccumulatorDecayShaderDebugName = "ECSRender_CausticAccumulatorDecay";
-const Name s_CausticHwRaygenShaderDebugName = "ECSRender_CausticHwRaygen";
-const Name s_CausticHwMissShaderDebugName = "ECSRender_CausticHwMiss";
-const Name s_CausticHwClosestHitShaderDebugName = "ECSRender_CausticHwClosestHit";
+const Name s_CausticHwPhotonShaderDebugName = "ECSRender_HwCausticPhotons";
 
 StringView SelectRayTracingCsgVariant(in b8 hasCsg){
     if(hasCsg)
@@ -103,113 +101,40 @@ b8 EnsureCausticResolveStagePipeline(
     return true;
 }
 
-b8 EnsureCausticRtPipelineVariant(
+b8 EnsureHwCausticPipelineVariant(
     in b8 csg,
     mut GraphicsRuntime graphics,
     mut RendererShaderSystem shaderSystem,
     mut BindingLayoutHandle inOutBindingLayout,
-    mut RayTracingPipelineHandle cachedPipeline,
-    mut RayTracingShaderTableHandle cachedTable,
+    mut ShaderHandle inOutShader,
+    mut ComputePipelineHandle inOutPipeline,
     mut b8 failed
 ){
-    if(cachedPipeline.valid() && cachedTable.valid())
+    if(inOutPipeline.valid())
         return true;
-    if(cachedPipeline.valid() || cachedTable.valid()){
-        error("RendererSystem: RT caustic pipeline and shader table cache is inconsistent");
-        cachedPipeline.reset();
-        cachedTable.reset();
-        failed = true;
-        return false;
-    }
     if(failed)
         return false;
-    if(!graphics.queryFeatureSupport(Feature::RayTracingPipeline)){
+    if(!graphics.queryFeatureSupport(Feature::RayTracingAccelStruct) || !graphics.queryFeatureSupport(Feature::RayQuery)){
         failed = true;
         return false;
     }
 
-    mut Device device = graphics.getDevice();
-    mut GpuDescriptorHeap heap = device.getDescriptorHeap();
-    if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
-        error("RendererSystem: hardware caustics require the descriptor-buffer TLAS heap layout");
+    if(!EnsurePushConstantComputePipeline<RefractiveSubsystem>(
+        graphics.getDevice(),
+        shaderSystem,
+        lambda[](in RefractiveSubsystem s) -> AssetRef<ComputeShader>{ return s.causticPhotonHwCs; },
+        SelectRayTracingCsgVariant(csg),
+        s_CausticHwPhotonShaderDebugName,
+        sizeof(CausticPhotonPushConstants),
+        true,
+        inOutBindingLayout,
+        inOutShader,
+        inOutPipeline
+    )){
+        error("RendererSystem: failed to create hardware caustic compute pipeline");
         failed = true;
         return false;
     }
-
-    if(!EnsurePushConstantBindingLayout(device, sizeof(CausticPhotonPushConstants), ShaderTypeMask::AllRayTracing, inOutBindingLayout)){
-        error("RendererSystem: failed to create hardware caustic binding layout");
-        failed = true;
-        return false;
-    }
-
-    ShaderHandle raygenShader;
-    ShaderHandle missShader;
-    ShaderHandle closestHitShader;
-    if(
-        !shaderSystem.loadShader<RayGenerationShader, RefractiveSubsystem>(lambda[](in RefractiveSubsystem s) -> AssetRef<RayGenerationShader>{ return s.causticPhotonHwRaygen; }, SelectRayTracingCsgVariant(csg), s_CausticHwRaygenShaderDebugName, raygenShader)
-        || !shaderSystem.loadShader<MissShader, RefractiveSubsystem>(lambda[](in RefractiveSubsystem s) -> AssetRef<MissShader>{ return s.causticPhotonHwMiss; }, s_ShaderArchiveDefaultVariant, s_CausticHwMissShaderDebugName, missShader)
-        || !shaderSystem.loadShader<ClosestHitShader, RefractiveSubsystem>(lambda[](in RefractiveSubsystem s) -> AssetRef<ClosestHitShader>{ return s.causticPhotonHwChit; }, s_ShaderArchiveDefaultVariant, s_CausticHwClosestHitShaderDebugName, closestHitShader)
-    ){
-        failed = true;
-        return false;
-    }
-
-    RayTracingPipelineDesc pipelineDesc = RayTracingPipelineDesc();
-    pipelineDesc.setMaxPayloadSize(s_CausticHwMaxPayloadBytes);
-    pipelineDesc.setMaxRecursionDepth(1u);
-    pipelineDesc.addBindingLayout(inOutBindingLayout);
-    pipelineDesc.addBindingLayout(heap.getResourceLayout());
-    pipelineDesc.addBindingLayout(heap.getSamplerLayout());
-    pipelineDesc.addBindingLayout(heap.getAccelStructLayout());
-
-    RayTracingPipelineShaderDesc raygenDesc;
-    raygenDesc.setShader(raygenShader).setExportName(s_CausticHwRaygenExportName);
-    pipelineDesc.addShader(raygenDesc);
-
-    RayTracingPipelineShaderDesc missDesc;
-    missDesc.setShader(missShader).setExportName(s_CausticHwMissExportName);
-    pipelineDesc.addShader(missDesc);
-
-    RayTracingPipelineHitGroupDesc hitGroupDesc;
-    hitGroupDesc.setClosestHitShader(closestHitShader).setExportName(s_CausticHwHitGroupExportName);
-    pipelineDesc.addHitGroup(hitGroupDesc);
-
-    const Expected<RayTracingPipelineHandle> pipelineResult = device.createRayTracingPipeline(pipelineDesc);
-    if(!pipelineResult.has_value()){
-        error("RendererSystem: failed to create RT caustic pipeline");
-        failed = true;
-        return false;
-    }
-    RayTracingPipelineHandle pipeline = pipelineResult.value();
-
-    const Expected<RayTracingShaderTableHandle> shaderTableResult = pipeline.deref().createShaderTable();
-    if(!shaderTableResult.has_value()){
-        error("RendererSystem: failed to create RT caustic shader table");
-        failed = true;
-        return false;
-    }
-    RayTracingShaderTableHandle shaderTable = shaderTableResult.value();
-    mut RayTracingShaderTable tableRef = shaderTable.deref();
-    b8 shaderTablePopulated = tableRef.setRayGenerationShader(s_CausticHwRaygenExportName);
-    if(shaderTablePopulated){
-        const Expected<u32> missIndex = tableRef.addMissShader(s_CausticHwMissExportName);
-        shaderTablePopulated = missIndex.has_value() && missIndex.value() == 0u;
-    }
-    if(shaderTablePopulated){
-        const Expected<u32> hitIndex = tableRef.addHitGroup(s_CausticHwHitGroupExportName);
-        shaderTablePopulated = hitIndex.has_value() && hitIndex.value() == 0u;
-    }
-    if(!shaderTablePopulated){
-        error("RendererSystem: failed to populate RT caustic shader table");
-        failed = true;
-        return false;
-    }
-
-    cachedPipeline = pipeline;
-    cachedTable = shaderTable;
-
-    [essential]
-    info("RendererSystem: created RT caustic pipeline + shader table");
     return true;
 }
 
@@ -304,10 +229,10 @@ b8 CausticPipelineSet::ensureCausticAccumulatorDecayPipeline(){
     return true;
 }
 
-b8 CausticPipelineSet::ensureCausticRtPipeline(){
+b8 CausticPipelineSet::ensureHwCausticPipeline(){
     if(this.m_hasCsg)
-        return EnsureCausticRtPipelineVariant(true, this.m_graphics, this.m_shaderSystem, this.m_caustic.m_hwCausticBindingLayout, this.m_caustic.m_hwCausticCsgPipeline, this.m_caustic.m_hwCausticCsgShaderTable, this.m_caustic.m_hwCausticCsgPipelineFailed);
-    return EnsureCausticRtPipelineVariant(false, this.m_graphics, this.m_shaderSystem, this.m_caustic.m_hwCausticBindingLayout, this.m_caustic.m_hwCausticPipeline, this.m_caustic.m_hwCausticShaderTable, this.m_caustic.m_hwCausticPipelineFailed);
+        return EnsureHwCausticPipelineVariant(true, this.m_graphics, this.m_shaderSystem, this.m_caustic.m_hwCausticBindingLayout, this.m_caustic.m_hwCausticCsgShader, this.m_caustic.m_hwCausticCsgPipeline, this.m_caustic.m_hwCausticCsgPipelineFailed);
+    return EnsureHwCausticPipelineVariant(false, this.m_graphics, this.m_shaderSystem, this.m_caustic.m_hwCausticBindingLayout, this.m_caustic.m_hwCausticShader, this.m_caustic.m_hwCausticPipeline, this.m_caustic.m_hwCausticPipelineFailed);
 }
 
 b8 CausticActivityResources::prepareCausticResolveActivity(in u32 halfWidth, in u32 halfHeight){
@@ -462,7 +387,7 @@ b8 RendererRayTracingSystem::prepareGpuBvhCausticResources(mut DeferredFrameTarg
 
 [cpp_unwind]
 b8 RendererRayTracingSystem::prepareHwCausticResources(mut DeferredFrameTargets targets){
-    if(!this.m_graphics.queryFeatureSupport(Feature::RayTracingAccelStruct))
+    if(!this.m_graphics.queryFeatureSupport(Feature::RayTracingAccelStruct) || !this.m_graphics.queryFeatureSupport(Feature::RayQuery))
         return true;
     if(this.m_rayTracingState.caustics.m_causticRefractiveInstanceCount == 0u || !this.m_rayTracingState.sceneBvh.m_tlas.valid() || this.m_rayTracingState.shadow.m_shadowMeshCount == 0u
         || !this.m_rayTracingState.caustics.m_causticEmissionTargets.buffer.valid())
@@ -485,11 +410,12 @@ b8 RendererRayTracingSystem::hasHwCausticWork()const{
 
 b8 RendererRayTracingSystem::hasHwCausticWork(in MeshViewBufferSnapshot meshView)const{
     in RtCausticState caustics = this.m_rayTracingState.caustics;
-    b8 pipelineReady = caustics.m_hwCausticPipeline.valid() && caustics.m_hwCausticShaderTable.valid();
+    b8 pipelineReady = caustics.m_hwCausticPipeline.valid();
     if(this.m_lightSpaceShadow.m_csg.snapshot.hasCsg)
-        pipelineReady = caustics.m_hwCausticCsgPipeline.valid() && caustics.m_hwCausticCsgShaderTable.valid();
+        pipelineReady = caustics.m_hwCausticCsgPipeline.valid();
     return
         this.m_graphics.queryFeatureSupport(Feature::RayTracingAccelStruct)
+        && this.m_graphics.queryFeatureSupport(Feature::RayQuery)
         && pipelineReady
         && this.m_rayTracingState.sceneBvh.m_tlas.valid()
         && this.m_rayTracingState.shadow.m_shadowMeshCount > 0u
@@ -518,7 +444,7 @@ b8 RendererRayTracingSystem::prepareCausticResources(in MeshViewBufferSnapshot m
     b8 producerReady = materialResources.ensureRayTraceMaterialContextSlotsHeapHandle();
     if(producerReady){
         if(hardware)
-            producerReady = pipelines.ensureCausticRtPipeline();
+            producerReady = pipelines.ensureHwCausticPipeline();
         else
             producerReady = pipelines.ensureSwCausticPipeline();
     }

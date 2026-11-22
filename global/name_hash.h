@@ -77,18 +77,10 @@ alignas(64) inline constexpr Array<u64, s_NameHashLaneCount> s_LaneSeeds = {
     s_Fnv64OffsetBasis ^ s_LaneSeedSalt7,
 };
 
-alignas(64) extern const Array<u64, s_NameHashLaneCount> g_NameHashLaneSeeds;
-
-[[nodiscard]] consteval Array<u8, 256u> BuildCanonicalAsciiTable()noexcept{
-    Array<u8, 256u> table{};
-    for(usize i = 0u; i < 256u; ++i){
-        const u8 b = static_cast<u8>(i);
-        table[i] = b == static_cast<u8>('\\') ? static_cast<u8>('/') : ToAsciiLowerByte(b);
-    }
-    return table;
+[[nodiscard]] inline constexpr u8 CanonicalizeAsciiByte(const u8 byte)noexcept{
+    const u8 lower = static_cast<u8>(byte | (static_cast<u8>(static_cast<u8>(byte - static_cast<u8>('A')) <= static_cast<u8>('Z' - 'A')) << 5u));
+    return lower == static_cast<u8>('\\') ? static_cast<u8>('/') : lower;
 }
-
-alignas(64) inline constexpr Array<u8, 256u> s_CanonicalAsciiTable = BuildCanonicalAsciiTable();
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -97,28 +89,17 @@ alignas(64) inline constexpr Array<u8, 256u> s_CanonicalAsciiTable = BuildCanoni
 static_assert(sizeof(s_LaneSeeds) / sizeof(s_LaneSeeds[0]) == s_NameHashLaneCount, "s_LaneSeeds count must match s_NameHashLaneCount");
 
 inline constexpr void InitializeNameHash(NameHash& hash)noexcept{
-    if(IsConstantEvaluated()){
-        for(u32 i = 0u; i < s_NameHashLaneCount; ++i)
-            hash.qwords[i] = s_LaneSeeds[i];
-    }
-    else{
-        for(u32 i = 0u; i < s_NameHashLaneCount; ++i)
-            hash.qwords[i] = g_NameHashLaneSeeds[i];
-    }
+    for(u32 i = 0u; i < s_NameHashLaneCount; ++i)
+        hash.qwords[i] = s_LaneSeeds[i];
 }
 
 template<typename CharT>
 inline constexpr void UpdateCanonicalNameHashLanes(NameHash& hash, const CharT ch)noexcept(IsArithmetic_V<CharT>){
     u64 byte = 0u;
-    if constexpr(sizeof(CharT) == 1u){
-        if(!IsConstantEvaluated())
-            byte = static_cast<u64>(s_CanonicalAsciiTable[static_cast<u8>(ch)]);
-        else
-            byte = static_cast<u64>(static_cast<u8>(Canonicalize(ch)));
-    }
-    else{
+    if constexpr(sizeof(CharT) == 1u)
+        byte = static_cast<u64>(CanonicalizeAsciiByte(static_cast<u8>(ch)));
+    else
         byte = static_cast<u64>(static_cast<u8>(Canonicalize(ch)));
-    }
     for(u32 i = 0u; i < s_NameHashLaneCount; ++i){
         hash.qwords[i] ^= byte;
         hash.qwords[i] *= s_Fnv64Prime;
@@ -140,15 +121,10 @@ template<typename CharT>
         if(ch == CharT{})
             return false;
         u64 byte = 0u;
-        if constexpr(sizeof(CharT) == 1u){
-            if(!IsConstantEvaluated())
-                byte = static_cast<u64>(s_CanonicalAsciiTable[static_cast<u8>(ch)]);
-            else
-                byte = static_cast<u64>(static_cast<u8>(Canonicalize(ch)));
-        }
-        else{
+        if constexpr(sizeof(CharT) == 1u)
+            byte = static_cast<u64>(CanonicalizeAsciiByte(static_cast<u8>(ch)));
+        else
             byte = static_cast<u64>(static_cast<u8>(Canonicalize(ch)));
-        }
         h0 = (h0 ^ byte) * s_Fnv64Prime;
         h1 = (h1 ^ byte) * s_Fnv64Prime;
         h2 = (h2 ^ byte) * s_Fnv64Prime;
@@ -173,48 +149,23 @@ template<typename CharT>
 template<typename CharT>
 [[nodiscard]] FOUNDATION_INLINE constexpr b8 ComputeCanonicalNameHashDirect(NameHash& outHash, const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     static_assert(s_NameHashLaneCount == 8u, "ComputeCanonicalNameHashDirect expects 8 lanes");
-    u64 h0 = 0u;
-    u64 h1 = 0u;
-    u64 h2 = 0u;
-    u64 h3 = 0u;
-    u64 h4 = 0u;
-    u64 h5 = 0u;
-    u64 h6 = 0u;
-    u64 h7 = 0u;
-    if(IsConstantEvaluated()){
-        h0 = s_LaneSeeds[0];
-        h1 = s_LaneSeeds[1];
-        h2 = s_LaneSeeds[2];
-        h3 = s_LaneSeeds[3];
-        h4 = s_LaneSeeds[4];
-        h5 = s_LaneSeeds[5];
-        h6 = s_LaneSeeds[6];
-        h7 = s_LaneSeeds[7];
-    }
-    else{
-        h0 = g_NameHashLaneSeeds[0];
-        h1 = g_NameHashLaneSeeds[1];
-        h2 = g_NameHashLaneSeeds[2];
-        h3 = g_NameHashLaneSeeds[3];
-        h4 = g_NameHashLaneSeeds[4];
-        h5 = g_NameHashLaneSeeds[5];
-        h6 = g_NameHashLaneSeeds[6];
-        h7 = g_NameHashLaneSeeds[7];
-    }
+    u64 h0 = s_LaneSeeds[0];
+    u64 h1 = s_LaneSeeds[1];
+    u64 h2 = s_LaneSeeds[2];
+    u64 h3 = s_LaneSeeds[3];
+    u64 h4 = s_LaneSeeds[4];
+    u64 h5 = s_LaneSeeds[5];
+    u64 h6 = s_LaneSeeds[6];
+    u64 h7 = s_LaneSeeds[7];
 
     for(const CharT ch : text){
         if(ch == CharT{}) [[unlikely]]
             return false;
         u64 byte = 0u;
-        if constexpr(sizeof(CharT) == 1u){
-            if(!IsConstantEvaluated())
-                byte = static_cast<u64>(s_CanonicalAsciiTable[static_cast<u8>(ch)]);
-            else
-                byte = static_cast<u64>(static_cast<u8>(Canonicalize(ch)));
-        }
-        else{
+        if constexpr(sizeof(CharT) == 1u)
+            byte = static_cast<u64>(CanonicalizeAsciiByte(static_cast<u8>(ch)));
+        else
             byte = static_cast<u64>(static_cast<u8>(Canonicalize(ch)));
-        }
         h0 = (h0 ^ byte) * s_Fnv64Prime;
         h1 = (h1 ^ byte) * s_Fnv64Prime;
         h2 = (h2 ^ byte) * s_Fnv64Prime;
@@ -275,46 +226,21 @@ inline constexpr b8 IsZeroHash(const NameHash& hash)noexcept{
 template<typename CharT>
 [[nodiscard]] inline constexpr NameHash ComputeNameHash(const NotNull<const CharT*> text)noexcept(IsArithmetic_V<CharT>){
     static_assert(s_NameHashLaneCount == 8u, "ComputeNameHash expects 8 lanes");
-    u64 h0 = 0u;
-    u64 h1 = 0u;
-    u64 h2 = 0u;
-    u64 h3 = 0u;
-    u64 h4 = 0u;
-    u64 h5 = 0u;
-    u64 h6 = 0u;
-    u64 h7 = 0u;
-    if(IsConstantEvaluated()){
-        h0 = NameDetail::s_LaneSeeds[0];
-        h1 = NameDetail::s_LaneSeeds[1];
-        h2 = NameDetail::s_LaneSeeds[2];
-        h3 = NameDetail::s_LaneSeeds[3];
-        h4 = NameDetail::s_LaneSeeds[4];
-        h5 = NameDetail::s_LaneSeeds[5];
-        h6 = NameDetail::s_LaneSeeds[6];
-        h7 = NameDetail::s_LaneSeeds[7];
-    }
-    else{
-        h0 = NameDetail::g_NameHashLaneSeeds[0];
-        h1 = NameDetail::g_NameHashLaneSeeds[1];
-        h2 = NameDetail::g_NameHashLaneSeeds[2];
-        h3 = NameDetail::g_NameHashLaneSeeds[3];
-        h4 = NameDetail::g_NameHashLaneSeeds[4];
-        h5 = NameDetail::g_NameHashLaneSeeds[5];
-        h6 = NameDetail::g_NameHashLaneSeeds[6];
-        h7 = NameDetail::g_NameHashLaneSeeds[7];
-    }
+    u64 h0 = NameDetail::s_LaneSeeds[0];
+    u64 h1 = NameDetail::s_LaneSeeds[1];
+    u64 h2 = NameDetail::s_LaneSeeds[2];
+    u64 h3 = NameDetail::s_LaneSeeds[3];
+    u64 h4 = NameDetail::s_LaneSeeds[4];
+    u64 h5 = NameDetail::s_LaneSeeds[5];
+    u64 h6 = NameDetail::s_LaneSeeds[6];
+    u64 h7 = NameDetail::s_LaneSeeds[7];
     const CharT* const ptr = text.get();
     for(usize index = 0u; ptr[index] != CharT{}; ++index){
         u64 byte = 0u;
-        if constexpr(sizeof(CharT) == 1u){
-            if(!IsConstantEvaluated())
-                byte = static_cast<u64>(NameDetail::s_CanonicalAsciiTable[static_cast<u8>(ptr[index])]);
-            else
-                byte = static_cast<u64>(static_cast<u8>(Canonicalize(ptr[index])));
-        }
-        else{
+        if constexpr(sizeof(CharT) == 1u)
+            byte = static_cast<u64>(NameDetail::CanonicalizeAsciiByte(static_cast<u8>(ptr[index])));
+        else
             byte = static_cast<u64>(static_cast<u8>(Canonicalize(ptr[index])));
-        }
         h0 = (h0 ^ byte) * s_Fnv64Prime;
         h1 = (h1 ^ byte) * s_Fnv64Prime;
         h2 = (h2 ^ byte) * s_Fnv64Prime;
@@ -336,7 +262,9 @@ template<typename CharT>
 
 template<typename CharT>
 [[nodiscard]] inline constexpr Expected<NameHash, NameTextError::Enum> ComputeNameHash(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
-    NameHash hash{};
+    NameHash hash;
+    if(IsConstantEvaluated())
+        hash = NameHash{};
     if(!NameDetail::ComputeCanonicalNameHashDirect(hash, text))
         return MakeUnexpected(NameTextError::EmbeddedNull);
     return hash;
@@ -378,45 +306,20 @@ private:
 template<typename CharT>
 [[nodiscard]] inline constexpr NameHash ComputeNameHash(const NameText<CharT> text)noexcept(IsArithmetic_V<CharT>){
     static_assert(s_NameHashLaneCount == 8u, "ComputeNameHash expects 8 lanes");
-    u64 h0 = 0u;
-    u64 h1 = 0u;
-    u64 h2 = 0u;
-    u64 h3 = 0u;
-    u64 h4 = 0u;
-    u64 h5 = 0u;
-    u64 h6 = 0u;
-    u64 h7 = 0u;
-    if(IsConstantEvaluated()){
-        h0 = NameDetail::s_LaneSeeds[0];
-        h1 = NameDetail::s_LaneSeeds[1];
-        h2 = NameDetail::s_LaneSeeds[2];
-        h3 = NameDetail::s_LaneSeeds[3];
-        h4 = NameDetail::s_LaneSeeds[4];
-        h5 = NameDetail::s_LaneSeeds[5];
-        h6 = NameDetail::s_LaneSeeds[6];
-        h7 = NameDetail::s_LaneSeeds[7];
-    }
-    else{
-        h0 = NameDetail::g_NameHashLaneSeeds[0];
-        h1 = NameDetail::g_NameHashLaneSeeds[1];
-        h2 = NameDetail::g_NameHashLaneSeeds[2];
-        h3 = NameDetail::g_NameHashLaneSeeds[3];
-        h4 = NameDetail::g_NameHashLaneSeeds[4];
-        h5 = NameDetail::g_NameHashLaneSeeds[5];
-        h6 = NameDetail::g_NameHashLaneSeeds[6];
-        h7 = NameDetail::g_NameHashLaneSeeds[7];
-    }
+    u64 h0 = NameDetail::s_LaneSeeds[0];
+    u64 h1 = NameDetail::s_LaneSeeds[1];
+    u64 h2 = NameDetail::s_LaneSeeds[2];
+    u64 h3 = NameDetail::s_LaneSeeds[3];
+    u64 h4 = NameDetail::s_LaneSeeds[4];
+    u64 h5 = NameDetail::s_LaneSeeds[5];
+    u64 h6 = NameDetail::s_LaneSeeds[6];
+    u64 h7 = NameDetail::s_LaneSeeds[7];
     for(const CharT character : text.m_text){
         u64 byte = 0u;
-        if constexpr(sizeof(CharT) == 1u){
-            if(!IsConstantEvaluated())
-                byte = static_cast<u64>(NameDetail::s_CanonicalAsciiTable[static_cast<u8>(character)]);
-            else
-                byte = static_cast<u64>(static_cast<u8>(Canonicalize(character)));
-        }
-        else{
+        if constexpr(sizeof(CharT) == 1u)
+            byte = static_cast<u64>(NameDetail::CanonicalizeAsciiByte(static_cast<u8>(character)));
+        else
             byte = static_cast<u64>(static_cast<u8>(Canonicalize(character)));
-        }
         h0 = (h0 ^ byte) * s_Fnv64Prime;
         h1 = (h1 ^ byte) * s_Fnv64Prime;
         h2 = (h2 ^ byte) * s_Fnv64Prime;

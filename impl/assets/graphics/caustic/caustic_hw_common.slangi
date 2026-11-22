@@ -12,7 +12,6 @@
 #include "hw_binding_slots.h"
 #include "photon_push_constants.slangi"
 #include "photon_types.slangi"
-#include "caustic_hw_payload.slangi"
 #include "../bvh/constants.h"
 #include "../mesh/runtime_constants.h"
 #include "../deferred/bindless_resources.slangi"

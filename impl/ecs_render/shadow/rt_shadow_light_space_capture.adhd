@@ -283,10 +283,41 @@ b8 LightSpaceShadowRecorder::resolve(
         pipeline = snapshot.transparentResolve;
         fallback = snapshot.transparentFallback;
     }
-    if(!snapshot.ready || !pipeline.valid() || sampleCount == 0u || (hardwareCsg && !snapshot.csgTlasDescriptor.valid()) || (!hardwareCsg && !fallback.valid()))
+    usize slotIndex = 0u;
+    if(transparent)
+        slotIndex = 1u;
+    if(
+        !snapshot.ready
+        || !pipeline.valid()
+        || sampleCount == 0u
+        || (hardwareCsg && !snapshot.csgTlasDescriptor.valid())
+        || (!hardwareCsg && (
+            !fallback.valid()
+            || !snapshot.fallbackLists[slotIndex].valid()
+            || !snapshot.fallbackArgs[slotIndex].valid()
+            || !snapshot.fallbackListDescriptors[slotIndex].valid()
+            || !snapshot.fallbackArgsDescriptors[slotIndex].valid()
+        ))
+    )
         return false;
     LightSpaceShadowPush push = snapshot.push;
     PopulateLightSpaceResolvePush(frameIndex, sampleCount, outputSlot, push);
+    if(!hardwareCsg){
+        push.fallbackListSlot = snapshot.fallbackListDescriptors[slotIndex].slot();
+        push.fallbackArgsSlot = snapshot.fallbackArgsDescriptors[slotIndex].slot();
+        Array<u32, 4u> emptyArgs;
+        emptyArgs[0u] = 0u;
+        emptyArgs[1u] = 1u;
+        emptyArgs[2u] = 1u;
+        emptyArgs[3u] = 0u;
+        if(!commandList.tryWriteBuffer(snapshot.fallbackArgs[slotIndex].deref(), emptyArgs, 0u)){
+            error("RendererSystem: failed to reset light-space shadow fallback arguments");
+            return false;
+        }
+        commandList.setBufferState(snapshot.fallbackLists[slotIndex].deref(), ResourceStates::UnorderedAccess, true);
+        commandList.setBufferState(snapshot.fallbackArgs[slotIndex].deref(), ResourceStates::UnorderedAccess);
+        commandList.commitBarriers();
+    }
     ComputeState computeState;
     computeState.setPipeline(pipeline.deref());
     commandList.setComputeState(computeState);
@@ -307,9 +338,12 @@ b8 LightSpaceShadowRecorder::resolve(
     if(hardwareCsg)
         return true;
     commandList.setTextureState(outputTexture, TextureSubresourceSet(), ResourceStates::UnorderedAccess, true);
+    commandList.setBufferState(snapshot.fallbackLists[slotIndex].deref(), ResourceStates::ShaderResource);
+    commandList.setBufferState(snapshot.fallbackArgs[slotIndex].deref(), ResourceStates::IndirectArgument | ResourceStates::ShaderResource);
     commandList.commitBarriers();
     ComputeState fallbackState;
     fallbackState.setPipeline(fallback.deref());
+    fallbackState.setIndirectParams(snapshot.fallbackArgs[slotIndex].deref());
     commandList.setComputeState(fallbackState);
     heap.bindCompute(commandList, fallback.deref());
     commandList.setPushConstants(push);
@@ -317,7 +351,7 @@ b8 LightSpaceShadowRecorder::resolve(
         const GpuTimingScopeDefinition scope = LightSpaceShadowFallbackTimingScope(transparent);
         GpuTimingMeasure measure(timing, scope, commandList.getDevice(), commandList);
 
-        commandList.dispatch(groupsX, groupsY, 1u);
+        commandList.dispatchIndirect(0u);
     }
     return true;
 }

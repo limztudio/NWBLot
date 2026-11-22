@@ -124,7 +124,7 @@ b8 Builder::selectable(in StringView stableKey, in StringView text, in b8 select
     const auto item = this.addItem(stableKey, text, WidgetKind::Selectable, options);
     if(!item.has_value())
         return false;
-    item.value().selectableStyle = this.m_listStyle.row;
+    item.value().selectableStyleIndex = this.currentSelectableStyleIndex();
     item.value().checked = selected;
     return this.m_context.takeActivation(item.value().state, item.value().enabled);
 }
@@ -143,6 +143,15 @@ void Builder::reset(){
             frame.value().reset();
     }
     this.m_popupFrameCount = 0u;
+    this.m_itemStyles.clear();
+    this.m_itemSelectableStyles.clear();
+    this.m_widgetStyleDirty = true;
+    this.m_selectableStyleDirty = true;
+    ++this.m_editViewFrameCounter;
+    if(this.m_editBoxCacheEntries.size() >= 256u){
+        this.m_editBoxCacheIndex.clear();
+        this.m_editBoxCacheEntries.clear();
+    }
 }
 
 b8 Builder::separator(in StringView stableKey, in SeparatorOptions options){
@@ -157,7 +166,7 @@ b8 Builder::separator(in StringView stableKey, in SeparatorOptions options){
         return false;
     }
     auto item = this.makeItem();
-    item.style = this.m_style;
+    item.styleIndex = this.currentItemStyleIndex();
     item.state = state.value();
     const LayoutNodeDesc description = ResolveSeparatorNodeDesc(skinRegion.value(), options);
     if(!this.addItemNode(description, item))
@@ -169,6 +178,11 @@ b8 Builder::separator(in StringView stableKey, in SeparatorOptions options){
 void Builder::setSkin(in borrow UiSkin skin){
     if(!this.balanced() || this.m_context.failed()){
         this.m_context.fail();
+        return;
+    }
+    const u64 styleVersion = skin.styleVersion();
+    if(this.m_skin.has_value() && !this.m_customPaletteStyleDirty && this.m_lastSkinStyleVersion == styleVersion){
+        this.m_skin = Optional<in UiSkin>(skin);
         return;
     }
     this.m_skin = Optional<in UiSkin>(skin);
@@ -185,7 +199,10 @@ void Builder::setSkin(in borrow UiSkin skin){
         this.m_sliderStyle,
         this.m_progressStyle
     );
-    this.invalidateStyleMetricsCache();
+    this.m_customPaletteStyleDirty = false;
+    this.m_widgetStyleDirty = true;
+    this.m_lastSkinStyleVersion = styleVersion;
+    this.syncMetricsCacheSkinVersion();
 }
 
 b8 Builder::setTextShaping(in u32 scriptTag, in StringView language){
@@ -229,7 +246,7 @@ Expected<mut BuilderItem> Builder::addItem(in StringView stableKey, in StringVie
     if(!state.has_value())
         return MakeUnexpected(Failure());
     auto item = this.makeItem();
-    item.style = this.m_style;
+    item.styleIndex = this.currentItemStyleIndex();
     item.state = state.value();
     item.enabled = options.enabled && this.synchronizePopup();
     const ShapeRequest request = this.textShapeRequest(text, this.m_style.fontSize);
@@ -603,9 +620,11 @@ b8 Builder::paintPanel(){
 }
 
 b8 Builder::paintItems(){
+    if(!this.m_scope.value().m_items.empty() && !this.popupAncestorsVisible())
+        return false;
     for(in auto item : this.m_scope.value().m_items){
         const Optional<LayoutBox> box = this.m_scope.value().m_layout.box(item.node);
-        if(!this.popupAncestorsVisible() || !box.has_value() || !this.paintItem(item, box.value()))
+        if(!box.has_value() || !this.paintItem(item, box.value()))
             return false;
     }
     return true;
@@ -632,10 +651,11 @@ b8 Builder::paintItem(in BuilderItem item, in LayoutBox box){
         return this.paintProgress(item, box);
     if(item.state.kind == WidgetKind::Image)
         return this.paintImage(item, box);
+    in WidgetStyle itemStyle = this.itemWidgetStyle(item);
     if(item.state.kind == WidgetKind::Separator){
         const Rect clip = this.visibleClip(box.clip);
         this.m_paint.pushClip(clip);
-        const b8 painted = this.m_paint.drawRegion(item.style.separator, box.rectangle);
+        const b8 painted = this.m_paint.drawRegion(itemStyle.separator, box.rectangle);
         const b8 popped = this.m_paint.popClip();
         return painted && popped;
     }
@@ -652,7 +672,7 @@ b8 Builder::paintItem(in BuilderItem item, in LayoutBox box){
         this.m_text,
         this.m_skin.value(),
         item.state.kind,
-        item.style,
+        itemStyle,
         item.text.deref(),
         item.textBounds,
         item.padding,
@@ -679,13 +699,14 @@ b8 Builder::paintSelectable(in BuilderItem item, in LayoutBox box){
         return false;
     HitTargetFactory targets;
     in InputRouter input = this.m_context.input();
+    in WidgetStyle itemStyle = this.itemWidgetStyle(item);
     SelectablePaintFlags flags;
     flags.enabled = item.enabled;
     flags.selected = item.checked;
     flags.hover = input.hover() == item.state.id;
     flags.focused = input.focus() == item.state.id;
     const Rect clip = this.visibleClip(box.clip);
-    if(!PaintSelectable(this.m_paint, this.m_text, this.m_skin.value(), item.text.deref(), item.textBounds, item.padding, box.rectangle, clip, item.selectableStyle, flags, item.style.text, item.style.disabledText))
+    if(!PaintSelectable(this.m_paint, this.m_text, this.m_skin.value(), item.text.deref(), item.textBounds, item.padding, box.rectangle, clip, this.itemSelectableStyle(item), flags, itemStyle.text, itemStyle.disabledText))
         return false;
     const HitTarget target = targets.makeBasicControlHitTarget(box.rectangle, clip, item.enabled, true, item.contextMenu);
     return this.m_context.addTarget(item.state, target);

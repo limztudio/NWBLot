@@ -45,6 +45,9 @@ class RtSceneBvhState{
     public GpuDescriptorHandle m_tlasHeapHandle = GpuDescriptorHandleInvalid();
     public u32 m_tlasInstanceCount = 0u;
     public u32 m_sceneBvhInstanceCount = 0u;
+    public f32x4 m_sceneWorldBoundsMin = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 m_sceneWorldBoundsMax = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    public u32 m_sceneWorldBoundsFlags = 0u;
     public GpuDescriptorHandle m_bvhSortKeysHeapHandle = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle m_bvhSortPayloadHeapHandle = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle m_bvhVisitCounterHeapHandle = GpuDescriptorHandleInvalid();
@@ -136,6 +139,9 @@ class RendererRayTracingState : NoCopy{
         this.sceneBvh.m_tlasHeapHandle = GpuDescriptorHandleInvalid();
         this.sceneBvh.m_tlasMaxInstances = 0u;
         this.sceneBvh.m_tlasInstanceCount = 0u;
+        this.sceneBvh.m_sceneWorldBoundsMin = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        this.sceneBvh.m_sceneWorldBoundsMax = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        this.sceneBvh.m_sceneWorldBoundsFlags = 0u;
         this.sceneBvh.m_tlasStaticSceneHash = 0u;
         this.sceneBvh.m_sceneSwBvhStaticSceneHash = 0u;
         this.sceneBvh.m_tlasStaticSceneHashValid = false;
@@ -278,10 +284,10 @@ class RendererRayTracingState : NoCopy{
         this.caustics.m_swCausticCsgShader.reset();
         this.caustics.m_swCausticCsgPipeline.reset();
         this.caustics.m_hwCausticBindingLayout.reset();
+        this.caustics.m_hwCausticShader.reset();
         this.caustics.m_hwCausticPipeline.reset();
-        this.caustics.m_hwCausticShaderTable.reset();
+        this.caustics.m_hwCausticCsgShader.reset();
         this.caustics.m_hwCausticCsgPipeline.reset();
-        this.caustics.m_hwCausticCsgShaderTable.reset();
         this.caustics.m_causticResolve = CausticResolveState();
         this.caustics.m_causticGeometryDownsampleBindingLayout.reset();
         this.caustics.m_causticGeometryDownsampleShader.reset();

@@ -32,6 +32,12 @@ class Builder : NoCopy{
     private ComboStyle m_comboStyle;
     private TooltipStyle m_tooltipStyle;
     private Optional<mut IEditBoxHost> m_editHost;
+    private Vector<WidgetStyle> m_itemStyles;
+    private Vector<SelectableStyle> m_itemSelectableStyles;
+    private HashMap<u64, u32> m_editBoxCacheIndex;
+    private Vector<CachedEditBoxView> m_editBoxCacheEntries;
+    private u64 m_editViewFrameCounter = 0u;
+    private u64 m_lastSkinStyleVersion = 0u;
     private u64 m_metricsCacheSkinVersion = 0u;
     private Point m_cachedButtonMinSize;
     private Insets m_cachedButtonPadding;
@@ -43,6 +49,9 @@ class Builder : NoCopy{
     private b8 m_pointerBusy = false;
     private b8 m_declaring = false;
     private b8 m_finalizing = false;
+    private b8 m_customPaletteStyleDirty = true;
+    private b8 m_widgetStyleDirty = true;
+    private b8 m_selectableStyleDirty = true;
     private b8 m_buttonMetricsCached = false;
     private b8 m_buttonMetricsValid = false;
     private b8 m_checkboxExtentCached = false;
@@ -77,8 +86,31 @@ class Builder : NoCopy{
 
     private BuilderItem makeItem()const{ return BuilderItem(); }
 
-    [owner_result]
     private BuilderEditBoxFrame makeEditBoxFrame()const{ return BuilderEditBoxFrame(); }
+
+    private u32 currentItemStyleIndex(){
+        if(this.m_widgetStyleDirty || this.m_itemStyles.empty()){
+            this.m_itemStyles.push_back(this.m_style);
+            this.m_widgetStyleDirty = false;
+        }
+        return cast<u32>(this.m_itemStyles.size() - 1u);
+    }
+
+    private u32 currentSelectableStyleIndex(){
+        if(this.m_selectableStyleDirty || this.m_itemSelectableStyles.empty()){
+            this.m_itemSelectableStyles.push_back(this.m_listStyle.row);
+            this.m_selectableStyleDirty = false;
+        }
+        return cast<u32>(this.m_itemSelectableStyles.size() - 1u);
+    }
+
+    private in WidgetStyle itemWidgetStyle(in BuilderItem item)const{ return this.m_itemStyles[item.styleIndex]; }
+
+    private in SelectableStyle itemSelectableStyle(in BuilderItem item)const{ return this.m_itemSelectableStyles[item.selectableStyleIndex]; }
+
+    private in EditBoxView editViewForFrame(in BuilderEditBoxFrame frame)const{
+        return this.m_editBoxCacheEntries[frame.editViewCache].view;
+    }
 
     [owner_result]
     private BuilderListFrame makeListFrame()const{ return BuilderListFrame(); }
@@ -244,6 +276,8 @@ class Builder : NoCopy{
 
     public mut WidgetStyle style(){
         this.checkStyleAccess();
+        this.m_customPaletteStyleDirty = true;
+        this.m_widgetStyleDirty = true;
         this.m_buttonMetricsCached = false;
         this.m_checkboxExtentCached = false;
         return this.m_style;
@@ -251,11 +285,13 @@ class Builder : NoCopy{
 
     public mut ScrollbarStyle scrollbarStyle(){
         this.checkStyleAccess();
+        this.m_customPaletteStyleDirty = true;
         return this.m_scrollbarStyle;
     }
 
     public mut EditBoxStyle editStyle(){
         this.checkStyleAccess();
+        this.m_customPaletteStyleDirty = true;
         this.m_editMinSizeCached = false;
         this.m_editPaddingCached = false;
         return this.m_editStyle;
@@ -263,27 +299,32 @@ class Builder : NoCopy{
 
     public mut PopupStyle popupStyle(){
         this.checkStyleAccess();
+        this.m_customPaletteStyleDirty = true;
         return this.m_popupStyle;
     }
 
     public mut ListStyle listStyle(){
         this.checkStyleAccess();
+        this.m_selectableStyleDirty = true;
         this.m_selectableMetricsCached = false;
         return this.m_listStyle;
     }
 
     public mut RadioGroupStyle radioGroupStyle(){
         this.checkStyleAccess();
+        this.m_customPaletteStyleDirty = true;
         return this.m_radioGroupStyle;
     }
 
     public mut SliderStyle sliderStyle(){
         this.checkStyleAccess();
+        this.m_customPaletteStyleDirty = true;
         return this.m_sliderStyle;
     }
 
     public mut ProgressStyle progressStyle(){
         this.checkStyleAccess();
+        this.m_customPaletteStyleDirty = true;
         return this.m_progressStyle;
     }
 
@@ -294,6 +335,7 @@ class Builder : NoCopy{
 
     public mut TooltipStyle tooltipStyle(){
         this.checkStyleAccess();
+        this.m_customPaletteStyleDirty = true;
         return this.m_tooltipStyle;
     }
 

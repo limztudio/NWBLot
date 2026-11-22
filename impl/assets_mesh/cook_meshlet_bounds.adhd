@@ -33,16 +33,13 @@ MeshletBounds BuildMeshletBounds(
     const u32 primitiveCount = MeshletPrimitiveCount(meshlet);
     assert(positionCount <= s_MeshMaxMeshletVertices, "positionCount <= s_MeshMaxMeshletVertices");
     Array<f32x4, s_MeshMaxMeshletVertices> positions;
-    for(u32 localPositionIndex = 0u; localPositionIndex < positionCount; ++localPositionIndex){
-        const MeshletPositionStreamRef ref = meshletPositionStreamRefs[cast<usize>(meshlet.positionRefOffset + localPositionIndex)];
-        const f32x3u pos = meshPositions[cast<usize>(ref.position)];
-        positions[cast<usize>(localPositionIndex)] = f32x4(pos.x, pos.y, pos.z, 0.0f);
-    }
-
     VectorSingle minBounds(f32.max, f32.max, f32.max, 0.0f);
     VectorSingle maxBounds(-f32.max, -f32.max, -f32.max, 0.0f);
     for(u32 localPositionIndex = 0u; localPositionIndex < positionCount; ++localPositionIndex){
-        const VectorSingle pos(positions[cast<usize>(localPositionIndex)]);
+        const MeshletPositionStreamRef ref = meshletPositionStreamRefs[cast<usize>(meshlet.positionRefOffset + localPositionIndex)];
+        const f32x3u pos3 = meshPositions[cast<usize>(ref.position)];
+        const VectorSingle pos(pos3.x, pos3.y, pos3.z, 0.0f);
+        positions[cast<usize>(localPositionIndex)] = f32x4(pos);
         minBounds = Min(minBounds, pos);
         maxBounds = Max(maxBounds, pos);
     }
@@ -56,13 +53,13 @@ MeshletBounds BuildMeshletBounds(
     const VectorSingle radius = Sqrt(radiusSquaredLanes);
 
     VectorSingle areaWeightedNormal(0.0f, 0.0f, 0.0f, 0.0f);
-    Array<f32x4, s_MeshMaxMeshletTriangles> faceNormals;
+    Array<f32x4, s_MeshMaxMeshletTriangles> unitNormals;
     u32 validFaceNormalCount = 0u;
     for(u32 primitiveIndex = 0u; primitiveIndex < primitiveCount; ++primitiveIndex){
         const VectorSingle faceNormal = MeshletFaceNormal(Span<f32x4>(positions), meshletPrimitiveIndices, meshletLocalVertexRefs, meshlet, primitiveIndex);
-        faceNormals[cast<usize>(primitiveIndex)] = f32x4(faceNormal);
         if(IsValidMeshletDirection3(faceNormal)){
             areaWeightedNormal = areaWeightedNormal + faceNormal;
+            unitNormals[cast<usize>(primitiveIndex)] = f32x4(NormalizeMeshletDirection3OrZero(faceNormal));
             ++validFaceNormalCount;
         }
     }
@@ -70,15 +67,12 @@ MeshletBounds BuildMeshletBounds(
     const VectorSingle coneAxis = NormalizeMeshletDirection3OrZero(areaWeightedNormal);
     f32 coneCutoff = -1.0f;
     if(validFaceNormalCount == primitiveCount && IsValidMeshletDirection3(coneAxis)){
-        coneCutoff = 1.0f;
+        VectorSingle minDot(1.0f);
         for(u32 primitiveIndex = 0u; primitiveIndex < primitiveCount; ++primitiveIndex){
-            const VectorSingle faceNormal = NormalizeMeshletDirection3OrZero(VectorSingle(faceNormals[cast<usize>(primitiveIndex)]));
-            if(IsValidMeshletDirection3(faceNormal)){
-                const VectorSingle current(coneCutoff);
-                const VectorSingle candidate = Vector3Dot(coneAxis, faceNormal);
-                coneCutoff = VectorSelect(candidate, current, VectorLess(current, candidate)).x;
-            }
+            const VectorSingle candidate = Vector3Dot(coneAxis, VectorSingle(unitNormals[cast<usize>(primitiveIndex)]));
+            minDot = Min(minDot, candidate);
         }
+        coneCutoff = minDot.x;
         if(coneCutoff <= 0.0f)
             coneCutoff = -1.0f;
     }

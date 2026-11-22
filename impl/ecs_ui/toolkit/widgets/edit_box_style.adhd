@@ -19,6 +19,10 @@ const Color s_EditBoxPreeditColor = Color(0.50f, 0.72f, 1.0f, 1.0f);
 const f32 s_TextAreaDefaultHeight = 160.0f;
 const u32 s_UiEditMinInterpolatedStops = 2u;
 const usize s_EditCaretMaxExtraMappingStops = 2u;
+const Name s_EditBoxNormalRegionName = "edit.normal";
+const Name s_EditBoxHoverRegionName = "edit.hover";
+const Name s_EditBoxFocusedRegionName = "edit.focused";
+const Name s_EditBoxDisabledRegionName = "edit.disabled";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -64,12 +68,12 @@ class EditBoxPlacement{
 }
 
 class EditBoxStyle{
-    public Name normal = Name("edit.normal");
-    public Name hover = Name("edit.hover");
-    public Name focused = Name("edit.focused");
-    public Name disabled = Name("edit.disabled");
-    public Name fallback = Name("button.normal");
-    public Name focus = Name("focus.overlay");
+    public Name normal = s_EditBoxNormalRegionName;
+    public Name hover = s_EditBoxHoverRegionName;
+    public Name focused = s_EditBoxFocusedRegionName;
+    public Name disabled = s_EditBoxDisabledRegionName;
+    public Name fallback = s_StyleButtonNormalRegionName;
+    public Name focus = s_StyleFocusOverlayRegionName;
     public Color background = s_StyleInsetColor;
     public Color text = s_StyleTextColor;
     public Color disabledText = s_StyleDisabledTextColor;
@@ -88,6 +92,9 @@ class EditBoxPaintFlags{
     public b8 caretVisible = true;
     public b8 preeditCaretVisible = true;
 }
+
+const EditBoxStyle s_DefaultEditBoxStyle = EditBoxStyle();
+const EditBoxPaintFlags s_DefaultEditBoxPaintFlags = EditBoxPaintFlags();
 
 class EditBoxOptions{
     public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);

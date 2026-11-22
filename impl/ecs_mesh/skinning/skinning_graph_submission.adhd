@@ -278,12 +278,13 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
     auto skinningBindings = this.m_world.view<SkinnedMeshBindingComponent>();
     dispatchPlans.reserve(skinningBindings.candidateCount());
 
-    MeshSkinningFramePlanBuilder planBuilder(this, graph, dispatchPlans);
+    mut Vector<GpuTaskId> uploadTasks = this.m_frameUploadTasks;
+    uploadTasks.clear();
+    MeshSkinningFramePlanBuilder planBuilder(this, graph, dispatchPlans, uploadTasks);
     for(in auto row : skinningBindings){
         if(!planBuilder.declare(Get<0>(row), Get<1>(row)))
             return false;
     }
-    GpuTaskId terminalTask = planBuilder.terminalTask();
 
     if(dispatchPlans.empty())
         return true;
@@ -316,7 +317,8 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
     const Span<MeshSkinningGraphDispatchPlan> allDispatchPlans(dispatchPlans);
     SkinningFinalizerTask finalizerPayload(this, allDispatchPlans);
     MeshSkinningLocalBoundsTask localBoundsPayload(this.m_graphics, timingTicket, localBoundsDispatches);
-    GpuTaskId postDispatchDependency = terminalTask;
+    GpuTaskId postDispatchDependency;
+    b8 hasDeformationTask = false;
     if(!resourceUses.deformation.empty()){
         mut Vector<MeshSkinningGraphDispatchPlan> deformationPlans = this.m_frameDeformationPlans;
         deformationPlans.clear();
@@ -336,8 +338,8 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
         ;
         if(source.has_value())
             deformationDesc.setExternalStateSources(Span<GpuTaskExternalStateSource>(previousFrameStateSources));
-        if(terminalTask.valid())
-            deformationDesc.setDependency(terminalTask);
+        if(!uploadTasks.empty())
+            deformationDesc.setDependencies(Span<GpuTaskId>(uploadTasks));
         const auto deformationTaskResult = graph.addPreparedPayloadTask(deformationDesc, deformationPayload);
         if(!deformationTaskResult.has_value()){
             error("MeshSkinningSystem: failed to declare graph-owned skinning deformation");
@@ -345,6 +347,7 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
         }
         const GpuTaskId deformationTask = deformationTaskResult.value();
         postDispatchDependency = deformationTask;
+        hasDeformationTask = true;
     }
 
     SkinningPlansTask postDispatchPayload(this, timingTicket, allDispatchPlans, false);
@@ -357,8 +360,10 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
     ;
     if(source.has_value())
         postDispatchDesc.setExternalStateSources(Span<GpuTaskExternalStateSource>(previousFrameStateSources));
-    if(postDispatchDependency.valid())
+    if(hasDeformationTask)
         postDispatchDesc.setDependency(postDispatchDependency);
+    else if(!uploadTasks.empty())
+        postDispatchDesc.setDependencies(Span<GpuTaskId>(uploadTasks));
     const auto postDispatchTaskResult = graph.addPreparedPayloadTask(postDispatchDesc, postDispatchPayload);
     if(!postDispatchTaskResult.has_value()){
         error("MeshSkinningSystem: failed to declare graph-owned skinning bounds/repack");
@@ -397,7 +402,7 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
         return false;
     }
     const GpuTaskId finalizerTask = finalizerTaskResult.value();
-    terminalTask = finalizerTask;
+    const GpuTaskId terminalTask = finalizerTask;
 
     mut GpuTaskGraphAnalysis analysis = this.m_frameTaskGraphAnalysis;
     mut GpuTaskGraphQueueAssignments assignments = this.m_frameTaskGraphQueueAssignments;

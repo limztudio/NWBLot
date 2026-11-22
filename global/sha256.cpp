@@ -319,6 +319,22 @@ void CompressBlocksScalar(
     }
 }
 
+template<void (*CompressFn)(Array<u32, Sha256Detail::s_StateWordCount>&, const u8*, usize)>
+[[nodiscard]] inline Sha256Digest ComputeSha256WithKernel(const BinaryByteView input)noexcept{
+    Array<u32, Sha256Detail::s_StateWordCount> state = Sha256Detail::s_InitialState;
+    const usize inputSize = input.size();
+    const u8* const inputData = input.data();
+    const usize fullBlocks = inputSize / ShaBe32Detail::s_BlockByteCount;
+    const usize offset = fullBlocks * ShaBe32Detail::s_BlockByteCount;
+    if(fullBlocks > 0u)
+        CompressFn(state, inputData, fullBlocks);
+
+    alignas(16) Array<u8, ShaBe32Detail::s_BlockByteCount * 2u> tail;
+    const usize tailBlockCount = ShaBe32Detail::PrepareShaBe32TailBlocks(inputData, inputSize, offset, tail);
+    CompressFn(state, tail.data(), tailBlockCount);
+    return ShaBe32Detail::FinalizeShaBe32Digest<Sha256Digest, Sha256Detail::s_StateWordCount>(state);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -345,6 +361,17 @@ void Sha256Detail::CompressBlocks(Array<u32, s_StateWordCount>& state, const u8*
     }
 #endif
     __hidden_sha256::CompressBlocksScalar(state, blocks, blockCount);
+}
+
+Sha256Digest Sha256Detail::ComputeSha256Impl(const BinaryByteView input)noexcept{
+#if defined(FOUNDATION_ARCH_ARM64) || defined(__aarch64__) || defined(_M_ARM64)
+    if(__hidden_sha256::HasArmv8Sha2())
+        return __hidden_sha256::ComputeSha256WithKernel<&__hidden_sha256::CompressBlocksArmv8Sha2>(input);
+#elif defined(FOUNDATION_ARCH_X86_64) || defined(__x86_64__) || defined(_M_X64)
+    if(__hidden_sha256::HasX86ShaNi())
+        return __hidden_sha256::ComputeSha256WithKernel<&__hidden_sha256::CompressBlocksX86ShaNi>(input);
+#endif
+    return __hidden_sha256::ComputeSha256WithKernel<&__hidden_sha256::CompressBlocksScalar>(input);
 }
 
 

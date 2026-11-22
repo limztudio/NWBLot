@@ -151,8 +151,9 @@ b8 RefractionStatisticsReadbackGraphTask::record(mut CommandList commands, in Gp
         return false;
     const GpuGraphResourceId source = this.sourceResource;
     const GpuGraphResourceId destination = this.destinationResource;
-    if(!CaptureGpuTaskCommandsIfEnabled(context, lambda[in context, in source, in destination](mut GpuCommandIrCapture capture) -> b8{
-        return capture.captureCopyBuffer(context.task, context.packet, context.queue, source, 0u, destination, 0u, s_RefractionReadbackCounterBytes);
+    in GpuTaskRecordContext contextRef = context;
+    if(!CaptureGpuTaskCommandsIfEnabled(contextRef, lambda[in contextRef, in source, in destination](mut GpuCommandIrCapture capture) -> b8{
+        return capture.captureCopyBuffer(contextRef.task, contextRef.packet, contextRef.queue, source, 0u, destination, 0u, s_RefractionReadbackCounterBytes);
     }))
         return false;
     commands.endRenderPass();

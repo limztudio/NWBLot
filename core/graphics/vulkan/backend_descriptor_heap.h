@@ -157,7 +157,7 @@ public:
     b8 initialize(const GpuDescriptorHeapDesc& desc);
     void shutdown();
 
-    [[nodiscard]] b8 isInitialized()const noexcept{ return m_initialized; }
+    [[nodiscard]] b8 isInitialized()const noexcept{ return m_initialized.load(MemoryOrder::acquire); }
     [[nodiscard]] GpuDescriptorHeapLifecycleStatistics lifecycleStatistics()const noexcept;
 
     [[nodiscard]] Expected<GpuDescriptorHandle> allocate(GpuDescriptorClass::Enum descriptorClass);
@@ -201,7 +201,7 @@ private:
     void resetStateForShutdownLocked()noexcept;
     [[nodiscard]] b8 initializeStorage(u32 resourceCapacity, u32 samplerCapacity, u32 accelStructCapacity);
     void publishBindingFastVersionLocked()noexcept{
-        if(m_initialized && m_staticBindingContractValid && m_descriptorBufferGeneration != 0u){
+        if(m_initialized.load(MemoryOrder::relaxed) && m_staticBindingContractValid && m_descriptorBufferGeneration != 0u){
             if(++m_nextBindingFastVersion == 0u)
                 m_nextBindingFastVersion = 1u;
             m_bindingFastVersion.store(m_nextBindingFastVersion, MemoryOrder::release);
@@ -245,7 +245,7 @@ private:
     Vector<HeapUse, Alloc::GlobalArena> m_heapUses;
     Vector<GpuDescriptorHandle, Alloc::GlobalArena> m_dynamicReadinessSlots;
     Vector<GpuDescriptorHandle, Alloc::GlobalArena> m_concurrentAdmissionSlots;
-    mutable u64 m_verifiedConcurrentQueueMask = 0u;
+    mutable Atomic<u64> m_verifiedConcurrentQueueMask{ 0u };
     usize m_pendingRecordingCount = 0u;
     usize m_retiredCount = 0u;
     usize m_activePendingRecordingLeaseCount = 0u;
@@ -257,7 +257,7 @@ private:
 
     mutable Futex m_mutex;
     Atomic<b8> m_hasPendingRetirementWork{ false };
-    b8 m_initialized = false;
+    Atomic<b8> m_initialized{ false };
     b8 m_staticBindingContractValid = false;
 };
 

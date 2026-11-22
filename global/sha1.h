@@ -69,61 +69,11 @@ inline constexpr Array<u32, s_StateWordCount> s_InitialState = {
     return (value << count) | (value >> (ShaBe32Detail::s_WordBits - count));
 }
 
+void CompressBlocks(Array<u32, s_StateWordCount>& state, const u8* blocks, usize blockCount)noexcept;
+[[nodiscard]] Sha1Digest ComputeSha1Impl(BinaryByteView input)noexcept;
+
 inline void Compress(Array<u32, s_StateWordCount>& state, const u8* const block)noexcept{
-    Array<u32, s_RoundCount> words = {};
-    ShaBe32Detail::UnpackBlockWords(block, words.data());
-    for(u32 index = ShaBe32Detail::s_BlockWordCount; index < s_RoundCount; ++index){
-        const u32 mixed = words[index - s_ScheduleLagA] ^ words[index - s_ScheduleLagB] ^ words[index - s_ScheduleLagC] ^ words[index - s_ScheduleLagD];
-        words[index] = RotateLeft(mixed, s_ScheduleRotateLeft);
-    }
-
-    u32 a = state[0u];
-    u32 b = state[1u];
-    u32 c = state[2u];
-    u32 d = state[3u];
-    u32 e = state[4u];
-    for(u32 index = 0u; index < s_RoundPhase1End; ++index){
-        const u32 f = (b & c) | (~b & d);
-        const u32 next = RotateLeft(a, s_RoundRotateLeftA) + f + e + s_RoundConstantPhase1 + words[index];
-        e = d;
-        d = c;
-        c = RotateLeft(b, s_RoundRotateLeftB);
-        b = a;
-        a = next;
-    }
-    for(u32 index = s_RoundPhase1End; index < s_RoundPhase2End; ++index){
-        const u32 f = b ^ c ^ d;
-        const u32 next = RotateLeft(a, s_RoundRotateLeftA) + f + e + s_RoundConstantPhase2 + words[index];
-        e = d;
-        d = c;
-        c = RotateLeft(b, s_RoundRotateLeftB);
-        b = a;
-        a = next;
-    }
-    for(u32 index = s_RoundPhase2End; index < s_RoundPhase3End; ++index){
-        const u32 f = (b & c) | (b & d) | (c & d);
-        const u32 next = RotateLeft(a, s_RoundRotateLeftA) + f + e + s_RoundConstantPhase3 + words[index];
-        e = d;
-        d = c;
-        c = RotateLeft(b, s_RoundRotateLeftB);
-        b = a;
-        a = next;
-    }
-    for(u32 index = s_RoundPhase3End; index < s_RoundCount; ++index){
-        const u32 f = b ^ c ^ d;
-        const u32 next = RotateLeft(a, s_RoundRotateLeftA) + f + e + s_RoundConstantPhase4 + words[index];
-        e = d;
-        d = c;
-        c = RotateLeft(b, s_RoundRotateLeftB);
-        b = a;
-        a = next;
-    }
-
-    state[0u] += a;
-    state[1u] += b;
-    state[2u] += c;
-    state[3u] += d;
-    state[4u] += e;
+    CompressBlocks(state, block, 1u);
 }
 
 
@@ -137,7 +87,7 @@ inline void Compress(Array<u32, s_StateWordCount>& state, const u8* const block)
 
 
 [[nodiscard]] inline Sha1Digest ComputeSha1(const BinaryByteView input)noexcept{
-    return ShaBe32Detail::ComputeDigest<Sha1Digest, Sha1Detail::s_StateWordCount, &Sha1Detail::Compress>(input, Sha1Detail::s_InitialState);
+    return Sha1Detail::ComputeSha1Impl(input);
 }
 
 [[nodiscard]] inline Sha1Digest ComputeSha1Text(const AStringView text)noexcept{

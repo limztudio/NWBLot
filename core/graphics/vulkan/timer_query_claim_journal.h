@@ -48,7 +48,11 @@ private:
 
 
 public:
-    TimerQueryClaimJournal(TrackedCommandBuffer& owner, Alloc::GlobalArena& arena)noexcept : m_owner(owner), m_claims(arena){}
+    TimerQueryClaimJournal(TrackedCommandBuffer& owner, Alloc::GlobalArena& arena)noexcept
+        : m_owner(owner)
+        , m_claims(arena)
+        , m_claimIndices(0u, Hasher<usize>(), EqualTo<usize>(), arena)
+    {}
     [[nodiscard]] const Vector<Claim, Alloc::GlobalArena>& claims()const noexcept{ return m_claims; }
 
 
@@ -63,8 +67,13 @@ private:
 
 
 private:
+    static constexpr usize s_LinearClaimThreshold = 8u;
+
+    [[nodiscard]] usize findClaimIndex(const TimerQuery& query)const noexcept;
+
     TrackedCommandBuffer& m_owner;
     Vector<Claim, Alloc::GlobalArena> m_claims;
+    HashMap<usize, usize, Alloc::GlobalArena, Hasher<usize>, EqualTo<usize>> m_claimIndices;
 };
 
 

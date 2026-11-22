@@ -20,6 +20,7 @@ class TargetSpatialIndex{
     public Vector<u32> overflowTargets;
     public Vector<u32> scratchTargetIndices;
     public Vector<u32> scratchPackedCells;
+    public Vector<Rect> scratchClippedRects;
     public f32 minX = 0.0f;
     public f32 minY = 0.0f;
     public f32 maxX = 0.0f;
@@ -48,17 +49,21 @@ void BuildTargetSpatialIndex(in Span<HitTarget> targets, mut TargetSpatialIndex 
     outIndex.overflowTargets.clear();
     outIndex.scratchTargetIndices.clear();
     outIndex.scratchPackedCells.clear();
+    outIndex.scratchClippedRects.clear();
     outIndex.active = false;
     outIndex.dirty = false;
     if(targets.size() < s_InputSpatialGridMinTargets)
         return;
 
+    outIndex.scratchTargetIndices.reserve(targets.size());
+    outIndex.scratchClippedRects.reserve(targets.size());
     f32 minX = 0.0f;
     f32 minY = 0.0f;
     f32 maxX = 0.0f;
     f32 maxY = 0.0f;
     b8 hasVisible = false;
-    for(in HitTarget target : targets){
+    for(usize index = 0u; index < targets.size(); ++index){
+        in HitTarget target = targets[index];
         if(!target.enabled)
             continue;
         const f32 x0 = Max(target.rectangle.x, target.clip.x);
@@ -67,6 +72,8 @@ void BuildTargetSpatialIndex(in Span<HitTarget> targets, mut TargetSpatialIndex 
         const f32 y1 = Min(target.rectangle.y + target.rectangle.height, target.clip.y + target.clip.height);
         if(!(x1 > x0) || !(y1 > y0))
             continue;
+        outIndex.scratchTargetIndices.push_back(cast<u32>(index));
+        outIndex.scratchClippedRects.push_back(Rect(x0, y0, x1, y1));
         if(!hasVisible){
             minX = x0;
             minY = y0;
@@ -107,24 +114,18 @@ void BuildTargetSpatialIndex(in Span<HitTarget> targets, mut TargetSpatialIndex 
     Array<u32, s_InputSpatialGridCells> cellCounts;
     for(usize cell = 0u; cell < s_InputSpatialGridCells; ++cell)
         cellCounts[cell] = 0u;
-    outIndex.scratchTargetIndices.reserve(targets.size());
-    outIndex.scratchPackedCells.reserve(targets.size());
-    for(usize index = 0u; index < targets.size(); ++index){
-        in HitTarget target = targets[index];
-        if(!target.enabled)
-            continue;
-        const f32 x0 = Max(target.rectangle.x, target.clip.x);
-        const f32 y0 = Max(target.rectangle.y, target.clip.y);
-        const f32 x1 = Min(target.rectangle.x + target.rectangle.width, target.clip.x + target.clip.width);
-        const f32 y1 = Min(target.rectangle.y + target.rectangle.height, target.clip.y + target.clip.height);
-        if(!(x1 > x0) || !(y1 > y0))
-            continue;
-        const usize cx0 = ClampTargetSpatialCellCoord((x0 - minX) * invCellWidth);
-        const usize cy0 = ClampTargetSpatialCellCoord((y0 - minY) * invCellHeight);
-        const usize cx1 = ClampTargetSpatialCellCoord((x1 - minX) * invCellWidth);
-        const usize cy1 = ClampTargetSpatialCellCoord((y1 - minY) * invCellHeight);
+    const usize visibleCount = outIndex.scratchTargetIndices.size();
+    outIndex.scratchPackedCells.reserve(visibleCount);
+    usize keptGridTargets = 0u;
+    for(usize visibleIndex = 0u; visibleIndex < visibleCount; ++visibleIndex){
+        const u32 targetIndex = outIndex.scratchTargetIndices[visibleIndex];
+        in Rect clipped = outIndex.scratchClippedRects[visibleIndex];
+        const usize cx0 = ClampTargetSpatialCellCoord((clipped.x - minX) * invCellWidth);
+        const usize cy0 = ClampTargetSpatialCellCoord((clipped.y - minY) * invCellHeight);
+        const usize cx1 = ClampTargetSpatialCellCoord((clipped.width - minX) * invCellWidth);
+        const usize cy1 = ClampTargetSpatialCellCoord((clipped.height - minY) * invCellHeight);
         if((cx1 - cx0 + 1u) * (cy1 - cy0 + 1u) > s_InputSpatialGridMaxCellsPerTarget){
-            outIndex.overflowTargets.push_back(cast<u32>(index));
+            outIndex.overflowTargets.push_back(targetIndex);
             continue;
         }
         for(usize cy = cy0; cy <= cy1; ++cy){
@@ -132,9 +133,11 @@ void BuildTargetSpatialIndex(in Span<HitTarget> targets, mut TargetSpatialIndex 
             for(usize cx = cx0; cx <= cx1; ++cx)
                 ++cellCounts[rowBase + cx];
         }
-        outIndex.scratchTargetIndices.push_back(cast<u32>(index));
+        outIndex.scratchTargetIndices[keptGridTargets] = targetIndex;
+        ++keptGridTargets;
         outIndex.scratchPackedCells.push_back(cast<u32>(cx0) | (cast<u32>(cy0) << 4u) | (cast<u32>(cx1) << 8u) | (cast<u32>(cy1) << 12u));
     }
+    outIndex.scratchTargetIndices.resize(keptGridTargets);
 
     Array<u32, s_InputSpatialGridCells> writeCursors;
     u32 running = 0u;
@@ -355,7 +358,7 @@ Expected<PointerGesture> TryConsumeRouterPointerGesture(
     if(!IsRouterTargetInteractive(targets, lookup, popups, target) || !target.pointerGesture)
         return MakeUnexpected(Failure());
     for(usize index = 0u; index < pointerGestures.size(); ++index){
-        PointerGestureRecord record = pointerGestures[index];
+        mut PointerGestureRecord record = pointerGestures[index];
         if(record.gesture.id.target != id || record.gesture.id.declarationGeneration != declarationGeneration || !record.pendingUpdate || record.gesture.popup != target.popup || record.gesture.control != target.control)
             continue;
         const PointerGesture gesture = record.gesture;
@@ -364,10 +367,8 @@ Expected<PointerGesture> TryConsumeRouterPointerGesture(
                 pointerGestures[moveIndex - 1u] = pointerGestures[moveIndex];
             pointerGestures.pop_back();
         }
-        else{
+        else
             record.pendingUpdate = false;
-            pointerGestures[index] = record;
-        }
         return gesture;
     }
     return MakeUnexpected(Failure());

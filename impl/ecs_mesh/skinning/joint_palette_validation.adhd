@@ -94,25 +94,31 @@ Expected<SkeletonJointMatrix> TryBuildSkinJointPaletteEntryValidated(
     in b8 inverseBindValidated,
     in b8 useDualQuaternionPayload
 ){
-    MatrixSingle inverseBindMatrix(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
-    if(hasInverseBindMatrices)
-        inverseBindMatrix = MatrixSingle(inverseBindMatrices[jointIndex]);
-    const Expected<MatrixSingle> jointMatrix = TryResolveSkinningJointMatrixPrevalidated(
-        MatrixSingle(sourceJoints[jointIndex]),
-        sourceJointsValidated,
-        hasInverseBindMatrices,
-        inverseBindMatrix,
-        inverseBindValidated,
-        s_SkinValidationEpsilon
-    );
-    if(!jointMatrix.has_value()){
+    const MatrixSingle sourceJoint(sourceJoints[jointIndex]);
+    if(!sourceJointsValidated && !IsInvertibleAffineJointMatrix3x4(sourceJoint, s_SkeletonJointDeterminantEpsilon)){
         error("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} is not a finite invertible affine matrix", handleValue, jointIndex);
         return MakeUnexpected(Failure());
     }
+    MatrixSingle resolvedJoint = sourceJoint;
+    if(hasInverseBindMatrices){
+        const Expected<MatrixSingle> jointMatrix = TryResolveSkinningJointMatrix3x4Prevalidated(
+            sourceJoint,
+            true,
+            true,
+            MatrixSingle(inverseBindMatrices[jointIndex]),
+            inverseBindValidated,
+            s_SkinValidationEpsilon
+        );
+        if(!jointMatrix.has_value()){
+            error("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} is not a finite invertible affine matrix", handleValue, jointIndex);
+            return MakeUnexpected(Failure());
+        }
+        resolvedJoint = jointMatrix.value();
+    }
     if(!useDualQuaternionPayload)
-        return SkeletonJointMatrix(jointMatrix.value());
+        return SkeletonJointMatrix(resolvedJoint);
 
-    const Expected<SkeletonJointMatrix> storedJointMatrix = TryBuildRigidDualQuaternionPayload(jointMatrix.value());
+    const Expected<SkeletonJointMatrix> storedJointMatrix = TryBuildRigidDualQuaternionPayload(resolvedJoint);
     if(!storedJointMatrix.has_value()){
         error("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} failed dual-quaternion payload build", handleValue, jointIndex);
         return MakeUnexpected(Failure());

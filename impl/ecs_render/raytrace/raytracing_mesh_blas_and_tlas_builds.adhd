@@ -296,9 +296,12 @@ b8 RendererRayTracingSystem::preparePendingMeshBlasResources(){
         return false;
 
     b8 allResourcesReady = true;
-    MeshRayTracingResourceSnapshotVector meshes;
+    this.m_pendingBlasStaticSkipped = 0u;
+    mut MeshRayTracingResourceSnapshotVector meshes = this.m_sceneGatherScratch.pendingMeshBuildSnapshots;
+    meshes.clear();
     u64 staticSkipped = 0u;
     this.m_meshSystem.collectPendingBlasRayTracingSnapshots(meshes, staticSkipped);
+    this.m_pendingBlasStaticSkipped = staticSkipped;
     for(mut MeshRayTracingResourceSnapshot meshResources : meshes){
         const MeshRayTracingResourceSnapshot expected = meshResources;
         if(!this.prepareMeshBlasResources(meshResources)){
@@ -310,6 +313,8 @@ b8 RendererRayTracingSystem::preparePendingMeshBlasResources(){
             allResourcesReady = false;
         }
     }
+    if(!allResourcesReady)
+        meshes.clear();
     return allResourcesReady;
 }
 
@@ -319,19 +324,20 @@ b8 RendererRayTracingSystem::capturePreparedMeshBlasBuilds(){
     if(!this.m_graphics.queryFeatureSupport(Feature::RayTracingAccelStruct))
         return false;
 
-    MeshRayTracingResourceSnapshotVector meshes;
-    u64 staticSkipped = 0u;
-    this.m_meshSystem.collectPendingBlasRayTracingSnapshots(meshes, staticSkipped);
-    this.m_blasLedgerStaticSkipped += staticSkipped;
+    mut MeshRayTracingResourceSnapshotVector meshes = this.m_sceneGatherScratch.pendingMeshBuildSnapshots;
+    this.m_blasLedgerStaticSkipped += this.m_pendingBlasStaticSkipped;
+    this.m_pendingBlasStaticSkipped = 0u;
     for(in MeshRayTracingResourceSnapshot meshResources : meshes){
         auto build = ResolvePreparedMeshBlasBuild(meshResources);
         if(!build.has_value()){
             warning("RendererSystem: could not freeze BLAS build for mesh '{}'", meshResources.meshName.resolvedText());
+            meshes.clear();
             this.clearPreparedMeshBlasBuilds();
             return false;
         }
         this.m_preparedMeshBlasBuilds.push_back(build.value());
     }
+    meshes.clear();
     this.m_preparedMeshBlasBuildsReady = !this.m_preparedMeshBlasBuilds.empty();
     return true;
 }

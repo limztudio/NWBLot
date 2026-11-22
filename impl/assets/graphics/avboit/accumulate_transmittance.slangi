@@ -20,11 +20,14 @@ float nwbAvboitWarpedPhysicalSliceFromVirtualSlice(uint virtualSlice){
 
 float nwbAvboitPhysicalSliceFromVirtualSampleSlice(float sampleSlice){
     const uint virtualSliceCount = nwbAvboitVirtualSliceCount();
+    const uint activeMax = nwbAvboitActivePhysicalSliceCount() - 1u;
     const float sliceBase = floor(sampleSlice);
-    const uint virtualSlice0 = uint(sliceBase);
+    const uint virtualSlice0 = min(uint(sliceBase), virtualSliceCount - 1u);
     const uint virtualSlice1 = min(virtualSlice0 + 1u, virtualSliceCount - 1u);
-    const float physicalSlice0 = nwbAvboitWarpedPhysicalSliceFromVirtualSlice(virtualSlice0);
-    const float physicalSlice1 = nwbAvboitWarpedPhysicalSliceFromVirtualSlice(virtualSlice1);
+    const float physicalSlice0 = float(min(nwbAvboitDepthWarp()[virtualSlice0], activeMax));
+    if(virtualSlice1 == virtualSlice0)
+        return physicalSlice0;
+    const float physicalSlice1 = float(min(nwbAvboitDepthWarp()[virtualSlice1], activeMax));
     return lerp(physicalSlice0, physicalSlice1, sampleSlice - sliceBase);
 }
 

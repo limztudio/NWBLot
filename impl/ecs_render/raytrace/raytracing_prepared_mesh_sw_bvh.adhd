@@ -281,8 +281,7 @@ b8 RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(){
     SoftwareBvhBuilder bvh(this.m_graphics, this.m_shaderSystem, this.m_rayTracingState.sceneBvh);
     this.clearPreparedMeshSwBvhBuilds();
     mut RtSceneBvhState state = this.m_rayTracingState.sceneBvh;
-    MeshRayTracingResourceSnapshotVector meshes;
-    this.m_meshSystem.collectPendingSwBvhRayTracingSnapshots(meshes);
+    mut MeshRayTracingResourceSnapshotVector meshes = this.m_sceneGatherScratch.pendingMeshBuildSnapshots;
     if(meshes.empty()){
         this.m_preparedMeshSwBvhBuildPlanFrozen = true;
         return true;
@@ -295,8 +294,10 @@ b8 RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(){
             && IsDescriptorClass(state.m_bvhSortPayloadHeapHandle, GpuDescriptorClass::StorageBuffer)
             && IsDescriptorClass(state.m_bvhVisitCounterHeapHandle, GpuDescriptorClass::StorageBuffer)
     ;
-    if(!sharedResourcesReady)
+    if(!sharedResourcesReady){
+        meshes.clear();
         return false;
+    }
 
     for(in MeshRayTracingResourceSnapshot mesh : meshes){
         if(
@@ -309,6 +310,7 @@ b8 RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(){
             || !IsDescriptorClass(mesh.swBvhTriangleIndexHeapHandle, GpuDescriptorClass::StorageBuffer)
         ){
             warning("RendererSystem: could not freeze software BVH build for mesh '{}'", mesh.meshName.resolvedText());
+            meshes.clear();
             this.clearPreparedMeshSwBvhBuilds();
             return false;
         }
@@ -316,6 +318,7 @@ b8 RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(){
         PreparedMeshSwBvhBuild preparedBuild = CapturePreparedMeshSwBvhBuild(mesh, state);
         this.m_preparedMeshSwBvhBuilds.push_back(preparedBuild);
     }
+    meshes.clear();
     this.m_preparedMeshSwBvhBuildsReady = !this.m_preparedMeshSwBvhBuilds.empty();
     this.m_preparedMeshSwBvhBuildPlanFrozen = true;
     return true;
@@ -348,9 +351,10 @@ void RendererRayTracingSystem::clearPreparedMeshSwBvhBuilds(){
 b8 RendererRayTracingSystem::preparePendingMeshSwBvhResources(){
     SoftwareBvhBuilder bvh(this.m_graphics, this.m_shaderSystem, this.m_rayTracingState.sceneBvh);
     b8 allResourcesReady = true;
-    MeshRayTracingResourceSnapshotVector meshes;
+    mut MeshRayTracingResourceSnapshotVector meshes = this.m_sceneGatherScratch.pendingMeshBuildSnapshots;
+    meshes.clear();
     this.m_meshSystem.collectPendingSwBvhRayTracingSnapshots(meshes);
-    for(in MeshRayTracingResourceSnapshot meshResources : meshes){
+    for(mut MeshRayTracingResourceSnapshot meshResources : meshes){
         if(!meshResources.positionBuffer.valid() || !meshResources.triangleIndexBuffer.valid()){
             allResourcesReady = false;
             continue;
@@ -367,7 +371,8 @@ b8 RendererRayTracingSystem::preparePendingMeshSwBvhResources(){
             allResourcesReady = false;
             continue;
         }
-        MeshRayTracingResourceSnapshot preparedResources = boundResources.value();
+        meshResources = boundResources.value();
+        MeshRayTracingResourceSnapshot preparedResources = meshResources;
         if(!bvh.ensureMeshSwBvhResources(primitiveCount, preparedResources.swBvhNodeBuffer, preparedResources.swBvhParentBuffer, preparedResources.swBvhNodeHeapHandle, preparedResources.swBvhParentHeapHandle)){
             warning("RendererSystem: software BVH resource preparation failed for mesh '{}'", meshResources.meshName.resolvedText());
             allResourcesReady = false;
@@ -376,7 +381,11 @@ b8 RendererRayTracingSystem::preparePendingMeshSwBvhResources(){
             warning("RendererSystem: software BVH resource preflight lost mesh '{}'", meshResources.meshName.resolvedText());
             allResourcesReady = false;
         }
+        else
+            meshResources = preparedResources;
     }
+    if(!allResourcesReady)
+        meshes.clear();
     return allResourcesReady;
 }
 

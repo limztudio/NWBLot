@@ -34,7 +34,9 @@ half4 nwbCausticResolveWavelet(const uint2 pixel, const uint3 groupThreadID, con
     const bool inBounds = pixel.x < (uint)hw && pixel.y < (uint)hh;
     const int step = (int)NWB_CAUSTIC_RESOLVE_STEP_WIDTH;
 
-#if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT
+#if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT \
+    && NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_STAGE_PREPARE_DOWNSAMPLE \
+    && NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_STAGE_UPSAMPLE
     if(step <= NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP){
         const int tileW = NWB_CAUSTIC_RESOLVE_GROUP_SIZE + NWB_CAUSTIC_RESOLVE_KERNEL_SPAN * step;
         const int2 tileOrigin = int2(groupID.xy) * NWB_CAUSTIC_RESOLVE_GROUP_SIZE - int2(NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS * step, NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS * step);
@@ -51,9 +53,10 @@ half4 nwbCausticResolveWavelet(const uint2 pixel, const uint3 groupThreadID, con
             half3 tapWorld = half3(0.0h, 0.0h, 0.0h);
             uint tapValid = 0u;
             if(t.x >= 0 && t.y >= 0 && t.x < hw && t.y < hh){
-                if(nwbCausticResolveValidAtHalf(t)){
+                const half4 tapGeom = nwbCausticResolveGeometryAtHalf(t);
+                if(tapGeom.w > half(NWB_CAUSTIC_RESOLVE_VALID_THRESHOLD)){
                     tapColor = half3(nwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(t, 0)).rgb);
-                    tapWorld = nwbCausticResolveWorldAtHalf(t);
+                    tapWorld = tapGeom.xyz;
                     tapValid = 1u;
                     if(any(tapColor > half3(0.0h, 0.0h, 0.0h)))
                         InterlockedOr(g_NwbCausticResolveTileActive, 1u);
@@ -109,9 +112,10 @@ half4 nwbCausticResolveWavelet(const uint2 pixel, const uint3 groupThreadID, con
             const int2 tap = int2(texel.x + kx * step, texel.y + ky * step);
             if(tap.x < 0 || tap.y < 0 || tap.x >= hw || tap.y >= hh)
                 continue;
-            if(!nwbCausticResolveValidAtHalf(tap))
+            const half4 tapGeom = nwbCausticResolveGeometryAtHalf(tap);
+            if(tapGeom.w <= half(NWB_CAUSTIC_RESOLVE_VALID_THRESHOLD))
                 continue;
-            const float3 d = float3(nwbCausticResolveWorldAtHalf(tap)) - parameters.centerWorld;
+            const float3 d = float3(tapGeom.xyz) - parameters.centerWorld;
             const half weight = NWB_CAUSTIC_RESOLVE_KERNEL[kx + NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS] * NWB_CAUSTIC_RESOLVE_KERNEL[ky + NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS] * half(exp(-dot(d, d) * parameters.invTwoSigmaWorldSq));
             const half3 tapColor = half3(nwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(tap, 0)).rgb);
             sum += weight * tapColor;

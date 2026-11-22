@@ -48,7 +48,7 @@ public:
     void destroyBuffer(Buffer& buffer);
     [[nodiscard]] Expected<void*, VkResult> mapBufferMemory(Buffer& buffer);
     void unmapBufferMemory(Buffer& buffer);
-    VkResult invalidateBufferMemory(Buffer& buffer);
+    VkResult invalidateBufferMemory(Buffer& buffer, u64 offset = 0u, u64 size = VK_WHOLE_SIZE);
 
     VkResult createTexture(Texture& texture, const VkImageCreateInfo& imageInfo);
     void destroyTexture(Texture& texture);

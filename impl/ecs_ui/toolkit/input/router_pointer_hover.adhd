@@ -9,30 +9,26 @@
 
 
 Expected<usize> FindRouterPointerSourceIndex(
-    in Span<PointerSource> pointerSources,
+    in PointerSourceTable pointerSources,
     in InputSource source,
     in PointerIntent intent
 ){
-    for(usize index = 0u; index < pointerSources.size(); ++index){
-        if(pointerSources[index].source == source && pointerSources[index].intent == intent)
-            return index;
-    }
-    return MakeUnexpected(Failure());
+    return pointerSources.findIndex(source, intent);
 }
 
 b8 OwnsRouterPointerSource(
-    in Span<PointerSource> pointerSources,
+    in PointerSourceTable pointerSources,
     in InputSource source,
     in PointerIntent intent
 ){
-    const Expected<usize> found = FindRouterPointerSourceIndex(pointerSources, source, intent);
-    return found.has_value() && pointerSources[found.value()].consumed;
+    const Expected<usize> found = pointerSources.findIndex(source, intent);
+    return found.has_value() && pointerSources.at(found.value()).consumed;
 }
 
 void TerminateRouterPointerSource(
     in InputSource source,
     in InputSource hoverPointerSource,
-    mut Vector<PointerSource> pointerSources,
+    mut PointerSourceTable pointerSources,
     mut Vector<PointerGestureRecord> pointerGestures,
     mut u64 inOutActiveGestureSequence,
     mut b8 inOutPointerSubmitArmed,
@@ -50,13 +46,7 @@ void TerminateRouterPointerSource(
 ){
     outUnfinishedHoverSource = false;
     const b8 active = inOutActivePointerSource == source;
-    b8 unfinished = false;
-    for(in PointerSource held : pointerSources){
-        if(held.source == source){
-            unfinished = true;
-            break;
-        }
-    }
+    const b8 unfinished = pointerSources.hasSource(source);
     if(active){
         CancelRouterPointerPress(
             pointerGestures,
@@ -74,15 +64,7 @@ void TerminateRouterPointerSource(
         inOutSecondarySequenceConsumed = false;
         inOutActivePointerSource = InputSource();
     }
-    usize keptSources = 0u;
-    for(usize index = 0u; index < pointerSources.size(); ++index){
-        if(pointerSources[index].source != source){
-            if(keptSources != index)
-                pointerSources[keptSources] = pointerSources[index];
-            ++keptSources;
-        }
-    }
-    pointerSources.resize(keptSources);
+    pointerSources.retainSourceNotEqual(source);
     outUnfinishedHoverSource = unfinished && hoverPointerSource == source;
 }
 

@@ -41,6 +41,7 @@ struct GpuSubmissionPacket{
     u32 externalDependencyCount = 0u;
     u32 recordingFrontier = 0u;
     GpuPhysicalQueueId queue;
+    Name packetTimingScopeName = s_NameNone;
     b8 joinsAcceptedQueueFrontier = false;
     b8 isRecoverySubmission = false;
     b8 recordsPacketEnvelopeTiming = false;

@@ -54,12 +54,14 @@ b8 EqualSkeletonJointMatrixSpan(in Span<SkeletonJointMatrix> lhs, in Span<Skelet
     if(lhs.size() != rhs.size())
         return false;
     for(usize i = 0u; i < lhs.size(); ++i){
-        const MatrixSingle a(lhs[i]);
-        const MatrixSingle b(rhs[i]);
-        for(u32 row = 0u; row < s_SkeletonJointMatrixRowCount; ++row){
-            if(!EqualF32x4Bits(a[row], b[row]))
-                return false;
-        }
+        in SkeletonJointMatrix a = lhs[i];
+        in SkeletonJointMatrix b = rhs[i];
+        if(
+            !EqualF32x4Bits(VectorSingle(a[0u]), VectorSingle(b[0u]))
+            || !EqualF32x4Bits(VectorSingle(a[1u]), VectorSingle(b[1u]))
+            || !EqualF32x4Bits(VectorSingle(a[2u]), VectorSingle(b[2u]))
+        )
+            return false;
     }
     return true;
 }

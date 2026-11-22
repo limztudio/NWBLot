@@ -112,11 +112,11 @@ class EditBoxView{
 
     [cpp_unwind]
     public b8 paint(mut TextService text, mut PaintBuilder paint, in UiSkin skin, in EditBoxPlacement placement)const{
-        return this.paint(text, paint, skin, placement, EditBoxStyle(), EditBoxPaintFlags());
+        return this.paint(text, paint, skin, placement, s_DefaultEditBoxStyle, s_DefaultEditBoxPaintFlags);
     }
     [cpp_unwind]
     public b8 paint(mut TextService text, mut PaintBuilder paint, in UiSkin skin, in EditBoxPlacement placement, in EditBoxStyle style)const{
-        return this.paint(text, paint, skin, placement, style, EditBoxPaintFlags());
+        return this.paint(text, paint, skin, placement, style, s_DefaultEditBoxPaintFlags);
     }
     [cpp_unwind]
     public b8 paint(mut TextService text, mut PaintBuilder paint, in UiSkin skin, in EditBoxPlacement placement, in EditBoxStyle style, in EditBoxPaintFlags flags)const{
@@ -134,7 +134,7 @@ class EditBoxView{
     public in Rect visualBounds()const{ return this.m_visualBounds; }
     public in Vector<EditBoxCaretStop> caretStops()const{ return this.m_geometry.caretStops(); }
     public in EditCaretGeometry caretGeometry()const{ return this.m_geometry; }
-    public SharedEditCaretStopTable sharedCaretStopTable()const{ return this.m_geometry.sharedStopTable(); }
+    public in SharedEditCaretStopTable sharedCaretStopTable()const{ return this.m_geometry.sharedStopTable(); }
     public EditTextMode textMode()const{ return this.m_textMode; }
     public u64 revision()const{ return this.m_revision; }
     public usize committedBytes()const{ return this.m_committedBytes; }

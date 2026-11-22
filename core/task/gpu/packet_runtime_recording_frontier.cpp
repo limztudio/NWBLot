@@ -832,12 +832,11 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiersWithAccess(
                         }
                     };
                     const usize workerTaskCount = Min<usize>(parallelCount, static_cast<usize>(cpuScheduler.workerThreadCount()));
-                    for(usize taskIndex = 0u; taskIndex < workerTaskCount; ++taskIndex){
-                        const auto submitted = parallelScope.submit([&runParallelWork](){ runParallelWork(); });
+                    if(workerTaskCount != 0u){
+                        const auto submitted = parallelScope.submitRepeated(workerTaskCount, runParallelWork);
                         if(!submitted){
                             parallelSubmitError = submitted.error();
                             nextParallelIndex.store(parallelCount, MemoryOrder::release);
-                            break;
                         }
                     }
                     if(!parallelSubmitError){

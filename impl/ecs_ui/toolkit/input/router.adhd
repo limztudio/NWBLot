@@ -390,10 +390,14 @@ class InputRouter : NoCopy{
             && this.hitTest(this.m_pointerState.interactionPosition()) == id;
     }
     private void refreshPressedCache(){
+        const b8 pointerActive = this.m_pointerState.primaryDown() && this.m_pointerState.submitArmed() && this.m_pointerState.capture().valid();
+        const b8 commandActive = this.m_windowFocused && !this.m_commandSources.records().empty() && this.m_commandSources.focus().valid();
+        if(!pointerActive && !commandActive && !this.m_pointerPressedTarget.valid() && this.m_pointerPressedCached && !this.m_commandPressedTarget.valid())
+            return;
         this.m_pointerPressedTarget = WidgetId();
         this.m_pointerPressedCached = true;
         this.m_commandPressedTarget = WidgetId();
-        if(this.m_pointerState.primaryDown() && this.m_pointerState.submitArmed() && this.m_pointerState.capture().valid()){
+        if(pointerActive){
             in Point pos = this.m_pointerState.interactionPosition();
             if(this.m_hoverState.known && this.m_hoverState.position.x == pos.x && this.m_hoverState.position.y == pos.y){
                 if(this.m_hoverState.target == this.m_pointerState.capture())
@@ -402,7 +406,7 @@ class InputRouter : NoCopy{
             else
                 this.m_pointerPressedCached = false;
         }
-        if(this.m_windowFocused && !this.m_commandSources.records().empty() && this.m_commandSources.focus().valid()){
+        if(commandActive){
             const WidgetId focusId = this.m_commandSources.focus();
             if(this.m_commandSources.isPressed(this.m_targetTable.targets(), this.m_targetTable.lookup(), this.m_popupState.records(), this.m_windowFocused, focusId))
                 this.m_commandPressedTarget = focusId;
@@ -573,6 +577,27 @@ class InputRouter : NoCopy{
         this.reconcileTargets();
     }
     private void reconcileTargets(){
+        if(
+            !this.m_hoverState.known
+            && !this.m_hoverState.target.valid()
+            && !this.m_hoverState.identity.owner.valid()
+            && !this.m_pointerState.capture().valid()
+            && !this.m_pointerState.primaryDown()
+            && !this.m_pointerState.secondaryDown()
+            && !this.m_pointerState.secondaryOwner().target.valid()
+            && !this.m_pointerState.submitArmed()
+            && this.m_pointerState.gestureSequence() == 0u
+            && this.m_pointerState.sources().empty()
+            && this.m_pointerState.gestures().empty()
+            && !this.m_commandSources.focus().valid()
+            && this.m_commandSources.records().empty()
+            && this.m_actions.empty()
+            && this.m_controlActions.empty()
+            && this.m_contextMenuActions.empty()
+        ){
+            this.refreshPressedCache();
+            return;
+        }
         b8 changedHoverOwner = false;
         if(this.m_hoverState.known)
             this.m_targetTable.prepareSpatialIndex();

@@ -231,9 +231,12 @@ void AppendRawShapedGlyphs<TFace>(
     in usize end,
     mut Vector<ShapedGlyphRecord<TFace>> inOutGlyphs
 ){
+    if(begin < end)
+        inOutGlyphs.reserve(inOutGlyphs.size() + (end - begin));
     for(usize index = begin; index < end; ++index){
-        const RawShapedGlyph glyph = glyphs[index];
-        ShapedGlyphRecord<TFace> shaped;
+        in RawShapedGlyph glyph = glyphs[index];
+        inOutGlyphs.emplace_back();
+        mut ShapedGlyphRecord<TFace> shaped = inOutGlyphs[inOutGlyphs.size() - 1u];
         shaped.face = face;
         shaped.glyphId = glyph.glyphId;
         shaped.byteBegin = glyph.byteBegin;
@@ -242,7 +245,6 @@ void AppendRawShapedGlyphs<TFace>(
         shaped.advance = glyph.advance;
         shaped.ink = glyph.ink;
         shaped.coverage = glyph.coverage;
-        inOutGlyphs.push_back(shaped);
     }
 }
 

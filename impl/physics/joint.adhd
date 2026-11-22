@@ -212,6 +212,32 @@ class JointConstraintStepCache{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+SymMat3 NegSkewSymSkew(in SymMat3 m, in VectorSingle r){
+    const f32 rx = r.x;
+    const f32 ry = r.y;
+    const f32 rz = r.z;
+
+    const f32 b01 = m.m02 * rx - m.m00 * rz;
+    const f32 b02 = m.m00 * ry - m.m01 * rx;
+
+    const f32 b10 = m.m11 * rz - m.m12 * ry;
+    const f32 b11 = m.m12 * rx - m.m01 * rz;
+    const f32 b12 = m.m01 * ry - m.m11 * rx;
+
+    const f32 b20 = m.m12 * rz - m.m22 * ry;
+    const f32 b21 = m.m22 * rx - m.m02 * rz;
+    const f32 b22 = m.m02 * ry - m.m12 * rx;
+
+    return SymMat3(
+        rz * b10 - ry * b20,
+        rz * b11 - ry * b21,
+        rz * b12 - ry * b22,
+        rx * b21 - rz * b01,
+        rx * b22 - rz * b02,
+        ry * b02 - rx * b12
+    );
+}
+
 Mat3 ComputePointEffectiveMass(
     in f32 invMassA,
     in f32 invMassB,
@@ -225,18 +251,17 @@ Mat3 ComputePointEffectiveMass(
     const VectorSingle diagA = ApplyLinearLocks(VectorSingle(invMassA), flagsA);
     const VectorSingle diagB = ApplyLinearLocks(VectorSingle(invMassB), flagsB);
     const VectorSingle sumM = diagA + diagB;
-    const Mat3 skewA = SkewSymmetricMat3(rA);
-    const Mat3 skewB = SkewSymmetricMat3(rB);
-    const Mat3 iaMat = Mat3FromSymMat3(invIA);
-    const Mat3 ibMat = Mat3FromSymMat3(invIB);
-    const Mat3 termA = MulMat3(skewA, MulMat3(iaMat, skewA));
-    const Mat3 termB = MulMat3(skewB, MulMat3(ibMat, skewB));
-    const Mat3 kMat = Mat3(
-        VectorSingle(sumM.x, 0.0f, 0.0f, 0.0f) - VectorSingle(termA.row0) - VectorSingle(termB.row0),
-        VectorSingle(0.0f, sumM.y, 0.0f, 0.0f) - VectorSingle(termA.row1) - VectorSingle(termB.row1),
-        VectorSingle(0.0f, 0.0f, sumM.z, 0.0f) - VectorSingle(termA.row2) - VectorSingle(termB.row2)
+    const SymMat3 nA = NegSkewSymSkew(invIA, rA);
+    const SymMat3 nB = NegSkewSymSkew(invIB, rB);
+    const SymMat3 kSym(
+        sumM.x + nA.m00 + nB.m00,
+        nA.m01 + nB.m01,
+        nA.m02 + nB.m02,
+        sumM.y + nA.m11 + nB.m11,
+        nA.m12 + nB.m12,
+        sumM.z + nA.m22 + nB.m22
     );
-    return InvertSymmetricMat3(kMat);
+    return InvertSymmetricMat3(Mat3FromSymMat3(kSym));
 }
 
 void ApplyLinearImpulsePair(
@@ -688,11 +713,23 @@ void SolveJointConstraintCached(mut Vector<BodyState> states, mut JointConstrain
         (deltaRotA.x * deltaRotA.x + deltaRotA.y * deltaRotA.y + deltaRotA.z * deltaRotA.z) <= 1.0e-12f
         && (deltaRotB.x * deltaRotB.x + deltaRotB.y * deltaRotB.y + deltaRotB.z * deltaRotB.z) <= 1.0e-12f
     ;
-    const VectorSingle rA = Vector3Rotate(jc.rA0(), deltaRotA);
-    const VectorSingle rB = Vector3Rotate(jc.rB0(), deltaRotB);
+    const b8 exactIdentityDeltaRotA =
+        deltaRotA.x == 0.0f && deltaRotA.y == 0.0f && deltaRotA.z == 0.0f && deltaRotA.w == 1.0f;
+    const b8 exactIdentityDeltaRotB =
+        deltaRotB.x == 0.0f && deltaRotB.y == 0.0f && deltaRotB.z == 0.0f && deltaRotB.w == 1.0f;
+    VectorSingle rA = jc.rA0();
+    VectorSingle qA = VectorSingle(jc.qA0);
+    if(!exactIdentityDeltaRotA){
+        rA = Vector3Rotate(rA, deltaRotA);
+        qA = SafeNormalizeQuat(QuaternionMultiply(deltaRotA, qA));
+    }
+    VectorSingle rB = jc.rB0();
+    VectorSingle qB = VectorSingle(jc.qB0);
+    if(!exactIdentityDeltaRotB){
+        rB = Vector3Rotate(rB, deltaRotB);
+        qB = SafeNormalizeQuat(QuaternionMultiply(deltaRotB, qB));
+    }
     const VectorSingle d = jc.baseCenterDelta() + stateB.deltaPosition() - stateA.deltaPosition() + rB - rA;
-    const VectorSingle qA = SafeNormalizeQuat(QuaternionMultiply(deltaRotA, VectorSingle(jc.qA0)));
-    const VectorSingle qB = SafeNormalizeQuat(QuaternionMultiply(deltaRotB, VectorSingle(jc.qB0)));
 
     if(jc.type == JointType::Distance){
         const f32 dist = Vector3Length(VectorSingle(d, 0.0f)).x;

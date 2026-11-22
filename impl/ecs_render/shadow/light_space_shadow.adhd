@@ -43,6 +43,8 @@ static_assert(offset_of<LightSpaceShadowPush>(meshletBoundsSlot) == 92u);
 static_assert(offset_of<LightSpaceShadowPush>(meshletCount) == 96u);
 static_assert(offset_of<LightSpaceShadowPush>(receiverViewSlot) == 100u);
 static_assert(offset_of<LightSpaceShadowPush>(receiverCsgSampleStateSlot) == 104u);
+static_assert(offset_of<LightSpaceShadowPush>(fallbackListSlot) == 108u);
+static_assert(offset_of<LightSpaceShadowPush>(fallbackArgsSlot) == 112u);
 
 const usize s_LightSpaceFramebufferCount = s_SceneShadowSlotCount * s_PointLightViewCount;
 
@@ -54,6 +56,8 @@ class LightSpaceShadowSnapshot{
     public BufferHandle drawArguments;
     public BufferHandle csgContext;
     public BufferHandle csgOpaqueDepth;
+    public Array<BufferHandle, 2u> fallbackLists;
+    public Array<BufferHandle, 2u> fallbackArgs;
     public BufferHandle receiverView;
     public BufferHandle receiverCsgSampleState;
     public TextureHandle depth;
@@ -63,6 +67,9 @@ class LightSpaceShadowSnapshot{
     public GpuDescriptorHandle drawArgumentsDescriptor;
     public GpuDescriptorHandle csgContextDescriptor;
     public GpuDescriptorHandle csgOpaqueDepthDescriptor;
+    public Array<GpuDescriptorHandle, 2u> fallbackListDescriptors;
+    public Array<GpuDescriptorHandle, 2u> fallbackArgsDescriptors;
+    public u64 fallbackPixelCapacity = 0u;
     public GpuDescriptorHandle depthDescriptor;
     public GpuDescriptorHandle csgTlasDescriptor;
     public Array<FramebufferHandle, s_LightSpaceFramebufferCount> opaqueFramebuffers;

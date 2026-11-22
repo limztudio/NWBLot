@@ -26,14 +26,16 @@ class FloatTextureClearGraphTask{
         clear.subresources = this.m_subresources;
         clear.valueType = GpuClearTextureTaskValueType::Float;
         clear.floatValue = this.m_value;
-        return VisitGpuTaskTexture(context.declarations, this.m_destination, lambda[in clear, in context, mut commandList](mut RhiTexture texture) -> b8{
+        in GpuClearTextureTaskDesc clearRef = clear;
+        in GpuTaskRecordContext contextRef = context;
+        return VisitGpuTaskTexture(context.declarations, this.m_destination, lambda[in clearRef, in contextRef, mut commandList](mut RhiTexture texture) -> b8{
             if(commandList.isRenderPassActive())
                 return false;
-            if(!CaptureGpuTaskCommandsIfEnabled(context, lambda[in context, in clear](mut GpuCommandIrCapture capture) -> b8{
-                return capture.captureClearTexture(context.task, context.packet, context.queue, clear.destination, clear);
+            if(!CaptureGpuTaskCommandsIfEnabled(contextRef, lambda[in contextRef, in clearRef](mut GpuCommandIrCapture capture) -> b8{
+                return capture.captureClearTexture(contextRef.task, contextRef.packet, contextRef.queue, clearRef.destination, clearRef);
             }))
                 return false;
-            commandList.clearTextureFloat(texture, clear.subresources, clear.floatValue);
+            commandList.clearTextureFloat(texture, clearRef.subresources, clearRef.floatValue);
             return true;
         });
     }

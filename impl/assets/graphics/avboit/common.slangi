@@ -150,7 +150,7 @@ uint2 nwbAvboitLowPixelFromLowFragCoord(float2 fragCoord){
 }
 
 float nwbAvboitOpaqueDepthFromLowFragCoord(Texture2D<float4> opaqueDepth, SamplerState pointSampler, float2 fragCoord){
-    return opaqueDepth.Sample(pointSampler, nwbAvboitFullUvFromLowFragCoord(fragCoord)).r;
+    return opaqueDepth.SampleLevel(pointSampler, nwbAvboitFullUvFromLowFragCoord(fragCoord), 0.0).r;
 }
 
 float nwbAvboitExtinctionFromAlpha(half alpha){

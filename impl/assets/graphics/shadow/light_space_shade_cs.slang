@@ -66,9 +66,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     NwbLightSpaceView view = (NwbLightSpaceView)0;
     for(uint index = 0u; index < g_NwbLightSpacePush.viewCount; ++index){
-        const NwbLightSpaceView candidate = nwbLightSpaceLoadView(index);
-        if(pixelIndex >= candidate.map.z && pixelIndex - candidate.map.z < candidate.map.x * candidate.map.y){
-            view = candidate;
+        const uint4 map = nwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(index * NWB_LIGHT_SPACE_VIEW_BYTES + NWB_LIGHT_SPACE_VIEW_MAP_OFFSET);
+        if(pixelIndex >= map.z && pixelIndex - map.z < map.x * map.y){
+            view = nwbLightSpaceLoadView(index);
             break;
         }
     }

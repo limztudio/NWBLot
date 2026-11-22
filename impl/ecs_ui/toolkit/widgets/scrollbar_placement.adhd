@@ -16,6 +16,8 @@ const u32 s_TextAreaScrollHorizontalBefore = 1u;
 const u32 s_TextAreaScrollHorizontalAfter = 2u;
 const u32 s_TextAreaScrollVerticalBefore = 3u;
 const u32 s_TextAreaScrollVerticalAfter = 4u;
+const Name s_ScrollbarTrackRegionName = "scroll.track";
+const Name s_ScrollbarThumbRegionName = "scroll.thumb";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,13 +29,13 @@ enum<u8> ScrollAxis{
 }
 
 class ScrollbarStyle{
-    public Name track = Name("scroll.track");
-    public Name trackFallback = Name("panel.normal");
-    public Name thumb = Name("scroll.thumb");
-    public Name thumbHover = Name("button.hover");
-    public Name thumbPressed = Name("button.pressed");
-    public Name thumbDisabled = Name("button.disabled");
-    public Name thumbFallback = Name("button.normal");
+    public Name track = s_ScrollbarTrackRegionName;
+    public Name trackFallback = s_StylePanelNormalRegionName;
+    public Name thumb = s_ScrollbarThumbRegionName;
+    public Name thumbHover = s_StyleButtonHoverRegionName;
+    public Name thumbPressed = s_StyleButtonPressedRegionName;
+    public Name thumbDisabled = s_StyleButtonDisabledRegionName;
+    public Name thumbFallback = s_StyleButtonNormalRegionName;
     public Color trackColor = s_StyleInsetColor;
     public Color thumbColor = s_ScrollbarThumbColor;
     public Color disabledColor = s_ScrollbarDisabledColor;

@@ -61,6 +61,10 @@ ByteAddressBuffer nwbHeapRawBuffer(const uint slot){
     return g_NwbHeapRawBuffers[NonUniformResourceIndex(slot)];
 }
 
+ByteAddressBuffer nwbHeapRawBufferUniform(const uint slot){
+    return g_NwbHeapRawBuffers[slot];
+}
+
 Texture2D<float4> nwbHeapSampledImage2D(const uint slot){
     return g_NwbHeapSampledImages[slot];
 }

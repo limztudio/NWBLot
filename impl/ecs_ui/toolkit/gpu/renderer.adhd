@@ -166,6 +166,8 @@ class GpuRenderer : IGpuTaskGraphOutputLayerContributor, NoCopy{
         for(mut auto frame : state.m_frames){
             if(!IsExclusivelyRetainedGpuFrame(frame.valid(), frame.referenceCount()))
                 continue;
+            if(state.m_pending.valid() && !ShouldResetStaleRecycledGpuFrame(true, frame.deref().m_snapshot.generation()))
+                continue;
             AtomicThreadFence(MemoryOrder::acquire);
             if(!frame.deref().recyclable(device))
                 continue;

@@ -9,21 +9,83 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool nwbCausticPickLight(const uint photonIndex, out NwbSceneLight outLight){
+bool nwbCausticSelectLightAndTarget(
+    const uint photonIndex,
+    const uint photonCount,
+    const uint emissionTargetCount,
+    out NwbSceneLight outLight,
+    out uint outTargetIndex,
+    out uint outLocalIndex,
+    out uint outLocalCount,
+    out uint outCombo,
+    out uint outTotalCombos
+){
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
     uint causticLightCount = 0u;
+    uint firstLightIndex = 0u;
     for(uint i = 0u; i < lightCount; ++i){
-        if(g_NwbSceneLights[i].params.w >= 0.0)
+        if(g_NwbSceneLights[i].params.w >= 0.0){
+            if(causticLightCount == 0u)
+                firstLightIndex = i;
             ++causticLightCount;
+        }
     }
-    if(causticLightCount == 0u){
-        outLight = g_NwbSceneLights[0];
+    outLight = g_NwbSceneLights[firstLightIndex];
+    outTargetIndex = 0u;
+    outLocalIndex = 0u;
+    outLocalCount = 0u;
+    outCombo = 0u;
+    outTotalCombos = 0u;
+    if(causticLightCount == 0u || emissionTargetCount == 0u || photonCount == 0u)
         return false;
+
+    const uint totalCombos = causticLightCount * emissionTargetCount;
+    outTotalCombos = totalCombos;
+    uint combo = 0u;
+    uint localIndex = 0u;
+    uint localCount = 0u;
+    if(totalCombos == 1u){
+        combo = 0u;
+        localIndex = photonIndex;
+        localCount = photonCount;
+    }
+    else if(totalCombos >= photonCount){
+        if(photonIndex >= photonCount)
+            return false;
+        combo = photonIndex % totalCombos;
+        localIndex = 0u;
+        localCount = 1u;
+    }
+    else{
+        const uint baseCount = photonCount / totalCombos;
+        const uint rem = photonCount % totalCombos;
+        const uint split = rem * (baseCount + 1u);
+        if(photonIndex < split){
+            const uint blockSize = baseCount + 1u;
+            combo = photonIndex / blockSize;
+            localIndex = photonIndex % blockSize;
+            localCount = blockSize;
+        }
+        else{
+            const uint tail = photonIndex - split;
+            combo = rem + tail / baseCount;
+            localIndex = tail % baseCount;
+            localCount = baseCount;
+        }
     }
 
-    const uint pick = photonIndex % causticLightCount;
-    uint seen = 0u;
-    for(uint i = 0u; i < lightCount; ++i){
+    const uint pick = combo / emissionTargetCount;
+    outTargetIndex = combo % emissionTargetCount;
+    outLocalIndex = localIndex;
+    outLocalCount = localCount;
+    outCombo = combo;
+
+    if(pick == 0u){
+        outLight = g_NwbSceneLights[firstLightIndex];
+        return true;
+    }
+    uint seen = 1u;
+    for(uint i = firstLightIndex + 1u; i < lightCount; ++i){
         if(g_NwbSceneLights[i].params.w < 0.0)
             continue;
         if(seen == pick){
@@ -32,7 +94,6 @@ bool nwbCausticPickLight(const uint photonIndex, out NwbSceneLight outLight){
         }
         ++seen;
     }
-    outLight = g_NwbSceneLights[0];
     return true;
 }
 

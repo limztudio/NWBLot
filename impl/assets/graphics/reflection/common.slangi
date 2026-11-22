@@ -25,7 +25,6 @@
 static const float NWB_REFLECTION_GLASS_IOR_MIN = 1.0001;
 static const half NWB_REFLECTION_GLASS_IOR_MAX = 4.0h;
 static const uint NWB_REFLECTION_GLASS_DEPTH_UNCERTAINTY_STEPS = 4u;
-static const half NWB_REFLECTION_SCHLICK_EXPONENT = 5.0h;
 static const float NWB_REFLECTION_SURFACE_BIAS_MIN = 0.001;
 static const float NWB_REFLECTION_SURFACE_BIAS_DISTANCE_SCALE = 1e-5;
 
@@ -117,23 +116,29 @@ bool nwbReflectionLoadSurface(const uint2 pixel, const bool glass, out NwbReflec
     stableTraceEligible = false;
     surface = (NwbReflectionSurface)0;
     const int3 texel = int3(pixel, 0);
-    const uint specularSlot = glass ? g_NwbReflectionParameters.glassSpecularSlot : g_NwbReflectionParameters.opaqueSpecularSlot;
-    const half4 specularRoughness = half4(nwbHeapSampledImage2DNonUniform(specularSlot).Load(texel));
-    const uint normalSlot = glass ? g_NwbReflectionResources.refractionSlots0.y : g_NwbReflectionResources.gbufferSlots.y;
     float4 packedNormal = float4(0.0);
-    half3 f0 = saturate(specularRoughness.rgb);
+    half3 f0 = half3(0.0h);
+    half roughness = half(0.0h);
     if(glass){
-        packedNormal = nwbHeapSampledImage2DNonUniform(normalSlot).Load(texel);
+        packedNormal = nwbHeapSampledImage2D(g_NwbReflectionResources.refractionSlots0.y).Load(texel);
         if(!isfinite(packedNormal.w) || packedNormal.w <= NWB_REFLECTION_GLASS_IOR_MIN)
             return false;
         const half ior = clamp(half(packedNormal.w), half(1.0h), NWB_REFLECTION_GLASS_IOR_MAX);
         const half ratio = (ior - half(1.0h)) / (ior + half(1.0h));
         f0 = half3(ratio * ratio);
     }
-    if(!isfinite(float(specularRoughness.a)) || !all(isfinite(float3(f0))) || !any(f0 > half3(0.0h)))
+    else{
+        const half4 specularRoughness = half4(nwbHeapSampledImage2D(g_NwbReflectionParameters.opaqueSpecularSlot).Load(texel));
+        f0 = saturate(specularRoughness.rgb);
+        if(!isfinite(float(specularRoughness.a)))
+            return false;
+        roughness = saturate(specularRoughness.a);
+    }
+    if(!all(isfinite(float3(f0))) || !any(f0 > half3(0.0h)))
         return false;
-    const uint depthSlot = glass ? g_NwbReflectionResources.refractionSlots0.x : g_NwbReflectionResources.gbufferSlots.w;
-    const float depth = nwbHeapSampledImage2DNonUniform(depthSlot).Load(texel).r;
+    const float depth = glass
+        ? nwbHeapSampledImage2D(g_NwbReflectionResources.refractionSlots0.x).Load(texel).r
+        : nwbHeapSampledImage2D(g_NwbReflectionResources.gbufferSlots.w).Load(texel).r;
     if(!isfinite(depth) || depth < 0.0 || depth >= 1.0)
         return false;
     const float2 uv = (float2(pixel) + 0.5) / float2(g_NwbReflectionParameters.dimensionsAndRoute.x, g_NwbReflectionParameters.dimensionsAndRoute.y);
@@ -150,7 +155,7 @@ bool nwbReflectionLoadSurface(const uint2 pixel, const bool glass, out NwbReflec
     const float3 cameraRay = surface.position - g_NwbReflectionView.cameraPosition.xyz;
     const float3 incident = nwbSafeNormalize(cameraRay, float3(0.0, 0.0, 1.0));
     if(!glass)
-        packedNormal = nwbHeapSampledImage2DNonUniform(normalSlot).Load(texel);
+        packedNormal = nwbHeapSampledImage2D(g_NwbReflectionResources.gbufferSlots.y).Load(texel);
     surface.normal = nwbSafeNormalize(glass ? packedNormal.xyz : packedNormal.xyz * 2.0 - 1.0, -incident);
     if(dot(surface.normal, incident) > 0.0)
         surface.normal = -surface.normal;
@@ -166,9 +171,9 @@ bool nwbReflectionLoadSurface(const uint2 pixel, const bool glass, out NwbReflec
         originUncertainty = length(nextPosition - surface.position);
     }
     surface.direction = reflect(incident, surface.normal);
-    surface.roughness = glass ? half(0.0h) : saturate(specularRoughness.a);
+    surface.roughness = roughness;
     const half cosine = half(saturate(-dot(incident, surface.normal)));
-    const half3 weight = f0 + (half3(1.0h) - f0) * half(pow(half(1.0h) - cosine, NWB_REFLECTION_SCHLICK_EXPONENT));
+    const half3 weight = nwbReflectionSchlick(f0, cosine);
     surface.weight = weight;
     surface.bias = max(NWB_REFLECTION_SURFACE_BIAS_MIN, originUncertainty + length(cameraRay) * NWB_REFLECTION_SURFACE_BIAS_DISTANCE_SCALE);
     if(!isfinite(surface.bias) || !all(isfinite(surface.direction)) || !all(isfinite(surface.weight)) || !all(isfinite(surface.position + surface.normal * surface.bias)))

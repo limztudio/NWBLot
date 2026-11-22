@@ -127,10 +127,20 @@ b8 VolumeFileSystem::loadMetadataLocked(Alloc::ScratchArena& scratchArena){
         return false;
     }
 
-    Vector<u8, Core::Alloc::ScratchArena> indexData(static_cast<usize>(header.indexBytes), 0, scratchArena);
-    if(header.indexBytes > 0 && !readBytesLocked(static_cast<u64>(sizeof(header)), indexData.data(), header.indexBytes)){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "failed to read metadata index");
-        return false;
+    const u8* indexPtr = nullptr;
+    Vector<u8, Core::Alloc::ScratchArena> indexData{scratchArena};
+    if(header.indexBytes > 0u){
+        if(!m_writable && m_readMappings.size() == m_segmentPaths.size() && m_readMappings[0].mappedView != nullptr && static_cast<u64>(sizeof(header)) + header.indexBytes <= m_readMappings[0].mappedBytes){
+            indexPtr = m_readMappings[0].mappedView + sizeof(header);
+        }
+        else{
+            indexData.resize(static_cast<usize>(header.indexBytes), 0);
+            if(!readBytesLocked(static_cast<u64>(sizeof(header)), indexData.data(), header.indexBytes)){
+                FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "failed to read metadata index");
+                return false;
+            }
+            indexPtr = indexData.data();
+        }
     }
 
     FileMap loadedFiles(0, Hasher<Name>(), EqualTo<Name>(), m_arena);
@@ -143,7 +153,7 @@ b8 VolumeFileSystem::loadMetadataLocked(Alloc::ScratchArena& scratchArena){
         }
 
         FilesystemVolumeDetail::VolumeIndexEntryDisk entry;
-        FOUNDATION_MEMCPY(&entry, sizeof(entry), indexData.data() + static_cast<usize>(cursor), sizeof(entry));
+        FOUNDATION_MEMCPY(&entry, sizeof(entry), indexPtr + static_cast<usize>(cursor), sizeof(entry));
         cursor += sizeof(entry);
 
         u64 endOffset = 0;
@@ -181,6 +191,7 @@ b8 VolumeFileSystem::loadMetadataLocked(Alloc::ScratchArena& scratchArena){
     m_metadataBytes = header.metadataBytes;
     m_nextFreeOffset = header.nextFreeOffset;
     m_files = Move(loadedFiles);
+    m_writtenMetadataBytes = m_metadataBytes;
 
     return true;
 }
@@ -249,14 +260,18 @@ b8 VolumeFileSystem::flushMetadataLocked(Alloc::ScratchArena& scratchArena, cons
         return ::LessNameHash(lhs.hash, rhs.hash);
     });
 
+    const u64 writeEnd = m_writtenMetadataBytes == 0u ? m_metadataBytes : Max(totalMetaBytes, m_writtenMetadataBytes);
     Vector<u8, Core::Alloc::ScratchArena> metadataBuffer{scratchArena};
-    metadataBuffer.reserve(static_cast<usize>(m_metadataBytes));
+    metadataBuffer.reserve(static_cast<usize>(writeEnd));
     AppendPOD(metadataBuffer, header);
     AppendBytesNoReserveUnchecked(metadataBuffer, sortedRecords.data(), static_cast<usize>(header.indexBytes));
-    metadataBuffer.resize(static_cast<usize>(m_metadataBytes), 0u);
+    if(writeEnd > totalMetaBytes)
+        metadataBuffer.resize(static_cast<usize>(writeEnd), 0u);
 
-    if(writeBytesLocked(0, metadataBuffer.data(), metadataBuffer.size()))
+    if(writeBytesLocked(0, metadataBuffer.data(), metadataBuffer.size())){
+        m_writtenMetadataBytes = totalMetaBytes;
         return true;
+    }
 
     FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFlushMetadata, "metadata write failed");
     return false;

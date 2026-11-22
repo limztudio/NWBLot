@@ -89,13 +89,19 @@ half3 nwbShadowResolveSpatialWeights(const half offset){
     return half3(half(0.5h) * side.x * side.x, half(NWB_SHADOW_RESOLVE_BSPLINE_CENTER_BASE) - offset * offset, half(0.5h) * side.y * side.y);
 }
 
+half nwbShadowResolveNormalPow8(const float ndot){
+    const half c = half(max(ndot, 0.0));
+    const half c2 = c * c;
+    const half c4 = c2 * c2;
+    return c4 * c4;
+}
+
 half nwbShadowResolveNormalWeightDecoded(const float3 centerNormal, const half3 tapNormal){
-    return half(pow(max(dot(centerNormal, float3(tapNormal)), 0.0), NWB_SHADOW_RESOLVE_NORMAL_POWER));
+    return nwbShadowResolveNormalPow8(dot(centerNormal, float3(tapNormal)));
 }
 
 half nwbShadowResolveNormalWeightVec(const float3 centerNormal, const half2 tapOct){
-    const float3 tn = nwbOctDecodeNormal(float2(tapOct));
-    return half(pow(max(dot(centerNormal, tn), 0.0), NWB_SHADOW_RESOLVE_NORMAL_POWER));
+    return nwbShadowResolveNormalPow8(dot(centerNormal, nwbOctDecodeNormal(float2(tapOct))));
 }
 
 #if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
@@ -114,8 +120,12 @@ half nwbShadowResolveLuma(const half3 c){
 }
 
 #if NWB_SHADOW_RESOLVE_CHANNELS != NWB_SHADOW_RESOLVE_CHANNELS_COMBINED
+half nwbShadowResolveValueWeightPrecomputed(const half centerLuma, const NwbShadowResolveVisVec tapVis, const half invSigmaLum){
+    return half(exp(-abs(nwbShadowResolveLuma(tapVis) - centerLuma) * invSigmaLum));
+}
+
 half nwbShadowResolveValueWeightVec(const NwbShadowResolveVisVec centerVis, const NwbShadowResolveVisVec tapVis, const float sigmaLum){
-    return half(exp(-abs(nwbShadowResolveLuma(tapVis) - nwbShadowResolveLuma(centerVis)) / half(sigmaLum)));
+    return nwbShadowResolveValueWeightPrecomputed(nwbShadowResolveLuma(centerVis), tapVis, half(1.0 / sigmaLum));
 }
 
 #endif

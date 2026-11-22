@@ -244,7 +244,8 @@ class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
         if(this.m_timingEnabled)
             this.m_gpuPassTimingProbe.recordFrame(safeDelta, this.m_context.gpuTimingView());
         this.m_yaw.update(safeDelta, this.m_frozenYaw, this.m_frozenYaw >= 0.0f, this.m_arrowYawInput, s_SoftShadowManualYawSpeed, s_SoftShadowSpinSpeed, s_SoftShadowMaxSpinDelta);
-        this.updateWindowTitle();
+        if(this.m_titleThrottle.shouldUpdate(safeDelta, this.m_yaw.manualControl(), false))
+            this.updateWindowTitle();
         this.m_scene.spinCasters(SmokeWorldRef(this.m_world), this.m_yaw.yaw());
         if(!TickSmokeWorld(safeDelta, SmokeWorldRef(this.m_world)))
             return false;
@@ -275,6 +276,7 @@ class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
     private ArrowYawInputHandler m_arrowYawInput = ArrowYawInputHandler();
     private SoftShadowScene m_scene = SoftShadowScene();
     private YawSpinController m_yaw = YawSpinController();
+    private SmokeWindowTitleThrottle m_titleThrottle = SmokeWindowTitleThrottle();
     private f32 m_frozenYaw;
     private f32 m_angularRadius = s_SoftShadowDefaultAngularRadius;
     private f32 m_sourceRadius = s_SoftShadowDefaultSourceRadius;

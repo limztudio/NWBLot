@@ -178,16 +178,20 @@ b8 LocalVariableChecker::check(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
             if(exprTypeRef){
                 const ParamPassingMode::Enum savedRefMode = stmt.varType->refMode;
                 const SourceSpan savedSpan = stmt.varType->span;
-                *stmt.varType = *exprTypeRef;
-                stmt.varType->refMode = savedRefMode;
-                stmt.varType->span = savedSpan;
-                stmt.varType->isAuto = false;
+                TypeRef* inferredRef = CloneTypeRefWithMode(m_checker.m_arena, *exprTypeRef, savedRefMode);
+                inferredRef->span = savedSpan;
+                inferredRef->isAuto = false;
+                stmt.inferredAutoType = inferredRef;
+                info.type = stmt.inferredAutoType;
             }
             else if(!effectiveAutoName.empty()){
                 stmt.varType->isAuto = false;
                 stmt.varType->name = effectiveAutoName;
+                info.type = stmt.varType;
             }
-            info.type = stmt.varType;
+            else{
+                info.type = stmt.varType;
+            }
         }
         else if(exprTypeRef){
             stmt.inferredAutoType = const_cast<TypeRef*>(exprTypeRef);

@@ -150,23 +150,27 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         uint seedId = g_NwbSurfelSeedCellHead[seedBucket];
         uint seedWalk = 0u;
         [loop] while(seedId < poolCapacity && seedWalk < NWB_SURFEL_MAX_WALK){
-            const NwbSurfel neighbour = g_NwbSurfelSeedPool[seedId];
+            const uint nextInCell = g_NwbSurfelSeedPool[seedId].nextInCell;
+            const uint neighbourState = g_NwbSurfelSeedPool[seedId].sampleState;
+            const uint neighbourLastSeen = g_NwbSurfelSeedPool[seedId].lastSeenFrame;
             if(
-                nwbSurfelIsAlive(neighbour.sampleState)
-                && nwbSurfelSampleCount(neighbour.sampleState) >= NWB_SURFEL_SEED_NEIGHBOR_MIN_SAMPLE_COUNT
-                && frameIndex - neighbour.lastSeenFrame <= uint(g_NwbSurfelConstants.ageRaysTileScreen.x)
-                && nwbSurfelSameCell(neighbour.cell, seedCell)
+                nwbSurfelIsAlive(neighbourState)
+                && nwbSurfelSampleCount(neighbourState) >= NWB_SURFEL_SEED_NEIGHBOR_MIN_SAMPLE_COUNT
+                && frameIndex - neighbourLastSeen <= uint(g_NwbSurfelConstants.ageRaysTileScreen.x)
+                && nwbSurfelSameCell(g_NwbSurfelSeedPool[seedId].cell, seedCell)
             ){
-                const float dist = length(worldPosition - neighbour.position);
-                const half normalWeight = half(saturate(dot(worldNormal, neighbour.normal)));
+                const float dist = length(worldPosition - g_NwbSurfelSeedPool[seedId].position);
+                const half normalWeight = half(saturate(dot(worldNormal, g_NwbSurfelSeedPool[seedId].normal)));
                 const half distanceWeight = half(saturate(1.0h - dist / max(defaultRadius, NWB_SURFEL_RADIUS_MIN)));
                 const half weight = normalWeight * distanceWeight;
-                seedShR += half4(neighbour.shR) * weight;
-                seedShG += half4(neighbour.shG) * weight;
-                seedShB += half4(neighbour.shB) * weight;
-                seedWeight += weight;
+                if(weight > half(0.0h)){
+                    seedShR += half4(g_NwbSurfelSeedPool[seedId].shR) * weight;
+                    seedShG += half4(g_NwbSurfelSeedPool[seedId].shG) * weight;
+                    seedShB += half4(g_NwbSurfelSeedPool[seedId].shB) * weight;
+                    seedWeight += weight;
+                }
             }
-            seedId = neighbour.nextInCell;
+            seedId = nextInCell;
             ++seedWalk;
         }
     }

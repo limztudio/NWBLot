@@ -11,31 +11,55 @@
 NWB_VULKAN_BEGIN
 
 
-TimerQueryClaimJournal::Claim& TimerQueryClaimJournal::findOrAppendTimerQueryRecordingClaim(TimerQuery& query){
-    for(Claim& claim : m_claims){
-        if(claim.query.get() == &query)
-            return claim;
+usize TimerQueryClaimJournal::findClaimIndex(const TimerQuery& query)const noexcept{
+    if(!m_claimIndices.empty()){
+        const auto found = m_claimIndices.find(reinterpret_cast<usize>(&query));
+        return found != m_claimIndices.end() ? found.value() : Limit<usize>::s_Max;
     }
+    for(usize i = 0u; i < m_claims.size(); ++i){
+        if(m_claims[i].query.get() == &query)
+            return i;
+    }
+    return Limit<usize>::s_Max;
+}
+
+TimerQueryClaimJournal::Claim& TimerQueryClaimJournal::findOrAppendTimerQueryRecordingClaim(TimerQuery& query){
+    const usize existingIndex = findClaimIndex(query);
+    if(existingIndex != Limit<usize>::s_Max)
+        return m_claims[existingIndex];
 
     m_owner.m_resourceReferences.retainResource(query);
+    const usize newIndex = m_claims.size();
     m_claims.push_back(Claim{ .query = MakeNotNull(&query), .queue = {}, .resetAuthorizationSubmission = {}, .prerequisiteSubmission = {}, .queryIncarnation = query.m_incarnation, });
+    if(m_claimIndices.empty()){
+        if(m_claims.size() > s_LinearClaimThreshold){
+            m_claimIndices.reserve(m_claims.size() * 2u);
+            for(usize i = 0u; i < m_claims.size(); ++i)
+                m_claimIndices.emplace(reinterpret_cast<usize>(m_claims[i].query.get()), i);
+        }
+    }
+    else{
+        m_claimIndices.emplace(reinterpret_cast<usize>(&query), newIndex);
+    }
     return m_claims.back();
 }
 
 TimerQueryClaimJournal::Claim* TimerQueryClaimJournal::findTimerQueryRecordingClaim(TimerQuery& query, const u64 generation)noexcept{
-    for(Claim& claim : m_claims){
-        if(claim.query.get() == &query && claim.queryIncarnation == query.m_incarnation && claim.generation == generation && claim.recordingID == m_owner.m_recordingID)
-            return &claim;
-    }
+    const usize index = findClaimIndex(query);
+    if(index == Limit<usize>::s_Max)
+        return nullptr;
+    Claim& claim = m_claims[index];
+    if(claim.queryIncarnation == query.m_incarnation && claim.generation == generation && claim.recordingID == m_owner.m_recordingID)
+        return &claim;
     return nullptr;
 }
 
 b8 TimerQueryClaimJournal::recordsTimerQueryBegin(const TimerQuery& query, const u64 generation)const noexcept{
-    for(const Claim& claim : m_claims){
-        if(claim.query.get() == &query && claim.generation == generation && claim.recordingID == m_owner.m_recordingID && claim.recordsBegin)
-            return true;
-    }
-    return false;
+    const usize index = findClaimIndex(query);
+    if(index == Limit<usize>::s_Max)
+        return false;
+    const Claim& claim = m_claims[index];
+    return claim.generation == generation && claim.recordingID == m_owner.m_recordingID && claim.recordsBegin;
 }
 
 TimerQueryClaimJournal::OwnerMatches TimerQueryClaimJournal::resolveTimerQueryClaimOwnerMatches(const TimerQuery& query, const Claim& claim)const noexcept{
@@ -108,6 +132,7 @@ b8 TimerQueryClaimJournal::validateTimerQueryRecordingClaims(
 
 void TimerQueryClaimJournal::commitTimerQueryRecordingClaims(const QueueSubmissionToken& submissionToken)noexcept{
     static_assert(noexcept(m_claims.clear()), "accepted timer-query claim release must be non-throwing");
+    static_assert(noexcept(m_claimIndices.clear()), "accepted timer-query claim index release must be non-throwing");
     for(const Claim& claim : m_claims){
         TimerQuery& query = *claim.query;
         if(claim.queryIncarnation == 0u || query.m_incarnation != claim.queryIncarnation || claim.recordingID == 0u || claim.recordingID != m_owner.m_recordingID || (!claim.recordsReset && !claim.recordsBegin && !claim.recordsEnd))
@@ -166,10 +191,13 @@ void TimerQueryClaimJournal::commitTimerQueryRecordingClaims(const QueueSubmissi
         }
     }
     m_claims.clear();
+    if(!m_claimIndices.empty())
+        m_claimIndices.clear();
 }
 
 void TimerQueryClaimJournal::discardTimerQueryRecordingClaims()noexcept{
     static_assert(noexcept(m_claims.clear()), "timer-query claim discard must be non-throwing");
+    static_assert(noexcept(m_claimIndices.clear()), "timer-query claim index discard must be non-throwing");
     for(const Claim& claim : m_claims){
         TimerQuery& query = *claim.query;
         if(claim.queryIncarnation == 0u || query.m_incarnation != claim.queryIncarnation)
@@ -206,6 +234,8 @@ void TimerQueryClaimJournal::discardTimerQueryRecordingClaims()noexcept{
         }
     }
     m_claims.clear();
+    if(!m_claimIndices.empty())
+        m_claimIndices.clear();
 }
 
 

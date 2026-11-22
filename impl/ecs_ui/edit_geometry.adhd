@@ -117,12 +117,23 @@ class UiEditGeometry{
         outCandidate.modelGeneration = modelGeneration;
     }
 
-    public void commit(in u64 generation, mut UiEditBoxGeometry inOutCandidate, mut UiEditBoxGeometry inOutDisplayed)const{
+    public b8 commit(in u64 generation, mut UiEditBoxGeometry inOutCandidate, mut UiEditBoxGeometry inOutDisplayed)const{
         if(inOutCandidate.generation == generation){
-            inOutDisplayed = inOutCandidate;
+            inOutDisplayed.options = inOutCandidate.options;
+            inOutDisplayed.placement = inOutCandidate.placement;
+            if(inOutDisplayed.stopTable != inOutCandidate.stopTable)
+                inOutDisplayed.stopTable = inOutCandidate.stopTable;
+            inOutDisplayed.generation = inOutCandidate.generation;
+            inOutDisplayed.modelGeneration = inOutCandidate.modelGeneration;
+            inOutDisplayed.revision = inOutCandidate.revision;
+            inOutDisplayed.externalRevision = inOutCandidate.externalRevision;
+            inOutDisplayed.popup = inOutCandidate.popup;
+            inOutDisplayed.textMode = inOutCandidate.textMode;
             inOutCandidate.generation = 0u;
             inOutCandidate.stopTable = SharedEditCaretStopTable();
+            return true;
         }
+        return false;
     }
 
     public b8 focusedReady(in UiEditBoxGeometry displayed, in UiTextEditOwner owner, in PopupToken popup)const{

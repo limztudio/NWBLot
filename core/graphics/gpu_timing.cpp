@@ -118,6 +118,8 @@ void GpuTimingRecorder::resetQueries(){
         advanceEpoch();
         m_accumulatorsActive = false;
         m_performanceCollectionActive = false;
+        m_collectionActiveAtomic.store(false, MemoryOrder::relaxed);
+        m_syncedActiveStateValid = false;
         m_currentFrameIndex = 0u;
         m_statistics = {};
         m_pendingAttributionRetirements = false;
@@ -217,6 +219,25 @@ b8 GpuTimingRecorder::requestScopeQueries(const Name& scopeName, const u32 query
     return true;
 }
 
+b8 GpuTimingRecorder::requestScopeQueriesBatch(const Span<const ScopeRequest> requests){
+    if(requests.empty())
+        return true;
+    if(!requests.data())
+        return false;
+
+    ScopedLock lock(m_mutex);
+    syncActiveState();
+    for(const ScopeRequest& request : requests){
+        if(!request.scopeName)
+            return false;
+        const auto accumulatorResult = findOrCreateAccumulator(request.scopeName);
+        if(!accumulatorResult || !*accumulatorResult)
+            return false;
+        (***accumulatorResult).requestQueries(request.queryCount);
+    }
+    return true;
+}
+
 b8 GpuTimingRecorder::prepareOverlapMetric(const Name& firstScope, const Name& secondScope, const Name& outputScope){
     ScopedLock lock(m_mutex);
     syncActiveState();
@@ -259,6 +280,23 @@ b8 GpuTimingRecorder::materializeRequestedQueries(Device& device){
     if(!materialized)
         ++m_statistics.queryMaterializationFailureCount;
     return materialized;
+}
+
+b8 GpuTimingRecorder::resetDirtyQueriesOnHost(Device& device){
+    if(!device.supportsHostTimerQueryReset())
+        return false;
+
+    ScopedLock lock(m_mutex);
+    syncActiveState();
+    if(!m_accumulatorsActive)
+        return true;
+
+    b8 allReady = true;
+    for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it){
+        if(!it.value()->resetDirtyQueriesOnHost(device))
+            allReady = false;
+    }
+    return allReady;
 }
 
 void GpuTimingRecorder::recordFrameReset(CommandList& commandList){
@@ -466,7 +504,8 @@ Expected<Optional<NotNull<GpuTimingAccumulator*>>> GpuTimingRecorder::findOrCrea
 
 b8 GpuTimingRecorder::collectLocked(const u64 subscriptionIdentityLimit, Device& device, Alloc::ScratchArena& scratchArena, SampleDispatchVector& completedSamples, GpuTimingSinkSampleVector& performanceSamples){
     syncActiveState();
-    reservePendingAttributionSamplesLocked(completedSamples);
+    if(subscriptionIdentityLimit != 0u || m_pendingAttributionRetirements)
+        reservePendingAttributionSamplesLocked(completedSamples);
     const b8 publishPerformanceSamples = m_performanceCollectionActive;
     b8 hasPendingAcceptedQueries = false;
     for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it)
@@ -512,6 +551,14 @@ void GpuTimingRecorder::noteSkippedScope(const GpuTimingScopeSkipReason::Enum re
 
 void GpuTimingRecorder::syncActiveState(const u64 subscriptionIdentityLimit)noexcept{
     const b8 performanceCollectionActive = m_enabled && m_timing.enabled();
+    if(
+        m_syncedActiveStateValid
+        && m_syncedPerformanceCollectionActive == performanceCollectionActive
+        && m_syncedFeedbackDemandGeneration == m_feedbackDemandGeneration
+        && (!m_accumulatorsActive || m_syncedSubscriptionIdentityLimit == subscriptionIdentityLimit)
+    )
+        return;
+
     if(m_performanceCollectionActive != performanceCollectionActive){
         advancePerformanceCaptureEpoch();
         if(m_performanceCollectionActive)
@@ -519,11 +566,16 @@ void GpuTimingRecorder::syncActiveState(const u64 subscriptionIdentityLimit)noex
     }
     m_performanceCollectionActive = performanceCollectionActive;
     m_accumulatorsActive = m_performanceCollectionActive || !m_feedbackScopeDemands.empty();
+    m_collectionActiveAtomic.store(m_accumulatorsActive, MemoryOrder::relaxed);
     for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it){
         GpuTimingAccumulator& accumulator = *it.value();
         if(accumulator.setCaptureEnabled(m_performanceCollectionActive || feedbackScopeDemandedLocked(it.key()), subscriptionIdentityLimit))
             m_pendingAttributionRetirements = true;
     }
+    m_syncedActiveStateValid = true;
+    m_syncedPerformanceCollectionActive = performanceCollectionActive;
+    m_syncedFeedbackDemandGeneration = m_feedbackDemandGeneration;
+    m_syncedSubscriptionIdentityLimit = subscriptionIdentityLimit;
 }
 
 void GpuTimingRecorder::syncActiveState()noexcept{

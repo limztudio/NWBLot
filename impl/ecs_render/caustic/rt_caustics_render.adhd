@@ -52,11 +52,6 @@ u32 ComputeCausticSwDispatchGroups(in CausticPhotonBudget photonBudget, in u32 g
     return DivideUp(photonBudget.photonsPerFrame, groupSize);
 }
 
-u32 ComputeCausticHwDispatchHeight(in CausticPhotonBudget photonBudget, in u32 temporalPhaseCount){
-    assert(temporalPhaseCount != 0u);
-    return photonBudget.gridSide / temporalPhaseCount;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -175,7 +170,10 @@ CausticPhotonPushConstants MakeCausticPhotonPushConstants(
         targets.bindless.slotsBufferDescriptor.slot(),
         state.sceneBvh.m_rayTraceMaterialContextSlotsHeapHandle.slot(),
         targets.bindless.causticAccumulatorStorage.slot(),
-        temporalPhaseCount
+        temporalPhaseCount,
+        VectorSingle(state.sceneBvh.m_sceneWorldBoundsMin),
+        VectorSingle(state.sceneBvh.m_sceneWorldBoundsMax),
+        state.sceneBvh.m_sceneWorldBoundsFlags
     );
 }
 
@@ -357,13 +355,10 @@ b8 RendererRayTracingSystem::renderHwCaustics(mut CommandList commandList, in Me
         return false;
     }
     const b8 csg = this.m_lightSpaceShadow.m_csg.snapshot.hasCsg;
-    RayTracingPipelineHandle pipeline = this.m_rayTracingState.caustics.m_hwCausticPipeline;
+    ComputePipelineHandle pipeline = this.m_rayTracingState.caustics.m_hwCausticPipeline;
     if(csg)
         pipeline = this.m_rayTracingState.caustics.m_hwCausticCsgPipeline;
-    RayTracingShaderTableHandle shaderTable = this.m_rayTracingState.caustics.m_hwCausticShaderTable;
-    if(csg)
-        shaderTable = this.m_rayTracingState.caustics.m_hwCausticCsgShaderTable;
-    if(!pipeline.valid() || !shaderTable.valid() || !this.m_rayTracingState.sceneBvh.m_rayTraceMaterialContextSlotsHeapHandle.valid() || !this.causticResolveResourcesReady(targets))
+    if(!pipeline.valid() || !this.m_rayTracingState.sceneBvh.m_rayTraceMaterialContextSlotsHeapHandle.valid() || !this.causticResolveResourcesReady(targets))
         return false;
     const u32 temporalPhaseCount = s_CausticTemporalPhaseCount;
     const CausticPhotonBudget photonBudget = MakeCausticPhotonBudget(this.m_causticQualitySettings, s_CausticHwPhotonGridSide, temporalPhaseCount);
@@ -379,15 +374,12 @@ b8 RendererRayTracingSystem::renderHwCaustics(mut CommandList commandList, in Me
         cast<u32>(this.m_graphics.getFrameIndex()),
         temporalPhaseCount
     );
-    RayTracingState rayTracingPassState;
-    rayTracingPassState.setShaderTable(shaderTable.deref());
-    commandList.setRayTracingState(rayTracingPassState);
-    heap.bindRayTracing(commandList, pipeline.deref(), this.m_rayTracingState.sceneBvh.m_tlasHeapHandle);
+    ComputeState computeState;
+    computeState.setPipeline(pipeline.deref());
+    commandList.setComputeState(computeState);
+    heap.bindCompute(commandList, pipeline.deref(), this.m_rayTracingState.sceneBvh.m_tlasHeapHandle);
     commandList.setPushConstants(pushConstants);
-
-    RayTracingDispatchRaysArguments dispatchArgs;
-    dispatchArgs.setDimensions(photonBudget.gridSide, ComputeCausticHwDispatchHeight(photonBudget, temporalPhaseCount), 1u);
-    commandList.dispatchRays(dispatchArgs);
+    commandList.dispatch(ComputeCausticSwDispatchGroups(photonBudget, s_ShaderCausticHwGroupSize), 1u, 1u);
     FinishCausticPhotonTiming(commandList, causticPhotonTiming, localTiming);
     LogCausticProducerDispatchIfNeeded("hardware", photonBudget, temporalPhaseCount, this.m_rayTracingState.caustics.m_causticLightCount,
         this.m_rayTracingState.caustics.m_causticRefractiveInstanceCount, this.m_rayTracingState.caustics.m_hwCausticDispatchLogged);

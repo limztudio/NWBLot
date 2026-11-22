@@ -74,7 +74,7 @@ class EditCaretGeometry{
             return this.m_stopTable.deref().lines;
         return this.m_emptyLines;
     }
-    public SharedEditCaretStopTable sharedStopTable()const{ return this.m_stopTable; }
+    public in SharedEditCaretStopTable sharedStopTable()const{ return this.m_stopTable; }
     public EditTextMode textMode()const{ return this.m_mode; }
     public b8 ready()const{ return this.m_ready; }
 }

@@ -326,6 +326,14 @@ void CommandList::setEnableUavBarriersForBuffer(Buffer* buffer, b8 enableBarrier
     m_stateTracker.setEnableUavBarriersForBuffer(*buffer, enableBarriers);
 }
 
+void CommandList::setEnableAutomaticBarriers(const b8 enable){
+    if(!validateCommandRecordingScope(FOUNDATION_TEXT("set automatic-barrier policy")))
+        return;
+    m_enableAutomaticBarriers = enable;
+    if(enable && !m_renderPassActive && (!m_pendingImageBarriers.empty() || !m_pendingBufferBarriers.empty()))
+        commitBarriers();
+}
+
 b8 CommandList::resolveTrackedTextureSubresources(Texture* const texture, TextureSubresourceSet subresources, const ResourceStates::Mask stateBits, const TStringView operationName, TextureSubresourceSet& outResolvedSubresources){
     if(!texture)
         return false;

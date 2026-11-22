@@ -92,6 +92,49 @@ class TextLayout{
         return TextLayoutStatus::Success;
     }
 
+    [cpp_unwind]
+    public TextLayoutStatus shapeIntoDirect(in ShapeRequest request, mut TextShaper shaper){
+        const TextLayoutStatus validation = ValidateTextRequest(request, true);
+        if(validation != TextLayoutStatus::Success)
+            return validation;
+        this.m_text.assign(request.text);
+        this.m_glyphs.clear();
+        this.m_clusters.clear();
+        this.m_lines.clear();
+        this.m_measure = Point();
+        this.m_inkBounds = Rect();
+        this.m_fontSize = request.fontSize;
+        this.m_direction = request.direction;
+        this.m_glyphs.reserve(request.text.size());
+        this.m_clusters.reserve(request.text.size());
+        this.m_lines.reserve(1u);
+        b8 hasInk = false;
+        VectorDouble inkBounds = VectorDoubleZero();
+        usize byteBegin = 0u;
+        ShapedRun run;
+        while(true){
+            usize byteEnd = byteBegin;
+            usize breakEnd = byteBegin;
+            ResolveNextTextLineRange(request.text, byteBegin, byteEnd, breakEnd);
+            const ShapeRequest lineRequest = MakeTextLineShapeRequest(request, byteBegin, byteEnd);
+            const TextLayoutStatus shapeStatus = shaper.shapeInto(lineRequest, run);
+            if(shapeStatus != TextLayoutStatus::Success)
+                return shapeStatus;
+            const TextLayoutStatus lineStatus = PlaceShapedLineInto<SharedFontFace>(
+                byteBegin, byteEnd, breakEnd, run.metrics, Span<ShapedGlyph>(run.glyphs),
+                lineRequest.text, request.direction, this.m_glyphs, this.m_clusters, this.m_lines,
+                this.m_measure, inkBounds, hasInk
+            );
+            if(lineStatus != TextLayoutStatus::Success)
+                return lineStatus;
+            if(breakEnd == byteEnd)
+                break;
+            byteBegin = breakEnd;
+        }
+        this.m_inkBounds = StoreTextLayoutInkBounds(inkBounds);
+        return TextLayoutStatus::Success;
+    }
+
     [cpp_unwind, owner_result]
     public Expected<TextLayout, TextLayoutStatus> shape(in ShapeRequest request, mut ITextShaper shaper)const{
         TextLayout result;
@@ -114,7 +157,10 @@ class TextLayoutBuilder : NoCopy{
     [cpp_unwind, owner_result]
     public Expected<TextLayout, TextLayoutStatus> layout(in ShapeRequest request){
         TextLayout target;
-        return target.shape(request, this.m_shaper);
+        const TextLayoutStatus status = target.shapeInto(request, this.m_shaper);
+        if(status != TextLayoutStatus::Success)
+            return MakeUnexpected(status);
+        return target;
     }
 }
 

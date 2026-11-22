@@ -11,6 +11,7 @@
 
 #include "binding_slots.h"
 #include "constants.h"
+#include "../bvh/constants.h"
 #include "../raytrace/constants.h"
 #include "shadow_heap_resources.slangi"
 
@@ -46,8 +47,8 @@ half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, c
     ray.TMin = tMin;
     ray.TMax = tEnd;
 
-    RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
-    query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, NWB_RT_SHADOW_BASE_INSTANCE_MASK, ray);
+    RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
+    query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, NWB_RT_SHADOW_OPAQUE_INSTANCE_MASK, ray);
     while(query.Proceed());
 
     return (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? half3(0.0h, 0.0h, 0.0h) : half3(1.0h, 1.0h, 1.0h);

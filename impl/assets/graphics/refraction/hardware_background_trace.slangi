@@ -61,7 +61,8 @@ struct NwbRefractionHardwareBackgroundTrace{
                 return true;
             }
             const float3 backgroundPosition = origin + outgoingDirection * backgroundGeometry.distance;
-            const uint backgroundFlags = nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[backgroundGeometry.instance].flags;
+            const NwbRtInstanceMaterial backgroundMaterial = nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[backgroundGeometry.instance];
+            const uint backgroundFlags = backgroundMaterial.flags;
             if((backgroundFlags & NWB_REFRACTION_NON_OPAQUE_INSTANCE_MATERIAL_FLAGS) == 0u){
                 half3 radiance;
                 nwbRefractionCount(NWB_REFRACTION_COUNTER_cachedHitAttempts);
@@ -73,7 +74,6 @@ struct NwbRefractionHardwareBackgroundTrace{
                 nwbRefractionCount(NWB_REFRACTION_COUNTER_cachedHitMisses);
                 nwbRefractionCount(NWB_REFRACTION_COUNTER_shadedOpaqueReturns);
             }
-            const NwbRtInstanceMaterial backgroundMaterial = nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[backgroundGeometry.instance];
             const NwbMeshSurface backgroundSurface = nwbRefractionEvaluateGeometrySurface(backgroundMaterial, backgroundPosition, outgoingDirection, backgroundGeometry);
 #else
             RayDesc backgroundRay;
@@ -93,7 +93,8 @@ struct NwbRefractionHardwareBackgroundTrace{
             const uint backgroundInstance = backgroundQuery.CommittedInstanceID();
             const float backgroundDistance = backgroundQuery.CommittedRayT();
             const float3 backgroundPosition = origin + outgoingDirection * backgroundDistance;
-            const uint backgroundFlags = nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[backgroundInstance].flags;
+            const NwbRtInstanceMaterial backgroundMaterial = nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[backgroundInstance];
+            const uint backgroundFlags = backgroundMaterial.flags;
             if((backgroundFlags & NWB_REFRACTION_NON_OPAQUE_INSTANCE_MATERIAL_FLAGS) == 0u){
                 half3 radiance;
                 nwbRefractionCount(NWB_REFRACTION_COUNTER_cachedHitAttempts);
@@ -105,7 +106,6 @@ struct NwbRefractionHardwareBackgroundTrace{
                 nwbRefractionCount(NWB_REFRACTION_COUNTER_cachedHitMisses);
                 nwbRefractionCount(NWB_REFRACTION_COUNTER_shadedOpaqueReturns);
             }
-            const NwbRtInstanceMaterial backgroundMaterial = nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[backgroundInstance];
             const NwbMeshSurface backgroundSurface = nwbRefractionEvaluateTriangleSurface(
                 backgroundMaterial,
                 backgroundPosition,

@@ -154,6 +154,350 @@ class PointerSource{
     public b8 inert;
 }
 
+class PointerSourceKey{
+    public PointerSourceKey(){
+        this.device = 0u;
+        this.control = 0u;
+        this.intent = PointerIntent::Activate;
+    }
+
+    public PointerSourceKey(in InputSource inSource, in PointerIntent inIntent){
+        this.device = inSource.device;
+        this.control = inSource.control;
+        this.intent = inIntent;
+    }
+
+    public b8 operator==(in PointerSourceKey rhs)const{
+        return this.device == rhs.device && this.control == rhs.control && this.intent == rhs.intent;
+    }
+
+    public usize hash()const{
+        usize seed = HashValue(this.device);
+        seed = HashCombineValue(seed, this.control);
+        return HashCombineValue(seed, cast<u8>(this.intent));
+    }
+
+    public u64 device;
+    public u64 control;
+    public PointerIntent intent;
+}
+
+class PointerSourceTable : NoCopy{
+    public void reserve(in usize capacity){
+        this.m_entries.reserve(capacity);
+    }
+
+    public b8 empty()const{ return this.m_entries.empty(); }
+    public usize size()const{ return this.m_entries.size(); }
+    public Span<PointerSource> span()const{ return Span<PointerSource>(this.m_entries); }
+    public in PointerSource at(in usize index)const{ return this.m_entries[index]; }
+
+    public Expected<usize> findIndex(in InputSource source, in PointerIntent intent)const{
+        if(this.m_indexActive){
+            const auto found = this.m_index.find(PointerSourceKey(source, intent));
+            if(found == this.m_index.end())
+                return MakeUnexpected(Failure());
+            return cast<usize>(found.value());
+        }
+        for(usize index = 0u; index < this.m_entries.size(); ++index){
+            if(this.m_entries[index].source == source && this.m_entries[index].intent == intent)
+                return index;
+        }
+        return MakeUnexpected(Failure());
+    }
+
+    public b8 hasInertSource(in InputSource source)const{
+        if(this.m_indexActive){
+            const auto activateIt = this.m_index.find(PointerSourceKey(source, PointerIntent::Activate));
+            if(activateIt != this.m_index.end() && this.m_entries[activateIt.value()].inert)
+                return true;
+            const auto contextIt = this.m_index.find(PointerSourceKey(source, PointerIntent::ContextMenu));
+            return contextIt != this.m_index.end() && this.m_entries[contextIt.value()].inert;
+        }
+        for(in PointerSource held : this.m_entries){
+            if(held.source == source && held.inert)
+                return true;
+        }
+        return false;
+    }
+
+    public b8 hasAnyConsumed()const{
+        for(in PointerSource held : this.m_entries){
+            if(held.consumed)
+                return true;
+        }
+        return false;
+    }
+
+    public b8 hasSource(in InputSource source)const{
+        if(this.m_indexActive){
+            return this.m_index.find(PointerSourceKey(source, PointerIntent::Activate)) != this.m_index.end()
+                || this.m_index.find(PointerSourceKey(source, PointerIntent::ContextMenu)) != this.m_index.end();
+        }
+        for(in PointerSource held : this.m_entries){
+            if(held.source == source)
+                return true;
+        }
+        return false;
+    }
+
+    public void querySourceFlags(in InputSource source, mut b8 outAnyInert, mut b8 outAnyConsumed)const{
+        outAnyInert = false;
+        outAnyConsumed = false;
+        if(this.m_indexActive){
+            const auto activateIt = this.m_index.find(PointerSourceKey(source, PointerIntent::Activate));
+            if(activateIt != this.m_index.end()){
+                in PointerSource entry = this.m_entries[activateIt.value()];
+                outAnyInert = entry.inert;
+                outAnyConsumed = entry.consumed;
+            }
+            const auto contextIt = this.m_index.find(PointerSourceKey(source, PointerIntent::ContextMenu));
+            if(contextIt != this.m_index.end()){
+                in PointerSource entry = this.m_entries[contextIt.value()];
+                outAnyInert = outAnyInert || entry.inert;
+                outAnyConsumed = outAnyConsumed || entry.consumed;
+            }
+            return;
+        }
+        u32 matchedCount = 0u;
+        for(in PointerSource held : this.m_entries){
+            if(held.source != source)
+                continue;
+            if(held.inert)
+                outAnyInert = true;
+            if(held.consumed)
+                outAnyConsumed = true;
+            ++matchedCount;
+            if(matchedCount == 2u || (outAnyInert && outAnyConsumed))
+                break;
+        }
+    }
+
+    [cpp_unwind]
+    public void pushBack(in PointerSource entry){
+        const usize newIndex = this.m_entries.size();
+        this.m_entries.push_back(entry);
+        if(this.m_entries.size() > s_InputSourceReserve){
+            if(!this.m_indexActive){
+                this.m_index.reserve(s_InputMaxSources);
+                for(usize i = 0u; i < this.m_entries.size(); ++i){
+                    in PointerSource item = this.m_entries[i];
+                    this.m_index.try_emplace(PointerSourceKey(item.source, item.intent), cast<u32>(i));
+                }
+                this.m_indexActive = true;
+            }
+            else
+                this.m_index.try_emplace(PointerSourceKey(entry.source, entry.intent), cast<u32>(newIndex));
+        }
+    }
+
+    public void eraseAt(in usize index){
+        if(index >= this.m_entries.size())
+            return;
+        if(this.m_indexActive)
+            this.m_index.erase(PointerSourceKey(this.m_entries[index].source, this.m_entries[index].intent));
+        for(usize moveIndex = index + 1u; moveIndex < this.m_entries.size(); ++moveIndex){
+            this.m_entries[moveIndex - 1u] = this.m_entries[moveIndex];
+            if(this.m_indexActive){
+                const auto it = this.m_index.find(PointerSourceKey(this.m_entries[moveIndex - 1u].source, this.m_entries[moveIndex - 1u].intent));
+                if(it != this.m_index.end())
+                    it.value() = cast<u32>(moveIndex - 1u);
+            }
+        }
+        this.m_entries.pop_back();
+        if(this.m_indexActive && this.m_entries.size() <= s_InputSourceReserve){
+            this.m_index.clear();
+            this.m_indexActive = false;
+        }
+    }
+
+    public void retainSourceNotEqual(in InputSource source){
+        usize kept = 0u;
+        for(usize index = 0u; index < this.m_entries.size(); ++index){
+            in PointerSource entry = this.m_entries[index];
+            if(entry.source != source){
+                if(kept != index)
+                    this.m_entries[kept] = entry;
+                if(this.m_indexActive){
+                    const auto it = this.m_index.find(PointerSourceKey(entry.source, entry.intent));
+                    if(it != this.m_index.end())
+                        it.value() = cast<u32>(kept);
+                }
+                ++kept;
+            }
+            else if(this.m_indexActive)
+                this.m_index.erase(PointerSourceKey(entry.source, entry.intent));
+        }
+        this.m_entries.resize(kept);
+        if(this.m_indexActive && this.m_entries.size() <= s_InputSourceReserve){
+            this.m_index.clear();
+            this.m_indexActive = false;
+        }
+    }
+
+    public void retainDeviceNotEqual(in u64 device){
+        usize kept = 0u;
+        for(usize index = 0u; index < this.m_entries.size(); ++index){
+            in PointerSource entry = this.m_entries[index];
+            if(entry.source.device != device){
+                if(kept != index)
+                    this.m_entries[kept] = entry;
+                if(this.m_indexActive){
+                    const auto it = this.m_index.find(PointerSourceKey(entry.source, entry.intent));
+                    if(it != this.m_index.end())
+                        it.value() = cast<u32>(kept);
+                }
+                ++kept;
+            }
+            else if(this.m_indexActive)
+                this.m_index.erase(PointerSourceKey(entry.source, entry.intent));
+        }
+        this.m_entries.resize(kept);
+        if(this.m_indexActive && this.m_entries.size() <= s_InputSourceReserve){
+            this.m_index.clear();
+            this.m_indexActive = false;
+        }
+    }
+
+    private Vector<PointerSource> m_entries;
+    private HashMap<PointerSourceKey, u32> m_index;
+    private b8 m_indexActive = false;
+}
+
+class PointerBindingTable : NoCopy{
+    public void reserve(in usize capacity){
+        this.m_entries.reserve(capacity);
+    }
+
+    public usize size()const{ return this.m_entries.size(); }
+    public in PointerBinding at(in usize index)const{ return this.m_entries[index]; }
+
+    public void findContactAndHeld(in InputSource source, in PointerIntent intent, in b8 needHeld, mut usize outContactIndex, mut usize outHeldIndex)const{
+        outContactIndex = this.m_entries.size();
+        outHeldIndex = this.m_entries.size();
+        if(this.m_indexActive){
+            const auto heldIt = this.m_index.find(PointerSourceKey(source, intent));
+            if(heldIt != this.m_index.end())
+                outHeldIndex = cast<usize>(heldIt.value());
+            PointerIntent otherIntent = PointerIntent::ContextMenu;
+            if(intent == PointerIntent::ContextMenu)
+                otherIntent = PointerIntent::Activate;
+            const auto otherIt = this.m_index.find(PointerSourceKey(source, otherIntent));
+            if(outHeldIndex != this.m_entries.size()){
+                outContactIndex = outHeldIndex;
+                if(otherIt != this.m_index.end() && cast<usize>(otherIt.value()) < outContactIndex)
+                    outContactIndex = cast<usize>(otherIt.value());
+            }
+            else if(otherIt != this.m_index.end())
+                outContactIndex = cast<usize>(otherIt.value());
+            return;
+        }
+        for(usize index = 0u; index < this.m_entries.size(); ++index){
+            if(this.m_entries[index].source == source){
+                if(outContactIndex == this.m_entries.size()){
+                    outContactIndex = index;
+                    if(!needHeld)
+                        break;
+                }
+                if(this.m_entries[index].intent == intent && outHeldIndex == this.m_entries.size()){
+                    outHeldIndex = index;
+                    break;
+                }
+            }
+        }
+    }
+
+    [cpp_unwind]
+    public void pushBack(in PointerBinding entry){
+        const usize newIndex = this.m_entries.size();
+        this.m_entries.push_back(entry);
+        if(this.m_entries.size() > s_InputSourceReserve){
+            if(!this.m_indexActive){
+                this.m_index.reserve(s_InputMaxSources);
+                for(usize i = 0u; i < this.m_entries.size(); ++i){
+                    in PointerBinding item = this.m_entries[i];
+                    this.m_index.try_emplace(PointerSourceKey(item.source, item.intent), cast<u32>(i));
+                }
+                this.m_indexActive = true;
+            }
+            else
+                this.m_index.try_emplace(PointerSourceKey(entry.source, entry.intent), cast<u32>(newIndex));
+        }
+    }
+
+    public void eraseAt(in usize index){
+        if(index >= this.m_entries.size())
+            return;
+        if(this.m_indexActive)
+            this.m_index.erase(PointerSourceKey(this.m_entries[index].source, this.m_entries[index].intent));
+        for(usize moveIndex = index + 1u; moveIndex < this.m_entries.size(); ++moveIndex){
+            this.m_entries[moveIndex - 1u] = this.m_entries[moveIndex];
+            if(this.m_indexActive){
+                const auto it = this.m_index.find(PointerSourceKey(this.m_entries[moveIndex - 1u].source, this.m_entries[moveIndex - 1u].intent));
+                if(it != this.m_index.end())
+                    it.value() = cast<u32>(moveIndex - 1u);
+            }
+        }
+        this.m_entries.pop_back();
+        if(this.m_indexActive && this.m_entries.size() <= s_InputSourceReserve){
+            this.m_index.clear();
+            this.m_indexActive = false;
+        }
+    }
+
+    public void retainSourceNotEqual(in InputSource source){
+        usize kept = 0u;
+        for(usize index = 0u; index < this.m_entries.size(); ++index){
+            in PointerBinding entry = this.m_entries[index];
+            if(entry.source != source){
+                if(kept != index)
+                    this.m_entries[kept] = entry;
+                if(this.m_indexActive){
+                    const auto it = this.m_index.find(PointerSourceKey(entry.source, entry.intent));
+                    if(it != this.m_index.end())
+                        it.value() = cast<u32>(kept);
+                }
+                ++kept;
+            }
+            else if(this.m_indexActive)
+                this.m_index.erase(PointerSourceKey(entry.source, entry.intent));
+        }
+        this.m_entries.resize(kept);
+        if(this.m_indexActive && this.m_entries.size() <= s_InputSourceReserve){
+            this.m_index.clear();
+            this.m_indexActive = false;
+        }
+    }
+
+    public void retainDeviceNotEqual(in u64 device){
+        usize kept = 0u;
+        for(usize index = 0u; index < this.m_entries.size(); ++index){
+            in PointerBinding entry = this.m_entries[index];
+            if(entry.source.device != device){
+                if(kept != index)
+                    this.m_entries[kept] = entry;
+                if(this.m_indexActive){
+                    const auto it = this.m_index.find(PointerSourceKey(entry.source, entry.intent));
+                    if(it != this.m_index.end())
+                        it.value() = cast<u32>(kept);
+                }
+                ++kept;
+            }
+            else if(this.m_indexActive)
+                this.m_index.erase(PointerSourceKey(entry.source, entry.intent));
+        }
+        this.m_entries.resize(kept);
+        if(this.m_indexActive && this.m_entries.size() <= s_InputSourceReserve){
+            this.m_index.clear();
+            this.m_indexActive = false;
+        }
+    }
+
+    private Vector<PointerBinding> m_entries;
+    private HashMap<PointerSourceKey, u32> m_index;
+    private b8 m_indexActive = false;
+}
+
 class ContextOwnedTarget{
     public HitTarget target;
     public WidgetRoot root;

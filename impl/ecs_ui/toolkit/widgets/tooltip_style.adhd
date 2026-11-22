@@ -10,10 +10,11 @@
 
 const f32 s_TooltipDefaultDelaySeconds = 0.5f;
 const f32 s_TooltipDefaultMaximumWidth = 320.0f;
+const Name s_TooltipNormalRegionName = "tooltip.normal";
 
 class TooltipStyle{
-    public Name background = Name("tooltip.normal");
-    public Name fallback = Name("panel.normal");
+    public Name background = s_TooltipNormalRegionName;
+    public Name fallback = s_StylePanelNormalRegionName;
     public Insets padding = Insets(s_StyleSpacingMedium, s_StyleFieldPaddingY, s_StyleSpacingMedium, s_StyleFieldPaddingY);
     public Color text;
 }

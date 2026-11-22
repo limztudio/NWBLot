@@ -238,7 +238,7 @@ VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask states)noexcept{
     return flags;
 }
 
-VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states, b8 rayTracingStageAvailable)noexcept{
+VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states, b8 rayTracingStageAvailable, b8 computeOnlyQueue)noexcept{
     VkPipelineStageFlags2 flags = 0;
 
     if(states & ResourceStates::VertexBuffer)
@@ -246,9 +246,13 @@ VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states, b8 ra
     if(states & ResourceStates::IndexBuffer)
         flags |= VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT;
     if(states & (ResourceStates::ConstantBuffer | ResourceStates::ShaderResource | ResourceStates::UnorderedAccess)){
-        flags |= VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-        if(rayTracingStageAvailable)
-            flags |= VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
+        if(computeOnlyQueue)
+            flags |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+        else{
+            flags |= VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+            if(rayTracingStageAvailable)
+                flags |= VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
+        }
     }
     if(states & ResourceStates::IndirectArgument)
         flags |= VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;

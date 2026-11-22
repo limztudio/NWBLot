@@ -27,6 +27,14 @@ public:
 
 public:
     virtual b8 readAssetBinary(const Name& virtualPath, AssetBytes& outBinary)const = 0;
+    [[nodiscard]] virtual b8 visitAssetBinary(const Name& virtualPath, AssetArena& fallbackArena, void* context, b8 (*visitor)(void* context, Span<const u8> bytes))const{
+        if(!visitor)
+            return false;
+        AssetBytes binary{fallbackArena};
+        if(!readAssetBinary(virtualPath, binary))
+            return false;
+        return visitor(context, { binary.data(), binary.size() });
+    }
 };
 
 

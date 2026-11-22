@@ -46,6 +46,7 @@ static const uint NWB_REFLECTION_SCREEN_WORK_BYPASS_SHIFT = 24u;
 groupshared uint g_NwbReflectionCandidateMasks[NWB_REFLECTION_CANDIDATE_MASK_COUNT];
 groupshared uint g_NwbReflectionCandidateBase;
 groupshared uint g_NwbReflectionObservations[NWB_REFLECTION_OBSERVATION_SURFACE_COUNT];
+groupshared uint g_NwbReflectionFeedbackTiles[NWB_REFLECTION_OBSERVATION_SURFACE_COUNT];
 groupshared uint g_NwbReflectionScreenWork;
 
 struct NwbReflectionFeedbackTile{
@@ -59,29 +60,28 @@ struct NwbReflectionFeedbackTile{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NwbReflectionFeedbackTile nwbReflectionLoadFeedbackTile(const uint2 pixel, const bool glass){
+NwbReflectionFeedbackTile nwbReflectionUnpackFeedbackTile(const uint packed){
     NwbReflectionFeedbackTile tile = (NwbReflectionFeedbackTile)0;
-    if(!nwbReflectionFeedbackWriting() || (g_NwbReflectionParameters.feedbackFlags & NWB_REFLECTION_FEEDBACK_PREVIOUS_VALID) == 0u)
-        return tile;
-    const uint tilesX = (g_NwbReflectionParameters.dimensionsAndRoute.x + NWB_REFLECTION_FEEDBACK_GROUP_SIZE - 1u) / NWB_REFLECTION_FEEDBACK_GROUP_SIZE;
-    const uint tilesY = (g_NwbReflectionParameters.dimensionsAndRoute.y + NWB_REFLECTION_FEEDBACK_GROUP_SIZE - 1u) / NWB_REFLECTION_FEEDBACK_GROUP_SIZE;
-    const uint4 header = nwbHeapRawBuffer(g_NwbReflectionParameters.feedbackReadSlot).Load4(0u);
-    if((header.w & NWB_REFLECTION_FEEDBACK_HEADER_VALID) == 0u || header.z != tilesX * tilesY || header.y != g_NwbReflectionParameters.feedbackProbeIndex - 1u)
-        return tile;
-    const uint tileIndex = (pixel.y / NWB_REFLECTION_FEEDBACK_GROUP_SIZE) * tilesX + pixel.x / NWB_REFLECTION_FEEDBACK_GROUP_SIZE;
-    const uint entryIndex = tileIndex * NWB_REFLECTION_FEEDBACK_SURFACE_COUNT + (glass ? 1u : 0u);
-    const uint entry = nwbHeapRawBuffer(g_NwbReflectionParameters.feedbackReadSlot).Load(NWB_REFLECTION_FEEDBACK_HEADER_BYTES + entryIndex * NWB_REFLECTION_FEEDBACK_ENTRY_BYTES);
-    if(entry > NWB_REFLECTION_FEEDBACK_DORMANT)
-        return tile;
-    tile.state = entry;
-    tile.previousValid = true;
-    const uint budget = min(g_NwbReflectionParameters.maxHardwareRays, g_NwbReflectionParameters.queueCapacity);
-    if(entry == NWB_REFLECTION_FEEDBACK_DORMANT && header.x <= budget){
-        const uint phase = nwbReflectionSamplingHash(entryIndex) & (NWB_REFLECTION_FEEDBACK_PROBE_PERIOD - 1u);
-        tile.probe = (g_NwbReflectionParameters.feedbackProbeIndex & (NWB_REFLECTION_FEEDBACK_PROBE_PERIOD - 1u)) == phase;
-        tile.bypass = !tile.probe;
-    }
+    tile.state = packed & 0xffu;
+    tile.previousValid = (packed & 0x100u) != 0u;
+    tile.bypass = (packed & 0x200u) != 0u;
+    tile.probe = (packed & 0x400u) != 0u;
     return tile;
+}
+
+uint nwbReflectionBuildFeedbackTileWord(const uint entry, const uint entryIndex, const uint headerX, const uint budget){
+    if(entry > NWB_REFLECTION_FEEDBACK_DORMANT)
+        return 0u;
+    uint packed = (entry & 0xffu) | 0x100u;
+    if(entry == NWB_REFLECTION_FEEDBACK_DORMANT && headerX <= budget){
+        const uint phase = nwbReflectionSamplingHash(entryIndex) & (NWB_REFLECTION_FEEDBACK_PROBE_PERIOD - 1u);
+        const bool probe = (g_NwbReflectionParameters.feedbackProbeIndex & (NWB_REFLECTION_FEEDBACK_PROBE_PERIOD - 1u)) == phase;
+        if(probe)
+            packed |= 0x400u;
+        else
+            packed |= 0x200u;
+    }
+    return packed;
 }
 
 uint nwbReflectionNextFeedbackState(const NwbReflectionFeedbackTile tile, const uint observations){
@@ -156,11 +156,12 @@ bool nwbReflectionClassifySurface(const uint2 pixel, const bool glass, const Nwb
 
 
 [numthreads(NWB_REFLECTION_CLASSIFY_GROUP_SIZE, NWB_REFLECTION_CLASSIFY_GROUP_SIZE, 1)]
-void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex){
+void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_GroupID, uint groupIndex : SV_GroupIndex){
     const uint2 pixel = dispatchThreadId.xy;
     const bool hardware = g_NwbReflectionParameters.dimensionsAndRoute.w != 0u && (g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_HARDWARE || g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_HYBRID);
     const bool diagnostics = g_NwbReflectionParameters.diagnosticsEnabled != 0u;
     const bool feedbackWrites = nwbReflectionFeedbackWriting();
+    const bool feedbackReadEnabled = feedbackWrites && (g_NwbReflectionParameters.feedbackFlags & NWB_REFLECTION_FEEDBACK_PREVIOUS_VALID) != 0u;
     const bool observe = diagnostics || feedbackWrites;
     const bool sharedWork = hardware || observe;
     if(hardware && groupIndex < NWB_REFLECTION_CANDIDATE_MASK_COUNT)
@@ -169,17 +170,38 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint groupIndex : SV_Gro
         g_NwbReflectionObservations[groupIndex] = 0u;
     if(diagnostics && groupIndex == 0u)
         g_NwbReflectionScreenWork = 0u;
+    NwbReflectionFeedbackTile opaqueTile = (NwbReflectionFeedbackTile)0;
+    NwbReflectionFeedbackTile glassTile = (NwbReflectionFeedbackTile)0;
+    if(feedbackReadEnabled){
+        if(groupIndex == 0u){
+            g_NwbReflectionFeedbackTiles[0] = 0u;
+            g_NwbReflectionFeedbackTiles[1] = 0u;
+            const uint tilesX = (g_NwbReflectionParameters.dimensionsAndRoute.x + NWB_REFLECTION_FEEDBACK_GROUP_SIZE - 1u) / NWB_REFLECTION_FEEDBACK_GROUP_SIZE;
+            const uint tilesY = (g_NwbReflectionParameters.dimensionsAndRoute.y + NWB_REFLECTION_FEEDBACK_GROUP_SIZE - 1u) / NWB_REFLECTION_FEEDBACK_GROUP_SIZE;
+            if(groupId.x < tilesX && groupId.y < tilesY){
+                const uint4 header = nwbHeapRawBufferUniform(g_NwbReflectionParameters.feedbackReadSlot).Load4(0u);
+                if((header.w & NWB_REFLECTION_FEEDBACK_HEADER_VALID) != 0u && header.z == tilesX * tilesY && header.y == g_NwbReflectionParameters.feedbackProbeIndex - 1u){
+                    const uint tileIndex = groupId.y * tilesX + groupId.x;
+                    const uint baseEntryIndex = tileIndex * NWB_REFLECTION_FEEDBACK_SURFACE_COUNT;
+                    const uint byteOffset = NWB_REFLECTION_FEEDBACK_HEADER_BYTES + baseEntryIndex * NWB_REFLECTION_FEEDBACK_ENTRY_BYTES;
+                    const uint2 entries = nwbHeapRawBufferUniform(g_NwbReflectionParameters.feedbackReadSlot).Load2(byteOffset);
+                    const uint budget = min(g_NwbReflectionParameters.maxHardwareRays, g_NwbReflectionParameters.queueCapacity);
+                    g_NwbReflectionFeedbackTiles[0] = nwbReflectionBuildFeedbackTileWord(entries.x, baseEntryIndex, header.x, budget);
+                    g_NwbReflectionFeedbackTiles[1] = nwbReflectionBuildFeedbackTileWord(entries.y, baseEntryIndex + 1u, header.x, budget);
+                }
+            }
+        }
+        GroupMemoryBarrierWithGroupSync();
+        opaqueTile = nwbReflectionUnpackFeedbackTile(g_NwbReflectionFeedbackTiles[0]);
+        glassTile = nwbReflectionUnpackFeedbackTile(g_NwbReflectionFeedbackTiles[1]);
+    }
     bool opaqueCandidate = false;
     bool glassCandidate = false;
     uint opaqueObservations = 0u;
     uint glassObservations = 0u;
     uint opaqueWork = 0u;
     uint glassWork = 0u;
-    NwbReflectionFeedbackTile opaqueTile = (NwbReflectionFeedbackTile)0;
-    NwbReflectionFeedbackTile glassTile = (NwbReflectionFeedbackTile)0;
     if(pixel.x < g_NwbReflectionParameters.dimensionsAndRoute.x && pixel.y < g_NwbReflectionParameters.dimensionsAndRoute.y){
-        opaqueTile = nwbReflectionLoadFeedbackTile(pixel, false);
-        glassTile = nwbReflectionLoadFeedbackTile(pixel, true);
         half4 opaqueResult;
         half4 glassResult;
         opaqueCandidate = nwbReflectionClassifySurface(pixel, false, opaqueTile, opaqueResult, opaqueObservations, opaqueWork);
@@ -189,7 +211,8 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint groupIndex : SV_Gro
     }
 
     if(sharedWork){
-        GroupMemoryBarrierWithGroupSync();
+        if(!feedbackReadEnabled)
+            GroupMemoryBarrierWithGroupSync();
         const uint maskIndex = groupIndex >> NWB_REFLECTION_CANDIDATE_WORD_SHIFT;
         const uint bit = 1u << (groupIndex & NWB_REFLECTION_CANDIDATE_WORD_LANE_MASK);
         if(opaqueCandidate)

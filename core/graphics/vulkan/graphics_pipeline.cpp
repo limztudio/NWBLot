@@ -517,6 +517,24 @@ void CommandList::setGraphicsState(const GraphicsState& state){
         retainResource(state.indirectParams);
 }
 
+void CommandList::setScissorRect(const Rect& rect){
+    constexpr TStringView s_OperationName = FOUNDATION_TEXT("set scissor rect");
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
+        return;
+    if(!m_hasBoundGraphicsState || !m_renderPassActive){
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("graphics state and active render pass are required"));
+        return;
+    }
+    if(!rect.validScissor()){
+        rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("scissor rectangle is invalid"));
+        return;
+    }
+    m_currentGraphicsState.viewport.scissorRects.resize(1u);
+    m_currentGraphicsState.viewport.scissorRects[0u] = rect;
+    const VkRect2D scissor{ { static_cast<int32_t>(rect.minX), static_cast<int32_t>(rect.minY) }, { static_cast<uint32_t>(rect.maxX - rect.minX), static_cast<uint32_t>(rect.maxY - rect.minY) } };
+    m_context.deviceDispatch.vkCmdSetScissor(m_currentCmdBuf->m_cmdBuf, 0u, 1u, &scissor);
+}
+
 void CommandList::draw(const DrawArguments& args){
     constexpr TStringView s_OperationName = FOUNDATION_TEXT("draw");
     if(args.vertexCount == 0 || args.instanceCount == 0)

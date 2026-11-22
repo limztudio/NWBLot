@@ -12,16 +12,22 @@
 
 const f32 s_ComboArrowExtent = 20.0f;
 const f32 s_SearchComboQueryHeight = 36.0f;
+const Name s_ComboNormalRegionName = "combo.normal";
+const Name s_ComboHoverRegionName = "combo.hover";
+const Name s_ComboOpenRegionName = "combo.open";
+const Name s_ComboFocusedRegionName = "combo.focused";
+const Name s_ComboDisabledRegionName = "combo.disabled";
+const Name s_ComboArrowRegionName = "combo.arrow";
 
 class ComboStyle{
-    public Name normal = Name("combo.normal");
-    public Name hover = Name("combo.hover");
-    public Name open = Name("combo.open");
-    public Name focused = Name("combo.focused");
-    public Name disabled = Name("combo.disabled");
-    public Name fallback = Name("button.normal");
-    public Name arrow = Name("combo.arrow");
-    public Name arrowFallback = Name("window.collapse");
+    public Name normal = s_ComboNormalRegionName;
+    public Name hover = s_ComboHoverRegionName;
+    public Name open = s_ComboOpenRegionName;
+    public Name focused = s_ComboFocusedRegionName;
+    public Name disabled = s_ComboDisabledRegionName;
+    public Name fallback = s_StyleButtonNormalRegionName;
+    public Name arrow = s_ComboArrowRegionName;
+    public Name arrowFallback = s_StyleWindowCollapseRegionName;
     public Insets padding = Insets(s_StyleSpacingMedium, s_StyleFieldPaddingY, s_StyleSpacingMedium, s_StyleFieldPaddingY);
     public f32 arrowExtent = s_ComboArrowExtent;
     public f32 arrowGap = s_StyleSpacingMedium;

@@ -25,8 +25,9 @@ b8 FillMaterialBindEntry(in Path file, in MetascriptDocument document, mut Mater
         return false;
     }
     entry.structs.reserve(document.structCount());
-    if(!document.forEachStruct(lambda[in file, mut entry](in StringView name, in MetascriptValue value) -> b8{
-        return AppendParsedValue<MaterialBindStruct>(entry.structs, entry.parseStruct(file, name, value));
+    in auto fileRef = file;
+    if(!document.forEachStruct(lambda[in fileRef, mut entry](in StringView name, in MetascriptValue value) -> b8{
+        return AppendParsedValue<MaterialBindStruct>(entry.structs, entry.parseStruct(fileRef, name, value));
     }))
         return false;
     SortSequence<MaterialBindStruct>(entry.structs, lambda[](in MaterialBindStruct lhs, in MaterialBindStruct rhs) -> b8{
@@ -37,9 +38,10 @@ b8 FillMaterialBindEntry(in Path file, in MetascriptDocument document, mut Mater
         return false;
     }
     entry.instances.reserve(document.declarationCount());
-    return document.forEachDeclaration(lambda[in file, in document, mut entry](in StringView typeName, in StringView instanceName) -> b8{
-        if(!document.visitVariable(instanceName, lambda[](in MetascriptValue value) -> b8{ return value.isNull(); })){
-            error("Material bind '{}': instance '{}' must not have an initializer or assignments", file, instanceName);
+    in MetascriptDocument documentRef = document;
+    return document.forEachDeclaration(lambda[in fileRef, in documentRef, mut entry](in StringView typeName, in StringView instanceName) -> b8{
+        if(!documentRef.visitVariable(instanceName, lambda[](in MetascriptValue value) -> b8{ return value.isNull(); })){
+            error("Material bind '{}': instance '{}' must not have an initializer or assignments", fileRef, instanceName);
             return false;
         }
         MaterialBindSchemaValidator validator;
@@ -49,8 +51,9 @@ b8 FillMaterialBindEntry(in Path file, in MetascriptDocument document, mut Mater
 
 Expected<MaterialBindEntry> ParseMaterialBindSource(in Path file){
     MaterialBindEntry entry;
-    if(!VisitMetadataDocumentFile(file, s_MaterialBindDiagnosticPrefix, lambda[in file, mut entry](in MetascriptDocument document) -> b8{
-        return FillMaterialBindEntry(file, document, entry);
+    in auto fileRef = file;
+    if(!VisitMetadataDocumentFile(file, s_MaterialBindDiagnosticPrefix, lambda[in fileRef, mut entry](in MetascriptDocument document) -> b8{
+        return FillMaterialBindEntry(fileRef, document, entry);
     }))
         return MakeUnexpected(Failure());
     return entry;

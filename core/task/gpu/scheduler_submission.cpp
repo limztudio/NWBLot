@@ -904,7 +904,6 @@ b8 GpuTaskScheduler::submitPacketBatchWithinSubmissionOperation(
         deviceEntries[entryIndex].numCommandLists = entry.recordedPacket->commandListCount;
         deviceEntries[entryIndex].allowSignalCoalescing =
             (entryIndex + 1u < activeBatchCount)
-            && entry.timingTicketCount == 0u
             && (planAccess.packetRuntimeFlags(entry.packet.index) & GpuCompiledGraph::PacketRuntimeFlag::HasCrossQueueConsumer) == 0u
         ;
         if(entry.waitTokenCount != 0u)

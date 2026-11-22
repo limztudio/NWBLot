@@ -10,7 +10,7 @@
 
 void EmitPaintNineSlice(
     in b8 recording,
-    in Rect clip,
+    in PaintClipEntry clip,
     in UiSkinRegion region,
     in Rect rectangle,
     in Color tint,
@@ -21,7 +21,8 @@ void EmitPaintNineSlice(
     mut Vector<Vertex> vertices,
     mut Vector<u32> indices,
     mut Vector<DrawCommand> commands,
-    mut b8 inOutCommandsOrdered
+    mut b8 inOutCommandsOrdered,
+    mut b8 inOutCommandsStrictlyDescending
 ){
     if(!HasUiRectArea(rectangle))
         return;
@@ -74,7 +75,8 @@ void EmitPaintNineSlice(
                 vertices,
                 indices,
                 commands,
-                inOutCommandsOrdered
+                inOutCommandsOrdered,
+                inOutCommandsStrictlyDescending
             );
         }
     }
@@ -82,7 +84,7 @@ void EmitPaintNineSlice(
 
 void EmitPaintSkinRegion(
     in b8 recording,
-    in Rect clip,
+    in PaintClipEntry clip,
     in UiSkinRegion region,
     in Rect rectangle,
     in Color tint,
@@ -93,7 +95,8 @@ void EmitPaintSkinRegion(
     mut Vector<Vertex> vertices,
     mut Vector<u32> indices,
     mut Vector<DrawCommand> commands,
-    mut b8 inOutCommandsOrdered
+    mut b8 inOutCommandsOrdered,
+    mut b8 inOutCommandsStrictlyDescending
 ){
     if(region.drawMode == UiSkinDrawMode::NineSlice){
         EmitPaintNineSlice(
@@ -109,7 +112,8 @@ void EmitPaintSkinRegion(
             vertices,
             indices,
             commands,
-            inOutCommandsOrdered
+            inOutCommandsOrdered,
+            inOutCommandsStrictlyDescending
         );
     }
     else{
@@ -129,14 +133,15 @@ void EmitPaintSkinRegion(
             vertices,
             indices,
             commands,
-            inOutCommandsOrdered
+            inOutCommandsOrdered,
+            inOutCommandsStrictlyDescending
         );
     }
 }
 
 b8 DrawPaintSkinRegion(
     in b8 recording,
-    in Rect clip,
+    in PaintClipEntry clip,
     in Span<UiSkinRegion> regions,
     in Name regionName,
     in Rect rectangle,
@@ -148,7 +153,8 @@ b8 DrawPaintSkinRegion(
     mut Vector<Vertex> vertices,
     mut Vector<u32> indices,
     mut Vector<DrawCommand> commands,
-    mut b8 inOutCommandsOrdered
+    mut b8 inOutCommandsOrdered,
+    mut b8 inOutCommandsStrictlyDescending
 ){
     assert(recording);
     for(in UiSkinRegion region : regions){
@@ -167,7 +173,8 @@ b8 DrawPaintSkinRegion(
             vertices,
             indices,
             commands,
-            inOutCommandsOrdered
+            inOutCommandsOrdered,
+            inOutCommandsStrictlyDescending
         );
         return true;
     }
@@ -176,7 +183,7 @@ b8 DrawPaintSkinRegion(
 
 b8 DrawPaintSkinRegionIndexed(
     in b8 recording,
-    in Rect clip,
+    in PaintClipEntry clip,
     in Span<UiSkinRegion> regions,
     in HashMap<Name, usize> regionLookup,
     in Name regionName,
@@ -189,7 +196,8 @@ b8 DrawPaintSkinRegionIndexed(
     mut Vector<Vertex> vertices,
     mut Vector<u32> indices,
     mut Vector<DrawCommand> commands,
-    mut b8 inOutCommandsOrdered
+    mut b8 inOutCommandsOrdered,
+    mut b8 inOutCommandsStrictlyDescending
 ){
     assert(recording);
     const auto found = regionLookup.find(regionName);
@@ -208,7 +216,8 @@ b8 DrawPaintSkinRegionIndexed(
         vertices,
         indices,
         commands,
-        inOutCommandsOrdered
+        inOutCommandsOrdered,
+        inOutCommandsStrictlyDescending
     );
     return true;
 }
@@ -252,10 +261,11 @@ void BeginPaintBuilderRecordingCached(
     mut Vector<Vertex> outVertices,
     mut Vector<u32> outIndices,
     mut Vector<DrawCommand> outCommands,
-    mut Vector<Rect> outClips,
+    mut Vector<PaintClipEntry> outClips,
     mut usize outOverlayDepth,
     mut u32 outLayer,
     mut b8 outCommandsOrdered,
+    mut b8 outCommandsStrictlyDescending,
     mut b8 outRecording
 ){
     assert(IsFinite(VectorSingle(metrics.logicalWidth, metrics.logicalHeight, metrics.pixelScaleX, metrics.pixelScaleY)));
@@ -264,10 +274,15 @@ void BeginPaintBuilderRecordingCached(
     outIndices.clear();
     outCommands.clear();
     outClips.clear();
-    outClips.push_back(Rect(0.0f, 0.0f, metrics.logicalWidth, metrics.logicalHeight));
+    PaintClipEntry rootClip;
+    rootClip.rect = Rect(0.0f, 0.0f, metrics.logicalWidth, metrics.logicalHeight);
+    rootClip.right = metrics.logicalWidth;
+    rootClip.bottom = metrics.logicalHeight;
+    outClips.push_back(rootClip);
     outOverlayDepth = 0u;
     outLayer = 0u;
     outCommandsOrdered = true;
+    outCommandsStrictlyDescending = true;
     outRecording = true;
 }
 
@@ -278,43 +293,79 @@ void BeginPaintBuilderRecording(
     mut Vector<u32> outIndices,
     mut Vector<DrawCommand> outCommands,
     mut Vector<UiSkinRegion> outRegions,
-    mut Vector<Rect> outClips,
+    mut Vector<PaintClipEntry> outClips,
     mut usize outOverlayDepth,
     mut u32 outLayer,
     mut b8 outCommandsOrdered,
+    mut b8 outCommandsStrictlyDescending,
     mut b8 outRecording
 ){
-    BeginPaintBuilderRecordingCached(metrics, outVertices, outIndices, outCommands, outClips, outOverlayDepth, outLayer, outCommandsOrdered, outRecording);
+    BeginPaintBuilderRecordingCached(metrics, outVertices, outIndices, outCommands, outClips, outOverlayDepth, outLayer, outCommandsOrdered, outCommandsStrictlyDescending, outRecording);
     outRegions.clear();
     outRegions.reserve(skinRegions.size());
     for(in UiSkinRegion region : skinRegions)
         outRegions.push_back(region);
 }
 
+void RadixSortPaintCommands(mut Vector<DrawCommand> inOutCommands, in u32 orDiff){
+    const usize count = inOutCommands.size();
+    Vector<DrawCommand> scratch;
+    scratch.resize(count);
+    b8 inScratch = false;
+    for(u32 shift = 0u; shift < 32u; shift += 8u){
+        if(((orDiff >> shift) & 0xffu) == 0u)
+            continue;
+        Array<u32, 256u> counts;
+        for(usize bucket = 0u; bucket < 256u; ++bucket)
+            counts[bucket] = 0u;
+        if(!inScratch){
+            for(usize index = 0u; index < count; ++index)
+                ++counts[cast<usize>((inOutCommands[index].layer >> shift) & 0xffu)];
+        }
+        else{
+            for(usize index = 0u; index < count; ++index)
+                ++counts[cast<usize>((scratch[index].layer >> shift) & 0xffu)];
+        }
+        u32 offset = 0u;
+        for(usize bucket = 0u; bucket < 256u; ++bucket){
+            const u32 bucketCount = counts[bucket];
+            counts[bucket] = offset;
+            offset += bucketCount;
+        }
+        if(!inScratch){
+            for(usize index = 0u; index < count; ++index){
+                in DrawCommand command = inOutCommands[index];
+                const usize bucket = cast<usize>((command.layer >> shift) & 0xffu);
+                scratch[cast<usize>(counts[bucket])] = command;
+                ++counts[bucket];
+            }
+        }
+        else{
+            for(usize index = 0u; index < count; ++index){
+                in DrawCommand command = scratch[index];
+                const usize bucket = cast<usize>((command.layer >> shift) & 0xffu);
+                inOutCommands[cast<usize>(counts[bucket])] = command;
+                ++counts[bucket];
+            }
+        }
+        inScratch = !inScratch;
+    }
+    if(inScratch)
+        AssignTriviallyCopyableVector(inOutCommands, Span<DrawCommand>(scratch));
+}
+
 void FinalizePaintBuilderRecording(
     in b8 commandsOrdered,
+    in b8 commandsStrictlyDescending,
     in usize overlayDepth,
     mut Vector<DrawCommand> inOutCommands,
-    mut Vector<Rect> inOutClips,
+    mut Vector<PaintClipEntry> inOutClips,
     mut b8 inOutRecording
 ){
     [essential] assert(inOutRecording && inOutClips.size() == 1u && overlayDepth == 0u);
     const usize count = inOutCommands.size();
     if(!commandsOrdered && count > 1u){
-        b8 strictlyDescending = true;
-        b8 firstIndexMonotonic = true;
-        u32 orDiff = 0u;
-        const u32 firstLayer = inOutCommands[0u].layer;
-        for(usize index = 1u; index < count; ++index){
-            in DrawCommand prev = inOutCommands[index - 1u];
-            in DrawCommand cur = inOutCommands[index];
-            if(!(prev.layer > cur.layer))
-                strictlyDescending = false;
-            if(!(prev.firstIndex < cur.firstIndex))
-                firstIndexMonotonic = false;
-            orDiff |= (cur.layer ^ firstLayer);
-        }
-        if(strictlyDescending){
+        if(commandsStrictlyDescending){
             const usize half = count / 2u;
             for(usize index = 0u; index < half; ++index){
                 const DrawCommand temp = inOutCommands[index];
@@ -322,53 +373,22 @@ void FinalizePaintBuilderRecording(
                 inOutCommands[count - 1u - index] = temp;
             }
         }
-        else if(orDiff != 0u){
-            if(count <= 32u || !firstIndexMonotonic)
-                SortSequence<DrawCommand>(inOutCommands, IsPaintDrawCommandBefore);
-            else{
-                Vector<DrawCommand> scratch;
-                scratch.resize(count);
-                b8 inScratch = false;
-                for(u32 shift = 0u; shift < 32u; shift += 8u){
-                    if(((orDiff >> shift) & 0xffu) == 0u)
-                        continue;
-                    Array<u32, 256u> counts;
-                    for(usize bucket = 0u; bucket < 256u; ++bucket)
-                        counts[bucket] = 0u;
-                    if(!inScratch){
-                        for(usize index = 0u; index < count; ++index)
-                            ++counts[cast<usize>((inOutCommands[index].layer >> shift) & 0xffu)];
-                    }
-                    else{
-                        for(usize index = 0u; index < count; ++index)
-                            ++counts[cast<usize>((scratch[index].layer >> shift) & 0xffu)];
-                    }
-                    u32 offset = 0u;
-                    for(usize bucket = 0u; bucket < 256u; ++bucket){
-                        const u32 bucketCount = counts[bucket];
-                        counts[bucket] = offset;
-                        offset += bucketCount;
-                    }
-                    if(!inScratch){
-                        for(usize index = 0u; index < count; ++index){
-                            in DrawCommand command = inOutCommands[index];
-                            const usize bucket = cast<usize>((command.layer >> shift) & 0xffu);
-                            scratch[cast<usize>(counts[bucket])] = command;
-                            ++counts[bucket];
-                        }
-                    }
-                    else{
-                        for(usize index = 0u; index < count; ++index){
-                            in DrawCommand command = scratch[index];
-                            const usize bucket = cast<usize>((command.layer >> shift) & 0xffu);
-                            inOutCommands[cast<usize>(counts[bucket])] = command;
-                            ++counts[bucket];
-                        }
-                    }
-                    inScratch = !inScratch;
-                }
-                if(inScratch)
-                    AssignTriviallyCopyableVector(inOutCommands, Span<DrawCommand>(scratch));
+        else{
+            b8 firstIndexMonotonic = true;
+            u32 orDiff = 0u;
+            const u32 firstLayer = inOutCommands[0u].layer;
+            for(usize index = 1u; index < count; ++index){
+                in DrawCommand prev = inOutCommands[index - 1u];
+                in DrawCommand cur = inOutCommands[index];
+                if(!(prev.firstIndex < cur.firstIndex))
+                    firstIndexMonotonic = false;
+                orDiff |= (cur.layer ^ firstLayer);
+            }
+            if(orDiff != 0u){
+                if(count <= 32u || !firstIndexMonotonic)
+                    SortSequence<DrawCommand>(inOutCommands, IsPaintDrawCommandBefore);
+                else
+                    RadixSortPaintCommands(inOutCommands, orDiff);
             }
         }
     }

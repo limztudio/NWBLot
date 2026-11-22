@@ -9,19 +9,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<impl/assets/graphics/caustic/hw_binding_slots.h>"), cpp_name("NWB_CAUSTIC_HW_MAX_PAYLOAD_BYTES")]
-extern const u32 s_ShaderCausticHwMaxPayloadBytes;
-const u32 s_CausticHwMaxPayloadBytes = s_ShaderCausticHwMaxPayloadBytes;
+[cpp_header("<impl/assets/graphics/caustic/hw_binding_slots.h>"), cpp_name("NWB_CAUSTIC_HW_GROUP_SIZE")]
+extern const u32 s_ShaderCausticHwGroupSize;
 
 [cpp_header("<impl/assets/graphics/caustic/resolve_binding_slots.h>"), cpp_name("NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT")]
 extern const u32 s_ShaderCausticAccumulatorChannelCount;
 
 [cpp_header("<impl/assets/graphics/caustic/sw_binding_slots.h>"), cpp_name("NWB_CAUSTIC_SW_GRID_SIDE")]
 extern const u32 s_ShaderCausticSwGridSide;
-static_assert(s_CausticHwMaxPayloadBytes == 8u);
 static_assert(s_CausticAccumulatorChannelCount == s_ShaderCausticAccumulatorChannelCount, "s_CausticAccumulatorChannelCount must match NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT");
 static_assert(size_of<NwbCausticEmissionTargetGpu>() == size_of<f32x4>() * 2u, "NwbCausticEmissionTargetGpu must stay a tight 32-byte std430 record");
-static_assert(size_of<CausticPhotonPushConstants>() == size_of<u32>() * 15u, "CausticPhotonPushConstants must match the shader push-constant layout");
+static_assert(size_of<CausticPhotonPushConstants>() == size_of<u32>() * 22u, "CausticPhotonPushConstants must match the shader push-constant layout");
 static_assert(size_of<CausticResolvePushConstants>() == s_CausticResolvePushConstantsByteSize, "CausticResolvePushConstants must match the shader push-constant layout");
 static_assert(offset_of<CausticResolvePushConstants>(activityInputSlot) == s_CausticResolvePushConstantsActivityInputSlotOffset);
 static_assert(offset_of<CausticResolvePushConstants>(activityOutputSlot) == s_CausticResolvePushConstantsActivityOutputSlotOffset);
@@ -46,10 +44,10 @@ class RtCausticState{
     public ShaderHandle m_swCausticCsgShader;
     public ComputePipelineHandle m_swCausticCsgPipeline;
     public BindingLayoutHandle m_hwCausticBindingLayout;
-    public RayTracingPipelineHandle m_hwCausticPipeline;
-    public RayTracingShaderTableHandle m_hwCausticShaderTable;
-    public RayTracingPipelineHandle m_hwCausticCsgPipeline;
-    public RayTracingShaderTableHandle m_hwCausticCsgShaderTable;
+    public ShaderHandle m_hwCausticShader;
+    public ComputePipelineHandle m_hwCausticPipeline;
+    public ShaderHandle m_hwCausticCsgShader;
+    public ComputePipelineHandle m_hwCausticCsgPipeline;
     public CausticEmissionTargetBuffer m_causticEmissionTargets;
     public CausticResolveState m_causticResolve;
     public BindingLayoutHandle m_causticGeometryDownsampleBindingLayout;

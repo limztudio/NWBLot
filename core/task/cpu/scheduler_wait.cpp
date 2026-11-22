@@ -18,14 +18,12 @@ NWB_CORE_BEGIN
 
 
 void CpuTaskScheduler::waitJoinEpoch(const u32 expectedEpoch)noexcept{
-    if(!m_profileEnabled.load(MemoryOrder::relaxed)){
-        for(u32 spin = 0u; spin < s_JoinSpinIterations; ++spin){
-            if(m_joinEpoch.load(MemoryOrder::relaxed) != expectedEpoch){
-                if(m_joinEpoch.load(MemoryOrder::acquire) != expectedEpoch)
-                    return;
-            }
-            MachinePause(1);
+    for(u32 spin = 0u; spin < s_JoinSpinIterations; ++spin){
+        if(m_joinEpoch.load(MemoryOrder::relaxed) != expectedEpoch){
+            if(m_joinEpoch.load(MemoryOrder::acquire) != expectedEpoch)
+                return;
         }
+        MachinePause(1);
     }
     while(m_joinEpoch.load(MemoryOrder::acquire) == expectedEpoch)
         m_joinEpoch.wait(expectedEpoch, MemoryOrder::acquire);

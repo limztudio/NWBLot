@@ -491,6 +491,7 @@ void CommandList::clearStateInternal(){
     m_cachedDynamicGraphicsState = {};
     m_lastValidatedWriteBuffer = nullptr;
     m_lastValidatedWriteBufferPermanentState = ResourceStates::Unknown;
+    m_enableAutomaticBarriers = true;
 #if defined(NWB_DEBUG)
     m_taskCapabilitiesUsed = GpuQueueCapability::None;
     m_taskDeclaredCapabilities = GpuQueueCapability::None;

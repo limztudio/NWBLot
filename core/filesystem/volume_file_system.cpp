@@ -33,6 +33,7 @@ b8 VolumeFileSystem::mount(const VolumeMountDesc& desc){
     Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_LoadMetadataScratch);
 
     ExclusiveLockGuard lock(m_mutex);
+    m_immutableReadOnly.store(false, MemoryOrder::release);
     if(m_mounted && m_writable && !flushMetadataLocked(scratchArena))
         return false;
     unmountLocked();
@@ -126,6 +127,7 @@ b8 VolumeFileSystem::mount(const VolumeMountDesc& desc){
         m_segmentSize = discoveredHeader.segmentSize;
 
         const usize segmentPathCount = m_segmentPaths.size();
+        u64 firstSegmentSize = 0u;
         for(usize segmentIndex = 0u; segmentIndex < segmentPathCount; ++segmentIndex){
             const Path& segmentPath = m_segmentPaths[segmentIndex];
             const auto fileSizeResult = FileSize(segmentPath);
@@ -140,6 +142,8 @@ b8 VolumeFileSystem::mount(const VolumeMountDesc& desc){
                 unmountLocked();
                 return false;
             }
+            if(segmentIndex == 0u)
+                firstSegmentSize = segmentFileSize;
 
             const b8 isLastSegment = segmentIndex + 1u == segmentPathCount;
             if(!isLastSegment && segmentFileSize != m_segmentSize){
@@ -154,13 +158,7 @@ b8 VolumeFileSystem::mount(const VolumeMountDesc& desc){
             }
         }
 
-        const auto firstFileSizeResult = FileSize(m_segmentPaths[0]);
-        if(!firstFileSizeResult){
-            FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMountFileSize, m_segmentPaths[0], firstFileSizeResult.error());
-            unmountLocked();
-            return false;
-        }
-        if(*firstFileSizeResult < sizeof(FilesystemVolumeDetail::VolumeHeaderDisk)){
+        if(firstSegmentSize < sizeof(FilesystemVolumeDetail::VolumeHeaderDisk)){
             FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMountFileSize, m_segmentPaths[0], "segment is smaller than the volume header");
             unmountLocked();
             return false;
@@ -171,6 +169,15 @@ b8 VolumeFileSystem::mount(const VolumeMountDesc& desc){
             unmountLocked();
             return false;
         }
+
+        if(m_maxSegments != 0 && m_segmentPaths.size() > m_maxSegments){
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("Filesystem('{}'): mount failed: discovered {} segments, maxSegments is {}"), ConvertString(m_volumeName), m_segmentPaths.size(), m_maxSegments);
+            unmountLocked();
+            return false;
+        }
+
+        if(!m_writable)
+            openReadMappingsLocked();
 
         if(!loadMetadataLocked(scratchArena)){
             FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMount, "metadata load failed");
@@ -191,15 +198,14 @@ b8 VolumeFileSystem::mount(const VolumeMountDesc& desc){
         return false;
     }
 
-    if(!m_writable)
-        openReadMappingsLocked();
-
     m_mounted = true;
+    m_immutableReadOnly.store(!m_writable, MemoryOrder::release);
     return true;
 }
 
 b8 VolumeFileSystem::unmount(){
     ExclusiveLockGuard lock(m_mutex);
+    m_immutableReadOnly.store(false, MemoryOrder::release);
     if(m_mounted && m_writable){
         Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_SaveMetadataScratch);
         if(!flushMetadataLocked(scratchArena))
@@ -306,7 +312,7 @@ void VolumeFileSystem::reserveFileCapacity(const usize fileCount){
 }
 
 Expected<usize> VolumeFileSystem::readFile(const Name& virtualPath, const u64 offset, void* data, const usize bytes)const{
-    SharedLockGuard lock(m_mutex);
+    OptionalSharedLockGuard lock(m_mutex, !m_immutableReadOnly.load(MemoryOrder::acquire));
     const auto record = readFileRecordLocked(virtualPath);
     if(!record)
         return MakeUnexpected(record.error());
@@ -323,7 +329,7 @@ Expected<usize> VolumeFileSystem::readFile(const Name& virtualPath, const u64 of
 Expected<usize> VolumeFileSystem::readWholeFile(const Name& virtualPath, void* const context, u8* (* const prepareBuffer)(void* context, usize size))const{
     if(!prepareBuffer)
         return MakeUnexpected(Failure{});
-    SharedLockGuard lock(m_mutex);
+    OptionalSharedLockGuard lock(m_mutex, !m_immutableReadOnly.load(MemoryOrder::acquire));
     const auto record = readFileRecordLocked(virtualPath);
     if(!record)
         return MakeUnexpected(record.error());
@@ -340,8 +346,31 @@ Expected<usize> VolumeFileSystem::readWholeFile(const Name& virtualPath, void* c
     return byteCount;
 }
 
+Optional<b8> VolumeFileSystem::visitWholeFile(const Name& virtualPath, void* const context, b8 (* const visitor)(void* context, Span<const u8> bytes))const{
+    if(!visitor)
+        return false;
+    OptionalSharedLockGuard lock(m_mutex, !m_immutableReadOnly.load(MemoryOrder::acquire));
+    if(m_writable || m_readMappings.size() != m_segmentPaths.size() || m_segmentSize == 0u)
+        return {};
+    const auto record = readFileRecordLocked(virtualPath);
+    if(!record)
+        return false;
+    if(record->size == 0u)
+        return visitor(context, Span<const u8>{});
+    if(!CanRepresentU64<usize>(record->size))
+        return {};
+    const usize segmentIndex = static_cast<usize>(record->offset / m_segmentSize);
+    const u64 segmentOffset = record->offset % m_segmentSize;
+    if(record->size > m_segmentSize - segmentOffset || segmentIndex >= m_readMappings.size())
+        return {};
+    const ReadOnlySegmentMapping& mapping = m_readMappings[segmentIndex];
+    if(!mapping.mappedView || segmentOffset > mapping.mappedBytes || record->size > mapping.mappedBytes - segmentOffset)
+        return {};
+    return visitor(context, Span<const u8>{ mapping.mappedView + static_cast<usize>(segmentOffset), static_cast<usize>(record->size) });
+}
+
 b8 VolumeFileSystem::seekFile(FileCursor& cursor, const i64 offset, const FileSeekOrigin::Enum origin)const noexcept(!FOUNDATION_OCCUR_WARNING){
-    SharedLockGuard lock(m_mutex);
+    OptionalSharedLockGuard lock(m_mutex, !m_immutableReadOnly.load(MemoryOrder::acquire));
     if(cursor.filesystem != this)
         return false;
     const auto record = readFileRecordLocked(cursor.virtualPath);
@@ -389,12 +418,12 @@ b8 VolumeFileSystem::removeFile(const Name& virtualPath){
 }
 
 b8 VolumeFileSystem::fileExists(const Name& virtualPath)const noexcept{
-    SharedLockGuard lock(m_mutex);
+    OptionalSharedLockGuard lock(m_mutex, !m_immutableReadOnly.load(MemoryOrder::acquire));
     return m_mounted && virtualPath && m_files.find(virtualPath) != m_files.end();
 }
 
 Expected<u64> VolumeFileSystem::fileSize(const Name& virtualPath)const noexcept(!FOUNDATION_OCCUR_WARNING){
-    SharedLockGuard lock(m_mutex);
+    OptionalSharedLockGuard lock(m_mutex, !m_immutableReadOnly.load(MemoryOrder::acquire));
     if(!m_mounted){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFileSize, FilesystemVolumeDetail::s_VolumeDetailNotMounted);
         return MakeUnexpected(Failure{});
@@ -546,10 +575,12 @@ Expected<VolumeFileSystem::FileRecord> VolumeFileSystem::readFileRecordLocked(co
 }
 
 void VolumeFileSystem::unmountLocked()noexcept{
+    m_immutableReadOnly.store(false, MemoryOrder::release);
     closeReadMappingsLocked();
 
     m_mounted = false;
     m_writable = false;
+    m_writtenMetadataBytes = 0u;
 
     m_volumeName.clear();
     m_mountDirectory.clear();

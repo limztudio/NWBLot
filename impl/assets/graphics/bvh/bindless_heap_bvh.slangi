@@ -29,6 +29,10 @@ StructuredBuffer<NwbBvhNode> nwbHeapBvhNodes(const uint slot){
     return g_NwbHeapBvhNodeBuffers[NonUniformResourceIndex(slot)];
 }
 
+StructuredBuffer<NwbBvhNode> nwbHeapBvhNodesUniform(const uint slot){
+    return g_NwbHeapBvhNodeBuffers[slot];
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

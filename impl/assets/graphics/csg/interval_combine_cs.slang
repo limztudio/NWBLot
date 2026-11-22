@@ -289,31 +289,23 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     }
 
-    const uint intervalLayerCount = nwbCsgIntervalCombineIntervalLayerCount();
+    const uint intervalLayerCount = min(nwbCsgIntervalCombineIntervalLayerCount(), NWB_CSG_PEEL_LAYER_COUNT);
     uint intervalIds[NWB_CSG_PEEL_LAYER_COUNT];
     float4 intervalDepths[NWB_CSG_PEEL_LAYER_COUNT];
     half4 cachedCapNormals[NWB_CSG_PEEL_LAYER_COUNT];
     uint cachedCapNormalMask = 0u;
-    bool hasAnyInterval = false;
-    [unroll] for(uint intervalIndex = 0u; intervalIndex < NWB_CSG_PEEL_LAYER_COUNT; ++intervalIndex){
-        if(intervalIndex < intervalLayerCount){
-            const int3 texel = int3(int2(pixel), int(intervalIndex));
-            const uint intervalId = g_NwbCsgIntervalId.Load(texel);
-            intervalIds[intervalIndex] = intervalId;
-            if(intervalId != 0u){
-                intervalDepths[intervalIndex] = g_NwbCsgIntervalDepth.Load(texel);
-                hasAnyInterval = true;
-            }
-            else
-                intervalDepths[intervalIndex] = float4(0.0, 0.0, 0.0, 0.0);
-        }
-        else{
-            intervalIds[intervalIndex] = 0u;
-            intervalDepths[intervalIndex] = float4(0.0, 0.0, 0.0, 0.0);
-        }
+    uint loadedIntervalCount = 0u;
+    [loop] for(uint intervalIndex = 0u; intervalIndex < intervalLayerCount; ++intervalIndex){
+        const int3 texel = int3(int2(pixel), int(intervalIndex));
+        const uint intervalId = g_NwbCsgIntervalId.Load(texel);
+        if(intervalId == 0u)
+            break;
+        intervalIds[intervalIndex] = intervalId;
+        intervalDepths[intervalIndex] = g_NwbCsgIntervalDepth.Load(texel);
         cachedCapNormals[intervalIndex] = half4(0.0h);
+        ++loadedIntervalCount;
     }
-    if(!hasAnyInterval){
+    if(loadedIntervalCount == 0u){
         g_NwbCsgRemovedIntervalCount[uint3(pixel, 0u)] = uint2(0u, flags);
         return;
     }
@@ -329,13 +321,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint cachedSpanCount = min(spanCount, NWB_CSG_RECEIVER_SPAN_LAYER_COUNT);
     [loop] for(uint spanIndex = 0u; spanIndex < cachedSpanCount; ++spanIndex)
         spanDatas[spanIndex] = g_NwbCsgReceiverSpanData.Load(int3(int2(pixel), int(spanIndex)));
-    [loop] for(uint spanIndex = cachedSpanCount; spanIndex < NWB_CSG_RECEIVER_SPAN_LAYER_COUNT; ++spanIndex)
-        spanDatas[spanIndex] = uint4(0u, 0u, 0u, 0u);
 
     uint removedIntervalCount = 0u;
     [loop] for(uint spanIndex = 0u; spanIndex < spanCount; ++spanIndex){
         const uint4 spanData = (spanIndex < NWB_CSG_RECEIVER_SPAN_LAYER_COUNT) ? spanDatas[spanIndex] : g_NwbCsgReceiverSpanData.Load(int3(int2(pixel), int(spanIndex)));
-        nwbCsgIntervalCombineSpan(pixel, spanData, spanIndex, intervalLayerCount, removedIntervalLayerCount, intervalIds, intervalDepths, cachedCapNormals, cachedCapNormalMask, entries, removedIntervalCount, flags);
+        nwbCsgIntervalCombineSpan(pixel, spanData, spanIndex, loadedIntervalCount, removedIntervalLayerCount, intervalIds, intervalDepths, cachedCapNormals, cachedCapNormalMask, entries, removedIntervalCount, flags);
     }
 
     nwbCsgIntervalCombineWriteEntries(pixel, spanDatas, intervalDepths, cachedCapNormals, cachedCapNormalMask, entries, removedIntervalLayerCount, removedIntervalCount, flags);

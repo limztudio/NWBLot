@@ -259,11 +259,11 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
         bindPointIndex = 2u;
     CachedDescriptorBufferOffsets& cachedOffsets = m_boundDescriptorBufferOffsets[bindPointIndex];
     if(
-        !bindAccelStruct
-        && m_descriptorBuffersBound
+        m_descriptorBuffersBound
         && cachedOffsets.valid
         && cachedOffsets.heap == &heap
-        && !cachedOffsets.hasAccelStruct
+        && cachedOffsets.hasAccelStruct == bindAccelStruct
+        && (!bindAccelStruct || cachedOffsets.accelStructHandle == accelStructHandle)
         && cachedOffsets.pipelineLayout == pipelineBindings.pipelineLayout
         && cachedOffsets.descriptorGeneration != 0u
         && cachedOffsets.heapBindingVersion != 0u
@@ -280,7 +280,7 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
     BindingLayout* const resourceLayout = heap.m_resourceLayout.get();
     BindingLayout* const samplerLayout = heap.m_samplerLayout.get();
     BindingLayout* const accelStructLayout = heap.m_accelStructLayout.get();
-    if(heap.m_initialized && heap.m_staticBindingContractValid && heap.m_descriptorBufferGeneration != 0u){
+    if(heap.m_initialized.load(MemoryOrder::relaxed) && heap.m_staticBindingContractValid && heap.m_descriptorBufferGeneration != 0u){
         if(
             (bindAccelStruct && !accelStructLayout)
             || !__hidden_vulkan_resource_bindings_commands::PipelineMatchesHeapLayouts(pipelineBindings, resourceLayout, samplerLayout, accelStructLayout, abi, bindAccelStruct)
@@ -305,7 +305,7 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
         }
 
         if(
-            !heap.m_initialized
+            !heap.m_initialized.load(MemoryOrder::relaxed)
             || heap.m_descriptorBufferGeneration == 0u
             || !resourceLayout
             || !samplerLayout
@@ -403,11 +403,13 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
         accelStructBlock = heap.m_accelStructBufferBlocks[slot];
         AccelStruct* const accelStruct = heap.m_accelStructResources[slot].get();
         Buffer* const backingBuffer = accelStruct ? accelStruct->getBackingBuffer() : nullptr;
-        b8 accelStructBlockLive = false;
+        b8 accelStructBlockLive = true;
+#if defined(NWB_DEBUG)
         {
             ScopedLock resourceStorageLock(manager->m_resourceSegment.mutex);
             accelStructBlockLive = manager->isLiveSegmentLocked(manager->m_resourceSegment, accelStructBlock, DescriptorBufferSegmentKind::Resource);
         }
+#endif
         if(
             !accelStructBlockLive
             || accelStructBlock.sizeBytes != accelStructLayout->m_descriptorBufferSetSizeBytes
@@ -450,6 +452,7 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
         && cachedOffsets.pipelineLayout == pipelineBindings.pipelineLayout
         && cachedOffsets.descriptorGeneration == managerSnapshot->generation
         && cachedOffsets.hasAccelStruct == bindAccelStruct
+        && cachedOffsets.accelStructHandle == accelStructHandle
         && cachedOffsets.resourceOffset == resourceBlock.offsetBytes
         && cachedOffsets.samplerOffset == samplerBlock.offsetBytes
         && (!bindAccelStruct || cachedOffsets.accelStructOffset == accelStructBlock.offsetBytes)
@@ -483,6 +486,7 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
     cachedOffsets.resourceOffset = resourceBlock.offsetBytes;
     cachedOffsets.samplerOffset = samplerBlock.offsetBytes;
     cachedOffsets.accelStructOffset = accelStructBlock.offsetBytes;
+    cachedOffsets.accelStructHandle = accelStructHandle;
     cachedOffsets.hasAccelStruct = bindAccelStruct;
     cachedOffsets.valid = true;
 }

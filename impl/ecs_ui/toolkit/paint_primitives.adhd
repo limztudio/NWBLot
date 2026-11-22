@@ -119,6 +119,12 @@ class PaintOverlayFrame{
     public u32 layer = 0u;
 }
 
+class PaintClipEntry{
+    public Rect rect;
+    public f32 right = 0.0f;
+    public f32 bottom = 0.0f;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

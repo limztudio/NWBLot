@@ -16,7 +16,7 @@ void RouteRouterCommand(
     in InputEvent event,
     in b8 pointerSequenceConsumed,
     in b8 secondarySequenceConsumed,
-    in Span<PointerSource> pointerSources,
+    in PointerSourceTable pointerSources,
     in Span<PopupRecord> popups,
     in b8 canAppendPopupDismissal,
     mut PopupDismissRequest popupDismissRequest,

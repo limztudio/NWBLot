@@ -61,6 +61,68 @@ inline constexpr u32 s_HexDigitsPerByte = 2u;
 #endif
 }
 
+[[nodiscard]] constexpr inline u64 ByteSwap64(const u64 value)noexcept{
+#if defined(__clang__) || defined(__GNUC__)
+    return __builtin_bswap64(value);
+#else
+    return ((value & 0x00000000000000ffull) << 56u)
+        | ((value & 0x000000000000ff00ull) << 40u)
+        | ((value & 0x0000000000ff0000ull) << 24u)
+        | ((value & 0x00000000ff000000ull) << 8u)
+        | ((value & 0x000000ff00000000ull) >> 8u)
+        | ((value & 0x0000ff0000000000ull) >> 24u)
+        | ((value & 0x00ff000000000000ull) >> 40u)
+        | ((value & 0xff00000000000000ull) >> 56u);
+#endif
+}
+
+[[nodiscard]] inline usize PrepareShaBe32TailBlocks(
+    const u8* const inputData,
+    const usize inputSize,
+    const usize offset,
+    Array<u8, s_BlockByteCount * 2u>& outTail
+)noexcept{
+    const usize remainder = inputSize - offset;
+    if(remainder > 0u)
+        std::memcpy(outTail.data(), inputData + offset, remainder);
+    outTail[remainder] = s_PaddingMarker;
+
+    const usize tailBlockCount = remainder >= s_LengthFieldOffset ? 2u : 1u;
+    const usize totalTailBytes = tailBlockCount * s_BlockByteCount;
+    const usize lengthOffset = totalTailBytes - s_LengthFieldByteCount;
+    if(lengthOffset > remainder + 1u)
+        std::memset(outTail.data() + remainder + 1u, 0, lengthOffset - (remainder + 1u));
+
+    const u64 bitCount = static_cast<u64>(inputSize) * s_BitsPerByte;
+    if constexpr(std::endian::native == std::endian::little){
+        const u64 bigEndianBitCount = ByteSwap64(bitCount);
+        std::memcpy(outTail.data() + lengthOffset, &bigEndianBitCount, sizeof(u64));
+    }
+    else{
+        for(u32 index = 0u; index < s_LengthFieldByteCount; ++index)
+            outTail[totalTailBytes - 1u - index] = static_cast<u8>(bitCount >> (index * s_BitsPerByte));
+    }
+    return tailBlockCount;
+}
+
+template<typename DigestT, u32 StateWordCount>
+[[nodiscard]] inline DigestT FinalizeShaBe32Digest(const Array<u32, StateWordCount>& state)noexcept{
+    static_assert(DigestT::s_ByteCount == StateWordCount * s_WordByteCount);
+
+    DigestT digest;
+    if constexpr(std::endian::native == std::endian::little){
+        for(u32 index = 0u; index < StateWordCount; ++index){
+            const u32 bigEndianWord = ByteSwap32(state[index]);
+            std::memcpy(digest.bytes + index * s_WordByteCount, &bigEndianWord, sizeof(u32));
+        }
+    }
+    else{
+        for(u32 index = 0u; index < DigestT::s_ByteCount; ++index)
+            digest.bytes[index] = static_cast<u8>(state[index / s_WordByteCount] >> ((s_LastByteInWord - index % s_WordByteCount) * s_BitsPerByte));
+    }
+    return digest;
+}
+
 inline void UnpackBlockWords(const u8* const block, u32* const outWords)noexcept{
     if constexpr(std::endian::native == std::endian::little){
         for(u32 index = 0u; index < s_BlockWordCount; ++index){
@@ -204,6 +266,7 @@ inline constexpr Array<u32, s_StateWordCount> s_InitialState = { 0x6a09e667u, 0x
 }
 
 void CompressBlocks(Array<u32, s_StateWordCount>& state, const u8* blocks, usize blockCount)noexcept;
+[[nodiscard]] Sha256Digest ComputeSha256Impl(BinaryByteView input)noexcept;
 
 inline void Compress(Array<u32, s_StateWordCount>& state, const u8* const block)noexcept{
     CompressBlocks(state, block, 1u);
@@ -220,38 +283,7 @@ inline void Compress(Array<u32, s_StateWordCount>& state, const u8* const block)
 
 
 [[nodiscard]] inline Sha256Digest ComputeSha256(const BinaryByteView input)noexcept{
-    Array<u32, Sha256Detail::s_StateWordCount> state = Sha256Detail::s_InitialState;
-    const usize inputSize = input.size();
-    const u8* const inputData = input.data();
-    const usize fullBlocks = inputSize / ShaBe32Detail::s_BlockByteCount;
-    const usize offset = fullBlocks * ShaBe32Detail::s_BlockByteCount;
-    if(fullBlocks > 0u)
-        Sha256Detail::CompressBlocks(state, inputData, fullBlocks);
-
-    Array<u8, ShaBe32Detail::s_BlockByteCount * 2u> tail = {};
-    const usize remainder = inputSize - offset;
-    if(remainder > 0u)
-        FOUNDATION_MEMCPY(tail.data(), tail.size(), inputData + offset, remainder);
-    tail[remainder] = ShaBe32Detail::s_PaddingMarker;
-    const usize tailBlockCount = remainder >= ShaBe32Detail::s_LengthFieldOffset ? 2u : 1u;
-    const usize totalTailBytes = tailBlockCount * ShaBe32Detail::s_BlockByteCount;
-    const u64 bitCount = static_cast<u64>(inputSize) * s_BitsPerByte;
-    for(u32 index = 0u; index < ShaBe32Detail::s_LengthFieldByteCount; ++index)
-        tail[totalTailBytes - 1u - index] = static_cast<u8>(bitCount >> (index * s_BitsPerByte));
-    Sha256Detail::CompressBlocks(state, tail.data(), tailBlockCount);
-
-    Sha256Digest digest;
-    if constexpr(std::endian::native == std::endian::little){
-        for(u32 index = 0u; index < Sha256Detail::s_StateWordCount; ++index){
-            const u32 bigEndianWord = ShaBe32Detail::ByteSwap32(state[index]);
-            std::memcpy(digest.bytes + index * ShaBe32Detail::s_WordByteCount, &bigEndianWord, sizeof(u32));
-        }
-    }
-    else{
-        for(u32 index = 0u; index < Sha256Digest::s_ByteCount; ++index)
-            digest.bytes[index] = static_cast<u8>(state[index / ShaBe32Detail::s_WordByteCount] >> ((ShaBe32Detail::s_LastByteInWord - index % ShaBe32Detail::s_WordByteCount) * s_BitsPerByte));
-    }
-    return digest;
+    return Sha256Detail::ComputeSha256Impl(input);
 }
 
 [[nodiscard]] inline Expected<Sha256Digest> ParseSha256(const AStringView text)noexcept{

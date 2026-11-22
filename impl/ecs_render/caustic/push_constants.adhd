@@ -27,6 +27,9 @@ const u32 s_CausticReducedBaseGridSide = 128u;
 const u32 s_CausticFullBaseGridSide = 512u;
 const u32 s_CausticTemporalDisabledPhaseCount = 1u;
 const u32 s_CausticTemporalPhaseCount = 2u;
+const u32 s_CausticSceneBoundsInvalid = 0u;
+const u32 s_CausticSceneBoundsExact = 1u;
+const u32 s_CausticSceneBoundsApproximate = 2u;
 const f32 s_DefaultCausticTemporalDecay = 0.85f;
 const u32 s_CausticHalfPhotonGridDivisor = 2u;
 const u32 s_CausticQuarterPhotonGridDivisor = 4u;
@@ -46,9 +49,6 @@ const usize s_CausticResolvePushConstantsByteSize = 60u;
 const u32 s_CausticHwPhotonGridSide = 512u;
 const f32 s_CausticIntensity = 2.0f;
 const f32 s_CausticRuntimeBoundsInflation = 1.25f;
-const StringView s_CausticHwRaygenExportName = "CausticHwRayGen";
-const StringView s_CausticHwMissExportName = "CausticHwMiss";
-const StringView s_CausticHwHitGroupExportName = "CausticHwHitGroup";
 const StringView s_CausticResolvePrepareVariant = "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=3";
 const StringView s_CausticResolveWaveletVariant = "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=1";
 const StringView s_CausticResolveWaveletStepOneVariant = "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=5";
@@ -100,6 +100,13 @@ class CausticPhotonPushConstants{
     public u32 materialContextSlotsHeapSlot = 0u;
     public u32 accumulatorStorageSlot = 0u;
     public u32 temporalPhaseCount = s_CausticTemporalDisabledPhaseCount;
+    public f32 sceneBoundsMinX = 0.0f;
+    public f32 sceneBoundsMinY = 0.0f;
+    public f32 sceneBoundsMinZ = 0.0f;
+    public f32 sceneBoundsMaxX = 0.0f;
+    public f32 sceneBoundsMaxY = 0.0f;
+    public f32 sceneBoundsMaxZ = 0.0f;
+    public u32 sceneBoundsFlags = 0u;
 }
 
 class CausticResolveActivityLayout{

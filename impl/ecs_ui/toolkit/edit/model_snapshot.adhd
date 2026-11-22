@@ -54,6 +54,8 @@ class EditModelSnapshot{
 
     public void capture(in EditModel model){
         const TextAreaModelStamp current = model.stamp();
+        if(this.m_hasCompositionSnapshot && this.m_expectedStamp == current)
+            return;
         if(
             this.m_hasCompositionSnapshot
             && this.m_expectedStamp.instanceGeneration != 0u

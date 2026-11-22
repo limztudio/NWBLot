@@ -139,11 +139,11 @@ class InputPointerState : NoCopy{
         );
     }
 
-    public mut Vector<PointerSource> sources(){
+    public mut PointerSourceTable sources(){
         return this.m_pointerSources;
     }
 
-    public in Vector<PointerSource> sources()const{
+    public in PointerSourceTable sources()const{
         return this.m_pointerSources;
     }
 
@@ -267,7 +267,7 @@ class InputPointerState : NoCopy{
         return this.m_secondarySequenceConsumed;
     }
 
-    private Vector<PointerSource> m_pointerSources;
+    private PointerSourceTable m_pointerSources;
     private Vector<PointerGestureRecord> m_pointerGestures;
     private u64 m_activeGestureSequence = 0u;
     private WidgetId m_capture;

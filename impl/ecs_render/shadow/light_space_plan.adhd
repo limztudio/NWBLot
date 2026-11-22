@@ -262,6 +262,8 @@ void PopulatePreparedLightSpaceShadowPush(
     }
     outPush.viewCount = viewCount;
     outPush.outputSlot = outputSlot;
+    outPush.fallbackListSlot = s_LightSpaceInvalidGpuDescriptorSlot;
+    outPush.fallbackArgsSlot = s_LightSpaceInvalidGpuDescriptorSlot;
 }
 
 

@@ -132,7 +132,7 @@ b8 GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap initialization rejected while pending-recording leases are active."));
         return false;
     }
-    if(m_initialized){
+    if(m_initialized.load(MemoryOrder::relaxed)){
         DescriptorBufferManager* const manager = m_context.descriptorBufferManager;
         if(!manager || manager != &m_device.m_descriptorBufferManager){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap reinitialization rejected an unavailable manager."));
@@ -367,7 +367,7 @@ b8 GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         && (m_resourceBufferBlock.offsetBytes % offsetAlignmentBytes) == 0u
         && (m_samplerBufferBlock.offsetBytes % offsetAlignmentBytes) == 0u
     ;
-    m_initialized = true;
+    m_initialized.store(true, MemoryOrder::release);
     syncDynamicReadinessFlagLocked();
     publishBindingFastVersionLocked();
 
@@ -396,7 +396,7 @@ GpuDescriptorHeapLifecycleStatistics GpuDescriptorHeap::lifecycleStatistics()con
     ScopedLock lock(m_mutex);
 
     GpuDescriptorHeapLifecycleStatistics statistics;
-    statistics.initialized = m_initialized;
+    statistics.initialized = m_initialized.load(MemoryOrder::relaxed);
     statistics.resourceCapacity = m_resourceSlots.capacity;
     statistics.samplerCapacity = m_samplerSlots.capacity;
     statistics.accelStructCapacity = m_accelStructSlots.capacity;
@@ -430,14 +430,14 @@ Expected<GpuDescriptorHandle> GpuDescriptorHeap::allocate(const GpuDescriptorCla
     b8 hasRetiredSlots = false;
     {
         ScopedLock lock(m_mutex);
-        hasRetiredSlots = m_initialized && descriptorClass < GpuDescriptorClass::Count && (descriptorClass != GpuDescriptorClass::AccelStruct || m_accelStructLayout) && m_retiredCount != 0u;
+        hasRetiredSlots = m_initialized.load(MemoryOrder::relaxed) && descriptorClass < GpuDescriptorClass::Count && (descriptorClass != GpuDescriptorClass::AccelStruct || m_accelStructLayout) && m_retiredCount != 0u;
     }
     if(hasRetiredSlots)
         collectRetired();
 
     ScopedLock lock(m_mutex);
 
-    if(!m_initialized){
+    if(!m_initialized.load(MemoryOrder::relaxed)){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap::allocate called before initialize."));
         return MakeUnexpected(Failure{});
     }
@@ -495,7 +495,7 @@ Expected<GpuDescriptorHandle> GpuDescriptorHeap::allocate(const GpuDescriptorCla
 void GpuDescriptorHeap::free(const GpuDescriptorHandle handle){
     {
         ScopedLock lock(m_mutex);
-        if(!m_initialized)
+        if(!m_initialized.load(MemoryOrder::relaxed))
             return;
         if(!handle.valid())
             return;
@@ -528,6 +528,8 @@ void GpuDescriptorHeap::free(const GpuDescriptorHandle handle){
             ++m_retiredCount;
             m_hasPendingRetirementWork.store(true, MemoryOrder::release);
         }
+        if(handle.descriptorClass() == GpuDescriptorClass::AccelStruct)
+            publishBindingFastVersionLocked();
     }
 }
 
@@ -582,6 +584,7 @@ void GpuDescriptorHeap::releaseRetainedDescriptorResource(const GpuDescriptorHan
 
     if(handle.descriptorClass() == GpuDescriptorClass::AccelStruct){
         releaseAccelStructDescriptorBlock(handle.slot());
+        publishBindingFastVersionLocked();
         return;
     }
 
@@ -662,7 +665,7 @@ void GpuDescriptorHeap::resetStateForShutdownLocked()noexcept{
     m_heapUses.clear();
     m_dynamicReadinessSlots.clear();
     m_concurrentAdmissionSlots.clear();
-    m_verifiedConcurrentQueueMask = 0u;
+    m_verifiedConcurrentQueueMask.store(0u, MemoryOrder::release);
     m_pendingRecordingCount = 0u;
     m_retiredCount = 0u;
     m_activePendingRecordingLeaseCount = 0u;
@@ -671,7 +674,7 @@ void GpuDescriptorHeap::resetStateForShutdownLocked()noexcept{
     m_hasPendingRetirementWork.store(false, MemoryOrder::release);
     m_desc = {};
 
-    m_initialized = false;
+    m_initialized.store(false, MemoryOrder::release);
     m_staticBindingContractValid = false;
     m_hasDynamicReadinessSlots.store(false, MemoryOrder::release);
     m_bindingFastVersion.store(0u, MemoryOrder::release);

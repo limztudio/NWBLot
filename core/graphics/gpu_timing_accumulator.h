@@ -106,11 +106,25 @@ public:
         u64 subscriptionIdentityLimit,
         b8 publishPerformanceSamples
     );
+    [[nodiscard]] b8 resetDirtyQueriesOnHost(Device& device);
     void recordFrameReset(CommandList& commandList);
     void confirmFrameReset(const QueueSubmissionToken& token);
     void discardFrameReset()noexcept;
     void requestQueries(const u32 queryCount)noexcept{ m_requestedQueryCount = Max(m_requestedQueryCount, queryCount); }
     [[nodiscard]] b8 materializeRequestedQueries(Device& device);
+    [[nodiscard]] Expected<QueryBegin> claimQueryForBegin(
+        const CommandList& commandList,
+        b8 canRecordHere,
+        b8 canResetHere,
+        const CommandListParameters& commandListDescription,
+        u64 frameIndex,
+        u32 epoch,
+        u64 performanceCaptureEpoch,
+        GpuTimingSampleAttribution attribution,
+        TimerQuery*& outQuery,
+        b8& outPreviousDeviceReady
+    );
+    void releaseFailedBeginClaim(const GpuTimingScope& scope, b8 previousDeviceReady)noexcept;
     [[nodiscard]] Expected<QueryBegin> beginQuery(CommandList& commandList, u64 frameIndex, u32 epoch, u64 performanceCaptureEpoch, GpuTimingSampleAttribution attribution);
     [[nodiscard]] QueryEndResult::Enum endQuery(CommandList& commandList, const GpuTimingScope& scope);
     [[nodiscard]] QueryEndResult::Enum endQueryFromExistingClaim(CommandList& commandList, const GpuTimingScope& scope)noexcept;
@@ -152,6 +166,7 @@ private:
     Array<u64, GpuTimingScopeSkipReason::Count> m_skippedScopeCountByReason{};
     Name m_scopeName = s_NameNone;
     u32 m_requestedQueryCount = 0u;
+    u32 m_nextSearchIndex = 0u;
     b8 m_captureEnabled = false;
     Perf::TimingScopeId m_timingScope;
 };

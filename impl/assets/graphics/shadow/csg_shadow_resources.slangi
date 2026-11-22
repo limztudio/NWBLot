@@ -19,6 +19,9 @@
 
 #include "light_space_resources.slangi"
 #include "../common/math.slangi"
+#ifndef NWB_CSG_RAY_UNIFORM_CONTEXT
+#define NWB_CSG_RAY_UNIFORM_CONTEXT 0
+#endif
 #include "../csg/ray_geometry.slangi"
 
 

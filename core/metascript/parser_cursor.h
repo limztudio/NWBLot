@@ -65,11 +65,12 @@ public:
     [[nodiscard]] b8 check(const TokenType::Enum type)const noexcept{ return m_current.type == type; }
     [[nodiscard]] b8 checkIdentifier(const MStringView text)const noexcept{ return m_current.type == TokenType::Identifier && m_current.text == text; }
 
-    b8 match(TokenType::Enum type);
-    b8 matchIdentifier(MStringView text);
+    [[nodiscard]] b8 match(TokenType::Enum type);
+    [[nodiscard]] b8 matchIdentifier(MStringView text);
 
     void advance();
-    b8 expect(TokenType::Enum type, MStringView expected);
+    [[nodiscard]] b8 expect(TokenType::Enum type, MStringView expected);
+    [[nodiscard]] b8 skipBalancedBraces(usize& outStartOffset, usize& outEndOffset, b8& outHasAngleBracket);
 
     void error(MStringView message){ error(m_current.line, m_current.column, message); }
     void error(u32 line, u32 column, MStringView message);

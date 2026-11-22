@@ -89,7 +89,8 @@ NwbOpticalTraceResult nwbOpticalTrace(const NwbOpticalTraceConfig config, const 
         }
         result.distance += segmentDistance;
         const NwbOpticalMedium incidentMedium = nwbOpticalDominantMedium(media);
-        throughput *= nwbDielectricBeerTransmission(incidentMedium.absorption, segmentDistance);
+        if(media.count != 0u)
+            throughput *= nwbDielectricBeerTransmission(incidentMedium.absorption, segmentDistance);
         NwbOpticalInstance optical;
         if(!nwbOpticalReadInstance(config, hit.instance, optical, result))
             return result;

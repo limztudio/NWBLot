@@ -23,6 +23,7 @@ struct NwbOpticalBootstrapEvent{
 };
 
 #if NWB_OPTICAL_CLOSED_MEDIA
+[noinline]
 bool nwbOpticalReplayBootstrap(
     const NwbOpticalTraceConfig config,
     const float3 origin,

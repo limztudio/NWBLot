@@ -12,22 +12,28 @@ const u32 s_RadioGroupMaxChoices = 64u;
 const u32 s_RadioGroupStampFencePassCount = 2u;
 const f32 s_RadioGroupMaxMarkInset = 0.5f;
 const f64 s_RadioGroupMaxMarkInsetF64 = 0.5;
+const Name s_RadioNormalRegionName = "radio.normal";
+const Name s_RadioHoverRegionName = "radio.hover";
+const Name s_RadioPressedRegionName = "radio.pressed";
+const Name s_RadioCheckedRegionName = "radio.checked";
+const Name s_RadioDisabledRegionName = "radio.disabled";
+const Name s_RadioMarkRegionName = "radio.mark";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 class RadioGroupStyle{
-    public Name normal = Name("radio.normal");
-    public Name hover = Name("radio.hover");
-    public Name pressed = Name("radio.pressed");
-    public Name checked = Name("radio.checked");
-    public Name disabled = Name("radio.disabled");
-    public Name mark = Name("radio.mark");
-    public Name fallback = Name("checkbox.normal");
-    public Name checkedFallback = Name("checkbox.checked");
-    public Name markFallback = Name("checkbox.mark");
-    public Name focus = Name("focus.overlay");
+    public Name normal = s_RadioNormalRegionName;
+    public Name hover = s_RadioHoverRegionName;
+    public Name pressed = s_RadioPressedRegionName;
+    public Name checked = s_RadioCheckedRegionName;
+    public Name disabled = s_RadioDisabledRegionName;
+    public Name mark = s_RadioMarkRegionName;
+    public Name fallback = s_StyleCheckboxNormalRegionName;
+    public Name checkedFallback = s_StyleCheckboxCheckedRegionName;
+    public Name markFallback = s_StyleCheckboxMarkRegionName;
+    public Name focus = s_StyleFocusOverlayRegionName;
     public Color hoverTint = s_StyleHoverTint;
     public Color pressedTint = s_StylePressedTint;
     public Color disabledTint = s_StyleDisabledTint;

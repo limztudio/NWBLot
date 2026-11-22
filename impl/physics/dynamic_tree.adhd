@@ -74,6 +74,19 @@ class DynamicTree{
         this.freeNode(proxyId);
     }
 
+    public b8 needsMove(in u32 proxyId, in Aabb3D aabb, in b8 keepEnlarged)const{
+        if(proxyId >= this.m_nodes.size() || !this.m_nodes[proxyId].isLeaf())
+            return false;
+        const Aabb3D curAabb = this.m_nodes[proxyId].aabb();
+        if(!AabbContains(curAabb, aabb))
+            return true;
+        if(keepEnlarged)
+            return false;
+        const f32 margin = ComputeAabbMargin(aabb);
+        const Aabb3D hugeAabb = FattenAabb(FattenAabb(aabb, margin), 4.0f * margin);
+        return !AabbContains(hugeAabb, curAabb);
+    }
+
     public b8 moveProxy(in u32 proxyId, in Aabb3D aabb, in VectorSingle displacement){
         if(proxyId >= this.m_nodes.size() || !this.m_nodes[proxyId].isLeaf())
             return false;

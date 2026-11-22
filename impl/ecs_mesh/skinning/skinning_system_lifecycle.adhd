@@ -241,7 +241,13 @@ void MeshSkinningSystem::prepare(mut World world){
     if(!this.m_skinningComputePipeline.valid() || !this.m_boundsComputePipeline.valid() || !this.m_localBoundsComputePipeline.valid() || !this.m_repackComputePipeline.valid())
         return;
     this.m_runtimeMeshCache.prepareResources(this.m_world);
-    this.pruneRuntimeResources();
+    const u64 cacheTopologyGen = this.m_runtimeMeshCache.topologyGeneration();
+    if(cacheTopologyGen != this.m_cachedCacheTopologyGeneration){
+        this.m_cachedCacheTopologyGeneration = cacheTopologyGen;
+        ++this.m_runtimeTopologyGeneration;
+    }
+    if(this.pruneRuntimeResources())
+        ++this.m_runtimeTopologyGeneration;
     for(in auto row : this.m_world.view<SkinnedMeshBindingComponent>()){
         const auto instance = this.m_runtimeMeshCache.editInstance(Get<1>(row).runtimeMesh);
         if(instance.has_value()){
@@ -254,16 +260,22 @@ void MeshSkinningSystem::prepare(mut World world){
 }
 
 b8 MeshSkinningSystem::prepareResources(in FramebufferPtr framebuffer){
-    const auto previous = this.m_acceptedSkinningState.borrowSource();
-    if(previous.has_value() && !this.replaceAcceptedSkinningState(previous.value())){
-        error("MeshSkinningSystem: failed to prune the accepted skinning state handoff");
-        return false;
+    if(this.m_acceptedSkinningStateTopologyGeneration != this.m_runtimeTopologyGeneration){
+        const auto previous = this.m_acceptedSkinningState.borrowSource();
+        if(previous.has_value() && !this.replaceAcceptedSkinningState(previous.value())){
+            error("MeshSkinningSystem: failed to prune the accepted skinning state handoff");
+            return false;
+        }
+        if(this.m_runtimeSetupReady)
+            this.m_acceptedSkinningStateTopologyGeneration = this.m_runtimeTopologyGeneration;
     }
     return this.m_runtimeSetupReady;
 }
 
 void MeshSkinningSystem::invalidateResources(){
     this.m_runtimeSetupReady = false;
+    this.m_acceptedSkinningStateTopologyGeneration = 0u;
+    ++this.m_runtimeTopologyGeneration;
     this.resetFrameTaskGraph();
     [essential] assert(this.m_frameRecordedGraph.releaseCommandListCache(), "skinning invalidation requires joined graph recording before device-bound cache release");
     this.m_acceptedSkinningState.reset();
@@ -402,7 +414,8 @@ b8 MeshSkinningSystem::replaceAcceptedSkinningState(in CommandListResourceStateH
     return replaced;
 }
 
-void MeshSkinningSystem::pruneRuntimeResources(){
+b8 MeshSkinningSystem::pruneRuntimeResources(){
+    b8 pruned = false;
     auto it = this.m_runtimeResources.begin();
     while(it != this.m_runtimeResources.end()){
         mut MeshSkinningRuntimeResources resources = it.value();
@@ -413,7 +426,9 @@ void MeshSkinningSystem::pruneRuntimeResources(){
         }
         this.releaseRuntimeResourceBindlessHeapHandles(resources);
         it = this.m_runtimeResources.erase(it);
+        pruned = true;
     }
+    return pruned;
 }
 
 

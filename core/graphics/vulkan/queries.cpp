@@ -45,7 +45,8 @@ b8 CommandList::resetTimerQuery(TimerQuery& query){
         }
         priorSubmission = query.prerequisiteSubmissionWithinLock();
     }
-    const b8 priorSubmissionObservedComplete = VulkanTimerQueryDetail::IsSubmissionComplete(m_device, priorSubmission);
+    const b8 samePhysicalQueue = priorSubmission.valid() && priorSubmission.matchesPhysicalQueue(m_creationDesc.physicalQueue.index, m_creationDesc.physicalQueue.deviceGeneration);
+    const b8 priorSubmissionObservedComplete = samePhysicalQueue || VulkanTimerQueryDetail::IsSubmissionComplete(m_device, priorSubmission);
 
     b8 resetRecorded = false;
     {
@@ -129,7 +130,8 @@ Expected<TimerQueryRecordingToken> CommandList::beginTimerQuery(TimerQuery& quer
             priorSubmission = query.prerequisiteSubmissionWithinLock();
         }
     }
-    const b8 priorSubmissionObservedComplete = VulkanTimerQueryDetail::IsSubmissionComplete(m_device, priorSubmission);
+    const b8 samePhysicalQueue = priorSubmission.valid() && priorSubmission.matchesPhysicalQueue(m_creationDesc.physicalQueue.index, m_creationDesc.physicalQueue.deviceGeneration);
+    const b8 priorSubmissionObservedComplete = samePhysicalQueue || VulkanTimerQueryDetail::IsSubmissionComplete(m_device, priorSubmission);
 
     b8 beginRecorded = false;
     {

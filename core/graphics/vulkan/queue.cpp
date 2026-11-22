@@ -445,7 +445,30 @@ Expected<NotNull<Queue::WorkerCommandArena*>, VkResult> Queue::getOrCreateWorker
 Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateDirectCommandBuffer(){
     UniqueLock<Futex> lock(m_mutex);
 
-    if(!m_commandBuffersInFlight.empty()){
+    if(m_device.isDeviceLost()){
+        lock.unlock();
+        m_device.captureDeviceLoss(VulkanArenaScope::s_QueueTimelineQueryContext);
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(VK_ERROR_DEVICE_LOST));
+        return MakeUnexpected(VK_ERROR_DEVICE_LOST);
+    }
+
+    const auto popPooledDirectBuffer = [&]()noexcept -> TrackedCommandBufferPtr {
+        for(usize index = m_commandBuffersPool.size(); index > 0u; --index){
+            auto& entry = m_commandBuffersPool[index - 1u];
+            FOUNDATION_ASSERT(entry);
+            if(entry->m_recordingWorkerIndex == 0u){
+                TrackedCommandBufferPtr cmdBuf = Move(entry);
+                if(index != m_commandBuffersPool.size())
+                    entry = Move(m_commandBuffersPool.back());
+                m_commandBuffersPool.pop_back();
+                return cmdBuf;
+            }
+        }
+        return {};
+    };
+
+    TrackedCommandBufferPtr pooledCmdBuf = popPooledDirectBuffer();
+    if(!pooledCmdBuf && !m_commandBuffersInFlight.empty()){
         const VkResult completionResult = updateLastFinishedID();
         if(completionResult != VK_SUCCESS){
             lock.unlock();
@@ -455,28 +478,10 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateDirectCommandBuffe
             return MakeUnexpected(completionResult);
         }
         collectCompletedCommandBuffers();
+        pooledCmdBuf = popPooledDirectBuffer();
     }
-    else if(m_device.isDeviceLost()){
-        lock.unlock();
-        m_device.captureDeviceLoss(VulkanArenaScope::s_QueueTimelineQueryContext);
-        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(VK_ERROR_DEVICE_LOST));
-        return MakeUnexpected(VK_ERROR_DEVICE_LOST);
-    }
-
-    auto available = m_commandBuffersPool.end();
-    for(usize index = m_commandBuffersPool.size(); index > 0u; --index){
-        auto& entry = m_commandBuffersPool[index - 1u];
-        FOUNDATION_ASSERT(entry);
-        if(entry->m_recordingWorkerIndex == 0u){
-            available = m_commandBuffersPool.begin() + static_cast<isize>(index - 1u);
-            break;
-        }
-    }
-    if(available != m_commandBuffersPool.end()){
-        TrackedCommandBufferPtr cmdBuf = Move(*available);
-        if(available + 1 != m_commandBuffersPool.end())
-            *available = Move(m_commandBuffersPool.back());
-        m_commandBuffersPool.pop_back();
+    if(pooledCmdBuf){
+        TrackedCommandBufferPtr cmdBuf = Move(pooledCmdBuf);
         FOUNDATION_ASSERT(cmdBuf && cmdBuf->m_cmdBuf != VK_NULL_HANDLE);
 
         transitionCommandBufferState(*cmdBuf, TrackedCommandBufferArenaState::Leased);

@@ -142,6 +142,7 @@ class UiLayerSystem : IRenderPass, IInputEventHandler{
     public b8 wantsPointer()const;
 
     private void collectRoots();
+    private void commitAcceptedFrameIfReady();
     private void synchronizeInput();
     private void routeInput(in UiInputEvent event);
     private void routeInput(in UiInputEvent event, mut b8 outBlockText);
@@ -307,7 +308,8 @@ b8 UiLayerSystem::keyboardCharInput(in u32 unicode, in i32 mods){
 b8 UiLayerSystem::mousePosUpdate(in f64 xpos, in f64 ypos){
     if(!ValidUiMouseCoordinate(xpos, ypos))
         return false;
-    this.synchronizeNativeInput();
+    if(this.m_context.ready())
+        this.commitAcceptedFrameIfReady();
     this.m_pointer = Point(cast<f32>(xpos), cast<f32>(ypos));
     PointerInput event;
     event.source = s_NativePointerSource;
@@ -725,19 +727,26 @@ void UiLayerSystem::collectRoots(){
 
 }
 
+void UiLayerSystem::commitAcceptedFrameIfReady(){
+    if(!this.m_context.ready() || this.m_renderer.lastAcceptedGeneration() != this.m_context.readyGeneration())
+        return;
+    const auto status = this.m_renderer.lastAcceptedPresentationStatus();
+    if(status == PresentationReceiptStatus::Accepted){
+        const b8 committed = this.m_context.commitFrame(this.m_renderer.lastAcceptedGeneration());
+        [essential] assert(committed);
+        this.m_editHost.commitFrame(this.m_renderer.lastAcceptedGeneration());
+        this.m_editHost.synchronizeFocus();
+    }
+    else if(status == PresentationReceiptStatus::Rejected){
+        this.abandonPendingFrame();
+        this.m_editHost.synchronizeFocus();
+    }
+}
+
 void UiLayerSystem::synchronizeInput(){
     this.collectRoots();
     this.m_context.retainRoots(this.m_rootIdentities);
-    if(this.m_context.ready() && this.m_renderer.lastAcceptedGeneration() == this.m_context.readyGeneration()){
-        const auto status = this.m_renderer.lastAcceptedPresentationStatus();
-        if(status == PresentationReceiptStatus::Accepted){
-            const b8 committed = this.m_context.commitFrame(this.m_renderer.lastAcceptedGeneration());
-            [essential] assert(committed);
-            this.m_editHost.commitFrame(this.m_renderer.lastAcceptedGeneration());
-        }
-        else if(status == PresentationReceiptStatus::Rejected)
-            this.abandonPendingFrame();
-    }
+    this.commitAcceptedFrameIfReady();
     this.m_editHost.synchronizeFocus();
 }
 

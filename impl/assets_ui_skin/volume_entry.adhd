@@ -17,8 +17,9 @@ Expected<UiSkin> CookUiSkinVolumeEntry(in UiSkinCookEntry entry){
 }
 
 b8 ExtractUiSkinDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
-    return context.visitDocument(lambda[in context, mut collector](in MetascriptDocument doc) -> b8{
-        const Expected<UiSkinCookEntry> entry = ParseUiSkinCookMetadata(context.assetRoot, context.virtualRoot, context.nwbFilePath, doc);
+    in CookDependencyItemContext contextRef = context;
+    return context.visitDocument(lambda[in contextRef, mut collector](in MetascriptDocument doc) -> b8{
+        const Expected<UiSkinCookEntry> entry = ParseUiSkinCookMetadata(contextRef.assetRoot, contextRef.virtualRoot, contextRef.nwbFilePath, doc);
         if(!entry.has_value())
             return false;
         return collector.addAssetDependency(entry.value().texture.name(), Texture::AssetTypeName());

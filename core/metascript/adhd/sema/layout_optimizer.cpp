@@ -342,7 +342,7 @@ b8 LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseError>
         return true;
     }
 
-    if(classDecl.isSerialize && m_symbols.hasPolymorphicInterface(classDecl)){
+    if(!classDecl.isImported && classDecl.isSerialize && m_symbols.hasPolymorphicInterface(classDecl)){
         ReportAdhdDiagnostic(m_arena, errors, classDecl.span, "'[serialize]' class cannot implement an interface (virtual table pointers cannot be binary serialized)");
         return false;
     }
@@ -357,14 +357,14 @@ b8 LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseError>
         if(!field->type || field->isStatic)
             continue;
 
-        if(__hidden_adhd_layout_optimizer::TypeReferencesClassByValue(*field->type, classDecl.name, m_symbols)){
+        if(!classDecl.isImported && __hidden_adhd_layout_optimizer::TypeReferencesClassByValue(*field->type, classDecl.name, m_symbols)){
             ReportAdhdDiagnostic(m_arena, errors, field->span, "recursive by-value class member layout is prohibited; use 'in'/'mut' reference or 'Vector<T>'");
             return false;
         }
 
         markFieldArenaUsage(*field->type, *field, classDecl, classDecl.needsClassArena);
 
-        if(classDecl.isSerialize && !field->isTransient){
+        if(!classDecl.isImported && classDecl.isSerialize && !field->isTransient){
             MStringView serializeErr;
             if(!__hidden_adhd_layout_optimizer::IsTypeBinarySerializable(*field->type, m_symbols, 0u, serializeErr)){
                 ReportAdhdDiagnostic(m_arena, errors, field->span, serializeErr);

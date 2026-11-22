@@ -14,6 +14,7 @@ nwb_declare_static_library(global_foundation)
 target_sources(global_foundation PRIVATE
     "${PROJECT_SOURCE_DIR}/global/arena_memory.cpp"
     "${PROJECT_SOURCE_DIR}/global/cpu_topology.cpp"
+    "${PROJECT_SOURCE_DIR}/global/sha1.cpp"
     "${PROJECT_SOURCE_DIR}/global/sha256.cpp"
     "${PROJECT_SOURCE_DIR}/global/*.h"
     "${PROJECT_SOURCE_DIR}/global/*.hh"

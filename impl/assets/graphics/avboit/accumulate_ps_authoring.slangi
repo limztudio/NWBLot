@@ -135,19 +135,22 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     const half volumeTransmittance = nwbAvboitLinearBiasedTransmittance(input.position.xy, input.position.z);
     const half weightedAlpha = alpha * volumeTransmittance;
 
-    NwbBxdfSurface bxdfSurface;
-    bxdfSurface.baseColor = surface.baseColor;
-    bxdfSurface.normal = nwbSafeNormalize(surface.normal, float3(0.0, 0.0, 1.0));
-    bxdfSurface.worldPosition = inWorldPosition;
-    bxdfSurface.viewVector = nwbSafeNormalize(g_NwbSceneCameraPosition.xyz - inWorldPosition, float3(0.0, 0.0, 1.0));
-    bxdfSurface.shadingModel = nwbMeshShadingModelId();
-    bxdfSurface.param0 = surface.param0;
-    bxdfSurface.param1 = surface.param1;
-    bxdfSurface.isBackground = false;
-    bxdfSurface.indirectIrradiance = nwbBxdfIndirectIrradiance(bxdfSurface.worldPosition, bxdfSurface.normal);
+    half3 shadedColor = half3(0.0h);
+    if(weightedAlpha > half(0.0h)){
+        NwbBxdfSurface bxdfSurface;
+        bxdfSurface.baseColor = surface.baseColor;
+        bxdfSurface.normal = nwbSafeNormalize(surface.normal, float3(0.0, 0.0, 1.0));
+        bxdfSurface.worldPosition = inWorldPosition;
+        bxdfSurface.viewVector = nwbSafeNormalize(g_NwbSceneCameraPosition.xyz - inWorldPosition, float3(0.0, 0.0, 1.0));
+        bxdfSurface.shadingModel = nwbMeshShadingModelId();
+        bxdfSurface.param0 = surface.param0;
+        bxdfSurface.param1 = surface.param1;
+        bxdfSurface.isBackground = false;
+        bxdfSurface.indirectIrradiance = nwbBxdfIndirectIrradiance(bxdfSurface.worldPosition, bxdfSurface.normal);
 
-    const half3 resolvedColor = nwbDeferredDispatchBxdf(bxdfSurface.shadingModel, bxdfSurface, int2(-1, -1));
-    const half3 shadedColor = max(resolvedColor, half3(0.0h));
+        const half3 resolvedColor = nwbDeferredDispatchBxdf(bxdfSurface.shadingModel, bxdfSurface, int2(-1, -1));
+        shadedColor = max(resolvedColor, half3(0.0h));
+    }
 
     NwbAvboitAccumulatePixelOutput output;
     output.accumColor = half4(shadedColor * weightedAlpha, weightedAlpha);

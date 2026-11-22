@@ -10,6 +10,8 @@
 #include <core/alloc/scratch.h>
 #include <core/filesystem/volume_naming.h>
 
+#include <global/atomic.h>
+
 #if !defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <pthread.h>
 #endif
@@ -92,6 +94,22 @@ private:
         const VolumeRWLock& m_lock;
     };
 
+    class OptionalSharedLockGuard final : NoCopy{
+    public:
+        explicit OptionalSharedLockGuard(const VolumeRWLock& lock, const b8 active)noexcept
+            : m_lock(active ? AddressOf(lock) : nullptr)
+        {
+            if(m_lock)
+                m_lock->lockShared();
+        }
+        ~OptionalSharedLockGuard()noexcept{
+            if(m_lock)
+                m_lock->unlockShared();
+        }
+    private:
+        const VolumeRWLock* m_lock = nullptr;
+    };
+
     class ExclusiveLockGuard final : NoCopy{
     public:
         explicit ExclusiveLockGuard(const VolumeRWLock& lock)noexcept
@@ -150,6 +168,7 @@ public:
 
     [[nodiscard]] virtual Expected<usize> readFile(const Name& virtualPath, u64 offset, void* data, usize bytes)const override;
     [[nodiscard]] virtual Expected<usize> readWholeFile(const Name& virtualPath, void* context, u8* (*prepareBuffer)(void* context, usize size))const override;
+    [[nodiscard]] virtual Optional<b8> visitWholeFile(const Name& virtualPath, void* context, b8 (*visitor)(void* context, Span<const u8> bytes))const override;
     virtual b8 seekFile(FileCursor& cursor, i64 offset, FileSeekOrigin::Enum origin)const noexcept(!FOUNDATION_OCCUR_WARNING)override;
     virtual b8 removeFile(const Name& virtualPath)override;
     virtual b8 fileExists(const Name& virtualPath)const noexcept override;
@@ -199,9 +218,11 @@ private:
     FilesystemVolumeDetail::SegmentTransferCache* m_activeWriteCache = nullptr;
     FileMap m_files;
     mutable VolumeRWLock m_mutex;
+    Atomic<b8> m_immutableReadOnly{ false };
 
     b8 m_mounted = false;
     b8 m_writable = false;
+    u64 m_writtenMetadataBytes = 0u;
 };
 
 

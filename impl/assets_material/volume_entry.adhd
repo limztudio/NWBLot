@@ -106,8 +106,9 @@ b8 CollectMaterialDependencies(in MaterialCookEntry entry, mut ICookDependencyCo
 }
 
 b8 ExtractMaterialDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
-    return context.visitDocument(lambda[in context, mut collector](in MetascriptDocument doc) -> b8{
-        const Expected<MaterialCookEntry> entry = ParseMaterialCookMetadata(context.assetRoot, context.virtualRoot, context.nwbFilePath, doc);
+    in CookDependencyItemContext contextRef = context;
+    return context.visitDocument(lambda[in contextRef, mut collector](in MetascriptDocument doc) -> b8{
+        const Expected<MaterialCookEntry> entry = ParseMaterialCookMetadata(contextRef.assetRoot, contextRef.virtualRoot, contextRef.nwbFilePath, doc);
         return entry.has_value() && CollectMaterialDependencies(entry.value(), collector);
     });
 }

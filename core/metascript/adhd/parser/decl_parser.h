@@ -20,6 +20,16 @@ NWB_ADHD_BEGIN
 
 
 class DeclParser final{
+private:
+    struct DeferredCallableBody{
+        MethodDecl* method = nullptr;
+        ParserCursor::Checkpoint bodyCheckpoint;
+        usize startOffset = 0u;
+        usize endOffset = 0u;
+        b8 hasAngleBracket = false;
+    };
+
+
 public:
     explicit DeclParser(ParserCursor& cursor, const MStringView activeSource = {}, const Preprocessor* preprocessor = nullptr)noexcept
         : m_cursor(cursor)
@@ -49,9 +59,10 @@ private:
     [[nodiscard]] TypeAliasDecl* parseTypeAlias(SourceSpan span, Span<const ParsedAttribute> attributes, b8 isExtern = false);
     [[nodiscard]] EnumDecl* parseEnumDecl(SourceSpan span, Span<const ParsedAttribute> attributes, b8 isFlag, b8 isExtern = false);
     [[nodiscard]] InterfaceDecl* parseInterfaceDecl(SourceSpan span, Span<const ParsedAttribute> attributes, b8 isExtern = false);
-    [[nodiscard]] ClassDecl* parseClassDecl(SourceSpan span, Span<const ParsedAttribute> attributes, b8 isExtern = false);
+    [[nodiscard]] ClassDecl* parseClassDecl(SourceSpan span, Span<const ParsedAttribute> attributes, b8 isExtern = false, b8 isImported = false);
     void parseClassMethodQualifiers(MethodDecl& method);
-    [[nodiscard]] b8 parseClassMemberCallableBody(MethodDecl& method, MStringView missingTerminatorMessage);
+    [[nodiscard]] b8 parseClassMemberCallableBody(const ClassDecl& ownerClass, MethodDecl& method, MStringView missingTerminatorMessage);
+    [[nodiscard]] b8 trySkipImportedCallableBody(MethodDecl& method, b8 allowSkip, b8& outSkipped);
     [[nodiscard]] b8 parseDestructorEmptyParams(MStringView missingLeftParenMessage);
     [[nodiscard]] b8 parseConstructorParamsAndRejectInitList(MethodDecl& method);
     [[nodiscard]] b8 parseMethodParamsAndValidateArity(MethodDecl& method, SourceSpan span);
@@ -85,7 +96,7 @@ private:
     );
     [[nodiscard]] b8 parseClassMember(ClassDecl& classDecl);
     [[nodiscard]] b8 parseCallableOwnerOrTemplateHeader(b8 failOnInvalidTemplateParams, MVector<MStringView>& outOwnerTemplateParams, MVector<TemplateParamDecl>& outOwnerTemplateParamDecls, MVector<TemplateParamDecl>& outTemplateParams);
-    [[nodiscard]] MethodDecl* parseFreeOrOutOfLineCallable(SourceSpan span, Span<const ParsedAttribute> attributes, b8 isExtern = false);
+    [[nodiscard]] MethodDecl* parseFreeOrOutOfLineCallable(SourceSpan span, Span<const ParsedAttribute> attributes, b8 isExtern = false, b8 isImported = false);
     [[nodiscard]] b8 applyCallableAttributes(Span<const ParsedAttribute> attributes, MethodDecl& decl);
     [[nodiscard]] b8 parseOperatorName(MStringView& outOpName);
 
@@ -97,6 +108,7 @@ private:
     StmtParser m_stmtParser;
     MStringView m_activeSource;
     const Preprocessor* m_preprocessor = nullptr;
+    MVector<DeferredCallableBody>* m_deferredBodies = nullptr;
 };
 
 

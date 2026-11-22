@@ -158,6 +158,8 @@ class TextService : NoCopy{
 
     public u64 identity()const{ return this.m_identity; }
     public u64 generation()const{ return this.m_generation; }
+    public u64 atlasIdentity()const{ return this.m_atlas.identity(); }
+    public usize atlasGlyphCount()const{ return this.m_atlas.glyphCount(); }
 
     [cpp_unwind]
     public b8 setFonts(in Span<FontSource> sources){
@@ -176,7 +178,10 @@ class TextService : NoCopy{
     [cpp_unwind, owner_result]
     public Expected<TextLayout, TextLayoutStatus> layout(in ShapeRequest request){
         TextLayout target;
-        return target.shape(request, this.m_shaper);
+        const TextLayoutStatus status = target.shapeIntoDirect(request, this.m_shaper);
+        if(status != TextLayoutStatus::Success)
+            return MakeUnexpected(status);
+        return target;
     }
 
     [cpp_unwind]
@@ -184,7 +189,7 @@ class TextService : NoCopy{
         Expected<SharedTextLayout> created = this.m_layoutPool.make<TextLayout>();
         if(!created.has_value())
             return MakeUnexpected(TextLayoutStatus::FontFailure);
-        const TextLayoutStatus status = created.value().deref().shapeInto(request, this.m_shaper);
+        const TextLayoutStatus status = created.value().deref().shapeIntoDirect(request, this.m_shaper);
         if(status != TextLayoutStatus::Success)
             return MakeUnexpected(status);
         return created.value();
@@ -436,14 +441,26 @@ class TextService : NoCopy{
         if(this.m_preparedGlyphs.empty())
             return true;
         if(!this.m_coverageCandidateSlots.empty()){
+            u64 lastCovFaceId = 0u;
+            u32 lastCovGlyphId = u32.max;
+            AtlasGlyph lastCovRecord;
             for(in u32 slotIndex : this.m_coverageCandidateSlots){
                 mut ResolvedGlyphDraw item = this.m_preparedGlyphs[slotIndex];
                 in PlacedGlyph glyph = glyphs[item.pageIndex];
-                const Optional<in AtlasGlyph> preparedSlot = this.m_atlas.prepareAndFind(glyph.face, glyph.glyphId, raster.pixelSize);
-                if(!preparedSlot.has_value())
+                if(glyph.face.valid()){
+                    const u64 faceId = glyph.face.deref().faceIdentity();
+                    if(faceId != lastCovFaceId || glyph.glyphId != lastCovGlyphId){
+                        const Optional<in AtlasGlyph> preparedSlot = this.m_atlas.prepareAndFind(glyph.face, glyph.glyphId, raster.pixelSize);
+                        if(!preparedSlot.has_value())
+                            return false;
+                        lastCovFaceId = faceId;
+                        lastCovGlyphId = glyph.glyphId;
+                        lastCovRecord = preparedSlot.value();
+                    }
+                }
+                else
                     return false;
-                in AtlasGlyph record = preparedSlot.value();
-                const Expected<Rect> rectangle = CoverageRectangle(glyph, record, raster.rasterScale, topLeft, deviceScale);
+                const Expected<Rect> rectangle = CoverageRectangle(glyph, lastCovRecord, raster.rasterScale, topLeft, deviceScale);
                 if(!rectangle.has_value())
                     return false;
                 const TextGlyphIntersection status = TryIntersectTextRects(rectangle.value(), clip);
@@ -454,8 +471,8 @@ class TextService : NoCopy{
                     continue;
                 }
                 item.rectangle = rectangle.value();
-                item.uv = ResolveCoverageGlyphUv(record.pixels);
-                item.pageIndex = record.pageIndex;
+                item.uv = ResolveCoverageGlyphUv(lastCovRecord.pixels);
+                item.pageIndex = lastCovRecord.pageIndex;
             }
             Array<u32, s_GlyphAtlasMaxPages> resolvedCoveragePages;
             for(usize pageSlot = 0u; pageSlot < s_GlyphAtlasMaxPages; ++pageSlot)

@@ -402,6 +402,7 @@ public:
     }
 
     void setGraphicsState(const GraphicsState& state);
+    void setScissorRect(const Rect& rect);
     void draw(const DrawArguments& args);
     void drawIndexed(const DrawArguments& args);
     void drawIndirect(u32 offsetBytes, u32 drawCount = 1);
@@ -473,6 +474,7 @@ public:
     void setEnableUavBarriersForBuffer(Buffer& buffer, b8 enableBarriers){
         setEnableUavBarriersForBuffer(&buffer, enableBarriers);
     }
+    void setEnableAutomaticBarriers(b8 enable);
     void beginTrackingTextureState(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits);
     void beginTrackingTextureState(Texture& texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits){
         beginTrackingTextureState(&texture, subresources, stateBits);
@@ -761,6 +763,7 @@ private:
         VkDeviceSize resourceOffset = 0u;
         VkDeviceSize samplerOffset = 0u;
         VkDeviceSize accelStructOffset = 0u;
+        GpuDescriptorHandle accelStructHandle = {};
         b8 hasAccelStruct = false;
         b8 valid = false;
     };

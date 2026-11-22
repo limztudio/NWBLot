@@ -14,8 +14,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_FALLBACK_ARGS_WORDS")]
+extern const u32 s_ShaderLightSpaceFallbackArgsWords;
+
 const usize s_LightSpaceComputePipelineTableCount = 12u;
 const usize s_LightSpaceCsgStorageBufferCount = 2u;
+const usize s_LightSpaceFallbackSlotCount = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -288,7 +292,11 @@ void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
     state.m_preflightedDrawCount = drawCount;
     state.m_preflightedPlanValid = true;
     LightSpaceResourceSet resources(this.m_graphics, this.m_shaderSystem, this.m_lightSpaceShadow, this.m_shadowVisibilityHardwareSupported);
-    state.m_resourcesPrepared = resources.ensureLightSpaceShadowPipelines() && resources.ensureLightSpaceShadowStorage(plan);
+    in DeferredFrameTargets targets = this.m_shadowVisibilityPreparedTargets.value();
+    const u32 halfWidth = DivideUp(targets.width, targets.shadowReceiverFactor);
+    const u32 halfHeight = DivideUp(targets.height, targets.shadowReceiverFactor);
+    const u64 fallbackPixels = Max(cast<u64>(halfWidth) * cast<u64>(halfHeight), 1ull);
+    state.m_resourcesPrepared = resources.ensureLightSpaceShadowPipelines() && resources.ensureLightSpaceShadowStorage(plan, fallbackPixels);
 }
 
 Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(in Span<SceneLightGpuData> lights, mut u32 outDrawCount)const{
@@ -338,6 +346,12 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(in Span<SceneLightGpuDat
         || !snapshot.transparentResolve.valid() || !snapshot.opaqueFallback.valid() || !snapshot.transparentFallback.valid() || !snapshot.shadePipeline.valid()
         || !snapshot.opaqueCapture.valid() || !snapshot.transparentCapture.valid()
         || !snapshot.counts.valid() || !snapshot.events.valid() || !snapshot.views.valid() || !snapshot.drawArguments.valid() || !snapshot.depth
+        || (!this.m_shadowVisibilityHardwareSupported && (
+            !snapshot.fallbackLists[0u].valid() || !snapshot.fallbackLists[1u].valid()
+            || !snapshot.fallbackArgs[0u].valid() || !snapshot.fallbackArgs[1u].valid()
+            || !snapshot.fallbackListDescriptors[0u].valid() || !snapshot.fallbackListDescriptors[1u].valid()
+            || !snapshot.fallbackArgsDescriptors[0u].valid() || !snapshot.fallbackArgsDescriptors[1u].valid()
+        ))
     )
         return;
     u32 drawCount = 0u;
@@ -559,7 +573,7 @@ b8 LightSpaceResourceSet::ensureLightSpaceShadowPipelines(){
     return true;
 }
 
-b8 LightSpaceResourceSet::ensureLightSpaceShadowStorage(in LightSpacePlan plan){
+b8 LightSpaceResourceSet::ensureLightSpaceShadowStorage(in LightSpacePlan plan, in u64 fallbackPixels){
     mut LightSpaceShadowSnapshot snapshot = this.m_state.m_snapshot;
     mut Device device = this.m_graphics.getDevice();
     mut GpuDescriptorHeap heap = device.getDescriptorHeap();
@@ -571,6 +585,69 @@ b8 LightSpaceResourceSet::ensureLightSpaceShadowStorage(in LightSpacePlan plan){
         && IsValidLightSpaceStorageByteSize(sizes[2], maximumRange)
         && IsValidLightSpaceStorageByteSize(sizes[3], maximumRange)
     );
+    if(!this.m_hardwareSupported){
+        const u64 fallbackListBytes = fallbackPixels * sizeof(u32);
+        const u64 fallbackArgsBytes = cast<u64>(s_ShaderLightSpaceFallbackArgsWords) * sizeof(u32);
+        if(!IsValidLightSpaceStorageByteSize(fallbackListBytes, maximumRange) || !IsValidLightSpaceStorageByteSize(fallbackArgsBytes, maximumRange))
+            return false;
+        if(
+            !snapshot.fallbackLists[0u].valid() || !snapshot.fallbackLists[1u].valid()
+            || !snapshot.fallbackArgs[0u].valid() || !snapshot.fallbackArgs[1u].valid()
+            || !snapshot.fallbackListDescriptors[0u].valid() || !snapshot.fallbackListDescriptors[1u].valid()
+            || !snapshot.fallbackArgsDescriptors[0u].valid() || !snapshot.fallbackArgsDescriptors[1u].valid()
+            || snapshot.fallbackPixelCapacity < fallbackPixels
+        ){
+            Array<BufferHandle, s_LightSpaceFallbackSlotCount> fallbackLists;
+            Array<BufferHandle, s_LightSpaceFallbackSlotCount> fallbackArgs;
+            Array<GpuDescriptorHandle, 4u> fallbackDescriptors;
+            GpuDescriptorRetirementGuard retireFallback(heap, Span<GpuDescriptorHandle>(fallbackDescriptors));
+            const Array<Name, s_LightSpaceFallbackSlotCount> listNames((s_LightSpaceResourceOpaqueFallbackList), (s_LightSpaceResourceTransparentFallbackList));
+            const Array<Name, s_LightSpaceFallbackSlotCount> argsNames((s_LightSpaceResourceOpaqueFallbackArgs), (s_LightSpaceResourceTransparentFallbackArgs));
+            for(u32 index = 0u; index < s_LightSpaceFallbackSlotCount; ++index){
+                BufferDesc listDesc;
+                listDesc
+                    .setByteSize(fallbackListBytes).setStructStride(sizeof(u32)).setCanHaveRawViews(true).setCanHaveUAVs(true)
+                    .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(listNames[index])
+                    .enableAutomaticStateTracking(ResourceStates::UnorderedAccess)
+                ;
+                const Expected<BufferHandle> listResult = this.m_graphics.createBuffer(listDesc);
+                if(!listResult.has_value())
+                    return false;
+                fallbackLists[index] = listResult.value();
+                const auto listDescriptor = RegisterHeapBuffer(heap, fallbackLists[index].deref(), GpuDescriptorClass::StorageBuffer, true);
+                if(!listDescriptor.has_value())
+                    return false;
+                fallbackDescriptors[index] = listDescriptor.value();
+
+                BufferDesc argsDesc;
+                argsDesc
+                    .setByteSize(fallbackArgsBytes).setStructStride(sizeof(u32)).setCanHaveRawViews(true).setCanHaveUAVs(true)
+                    .setIsDrawIndirectArgs(true)
+                    .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(argsNames[index])
+                    .enableAutomaticStateTracking(ResourceStates::UnorderedAccess)
+                ;
+                const Expected<BufferHandle> argsResult = this.m_graphics.createBuffer(argsDesc);
+                if(!argsResult.has_value())
+                    return false;
+                fallbackArgs[index] = argsResult.value();
+                const auto argsDescriptor = RegisterHeapBuffer(heap, fallbackArgs[index].deref(), GpuDescriptorClass::StorageBuffer, true);
+                if(!argsDescriptor.has_value())
+                    return false;
+                fallbackDescriptors[s_LightSpaceFallbackSlotCount + index] = argsDescriptor.value();
+            }
+            for(u32 index = 0u; index < s_LightSpaceFallbackSlotCount; ++index){
+                RetireDescriptor(heap, snapshot.fallbackListDescriptors[index]);
+                RetireDescriptor(heap, snapshot.fallbackArgsDescriptors[index]);
+                snapshot.fallbackLists[index] = fallbackLists[index];
+                snapshot.fallbackArgs[index] = fallbackArgs[index];
+                snapshot.fallbackListDescriptors[index] = fallbackDescriptors[index];
+                snapshot.fallbackArgsDescriptors[index] = fallbackDescriptors[s_LightSpaceFallbackSlotCount + index];
+            }
+            for(usize index = 0u; index < fallbackDescriptors.size(); ++index)
+                fallbackDescriptors[index] = GpuDescriptorHandleInvalid();
+            snapshot.fallbackPixelCapacity = fallbackPixels;
+        }
+    }
     if(this.m_state.m_csg.snapshot.hasCsg){
         mut LightSpaceShadowDiagnostics diagnostics = this.m_state.m_diagnostics;
         if(!diagnostics.readback.valid()){
@@ -749,6 +826,10 @@ void LightSpaceResourceSet::releaseLightSpaceShadowResources(){
     RetireDescriptor(heap, state.m_snapshot.depthDescriptor);
     RetireDescriptor(heap, state.m_snapshot.csgContextDescriptor);
     RetireDescriptor(heap, state.m_snapshot.csgOpaqueDepthDescriptor);
+    for(u32 index = 0u; index < s_LightSpaceFallbackSlotCount; ++index){
+        RetireDescriptor(heap, state.m_snapshot.fallbackListDescriptors[index]);
+        RetireDescriptor(heap, state.m_snapshot.fallbackArgsDescriptors[index]);
+    }
     state.m_captureHistory.invalidate();
     state.m_diagnostics = LightSpaceShadowDiagnostics();
     state.m_captureSceneTrusted = false;

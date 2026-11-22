@@ -190,6 +190,7 @@ b8 TypeChecker::DoesSynthesizedClassCtorPassArena(const ClassDecl& ctorCls, cons
 }
 
 b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>& errors){
+    ScopedAstNodePool astPoolScope(unit.astNodePool);
     b8 ok = true;
     m_activeUnit = &unit;
     m_recordGlobalHeaders = false;
@@ -446,31 +447,27 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
         m_recordGlobalHeaders = !classDecl->isImported && !classDecl->isExtern;
         if(!checkClassDecl(*classDecl, errors))
             ok = false;
-        if(!classDecl->isImported && !classDecl->isExtern){
+        if(!classDecl->isExtern){
             for(MethodDecl* m : classDecl->methods){
-                if(m && !m->isExtern)
+                if(m && !m->isExtern && (!classDecl->isImported || !m->isImported))
                     m->isInline = (!classDecl->assetTypeName.empty() && m->hasBody && !m->isOutOfLine) || __hidden_adhd_type_checker::ShouldAutoInlineCallable(*m);
             }
         }
     }
 
     for(MethodDecl* fn : unit.freeFunctions){
-        m_recordGlobalHeaders = !fn->isImported && !fn->isExtern;
-        if(!fn->isExtern && !fn->isOperator && !fn->name.empty() && !IsAsciiUpper(fn->name[0])){
+        if(fn->isImported || fn->isExtern)
+            continue;
+        m_recordGlobalHeaders = true;
+        if(!fn->isOperator && !fn->name.empty() && !IsAsciiUpper(fn->name[0])){
             reportError(errors, fn->span, "global function name must start with an uppercase letter");
             ok = false;
         }
         if(!checkCallableSignature(nullptr, *fn, errors))
             ok = false;
         if(!fn->hasBody){
-            if(!fn->isImported && !fn->isExtern){
-                reportError(errors, fn->span, "declared function has no implementation body");
-                ok = false;
-            }
-            continue;
-        }
-        if(fn->isImported || fn->isExtern){
-            fn->isInline = !fn->isExtern && __hidden_adhd_type_checker::ShouldAutoInlineCallable(*fn);
+            reportError(errors, fn->span, "declared function has no implementation body");
+            ok = false;
             continue;
         }
         if(!m_parallelValidator.validateMethod(*fn, errors))

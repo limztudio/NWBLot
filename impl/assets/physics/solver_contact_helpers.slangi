@@ -587,6 +587,47 @@ void nwbPhysicsSolveSingleContact(
     nwbPhysicsSolveContactVelocity(constraintIdx, mode == NWB_PHYSICS_SOLVER_MODE_SOLVE_BIAS, bodyStateSlot, constraintSlot, invH);
 }
 
+#ifdef NWB_PHYSICS_USE_LDS_BODY_STATES
+void nwbPhysicsIslandSolveContactsPass(
+    const uint tid,
+    const uint contactOffset,
+    const uint4 counts0,
+    const uint4 counts1,
+    const uint mode,
+    const uint bodyStateSlot,
+    const uint constraintSlot,
+    const float invH,
+    const uint flags
+){
+    uint off = contactOffset;
+    [unroll]
+    for(uint wordIdx = 0u; wordIdx < 6u; ++wordIdx){
+        const uint packed = (wordIdx < 4u) ? counts0[wordIdx] : counts1[wordIdx - 4u];
+        if(packed == 0u)
+            continue;
+        [unroll]
+        for(uint sub = 0u; sub < 4u; ++sub){
+            const uint cnt = (packed >> (sub * 8u)) & 0xffu;
+            if(cnt == 0u)
+                continue;
+            const uint color = wordIdx * 4u + sub;
+            if(color == NWB_PHYSICS_OVERFLOW_COLOR_INDEX){
+                if(tid == 0u){
+                    for(uint k = 0u; k < cnt; ++k)
+                        nwbPhysicsSolveSingleContact(off + k, mode, bodyStateSlot, constraintSlot, invH, flags);
+                }
+            }
+            else{
+                for(uint k = tid; k < cnt; k += NWB_PHYSICS_ISLAND_WORKGROUP_SIZE)
+                    nwbPhysicsSolveSingleContact(off + k, mode, bodyStateSlot, constraintSlot, invH, flags);
+            }
+            off += cnt;
+            GroupMemoryBarrierWithGroupSync();
+        }
+    }
+}
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -89,7 +89,7 @@ b8 AssetFilePublisher::Write(const __hidden_asset_file_publisher::ScratchPath& p
         if(ownsTemporary || !collision)
             break;
     }
-    if(!staged || !ReadBinaryFile(temporary, existing) || !BytesMatch(existing, bytes)){
+    if(!staged){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetVolume: failed to publish built asset '{}'"), PathToString<tchar>(path));
         return false;
     }

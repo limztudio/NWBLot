@@ -81,11 +81,13 @@ b8 ValidDeferredOutputLayer(in GpuTaskGraph graph, in GpuTaskGraphOutputLayer ou
     if(version.resource != output.color || version.origin != GpuGraphResourceVersionOrigin::TaskProduced)
         return false;
     in TextureDesc backBuffer = frame.backBuffer.texture.deref().getDescription();
-    return VisitGpuTaskTexture(declarations, output.color, lambda[in backBuffer, in output, in version](mut RhiTexture texture) -> b8{
+    in GpuTaskGraphOutputLayer outputRef = output;
+    in GpuTaskGraphResourceVersionView versionRef = version;
+    return VisitGpuTaskTexture(declarations, output.color, lambda[in backBuffer, in outputRef, in versionRef](mut RhiTexture texture) -> b8{
         in TextureDesc desc = texture.getDescription();
-        return ValidDeferredOutputLayerTextureShape(output.sampledImage.descriptorClass() == GpuDescriptorClass::SampledImage,
+        return ValidDeferredOutputLayerTextureShape(outputRef.sampledImage.descriptorClass() == GpuDescriptorClass::SampledImage,
             desc.width, desc.height, backBuffer.width, backBuffer.height, desc.dimension == TextureDimension::Texture2D, desc.format == Format::RGBA16_FLOAT,
-            desc.sampleCount, desc.mipLevels, desc.arraySize, version.range.textureSubresources.isEntireTexture(desc));
+            desc.sampleCount, desc.mipLevels, desc.arraySize, versionRef.range.textureSubresources.isEntireTexture(desc));
     });
 }
 

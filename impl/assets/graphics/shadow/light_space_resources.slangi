@@ -46,6 +46,8 @@ struct NwbLightSpacePushConstants{
     uint meshletCount;
     uint receiverViewSlot;
     uint receiverCsgSampleStateSlot;
+    uint fallbackListSlot;
+    uint fallbackArgsSlot;
 };
 [[vk::push_constant]] ConstantBuffer<NwbLightSpacePushConstants> g_NwbLightSpacePush;
 

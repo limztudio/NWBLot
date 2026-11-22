@@ -406,6 +406,17 @@ MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const Me
 }
 
 const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
+    if(expr.semanticChecked && expr.hasCachedTypeRef)
+        return expr.cachedTypeRef;
+    const TypeRef* const resolved = inferExprTypeRefUncached(ownerClass, method, expr, scope);
+    if(expr.semanticChecked){
+        expr.cachedTypeRef = resolved;
+        expr.hasCachedTypeRef = true;
+    }
+    return resolved;
+}
+
+const TypeRef* TypeChecker::inferExprTypeRefUncached(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
     if(expr.kind == ExprKind::Identifier){
         if(const ScopedVarInfo* local = FindScopedVar(scope, expr.text)){
             const TypeRef* unwrappedLocal = m_symbols.unwrapTypeAlias(local->type);

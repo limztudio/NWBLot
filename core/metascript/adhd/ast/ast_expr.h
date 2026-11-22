@@ -213,6 +213,9 @@ struct Expr{
     b8 unwrapSimdResultValue = false;
     u8 formatArgWrapKind = 0u;
     const TypeRef* wrapInFuncType = nullptr;
+    b8 semanticChecked = false;
+    mutable b8 hasCachedTypeRef = false;
+    mutable const TypeRef* cachedTypeRef = nullptr;
 
 
 public:

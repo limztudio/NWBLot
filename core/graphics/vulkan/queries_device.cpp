@@ -72,12 +72,14 @@ Expected<b8> Device::pollTimerQuery(TimerQuery& query){
         completedGeneration = query.m_completedCycleGeneration;
     }
 
-    const GpuPhysicalQueueId completionQueue{ .index = completedSubmission.physicalQueueIndex, .deviceGeneration = completedSubmission.deviceGeneration, };
-    const Expected<u64> completedInstance = queueGetCompletedInstance(completionQueue);
-    if(!completedInstance)
-        return MakeUnexpected(Failure{});
-    if(*completedInstance < completedSubmission.value)
-        return false;
+    if(!isQueueSubmissionObservedComplete(completedSubmission)){
+        const GpuPhysicalQueueId completionQueue{ .index = completedSubmission.physicalQueueIndex, .deviceGeneration = completedSubmission.deviceGeneration, };
+        const Expected<u64> completedInstance = queueGetCompletedInstance(completionQueue);
+        if(!completedInstance)
+            return MakeUnexpected(Failure{});
+        if(*completedInstance < completedSubmission.value)
+            return false;
+    }
 
     VkResult res = VK_SUCCESS;
     {
@@ -116,10 +118,12 @@ Expected<TimerQueryResult> Device::getTimerQueryResult(TimerQuery& query){
         completedGeneration = query.m_completedCycleGeneration;
     }
 
-    const GpuPhysicalQueueId completionQueue{ .index = completedSubmission.physicalQueueIndex, .deviceGeneration = completedSubmission.deviceGeneration, };
-    const Expected<u64> completedInstance = queueGetCompletedInstance(completionQueue);
-    if(!completedInstance || *completedInstance < completedSubmission.value)
-        return MakeUnexpected(Failure{});
+    if(!isQueueSubmissionObservedComplete(completedSubmission)){
+        const GpuPhysicalQueueId completionQueue{ .index = completedSubmission.physicalQueueIndex, .deviceGeneration = completedSubmission.deviceGeneration, };
+        const Expected<u64> completedInstance = queueGetCompletedInstance(completionQueue);
+        if(!completedInstance || *completedInstance < completedSubmission.value)
+            return MakeUnexpected(Failure{});
+    }
 
     VkResult res = VK_SUCCESS;
     {

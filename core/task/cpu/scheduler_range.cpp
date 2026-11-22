@@ -45,7 +45,7 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
         notifyProgress(wakePlan, wakeJoiners);
     });
 
-    if(!m_profileEnabled.load(MemoryOrder::relaxed) && options.target != CpuTaskTarget::MainThread && m_workerCount != 0u && runFirstInline && chunkGroups >= 2u){
+    if(options.target != CpuTaskTarget::MainThread && m_workerCount != 0u && runFirstInline && chunkGroups >= 2u){
         const b8 fastUnscoped = !inScheduler && !callerScope && mainThread;
         const usize workerCapacity = static_cast<usize>(1u) + static_cast<usize>(m_workerCount);
         const usize chunkCount = Min(chunkGroups, static_cast<usize>(m_workerCount) * 2u);

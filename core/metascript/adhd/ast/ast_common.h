@@ -95,8 +95,111 @@ namespace DiagnosticKind{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class AstNodePool final : NoCopy{
+private:
+    struct ChunkHeader{
+        ChunkHeader* prev = nullptr;
+        usize capacity = 0u;
+        usize used = 0u;
+        usize alignment = 16u;
+    };
+
+    struct DestructorNode{
+        DestructorNode* prev = nullptr;
+        void* object = nullptr;
+        void (*destroy)(void*)noexcept = nullptr;
+    };
+
+    static inline constexpr usize s_ChunkBytes = 65536u;
+
+
+public:
+    static thread_local AstNodePool* s_ActivePool;
+
+
+public:
+    explicit AstNodePool(MetaArena& arena)noexcept
+        : m_arena(arena)
+    {}
+    ~AstNodePool()noexcept{ clear(); }
+
+    template<typename T>
+    [[nodiscard]] T* allocate(){
+        void* mem = allocateRaw(alignof(T), sizeof(T));
+        T* obj = ::new(mem) T(m_arena);
+        if constexpr(!std::is_trivially_destructible_v<T>){
+            DestructorNode* const dtor = static_cast<DestructorNode*>(allocateRaw(alignof(DestructorNode), sizeof(DestructorNode)));
+            dtor->prev = m_dtorHead;
+            dtor->object = obj;
+            dtor->destroy = [](void* const ptr)noexcept{ static_cast<T*>(ptr)->~T(); };
+            m_dtorHead = dtor;
+        }
+        return obj;
+    }
+
+    void clear()noexcept{
+        while(m_dtorHead){
+            DestructorNode* const node = m_dtorHead;
+            m_dtorHead = node->prev;
+            node->destroy(node->object);
+        }
+        while(m_head){
+            ChunkHeader* const chunk = m_head;
+            m_head = chunk->prev;
+            m_arena.deallocate(chunk, chunk->alignment, chunk->capacity);
+        }
+    }
+
+
+private:
+    [[nodiscard]] void* allocateRaw(usize align, const usize size){
+        if(align < 8u)
+            align = 8u;
+        const usize headerBytes = AlignUp<usize>(sizeof(ChunkHeader), 16u);
+        if(!m_head || AlignUp<usize>(m_head->used, align) + size > m_head->capacity){
+            const usize bodyMin = headerBytes + size + align;
+            const usize chunkBytes = bodyMin > s_ChunkBytes ? AlignUp<usize>(bodyMin, 4096u) : s_ChunkBytes;
+            const usize chunkAlign = align > 16u ? align : 16u;
+            void* const raw = m_arena.allocate(chunkAlign, chunkBytes);
+            ChunkHeader* const chunk = static_cast<ChunkHeader*>(raw);
+            chunk->prev = m_head;
+            chunk->capacity = chunkBytes;
+            chunk->used = headerBytes;
+            chunk->alignment = chunkAlign;
+            m_head = chunk;
+        }
+        const usize alignedOffset = AlignUp(m_head->used, align);
+        m_head->used = alignedOffset + size;
+        return reinterpret_cast<u8*>(m_head) + alignedOffset;
+    }
+
+
+private:
+    MetaArena& m_arena;
+    ChunkHeader* m_head = nullptr;
+    DestructorNode* m_dtorHead = nullptr;
+};
+
+class ScopedAstNodePool final : NoCopy{
+public:
+    explicit ScopedAstNodePool(AstNodePool& pool)noexcept
+        : m_previous(AstNodePool::s_ActivePool)
+    {
+        AstNodePool::s_ActivePool = &pool;
+    }
+    ~ScopedAstNodePool()noexcept{
+        AstNodePool::s_ActivePool = m_previous;
+    }
+
+
+private:
+    AstNodePool* m_previous = nullptr;
+};
+
 template<typename T>
 [[nodiscard]] T* AllocateAstNode(MetaArena& arena){
+    if(AstNodePool* const pool = AstNodePool::s_ActivePool)
+        return pool->allocate<T>();
     void* mem = arena.allocate(alignof(T), sizeof(T));
     return ::new(mem) T(arena);
 }

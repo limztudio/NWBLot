@@ -65,7 +65,9 @@ struct NwbCausticResolvePushConstants{
 #define NWB_CAUSTIC_RESOLVE_TILE_SIDE (NWB_CAUSTIC_RESOLVE_GROUP_SIZE + NWB_CAUSTIC_RESOLVE_KERNEL_SPAN * NWB_CAUSTIC_RESOLVE_TILE_CAPACITY_STEP)
 #define NWB_CAUSTIC_RESOLVE_TILE_TEXELS (NWB_CAUSTIC_RESOLVE_TILE_SIDE * NWB_CAUSTIC_RESOLVE_TILE_SIDE)
 
-#if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT
+#if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT \
+    && NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_STAGE_PREPARE_DOWNSAMPLE \
+    && NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_STAGE_UPSAMPLE
 groupshared half3  g_NwbCausticResolveTileColor[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared half3  g_NwbCausticResolveTileWorld[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared uint   g_NwbCausticResolveTileValid[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
@@ -134,7 +136,7 @@ bool nwbCausticResolveInputInactive(const uint2 group, const uint threadIndex){
         const int2 tile = int2(group) + offset;
         if(all(tile >= int2(0, 0)) && all(tile < int2(tiles))){
             const uint index = (uint)tile.y * tiles.x + (uint)tile.x;
-            if(nwbHeapRawBuffer(g_NwbCausticResolvePushConstants.activityInputSlot).Load(index * NWB_CAUSTIC_RESOLVE_ACTIVITY_WORD_BYTES) != 0u)
+            if(nwbHeapRawBufferUniform(g_NwbCausticResolvePushConstants.activityInputSlot).Load(index * NWB_CAUSTIC_RESOLVE_ACTIVITY_WORD_BYTES) != 0u)
                 InterlockedOr(g_NwbCausticResolveInputActivity, 1u);
         }
     }

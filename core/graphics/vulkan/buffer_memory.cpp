@@ -19,6 +19,10 @@ NWB_VULKAN_BEGIN
 
 
 Expected<void*> Device::mapBuffer(Buffer& buffer, const CpuAccessMode::Enum requestedAccess){
+    return mapBufferInternal(buffer, requestedAccess, 0u, VK_WHOLE_SIZE);
+}
+
+Expected<void*> Device::mapBufferInternal(Buffer& buffer, const CpuAccessMode::Enum requestedAccess, const u64 invalidateOffsetBytes, const u64 invalidateSizeBytes){
     if(requestedAccess != CpuAccessMode::Read && requestedAccess != CpuAccessMode::Write){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to map buffer: invalid CPU access mode"));
         return MakeUnexpected(Failure{});
@@ -60,8 +64,18 @@ Expected<void*> Device::mapBuffer(Buffer& buffer, const CpuAccessMode::Enum requ
             return MakeUnexpected(Failure{});
         }
 
-        if(*effectiveAccess == CpuAccessMode::Read){
-            const VkResult res = m_allocator.invalidateHeapMemory(heap, buffer.m_heapBindingRange.localOffset, buffer.m_heapBindingRange.size);
+        if(*effectiveAccess == CpuAccessMode::Read && invalidateSizeBytes != 0u){
+            u64 heapInvalidateOffset = buffer.m_heapBindingRange.localOffset;
+            u64 heapInvalidateSize = buffer.m_heapBindingRange.size;
+            if(invalidateSizeBytes != VK_WHOLE_SIZE){
+                if(invalidateOffsetBytes > buffer.m_heapBindingRange.size || invalidateSizeBytes > buffer.m_heapBindingRange.size - invalidateOffsetBytes){
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to invalidate readback heap mapping: requested byte range exceeds binding size"));
+                    return MakeUnexpected(Failure{});
+                }
+                heapInvalidateOffset += invalidateOffsetBytes;
+                heapInvalidateSize = invalidateSizeBytes;
+            }
+            const VkResult res = m_allocator.invalidateHeapMemory(heap, heapInvalidateOffset, heapInvalidateSize);
             if(res != VK_SUCCESS){
                 NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to invalidate readback heap mapping: {}"), ResultToString(res));
                 return MakeUnexpected(Failure{});
@@ -76,10 +90,10 @@ Expected<void*> Device::mapBuffer(Buffer& buffer, const CpuAccessMode::Enum requ
     }
 
     auto invalidateReadRange = [&]() -> b8{
-        if(*effectiveAccess != CpuAccessMode::Read)
+        if(*effectiveAccess != CpuAccessMode::Read || invalidateSizeBytes == 0u)
             return true;
 
-        const VkResult res = m_allocator.invalidateBufferMemory(buffer);
+        const VkResult res = m_allocator.invalidateBufferMemory(buffer, invalidateOffsetBytes, invalidateSizeBytes);
         if(res != VK_SUCCESS){
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to invalidate readback buffer mapping: {}"), ResultToString(res));
             return false;
@@ -165,7 +179,7 @@ b8 Device::readMappedBufferBytes(Buffer& buffer, void* const outData, const usiz
         return false;
     }
 
-    const Expected<void*> mapped = mapBuffer(buffer, CpuAccessMode::Read);
+    const Expected<void*> mapped = mapBufferInternal(buffer, CpuAccessMode::Read, srcOffsetBytes, static_cast<u64>(byteSize));
     if(!mapped)
         return false;
     if(!*mapped){

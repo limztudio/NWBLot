@@ -229,6 +229,29 @@ Preprocessor::Preprocessor(MetaArena& arena, Alloc::ScratchArena& scratchArena, 
 }
 
 
+void Preprocessor::rebuildMacroFilter()noexcept{
+    m_macroFilter.firstCharMask.fill(0u);
+    if(m_macros.empty()){
+        m_macroFilter.minLen = 0u;
+        m_macroFilter.maxLen = 0u;
+        return;
+    }
+    usize minLen = Limit<usize>::s_Max;
+    usize maxLen = 0u;
+    for(const auto& [name, macro] : m_macros){
+        (void)macro;
+        if(name.empty())
+            continue;
+        m_macroFilter.firstCharMask[static_cast<u8>(name[0])] = 1u;
+        if(name.size() < minLen)
+            minLen = name.size();
+        if(name.size() > maxLen)
+            maxLen = name.size();
+    }
+    m_macroFilter.minLen = minLen == Limit<usize>::s_Max ? 0u : minLen;
+    m_macroFilter.maxLen = maxLen;
+}
+
 void Preprocessor::defineObjectMacro(const MStringView name, const MStringView body){
     if(const auto existing = m_macros.find(name); existing != m_macros.end() && existing.value().isFunctionLike && m_functionMacroCount > 0u)
         --m_functionMacroCount;
@@ -238,6 +261,7 @@ void Preprocessor::defineObjectMacro(const MStringView name, const MStringView b
     macro.isFunctionLike = false;
     MString key(name.data(), name.size(), m_arena);
     m_macros.insert_or_assign(Move(key), Move(macro));
+    rebuildMacroFilter();
 }
 
 void Preprocessor::undefineMacro(const MStringView name)noexcept{
@@ -246,6 +270,7 @@ void Preprocessor::undefineMacro(const MStringView name)noexcept{
         if(it.value().isFunctionLike && m_functionMacroCount > 0u)
             --m_functionMacroCount;
         m_macros.erase(it);
+        rebuildMacroFilter();
     }
 }
 
@@ -437,20 +462,41 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
         else if(isActive){
             expandedTail.clear();
             MStringView expandedView = effectiveLine;
+            PreprocessorMacroExpander::LineScanOutcome scanOutcome{};
             if(!m_macros.empty()){
-                PreprocessorMacroExpander macroExpander(m_arena, m_macros, m_errors);
-                if(!macroExpander.expandToView(effectiveLine, startLine, expandedTail, expandedView))
+                PreprocessorMacroExpander macroExpander(m_arena, m_macros, m_errors, &m_macroFilter);
+                if(!macroExpander.expandToView(effectiveLine, startLine, expandedTail, expandedView, &scanOutcome))
                     return false;
             }
             if(commentPrefix.empty()){
-                updateLineScanState(expandedView, 0u);
+                if(!m_macros.empty() && !scanOutcome.replaced){
+                    if(scanOutcome.enteredBlockComment)
+                        inBlockComment = true;
+                    else if(scanOutcome.enteredRawString){
+                        inRawString = true;
+                        rawStringDelimiter.assign(scanOutcome.rawStringDelimiter.data(), scanOutcome.rawStringDelimiter.size());
+                    }
+                }
+                else{
+                    updateLineScanState(expandedView, 0u);
+                }
                 outProcessed.append(expandedView.data(), expandedView.size());
             }
             else{
                 expandedLine.clear();
                 expandedLine.append(commentPrefix.data(), commentPrefix.size());
                 expandedLine.append(expandedView.data(), expandedView.size());
-                updateLineScanState(MStringView(expandedLine.data(), expandedLine.size()), commentPrefix.size());
+                if(!m_macros.empty() && !scanOutcome.replaced){
+                    if(scanOutcome.enteredBlockComment)
+                        inBlockComment = true;
+                    else if(scanOutcome.enteredRawString){
+                        inRawString = true;
+                        rawStringDelimiter.assign(scanOutcome.rawStringDelimiter.data(), scanOutcome.rawStringDelimiter.size());
+                    }
+                }
+                else{
+                    updateLineScanState(MStringView(expandedLine.data(), expandedLine.size()), commentPrefix.size());
+                }
                 outProcessed.append(expandedLine.data(), expandedLine.size());
             }
             outProcessed.push_back('\n');
@@ -652,6 +698,7 @@ b8 Preprocessor::handleDefine(const MStringView rest, const u32 line){
         ++m_functionMacroCount;
     MString key(name.data(), name.size(), m_arena);
     m_macros.insert_or_assign(Move(key), Move(macro));
+    rebuildMacroFilter();
     return true;
 }
 

@@ -65,6 +65,16 @@ class RayTracingOpticalSceneGather{
         this.instances.reserve(capacity);
     }
 
+    public void reset(in usize capacity){
+        this.header = RayTracingOpticalSceneHeaderGpu();
+        this.instances.clear();
+        this.runtimeBounds.clear();
+        this.instances.reserve(capacity);
+        this.hasBounds = false;
+        this.boundsCompleteExceptRuntime = true;
+        this.unspecifiedBoundariesOnly = true;
+    }
+
     public void append(in EntityID entity, in RendererComponent renderer, in b8 transparent, in VectorSingle boundsMin, in VectorSingle boundsMax, in b8 boundsValid){
         const RayTracingOpticalInstanceGpu instance = BuildRayTracingOpticalInstance(
             entity,

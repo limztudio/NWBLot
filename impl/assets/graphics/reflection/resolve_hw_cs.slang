@@ -135,11 +135,56 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
         surface.bias,
         g_NwbReflectionParameters.maxRayDistance,
     };
-    if(g_NwbReflectionParameters.diagnosticsEnabled != 0u){
-        const bool exterior = nwbOpticalSegmentProvenExterior(config.opticalSceneHeapSlot, surface.position + surface.normal * surface.bias, surface.direction, config.minDistance, config.maxDistance, config.maxQueries);
+    const float3 traceOrigin = surface.position + surface.normal * surface.bias;
+    const bool exterior = nwbOpticalSegmentProvenExterior(config.opticalSceneHeapSlot, traceOrigin, surface.direction, config.minDistance, config.maxDistance, config.maxQueries);
+    if(g_NwbReflectionParameters.diagnosticsEnabled != 0u)
         nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_EXTERIOR_ELIGIBLE_RAYS, exterior ? 1u : 0u);
+    bool useExteriorFastPath = exterior;
+#if NWB_RT_CSG_ENABLED
+    if(useExteriorFastPath){
+        const uint activeCount = nwbHeapRawBufferUniform(NWB_RT_CSG_CONTEXT_SLOT).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_COUNT_OFFSET);
+        useExteriorFastPath = activeCount + 1u <= config.maxQueries;
     }
-    const NwbOpticalTraceResult result = nwbOpticalTrace(config, surface.position + surface.normal * surface.bias, surface.direction);
+#endif
+    NwbOpticalTraceResult result = (NwbOpticalTraceResult)0;
+    if(useExteriorFastPath){
+        const NwbRayTraceSurfaceHit hit = nwbRayTraceClosestSurfaceHit(config.instanceMaterialHeapSlot, traceOrigin, surface.direction, config.minDistance, config.maxDistance);
+#if NWB_RT_CSG_ENABLED
+        result.queryBudgetUnits = hit.queryBudgetUnits;
+        result.physicalQueries = hit.physicalQueries;
+        if(hit.failure != 0u){
+            result.surfaceHit = true;
+            result.transparentPath = (hit.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) != 0u;
+            result.termination = (hit.failure & NWB_CSG_RAY_FAILURE_AMBIGUOUS_NORMAL) != 0u ? NWB_OPTICAL_TERMINATION_AMBIGUOUS : NWB_OPTICAL_TERMINATION_UNSUPPORTED;
+        }
+        else
+#else
+        result.queryBudgetUnits = 1u;
+#endif
+        if(!hit.hit){
+            result.radiance = nwbOpticalEnvironmentRadiance(surface.direction);
+            result.termination = NWB_OPTICAL_TERMINATION_MISS_OUTSIDE;
+        }
+        else{
+            result.surfaceHit = true;
+            if(!isfinite(hit.distance) || !all(isfinite(hit.position)) || !all(isfinite(hit.geometricNormal)) || dot(hit.geometricNormal, hit.geometricNormal) == 0.0 || hit.distance <= 0.0)
+                result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+            else{
+                const float segmentDistance = length(hit.position - traceOrigin);
+                if(!isfinite(segmentDistance) || segmentDistance <= 0.0)
+                    result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+                else if(segmentDistance > config.maxDistance)
+                    result.termination = NWB_OPTICAL_TERMINATION_RANGE;
+                else{
+                    result.distance = segmentDistance;
+                    result.radiance = nwbOpticalSurfaceRadiance(hit, -surface.direction);
+                    result.termination = NWB_OPTICAL_TERMINATION_OPAQUE;
+                }
+            }
+        }
+    }
+    else
+        result = nwbOpticalTrace(config, traceOrigin, surface.direction);
     nwbReflectionRecordOpticalDiagnostics(result);
     half3 radiance = result.radiance;
     if(!result.transparentPath && result.termination == NWB_OPTICAL_TERMINATION_OPAQUE){

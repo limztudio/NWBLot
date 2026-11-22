@@ -320,11 +320,12 @@ b8 Builder::applyContextMenuInput(mut BuilderContextMenuFrame frame, mut Context
     ListOptions options;
     options.wheelRows = frame.options.wheelRows;
     options.selectOnNavigate = false;
+    in ListOptions optionsRef = options;
     ListInput inputs(this.m_context);
     const ListInputMatches matches = lambda[in this, mut frame]() -> b8{ return this.contextMenuMatches(frame); };
-    const ListInputApplyAction apply = lambda[mut this, mut frame, in options, mut result](in ControlAction action) -> ListActionOutcome{
+    const ListInputApplyAction apply = lambda[mut this, mut frame, in optionsRef, mut result](in ControlAction action) -> ListActionOutcome{
         ListResult preview;
-        if(!ApplyListControlAction(frame.source.value(), options, action, frame.state.value().m_list, preview) || !this.contextMenuMatches(frame))
+        if(!ApplyListControlAction(frame.source.value(), optionsRef, action, frame.state.value().m_list, preview) || !this.contextMenuMatches(frame))
             return ListActionOutcome::Failed;
         if(!preview.activated)
             return ListActionOutcome::Continue;
@@ -505,7 +506,7 @@ EditBoxResult Builder::declareEditBox(
         return result;
     }
     auto item = this.makeItem();
-    item.style = this.m_style;
+    item.styleIndex = this.currentItemStyleIndex();
     item.state = widget.value();
     auto editFrame = this.makeEditBoxFrame();
     editFrame.editStyle = this.m_editStyle;
@@ -527,12 +528,12 @@ EditBoxResult Builder::declareEditBox(
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    description.intrinsicSize = ResolveEditIntrinsicSize(this.loadEditMinimumSize(), editFrame.editView.visualBounds().height, item.padding);
+    description.intrinsicSize = ResolveEditIntrinsicSize(this.loadEditMinimumSize(), this.editViewForFrame(editFrame).visualBounds().height, item.padding);
     if(!this.addItemNode(description, item)){
         result.valid = false;
         return result;
     }
-    AppendOwned<BuilderEditBoxFrame>(this.m_scope.value().m_editBoxes, editFrame);
+    this.m_scope.value().m_editBoxes.push_back(editFrame);
     AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
     return result;
 }
@@ -546,10 +547,62 @@ b8 Builder::prepareEditBox(in EditBoxResult result, mut EditModel model, mut Edi
     editFrame.editFlags.readOnly = editFrame.editOptions.readOnly;
     editFrame.editFlags.caretVisible = state.caretElapsed < s_CaretVisiblePhaseEnd;
     editFrame.editFlags.preeditCaretVisible = result.preeditCaretVisible;
-    if(!editFrame.editView.snapshot(model) || editFrame.editView.shape(this.m_text, this.textShapeRequest("", this.m_style.fontSize)) != TextLayoutStatus::Success || !editFrame.editView.measure(this.m_text, this.m_paint.displayMetrics())){
-        this.m_context.fail();
-        return false;
+
+    const u64 widgetKey = item.state.id.value;
+    u32 cacheIdx = u32.max;
+    const auto foundCache = this.m_editBoxCacheIndex.find(widgetKey);
+    if(foundCache != this.m_editBoxCacheIndex.end())
+        cacheIdx = foundCache.value();
+    else{
+        cacheIdx = cast<u32>(this.m_editBoxCacheEntries.size());
+        this.m_editBoxCacheEntries.emplace_back();
+        this.m_editBoxCacheIndex.try_emplace(widgetKey, cacheIdx);
     }
+    mut CachedEditBoxView cached = this.m_editBoxCacheEntries[cacheIdx];
+    cached.lastUsedFrame = this.m_editViewFrameCounter;
+    const TextAreaModelStamp stamp = model.stamp();
+    const u64 textId = this.m_text.identity();
+    const u64 textGen = this.m_text.generation();
+    const u32 fontSizeBits = bit_cast<u32>(this.m_style.fontSize);
+    in DisplayMetrics display = this.m_paint.displayMetrics();
+    const u32 scaleXBits = bit_cast<u32>(display.pixelScaleX);
+    const u32 scaleYBits = bit_cast<u32>(display.pixelScaleY);
+    const u64 atlasId = this.m_text.atlasIdentity();
+    const usize atlasGlyphs = this.m_text.atlasGlyphCount();
+    if(!cached.matchesShape(stamp, textId, textGen, fontSizeBits, this.m_textScriptTag, StringView(this.m_textLanguage))){
+        cached.valid = false;
+        if(
+            !cached.view.snapshot(model)
+            || cached.view.shape(this.m_text, this.textShapeRequest("", this.m_style.fontSize)) != TextLayoutStatus::Success
+            || !cached.view.measure(this.m_text, display)
+        ){
+            this.m_context.fail();
+            return false;
+        }
+        cached.modelStamp = stamp;
+        cached.textIdentity = textId;
+        cached.textGeneration = textGen;
+        cached.fontSizeBits = fontSizeBits;
+        cached.scriptTag = this.m_textScriptTag;
+        cached.language.assign(StringView(this.m_textLanguage));
+        cached.pixelScaleXBits = scaleXBits;
+        cached.pixelScaleYBits = scaleYBits;
+        cached.atlasIdentity = this.m_text.atlasIdentity();
+        cached.atlasGlyphCount = this.m_text.atlasGlyphCount();
+        cached.valid = true;
+    }
+    else if(!cached.matchesMeasure(scaleXBits, scaleYBits, atlasId, atlasGlyphs)){
+        if(!cached.view.measure(this.m_text, display)){
+            cached.valid = false;
+            this.m_context.fail();
+            return false;
+        }
+        cached.pixelScaleXBits = scaleXBits;
+        cached.pixelScaleYBits = scaleYBits;
+        cached.atlasIdentity = this.m_text.atlasIdentity();
+        cached.atlasGlyphCount = this.m_text.atlasGlyphCount();
+    }
+    editFrame.editViewCache = cacheIdx;
     editFrame.editState = Optional<mut EditBoxState>(state);
     item.padding = this.loadEditPadding();
     return true;
@@ -559,12 +612,13 @@ b8 Builder::paintEditBox(in BuilderItem item, in LayoutBox box, in Optional<in H
     if(item.editBox >= this.m_scope.value().m_editBoxes.size() || !this.numericEditMatches(item))
         return false;
     mut BuilderEditBoxFrame editFrame = this.m_scope.value().m_editBoxes[item.editBox];
+    in EditBoxView view = this.editViewForFrame(editFrame);
     const f32 caretWidth = ResolveSinglePixelCaretWidth(this.m_paint.displayMetrics());
-    const auto arranged = editFrame.editView.arrange(box.rectangle, item.padding, this.visibleClip(box.clip), Point(editFrame.editState.value().scroll, 0.0f), caretWidth);
+    const auto arranged = view.arrange(box.rectangle, item.padding, this.visibleClip(box.clip), Point(editFrame.editState.value().scroll, 0.0f), caretWidth);
     if(!arranged.has_value())
         return false;
     in EditBoxPlacement placement = arranged.value();
-    if(!editFrame.editView.paint(this.m_text, this.m_paint, this.m_skin.value(), placement, editFrame.editStyle, editFrame.editFlags))
+    if(!view.paint(this.m_text, this.m_paint, this.m_skin.value(), placement, editFrame.editStyle, editFrame.editFlags))
         return false;
     editFrame.editState.value().placement = placement;
     editFrame.editState.value().scroll = placement.scroll;
@@ -575,7 +629,7 @@ b8 Builder::paintEditBox(in BuilderItem item, in LayoutBox box, in Optional<in H
     const HitTarget target = targets.makeEditBoxHitTarget(navigationTarget, box.rectangle, this.visibleClip(box.clip), editFrame.editOptions.enabled, item.contextMenu);
     if(!this.m_context.addTarget(item.state, target))
         return false;
-    const b8 published = !this.m_editHost.has_value() || this.m_editHost.value().publish(item.state, editFrame.editView, placement, editFrame.editOptions);
+    const b8 published = !this.m_editHost.has_value() || this.m_editHost.value().publish(item.state, view, placement, editFrame.editOptions);
     return published && this.numericEditMatches(item);
 }
 

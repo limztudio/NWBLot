@@ -151,13 +151,63 @@ b8 ParseAssetMetadata(
 
     b8 useAssetCache = !assetCacheDirectory.empty();
     Sha256Digest producerDigest = {};
-    if(useAssetCache && !nwbFiles.empty())
+    Vector<AssetPairedSidecarRule, ScratchArena> pairedSidecarRules(scratchArena);
+    if(useAssetCache && !nwbFiles.empty()){
         AssetProducerFingerprint::Resolve(scratchArena, useAssetCache, producerDigest);
+        if(useAssetCache)
+            CookMetadataDetail::CopyPairedSidecarRules(pairedSidecarRules);
+    }
+    const Span<const AssetPairedSidecarRule> pairedSidecarRuleSpan(pairedSidecarRules.data(), pairedSidecarRules.size());
+
     outMetadata.fileCacheRecords.clear();
     if(useAssetCache){
         outMetadata.fileCacheRecords.reserve(nwbFiles.size());
         for(usize fileIndex = 0u; fileIndex < nwbFiles.size(); ++fileIndex)
             outMetadata.fileCacheRecords.emplace_back(cookArena);
+    }
+
+    struct PreparedCookMetaFile final{
+        AInteropString metaText;
+        AInteropString sourcePathText;
+        AInteropString cacheFileName;
+        Sha256Digest paramSha256 = {};
+        b8 readOk = false;
+        b8 canUseCache = false;
+    };
+
+    Vector<PreparedCookMetaFile, ScratchArena> preparedFiles(scratchArena);
+    b8 useParallelPrep = nwbFiles.size() >= 4u && cpuScheduler.isParallelEnabled();
+    if(useParallelPrep){
+        preparedFiles.resize(nwbFiles.size());
+        const auto prepResult = cpuScheduler.parallelFor(usize{ 0u }, nwbFiles.size(), [&](const usize fileIndex){
+            Alloc::ScratchArena workerScratch;
+            ScratchString sourcePathText{workerScratch};
+            ScratchString cacheFileName{workerScratch};
+            PreparedCookMetaFile& entry = preparedFiles[fileIndex];
+            const DiscoveredNwbFile& discoveredNwbFile = nwbFiles[fileIndex];
+            if(!ReadTextFile(discoveredNwbFile.filePath, entry.metaText))
+                return;
+            entry.readOk = true;
+            StripUtf8Bom(entry.metaText);
+            if(useAssetCache){
+                entry.canUseCache = CookMetadataDetail::ComputeNwbFileAssetCacheData(
+                    discoveredNwbFile,
+                    AStringView(entry.metaText),
+                    producerDigest,
+                    pairedSidecarRuleSpan,
+                    workerScratch,
+                    sourcePathText,
+                    cacheFileName,
+                    entry.paramSha256
+                );
+                entry.sourcePathText.assign(sourcePathText.data(), sourcePathText.size());
+                entry.cacheFileName.assign(cacheFileName.data(), cacheFileName.size());
+            }
+        });
+        if(!prepResult){
+            preparedFiles.clear();
+            useParallelPrep = false;
+        }
     }
 
     ScratchArena fileScratchArena;
@@ -170,26 +220,52 @@ b8 ParseAssetMetadata(
         ScratchString cacheFileName{fileScratchArena};
 
         const DiscoveredNwbFile& discoveredNwbFile = nwbFiles[fileIndex];
-        metaText.clear();
-        if(!ReadTextFile(discoveredNwbFile.filePath, metaText)){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: failed to read meta '{}'"), PathToString<tchar>(discoveredNwbFile.filePath));
-            return false;
+        AStringView metaTextView;
+        if(useParallelPrep){
+            const PreparedCookMetaFile& prepared = preparedFiles[fileIndex];
+            if(!prepared.readOk){
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: failed to read meta '{}'"), PathToString<tchar>(discoveredNwbFile.filePath));
+                return false;
+            }
+            metaTextView = AStringView(prepared.metaText);
         }
-        StripUtf8Bom(metaText);
+        else{
+            metaText.clear();
+            if(!ReadTextFile(discoveredNwbFile.filePath, metaText)){
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: failed to read meta '{}'"), PathToString<tchar>(discoveredNwbFile.filePath));
+                return false;
+            }
+            StripUtf8Bom(metaText);
+            metaTextView = AStringView(metaText);
+        }
 
         if(useAssetCache){
             NwbFileAssetCacheRecord& cacheRecord = outMetadata.fileCacheRecords[fileIndex];
-            const AStringView firstToken = ReadFirstIdentifierAfterCComments(AStringView(metaText));
-            CookMetadataDetail::PrepareNwbFileAssetCacheRecord(
-                assetCacheDirectory,
-                discoveredNwbFile,
-                AStringView(metaText),
-                producerDigest,
-                fileScratchArena,
-                sourcePathText,
-                cacheFileName,
-                cacheRecord
-            );
+            const AStringView firstToken = ReadFirstIdentifierAfterCComments(metaTextView);
+            if(useParallelPrep){
+                const PreparedCookMetaFile& prepared = preparedFiles[fileIndex];
+                CookMetadataDetail::PopulateNwbFileAssetCacheRecord(
+                    assetCacheDirectory,
+                    AStringView(prepared.sourcePathText),
+                    AStringView(prepared.cacheFileName),
+                    prepared.paramSha256,
+                    prepared.canUseCache,
+                    cacheRecord
+                );
+            }
+            else{
+                CookMetadataDetail::PrepareNwbFileAssetCacheRecord(
+                    assetCacheDirectory,
+                    discoveredNwbFile,
+                    metaTextView,
+                    producerDigest,
+                    pairedSidecarRuleSpan,
+                    fileScratchArena,
+                    sourcePathText,
+                    cacheFileName,
+                    cacheRecord
+                );
+            }
 
 #if !defined(NWB_BUILDMODE)
             if(cacheRecord.canWriteCache && !IsLikelyNonStandaloneFirstToken(firstToken)){
@@ -214,7 +290,7 @@ b8 ParseAssetMetadata(
 #endif
         }
 
-        const auto parsedDoc = __hidden_cook_metadata::ParseMetascriptDocumentText(discoveredNwbFile.filePath, AStringView(metaText), cookArena);
+        const auto parsedDoc = __hidden_cook_metadata::ParseMetascriptDocumentText(discoveredNwbFile.filePath, metaTextView, cookArena);
         if(!parsedDoc)
             return false;
         const auto& doc = *parsedDoc;

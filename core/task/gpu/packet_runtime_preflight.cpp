@@ -393,20 +393,7 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
             if((*permanentState) != ResourceStates::Unknown)
                 return true;
             const TextureSubresourceSet range = barrier.range.textureSubresources.resolve(texture->getCreationDescription(), TextureSubresourceMipResolve::Range);
-            for(ArraySlice arraySlice = range.baseArraySlice; arraySlice < range.baseArraySlice + range.numArraySlices; ++arraySlice){
-                for(MipLevel mipLevel = range.baseMipLevel; mipLevel < range.baseMipLevel + range.numMipLevels; ++mipLevel){
-                    b8 found = false;
-                    for(const CommandListResourceStateHandoff::TextureState& state : initialStates->m_textureStates){
-                        if(state.texture == texture && state.arraySlice == arraySlice && state.mipLevel == mipLevel && state.state != ResourceStates::Unknown){
-                            found = true;
-                            break;
-                        }
-                    }
-                    if(!found)
-                        return false;
-                }
-            }
-            return true;
+            return initialStateValidation->hasExplicitTextureRange(texture, range);
         }
 
         Buffer* const buffer = cached.buffer;
@@ -416,6 +403,8 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
         if((*permanentState) != ResourceStates::Unknown)
             return true;
         const BufferRange range = barrier.range.bufferRange.resolve(buffer->getCreationDescription());
+        if(initialStates->m_bufferStates.size() > 8u)
+            return initialStateValidation->hasExplicitBufferRange(buffer, range);
         return CoversHalfOpenRange(
             range.byteOffset, range.end(), Span<const CommandListResourceStateHandoff::BufferState>(initialStates->m_bufferStates),
             [buffer](const auto& state)noexcept{ return state.buffer == buffer && state.state != ResourceStates::Unknown; },

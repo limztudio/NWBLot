@@ -129,35 +129,35 @@ struct NwbCsgRayCutIterator{
 };
 
 uint4 nwbCsgRayReceiverRange(const uint contextSlot, const uint instanceIndex){
-    const uint4 header = nwbHeapRawBuffer(contextSlot).Load4(0u);
+    const uint4 header = nwbCsgRayContextBuffer(contextSlot).Load4(0u);
     if(instanceIndex >= header.x)
         return uint4(0u);
-    return nwbHeapRawBuffer(contextSlot).Load4(header.y + instanceIndex * NWB_CSG_RAY_RANGE_BYTES);
+    return nwbCsgRayContextBuffer(contextSlot).Load4(header.y + instanceIndex * NWB_CSG_RAY_RANGE_BYTES);
 }
 
 uint nwbCsgRayValidateReceiverRange(const uint contextSlot, const uint4 range){
-    const uint cutterCount = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_CUTTER_COUNT_OFFSET);
+    const uint cutterCount = nwbCsgRayContextBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_CUTTER_COUNT_OFFSET);
     return (range.z & NWB_CSG_RAY_RECEIVER_UNSUPPORTED) != 0u || range.w == 0u || range.x > cutterCount || range.y > cutterCount - range.x || range.y > NWB_CSG_RAY_MAX_CUTTERS ? NWB_CSG_RAY_FAILURE_UNSUPPORTED : 0u;
 }
 
 NwbCsgRayCutter nwbCsgRayLoadCutter(const uint contextSlot, const uint cutterIndex){
-    const uint offset = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_CUTTER_BASE_OFFSET) + cutterIndex * NWB_CSG_RAY_CUTTER_BYTES;
+    const uint offset = nwbCsgRayContextBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_CUTTER_BASE_OFFSET) + cutterIndex * NWB_CSG_RAY_CUTTER_BYTES;
     NwbCsgRayCutter cutter;
-    cutter.shapeType = nwbHeapRawBuffer(contextSlot).Load(offset);
-    cutter.worldToShapeRow0 = asfloat(nwbHeapRawBuffer(contextSlot).Load4(offset + NWB_CSG_RAY_CUTTER_ROW0_OFFSET));
-    cutter.worldToShapeRow1 = asfloat(nwbHeapRawBuffer(contextSlot).Load4(offset + NWB_CSG_RAY_CUTTER_ROW1_OFFSET));
-    cutter.worldToShapeRow2 = asfloat(nwbHeapRawBuffer(contextSlot).Load4(offset + NWB_CSG_RAY_CUTTER_ROW2_OFFSET));
-    cutter.parameter0 = asfloat(nwbHeapRawBuffer(contextSlot).Load4(offset + NWB_CSG_RAY_CUTTER_PARAMETER0_OFFSET));
+    cutter.shapeType = nwbCsgRayContextBuffer(contextSlot).Load(offset);
+    cutter.worldToShapeRow0 = asfloat(nwbCsgRayContextBuffer(contextSlot).Load4(offset + NWB_CSG_RAY_CUTTER_ROW0_OFFSET));
+    cutter.worldToShapeRow1 = asfloat(nwbCsgRayContextBuffer(contextSlot).Load4(offset + NWB_CSG_RAY_CUTTER_ROW1_OFFSET));
+    cutter.worldToShapeRow2 = asfloat(nwbCsgRayContextBuffer(contextSlot).Load4(offset + NWB_CSG_RAY_CUTTER_ROW2_OFFSET));
+    cutter.parameter0 = asfloat(nwbCsgRayContextBuffer(contextSlot).Load4(offset + NWB_CSG_RAY_CUTTER_PARAMETER0_OFFSET));
     return cutter;
 }
 
 NwbSwBvhInstance nwbCsgRayLoadInstance(const uint contextSlot, const uint instanceIndex){
-    const uint offset = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_INSTANCE_BASE_OFFSET) + instanceIndex * NWB_CSG_RAY_INSTANCE_BYTES;
+    const uint offset = nwbCsgRayContextBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_INSTANCE_BASE_OFFSET) + instanceIndex * NWB_CSG_RAY_INSTANCE_BYTES;
     NwbSwBvhInstance instance;
-    instance.worldToObjectRow0 = asfloat(nwbHeapRawBuffer(contextSlot).Load4(offset));
-    instance.worldToObjectRow1 = asfloat(nwbHeapRawBuffer(contextSlot).Load4(offset + NWB_CSG_RAY_INSTANCE_ROW1_OFFSET));
-    instance.worldToObjectRow2 = asfloat(nwbHeapRawBuffer(contextSlot).Load4(offset + NWB_CSG_RAY_INSTANCE_ROW2_OFFSET));
-    const uint4 tail = nwbHeapRawBuffer(contextSlot).Load4(offset + NWB_CSG_RAY_INSTANCE_TAIL_OFFSET);
+    instance.worldToObjectRow0 = asfloat(nwbCsgRayContextBuffer(contextSlot).Load4(offset));
+    instance.worldToObjectRow1 = asfloat(nwbCsgRayContextBuffer(contextSlot).Load4(offset + NWB_CSG_RAY_INSTANCE_ROW1_OFFSET));
+    instance.worldToObjectRow2 = asfloat(nwbCsgRayContextBuffer(contextSlot).Load4(offset + NWB_CSG_RAY_INSTANCE_ROW2_OFFSET));
+    const uint4 tail = nwbCsgRayContextBuffer(contextSlot).Load4(offset + NWB_CSG_RAY_INSTANCE_TAIL_OFFSET);
     instance.reservedMeshIndex = tail.x;
     instance.primitiveCount = tail.y;
     instance.pad0 = tail.z;
@@ -180,10 +180,10 @@ NwbBvhNode nwbCsgRayReceiverRoot(const uint contextSlot, const uint instanceInde
     }
     if(instance.pad0 != NWB_CSG_RAY_INVALID_INDEX)
         return nwbHeapBvhNodes(instance.pad0)[0u];
-    const uint offset = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_INSTANCE_BASE_OFFSET) + instanceIndex * NWB_CSG_RAY_INSTANCE_BYTES + NWB_CSG_RAY_INSTANCE_LOCAL_MIN_OFFSET;
+    const uint offset = nwbCsgRayContextBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_INSTANCE_BASE_OFFSET) + instanceIndex * NWB_CSG_RAY_INSTANCE_BYTES + NWB_CSG_RAY_INSTANCE_LOCAL_MIN_OFFSET;
     NwbBvhNode root = (NwbBvhNode)0;
-    root.aabbMin = asfloat(nwbHeapRawBuffer(contextSlot).Load3(offset));
-    root.aabbMax = asfloat(nwbHeapRawBuffer(contextSlot).Load3(offset + NWB_CSG_RAY_LANE_BYTES));
+    root.aabbMin = asfloat(nwbCsgRayContextBuffer(contextSlot).Load3(offset));
+    root.aabbMax = asfloat(nwbCsgRayContextBuffer(contextSlot).Load3(offset + NWB_CSG_RAY_LANE_BYTES));
     return root;
 }
 

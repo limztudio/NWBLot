@@ -212,16 +212,18 @@ Expected<AssetMap> ReadSceneAssetsMap(in Path file, in MetascriptValue value){
     if(!ValidateSceneAssetsFieldIsMap(value.isMap(), fileText))
         return MakeUnexpected(Failure());
     AssetMap assets;
-    if(!value.forEachMapEntry(lambda[in file, in fileText, mut assets](in StringView key, in MetascriptValue item) -> b8{
-        if(!ValidateSceneAssetNicknameSyntax(key, fileText))
+    in auto fileRef = file;
+    in String fileTextRef = fileText;
+    if(!value.forEachMapEntry(lambda[in fileRef, in fileTextRef, mut assets](in StringView key, in MetascriptValue item) -> b8{
+        if(!ValidateSceneAssetNicknameSyntax(key, fileTextRef))
             return false;
         const Expected<Name> name = ParseName(key);
-        if(!ValidateSceneAssetNicknameResolved(name.has_value() && name.value() != s_NameNone, key, fileText))
+        if(!ValidateSceneAssetNicknameResolved(name.has_value() && name.value() != s_NameNone, key, fileTextRef))
             return false;
-        const auto parsed = ParseReservedAssetRefValue<IAsset>(file, s_SceneDiagnosticPrefix, key, item, "entries must be strings");
+        const auto parsed = ParseReservedAssetRefValue<IAsset>(fileRef, s_SceneDiagnosticPrefix, key, item, "entries must be strings");
         if(!parsed.has_value())
             return false;
-        return ValidateSceneAssetNicknameUnique(assets.emplace(name.value(), parsed.value()).second, key, fileText);
+        return ValidateSceneAssetNicknameUnique(assets.emplace(name.value(), parsed.value()).second, key, fileTextRef);
     }))
         return MakeUnexpected(Failure());
     return assets;

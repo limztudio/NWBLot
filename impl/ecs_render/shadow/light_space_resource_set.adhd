@@ -25,7 +25,7 @@ class LightSpaceResourceSet : NoCopy{
     }
 
     public b8 ensureLightSpaceShadowPipelines();
-    public b8 ensureLightSpaceShadowStorage(in LightSpacePlan plan);
+    public b8 ensureLightSpaceShadowStorage(in LightSpacePlan plan, in u64 fallbackPixels);
     public void releaseLightSpaceShadowResources();
 }
 

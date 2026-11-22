@@ -683,11 +683,12 @@ void RendererMaterialSystem::renderPreparedAvboitMaterialPass(
     );
     csgDrawContext.setFramebuffer(framebuffer).setCsgResources(csgResources);
     csgDrawContext.setAvboitTargets(avboitTargets);
-    auto recordPreparedDraws = lambda[mut this, in regularDrawResourcesReady, in csgDrawResourcesReady, mut regularDrawContext, mut csgDrawContext, in drawItems]() -> void{
+    in MaterialPassDrawItemPartitionsView drawItemsRef = drawItems;
+    auto recordPreparedDraws = lambda[mut this, in regularDrawResourcesReady, in csgDrawResourcesReady, mut regularDrawContext, mut csgDrawContext, in drawItemsRef]() -> void{
         if(regularDrawResourcesReady)
-            this.m_drawRecorder.renderMaterialPassDrawItems(regularDrawContext, drawItems.regular);
+            this.m_drawRecorder.renderMaterialPassDrawItems(regularDrawContext, drawItemsRef.regular);
         if(csgDrawResourcesReady)
-            this.m_drawRecorder.renderMaterialPassDrawItems(csgDrawContext, drawItems.csg);
+            this.m_drawRecorder.renderMaterialPassDrawItems(csgDrawContext, drawItemsRef.csg);
     };
     if(splitEmulationTiming){
         recordPreparedDraws();

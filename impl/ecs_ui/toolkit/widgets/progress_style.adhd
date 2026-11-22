@@ -8,16 +8,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const Name s_ProgressTrackRegionName = "progress.track";
+const Name s_ProgressFillRegionName = "progress.fill";
+const Name s_ProgressTrackFallbackRegionName = "scrollbar.track";
+const Name s_ProgressFillFallbackRegionName = "scrollbar.thumb.normal";
+
 class ProgressOptions{
     public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
     public f32 height = s_StyleControlHeight;
 }
 
 class ProgressStyle{
-    public Name track = Name("progress.track");
-    public Name fill = Name("progress.fill");
-    public Name trackFallback = Name("scrollbar.track");
-    public Name fillFallback = Name("scrollbar.thumb.normal");
+    public Name track = s_ProgressTrackRegionName;
+    public Name fill = s_ProgressFillRegionName;
+    public Name trackFallback = s_ProgressTrackFallbackRegionName;
+    public Name fillFallback = s_ProgressFillFallbackRegionName;
     public Insets padding;
     public Color trackTint;
     public Color fillTint;

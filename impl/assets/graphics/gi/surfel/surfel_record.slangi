@@ -17,11 +17,11 @@ struct NwbSurfel{
     uint nextInCell;
     float3 normal;
     uint sampleState;
+    int3 cell;
+    uint lastSeenFrame;
     float4 shR;
     float4 shG;
     float4 shB;
-    int3 cell;
-    uint lastSeenFrame;
 };
 
 bool nwbSurfelIsAlive(const uint sampleState){

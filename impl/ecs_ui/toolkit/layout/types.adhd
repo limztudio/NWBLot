@@ -23,30 +23,15 @@ enum<u8> LayoutDirection{
     Overlay,
 }
 
-enum<u8> LayoutSizePolicy{
+enum<u32> LayoutSizePolicy{
     Fixed,
     Content,
     Stretch,
 }
 
 class LayoutSize{
-    public LayoutSize(){
-        this.policy = LayoutSizePolicy::Content;
-        this.value = 0.0f;
-    }
-
-    public LayoutSize(in LayoutSizePolicy inPolicy){
-        this.policy = inPolicy;
-        this.value = 0.0f;
-    }
-
-    public LayoutSize(in LayoutSizePolicy inPolicy, in f32 inValue){
-        this.policy = inPolicy;
-        this.value = inValue;
-    }
-
-    public LayoutSizePolicy policy;
-    public f32 value;
+    public LayoutSizePolicy policy = LayoutSizePolicy::Content;
+    public f32 value = 0.0f;
 }
 
 class LayoutNodeDesc{

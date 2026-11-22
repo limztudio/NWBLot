@@ -236,19 +236,26 @@ Expected<u64, ErrorCode> VolumeFileSystem::computePhysicalCapacityLocked()const 
         return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
     }
 
-    const auto lastSegmentBytes = FileSize(m_segmentPaths.back());
-    if(!lastSegmentBytes){
-        const ErrorCode& errorCode = lastSegmentBytes.error();
-        FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, FilesystemVolumeDetail::s_VolumeOpPhysicalCapacityFileSize, m_segmentPaths.back(), errorCode);
-        return MakeUnexpected(errorCode);
+    u64 lastSegmentBytes = 0u;
+    if(!m_writable && m_readMappings.size() == m_segmentPaths.size() && m_readMappings.back().mappedView != nullptr && m_readMappings.back().mappedBytes != 0u){
+        lastSegmentBytes = m_readMappings.back().mappedBytes;
     }
-    if(*lastSegmentBytes == 0 || *lastSegmentBytes > m_segmentSize){
+    else{
+        const auto lastSegmentResult = FileSize(m_segmentPaths.back());
+        if(!lastSegmentResult){
+            const ErrorCode& errorCode = lastSegmentResult.error();
+            FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, FilesystemVolumeDetail::s_VolumeOpPhysicalCapacityFileSize, m_segmentPaths.back(), errorCode);
+            return MakeUnexpected(errorCode);
+        }
+        lastSegmentBytes = *lastSegmentResult;
+    }
+    if(lastSegmentBytes == 0 || lastSegmentBytes > m_segmentSize){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpPhysicalCapacity, "final segment size is outside logical bounds");
         return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
     }
 
     const u64 fullSegmentBytes = static_cast<u64>(fullSegmentCount) * m_segmentSize;
-    const auto capacityBytes = ::AddNoOverflow(fullSegmentBytes, *lastSegmentBytes);
+    const auto capacityBytes = ::AddNoOverflow(fullSegmentBytes, lastSegmentBytes);
     if(capacityBytes)
         return *capacityBytes;
 

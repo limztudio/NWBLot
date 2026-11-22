@@ -37,6 +37,11 @@ struct NwbPhysicsGpuBodyState{
     float4 deltaRotation;
 };
 
+struct NwbPhysicsGpuBodyPose{
+    float4 originPad;
+    float4 rotation;
+};
+
 struct NwbPhysicsGpuBodySim{
     float4 positionInvMass;
     float4 rotation;
@@ -153,6 +158,7 @@ struct NwbPhysicsGpuJointConstraint{
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<uint, Std430DataLayout> g_NwbPhysicsUintBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<float4, Std430DataLayout> g_NwbPhysicsFloat4Buffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuBodyState, Std430DataLayout> g_NwbPhysicsBodyStateBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuBodyPose, Std430DataLayout> g_NwbPhysicsBodyPoseBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuBodySim, Std430DataLayout> g_NwbPhysicsBodySimBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuShapeProxy, Std430DataLayout> g_NwbPhysicsShapeProxyBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuBroadphasePair, Std430DataLayout> g_NwbPhysicsBroadphasePairBuffers[];
@@ -192,6 +198,24 @@ float3 nwbPhysicsQuatRotate(const float3 v, const float4 q){
 
 float3 nwbPhysicsQuatInvRotate(const float3 v, const float4 q){
     return nwbPhysicsQuatRotate(v, float4(-q.xyz, q.w));
+}
+
+void nwbPhysicsQuatToAxes(const float4 q, out float3 outX, out float3 outY, out float3 outZ){
+    const float x2 = q.x + q.x;
+    const float y2 = q.y + q.y;
+    const float z2 = q.z + q.z;
+    const float xx = q.x * x2;
+    const float xy = q.x * y2;
+    const float xz = q.x * z2;
+    const float yy = q.y * y2;
+    const float yz = q.y * z2;
+    const float zz = q.z * z2;
+    const float wx = q.w * x2;
+    const float wy = q.w * y2;
+    const float wz = q.w * z2;
+    outX = float3(1.0f - (yy + zz), xy + wz, xz - wy);
+    outY = float3(xy - wz, 1.0f - (xx + zz), yz + wx);
+    outZ = float3(xz + wy, yz - wx, 1.0f - (xx + yy));
 }
 
 float4 nwbPhysicsIntegrateDeltaQuat(const float4 q, const float3 omega, const float h){

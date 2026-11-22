@@ -595,6 +595,33 @@ ShapeProxy MakeShapeProxyFromShape(in Shape shape, in Vector<HullShape> hullShap
     return ShapeProxy();
 }
 
+ShapeProxyView MakeShapeProxyViewFromShape(
+    in Shape shape,
+    in Vector<HullShape> hullShapes,
+    in Vector<MeshShape> meshShapes,
+    mut Array<f32x3u, 2u> outInlinePts
+){
+    if(shape.type == ShapeType::Sphere){
+        const SphereShape s = shape.sphereShape();
+        outInlinePts[0u] = f32x3u(s.centerRadius.x, s.centerRadius.y, s.centerRadius.z);
+        return MakeSpanProxyView(Span<f32x3u>(outInlinePts).subspan(0u, 1u), s.centerRadius.w);
+    }
+    if(shape.type == ShapeType::Capsule){
+        const CapsuleShape c = shape.capsuleShape();
+        outInlinePts[0u] = f32x3u(c.center1Radius.x, c.center1Radius.y, c.center1Radius.z);
+        outInlinePts[1u] = f32x3u(c.center2.x, c.center2.y, c.center2.z);
+        return MakeSpanProxyView(Span<f32x3u>(outInlinePts), c.center1Radius.w);
+    }
+    if(shape.type == ShapeType::Mesh){
+        if(shape.geometryIndex < meshShapes.size())
+            return ShapeProxyView();
+        return ShapeProxyView();
+    }
+    if(shape.geometryIndex < hullShapes.size())
+        return MakeHullProxyView(hullShapes[shape.geometryIndex]);
+    return ShapeProxyView();
+}
+
 Manifold CollideShapePair(
     in Shape shapeA,
     in Transform3D xfA,

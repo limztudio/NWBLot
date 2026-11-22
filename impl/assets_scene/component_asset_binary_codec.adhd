@@ -52,8 +52,11 @@ class ComponentAssetBinaryCodec{
         outBinary.clear();
         outBinary.reserve(s_ComponentHeaderBinaryBytes + payload.size());
         AppendPOD(outBinary, header);
-        for(in u8 b : payload)
-            outBinary.push_back(b);
+        if(!payload.empty()){
+            const auto appendRes = AppendBinaryVectorPayload(outBinary, payload);
+            if(!appendRes.has_value())
+                return;
+        }
     }
 
     public Expected<Span<u8>> unpackEnvelope(

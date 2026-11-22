@@ -471,20 +471,22 @@ Manifold CollideSphereAndHull(in SphereShape sphereA, in Transform3D xfA, in Hul
         return m;
     }
 
-    const ShapeProxy sphereProxy = MakePointProxy(sphereA.center(), sphereR);
-    const ShapeProxy hullProxy = MakeHullProxy(hullB);
+    Array<f32x3u, 1u> sphereLocalPts;
+    sphereLocalPts[0u] = PackVec3U(localSphereC);
+    const ShapeProxyView sphereView = MakeSpanProxyView(Span<f32x3u>(sphereLocalPts), sphereR);
+    const ShapeProxyView hullView = MakeHullProxyView(hullB);
     SimplexCache cache;
-    const DistanceOutput dist = ShapeDistanceProxies(sphereProxy, xfA, hullProxy, xfB, false, cache);
+    const DistanceOutput dist = ShapeDistanceLocalProxyViews(sphereView, hullView, false, cache);
     if(dist.distance() > totalR + maxDistance)
         return m;
 
-    VectorSingle nAtoB = dist.normal();
+    VectorSingle nAtoB = SafeNormalizeVec3(Vector3Rotate(dist.normal(), VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     if(dist.distance() <= 1.0e-6f){
         const VectorSingle localOutward = VectorSingle(hullB.facePlanes[bestFace].normalOffset, 0.0f);
         nAtoB = -SafeNormalizeVec3(Vector3Rotate(localOutward, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     }
-    const VectorSingle wA = dist.pointA() + nAtoB * sphereR;
-    const VectorSingle wB = VectorSingle(dist.pointB) - nAtoB * hullR;
+    const VectorSingle wA = worldSphereC + nAtoB * sphereR;
+    const VectorSingle wB = TransformPoint(xfB, VectorSingle(dist.pointB)) - nAtoB * hullR;
     m.normalTwist = f32x4(nAtoB, 0.0f);
     m.setPointCount(1u);
     SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), dist.distance() - totalR, MakeFeatureId(0u, 0u, 1u, cast<u8>(bestFace)));
@@ -981,10 +983,13 @@ Manifold CollideCapsuleAndHull(in CapsuleShape capsuleA, in Transform3D xfA, in 
     const VectorSingle l1 = InverseTransformPoint(xfB, w1);
     const VectorSingle l2 = InverseTransformPoint(xfB, w2);
 
-    const ShapeProxy capProxy = MakeCapsuleProxy(capsuleA);
-    const ShapeProxy hullProxy = MakeHullProxy(hullB);
+    Array<f32x3u, 2u> capLocalPts;
+    capLocalPts[0u] = PackVec3U(l1);
+    capLocalPts[1u] = PackVec3U(l2);
+    const ShapeProxyView capView = MakeSpanProxyView(Span<f32x3u>(capLocalPts), capR);
+    const ShapeProxyView hullView = MakeHullProxyView(hullB);
     SimplexCache cache;
-    const DistanceOutput gjk = ShapeDistanceProxies(capProxy, xfA, hullProxy, xfB, false, cache);
+    const DistanceOutput gjk = ShapeDistanceLocalProxyViews(capView, hullView, false, cache);
     if(gjk.distance() > totalR + maxDistance)
         return m;
 
@@ -1005,16 +1010,16 @@ Manifold CollideCapsuleAndHull(in CapsuleShape capsuleA, in Transform3D xfA, in 
     }
 
     if(gjk.distance() > 1.0e-5f){
-        const VectorSingle nAtoB = gjk.normal();
-        const VectorSingle localN = Vector3InverseRotate(-nAtoB, VectorSingle(xfB.rotation));
+        const VectorSingle localN = -gjk.normal();
+        const VectorSingle nAtoB = SafeNormalizeVec3(Vector3Rotate(gjk.normal(), VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
         const VectorSingle faceN = VectorSingle(hullB.facePlanes[bestFace].normalOffset, 0.0f);
         if(Vector3Dot(localN, faceN).x > 0.995f && maxFaceSep <= totalR + maxDistance){
             if(TryClipSegmentAgainstHullFace(xfA, hullB, xfB, l1, l2, bestFace, capR, totalR, maxDistance, m))
                 return m;
         }
 
-        const VectorSingle wA = gjk.pointA() + nAtoB * capR;
-        const VectorSingle wB = VectorSingle(gjk.pointB) - nAtoB * hullR;
+        const VectorSingle wA = TransformPoint(xfB, gjk.pointA()) + nAtoB * capR;
+        const VectorSingle wB = TransformPoint(xfB, VectorSingle(gjk.pointB)) - nAtoB * hullR;
         m.normalTwist = f32x4(nAtoB, 0.0f);
         m.setPointCount(1u);
         SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - VectorSingle(xfA.position), wB - VectorSingle(xfB.position), gjk.distance() - totalR, MakeFeatureId(0u, 2u, 1u, cast<u8>(bestFace)));
@@ -1327,11 +1332,15 @@ Manifold CollideCapsuleAndMesh(in CapsuleShape capA, in Transform3D xfA, in Mesh
     const VectorSingle c2 = capA.center2Vec();
     const VectorSingle l1 = TransformPoint(localCapXf, c1);
     const VectorSingle l2 = TransformPoint(localCapXf, c2);
+    const VectorSingle lMid = (l1 + l2) * 0.5f;
     const f32 totalR = capR + meshR;
     const f32 queryR = totalR + maxDistance;
     const VectorSingle rVec(queryR, queryR, queryR, 0.0f);
     const Aabb3D queryBox(Min(l1, l2) - rVec, Max(l1, l2) + rVec);
-    const ShapeProxy capProxy = MakeCapsuleProxy(capA);
+    Array<f32x3u, 2u> capLocalPts;
+    capLocalPts[0u] = PackVec3U(l1);
+    capLocalPts[1u] = PackVec3U(l2);
+    const ShapeProxyView capView = MakeSpanProxyView(Span<f32x3u>(capLocalPts), capR);
     const b8 closedMesh = meshB.isClosed();
 
     f32 bestSep = s_MaxF32;
@@ -1365,46 +1374,56 @@ Manifold CollideCapsuleAndMesh(in CapsuleShape capA, in Transform3D xfA, in Mesh
                 const VectorSingle triN = Vec3FromU(tri.normal);
                 const f32 sDist1 = Vector3Dot(triN, VectorSingle(l1 - tv0, 0.0f)).x;
                 const f32 sDist2 = Vector3Dot(triN, VectorSingle(l2 - tv0, 0.0f)).x;
-                if(closedMesh && sDist1 < -s_LinearSlop && sDist2 < -s_LinearSlop)
-                    continue;
+                if(closedMesh){
+                    if((sDist1 < -s_LinearSlop && sDist2 < -s_LinearSlop) || (sDist1 > queryR && sDist2 > queryR))
+                        continue;
+                }
+                else{
+                    if((sDist1 > queryR && sDist2 > queryR) || (sDist1 < -queryR && sDist2 < -queryR))
+                        continue;
+                }
 
-                const ShapeProxy triProxy = MakeTriangleProxy(tv0, tv1, tv2, meshR);
+                Array<f32x3u, 3u> triPts;
+                triPts[0u] = tri.v0;
+                triPts[1u] = tri.v1;
+                triPts[2u] = tri.v2;
+                const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), meshR);
                 SimplexCache cache;
-                const DistanceOutput gjk = ShapeDistanceProxies(capProxy, xfA, triProxy, xfB, false, cache);
-
-                VectorSingle triWorldN = SafeNormalizeVec3(Vector3Rotate(triN, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-                const VectorSingle wCapMid = (TransformPoint(xfA, c1) + TransformPoint(xfA, c2)) * 0.5f;
-                const VectorSingle wTriRef = TransformPoint(xfB, tv0);
-                if(!closedMesh && Vector3Dot(VectorSingle(wCapMid - wTriRef, 0.0f), triWorldN).x < 0.0f)
-                    triWorldN = -triWorldN;
+                const DistanceOutput gjk = ShapeDistanceLocalProxyViews(capView, triView, false, cache);
 
                 f32 sep = gjk.distance() - totalR;
+                if(gjk.distance() > 1.0e-5f && sep > maxDistance)
+                    continue;
+
+                VectorSingle triWorldN = SafeNormalizeVec3(Vector3Rotate(triN, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                if(!closedMesh && Vector3Dot(VectorSingle(lMid - tv0, 0.0f), triN).x < 0.0f)
+                    triWorldN = -triWorldN;
+
                 VectorSingle nAtoB = -triWorldN;
                 VectorSingle wA(0.0f);
                 VectorSingle wB(0.0f);
 
                 if(gjk.distance() > 1.0e-5f){
-                    if(sep > maxDistance)
-                        continue;
-                    nAtoB = SafeNormalizeVec3(gjk.normal(), -triWorldN);
-                    const VectorSingle localPtB = InverseTransformPoint(xfB, VectorSingle(gjk.pointB));
-                    const VectorSingle rawMeshToCapLocal = Vector3InverseRotate(-nAtoB, VectorSingle(xfB.rotation));
+                    const VectorSingle localPtA = gjk.pointA();
+                    const VectorSingle localPtB = VectorSingle(gjk.pointB);
+                    const VectorSingle localN = SafeNormalizeVec3(gjk.normal(), -triN);
+                    const VectorSingle rawMeshToCapLocal = -localN;
                     const u8 edgeFlags = meshB.triangleEdgeFlag(ti);
                     VectorSingle smoothedMeshToCap = rawMeshToCapLocal;
                     if(SmoothMeshContactNormal(tri, edgeFlags, localPtB, rawMeshToCapLocal, smoothedMeshToCap)){
-                        const VectorSingle localPtA = InverseTransformPoint(xfB, gjk.pointA());
                         const f32 planeDist = Vector3Dot(triN, VectorSingle(localPtA - tv0, 0.0f)).x;
                         if(planeDist - totalR > maxDistance)
                             continue;
                         sep = planeDist - totalR;
                         const VectorSingle sWorldN = SafeNormalizeVec3(Vector3Rotate(smoothedMeshToCap, VectorSingle(xfB.rotation)), triWorldN);
                         nAtoB = -sWorldN;
-                        wA = gjk.pointA() + nAtoB * capR;
+                        wA = TransformPoint(xfB, localPtA) + nAtoB * capR;
                         wB = wA + nAtoB * sep;
                     }
                     else{
-                        wA = gjk.pointA() + nAtoB * capR;
-                        wB = VectorSingle(gjk.pointB) - nAtoB * meshR;
+                        nAtoB = SafeNormalizeVec3(Vector3Rotate(localN, VectorSingle(xfB.rotation)), -triWorldN);
+                        wA = TransformPoint(xfB, localPtA) + nAtoB * capR;
+                        wB = TransformPoint(xfB, localPtB) - nAtoB * meshR;
                     }
                     if(closedMesh && Vector3Dot(nAtoB, triWorldN).x >= 0.0f)
                         continue;
@@ -1458,7 +1477,6 @@ Manifold CollideCapsuleAndMesh(in CapsuleShape capA, in Transform3D xfA, in Mesh
     }
 
     if(closedMesh && (!foundHit || bestSep > -capR)){
-        const VectorSingle lMid = (l1 + l2) * 0.5f;
         if(IsPointInsideClosedMesh(meshB, lMid) || IsPointInsideClosedMesh(meshB, l1) || IsPointInsideClosedMesh(meshB, l2)){
             Array<f32x4, 3u> probePts;
             probePts[0u] = f32x4(l1, 0.0f);

@@ -603,8 +603,41 @@ class PhysicsComponentBinaryCodec{
             error("ColliderComponentAsset::loadComponentPayload failed: trailing bytes in payload");
             return false;
         }
-        c.dirty = true;
-        outComp = c;
+        outComp.shapeType = c.shapeType;
+        outComp.center = c.center;
+        outComp.center2 = c.center2;
+        outComp.halfExtents = c.halfExtents;
+        outComp.localRotation = c.localRotation;
+        outComp.radius = c.radius;
+        outComp.skinRadius = c.skinRadius;
+        outComp.density = c.density;
+        outComp.friction = c.friction;
+        outComp.restitution = c.restitution;
+        outComp.rollingResistance = c.rollingResistance;
+        outComp.tangentSpeed = c.tangentSpeed;
+        outComp.categoryBits = c.categoryBits;
+        outComp.maskBits = c.maskBits;
+        outComp.groupIndex = c.groupIndex;
+        outComp.userData = c.userData;
+        outComp.entityTag = c.entityTag;
+        outComp.isBox = c.isBox;
+        outComp.isSensor = c.isSensor;
+        outComp.enableContactEvents = c.enableContactEvents;
+        outComp.enableHitEvents = c.enableHitEvents;
+        outComp.enableSensorEvents = c.enableSensorEvents;
+        outComp.enablePreSolveEvents = c.enablePreSolveEvents;
+        outComp.invokeContactCreation = c.invokeContactCreation;
+        outComp.hullPoints.swap(c.hullPoints);
+        outComp.meshVertices.swap(c.meshVertices);
+        outComp.meshIndices.swap(c.meshIndices);
+        outComp.meshAsset = c.meshAsset;
+        outComp.extraShapes.swap(c.extraShapes);
+        outComp.dirty = true;
+        outComp.runtimeShapeId = ShapeId();
+        outComp.runtimeExtraShapeIds.clear();
+        outComp.boundBodyId = BodyId();
+        outComp.syncedWorldScale = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
+        outComp.hasSyncedWorldScale = false;
         return true;
     }
 

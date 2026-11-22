@@ -52,24 +52,28 @@ void QueryBroadPhaseMovedProxy(in PhysicsWorld worldRef, in usize moveIdx, mut V
     in Shape shapeA = worldRef.m_shapes[shapeIdA];
     const Aabb3D queryBox = worldRef.m_broadPhase.trees[treeType].fatAabb(proxyId);
 
-    u32 queryMask = shapeA.filter.maskBits;
-    if(shapeA.filter.groupIndex > 0)
-        queryMask = 0xffffffffu;
+    u32 queryMask = worldRef.broadPhaseQueryMask(shapeA.filter);
+    if(queryMask == 0u)
+        return;
 
     in PhysicsWorld worldAlias = worldRef;
     for(usize t = 0u; t < s_TreeCount; ++t){
         if(treeType == s_TreeStatic && t == s_TreeStatic)
             continue;
-        const b8 staticToKinematic = (treeType == s_TreeStatic && t == s_TreeKinematic);
+        const b8 nonDynamicPair = (treeType != s_TreeDynamic && t != s_TreeDynamic);
+        u8 reqNodeFlags = 0u;
+        if(nonDynamicPair && !shapeA.isSensor())
+            reqNodeFlags = s_TreeNodeHasSensor;
         const b8 sameTree = (t == treeType);
-        worldRef.m_broadPhase.trees[t].queryAabb(
+        worldRef.m_broadPhase.trees[t].queryAabbFiltered(
             queryBox,
             queryMask,
-            lambda[in worldAlias, in sameTree, in t, in shapeIdA, in shapeA, in staticToKinematic, mut bucket](in u32 otherProxyId, in u32 shapeIdB) -> b8{
+            reqNodeFlags,
+            lambda[in worldAlias, in sameTree, in t, in shapeIdA, in shapeA, in nonDynamicPair, mut bucket](in u32 otherProxyId, in u32 shapeIdB) -> b8{
                 if(shapeIdB == shapeIdA || shapeIdB >= worldAlias.m_shapes.size() || !worldAlias.m_shapes[shapeIdB].alive())
                     return true;
                 in Shape shapeB = worldAlias.m_shapes[shapeIdB];
-                if(staticToKinematic && !shapeA.isSensor() && !shapeB.isSensor())
+                if(nonDynamicPair && !shapeA.isSensor() && !shapeB.isSensor())
                     return true;
                 if(shapeA.bodyId == shapeB.bodyId)
                     return true;
@@ -302,12 +306,14 @@ Manifold SweepContactPairAfterMiss(
             return initialManifold;
     }
 
+    Array<f32x3u, 2u> inlinePtsA;
+    Array<f32x3u, 2u> inlinePtsB;
     LocalRayHit castHit;
     if(sB.type == ShapeType::Mesh){
         if(sB.geometryIndex >= meshShapes.size())
             return initialManifold;
-        castHit = ShapeCastMesh(
-            MakeShapeProxyFromShape(sA, hullShapes, meshShapes),
+        castHit = ShapeCastMeshView(
+            MakeShapeProxyViewFromShape(sA, hullShapes, meshShapes, inlinePtsA),
             xfA,
             VectorSingle(sweptDispA - sweptDispB, 0.0f),
             meshShapes[sB.geometryIndex],
@@ -318,8 +324,8 @@ Manifold SweepContactPairAfterMiss(
     else if(sA.type == ShapeType::Mesh){
         if(sA.geometryIndex >= meshShapes.size())
             return initialManifold;
-        castHit = ShapeCastMesh(
-            MakeShapeProxyFromShape(sB, hullShapes, meshShapes),
+        castHit = ShapeCastMeshView(
+            MakeShapeProxyViewFromShape(sB, hullShapes, meshShapes, inlinePtsB),
             xfB,
             VectorSingle(sweptDispB - sweptDispA, 0.0f),
             meshShapes[sA.geometryIndex],
@@ -328,11 +334,11 @@ Manifold SweepContactPairAfterMiss(
         );
     }
     else{
-        castHit = ShapeCastProxies(
-            MakeShapeProxyFromShape(sA, hullShapes, meshShapes),
+        castHit = ShapeCastProxyViews(
+            MakeShapeProxyViewFromShape(sA, hullShapes, meshShapes, inlinePtsA),
             xfA,
             sweptDispA,
-            MakeShapeProxyFromShape(sB, hullShapes, meshShapes),
+            MakeShapeProxyViewFromShape(sB, hullShapes, meshShapes, inlinePtsB),
             xfB,
             sweptDispB,
             1.0f
@@ -1154,6 +1160,7 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
     VectorSingle sweepMax(-s_MaxF32);
     u32 shapeCheckIdx = bodyInit.headShapeId;
     b8 hasCollider = false;
+    u32 bodyQueryMask = 0u;
     const Transform3D xfStart = Transform3D(initCenter0 - Vector3Rotate(initLocalCenter, VectorSingle(simInit.rotation0)), VectorSingle(simInit.rotation0));
     while(shapeCheckIdx != s_NullIndex){
         in Shape sA = worldRef.m_shapes[shapeCheckIdx];
@@ -1163,11 +1170,12 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
             const Aabb3D boxUnion = AabbUnion(boxStart, boxEnd);
             sweepMin = Min(sweepMin, VectorSingle(boxUnion.lowerBound));
             sweepMax = Max(sweepMax, VectorSingle(boxUnion.upperBound));
+            bodyQueryMask |= worldRef.broadPhaseQueryMask(sA.filter);
             hasCollider = true;
         }
         shapeCheckIdx = sA.nextShapeId;
     }
-    if(!hasCollider)
+    if(!hasCollider || bodyQueryMask == 0u)
         return;
 
     const Aabb3D queryBox = FattenAabb(Aabb3D(sweepMin, sweepMax), s_SpeculativeDistance);
@@ -1192,9 +1200,10 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
     in PhysicsWorld worldAlias = worldRef;
 
     for(usize t = 0u; t < s_TreeCount; ++t){
-        worldRef.m_broadPhase.trees[t].queryAabb(
+        worldRef.m_broadPhase.trees[t].queryAabbFiltered(
             queryBox,
-            0xffffffffu,
+            bodyQueryMask,
+            s_TreeNodeHasNonSensor,
             lambda[in worldAlias, in bodyIdA, in bodyInit, in sweepARef, mut bestT, mut foundToi, mut bestShapeIdxA, mut bestShapeIdxB, mut bestNormal, mut bestPoint, mut bestSweepB, mut bestRestitution, mut bestFriction](in u32 proxyId, in u32 shapeIdxB) -> b8{
                 if(shapeIdxB >= worldAlias.m_shapes.size() || !worldAlias.m_shapes[shapeIdxB].alive())
                     return true;
@@ -1239,14 +1248,15 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
                             customAllow = worldAlias.m_customFilterCallback.value()(worldAlias.makeShapeId(ordA), worldAlias.makeShapeId(ordB));
                         }
                         if(customAllow){
-                            const ShapeProxy proxyA = MakeShapeProxyFromShape(sA, worldAlias.m_hullShapes, worldAlias.m_meshShapes);
+                            Array<f32x3u, 2u> inlinePtsA;
+                            const ShapeProxyView proxyA = MakeShapeProxyViewFromShape(sA, worldAlias.m_hullShapes, worldAlias.m_meshShapes, inlinePtsA);
                             b8 candidateHit = false;
                             f32 candidateFrac = 1.0f;
                             VectorSingle candidateN(0.0f, 1.0f, 0.0f, 0.0f);
                             VectorSingle candidatePt(0.0f);
                             if(sB.type == ShapeType::Mesh){
                                 if(sB.geometryIndex < worldAlias.m_meshShapes.size()){
-                                    const TimeOfImpactOutput toi = ComputeMeshTimeOfImpact(proxyA, sweepARef, worldAlias.m_meshShapes[sB.geometryIndex], sweepB, bestT);
+                                    const TimeOfImpactOutput toi = ComputeMeshTimeOfImpactViews(proxyA, sweepARef, worldAlias.m_meshShapes[sB.geometryIndex], sweepB, bestT);
                                     const f32 hitFrac = toi.fraction();
                                     if(toi.hit() && !toi.initialOverlap() && hitFrac > 1.0e-5f && hitFrac < bestT){
                                         candidateHit = true;
@@ -1257,8 +1267,9 @@ void QueryBulletContinuousCandidate(in PhysicsWorld worldRef, in usize idx, mut 
                                 }
                             }
                             else{
-                                const ShapeProxy proxyB = MakeShapeProxyFromShape(sB, worldAlias.m_hullShapes, worldAlias.m_meshShapes);
-                                const TimeOfImpactOutput toi = ComputeTimeOfImpact(proxyA, sweepARef, proxyB, sweepB, bestT);
+                                Array<f32x3u, 2u> inlinePtsB;
+                                const ShapeProxyView proxyB = MakeShapeProxyViewFromShape(sB, worldAlias.m_hullShapes, worldAlias.m_meshShapes, inlinePtsB);
+                                const TimeOfImpactOutput toi = ComputeTimeOfImpactViews(proxyA, sweepARef, proxyB, sweepB, bestT);
                                 const f32 toiFrac = toi.fraction();
                                 if(toi.hit() && !toi.initialOverlap() && toiFrac > 1.0e-5f && toiFrac < bestT){
                                     candidateHit = true;
@@ -1584,9 +1595,14 @@ void EmitContinuousSensorPassThroughPairs(mut PhysicsWorld world){
     const u32 fastOrBulletMask = cast<u32>(BodyFlags::IsBullet) | cast<u32>(BodyFlags::IsFast);
     in SolverSet awakeSet = world.m_solverSets[s_AwakeSetIndex];
     const usize awakeCount = awakeSet.sims.size();
-    Vector<u32> candShapeA;
-    Vector<u32> candShapeB;
-    Vector<u64> seenKeys;
+    mut Vector<u32> candShapeA = world.m_cpuScratch.sensorCandShapeA;
+    mut Vector<u32> candShapeB = world.m_cpuScratch.sensorCandShapeB;
+    mut Vector<u64> candPairKeys = world.m_cpuScratch.sensorCandPairKeys;
+    mut Vector<usize> candOrder = world.m_cpuScratch.sensorCandOrder;
+    candShapeA.clear();
+    candShapeB.clear();
+    candPairKeys.clear();
+    candOrder.clear();
 
     in PhysicsWorld worldRef = world;
     for(usize idx = 0u; idx < awakeCount; ++idx){
@@ -1607,63 +1623,90 @@ void EmitContinuousSensorPassThroughPairs(mut PhysicsWorld world){
         while(shapeIdxA != s_NullIndex){
             in Shape sA = world.m_shapes[shapeIdxA];
             if(sA.alive()){
-                const Aabb3D boxStart = ComputeShapeWorldAabb(sA, xfStartA, world.m_hullShapes, world.m_meshShapes);
-                const Aabb3D boxEnd = ComputeShapeWorldAabb(sA, simA.transform, world.m_hullShapes, world.m_meshShapes);
-                const Aabb3D sweepBox = FattenAabb(AabbUnion(boxStart, boxEnd), s_SpeculativeDistance);
-                for(usize t = 0u; t < s_TreeCount; ++t){
-                    world.m_broadPhase.trees[t].queryAabb(
-                        sweepBox,
-                        0xffffffffu,
-                        lambda[in worldRef, in bodyIdA, in shapeIdxA, in sA, mut candShapeA, mut candShapeB, mut seenKeys](in u32 proxyId, in u32 shapeIdxB) -> b8{
-                            if(shapeIdxB >= worldRef.m_shapes.size() || !worldRef.m_shapes[shapeIdxB].alive())
-                                return true;
-                            in Shape sB = worldRef.m_shapes[shapeIdxB];
-                            if(sB.bodyId == bodyIdA)
-                                return true;
-                            const b8 aSensorEv = sA.isSensor() && sA.enableSensorEvents();
-                            const b8 bSensorEv = sB.isSensor() && sB.enableSensorEvents();
-                            if(!aSensorEv && !bSensorEv)
-                                return true;
-                            in Body bB = worldRef.m_bodies[sB.bodyId];
-                            if(!bB.alive || bB.setIndex == s_DisabledSetIndex)
-                                return true;
-                            if(!ShouldCollideFilters(sA.filter, sB.filter))
-                                return true;
-                            const u64 pairKey = PackUnorderedU32Pair(cast<isize>(shapeIdxA), cast<isize>(shapeIdxB));
-                            for(usize si = 0u; si < seenKeys.size(); ++si){
-                                if(seenKeys[si] == pairKey)
+                const u32 queryMask = world.broadPhaseQueryMask(sA.filter);
+                if(queryMask != 0u){
+                    const b8 aSensorEv = sA.isSensor() && sA.enableSensorEvents();
+                    u8 reqNodeFlags = 0u;
+                    if(!aSensorEv)
+                        reqNodeFlags = s_TreeNodeHasSensorEvents;
+                    const Aabb3D boxStart = ComputeShapeWorldAabb(sA, xfStartA, world.m_hullShapes, world.m_meshShapes);
+                    const Aabb3D boxEnd = ComputeShapeWorldAabb(sA, simA.transform, world.m_hullShapes, world.m_meshShapes);
+                    const Aabb3D sweepBox = FattenAabb(AabbUnion(boxStart, boxEnd), s_SpeculativeDistance);
+                    for(usize t = 0u; t < s_TreeCount; ++t){
+                        world.m_broadPhase.trees[t].queryAabbFiltered(
+                            sweepBox,
+                            queryMask,
+                            reqNodeFlags,
+                            lambda[in worldRef, in bodyIdA, in shapeIdxA, in sA, in aSensorEv, mut candShapeA, mut candShapeB, mut candPairKeys](in u32 proxyId, in u32 shapeIdxB) -> b8{
+                                if(shapeIdxB >= worldRef.m_shapes.size() || !worldRef.m_shapes[shapeIdxB].alive())
                                     return true;
-                            }
-                            const auto existing = worldRef.m_pairContactMap.find(pairKey);
-                            if(existing != worldRef.m_pairContactMap.end()){
-                                if((worldRef.m_contacts[existing.value()].flags & cast<u32>(ContactFlags::Touching)) != 0u)
+                                in Shape sB = worldRef.m_shapes[shapeIdxB];
+                                if(sB.bodyId == bodyIdA)
                                     return true;
-                            }
-                            if(worldRef.m_customFilterCallback.has_value()){
-                                u32 ordA = shapeIdxA;
-                                u32 ordB = shapeIdxB;
-                                if(shapeIdxB < shapeIdxA){
-                                    ordA = shapeIdxB;
-                                    ordB = shapeIdxA;
+                                const b8 bSensorEv = sB.isSensor() && sB.enableSensorEvents();
+                                if(!aSensorEv && !bSensorEv)
+                                    return true;
+                                in Body bB = worldRef.m_bodies[sB.bodyId];
+                                if(!bB.alive || bB.setIndex == s_DisabledSetIndex)
+                                    return true;
+                                if(!ShouldCollideFilters(sA.filter, sB.filter))
+                                    return true;
+                                const u64 pairKey = PackUnorderedU32Pair(cast<isize>(shapeIdxA), cast<isize>(shapeIdxB));
+                                const auto existing = worldRef.m_pairContactMap.find(pairKey);
+                                if(existing != worldRef.m_pairContactMap.end()){
+                                    if((worldRef.m_contacts[existing.value()].flags & cast<u32>(ContactFlags::Touching)) != 0u)
+                                        return true;
                                 }
-                                if(!worldRef.m_customFilterCallback.value()(worldRef.makeShapeId(ordA), worldRef.makeShapeId(ordB)))
-                                    return true;
+                                candPairKeys.push_back(pairKey);
+                                candShapeA.push_back(shapeIdxA);
+                                candShapeB.push_back(shapeIdxB);
+                                return true;
                             }
-                            seenKeys.push_back(pairKey);
-                            candShapeA.push_back(shapeIdxA);
-                            candShapeB.push_back(shapeIdxB);
-                            return true;
-                        }
-                    );
+                        );
+                    }
                 }
             }
             shapeIdxA = sA.nextShapeId;
         }
     }
 
-    for(usize ci = 0u; ci < candShapeA.size(); ++ci){
+    const usize candCount = candPairKeys.size();
+    if(candCount == 0u)
+        return;
+
+    candOrder.resize(candCount);
+    for(usize ci = 0u; ci < candCount; ++ci)
+        candOrder[ci] = ci;
+    if(candCount > 1u){
+        const Span<u64> pairKeySpan = Span<u64>(candPairKeys);
+        SortSequence<usize>(
+            candOrder,
+            lambda[in pairKeySpan](in usize lhs, in usize rhs) -> b8{
+                return pairKeySpan[lhs] < pairKeySpan[rhs];
+            }
+        );
+    }
+
+    u64 prevPairKey = u64.max;
+    for(usize oi = 0u; oi < candCount; ++oi){
+        const usize ci = candOrder[oi];
+        const u64 pairKey = candPairKeys[ci];
+        if(pairKey == prevPairKey)
+            continue;
+        prevPairKey = pairKey;
+
         const u32 shapeIdxA = candShapeA[ci];
         const u32 shapeIdxB = candShapeB[ci];
+        if(world.m_customFilterCallback.has_value()){
+            u32 ordA = shapeIdxA;
+            u32 ordB = shapeIdxB;
+            if(shapeIdxB < shapeIdxA){
+                ordA = shapeIdxB;
+                ordB = shapeIdxA;
+            }
+            if(!world.m_customFilterCallback.value()(world.makeShapeId(ordA), world.makeShapeId(ordB)))
+                continue;
+        }
         in Shape sA = world.m_shapes[shapeIdxA];
         in Shape sB = world.m_shapes[shapeIdxB];
         in Body bA = world.m_bodies[sA.bodyId];
@@ -1704,17 +1747,19 @@ void EmitContinuousSensorPassThroughPairs(mut PhysicsWorld world){
         if(sA.type == ShapeType::Mesh && sB.type == ShapeType::Mesh)
             continue;
 
+        Array<f32x3u, 2u> inlinePtsA;
+        Array<f32x3u, 2u> inlinePtsB;
         TimeOfImpactOutput toi;
         if(sB.type == ShapeType::Mesh){
             if(sB.geometryIndex < world.m_meshShapes.size())
-                toi = ComputeSensorMeshTimeOfImpact(MakeShapeProxyFromShape(sA, world.m_hullShapes, world.m_meshShapes), sweepA, world.m_meshShapes[sB.geometryIndex], sweepB, 1.0f);
+                toi = ComputeSensorMeshTimeOfImpactViews(MakeShapeProxyViewFromShape(sA, world.m_hullShapes, world.m_meshShapes, inlinePtsA), sweepA, world.m_meshShapes[sB.geometryIndex], sweepB, 1.0f);
         }
         else if(sA.type == ShapeType::Mesh){
             if(sA.geometryIndex < world.m_meshShapes.size())
-                toi = ComputeSensorMeshTimeOfImpact(MakeShapeProxyFromShape(sB, world.m_hullShapes, world.m_meshShapes), sweepB, world.m_meshShapes[sA.geometryIndex], sweepA, 1.0f);
+                toi = ComputeSensorMeshTimeOfImpactViews(MakeShapeProxyViewFromShape(sB, world.m_hullShapes, world.m_meshShapes, inlinePtsB), sweepB, world.m_meshShapes[sA.geometryIndex], sweepA, 1.0f);
         }
         else{
-            toi = ComputeSensorTimeOfImpact(MakeShapeProxyFromShape(sA, world.m_hullShapes, world.m_meshShapes), sweepA, MakeShapeProxyFromShape(sB, world.m_hullShapes, world.m_meshShapes), sweepB, 1.0f);
+            toi = ComputeSensorTimeOfImpactViews(MakeShapeProxyViewFromShape(sA, world.m_hullShapes, world.m_meshShapes, inlinePtsA), sweepA, MakeShapeProxyViewFromShape(sB, world.m_hullShapes, world.m_meshShapes, inlinePtsB), sweepB, 1.0f);
         }
 
         if(toi.hit() && !toi.initialOverlap() && toi.fraction() > 0.0f && toi.fraction() < 1.0f){
@@ -1728,7 +1773,7 @@ void EmitContinuousSensorPassThroughPairs(mut PhysicsWorld world){
 }
 
 void EmitContinuousSensorPassThroughEvents(mut PhysicsWorld world){
-    if(!HasMovedFastOrBulletBody(world))
+    if(world.m_sensorEventShapeCount == 0u || !HasMovedFastOrBulletBody(world))
         return;
     EmitContinuousSensorPassThroughPairs(world);
 }
@@ -2604,6 +2649,12 @@ class SolverWorkPartition{
     public Vector<u32> scratchStagedCpuContactComps;
     public Vector<u32> scratchCursors;
     public Vector<u32> scratchIslandCursors;
+    public Vector<u32> scratchBinHeads;
+    public Vector<u32> scratchBinTails;
+    public Vector<u32> scratchBinNexts;
+    public Vector<u32> scratchBinBodies;
+    public Vector<u32> scratchBinContacts;
+    public Vector<u8> scratchBinOverflow;
     public Vector<u32> scratchStagedJointIds;
     public Vector<u32> scratchStagedJointIslands;
     public Vector<u32> scratchStagedCpuJointLocalIds;
@@ -2946,7 +2997,61 @@ void BuildSolverWorkPartition(
     if(sortedJointIslands.size() > 1u)
         SortSequence<usize>(sortedJointIslands, islandCmp);
 
-    outPartition.gpuContactIslandCount = cast<u32>(sortedContactIslands.size());
+    mut Vector<u32> binHeads = outPartition.scratchBinHeads;
+    mut Vector<u32> binTails = outPartition.scratchBinTails;
+    mut Vector<u32> binNexts = outPartition.scratchBinNexts;
+    mut Vector<u32> binBodies = outPartition.scratchBinBodies;
+    mut Vector<u32> binContacts = outPartition.scratchBinContacts;
+    mut Vector<u8> binOverflow = outPartition.scratchBinOverflow;
+    binHeads.clear();
+    binTails.clear();
+    binBodies.clear();
+    binContacts.clear();
+    binOverflow.clear();
+    binNexts.resize(compCount);
+    for(usize ci = 0u; ci < compCount; ++ci)
+        binNexts[ci] = s_NullIndex;
+
+    mut Vector<u32> compToIslandIdx = outPartition.scratchCompToIslandIdx;
+    compToIslandIdx.clear();
+    compToIslandIdx.resize(compCount, s_NullIndex);
+
+    for(usize ii = 0u; ii < sortedContactIslands.size(); ++ii){
+        const u32 ci = cast<u32>(sortedContactIslands[ii]);
+        in SolverComponentInfo cInfo = components[ci];
+        u32 targetBin = s_NullIndex;
+        if(!cInfo.hasOverflowContact){
+            for(usize bi = 0u; bi < binBodies.size(); ++bi){
+                if(binOverflow[bi] != 0u)
+                    continue;
+                if(binBodies[bi] + cInfo.bodyCount <= s_GpuContactIslandMaxBodies && binContacts[bi] + cInfo.contactCount <= s_GpuContactIslandMaxContacts){
+                    targetBin = cast<u32>(bi);
+                    break;
+                }
+            }
+        }
+        if(targetBin == s_NullIndex){
+            targetBin = cast<u32>(binHeads.size());
+            binHeads.push_back(ci);
+            binTails.push_back(ci);
+            binBodies.push_back(cInfo.bodyCount);
+            binContacts.push_back(cInfo.contactCount);
+            u8 ovFlag = 0u;
+            if(cInfo.hasOverflowContact)
+                ovFlag = 1u;
+            binOverflow.push_back(ovFlag);
+        }
+        else{
+            const u32 tailCi = binTails[targetBin];
+            binNexts[tailCi] = ci;
+            binTails[targetBin] = ci;
+            binBodies[targetBin] += cInfo.bodyCount;
+            binContacts[targetBin] += cInfo.contactCount;
+        }
+        compToIslandIdx[ci] = targetBin;
+    }
+
+    outPartition.gpuContactIslandCount = cast<u32>(binHeads.size());
     outPartition.gpuJointIslandCount = cast<u32>(sortedJointIslands.size());
     const u32 totalIslandCount = outPartition.gpuContactIslandCount + outPartition.gpuJointIslandCount;
     outPartition.gpuIslandSlices.resize(totalIslandCount);
@@ -2960,21 +3065,9 @@ void BuildSolverWorkPartition(
         for(usize c = 0u; c < s_GraphColorCount; ++c)
             outPartition.gpuIslandSlices[si].contactColorCounts[c] = 0u;
     }
-    mut Vector<u32> islandOrder = outPartition.scratchIslandOrder;
-    islandOrder.clear();
-    islandOrder.resize(totalIslandCount, 0u);
-    mut Vector<u32> compToIslandIdx = outPartition.scratchCompToIslandIdx;
-    compToIslandIdx.clear();
-    compToIslandIdx.resize(compCount, s_NullIndex);
-    for(u32 si = 0u; si < outPartition.gpuContactIslandCount; ++si){
-        const u32 ci = cast<u32>(sortedContactIslands[si]);
-        islandOrder[si] = ci;
-        compToIslandIdx[ci] = si;
-    }
     for(u32 si = 0u; si < outPartition.gpuJointIslandCount; ++si){
         const u32 dstIdx = outPartition.gpuContactIslandCount + si;
         const u32 ci = cast<u32>(sortedJointIslands[si]);
-        islandOrder[dstIdx] = ci;
         compToIslandIdx[ci] = dstIdx;
     }
 
@@ -3021,11 +3114,22 @@ void BuildSolverWorkPartition(
         emitGpuOwnedComp(cast<u32>(sortedFreeComps[fi]));
     outPartition.gpuFreeBodyCount = cast<u32>(outPartition.gpuAwakeIndices.size());
 
-    for(u32 si = 0u; si < totalIslandCount; ++si){
-        const u32 ci = islandOrder[si];
+    for(u32 si = 0u; si < outPartition.gpuContactIslandCount; ++si){
         const u32 bodyOff = cast<u32>(outPartition.gpuAwakeIndices.size());
+        u32 curCi = binHeads[si];
+        while(curCi != s_NullIndex){
+            emitGpuOwnedComp(curCi);
+            curCi = binNexts[curCi];
+        }
         outPartition.gpuIslandSlices[si].bodyOffset = bodyOff;
-        outPartition.gpuIslandSlices[si].bodyCount = compDynOffsets[ci + 1u] - compDynOffsets[ci];
+        outPartition.gpuIslandSlices[si].bodyCount = binBodies[si];
+    }
+    for(u32 si = 0u; si < outPartition.gpuJointIslandCount; ++si){
+        const u32 dstIdx = outPartition.gpuContactIslandCount + si;
+        const u32 ci = cast<u32>(sortedJointIslands[si]);
+        const u32 bodyOff = cast<u32>(outPartition.gpuAwakeIndices.size());
+        outPartition.gpuIslandSlices[dstIdx].bodyOffset = bodyOff;
+        outPartition.gpuIslandSlices[dstIdx].bodyCount = compDynOffsets[ci + 1u] - compDynOffsets[ci];
         emitGpuOwnedComp(ci);
     }
 
@@ -3499,7 +3603,7 @@ b8 TrySolvePartitionComponentsParallelCpu(
         return true;
 
     in Vector<BodySim> simsView = world.m_solverSets[s_AwakeSetIndex].sims;
-    b8 canTryIslandFastPath = (bodyCount == totalAwake && kinAwakeIndices.empty() && awakeIslandCount >= 2u);
+    b8 canTryIslandFastPath = (bodyCount == totalAwake && awakeIslandCount >= 2u);
     mut Vector<u64> crossIslandEdges = world.m_cpuScratch.parCrossIslandEdges;
     crossIslandEdges.clear();
     usize totalContacts = 0u;
@@ -3512,11 +3616,25 @@ b8 TrySolvePartitionComponentsParallelCpu(
                 continue;
             const u32 idxA = cc.indexA;
             const u32 idxB = cc.indexB;
-            if(idxA != s_NullIndex && (statesView[idxA].flags() & dynBit) == 0u)
-                return true;
-            if(idxB != s_NullIndex && (statesView[idxB].flags() & dynBit) == 0u)
-                return true;
-            if(canTryIslandFastPath && idxA != s_NullIndex && idxB != s_NullIndex){
+            b8 dynA = false;
+            if(idxA != s_NullIndex){
+                in BodyState stA = statesView[idxA];
+                dynA = (stA.flags() & dynBit) != 0u;
+                if(!dynA){
+                    if(Vector3LengthSq(VectorSingle(stA.linearVelocity)).x > 0.0f || Vector3LengthSq(VectorSingle(stA.angularVelocity)).x > 0.0f)
+                        return true;
+                }
+            }
+            b8 dynB = false;
+            if(idxB != s_NullIndex){
+                in BodyState stB = statesView[idxB];
+                dynB = (stB.flags() & dynBit) != 0u;
+                if(!dynB){
+                    if(Vector3LengthSq(VectorSingle(stB.linearVelocity)).x > 0.0f || Vector3LengthSq(VectorSingle(stB.angularVelocity)).x > 0.0f)
+                        return true;
+                }
+            }
+            if(canTryIslandFastPath && dynA && dynB){
                 in Body bA = world.m_bodies[simsView[idxA].bodyId];
                 in Body bB = world.m_bodies[simsView[idxB].bodyId];
                 if(bA.islandId >= world.m_islands.size() || bB.islandId >= world.m_islands.size()){
@@ -3541,11 +3659,25 @@ b8 TrySolvePartitionComponentsParallelCpu(
         in JointConstraint jc = jointConstraints[ji];
         const u32 idxA = jc.indexA;
         const u32 idxB = jc.indexB;
-        if(idxA != s_NullIndex && (statesView[idxA].flags() & dynBit) == 0u)
-            return true;
-        if(idxB != s_NullIndex && (statesView[idxB].flags() & dynBit) == 0u)
-            return true;
-        if(canTryIslandFastPath && idxA != s_NullIndex && idxB != s_NullIndex){
+        b8 dynA = false;
+        if(idxA != s_NullIndex){
+            in BodyState stA = statesView[idxA];
+            dynA = (stA.flags() & dynBit) != 0u;
+            if(!dynA){
+                if(Vector3LengthSq(VectorSingle(stA.linearVelocity)).x > 0.0f || Vector3LengthSq(VectorSingle(stA.angularVelocity)).x > 0.0f)
+                    return true;
+            }
+        }
+        b8 dynB = false;
+        if(idxB != s_NullIndex){
+            in BodyState stB = statesView[idxB];
+            dynB = (stB.flags() & dynBit) != 0u;
+            if(!dynB){
+                if(Vector3LengthSq(VectorSingle(stB.linearVelocity)).x > 0.0f || Vector3LengthSq(VectorSingle(stB.angularVelocity)).x > 0.0f)
+                    return true;
+            }
+        }
+        if(canTryIslandFastPath && dynA && dynB){
             in Body bA = world.m_bodies[simsView[idxA].bodyId];
             in Body bB = world.m_bodies[simsView[idxB].bodyId];
             if(bA.islandId >= world.m_islands.size() || bB.islandId >= world.m_islands.size()){
@@ -3710,7 +3842,7 @@ b8 TrySolvePartitionComponentsParallelCpu(
             u32 loc = s_NullIndex;
             if(cc.indexA != s_NullIndex)
                 loc = awakeToLocal[cc.indexA];
-            else if(cc.indexB != s_NullIndex)
+            if(loc == s_NullIndex && cc.indexB != s_NullIndex)
                 loc = awakeToLocal[cc.indexB];
             if(loc == s_NullIndex)
                 continue;
@@ -3752,7 +3884,7 @@ b8 TrySolvePartitionComponentsParallelCpu(
         u32 loc = s_NullIndex;
         if(jc.indexA != s_NullIndex)
             loc = awakeToLocal[jc.indexA];
-        else if(jc.indexB != s_NullIndex)
+        if(loc == s_NullIndex && jc.indexB != s_NullIndex)
             loc = awakeToLocal[jc.indexB];
         if(loc == s_NullIndex)
             continue;
@@ -3893,11 +4025,32 @@ b8 TrySolvePartitionComponentsParallelCpu(
     if(!res.has_value())
         return false;
 
-    for(usize ki = 0u; ki < kinAwakeIndices.size(); ++ki){
-        const usize kIdx = cast<usize>(kinAwakeIndices[ki]);
-        for(u32 subStep = 0u; subStep < subStepCount; ++subStep)
-            IntegrateBodyPositionsAt(states, h, kIdx);
-        FinalizeAwakeBodyAt(world, dt, kIdx);
+    const usize kinCount = kinAwakeIndices.size();
+    if(kinCount >= s_CpuColorParallelThreshold){
+        const Span<u32> kinSpan = Span<u32>(kinAwakeIndices);
+        const usize kGrain = ComputePhysicsGrain(cpuScheduler, kinCount, cast<usize>(64u));
+        const auto kRes = cpuScheduler.parallelFor(
+            0u,
+            kinCount,
+            kGrain,
+            lambda[mut world, mut states, in kinSpan, in subStepCount, in h, in dt](in usize ki) -> void{
+                const usize kIdx = cast<usize>(kinSpan[ki]);
+                for(u32 subStep = 0u; subStep < subStepCount; ++subStep)
+                    IntegrateBodyPositionsAt(states, h, kIdx);
+                FinalizeAwakeBodyAt(world, dt, kIdx);
+            },
+            CpuTaskOptions()
+        );
+        if(!kRes.has_value())
+            return false;
+    }
+    else{
+        for(usize ki = 0u; ki < kinCount; ++ki){
+            const usize kIdx = cast<usize>(kinAwakeIndices[ki]);
+            for(u32 subStep = 0u; subStep < subStepCount; ++subStep)
+                IntegrateBodyPositionsAt(states, h, kIdx);
+            FinalizeAwakeBodyAt(world, dt, kIdx);
+        }
     }
     FinalizeDynamicBodiesCpu(world, Span<u32>(dynAwakeIndices), dynCount, totalAwake, kinAwakeIndices.empty() && bodyCount == totalAwake, dt, cpuScheduler);
     world.m_cpuScratch.parImpulsesStored = true;

@@ -46,6 +46,7 @@ const u32 s_GpuSolverFlagSerialLoop = 0x00000002u;
 
 const u32 s_GpuPushConstantsBytes = 80u;
 const u32 s_GpuBodyStateBytes = 64u;
+const u32 s_GpuBodyPoseBytes = 32u;
 const u32 s_GpuBodySimBytes = 144u;
 const u32 s_GpuBodyOutBytes = 64u;
 const u32 s_GpuShapeProxyBytes = 112u;
@@ -89,6 +90,12 @@ class GpuPhysicsBodyState{
     public f32x4 angularVelocityPad(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 deltaPositionFlags(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 deltaRotation(0.0f, 0.0f, 0.0f, 1.0f);
+}
+
+[layout(16)]
+class GpuPhysicsBodyPose{
+    public f32x4 originPad(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 rotation(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
 [layout(16)]
@@ -213,6 +220,7 @@ class GpuPhysicsJointConstraint{
 
 static_assert(size_of<GpuPhysicsPushConstants>() == s_GpuPushConstantsBytes, "GpuPhysicsPushConstants layout drifted from shader");
 static_assert(size_of<GpuPhysicsBodyState>() == s_GpuBodyStateBytes, "GpuPhysicsBodyState layout drifted from shader");
+static_assert(size_of<GpuPhysicsBodyPose>() == s_GpuBodyPoseBytes, "GpuPhysicsBodyPose layout drifted from shader");
 static_assert(size_of<GpuPhysicsBodySim>() == s_GpuBodySimBytes, "GpuPhysicsBodySim layout drifted from shader");
 static_assert(size_of<GpuPhysicsBodyOut>() == s_GpuBodyOutBytes, "GpuPhysicsBodyOut layout drifted from shader");
 static_assert(size_of<GpuPhysicsShapeProxy>() == s_GpuShapeProxyBytes, "GpuPhysicsShapeProxy layout drifted from shader");
@@ -233,6 +241,8 @@ static_assert(offset_of<GpuPhysicsPushConstants>(slots1) == 64u, "PushConstants.
 static_assert(offset_of<GpuPhysicsBodyState>(linearVelocityPad) == 0u, "BodyState.linearVelocityPad offset mismatch");
 static_assert(offset_of<GpuPhysicsBodyState>(deltaPositionFlags) == 32u, "BodyState.deltaPositionFlags offset mismatch");
 static_assert(offset_of<GpuPhysicsBodyState>(deltaRotation) == 48u, "BodyState.deltaRotation offset mismatch");
+static_assert(offset_of<GpuPhysicsBodyPose>(originPad) == 0u, "BodyPose.originPad offset mismatch");
+static_assert(offset_of<GpuPhysicsBodyPose>(rotation) == 16u, "BodyPose.rotation offset mismatch");
 static_assert(offset_of<GpuPhysicsBodySim>(positionInvMass) == 0u, "BodySim.positionInvMass offset mismatch");
 static_assert(offset_of<GpuPhysicsBodySim>(localCenterMinExtent) == 64u, "BodySim.localCenterMinExtent offset mismatch");
 static_assert(offset_of<GpuPhysicsBodySim>(invInertiaWorld0) == 80u, "BodySim.invInertiaWorld0 offset mismatch");
@@ -276,6 +286,7 @@ static_assert(offset_of<GpuPhysicsIslandSlice>(contactColorCounts1) == 48u, "Isl
 
 static_assert(is_trivially_copyable<GpuPhysicsPushConstants>(), "GpuPhysicsPushConstants must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsBodyState>(), "GpuPhysicsBodyState must stay trivially copyable");
+static_assert(is_trivially_copyable<GpuPhysicsBodyPose>(), "GpuPhysicsBodyPose must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsBodySim>(), "GpuPhysicsBodySim must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsBodyOut>(), "GpuPhysicsBodyOut must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsShapeProxy>(), "GpuPhysicsShapeProxy must stay trivially copyable");

@@ -8,6 +8,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const u8 s_TreeNodeHasSensor = 0x01u;
+const u8 s_TreeNodeHasSensorEvents = 0x02u;
+const u8 s_TreeNodeHasNonSensor = 0x04u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class TreeNode{
     public f32x3_u32 aabbMinUser(0.0f, 0.0f, 0.0f, s_NullIndex);
     public f32x3_u32 aabbMaxCategory(0.0f, 0.0f, 0.0f, 0u);
@@ -16,6 +24,7 @@ class TreeNode{
     public u32 child2 = s_NullIndex;
     public i16 height = -1;
     public b8 moved = false;
+    public u8 nodeFlags = 0u;
 
     public b8 isLeaf()const{
         return this.child1 == s_NullIndex;
@@ -54,7 +63,7 @@ class DynamicTree{
         this.m_nodeCount = 0u;
     }
 
-    public u32 createProxy(in Aabb3D aabb, in u32 categoryBits, in u32 userData){
+    public u32 createProxyWithFlags(in Aabb3D aabb, in u32 categoryBits, in u8 nodeFlags, in u32 userData){
         const u32 proxyId = this.allocateNode();
         const f32 margin = ComputeAabbMargin(aabb);
         const Aabb3D fat = FattenAabb(aabb, margin);
@@ -62,9 +71,32 @@ class DynamicTree{
         this.m_nodes[proxyId].aabbMaxCategory = f32x3_u32(fat.upperBound.x, fat.upperBound.y, fat.upperBound.z, categoryBits);
         this.m_nodes[proxyId].height = 0;
         this.m_nodes[proxyId].moved = false;
+        this.m_nodes[proxyId].nodeFlags = nodeFlags;
         this.m_moveIndices[proxyId] = s_NullIndex;
         this.insertLeaf(proxyId);
         return proxyId;
+    }
+
+    public u32 createProxy(in Aabb3D aabb, in u32 categoryBits, in u32 userData){
+        return this.createProxyWithFlags(aabb, categoryBits, 0u, userData);
+    }
+
+    public void setNodeFlags(in u32 proxyId, in u8 nodeFlags){
+        if(proxyId >= this.m_nodes.size() || !this.m_nodes[proxyId].isLeaf())
+            return;
+        if(this.m_nodes[proxyId].nodeFlags == nodeFlags)
+            return;
+        this.m_nodes[proxyId].nodeFlags = nodeFlags;
+        u32 parent = this.m_nodes[proxyId].parentOrNext;
+        while(parent != s_NullIndex){
+            const u32 c1 = this.m_nodes[parent].child1;
+            const u32 c2 = this.m_nodes[parent].child2;
+            const u8 mergedFlags = this.m_nodes[c1].nodeFlags | this.m_nodes[c2].nodeFlags;
+            if(this.m_nodes[parent].nodeFlags == mergedFlags)
+                break;
+            this.m_nodes[parent].nodeFlags = mergedFlags;
+            parent = this.m_nodes[parent].parentOrNext;
+        }
     }
 
     public void destroyProxy(in u32 proxyId){
@@ -157,8 +189,16 @@ class DynamicTree{
         return n.height == 0 && n.isLeaf() && n.userData() != s_NullIndex;
     }
 
-    public void queryAabb<Callback>(in Aabb3D queryBox, in u32 maskBits, in Callback callback)const{
-        if(this.m_root == s_NullIndex)
+    public void queryAabbFiltered<Callback>(in Aabb3D queryBox, in u32 maskBits, in u8 requiredNodeFlags, in Callback callback)const{
+        if(this.m_root == s_NullIndex || maskBits == 0u)
+            return;
+
+        in TreeNode rootNode = this.m_nodes[this.m_root];
+        if(maskBits != u32.max && (rootNode.categoryBits() & maskBits) == 0u)
+            return;
+        if(requiredNodeFlags != 0u && (rootNode.nodeFlags & requiredNodeFlags) == 0u)
+            return;
+        if(!AabbOverlaps(rootNode.aabb(), queryBox))
             return;
 
         Array<u32, 256u> fixedStack;
@@ -171,41 +211,66 @@ class DynamicTree{
                 continue;
 
             in TreeNode node = this.m_nodes[nodeId];
-            if(!AabbOverlaps(node.aabb(), queryBox))
-                continue;
-
             if(node.isLeaf()){
-                if(maskBits == u32.max || (node.categoryBits() & maskBits) != 0u){
-                    if(!callback(nodeId, node.userData()))
-                        return;
-                }
+                if(!callback(nodeId, node.userData()))
+                    return;
             }
             else{
-                if(fixedCount < 256u){
-                    fixedStack[fixedCount] = node.child1;
-                    ++fixedCount;
+                if(node.child1 != s_NullIndex){
+                    in TreeNode c1 = this.m_nodes[node.child1];
+                    if(
+                        (maskBits == u32.max || (c1.categoryBits() & maskBits) != 0u)
+                        && (requiredNodeFlags == 0u || (c1.nodeFlags & requiredNodeFlags) != 0u)
+                        && AabbOverlaps(c1.aabb(), queryBox)
+                    ){
+                        if(fixedCount < 256u){
+                            fixedStack[fixedCount] = node.child1;
+                            ++fixedCount;
+                        }
+                    }
                 }
-                if(fixedCount < 256u){
-                    fixedStack[fixedCount] = node.child2;
-                    ++fixedCount;
+                if(node.child2 != s_NullIndex){
+                    in TreeNode c2 = this.m_nodes[node.child2];
+                    if(
+                        (maskBits == u32.max || (c2.categoryBits() & maskBits) != 0u)
+                        && (requiredNodeFlags == 0u || (c2.nodeFlags & requiredNodeFlags) != 0u)
+                        && AabbOverlaps(c2.aabb(), queryBox)
+                    ){
+                        if(fixedCount < 256u){
+                            fixedStack[fixedCount] = node.child2;
+                            ++fixedCount;
+                        }
+                    }
                 }
             }
         }
     }
 
-    public void rayCast<Callback>(
+    public void queryAabb<Callback>(in Aabb3D queryBox, in u32 maskBits, in Callback callback)const{
+        this.queryAabbFiltered(queryBox, maskBits, 0u, callback);
+    }
+
+    public void rayCastFiltered<Callback>(
         in VectorSingle origin,
         in VectorSingle translation,
         in u32 maskBits,
+        in f32 initialMaxFraction,
+        in u8 requiredNodeFlags,
         in Callback callback
     )const{
-        if(this.m_root == s_NullIndex)
+        if(this.m_root == s_NullIndex || maskBits == 0u || initialMaxFraction <= 0.0f)
             return;
 
-        f32 maxFraction = 1.0f;
+        in TreeNode rootNode = this.m_nodes[this.m_root];
+        if(maskBits != u32.max && (rootNode.categoryBits() & maskBits) == 0u)
+            return;
+        if(requiredNodeFlags != 0u && (rootNode.nodeFlags & requiredNodeFlags) == 0u)
+            return;
+
+        f32 maxFraction = initialMaxFraction;
         const RayCastSlabData ray = MakeRayCastSlabData(origin, translation);
         f32 rootTMin = 0.0f;
-        if(!AabbRayCastFast(this.m_nodes[this.m_root].aabb(), ray, maxFraction, rootTMin))
+        if(!AabbRayCastFast(rootNode.aabb(), ray, maxFraction, rootTMin))
             return;
 
         Array<u32, 256u> fixedStack;
@@ -222,20 +287,43 @@ class DynamicTree{
 
             in TreeNode node = this.m_nodes[nodeId];
             if(node.isLeaf()){
-                if(maskBits == u32.max || (node.categoryBits() & maskBits) != 0u){
-                    maxFraction = callback(nodeId, node.userData(), maxFraction);
-                    if(maxFraction <= 0.0f)
-                        return;
-                }
+                maxFraction = callback(nodeId, node.userData(), maxFraction);
+                if(maxFraction <= 0.0f)
+                    return;
             }
             else{
+                b8 hit1 = false;
                 f32 t1 = 0.0f;
-                const b8 hit1 = node.child1 != s_NullIndex && AabbRayCastFast(this.m_nodes[node.child1].aabb(), ray, maxFraction, t1);
+                if(node.child1 != s_NullIndex){
+                    in TreeNode c1 = this.m_nodes[node.child1];
+                    if(
+                        (maskBits == u32.max || (c1.categoryBits() & maskBits) != 0u)
+                        && (requiredNodeFlags == 0u || (c1.nodeFlags & requiredNodeFlags) != 0u)
+                    )
+                        hit1 = AabbRayCastFast(c1.aabb(), ray, maxFraction, t1);
+                }
+                b8 hit2 = false;
                 f32 t2 = 0.0f;
-                const b8 hit2 = node.child2 != s_NullIndex && AabbRayCastFast(this.m_nodes[node.child2].aabb(), ray, maxFraction, t2);
+                if(node.child2 != s_NullIndex){
+                    in TreeNode c2 = this.m_nodes[node.child2];
+                    if(
+                        (maskBits == u32.max || (c2.categoryBits() & maskBits) != 0u)
+                        && (requiredNodeFlags == 0u || (c2.nodeFlags & requiredNodeFlags) != 0u)
+                    )
+                        hit2 = AabbRayCastFast(c2.aabb(), ray, maxFraction, t2);
+                }
                 PushRayCastChildrenOrdered(fixedStack, fixedStackTMin, fixedCount, node.child1, hit1, t1, node.child2, hit2, t2);
             }
         }
+    }
+
+    public void rayCast<Callback>(
+        in VectorSingle origin,
+        in VectorSingle translation,
+        in u32 maskBits,
+        in Callback callback
+    )const{
+        this.rayCastFiltered(origin, translation, maskBits, 1.0f, 0u, callback);
     }
 
     private u32 allocateNode(){
@@ -263,6 +351,7 @@ class DynamicTree{
         this.m_nodes[nodeId].height = 0;
         this.m_nodes[nodeId].aabbMinUser.w = s_NullIndex;
         this.m_nodes[nodeId].moved = false;
+        this.m_nodes[nodeId].nodeFlags = 0u;
         this.m_moveIndices[nodeId] = s_NullIndex;
         ++this.m_nodeCount;
         return nodeId;
@@ -276,6 +365,7 @@ class DynamicTree{
         this.m_nodes[nodeId].aabbMinUser.w = s_NullIndex;
         this.m_nodes[nodeId].aabbMaxCategory.w = 0u;
         this.m_nodes[nodeId].moved = false;
+        this.m_nodes[nodeId].nodeFlags = 0u;
         this.m_moveIndices[nodeId] = s_NullIndex;
         this.m_freeList = nodeId;
         if(this.m_nodeCount > 0u)
@@ -344,6 +434,8 @@ class DynamicTree{
 
         this.m_nodes[newParent].child1 = sibling;
         this.m_nodes[newParent].child2 = leaf;
+        this.m_nodes[newParent].aabbMaxCategory.w = this.m_nodes[sibling].categoryBits() | this.m_nodes[leaf].categoryBits();
+        this.m_nodes[newParent].nodeFlags = this.m_nodes[sibling].nodeFlags | this.m_nodes[leaf].nodeFlags;
         this.m_nodes[sibling].parentOrNext = newParent;
         this.m_nodes[leaf].parentOrNext = newParent;
 
@@ -386,6 +478,8 @@ class DynamicTree{
             const u32 c2 = this.m_nodes[index].child2;
             this.m_nodes[index].height = cast<i16>(1 + Max(cast<i32>(this.m_nodes[c1].height), cast<i32>(this.m_nodes[c2].height)));
             this.m_nodes[index].setAabb(AabbUnion(this.m_nodes[c1].aabb(), this.m_nodes[c2].aabb()));
+            this.m_nodes[index].aabbMaxCategory.w = this.m_nodes[c1].categoryBits() | this.m_nodes[c2].categoryBits();
+            this.m_nodes[index].nodeFlags = this.m_nodes[c1].nodeFlags | this.m_nodes[c2].nodeFlags;
             index = this.m_nodes[index].parentOrNext;
         }
     }
@@ -418,7 +512,11 @@ class DynamicTree{
                 this.m_nodes[iA].child2 = iG;
                 this.m_nodes[iG].parentOrNext = iA;
                 this.m_nodes[iA].setAabb(AabbUnion(this.m_nodes[iB].aabb(), this.m_nodes[iG].aabb()));
+                this.m_nodes[iA].aabbMaxCategory.w = this.m_nodes[iB].categoryBits() | this.m_nodes[iG].categoryBits();
+                this.m_nodes[iA].nodeFlags = this.m_nodes[iB].nodeFlags | this.m_nodes[iG].nodeFlags;
                 this.m_nodes[iC].setAabb(AabbUnion(this.m_nodes[iA].aabb(), this.m_nodes[iF].aabb()));
+                this.m_nodes[iC].aabbMaxCategory.w = this.m_nodes[iA].categoryBits() | this.m_nodes[iF].categoryBits();
+                this.m_nodes[iC].nodeFlags = this.m_nodes[iA].nodeFlags | this.m_nodes[iF].nodeFlags;
                 this.m_nodes[iA].height = cast<i16>(1 + Max(cast<i32>(this.m_nodes[iB].height), cast<i32>(this.m_nodes[iG].height)));
                 this.m_nodes[iC].height = cast<i16>(1 + Max(cast<i32>(this.m_nodes[iA].height), cast<i32>(this.m_nodes[iF].height)));
             }
@@ -427,7 +525,11 @@ class DynamicTree{
                 this.m_nodes[iA].child2 = iF;
                 this.m_nodes[iF].parentOrNext = iA;
                 this.m_nodes[iA].setAabb(AabbUnion(this.m_nodes[iB].aabb(), this.m_nodes[iF].aabb()));
+                this.m_nodes[iA].aabbMaxCategory.w = this.m_nodes[iB].categoryBits() | this.m_nodes[iF].categoryBits();
+                this.m_nodes[iA].nodeFlags = this.m_nodes[iB].nodeFlags | this.m_nodes[iF].nodeFlags;
                 this.m_nodes[iC].setAabb(AabbUnion(this.m_nodes[iA].aabb(), this.m_nodes[iG].aabb()));
+                this.m_nodes[iC].aabbMaxCategory.w = this.m_nodes[iA].categoryBits() | this.m_nodes[iG].categoryBits();
+                this.m_nodes[iC].nodeFlags = this.m_nodes[iA].nodeFlags | this.m_nodes[iG].nodeFlags;
                 this.m_nodes[iA].height = cast<i16>(1 + Max(cast<i32>(this.m_nodes[iB].height), cast<i32>(this.m_nodes[iF].height)));
                 this.m_nodes[iC].height = cast<i16>(1 + Max(cast<i32>(this.m_nodes[iA].height), cast<i32>(this.m_nodes[iG].height)));
             }
@@ -454,7 +556,11 @@ class DynamicTree{
                 this.m_nodes[iA].child1 = iE;
                 this.m_nodes[iE].parentOrNext = iA;
                 this.m_nodes[iA].setAabb(AabbUnion(this.m_nodes[iC].aabb(), this.m_nodes[iE].aabb()));
+                this.m_nodes[iA].aabbMaxCategory.w = this.m_nodes[iC].categoryBits() | this.m_nodes[iE].categoryBits();
+                this.m_nodes[iA].nodeFlags = this.m_nodes[iC].nodeFlags | this.m_nodes[iE].nodeFlags;
                 this.m_nodes[iB].setAabb(AabbUnion(this.m_nodes[iA].aabb(), this.m_nodes[iD].aabb()));
+                this.m_nodes[iB].aabbMaxCategory.w = this.m_nodes[iA].categoryBits() | this.m_nodes[iD].categoryBits();
+                this.m_nodes[iB].nodeFlags = this.m_nodes[iA].nodeFlags | this.m_nodes[iD].nodeFlags;
                 this.m_nodes[iA].height = cast<i16>(1 + Max(cast<i32>(this.m_nodes[iC].height), cast<i32>(this.m_nodes[iE].height)));
                 this.m_nodes[iB].height = cast<i16>(1 + Max(cast<i32>(this.m_nodes[iA].height), cast<i32>(this.m_nodes[iD].height)));
             }
@@ -463,7 +569,11 @@ class DynamicTree{
                 this.m_nodes[iA].child1 = iD;
                 this.m_nodes[iD].parentOrNext = iA;
                 this.m_nodes[iA].setAabb(AabbUnion(this.m_nodes[iC].aabb(), this.m_nodes[iD].aabb()));
+                this.m_nodes[iA].aabbMaxCategory.w = this.m_nodes[iC].categoryBits() | this.m_nodes[iD].categoryBits();
+                this.m_nodes[iA].nodeFlags = this.m_nodes[iC].nodeFlags | this.m_nodes[iD].nodeFlags;
                 this.m_nodes[iB].setAabb(AabbUnion(this.m_nodes[iA].aabb(), this.m_nodes[iE].aabb()));
+                this.m_nodes[iB].aabbMaxCategory.w = this.m_nodes[iA].categoryBits() | this.m_nodes[iE].categoryBits();
+                this.m_nodes[iB].nodeFlags = this.m_nodes[iA].nodeFlags | this.m_nodes[iE].nodeFlags;
                 this.m_nodes[iA].height = cast<i16>(1 + Max(cast<i32>(this.m_nodes[iC].height), cast<i32>(this.m_nodes[iD].height)));
                 this.m_nodes[iB].height = cast<i16>(1 + Max(cast<i32>(this.m_nodes[iA].height), cast<i32>(this.m_nodes[iE].height)));
             }

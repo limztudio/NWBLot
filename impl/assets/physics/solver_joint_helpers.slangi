@@ -342,6 +342,8 @@ void nwbPhysicsSolveSingleJoint(
     const float3 invIB2 = float3(jc.invIB1.x, jc.invIB1.z, jc.invIB1.w);
 
     if(mode == NWB_PHYSICS_SOLVER_MODE_WARM_START){
+        if(all(jc.linearImpulse.xyz == float3(0.0f, 0.0f, 0.0f)) && all(jc.angularImpulse.xyz == float3(0.0f, 0.0f, 0.0f)) && all(jc.limitImpulses == float4(0.0f, 0.0f, 0.0f, 0.0f)))
+            return;
         if(jType == NWB_PHYSICS_JOINT_TYPE_DISTANCE){
             const float3 d0 = jc.baseCenterDeltaMaxMotor.xyz + jc.rB0InvMassB.xyz - jc.rA0InvMassA.xyz;
             const float3 u0 = nwbPhysicsSafeNormal(d0, float3(0.0f, 1.0f, 0.0f));
@@ -396,11 +398,19 @@ void nwbPhysicsSolveSingleJoint(
     const bool enableMotor = (jFlags & NWB_PHYSICS_JOINT_FLAG_ENABLE_MOTOR) != 0u;
     const bool isSpring = (jFlags & NWB_PHYSICS_JOINT_FLAG_ENABLE_SPRING) != 0u;
 
-    const float3 rA = nwbPhysicsQuatRotate(jc.rA0InvMassA.xyz, deltaRotA);
-    const float3 rB = nwbPhysicsQuatRotate(jc.rB0InvMassB.xyz, deltaRotB);
+    const bool hasDeltaRotA = (dot(deltaRotA.xyz, deltaRotA.xyz) > 1.0e-12f);
+    const bool hasDeltaRotB = (dot(deltaRotB.xyz, deltaRotB.xyz) > 1.0e-12f);
+    const float3 rA = hasDeltaRotA ? nwbPhysicsQuatRotate(jc.rA0InvMassA.xyz, deltaRotA) : jc.rA0InvMassA.xyz;
+    const float3 rB = hasDeltaRotB ? nwbPhysicsQuatRotate(jc.rB0InvMassB.xyz, deltaRotB) : jc.rB0InvMassB.xyz;
     const float3 d = jc.baseCenterDeltaMaxMotor.xyz + deltaPosB - deltaPosA + rB - rA;
-    const float4 qA = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(deltaRotA, jc.qA0));
-    const float4 qB = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(deltaRotB, jc.qB0));
+    float4 qA = jc.qA0;
+    float4 qB = jc.qB0;
+    if(jType != NWB_PHYSICS_JOINT_TYPE_DISTANCE){
+        if(hasDeltaRotA)
+            qA = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(deltaRotA, jc.qA0));
+        if(hasDeltaRotB)
+            qB = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(deltaRotB, jc.qB0));
+    }
 
     if(jType == NWB_PHYSICS_JOINT_TYPE_DISTANCE){
         const float dist = sqrt(dot(d, d));

@@ -181,13 +181,9 @@ uint nwbPhysicsClipBox2DPlane8(
     const float2 planeNormal2D,
     const float planeOffset,
     const uint planeId,
-    out float3 outPts[8],
-    out uint outFeat[8]
+    inout float3 outPts[8],
+    inout uint outFeat[8]
 ){
-    for(uint k = 0u; k < 8u; ++k){
-        outPts[k] = float3(0.0f, 0.0f, 0.0f);
-        outFeat[k] = 0u;
-    }
     uint outCount = 0u;
     if(inCount == 0u)
         return 0u;
@@ -373,12 +369,14 @@ void nwbPhysicsCollideBoxes(
     const float3 hB = proxyB.localExtentOrP1.xyz;
     const float rB = proxyB.localCenterRadius.w;
 
-    const float3 axA = nwbPhysicsQuatRotate(float3(1.0f, 0.0f, 0.0f), qA);
-    const float3 ayA = nwbPhysicsQuatRotate(float3(0.0f, 1.0f, 0.0f), qA);
-    const float3 azA = nwbPhysicsQuatRotate(float3(0.0f, 0.0f, 1.0f), qA);
-    const float3 axB = nwbPhysicsQuatRotate(float3(1.0f, 0.0f, 0.0f), qB);
-    const float3 ayB = nwbPhysicsQuatRotate(float3(0.0f, 1.0f, 0.0f), qB);
-    const float3 azB = nwbPhysicsQuatRotate(float3(0.0f, 0.0f, 1.0f), qB);
+    float3 axA;
+    float3 ayA;
+    float3 azA;
+    nwbPhysicsQuatToAxes(qA, axA, ayA, azA);
+    float3 axB;
+    float3 ayB;
+    float3 azB;
+    nwbPhysicsQuatToAxes(qB, axB, ayB, azB);
 
     const float3 axesA[3] = { axA, ayA, azA };
     const float3 axesB[3] = { axB, ayB, azB };
@@ -413,6 +411,7 @@ void nwbPhysicsCollideBoxes(
 
     int bestAxis = -1;
     float bestSep = -1.0e20f;
+    float bestSignedProj = 0.0f;
     float3 bestNormal = float3(0.0f, 1.0f, 0.0f);
 
     for(int i = 0; i < 3; ++i){
@@ -424,6 +423,7 @@ void nwbPhysicsCollideBoxes(
         if(sep > bestSep){
             bestSep = sep;
             bestAxis = i;
+            bestSignedProj = signedProj;
             bestNormal = (signedProj < 0.0f) ? -axesA[i] : axesA[i];
         }
     }
@@ -437,6 +437,7 @@ void nwbPhysicsCollideBoxes(
         if(sep > bestSep + 1.0e-4f){
             bestSep = sep;
             bestAxis = 3 + j;
+            bestSignedProj = signedProj;
             bestNormal = (signedProj < 0.0f) ? -axesB[j] : axesB[j];
         }
     }
@@ -504,19 +505,7 @@ void nwbPhysicsCollideBoxes(
     const float refH[3] = { refIsA ? hA.x : hB.x, refIsA ? hA.y : hB.y, refIsA ? hA.z : hB.z };
     const float incH[3] = { refIsA ? hB.x : hA.x, refIsA ? hB.y : hA.y, refIsA ? hB.z : hA.z };
 
-    int refFace = 0;
-    float bestRefDot = -2.0f;
-    for(int k = 0; k < 3; ++k){
-        const float d = dot(refAxes[k], refNormal);
-        if(d > bestRefDot){
-            bestRefDot = d;
-            refFace = k * 2;
-        }
-        if(-d > bestRefDot){
-            bestRefDot = -d;
-            refFace = k * 2 + 1;
-        }
-    }
+    const int refFace = refIsA ? (bestAxis * 2 + (bestSignedProj < 0.0f ? 1 : 0)) : ((bestAxis - 3) * 2 + (bestSignedProj < 0.0f ? 0 : 1));
 
     int incFace = 0;
     float bestIncDot = 2.0f;
@@ -544,12 +533,6 @@ void nwbPhysicsCollideBoxes(
     float3 poly1[8];
     uint feat0[8];
     uint feat1[8];
-    for(uint p = 0u; p < 8u; ++p){
-        poly0[p] = float3(0.0f, 0.0f, 0.0f);
-        poly1[p] = float3(0.0f, 0.0f, 0.0f);
-        feat0[p] = 0u;
-        feat1[p] = 0u;
-    }
     float3 incVerts[4];
     nwbPhysicsGetBoxFace(incCenter, incAxes[0], incAxes[1], incAxes[2], float3(incH[0], incH[1], incH[2]), incFace, incVerts);
     for(uint p = 0u; p < 4u; ++p){
@@ -562,9 +545,17 @@ void nwbPhysicsCollideBoxes(
     const float hu = refH[uIdx];
     const float hv = refH[vIdx];
     polyCount = nwbPhysicsClipBox2DPlane8(poly0, feat0, polyCount, float2(1.0f, 0.0f), hu, 1u, poly1, feat1);
+    if(polyCount == 0u)
+        return;
     polyCount = nwbPhysicsClipBox2DPlane8(poly1, feat1, polyCount, float2(-1.0f, 0.0f), hu, 2u, poly0, feat0);
+    if(polyCount == 0u)
+        return;
     polyCount = nwbPhysicsClipBox2DPlane8(poly0, feat0, polyCount, float2(0.0f, 1.0f), hv, 3u, poly1, feat1);
+    if(polyCount == 0u)
+        return;
     polyCount = nwbPhysicsClipBox2DPlane8(poly1, feat1, polyCount, float2(0.0f, -1.0f), hv, 4u, poly0, feat0);
+    if(polyCount == 0u)
+        return;
 
     const uint boxFacePack = ((refIsA ? 1u : 0u) << 28u) | ((uint(refFace) & 0xfu) << 24u) | ((uint(incFace) & 0xfu) << 20u);
     uint candFeat[8];
@@ -1356,6 +1347,15 @@ float3 nwbPhysicsHullLocalVertex(const NwbPhysicsGpuShapeProxy proxy, const uint
     return g_NwbPhysicsFloat4Buffers[hullVertexSlot][vOffset + vIdx].xyz;
 }
 
+uint nwbPhysicsReadHullPackedUint(const uint hullVertexSlot, const uint vecBase, const uint uintIdx){
+    const float4 packedVec = g_NwbPhysicsFloat4Buffers[hullVertexSlot][vecBase + (uintIdx >> 2u)];
+    const uint lane = uintIdx & 3u;
+    if(lane == 0u) return asuint(packedVec.x);
+    if(lane == 1u) return asuint(packedVec.y);
+    if(lane == 2u) return asuint(packedVec.z);
+    return asuint(packedVec.w);
+}
+
 uint nwbPhysicsHullEdgePacked(const NwbPhysicsGpuShapeProxy proxy, const uint hullVertexSlot, const uint edgeIdx){
     if((proxy.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u){
         const uint kBoxEdges[12] = {
@@ -1377,12 +1377,7 @@ uint nwbPhysicsHullEdgePacked(const NwbPhysicsGpuShapeProxy proxy, const uint hu
     const uint vOffset = proxy.filterData.w;
     const uint vCount = nwbPhysicsHullVertexCount(proxy);
     const uint fCount = nwbPhysicsHullFaceCount(proxy);
-    const float4 packedVec = g_NwbPhysicsFloat4Buffers[hullVertexSlot][vOffset + vCount + fCount + (edgeIdx >> 2u)];
-    const uint lane = edgeIdx & 3u;
-    if(lane == 0u) return asuint(packedVec.x);
-    if(lane == 1u) return asuint(packedVec.y);
-    if(lane == 2u) return asuint(packedVec.z);
-    return asuint(packedVec.w);
+    return nwbPhysicsReadHullPackedUint(hullVertexSlot, vOffset + vCount + fCount, edgeIdx);
 }
 
 bool nwbPhysicsIsMinkowskiFace(const float3 a, const float3 b, const float3 edgeBA, const float3 c, const float3 d, const float3 edgeDC){
@@ -1486,9 +1481,10 @@ uint nwbPhysicsGatherHullWorldFacePoly(
     if((proxy.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u){
         const float3 cBox = origin + nwbPhysicsQuatRotate(proxy.localCenterRadius.xyz, rot);
         const float4 qBox = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(rot, proxy.localRotation));
-        const float3 ax = nwbPhysicsQuatRotate(float3(1.0f, 0.0f, 0.0f), qBox);
-        const float3 ay = nwbPhysicsQuatRotate(float3(0.0f, 1.0f, 0.0f), qBox);
-        const float3 az = nwbPhysicsQuatRotate(float3(0.0f, 0.0f, 1.0f), qBox);
+        float3 ax;
+        float3 ay;
+        float3 az;
+        nwbPhysicsQuatToAxes(qBox, ax, ay, az);
         const float3 h = proxy.localExtentOrP1.xyz;
         float3 fv[4];
         nwbPhysicsGetBoxFace(cBox, ax, ay, az, h, int(faceIdx), fv);
@@ -1511,6 +1507,24 @@ uint nwbPhysicsGatherHullWorldFacePoly(
 
     const uint vOffset = proxy.filterData.w;
     const uint vCount = nwbPhysicsHullVertexCount(proxy);
+    const uint fCount = nwbPhysicsHullFaceCount(proxy);
+    const uint eCount = nwbPhysicsHullEdgeCount(proxy);
+    const uint faceDescVecBase = vOffset + vCount + fCount + ((eCount + 3u) >> 2u);
+    const uint faceDesc = nwbPhysicsReadHullPackedUint(hullVertexSlot, faceDescVecBase, faceIdx);
+    const uint preWoundCount = (faceDesc >> 16u) & 0xffu;
+    if(preWoundCount >= 3u && preWoundCount <= 16u){
+        const uint startByte = faceDesc & 0xffffu;
+        const uint faceIdxVecBase = faceDescVecBase + ((fCount + 3u) >> 2u);
+        for(uint i = 0u; i < preWoundCount; ++i){
+            const uint byteIdx = startByte + i;
+            const uint packedWord = nwbPhysicsReadHullPackedUint(hullVertexSlot, faceIdxVecBase, byteIdx >> 2u);
+            const uint vIdx = (packedWord >> ((byteIdx & 3u) * 8u)) & 0xffu;
+            const float3 v = g_NwbPhysicsFloat4Buffers[hullVertexSlot][vOffset + vIdx].xyz;
+            outVerts[i] = float4(origin + nwbPhysicsQuatRotate(v, rot), asfloat(vIdx));
+        }
+        return preWoundCount;
+    }
+
     float4 localVerts[16];
     uint count = 0u;
     float3 center = float3(0.0f, 0.0f, 0.0f);
@@ -2210,9 +2224,29 @@ bool nwbPhysicsFindClosestPointOnClosedMesh(
                 }
             }
         }
-        else if(sp + 2u <= 64u){
-            stack[sp++] = asuint(n0.w);
-            stack[sp++] = meta & 0x7fffffffu;
+        else{
+            const uint leftRel = asuint(n0.w);
+            const uint rightRel = meta & 0x7fffffffu;
+            const float4 ln0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + leftRel) * 2u + 0u];
+            const float4 ln1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + leftRel) * 2u + 1u];
+            const float4 rn0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + rightRel) * 2u + 0u];
+            const float4 rn1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + rightRel) * 2u + 1u];
+            const float3 dl = max(float3(0.0f, 0.0f, 0.0f), max(ln0.xyz - localPoint, localPoint - ln1.xyz));
+            const float3 dr = max(float3(0.0f, 0.0f, 0.0f), max(rn0.xyz - localPoint, localPoint - rn1.xyz));
+            const float dLeftSq = dot(dl, dl);
+            const float dRightSq = dot(dr, dr);
+            if(dLeftSq <= dRightSq){
+                if(dRightSq < bestDistSq && sp < 64u)
+                    stack[sp++] = rightRel;
+                if(dLeftSq < bestDistSq && sp < 64u)
+                    stack[sp++] = leftRel;
+            }
+            else{
+                if(dLeftSq < bestDistSq && sp < 64u)
+                    stack[sp++] = leftRel;
+                if(dRightSq < bestDistSq && sp < 64u)
+                    stack[sp++] = rightRel;
+            }
         }
     }
     if(found)
@@ -2277,9 +2311,13 @@ void nwbPhysicsCollideMeshMeshPair(
     const float4 invRotA = float4(-rotA.xyz, rotA.w);
     const float3 posBInA = nwbPhysicsQuatRotate(originB - originA, invRotA);
     const float4 rotBToA = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(invRotA, rotB));
-    const float3 bAxX = abs(nwbPhysicsQuatRotate(float3(1.0f, 0.0f, 0.0f), rotBToA));
-    const float3 bAxY = abs(nwbPhysicsQuatRotate(float3(0.0f, 1.0f, 0.0f), rotBToA));
-    const float3 bAxZ = abs(nwbPhysicsQuatRotate(float3(0.0f, 0.0f, 1.0f), rotBToA));
+    float3 bAxX;
+    float3 bAxY;
+    float3 bAxZ;
+    nwbPhysicsQuatToAxes(rotBToA, bAxX, bAxY, bAxZ);
+    bAxX = abs(bAxX);
+    bAxY = abs(bAxY);
+    bAxZ = abs(bAxZ);
 
     float3 candWA[16];
     float3 candWB[16];
@@ -2701,9 +2739,13 @@ void nwbPhysicsCollideMeshPair(
     else{
         const float4 localBoxRot = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(relRot, otherP.localRotation));
         const float3 lc = relOrig + nwbPhysicsQuatRotate(otherP.localCenterRadius.xyz, relRot);
-        const float3 axX = abs(nwbPhysicsQuatRotate(float3(1.0f, 0.0f, 0.0f), localBoxRot));
-        const float3 axY = abs(nwbPhysicsQuatRotate(float3(0.0f, 1.0f, 0.0f), localBoxRot));
-        const float3 axZ = abs(nwbPhysicsQuatRotate(float3(0.0f, 0.0f, 1.0f), localBoxRot));
+        float3 axX;
+        float3 axY;
+        float3 axZ;
+        nwbPhysicsQuatToAxes(localBoxRot, axX, axY, axZ);
+        axX = abs(axX);
+        axY = abs(axY);
+        axZ = abs(axZ);
         const float3 h = otherP.localExtentOrP1.xyz;
         const float3 ext = axX * h.x + axY * h.y + axZ * h.z + float3(queryR, queryR, queryR);
         queryMin = lc - ext;
@@ -3595,11 +3637,8 @@ groupshared uint s_GroupManifoldBase;
 [numthreads(NWB_PHYSICS_WORKGROUP_SIZE, 1, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID){
     const uint idx = dispatchThreadID.x;
+    const uint maxPairs = g_NwbPhysicsPushConstants.itemCount;
     const uint counterSlot = g_NwbPhysicsPushConstants.slots1.w;
-    uint pairCount = g_NwbPhysicsPushConstants.itemCount;
-    if(counterSlot != NWB_PHYSICS_INVALID_INDEX)
-        pairCount = min(pairCount, g_NwbPhysicsUintBuffers[counterSlot][1u]);
-
     const uint bodySimSlot = g_NwbPhysicsPushConstants.slots0.x;
     const uint meshNodeSlot = g_NwbPhysicsPushConstants.slots0.y;
     const uint shapeSlot = g_NwbPhysicsPushConstants.slots0.z;
@@ -3609,52 +3648,57 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     const uint manifoldSlot = g_NwbPhysicsPushConstants.slots1.z;
 
 #if NWB_PHYSICS_NP_PROFILE == 2
-    if(idx >= pairCount)
+    if(idx >= maxPairs)
         return;
     nwbPhysicsSolveBulletToi(idx, bodySimSlot, shapeSlot, pairSlot, hullVertexSlot, manifoldSlot, meshNodeSlot, meshTriSlot, g_NwbPhysicsPushConstants.linearSlop);
 #else
+    uint pairCount = maxPairs;
+    if(counterSlot != NWB_PHYSICS_INVALID_INDEX){
+        const uint rawPrim = g_NwbPhysicsUintBuffers[counterSlot][0u];
+        const uint rawComplex = g_NwbPhysicsUintBuffers[counterSlot][1u];
+        const bool overflow = (rawPrim > maxPairs) || (rawComplex > (maxPairs - rawPrim));
+#if NWB_PHYSICS_NP_PROFILE == 0
+        pairCount = overflow ? 0u : rawPrim;
+#else
+        pairCount = overflow ? 0u : rawComplex;
+#endif
+    }
+
     bool keepManifold = false;
     NwbPhysicsGpuNarrowphaseManifold result = (NwbPhysicsGpuNarrowphaseManifold)0;
 
     if(idx < pairCount){
-        const NwbPhysicsGpuBroadphasePair pair = g_NwbPhysicsBroadphasePairBuffers[pairSlot][idx];
+#if NWB_PHYSICS_NP_PROFILE == 1
+        const uint pairIndex = (counterSlot != NWB_PHYSICS_INVALID_INDEX) ? (maxPairs - 1u - idx) : idx;
+#else
+        const uint pairIndex = idx;
+#endif
+        const NwbPhysicsGpuBroadphasePair pair = g_NwbPhysicsBroadphasePairBuffers[pairSlot][pairIndex];
         const NwbPhysicsGpuShapeProxy proxyA = g_NwbPhysicsShapeProxyBuffers[shapeSlot][pair.indices.x];
         const NwbPhysicsGpuShapeProxy proxyB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][pair.indices.y];
 
         const uint typeA = proxyA.bodyIndexTypeShape.y;
         const uint typeB = proxyB.bodyIndexTypeShape.y;
-        const bool isBoxA = (typeA == NWB_PHYSICS_SHAPE_TYPE_HULL) && ((proxyA.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u);
-        const bool isBoxB = (typeB == NWB_PHYSICS_SHAPE_TYPE_HULL) && ((proxyB.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u);
-        const bool isComplexPair = (typeA == NWB_PHYSICS_SHAPE_TYPE_MESH) || (typeB == NWB_PHYSICS_SHAPE_TYPE_MESH) || (typeA == NWB_PHYSICS_SHAPE_TYPE_HULL && !isBoxA) || (typeB == NWB_PHYSICS_SHAPE_TYPE_HULL && !isBoxB);
+        const float speculativeDist = g_NwbPhysicsPushConstants.gravitySpeculative.w;
+        const NwbPhysicsGpuBodyPose poseA = g_NwbPhysicsBodyPoseBuffers[bodySimSlot][pair.indices.z];
+        const NwbPhysicsGpuBodyPose poseB = g_NwbPhysicsBodyPoseBuffers[bodySimSlot][pair.indices.w];
 
-#if NWB_PHYSICS_NP_PROFILE == 0
-        const bool activePair = !isComplexPair;
-#else
-        const bool activePair = isComplexPair;
-#endif
-        if(activePair){
-            const float speculativeDist = g_NwbPhysicsPushConstants.gravitySpeculative.w;
-            const NwbPhysicsGpuBodySim bodyA = g_NwbPhysicsBodySimBuffers[bodySimSlot][pair.indices.z];
-            const NwbPhysicsGpuBodySim bodyB = g_NwbPhysicsBodySimBuffers[bodySimSlot][pair.indices.w];
+        const bool isSensorPair = ((proxyA.bodyIndexTypeShape.w | proxyB.bodyIndexTypeShape.w) & NWB_PHYSICS_SHAPE_FLAG_SENSOR) != 0u;
+        const float maxDist = isSensorPair ? 0.0f : speculativeDist;
 
-            const bool isSensorPair = ((proxyA.bodyIndexTypeShape.w | proxyB.bodyIndexTypeShape.w) & NWB_PHYSICS_SHAPE_FLAG_SENSOR) != 0u;
-            const float maxDist = isSensorPair ? 0.0f : speculativeDist;
+        const float3 originA = poseA.originPad.xyz;
+        const float4 rotA = poseA.rotation;
+        const float3 originB = poseB.originPad.xyz;
+        const float4 rotB = poseB.rotation;
 
-            float3 originA;
-            float4 rotA;
-            nwbPhysicsWorldTransform(bodyA, originA, rotA);
-            float3 originB;
-            float4 rotB;
-            nwbPhysicsWorldTransform(bodyB, originB, rotB);
-
-            result.pairInfo = uint4(pair.indices.x, pair.indices.y, 0u, 0u);
+        result.pairInfo = uint4(pair.indices.x, pair.indices.y, 0u, 0u);
 
 #if NWB_PHYSICS_NP_PROFILE == 1
     if(typeA == NWB_PHYSICS_SHAPE_TYPE_MESH || typeB == NWB_PHYSICS_SHAPE_TYPE_MESH){
-        nwbPhysicsCollideMeshPair(proxyA, originA, rotA, bodyA.positionInvMass.xyz, proxyB, originB, rotB, bodyB.positionInvMass.xyz, meshNodeSlot, meshTriSlot, hullVertexSlot, maxDist, result);
+        nwbPhysicsCollideMeshPair(proxyA, originA, rotA, originA, proxyB, originB, rotB, originB, meshNodeSlot, meshTriSlot, hullVertexSlot, maxDist, result);
     }
     else if(typeA == NWB_PHYSICS_SHAPE_TYPE_HULL && typeB == NWB_PHYSICS_SHAPE_TYPE_HULL){
-        nwbPhysicsSolveHullHullDeep(proxyA, originA, rotA, bodyA.positionInvMass.xyz, proxyB, originB, rotB, bodyB.positionInvMass.xyz, hullVertexSlot, maxDist, result);
+        nwbPhysicsSolveHullHullDeep(proxyA, originA, rotA, originA, proxyB, originB, rotB, originB, hullVertexSlot, maxDist, result);
     }
     else{
         const float totalR = proxyA.localCenterRadius.w + proxyB.localCenterRadius.w;
@@ -3666,7 +3710,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
 
         if(typeA == NWB_PHYSICS_SHAPE_TYPE_SPHERE || typeB == NWB_PHYSICS_SHAPE_TYPE_SPHERE){
             if(hitDeep || dist <= 1.0e-5f){
-                nwbPhysicsSolveSphereHullDeep(proxyA, originA, rotA, bodyA.positionInvMass.xyz, proxyB, originB, rotB, bodyB.positionInvMass.xyz, hullVertexSlot, maxDist, result);
+                nwbPhysicsSolveSphereHullDeep(proxyA, originA, rotA, originA, proxyB, originB, rotB, originB, hullVertexSlot, maxDist, result);
             }
             else{
                 const float sep = dist - totalR;
@@ -3674,8 +3718,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     const float3 n = (pB - pA) / dist;
                     result.pairInfo.z = 1u;
                     result.normalPad = float4(n, 0.0f);
-                    result.anchorAFeature[0] = float4(pA + n * proxyA.localCenterRadius.w - bodyA.positionInvMass.xyz, asfloat(20u));
-                    result.anchorBSeparation[0] = float4(pB - n * proxyB.localCenterRadius.w - bodyB.positionInvMass.xyz, sep);
+                    result.anchorAFeature[0] = float4(pA + n * proxyA.localCenterRadius.w - originA, asfloat(20u));
+                    result.anchorBSeparation[0] = float4(pB - n * proxyB.localCenterRadius.w - originB, sep);
                 }
             }
         }
@@ -3703,17 +3747,19 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     if(!runDeepCap){
                         result.pairInfo.z = 1u;
                         result.normalPad = float4(n, 0.0f);
-                        result.anchorAFeature[0] = float4(pA + n * proxyA.localCenterRadius.w - bodyA.positionInvMass.xyz, asfloat(20u));
-                        result.anchorBSeparation[0] = float4(pB - n * proxyB.localCenterRadius.w - bodyB.positionInvMass.xyz, sep);
+                        result.anchorAFeature[0] = float4(pA + n * proxyA.localCenterRadius.w - originA, asfloat(20u));
+                        result.anchorBSeparation[0] = float4(pB - n * proxyB.localCenterRadius.w - originB, sep);
                     }
                 }
             }
             if(runDeepCap){
-                nwbPhysicsSolveCapsuleHullDeep(proxyA, originA, rotA, bodyA.positionInvMass.xyz, proxyB, originB, rotB, bodyB.positionInvMass.xyz, hullVertexSlot, maxDist, result);
+                nwbPhysicsSolveCapsuleHullDeep(proxyA, originA, rotA, originA, proxyB, originB, rotB, originB, hullVertexSlot, maxDist, result);
             }
         }
     }
 #else
+    const bool isBoxA = (typeA == NWB_PHYSICS_SHAPE_TYPE_HULL) && ((proxyA.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u);
+    const bool isBoxB = (typeB == NWB_PHYSICS_SHAPE_TYPE_HULL) && ((proxyB.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u);
     if(typeA == NWB_PHYSICS_SHAPE_TYPE_SPHERE && typeB == NWB_PHYSICS_SHAPE_TYPE_SPHERE){
         const float3 cA = originA + nwbPhysicsQuatRotate(proxyA.localCenterRadius.xyz, rotA);
         const float3 cB = originB + nwbPhysicsQuatRotate(proxyB.localCenterRadius.xyz, rotB);
@@ -3728,8 +3774,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             const float3 n = dist > 1.0e-6f ? (d / dist) : float3(0.0f, 1.0f, 0.0f);
             result.pairInfo.z = 1u;
             result.normalPad = float4(n, 0.0f);
-            result.anchorAFeature[0] = float4(cA + n * rA - bodyA.positionInvMass.xyz, asfloat(1u));
-            result.anchorBSeparation[0] = float4(cB - n * rB - bodyB.positionInvMass.xyz, dist - totalR);
+            result.anchorAFeature[0] = float4(cA + n * rA - originA, asfloat(1u));
+            result.anchorBSeparation[0] = float4(cB - n * rB - originB, dist - totalR);
         }
     }
     else if(typeA == NWB_PHYSICS_SHAPE_TYPE_SPHERE && typeB == NWB_PHYSICS_SHAPE_TYPE_CAPSULE){
@@ -3748,8 +3794,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             const float3 n = dist > 1.0e-6f ? (d / dist) : float3(0.0f, 1.0f, 0.0f);
             result.pairInfo.z = 1u;
             result.normalPad = float4(n, 0.0f);
-            result.anchorAFeature[0] = float4(cA + n * rA - bodyA.positionInvMass.xyz, asfloat(2u));
-            result.anchorBSeparation[0] = float4(q - n * rB - bodyB.positionInvMass.xyz, dist - totalR);
+            result.anchorAFeature[0] = float4(cA + n * rA - originA, asfloat(2u));
+            result.anchorBSeparation[0] = float4(q - n * rB - originB, dist - totalR);
         }
     }
     else if(typeA == NWB_PHYSICS_SHAPE_TYPE_CAPSULE && typeB == NWB_PHYSICS_SHAPE_TYPE_SPHERE){
@@ -3768,8 +3814,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             const float3 n = dist > 1.0e-6f ? (d / dist) : float3(0.0f, 1.0f, 0.0f);
             result.pairInfo.z = 1u;
             result.normalPad = float4(n, 0.0f);
-            result.anchorAFeature[0] = float4(q + n * rA - bodyA.positionInvMass.xyz, asfloat(3u));
-            result.anchorBSeparation[0] = float4(cB - n * rB - bodyB.positionInvMass.xyz, dist - totalR);
+            result.anchorAFeature[0] = float4(q + n * rA - originA, asfloat(3u));
+            result.anchorBSeparation[0] = float4(cB - n * rB - originB, dist - totalR);
         }
     }
     else if(typeA == NWB_PHYSICS_SHAPE_TYPE_CAPSULE && typeB == NWB_PHYSICS_SHAPE_TYPE_CAPSULE){
@@ -3819,17 +3865,17 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                         const float3 qB1 = pA1 + (cB - cA);
                         const float sep = dist - totalR;
                         result.pairInfo.z = 2u;
-                        result.anchorAFeature[0] = float4(pA0 + n * rA - bodyA.positionInvMass.xyz, asfloat(4u));
-                        result.anchorBSeparation[0] = float4(qB0 - n * rB - bodyB.positionInvMass.xyz, sep);
-                        result.anchorAFeature[1] = float4(pA1 + n * rA - bodyA.positionInvMass.xyz, asfloat(5u));
-                        result.anchorBSeparation[1] = float4(qB1 - n * rB - bodyB.positionInvMass.xyz, sep);
+                        result.anchorAFeature[0] = float4(pA0 + n * rA - originA, asfloat(4u));
+                        result.anchorBSeparation[0] = float4(qB0 - n * rB - originB, sep);
+                        result.anchorAFeature[1] = float4(pA1 + n * rA - originA, asfloat(5u));
+                        result.anchorBSeparation[1] = float4(qB1 - n * rB - originB, sep);
                     }
                 }
             }
             if(result.pairInfo.z == 0u){
                 result.pairInfo.z = 1u;
-                result.anchorAFeature[0] = float4(cA + n * rA - bodyA.positionInvMass.xyz, asfloat(4u));
-                result.anchorBSeparation[0] = float4(cB - n * rB - bodyB.positionInvMass.xyz, dist - totalR);
+                result.anchorAFeature[0] = float4(cA + n * rA - originA, asfloat(4u));
+                result.anchorBSeparation[0] = float4(cB - n * rB - originB, dist - totalR);
             }
         }
     }
@@ -3881,12 +3927,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             const float3 finalBoxPt = worldBoxPt + outwardBoxNormal * rBox;
             result.pairInfo.z = 1u;
             result.normalPad = float4(nAtoB, 0.0f);
-            result.anchorAFeature[0] = float4((sphereIsA ? worldSpherePt : finalBoxPt) - bodyA.positionInvMass.xyz, asfloat(5u));
-            result.anchorBSeparation[0] = float4((sphereIsA ? finalBoxPt : worldSpherePt) - bodyB.positionInvMass.xyz, separation);
+            result.anchorAFeature[0] = float4((sphereIsA ? worldSpherePt : finalBoxPt) - originA, asfloat(5u));
+            result.anchorBSeparation[0] = float4((sphereIsA ? finalBoxPt : worldSpherePt) - originB, separation);
         }
     }
     else if(isBoxA && isBoxB){
-        nwbPhysicsCollideBoxes(proxyA, originA, rotA, bodyA.positionInvMass.xyz, proxyB, originB, rotB, bodyB.positionInvMass.xyz, maxDist, result);
+        nwbPhysicsCollideBoxes(proxyA, originA, rotA, originA, proxyB, originB, rotB, originB, maxDist, result);
     }
     else if((typeA == NWB_PHYSICS_SHAPE_TYPE_CAPSULE && isBoxB) || (isBoxA && typeB == NWB_PHYSICS_SHAPE_TYPE_CAPSULE)){
         const bool capIsA = (typeA == NWB_PHYSICS_SHAPE_TYPE_CAPSULE);
@@ -4071,8 +4117,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                         const float ptSep = dot(capSurf - boxSurf, outWorldN);
                         if(ptSep <= maxDist){
                             const uint feat = (emitted == 0u) ? 6u : 7u;
-                            result.anchorAFeature[emitted] = float4((capIsA ? capSurf : boxSurf) - bodyA.positionInvMass.xyz, asfloat(feat));
-                            result.anchorBSeparation[emitted] = float4((capIsA ? boxSurf : capSurf) - bodyB.positionInvMass.xyz, ptSep);
+                            result.anchorAFeature[emitted] = float4((capIsA ? capSurf : boxSurf) - originA, asfloat(feat));
+                            result.anchorBSeparation[emitted] = float4((capIsA ? boxSurf : capSurf) - originB, ptSep);
                             ++emitted;
                         }
                     }
@@ -4083,8 +4129,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 const float3 wBox = cBox + nwbPhysicsQuatRotate(localBoxSurface, qBox);
                 const float3 capSurf = wSeg - outWorldN * rCap;
                 const float3 boxSurf = wBox + outWorldN * rBox;
-                result.anchorAFeature[0] = float4((capIsA ? capSurf : boxSurf) - bodyA.positionInvMass.xyz, asfloat(6u));
-                result.anchorBSeparation[0] = float4((capIsA ? boxSurf : capSurf) - bodyB.positionInvMass.xyz, singleSep);
+                result.anchorAFeature[0] = float4((capIsA ? capSurf : boxSurf) - originA, asfloat(6u));
+                result.anchorBSeparation[0] = float4((capIsA ? boxSurf : capSurf) - originB, singleSep);
                 emitted = 1u;
             }
             result.pairInfo.z = emitted;
@@ -4095,10 +4141,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     }
 #endif
 
-            keepManifold = (result.pairInfo.z > 0u) || (result.pairInfo.w != 0u) || (((proxyA.bodyIndexTypeShape.w | proxyB.bodyIndexTypeShape.w) & NWB_PHYSICS_SHAPE_FLAG_FAST_OR_BULLET) != 0u);
-            if(keepManifold && result.pairInfo.z == 0u)
-                result.normalPad = float4(0.0f, 1.0f, 0.0f, 0.0f);
-        }
+        keepManifold = (result.pairInfo.z > 0u) || (result.pairInfo.w != 0u) || (((proxyA.bodyIndexTypeShape.w | proxyB.bodyIndexTypeShape.w) & NWB_PHYSICS_SHAPE_FLAG_FAST_OR_BULLET) != 0u);
+        if(keepManifold && result.pairInfo.z == 0u)
+            result.normalPad = float4(0.0f, 1.0f, 0.0f, 0.0f);
     }
 
     if(counterSlot != NWB_PHYSICS_INVALID_INDEX){
@@ -4117,7 +4162,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
 
         if(keepManifold){
             const uint outIdx = s_GroupManifoldBase + localIdx;
-            if(outIdx < pairCount)
+            if(outIdx < maxPairs)
                 g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][outIdx] = result;
         }
     }

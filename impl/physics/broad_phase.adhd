@@ -52,6 +52,22 @@ class BroadPhase{
         this.discoveredPairs.clear();
     }
 
+    public void createProxyWithFlags(
+        in BodyType bodyType,
+        in Aabb3D aabb,
+        in u32 categoryBits,
+        in u8 nodeFlags,
+        in u32 shapeId,
+        in b8 forceMove,
+        mut u32 outProxyKey
+    ){
+        const u32 treeIdx = ResolveBroadPhaseTreeType(bodyType);
+        const u32 proxyId = this.trees[treeIdx].createProxyWithFlags(aabb, categoryBits, nodeFlags, shapeId);
+        outProxyKey = EncodeBroadPhaseProxyKey(proxyId, treeIdx);
+        if(treeIdx != s_TreeStatic || forceMove)
+            this.bufferMove(outProxyKey);
+    }
+
     public void createProxy(
         in BodyType bodyType,
         in Aabb3D aabb,
@@ -60,11 +76,15 @@ class BroadPhase{
         in b8 forceMove,
         mut u32 outProxyKey
     ){
-        const u32 treeIdx = ResolveBroadPhaseTreeType(bodyType);
-        const u32 proxyId = this.trees[treeIdx].createProxy(aabb, categoryBits, shapeId);
-        outProxyKey = EncodeBroadPhaseProxyKey(proxyId, treeIdx);
-        if(treeIdx != s_TreeStatic || forceMove)
-            this.bufferMove(outProxyKey);
+        this.createProxyWithFlags(bodyType, aabb, categoryBits, 0u, shapeId, forceMove, outProxyKey);
+    }
+
+    public void setNodeFlags(in u32 proxyKey, in u8 nodeFlags){
+        if(proxyKey == s_NullIndex)
+            return;
+        const u32 treeIdx = DecodeBroadPhaseTreeType(proxyKey);
+        const u32 proxyId = DecodeBroadPhaseProxyId(proxyKey);
+        this.trees[treeIdx].setNodeFlags(proxyId, nodeFlags);
     }
 
     public void destroyProxy(in u32 proxyKey){

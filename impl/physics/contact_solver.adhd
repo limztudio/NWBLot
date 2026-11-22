@@ -220,7 +220,7 @@ f32 LinearInvMassDot(in VectorSingle d1, in VectorSingle d2, in f32 invMass, in 
     return invMass * Vector3Dot(d1, ApplyLinearLocks(d2, bodyFlags)).x;
 }
 
-void PrepareContactConstraintWithCache(
+b8 PrepareContactConstraintSetup(
     in Vector<Body> bodies,
     in Vector<SolverSet> sets,
     in Contact contact,
@@ -232,12 +232,24 @@ void PrepareContactConstraintWithCache(
     in b8 enableContactSoftening,
     in b8 enableWarmStarting,
     mut ContactConstraint outConstraint,
-    mut ContactConstraintStepCache outCache
+    mut VectorSingle outN,
+    mut VectorSingle outT1,
+    mut VectorSingle outT2,
+    mut VectorSingle outOriginToComA,
+    mut VectorSingle outOriginToComB,
+    mut u32 outFlagsA,
+    mut u32 outFlagsB,
+    mut VectorSingle outVA,
+    mut VectorSingle outWA,
+    mut VectorSingle outVB,
+    mut VectorSingle outWB,
+    mut f32 outBaseLinearKN,
+    mut f32 outWarmTwistImpulse
 ){
     outConstraint.contactId = contact.contactId;
     outConstraint.pointCount = Min(contact.manifold.rollingImpulseMeta.w & 0xffu, cast<u32>(s_MaxManifoldPoints));
     if(outConstraint.pointCount == 0u)
-        return;
+        return false;
 
     const u32 bodyIdA = contact.edges[0u].bodyId;
     const u32 bodyIdB = contact.edges[1u].bodyId;
@@ -249,7 +261,7 @@ void PrepareContactConstraintWithCache(
         || bB.setIndex >= sets.size() || bB.localIndex >= sets[bB.setIndex].sims.size()
     ){
         outConstraint.pointCount = 0u;
-        return;
+        return false;
     }
 
     in BodySim simA = sets[bA.setIndex].sims[bA.localIndex];
@@ -262,37 +274,37 @@ void PrepareContactConstraintWithCache(
     if(bB.setIndex == s_AwakeSetIndex)
         indexB = bB.localIndex;
 
-    u32 flagsA = 0u;
-    VectorSingle vA(0.0f);
-    VectorSingle wA(0.0f);
+    outFlagsA = 0u;
+    outVA = VectorSingle(0.0f);
+    outWA = VectorSingle(0.0f);
     if(indexA != s_NullIndex){
         in BodyState stateA = sets[s_AwakeSetIndex].states[indexA];
-        flagsA = stateA.deltaPositionFlags.w;
-        vA = VectorSingle(stateA.linearVelocity);
-        wA = VectorSingle(stateA.angularVelocity);
+        outFlagsA = stateA.deltaPositionFlags.w;
+        outVA = VectorSingle(stateA.linearVelocity);
+        outWA = VectorSingle(stateA.angularVelocity);
     }
-    u32 flagsB = 0u;
-    VectorSingle vB(0.0f);
-    VectorSingle wB(0.0f);
+    outFlagsB = 0u;
+    outVB = VectorSingle(0.0f);
+    outWB = VectorSingle(0.0f);
     if(indexB != s_NullIndex){
         in BodyState stateB = sets[s_AwakeSetIndex].states[indexB];
-        flagsB = stateB.deltaPositionFlags.w;
-        vB = VectorSingle(stateB.linearVelocity);
-        wB = VectorSingle(stateB.angularVelocity);
+        outFlagsB = stateB.deltaPositionFlags.w;
+        outVB = VectorSingle(stateB.linearVelocity);
+        outWB = VectorSingle(stateB.angularVelocity);
     }
 
     f32 invMassA = 0.0f;
-    if(indexA != s_NullIndex && (flagsA & 0x07u) != 0x07u)
+    if(indexA != s_NullIndex && (outFlagsA & 0x07u) != 0x07u)
         invMassA = simA.centerInvMass.w;
     f32 invMassB = 0.0f;
-    if(indexB != s_NullIndex && (flagsB & 0x07u) != 0x07u)
+    if(indexB != s_NullIndex && (outFlagsB & 0x07u) != 0x07u)
         invMassB = simB.centerInvMass.w;
     SymMat3 effInvIA = SymMat3();
     if(indexA != s_NullIndex)
-        effInvIA = MaskSymMat3AngularLocks(simA.invInertiaWorld, flagsA);
+        effInvIA = MaskSymMat3AngularLocks(simA.invInertiaWorld, outFlagsA);
     SymMat3 effInvIB = SymMat3();
     if(indexB != s_NullIndex)
-        effInvIB = MaskSymMat3AngularLocks(simB.invInertiaWorld, flagsB);
+        effInvIB = MaskSymMat3AngularLocks(simB.invInertiaWorld, outFlagsB);
 
     outConstraint.indexA = indexA;
     outConstraint.indexB = indexB;
@@ -315,18 +327,17 @@ void PrepareContactConstraintWithCache(
         outConstraint.softness = dynamicSoftness;
     }
 
-    const VectorSingle n = SafeNormalizeVec3(VectorSingle(contact.manifold.normalTwist, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-    VectorSingle t1(0.0f);
-    VectorSingle t2(0.0f);
-    ComputeTangentBasis(n, t1, t2);
-    outConstraint.normalFriction = f32x4(n, contact.friction);
-    outConstraint.tangent1Restitution = f32x4(t1, contact.restitution);
-    outCache.tangent2 = f32x4(t2, 0.0f);
+    outN = SafeNormalizeVec3(VectorSingle(contact.manifold.normalTwist, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    outT1 = VectorSingle(0.0f);
+    outT2 = VectorSingle(0.0f);
+    ComputeTangentBasis(outN, outT1, outT2);
+    outConstraint.normalFriction = f32x4(outN, contact.friction);
+    outConstraint.tangent1Restitution = f32x4(outT1, contact.restitution);
 
-    f32 warmTwistImpulse = 0.0f;
+    outWarmTwistImpulse = 0.0f;
     if(enableWarmStarting){
         outConstraint.frictionImpulse = contact.manifold.frictionImpulse;
-        warmTwistImpulse = contact.manifold.normalTwist.w;
+        outWarmTwistImpulse = contact.manifold.normalTwist.w;
         outConstraint.rollingImpulse = f32x3u(contact.manifold.rollingImpulseMeta.x, contact.manifold.rollingImpulseMeta.y, contact.manifold.rollingImpulseMeta.z);
     }
     else{
@@ -334,71 +345,99 @@ void PrepareContactConstraintWithCache(
         outConstraint.rollingImpulse = f32x3u(0.0f, 0.0f, 0.0f);
     }
 
-    VectorSingle sumCenterA = VectorSingle(0.0f);
-    VectorSingle sumCenterB = VectorSingle(0.0f);
-    f32 totalWeight = 0.0f;
+    outOriginToComA = VectorSingle(simA.transform.position) - VectorSingle(simA.centerInvMass, 0.0f);
+    outOriginToComB = VectorSingle(simB.transform.position) - VectorSingle(simB.centerInvMass, 0.0f);
+    outBaseLinearKN = LinearInvMassDot(outN, outN, invMassA, outFlagsA) + LinearInvMassDot(outN, outN, invMassB, outFlagsB);
+    return true;
+}
 
-    const VectorSingle originToComA = VectorSingle(simA.transform.position) - VectorSingle(simA.centerInvMass, 0.0f);
-    const VectorSingle originToComB = VectorSingle(simB.transform.position) - VectorSingle(simB.centerInvMass, 0.0f);
-    const f32 baseLinearKN = LinearInvMassDot(n, n, invMassA, flagsA) + LinearInvMassDot(n, n, invMassB, flagsB);
-    const b8 hasA = (indexA != s_NullIndex);
-    const b8 hasB = (indexB != s_NullIndex);
+void PrepareContactConstraintPoint(
+    in ManifoldPoint mp,
+    in VectorSingle n,
+    in SymMat3 effInvIA,
+    in SymMat3 effInvIB,
+    in b8 hasA,
+    in b8 hasB,
+    in b8 enableWarmStarting,
+    in VectorSingle vA,
+    in VectorSingle wA,
+    in VectorSingle vB,
+    in VectorSingle wB,
+    in VectorSingle originToComA,
+    in VectorSingle originToComB,
+    in f32 baseLinearKN,
+    mut ManifoldConstraintPoint outMcp,
+    mut VectorSingle outRnA,
+    mut VectorSingle outRnB,
+    mut VectorSingle outInvIArnA,
+    mut VectorSingle outInvIBrnB
+){
+    const VectorSingle rA = VectorSingle(originToComA + VectorSingle(mp.anchorANormalImpulse, 0.0f), 0.0f);
+    const VectorSingle rB = VectorSingle(originToComB + VectorSingle(mp.anchorBTotalImpulse, 0.0f), 0.0f);
 
-    for(u32 i = 0u; i < outConstraint.pointCount; ++i){
-        in ManifoldPoint mp = contact.manifold.points[i];
-        const VectorSingle rA = VectorSingle(originToComA + VectorSingle(mp.anchorANormalImpulse, 0.0f), 0.0f);
-        const VectorSingle rB = VectorSingle(originToComB + VectorSingle(mp.anchorBTotalImpulse, 0.0f), 0.0f);
+    outRnA = Cross(rA, n);
+    outRnB = Cross(rB, n);
+    outInvIArnA = VectorSingle(0.0f);
+    if(hasA)
+        outInvIArnA = ApplySymMat3Local(effInvIA, outRnA);
+    outInvIBrnB = VectorSingle(0.0f);
+    if(hasB)
+        outInvIBrnB = ApplySymMat3Local(effInvIB, outRnB);
 
-        const VectorSingle rnA = Cross(rA, n);
-        const VectorSingle rnB = Cross(rB, n);
-        VectorSingle invIArnA(0.0f);
-        if(hasA)
-            invIArnA = ApplySymMat3Local(effInvIA, rnA);
-        VectorSingle invIBrnB(0.0f);
-        if(hasB)
-            invIBrnB = ApplySymMat3Local(effInvIB, rnB);
+    const f32 kN =
+        baseLinearKN
+        + Vector3Dot(outRnA, outInvIArnA).x
+        + Vector3Dot(outRnB, outInvIBrnB).x
+    ;
 
-        mut ContactPointStepCache ptCache = outCache.points[i];
-        ptCache.rnA = f32x4(rnA, 0.0f);
-        ptCache.rnB = f32x4(rnB, 0.0f);
-        ptCache.invIA_rnA = f32x4(invIArnA, 0.0f);
-        ptCache.invIB_rnB = f32x4(invIBrnB, 0.0f);
+    outMcp.rABaseSep = f32x4(rA, mp.pointSeparation.w);
+    if(kN > 1.0e-12f)
+        outMcp.normalMass = 1.0f / kN;
+    else
+        outMcp.normalMass = 0.0f;
 
-        const f32 kN =
-            baseLinearKN
-            + Vector3Dot(rnA, invIArnA).x
-            + Vector3Dot(rnB, invIBrnB).x
-        ;
+    if(enableWarmStarting)
+        outMcp.normalImpulse = mp.anchorANormalImpulse.w;
+    else
+        outMcp.normalImpulse = 0.0f;
+    outMcp.totalNormalImpulse = 0.0f;
+    outMcp.restitutionImpulse = 0.0f;
 
-        mut ManifoldConstraintPoint mcp = outConstraint.points[i];
-        mcp.rABaseSep = f32x4(rA, mp.pointSeparation.w);
-        if(kN > 1.0e-12f)
-            mcp.normalMass = 1.0f / kN;
-        else
-            mcp.normalMass = 0.0f;
+    VectorSingle velA(0.0f);
+    if(hasA)
+        velA = vA + Cross(wA, rA);
+    VectorSingle velB(0.0f);
+    if(hasB)
+        velB = vB + Cross(wB, rB);
+    const VectorSingle dv = velB - velA;
+    outMcp.rBRelVel = f32x4(rB, Vector3Dot(dv, n).x);
+}
 
-        if(enableWarmStarting)
-            mcp.normalImpulse = mp.anchorANormalImpulse.w;
-        else
-            mcp.normalImpulse = 0.0f;
-        mcp.totalNormalImpulse = 0.0f;
-        mcp.restitutionImpulse = 0.0f;
-
-        VectorSingle velA(0.0f);
-        if(hasA)
-            velA = vA + Cross(wA, rA);
-        VectorSingle velB(0.0f);
-        if(hasB)
-            velB = vB + Cross(wB, rB);
-        const VectorSingle dv = velB - velA;
-        mcp.rBRelVel = f32x4(rB, Vector3Dot(dv, n).x);
-
-        const f32 weight = Max(mcp.normalImpulse, s_MinFrictionWeight);
-        sumCenterA = sumCenterA + rA * weight;
-        sumCenterB = sumCenterB + rB * weight;
-        totalWeight += weight;
-    }
-
+void FinalizeContactConstraintFrame(
+    in b8 hasA,
+    in b8 hasB,
+    in u32 flagsA,
+    in u32 flagsB,
+    in f32 invMassA,
+    in f32 invMassB,
+    in SymMat3 effInvIA,
+    in SymMat3 effInvIB,
+    in VectorSingle n,
+    in VectorSingle t1,
+    in VectorSingle t2,
+    in VectorSingle sumCenterA,
+    in VectorSingle sumCenterB,
+    in f32 totalWeight,
+    in f32 warmTwistImpulse,
+    in b8 needNormalsEvenWithoutLever,
+    mut ContactConstraint outConstraint,
+    mut VectorSingle outInvIAn,
+    mut VectorSingle outInvIBn,
+    mut VectorSingle outIrt1A,
+    mut VectorSingle outIrt2A,
+    mut VectorSingle outIrt1B,
+    mut VectorSingle outIrt2B
+){
     VectorSingle centerA(0.0f);
     VectorSingle centerB(0.0f);
     if(totalWeight > 0.0f){
@@ -419,40 +458,36 @@ void PrepareContactConstraintWithCache(
     const VectorSingle rt2A = Cross(centerA, t2);
     const VectorSingle rt2B = Cross(centerB, t2);
 
-    VectorSingle irt1A(0.0f);
-    VectorSingle irt2A(0.0f);
+    outIrt1A = VectorSingle(0.0f);
+    outIrt2A = VectorSingle(0.0f);
     if(hasA){
-        irt1A = ApplySymMat3Local(effInvIA, rt1A);
-        irt2A = ApplySymMat3Local(effInvIA, rt2A);
+        outIrt1A = ApplySymMat3Local(effInvIA, rt1A);
+        outIrt2A = ApplySymMat3Local(effInvIA, rt2A);
     }
-    VectorSingle irt1B(0.0f);
-    VectorSingle irt2B(0.0f);
+    outIrt1B = VectorSingle(0.0f);
+    outIrt2B = VectorSingle(0.0f);
     if(hasB){
-        irt1B = ApplySymMat3Local(effInvIB, rt1B);
-        irt2B = ApplySymMat3Local(effInvIB, rt2B);
+        outIrt1B = ApplySymMat3Local(effInvIB, rt1B);
+        outIrt2B = ApplySymMat3Local(effInvIB, rt2B);
     }
-    outCache.irt1A = f32x4(irt1A, 0.0f);
-    outCache.irt2A = f32x4(irt2A, 0.0f);
-    outCache.irt1B = f32x4(irt1B, 0.0f);
-    outCache.irt2B = f32x4(irt2B, 0.0f);
 
     const f32 k00 =
         LinearInvMassDot(t1, t1, invMassA, flagsA)
         + LinearInvMassDot(t1, t1, invMassB, flagsB)
-        + Vector3Dot(rt1A, irt1A).x
-        + Vector3Dot(rt1B, irt1B).x
+        + Vector3Dot(rt1A, outIrt1A).x
+        + Vector3Dot(rt1B, outIrt1B).x
     ;
     const f32 k01 =
         LinearInvMassDot(t1, t2, invMassA, flagsA)
         + LinearInvMassDot(t1, t2, invMassB, flagsB)
-        + Vector3Dot(rt1A, irt2A).x
-        + Vector3Dot(rt1B, irt2B).x
+        + Vector3Dot(rt1A, outIrt2A).x
+        + Vector3Dot(rt1B, outIrt2B).x
     ;
     const f32 k11 =
         LinearInvMassDot(t2, t2, invMassA, flagsA)
         + LinearInvMassDot(t2, t2, invMassB, flagsB)
-        + Vector3Dot(rt2A, irt2A).x
-        + Vector3Dot(rt2B, irt2B).x
+        + Vector3Dot(rt2A, outIrt2A).x
+        + Vector3Dot(rt2B, outIrt2B).x
     ;
     const f32 det = k00 * k11 - k01 * k01;
     if(IsFinite(det) && Abs(det) > 1.0e-18f){
@@ -473,40 +508,179 @@ void PrepareContactConstraintWithCache(
             outConstraint.tangentMass11 = 0.0f;
     }
 
-    VectorSingle invIAn(0.0f);
-    if(hasA)
-        invIAn = ApplySymMat3Local(effInvIA, n);
-    VectorSingle invIBn(0.0f);
-    if(hasB)
-        invIBn = ApplySymMat3Local(effInvIB, n);
-    outCache.invIA_n = f32x4(invIAn, 0.0f);
-    outCache.invIB_n = f32x4(invIBn, 0.0f);
-
-    if(contact.rollingResistance > 0.0f){
-        outCache.rollingMass = InvertSymMat3(SymMat3(
-            effInvIA.m00 + effInvIB.m00,
-            effInvIA.m01 + effInvIB.m01,
-            effInvIA.m02 + effInvIB.m02,
-            effInvIA.m11 + effInvIB.m11,
-            effInvIA.m12 + effInvIB.m12,
-            effInvIA.m22 + effInvIB.m22
-        ));
-    }
-    else{
-        outCache.rollingMass = SymMat3();
+    outInvIAn = VectorSingle(0.0f);
+    outInvIBn = VectorSingle(0.0f);
+    if(needNormalsEvenWithoutLever || maxLeverArm > 0.0f){
+        if(hasA)
+            outInvIAn = ApplySymMat3Local(effInvIA, n);
+        if(hasB)
+            outInvIBn = ApplySymMat3Local(effInvIB, n);
     }
 
     f32 twistMassVal = 0.0f;
     if(maxLeverArm > 0.0f){
         const f32 kTwist =
-            Vector3Dot(n, invIAn).x
-            + Vector3Dot(n, invIBn).x
+            Vector3Dot(n, outInvIAn).x
+            + Vector3Dot(n, outInvIBn).x
         ;
         if(kTwist > 1.0e-12f)
             twistMassVal = 1.0f / kTwist;
     }
     outConstraint.centerATwistMass = f32x4(centerA, twistMassVal);
     outConstraint.centerBTwistImpulse = f32x4(centerB, warmTwistImpulse);
+}
+
+void PrepareContactConstraintWithCache(
+    in Vector<Body> bodies,
+    in Vector<SolverSet> sets,
+    in Contact contact,
+    in Softness dynamicSoftness,
+    in Softness staticSoftness,
+    in f32 contactHertz,
+    in f32 contactDampingRatio,
+    in f32 h,
+    in b8 enableContactSoftening,
+    in b8 enableWarmStarting,
+    mut ContactConstraint outConstraint,
+    mut ContactConstraintStepCache outCache
+){
+    VectorSingle n(0.0f);
+    VectorSingle t1(0.0f);
+    VectorSingle t2(0.0f);
+    VectorSingle originToComA(0.0f);
+    VectorSingle originToComB(0.0f);
+    u32 flagsA = 0u;
+    u32 flagsB = 0u;
+    VectorSingle vA(0.0f);
+    VectorSingle wA(0.0f);
+    VectorSingle vB(0.0f);
+    VectorSingle wB(0.0f);
+    f32 baseLinearKN = 0.0f;
+    f32 warmTwistImpulse = 0.0f;
+    if(!PrepareContactConstraintSetup(
+        bodies,
+        sets,
+        contact,
+        dynamicSoftness,
+        staticSoftness,
+        contactHertz,
+        contactDampingRatio,
+        h,
+        enableContactSoftening,
+        enableWarmStarting,
+        outConstraint,
+        n,
+        t1,
+        t2,
+        originToComA,
+        originToComB,
+        flagsA,
+        flagsB,
+        vA,
+        wA,
+        vB,
+        wB,
+        baseLinearKN,
+        warmTwistImpulse
+    ))
+        return;
+
+    outCache.tangent2 = f32x4(t2, 0.0f);
+
+    const b8 hasA = (outConstraint.indexA != s_NullIndex);
+    const b8 hasB = (outConstraint.indexB != s_NullIndex);
+    VectorSingle sumCenterA(0.0f);
+    VectorSingle sumCenterB(0.0f);
+    f32 totalWeight = 0.0f;
+    for(u32 i = 0u; i < outConstraint.pointCount; ++i){
+        mut ManifoldConstraintPoint mcp = outConstraint.points[i];
+        VectorSingle rnA(0.0f);
+        VectorSingle rnB(0.0f);
+        VectorSingle invIArnA(0.0f);
+        VectorSingle invIBrnB(0.0f);
+        PrepareContactConstraintPoint(
+            contact.manifold.points[i],
+            n,
+            outConstraint.invIA,
+            outConstraint.invIB,
+            hasA,
+            hasB,
+            enableWarmStarting,
+            vA,
+            wA,
+            vB,
+            wB,
+            originToComA,
+            originToComB,
+            baseLinearKN,
+            mcp,
+            rnA,
+            rnB,
+            invIArnA,
+            invIBrnB
+        );
+        mut ContactPointStepCache ptCache = outCache.points[i];
+        ptCache.rnA = f32x4(rnA, 0.0f);
+        ptCache.rnB = f32x4(rnB, 0.0f);
+        ptCache.invIA_rnA = f32x4(invIArnA, 0.0f);
+        ptCache.invIB_rnB = f32x4(invIBrnB, 0.0f);
+        const f32 weight = Max(mcp.normalImpulse, s_MinFrictionWeight);
+        sumCenterA = sumCenterA + VectorSingle(mcp.rABaseSep, 0.0f) * weight;
+        sumCenterB = sumCenterB + VectorSingle(mcp.rBRelVel, 0.0f) * weight;
+        totalWeight += weight;
+    }
+
+    VectorSingle invIAn(0.0f);
+    VectorSingle invIBn(0.0f);
+    VectorSingle irt1A(0.0f);
+    VectorSingle irt2A(0.0f);
+    VectorSingle irt1B(0.0f);
+    VectorSingle irt2B(0.0f);
+    FinalizeContactConstraintFrame(
+        hasA,
+        hasB,
+        flagsA,
+        flagsB,
+        outConstraint.invMassA,
+        outConstraint.invMassB,
+        outConstraint.invIA,
+        outConstraint.invIB,
+        n,
+        t1,
+        t2,
+        sumCenterA,
+        sumCenterB,
+        totalWeight,
+        warmTwistImpulse,
+        true,
+        outConstraint,
+        invIAn,
+        invIBn,
+        irt1A,
+        irt2A,
+        irt1B,
+        irt2B
+    );
+    outCache.irt1A = f32x4(irt1A, 0.0f);
+    outCache.irt2A = f32x4(irt2A, 0.0f);
+    outCache.irt1B = f32x4(irt1B, 0.0f);
+    outCache.irt2B = f32x4(irt2B, 0.0f);
+    outCache.invIA_n = f32x4(invIAn, 0.0f);
+    outCache.invIB_n = f32x4(invIBn, 0.0f);
+
+    if(contact.rollingResistance > 0.0f){
+        outCache.rollingMass = InvertSymMat3(SymMat3(
+            outConstraint.invIA.m00 + outConstraint.invIB.m00,
+            outConstraint.invIA.m01 + outConstraint.invIB.m01,
+            outConstraint.invIA.m02 + outConstraint.invIB.m02,
+            outConstraint.invIA.m11 + outConstraint.invIB.m11,
+            outConstraint.invIA.m12 + outConstraint.invIB.m12,
+            outConstraint.invIA.m22 + outConstraint.invIB.m22
+        ));
+    }
+    else{
+        outCache.rollingMass = SymMat3();
+    }
 }
 
 void PrepareContactConstraint(
@@ -522,8 +696,20 @@ void PrepareContactConstraint(
     in b8 enableWarmStarting,
     mut ContactConstraint outConstraint
 ){
-    ContactConstraintStepCache unusedCache;
-    PrepareContactConstraintWithCache(
+    VectorSingle n(0.0f);
+    VectorSingle t1(0.0f);
+    VectorSingle t2(0.0f);
+    VectorSingle originToComA(0.0f);
+    VectorSingle originToComB(0.0f);
+    u32 flagsA = 0u;
+    u32 flagsB = 0u;
+    VectorSingle vA(0.0f);
+    VectorSingle wA(0.0f);
+    VectorSingle vB(0.0f);
+    VectorSingle wB(0.0f);
+    f32 baseLinearKN = 0.0f;
+    f32 warmTwistImpulse = 0.0f;
+    if(!PrepareContactConstraintSetup(
         bodies,
         sets,
         contact,
@@ -535,7 +721,90 @@ void PrepareContactConstraint(
         enableContactSoftening,
         enableWarmStarting,
         outConstraint,
-        unusedCache
+        n,
+        t1,
+        t2,
+        originToComA,
+        originToComB,
+        flagsA,
+        flagsB,
+        vA,
+        wA,
+        vB,
+        wB,
+        baseLinearKN,
+        warmTwistImpulse
+    ))
+        return;
+
+    const b8 hasA = (outConstraint.indexA != s_NullIndex);
+    const b8 hasB = (outConstraint.indexB != s_NullIndex);
+    VectorSingle sumCenterA(0.0f);
+    VectorSingle sumCenterB(0.0f);
+    f32 totalWeight = 0.0f;
+    for(u32 i = 0u; i < outConstraint.pointCount; ++i){
+        mut ManifoldConstraintPoint mcp = outConstraint.points[i];
+        VectorSingle rnA(0.0f);
+        VectorSingle rnB(0.0f);
+        VectorSingle invIArnA(0.0f);
+        VectorSingle invIBrnB(0.0f);
+        PrepareContactConstraintPoint(
+            contact.manifold.points[i],
+            n,
+            outConstraint.invIA,
+            outConstraint.invIB,
+            hasA,
+            hasB,
+            enableWarmStarting,
+            vA,
+            wA,
+            vB,
+            wB,
+            originToComA,
+            originToComB,
+            baseLinearKN,
+            mcp,
+            rnA,
+            rnB,
+            invIArnA,
+            invIBrnB
+        );
+        const f32 weight = Max(mcp.normalImpulse, s_MinFrictionWeight);
+        sumCenterA = sumCenterA + VectorSingle(mcp.rABaseSep, 0.0f) * weight;
+        sumCenterB = sumCenterB + VectorSingle(mcp.rBRelVel, 0.0f) * weight;
+        totalWeight += weight;
+    }
+
+    VectorSingle invIAn(0.0f);
+    VectorSingle invIBn(0.0f);
+    VectorSingle irt1A(0.0f);
+    VectorSingle irt2A(0.0f);
+    VectorSingle irt1B(0.0f);
+    VectorSingle irt2B(0.0f);
+    FinalizeContactConstraintFrame(
+        hasA,
+        hasB,
+        flagsA,
+        flagsB,
+        outConstraint.invMassA,
+        outConstraint.invMassB,
+        outConstraint.invIA,
+        outConstraint.invIB,
+        n,
+        t1,
+        t2,
+        sumCenterA,
+        sumCenterB,
+        totalWeight,
+        warmTwistImpulse,
+        false,
+        outConstraint,
+        invIAn,
+        invIBn,
+        irt1A,
+        irt2A,
+        irt1B,
+        irt2B
     );
 }
 

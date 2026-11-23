@@ -9,15 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ShapeRequest MakeTextLineShapeRequest(in ShapeRequest request, in usize byteBegin, in usize byteEnd){
-    ShapeRequest lineRequest = request;
-    lineRequest.text = request.text.substr(byteBegin, byteEnd - byteBegin);
-    return lineRequest;
-}
-
-Rect StoreTextLayoutInkBounds(in VectorDouble inkBounds){
-    return Rect(cast<f32>(inkBounds.x), cast<f32>(inkBounds.y), cast<f32>(inkBounds.z), cast<f32>(inkBounds.w));
-}
+type SharedTextLayout = Shared<TextLayout>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -145,8 +137,6 @@ class TextLayout{
     }
 }
 
-type SharedTextLayout = Shared<TextLayout>;
-
 class TextLayoutBuilder : NoCopy{
     private mut ITextShaper m_shaper;
 
@@ -162,6 +152,20 @@ class TextLayoutBuilder : NoCopy{
             return MakeUnexpected(status);
         return target;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ShapeRequest MakeTextLineShapeRequest(in ShapeRequest request, in usize byteBegin, in usize byteEnd){
+    ShapeRequest lineRequest = request;
+    lineRequest.text = request.text.substr(byteBegin, byteEnd - byteBegin);
+    return lineRequest;
+}
+
+Rect StoreTextLayoutInkBounds(in VectorDouble inkBounds){
+    return Rect(cast<f32>(inkBounds.x), cast<f32>(inkBounds.y), cast<f32>(inkBounds.z), cast<f32>(inkBounds.w));
 }
 
 

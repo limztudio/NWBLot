@@ -9,6 +9,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class SharedComputeEmulationPhaseTable{
+    public Array<Name, s_SharedComputeEmulationMaximumPhaseCount> identities;
+    public Array<StringView, s_SharedComputeEmulationMaximumPhaseCount> markers;
+
+    public void set(in usize index, in Name identity, in StringView marker){
+        this.identities[index] = identity;
+        this.markers[index] = marker;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [cpp_unwind]
 b8 AppendImmutableBufferUpload(mut GpuTaskGraph graph, in GpuUploadBlobId blob, in GpuGraphResourceId destination, in Name identity, in StringView label, mut GpuTaskId dependency, in b8 mergeWithPrevious){
     GpuTaskSchedulingHint scheduling;
@@ -45,18 +59,6 @@ GpuTaskCommandRequirements SharedComputeEmulationCommandRequirements(in b8 gener
         requirements.requiredCapabilities = GpuQueueCapability::Graphics;
     return requirements;
 }
-
-
-class SharedComputeEmulationPhaseTable{
-    public Array<Name, s_SharedComputeEmulationMaximumPhaseCount> identities;
-    public Array<StringView, s_SharedComputeEmulationMaximumPhaseCount> markers;
-
-    public void set(in usize index, in Name identity, in StringView marker){
-        this.identities[index] = identity;
-        this.markers[index] = marker;
-    }
-}
-
 
 SharedComputeEmulationPhaseTable OpaqueSharedComputeEmulationPhases(){
     SharedComputeEmulationPhaseTable table;

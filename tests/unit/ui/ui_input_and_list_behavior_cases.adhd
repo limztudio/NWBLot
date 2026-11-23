@@ -12,6 +12,11 @@
 
 
 type IntegerModelTests = NumericModelFixture<IntegerEditModel>;
+const StringView s_UiListScrollbarPanelKey = "panel";
+const StringView s_UiListScrollbarListKey = "list";
+const StringView s_UiListScrollbarPopupKey = "popup";
+const StringView s_UiListScrollbarUpperPopupKey = "upper";
+const StringView s_UiListScrollbarKey = "scrollbar";
 
 class UiInputBindingsTests{
     public InputBindings m_bindings;
@@ -94,16 +99,6 @@ usize UiLayoutTreeBoxAddress(in LayoutTree tree, in u32 index){
 }
 void ExpectUiIntegerModelRejected(in NumericEditResult result){ ExpectNumericEditRejected(result, false); }
 void ExpectUiIntegerModelRejected(in NumericEditResult result, in b8 restored){ ExpectNumericEditRejected(result, restored); }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const StringView s_UiListScrollbarPanelKey = "panel";
-const StringView s_UiListScrollbarListKey = "list";
-const StringView s_UiListScrollbarPopupKey = "popup";
-const StringView s_UiListScrollbarUpperPopupKey = "upper";
-const StringView s_UiListScrollbarKey = "scrollbar";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -12,7 +12,6 @@
 
 
 type PerfSessionReport = SessionReport;
-
 const usize s_CompilerStatisticsProbeCapacity = 1024;
 const u32 s_GatherBenchmarkWarmupFrames = 96u;
 const u32 s_GatherBenchmarkSampleFrames = 256u;
@@ -20,6 +19,10 @@ const u32 s_GatherBenchmarkDrainFrames = 32u;
 const u32 s_GatherBenchmarkCpuScopeCount = 8u;
 const u32 s_GatherBenchmarkGpuScopeCount = 18u;
 const u32 s_GatherBenchmarkArenaScopeCount = 3u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class RendererCompilerSample{
     public GpuTaskGraphCompileStatistics compile;
@@ -30,23 +33,6 @@ class RendererCompilerSample{
     public usize rejectedPackets = 0u;
     public usize rejectedTasks = 0u;
     public b8 valid = false;
-}
-
-Array<f64, 12u> CompileDurations(in GpuTaskGraphCompileStatistics stats){
-    return Array<f64, 12u>(
-        stats.declarationSeconds,
-        stats.analysisSeconds,
-        stats.validationSeconds,
-        stats.dependencyAnalysisSeconds,
-        stats.hazardAnalysisSeconds,
-        stats.topologicalOrderSeconds,
-        stats.queueAssignmentSeconds,
-        stats.planningSeconds,
-        stats.totalSeconds,
-        stats.packetizationSeconds,
-        stats.resourceStatePlanningSeconds,
-        stats.packetDependencyPlanningSeconds
-    );
 }
 
 [arena]
@@ -168,54 +154,6 @@ class RendererCompilerStatisticsProbe : IRenderPass{
     }
 }
 
-StringView GatherBenchmarkCpuScopeName(in u32 scope){
-    switch(scope){
-    case 0u: return "graphics.frame";
-    case 1u: return "graphics.frame_preamble";
-    case 2u: return "graphics.prepare_resources";
-    case 3u: return "graphics.render_passes";
-    case 4u: return "graphics.render";
-    case 5u: return "frame.project_update";
-    case 6u: return "graphics.present";
-    }
-    return "graphics.begin_frame";
-}
-
-StringView GatherBenchmarkGpuScopeName(in u32 scope){
-    switch(scope){
-    case 0u: return "render.frame";
-    case 1u: return "render.opaque_regular";
-    case 2u: return "render.shadow_visibility";
-    case 3u: return "render.deferred_lighting";
-    case 4u: return "render.deferred_composite";
-    case 5u: return "render.deferred_present";
-    case 6u: return "render.avboit_clear";
-    case 7u: return "render.avboit_occupancy";
-    case 8u: return "render.avboit_depth_warp";
-    case 9u: return "render.avboit_extinction";
-    case 10u: return "render.avboit_integration";
-    case 11u: return "render.avboit_accumulate";
-    case 12u: return "render.reflection_classify";
-    case 13u: return "render.reflection_build_args";
-    case 14u: return "render.reflection_hardware";
-    case 15u: return "render.reflection_depth_pyramid";
-    case 16u: return "render.reflection_temporal";
-    }
-    return "render.reflection_spatial";
-}
-
-StringView GatherBenchmarkArenaScopeName(in u32 scope){
-    switch(scope){
-    case 0u: return "impl/ecs_render/prepare";
-    case 1u: return "impl/ecs_render/render";
-    }
-    return "impl/ecs_render/task_graph";
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class RendererGatherCpuSample{
     public Array<MemorySnapshot, s_GatherBenchmarkArenaScopeCount> memory;
     public Array<f64, s_GatherBenchmarkCpuScopeCount> milliseconds;
@@ -236,32 +174,6 @@ class RendererGatherGpuSample{
 
     public TimingStats timing;
     public u32 scope;
-}
-
-void AppendGatherBenchmarkMemory(in Span<MemorySnapshot> snapshots, mut String out){
-    out.push_back('{');
-    for(u32 scope = 0u; scope < s_GatherBenchmarkArenaScopeCount; ++scope){
-        if(scope != 0u)
-            out.push_back(',');
-        const MemorySnapshot snapshot = snapshots[scope];
-        StringView presentText = "false";
-        if(snapshot.valid())
-            presentText = "true";
-        StringAppendFormat(
-            out,
-            "\"{}\":{{\"present\":{},\"frame\":{},\"reserved\":{},\"used\":{},\"historical_arena_peak\":{},\"allocations\":{},\"reallocations\":{},\"deallocations\":{}}}",
-            GatherBenchmarkArenaScopeName(scope),
-            presentText,
-            snapshot.frameIndex,
-            snapshot.reservedBytes,
-            snapshot.usedBytes,
-            snapshot.peakUsedBytes,
-            snapshot.allocationCount,
-            snapshot.reallocationCount,
-            snapshot.deallocationCount
-        );
-    }
-    out.push_back('}');
 }
 
 class RendererGatherBenchmarkProbe{
@@ -451,6 +363,97 @@ class RendererGatherBenchmarkProbe{
     private u64 m_lastPublish = 0u;
     private u32 m_successfulFrames = 0u;
     private b8 m_hasPublication = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Array<f64, 12u> CompileDurations(in GpuTaskGraphCompileStatistics stats){
+    return Array<f64, 12u>(
+        stats.declarationSeconds,
+        stats.analysisSeconds,
+        stats.validationSeconds,
+        stats.dependencyAnalysisSeconds,
+        stats.hazardAnalysisSeconds,
+        stats.topologicalOrderSeconds,
+        stats.queueAssignmentSeconds,
+        stats.planningSeconds,
+        stats.totalSeconds,
+        stats.packetizationSeconds,
+        stats.resourceStatePlanningSeconds,
+        stats.packetDependencyPlanningSeconds
+    );
+}
+
+StringView GatherBenchmarkCpuScopeName(in u32 scope){
+    switch(scope){
+    case 0u: return "graphics.frame";
+    case 1u: return "graphics.frame_preamble";
+    case 2u: return "graphics.prepare_resources";
+    case 3u: return "graphics.render_passes";
+    case 4u: return "graphics.render";
+    case 5u: return "frame.project_update";
+    case 6u: return "graphics.present";
+    }
+    return "graphics.begin_frame";
+}
+
+StringView GatherBenchmarkGpuScopeName(in u32 scope){
+    switch(scope){
+    case 0u: return "render.frame";
+    case 1u: return "render.opaque_regular";
+    case 2u: return "render.shadow_visibility";
+    case 3u: return "render.deferred_lighting";
+    case 4u: return "render.deferred_composite";
+    case 5u: return "render.deferred_present";
+    case 6u: return "render.avboit_clear";
+    case 7u: return "render.avboit_occupancy";
+    case 8u: return "render.avboit_depth_warp";
+    case 9u: return "render.avboit_extinction";
+    case 10u: return "render.avboit_integration";
+    case 11u: return "render.avboit_accumulate";
+    case 12u: return "render.reflection_classify";
+    case 13u: return "render.reflection_build_args";
+    case 14u: return "render.reflection_hardware";
+    case 15u: return "render.reflection_depth_pyramid";
+    case 16u: return "render.reflection_temporal";
+    }
+    return "render.reflection_spatial";
+}
+
+StringView GatherBenchmarkArenaScopeName(in u32 scope){
+    switch(scope){
+    case 0u: return "impl/ecs_render/prepare";
+    case 1u: return "impl/ecs_render/render";
+    }
+    return "impl/ecs_render/task_graph";
+}
+
+void AppendGatherBenchmarkMemory(in Span<MemorySnapshot> snapshots, mut String out){
+    out.push_back('{');
+    for(u32 scope = 0u; scope < s_GatherBenchmarkArenaScopeCount; ++scope){
+        if(scope != 0u)
+            out.push_back(',');
+        const MemorySnapshot snapshot = snapshots[scope];
+        StringView presentText = "false";
+        if(snapshot.valid())
+            presentText = "true";
+        StringAppendFormat(
+            out,
+            "\"{}\":{{\"present\":{},\"frame\":{},\"reserved\":{},\"used\":{},\"historical_arena_peak\":{},\"allocations\":{},\"reallocations\":{},\"deallocations\":{}}}",
+            GatherBenchmarkArenaScopeName(scope),
+            presentText,
+            snapshot.frameIndex,
+            snapshot.reservedBytes,
+            snapshot.usedBytes,
+            snapshot.peakUsedBytes,
+            snapshot.allocationCount,
+            snapshot.reallocationCount,
+            snapshot.deallocationCount
+        );
+    }
+    out.push_back('}');
 }
 
 

@@ -13,6 +13,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/shadow/hardware_transparent_binding_slots.h>"), cpp_name("NWB_HW_TRANSPARENT_PUSH_CONSTANT_BYTES")]
+extern const u32 s_ShaderHwTransparentPushConstantBytes;
+
+[cpp_header("<impl/assets/graphics/shadow/hardware_transparent_binding_slots.h>"), cpp_name("NWB_HW_TRANSPARENT_WORDS_PER_RAY")]
+extern const u32 s_ShaderHwTransparentWordsPerRay;
+
+[cpp_header("<impl/assets/graphics/shadow/hardware_transparent_binding_slots.h>"), cpp_name("NWB_HW_TRANSPARENT_OVERFLOW_ARGS_WORDS")]
+extern const u32 s_ShaderHwTransparentOverflowArgsWords;
+
+[cpp_header("<impl/assets/graphics/shadow/hardware_transparent_binding_slots.h>"), cpp_name("NWB_HW_TRANSPARENT_GROUP_SIZE")]
+extern const u32 s_ShaderHwTransparentGroupSize;
+
+static_assert(size_of<HardwareTransparentShadowPushConstants>() == s_ShaderHwTransparentPushConstantBytes);
+static_assert(offset_of<HardwareTransparentShadowPushConstants>(receiverFactor) == s_HwTransparentReceiverFactorByteOffset);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const Name s_HardwareTransparentShadowDebugName = "ECSRender_HardwareTransparentShadow";
 
 
@@ -55,25 +74,6 @@ void PopulateHardwareTransparentSlotSamplePush(in u32 lightSlot, in u32 sampleIn
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<impl/assets/graphics/shadow/hardware_transparent_binding_slots.h>"), cpp_name("NWB_HW_TRANSPARENT_PUSH_CONSTANT_BYTES")]
-extern const u32 s_ShaderHwTransparentPushConstantBytes;
-
-[cpp_header("<impl/assets/graphics/shadow/hardware_transparent_binding_slots.h>"), cpp_name("NWB_HW_TRANSPARENT_WORDS_PER_RAY")]
-extern const u32 s_ShaderHwTransparentWordsPerRay;
-
-[cpp_header("<impl/assets/graphics/shadow/hardware_transparent_binding_slots.h>"), cpp_name("NWB_HW_TRANSPARENT_OVERFLOW_ARGS_WORDS")]
-extern const u32 s_ShaderHwTransparentOverflowArgsWords;
-
-[cpp_header("<impl/assets/graphics/shadow/hardware_transparent_binding_slots.h>"), cpp_name("NWB_HW_TRANSPARENT_GROUP_SIZE")]
-extern const u32 s_ShaderHwTransparentGroupSize;
-
-static_assert(size_of<HardwareTransparentShadowPushConstants>() == s_ShaderHwTransparentPushConstantBytes);
-static_assert(offset_of<HardwareTransparentShadowPushConstants>(receiverFactor) == s_HwTransparentReceiverFactorByteOffset);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 HardwareTransparentShadowResources::prepareHardwareTransparentShadowResources(mut DeferredFrameTargets targets){
     mut HardwareTransparentShadowState state = this.m_state;
     state.m_ready = false;
@@ -106,11 +106,14 @@ b8 HardwareTransparentShadowResources::prepareHardwareTransparentShadowResources
             state.m_pipelineFailed = true;
             return false;
         }
-        if(!CreateHeapComputePipeline(device, state.m_shaders[i], state.m_bindingLayout, true, state.m_pipelines[i])){
+        const Expected<ComputePipelineHandle> pipeline = CreateHeapComputePipeline(device, state.m_shaders[i], state.m_bindingLayout, true);
+        if(!pipeline.has_value()){
+            state.m_pipelines[i].reset();
             error("RendererSystem: failed to create hardware transparent-shadow pipeline {}", i);
             state.m_pipelineFailed = true;
             return false;
         }
+        state.m_pipelines[i] = pipeline.value();
     }
 
     u32 pixels = 0u;

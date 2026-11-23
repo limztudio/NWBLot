@@ -13,6 +13,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+enum<u8> OpaqueCsgComputeIntervalPass{ ReceiverSpan, Combine }
+
 class OpaqueCsgIntervalRecordInputs{
     public mut RendererMaterialSystem materialSystem;
     public mut RendererCsgSystem csgSystem;
@@ -42,8 +44,6 @@ class OpaqueCsgIntervalRecordInputs{
         this.sceneShadingSetupReady = shadingReady;
     }
 }
-
-enum<u8> OpaqueCsgComputeIntervalPass{ ReceiverSpan, Combine }
 
 [modular]
 class OpaqueCsgComputeIntervalGraphTask{

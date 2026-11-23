@@ -25,49 +25,6 @@
 
 const f32 s_ReflectionHalfPi = s_PIDIV2;
 const f32 s_ReflectionPi = s_PI;
-
-enum<u8> ReflectionFeedbackCase{
-    Boundary,
-    Mutation,
-    LongMiss
-}
-
-enum<u8> ReflectionRoughnessCase{
-    Static,
-    Furnace,
-    Camera,
-    Transform,
-    Material,
-    Light,
-    Deform,
-    StaticDeform
-}
-
-b8 IsReflectionFeedbackMutationCase(in ReflectionFeedbackCase mode){
-    return mode == ReflectionFeedbackCase::Mutation;
-}
-
-b8 IsReflectionRoughnessMutationCase(in ReflectionRoughnessCase mode){
-    return mode == ReflectionRoughnessCase::Camera
-        || mode == ReflectionRoughnessCase::Transform
-        || mode == ReflectionRoughnessCase::Material
-        || mode == ReflectionRoughnessCase::Light
-        || mode == ReflectionRoughnessCase::Deform;
-}
-
-b8 IsReflectionRoughnessDeformingCase(in ReflectionRoughnessCase mode){
-    return mode == ReflectionRoughnessCase::Deform || mode == ReflectionRoughnessCase::StaticDeform;
-}
-
-class OpticalReceiverEntities{
-    public EntityID receiver = s_InvalidEntityId;
-    public EntityID cutter = s_InvalidEntityId;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const StringView s_ReflectionSpecularParameterPath = "runtime.specular_f0";
 const StringView s_ReflectionRoughnessParameterPath = "runtime.perceptual_roughness";
 const StringView s_OpticalCsgDenseCase = "optical_csg_dense";
@@ -94,14 +51,12 @@ const StringView s_OpticalTiltedCase = "optical_tilted";
 const StringView s_OpticalMirroredCase = "optical_mirrored";
 const StringView s_OpticalUnspecifiedCase = "optical_unspecified";
 const StringView s_ReflectionOpticalInterface = "project/shaders/reflection_optical";
-
 const Name s_ReflectionSurfaceInterfaceName = "project/shaders/smoke_surface";
 const Name s_ReflectionOpticalInterfaceName = "project/shaders/reflection_optical";
 const Name s_ReflectionNameCsgGroupGapSubUlp = "smoke/reflection/csg_group_gap_sub_ulp";
 const Name s_ReflectionNameCsgGroupGap = "smoke/reflection/csg_group_gap";
 const Name s_ReflectionNameCsgSubUlp = "smoke/reflection/csg_sub_ulp";
 const Name s_ReflectionNameCsgSliver = "smoke/reflection/csg_sliver";
-
 const SmokeMeshRef s_ReflectionOpticalPlaneMesh = "project/meshes/shadow_plane";
 const SmokeMeshRef s_ReflectionOpticalBoxMesh = "project/meshes/cube_hard_edges";
 const SmokeMeshRef s_ReflectionOpticalCsgOpenTailMesh = "project/meshes/reflection_csg_open_tail";
@@ -120,9 +75,31 @@ const SmokeMaterialRef s_ReflectionOpticalPaneMaterial = "project/smoke/reflecti
 const f32x4 s_ReflectionOpticalClearTransmission = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
 const f32x4 s_ReflectionOpticalTintedTransmission = f32x4(0.55f, 0.8f, 1.0f, 0.0f);
 
+enum<u8> ReflectionFeedbackCase{
+    Boundary,
+    Mutation,
+    LongMiss
+}
+
+enum<u8> ReflectionRoughnessCase{
+    Static,
+    Furnace,
+    Camera,
+    Transform,
+    Material,
+    Light,
+    Deform,
+    StaticDeform
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+class OpticalReceiverEntities{
+    public EntityID receiver = s_InvalidEntityId;
+    public EntityID cutter = s_InvalidEntityId;
+}
 
 class ReflectionOpticalCsgBuilder{
     public ReflectionOpticalCsgBuilder(mut World world){
@@ -151,6 +128,175 @@ class ReflectionOpticalCsgBuilder{
     }
 
     private mut World m_world;
+}
+
+class ReflectionCsgContextProbe : ISmokeCapturePredicate{
+    public ReflectionCsgContextProbe(mut ProjectRuntimeContext context){
+        this.m_context = context;
+    }
+
+    public void stop(){
+        StopAndResetSmokeFramebufferCapture(this.m_capture);
+    }
+
+    public b8 shouldCapture(in u64 sourceFrame)const{
+        return sourceFrame == this.m_targetSource;
+    }
+
+    public b8 shouldCaptureFrame(in u64 sourceFrame)const override{
+        return this.shouldCapture(sourceFrame);
+    }
+
+    public b8 create(in u32 rayCapacity, mut World world){
+        this.m_rayCapacity = rayCapacity;
+        const Expected<String> output = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
+        if(!output.has_value()){
+            error("ReflectionCsgContext: application framebuffer capture is required");
+            return false;
+        }
+        const Expected<ReflectionCsgContextEntities> scene = CreateReflectionCsgContextScene(world);
+        if(!scene.has_value())
+            return false;
+
+        const FramebufferCaptureOptions options = MakeSmokeCaptureOptions(this, 960u, 720u, false);
+        SmokeCaptureFactory captureFactory = SmokeCaptureFactory(this.m_context);
+        if(!captureFactory.prepareSeriesInto(StringView(output.value()), 5u, options, this.m_capturePaths, this.m_capture))
+            return false;
+        this.m_entities = scene.value();
+        return this.beginPhase(world);
+    }
+
+    public b8 sampleSynchronizedFrame(in ReflectionStatistics statistics, mut World world, mut RendererSystem renderer){
+        if(!this.m_context.graphics.waitForIdle()){
+            error("ReflectionCsgContext: diagnostic frame synchronization failed");
+            return false;
+        }
+        if(this.m_done)
+            return true;
+
+        const u64 frame = this.m_context.graphics.getFrameIndex();
+        if(frame > 0u && frame - 1u != this.m_packetSource){
+            this.m_packetSource = frame - 1u;
+            ReportReflectionSlicePackets(this.m_rayCapacity, this.m_packetSource, this.m_phase != 2u, this.m_context, renderer);
+        }
+
+        if(statistics.sequence != this.m_lastSequence || statistics.generation != this.m_lastGeneration){
+            this.m_lastSequence = statistics.sequence;
+            this.m_lastGeneration = statistics.generation;
+            if(statistics.frameIndex >= 3u && statistics.graphicsFrameIndex >= this.m_phaseSource && statistics.acceptedToken.valid())
+                ++this.m_completed;
+        }
+
+        UpdateSmokeFramebufferCapture(this.m_capture);
+        if(SmokeFramebufferCaptureReady(this.m_capture)){
+            const u64 capturedSource = SmokeFramebufferCapturedFrameIndex(this.m_capture);
+            if(capturedSource != this.m_targetSource || capturedSource < this.m_phaseSource || this.m_completed < 16u){
+                error("ReflectionCsgContext: capture missed the qualified phase source frame");
+                return false;
+            }
+            if(statistics.graphicsFrameIndex < capturedSource)
+                return true;
+            if(statistics.graphicsFrameIndex != capturedSource){
+                error(
+                    "ReflectionCsgContext: captured source={} skipped by completed source={} sequence={} generation={}"
+                    , capturedSource
+                    , statistics.graphicsFrameIndex
+                    , statistics.sequence
+                    , statistics.generation
+                );
+                return false;
+            }
+            [essential] info(
+                "ReflectionCsgContext: captured phase={} source_frame={} completed_frames={}"
+                , this.m_phase
+                , capturedSource
+                , this.m_completed
+            );
+            if(this.m_phase == 4u){
+                this.m_done = true;
+                [essential] info("ReflectionCsgContext: complete captures=5");
+                FinishSmokeFramebufferCapture(this.m_capture);
+                return true;
+            }
+            ++this.m_phase;
+            const StringView nextPath = StringView(this.m_capturePaths[this.m_phase]);
+            if(!RearmSmokeFramebufferCapture(this.m_capture, nextPath))
+                return false;
+            return this.beginPhase(world);
+        }
+
+        if(this.m_targetSource == ~cast<u64>(0u) && this.m_completed >= 16u)
+            this.m_targetSource = frame;
+        return true;
+    }
+
+    private b8 beginPhase(mut World world){
+        const b8 small = this.m_phase == 0u || this.m_phase == 3u;
+        const b8 csg = this.m_phase != 2u;
+        f32 denseX = 0.0f;
+        if(small)
+            denseX = 40.0f;
+        const b8 denseCutterActive = !small && csg;
+        if(!SetSmokeEntityVisible(this.m_entities.smallReceiver, small, world))
+            return false;
+        if(!SetSmokeEntityPositionX(this.m_entities.denseReceiver, denseX, world))
+            return false;
+        SetSmokeCsgCutterActive(this.m_entities.smallCutter, small, world);
+        SetSmokeCsgCutterActive(this.m_entities.denseCutter, denseCutterActive, world);
+        this.m_phaseSource = this.m_context.graphics.getFrameIndex();
+        this.m_completed = 0u;
+        this.m_targetSource = ~cast<u64>(0u);
+        u32 cutPrimitives = 0u;
+        if(small)
+            cutPrimitives = 12u;
+        else if(csg)
+            cutPrimitives = 108u;
+        u32 csgVal = 0u;
+        if(csg)
+            csgVal = 1u;
+        [essential] info(
+            "ReflectionCsgContext: phase={} source_frame={} cut_receiver_primitives={} csg={}"
+            , this.m_phase
+            , this.m_phaseSource
+            , cutPrimitives
+            , csgVal
+        );
+        return true;
+    }
+
+    private Vector<String> m_capturePaths;
+    private ReflectionCsgContextEntities m_entities = ReflectionCsgContextEntities();
+    private UniquePtr<FramebufferCapture> m_capture = UniquePtr<FramebufferCapture>();
+    private mut ProjectRuntimeContext m_context;
+    private u64 m_phaseSource = 0u;
+    private u64 m_targetSource = ~cast<u64>(0u);
+    private u64 m_packetSource = ~cast<u64>(0u);
+    private u64 m_lastSequence = 0u;
+    private u64 m_lastGeneration = 0u;
+    private u32 m_rayCapacity = 0u;
+    private u32 m_phase = 0u;
+    private u32 m_completed = 0u;
+    private b8 m_done = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsReflectionFeedbackMutationCase(in ReflectionFeedbackCase mode){
+    return mode == ReflectionFeedbackCase::Mutation;
+}
+
+b8 IsReflectionRoughnessMutationCase(in ReflectionRoughnessCase mode){
+    return mode == ReflectionRoughnessCase::Camera
+        || mode == ReflectionRoughnessCase::Transform
+        || mode == ReflectionRoughnessCase::Material
+        || mode == ReflectionRoughnessCase::Light
+        || mode == ReflectionRoughnessCase::Deform;
+}
+
+b8 IsReflectionRoughnessDeformingCase(in ReflectionRoughnessCase mode){
+    return mode == ReflectionRoughnessCase::Deform || mode == ReflectionRoughnessCase::StaticDeform;
 }
 
 b8 ApplyReflectionSurfaceParameters(in EntityID entity, in f32 f0, in f32 roughness, mut World world){
@@ -725,10 +871,6 @@ b8 CreateReflectionOpticalScene(in StringView caseName, mut World world){
     return CreateReflectionOpticalObjects(caseName, world);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void ReportReflectionSlicePackets(
     in u32 rayCapacity,
     in u64 sourceFrame,
@@ -845,155 +987,6 @@ void ReportReflectionSlicePackets(
         , singleTaskPackets
         , graphicsPackets
     );
-}
-
-class ReflectionCsgContextProbe : ISmokeCapturePredicate{
-    public ReflectionCsgContextProbe(mut ProjectRuntimeContext context){
-        this.m_context = context;
-    }
-
-    public void stop(){
-        StopAndResetSmokeFramebufferCapture(this.m_capture);
-    }
-
-    public b8 shouldCapture(in u64 sourceFrame)const{
-        return sourceFrame == this.m_targetSource;
-    }
-
-    public b8 shouldCaptureFrame(in u64 sourceFrame)const override{
-        return this.shouldCapture(sourceFrame);
-    }
-
-    public b8 create(in u32 rayCapacity, mut World world){
-        this.m_rayCapacity = rayCapacity;
-        const Expected<String> output = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
-        if(!output.has_value()){
-            error("ReflectionCsgContext: application framebuffer capture is required");
-            return false;
-        }
-        const Expected<ReflectionCsgContextEntities> scene = CreateReflectionCsgContextScene(world);
-        if(!scene.has_value())
-            return false;
-
-        const FramebufferCaptureOptions options = MakeSmokeCaptureOptions(this, 960u, 720u, false);
-        SmokeCaptureFactory captureFactory = SmokeCaptureFactory(this.m_context);
-        if(!captureFactory.prepareSeriesInto(StringView(output.value()), 5u, options, this.m_capturePaths, this.m_capture))
-            return false;
-        this.m_entities = scene.value();
-        return this.beginPhase(world);
-    }
-
-    public b8 sampleSynchronizedFrame(in ReflectionStatistics statistics, mut World world, mut RendererSystem renderer){
-        if(!this.m_context.graphics.waitForIdle()){
-            error("ReflectionCsgContext: diagnostic frame synchronization failed");
-            return false;
-        }
-        if(this.m_done)
-            return true;
-
-        const u64 frame = this.m_context.graphics.getFrameIndex();
-        if(frame > 0u && frame - 1u != this.m_packetSource){
-            this.m_packetSource = frame - 1u;
-            ReportReflectionSlicePackets(this.m_rayCapacity, this.m_packetSource, this.m_phase != 2u, this.m_context, renderer);
-        }
-
-        if(statistics.sequence != this.m_lastSequence || statistics.generation != this.m_lastGeneration){
-            this.m_lastSequence = statistics.sequence;
-            this.m_lastGeneration = statistics.generation;
-            if(statistics.frameIndex >= 3u && statistics.graphicsFrameIndex >= this.m_phaseSource && statistics.acceptedToken.valid())
-                ++this.m_completed;
-        }
-
-        UpdateSmokeFramebufferCapture(this.m_capture);
-        if(SmokeFramebufferCaptureReady(this.m_capture)){
-            const u64 capturedSource = SmokeFramebufferCapturedFrameIndex(this.m_capture);
-            if(capturedSource != this.m_targetSource || capturedSource < this.m_phaseSource || this.m_completed < 16u){
-                error("ReflectionCsgContext: capture missed the qualified phase source frame");
-                return false;
-            }
-            if(statistics.graphicsFrameIndex < capturedSource)
-                return true;
-            if(statistics.graphicsFrameIndex != capturedSource){
-                error(
-                    "ReflectionCsgContext: captured source={} skipped by completed source={} sequence={} generation={}"
-                    , capturedSource
-                    , statistics.graphicsFrameIndex
-                    , statistics.sequence
-                    , statistics.generation
-                );
-                return false;
-            }
-            [essential] info(
-                "ReflectionCsgContext: captured phase={} source_frame={} completed_frames={}"
-                , this.m_phase
-                , capturedSource
-                , this.m_completed
-            );
-            if(this.m_phase == 4u){
-                this.m_done = true;
-                [essential] info("ReflectionCsgContext: complete captures=5");
-                FinishSmokeFramebufferCapture(this.m_capture);
-                return true;
-            }
-            ++this.m_phase;
-            const StringView nextPath = StringView(this.m_capturePaths[this.m_phase]);
-            if(!RearmSmokeFramebufferCapture(this.m_capture, nextPath))
-                return false;
-            return this.beginPhase(world);
-        }
-
-        if(this.m_targetSource == ~cast<u64>(0u) && this.m_completed >= 16u)
-            this.m_targetSource = frame;
-        return true;
-    }
-
-    private b8 beginPhase(mut World world){
-        const b8 small = this.m_phase == 0u || this.m_phase == 3u;
-        const b8 csg = this.m_phase != 2u;
-        f32 denseX = 0.0f;
-        if(small)
-            denseX = 40.0f;
-        const b8 denseCutterActive = !small && csg;
-        if(!SetSmokeEntityVisible(this.m_entities.smallReceiver, small, world))
-            return false;
-        if(!SetSmokeEntityPositionX(this.m_entities.denseReceiver, denseX, world))
-            return false;
-        SetSmokeCsgCutterActive(this.m_entities.smallCutter, small, world);
-        SetSmokeCsgCutterActive(this.m_entities.denseCutter, denseCutterActive, world);
-        this.m_phaseSource = this.m_context.graphics.getFrameIndex();
-        this.m_completed = 0u;
-        this.m_targetSource = ~cast<u64>(0u);
-        u32 cutPrimitives = 0u;
-        if(small)
-            cutPrimitives = 12u;
-        else if(csg)
-            cutPrimitives = 108u;
-        u32 csgVal = 0u;
-        if(csg)
-            csgVal = 1u;
-        [essential] info(
-            "ReflectionCsgContext: phase={} source_frame={} cut_receiver_primitives={} csg={}"
-            , this.m_phase
-            , this.m_phaseSource
-            , cutPrimitives
-            , csgVal
-        );
-        return true;
-    }
-
-    private Vector<String> m_capturePaths;
-    private ReflectionCsgContextEntities m_entities = ReflectionCsgContextEntities();
-    private UniquePtr<FramebufferCapture> m_capture = UniquePtr<FramebufferCapture>();
-    private mut ProjectRuntimeContext m_context;
-    private u64 m_phaseSource = 0u;
-    private u64 m_targetSource = ~cast<u64>(0u);
-    private u64 m_packetSource = ~cast<u64>(0u);
-    private u64 m_lastSequence = 0u;
-    private u64 m_lastGeneration = 0u;
-    private u32 m_rayCapacity = 0u;
-    private u32 m_phase = 0u;
-    private u32 m_completed = 0u;
-    private b8 m_done = false;
 }
 
 

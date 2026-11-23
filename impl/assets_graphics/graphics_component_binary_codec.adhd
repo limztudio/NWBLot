@@ -104,15 +104,14 @@ class GraphicsComponentBinaryCodec{
         return true;
     }
 
-    public b8 deserializeAssetRef(in Span<u8> payload, in StringView context, mut Name outVirtualPath)const{
+    public Expected<Name> deserializeAssetRef(in Span<u8> payload, in StringView context)const{
         usize cursor = 0u;
         const Expected<SingleAssetRefComponentPayloadBinary> binaryPayload = ReadPOD<SingleAssetRefComponentPayloadBinary>(payload, cursor);
         if(!binaryPayload.has_value() || cursor != payload.size()){
             error("{} failed: invalid payload size", context);
-            return false;
+            return MakeUnexpected(Failure());
         }
-        outVirtualPath = Name(binaryPayload.value().assetHash);
-        return true;
+        return Name(binaryPayload.value().assetHash);
     }
 
     public b8 serializeRenderer(in RendererComponent component, mut Vector<u8> outPayload)const{
@@ -123,20 +122,19 @@ class GraphicsComponentBinaryCodec{
         return true;
     }
 
-    public b8 deserializeRenderer(in Span<u8> payload, mut RendererComponent outComponent)const{
+    public Expected<RendererComponent> deserializeRenderer(in Span<u8> payload)const{
         usize cursor = 0u;
         const Expected<RendererComponentPayloadBinary> binaryPayload = ReadPOD<RendererComponentPayloadBinary>(payload, cursor);
         if(!binaryPayload.has_value() || cursor != payload.size()){
             error("RendererComponentAsset::loadComponentPayload failed: invalid payload size");
-            return false;
+            return MakeUnexpected(Failure());
         }
         const Expected<RendererComponent> unpacked = this.unpackRenderer(binaryPayload.value());
         if(!unpacked.has_value()){
             error("RendererComponentAsset::loadComponentPayload failed: invalid renderer flags");
-            return false;
+            return MakeUnexpected(Failure());
         }
-        outComponent = unpacked.value();
-        return true;
+        return unpacked.value();
     }
 }
 

@@ -28,14 +28,12 @@ class AvboitGeometryPreparationInputs{
     }
 }
 
-
 class AvboitComputeEmulationOutputs{
     public GpuGraphResourceSetId computeEmulationOutputSet = GpuGraphResourceSetId();
     public GpuGraphResourceId sharedComputeEmulationOutput = GpuGraphResourceId();
     public b8 computeEmulationOutputStatesGraphOwned = false;
     public b8 sharedComputeEmulationOutputStatesGraphOwned = false;
 }
-
 
 class FrameGraphAvboitMaterialUploadResult{
     public GpuTaskId uploadTask;
@@ -52,14 +50,6 @@ class FrameGraphAvboitMaterialUploadResult{
     public b8 producesReusableGeometry = false;
     public b8 csgComputeEmulationPlanCaptured = false;
     public b8 sharedComputeEmulationPlanCaptured = false;
-}
-
-b8 EqualCsgFrameWorkRegion(in CsgFrameWorkRegion lhs, in CsgFrameWorkRegion rhs){
-    return lhs.minX == rhs.minX
-        && lhs.minY == rhs.minY
-        && lhs.maxX == rhs.maxX
-        && lhs.maxY == rhs.maxY
-        && lhs.fullFrame == rhs.fullFrame;
 }
 
 class AvboitUploadedStreamState{
@@ -112,14 +102,6 @@ class AvboitGeometryPreparationResult{
     public b8 sampledTexturesCollected = false;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 CanPublishAvboitReusableGeometryProducer(in b8 captured, in b8 taskValid){
-    return captured && taskValid;
-}
-
 [modular]
 class AvboitGeneratedGeometryReuse : NoCopy{
     private Vector<MaterialPassDrawItem> m_draws;
@@ -136,6 +118,22 @@ class AvboitGeneratedGeometryReuse : NoCopy{
     public b8 matches(in MaterialPassDrawItemPartitionsView draws, in Span<InstanceGpuData> instances, in MeshFrameBindingSnapshot frameBindings, in MeshViewGpuData view, in MaterialPipelinePass pass);
     public b8 publishProducer(in GpuTaskId task);
     public GpuTaskId producerTask()const{ return this.m_producer; }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 EqualCsgFrameWorkRegion(in CsgFrameWorkRegion lhs, in CsgFrameWorkRegion rhs){
+    return lhs.minX == rhs.minX
+        && lhs.minY == rhs.minY
+        && lhs.maxX == rhs.maxX
+        && lhs.maxY == rhs.maxY
+        && lhs.fullFrame == rhs.fullFrame;
+}
+
+b8 CanPublishAvboitReusableGeometryProducer(in b8 captured, in b8 taskValid){
+    return captured && taskValid;
 }
 
 

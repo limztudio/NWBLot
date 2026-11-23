@@ -96,9 +96,8 @@ class ShadowSurfaceSourceBuilder{
     )const{
         String ownedSymbol = "";
         ownedSymbol.append(symbol);
-        if(inOutSeenSymbols.contains(ownedSymbol))
+        if(!inOutSeenSymbols.insert(ownedSymbol).second)
             return;
-        inOutSeenSymbols.insert(ownedSymbol);
         this.appendBindAliasDefinition(symbol, bindNamespace, inOutSource);
         outAliasSymbols.push_back(ownedSymbol);
     }

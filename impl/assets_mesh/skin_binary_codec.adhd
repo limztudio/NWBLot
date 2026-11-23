@@ -8,6 +8,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class SkinBinaryReferences{
+    public NameHash mesh;
+    public NameHash skeleton;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class SkinBinaryCodec{
     private SkinHeaderBinary makeHeader(
         in NameHash meshNameHash,
@@ -31,6 +40,7 @@ class SkinBinaryCodec{
         return false;
     }
 
+    [cpp_unwind]
     public b8 serialize(
         in NameHash meshNameHash,
         in NameHash skeletonNameHash,
@@ -65,59 +75,54 @@ class SkinBinaryCodec{
         return true;
     }
 
-    public b8 deserialize(
-        in Span<u8> binary,
-        mut Name outMesh,
-        mut Name outSkeleton,
-        mut Vector<SkinInfluence4> outInfluences,
-        mut Vector<SkeletonJointMatrix> outInverseBindMatrices
-    )const{
+    [cpp_unwind]
+    public Expected<SkinBinaryReferences> deserialize(in Span<u8> binary, mut Vector<SkinInfluence4> outInfluences, mut Vector<SkeletonJointMatrix> outInverseBindMatrices)const{
         usize cursor = 0u;
         const Expected<SkinHeaderBinary> headerResult = ReadPOD<SkinHeaderBinary>(binary, cursor);
         if(!headerResult.has_value()){
             error("Skin::loadBinary failed: malformed header");
-            return false;
+            return MakeUnexpected(Failure());
         }
         const SkinHeaderBinary header = headerResult.value();
         if(header.magic != s_SkinBinaryMagic){
             error("Skin::loadBinary failed: invalid skin asset format; recook required");
-            return false;
+            return MakeUnexpected(Failure());
         }
         if(!this.validateHeader(header))
-            return false;
-
-        outMesh = Name(header.meshNameHash);
-        outSkeleton = Name(header.skeletonNameHash);
+            return MakeUnexpected(Failure());
 
         if(header.influenceCount > cast<u64>(usize.max / s_SkinInfluence4BinaryBytes)){
             error("Skin::loadBinary failed: 'influences' payload byte size overflows");
-            return false;
+            return MakeUnexpected(Failure());
         }
         const usize influenceCount = cast<usize>(header.influenceCount);
         if(!CanReadBytes(binary, cursor, influenceCount * s_SkinInfluence4BinaryBytes) || !CanStoreValueCount(outInfluences, influenceCount)){
             error("Skin::loadBinary failed: malformed 'influences' payload");
-            return false;
+            return MakeUnexpected(Failure());
         }
         if(!ReadBinaryVectorPayload(binary, influenceCount, cursor, outInfluences).has_value())
-            return false;
+            return MakeUnexpected(Failure());
 
         if(header.inverseBindMatrixCount > cast<u64>(usize.max / s_SkeletonJointMatrixBinaryBytes)){
             error("Skin::loadBinary failed: 'inverse bind matrices' payload byte size overflows");
-            return false;
+            return MakeUnexpected(Failure());
         }
         const usize matrixCount = cast<usize>(header.inverseBindMatrixCount);
         if(!CanReadBytes(binary, cursor, matrixCount * s_SkeletonJointMatrixBinaryBytes) || !CanStoreValueCount(outInverseBindMatrices, matrixCount)){
             error("Skin::loadBinary failed: malformed 'inverse bind matrices' payload");
-            return false;
+            return MakeUnexpected(Failure());
         }
         if(!ReadBinaryVectorPayload(binary, matrixCount, cursor, outInverseBindMatrices).has_value())
-            return false;
+            return MakeUnexpected(Failure());
 
         if(cursor != binary.size()){
             error("Skin::loadBinary failed: trailing bytes detected");
-            return false;
+            return MakeUnexpected(Failure());
         }
-        return true;
+        SkinBinaryReferences references;
+        references.mesh = header.meshNameHash;
+        references.skeleton = header.skeletonNameHash;
+        return references;
     }
 }
 

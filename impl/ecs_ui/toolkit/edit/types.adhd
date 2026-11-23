@@ -305,7 +305,7 @@ void ClearEditModelSnapshotValues(
     expectedExternalRevision = 0u;
 }
 
-void CaptureEditModelSnapshotSurroundingValues(
+[cpp_unwind] void CaptureEditModelSnapshotSurroundingValues(
     in StringView text,
     in TextAreaModelStamp stamp,
     mut String expectedText,
@@ -313,13 +313,17 @@ void CaptureEditModelSnapshotSurroundingValues(
     mut u64 expectedRevision,
     mut u64 expectedExternalRevision
 ){
-    expectedText.assign(text);
+    expectedText.reserve(text.size());
+    if(text.empty())
+        expectedText.clear();
+    else
+        expectedText.assign(text);
     expectedStamp = stamp;
     expectedRevision = stamp.revision;
     expectedExternalRevision = stamp.externalRevision;
 }
 
-void CaptureEditModelSnapshotValues(
+[cpp_unwind] void CaptureEditModelSnapshotValues(
     in StringView text,
     in TextAreaModelStamp stamp,
     in EditCompositionView composition,
@@ -330,9 +334,14 @@ void CaptureEditModelSnapshotValues(
     mut u64 expectedRevision,
     mut u64 expectedExternalRevision
 ){
+    expectedText.reserve(text.size());
+    expectedPreedit.reserve(composition.text.size());
     CaptureEditModelSnapshotSurroundingValues(text, stamp, expectedText, expectedStamp, expectedRevision, expectedExternalRevision);
     expectedComposition = composition;
-    expectedPreedit.assign(composition.text);
+    if(composition.text.empty())
+        expectedPreedit.clear();
+    else
+        expectedPreedit.assign(composition.text);
     expectedComposition.text = "";
 }
 

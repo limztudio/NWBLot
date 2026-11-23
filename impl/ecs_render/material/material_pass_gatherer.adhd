@@ -14,96 +14,24 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_POSITION_LOCATION")]
+extern const u32 s_EmulationVertexPositionLocation;
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_NORMAL_LOCATION")]
+extern const u32 s_EmulationVertexNormalLocation;
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_TANGENT_LOCATION")]
+extern const u32 s_EmulationVertexTangentLocation;
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_UV0_LOCATION")]
+extern const u32 s_EmulationVertexUv0Location;
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_COLOR_LOCATION")]
+extern const u32 s_EmulationVertexColorLocation;
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_LOCATION")]
+extern const u32 s_EmulationVertexWorldPositionLocation;
+
 const Name s_MeshEmulationVsDebugName = "ECSRender_MeshEmulationVS";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 IsCsgReceiverSurfacePassActive(in b8 csgClipActive, in MaterialPipelinePass pass){
-    return csgClipActive && (pass == MaterialPipelinePass::Opaque || pass == MaterialPipelinePass::CsgReceiverSurface);
-}
-
-MaterialPipelineKey BuildMaterialPassPipelineKey(
-    in Name materialName,
-    in MaterialFramebufferInfo framebufferInfo,
-    in MaterialPipelinePass pass,
-    in b8 materialTwoSided,
-    in b8 csgClipActive,
-    in Name csgEvaluatorVariant,
-    in u64 csgShapeRegistryRevision
-){
-    MaterialPipelineKey key;
-    key.material = materialName;
-    key.framebufferInfo = framebufferInfo;
-    key.pass = pass;
-    key.twoSided = materialTwoSided;
-    if(csgClipActive){
-        key.csgMode = MaterialPipelineCsgMode::ClipOnly;
-        key.csgEvaluatorVariant = csgEvaluatorVariant;
-        key.csgShapeRegistryRevision = csgShapeRegistryRevision;
-        key.twoSided = true;
-    }
-    return key;
-}
-
-b8 ValidateInstanceBufferAddressableCapacity(in usize capacity, in usize instanceStrideBytes){
-    if(capacity <= usize.max / instanceStrideBytes)
-        return true;
-
-    error("RendererSystem: instance buffer capacity overflows addressable memory");
-    return false;
-}
-
-Expected<usize> ValidateAndAlignMaterialTypedByteRequest(in usize byteCount, in usize wordByteSize){
-    usize requiredByteCount = Max(byteCount, wordByteSize);
-    auto alignedByteCount = AlignUpChecked(requiredByteCount, wordByteSize);
-    if(!alignedByteCount.has_value()){
-        error("RendererSystem: material typed buffer request overflows alignment");
-        return MakeUnexpected(Failure());
-    }
-    if(alignedByteCount.value() > cast<usize>(u32.max)){
-        error("RendererSystem: material typed buffer request exceeds u32 byte-offset limits");
-        return MakeUnexpected(Failure());
-    }
-    return alignedByteCount.value();
-}
-
-void LogMeshSystemNotRegisteredForMaterialPass(){
-    error("RendererSystem: MeshSystem is not registered; material pass cannot resolve meshes");
-}
-
-MaterialPassPipelineResourceSnapshot CaptureMaterialPassPipelineResourceSnapshot(in MaterialPipelineResources pipelineResources){
-    MaterialPassPipelineResourceSnapshot snapshot;
-    snapshot.indexedPipeline = pipelineResources.indexedPipeline;
-    snapshot.emulationPipeline = pipelineResources.emulationPipeline;
-    snapshot.meshletPipeline = pipelineResources.meshletPipeline;
-    snapshot.computePipeline = pipelineResources.computePipeline;
-    snapshot.objectGeometryDecodePipeline = pipelineResources.objectGeometryDecodePipeline;
-    snapshot.sharedGeometryComputeProgram = pipelineResources.sharedGeometryComputeProgram;
-    snapshot.indexedGeometryOutput = pipelineResources.indexedGeometryOutput;
-    return snapshot;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-MaterialPassMeshResourceSnapshot CaptureMaterialMeshResourceSnapshot(in MeshResources mesh){
-    MaterialPassMeshResourceSnapshot snapshot;
-    snapshot.sourceBuffers = mesh.buffers;
-    snapshot.geometryHeapHandles = mesh.geometryHeapHandles;
-    snapshot.emulationVertexBuffer = mesh.emulationVertexBuffer;
-    snapshot.objectGeometryCache = CaptureObjectGeometryCache(mesh);
-    snapshot.emulationVertexHeapHandle = mesh.emulationVertexHeapHandle;
-    snapshot.emulationIndexByteOffset = mesh.emulationIndexByteOffset;
-    snapshot.meshletCount = mesh.meshletCount;
-    snapshot.meshletPrimitiveIndexCount = mesh.meshletPrimitiveIndexCount;
-    snapshot.runtimeMesh = mesh.runtimeMesh;
-    snapshot.dynamicMeshletBoundsFresh = mesh.dynamicMeshletBoundsFresh;
-    snapshot.dynamicMeshletConesFresh = mesh.dynamicMeshletConesFresh;
-    return snapshot;
-}
 
 class MaterialPassMeshSnapshotKey{
     public usize positionIdentity = 0u;
@@ -155,24 +83,6 @@ class MaterialPassMeshSnapshotKey{
     }
 }
 
-MaterialPassMeshSnapshotKey MakeMaterialPassMeshSnapshotKey(in MeshResources mesh){
-    MaterialPassMeshSnapshotKey key;
-    key.positionIdentity = mesh.buffers.positionBuffer.identity();
-    key.emulationIdentity = mesh.emulationVertexBuffer.identity();
-    key.objectCacheIdentity = mesh.objectGeometryCache.buffer.identity();
-    key.runtimeVersion = mesh.runtimeMeshVersion;
-    key.sourceRevision = mesh.runtimeGeometryContentRevision;
-    key.emulationIndexByteOffset = mesh.emulationIndexByteOffset;
-    key.objectCacheIndexByteOffset = mesh.objectGeometryCache.indexByteOffset;
-    key.runtimeMesh = mesh.runtimeMesh;
-    key.boundsFresh = mesh.dynamicMeshletBoundsFresh;
-    key.conesFresh = mesh.dynamicMeshletConesFresh;
-    key.objectCacheInitialized = mesh.objectGeometryCache.initialized;
-    key.objectDecoderValid = mesh.objectGeometryCache.decoderPipeline.valid();
-    key.emulationHeapValid = mesh.emulationVertexHeapHandle.valid();
-    return key;
-}
-
 class MaterialPassDrawSnapshotCache : NoCopy{
     private HashMap<MaterialPassMeshSnapshotKey, Shared<MaterialPassMeshResourceSnapshot>> m_meshes;
     private HashMap<MaterialPipelineKey, Shared<MaterialPassPipelineResourceSnapshot>> m_pipelines;
@@ -206,163 +116,6 @@ class MaterialPassDrawSnapshotCache : NoCopy{
         return inserted.first.value();
     }
 }
-
-b8 PrepareMaterialPassGeometry(mut RendererMeshSystem meshes, in RendererResourceLookupMode lookupMode, mut MeshResources mesh, in MaterialPipelineResources resources){
-    switch(resources.renderPath){
-    case RenderPath::MeshShader:
-        return true;
-    case RenderPath::VertexIndexed:{
-        if(lookupMode == RendererResourceLookupMode::CreateMissing && !meshes.prepareObjectGeometryCache(mesh, resources.objectGeometryDecodePipeline))
-            return false;
-        const auto cache = CaptureObjectGeometryCache(mesh);
-        return cache.valid() && cache.decoderPipeline == resources.objectGeometryDecodePipeline;
-    }
-    case RenderPath::ComputeEmulation:
-        if(lookupMode == RendererResourceLookupMode::CreateMissing && !meshes.prepareComputeEmulationResources(mesh))
-            return false;
-        return mesh.emulationVertexBuffer.valid() && mesh.emulationVertexHeapHandle.valid()
-            && mesh.emulationVertexHeapHandle.descriptorClass() == GpuDescriptorClass::StorageBuffer
-            && IsValidIndexedEmulationByteOffset(resources.indexedGeometryOutput, mesh.emulationIndexByteOffset);
-    default:
-        return false;
-    }
-}
-
-Expected<MaterialInstanceAppend> AppendMaterialPassInstance(
-    mut MaterialTypedStager stager,
-    mut RendererMeshSystem meshes,
-    in EntityID entity,
-    in MaterialSurfaceInfo material,
-    in MeshResources mesh,
-    in Optional<in TransformComponent> transform,
-    mut InstanceGpuDataVector instanceData,
-    mut MaterialTypedInstanceRangeVector materialTypedRanges
-){
-    assert(instanceData.size() < cast<usize>(u32.max));
-    const auto constantRange = stager.constant(material);
-    if(!constantRange.has_value())
-        return MakeUnexpected(Failure());
-    const auto mutableRange = stager.mutableInstance(entity, material);
-    if(!mutableRange.has_value())
-        return MakeUnexpected(Failure());
-    MaterialTypedInstanceRanges ranges;
-    ranges.constantRange = constantRange.value();
-    ranges.mutableRange = mutableRange.value();
-    assert(MaterialTypedByteRangeEmptyOffsetValid(ranges.constantRange));
-    assert(MaterialTypedByteRangeEmptyOffsetValid(ranges.mutableRange));
-    const u32 index = cast<u32>(instanceData.size());
-    TransformComponent resolved;
-    if(transform.has_value())
-        resolved = transform.value();
-    InstanceGpuData instance = BuildInstanceGpuData(entity, transform.has_value(), LoadFloat(resolved.position), LoadFloat(resolved.rotation), LoadFloat(resolved.scale), ranges.mutableRange.byteOffset);
-    meshes.populateMeshGeometryHeapSlots(mesh, instance);
-    instanceData.push_back(instance);
-    if(s_RuntimeAssertionsEnabled)
-        materialTypedRanges.push_back(ranges);
-    return MaterialInstanceAppend(index, ranges);
-}
-
-b8 EqualCsgFrameState(in CsgFrameState lhs, in CsgFrameState rhs){
-    return lhs.receiverCount == rhs.receiverCount
-        && lhs.cutterCount == rhs.cutterCount
-        && lhs.hasAnyWork == rhs.hasAnyWork
-        && lhs.hasOpaqueStaticWork == rhs.hasOpaqueStaticWork
-        && lhs.hasOpaqueSkinnedWork == rhs.hasOpaqueSkinnedWork
-        && lhs.hasTransparentStaticWork == rhs.hasTransparentStaticWork
-        && lhs.hasTransparentSkinnedWork == rhs.hasTransparentSkinnedWork;
-}
-
-[cpp_unwind]
-void CopyPreparedDrawItems(in MaterialPassDrawItems source, mut MaterialPassDrawItems destination){
-    AssignVector(destination.meshDrawItems, source.meshDrawItems);
-    AssignVector(destination.indexedDrawItems, source.indexedDrawItems);
-    AssignVector(destination.computeDrawItems, source.computeDrawItems);
-}
-
-[cpp_unwind]
-void CopyPreparedDrawItemPartitions(in MaterialPassDrawItemPartitions source, mut MaterialPassDrawItemPartitions destination){
-    CopyPreparedDrawItems(source.regular, destination.regular);
-    CopyPreparedDrawItems(source.csg, destination.csg);
-    CopyPreparedDrawItems(source.csgReceiverSurface, destination.csgReceiverSurface);
-}
-
-[cpp_unwind]
-void CopyPreparedCsgFrameData(in CsgFrameGpuData source, mut CsgFrameGpuData destination){
-    AssignVector(destination.receiverRanges, source.receiverRanges);
-    AssignVector(destination.cutters, source.cutters);
-    destination.workRegion = source.workRegion;
-}
-
-b8 MatchesPreparedPassCacheSlot(
-    in PreparedMaterialPassCacheSlot slot,
-    in Framebuffer framebuffer,
-    in b8 transparent,
-    in CsgFrameState csgFrameState,
-    in b8 csgActiveForPass,
-    in Optional<in MeshViewGpuData> meshViewState
-){
-    if(!slot.valid || slot.transparent != transparent)
-        return false;
-    in FramebufferInfoEx fbInfo = framebuffer.getFramebufferInfo();
-    if(slot.framebufferInfo != FramebufferInfo(fbInfo) || slot.framebufferWidth != fbInfo.width || slot.framebufferHeight != fbInfo.height)
-        return false;
-    if(!EqualCsgFrameState(slot.csgFrameState, csgFrameState))
-        return false;
-    if(!csgActiveForPass)
-        return true;
-    if(slot.hasMeshView != meshViewState.has_value())
-        return false;
-    return !slot.hasMeshView || slot.meshViewBytes == bit_cast<Array<u8, s_MeshViewGpuDataBytes>>(meshViewState.value());
-}
-
-void StampPreparedPassCacheSlot(
-    mut PreparedMaterialPassCacheSlot slot,
-    in Framebuffer framebuffer,
-    in b8 transparent,
-    in CsgFrameState csgFrameState,
-    in Optional<in MeshViewGpuData> meshViewState,
-    in b8 usesSharedTransparentStreams
-){
-    in FramebufferInfoEx fbInfo = framebuffer.getFramebufferInfo();
-    slot.framebufferInfo = FramebufferInfo(fbInfo);
-    slot.framebufferWidth = fbInfo.width;
-    slot.framebufferHeight = fbInfo.height;
-    slot.csgFrameState = csgFrameState;
-    slot.hasMeshView = meshViewState.has_value();
-    if(meshViewState.has_value())
-        slot.meshViewBytes = bit_cast<Array<u8, s_MeshViewGpuDataBytes>>(meshViewState.value());
-    slot.transparent = transparent;
-    slot.usesSharedTransparentStreams = usesSharedTransparentStreams;
-    slot.valid = true;
-}
-
-[cpp_unwind]
-void AssignPreparedPassCacheOutputs(in PreparedMaterialPassCacheSlot slot, in PreparedMaterialStreamCache streams, in MaterialPassGatherOutputs outputs){
-    CopyPreparedDrawItemPartitions(slot.drawItems, outputs.drawItems);
-    CopyPreparedCsgFrameData(slot.csgFrameData, outputs.csgFrameData);
-    AssignVector(outputs.instanceData, streams.instanceData);
-    AssignVector(outputs.materialTypedBytes, streams.materialTypedBytes);
-    if(s_RuntimeAssertionsEnabled)
-        AssignVector(outputs.materialTypedRanges, streams.materialTypedRanges);
-}
-
-void AppendMaterialDrawItem(in RenderPath path, mut MaterialPassDrawItem item, mut MaterialPassDrawItems draws){
-    switch(path){
-    case RenderPath::MeshShader:
-        AppendOwned<MaterialPassDrawItem>(draws.meshDrawItems, item);
-        break;
-    case RenderPath::VertexIndexed:
-        AppendOwned<MaterialPassDrawItem>(draws.indexedDrawItems, item);
-        break;
-    case RenderPath::ComputeEmulation:
-        AppendOwned<MaterialPassDrawItem>(draws.computeDrawItems, item);
-        break;
-    default:
-        assert(false);
-        break;
-    }
-}
-
 
 class MaterialDrawGather{
     private mut RendererMaterialSystem system;
@@ -845,6 +598,265 @@ class TransparentBatchGatherState : NoCopy{
     }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsCsgReceiverSurfacePassActive(in b8 csgClipActive, in MaterialPipelinePass pass){
+    return csgClipActive && (pass == MaterialPipelinePass::Opaque || pass == MaterialPipelinePass::CsgReceiverSurface);
+}
+
+MaterialPipelineKey BuildMaterialPassPipelineKey(
+    in Name materialName,
+    in MaterialFramebufferInfo framebufferInfo,
+    in MaterialPipelinePass pass,
+    in b8 materialTwoSided,
+    in b8 csgClipActive,
+    in Name csgEvaluatorVariant,
+    in u64 csgShapeRegistryRevision
+){
+    MaterialPipelineKey key;
+    key.material = materialName;
+    key.framebufferInfo = framebufferInfo;
+    key.pass = pass;
+    key.twoSided = materialTwoSided;
+    if(csgClipActive){
+        key.csgMode = MaterialPipelineCsgMode::ClipOnly;
+        key.csgEvaluatorVariant = csgEvaluatorVariant;
+        key.csgShapeRegistryRevision = csgShapeRegistryRevision;
+        key.twoSided = true;
+    }
+    return key;
+}
+
+b8 ValidateInstanceBufferAddressableCapacity(in usize capacity, in usize instanceStrideBytes){
+    if(capacity <= usize.max / instanceStrideBytes)
+        return true;
+
+    error("RendererSystem: instance buffer capacity overflows addressable memory");
+    return false;
+}
+
+Expected<usize> ValidateAndAlignMaterialTypedByteRequest(in usize byteCount, in usize wordByteSize){
+    usize requiredByteCount = Max(byteCount, wordByteSize);
+    auto alignedByteCount = AlignUpChecked(requiredByteCount, wordByteSize);
+    if(!alignedByteCount.has_value()){
+        error("RendererSystem: material typed buffer request overflows alignment");
+        return MakeUnexpected(Failure());
+    }
+    if(alignedByteCount.value() > cast<usize>(u32.max)){
+        error("RendererSystem: material typed buffer request exceeds u32 byte-offset limits");
+        return MakeUnexpected(Failure());
+    }
+    return alignedByteCount.value();
+}
+
+void LogMeshSystemNotRegisteredForMaterialPass(){
+    error("RendererSystem: MeshSystem is not registered; material pass cannot resolve meshes");
+}
+
+MaterialPassPipelineResourceSnapshot CaptureMaterialPassPipelineResourceSnapshot(in MaterialPipelineResources pipelineResources){
+    MaterialPassPipelineResourceSnapshot snapshot;
+    snapshot.indexedPipeline = pipelineResources.indexedPipeline;
+    snapshot.emulationPipeline = pipelineResources.emulationPipeline;
+    snapshot.meshletPipeline = pipelineResources.meshletPipeline;
+    snapshot.computePipeline = pipelineResources.computePipeline;
+    snapshot.objectGeometryDecodePipeline = pipelineResources.objectGeometryDecodePipeline;
+    snapshot.sharedGeometryComputeProgram = pipelineResources.sharedGeometryComputeProgram;
+    snapshot.indexedGeometryOutput = pipelineResources.indexedGeometryOutput;
+    return snapshot;
+}
+
+MaterialPassMeshResourceSnapshot CaptureMaterialMeshResourceSnapshot(in MeshResources mesh){
+    MaterialPassMeshResourceSnapshot snapshot;
+    snapshot.sourceBuffers = mesh.buffers;
+    snapshot.geometryHeapHandles = mesh.geometryHeapHandles;
+    snapshot.emulationVertexBuffer = mesh.emulationVertexBuffer;
+    snapshot.objectGeometryCache = CaptureObjectGeometryCache(mesh);
+    snapshot.emulationVertexHeapHandle = mesh.emulationVertexHeapHandle;
+    snapshot.emulationIndexByteOffset = mesh.emulationIndexByteOffset;
+    snapshot.meshletCount = mesh.meshletCount;
+    snapshot.meshletPrimitiveIndexCount = mesh.meshletPrimitiveIndexCount;
+    snapshot.runtimeMesh = mesh.runtimeMesh;
+    snapshot.dynamicMeshletBoundsFresh = mesh.dynamicMeshletBoundsFresh;
+    snapshot.dynamicMeshletConesFresh = mesh.dynamicMeshletConesFresh;
+    return snapshot;
+}
+
+MaterialPassMeshSnapshotKey MakeMaterialPassMeshSnapshotKey(in MeshResources mesh){
+    MaterialPassMeshSnapshotKey key;
+    key.positionIdentity = mesh.buffers.positionBuffer.identity();
+    key.emulationIdentity = mesh.emulationVertexBuffer.identity();
+    key.objectCacheIdentity = mesh.objectGeometryCache.buffer.identity();
+    key.runtimeVersion = mesh.runtimeMeshVersion;
+    key.sourceRevision = mesh.runtimeGeometryContentRevision;
+    key.emulationIndexByteOffset = mesh.emulationIndexByteOffset;
+    key.objectCacheIndexByteOffset = mesh.objectGeometryCache.indexByteOffset;
+    key.runtimeMesh = mesh.runtimeMesh;
+    key.boundsFresh = mesh.dynamicMeshletBoundsFresh;
+    key.conesFresh = mesh.dynamicMeshletConesFresh;
+    key.objectCacheInitialized = mesh.objectGeometryCache.initialized;
+    key.objectDecoderValid = mesh.objectGeometryCache.decoderPipeline.valid();
+    key.emulationHeapValid = mesh.emulationVertexHeapHandle.valid();
+    return key;
+}
+
+b8 PrepareMaterialPassGeometry(mut RendererMeshSystem meshes, in RendererResourceLookupMode lookupMode, mut MeshResources mesh, in MaterialPipelineResources resources){
+    switch(resources.renderPath){
+    case RenderPath::MeshShader:
+        return true;
+    case RenderPath::VertexIndexed:{
+        if(lookupMode == RendererResourceLookupMode::CreateMissing && !meshes.prepareObjectGeometryCache(mesh, resources.objectGeometryDecodePipeline))
+            return false;
+        const auto cache = CaptureObjectGeometryCache(mesh);
+        return cache.valid() && cache.decoderPipeline == resources.objectGeometryDecodePipeline;
+    }
+    case RenderPath::ComputeEmulation:
+        if(lookupMode == RendererResourceLookupMode::CreateMissing && !meshes.prepareComputeEmulationResources(mesh))
+            return false;
+        return mesh.emulationVertexBuffer.valid() && mesh.emulationVertexHeapHandle.valid()
+            && mesh.emulationVertexHeapHandle.descriptorClass() == GpuDescriptorClass::StorageBuffer
+            && IsValidIndexedEmulationByteOffset(resources.indexedGeometryOutput, mesh.emulationIndexByteOffset);
+    default:
+        return false;
+    }
+}
+
+Expected<MaterialInstanceAppend> AppendMaterialPassInstance(
+    mut MaterialTypedStager stager,
+    mut RendererMeshSystem meshes,
+    in EntityID entity,
+    in MaterialSurfaceInfo material,
+    in MeshResources mesh,
+    in Optional<in TransformComponent> transform,
+    mut InstanceGpuDataVector instanceData,
+    mut MaterialTypedInstanceRangeVector materialTypedRanges
+){
+    assert(instanceData.size() < cast<usize>(u32.max));
+    const auto constantRange = stager.constant(material);
+    if(!constantRange.has_value())
+        return MakeUnexpected(Failure());
+    const auto mutableRange = stager.mutableInstance(entity, material);
+    if(!mutableRange.has_value())
+        return MakeUnexpected(Failure());
+    MaterialTypedInstanceRanges ranges;
+    ranges.constantRange = constantRange.value();
+    ranges.mutableRange = mutableRange.value();
+    assert(MaterialTypedByteRangeEmptyOffsetValid(ranges.constantRange));
+    assert(MaterialTypedByteRangeEmptyOffsetValid(ranges.mutableRange));
+    const u32 index = cast<u32>(instanceData.size());
+    TransformComponent resolved;
+    if(transform.has_value())
+        resolved = transform.value();
+    InstanceGpuData instance = BuildInstanceGpuData(entity, transform.has_value(), LoadFloat(resolved.position), LoadFloat(resolved.rotation), LoadFloat(resolved.scale), ranges.mutableRange.byteOffset);
+    meshes.populateMeshGeometryHeapSlots(mesh, instance);
+    instanceData.push_back(instance);
+    if(s_RuntimeAssertionsEnabled)
+        materialTypedRanges.push_back(ranges);
+    return MaterialInstanceAppend(index, ranges);
+}
+
+b8 EqualCsgFrameState(in CsgFrameState lhs, in CsgFrameState rhs){
+    return lhs.receiverCount == rhs.receiverCount
+        && lhs.cutterCount == rhs.cutterCount
+        && lhs.hasAnyWork == rhs.hasAnyWork
+        && lhs.hasOpaqueStaticWork == rhs.hasOpaqueStaticWork
+        && lhs.hasOpaqueSkinnedWork == rhs.hasOpaqueSkinnedWork
+        && lhs.hasTransparentStaticWork == rhs.hasTransparentStaticWork
+        && lhs.hasTransparentSkinnedWork == rhs.hasTransparentSkinnedWork;
+}
+
+[cpp_unwind]
+void CopyPreparedDrawItems(in MaterialPassDrawItems source, mut MaterialPassDrawItems destination){
+    AssignVector(destination.meshDrawItems, source.meshDrawItems);
+    AssignVector(destination.indexedDrawItems, source.indexedDrawItems);
+    AssignVector(destination.computeDrawItems, source.computeDrawItems);
+}
+
+[cpp_unwind]
+void CopyPreparedDrawItemPartitions(in MaterialPassDrawItemPartitions source, mut MaterialPassDrawItemPartitions destination){
+    CopyPreparedDrawItems(source.regular, destination.regular);
+    CopyPreparedDrawItems(source.csg, destination.csg);
+    CopyPreparedDrawItems(source.csgReceiverSurface, destination.csgReceiverSurface);
+}
+
+[cpp_unwind]
+void CopyPreparedCsgFrameData(in CsgFrameGpuData source, mut CsgFrameGpuData destination){
+    AssignVector(destination.receiverRanges, source.receiverRanges);
+    AssignVector(destination.cutters, source.cutters);
+    destination.workRegion = source.workRegion;
+}
+
+b8 MatchesPreparedPassCacheSlot(
+    in PreparedMaterialPassCacheSlot slot,
+    in Framebuffer framebuffer,
+    in b8 transparent,
+    in CsgFrameState csgFrameState,
+    in b8 csgActiveForPass,
+    in Optional<in MeshViewGpuData> meshViewState
+){
+    if(!slot.valid || slot.transparent != transparent)
+        return false;
+    in FramebufferInfoEx fbInfo = framebuffer.getFramebufferInfo();
+    if(slot.framebufferInfo != FramebufferInfo(fbInfo) || slot.framebufferWidth != fbInfo.width || slot.framebufferHeight != fbInfo.height)
+        return false;
+    if(!EqualCsgFrameState(slot.csgFrameState, csgFrameState))
+        return false;
+    if(!csgActiveForPass)
+        return true;
+    if(slot.hasMeshView != meshViewState.has_value())
+        return false;
+    return !slot.hasMeshView || slot.meshViewBytes == bit_cast<Array<u8, s_MeshViewGpuDataBytes>>(meshViewState.value());
+}
+
+void StampPreparedPassCacheSlot(
+    mut PreparedMaterialPassCacheSlot slot,
+    in Framebuffer framebuffer,
+    in b8 transparent,
+    in CsgFrameState csgFrameState,
+    in Optional<in MeshViewGpuData> meshViewState,
+    in b8 usesSharedTransparentStreams
+){
+    in FramebufferInfoEx fbInfo = framebuffer.getFramebufferInfo();
+    slot.framebufferInfo = FramebufferInfo(fbInfo);
+    slot.framebufferWidth = fbInfo.width;
+    slot.framebufferHeight = fbInfo.height;
+    slot.csgFrameState = csgFrameState;
+    slot.hasMeshView = meshViewState.has_value();
+    if(meshViewState.has_value())
+        slot.meshViewBytes = bit_cast<Array<u8, s_MeshViewGpuDataBytes>>(meshViewState.value());
+    slot.transparent = transparent;
+    slot.usesSharedTransparentStreams = usesSharedTransparentStreams;
+    slot.valid = true;
+}
+
+[cpp_unwind]
+void AssignPreparedPassCacheOutputs(in PreparedMaterialPassCacheSlot slot, in PreparedMaterialStreamCache streams, in MaterialPassGatherOutputs outputs){
+    CopyPreparedDrawItemPartitions(slot.drawItems, outputs.drawItems);
+    CopyPreparedCsgFrameData(slot.csgFrameData, outputs.csgFrameData);
+    AssignVector(outputs.instanceData, streams.instanceData);
+    AssignVector(outputs.materialTypedBytes, streams.materialTypedBytes);
+    if(s_RuntimeAssertionsEnabled)
+        AssignVector(outputs.materialTypedRanges, streams.materialTypedRanges);
+}
+
+void AppendMaterialDrawItem(in RenderPath path, mut MaterialPassDrawItem item, mut MaterialPassDrawItems draws){
+    switch(path){
+    case RenderPath::MeshShader:
+        AppendOwned<MaterialPassDrawItem>(draws.meshDrawItems, item);
+        break;
+    case RenderPath::VertexIndexed:
+        AppendOwned<MaterialPassDrawItem>(draws.indexedDrawItems, item);
+        break;
+    case RenderPath::ComputeEmulation:
+        AppendOwned<MaterialPassDrawItem>(draws.computeDrawItems, item);
+        break;
+    default:
+        assert(false);
+        break;
+    }
+}
+
 [cpp_unwind]
 void RendererMaterialSystem::gatherDraws(
     in FramebufferHandle framebuffer,
@@ -1150,20 +1162,6 @@ b8 RendererMaterialSystem::prepareTransparentMaterialPassesImpl(
 
     return allReady;
 }
-
-
-[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_POSITION_LOCATION")]
-extern const u32 s_EmulationVertexPositionLocation;
-[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_NORMAL_LOCATION")]
-extern const u32 s_EmulationVertexNormalLocation;
-[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_TANGENT_LOCATION")]
-extern const u32 s_EmulationVertexTangentLocation;
-[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_UV0_LOCATION")]
-extern const u32 s_EmulationVertexUv0Location;
-[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_COLOR_LOCATION")]
-extern const u32 s_EmulationVertexColorLocation;
-[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_LOCATION")]
-extern const u32 s_EmulationVertexWorldPositionLocation;
 
 [cpp_unwind]
 Expected<BindingLayoutHandle> RendererMaterialSystem::prepareMaterialPassBindingLayout(){

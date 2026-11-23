@@ -8,10 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 IsSupportedMaterialShaderStage(in ShaderType shaderType){
-    return shaderType == ShaderType::MeshStage || shaderType == ShaderType::PixelStage;
-}
-
 type StageShaderArray = Array<AssetRef<IShader>, s_MaterialShaderStageCount>;
 type TypedLayoutBlockVector = Vector<MaterialTypedLayoutBlock>;
 type TypedLayoutFieldVector = Vector<MaterialTypedLayoutField>;
@@ -92,6 +88,14 @@ class Material{
     public b8 transparent()const{ return this.m_transparent; }
     public b8 twoSided()const{ return this.m_twoSided; }
     public b8 refractive()const{ return this.m_refractive; }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsSupportedMaterialShaderStage(in ShaderType shaderType){
+    return shaderType == ShaderType::MeshStage || shaderType == ShaderType::PixelStage;
 }
 
 

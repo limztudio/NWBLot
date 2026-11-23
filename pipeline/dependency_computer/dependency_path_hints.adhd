@@ -26,8 +26,12 @@ class DependencyPathHints{
             return;
 
         const Name key = parsedName.value();
-        if(!this.m_texts.contains(key))
-            this.m_texts.try_emplace(key, String(trimmedText));
+        if(!this.m_texts.contains(key)){
+            if(!this.m_texts.try_emplace(key, String(trimmedText)).second){
+                assert(false);
+                return;
+            }
+        }
     }
 
     public StringView lookup(in Name virtualPath)const{

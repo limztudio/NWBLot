@@ -10,9 +10,35 @@
 
 [cpp_header("<global/simd/collision_detail.h>"), cpp_name("::CollisionDetail::Vector3SignedUnitMask")]
 extern VectorSingle BenchmarkSingleSignedUnitMask(in VectorSingle position, in VectorSingle componentMask);
-
 [cpp_header("<global/simd/collision_detail.h>"), cpp_name("::CollisionDoubleDetail::VectorDouble3SignedUnitMask")]
 extern VectorDouble BenchmarkDoubleSignedUnitMask(in VectorDouble position, in VectorDouble componentMask);
+
+const usize s_BoxNormalCaseCount = 32768u;
+const usize s_BoxNormalDataCount = 128u;
+const u64 s_BoxNormalVerifySeed = 0x12ace40f893d5847ull;
+const f64 s_NanosecondsPerSecond = 1.0e9;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class BoxNormalSingleCase{
+    public f32x4 position = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 extents = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 fallback = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32 threshold = 0.0f;
+}
+
+class BoxNormalDoubleCase{
+    public f64x4 position = f64x4(0.0, 0.0, 0.0, 0.0);
+    public f64x4 extents = f64x4(0.0, 0.0, 0.0, 0.0);
+    public f64x4 fallback = f64x4(0.0, 0.0, 0.0, 0.0);
+    public f64 threshold = 0.0;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 VectorSingle OriginalSingle(in VectorSingle position, in VectorSingle halfExtents, in VectorSingle fallback, in f32 minLengthSquared){
     const VectorSingle q = VectorSubtract(VectorAbs(position), halfExtents);
@@ -191,33 +217,6 @@ u64 DispatchBoxNormalDoubleWorkload(in Array<BoxNormalDoubleCase, s_BoxNormalDat
         return WorkloadDouble<true, false>(data, iterations);
     return WorkloadDouble<false, false>(data, iterations);
 }
-
-const usize s_BoxNormalCaseCount = 32768u;
-const usize s_BoxNormalDataCount = 128u;
-const u64 s_BoxNormalVerifySeed = 0x12ace40f893d5847ull;
-const f64 s_NanosecondsPerSecond = 1.0e9;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class BoxNormalSingleCase{
-    public f32x4 position = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 extents = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 fallback = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32 threshold = 0.0f;
-}
-
-class BoxNormalDoubleCase{
-    public f64x4 position = f64x4(0.0, 0.0, 0.0, 0.0);
-    public f64x4 extents = f64x4(0.0, 0.0, 0.0, 0.0);
-    public f64x4 fallback = f64x4(0.0, 0.0, 0.0, 0.0);
-    public f64 threshold = 0.0;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 u32 BoolToBoxNormalFlag(in b8 value){
     if(value)

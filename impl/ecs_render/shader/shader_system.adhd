@@ -12,20 +12,13 @@
 
 
 const StringView s_RendererAssetOwnerName = "RendererSystem";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const StringView s_ShaderArchiveDefaultVariant = "default";
-
 type RendererShaderPathResolveCallback = ShaderArchivePathResolver;
 type SubsystemAssetSelector<SubsystemT, TAsset> = Func<64u, AssetRef<TAsset>(in SubsystemT)>;
 
 
-b8 HasRendererShaderArchiveStage<Resolver>(mut Resolver resolver, in Name shaderName, in StringView variant, in Name stage){
-    return resolver(shaderName, variant, stage).has_value();
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class RendererShaderSystem : NoCopy{
     private mut GraphicsRuntime m_graphics;
@@ -120,6 +113,14 @@ class RendererShaderSystem : NoCopy{
     public in ShaderHandle deferredCompositeVertexShader()const{
         return this.m_deferredCompositeVertexShader;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 HasRendererShaderArchiveStage<Resolver>(mut Resolver resolver, in Name shaderName, in StringView variant, in Name stage){
+    return resolver(shaderName, variant, stage).has_value();
 }
 
 

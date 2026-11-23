@@ -10,173 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ShouldConfirmCausticAccumulatorBootstrapClear(in b8 graphOwnsAccumulatorBootstrapClear, in b8 causticProducerDispatched){
-    return graphOwnsAccumulatorBootstrapClear && causticProducerDispatched;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(in HardwareCausticsStageInputs inputs){
-    HardwareCausticsStageResult result;
-    if(!inputs.declaresHardwareCaustics)
-        return result;
-    if(
-        !inputs.worldPosition.valid()
-        || !inputs.depth.valid()
-        || !inputs.currentCausticIrradiance.valid()
-        || !inputs.currentBindlessSlots.valid()
-        || !inputs.sceneShading.valid()
-        || !inputs.lights.valid()
-        || !inputs.graphicsPrefixTask.valid()
-    )
-        return MakeUnexpected(Failure());
-    if(this.m_raytracingSystem.hasHwCausticWork(inputs.meshViewSnapshot) && !inputs.opticalScene.valid())
-        return MakeUnexpected(Failure());
-
-    CausticsResolveChainBuilder resolveChainBuilder(this.m_graph, this.m_raytracingSystem);
-    const auto stageTargetsResult = resolveChainBuilder.importStageTargets(inputs.targets, true);
-    if(!stageTargetsResult.has_value())
-        return MakeUnexpected(Failure());
-    const CausticsStageTargets stageTargets = stageTargetsResult.value();
-
-    Vector<GpuTaskResourceUse> hardwarePhotonResourceUses;
-    const b8 hardwareTraceGeometryStatesGraphOwned = inputs.hardwareTraceGeometrySet.valid();
-    const TraceResourceSetUses hardwarePhotonResourceSetUses = MakeTraceResourceSetUses(inputs.hardwareTraceGeometrySet, inputs.traceMaterialSampledTextureSet);
-    hardwarePhotonResourceUses.reserve(ComputePhotonResourceUseCapacity(
-        s_HardwarePhotonResourceUseCapacity,
-        inputs.rayTracingResources.csgTraceContextBuffer.valid(),
-        inputs.rayTracingResources.csgTraceBoundsBuffers.size(),
-        hardwareTraceGeometryStatesGraphOwned,
-        inputs.hardwareTraceGeometryResources.size()
-    ));
-    hardwarePhotonResourceUses.push_back(ReadTextureUse(inputs.worldPosition, s_FramebufferSubresources, ResourceStates::ShaderResource));
-    hardwarePhotonResourceUses.push_back(ReadTextureUse(inputs.depth, s_FramebufferSubresources, ResourceStates::ShaderResource));
-    hardwarePhotonResourceUses.push_back(ReadUse(inputs.currentBindlessSlots, ResourceStates::ConstantBuffer));
-    hardwarePhotonResourceUses.push_back(ReadUse(inputs.sceneShading, ResourceStates::ConstantBuffer));
-    hardwarePhotonResourceUses.push_back(ReadUse(inputs.lights, ResourceStates::ShaderResource));
-    if(inputs.opticalScene.valid())
-        hardwarePhotonResourceUses.push_back(ReadUse(inputs.opticalScene));
-    hardwarePhotonResourceUses.push_back(ReadUse(stageTargets.sceneGeometryDomain));
-    hardwarePhotonResourceUses.push_back(ReadWriteTextureUse(stageTargets.causticAccumulator, s_CausticAccumulatorSubresources, ResourceStates::UnorderedAccess));
-
-    b8 optionalResourcesImported =
-        AppendCausticReadBuffer(this.m_graph, hardwarePhotonResourceUses, inputs.meshViewSnapshot.buffer, Name(s_MeshViewName), s_MeshViewLabel, ResourceStates::ConstantBuffer)
-        && AppendCausticReadBuffer(this.m_graph, hardwarePhotonResourceUses,
-            inputs.rayTracingResources.shadowInstanceMaterialBuffer,
-            Name(s_SceneShadowInstanceMaterialName),
-            s_SceneShadowInstanceMaterialLabel,
-            ResourceStates::ShaderResource
-        )
-        && AppendCausticReadBuffer(this.m_graph, hardwarePhotonResourceUses, inputs.rayTracingResources.shadowMaterialTypedBuffer, Name(s_SceneShadowMaterialTypedName), s_SceneShadowMaterialTypedLabel, ResourceStates::ShaderResource)
-        && AppendCausticReadBuffer(this.m_graph, hardwarePhotonResourceUses, inputs.rayTracingResources.shadowInstanceBuffer, Name(s_SceneShadowInstancesName), s_SceneShadowInstancesLabel, ResourceStates::ShaderResource)
-        && AppendCausticReadBuffer(this.m_graph, hardwarePhotonResourceUses, inputs.rayTracingResources.causticEmissionTargetBuffer, Name(s_HardwareCausticEmissionTargetsName), s_CausticEmissionTargetsLabel, ResourceStates::ShaderResource)
-    ;
-    if(inputs.materialContextSlots.valid())
-        hardwarePhotonResourceUses.push_back(ReadUse(inputs.materialContextSlots, ResourceStates::ConstantBuffer));
-    for(in GpuGraphResourceId resource : inputs.hardwareTraceGeometryResources){
-        if(!resource.valid()){
-            warning("RendererSystem: invalid prepared hardware-caustics geometry resource");
-            return MakeUnexpected(Failure());
-        }
-        if(!hardwareTraceGeometryStatesGraphOwned)
-            hardwarePhotonResourceUses.push_back(ReadUse(resource, ResourceStates::ShaderResource));
-    }
-    if(inputs.rayTracingResources.sceneTlas.valid()){
-        GpuGraphResourceDesc tlasDesc = AccelStructResourceDesc(Name(s_SceneTlasResourceName), s_SceneTlasResourceLabel);
-        tlasDesc.setInitialState(this.m_raytracingSystem.sceneTlasBackingInitialState());
-        const auto tlas = this.m_graph.importAccelStruct(inputs.rayTracingResources.sceneTlas, tlasDesc);
-        optionalResourcesImported = optionalResourcesImported && tlas.has_value();
-        if(tlas.has_value())
-            hardwarePhotonResourceUses.push_back(ReadUse(tlas.value(), ResourceStates::AccelStructRead));
-    }
-    optionalResourcesImported = optionalResourcesImported && AppendCurrentCsgRayGeometry(
-        inputs.rayTracingResources.csgTraceContextBuffer,
-        inputs.rayTracingResources.csgTraceBoundsBuffers,
-        this.m_graph,
-        hardwarePhotonResourceUses
-    );
-    if(!optionalResourcesImported){
-        warning("RendererSystem: could not import a hardware-caustics dynamic resource");
-        return MakeUnexpected(Failure());
-    }
-
-    const Array<GpuTaskId, 1u> hardwareDependencies(inputs.graphicsPrefixTask);
-    const Array<GpuExternalCompletionId, 1u> externalCompletions(inputs.historyWriterDrainCompletion);
-    const Span<GpuExternalCompletionId> hardwareExternalDependencies = Span<GpuExternalCompletionId>(externalCompletions).first(cast<usize>(inputs.features.laggedLightingHistoryWriterWaitPending));
-    const Array<GpuTaskExternalStateSource, 1u> accumulatorStateSources(ExternalStateSourceFromCache(inputs.accumulatorPersistentState));
-    const Span<GpuTaskExternalStateSource> accumulatorStateSourceSpan = Span<GpuTaskExternalStateSource>(accumulatorStateSources).first(cast<usize>(inputs.accumulatorPersistentState.valid()));
-
-    CausticsStagePrefixInputs prefixInputs(inputs.targets, inputs.meshViewSnapshot, inputs.shadowPreparationReady, inputs.timingTicket, inputs.photonTiming);
-    prefixInputs.initialDependencies = Span<GpuTaskId>(hardwareDependencies);
-    prefixInputs.externalDependencies = hardwareExternalDependencies;
-    prefixInputs.accumulatorStateSources = accumulatorStateSourceSpan;
-    prefixInputs.causticIrradiance = inputs.currentCausticIrradiance;
-    prefixInputs.causticAccumulator = stageTargets.causticAccumulator;
-    prefixInputs.causticAccumulatorInitialized = inputs.rayTracingResources.causticAccumulatorInitialized;
-    prefixInputs.hardwareCaustics = true;
-    const auto prefixTasksResult = resolveChainBuilder.declarePrefixTasks(prefixInputs);
-    if(!prefixTasksResult.has_value())
-        return MakeUnexpected(Failure());
-    result.causticIrradianceClearTask = prefixTasksResult.value().causticIrradianceClearTask;
-    result.causticAccumulatorBootstrapClearTask = prefixTasksResult.value().causticAccumulatorBootstrapClearTask;
-    result.causticAccumulatorDecayTask = prefixTasksResult.value().causticAccumulatorDecayTask;
-
-    GpuTaskSchedulingHint hardwareCausticsScheduling;
-    hardwareCausticsScheduling.cost = GpuTaskCostHint::Large;
-    hardwareCausticsScheduling.forceSubmissionBoundary = false;
-    hardwareCausticsScheduling.allowPacketMerge = true;
-    hardwareCausticsScheduling.mergeWithPrevious = true;
-    hardwareCausticsScheduling.allowMergeAcrossConsumerFrontier = true;
-    ConfigureComputeEffectRoutingHint(true, hardwareCausticsScheduling);
-
-    GpuTaskDesc hardwarePhotonDesc;
-    hardwarePhotonDesc
-        .setIdentity(Name(s_RenderNameRenderHardwareCausticsPhotons))
-        .setMarkerLabel("Hardware Caustic Photons")
-        .setScheduling(hardwareCausticsScheduling)
-        .setDependency(prefixTasksResult.value().photonDependencyTask)
-        .setResourceUses(hardwarePhotonResourceUses)
-        .setResourceSetUses(Span<GpuTaskResourceSetUse>(hardwarePhotonResourceSetUses.uses).first(hardwarePhotonResourceSetUses.useCount))
-    ;
-    const auto causticPhotonTaskResult = this.m_raytracingSystem.declareHardwareCausticsTask(
-        this.m_graph,
-        hardwarePhotonDesc,
-        inputs.lightingResources,
-        inputs.meshViewSnapshot,
-        inputs.shadowPreparationReady,
-        prefixTasksResult.value().graphOwnsAccumulatorBootstrapClear,
-        inputs.targets,
-        inputs.timingTicket,
-        inputs.photonTiming,
-        inputs.producerDispatched
-    );
-    if(!causticPhotonTaskResult.has_value()){
-        warning("RendererSystem: could not declare hardware-caustics photon graph task");
-        return MakeUnexpected(Failure());
-    }
-    result.causticPhotonTask = causticPhotonTaskResult.value();
-
-    CausticsGeometryAndResolveInputs geometryInputs(inputs.targets, inputs.producerDispatched, inputs.timingTicket, inputs.resolveTiming);
-    geometryInputs.stageTargets = stageTargets;
-    geometryInputs.worldPosition = inputs.worldPosition;
-    geometryInputs.depth = inputs.depth;
-    geometryInputs.causticIrradiance = inputs.currentCausticIrradiance;
-    geometryInputs.photonTask = result.causticPhotonTask;
-    geometryInputs.baseScheduling = hardwareCausticsScheduling;
-    geometryInputs.hardwareCaustics = true;
-    const auto geometryAndResolveResult = resolveChainBuilder.declareGeometryAndResolve(geometryInputs);
-    if(!geometryAndResolveResult.has_value())
-        return MakeUnexpected(Failure());
-    result.causticGeometryTask = geometryAndResolveResult.value().causticGeometryTask;
-    result.causticResolvePrepareTask = geometryAndResolveResult.value().causticResolvePrepareTask;
-    result.causticResolveWaveletTasks = geometryAndResolveResult.value().causticResolveWaveletTasks;
-    result.causticResolveUpsampleTask = geometryAndResolveResult.value().causticResolveUpsampleTask;
-    result.hardwareCausticsTask = geometryAndResolveResult.value().causticsTask;
-    return result;
-}
-
 class CausticAccumulatorDecayGraphTask{
     private mut RendererRayTracingSystem raytracingSystem;
     private mut GraphicsRuntime graphics;
@@ -435,6 +268,173 @@ class CausticResolveGraphTask{
     public void discarded(){
         DiscardGpuTimingMeasure(this.causticResolveTiming);
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ShouldConfirmCausticAccumulatorBootstrapClear(in b8 graphOwnsAccumulatorBootstrapClear, in b8 causticProducerDispatched){
+    return graphOwnsAccumulatorBootstrapClear && causticProducerDispatched;
+}
+
+Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(in HardwareCausticsStageInputs inputs){
+    HardwareCausticsStageResult result;
+    if(!inputs.declaresHardwareCaustics)
+        return result;
+    if(
+        !inputs.worldPosition.valid()
+        || !inputs.depth.valid()
+        || !inputs.currentCausticIrradiance.valid()
+        || !inputs.currentBindlessSlots.valid()
+        || !inputs.sceneShading.valid()
+        || !inputs.lights.valid()
+        || !inputs.graphicsPrefixTask.valid()
+    )
+        return MakeUnexpected(Failure());
+    if(this.m_raytracingSystem.hasHwCausticWork(inputs.meshViewSnapshot) && !inputs.opticalScene.valid())
+        return MakeUnexpected(Failure());
+
+    CausticsResolveChainBuilder resolveChainBuilder(this.m_graph, this.m_raytracingSystem);
+    const auto stageTargetsResult = resolveChainBuilder.importStageTargets(inputs.targets, true);
+    if(!stageTargetsResult.has_value())
+        return MakeUnexpected(Failure());
+    const CausticsStageTargets stageTargets = stageTargetsResult.value();
+
+    Vector<GpuTaskResourceUse> hardwarePhotonResourceUses;
+    const b8 hardwareTraceGeometryStatesGraphOwned = inputs.hardwareTraceGeometrySet.valid();
+    const TraceResourceSetUses hardwarePhotonResourceSetUses = MakeTraceResourceSetUses(inputs.hardwareTraceGeometrySet, inputs.traceMaterialSampledTextureSet);
+    hardwarePhotonResourceUses.reserve(ComputePhotonResourceUseCapacity(
+        s_HardwarePhotonResourceUseCapacity,
+        inputs.rayTracingResources.csgTraceContextBuffer.valid(),
+        inputs.rayTracingResources.csgTraceBoundsBuffers.size(),
+        hardwareTraceGeometryStatesGraphOwned,
+        inputs.hardwareTraceGeometryResources.size()
+    ));
+    hardwarePhotonResourceUses.push_back(ReadTextureUse(inputs.worldPosition, s_FramebufferSubresources, ResourceStates::ShaderResource));
+    hardwarePhotonResourceUses.push_back(ReadTextureUse(inputs.depth, s_FramebufferSubresources, ResourceStates::ShaderResource));
+    hardwarePhotonResourceUses.push_back(ReadUse(inputs.currentBindlessSlots, ResourceStates::ConstantBuffer));
+    hardwarePhotonResourceUses.push_back(ReadUse(inputs.sceneShading, ResourceStates::ConstantBuffer));
+    hardwarePhotonResourceUses.push_back(ReadUse(inputs.lights, ResourceStates::ShaderResource));
+    if(inputs.opticalScene.valid())
+        hardwarePhotonResourceUses.push_back(ReadUse(inputs.opticalScene));
+    hardwarePhotonResourceUses.push_back(ReadUse(stageTargets.sceneGeometryDomain));
+    hardwarePhotonResourceUses.push_back(ReadWriteTextureUse(stageTargets.causticAccumulator, s_CausticAccumulatorSubresources, ResourceStates::UnorderedAccess));
+
+    b8 optionalResourcesImported =
+        AppendCausticReadBuffer(this.m_graph, hardwarePhotonResourceUses, inputs.meshViewSnapshot.buffer, Name(s_MeshViewName), s_MeshViewLabel, ResourceStates::ConstantBuffer)
+        && AppendCausticReadBuffer(this.m_graph, hardwarePhotonResourceUses,
+            inputs.rayTracingResources.shadowInstanceMaterialBuffer,
+            Name(s_SceneShadowInstanceMaterialName),
+            s_SceneShadowInstanceMaterialLabel,
+            ResourceStates::ShaderResource
+        )
+        && AppendCausticReadBuffer(this.m_graph, hardwarePhotonResourceUses, inputs.rayTracingResources.shadowMaterialTypedBuffer, Name(s_SceneShadowMaterialTypedName), s_SceneShadowMaterialTypedLabel, ResourceStates::ShaderResource)
+        && AppendCausticReadBuffer(this.m_graph, hardwarePhotonResourceUses, inputs.rayTracingResources.shadowInstanceBuffer, Name(s_SceneShadowInstancesName), s_SceneShadowInstancesLabel, ResourceStates::ShaderResource)
+        && AppendCausticReadBuffer(this.m_graph, hardwarePhotonResourceUses, inputs.rayTracingResources.causticEmissionTargetBuffer, Name(s_HardwareCausticEmissionTargetsName), s_CausticEmissionTargetsLabel, ResourceStates::ShaderResource)
+    ;
+    if(inputs.materialContextSlots.valid())
+        hardwarePhotonResourceUses.push_back(ReadUse(inputs.materialContextSlots, ResourceStates::ConstantBuffer));
+    for(in GpuGraphResourceId resource : inputs.hardwareTraceGeometryResources){
+        if(!resource.valid()){
+            warning("RendererSystem: invalid prepared hardware-caustics geometry resource");
+            return MakeUnexpected(Failure());
+        }
+        if(!hardwareTraceGeometryStatesGraphOwned)
+            hardwarePhotonResourceUses.push_back(ReadUse(resource, ResourceStates::ShaderResource));
+    }
+    if(inputs.rayTracingResources.sceneTlas.valid()){
+        GpuGraphResourceDesc tlasDesc = AccelStructResourceDesc(Name(s_SceneTlasResourceName), s_SceneTlasResourceLabel);
+        tlasDesc.setInitialState(this.m_raytracingSystem.sceneTlasBackingInitialState());
+        const auto tlas = this.m_graph.importAccelStruct(inputs.rayTracingResources.sceneTlas, tlasDesc);
+        optionalResourcesImported = optionalResourcesImported && tlas.has_value();
+        if(tlas.has_value())
+            hardwarePhotonResourceUses.push_back(ReadUse(tlas.value(), ResourceStates::AccelStructRead));
+    }
+    optionalResourcesImported = optionalResourcesImported && AppendCurrentCsgRayGeometry(
+        inputs.rayTracingResources.csgTraceContextBuffer,
+        inputs.rayTracingResources.csgTraceBoundsBuffers,
+        this.m_graph,
+        hardwarePhotonResourceUses
+    );
+    if(!optionalResourcesImported){
+        warning("RendererSystem: could not import a hardware-caustics dynamic resource");
+        return MakeUnexpected(Failure());
+    }
+
+    const Array<GpuTaskId, 1u> hardwareDependencies(inputs.graphicsPrefixTask);
+    const Array<GpuExternalCompletionId, 1u> externalCompletions(inputs.historyWriterDrainCompletion);
+    const Span<GpuExternalCompletionId> hardwareExternalDependencies = Span<GpuExternalCompletionId>(externalCompletions).first(cast<usize>(inputs.features.laggedLightingHistoryWriterWaitPending));
+    const Array<GpuTaskExternalStateSource, 1u> accumulatorStateSources(ExternalStateSourceFromCache(inputs.accumulatorPersistentState));
+    const Span<GpuTaskExternalStateSource> accumulatorStateSourceSpan = Span<GpuTaskExternalStateSource>(accumulatorStateSources).first(cast<usize>(inputs.accumulatorPersistentState.valid()));
+
+    CausticsStagePrefixInputs prefixInputs(inputs.targets, inputs.meshViewSnapshot, inputs.shadowPreparationReady, inputs.timingTicket, inputs.photonTiming);
+    prefixInputs.initialDependencies = Span<GpuTaskId>(hardwareDependencies);
+    prefixInputs.externalDependencies = hardwareExternalDependencies;
+    prefixInputs.accumulatorStateSources = accumulatorStateSourceSpan;
+    prefixInputs.causticIrradiance = inputs.currentCausticIrradiance;
+    prefixInputs.causticAccumulator = stageTargets.causticAccumulator;
+    prefixInputs.causticAccumulatorInitialized = inputs.rayTracingResources.causticAccumulatorInitialized;
+    prefixInputs.hardwareCaustics = true;
+    const auto prefixTasksResult = resolveChainBuilder.declarePrefixTasks(prefixInputs);
+    if(!prefixTasksResult.has_value())
+        return MakeUnexpected(Failure());
+    result.causticIrradianceClearTask = prefixTasksResult.value().causticIrradianceClearTask;
+    result.causticAccumulatorBootstrapClearTask = prefixTasksResult.value().causticAccumulatorBootstrapClearTask;
+    result.causticAccumulatorDecayTask = prefixTasksResult.value().causticAccumulatorDecayTask;
+
+    GpuTaskSchedulingHint hardwareCausticsScheduling;
+    hardwareCausticsScheduling.cost = GpuTaskCostHint::Large;
+    hardwareCausticsScheduling.forceSubmissionBoundary = false;
+    hardwareCausticsScheduling.allowPacketMerge = true;
+    hardwareCausticsScheduling.mergeWithPrevious = true;
+    hardwareCausticsScheduling.allowMergeAcrossConsumerFrontier = true;
+    ConfigureComputeEffectRoutingHint(true, hardwareCausticsScheduling);
+
+    GpuTaskDesc hardwarePhotonDesc;
+    hardwarePhotonDesc
+        .setIdentity(Name(s_RenderNameRenderHardwareCausticsPhotons))
+        .setMarkerLabel("Hardware Caustic Photons")
+        .setScheduling(hardwareCausticsScheduling)
+        .setDependency(prefixTasksResult.value().photonDependencyTask)
+        .setResourceUses(hardwarePhotonResourceUses)
+        .setResourceSetUses(Span<GpuTaskResourceSetUse>(hardwarePhotonResourceSetUses.uses).first(hardwarePhotonResourceSetUses.useCount))
+    ;
+    const auto causticPhotonTaskResult = this.m_raytracingSystem.declareHardwareCausticsTask(
+        this.m_graph,
+        hardwarePhotonDesc,
+        inputs.lightingResources,
+        inputs.meshViewSnapshot,
+        inputs.shadowPreparationReady,
+        prefixTasksResult.value().graphOwnsAccumulatorBootstrapClear,
+        inputs.targets,
+        inputs.timingTicket,
+        inputs.photonTiming,
+        inputs.producerDispatched
+    );
+    if(!causticPhotonTaskResult.has_value()){
+        warning("RendererSystem: could not declare hardware-caustics photon graph task");
+        return MakeUnexpected(Failure());
+    }
+    result.causticPhotonTask = causticPhotonTaskResult.value();
+
+    CausticsGeometryAndResolveInputs geometryInputs(inputs.targets, inputs.producerDispatched, inputs.timingTicket, inputs.resolveTiming);
+    geometryInputs.stageTargets = stageTargets;
+    geometryInputs.worldPosition = inputs.worldPosition;
+    geometryInputs.depth = inputs.depth;
+    geometryInputs.causticIrradiance = inputs.currentCausticIrradiance;
+    geometryInputs.photonTask = result.causticPhotonTask;
+    geometryInputs.baseScheduling = hardwareCausticsScheduling;
+    geometryInputs.hardwareCaustics = true;
+    const auto geometryAndResolveResult = resolveChainBuilder.declareGeometryAndResolve(geometryInputs);
+    if(!geometryAndResolveResult.has_value())
+        return MakeUnexpected(Failure());
+    result.causticGeometryTask = geometryAndResolveResult.value().causticGeometryTask;
+    result.causticResolvePrepareTask = geometryAndResolveResult.value().causticResolvePrepareTask;
+    result.causticResolveWaveletTasks = geometryAndResolveResult.value().causticResolveWaveletTasks;
+    result.causticResolveUpsampleTask = geometryAndResolveResult.value().causticResolveUpsampleTask;
+    result.hardwareCausticsTask = geometryAndResolveResult.value().causticsTask;
+    return result;
 }
 
 [cpp_unwind]

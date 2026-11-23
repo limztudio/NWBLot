@@ -8,6 +8,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const usize s_MeshPositionElementBytes = 12u;
+const usize s_MeshHalf4ElementBytes = 8u;
+const usize s_MeshUv0ElementBytes = 8u;
+const usize s_MeshletDescElementBytes = 48u;
+const usize s_MeshletBoundsElementBytes = 20u;
+const usize s_MeshletLocalVertexRefElementBytes = 4u;
+const usize s_MeshSolidTriangleWordElementBytes = 4u;
+
+const usize s_MeshBinaryHeaderBytes = 92u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 ValidateMeshletPayload(
     in Span<u8> positionRefDeltas,
     in Span<u8> attributeRefDeltas,
@@ -269,16 +283,6 @@ b8 ValidateMeshAssetPayload(
         meshPathText
     );
 }
-
-const usize s_MeshPositionElementBytes = 12u;
-const usize s_MeshHalf4ElementBytes = 8u;
-const usize s_MeshUv0ElementBytes = 8u;
-const usize s_MeshletDescElementBytes = 48u;
-const usize s_MeshletBoundsElementBytes = 20u;
-const usize s_MeshletLocalVertexRefElementBytes = 4u;
-const usize s_MeshSolidTriangleWordElementBytes = 4u;
-
-const usize s_MeshBinaryHeaderBytes = 92u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

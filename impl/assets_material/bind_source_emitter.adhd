@@ -351,6 +351,7 @@ class MaterialBindSourceEmitter{
         return true;
     }
 
+    [cpp_unwind]
     public b8 buildMaterialBindIncludeSourceFromData(
         in StringView entrySource,
         in StringView entryVirtualPath,
@@ -374,24 +375,23 @@ class MaterialBindSourceEmitter{
         if(!interfaceName.has_value())
             return false;
 
-        u64 layoutHash = 0u;
         Vector<MaterialTypedLayoutBlock> typedLayoutBlocks;
         Vector<MaterialTypedLayoutField> typedLayoutFields;
         Vector<u8> typedBlockBytes;
         HashMap<Name, MaterialBindTypedLayoutBlockLookupEntry> blockLookup;
         HashMap<CompactString, MaterialBindTypedLayoutParameterLookupEntry> parameterLookup;
-        if(!BuildMaterialBindTypedLayoutData(
+        const Expected<u64> layoutHash = BuildMaterialBindTypedLayoutData(
             entryVirtualPath,
             interfaceName.value(),
             structs,
             instances,
-            layoutHash,
             typedLayoutBlocks,
             typedLayoutFields,
             typedBlockBytes,
             blockLookup,
             parameterLookup
-        ))
+        );
+        if(!layoutHash.has_value())
             return false;
 
         HashSet<String> generatedSymbols;
@@ -401,7 +401,7 @@ class MaterialBindSourceEmitter{
             includePath,
             instances,
             interfaceName.value(),
-            layoutHash,
+            layoutHash.value(),
             typedLayoutBlocks,
             typedLayoutFields.size(),
             blockLookup,

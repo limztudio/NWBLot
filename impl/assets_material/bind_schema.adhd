@@ -66,34 +66,6 @@ class MaterialBindInstance{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<usize> FindMaterialBindStructIndex(in Span<MaterialBindStruct> structs, in StringView structName){
-    for(usize i = 0u; i < structs.size(); ++i){
-        if(structs[i].name == structName)
-            return i;
-    }
-    return MakeUnexpected(Failure());
-}
-
-b8 HasMaterialBindInstance(in Span<MaterialBindInstance> instances, in StringView instanceName){
-    for(in MaterialBindInstance instance : instances){
-        if(instance.name == instanceName)
-            return true;
-    }
-    return false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<Name> TryParseMaterialBindName(in StringView text){
-    return ParseName(text);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class MaterialBindSchemaValidator{
     public b8 validateMaterialBindStructAttributes(in StringView bindFilePathText, in MaterialBindStruct bindStruct){
         b8 foundBlockClass = false;
@@ -194,7 +166,31 @@ class MaterialBindSchemaValidator{
         instance.name.assign(instanceName);
         return true;
     }
-};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<usize> FindMaterialBindStructIndex(in Span<MaterialBindStruct> structs, in StringView structName){
+    for(usize i = 0u; i < structs.size(); ++i){
+        if(structs[i].name == structName)
+            return i;
+    }
+    return MakeUnexpected(Failure());
+}
+
+b8 HasMaterialBindInstance(in Span<MaterialBindInstance> instances, in StringView instanceName){
+    for(in MaterialBindInstance instance : instances){
+        if(instance.name == instanceName)
+            return true;
+    }
+    return false;
+}
+
+Expected<Name> TryParseMaterialBindName(in StringView text){
+    return ParseName(text);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

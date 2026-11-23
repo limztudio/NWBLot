@@ -13,7 +13,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const usize s_GlobalArenaIterations = 32768u;
+const usize s_GlobalArenaAllocationBytes = 128u;
+const usize s_PersistentHandoffThreads = 4u;
+const usize s_PersistentHandoffIterations = 4096u;
+const usize s_PersistentHandoffAlignment = 256u;
+const usize s_PersistentHandoffBytes = 256u;
+const usize s_PersistentResizeIterations = 4096u;
+const usize s_PersistentResizeInitialBytes = 113u;
+const usize s_PersistentResizeBytes = 389u;
+const usize s_PersistentResizeAlignment = 256u;
 const usize s_VerifyAlignedReallocationGrownBytes = s_AllocCaseVerifyAlignedReallocationAlignment * 4u;
+
+class SharedArenaPayload{
+    public Vector<u32> values;
+}
 
 void VerifyAlignedReallocation<Arena>(mut Arena testArena){
     {
@@ -121,8 +135,6 @@ void VerifyArenaAlignedReallocation_PersistentArenaReallocationPreservesAlignmen
 
 void VerifyGlobalArenaTests_SharedOwnerAllocationChurnPreservesPayloadAndAccounting(){
     const usize threadCount = 4u;
-    const usize iterationsPerThread = 32768u;
-    const usize allocationBytes = 128u;
     Array<AllocatorWorkerResult, 4> results = Array<AllocatorWorkerResult, 4>();
 
     {
@@ -131,15 +143,15 @@ void VerifyGlobalArenaTests_SharedOwnerAllocationChurnPreservesPayloadAndAccount
         Latch start(1u);
 
         for(usize threadIndex = 0u; threadIndex < threadCount; ++threadIndex){
-            workers[threadIndex].emplace(lambda[mut results, mut workersReady, mut start, in threadIndex, in iterationsPerThread, in allocationBytes]() -> void{
+            workers[threadIndex].emplace(lambda[mut results, mut workersReady, mut start, in threadIndex]() -> void{
                 HeapStorage workerStorage(s_GlobalSharedOwnerAllocationChurn);
                 b8 allocationFailed = false;
                 b8 contentsPreserved = true;
                 workersReady.count_down();
                 start.wait();
 
-                for(usize iteration = 0u; iteration < iterationsPerThread; ++iteration){
-                    RawAllocation allocation = AllocateBytes(workerStorage, 1u, allocationBytes);
+                for(usize iteration = 0u; iteration < s_GlobalArenaIterations; ++iteration){
+                    RawAllocation allocation = AllocateBytes(workerStorage, 1u, s_GlobalArenaAllocationBytes);
                     if(allocation.address() == 0u){
                         allocationFailed = true;
                         break;
@@ -147,10 +159,10 @@ void VerifyGlobalArenaTests_SharedOwnerAllocationChurnPreservesPayloadAndAccount
                     const u8 firstByte = cast<u8>(threadIndex);
                     const u8 lastByte = cast<u8>(iteration);
                     allocation.writeVolatile(0u, firstByte);
-                    allocation.writeVolatile(allocationBytes - 1u, lastByte);
+                    allocation.writeVolatile(s_GlobalArenaAllocationBytes - 1u, lastByte);
                     contentsPreserved &= allocation.readVolatile(0u) == firstByte;
-                    contentsPreserved &= allocation.readVolatile(allocationBytes - 1u) == lastByte;
-                    FreeBytes(workerStorage, allocation, 1u, allocationBytes);
+                    contentsPreserved &= allocation.readVolatile(s_GlobalArenaAllocationBytes - 1u) == lastByte;
+                    FreeBytes(workerStorage, allocation, 1u, s_GlobalArenaAllocationBytes);
                 }
 
                 AllocatorWorkerResult out;
@@ -170,20 +182,16 @@ void VerifyGlobalArenaTests_SharedOwnerAllocationChurnPreservesPayloadAndAccount
     for(in AllocatorWorkerResult result : results){
         EXPECT_FALSE(result.allocationFailed);
         EXPECT_TRUE(result.contentsPreserved);
-        EXPECT_EQ(result.stats.allocationCount, iterationsPerThread);
-        EXPECT_EQ(result.stats.deallocationCount, iterationsPerThread);
+        EXPECT_EQ(result.stats.allocationCount, s_GlobalArenaIterations);
+        EXPECT_EQ(result.stats.deallocationCount, s_GlobalArenaIterations);
         EXPECT_EQ(result.stats.reallocationCount, 0u);
         EXPECT_EQ(result.stats.usedBytes, 0u);
         EXPECT_EQ(result.stats.reservedBytes, 0u);
-        EXPECT_GE(result.stats.peakUsedBytes, allocationBytes);
+        EXPECT_GE(result.stats.peakUsedBytes, s_GlobalArenaAllocationBytes);
     }
 }
 
 void VerifyPersistentArenaTests_SharedArenaConcurrentAllocationCrossThreadFreeAndAccounting(){
-    const usize threadCount = 4u;
-    const usize iterationsPerThread = 4096u;
-    const usize handoffAlignment = 256u;
-    const usize handoffBytes = 256u;
     const usize poolBytes = PersistentArenaStructureAlignedSize(512u * 1024u);
     PersistentStorage testArena(s_PersistentArenaSharedCrossThreadChurn, poolBytes);
     Array<PersistentArenaWorkerResult, 4> results = Array<PersistentArenaWorkerResult, 4>();
@@ -192,42 +200,42 @@ void VerifyPersistentArenaTests_SharedArenaConcurrentAllocationCrossThreadFreeAn
     {
         Array<RawAllocation, 4> handoffs;
         Array<Optional<JoiningThread>, 4u> workers;
-        Latch workersReady(threadCount);
+        Latch workersReady(s_PersistentHandoffThreads);
         Latch start(1u);
-        Latch handoffsReady(threadCount);
+        Latch handoffsReady(s_PersistentHandoffThreads);
         Latch releaseHandoffs(1u);
 
-        for(usize threadIndex = 0u; threadIndex < threadCount; ++threadIndex){
-            workers[threadIndex].emplace(lambda[mut testArena, mut handoffs, mut results, mut workersReady, mut start, mut handoffsReady, mut releaseHandoffs, in threadIndex, in threadCount, in iterationsPerThread, in handoffAlignment, in handoffBytes]() -> void{
+        for(usize threadIndex = 0u; threadIndex < s_PersistentHandoffThreads; ++threadIndex){
+            workers[threadIndex].emplace(lambda[mut testArena, mut handoffs, mut results, mut workersReady, mut start, mut handoffsReady, mut releaseHandoffs, in threadIndex]() -> void{
                 b8 allocationFailed = false;
                 b8 contentsPreserved = true;
                 b8 alignmentPreserved = true;
                 workersReady.count_down();
                 start.wait();
 
-                RawAllocation handoff = AllocateBytes(testArena, handoffAlignment, handoffBytes);
+                RawAllocation handoff = AllocateBytes(testArena, s_PersistentHandoffAlignment, s_PersistentHandoffBytes);
                 if(handoff.address() == 0u)
                     allocationFailed = true;
                 else{
                     handoff.writeVolatile(0u, cast<u8>(threadIndex));
-                    handoff.writeVolatile(handoffBytes - 1u, cast<u8>(threadIndex + 1u));
-                    alignmentPreserved &= handoff.address() % handoffAlignment == 0u;
+                    handoff.writeVolatile(s_PersistentHandoffBytes - 1u, cast<u8>(threadIndex + 1u));
+                    alignmentPreserved &= handoff.address() % s_PersistentHandoffAlignment == 0u;
                 }
                 handoffs[threadIndex] = handoff;
                 handoffsReady.count_down();
                 releaseHandoffs.wait();
 
-                RawAllocation handedOff = handoffs[(threadIndex + 1u) % threadCount];
+                RawAllocation handedOff = handoffs[(threadIndex + 1u) % s_PersistentHandoffThreads];
                 if(handedOff.address() == 0u)
                     allocationFailed = true;
                 else{
-                    contentsPreserved &= handedOff.readVolatile(0u) == cast<u8>((threadIndex + 1u) % threadCount);
-                    contentsPreserved &= handedOff.readVolatile(handoffBytes - 1u) == cast<u8>((threadIndex + 1u) % threadCount + 1u);
-                    FreeBytes(testArena, handedOff, handoffAlignment, handoffBytes);
+                    contentsPreserved &= handedOff.readVolatile(0u) == cast<u8>((threadIndex + 1u) % s_PersistentHandoffThreads);
+                    contentsPreserved &= handedOff.readVolatile(s_PersistentHandoffBytes - 1u) == cast<u8>((threadIndex + 1u) % s_PersistentHandoffThreads + 1u);
+                    FreeBytes(testArena, handedOff, s_PersistentHandoffAlignment, s_PersistentHandoffBytes);
                 }
 
-                for(usize iteration = 0u; iteration < iterationsPerThread; ++iteration){
-                    usize alignment = handoffAlignment;
+                for(usize iteration = 0u; iteration < s_PersistentHandoffIterations; ++iteration){
+                    usize alignment = s_PersistentHandoffAlignment;
                     if((iteration + threadIndex) % 2u == 0u)
                         alignment = 1u;
                     RawAllocation allocation = AllocateBytes(testArena, alignment, 113u);
@@ -264,14 +272,14 @@ void VerifyPersistentArenaTests_SharedArenaConcurrentAllocationCrossThreadFreeAn
     }
 
     const ArenaMemoryStats settled = testArena.memoryStats();
-    const u64 expectedOperations = cast<u64>(threadCount * (iterationsPerThread + 1u));
+    const u64 expectedOperations = cast<u64>(s_PersistentHandoffThreads * (s_PersistentHandoffIterations + 1u));
     for(in PersistentArenaWorkerResult result : results){
         EXPECT_FALSE(result.allocationFailed);
         EXPECT_TRUE(result.contentsPreserved);
         EXPECT_TRUE(result.alignmentPreserved);
     }
     EXPECT_EQ(live.reservedBytes, poolBytes);
-    EXPECT_EQ(live.allocationCount, threadCount);
+    EXPECT_EQ(live.allocationCount, s_PersistentHandoffThreads);
     EXPECT_EQ(live.reallocationCount, 0u);
     EXPECT_EQ(live.deallocationCount, 0u);
     EXPECT_GT(live.usedBytes, 0u);
@@ -287,10 +295,6 @@ void VerifyPersistentArenaTests_SharedArenaConcurrentAllocationCrossThreadFreeAn
 
 void VerifyPersistentArenaTests_SharedArenaConcurrentReallocationPreservesPayloadAndAccounting(){
     const usize threadCount = 4u;
-    const usize iterationsPerThread = 4096u;
-    const usize initialBytes = 113u;
-    const usize replacementBytes = 389u;
-    const usize replacementAlignment = 256u;
     const usize poolBytes = PersistentArenaStructureAlignedSize(512u * 1024u);
     PersistentStorage testArena(s_PersistentArenaSharedReallocationChurn, poolBytes);
     Array<PersistentArenaWorkerResult, 4> results = Array<PersistentArenaWorkerResult, 4>();
@@ -301,15 +305,15 @@ void VerifyPersistentArenaTests_SharedArenaConcurrentReallocationPreservesPayloa
         Latch start(1u);
 
         for(usize threadIndex = 0u; threadIndex < threadCount; ++threadIndex){
-            workers[threadIndex].emplace(lambda[mut testArena, mut results, mut workersReady, mut start, in threadIndex, in iterationsPerThread, in initialBytes, in replacementBytes, in replacementAlignment]() -> void{
+            workers[threadIndex].emplace(lambda[mut testArena, mut results, mut workersReady, mut start, in threadIndex]() -> void{
                 b8 allocationFailed = false;
                 b8 contentsPreserved = true;
                 b8 alignmentPreserved = true;
                 workersReady.count_down();
                 start.wait();
 
-                for(usize iteration = 0u; iteration < iterationsPerThread; ++iteration){
-                    RawAllocation allocation = AllocateBytes(testArena, 1u, initialBytes);
+                for(usize iteration = 0u; iteration < s_PersistentResizeIterations; ++iteration){
+                    RawAllocation allocation = AllocateBytes(testArena, 1u, s_PersistentResizeInitialBytes);
                     if(allocation.address() == 0u){
                         allocationFailed = true;
                         break;
@@ -317,20 +321,20 @@ void VerifyPersistentArenaTests_SharedArenaConcurrentReallocationPreservesPayloa
                     const u8 firstByte = cast<u8>(threadIndex + iteration);
                     const u8 lastByte = cast<u8>(threadIndex + iteration + 1u);
                     allocation.writeVolatile(0u, firstByte);
-                    allocation.writeVolatile(initialBytes - 1u, lastByte);
+                    allocation.writeVolatile(s_PersistentResizeInitialBytes - 1u, lastByte);
                     YieldThread();
 
-                    RawAllocation replacement = ResizeBytes(testArena, allocation, replacementAlignment, replacementBytes);
+                    RawAllocation replacement = ResizeBytes(testArena, allocation, s_PersistentResizeAlignment, s_PersistentResizeBytes);
                     if(replacement.address() == 0u){
                         allocationFailed = true;
-                        FreeBytes(testArena, allocation, 1u, initialBytes);
+                        FreeBytes(testArena, allocation, 1u, s_PersistentResizeInitialBytes);
                         break;
                     }
                     allocation = replacement;
                     contentsPreserved &= allocation.readVolatile(0u) == firstByte;
-                    contentsPreserved &= allocation.readVolatile(initialBytes - 1u) == lastByte;
-                    alignmentPreserved &= allocation.address() % replacementAlignment == 0u;
-                    FreeBytes(testArena, allocation, replacementAlignment, replacementBytes);
+                    contentsPreserved &= allocation.readVolatile(s_PersistentResizeInitialBytes - 1u) == lastByte;
+                    alignmentPreserved &= allocation.address() % s_PersistentResizeAlignment == 0u;
+                    FreeBytes(testArena, allocation, s_PersistentResizeAlignment, s_PersistentResizeBytes);
                 }
 
                 PersistentArenaWorkerResult out;
@@ -348,7 +352,7 @@ void VerifyPersistentArenaTests_SharedArenaConcurrentReallocationPreservesPayloa
     }
 
     const ArenaMemoryStats settled = testArena.memoryStats();
-    const u64 expectedOperations = cast<u64>(threadCount * iterationsPerThread);
+    const u64 expectedOperations = cast<u64>(threadCount * s_PersistentResizeIterations);
     for(in PersistentArenaWorkerResult result : results){
         EXPECT_FALSE(result.allocationFailed);
         EXPECT_TRUE(result.contentsPreserved);
@@ -1028,8 +1032,7 @@ void VerifyScratchArenaReuse_NestedContainerDestructionAndCallerUnwindPreserveEa
 }
 
 void VerifyScratchArenaReuse_OwnerTelemetryRetainsHistoryAndSeparatesReservedBackingFromUsage(){
-    ArenaMemoryStats before = ArenaMemoryStats();
-    TryReadOwnerStats(s_ScratchReuseOwnerLifecycle, before);
+    const ArenaMemoryStats before = OwnerStats(s_ScratchReuseOwnerLifecycle);
     ArenaMemoryStats live = ArenaMemoryStats();
     {
         ScratchStorage testArena(s_ScratchReuseOwnerLifecycle, 256u);
@@ -1041,20 +1044,20 @@ void VerifyScratchArenaReuse_OwnerTelemetryRetainsHistoryAndSeparatesReservedBac
         live = testArena.memoryStats();
         EXPECT_EQ(live.usedBytes, 0u);
         EXPECT_GT(live.reservedBytes, 0u);
-        ArenaMemoryStats liveOwner = ArenaMemoryStats();
-        const b8 foundLive = TryReadOwnerStats(s_ScratchReuseOwnerLifecycle, liveOwner);
-        EXPECT_TRUE(foundLive);
-        if(foundLive){
+        const Optional<ArenaMemoryStats> liveResult = FindOwnerStats(s_ScratchReuseOwnerLifecycle, ArenaMemorySource::Arena);
+        EXPECT_TRUE(liveResult.has_value());
+        if(liveResult.has_value()){
+            const ArenaMemoryStats liveOwner = liveResult.value();
             EXPECT_EQ(liveOwner.usedBytes, 0u);
             EXPECT_EQ(liveOwner.reservedBytes, live.reservedBytes);
             EXPECT_EQ(liveOwner.allocationCount, before.allocationCount + live.allocationCount);
             EXPECT_EQ(liveOwner.deallocationCount, before.deallocationCount + live.deallocationCount);
         }
     }
-    ArenaMemoryStats afterOwner = ArenaMemoryStats();
-    const b8 foundAfter = TryReadOwnerStats(s_ScratchReuseOwnerLifecycle, afterOwner);
-    EXPECT_TRUE(foundAfter);
-    if(foundAfter){
+    const Optional<ArenaMemoryStats> afterResult = FindOwnerStats(s_ScratchReuseOwnerLifecycle, ArenaMemorySource::Arena);
+    EXPECT_TRUE(afterResult.has_value());
+    if(afterResult.has_value()){
+        const ArenaMemoryStats afterOwner = afterResult.value();
         EXPECT_EQ(afterOwner.usedBytes, 0u);
         EXPECT_EQ(afterOwner.reservedBytes, 0u);
         EXPECT_EQ(afterOwner.allocationCount, before.allocationCount + live.allocationCount);
@@ -1125,10 +1128,6 @@ void VerifyAllocatorUsageBoundaries_ZeroSizeReallocationReleasesChargedBytes(){
     EXPECT_EQ(testArena.memoryStats().allocationCount, 1u);
     EXPECT_EQ(testArena.memoryStats().deallocationCount, 1u);
     EXPECT_EQ(OwnerStats(s_AllocationOwnersObjectAndZero).usedBytes, 0u);
-}
-
-class SharedArenaPayload{
-    public Vector<u32> values;
 }
 
 Expected<Shared<SharedArenaPayload>> MakeEscapingSharedArenaPayload(){

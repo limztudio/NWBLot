@@ -12,24 +12,11 @@
 
 [cpp_header("<impl/assets/graphics/refraction/diagnostics_layout.h>"), cpp_name("NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE")]
 extern const usize s_RefractionReadbackCounterBytes;
+
 const usize s_RefractionReadbackCounterCount = s_RefractionReadbackCounterBytes / size_of<u32>();
-
-b8 IsRefractionStatisticsResourcesReady(in b8 hasCounters, in b8 counterDescriptorValid, in b8 hasBuffer0){
-    return hasCounters && counterDescriptorValid && hasBuffer0;
-}
-
-b8 ResolveAcceptedRefractionCsgHardwareEnabled(in b8 csgHardwareEnabled, in b8 hardwareReady){
-    return csgHardwareEnabled && hardwareReady;
-}
-
-b8 CanSnapshotRefractionStatisticsReadback(
-    in b8 hasControl,
-    in b8 hasCounters,
-    in b8 counterDescriptorValid,
-    in b8 hasPrimaryReadbackBuffer
-){
-    return hasControl && hasCounters && counterDescriptorValid && hasPrimaryReadbackBuffer;
-}
+type RefractionStatisticsState = StatisticsReadbackState<RefractionStatistics, RefractionStatisticsOutcome>;
+type RefractionStatisticsControlHandle = Shared<RefractionStatisticsState>;
+type RefractionStatisticsReservation = StatisticsReservation<RefractionStatistics, RefractionStatisticsOutcome>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -46,10 +33,6 @@ class RefractionStatisticsOutcome : IStatisticsOutcome<RefractionStatistics>{
         CopyRefractionDiagnosticCounters(counters, latest);
     }
 }
-
-type RefractionStatisticsState = StatisticsReadbackState<RefractionStatistics, RefractionStatisticsOutcome>;
-type RefractionStatisticsControlHandle = Shared<RefractionStatisticsState>;
-type RefractionStatisticsReservation = StatisticsReservation<RefractionStatistics, RefractionStatisticsOutcome>;
 
 class RefractionStatisticsReadbackSnapshot{
     public RefractionStatisticsControlHandle control;
@@ -117,6 +100,27 @@ class RefractionStatisticsReadback : NoCopy{
         result.counterDescriptor = this.m_counterDescriptor;
         return result;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsRefractionStatisticsResourcesReady(in b8 hasCounters, in b8 counterDescriptorValid, in b8 hasBuffer0){
+    return hasCounters && counterDescriptorValid && hasBuffer0;
+}
+
+b8 ResolveAcceptedRefractionCsgHardwareEnabled(in b8 csgHardwareEnabled, in b8 hardwareReady){
+    return csgHardwareEnabled && hardwareReady;
+}
+
+b8 CanSnapshotRefractionStatisticsReadback(
+    in b8 hasControl,
+    in b8 hasCounters,
+    in b8 counterDescriptorValid,
+    in b8 hasPrimaryReadbackBuffer
+){
+    return hasControl && hasCounters && counterDescriptorValid && hasPrimaryReadbackBuffer;
 }
 
 

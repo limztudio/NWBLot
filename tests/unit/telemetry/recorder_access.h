@@ -44,8 +44,8 @@ private:
 }
 
 inline void TestReplaceWithMovedPayload(Core::Telemetry::TelemetryBytes& destination, Core::Telemetry::TelemetryBytes& source){
-    std::destroy_at(&destination);
-    std::construct_at(&destination, Move(source));
+    DestroyAt(&destination);
+    ConstructAt(&destination, Move(source));
 }
 
 inline b8 AppendMovedTelemetryPayload(Core::Telemetry::Recorder& recorder, const Core::Telemetry::EventHeader& header, Core::Telemetry::TelemetryBytes& bytes){

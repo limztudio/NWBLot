@@ -59,17 +59,6 @@ b8 IsExternallyPlannedMacroInclude(in Span<StringView> externallyPlannedMacroInc
     return false;
 }
 
-b8 NextSourceDependencyLine(in StringView sourceView, mut usize inOutLineBegin, mut StringView outLine){
-    if(inOutLineBegin >= sourceView.size())
-        return false;
-
-    const Expected<StringView> nextLine = NextTextLine(sourceView, inOutLineBegin);
-    if(!nextLine.has_value())
-        return false;
-    outLine = nextLine.value();
-    return true;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

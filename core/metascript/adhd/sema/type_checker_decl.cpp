@@ -31,6 +31,40 @@ namespace __hidden_adhd_type_checker_decl{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] const ClassDecl* FindPolymorphicSdkInterface(const SymbolTable& symbols, const MStringView baseName)noexcept{
+    if(const ClassDecl* sdk = symbols.findClass(baseName); sdk && sdk->isExtern && sdk->isPolymorphicBase)
+        return sdk;
+    return FindBuiltinPolymorphicInterfaceDecl(baseName);
+}
+
+void MatchPolymorphicSdkOverride(
+    const ClassDecl& sdk,
+    MethodDecl& method,
+    const SymbolTable& symbols,
+    MVector<ParseError>& errors,
+    b8& outMatched,
+    b8& outAllowsUnwind,
+    b8& outOk
+){
+    for(const MethodDecl* candidate : sdk.methods){
+        if(!candidate || candidate->name != method.name || candidate->isConst != method.isConst)
+            continue;
+        if(!TypeComparator(symbols).areEquivalent(method.returnType, candidate->returnType))
+            continue;
+        if(!candidate->isVariadic && !TypeComparator(symbols).doParamListsMatchWithSubst(method.params, candidate->params, {}, {}))
+            continue;
+        outMatched = true;
+        if(method.allowsCppUnwind && !candidate->allowsCppUnwind){
+            errors.push_back(ParseError{ method.span.line, method.span.column, MString("'[cpp_unwind]' cannot weaken a nonthrowing SDK override contract", errors.get_allocator()) });
+            outOk = false;
+        }
+        outAllowsUnwind |= candidate->allowsCppUnwind;
+        for(usize pi = 0u; pi < method.params.size() && pi < candidate->params.size(); ++pi)
+            method.params[pi].cppConstReference |= candidate->params[pi].cppConstReference;
+        break;
+    }
+}
+
 void CollectAssignedThisMembers(const Span<const Stmt* const> stmts, MVector<MStringView>& outMembers, MVector<SourceSpan>& outSpans){
     for(const Stmt* stmt : stmts){
         if(!stmt)
@@ -311,7 +345,7 @@ b8 TypeChecker::checkCallableSignature(const ClassDecl* enclosingClass, MethodDe
         }
     }
     if(method.allowsCppUnwind){
-        if(method.isOperator || method.assetCookRole != AssetCookRole::None){
+        if(method.isOperator || (method.assetCookRole != AssetCookRole::None && method.assetCookRole != AssetCookRole::Writer && method.assetCookRole != AssetCookRole::Entry)){
             reportError(errors, method.span, "'[cpp_unwind]' requires an ordinary function or method without an imposed C++ contract");
             return false;
         }
@@ -854,21 +888,8 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
                 if(!baseType)
                     continue;
                 const MStringView baseName = m_symbols.resolveBaseTypeName(baseType->name);
-                if(const ClassDecl* sdk = m_symbols.findClass(baseName); sdk && sdk->isExtern && sdk->isPolymorphicBase){
-                    for(const MethodDecl* candidate : sdk->methods){
-                        if(candidate->name != m->name || candidate->isConst != m->isConst
-                            || !TypeComparator(m_symbols).areEquivalent(m->returnType, candidate->returnType)
-                            || !TypeComparator(m_symbols).doParamListsMatchWithSubst(m->params, candidate->params, {}, {}))
-                            continue;
-                        matchesInterface = true;
-                        if(m->allowsCppUnwind && !candidate->allowsCppUnwind){
-                            reportError(errors, m->span, "'[cpp_unwind]' cannot weaken a nonthrowing SDK override contract");
-                            ok = false;
-                        }
-                        for(usize pi = 0u; pi < m->params.size(); ++pi)
-                            m->params[pi].cppConstReference |= candidate->params[pi].cppConstReference;
-                        break;
-                    }
+                if(const ClassDecl* sdk = __hidden_adhd_type_checker_decl::FindPolymorphicSdkInterface(m_symbols, baseName)){
+                    __hidden_adhd_type_checker_decl::MatchPolymorphicSdkOverride(*sdk, *m, m_symbols, errors, matchesInterface, sdkAllowsUnwind, ok);
                     continue;
                 }
                 const auto* signature = FindBuiltinReceiverSignature(baseName, m->name);
@@ -882,14 +903,23 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
                 for(usize pi = 0u; pi < m->params.size(); ++pi)
                     m->params[pi].cppConstReference |= (signature->cppConstReferenceMask & (1u << pi)) != 0u;
             }
-            if(m->allowsCppUnwind && !matchesInterface && !sdkAllowsUnwind){
-                reportError(errors, m->span, "'[cpp_unwind]' on an override requires an authored interface contract");
-                ok = false;
-            }
             if(!matchesInterface && !classDecl.systemTypeName.empty()){
                 const ClassRoleContractInfo* sysContract = ContractSemantics::FindClassRoleContract(ClassRoleKind::System);
-                if(sysContract && FindBuiltinReceiverMethod(sysContract->implicitInterfaceAdhdName, m->name))
-                    matchesInterface = true;
+                if(sysContract){
+                    if(const ClassDecl* sdk = __hidden_adhd_type_checker_decl::FindPolymorphicSdkInterface(m_symbols, sysContract->implicitInterfaceAdhdName)){
+                        __hidden_adhd_type_checker_decl::MatchPolymorphicSdkOverride(*sdk, *m, m_symbols, errors, matchesInterface, sdkAllowsUnwind, ok);
+                    }
+                    else if(FindBuiltinReceiverMethod(sysContract->implicitInterfaceAdhdName, m->name)){
+                        matchesInterface = true;
+                        if(m->allowsCppUnwind){
+                            const auto* signature = FindBuiltinReceiverSignature(sysContract->implicitInterfaceAdhdName, m->name);
+                            if(!signature || signature->arity != m->params.size() || !signature->allowsCppUnwind){
+                                reportError(errors, m->span, "'[cpp_unwind]' cannot weaken a nonthrowing SDK override contract");
+                                ok = false;
+                            }
+                        }
+                    }
+                }
             }
             if(!matchesInterface){
                 for(const TypeRef* ifaceType : classDecl.implementedInterfaces){
@@ -898,6 +928,10 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
                     const MStringView ifaceName = m_symbols.resolveBaseTypeName(ifaceType->name);
                     if((!classDecl.concreteBase || classDecl.concreteBase->name != ifaceName) && !m_symbols.findInterface(ifaceName) && !IsNonCopyableBaseInterfaceName(ifaceName)){
                         matchesInterface = true;
+                        if(m->allowsCppUnwind && !sdkAllowsUnwind){
+                            reportError(errors, m->span, "'[cpp_unwind]' on an override requires an authored interface contract");
+                            ok = false;
+                        }
                         break;
                     }
                 }

@@ -12,6 +12,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>"), cpp_name("NWB_SHADOW_RESOLVE_GROUP_SIZE")]
+extern const u32 s_ShaderShadowResolveGroupSize;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 CanRenderSoftShadowTerminalUpsample(
     in b8 pipelineReady,
     in b8 softShadowReady,
@@ -68,9 +75,6 @@ void ResolveSoftShadowCombinedHalfExtentsAndGroups(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[cpp_header("<impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>"), cpp_name("NWB_SHADOW_RESOLVE_GROUP_SIZE")]
-extern const u32 s_ShaderShadowResolveGroupSize;
 
 b8 RendererRayTracingSystem::renderSoftShadowCombinedTemporalMerge(mut CommandList commandList, mut DeferredFrameTargets targets){
     in SoftShadowResolveState resolve = this.m_rayTracingState.shadow.m_softShadowResolve;

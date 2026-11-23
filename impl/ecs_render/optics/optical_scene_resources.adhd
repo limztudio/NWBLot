@@ -10,14 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 CanPublishOpticalSceneSnapshot(in b8 prepared, in b8 runtimeBoundsRequired, in b8 hasRuntimeBoundsSnapshot){
-    return prepared && (!runtimeBoundsRequired || hasRuntimeBoundsSnapshot);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class RayTracingOpticalSceneResources : NoCopy{
     private SharedPool m_versions = SharedPool();
     private mut GraphicsRuntime m_graphics;
@@ -60,10 +52,10 @@ class RayTracingOpticalSceneResources : NoCopy{
         this.m_prepared = false;
         this.m_runtimeBoundsRequired = !gather.runtimeBounds.empty();
         this.m_runtimeBoundsSnapshot.reset();
-        usize instanceBytes = 0u;
-        usize byteCount = 0u;
-        if(!OpticalSceneBinaryCodec().computeByteSize(gather.instances.size(), instanceBytes, byteCount))
+        const Expected<usize> byteCountResult = OpticalSceneBinaryCodec().computeByteSize(gather.instances.size());
+        if(!byteCountResult.has_value())
             return false;
+        const usize byteCount = byteCountResult.value();
         mut Device device = this.m_graphics.getDevice();
         mut GpuDescriptorHeap heap = device.getDescriptorHeap();
         if(!heap.isInitialized()){
@@ -129,12 +121,7 @@ class RayTracingOpticalSceneResources : NoCopy{
                 this.m_uploads.push_back(upload);
             }
             else{
-                OpticalSceneBinaryCodec().serialize(
-                    gather.header,
-                    Span<RayTracingOpticalInstanceGpu>(gather.instances),
-                    upload.deref().bytes,
-                    upload.deref().instanceCount
-                );
+                upload.deref().instanceCount = OpticalSceneBinaryCodec().serialize(gather.header, Span<RayTracingOpticalInstanceGpu>(gather.instances), upload.deref().bytes);
             }
             this.m_resources.upload = upload;
         }
@@ -178,6 +165,14 @@ class RayTracingOpticalSceneResources : NoCopy{
         }
         return result;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 CanPublishOpticalSceneSnapshot(in b8 prepared, in b8 runtimeBoundsRequired, in b8 hasRuntimeBoundsSnapshot){
+    return prepared && (!runtimeBoundsRequired || hasRuntimeBoundsSnapshot);
 }
 
 

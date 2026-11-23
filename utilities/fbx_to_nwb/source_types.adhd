@@ -101,6 +101,7 @@ SourceMeshStreamCounts CountSourceMeshStreams(in SourceMeshStreams mesh){
     );
 }
 
+[cpp_unwind]
 void ReserveSourceMeshStreamsCapacity(in usize estimatedTriangleCorners, in b8 wantsSkinning, mut SourceMeshStreams outMesh){
     outMesh.positions.reserve(estimatedTriangleCorners);
     outMesh.normals.reserve(estimatedTriangleCorners);

@@ -12,7 +12,7 @@ class IntegerEditModel : NoCopy{
     private NumericEditDraft m_draft;
     private i64 m_value = s_DefaultIntegerEditValue;
 
-    public IntegerEditModel(){
+    [cpp_unwind] public IntegerEditModel(){
         if(!this.canonicalize(this.m_value).has_value())
             TerminateInvariant();
     }
@@ -27,9 +27,9 @@ class IntegerEditModel : NoCopy{
 
     public u64 revision()const{ return this.m_draft.revision(); }
 
-    public b8 setDraft(in StringView text){ return this.m_draft.setText(text); }
+    [cpp_unwind] public b8 setDraft(in StringView text){ return this.m_draft.setText(text); }
 
-    public b8 setValue(in i64 value){
+    [cpp_unwind] public b8 setValue(in i64 value){
         if(!this.canonicalize(value).has_value())
             return false;
         this.m_value = value;
@@ -41,19 +41,19 @@ class IntegerEditModel : NoCopy{
 
     public NumericParseStatus status()const{ return this.status(IntegerBounds()); }
 
-    public NumericEditResult submit(in IntegerBounds bounds){ return this.commit(bounds, false); }
+    [cpp_unwind] public NumericEditResult submit(in IntegerBounds bounds){ return this.commit(bounds, false); }
 
-    public NumericEditResult submit(){ return this.submit(IntegerBounds()); }
+    [cpp_unwind] public NumericEditResult submit(){ return this.submit(IntegerBounds()); }
 
-    public NumericEditResult blur(in IntegerBounds bounds){ return this.commit(bounds, true); }
+    [cpp_unwind] public NumericEditResult blur(in IntegerBounds bounds){ return this.commit(bounds, true); }
 
-    public NumericEditResult blur(){ return this.blur(IntegerBounds()); }
+    [cpp_unwind] public NumericEditResult blur(){ return this.blur(IntegerBounds()); }
 
-    public NumericEditResult cancel(){ return this.m_draft.restore(this.canonicalize(this.m_value), true); }
+    [cpp_unwind] public NumericEditResult cancel(){ return this.m_draft.restore(this.canonicalize(this.m_value), true); }
 
-    public NumericEditResult abandon(){ return this.m_draft.restore(this.canonicalize(this.m_value), false); }
+    [cpp_unwind] public NumericEditResult abandon(){ return this.m_draft.restore(this.canonicalize(this.m_value), false); }
 
-    private Expected<b8, ErrorCode> canonicalize(in i64 value){
+    [cpp_unwind] private Expected<b8, ErrorCode> canonicalize(in i64 value){
         CompactString text;
         const Expected<void, ErrorCode> formatted = FormatI64Into(value, text);
         if(!formatted.has_value())
@@ -61,7 +61,7 @@ class IntegerEditModel : NoCopy{
         return this.m_draft.canonicalize(text.view());
     }
 
-    private NumericEditResult commit(in IntegerBounds bounds, in b8 canonical){
+    [cpp_unwind] private NumericEditResult commit(in IntegerBounds bounds, in b8 canonical){
         if(!ValidateIntegerBounds(bounds))
             return NumericEditResult();
         const Expected<i64, NumericParseStatus> parsed = ParseIntegerDraft(this.draft().text());

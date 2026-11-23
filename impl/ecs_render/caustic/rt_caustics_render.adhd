@@ -14,6 +14,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/caustic/sw_binding_slots.h>"), cpp_name("NWB_CAUSTIC_SW_GROUP_SIZE")]
+extern const u32 s_CausticSwGroupSize;
+[cpp_header("<impl/assets/graphics/caustic/resolve_binding_slots.h>"), cpp_name("NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP")]
+extern const u32 s_CausticResolveLdsMaxStep;
+
 enum<u8> CausticWaveletVariantKind{
     Generic = 0u,
     StepOne = 1u,
@@ -21,6 +26,26 @@ enum<u8> CausticWaveletVariantKind{
     Direct = 3u,
     kCount
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CausticResolvePassResources{
+    public in TextureHandle texture;
+    public u32 sampledSlot;
+    public u32 storageSlot;
+
+    public CausticResolvePassResources(in borrow TextureHandle texture, in u32 sampledSlot, in u32 storageSlot){
+        this.texture = texture;
+        this.sampledSlot = sampledSlot;
+        this.storageSlot = storageSlot;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 b8 IsCausticPrepareOutputHalfB(in u32 resolvePassCount){
     return (resolvePassCount % 2u) == 0u;
@@ -50,27 +75,6 @@ u32 ComputeCausticFullDispatchGroups(in u32 extent){
 
 u32 ComputeCausticSwDispatchGroups(in CausticPhotonBudget photonBudget, in u32 groupSize){
     return DivideUp(photonBudget.photonsPerFrame, groupSize);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_header("<impl/assets/graphics/caustic/sw_binding_slots.h>"), cpp_name("NWB_CAUSTIC_SW_GROUP_SIZE")]
-extern const u32 s_CausticSwGroupSize;
-[cpp_header("<impl/assets/graphics/caustic/resolve_binding_slots.h>"), cpp_name("NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP")]
-extern const u32 s_CausticResolveLdsMaxStep;
-
-class CausticResolvePassResources{
-    public in TextureHandle texture;
-    public u32 sampledSlot;
-    public u32 storageSlot;
-
-    public CausticResolvePassResources(in borrow TextureHandle texture, in u32 sampledSlot, in u32 storageSlot){
-        this.texture = texture;
-        this.sampledSlot = sampledSlot;
-        this.storageSlot = storageSlot;
-    }
 }
 
 CausticResolvePassResources MakeCausticResolvePassResources(in DeferredFrameTargets targets, in b8 halfB){
@@ -223,16 +227,15 @@ Expected<Optional<GpuUploadBlobId>> RendererRayTracingSystem::retainPreparedCaus
         return Optional<GpuUploadBlobId>();
     }
 
-    usize targetByteCount = 0u;
-    if(!CausticEmissionTargetBuilder().validateUpload(
+    const Expected<usize> targetByteCount = CausticEmissionTargetBuilder().validateUpload(
         targetCount,
         this.m_preparedCausticEmissionTargetBytes.size(),
         this.m_rayTracingState.caustics.m_causticEmissionTargets.buffer.valid(),
         this.m_rayTracingState.caustics.m_causticEmissionTargets.capacity,
         this.m_rayTracingState.caustics.m_causticEmissionTargets.heapHandle.valid(),
-        this.m_rayTracingState.caustics.m_causticEmissionTargets.heapHandle.descriptorClass() == GpuDescriptorClass::StorageBuffer,
-        targetByteCount
-    ))
+        this.m_rayTracingState.caustics.m_causticEmissionTargets.heapHandle.descriptorClass() == GpuDescriptorClass::StorageBuffer
+    );
+    if(!targetByteCount.has_value())
         return MakeUnexpected(Failure());
 
     const usize bufferIdentity = this.m_rayTracingState.caustics.m_causticEmissionTargets.buffer.identity();

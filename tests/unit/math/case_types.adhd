@@ -11,6 +11,32 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const Array<i32, 4u> s_FloatingPointRoundingModes = Array<i32, 4u>(FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO);
+const Array<i32, 3u> s_DirectedRoundingModes = Array<i32, 3u>(FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO);
+const i32 s_FeAllExcept = FE_ALL_EXCEPT;
+const i32 s_FeInvalid = FE_INVALID;
+const i32 s_FeOverflow = FE_OVERFLOW;
+const i32 s_FeDivByZero = FE_DIVBYZERO;
+const i32 s_FeInexact = FE_INEXACT;
+const f32 s_MathMatrixAffineEpsilon = 0.000001f;
+const f32 s_MathMatrixDeterminantEpsilon = 0.000000000001f;
+const f32 s_MathMatrixRigidEpsilon = 0.001f;
+const f32 s_SingleDirectionEpsilon = 0.00001f;
+const f64 s_DoubleDirectionEpsilon = 0.00000000000002;
+const u32 s_F32InfinityBits = 0x7f800000u;
+const u32 s_F32NegInfinityBits = 0xff800000u;
+const u32 s_F32QuietNanBits = 0x7fc00000u;
+const u32 s_F32NegZeroBits = 0x80000000u;
+const u64 s_F64InfinityBits = 0x7ff0000000000000u;
+const u64 s_F64NegInfinityBits = 0xfff0000000000000u;
+const u64 s_F64QuietNanBits = 0x7ff8000000000000u;
+const u64 s_F64NegZeroBits = 0x8000000000000000u;
+const u64 s_F64MaxBits = 0x7fefffffffffffffu;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [move_only]
 class ScopedHeldFloatingPointEnvironment{
     private Expected<FloatingPointEnvironment> m_original = HoldFloatingPointExceptions();
@@ -31,34 +57,9 @@ class ScopedHeldFloatingPointEnvironment{
     }
 }
 
-const Array<i32, 4u> s_FloatingPointRoundingModes = Array<i32, 4u>(FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO);
-const Array<i32, 3u> s_DirectedRoundingModes = Array<i32, 3u>(FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO);
-const i32 s_FeAllExcept = FE_ALL_EXCEPT;
-const i32 s_FeInvalid = FE_INVALID;
-const i32 s_FeOverflow = FE_OVERFLOW;
-const i32 s_FeDivByZero = FE_DIVBYZERO;
-const i32 s_FeInexact = FE_INEXACT;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-const f32 s_MathMatrixAffineEpsilon = 0.000001f;
-const f32 s_MathMatrixDeterminantEpsilon = 0.000000000001f;
-const f32 s_MathMatrixRigidEpsilon = 0.001f;
-const f32 s_SingleDirectionEpsilon = 0.00001f;
-const f64 s_DoubleDirectionEpsilon = 0.00000000000002;
-
-const u32 s_F32InfinityBits = 0x7f800000u;
-const u32 s_F32NegInfinityBits = 0xff800000u;
-const u32 s_F32QuietNanBits = 0x7fc00000u;
-const u32 s_F32NegZeroBits = 0x80000000u;
-
-const u64 s_F64InfinityBits = 0x7ff0000000000000u;
-const u64 s_F64NegInfinityBits = 0xfff0000000000000u;
-const u64 s_F64QuietNanBits = 0x7ff8000000000000u;
-const u64 s_F64NegZeroBits = 0x8000000000000000u;
-const u64 s_F64MaxBits = 0x7fefffffffffffffu;
 
 class EqualityObservation{
     public b8 equal = false;

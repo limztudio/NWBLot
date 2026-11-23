@@ -94,6 +94,16 @@ class ReflectionHistoryOutcome{
     public ReflectionHistoryResetReason resetReason = ReflectionHistoryResetReason::None;
 }
 
+class ReflectionGraphResult{
+    public GpuTaskId completion;
+    public GpuGraphResourceId opaqueRadiance;
+    public GpuGraphResourceId glassRadiance;
+    public GpuGraphResourceId frameParameters;
+    public GpuGraphResourceId counters;
+
+    public b8 valid()const{ return this.completion.valid(); }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -174,17 +184,6 @@ b8 ValidateReflectionSettings(in ReflectionSettings settings){
 
 b8 SameReflectionEstimatorSettings(in ReflectionSettings first, in ReflectionSettings second){
     return first.temporalEnabled == second.temporalEnabled && first.temporalMaxSamples == second.temporalMaxSamples && SameReflectionTraceSettings(first, second);
-}
-
-
-class ReflectionGraphResult{
-    public GpuTaskId completion;
-    public GpuGraphResourceId opaqueRadiance;
-    public GpuGraphResourceId glassRadiance;
-    public GpuGraphResourceId frameParameters;
-    public GpuGraphResourceId counters;
-
-    public b8 valid()const{ return this.completion.valid(); }
 }
 
 

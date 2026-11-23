@@ -16,11 +16,11 @@
 extern const usize s_ReflectionReadbackCounterBytes;
 [cpp_header("<impl/assets/graphics/reflection/frame_constants.h>"), cpp_name("NWB_REFLECTION_COUNTER_BUFFER_BYTES")]
 extern const usize s_ReflectionCounterBufferBytes;
-const usize s_ReflectionReadbackCounterCount = s_ReflectionReadbackCounterBytes / size_of<u32>();
 
-b8 ResolveAcceptedReflectionOpticalTransport(in b8 metadataOpticalTransportEnabled, in b8 hardwareReady){
-    return metadataOpticalTransportEnabled && hardwareReady;
-}
+const usize s_ReflectionReadbackCounterCount = s_ReflectionReadbackCounterBytes / size_of<u32>();
+type ReflectionStatisticsState = StatisticsReadbackState<ReflectionStatistics, ReflectionStatisticsOutcome>;
+type ReflectionStatisticsControlHandle = Shared<ReflectionStatisticsState>;
+type ReflectionStatisticsReservation = StatisticsReservation<ReflectionStatistics, ReflectionStatisticsOutcome>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,10 +50,6 @@ class ReflectionStatisticsOutcome : IStatisticsOutcome<ReflectionStatistics>{
         CopyReflectionDiagnosticCounters(counters, metadata, latest);
     }
 }
-
-type ReflectionStatisticsState = StatisticsReadbackState<ReflectionStatistics, ReflectionStatisticsOutcome>;
-type ReflectionStatisticsControlHandle = Shared<ReflectionStatisticsState>;
-type ReflectionStatisticsReservation = StatisticsReservation<ReflectionStatistics, ReflectionStatisticsOutcome>;
 
 class ReflectionStatisticsReadbackSnapshot{
     public ReflectionStatisticsControlHandle control;
@@ -95,6 +91,14 @@ class ReflectionStatisticsReadback : NoCopy{
         this.m_readback.populateSnapshot<ReflectionStatisticsReadbackSnapshot>(metadata, result);
         return result;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ResolveAcceptedReflectionOpticalTransport(in b8 metadataOpticalTransportEnabled, in b8 hardwareReady){
+    return metadataOpticalTransportEnabled && hardwareReady;
 }
 
 

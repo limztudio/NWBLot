@@ -11,11 +11,19 @@
 
 
 b8 RigidBodyComponentAsset::loadBinary(in Span<u8> binary){
-    return ComponentAssetBinaryCodec().loadBinary(binary, this);
+    RigidBodyComponentAsset candidate(this.virtualPath());
+    if(!ComponentAssetBinaryCodec().loadBinary(binary, candidate))
+        return false;
+    this.component = candidate.component;
+    return true;
 }
 
 b8 RigidBodyComponentAsset::loadComponentPayload(in Span<u8> payload){
-    return PhysicsComponentBinaryCodec().deserializeRigidBody(payload, this.component);
+    const Expected<RigidBodyComponent> result = PhysicsComponentBinaryCodec().deserializeRigidBody(payload);
+    if(!result.has_value())
+        return false;
+    this.component = result.value();
+    return true;
 }
 
 b8 RigidBodyComponentAsset::validatePayload()const{
@@ -29,11 +37,19 @@ b8 RigidBodyComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)
 }
 
 b8 ColliderComponentAsset::loadBinary(in Span<u8> binary){
-    return ComponentAssetBinaryCodec().loadBinary(binary, this);
+    ColliderComponentAsset candidate(this.virtualPath());
+    if(!ComponentAssetBinaryCodec().loadBinary(binary, candidate))
+        return false;
+    this.component = candidate.component;
+    return true;
 }
 
 b8 ColliderComponentAsset::loadComponentPayload(in Span<u8> payload){
-    return PhysicsComponentBinaryCodec().deserializeCollider(payload, this.component);
+    const Expected<ColliderComponent> result = PhysicsComponentBinaryCodec().deserializeCollider(payload);
+    if(!result.has_value())
+        return false;
+    this.component = result.value();
+    return true;
 }
 
 b8 ColliderComponentAsset::validatePayload()const{
@@ -47,11 +63,19 @@ b8 ColliderComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)c
 }
 
 b8 JointComponentAsset::loadBinary(in Span<u8> binary){
-    return ComponentAssetBinaryCodec().loadBinary(binary, this);
+    JointComponentAsset candidate(this.virtualPath());
+    if(!ComponentAssetBinaryCodec().loadBinary(binary, candidate))
+        return false;
+    this.component = candidate.component;
+    return true;
 }
 
 b8 JointComponentAsset::loadComponentPayload(in Span<u8> payload){
-    return PhysicsComponentBinaryCodec().deserializeJoint(payload, this.component);
+    const Expected<JointComponent> result = PhysicsComponentBinaryCodec().deserializeJoint(payload);
+    if(!result.has_value())
+        return false;
+    this.component = result.value();
+    return true;
 }
 
 b8 JointComponentAsset::validatePayload()const{
@@ -65,11 +89,19 @@ b8 JointComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)cons
 }
 
 b8 PhysicsWorldConfigComponentAsset::loadBinary(in Span<u8> binary){
-    return ComponentAssetBinaryCodec().loadBinary(binary, this);
+    PhysicsWorldConfigComponentAsset candidate(this.virtualPath());
+    if(!ComponentAssetBinaryCodec().loadBinary(binary, candidate))
+        return false;
+    this.component = candidate.component;
+    return true;
 }
 
 b8 PhysicsWorldConfigComponentAsset::loadComponentPayload(in Span<u8> payload){
-    return PhysicsComponentBinaryCodec().deserializeWorldConfig(payload, this.component);
+    const Expected<PhysicsWorldConfigComponent> result = PhysicsComponentBinaryCodec().deserializeWorldConfig(payload);
+    if(!result.has_value())
+        return false;
+    this.component = result.value();
+    return true;
 }
 
 b8 PhysicsWorldConfigComponentAsset::validatePayload()const{
@@ -83,11 +115,19 @@ b8 PhysicsWorldConfigComponentAsset::serializeComponentPayload(mut Vector<u8> ou
 }
 
 b8 PhysicsParentComponentAsset::loadBinary(in Span<u8> binary){
-    return ComponentAssetBinaryCodec().loadBinary(binary, this);
+    PhysicsParentComponentAsset candidate(this.virtualPath());
+    if(!ComponentAssetBinaryCodec().loadBinary(binary, candidate))
+        return false;
+    this.component = candidate.component;
+    return true;
 }
 
 b8 PhysicsParentComponentAsset::loadComponentPayload(in Span<u8> payload){
-    return PhysicsComponentBinaryCodec().deserializePhysicsParent(payload, this.component);
+    const Expected<PhysicsParentComponent> result = PhysicsComponentBinaryCodec().deserializePhysicsParent(payload);
+    if(!result.has_value())
+        return false;
+    this.component = result.value();
+    return true;
 }
 
 b8 PhysicsParentComponentAsset::validatePayload()const{

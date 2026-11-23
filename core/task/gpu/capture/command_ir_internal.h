@@ -9,7 +9,6 @@
 #include "command_ir_raster.h"
 
 #include <cstddef>
-#include <cstring>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -245,7 +244,7 @@ template<typename T>
 [[nodiscard]] FOUNDATION_INLINE T ReadWirePod(const u8* const ptr)noexcept{
     static_assert(IsTriviallyCopyable_V<T>, "Wire POD decode requires a trivially copyable type");
     T value;
-    std::memcpy(&value, ptr, sizeof(T));
+    FOUNDATION_MEMCPY(&value, sizeof(T), ptr, sizeof(T));
     return value;
 }
 
@@ -721,11 +720,15 @@ public:
         const WireStepStatus::Enum status = stepRecord<true, false>(GpuSubmissionPacketId{}, recordPtr, outOpcode, outContext, unusedMatchesPacket);
         if(status == WireStepStatus::Record && recordPtr){
             const usize byteSize = IsRasterOpcode(outOpcode) ? RasterRecordWireByteSize(outOpcode) : BuiltinRecordWireByteSize(outOpcode);
-            std::memcpy(&outStorage, recordPtr, byteSize);
+            FOUNDATION_MEMCPY(&outStorage, sizeof(outStorage), recordPtr, byteSize);
             if(!IsRasterOpcode(outOpcode) && outBuiltin){
-                GpuCommandIrStreamValidationResult unusedValidation;
+                GpuCommandIrStreamValidationResult decodeValidation;
                 usize unusedBlobOffset = m_nextBlobOffset;
-                (void)DecodeAndValidateBuiltinWireRecord(outOpcode, recordPtr, m_blobBytes, m_graphGeneration, m_planGeneration, m_cursor, m_nextRecordIndex, unusedBlobOffset, unusedValidation, *outBuiltin);
+                if(!DecodeAndValidateBuiltinWireRecord(outOpcode, recordPtr, m_blobBytes, m_graphGeneration, m_planGeneration, m_cursor, m_nextRecordIndex, unusedBlobOffset, decodeValidation, *outBuiltin)){
+                    if(!m_validation.failed())
+                        m_validation = decodeValidation;
+                    return WireStepStatus::Error;
+                }
             }
         }
         return status;

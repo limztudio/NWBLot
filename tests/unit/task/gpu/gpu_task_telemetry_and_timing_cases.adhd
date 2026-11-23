@@ -9,6 +9,30 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+enum<u8> GpuTelemetryScenario{
+    Explicit = 0,
+    Inferred = 1,
+    Mixed = 2,
+    kCount
+}
+
+enum<u8> GpuTelemetryTerminalScenario{
+    ReadPairs = 0,
+    RootedStar = 1,
+    Chain = 2,
+    kCount
+}
+
+class GpuTelemetryTimingInput{
+    public GpuTaskTimingKey key;
+    public GpuPhysicalQueueId queue;
+
+    public GpuTelemetryTimingInput(){
+        this.key = GpuTaskTimingKey();
+        this.queue = GpuPhysicalQueueId();
+    }
+}
+
 Name MakeGpuTelemetryFlippedHashName(in Name base, in u32 lane){
     NameHash hash = base.hash();
     hash.qwords[lane] ^= 1u;
@@ -49,30 +73,6 @@ Optional<GpuTaskTimingAssignmentState> FindSnapshotTimingAssignmentValue(in GpuT
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-enum<u8> GpuTelemetryScenario{
-    Explicit = 0,
-    Inferred = 1,
-    Mixed = 2,
-    kCount
-}
-
-enum<u8> GpuTelemetryTerminalScenario{
-    ReadPairs = 0,
-    RootedStar = 1,
-    Chain = 2,
-    kCount
-}
-
-class GpuTelemetryTimingInput{
-    public GpuTaskTimingKey key;
-    public GpuPhysicalQueueId queue;
-
-    public GpuTelemetryTimingInput(){
-        this.key = GpuTaskTimingKey();
-        this.queue = GpuPhysicalQueueId();
-    }
-}
 
 GpuTelemetryTimingInput MakeGpuTelemetryTimingInputGen(in u32 index, in u16 generation){
     GpuTelemetryTimingInput result = GpuTelemetryTimingInput();

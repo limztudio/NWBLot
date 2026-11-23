@@ -9,30 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u32 ResolveBroadPhaseTreeType(in BodyType bodyType){
-    if(bodyType == BodyType::Static)
-        return s_TreeStatic;
-    if(bodyType == BodyType::Kinematic)
-        return s_TreeKinematic;
-    return s_TreeDynamic;
-}
-
-u32 EncodeBroadPhaseProxyKey(in u32 proxyId, in u32 treeType){
-    return (proxyId << 2u) | (treeType & 0x3u);
-}
-
-u32 DecodeBroadPhaseProxyId(in u32 proxyKey){
-    return proxyKey >> 2u;
-}
-
-u32 DecodeBroadPhaseTreeType(in u32 proxyKey){
-    return proxyKey & 0x3u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class CandidatePair{
     public u32 shapeIdA = s_NullIndex;
     public u32 shapeIdB = s_NullIndex;
@@ -140,6 +116,30 @@ class BroadPhase{
         const u32 proxyId = DecodeBroadPhaseProxyId(proxyKey);
         return this.trees[treeIdx].fatAabb(proxyId);
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u32 ResolveBroadPhaseTreeType(in BodyType bodyType){
+    if(bodyType == BodyType::Static)
+        return s_TreeStatic;
+    if(bodyType == BodyType::Kinematic)
+        return s_TreeKinematic;
+    return s_TreeDynamic;
+}
+
+u32 EncodeBroadPhaseProxyKey(in u32 proxyId, in u32 treeType){
+    return (proxyId << 2u) | (treeType & 0x3u);
+}
+
+u32 DecodeBroadPhaseProxyId(in u32 proxyKey){
+    return proxyKey >> 2u;
+}
+
+u32 DecodeBroadPhaseTreeType(in u32 proxyKey){
+    return proxyKey & 0x3u;
 }
 
 

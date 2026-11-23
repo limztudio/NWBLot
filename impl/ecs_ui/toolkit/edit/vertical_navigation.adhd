@@ -8,6 +8,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+interface IEditNavigationResolver{
+    [cpp_unwind]
+    Expected<EditNavigationResult> resolve(in EditModel model, in EditNavigationDirection direction, in EditNavigationSnapshot preferred, in f32 viewportHeight);
+}
+
 class EditNavigationState : NoCopy{
     private u64 m_instanceGeneration;
     private u64 m_generation = 1u;
@@ -56,10 +61,6 @@ class EditNavigationState : NoCopy{
         AdvanceNonWrappingRevision(this.m_generation);
         ClearEditNavigationPreferredX(this.m_preferredX, this.m_valid);
     }
-}
-
-interface IEditNavigationResolver{
-    Expected<EditNavigationResult> resolve(in EditModel model, in EditNavigationDirection direction, in EditNavigationSnapshot preferred, in f32 viewportHeight);
 }
 
 

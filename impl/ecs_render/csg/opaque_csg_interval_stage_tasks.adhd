@@ -5,6 +5,14 @@
 #include <impl/ecs_render/kernel/task_graph_resource_descs.adhd>
 #include <impl/ecs_render/csg/cutter_gpu_data.adhd>
 #include <impl/ecs_render/csg/types.adhd>
+#include <impl/ecs_render/csg/opaque_csg_interval_stage.adhd>
+#include <impl/ecs_render/csg/task_graph_opaque_interval_tasks.adhd>
+#include <impl/ecs_render/kernel/timing_names.adhd>
+#include <impl/ecs_render/kernel/renderer_constants_private.adhd>
+#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd>
+#include <impl/ecs_render/kernel/task_graph_clear_timing.adhd>
+#include <impl/ecs_render/material/task_graph_resource_sets.adhd>
+#include <impl/ecs_render/shared/renderer_frame_bindings.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -15,6 +23,15 @@ class OpaqueCsgIntervalReadinessState{
     public b8 csgResourcesReady = false;
     public b8 csgReceiverSurfaceDrawResourcesReady = false;
 }
+
+class OpaqueIntervalReadiness{
+    public CsgFrameGpuDataView csgFrameData;
+    public OpaqueCsgIntervalReadinessState state;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 usize ComputeOpaqueCsgIntervalSampleResourceUseCapacity(in b8 hasOpaqueDrawItems, in b8 hasCsgFrameGpuWork){
     usize capacity = 1u + s_OpaqueCsgRemovedIntervalResourceUseCount + s_OpaqueCsgGbufferColorResourceUseCount;
@@ -54,25 +71,6 @@ OpaqueCsgIntervalReadinessState EvaluateOpaqueCsgIntervalReadiness(
     state.csgReceiverSurfaceDrawResourcesReady = state.csgResourcesReady && (csgReceiverSurfaceEmpty || csgReceiverSurfaceDrawResourcesReady);
     return state;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/csg/opaque_csg_interval_stage.adhd>
-
-#include <impl/ecs_render/csg/task_graph_opaque_interval_tasks.adhd>
-#include <impl/ecs_render/kernel/timing_names.adhd>
-
-#include <impl/ecs_render/kernel/renderer_constants_private.adhd>
-#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd>
-#include <impl/ecs_render/kernel/task_graph_clear_timing.adhd>
-#include <impl/ecs_render/material/task_graph_resource_sets.adhd>
-#include <impl/ecs_render/shared/renderer_frame_bindings.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void OpaqueCsgIntervalStage::capturePayloads(
     in MeshFrameBindingSnapshot frameBindings,
@@ -363,15 +361,6 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(in OpaqueC
     }
     tasks.intervalSampleTask = intervalSampleTaskResult.value();
     return tasks;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class OpaqueIntervalReadiness{
-    public CsgFrameGpuDataView csgFrameData;
-    public OpaqueCsgIntervalReadinessState state;
 }
 
 OpaqueIntervalReadiness ResolveOpaqueIntervalReadiness(in OpaqueCsgIntervalRecordInputs payload){

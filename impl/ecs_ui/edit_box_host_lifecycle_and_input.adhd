@@ -54,6 +54,7 @@ b8 ResolveNextUiEditCompositionState(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_unwind]
 EditBoxResult UiEditBoxHost::editNavigated(
     in WidgetState widget,
     in EditBoxOptions options,
@@ -67,6 +68,7 @@ EditBoxResult UiEditBoxHost::editNavigated(
     return this.editBorrowed(widget, options, popup, model, Optional<mut IEditActionSink>(actions), Optional<mut UiEditNavigationBorrow>(borrowed));
 }
 
+[cpp_unwind]
 b8 UiEditBoxHost::publish(in WidgetState widget, in EditBoxView view, in EditBoxPlacement placement, in EditBoxOptions options){
     if(this.rejectBorrowedMutation())
         return false;

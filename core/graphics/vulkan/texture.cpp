@@ -214,12 +214,12 @@ Texture::~Texture()noexcept{
     m_views.clear();
 
     {
-        ScopedLock bindingLock(m_memoryBindingMutex);
+        NothrowScopedLock bindingLock(m_memoryBindingMutex);
         m_gpuReady.store(false, MemoryOrder::release);
         if(m_boundHeap){
             auto& boundHeap = *MakeNotNull(m_boundHeap.get());
             {
-                ScopedLock heapLock(boundHeap.m_bindingMutex);
+                NothrowScopedLock heapLock(boundHeap.m_bindingMutex);
                 if(m_image != VK_NULL_HANDLE){
                     m_context.deviceDispatch.vkDestroyImage(m_context.device, m_image, m_context.allocationCallbacks);
                     m_image = VK_NULL_HANDLE;
@@ -282,7 +282,7 @@ ResourceStates::Mask Texture::resolveTaskGraphImportInitialState()const noexcept
 
 Object Texture::getNativeHandle(ObjectType objectType)noexcept{
     if(objectType == ObjectTypes::s_Image){
-        ScopedLock bindingLock(m_memoryBindingMutex);
+        NothrowScopedLock bindingLock(m_memoryBindingMutex);
         return Object(m_image);
     }
     return Object(nullptr);
@@ -447,7 +447,7 @@ StagingTexture::StagingTexture(const VulkanContext& context, VulkanAllocator& al
 {}
 
 StagingTexture::~StagingTexture()noexcept{
-    ScopedLock lock(m_mappingMutex);
+    NothrowScopedLock lock(m_mappingMutex);
 
     m_allocator.destroyStagingTexture(*this);
 }

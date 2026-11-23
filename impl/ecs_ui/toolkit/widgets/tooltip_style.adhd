@@ -12,6 +12,10 @@ const f32 s_TooltipDefaultDelaySeconds = 0.5f;
 const f32 s_TooltipDefaultMaximumWidth = 320.0f;
 const Name s_TooltipNormalRegionName = "tooltip.normal";
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class TooltipStyle{
     public Name background = s_TooltipNormalRegionName;
     public Name fallback = s_StylePanelNormalRegionName;
@@ -42,6 +46,61 @@ class TooltipOptions{
     public f32 maximumWidth = s_TooltipDefaultMaximumWidth;
     public f32 gap = s_StyleSpacingSmall;
 }
+
+class TooltipState : NoCopy{
+    public u64 m_instanceGeneration = AllocateServiceIdentity();
+    public u64 m_revision = 1u;
+    public WidgetId m_owner;
+    public u64 m_ownerDeclaration = 0u;
+    public WidgetId m_anchor;
+    public u64 m_declarationGeneration = 0u;
+    public PopupToken m_popup;
+    public u64 m_focusLossGeneration = 0u;
+    public u64 m_hoverActivityGeneration = 0u;
+    public TooltipOptions m_options;
+    public PopupPlacement m_placement;
+    public b8 m_hovered = false;
+    public b8 m_visible = false;
+    public f64 m_elapsed = 0.0;
+
+    public void reset(){
+        AdvanceNonWrappingRevision(this.m_revision);
+        ResetTooltipStateFields(
+            this.m_owner,
+            this.m_ownerDeclaration,
+            this.m_anchor,
+            this.m_declarationGeneration,
+            this.m_popup,
+            this.m_focusLossGeneration,
+            this.m_hoverActivityGeneration,
+            this.m_options,
+            this.m_placement,
+            this.m_elapsed,
+            this.m_hovered,
+            this.m_visible
+        );
+    }
+
+    public u64 instanceGeneration()const{
+        return this.m_instanceGeneration;
+    }
+
+    public u64 revision()const{
+        return this.m_revision;
+    }
+
+    public b8 visible()const{
+        return this.m_visible;
+    }
+
+    public in PopupPlacement placement()const{
+        return this.m_placement;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 b8 IsValidTooltipOptions(in TooltipOptions options){
     return IsFinite(options.delaySeconds)
@@ -165,61 +224,6 @@ b8 BindTooltipOwner(
     inOutOwner = owner;
     inOutOwnerDeclaration = ownerDeclaration;
     return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class TooltipState : NoCopy{
-    public u64 m_instanceGeneration = AllocateServiceIdentity();
-    public u64 m_revision = 1u;
-    public WidgetId m_owner;
-    public u64 m_ownerDeclaration = 0u;
-    public WidgetId m_anchor;
-    public u64 m_declarationGeneration = 0u;
-    public PopupToken m_popup;
-    public u64 m_focusLossGeneration = 0u;
-    public u64 m_hoverActivityGeneration = 0u;
-    public TooltipOptions m_options;
-    public PopupPlacement m_placement;
-    public b8 m_hovered = false;
-    public b8 m_visible = false;
-    public f64 m_elapsed = 0.0;
-
-    public void reset(){
-        AdvanceNonWrappingRevision(this.m_revision);
-        ResetTooltipStateFields(
-            this.m_owner,
-            this.m_ownerDeclaration,
-            this.m_anchor,
-            this.m_declarationGeneration,
-            this.m_popup,
-            this.m_focusLossGeneration,
-            this.m_hoverActivityGeneration,
-            this.m_options,
-            this.m_placement,
-            this.m_elapsed,
-            this.m_hovered,
-            this.m_visible
-        );
-    }
-
-    public u64 instanceGeneration()const{
-        return this.m_instanceGeneration;
-    }
-
-    public u64 revision()const{
-        return this.m_revision;
-    }
-
-    public b8 visible()const{
-        return this.m_visible;
-    }
-
-    public in PopupPlacement placement()const{
-        return this.m_placement;
-    }
 }
 
 b8 UpdateTooltipState(

@@ -16,6 +16,134 @@ const usize s_CpuPrepareContactThreshold = 128u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class SolverComponentInfo{
+    public u32 componentRoot = s_NullIndex;
+    public u32 bodyCount = 0u;
+    public u32 contactCount = 0u;
+    public u32 jointCount = 0u;
+    public u32 maxDynamicColor = 0u;
+    public u32 colorMask = 0u;
+    public u32 workScore = 0u;
+    public b8 hasBullet = false;
+    public b8 hasOverflowContact = false;
+    public b8 hasAwakeKinematic = false;
+    public b8 assignGpu = false;
+}
+
+class GpuIslandPartitionSlice{
+    public u32 bodyOffset = 0u;
+    public u32 bodyCount = 0u;
+    public u32 contactOffset = 0u;
+    public u32 contactCount = 0u;
+    public u32 jointOffset = 0u;
+    public u32 jointCount = 0u;
+    public Array<u8, s_GraphColorCount> contactColorCounts;
+}
+
+class SolverWorkPartition{
+    public Vector<u8> awakeBodyOwner;
+    public Vector<u32> cpuAwakeIndices;
+    public Vector<u32> gpuAwakeIndices;
+    public Vector<u8> gpuAwakeWriteBack;
+    public Vector<u32> awakeToGpuSlot;
+    public Array<Vector<u32>, s_GraphColorCount> cpuColorContactIds;
+    public Array<Vector<u32>, s_GraphColorCount> gpuColorContactIds;
+    public Vector<u32> cpuJointIds;
+    public Vector<u32> gpuJointIds;
+    public Vector<GpuIslandPartitionSlice> gpuIslandSlices;
+    public u32 gpuFreeBodyCount = 0u;
+    public u32 gpuContactIslandCount = 0u;
+    public u32 gpuJointIslandCount = 0u;
+    public u32 gpuColorBodyOffset = 0u;
+    public Vector<u32> gpuIslandContactIds;
+    public Vector<u32> gpuIslandJointIds;
+    public Array<Vector<u32>, s_GraphColorCount> gpuColorOnlyContactIds;
+    public Vector<u32> gpuColorOnlyJointIds;
+    public Vector<u32> cpuKinAwakeIndices;
+    public Vector<u32> cpuCompWorkScores;
+    public Vector<u32> cpuCompBodyOffsets;
+    public Vector<u32> cpuCompBodyIndices;
+    public Vector<u32> cpuCompContactOffsets;
+    public Vector<CpuContactSlotRef> cpuCompContactSlots;
+    public Vector<u32> cpuCompJointOffsets;
+    public Vector<u32> cpuCompJointIndices;
+    public u32 cpuComponentCount = 0u;
+    public u32 gpuComponentCount = 0u;
+    public u32 cpuOwnedBodyCount = 0u;
+    public u32 gpuOwnedBodyCount = 0u;
+    public b8 cpuCanSolveParallel = false;
+
+    public Vector<u32> scratchActiveJointIds;
+    public Vector<u32> scratchDsuParents;
+    public Vector<u8> scratchDsuRanks;
+    public Vector<SolverComponentInfo> scratchComponents;
+    public Vector<u32> scratchRootToComp;
+    public Vector<u32> scratchAwakeCompIdx;
+    public Vector<usize> scratchCompOrder;
+    public Vector<u8> scratchGpuCompKind;
+    public Vector<u32> scratchCompToCpuCompIdx;
+    public Vector<usize> scratchSortedFreeComps;
+    public Vector<usize> scratchSortedContactIslands;
+    public Vector<usize> scratchSortedJointIslands;
+    public Vector<u32> scratchIslandOrder;
+    public Vector<u32> scratchCompToIslandIdx;
+    public Vector<u32> scratchCompDynOffsets;
+    public Vector<u32> scratchCompDynCursors;
+    public Vector<u32> scratchCompDynBodies;
+    public Vector<u32> scratchStagedContactIds;
+    public Vector<u32> scratchStagedContactIslands;
+    public Vector<CpuContactSlotRef> scratchStagedCpuContactSlots;
+    public Vector<u32> scratchStagedCpuContactComps;
+    public Vector<u32> scratchCursors;
+    public Vector<u32> scratchIslandCursors;
+    public Vector<u32> scratchStagedJointIds;
+    public Vector<u32> scratchStagedJointIslands;
+    public Vector<u32> scratchStagedCpuJointLocalIds;
+    public Vector<u32> scratchStagedCpuJointComps;
+    public Vector<u32> scratchJointVisitStamps;
+    public u32 scratchJointVisitStamp = 0u;
+
+    public void resetForStep(){
+        this.awakeBodyOwner.clear();
+        this.cpuAwakeIndices.clear();
+        this.gpuAwakeIndices.clear();
+        this.gpuAwakeWriteBack.clear();
+        this.awakeToGpuSlot.clear();
+        for(usize c = 0u; c < s_GraphColorCount; ++c){
+            this.cpuColorContactIds[c].clear();
+            this.gpuColorContactIds[c].clear();
+            this.gpuColorOnlyContactIds[c].clear();
+        }
+        this.cpuJointIds.clear();
+        this.gpuJointIds.clear();
+        this.gpuIslandSlices.clear();
+        this.gpuFreeBodyCount = 0u;
+        this.gpuContactIslandCount = 0u;
+        this.gpuJointIslandCount = 0u;
+        this.gpuColorBodyOffset = 0u;
+        this.gpuIslandContactIds.clear();
+        this.gpuIslandJointIds.clear();
+        this.gpuColorOnlyJointIds.clear();
+        this.cpuKinAwakeIndices.clear();
+        this.cpuCompWorkScores.clear();
+        this.cpuCompBodyOffsets.clear();
+        this.cpuCompBodyIndices.clear();
+        this.cpuCompContactOffsets.clear();
+        this.cpuCompContactSlots.clear();
+        this.cpuCompJointOffsets.clear();
+        this.cpuCompJointIndices.clear();
+        this.cpuComponentCount = 0u;
+        this.gpuComponentCount = 0u;
+        this.cpuOwnedBodyCount = 0u;
+        this.gpuOwnedBodyCount = 0u;
+        this.cpuCanSolveParallel = false;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 usize ComputePhysicsGrain(in CpuTaskScheduler cpuScheduler, in usize itemCount, in usize minGrain){
     const usize workerCount = Max(cast<usize>(cpuScheduler.workerThreadCount()), cast<usize>(1u));
     const usize targetChunks = workerCount * 4u;
@@ -33,10 +161,6 @@ usize ResolveColorSlotIndex(in Array<usize, s_GraphColorCount> colorStarts, in u
         ++c;
     return c;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void QueryBroadPhaseMovedProxy(in PhysicsWorld worldRef, in usize moveIdx, mut Vector<CandidatePair> bucket){
     const u32 proxyKey = worldRef.m_broadPhase.moveArray[moveIdx];
@@ -2247,130 +2371,6 @@ void RecordWorldStepStats(
     world.m_lastStats.backendUsed = backend;
 }
 
-class SolverComponentInfo{
-    public u32 componentRoot = s_NullIndex;
-    public u32 bodyCount = 0u;
-    public u32 contactCount = 0u;
-    public u32 jointCount = 0u;
-    public u32 maxDynamicColor = 0u;
-    public u32 colorMask = 0u;
-    public u32 workScore = 0u;
-    public b8 hasBullet = false;
-    public b8 hasOverflowContact = false;
-    public b8 hasAwakeKinematic = false;
-    public b8 assignGpu = false;
-}
-
-class GpuIslandPartitionSlice{
-    public u32 bodyOffset = 0u;
-    public u32 bodyCount = 0u;
-    public u32 contactOffset = 0u;
-    public u32 contactCount = 0u;
-    public u32 jointOffset = 0u;
-    public u32 jointCount = 0u;
-    public Array<u8, s_GraphColorCount> contactColorCounts;
-}
-
-class SolverWorkPartition{
-    public Vector<u8> awakeBodyOwner;
-    public Vector<u32> cpuAwakeIndices;
-    public Vector<u32> gpuAwakeIndices;
-    public Vector<u8> gpuAwakeWriteBack;
-    public Vector<u32> awakeToGpuSlot;
-    public Array<Vector<u32>, s_GraphColorCount> cpuColorContactIds;
-    public Array<Vector<u32>, s_GraphColorCount> gpuColorContactIds;
-    public Vector<u32> cpuJointIds;
-    public Vector<u32> gpuJointIds;
-    public Vector<GpuIslandPartitionSlice> gpuIslandSlices;
-    public u32 gpuFreeBodyCount = 0u;
-    public u32 gpuContactIslandCount = 0u;
-    public u32 gpuJointIslandCount = 0u;
-    public u32 gpuColorBodyOffset = 0u;
-    public Vector<u32> gpuIslandContactIds;
-    public Vector<u32> gpuIslandJointIds;
-    public Array<Vector<u32>, s_GraphColorCount> gpuColorOnlyContactIds;
-    public Vector<u32> gpuColorOnlyJointIds;
-    public Vector<u32> cpuKinAwakeIndices;
-    public Vector<u32> cpuCompWorkScores;
-    public Vector<u32> cpuCompBodyOffsets;
-    public Vector<u32> cpuCompBodyIndices;
-    public Vector<u32> cpuCompContactOffsets;
-    public Vector<CpuContactSlotRef> cpuCompContactSlots;
-    public Vector<u32> cpuCompJointOffsets;
-    public Vector<u32> cpuCompJointIndices;
-    public u32 cpuComponentCount = 0u;
-    public u32 gpuComponentCount = 0u;
-    public u32 cpuOwnedBodyCount = 0u;
-    public u32 gpuOwnedBodyCount = 0u;
-    public b8 cpuCanSolveParallel = false;
-
-    public Vector<u32> scratchActiveJointIds;
-    public Vector<u32> scratchDsuParents;
-    public Vector<u8> scratchDsuRanks;
-    public Vector<SolverComponentInfo> scratchComponents;
-    public Vector<u32> scratchRootToComp;
-    public Vector<u32> scratchAwakeCompIdx;
-    public Vector<usize> scratchCompOrder;
-    public Vector<u8> scratchGpuCompKind;
-    public Vector<u32> scratchCompToCpuCompIdx;
-    public Vector<usize> scratchSortedFreeComps;
-    public Vector<usize> scratchSortedContactIslands;
-    public Vector<usize> scratchSortedJointIslands;
-    public Vector<u32> scratchIslandOrder;
-    public Vector<u32> scratchCompToIslandIdx;
-    public Vector<u32> scratchCompDynOffsets;
-    public Vector<u32> scratchCompDynCursors;
-    public Vector<u32> scratchCompDynBodies;
-    public Vector<u32> scratchStagedContactIds;
-    public Vector<u32> scratchStagedContactIslands;
-    public Vector<CpuContactSlotRef> scratchStagedCpuContactSlots;
-    public Vector<u32> scratchStagedCpuContactComps;
-    public Vector<u32> scratchCursors;
-    public Vector<u32> scratchIslandCursors;
-    public Vector<u32> scratchStagedJointIds;
-    public Vector<u32> scratchStagedJointIslands;
-    public Vector<u32> scratchStagedCpuJointLocalIds;
-    public Vector<u32> scratchStagedCpuJointComps;
-    public Vector<u32> scratchJointVisitStamps;
-    public u32 scratchJointVisitStamp = 0u;
-
-    public void resetForStep(){
-        this.awakeBodyOwner.clear();
-        this.cpuAwakeIndices.clear();
-        this.gpuAwakeIndices.clear();
-        this.gpuAwakeWriteBack.clear();
-        this.awakeToGpuSlot.clear();
-        for(usize c = 0u; c < s_GraphColorCount; ++c){
-            this.cpuColorContactIds[c].clear();
-            this.gpuColorContactIds[c].clear();
-            this.gpuColorOnlyContactIds[c].clear();
-        }
-        this.cpuJointIds.clear();
-        this.gpuJointIds.clear();
-        this.gpuIslandSlices.clear();
-        this.gpuFreeBodyCount = 0u;
-        this.gpuContactIslandCount = 0u;
-        this.gpuJointIslandCount = 0u;
-        this.gpuColorBodyOffset = 0u;
-        this.gpuIslandContactIds.clear();
-        this.gpuIslandJointIds.clear();
-        this.gpuColorOnlyJointIds.clear();
-        this.cpuKinAwakeIndices.clear();
-        this.cpuCompWorkScores.clear();
-        this.cpuCompBodyOffsets.clear();
-        this.cpuCompBodyIndices.clear();
-        this.cpuCompContactOffsets.clear();
-        this.cpuCompContactSlots.clear();
-        this.cpuCompJointOffsets.clear();
-        this.cpuCompJointIndices.clear();
-        this.cpuComponentCount = 0u;
-        this.gpuComponentCount = 0u;
-        this.cpuOwnedBodyCount = 0u;
-        this.gpuOwnedBodyCount = 0u;
-        this.cpuCanSolveParallel = false;
-    }
-}
-
 b8 IsTinyBulletComponent(in SolverComponentInfo comp){
     return comp.hasBullet && comp.bodyCount <= 2u;
 }
@@ -3163,7 +3163,7 @@ void SolveSingleComponentBatchCpu(
     }
 }
 
-b8 TrySolvePartitionComponentsParallelCpu(
+Expected<b8> TrySolvePartitionComponentsParallelCpu(
     mut PhysicsWorld world,
     in Vector<u32> awakeIndices,
     mut Array<Vector<ContactConstraint>, s_GraphColorCount> colorConstraints,
@@ -3171,17 +3171,15 @@ b8 TrySolvePartitionComponentsParallelCpu(
     in f32 dt,
     in u32 subStepCount,
     mut CpuTaskScheduler cpuScheduler,
-    in b8 contactCachesPrebuilt,
-    mut b8 outHandled
+    in b8 contactCachesPrebuilt
 ){
-    outHandled = false;
     const usize bodyCount = awakeIndices.size();
     if(!cpuScheduler.isParallelEnabled() || bodyCount < 24u || dt <= 0.0f || subStepCount == 0u)
-        return true;
+        return false;
 
     const usize totalAwake = world.m_solverSets[s_AwakeSetIndex].states.size();
     if(totalAwake == 0u)
-        return true;
+        return false;
 
     const usize awakeIslandCount = world.m_solverSets[s_AwakeSetIndex].islands.size();
     if(bodyCount == totalAwake && awakeIslandCount == 1u){
@@ -3189,7 +3187,7 @@ b8 TrySolvePartitionComponentsParallelCpu(
         if(singleIslandId < world.m_islands.size()){
             in Island singleIsl = world.m_islands[singleIslandId];
             if(singleIsl.alive && singleIsl.setIndex == s_AwakeSetIndex && singleIsl.bodies.size() == totalAwake && singleIsl.constraintRemoveCount == 0u)
-                return true;
+                return false;
         }
     }
 
@@ -3219,7 +3217,7 @@ b8 TrySolvePartitionComponentsParallelCpu(
 
     const usize dynCount = dynAwakeIndices.size();
     if(dynCount < 2u)
-        return true;
+        return false;
 
     in Vector<BodySim> simsView = world.m_solverSets[s_AwakeSetIndex].sims;
     b8 canTryIslandFastPath = (bodyCount == totalAwake && kinAwakeIndices.empty() && awakeIslandCount >= 2u);
@@ -3236,9 +3234,9 @@ b8 TrySolvePartitionComponentsParallelCpu(
             const u32 idxA = cc.indexA;
             const u32 idxB = cc.indexB;
             if(idxA != s_NullIndex && (statesView[idxA].flags() & dynBit) == 0u)
-                return true;
+                return false;
             if(idxB != s_NullIndex && (statesView[idxB].flags() & dynBit) == 0u)
-                return true;
+                return false;
             if(canTryIslandFastPath && idxA != s_NullIndex && idxB != s_NullIndex){
                 in Body bA = world.m_bodies[simsView[idxA].bodyId];
                 in Body bB = world.m_bodies[simsView[idxB].bodyId];
@@ -3265,9 +3263,9 @@ b8 TrySolvePartitionComponentsParallelCpu(
         const u32 idxA = jc.indexA;
         const u32 idxB = jc.indexB;
         if(idxA != s_NullIndex && (statesView[idxA].flags() & dynBit) == 0u)
-            return true;
+            return false;
         if(idxB != s_NullIndex && (statesView[idxB].flags() & dynBit) == 0u)
-            return true;
+            return false;
         if(canTryIslandFastPath && idxA != s_NullIndex && idxB != s_NullIndex){
             in Body bA = world.m_bodies[simsView[idxA].bodyId];
             in Body bB = world.m_bodies[simsView[idxB].bodyId];
@@ -3289,7 +3287,7 @@ b8 TrySolvePartitionComponentsParallelCpu(
     }
 
     if(dynCount + totalContacts + jointConstraints.size() < 48u)
-        return true;
+        return false;
 
     mut Vector<u32> rootToComp = world.m_cpuScratch.parRootToComp;
     mut Vector<u32> dynBodyComps = world.m_cpuScratch.parDynBodyComps;
@@ -3392,7 +3390,7 @@ b8 TrySolvePartitionComponentsParallelCpu(
     }
 
     if(compCount < 2u)
-        return true;
+        return false;
 
     mut Vector<u32> compBodyOffsets = world.m_cpuScratch.parCompBodyOffsets;
     compBodyOffsets.clear();
@@ -3614,7 +3612,7 @@ b8 TrySolvePartitionComponentsParallelCpu(
         CpuTaskOptions()
     );
     if(!res.has_value())
-        return false;
+        return MakeUnexpected(Failure());
 
     for(usize ki = 0u; ki < kinAwakeIndices.size(); ++ki){
         const usize kIdx = cast<usize>(kinAwakeIndices[ki]);
@@ -3625,7 +3623,6 @@ b8 TrySolvePartitionComponentsParallelCpu(
     FinalizeDynamicBodiesCpu(world, Span<u32>(dynAwakeIndices), dynCount, totalAwake, kinAwakeIndices.empty() && bodyCount == totalAwake, dt, cpuScheduler);
     world.m_cpuScratch.parImpulsesStored = true;
 
-    outHandled = true;
     return true;
 }
 
@@ -3644,10 +3641,10 @@ b8 SolvePartitionSubStepsCpuImpl(
     if(bodyCount == 0u || dt <= 0.0f || subStepCount == 0u)
         return true;
 
-    b8 handledParallel = false;
-    if(!TrySolvePartitionComponentsParallelCpu(world, awakeIndices, colorConstraints, jointConstraints, dt, subStepCount, cpuScheduler, contactCachesPrebuilt, handledParallel))
+    const Expected<b8> handledParallel = TrySolvePartitionComponentsParallelCpu(world, awakeIndices, colorConstraints, jointConstraints, dt, subStepCount, cpuScheduler, contactCachesPrebuilt);
+    if(!handledParallel.has_value())
         return false;
-    if(handledParallel)
+    if(handledParallel.value())
         return true;
 
     const f32 h = dt / cast<f32>(subStepCount);

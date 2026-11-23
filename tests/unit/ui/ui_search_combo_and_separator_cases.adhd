@@ -9,6 +9,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const AStringView s_UiSearchComboCallbackQuery = "callback";
+const AStringView s_UiSearchComboEmptyResultQuery = "None";
+const AStringView s_UiSearchComboSecondHalfQuery = "Second";
+const AStringView s_UiSearchComboPreeditText = "preedit";
+const AStringView s_UiSearchComboKey = "combo";
+const AStringView s_UiSearchComboPanelKey = "panel";
+const u32 s_UiSeparatorQuietNaNF32Bits = 0x7fc00000u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 enum<u8> UiSearchComboBehaviorMutation{
     None, Query, SameQuery, QuerySelection, Selection, Open, Close, PreviewScroll,
     CompositionBegin, CompositionUpdate, CompositionCancel, CompositionCycle
@@ -321,14 +333,6 @@ b8 DeclareUiSearchSelectionEpoch(mut UiSearchSelectionEpochTests self, in u64 ge
     self.m_searchResult = self.m_builder.searchComboBox("combo", self.m_epochSource, self.m_search, MakeSearchComboFixtureOptions());
     return self.m_searchResult.combo.valid;
 }
-
-const AStringView s_UiSearchComboCallbackQuery = "callback";
-const AStringView s_UiSearchComboEmptyResultQuery = "None";
-const AStringView s_UiSearchComboSecondHalfQuery = "Second";
-const AStringView s_UiSearchComboPreeditText = "preedit";
-const AStringView s_UiSearchComboKey = "combo";
-const AStringView s_UiSearchComboPanelKey = "panel";
-const u32 s_UiSeparatorQuietNaNF32Bits = 0x7fc00000u;
 
 
 b8 AcceptUiSearchSelectionEpochInitial(mut UiSearchSelectionEpochTests self){

@@ -54,20 +54,6 @@ enum<u8> TestbedPhysicsBackendChoice{
     kCount
 }
 
-class TestbedPhysicsHudStats{
-    public u32 bodyCount = 0u;
-    public u32 awakeBodyCount = 0u;
-    public u32 contactCount = 0u;
-    public u32 jointCount = 0u;
-    public u32 islandCount = 0u;
-    public u32 cpuSolvedBodyCount = 0u;
-    public u32 gpuSolvedBodyCount = 0u;
-    public u32 cpuSolvedIslandCount = 0u;
-    public u32 gpuSolvedIslandCount = 0u;
-    public u8 backendUsed = 0u;
-    public f64 stepMs = 0.0;
-}
-
 interface IProjectUiLayerPainter{
     void paintUiLayer(mut UiPaintContext context);
 }
@@ -88,6 +74,20 @@ interface IUiFilteredListState{
     StringView text(in u64 index)const;
     StringView filteredText(in u64 index)const;
     b8 applyFilter(in StringView query);
+}
+
+class TestbedPhysicsHudStats{
+    public u32 bodyCount = 0u;
+    public u32 awakeBodyCount = 0u;
+    public u32 contactCount = 0u;
+    public u32 jointCount = 0u;
+    public u32 islandCount = 0u;
+    public u32 cpuSolvedBodyCount = 0u;
+    public u32 gpuSolvedBodyCount = 0u;
+    public u32 cpuSolvedIslandCount = 0u;
+    public u32 gpuSolvedIslandCount = 0u;
+    public u8 backendUsed = 0u;
+    public f64 stepMs = 0.0;
 }
 
 
@@ -784,9 +784,11 @@ void PaintPhysicsDebugOverlay(mut NotNullUniquePtr<World> worldHandle, mut UiPai
     in CameraProjection camProj = cameraView.projection;
     for(usize li = 0u; li < debugLines.size(); ++li){
         in PhysicsDebugLine line = debugLines[li];
-        VectorSingle seg(0.0f);
-        if(ProjectPhysicsWorldSegmentToScreen(camXf, camProj, metrics.logicalWidth, metrics.logicalHeight, VectorSingle(line.start), VectorSingle(line.end), seg))
+        const Expected<VectorSingle> segment = ProjectPhysicsWorldSegmentToScreen(camXf, camProj, metrics.logicalWidth, metrics.logicalHeight, VectorSingle(line.start), VectorSingle(line.end));
+        if(segment.has_value()){
+            const VectorSingle seg = segment.value();
             context.paint.drawLine(Point(seg.x, seg.y), Point(seg.z, seg.w), 1.5f, Color(line.color.x, line.color.y, line.color.z, line.color.w));
+        }
     }
 }
 

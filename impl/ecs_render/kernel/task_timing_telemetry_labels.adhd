@@ -8,6 +8,28 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class RendererTaskTimingPendingSample{
+    public GpuTimingSampleAttribution attribution = s_NoGpuTimingSampleAttribution;
+    public Name scopeName = s_NameNone;
+    public GpuTaskTimingKey key = GpuTaskTimingKey();
+    public GpuPhysicalQueueId expectedQueue = GpuPhysicalQueueId();
+    public u64 sourceFrameIndex = 0u;
+    public f64 durationSeconds = 0.0;
+    public b8 recordsNonCommittingTimingSample = false;
+    public b8 submissionResolved = false;
+    public b8 accepted = false;
+    public b8 assignmentRecorded = false;
+    public b8 sampleResolved = false;
+    public b8 hasUsableSample = false;
+}
+
+class CompiledPacketQueueInspection{
+    public b8 matchesQueue = false;
+    public b8 hasRecordedWorker = false;
+    public u32 workerDomain = 0u;
+    public u32 workerIndex = 0u;
+}
+
 b8 ShouldAppendPhysicalQueueRuntimeTelemetry(
     in u64 acceptedPacketCount,
     in u64 rejectedPacketCount,
@@ -243,37 +265,30 @@ void AppendPhysicalQueueSummaryTelemetry(
     );
 }
 
-b8 InspectCompiledPacketForQueue(
+Expected<CompiledPacketQueueInspection> InspectCompiledPacketForQueue(
     in GpuCompiledGraphReadView plan,
     in GpuRecordedGraph recordedGraph,
     in usize packetIndex,
-    in GpuPhysicalQueueId queueId,
-    mut b8 outMatchesQueue,
-    mut b8 outHasRecordedWorker,
-    mut u32 outWorkerDomain,
-    mut u32 outWorkerIndex
+    in GpuPhysicalQueueId queueId
 ){
-    outMatchesQueue = false;
-    outHasRecordedWorker = false;
-    outWorkerDomain = 0u;
-    outWorkerIndex = 0u;
+    CompiledPacketQueueInspection result;
     const GpuSubmissionPacketId packet = plan.packetIdAt(packetIndex);
     const GpuCompiledPacketView packetView = plan.packet(packet);
     if(!packetView.valid())
-        return false;
+        return MakeUnexpected(Failure());
     const Optional<GpuSubmissionPacket> packetPlan = packetView.packetPlan();
     if(!packetPlan.has_value())
-        return false;
+        return MakeUnexpected(Failure());
     if(packetPlan.value().queue != queueId)
-        return true;
-    outMatchesQueue = true;
+        return result;
+    result.matchesQueue = true;
     const Optional<GpuRecordedPacket> recordedPacket = recordedGraph.packetSnapshot(packet);
     if(!recordedPacket.has_value())
-        return true;
-    outHasRecordedWorker = true;
-    outWorkerDomain = recordedPacket.value().recordingWorkerDomain;
-    outWorkerIndex = recordedPacket.value().recordingWorkerIndex;
-    return true;
+        return result;
+    result.hasRecordedWorker = true;
+    result.workerDomain = recordedPacket.value().recordingWorkerDomain;
+    result.workerIndex = recordedPacket.value().recordingWorkerIndex;
+    return result;
 }
 
 b8 AppendPhysicalQueueRuntimeTelemetryEntry(
@@ -321,20 +336,17 @@ b8 AppendPhysicalQueueRuntimeTelemetryEntry(
     const usize packetCount = deferredCompiledPlan.packetCount();
     HashSet<u64> seenWorkers;
     for(usize packetIndex = 0u; packetIndex < packetCount; ++packetIndex){
-        b8 matchesQueue = false;
-        b8 hasRecordedWorker = false;
-        u32 workerDomain = 0u;
-        u32 workerIndex = 0u;
-        if(!InspectCompiledPacketForQueue(deferredCompiledPlan, recordedGraph, packetIndex, queueInfo.id, matchesQueue, hasRecordedWorker, workerDomain, workerIndex))
+        const Expected<CompiledPacketQueueInspection> inspection = InspectCompiledPacketForQueue(deferredCompiledPlan, recordedGraph, packetIndex, queueInfo.id);
+        if(!inspection.has_value())
             return false;
-        if(!matchesQueue || !hasRecordedWorker || workerIndex == 0u)
+        if(!inspection.value().matchesQueue || !inspection.value().hasRecordedWorker || inspection.value().workerIndex == 0u)
             continue;
 
-        const u64 workerKey = (cast<u64>(workerDomain) << 32u) | cast<u64>(workerIndex);
+        const u64 workerKey = (cast<u64>(inspection.value().workerDomain) << 32u) | cast<u64>(inspection.value().workerIndex);
         if(!seenWorkers.insert(workerKey).second)
             continue;
 
-        const GpuCommandArenaWorkerStatistics workerCommandArenaStatistics = device.getCommandArenaWorkerStatistics(queueInfo.id, workerDomain, workerIndex);
+        const GpuCommandArenaWorkerStatistics workerCommandArenaStatistics = device.getCommandArenaWorkerStatistics(queueInfo.id, inspection.value().workerDomain, inspection.value().workerIndex);
         if(workerCommandArenaStatistics.valid())
             AppendCommandArenaWorkerStatistics(workerCommandArenaStatistics, label);
     }
@@ -370,21 +382,6 @@ void AppendLogicalOwnershipTransferTelemetryEntry(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-class RendererTaskTimingPendingSample{
-    public GpuTimingSampleAttribution attribution = s_NoGpuTimingSampleAttribution;
-    public Name scopeName = s_NameNone;
-    public GpuTaskTimingKey key = GpuTaskTimingKey();
-    public GpuPhysicalQueueId expectedQueue = GpuPhysicalQueueId();
-    public u64 sourceFrameIndex = 0u;
-    public f64 durationSeconds = 0.0;
-    public b8 recordsNonCommittingTimingSample = false;
-    public b8 submissionResolved = false;
-    public b8 accepted = false;
-    public b8 assignmentRecorded = false;
-    public b8 sampleResolved = false;
-    public b8 hasUsableSample = false;
-}
 
 usize FindRendererTaskTimingPendingSample(
     in Span<RendererTaskTimingPendingSample> pendingSamples,

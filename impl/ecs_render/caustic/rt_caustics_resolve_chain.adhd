@@ -20,6 +20,13 @@
 
 const usize s_CausticStageUseCapacity = s_CausticMaxStageResourceUses + s_CausticActivityUsesPerStage;
 
+class CausticResolveStageActivityPlan{
+    public usize readBufferIndex = 0u;
+    public usize writeBufferIndex = 0u;
+    public b8 readsPreviousStage = false;
+    public b8 writesCurrentStage = false;
+}
+
 Expected<CausticsStageTargets> ImportCausticsStageTargets(
     in DeferredFrameTargets targets,
     in b8 hardwareCaustics,
@@ -67,13 +74,6 @@ Expected<CausticsStageTargets> ImportCausticsStageTargets(
     );
 }
 
-
-class CausticResolveStageActivityPlan{
-    public usize readBufferIndex = 0u;
-    public usize writeBufferIndex = 0u;
-    public b8 readsPreviousStage = false;
-    public b8 writesCurrentStage = false;
-}
 
 usize ComputePhotonResourceUseCapacity(
     in usize baseCapacity,

@@ -19,15 +19,6 @@ namespace Utilities{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<i32> TryConsoleCommand(const ConsoleArguments& arguments, const InplaceFunction<64u, i32(const ConsoleArguments&)>& command)noexcept{
-    try{
-        return command(arguments);
-    }
-    catch(...){
-        return MakeUnexpected(Failure{});
-    }
-}
-
 void ConsoleWrite(const AStringView text){
     FOUNDATION_COUT << text;
 }
@@ -98,8 +89,8 @@ ToolCliParseResult ToolCli::parse(const ConsoleArguments& arguments){
 }
 
 ToolCliParseResult ToolCli::resultFor(const CLI::ParseError& error)const{
-    std::ostringstream output;
-    std::ostringstream errors;
+    AInteropOutputStringStream output;
+    AInteropOutputStringStream errors;
     ToolCliParseResult result;
     result.m_ok = false;
     result.m_help = error.get_name() == "CallForHelp";

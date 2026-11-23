@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<String, EditTextStatus> NormalizeSingleLineText(in StringView source, in usize maxBytes){
+[cpp_unwind] Expected<String, EditTextStatus> NormalizeSingleLineText(in StringView source, in usize maxBytes){
     String candidate;
     const Expected<usize, EditTextStatus> status = NormalizeSingleLineTextInto(source, maxBytes, candidate);
     if(!status.has_value())
@@ -16,7 +16,7 @@ Expected<String, EditTextStatus> NormalizeSingleLineText(in StringView source, i
     return candidate;
 }
 
-Expected<String, EditTextStatus> NormalizeMultilineText(in StringView source, in usize maxBytes){
+[cpp_unwind] Expected<String, EditTextStatus> NormalizeMultilineText(in StringView source, in usize maxBytes){
     String candidate;
     const Expected<usize, EditTextStatus> status = NormalizeMultilineTextInto(source, maxBytes, candidate);
     if(!status.has_value())

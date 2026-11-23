@@ -22,6 +22,7 @@ const usize s_SharedComputeEmulationPhasesPerDraw = 2u;
 const usize s_SharedComputeEmulationMinimumDrawCount = 2u;
 const usize s_SharedComputeEmulationMaximumDrawCount = 5u;
 const usize s_SharedComputeEmulationMaximumPhaseCount = s_SharedComputeEmulationMaximumDrawCount * s_SharedComputeEmulationPhasesPerDraw;
+const usize s_SceneShadingGpuDataBytes = size_of<f32>() * s_ShaderSceneShadingBufferFloatCount;
 const Name s_PrepareArena = "impl/ecs_render/prepare";
 const Name s_RenderArena = "impl/ecs_render/render";
 const Name s_TaskGraphArena = "impl/ecs_render/task_graph";
@@ -219,7 +220,6 @@ class SceneShadingGpuData{
     public f32x4 cameraPositionLightCount(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-const usize s_SceneShadingGpuDataBytes = size_of<f32>() * s_ShaderSceneShadingBufferFloatCount;
 static_assert(size_of<SceneShadingGpuData>() == s_SceneShadingGpuDataBytes, "SceneShadingGpuData layout must match the shading shaders");
 
 [serialize]

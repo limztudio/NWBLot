@@ -35,25 +35,6 @@ class GpuProbeDescriptors{
     }
 }
 
-b8 LoadGpuProbePipeline(
-    mut ProjectRuntimeContext context,
-    in Name shaderName,
-    in StringView variant,
-    in Name debugName,
-    in StringView owner,
-    in u32 pushBytes,
-    mut ComputePipelineHandle outPipeline
-){
-    ShaderHandle shader;
-    if(!Load<ComputeShader, ShaderArchivePathResolver>(shaderName, variant, debugName, owner,
-        context.graphics, context.assetManager, context.shaderPathResolver, Optional<Name>(), shader))
-        return false;
-    mut Device device = context.graphics.getDevice();
-    BindingLayoutHandle layout;
-    return EnsurePushConstantBindingLayout(device, pushBytes, ShaderTypeMask::Compute, layout)
-        && CreateHeapComputePipeline(device, shader, layout, false, outPipeline);
-}
-
 class ProbeBufferImport{
     public BufferHandle buffer;
     public StringView label;
@@ -81,6 +62,29 @@ class ProbeBufferImport{
         use.access = this.access;
         return use;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<ComputePipelineHandle> LoadGpuProbePipeline(
+    mut ProjectRuntimeContext context,
+    in Name shaderName,
+    in StringView variant,
+    in Name debugName,
+    in StringView owner,
+    in u32 pushBytes
+){
+    ShaderHandle shader;
+    if(!Load<ComputeShader, ShaderArchivePathResolver>(shaderName, variant, debugName, owner,
+        context.graphics, context.assetManager, context.shaderPathResolver, Optional<Name>(), shader))
+        return MakeUnexpected(Failure());
+    mut Device device = context.graphics.getDevice();
+    BindingLayoutHandle layout;
+    if(!EnsurePushConstantBindingLayout(device, pushBytes, ShaderTypeMask::Compute, layout))
+        return MakeUnexpected(Failure());
+    return CreateHeapComputePipeline(device, shader, layout, false);
 }
 
 [cpp_unwind]

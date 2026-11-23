@@ -26,14 +26,14 @@ inline ParsedMetadataExtensionMap MakeMap(HeapStorage& storage){
 }
 template<typename T, typename... Args>
 T& Require(ParsedAssetMetadata& metadata, const Name& name, Args&&... args){
-    if constexpr(std::is_constructible_v<T, AssetArena&, Args...>)
+    if constexpr(IsConstructible_V<T, AssetArena&, Args...>)
         return RequireParsedMetadataExtension<T>(name, metadata, metadata.arena, Forward<Args>(args)...);
     else
         return RequireParsedMetadataExtension<T>(name, metadata, Forward<Args>(args)...);
 }
 template<typename T, typename... Args>
 ParsedMetadataExtension Make(HeapStorage& owner, Args&&... args){
-    if constexpr(std::is_constructible_v<T, AssetArena&, Args...>)
+    if constexpr(IsConstructible_V<T, AssetArena&, Args...>)
         return MakeParsedMetadataExtension<T>(owner.arena, owner.arena, Forward<Args>(args)...);
     else
         return MakeParsedMetadataExtension<T>(owner.arena, Forward<Args>(args)...);

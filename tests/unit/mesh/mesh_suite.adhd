@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_mesh/meshlet_ref_validation.adhd>
 #include <impl/ecs_mesh/skinning/deformation_state.adhd>
 #include <impl/ecs_mesh/skinning/graph_resource_uses.adhd>
 #include <impl/ecs_mesh/skinning/skin_payload.adhd>
@@ -899,6 +900,31 @@ void VerifyMesh_RebuildTangentFramesRejectsInvalidEpsilonAndSubThresholdTriangle
     EXPECT_FALSE(RebuildTestTangentFrames(s_TriangleIndices, zeroArea, 0.0).has_value());
 }
 
+void VerifySkinningPayload_AttributeSkinConflictsAndUnreferencedEntriesReportExactFailure(){
+    Array<MeshletDesc, 1u> meshlets;
+    meshlets[0u].counts = PackMeshletCounts(2u, 0u, 2u, 1u);
+    Array<MeshletPositionStreamRef, 2u> positions;
+    positions[0u].skin = 3u;
+    positions[1u].skin = 4u;
+    Array<MeshletLocalVertexRef, 2u> localRefs;
+    localRefs[1u].localDeformedPosition = 1u;
+    Vector<u32> resolved;
+    const Expected<void, MeshletAttributeSkinFailure> conflict = ResolveMeshletAttributeSkins(meshlets, positions, localRefs, 1u, resolved);
+    ASSERT_FALSE(conflict.has_value());
+    EXPECT_EQ(conflict.error().kind, MeshletAttributeSkinFailureKind::ConflictingSkin);
+    EXPECT_EQ(conflict.error().meshletIndex, 0u);
+    EXPECT_EQ(conflict.error().attributeIndex, 0u);
+    EXPECT_EQ(conflict.error().existingSkin, 3u);
+    EXPECT_EQ(conflict.error().conflictingSkin, 4u);
+
+    meshlets[0u].counts = PackMeshletCounts(1u, 0u, 1u, 2u);
+    const Expected<void, MeshletAttributeSkinFailure> unreferenced = ResolveMeshletAttributeSkins(meshlets, positions, localRefs, 2u, resolved);
+    ASSERT_FALSE(unreferenced.has_value());
+    EXPECT_EQ(unreferenced.error().kind, MeshletAttributeSkinFailureKind::UnreferencedAttribute);
+    EXPECT_EQ(unreferenced.error().attributeIndex, 1u);
+}
+
+NWB_ADHD_GTEST(SkinningPayload, AttributeSkinConflictsAndUnreferencedEntriesReportExactFailure, VerifySkinningPayload_AttributeSkinConflictsAndUnreferencedEntriesReportExactFailure)
 NWB_ADHD_GTEST(SkinningGraphResourceUses, DeduplicatesRepeatedAndPermutedInputsWithoutChangingFirstOccurrence, VerifySkinningGraphResourceUses_DeduplicatesRepeatedAndPermutedInputsWithoutChangingFirstOccurrence)
 NWB_ADHD_GTEST(SkinningGraphResourceUses, PreservesFullResourceGenerationAndRebuildsChangedFlags, VerifySkinningGraphResourceUses_PreservesFullResourceGenerationAndRebuildsChangedFlags)
 NWB_ADHD_GTEST(SkinningGraphResourceUses, RejectsEveryPhaseConflictOrMissingResourceAndRecovers, VerifySkinningGraphResourceUses_RejectsEveryPhaseConflictOrMissingResourceAndRecovers)

@@ -19,6 +19,9 @@
 
 struct Failure final{};
 
+using UnexpectType = std::unexpect_t;
+inline constexpr UnexpectType s_Unexpect{};
+
 template<typename T, typename E = Failure> using Expected = std::expected<T, E>;
 
 template<typename E>

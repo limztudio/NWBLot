@@ -14,25 +14,6 @@ const StringView s_SamplerValidatePayloadContext = "Sampler::validatePayload";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 IsValidSamplerDescription(in SamplerDesc description){
-    return IsValidSamplerDescriptionParameters(
-        description.borderColor.r,
-        description.borderColor.g,
-        description.borderColor.b,
-        description.borderColor.a,
-        description.maxAnisotropy,
-        description.mipBias,
-        cast<u32>(description.addressU),
-        cast<u32>(description.addressV),
-        cast<u32>(description.addressW),
-        cast<u32>(description.reductionType)
-    );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [arena, asset("sampler")]
 class Sampler{
     private SamplerDesc m_description;
@@ -48,6 +29,25 @@ class Sampler{
     public in SamplerDesc description()const{
         return this.m_description;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidSamplerDescription(in SamplerDesc description){
+    return IsValidSamplerDescriptionParameters(
+        description.borderColor.r,
+        description.borderColor.g,
+        description.borderColor.b,
+        description.borderColor.a,
+        description.maxAnisotropy,
+        description.mipBias,
+        cast<u32>(description.addressU),
+        cast<u32>(description.addressV),
+        cast<u32>(description.addressW),
+        cast<u32>(description.reductionType)
+    );
 }
 
 

@@ -124,10 +124,12 @@ EditBoxResult UiEditBoxHost::editBorrowed(in WidgetState widget, in EditBoxOptio
             result.valid = false;
             return result;
         }
+        EditModelSnapshot snapshot = this.makeSnapshot();
+        snapshot.capture(model);
         this.m_entries.emplace_back();
         entry = Optional<mut UiEditBoxEntry>(this.m_entries[this.m_entries.size() - 1u]);
         entry.value().owner = owner;
-        entry.value().expected.capture(model);
+        entry.value().expected.swapStorage(snapshot);
         entry.value().navigationResetPending = navigation.has_value();
         abandon = actions.has_value();
         this.m_focusSyncDirty = true;

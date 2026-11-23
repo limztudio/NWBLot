@@ -114,7 +114,7 @@ void VerifyGlobal_BinaryIdentityLanesDoNotRecordNameSymbols(){
     countAfterBinaryLanes = EntryCount();
     if(buildSymbolsEnabled){
         expectedFirstHash = LiteralHash("identity/first");
-        s_FirstIdentity.hash();
+        EXPECT_EQ(s_FirstIdentity.hash(), expectedFirstHash);
         countAfterFirstHash = EntryCount();
     }
     EXPECT_EQ(countAfterBinaryLanes, 0u);

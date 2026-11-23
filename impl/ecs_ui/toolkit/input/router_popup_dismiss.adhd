@@ -157,16 +157,13 @@ void SpliceRetiredRouterPopupRestoreRecord(
     }
 }
 
-b8 TryRetireRouterPopupSubtree(
+Optional<InputPopupRetirement> TryRetireRouterPopupSubtree(
     in WidgetId id,
     mut Vector<PopupRecord> popups,
     mut Vector<HitTarget> targets,
-    mut Vector<PopupDismissal> popupDismissals,
-    mut b8 outTopRemoved,
-    mut PopupRecord outRestore
+    mut Vector<PopupDismissal> popupDismissals
 ){
-    outTopRemoved = false;
-    outRestore = PopupRecord();
+    InputPopupRetirement retirement;
     Array<b8, s_InputMaxPopups> removed;
     b8 found = false;
     for(usize index = 0u; index < popups.size(); ++index){
@@ -177,11 +174,11 @@ b8 TryRetireRouterPopupSubtree(
         found = found || isRemoved;
     }
     if(!found)
-        return false;
-    outTopRemoved = removed[popups.size() - 1u];
-    outRestore = popups.back();
-    if(outTopRemoved)
-        SpliceRetiredRouterPopupRestoreRecord(popups, removed, outRestore);
+        return Optional<InputPopupRetirement>();
+    retirement.top = removed[popups.size() - 1u];
+    retirement.restore = popups.back();
+    if(retirement.top)
+        SpliceRetiredRouterPopupRestoreRecord(popups, removed, retirement.restore);
     for(usize index = 0u; index < popups.size(); ++index){
         if(!removed[index]){
             PopupRecord record = popups[index];
@@ -232,7 +229,7 @@ b8 TryRetireRouterPopupSubtree(
         }
     }
     popups.resize(keptPopups);
-    return true;
+    return Optional<InputPopupRetirement>(retirement);
 }
 
 

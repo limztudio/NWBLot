@@ -21,6 +21,8 @@ const u32 s_GlyphAtlasNoPage = 0xffffffffu;
 const f32 s_BakedFontAtlasMinScale = 0.75f;
 const f32 s_BakedFontAtlasMaxScale = 1.5f;
 const StringView s_TextFontLifecycleCategory = "ui_font_lifecycle";
+type GlyphPageBinding = GlyphPageBindingRecord<Font>;
+type SdfAtlasPageBinding = SdfAtlasPageBindingRecord<Font>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -89,8 +91,11 @@ class SdfAtlasPageBindingRecord<TFont>{
     public u32 distanceEncoding = s_FontAtlasDistanceEncoding;
 }
 
-type GlyphPageBinding = GlyphPageBindingRecord<Font>;
-type SdfAtlasPageBinding = SdfAtlasPageBindingRecord<Font>;
+class GlyphAtlasPlacement{
+    public u32 x = 0u;
+    public u32 y = 0u;
+    public u32 rowHeight = 0u;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -208,12 +213,6 @@ void CopyGlyphBitmapToAtlasPage(
         for(u32 col = 0u; col < width; ++col)
             outPagePixels[destination + cast<usize>(col)] = bitmapPixels[source + cast<usize>(col)];
     }
-}
-
-class GlyphAtlasPlacement{
-    public u32 x = 0u;
-    public u32 y = 0u;
-    public u32 rowHeight = 0u;
 }
 
 Expected<GlyphAtlasPlacement> TryPlaceGlyphAtlasBitmap(

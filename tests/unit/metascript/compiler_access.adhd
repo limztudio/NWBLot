@@ -102,6 +102,21 @@ extern class CompilerCppHeaderImportOptions{
     Span<CompilerImportedCppHeader> headers;
 };
 
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Tests::Metascript::ConfigureNativeImport")]
+extern void ConfigureNativeImport(mut CompilerCppHeaderImportOptions options, mut HeapStorageVector<GlobalString> defines, mut GlobalAllocator arena);
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Tests::Metascript::NativeDocumentSize")]
+extern usize NativeDocumentSize();
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Tests::Metascript::NativeDescriptorHeapSize")]
+extern usize NativeDescriptorHeapSize();
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Tests::Metascript::NativeTaskGraphSize")]
+extern usize NativeTaskGraphSize();
+
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Tests::Metascript::NativeGraphicsRuntimeSize")]
+extern usize NativeGraphicsRuntimeSize();
+
 [cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::TemplateParamDecl")]
 extern class CompilerTemplateParam{
     StringView name;

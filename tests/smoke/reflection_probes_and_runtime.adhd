@@ -15,23 +15,10 @@
 [cpp_header("<impl/assets/graphics/reflection/depth_constants.h>"), cpp_name("NWB_REFLECTION_MAX_DEPTH_MIPS")]
 extern const u32 s_ReflectionMaxDepthMipsCap;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-StringView ReflectionSmokeProjectName(){
-    return "ReflectionSmokeProject";
-}
-
-StringView ReflectionCpuTimingOwnerLabel(){
-    return "reflection";
-}
-
 const u64 s_ReflectionCpuTimingPrepPresentations = 64u;
 const u32 s_ReflectionCpuTimingMinPositiveIntervals = 11u;
 const u64 s_ReflectionMaxU32Value = 4294967295u;
 const u32 s_ReflectionDefaultCaptureFrameCount = 16u;
-
 const StringView s_ReflectionSmokeCaseEnv = "NWB_REFLECTION_SMOKE_CASE";
 const StringView s_ReflectionCapturePathEnv = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH";
 const StringView s_ReflectionOffscreenCase = "offscreen";
@@ -95,39 +82,6 @@ class ReflectionTimingRenderPass{
 
     private TimingProbeUnfocusedPass m_pass;
 }
-
-Expected<NotNullUniquePtr<World>> CreateReflectionSmokeWorld(mut ProjectRuntimeContext context){
-    auto created = CreateSmokeWorld(ReflectionSmokeProjectName(), context);
-    if(!created.has_value())
-        return MakeUnexpected(Failure());
-    mut NotNullUniquePtr<World> world = created.value();
-    const Expected<String> caseText = ReadSmokeEnvironmentString(s_ReflectionSmokeCaseEnv);
-    StringView caseName = "";
-    if(caseText.has_value())
-        caseName = StringView(caseText.value());
-    if(caseName == "temporal_deform" || caseName == "rough_deform")
-        AddSmokeSkinnedRenderSystems(SmokeWorldRef(world), context);
-    else
-        SetupSmokeRenderSystems(SmokeWorldRef(world), context);
-    return TakeSmokeWorld(world);
-}
-
-ProjectFrameClientSize QueryReflectionSmokeFrameClientSize(){
-    const Expected<String> extent = ReadSmokeEnvironmentString("NWB_REFLECTION_SMOKE_EXTENT");
-    ProjectFrameClientSize result = ProjectFrameClientSize();
-    result.width = 960u;
-    result.height = 720u;
-    if(!extent.has_value() || StringView(extent.value()) == "native")
-        return result;
-    [essential] assert(StringView(extent.value()) == "npot", "ReflectionSmokeProject: extent must be native or npot");
-    result.width = 953u;
-    result.height = 713u;
-    return result;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 class ReflectionCpuTimingProbe{
     public ReflectionCpuTimingProbe(mut ProjectRuntimeContext context){
@@ -244,35 +198,6 @@ class ReflectionCpuTimingProbe{
     private b8 m_prepared = false;
     private b8 m_measuring = false;
     private b8 m_complete = false;
-}
-
-b8 ReadReflectionSmokeFlag(in StringView name, mut b8 value){
-    const Expected<String> text = ReadSmokeEnvironmentString(name);
-    if(!text.has_value())
-        return true;
-    const StringView view = StringView(text.value());
-    if(view == "0")
-        value = false;
-    else if(view == "1")
-        value = true;
-    else{
-        error("ReflectionSmokeProject: {} must be 0 or 1", name);
-        return false;
-    }
-    return true;
-}
-
-b8 ReadReflectionSmokeU32(in StringView name, in u32 minimum, in u32 maximum, mut u32 value){
-    const Expected<String> text = ReadSmokeEnvironmentString(name);
-    if(!text.has_value())
-        return true;
-    const Expected<u64> parsed = ParseU64(StringView(text.value()));
-    if(!parsed.has_value() || parsed.value() < cast<u64>(minimum) || parsed.value() > cast<u64>(maximum)){
-        error("ReflectionSmokeProject: {} must be in [{}, {}]", name, minimum, maximum);
-        return false;
-    }
-    value = cast<u32>(parsed.value());
-    return true;
 }
 
 class ReflectionSmokeConfiguration{
@@ -771,10 +696,6 @@ class ReflectionStatisticsReporter{
     private b8 m_feedbackObservedBypass = false;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [arena]
 class ReflectionSmokeProjectImpl : IProjectEntryCallbacks, ISmokeCapturePredicate{
     public ReflectionSmokeProjectImpl(mut NotNullUniquePtr<World> world, mut ProjectRuntimeContext context){
@@ -1205,6 +1126,72 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks, ISmokeCapturePredicat
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+StringView ReflectionSmokeProjectName(){
+    return "ReflectionSmokeProject";
+}
+
+StringView ReflectionCpuTimingOwnerLabel(){
+    return "reflection";
+}
+
+Expected<NotNullUniquePtr<World>> CreateReflectionSmokeWorld(mut ProjectRuntimeContext context){
+    auto created = CreateSmokeWorld(ReflectionSmokeProjectName(), context);
+    if(!created.has_value())
+        return MakeUnexpected(Failure());
+    mut NotNullUniquePtr<World> world = created.value();
+    const Expected<String> caseText = ReadSmokeEnvironmentString(s_ReflectionSmokeCaseEnv);
+    StringView caseName = "";
+    if(caseText.has_value())
+        caseName = StringView(caseText.value());
+    if(caseName == "temporal_deform" || caseName == "rough_deform")
+        AddSmokeSkinnedRenderSystems(SmokeWorldRef(world), context);
+    else
+        SetupSmokeRenderSystems(SmokeWorldRef(world), context);
+    return TakeSmokeWorld(world);
+}
+
+ProjectFrameClientSize QueryReflectionSmokeFrameClientSize(){
+    const Expected<String> extent = ReadSmokeEnvironmentString("NWB_REFLECTION_SMOKE_EXTENT");
+    ProjectFrameClientSize result = ProjectFrameClientSize();
+    result.width = 960u;
+    result.height = 720u;
+    if(!extent.has_value() || StringView(extent.value()) == "native")
+        return result;
+    [essential] assert(StringView(extent.value()) == "npot", "ReflectionSmokeProject: extent must be native or npot");
+    result.width = 953u;
+    result.height = 713u;
+    return result;
+}
+
+b8 ReadReflectionSmokeFlag(in StringView name, mut b8 value){
+    const Expected<String> text = ReadSmokeEnvironmentString(name);
+    if(!text.has_value())
+        return true;
+    const StringView view = StringView(text.value());
+    if(view == "0")
+        value = false;
+    else if(view == "1")
+        value = true;
+    else{
+        error("ReflectionSmokeProject: {} must be 0 or 1", name);
+        return false;
+    }
+    return true;
+}
+
+b8 ReadReflectionSmokeU32(in StringView name, in u32 minimum, in u32 maximum, mut u32 value){
+    const Expected<String> text = ReadSmokeEnvironmentString(name);
+    if(!text.has_value())
+        return true;
+    const Expected<u64> parsed = ParseU64(StringView(text.value()));
+    if(!parsed.has_value() || parsed.value() < cast<u64>(minimum) || parsed.value() > cast<u64>(maximum)){
+        error("ReflectionSmokeProject: {} must be in [{}, {}]", name, minimum, maximum);
+        return false;
+    }
+    value = cast<u32>(parsed.value());
+    return true;
+}
 
 ProjectFrameClientSize GetProjectFrameClientSize(){
     return QueryReflectionSmokeFrameClientSize();

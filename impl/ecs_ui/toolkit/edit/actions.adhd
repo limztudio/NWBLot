@@ -9,7 +9,7 @@
 
 
 interface IEditActionSink{
-    b8 apply(mut EditModel draft, in EditAction action, in b8 readOnly);
+    [cpp_unwind] b8 apply(mut EditModel draft, in EditAction action, in b8 readOnly);
 }
 
 

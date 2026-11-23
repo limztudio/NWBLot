@@ -14,80 +14,6 @@
 
 const usize s_ReflectionSurfaceReadCount = 9u;
 
-b8 ReflectionUsesSlicedCsgPushConstants(in b8 hasCsgTraceContextBuffer, in b8 isHardwareStage, in b8 isBuildArgsStage){
-    return hasCsgTraceContextBuffer && (isHardwareStage || isBuildArgsStage);
-}
-
-u32 ReflectionCsgSliceRayOffset(in u32 slice, in u32 raysPerSlice){
-    return slice * raysPerSlice;
-}
-
-u32 ReflectionCsgSliceIndirectByteOffset(in u32 slice, in u32 argumentStrideBytes){
-    return slice * argumentStrideBytes;
-}
-
-b8 IsFinalReflectionCsgHardwareSlice(in u32 slice, in u32 sliceCount){
-    return slice + 1u == sliceCount;
-}
-
-b8 ReflectionTraceModeUsesScreenInputs(in u32 traceMode, in u32 screenMode, in u32 hybridMode){
-    return traceMode == screenMode || traceMode == hybridMode;
-}
-
-b8 ShouldWriteReflectionFeedback(in b8 feedbackReserved, in b8 feedbackEligible, in u32 hardwareEnabled){
-    return feedbackReserved && feedbackEligible && hardwareEnabled != 0u;
-}
-
-u64 ReflectionFeedbackEntryByteCount(in u32 totalByteCount, in u64 headerBytes){
-    return cast<u64>(totalByteCount) - headerBytes;
-}
-
-ReflectionDispatchStage ResolveReflectionFeedbackPublicationStage(in b8 hasHardwareWork){
-    if(hasHardwareWork)
-        return ReflectionDispatchStage::BuildArgs;
-    return ReflectionDispatchStage::Classify;
-}
-
-b8 IsReflectionHardwareSceneReady(in u32 hardwareEnabled, in b8 hardwarePreparationReady){
-    return hardwareEnabled != 0u && hardwarePreparationReady;
-}
-
-b8 IsReflectionHardwareDispatchActive(in u32 hardwareEnabled, in u32 maxHardwareRays, in b8 hardwarePreparationReady){
-    return hardwareEnabled != 0u && maxHardwareRays > 0u && hardwarePreparationReady;
-}
-
-u32 ResolveReflectionHardwareRayCapacity(in u32 maxHardwareRays, in u32 queueCapacity){
-    return Min(maxHardwareRays, queueCapacity);
-}
-
-b8 IsTrustedReflectionContentStamp(in b8 sceneStampTrusted, in b8 csgEmpty, in b8 useLaggedLightingHistory){
-    return sceneStampTrusted && csgEmpty && !useLaggedLightingHistory;
-}
-
-ReflectionSceneContentStamp ResolveReflectionSceneContentStamp(in ReflectionSceneContentStamp baseStamp, in u64 geometryStamp, in u64 materialStamp, in b8 sceneStampTrusted, in b8 csgEmpty, in b8 useLaggedLightingHistory){
-    ReflectionSceneContentStamp stamp = baseStamp;
-    stamp.geometry = geometryStamp;
-    stamp.material = materialStamp;
-    stamp.trusted = IsTrustedReflectionContentStamp(sceneStampTrusted, csgEmpty, useLaggedLightingHistory);
-    return stamp;
-}
-
-ReflectionCompositeInputs MakeReflectionCompositeInputs(in u32 opaqueRadianceSlot, in u32 glassRadianceSlot, in ReflectionDebugView debugView){
-    ReflectionCompositeInputs inputs;
-    inputs.opaqueRadianceSlot = opaqueRadianceSlot;
-    inputs.glassRadianceSlot = glassRadianceSlot;
-    inputs.debugView = debugView;
-    return inputs;
-}
-
-void LogReflectionConfirmTimingBeginFailed(){
-    warning("Reflection: failed to confirm accepted hardware timing begin");
-}
-
-void LogReflectionConfirmTimingEndFailed(){
-    warning("Reflection: failed to confirm accepted hardware timing end");
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -124,32 +50,6 @@ class ReflectionParametersUploadTask{
         commandList.writeBuffer(this.m_buffer.deref(), parameters);
         return true;
     }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(size_of<ReflectionCsgDispatchPushConstants>() == s_ReflectionShaderCsgPushBytes, "CSG reflection push constants must match the shader");
-
-in ComputePipelineHandle ReflectionDispatchPipeline(in borrow ReflectionFrameSnapshot resources, in ReflectionDispatchStage stage){
-    if(stage == ReflectionDispatchStage::Hardware)
-        return resources.hardwarePipeline;
-    if(stage == ReflectionDispatchStage::HardwareFast)
-        return resources.fastHardwarePipeline;
-    if(stage == ReflectionDispatchStage::BuildOpticalArgs)
-        return resources.buildOpticalArgsPipeline;
-    if(stage == ReflectionDispatchStage::Classify)
-        return resources.classifyPipeline;
-    return resources.buildArgsPipeline;
-}
-
-GpuTimingScopeDefinition ReflectionDispatchTiming(in ReflectionDispatchStage stage){
-    if(stage == ReflectionDispatchStage::Hardware)
-        return s_TimingScopeReflectionHardware;
-    if(stage == ReflectionDispatchStage::Classify)
-        return s_TimingScopeReflectionClassify;
-    return s_TimingScopeReflectionBuildArgs;
 }
 
 [move_only]
@@ -370,6 +270,106 @@ class ReflectionOpticalHardwareStageTask{
         if(this.dispatch.valid())
             this.dispatch.deref().timing.value().discard();
     }
+}
+
+static_assert(size_of<ReflectionCsgDispatchPushConstants>() == s_ReflectionShaderCsgPushBytes, "CSG reflection push constants must match the shader");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ReflectionUsesSlicedCsgPushConstants(in b8 hasCsgTraceContextBuffer, in b8 isHardwareStage, in b8 isBuildArgsStage){
+    return hasCsgTraceContextBuffer && (isHardwareStage || isBuildArgsStage);
+}
+
+u32 ReflectionCsgSliceRayOffset(in u32 slice, in u32 raysPerSlice){
+    return slice * raysPerSlice;
+}
+
+u32 ReflectionCsgSliceIndirectByteOffset(in u32 slice, in u32 argumentStrideBytes){
+    return slice * argumentStrideBytes;
+}
+
+b8 IsFinalReflectionCsgHardwareSlice(in u32 slice, in u32 sliceCount){
+    return slice + 1u == sliceCount;
+}
+
+b8 ReflectionTraceModeUsesScreenInputs(in u32 traceMode, in u32 screenMode, in u32 hybridMode){
+    return traceMode == screenMode || traceMode == hybridMode;
+}
+
+b8 ShouldWriteReflectionFeedback(in b8 feedbackReserved, in b8 feedbackEligible, in u32 hardwareEnabled){
+    return feedbackReserved && feedbackEligible && hardwareEnabled != 0u;
+}
+
+u64 ReflectionFeedbackEntryByteCount(in u32 totalByteCount, in u64 headerBytes){
+    return cast<u64>(totalByteCount) - headerBytes;
+}
+
+ReflectionDispatchStage ResolveReflectionFeedbackPublicationStage(in b8 hasHardwareWork){
+    if(hasHardwareWork)
+        return ReflectionDispatchStage::BuildArgs;
+    return ReflectionDispatchStage::Classify;
+}
+
+b8 IsReflectionHardwareSceneReady(in u32 hardwareEnabled, in b8 hardwarePreparationReady){
+    return hardwareEnabled != 0u && hardwarePreparationReady;
+}
+
+b8 IsReflectionHardwareDispatchActive(in u32 hardwareEnabled, in u32 maxHardwareRays, in b8 hardwarePreparationReady){
+    return hardwareEnabled != 0u && maxHardwareRays > 0u && hardwarePreparationReady;
+}
+
+u32 ResolveReflectionHardwareRayCapacity(in u32 maxHardwareRays, in u32 queueCapacity){
+    return Min(maxHardwareRays, queueCapacity);
+}
+
+b8 IsTrustedReflectionContentStamp(in b8 sceneStampTrusted, in b8 csgEmpty, in b8 useLaggedLightingHistory){
+    return sceneStampTrusted && csgEmpty && !useLaggedLightingHistory;
+}
+
+ReflectionSceneContentStamp ResolveReflectionSceneContentStamp(in ReflectionSceneContentStamp baseStamp, in u64 geometryStamp, in u64 materialStamp, in b8 sceneStampTrusted, in b8 csgEmpty, in b8 useLaggedLightingHistory){
+    ReflectionSceneContentStamp stamp = baseStamp;
+    stamp.geometry = geometryStamp;
+    stamp.material = materialStamp;
+    stamp.trusted = IsTrustedReflectionContentStamp(sceneStampTrusted, csgEmpty, useLaggedLightingHistory);
+    return stamp;
+}
+
+ReflectionCompositeInputs MakeReflectionCompositeInputs(in u32 opaqueRadianceSlot, in u32 glassRadianceSlot, in ReflectionDebugView debugView){
+    ReflectionCompositeInputs inputs;
+    inputs.opaqueRadianceSlot = opaqueRadianceSlot;
+    inputs.glassRadianceSlot = glassRadianceSlot;
+    inputs.debugView = debugView;
+    return inputs;
+}
+
+void LogReflectionConfirmTimingBeginFailed(){
+    warning("Reflection: failed to confirm accepted hardware timing begin");
+}
+
+void LogReflectionConfirmTimingEndFailed(){
+    warning("Reflection: failed to confirm accepted hardware timing end");
+}
+
+in ComputePipelineHandle ReflectionDispatchPipeline(in borrow ReflectionFrameSnapshot resources, in ReflectionDispatchStage stage){
+    if(stage == ReflectionDispatchStage::Hardware)
+        return resources.hardwarePipeline;
+    if(stage == ReflectionDispatchStage::HardwareFast)
+        return resources.fastHardwarePipeline;
+    if(stage == ReflectionDispatchStage::BuildOpticalArgs)
+        return resources.buildOpticalArgsPipeline;
+    if(stage == ReflectionDispatchStage::Classify)
+        return resources.classifyPipeline;
+    return resources.buildArgsPipeline;
+}
+
+GpuTimingScopeDefinition ReflectionDispatchTiming(in ReflectionDispatchStage stage){
+    if(stage == ReflectionDispatchStage::Hardware)
+        return s_TimingScopeReflectionHardware;
+    if(stage == ReflectionDispatchStage::Classify)
+        return s_TimingScopeReflectionClassify;
+    return s_TimingScopeReflectionBuildArgs;
 }
 
 void SetReflectionSurfaceReads(mut Vector<GpuTaskResourceUse> uses, in ReflectionGraphInputs inputs, in GpuGraphResourceId frameParameters){
@@ -621,7 +621,6 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
     result.completion = completionResult.value();
     return result;
 }
-
 
 [cpp_unwind]
 Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare(in FrameGraphReflectionResolveInputs inputs, mut RayTracingSceneGraphReads sceneReads){

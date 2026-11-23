@@ -9,6 +9,87 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const StringView s_SimdSpecInvalidNestedSerializeSource =
+    "[serialize]\r\nclass BadBinaryPacket {\r\n    public Array<String, 4> names = Array<String, 4>();\r\n}\r\n";
+const StringView s_SimdSpecMismatchedTemplatedInterfaceSource =
+    "interface ISink<T> {\r\n    void send(in T item);\r\n}\r\nclass BadSink : ISink<i32> {\r\n    public void send(in f32 item)override {}\r\n}\r\n";
+const StringView s_SimdSpecVariadicMacroSource =
+    "[cpp_header(\"<tests/unit/sample_check.h>\"), cpp_name(\"EXPECT_EQ\")]\r\nextern void ExpectEq(in usize a0, in u32 a1);\r\n[cpp_header(\"<tests/unit/sample_check.h>\"), cpp_name(\"EXPECT_NEAR\")]\r\nextern void ExpectNear(in f32 a0, in f32 a1, in f32 a2);\r\n#define EXPECTED_COUNT 1u\r\n#define EXPECT_EQ(...) ExpectEq(__VA_ARGS__)\r\n#define EXPECT_NEAR_VAL(val, ...) ExpectNear(val, __VA_ARGS__)\r\nvoid FillBytes(mut Span<u8> bytes) {\r\n    for(usize i = 0u; i < bytes.size(); ++i)\r\n        bytes[i] = cast<u8>(i);\r\n}\r\nvoid ConsumeVec(in Vector<i32> items) {}\r\nvoid VerifyItems(in f32 sample) {\r\n    Vector<i32> items;\r\n    items.push_back(42);\r\n    ConsumeVec(items);\r\n    if(!items.empty())\r\n        EXPECT_EQ(items.size(), EXPECTED_COUNT);\r\n    else\r\n        EXPECT_NEAR_VAL(sample, 0.0f, 1e-4f);\r\n}\r\n";
+const StringView s_SimdSpecCtorMemberLiftSource =
+    "class Child {\r\n    private mut i32 m_target;\r\n    public Child(mut i32 target) {\r\n        this.m_target = target;\r\n    }\r\n}\r\nclass Parent {\r\n    private Child m_child;\r\n    public Parent(mut i32 target) {\r\n        this.m_child = Child(target);\r\n    }\r\n}\r\n";
+const StringView s_SimdSpecExternalIfaceSource =
+    "[cpp_header(\"<ext/callback.h>\")]\r\nextern enum ExternalEnum : u32{\r\n    Active\r\n};\r\n[cpp_header(\"<ext/callback.h>\")]\r\nextern interface IExternalCallback{\r\n    b8 onTick(in f32 a0);\r\n};\r\n[cpp_header(\"<ext/callback.h>\")]\r\nextern void RegisterSelf(in IExternalCallback a0);\r\nclass CallbackRunner : IExternalCallback {\r\n    public ~CallbackRunner() {}\r\n    public b8 onTick(in f32 dt)override {\r\n        RegisterSelf(this);\r\n        return dt > 0.0f && ExternalEnum::Active == ExternalEnum::Active;\r\n    }\r\n}\r\n";
+const StringView s_SimdSpecStorageOnlySimdParamSource =
+    "VectorSingle CombinePlane(in VectorSingle rawNormal, in VectorSingle cameraPosition) {\r\n    return rawNormal + cameraPosition;\r\n}\r\nVectorSingle BuildSidePlane(in VectorSingle forward, in VectorSingle side, in VectorSingle tanHalfAngle, in VectorSingle cameraPosition) {\r\n    const VectorSingle rawNormal = forward * tanHalfAngle + side;\r\n    return CombinePlane(VectorSingle(rawNormal.x, rawNormal.y, rawNormal.z, 0.0f), cameraPosition);\r\n}\r\n";
+const StringView s_SimdSpecBadMutThisLambdaInParSource =
+    "class Collector {\r\n    public Vector<i32> items;\r\n    public void runParallel() {\r\n        auto addFn = lambda[mut this](in i32 v) -> void {\r\n            this.items.push_back(v);\r\n        };\r\n        parallel_for(usize i = 0u; i < 4u; ++i) {\r\n            addFn(cast<i32>(i));\r\n        }\r\n    }\r\n}\r\n";
+const StringView s_SimdSpecMutCondSaturateMatRowSource =
+    "b8 TryLoadVec(mut VectorSingle outVec) {\r\n    outVec = VectorSingle(1.0f, 2.0f, 3.0f, 4.0f);\r\n    return true;\r\n}\r\nf32 ComputeFromCondAndMat(in MatrixSingle mat) {\r\n    VectorSingle trackMin = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);\r\n    if(!TryLoadVec(trackMin))\r\n        return 0.0f;\r\n    const VectorSingle clamped = Saturate(trackMin);\r\n    return clamped.x + mat[0].x;\r\n}\r\n";
+const StringView s_SimdSpecLaneInsertAndPermuteSource =
+    "VectorSingle NormalizeTangentWithSign(in VectorSingle tangent, in VectorSingle normal, in f32x3u posIn, mut f32x3u outPos) {\r\n    const VectorSingle loadedPos = VectorSingle(posIn.x, posIn.y, posIn.z, 0.0f);\r\n    outPos = f32x3u(loadedPos.x, loadedPos.y, loadedPos.z);\r\n    if(LengthSq(tangent.xyz) > 0.0001f) {\r\n        const VectorSingle normalized = Normalize(tangent.xyz);\r\n        f32 sign = 1.0f;\r\n        if(tangent.w < 0.0f)\r\n            sign = -1.0f;\r\n        return VectorSingle(normalized.x, normalized.y, normalized.z, sign);\r\n    }\r\n    const VectorSingle fallback = Normalize(normal.xyz);\r\n    return VectorSingle(fallback.x, fallback.y, fallback.z, normal.w);\r\n}\r\n";
+const StringView s_SimdSpecOptSource =
+    "const f32 s_AffineW = 1.0f;\r\nconst f32x4 s_ZeroVec(0.0f, 0.0f, 0.0f, 0.0f);\r\nconst f32x4 s_AxisY(0.0f, 1.0f, 0.0f, 0.0f);\r\nclass BoxData {\r\n    public f32x3u minPt = f32x3u(0.0f, 0.0f, 0.0f);\r\n    public f32x4 extent4 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);\r\n}\r\nVectorSingle OptimizeSimdOps(in VectorSingle a, in VectorSingle b, in VectorDouble d, in MatrixSingle m, in BoxData box, in f32 scale, mut BoxData outBox) {\r\n    const MatrixSingle idMat = MatrixSingle(\r\n        1.0f, 0.0f, 0.0f, 0.0f,\r\n        0.0f, 1.0f, 0.0f, 0.0f,\r\n        0.0f, 0.0f, 1.0f, 0.0f,\r\n        0.0f, 0.0f, 0.0f, 1.0f\r\n    );\r\n    const MatrixSingle scaledMat = idMat * scale;\r\n    const MatrixSingle projMat = MatrixSingle(\r\n        a.x, 0.0f, 0.0f, 0.0f,\r\n        0.0f, a.y, 0.0f, 0.0f,\r\n        0.0f, 0.0f, a.z, a.w,\r\n        0.0f, 0.0f, 1.0f, 0.0f\r\n    );\r\n    const VectorSingle unitMul = (a * 1.0f) + (b * -1.0f);\r\n    const VectorSingle negFma = (-a) * b + unitMul;\r\n    const VectorSingle splatMul = VectorSingle(scale) * 2.0f;\r\n    const VectorSingle pad3 = VectorSingle(scale, scale, scale, 0.0f);\r\n    const VectorSingle signFlipSplat = VectorSingle(scale, -scale, scale, -scale);\r\n    const f32 dot3ZeroW = Dot(a, VectorSingle(1.0f, 2.0f, 3.0f, 0.0f));\r\n    const f32 sumAll = Dot(a, VectorSingle(1.0f));\r\n    const VectorSingle satClamp = Clamp(a, 0.0f, 1.0f);\r\n    const VectorSingle satMinMax = Min(Max(b, 0.0f), 1.0f);\r\n    const VectorSingle storageSwiz = VectorSingle(box.minPt.z, box.minPt.y, box.minPt.x, 0.0f);\r\n    const VectorSingle storageBinOp = VectorSingle(box.minPt.x + box.extent4.x, box.minPt.y + box.extent4.y, box.minPt.z + box.extent4.z, 0.0f);\r\n    const VectorSingle storageNeg3 = VectorSingle(-box.minPt.x, -box.minPt.y, -box.minPt.z, 0.0f);\r\n    const VectorSingle laneMathMin = VectorSingle(Min(a.x, b.x), Min(a.y, b.y), Min(a.z, b.z), Min(a.w, b.w));\r\n    const VectorSingle altMaskSplat = VectorSingle(scale, 0.0f, scale, 0.0f);\r\n    const VectorSingle zeroSubAdd = (0.0f - a) + (b - 0.0f);\r\n    const VectorSingle lerpZero = Lerp(a, b, 0.0f);\r\n    const f32 swizGetX = (a.zyx).x;\r\n    const f32 max3 = Max(a.x, Max(a.y, a.z));\r\n    const VectorSingle max4Splat = VectorSingle(Max(Max(a.x, a.y), Max(a.z, a.w)));\r\n    const u32 bitsY = bit_cast<u32>(a.y);\r\n    const VectorSingle swizFromDouble = VectorSingle(cast<f32>(d.z), cast<f32>(d.y), cast<f32>(d.x), cast<f32>(d.w));\r\n    const MatrixSingle mulTrans = Transpose(m * scaledMat);\r\n    const f32x4 zeroStorageVec = f32x4(0.0f);\r\n    const f32x4x4 zeroStorageMat = f32x4x4(0.0f);\r\n    const VectorSingle unitVec = VectorSingle(1.0f, 1.0f, 1.0f, 1.0f);\r\n    const VectorSingle halfVec = VectorSingle(0.5f);\r\n    const VectorSingle axisW = VectorSingle(0.0f, 0.0f, 0.0f, 1.0f);\r\n    const VectorSingle constZero = VectorSingle(s_ZeroVec);\r\n    const VectorSingle constAxisY = VectorSingle(s_AxisY);\r\n    const VectorSingle negRep = VectorSingle(-scale, -scale, -scale, -scale);\r\n    const VectorSingle masked3 = VectorSingle(a.x, a.y, a.z, 0.0f);\r\n    const VectorSingle clearX = VectorSingle(0.0f, a.y, a.z, a.w);\r\n    const VectorSingle flipYW = VectorSingle(a.x, -a.y, a.z, -a.w);\r\n    const VectorSingle storageMaskXY = VectorSingle(box.extent4.x, box.extent4.y, 0.0f, 0.0f);\r\n    const VectorSingle neg3KeepW = VectorSingle(-a.x, -a.y, -a.z, a.w);\r\n    const VectorSingle laneBinOp = VectorSingle(a.x * scale, a.y * scale, a.z * scale, 0.0f);\r\n    const VectorSingle axisYWithW = VectorSingle(0.0f, 1.0f, 0.0f, a.w);\r\n    const VectorDouble xyUnitZW = VectorDouble(d.x, d.y, 1.0, 1.0);\r\n    const VectorSingle splatZ = a.zzzz;\r\n    const VectorSingle foldedSwiz = (a.yzxw).wxyz;\r\n    const VectorSingle identitySwiz = (a.yzxw).zxyw;\r\n    const VectorSingle fromDouble = VectorSingle(cast<f32>(d.x), cast<f32>(d.y), cast<f32>(d.z), cast<f32>(d.w));\r\n    const VectorSingle proj = a * Dot(a.xyz, b.xyz);\r\n    const VectorSingle scaled = b * VectorSingle(scale);\r\n    const VectorSingle invLen = a * Rsqrt(LengthSq(a.xyz));\r\n    const VectorSingle pt = Mul(VectorSingle(box.minPt, s_AffineW), scaledMat);\r\n    const VectorSingle pt2 = Mul(VectorSingle(a.x, a.y, 0.0f, 1.0f), projMat);\r\n    const VectorSingle nrm = Mul(VectorSingle(b, 0.0f), m) + unitMul;\r\n    const MatrixSingle transposed = Transpose(m);\r\n    const VectorSingle transRow0 = Mul(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), transposed);\r\n    const VectorSingle transRow2 = Mul(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), Transpose(m));\r\n    const VectorSingle matCol0 = Mul(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), m);\r\n    const VectorSingle norm3 = Normalize(a.xyz);\r\n    const VectorSingle norm3ZeroW = VectorSingle(norm3, 0.0f);\r\n    const VectorSingle scaledNorm3 = norm3 * 2.0f;\r\n    const VectorSingle scaledNorm3Swiz = VectorSingle(scaledNorm3.y, scaledNorm3.z, scaledNorm3.x, 0.0f);\r\n    const VectorDouble mixedBounds = VectorDouble(Min(d.x, 1.0), Min(d.y, 2.0), Max(d.z, 3.0), Max(d.w, 4.0));\r\n    const VectorSingle nonUniformAdd = VectorSingle(a.x + scale, a.y + 1.0f, a.z + 2.0f, a.w + 3.0f);\r\n    const VectorSingle mixedAddSub = VectorSingle(a.x + b.x, a.y - b.y, a.z + b.z, a.w - b.w);\r\n    const VectorSingle uniformLaneMul = VectorSingle(a.x * b.y, a.y * b.y, a.z * b.y, a.w * b.y);\r\n    const VectorSingle planeEq = VectorSingle(norm3, -Dot(norm3.xyz, b.xyz));\r\n    const VectorSingle negNorm3ZeroW = VectorSingle(-norm3, 0.0f);\r\n    const VectorSingle negScaleFma = a * (-scale) + b;\r\n    const VectorDouble minD(cast<f64>(a.x), cast<f64>(a.y), 0.0, 0.0);\r\n    const VectorDouble divD = VectorDouble(d.x, d.y, 0.0, 0.0) / xyUnitZW;\r\n    const VectorDouble maxD = Max(minD, divD);\r\n    const VectorSingle narrowXY = VectorSingle(cast<f32>(maxD.x), cast<f32>(maxD.y), 0.0f, 0.0f);\r\n    const VectorSingle negAxisZ = VectorSingle(0.0f, 0.0f, -1.0f, 0.0f);\r\n    const VectorSingle unitXW = VectorSingle(1.0f, 0.0f, 0.0f, 1.0f);\r\n    const VectorSingle negZPosW = VectorSingle(0.0f, 0.0f, -1.0f, 1.0f);\r\n    const VectorSingle withUnitW = VectorSingle(a, 1.0f);\r\n    const f32 idxGetZ = a[2u];\r\n    outBox.extent4 = f32x4(box.minPt.x, box.minPt.y, box.minPt.z, 0.0f);\r\n    outBox.extent4 = f32x4(a, b.w);\r\n    if(!IsFinite(box.extent4[0u]) || !IsFinite(box.extent4[1u]) || !IsFinite(box.extent4[2u]) || !IsFinite(box.extent4[3u]))\r\n        return negAxisZ;\r\n    if(!IsFinite(d.x) || d.x > 10.0 || !IsFinite(d.y) || d.y > 10.0)\r\n        return constZero;\r\n    if(Abs(box.minPt.x) > 1.0f || Abs(box.minPt.y) > 1.0f || Abs(box.minPt.z) > 1.0f)\r\n        return constAxisY;\r\n    if(!IsFinite(a.x) || !IsFinite(a.y) || !IsFinite(a.z) || !IsFinite(a.w) || !IsFinite(a.x + a.z) || !IsFinite(a.y + a.w) || a.x < 0.0f || a.y < 0.0f || a.z < 0.0f || a.w < 0.0f)\r\n        return unitVec;\r\n    if(scale >= a.x && 2.0f >= a.y && scale < a.z && 2.0f < a.w)\r\n        return planeEq;\r\n    if(a.x <= a.z && a.y <= a.w && IsFinite(b.xyz) && a.x == b.x && a.y == b.y && a.z == b.z)\r\n        return halfVec + axisW + VectorSingle(xyUnitZW) + VectorSingle(mixedBounds);\r\n    return masked3 + clearX + flipYW + storageMaskXY + negRep + neg3KeepW + laneBinOp + axisYWithW + splatZ + foldedSwiz + identitySwiz + fromDouble + swizFromDouble + max4Splat + proj + scaled + invLen + pt + pt2 + nrm + transRow0 + transRow2 + matCol0 + norm3ZeroW + scaledNorm3Swiz + nonUniformAdd + mixedAddSub + uniformLaneMul + planeEq + negNorm3ZeroW + negScaleFma + narrowXY + negAxisZ + unitXW + negZPosW + withUnitW + negFma + splatMul + pad3 + signFlipSplat + satClamp + satMinMax + storageSwiz + storageBinOp + storageNeg3 + laneMathMin + altMaskSplat + zeroSubAdd + lerpZero + Mul(a, mulTrans) + VectorSingle(dot3ZeroW + sumAll + swizGetX + idxGetZ + max3 + cast<f32>(bitsY) + zeroStorageVec.x + zeroStorageMat[0][0]);\r\n}\r\n";
+const StringView s_SimdSpecJobNodeReflectionSource =
+    "[reflect]\r\nclass JobNode {\r\n    public i32 visibleId = 1;\r\n    private i32 hiddenState = 2;\r\n    [reflect]\r\n    private i32 reflectedSecret = 3;\r\n    private void internalHelper() {}\r\n    [reflect]\r\n    private void reflectedHelper() {}\r\n    public void run() {}\r\n}\r\n";
+const StringView s_SimdSpecUncapturedThisInLambdaSource =
+    "class BadNode {\r\n    public i32 x = 1;\r\n    public i32 test()const {\r\n        auto fn = lambda() -> i32 {\r\n            return this.x;\r\n        };\r\n        return fn();\r\n    }\r\n}\r\n";
+const StringView s_SimdSpecMutateInThisLambdaSource =
+    "class BadConstThis {\r\n    public i32 x = 1;\r\n    public void test() {\r\n        auto fn = lambda[in this]() -> void {\r\n            this.x = 2;\r\n        };\r\n        fn();\r\n    }\r\n}\r\n";
+const StringView s_SimdSpecDuplicateDefaultSwitchSource =
+    "void BadSwitch(in u32 x) {\r\n    switch (x) {\r\n    default:\r\n        break;\r\n    default:\r\n        break;\r\n    }\r\n}\r\n";
+const StringView s_SimdSpecNumericGrammarValidSource =
+    "u8 Integer(in StringView s){ return ClassifyIntegerGrammar(s); }\nb8 Incomplete(in StringView s){ return ClassifyFloatGrammar(s) == s_NumericGrammarIncomplete; }\nf32 Bound(in f64 v, in b8 upper){ return RoundF64ToF32Bound(v, upper); }\nf64 Step(in f64 v, in f64 lo, in f64 hi, in f64 delta, in b8 up){ return StepF64Bounded(v, lo, hi, delta, up); }\nvoid Advance(mut u64 value){ AdvanceWrappingNonzeroU64(value); }\nu32 Width(in u32 value){ return BitWidthLowU32(value, 8u); }\n";
+const Array<StringView, 7u> s_SimdSpecNumericExpectedTokens = Array<StringView, 7u>(
+    MStringView("::ClassifyIntegerGrammar("),
+    MStringView("::ClassifyFloatGrammar("),
+    MStringView("::RoundF64ToF32Bound("),
+    MStringView("::StepF64Bounded("),
+    MStringView("::AdvanceWrappingNonzero("),
+    MStringView("::BitWidthLowU32("),
+    MStringView("::s_NumericGrammarIncomplete")
+);
+const Array<StringView, 8u> s_SimdSpecNumericInvalidSources = Array<StringView, 8u>(
+    MStringView("u8 F(in u32 value){ return ClassifyIntegerGrammar(value); }"),
+    MStringView("f32 F(in f32 value, in b8 upper){ return RoundF64ToF32Bound(value, upper); }"),
+    MStringView("f32 F(in f64 value, in u32 upper){ return RoundF64ToF32Bound(value, upper); }"),
+    MStringView("f64 F(in f64 v, in b8 up){ return StepF64Bounded(v, v, v, v); }"),
+    MStringView("f64 F(in f64 v, in u32 up){ return StepF64Bounded(v, v, v, v, up); }"),
+    MStringView("void F(in u64 v){ AdvanceWrappingNonzeroU64(v); }"),
+    MStringView("void F(mut u32 v){ AdvanceWrappingNonzeroU64(v); }"),
+    MStringView("u32 F(in u64 v){ return BitWidthLowU32(v, 8u); }")
+);
+const StringView s_SimdSpecRectValidSource =
+    "type RectVec = VectorSingle;\nVectorSingle Combine(in RectVec a, in RectVec b){ return IntersectRectVec(IntersectRectBoundsVec(a, b), b); }\nb8 Visible(in RectVec a, in RectVec b){ return HasVisibleRectIntersectionVec(a, b); }\nVectorSingle Inset(in RectVec a, in RectVec b){ return InsetRectVec(a, b); }\nvoid Take(in RectVec v){} void Call(in RectVec a, in RectVec b){ Take(IntersectRectVec(a, b)); }\n";
+const Array<StringView, 3u> s_SimdSpecRectInvalidSources = Array<StringView, 3u>(
+    MStringView("VectorSingle F(in VectorSingle a){ return IntersectRectVec(a, 1.0f); }"),
+    MStringView("VectorSingle F(in VectorDouble a, in VectorSingle b){ return IntersectRectVec(a, b); }"),
+    MStringView("VectorSingle F(in MatrixSingle a, in VectorSingle b){ return IntersectRectVec(a, b); }")
+);
+const Array<StringView, 2u> s_SimdSpecRectMutationSources = Array<StringView, 2u>(
+    MStringView("void Take(mut VectorSingle v){} void F(in VectorSingle a){ Take(IntersectRectVec(a, a)); }"),
+    MStringView("void Take(mut b8 v){} void F(in VectorSingle a){ Take(HasVisibleRectIntersectionVec(a, a)); }")
+);
+const StringView s_SimdSpecInvalidBoundArgSource =
+    "interface ITask {\r\n    void execute(in f32 dt);\r\n}\r\nclass PlainData {\r\n    public u32 value = 0;\r\n}\r\nclass TaskRunner<T : ITask> {\r\n    public T task = T();\r\n}\r\nvoid BadUse() {\r\n    TaskRunner<PlainData> runner = TaskRunner<PlainData>();\r\n}\r\n";
+const StringView s_SimdSpecDowncastInterfaceSource =
+    "interface ITask {\r\n    void execute(in f32 dt);\r\n}\r\nclass PhysicsTask : ITask {\r\n    public void execute(in f32 dt) override {}\r\n}\r\nvoid BadDowncast(in ITask task) {\r\n    PhysicsTask p = cast<PhysicsTask>(task);\r\n}\r\n";
+const StringView s_SimdSpecConstViolationSource =
+    "class Counter {\r\n    private u32 count = 0;\r\n    public void bump() {\r\n        this.count += 1;\r\n    }\r\n}\r\nvoid BadConstCall(in Counter c) {\r\n    c.bump();\r\n}\r\n";
+const StringView s_SimdSpecByValueInterfaceVarSource =
+    "interface IComponent {\r\n    void step(in f32 dt);\r\n}\r\nclass Comp : IComponent {\r\n    public void step(in f32 dt) override {}\r\n}\r\nvoid BadByValue() {\r\n    Comp c = Comp();\r\n    IComponent val = c;\r\n}\r\n";
+const StringView s_SimdSpecMismatchedOverrideConstSource =
+    "interface IComponent {\r\n    u32 id()const;\r\n}\r\nclass BadComp : IComponent {\r\n    public u32 id() override {\r\n        return 0;\r\n    }\r\n}\r\n";
+const StringView s_SimdSpecSplitImplSource =
+    "#include \"shared_service.adhd\"\r\ni32 SharedService::accumulate(in i32 delta) {\r\n    this.m_total += delta;\r\n    return this.m_total;\r\n}\r\n";
+const StringView s_SimdSpecTransitiveImplSource =
+    "#include \"split_decl.adhd\"\r\ni32 ComputeCrossFile(in i32 x) {\r\n    return x + s_LeafBias;\r\n}\r\nT CrossBox<T>::fetch()const {\r\n    return this.m_item;\r\n}\r\n";
+const StringView s_SimdSpecLaneIndexEdgesSource =
+    "f32 Lanes(mut VectorSingle value, in usize index) {\r\n    value[2u] = 1.0f;\r\n    value[index] = 2.0f;\r\n    return value[2u] + value[index];\r\n}\r\n";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class TransitiveSplitResolver : MetascriptIIncludeResolver{
     public u32 popCount = 0u;
     public b8 resolveInclude(in StringView includePath, in b8 isSystem, mut GlobalAllocator rArena, mut GlobalString outResolvedKey, mut GlobalString outContent)override{
@@ -40,110 +121,6 @@ class TransitiveSplitResolver : MetascriptIIncludeResolver{
     }
     public void popIncludeScope()override{ ++this.popCount; }
 }
-
-const StringView s_SimdSpecInvalidNestedSerializeSource =
-    "[serialize]\r\nclass BadBinaryPacket {\r\n    public Array<String, 4> names = Array<String, 4>();\r\n}\r\n";
-
-const StringView s_SimdSpecMismatchedTemplatedInterfaceSource =
-    "interface ISink<T> {\r\n    void send(in T item);\r\n}\r\nclass BadSink : ISink<i32> {\r\n    public void send(in f32 item)override {}\r\n}\r\n";
-
-const StringView s_SimdSpecVariadicMacroSource =
-    "[cpp_header(\"<tests/unit/sample_check.h>\"), cpp_name(\"EXPECT_EQ\")]\r\nextern void ExpectEq(in usize a0, in u32 a1);\r\n[cpp_header(\"<tests/unit/sample_check.h>\"), cpp_name(\"EXPECT_NEAR\")]\r\nextern void ExpectNear(in f32 a0, in f32 a1, in f32 a2);\r\n#define EXPECTED_COUNT 1u\r\n#define EXPECT_EQ(...) ExpectEq(__VA_ARGS__)\r\n#define EXPECT_NEAR_VAL(val, ...) ExpectNear(val, __VA_ARGS__)\r\nvoid FillBytes(mut Span<u8> bytes) {\r\n    for(usize i = 0u; i < bytes.size(); ++i)\r\n        bytes[i] = cast<u8>(i);\r\n}\r\nvoid ConsumeVec(in Vector<i32> items) {}\r\nvoid VerifyItems(in f32 sample) {\r\n    Vector<i32> items;\r\n    items.push_back(42);\r\n    ConsumeVec(items);\r\n    if(!items.empty())\r\n        EXPECT_EQ(items.size(), EXPECTED_COUNT);\r\n    else\r\n        EXPECT_NEAR_VAL(sample, 0.0f, 1e-4f);\r\n}\r\n";
-
-const StringView s_SimdSpecCtorMemberLiftSource =
-    "class Child {\r\n    private mut i32 m_target;\r\n    public Child(mut i32 target) {\r\n        this.m_target = target;\r\n    }\r\n}\r\nclass Parent {\r\n    private Child m_child;\r\n    public Parent(mut i32 target) {\r\n        this.m_child = Child(target);\r\n    }\r\n}\r\n";
-
-const StringView s_SimdSpecExternalIfaceSource =
-    "[cpp_header(\"<ext/callback.h>\")]\r\nextern enum ExternalEnum : u32{\r\n    Active\r\n};\r\n[cpp_header(\"<ext/callback.h>\")]\r\nextern interface IExternalCallback{\r\n    b8 onTick(in f32 a0);\r\n};\r\n[cpp_header(\"<ext/callback.h>\")]\r\nextern void RegisterSelf(in IExternalCallback a0);\r\nclass CallbackRunner : IExternalCallback {\r\n    public ~CallbackRunner() {}\r\n    public b8 onTick(in f32 dt)override {\r\n        RegisterSelf(this);\r\n        return dt > 0.0f && ExternalEnum::Active == ExternalEnum::Active;\r\n    }\r\n}\r\n";
-
-const StringView s_SimdSpecStorageOnlySimdParamSource =
-    "VectorSingle CombinePlane(in VectorSingle rawNormal, in VectorSingle cameraPosition) {\r\n    return rawNormal + cameraPosition;\r\n}\r\nVectorSingle BuildSidePlane(in VectorSingle forward, in VectorSingle side, in VectorSingle tanHalfAngle, in VectorSingle cameraPosition) {\r\n    const VectorSingle rawNormal = forward * tanHalfAngle + side;\r\n    return CombinePlane(VectorSingle(rawNormal.x, rawNormal.y, rawNormal.z, 0.0f), cameraPosition);\r\n}\r\n";
-
-const StringView s_SimdSpecBadMutThisLambdaInParSource =
-    "class Collector {\r\n    public Vector<i32> items;\r\n    public void runParallel() {\r\n        auto addFn = lambda[mut this](in i32 v) -> void {\r\n            this.items.push_back(v);\r\n        };\r\n        parallel_for(usize i = 0u; i < 4u; ++i) {\r\n            addFn(cast<i32>(i));\r\n        }\r\n    }\r\n}\r\n";
-
-const StringView s_SimdSpecMutCondSaturateMatRowSource =
-    "b8 TryLoadVec(mut VectorSingle outVec) {\r\n    outVec = VectorSingle(1.0f, 2.0f, 3.0f, 4.0f);\r\n    return true;\r\n}\r\nf32 ComputeFromCondAndMat(in MatrixSingle mat) {\r\n    VectorSingle trackMin = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);\r\n    if(!TryLoadVec(trackMin))\r\n        return 0.0f;\r\n    const VectorSingle clamped = Saturate(trackMin);\r\n    return clamped.x + mat[0].x;\r\n}\r\n";
-
-const StringView s_SimdSpecLaneInsertAndPermuteSource =
-    "VectorSingle NormalizeTangentWithSign(in VectorSingle tangent, in VectorSingle normal, in f32x3u posIn, mut f32x3u outPos) {\r\n    const VectorSingle loadedPos = VectorSingle(posIn.x, posIn.y, posIn.z, 0.0f);\r\n    outPos = f32x3u(loadedPos.x, loadedPos.y, loadedPos.z);\r\n    if(LengthSq(tangent.xyz) > 0.0001f) {\r\n        const VectorSingle normalized = Normalize(tangent.xyz);\r\n        f32 sign = 1.0f;\r\n        if(tangent.w < 0.0f)\r\n            sign = -1.0f;\r\n        return VectorSingle(normalized.x, normalized.y, normalized.z, sign);\r\n    }\r\n    const VectorSingle fallback = Normalize(normal.xyz);\r\n    return VectorSingle(fallback.x, fallback.y, fallback.z, normal.w);\r\n}\r\n";
-
-const StringView s_SimdSpecOptSource =
-    "const f32 s_AffineW = 1.0f;\r\nconst f32x4 s_ZeroVec(0.0f, 0.0f, 0.0f, 0.0f);\r\nconst f32x4 s_AxisY(0.0f, 1.0f, 0.0f, 0.0f);\r\nclass BoxData {\r\n    public f32x3u minPt = f32x3u(0.0f, 0.0f, 0.0f);\r\n    public f32x4 extent4 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);\r\n}\r\nVectorSingle OptimizeSimdOps(in VectorSingle a, in VectorSingle b, in VectorDouble d, in MatrixSingle m, in BoxData box, in f32 scale, mut BoxData outBox) {\r\n    const MatrixSingle idMat = MatrixSingle(\r\n        1.0f, 0.0f, 0.0f, 0.0f,\r\n        0.0f, 1.0f, 0.0f, 0.0f,\r\n        0.0f, 0.0f, 1.0f, 0.0f,\r\n        0.0f, 0.0f, 0.0f, 1.0f\r\n    );\r\n    const MatrixSingle scaledMat = idMat * scale;\r\n    const MatrixSingle projMat = MatrixSingle(\r\n        a.x, 0.0f, 0.0f, 0.0f,\r\n        0.0f, a.y, 0.0f, 0.0f,\r\n        0.0f, 0.0f, a.z, a.w,\r\n        0.0f, 0.0f, 1.0f, 0.0f\r\n    );\r\n    const VectorSingle unitMul = (a * 1.0f) + (b * -1.0f);\r\n    const VectorSingle negFma = (-a) * b + unitMul;\r\n    const VectorSingle splatMul = VectorSingle(scale) * 2.0f;\r\n    const VectorSingle pad3 = VectorSingle(scale, scale, scale, 0.0f);\r\n    const VectorSingle signFlipSplat = VectorSingle(scale, -scale, scale, -scale);\r\n    const f32 dot3ZeroW = Dot(a, VectorSingle(1.0f, 2.0f, 3.0f, 0.0f));\r\n    const f32 sumAll = Dot(a, VectorSingle(1.0f));\r\n    const VectorSingle satClamp = Clamp(a, 0.0f, 1.0f);\r\n    const VectorSingle satMinMax = Min(Max(b, 0.0f), 1.0f);\r\n    const VectorSingle storageSwiz = VectorSingle(box.minPt.z, box.minPt.y, box.minPt.x, 0.0f);\r\n    const VectorSingle storageBinOp = VectorSingle(box.minPt.x + box.extent4.x, box.minPt.y + box.extent4.y, box.minPt.z + box.extent4.z, 0.0f);\r\n    const VectorSingle storageNeg3 = VectorSingle(-box.minPt.x, -box.minPt.y, -box.minPt.z, 0.0f);\r\n    const VectorSingle laneMathMin = VectorSingle(Min(a.x, b.x), Min(a.y, b.y), Min(a.z, b.z), Min(a.w, b.w));\r\n    const VectorSingle altMaskSplat = VectorSingle(scale, 0.0f, scale, 0.0f);\r\n    const VectorSingle zeroSubAdd = (0.0f - a) + (b - 0.0f);\r\n    const VectorSingle lerpZero = Lerp(a, b, 0.0f);\r\n    const f32 swizGetX = (a.zyx).x;\r\n    const f32 max3 = Max(a.x, Max(a.y, a.z));\r\n    const VectorSingle max4Splat = VectorSingle(Max(Max(a.x, a.y), Max(a.z, a.w)));\r\n    const u32 bitsY = bit_cast<u32>(a.y);\r\n    const VectorSingle swizFromDouble = VectorSingle(cast<f32>(d.z), cast<f32>(d.y), cast<f32>(d.x), cast<f32>(d.w));\r\n    const MatrixSingle mulTrans = Transpose(m * scaledMat);\r\n    const f32x4 zeroStorageVec = f32x4(0.0f);\r\n    const f32x4x4 zeroStorageMat = f32x4x4(0.0f);\r\n    const VectorSingle unitVec = VectorSingle(1.0f, 1.0f, 1.0f, 1.0f);\r\n    const VectorSingle halfVec = VectorSingle(0.5f);\r\n    const VectorSingle axisW = VectorSingle(0.0f, 0.0f, 0.0f, 1.0f);\r\n    const VectorSingle constZero = VectorSingle(s_ZeroVec);\r\n    const VectorSingle constAxisY = VectorSingle(s_AxisY);\r\n    const VectorSingle negRep = VectorSingle(-scale, -scale, -scale, -scale);\r\n    const VectorSingle masked3 = VectorSingle(a.x, a.y, a.z, 0.0f);\r\n    const VectorSingle clearX = VectorSingle(0.0f, a.y, a.z, a.w);\r\n    const VectorSingle flipYW = VectorSingle(a.x, -a.y, a.z, -a.w);\r\n    const VectorSingle storageMaskXY = VectorSingle(box.extent4.x, box.extent4.y, 0.0f, 0.0f);\r\n    const VectorSingle neg3KeepW = VectorSingle(-a.x, -a.y, -a.z, a.w);\r\n    const VectorSingle laneBinOp = VectorSingle(a.x * scale, a.y * scale, a.z * scale, 0.0f);\r\n    const VectorSingle axisYWithW = VectorSingle(0.0f, 1.0f, 0.0f, a.w);\r\n    const VectorDouble xyUnitZW = VectorDouble(d.x, d.y, 1.0, 1.0);\r\n    const VectorSingle splatZ = a.zzzz;\r\n    const VectorSingle foldedSwiz = (a.yzxw).wxyz;\r\n    const VectorSingle identitySwiz = (a.yzxw).zxyw;\r\n    const VectorSingle fromDouble = VectorSingle(cast<f32>(d.x), cast<f32>(d.y), cast<f32>(d.z), cast<f32>(d.w));\r\n    const VectorSingle proj = a * Dot(a.xyz, b.xyz);\r\n    const VectorSingle scaled = b * VectorSingle(scale);\r\n    const VectorSingle invLen = a * Rsqrt(LengthSq(a.xyz));\r\n    const VectorSingle pt = Mul(VectorSingle(box.minPt, s_AffineW), scaledMat);\r\n    const VectorSingle pt2 = Mul(VectorSingle(a.x, a.y, 0.0f, 1.0f), projMat);\r\n    const VectorSingle nrm = Mul(VectorSingle(b, 0.0f), m) + unitMul;\r\n    const MatrixSingle transposed = Transpose(m);\r\n    const VectorSingle transRow0 = Mul(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), transposed);\r\n    const VectorSingle transRow2 = Mul(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), Transpose(m));\r\n    const VectorSingle matCol0 = Mul(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), m);\r\n    const VectorSingle norm3 = Normalize(a.xyz);\r\n    const VectorSingle norm3ZeroW = VectorSingle(norm3, 0.0f);\r\n    const VectorSingle scaledNorm3 = norm3 * 2.0f;\r\n    const VectorSingle scaledNorm3Swiz = VectorSingle(scaledNorm3.y, scaledNorm3.z, scaledNorm3.x, 0.0f);\r\n    const VectorDouble mixedBounds = VectorDouble(Min(d.x, 1.0), Min(d.y, 2.0), Max(d.z, 3.0), Max(d.w, 4.0));\r\n    const VectorSingle nonUniformAdd = VectorSingle(a.x + scale, a.y + 1.0f, a.z + 2.0f, a.w + 3.0f);\r\n    const VectorSingle mixedAddSub = VectorSingle(a.x + b.x, a.y - b.y, a.z + b.z, a.w - b.w);\r\n    const VectorSingle uniformLaneMul = VectorSingle(a.x * b.y, a.y * b.y, a.z * b.y, a.w * b.y);\r\n    const VectorSingle planeEq = VectorSingle(norm3, -Dot(norm3.xyz, b.xyz));\r\n    const VectorSingle negNorm3ZeroW = VectorSingle(-norm3, 0.0f);\r\n    const VectorSingle negScaleFma = a * (-scale) + b;\r\n    const VectorDouble minD(cast<f64>(a.x), cast<f64>(a.y), 0.0, 0.0);\r\n    const VectorDouble divD = VectorDouble(d.x, d.y, 0.0, 0.0) / xyUnitZW;\r\n    const VectorDouble maxD = Max(minD, divD);\r\n    const VectorSingle narrowXY = VectorSingle(cast<f32>(maxD.x), cast<f32>(maxD.y), 0.0f, 0.0f);\r\n    const VectorSingle negAxisZ = VectorSingle(0.0f, 0.0f, -1.0f, 0.0f);\r\n    const VectorSingle unitXW = VectorSingle(1.0f, 0.0f, 0.0f, 1.0f);\r\n    const VectorSingle negZPosW = VectorSingle(0.0f, 0.0f, -1.0f, 1.0f);\r\n    const VectorSingle withUnitW = VectorSingle(a, 1.0f);\r\n    const f32 idxGetZ = a[2u];\r\n    outBox.extent4 = f32x4(box.minPt.x, box.minPt.y, box.minPt.z, 0.0f);\r\n    outBox.extent4 = f32x4(a, b.w);\r\n    if(!IsFinite(box.extent4[0u]) || !IsFinite(box.extent4[1u]) || !IsFinite(box.extent4[2u]) || !IsFinite(box.extent4[3u]))\r\n        return negAxisZ;\r\n    if(!IsFinite(d.x) || d.x > 10.0 || !IsFinite(d.y) || d.y > 10.0)\r\n        return constZero;\r\n    if(Abs(box.minPt.x) > 1.0f || Abs(box.minPt.y) > 1.0f || Abs(box.minPt.z) > 1.0f)\r\n        return constAxisY;\r\n    if(!IsFinite(a.x) || !IsFinite(a.y) || !IsFinite(a.z) || !IsFinite(a.w) || !IsFinite(a.x + a.z) || !IsFinite(a.y + a.w) || a.x < 0.0f || a.y < 0.0f || a.z < 0.0f || a.w < 0.0f)\r\n        return unitVec;\r\n    if(scale >= a.x && 2.0f >= a.y && scale < a.z && 2.0f < a.w)\r\n        return planeEq;\r\n    if(a.x <= a.z && a.y <= a.w && IsFinite(b.xyz) && a.x == b.x && a.y == b.y && a.z == b.z)\r\n        return halfVec + axisW + VectorSingle(xyUnitZW) + VectorSingle(mixedBounds);\r\n    return masked3 + clearX + flipYW + storageMaskXY + negRep + neg3KeepW + laneBinOp + axisYWithW + splatZ + foldedSwiz + identitySwiz + fromDouble + swizFromDouble + max4Splat + proj + scaled + invLen + pt + pt2 + nrm + transRow0 + transRow2 + matCol0 + norm3ZeroW + scaledNorm3Swiz + nonUniformAdd + mixedAddSub + uniformLaneMul + planeEq + negNorm3ZeroW + negScaleFma + narrowXY + negAxisZ + unitXW + negZPosW + withUnitW + negFma + splatMul + pad3 + signFlipSplat + satClamp + satMinMax + storageSwiz + storageBinOp + storageNeg3 + laneMathMin + altMaskSplat + zeroSubAdd + lerpZero + Mul(a, mulTrans) + VectorSingle(dot3ZeroW + sumAll + swizGetX + idxGetZ + max3 + cast<f32>(bitsY) + zeroStorageVec.x + zeroStorageMat[0][0]);\r\n}\r\n";
-
-const StringView s_SimdSpecJobNodeReflectionSource =
-    "[reflect]\r\nclass JobNode {\r\n    public i32 visibleId = 1;\r\n    private i32 hiddenState = 2;\r\n    [reflect]\r\n    private i32 reflectedSecret = 3;\r\n    private void internalHelper() {}\r\n    [reflect]\r\n    private void reflectedHelper() {}\r\n    public void run() {}\r\n}\r\n";
-
-const StringView s_SimdSpecUncapturedThisInLambdaSource =
-    "class BadNode {\r\n    public i32 x = 1;\r\n    public i32 test()const {\r\n        auto fn = lambda() -> i32 {\r\n            return this.x;\r\n        };\r\n        return fn();\r\n    }\r\n}\r\n";
-
-const StringView s_SimdSpecMutateInThisLambdaSource =
-    "class BadConstThis {\r\n    public i32 x = 1;\r\n    public void test() {\r\n        auto fn = lambda[in this]() -> void {\r\n            this.x = 2;\r\n        };\r\n        fn();\r\n    }\r\n}\r\n";
-
-const StringView s_SimdSpecDuplicateDefaultSwitchSource =
-    "void BadSwitch(in u32 x) {\r\n    switch (x) {\r\n    default:\r\n        break;\r\n    default:\r\n        break;\r\n    }\r\n}\r\n";
-
-const StringView s_SimdSpecNumericGrammarValidSource =
-    "u8 Integer(in StringView s){ return ClassifyIntegerGrammar(s); }\nb8 Incomplete(in StringView s){ return ClassifyFloatGrammar(s) == s_NumericGrammarIncomplete; }\nf32 Bound(in f64 v, in b8 upper){ return RoundF64ToF32Bound(v, upper); }\nf64 Step(in f64 v, in f64 lo, in f64 hi, in f64 delta, in b8 up){ return StepF64Bounded(v, lo, hi, delta, up); }\nvoid Advance(mut u64 value){ AdvanceWrappingNonzeroU64(value); }\nu32 Width(in u32 value){ return BitWidthLowU32(value, 8u); }\n";
-
-const Array<StringView, 7u> s_SimdSpecNumericExpectedTokens = Array<StringView, 7u>(
-    MStringView("::ClassifyIntegerGrammar("),
-    MStringView("::ClassifyFloatGrammar("),
-    MStringView("::RoundF64ToF32Bound("),
-    MStringView("::StepF64Bounded("),
-    MStringView("::AdvanceWrappingNonzero("),
-    MStringView("::BitWidthLowU32("),
-    MStringView("::s_NumericGrammarIncomplete")
-);
-
-const Array<StringView, 8u> s_SimdSpecNumericInvalidSources = Array<StringView, 8u>(
-    MStringView("u8 F(in u32 value){ return ClassifyIntegerGrammar(value); }"),
-    MStringView("f32 F(in f32 value, in b8 upper){ return RoundF64ToF32Bound(value, upper); }"),
-    MStringView("f32 F(in f64 value, in u32 upper){ return RoundF64ToF32Bound(value, upper); }"),
-    MStringView("f64 F(in f64 v, in b8 up){ return StepF64Bounded(v, v, v, v); }"),
-    MStringView("f64 F(in f64 v, in u32 up){ return StepF64Bounded(v, v, v, v, up); }"),
-    MStringView("void F(in u64 v){ AdvanceWrappingNonzeroU64(v); }"),
-    MStringView("void F(mut u32 v){ AdvanceWrappingNonzeroU64(v); }"),
-    MStringView("u32 F(in u64 v){ return BitWidthLowU32(v, 8u); }")
-);
-
-const StringView s_SimdSpecRectValidSource =
-    "type RectVec = VectorSingle;\nVectorSingle Combine(in RectVec a, in RectVec b){ return IntersectRectVec(IntersectRectBoundsVec(a, b), b); }\nb8 Visible(in RectVec a, in RectVec b){ return HasVisibleRectIntersectionVec(a, b); }\nVectorSingle Inset(in RectVec a, in RectVec b){ return InsetRectVec(a, b); }\nvoid Take(in RectVec v){} void Call(in RectVec a, in RectVec b){ Take(IntersectRectVec(a, b)); }\n";
-
-const Array<StringView, 3u> s_SimdSpecRectInvalidSources = Array<StringView, 3u>(
-    MStringView("VectorSingle F(in VectorSingle a){ return IntersectRectVec(a, 1.0f); }"),
-    MStringView("VectorSingle F(in VectorDouble a, in VectorSingle b){ return IntersectRectVec(a, b); }"),
-    MStringView("VectorSingle F(in MatrixSingle a, in VectorSingle b){ return IntersectRectVec(a, b); }")
-);
-
-const Array<StringView, 2u> s_SimdSpecRectMutationSources = Array<StringView, 2u>(
-    MStringView("void Take(mut VectorSingle v){} void F(in VectorSingle a){ Take(IntersectRectVec(a, a)); }"),
-    MStringView("void Take(mut b8 v){} void F(in VectorSingle a){ Take(HasVisibleRectIntersectionVec(a, a)); }")
-);
-
-const StringView s_SimdSpecInvalidBoundArgSource =
-    "interface ITask {\r\n    void execute(in f32 dt);\r\n}\r\nclass PlainData {\r\n    public u32 value = 0;\r\n}\r\nclass TaskRunner<T : ITask> {\r\n    public T task = T();\r\n}\r\nvoid BadUse() {\r\n    TaskRunner<PlainData> runner = TaskRunner<PlainData>();\r\n}\r\n";
-
-const StringView s_SimdSpecDowncastInterfaceSource =
-    "interface ITask {\r\n    void execute(in f32 dt);\r\n}\r\nclass PhysicsTask : ITask {\r\n    public void execute(in f32 dt) override {}\r\n}\r\nvoid BadDowncast(in ITask task) {\r\n    PhysicsTask p = cast<PhysicsTask>(task);\r\n}\r\n";
-
-const StringView s_SimdSpecConstViolationSource =
-    "class Counter {\r\n    private u32 count = 0;\r\n    public void bump() {\r\n        this.count += 1;\r\n    }\r\n}\r\nvoid BadConstCall(in Counter c) {\r\n    c.bump();\r\n}\r\n";
-
-const StringView s_SimdSpecByValueInterfaceVarSource =
-    "interface IComponent {\r\n    void step(in f32 dt);\r\n}\r\nclass Comp : IComponent {\r\n    public void step(in f32 dt) override {}\r\n}\r\nvoid BadByValue() {\r\n    Comp c = Comp();\r\n    IComponent val = c;\r\n}\r\n";
-
-const StringView s_SimdSpecMismatchedOverrideConstSource =
-    "interface IComponent {\r\n    u32 id()const;\r\n}\r\nclass BadComp : IComponent {\r\n    public u32 id() override {\r\n        return 0;\r\n    }\r\n}\r\n";
-
-const StringView s_SimdSpecSplitImplSource =
-    "#include \"shared_service.adhd\"\r\ni32 SharedService::accumulate(in i32 delta) {\r\n    this.m_total += delta;\r\n    return this.m_total;\r\n}\r\n";
-
-const StringView s_SimdSpecTransitiveImplSource =
-    "#include \"split_decl.adhd\"\r\ni32 ComputeCrossFile(in i32 x) {\r\n    return x + s_LeafBias;\r\n}\r\nT CrossBox<T>::fetch()const {\r\n    return this.m_item;\r\n}\r\n";
-
-const StringView s_SimdSpecLaneIndexEdgesSource =
-    "f32 Lanes(mut VectorSingle value, in usize index) {\r\n    value[2u] = 1.0f;\r\n    value[index] = 2.0f;\r\n    return value[2u] + value[index];\r\n}\r\n";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

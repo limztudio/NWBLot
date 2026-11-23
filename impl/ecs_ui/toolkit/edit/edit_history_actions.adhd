@@ -9,7 +9,7 @@
 
 
 class EditHistoryActions{
-    private void commit(
+    [cpp_unwind] private void commit(
         in StringView value,
         in Span<usize> newBoundaries,
         in usize anchor,
@@ -30,7 +30,12 @@ class EditHistoryActions{
         mut u64 inOutCompositionGeneration,
         mut u64 inOutRevision
     ){
-        inOutText.assign(value);
+        inOutText.reserve(value.size());
+        inOutBoundaries.reserve(newBoundaries.size());
+        if(value.empty())
+            inOutText.clear();
+        else
+            inOutText.assign(value);
         inOutBoundaries.clear();
         for(usize i = 0u; i < newBoundaries.size(); ++i)
             inOutBoundaries.push_back(newBoundaries[i]);
@@ -52,7 +57,7 @@ class EditHistoryActions{
     }
 
 
-    public b8 restore(
+    [cpp_unwind] public b8 restore(
         in StringView value,
         in usize anchor,
         in usize caret,
@@ -100,7 +105,7 @@ class EditHistoryActions{
         return true;
     }
 
-    public b8 undo(
+    [cpp_unwind] public b8 undo(
         in Span<EditHistoryRecord> history,
         in EditTextMode textMode,
         mut String inOutText,
@@ -144,7 +149,7 @@ class EditHistoryActions{
         );
     }
 
-    public b8 redo(
+    [cpp_unwind] public b8 redo(
         in Span<EditHistoryRecord> history,
         in EditTextMode textMode,
         mut String inOutText,

@@ -131,6 +131,24 @@ class MeshSkinningRuntimeInstance{
     }
 }
 
+class RuntimeSkinPayloadScratch{
+    public Vector<SkeletonJointMatrix> poseJoints;
+    public Vector<SkeletonJointMatrix> jointMatrices;
+    public usize skinInfluenceCount = 0u;
+    public u32 resolvedSkinningMode = cast<u32>(SkeletonSkinningMode::LinearBlend);
+
+    public void reset(in u32 skinningMode){
+        this.skinInfluenceCount = 0u;
+        this.jointMatrices.clear();
+        this.poseJoints.clear();
+        this.resolvedSkinningMode = skinningMode;
+    }
+
+    public b8 hasActiveSkin()const{
+        return this.skinInfluenceCount != 0u && !this.jointMatrices.empty();
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -203,24 +221,6 @@ MeshSkinningResourceBuffers CaptureMeshSkinningResourceBuffers(in MeshSkinningRu
     buffers[17u] = instance.meshletLocalBoundsBuffer;
     buffers[18u] = instance.localBoundsBuffer;
     return buffers;
-}
-
-class RuntimeSkinPayloadScratch{
-    public Vector<SkeletonJointMatrix> poseJoints;
-    public Vector<SkeletonJointMatrix> jointMatrices;
-    public usize skinInfluenceCount = 0u;
-    public u32 resolvedSkinningMode = cast<u32>(SkeletonSkinningMode::LinearBlend);
-
-    public void reset(in u32 skinningMode){
-        this.skinInfluenceCount = 0u;
-        this.jointMatrices.clear();
-        this.poseJoints.clear();
-        this.resolvedSkinningMode = skinningMode;
-    }
-
-    public b8 hasActiveSkin()const{
-        return this.skinInfluenceCount != 0u && !this.jointMatrices.empty();
-    }
 }
 
 Expected<Span<SkeletonJointMatrix>> ResolveMeshSkinningGpuJointPalette(

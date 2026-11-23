@@ -78,12 +78,11 @@ class UiSkin{
         return TryFindUiSkinRegionIndex(Span<UiSkinRegion>(this.m_regions), Span<u32>(this.m_regionIndex), name);
     }
     public b8 hasRegion(in Name name)const{ return this.findRegionIndex(name).has_value(); }
-    public b8 tryFindRegion(in Name name, mut UiSkinRegion outRegion)const{
-        Expected<usize> regionPosition = this.findRegionIndex(name);
+    public Expected<UiSkinRegion> tryFindRegion(in Name name)const{
+        const Expected<usize> regionPosition = this.findRegionIndex(name);
         if(!regionPosition.has_value())
-            return false;
-        outRegion = this.m_regions[regionPosition.value()];
-        return true;
+            return MakeUnexpected(regionPosition.error());
+        return this.m_regions[regionPosition.value()];
     }
 
     private void rebuildRegionIndex(){

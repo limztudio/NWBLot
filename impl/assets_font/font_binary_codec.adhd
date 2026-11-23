@@ -50,26 +50,25 @@ class FontBinaryCodec{
             return;
     }
 
-    public b8 deserialize(in Span<u8> binary, mut Vector<u8> outFontBytes, mut u32 outFaceIndex)const{
+    public Expected<u32> deserialize(in Span<u8> binary, mut Vector<u8> outFontBytes)const{
         usize cursor = 0u;
         const Expected<FontBinaryHeader> headerResult = ReadPOD<FontBinaryHeader>(binary, cursor);
         if(!headerResult.has_value()){
             error("Font::loadBinary failed: malformed header");
-            return false;
+            return MakeUnexpected(Failure());
         }
         const FontBinaryHeader header = headerResult.value();
         if(header.magic != s_FontBinaryMagic){
             error("Font::loadBinary failed: invalid font asset format; recook required");
-            return false;
+            return MakeUnexpected(Failure());
         }
         const usize remainingBytes = binary.size() - cursor;
         if(!this.validatePayloadHeader(header, remainingBytes))
-            return false;
+            return MakeUnexpected(Failure());
 
         if(!ReadBinaryVectorPayload(binary, remainingBytes, cursor, outFontBytes).has_value())
-            return false;
-        outFaceIndex = header.faceIndex;
-        return true;
+            return MakeUnexpected(Failure());
+        return header.faceIndex;
     }
 }
 

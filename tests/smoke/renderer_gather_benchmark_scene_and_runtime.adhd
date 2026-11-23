@@ -16,9 +16,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-StringView GatherBenchmarkProjectName(){
-    return "RendererGatherBenchmark";
-}
+const f32 s_GatherBenchmarkFixedDelta = 0.016666667f;
+const u32 s_GatherBenchmarkInFlightRanges = 32u;
+const StringView s_GatherBenchmarkSharedWorkload = "shared";
+const StringView s_GatherBenchmarkRuntimeWorkload = "runtime";
+const StringView s_GatherBenchmarkMemoryMode = "memory";
+const StringView s_GatherBenchmarkTimingMode = "timing";
+const SmokeMeshRef s_GatherBenchmarkOctahedronMesh = "project/meshes/octahedron";
+const SmokeMeshRef s_GatherBenchmarkPlaneMesh = "project/meshes/shadow_plane";
+const SmokeMaterialRef s_GatherBenchmarkOpaqueMaterial = "project/smoke/reflection/materials/opaque";
+const SmokeMaterialRef s_GatherBenchmarkGlassMaterial = "project/smoke/gather_benchmark/materials/glass_00";
+const SmokeModelRef s_GatherBenchmarkCharacterModel = "project/characters/body/model";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class GatherBenchmarkTimingPass : IRenderPass{
     public GatherBenchmarkTimingPass(mut GraphicsRuntime graphics){}
@@ -38,26 +50,6 @@ class GatherBenchmarkTimingPass : IRenderPass{
 
     public b8 shouldRenderUnfocused()override{ return true; }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const f32 s_GatherBenchmarkFixedDelta = 0.016666667f;
-const u32 s_GatherBenchmarkInFlightRanges = 32u;
-const StringView s_GatherBenchmarkSharedWorkload = "shared";
-const StringView s_GatherBenchmarkRuntimeWorkload = "runtime";
-const StringView s_GatherBenchmarkMemoryMode = "memory";
-const StringView s_GatherBenchmarkTimingMode = "timing";
-const SmokeMeshRef s_GatherBenchmarkOctahedronMesh = "project/meshes/octahedron";
-const SmokeMeshRef s_GatherBenchmarkPlaneMesh = "project/meshes/shadow_plane";
-const SmokeMaterialRef s_GatherBenchmarkOpaqueMaterial = "project/smoke/reflection/materials/opaque";
-const SmokeMaterialRef s_GatherBenchmarkGlassMaterial = "project/smoke/gather_benchmark/materials/glass_00";
-const SmokeModelRef s_GatherBenchmarkCharacterModel = "project/characters/body/model";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 class RendererGatherBenchmarkScene{
     public b8 build(in StringView workload, in b8 runtime, mut World world){
@@ -190,10 +182,6 @@ class RendererGatherBenchmarkScene{
     private RendererGatherBenchmarkSceneCounts m_counts;
     private b8 m_runtime = false;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [arena]
 class RendererGatherBenchmarkProjectImpl : IProjectEntryCallbacks{
@@ -399,6 +387,10 @@ class RendererGatherBenchmarkProjectImpl : IProjectEntryCallbacks{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+StringView GatherBenchmarkProjectName(){
+    return "RendererGatherBenchmark";
+}
 
 ProjectFrameClientSize GetProjectFrameClientSize(){ return ProjectFrameClientSize(960u, 720u); }
 

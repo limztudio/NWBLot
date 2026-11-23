@@ -4,17 +4,19 @@
 
 #include <tests/common/gtest_macros.adhd>
 #include "ui_fixture_widget_base.adhd"
+#include <tests/unit/ui/fixture_text_shaping.adhd>
+#include <impl/ecs_ui/toolkit/edit/grapheme.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <tests/unit/ui/fixture_text_shaping.adhd>
-#include <impl/ecs_ui/toolkit/edit/grapheme.adhd>
-
 const f32 s_CaretGlyphAdvance = 10.0f;
 const StringView s_MultilineViewSkinPath = "tests/ui/widgets/multiline_view/skin";
-Rect MultilineViewViewport(){ return Rect(0.0f, 0.0f, 500.0f, 500.0f); }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class CaretShaper : ITextShaper{
     public f32 scalarAdvance = s_CaretGlyphAdvance;
@@ -131,6 +133,11 @@ class MultilineViewFixture{
     }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Rect MultilineViewViewport(){ return Rect(0.0f, 0.0f, 500.0f, 500.0f); }
 
 HitTarget MakeHorizontalNavigationPart(in HitTarget host){
     HitTarget part = HitTarget();

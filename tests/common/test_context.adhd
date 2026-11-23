@@ -10,6 +10,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<tests/common/gtest_sdk.h>"), cpp_name("::NWB::Tests::RecordTestProperty")]
+extern void RecordTestProperty(in StringView key, in StringView text);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_DefaultNearlyEqualEpsilon = 0.00001f;
 const Name s_TestArena = s_CommonCaseNameTestsCommonTestArena;
 const Name s_DefaultTestArena = s_CommonCaseNameTestsCommonDefaultTestArena;
 const Array<u32, 3u> s_TriangleIndices = Array<u32, 3u>(0u, 1u, 2u);
@@ -32,8 +40,6 @@ Path RepoRootOf(in StringView sourceFile){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-const f32 s_DefaultNearlyEqualEpsilon = 0.00001f;
 
 b8 NearlyEqual(in f32 lhs, in f32 rhs, in f32 epsilon){
     return Abs(lhs - rhs) <= epsilon;
@@ -88,9 +94,6 @@ usize CountText(in StringView text, in StringView expected){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[cpp_header("<tests/common/gtest_sdk.h>"), cpp_name("::NWB::Tests::RecordTestProperty")]
-extern void RecordTestProperty(in StringView key, in StringView text);
 
 void RecordUnsignedTestProperty(in StringView key, in u64 value){
     String text;

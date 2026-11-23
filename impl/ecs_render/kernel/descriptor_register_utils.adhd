@@ -26,17 +26,6 @@ Expected<GpuDescriptorHandle> RegisterDescriptor(mut GpuDescriptorHeap heap, in 
     return MakeUnexpected(Failure());
 }
 
-b8 TryAdoptDescriptor(in Expected<GpuDescriptorHandle> descriptor, mut GpuDescriptorHandle outHandle){
-    if(!descriptor.has_value())
-        return false;
-    outHandle = descriptor.value();
-    return true;
-}
-
-b8 AssignDescriptor(mut GpuDescriptorHeap heap, in GpuDescriptorClass descriptorClass, in DescriptorWriteItem item, mut GpuDescriptorHandle outHandle){
-    return TryAdoptDescriptor(RegisterDescriptor(heap, descriptorClass, item), outHandle);
-}
-
 b8 ReplaceDescriptor(mut GpuDescriptorHeap heap, in GpuDescriptorClass descriptorClass, in DescriptorWriteItem item, mut GpuDescriptorHandle inOutHandle){
     const Expected<GpuDescriptorHandle> descriptor = RegisterDescriptor(heap, descriptorClass, item);
     if(!descriptor.has_value())
@@ -67,17 +56,7 @@ Expected<GpuDescriptorHandle> RegisterSampledTexture(mut GpuDescriptorHeap heap,
     return RegisterSampledTexture(heap, descriptorClass, texture, Format::UNKNOWN, s_AllSubresources, TextureDimension::Unknown);
 }
 
-b8 AssignSampledTexture(
-    mut GpuDescriptorHeap heap,
-    in GpuDescriptorClass descriptorClass,
-    in TextureHandle texture,
-    in Format format,
-    in TextureSubresourceSet subresources,
-    in TextureDimension dimension,
-    mut GpuDescriptorHandle outHandle
-){
-    return TryAdoptDescriptor(RegisterSampledTexture(heap, descriptorClass, texture, format, subresources, dimension), outHandle);
-}
+
 
 Expected<GpuDescriptorHandle> RegisterStorageTexture(
     mut GpuDescriptorHeap heap,
@@ -95,34 +74,16 @@ Expected<GpuDescriptorHandle> RegisterStorageTexture(mut GpuDescriptorHeap heap,
     return RegisterStorageTexture(heap, texture, Format::UNKNOWN, TextureDimension::Unknown);
 }
 
-b8 AssignStorageTexture(
-    mut GpuDescriptorHeap heap,
-    in TextureHandle texture,
-    in Format format,
-    in TextureDimension dimension,
-    mut GpuDescriptorHandle outHandle
-){
-    return TryAdoptDescriptor(RegisterStorageTexture(heap, texture, format, dimension), outHandle);
-}
+
 
 Expected<GpuDescriptorHandle> RegisterSampler(mut GpuDescriptorHeap heap, mut RhiSampler sampler){
     return RegisterDescriptor(heap, GpuDescriptorClass::Sampler, DescriptorWriteItemSampler(0u, sampler));
 }
 
-b8 AssignSampler(mut GpuDescriptorHeap heap, mut RhiSampler sampler, mut GpuDescriptorHandle outHandle){
-    return TryAdoptDescriptor(RegisterSampler(heap, sampler), outHandle);
-}
+
 
 Expected<GpuDescriptorHandle> RegisterStructuredBuffer(mut GpuDescriptorHeap heap, mut Buffer buffer){
     return RegisterDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemStructuredBufferSrv(0u, buffer));
-}
-
-b8 AssignStructuredBuffer(mut GpuDescriptorHeap heap, mut Buffer buffer, mut GpuDescriptorHandle outHandle){
-    return TryAdoptDescriptor(RegisterStructuredBuffer(heap, buffer), outHandle);
-}
-
-b8 AssignStructuredBufferUav(mut GpuDescriptorHeap heap, mut Buffer buffer, mut GpuDescriptorHandle outHandle){
-    return AssignDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemStructuredBufferUav(0u, buffer), outHandle);
 }
 
 Expected<GpuDescriptorHandle> RegisterConstantBuffer(mut GpuDescriptorHeap heap, mut Buffer buffer){
@@ -134,10 +95,6 @@ Expected<GpuDescriptorHandle> RegisterConstantBuffer(mut GpuDescriptorHeap heap,
         return MakeUnexpected(Failure());
     BufferHandle localBuffer = buffer;
     return RegisterDescriptor(heap, GpuDescriptorClass::UniformBuffer, DescriptorWriteItemConstantBuffer(0u, localBuffer.deref()));
-}
-
-b8 AssignConstantBuffer(mut GpuDescriptorHeap heap, mut Buffer buffer, mut GpuDescriptorHandle outHandle){
-    return TryAdoptDescriptor(RegisterConstantBuffer(heap, buffer), outHandle);
 }
 
 DescriptorWriteItem MakeHeapBufferDescriptorWriteItem(mut Buffer buffer, in GpuDescriptorClass descriptorClass, in b8 writable){
@@ -155,7 +112,11 @@ Expected<GpuDescriptorHandle> RegisterHeapBuffer(mut GpuDescriptorHeap heap, mut
 b8 EnsureHeapBuffer(in GpuDescriptorClass descriptorClass, in b8 writable, mut GpuDescriptorHeap heap, mut Buffer buffer, mut GpuDescriptorHandle inOutHandle){
     if(inOutHandle.valid())
         return IsDescriptorClass(inOutHandle, descriptorClass);
-    return TryAdoptDescriptor(RegisterHeapBuffer(heap, buffer, descriptorClass, writable), inOutHandle);
+    const Expected<GpuDescriptorHandle> descriptor = RegisterHeapBuffer(heap, buffer, descriptorClass, writable);
+    if(!descriptor.has_value())
+        return false;
+    inOutHandle = descriptor.value();
+    return true;
 }
 
 b8 ReplaceHeapBuffer(in GpuDescriptorClass descriptorClass, in b8 writable, mut GpuDescriptorHeap heap, mut Buffer buffer, mut GpuDescriptorHandle inOutHandle){

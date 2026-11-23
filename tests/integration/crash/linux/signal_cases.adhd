@@ -9,12 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void OriginalSignalOwner(in i32 signal){}
-void ForeignSignalOwner(in i32 signal){}
-
-void OriginalTerminateOwner(){ ExitTestChild(123); }
-void ForeignTerminateOwner(){ ExitTestChild(124); }
-
 class SignalEnvironment{
     public AlternateStack stack;
     public SignalAction action;
@@ -35,6 +29,18 @@ class SignalEnvironment{
         }
     }
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void OriginalSignalOwner(in i32 signal){}
+
+void ForeignSignalOwner(in i32 signal){}
+
+void OriginalTerminateOwner(){ ExitTestChild(123); }
+
+void ForeignTerminateOwner(){ ExitTestChild(124); }
 
 void VerifyCrash_UninstallRestoresDisabledAlternateStackAndPriorSignalAndTerminateOwners(){
     const StringView group = "crash_restore_native_hooks";
@@ -104,8 +110,11 @@ void VerifyCrash_UninstallPreservesNewerForeignNativeHookOwners(){
 }
 
 NWB_ADHD_GTEST(Crash, UninstallRestoresDisabledAlternateStackAndPriorSignalAndTerminateOwners, VerifyCrash_UninstallRestoresDisabledAlternateStackAndPriorSignalAndTerminateOwners)
+
 NWB_ADHD_GTEST(Crash, UninstallPreservesNewerForeignNativeHookOwners, VerifyCrash_UninstallPreservesNewerForeignNativeHookOwners)
+
 NWB_ADHD_GTEST(Crash, LinuxSignalHandlerWritesCrashPackage, VerifyCrash_LinuxSignalHandlerWritesCrashPackage)
+
 NWB_ADHD_GTEST(Crash, LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers, VerifyCrash_LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers)
 
 

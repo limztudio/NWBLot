@@ -103,50 +103,44 @@ class MaterialBinaryReader{
         return false;
     }
 
-    private b8 readPreamble(
-        in Span<u8> binary,
-        mut usize inOutCursor,
-        mut String outShaderVariant,
-        mut Name outMaterialInterface
-    )const{
+    private Expected<Name> readPreamble(in Span<u8> binary, mut usize inOutCursor, mut String outShaderVariant)const{
         const Expected<u32> magicResult = ReadPOD<u32>(binary, inOutCursor);
         if(!magicResult.has_value()){
             error("Material::loadBinary failed: missing magic");
-            return false;
+            return MakeUnexpected(Failure());
         }
         if(magicResult.value() != s_MaterialBinaryMagic){
             error("Material::loadBinary failed: invalid magic");
-            return false;
+            return MakeUnexpected(Failure());
         }
 
         const Expected<StringView> shaderVariant = ReadString(binary, inOutCursor);
         if(!shaderVariant.has_value()){
             error("Material::loadBinary failed: missing shader variant");
-            return false;
+            return MakeUnexpected(Failure());
         }
         outShaderVariant.assign(shaderVariant.value());
         if(outShaderVariant.empty()){
             error("Material::loadBinary failed: shader variant is empty");
-            return false;
+            return MakeUnexpected(Failure());
         }
 
         const Expected<NameHash> materialInterfaceHashResult = ReadPOD<NameHash>(binary, inOutCursor);
         if(!materialInterfaceHashResult.has_value()){
             error("Material::loadBinary failed: missing material interface");
-            return false;
+            return MakeUnexpected(Failure());
         }
-        outMaterialInterface = Name(materialInterfaceHashResult.value());
-        if(outMaterialInterface == s_NameNone){
+        const Name materialInterface = Name(materialInterfaceHashResult.value());
+        if(materialInterface == s_NameNone){
             error("Material::loadBinary failed: material interface is required");
-            return false;
+            return MakeUnexpected(Failure());
         }
-        return true;
+        return materialInterface;
     }
 
-    private b8 readTypedLayout(
+    private Expected<u64> readTypedLayout(
         in Span<u8> binary,
         mut usize inOutCursor,
-        mut u64 outLayoutHash,
         mut Vector<MaterialTypedLayoutBlock> outBlocks,
         mut Vector<MaterialTypedLayoutField> outFields,
         mut Vector<u8> outBlockBytes,
@@ -160,46 +154,46 @@ class MaterialBinaryReader{
         const Expected<u64> layoutHashResult = ReadPOD<u64>(binary, inOutCursor);
         if(!layoutHashResult.has_value()){
             error("Material::loadBinary failed: missing typed layout header");
-            return false;
+            return MakeUnexpected(Failure());
         }
         const u64 layoutHash = layoutHashResult.value();
         const Expected<u32> blockCountResult = ReadPOD<u32>(binary, inOutCursor);
         if(!blockCountResult.has_value()){
             error("Material::loadBinary failed: missing typed layout header");
-            return false;
+            return MakeUnexpected(Failure());
         }
         const u32 blockCount = blockCountResult.value();
         const Expected<u32> fieldCountResult = ReadPOD<u32>(binary, inOutCursor);
         if(!fieldCountResult.has_value()){
             error("Material::loadBinary failed: missing typed layout header");
-            return false;
+            return MakeUnexpected(Failure());
         }
         const u32 fieldCount = fieldCountResult.value();
 
         if(cast<usize>(blockCount) > (binary.size() - inOutCursor) / s_MaterialTypedLayoutBlockBytes){
             error("Material::loadBinary failed: typed layout block count exceeds available data");
-            return false;
+            return MakeUnexpected(Failure());
         }
         outBlocks.reserve(cast<usize>(blockCount));
         for(u32 i = 0u; i < blockCount; ++i){
             const Expected<MaterialTypedLayoutBlockBinary> blockBinaryResult = ReadPOD<MaterialTypedLayoutBlockBinary>(binary, inOutCursor);
             if(!blockBinaryResult.has_value()){
                 error("Material::loadBinary failed: malformed typed layout block at index {}", i);
-                return false;
+                return MakeUnexpected(Failure());
             }
             outBlocks.push_back(this.unpackTypedLayoutBlock(blockBinaryResult.value()));
         }
 
         if(cast<usize>(fieldCount) > (binary.size() - inOutCursor) / s_MaterialTypedLayoutFieldBytes){
             error("Material::loadBinary failed: typed layout field count exceeds available data");
-            return false;
+            return MakeUnexpected(Failure());
         }
         outFields.reserve(cast<usize>(fieldCount));
         for(u32 i = 0u; i < fieldCount; ++i){
             const Expected<MaterialTypedLayoutFieldBinary> fieldBinaryResult = ReadPOD<MaterialTypedLayoutFieldBinary>(binary, inOutCursor);
             if(!fieldBinaryResult.has_value()){
                 error("Material::loadBinary failed: malformed typed layout field at index {}", i);
-                return false;
+                return MakeUnexpected(Failure());
             }
             outFields.push_back(this.unpackTypedLayoutField(fieldBinaryResult.value()));
         }
@@ -207,12 +201,12 @@ class MaterialBinaryReader{
         const Expected<u32> blockByteCountResult = ReadPOD<u32>(binary, inOutCursor);
         if(!blockByteCountResult.has_value()){
             error("Material::loadBinary failed: missing typed block byte count");
-            return false;
+            return MakeUnexpected(Failure());
         }
         const u32 blockByteCount = blockByteCountResult.value();
         if(cast<usize>(blockByteCount) > binary.size() - inOutCursor){
             error("Material::loadBinary failed: typed block byte count exceeds available data");
-            return false;
+            return MakeUnexpected(Failure());
         }
 
         outBlockBytes.resize(cast<usize>(blockByteCount));
@@ -223,65 +217,59 @@ class MaterialBinaryReader{
         const Expected<u32> resourceReferenceCountResult = ReadPOD<u32>(binary, inOutCursor);
         if(!resourceReferenceCountResult.has_value()){
             error("Material::loadBinary failed: missing material resource reference count");
-            return false;
+            return MakeUnexpected(Failure());
         }
         const u32 resourceReferenceCount = resourceReferenceCountResult.value();
         if(cast<usize>(resourceReferenceCount) > (binary.size() - inOutCursor) / s_MaterialResourceReferenceBytes){
             error("Material::loadBinary failed: material resource reference count exceeds available data");
-            return false;
+            return MakeUnexpected(Failure());
         }
         outResourceReferences.reserve(cast<usize>(resourceReferenceCount));
         for(u32 i = 0u; i < resourceReferenceCount; ++i){
             const Expected<MaterialResourceReferenceBinary> resourceReferenceBinaryResult = ReadPOD<MaterialResourceReferenceBinary>(binary, inOutCursor);
             if(!resourceReferenceBinaryResult.has_value()){
                 error("Material::loadBinary failed: malformed material resource reference at index {}", i);
-                return false;
+                return MakeUnexpected(Failure());
             }
             const Expected<MaterialResourceReference> resourceReference = this.tryUnpackResourceReference(resourceReferenceBinaryResult.value());
             if(!resourceReference.has_value()){
                 error("Material::loadBinary failed: material resource reference at index {} has an invalid asset identity", i);
-                return false;
+                return MakeUnexpected(Failure());
             }
             outResourceReferences.push_back(resourceReference.value());
         }
 
         if(!LogAndValidateMaterialTypedLayout(layoutHash, outBlocks, outFields, outBlockBytes, s_MaterialLoadBinaryContextText))
-            return false;
+            return MakeUnexpected(Failure());
         if(!ValidateMaterialResourceReferences(outBlocks, outFields, outResourceReferences)){
             error("Material::loadBinary failed: material resource references do not match typed layout");
-            return false;
+            return MakeUnexpected(Failure());
         }
 
-        outLayoutHash = layoutHash;
-        return true;
+        return layoutHash;
     }
 
-    private b8 readOptionalAvboitPixelShader(
-        in Span<u8> binary,
-        in StringView passLabel,
-        mut usize inOutCursor,
-        mut AssetRef<PixelShader> outShaderRef
-    )const{
-        outShaderRef = AssetRef<PixelShader>();
+    private Expected<AssetRef<PixelShader>> readOptionalAvboitPixelShader(in Span<u8> binary, in StringView passLabel, mut usize inOutCursor)const{
+        AssetRef<PixelShader> shaderRef;
         const Expected<u32> hasShaderResult = ReadPOD<u32>(binary, inOutCursor);
         if(!hasShaderResult.has_value()){
             error("Material::loadBinary failed: missing AVBOIT {} pixel shader presence flag", passLabel);
-            return false;
+            return MakeUnexpected(Failure());
         }
         const u32 hasShader = hasShaderResult.value();
         if(!this.validateAvboitPresenceFlag(passLabel, hasShader))
-            return false;
+            return MakeUnexpected(Failure());
         if(hasShader == 1u){
             const Expected<NameHash> shaderNameHashResult = ReadPOD<NameHash>(binary, inOutCursor);
             if(!shaderNameHashResult.has_value()){
                 error("Material::loadBinary failed: missing AVBOIT {} pixel shader name", passLabel);
-                return false;
+                return MakeUnexpected(Failure());
             }
-            outShaderRef.virtualPath = Name(shaderNameHashResult.value());
-            if(!this.validateAvboitShaderRef(passLabel, outShaderRef.valid()))
-                return false;
+            shaderRef.virtualPath = Name(shaderNameHashResult.value());
+            if(!this.validateAvboitShaderRef(passLabel, shaderRef.valid()))
+                return MakeUnexpected(Failure());
         }
-        return true;
+        return shaderRef;
     }
 
     private b8 readFooter(
@@ -318,68 +306,73 @@ class MaterialBinaryReader{
         }
         outSurfaceDispatchId = surfaceDispatchIdResult.value();
 
-        if(!this.readOptionalAvboitPixelShader(binary, s_MaterialAvboitAccumulatePassLabel, inOutCursor, outAvboitAccumulatePixelShader))
+        const Expected<AssetRef<PixelShader>> accumulate = this.readOptionalAvboitPixelShader(binary, s_MaterialAvboitAccumulatePassLabel, inOutCursor);
+        if(!accumulate.has_value())
             return false;
-        if(!this.readOptionalAvboitPixelShader(binary, s_MaterialAvboitOccupancyPassLabel, inOutCursor, outAvboitOccupancyPixelShader))
+        outAvboitAccumulatePixelShader = accumulate.value();
+        const Expected<AssetRef<PixelShader>> occupancy = this.readOptionalAvboitPixelShader(binary, s_MaterialAvboitOccupancyPassLabel, inOutCursor);
+        if(!occupancy.has_value())
             return false;
-        if(!this.readOptionalAvboitPixelShader(binary, s_MaterialAvboitExtinctionPassLabel, inOutCursor, outAvboitExtinctionPixelShader))
+        outAvboitOccupancyPixelShader = occupancy.value();
+        const Expected<AssetRef<PixelShader>> extinction = this.readOptionalAvboitPixelShader(binary, s_MaterialAvboitExtinctionPassLabel, inOutCursor);
+        if(!extinction.has_value())
             return false;
+        outAvboitExtinctionPixelShader = extinction.value();
 
         return true;
     }
 
-    private b8 readStageShaders<TStageShader>(
+    private Expected<u32> readStageShaders<TStageShader>(
         in Span<u8> binary,
         mut usize inOutCursor,
-        mut Array<AssetRef<TStageShader>, s_MaterialShaderStageCount> outStageShaders,
-        mut u32 outStageShaderCount
+        mut Array<AssetRef<TStageShader>, s_MaterialShaderStageCount> outStageShaders
     )const{
         for(usize i = 0u; i < s_MaterialShaderStageCount; ++i)
             outStageShaders[i].virtualPath = s_NameNone;
-        outStageShaderCount = 0u;
+        u32 stageShaderCount = 0u;
 
         const Expected<u32> shaderCountResult = ReadPOD<u32>(binary, inOutCursor);
         if(!shaderCountResult.has_value()){
             error("Material::loadBinary failed: missing shader count");
-            return false;
+            return MakeUnexpected(Failure());
         }
         const u32 shaderCount = shaderCountResult.value();
         if(!this.validateShaderCount(shaderCount, cast<u32>(s_MaterialShaderStageCount), binary.size() - inOutCursor, s_MaterialShaderEntryBytes))
-            return false;
+            return MakeUnexpected(Failure());
 
         for(u32 i = 0u; i < shaderCount; ++i){
             const Expected<u8> shaderTypeResult = ReadPOD<u8>(binary, inOutCursor);
             if(!shaderTypeResult.has_value()){
                 error("Material::loadBinary failed: malformed shader stage at index {}", i);
-                return false;
+                return MakeUnexpected(Failure());
             }
             const Expected<NameHash> shaderNameHashResult = ReadPOD<NameHash>(binary, inOutCursor);
             if(!shaderNameHashResult.has_value()){
                 error("Material::loadBinary failed: malformed shader stage at index {}", i);
-                return false;
+                return MakeUnexpected(Failure());
             }
 
             const u8 shaderTypeValue = shaderTypeResult.value();
             const Name shaderName = Name(shaderNameHashResult.value());
             if(shaderName == s_NameNone){
                 error("Material::loadBinary failed: shader stage entries must not be empty");
-                return false;
+                return MakeUnexpected(Failure());
             }
             if(!IsSupportedMaterialShaderStageValue(shaderTypeValue)){
                 error("Material::loadBinary failed: shader stage {} is not a material stage; only mesh and pixel are allowed", cast<u32>(shaderTypeValue));
-                return false;
+                return MakeUnexpected(Failure());
             }
 
             const usize shaderIndex = cast<usize>(shaderTypeValue);
             if(outStageShaders[shaderIndex].valid()){
                 error("Material::loadBinary failed: duplicate shader stage index {}", shaderIndex);
-                return false;
+                return MakeUnexpected(Failure());
             }
 
             outStageShaders[shaderIndex].virtualPath = shaderName;
-            ++outStageShaderCount;
+            ++stageShaderCount;
         }
-        return true;
+        return stageShaderCount;
     }
 
     public b8 deserialize<TStageShader>(
@@ -403,21 +396,26 @@ class MaterialBinaryReader{
         mut AssetRef<PixelShader> outAvboitExtinctionPixelShader
     )const{
         usize cursor = 0u;
-        if(!this.readPreamble(binary, cursor, outShaderVariant, outMaterialInterface))
+        const Expected<Name> materialInterface = this.readPreamble(binary, cursor, outShaderVariant);
+        if(!materialInterface.has_value())
             return false;
-        if(!this.readTypedLayout(
+        outMaterialInterface = materialInterface.value();
+        const Expected<u64> typedLayoutHash = this.readTypedLayout(
             binary,
             cursor,
-            outTypedLayoutHash,
             outTypedLayoutBlocks,
             outTypedLayoutFields,
             outTypedBlockBytes,
             outResourceReferences
-        ))
+        );
+        if(!typedLayoutHash.has_value())
             return false;
+        outTypedLayoutHash = typedLayoutHash.value();
         assert(outTypedLayoutHash != 0u);
-        if(!this.readStageShaders(binary, cursor, outStageShaders, outStageShaderCount))
+        const Expected<u32> stageShaderCount = this.readStageShaders(binary, cursor, outStageShaders);
+        if(!stageShaderCount.has_value())
             return false;
+        outStageShaderCount = stageShaderCount.value();
         if(!this.readFooter(
             binary,
             cursor,

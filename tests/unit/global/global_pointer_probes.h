@@ -13,7 +13,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_pointer_failure_tests{
+namespace PointerFailureTests{
 
 inline constexpr u32 s_PointerFailure = NWB::Tests::GlobalCases::s_GlobalPointerFailure;
 inline constexpr u32 s_ComparisonFailure = NWB::Tests::GlobalCases::s_GlobalComparisonFailure;

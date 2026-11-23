@@ -12,6 +12,9 @@ const u32 s_SkinInfluenceJointCount = 4u;
 const u32 s_SkinBinaryMagic = 0x534B4E31u;
 const f32 s_SkinValidationEpsilon = 0.000001f;
 const f32 s_SkinWeightSumEpsilon = 0.001f;
+const usize s_SkinHeaderBinaryBytes = 152u;
+const usize s_SkinInfluence4BinaryBytes = 24u;
+const usize s_SkeletonJointMatrixBinaryBytes = 48u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -177,10 +180,6 @@ b8 ValidateSkinAssetPayload(
         return false;
     return ValidateSkinInverseBindMatrixStream(inverseBindMatrices);
 }
-
-const usize s_SkinHeaderBinaryBytes = 152u;
-const usize s_SkinInfluence4BinaryBytes = 24u;
-const usize s_SkeletonJointMatrixBinaryBytes = 48u;
 
 b8 ValidateSkinCookInfluenceJointIndices(
     in StringView nwbFilePathText,

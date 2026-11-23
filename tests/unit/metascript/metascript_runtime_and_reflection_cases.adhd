@@ -26,11 +26,15 @@ type Value = MetascriptValue;
 const StringView s_MetaRuntimeItemsField = s_MetascriptValueItemsField;
 const usize s_MetaRuntimeInitialCount = s_MetascriptValueInitialCount;
 const Array<usize, 3u> s_ReallocationSourceIndices(0u, 3u, 7u);
+const Array<i32, 4u> s_FloatingPointRoundingModes = Array<i32, 4u>(FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO);
+const i32 s_FeAllExcept = FE_ALL_EXCEPT;
+const i32 s_FeInvalid = FE_INVALID;
+const StringView s_MetaRuntimeAssetVariable = "asset";
+const StringView s_MetaRuntimeNameField = "name";
 
-static_assert(!s_InvalidCharacterDecoded && s_InvalidCharacterValue == 7);
-static_assert(!s_CountsCopyConstructible && !s_CountsCopyAssignable);
-static_assert(s_CountsMoveConstructible && s_CountsMoveAssignable);
-static_assert(s_ReadyNothrow && !s_ConcreteRecordNothrow && !s_VirtualRecordNothrow);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class InvalidTargetCase{
     public StringView source;
@@ -44,6 +48,7 @@ class InvalidTargetCase{
 }
 
 class UnexpectedReadFailure{}
+
 class ThrowingReader : ReaderWithSpan{
     [cpp_unwind]
     public Expected<usize> readBytes(mut Span<u8> buffer)override{
@@ -51,9 +56,11 @@ class ThrowingReader : ReaderWithSpan{
         return MakeUnexpected(Failure());
     }
 }
+
 class EndOfFileReader : ReaderWithSpan{
     public Expected<usize> readBytes(mut Span<u8> buffer)override{ return cast<usize>(0u); }
 }
+
 class RejectedReader : ReaderWithSpan{
     private b8 m_oversized;
     public RejectedReader(in b8 oversized){ this.m_oversized = oversized; }
@@ -63,6 +70,7 @@ class RejectedReader : ReaderWithSpan{
         return MakeUnexpected(Failure());
     }
 }
+
 class ScopedHeldFloatingPointEnvironment : NoCopy{
     private Expected<FloatingPointEnvironment> m_original = HoldFloatingPointExceptions();
     public b8 valid()const{ return this.m_original.has_value(); }
@@ -71,9 +79,22 @@ class ScopedHeldFloatingPointEnvironment : NoCopy{
             EXPECT_TRUE(SetFloatingPointEnvironment(this.m_original.value()).has_value());
     }
 }
-const Array<i32, 4u> s_FloatingPointRoundingModes = Array<i32, 4u>(FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO);
-const i32 s_FeAllExcept = FE_ALL_EXCEPT;
-const i32 s_FeInvalid = FE_INVALID;
+
+class CountStorageObserver : ICountSnapshotObserver{
+    private mut ScratchStorage m_expected;
+    public CountStorageObserver(mut ScratchStorage expected){ this.m_expected = expected; }
+    public b8 inspect(in OwnedCounts counts)override{ return TestUsesStorage(counts.values, this.m_expected); }
+}
+
+static_assert(!s_InvalidCharacterDecoded && s_InvalidCharacterValue == 7);
+static_assert(!s_CountsCopyConstructible && !s_CountsCopyAssignable);
+static_assert(s_CountsMoveConstructible && s_CountsMoveAssignable);
+static_assert(s_ReadyNothrow && !s_ConcreteRecordNothrow && !s_VirtualRecordNothrow);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 usize FillIntegerListToCapacity(mut Value list, mut HeapStorage arena){
     list.makeList();
     list.asList().reserve(s_MetaRuntimeInitialCount);
@@ -88,10 +109,15 @@ void MetaRuntime_MakeSingleStringList(mut Value list, mut HeapStorage arena, in 
     Value item(text, arena);
     AppendMovedValue(list, item);
 }
+
 b8 HasVariable(in Document doc, in StringView name){ return doc.hasVariable(name); }
+
 in Value RequireVariable(in Document doc, in StringView name){ return doc.borrowVariable(name).value(); }
+
 b8 HasDeclaration(in Document doc, in StringView name){ return doc.declarationType(name).has_value(); }
+
 StringView DeclarationType(in Document doc, in StringView name){ return doc.declarationType(name).value(); }
+
 StringView DeclarationVariable(in Document doc, in StringView name){
     StringView result = "";
     doc.forEachDeclaration(lambda[in name, mut result](in StringView type, in StringView variable) -> b8{
@@ -100,12 +126,19 @@ StringView DeclarationVariable(in Document doc, in StringView name){
     });
     return result;
 }
+
 b8 HasStruct(in Document doc, in StringView name){ return BorrowStructMetadata(doc, name).has_value(); }
+
 in Value StructMetadata(in Document doc, in StringView name){ return BorrowStructMetadata(doc, name).value(); }
+
 b8 HasValueField(in Value value, in StringView name){ return value.hasField(name); }
+
 in Value RequireValueField(in Value value, in StringView name){ return value.borrowField(name).value(); }
+
 StringView DocumentErrorMessage(in Document doc, in usize index){ return StringView(doc.errors()[index].message); }
+
 String MakeRepeatedCharString(in usize count, in u8 ch){ String result; result.assign(count, ch); return result; }
+
 String BuildStructGrowthDocumentSource(){
     String source("struct Description{ float value; }; Description runtime;\n");
     for(usize index = 0u; index < 128u; ++index){
@@ -115,12 +148,6 @@ String BuildStructGrowthDocumentSource(){
     }
     return source;
 }
-const StringView s_MetaRuntimeAssetVariable = "asset";
-const StringView s_MetaRuntimeNameField = "name";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void MetaRuntime_CheckParseFailsWithMessage(in StringView source, in StringView expectedMessage){
     DestinationArena arena = DestinationArena();
@@ -708,30 +735,46 @@ void VerifyAdhdCompiler_NestedMotherArenaRebindsAcrossTransientScratchDestructio
 }
 
 NWB_ADHD_GTEST(Metascript, EmptyAndStructOnlyDocumentsHaveNoImplicitVariables, VerifyMetascript_EmptyAndStructOnlyDocumentsHaveNoImplicitVariables)
+
 NWB_ADHD_GTEST(Metascript, StructNamesAndVariablesUseSeparateNamespaces, VerifyMetascript_StructNamesAndVariablesUseSeparateNamespaces)
+
 NWB_ADHD_GTEST(Metascript, StructMetadataOwnsSourceAndSurvivesVariableStorageGrowth, VerifyMetascript_StructMetadataOwnsSourceAndSurvivesVariableStorageGrowth)
+
 NWB_ADHD_GTEST(Metascript, StructAndVariableDuplicatesAreRejectedInTheirOwnNamespaces, VerifyMetascript_StructAndVariableDuplicatesAreRejectedInTheirOwnNamespaces)
+
 NWB_ADHD_GTEST(Metascript, ReparsingClearsStructsVariablesDeclarationsAndErrors, VerifyMetascript_ReparsingClearsStructsVariablesDeclarationsAndErrors)
+
 NWB_ADHD_GTEST(Metascript, InvalidAssignmentTargetsPreserveDiagnosticsAndDeclaredValue, VerifyMetascript_InvalidAssignmentTargetsPreserveDiagnosticsAndDeclaredValue)
+
 NWB_ADHD_GTEST(Metascript, UnicodeCharLiteralRejectsWideValueBeforeNarrowing, VerifyMetascript_UnicodeCharLiteralRejectsWideValueBeforeNarrowing)
+
 NWB_ADHD_GTEST(Metascript, CrossArenaMoveAssignmentCopiesIntoDestinationArena, VerifyMetascript_CrossArenaMoveAssignmentCopiesIntoDestinationArena)
+
 NWB_ADHD_GTEST(Metascript, CrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena, VerifyMetascript_CrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena)
+
 NWB_ADHD_GTEST(Metascript, CrossArenaListConcatCopiesIntoResultArena, VerifyMetascript_CrossArenaListConcatCopiesIntoResultArena)
+
 NWB_ADHD_GTEST(Metascript, CrossArenaAppendCopiesIntoDestinationArena, VerifyMetascript_CrossArenaAppendCopiesIntoDestinationArena)
+
 NWB_ADHD_GTEST(Metascript, ListSelfAppendCopiesOriginalValues, VerifyMetascript_ListSelfAppendCopiesOriginalValues)
+
 NWB_ADHD_GTEST(Metascript, AppendSelfMoveCopiesOriginalValue, VerifyMetascript_AppendSelfMoveCopiesOriginalValue)
+
 NWB_ADHD_GTEST(Metascript, AppendExistingListElementMoveCopiesBeforeDestroy, VerifyMetascript_AppendExistingListElementMoveCopiesBeforeDestroy)
+
 NWB_ADHD_GTEST(Metascript, ListAppendExistingElementCopiesBeforeReallocation, VerifyMetascript_ListAppendExistingElementCopiesBeforeReallocation)
+
 NWB_ADHD_GTEST(Metascript, AppendsFirstMiddleAndLastElementsAcrossReallocation, VerifyMetascript_AppendsFirstMiddleAndLastElementsAcrossReallocation)
+
 NWB_ADHD_GTEST(Metascript, ConcatenatesNestedListElementsAcrossReallocation, VerifyMetascript_ConcatenatesNestedListElementsAcrossReallocation)
+
 NWB_ADHD_GTEST(Metascript, UnexpectedReaderExceptionsPropagateWithoutBecomingParseErrors, VerifyMetascript_UnexpectedReaderExceptionsPropagateWithoutBecomingParseErrors)
+
 NWB_ADHD_GTEST(Metascript, ReportedReaderFailureRemainsAnExplicitParseError, VerifyMetascript_ReportedReaderFailureRemainsAnExplicitParseError)
+
 NWB_ADHD_GTEST(Metascript, SuccessfulZeroReaderCountIsEndOfFileInsteadOfReadFailure, VerifyMetascript_SuccessfulZeroReaderCountIsEndOfFileInsteadOfReadFailure)
+
 NWB_ADHD_GTEST(Metascript, OversizedReaderResultIsRejectedBeforeUsingItsBuffer, VerifyMetascript_OversizedReaderResultIsRejectedBeforeUsingItsBuffer)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyDiagnosticPathsBorrowUntilFormattingAndCaptureUtf8(){
     AdhdTestArena arena;
@@ -758,6 +801,7 @@ void VerifyDiagnosticPathsBorrowUntilFormattingAndCaptureUtf8(){
     longPath.append(s_MaxEventTextBytes * 2u, 'x');
     verifyCapture(StringView(longPath), true);
 }
+
 void VerifyOptionalAndExpectedBorrowTheOriginalValue(){
     Array<u32, 1u> data(7u);
     mut u32 original = data[0u];
@@ -773,6 +817,7 @@ void VerifyOptionalAndExpectedBorrowTheOriginalValue(){
     EXPECT_EQ(fromSpan.current(), 23u);
     EXPECT_EQ(ReadOptionalCount(read), 23u);
 }
+
 void VerifyCheckedMapLookupRetainsTheOriginalElement(){
     HashMap<u32, u32> counts;
     counts[42u] = 11u;
@@ -780,6 +825,7 @@ void VerifyCheckedMapLookupRetainsTheOriginalElement(){
     counts.at(42u) = 23u;
     EXPECT_EQ(retained.current(), 23u);
 }
+
 void VerifyExpectedStateChangesRetainValueAndErrorInTheirDestinationArena(){
     HeapStorage destination(Name("tests/metascript/cached_result"));
     TestValueSlot<CachedCountResult> resultSlot;
@@ -806,11 +852,7 @@ void VerifyExpectedStateChangesRetainValueAndErrorInTheirDestinationArena(){
     EXPECT_EQ(retained.counts.value().front(), 17u);
     EXPECT_EQ(retained.issue.error().front(), 4u);
 }
-class CountStorageObserver : ICountSnapshotObserver{
-    private mut ScratchStorage m_expected;
-    public CountStorageObserver(mut ScratchStorage expected){ this.m_expected = expected; }
-    public b8 inspect(in OwnedCounts counts)override{ return TestUsesStorage(counts.values, this.m_expected); }
-}
+
 void VerifyBorrowOnlyPublisherKeepsMoveOnlySnapshotInOwnerArena(){
     HeapStorage destination(Name("tests/metascript/owned_counts"));
     TestValueSlot<OwnedCounts> retainedSlot;
@@ -848,6 +890,7 @@ void VerifyBorrowOnlyPublisherKeepsMoveOnlySnapshotInOwnerArena(){
     ASSERT_EQ(retained.values.size(), 1u);
     EXPECT_EQ(retained.values[0u], 5u);
 }
+
 [cpp_unwind]
 void VerifyCppUnwindPreservesExceptionAcrossNestedLambdas(){
     const CppUnwindCallback probe = CppUnwindCallback();
@@ -856,33 +899,76 @@ void VerifyCppUnwindPreservesExceptionAcrossNestedLambdas(){
     EXPECT_TRUE(ThrowsException<UnexpectedReadFailure>(lambda[in dispatch, mut callback]() -> void{ dispatch.record(callback); }));
 }
 
+[cpp_unwind]
+void VerifyCppUnwindParallelDrainsAcceptedWorkBeforeCaptureAndScratchDestroy(){
+    const CppUnwindCallback probe = CppUnwindCallback();
+    ParallelUnwindTracker tracker;
+    Func<void()> callback = lambda[]() -> void{ ThrowTestException<UnexpectedReadFailure>(UnexpectedReadFailure()); };
+    EXPECT_TRUE(ThrowsException<UnexpectedReadFailure>(lambda[in probe, mut tracker, mut callback]() -> void{ probe.runParallelUnwind(tracker, callback); }));
+    EXPECT_EQ(tracker.runs(), 1u);
+    EXPECT_EQ(tracker.valueSum(), 7u);
+    EXPECT_TRUE(tracker.finished());
+    EXPECT_TRUE(tracker.postObservedFinished());
+    EXPECT_TRUE(tracker.preObservedFinished());
+    EXPECT_EQ(tracker.postOrder(), 1u);
+    EXPECT_EQ(tracker.preOrder(), 2u);
+}
+
 NWB_ADHD_GTEST(AdhdReflection, RejectsInvalidContainerEntriesWithoutPublishingEmptyNames, VerifyAdhdReflection_RejectsInvalidContainerEntriesWithoutPublishingEmptyNames)
+
 NWB_ADHD_GTEST(AdhdCompactString, SearchAndBoundariesUseCanonicalStoredText, VerifyAdhdCompactString_SearchAndBoundariesUseCanonicalStoredText)
+
 NWB_ADHD_GTEST(AdhdCompiler, ScalarLerpEvaluatesSideEffectOnce, VerifyAdhdCompiler_ScalarLerpEvaluatesSideEffectOnce)
+
 NWB_ADHD_GTEST(AdhdCompiler, ScalarLerpPreservesMoveOnlyOperandCategories, VerifyAdhdCompiler_ScalarLerpPreservesMoveOnlyOperandCategories)
+
 NWB_ADHD_GTEST(AdhdCompiler, UserCallableShadowsBuiltinInGeneratedCode, VerifyAdhdCompiler_UserCallableShadowsBuiltinInGeneratedCode)
+
 NWB_ADHD_GTEST(AdhdCompiler, UserCallableShadowsBuiltinForSimd, VerifyAdhdCompiler_UserCallableShadowsBuiltinForSimd)
+
 NWB_ADHD_GTEST(AdhdCompiler, ResolvedBuiltinStillUsesSimdImplementation, VerifyAdhdCompiler_ResolvedBuiltinStillUsesSimdImplementation)
+
 NWB_ADHD_GTEST(AdhdCompiler, LocalCallableShadowsBuiltin, VerifyAdhdCompiler_LocalCallableShadowsBuiltin)
+
 NWB_ADHD_GTEST(AdhdCompiler, NestedSimdCallKeepsUserCallableIdentity, VerifyAdhdCompiler_NestedSimdCallKeepsUserCallableIdentity)
+
 NWB_ADHD_GTEST(AdhdCompiler, TransposeDoesNotFuseUserDefinedMultiply, VerifyAdhdCompiler_TransposeDoesNotFuseUserDefinedMultiply)
+
 NWB_ADHD_GTEST(AdhdCompiler, LocalCallableShadowsSimdReduction, VerifyAdhdCompiler_LocalCallableShadowsSimdReduction)
+
 NWB_ADHD_GTEST(AdhdCompiler, LocalParameterShadowsBuiltinConstant, VerifyAdhdCompiler_LocalParameterShadowsBuiltinConstant)
+
 NWB_ADHD_GTEST(AdhdCompiler, UnshadowedBuiltinConstantStillResolves, VerifyAdhdCompiler_UnshadowedBuiltinConstantStillResolves)
+
 NWB_ADHD_GTEST(AdhdCompiler, GlobalConstantShadowsBuiltinInTypeInference, VerifyAdhdCompiler_GlobalConstantShadowsBuiltinInTypeInference)
+
 NWB_ADHD_GTEST(AdhdCompiler, ScalarLerpKeepsFirstTemporaryCategory, VerifyAdhdCompiler_ScalarLerpKeepsFirstTemporaryCategory)
+
 NWB_ADHD_GTEST(AdhdCompiler, TrimViewBorrowsLocalCompactString, VerifyAdhdCompiler_TrimViewBorrowsLocalCompactString)
+
 NWB_ADHD_GTEST(AdhdCompiler, StringAndCompactSubstrPreserveOwnershipAndSingleEvaluation, VerifyAdhdCompiler_StringAndCompactSubstrPreserveOwnershipAndSingleEvaluation)
+
 NWB_ADHD_GTEST(AdhdCompiler, HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMutation, VerifyAdhdCompiler_HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMutation)
+
 NWB_ADHD_GTEST(AdhdCompiler, SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortCircuitedSignalingNaNs, VerifyAdhdCompiler_SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortCircuitedSignalingNaNs)
+
 NWB_ADHD_GTEST(AdhdCompiler, GlobalExportArenaFirstFormattingOverflowAndHeaderTracking, VerifyAdhdCompiler_GlobalExportArenaFirstFormattingOverflowAndHeaderTracking)
+
 NWB_ADHD_GTEST(AdhdCompiler, NestedMotherArenaRebindsAcrossTransientScratchDestruction, VerifyAdhdCompiler_NestedMotherArenaRebindsAcrossTransientScratchDestruction)
+
 NWB_ADHD_GTEST(AdhdCompiler, DiagnosticPathsBorrowUntilFormattingAndCaptureUtf8, VerifyDiagnosticPathsBorrowUntilFormattingAndCaptureUtf8)
+
 NWB_ADHD_GTEST(AdhdCompiler, OptionalAndExpectedBorrowTheOriginalValue, VerifyOptionalAndExpectedBorrowTheOriginalValue)
+
 NWB_ADHD_GTEST(AdhdCompiler, CheckedMapLookupRetainsTheOriginalElement, VerifyCheckedMapLookupRetainsTheOriginalElement)
+
 NWB_ADHD_GTEST(AdhdCompiler, ExpectedStateChangesRetainValueAndErrorInTheirDestinationArena, VerifyExpectedStateChangesRetainValueAndErrorInTheirDestinationArena)
+
 NWB_ADHD_GTEST(AdhdCompiler, BorrowOnlyPublisherKeepsMoveOnlySnapshotInOwnerArena, VerifyBorrowOnlyPublisherKeepsMoveOnlySnapshotInOwnerArena)
+
 NWB_ADHD_GTEST(AdhdCompiler, CppUnwindPreservesExceptionAcrossNestedLambdas, VerifyCppUnwindPreservesExceptionAcrossNestedLambdas)
+
+NWB_ADHD_GTEST(AdhdCompiler, CppUnwindParallelDrainsAcceptedWorkBeforeCaptureAndScratchDestroy, VerifyCppUnwindParallelDrainsAcceptedWorkBeforeCaptureAndScratchDestroy)
 
 void VerifySimdZeroAdditionPreservesSignedZeroAndSignalingNan(){
     const auto originalEnvironment = HoldFloatingPointExceptions();
@@ -933,6 +1019,7 @@ void VerifySimdZeroAdditionPreservesSignedZeroAndSignalingNan(){
         }
     }
 }
+
 NWB_ADHD_GTEST(AdhdCompiler, SimdZeroAdditionPreservesSignedZeroAndSignalingNan, VerifySimdZeroAdditionPreservesSignedZeroAndSignalingNan)
 
 void VerifySimdNegatedZeroPreservesSignAndAdditionFlags(){
@@ -994,6 +1081,7 @@ void VerifySimdNegatedZeroPreservesSignAndAdditionFlags(){
         }
     }
 }
+
 NWB_ADHD_GTEST(AdhdCompiler, SimdNegatedZeroPreservesSignAndAdditionFlags, VerifySimdNegatedZeroPreservesSignAndAdditionFlags)
 
 void VerifySimdZeroArithmeticPreservesExceptionalValuesAndFlags(){
@@ -1086,6 +1174,7 @@ void VerifySimdZeroArithmeticPreservesExceptionalValuesAndFlags(){
         }
     }
 }
+
 NWB_ADHD_GTEST(AdhdCompiler, SimdZeroArithmeticPreservesExceptionalValuesAndFlags, VerifySimdZeroArithmeticPreservesExceptionalValuesAndFlags)
 
 void VerifySimdProductPlusZeroPreservesNegativeZeroAddition(){
@@ -1104,6 +1193,7 @@ void VerifySimdProductPlusZeroPreservesNegativeZeroAddition(){
     EXPECT_EQ(VectorDoubleGetIntX(AddProductZeroRightDouble(value64, one64)), 0ull);
     EXPECT_EQ(VectorDoubleGetIntX(AddProductZeroLeftDouble(value64, one64)), 0ull);
 }
+
 NWB_ADHD_GTEST(AdhdCompiler, SimdProductPlusZeroPreservesNegativeZeroAddition, VerifySimdProductPlusZeroPreservesNegativeZeroAddition)
 
 

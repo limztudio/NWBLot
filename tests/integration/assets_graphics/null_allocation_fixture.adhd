@@ -12,6 +12,14 @@
 
 [cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::NullAllocation"), cpp_flags(polymorphic_base)]
 extern class NullAllocation;
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::RegisterBucket")]
+extern b8 RegisterTestCookBucket<Bucket>(mut CookEntryRegistry registry, in Name type);
+
+type NullAllocatedCodec = NameProbeCodec<NullAllocatedAsset>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class NullAllocationState{
     public u32 constructors = 0u;
@@ -34,11 +42,6 @@ class NullAllocatedAsset : NullAllocation{
     }
 }
 
-[asset_writer]
-b8 SerializeNullAllocatedAsset(in NullAllocatedAsset asset, mut Vector<u8> bytes){ return false; }
-
-type NullAllocatedCodec = NameProbeCodec<NullAllocatedAsset>;
-
 class NullAllocatedBucket : ICookEntryBucket, NullAllocation{
     public NullAllocatedBucket(mut GlobalAllocator storage){}
     public usize size()const override{ return 0u; }
@@ -47,8 +50,12 @@ class NullAllocatedBucket : ICookEntryBucket, NullAllocation{
     public b8 writeCookedAssets(mut CookEntryWriteContext context)override{ return false; }
 }
 
-[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::RegisterBucket")]
-extern b8 RegisterTestCookBucket<Bucket>(mut CookEntryRegistry registry, in Name type);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[asset_writer]
+b8 SerializeNullAllocatedAsset(in NullAllocatedAsset asset, mut Vector<u8> bytes){ return false; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

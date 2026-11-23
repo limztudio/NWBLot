@@ -133,6 +133,7 @@ void VerifyAssetsGraphics_MaterialKeyHashPreservesHighBytesAndPathSeparators(){
     EXPECT_EQ(packed.w, 3u);
 }
 
+[cpp_unwind]
 void VerifyAssetsGraphics_DuplicateMaterialBindIdentityIsRejectedBeforeMaterialMutation(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
@@ -153,6 +154,7 @@ void VerifyAssetsGraphics_DuplicateMaterialBindIdentityIsRejectedBeforeMaterialM
     EXPECT_EQ(materialEntries[0u].typedBlockBytes[0u], 0x2Au);
 }
 
+[cpp_unwind]
 void VerifyAssetsGraphics_MaterialBindSchemaValidation(){
     Array<StringView, 8u> expectedSymbols = Array<StringView, 8u>();
     expectedSymbols[0u] = "NWB_MATERIAL_BIND_INTERFACE_HASH_0";
@@ -1097,10 +1099,42 @@ void VerifyAssetsGraphics_ObjectGeometryMetadataRejectsRetiredVertexSourceSelect
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_unwind]
+void VerifyAssetsGraphics_FindOrBuildMaterialBindTypedLayoutUnwindsAtomicallyOnAllocationFailure(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
+    TestArena testArena = TestArena();
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_MaterialScratchArena);
+
+    const Expected<GraphicsTestPath> rootResultA = PrepareCaseRoot(testArena, "material_bind_oom_a");
+    ASSERT_TRUE(rootResultA.has_value());
+    Expected<MaterialBindEntry> parsedA = ParseTestMaterialBindFromText(s_MinimalMaterialBindSource, rootResultA.value(), testArena, scratch);
+    ASSERT_TRUE(parsedA.has_value());
+    SetMaterialBindEntryVirtualPath(parsedA.value(), s_ProjectMaterialInterfacesTestSurface);
+
+    const Expected<GraphicsTestPath> rootResultB = PrepareCaseRoot(testArena, "material_bind_oom_b");
+    ASSERT_TRUE(rootResultB.has_value());
+    Expected<MaterialBindEntry> parsedB = ParseTestMaterialBindFromText(s_UpdatedDefaultMaterialBindSource, rootResultB.value(), testArena, scratch);
+    ASSERT_TRUE(parsedB.has_value());
+    SetMaterialBindEntryVirtualPath(parsedB.value(), "project/material_interfaces/other_surface");
+
+    EXPECT_TRUE(VerifyFindOrBuildMaterialBindTypedLayoutOom(
+        parsedA.value(),
+        Name(s_ProjectMaterialInterfacesTestSurface),
+        parsedB.value(),
+        Name("project/material_interfaces/other_surface")
+    ));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_GTEST(AssetsGraphics, ResourceParameterCandidateRejectsExpressionsButPreservesBytes, VerifyAssetsGraphics_ResourceParameterCandidateRejectsExpressionsButPreservesBytes)
 NWB_ADHD_GTEST(AssetsGraphics, MaterialCookAdmissionRejectsMissingInputsAndCountOverflow, VerifyAssetsGraphics_MaterialCookAdmissionRejectsMissingInputsAndCountOverflow)
 NWB_ADHD_GTEST(AssetsGraphics, MaterialKeyHashPreservesHighBytesAndPathSeparators, VerifyAssetsGraphics_MaterialKeyHashPreservesHighBytesAndPathSeparators)
 NWB_ADHD_GTEST(AssetsGraphics, DuplicateMaterialBindIdentityIsRejectedBeforeMaterialMutation, VerifyAssetsGraphics_DuplicateMaterialBindIdentityIsRejectedBeforeMaterialMutation)
+NWB_ADHD_GTEST(AssetsGraphics, FindOrBuildMaterialBindTypedLayoutUnwindsAtomicallyOnAllocationFailure, VerifyAssetsGraphics_FindOrBuildMaterialBindTypedLayoutUnwindsAtomicallyOnAllocationFailure)
 NWB_ADHD_GTEST(AssetsGraphics, MaterialBindSchemaValidation, VerifyAssetsGraphics_MaterialBindSchemaValidation)
 NWB_ADHD_GTEST(AssetsGraphics, MaterialBindEngineAndProjectResourceValidation, VerifyAssetsGraphics_MaterialBindEngineAndProjectResourceValidation)
 NWB_ADHD_GTEST(AssetsGraphics, MaterialBindCookRejectsMalformedParametersAndInterfaceMismatch, VerifyAssetsGraphics_MaterialBindCookRejectsMalformedParametersAndInterfaceMismatch)

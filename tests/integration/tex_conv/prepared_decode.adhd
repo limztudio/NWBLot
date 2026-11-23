@@ -46,6 +46,7 @@ Expected<Texture> CookDecodedTexture(in Path sourcePath, in MetascriptDocument d
     return BuildTextureAsset(entry.value());
 }
 
+[cpp_unwind]
 b8 Decode(in StringView source, in StringView destination, in StringView mipText){
     const Expected<u32> mipIndexResult = ParseMipIndex(mipText);
     if(!mipIndexResult.has_value())

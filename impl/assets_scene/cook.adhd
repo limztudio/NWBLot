@@ -157,8 +157,12 @@ Expected<TransformComponentCookEntry> ParseTransformComponentCookMetadata(in Nam
     TransformComponentCookEntry entry;
     if(!ValidateOptionalSceneMetadataMap(file, value, s_TransformDiagnosticPrefix) || !AssignCookEntryVirtualPath(path, file, s_TransformDiagnosticPrefix, entry))
         return MakeUnexpected(Failure());
-    if(value.isMap() && !ParseTransformComponentData(file, value, entry.component))
-        return MakeUnexpected(Failure());
+    if(value.isMap()){
+        const Expected<TransformComponent> component = ParseTransformComponentData(file, value);
+        if(!component.has_value())
+            return MakeUnexpected(Failure());
+        entry.component = component.value();
+    }
     if(!BuildComponentAssetFromEntry<TransformComponentAsset, TransformComponentCookEntry>(entry).has_value())
         return MakeUnexpected(Failure());
     return entry;
@@ -168,8 +172,12 @@ Expected<CameraComponentCookEntry> ParseCameraComponentCookMetadata(in Name path
     CameraComponentCookEntry entry;
     if(!ValidateOptionalSceneMetadataMap(file, value, s_CameraDiagnosticPrefix) || !AssignCookEntryVirtualPath(path, file, s_CameraDiagnosticPrefix, entry))
         return MakeUnexpected(Failure());
-    if(value.isMap() && !ParseCameraComponentData(file, value, entry.component))
-        return MakeUnexpected(Failure());
+    if(value.isMap()){
+        const Expected<CameraComponent> component = ParseCameraComponentData(file, value);
+        if(!component.has_value())
+            return MakeUnexpected(Failure());
+        entry.component = component.value();
+    }
     if(!BuildComponentAssetFromEntry<CameraComponentAsset, CameraComponentCookEntry>(entry).has_value())
         return MakeUnexpected(Failure());
     return entry;
@@ -179,8 +187,12 @@ Expected<LightComponentCookEntry> ParseLightComponentCookMetadata(in Name path, 
     LightComponentCookEntry entry;
     if(!ValidateOptionalSceneMetadataMap(file, value, s_LightDiagnosticPrefix) || !AssignCookEntryVirtualPath(path, file, s_LightDiagnosticPrefix, entry))
         return MakeUnexpected(Failure());
-    if(value.isMap() && !ParseLightComponentData(file, value, entry.component))
-        return MakeUnexpected(Failure());
+    if(value.isMap()){
+        const Expected<LightComponent> component = ParseLightComponentData(file, value);
+        if(!component.has_value())
+            return MakeUnexpected(Failure());
+        entry.component = component.value();
+    }
     if(!BuildComponentAssetFromEntry<LightComponentAsset, LightComponentCookEntry>(entry).has_value())
         return MakeUnexpected(Failure());
     return entry;

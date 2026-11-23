@@ -11,18 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void EvaluateShadowOccluderMaterialCompleteness(
-    in b8 hasMaterialInfo,
-    in b8 transparent,
-    in u32 surfaceDispatchId,
-    mut b8 inOutContentComplete,
-    mut b8 outMarkOpticalSceneIncomplete
-){
-    if(!hasMaterialInfo || surfaceDispatchId == u32.max)
-        inOutContentComplete = false;
-    outMarkOpticalSceneIncomplete = !hasMaterialInfo || (transparent && surfaceDispatchId == u32.max);
-}
-
 class ShadowOccluderMaterialGather{
     private mut RendererMaterialSystem m_materialSystem;
     private mut ShadowMaterialSampledTextureCollector m_sampledTextureCollector;
@@ -85,6 +73,22 @@ class ShadowOccluderMaterialGather{
             this.m_opticalScene.markIncomplete();
         return true;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void EvaluateShadowOccluderMaterialCompleteness(
+    in b8 hasMaterialInfo,
+    in b8 transparent,
+    in u32 surfaceDispatchId,
+    mut b8 inOutContentComplete,
+    mut b8 outMarkOpticalSceneIncomplete
+){
+    if(!hasMaterialInfo || surfaceDispatchId == u32.max)
+        inOutContentComplete = false;
+    outMarkOpticalSceneIncomplete = !hasMaterialInfo || (transparent && surfaceDispatchId == u32.max);
 }
 
 

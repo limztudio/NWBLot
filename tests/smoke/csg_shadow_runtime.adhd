@@ -11,31 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-StringView CsgShadowProjectName(){
-    return "CsgShadowSmokeProject";
-}
-
-[cpp_unwind]
-Expected<NotNullUniquePtr<World>> CreateCsgShadowWorld(mut ProjectRuntimeContext context){
-    auto created = CreateSmokeWorld(CsgShadowProjectName(), context);
-    if(!created.has_value())
-        return MakeUnexpected(Failure());
-    mut NotNullUniquePtr<World> world = created.value();
-    mut RendererSystem renderer = AddSmokeRenderSystems(SmokeWorldRef(world), context);
-    ReflectionSettings reflection = ReflectionSettings();
-    reflection.traceMode = ReflectionTraceMode::Disabled;
-    [essential] assert(renderer.setReflectionSettings(reflection), "Invalid CSG shadow reflection settings");
-    renderer.setRefractionEnabled(false);
-    PresentationSettings presentation = PresentationSettings();
-    presentation.toneMap = PresentationToneMap::LinearClamp;
-    [essential] assert(renderer.setPresentationSettings(presentation), "Invalid CSG shadow presentation settings");
-    return TakeSmokeWorld(world);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const SmokeMeshRef s_CsgShadowPlaneMesh = "project/meshes/shadow_plane";
 
 
@@ -275,6 +250,27 @@ class CsgShadowSmokeProjectImpl : IProjectEntryCallbacks{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+StringView CsgShadowProjectName(){
+    return "CsgShadowSmokeProject";
+}
+
+[cpp_unwind]
+Expected<NotNullUniquePtr<World>> CreateCsgShadowWorld(mut ProjectRuntimeContext context){
+    auto created = CreateSmokeWorld(CsgShadowProjectName(), context);
+    if(!created.has_value())
+        return MakeUnexpected(Failure());
+    mut NotNullUniquePtr<World> world = created.value();
+    mut RendererSystem renderer = AddSmokeRenderSystems(SmokeWorldRef(world), context);
+    ReflectionSettings reflection = ReflectionSettings();
+    reflection.traceMode = ReflectionTraceMode::Disabled;
+    [essential] assert(renderer.setReflectionSettings(reflection), "Invalid CSG shadow reflection settings");
+    renderer.setRefractionEnabled(false);
+    PresentationSettings presentation = PresentationSettings();
+    presentation.toneMap = PresentationToneMap::LinearClamp;
+    [essential] assert(renderer.setPresentationSettings(presentation), "Invalid CSG shadow presentation settings");
+    return TakeSmokeWorld(world);
+}
 
 ProjectFrameClientSize GetProjectFrameClientSize(){
     return ProjectFrameClientSize(960, 720);

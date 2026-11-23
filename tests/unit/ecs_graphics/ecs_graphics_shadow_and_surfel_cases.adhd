@@ -48,12 +48,17 @@ extern b8 nwbSurfelSpawnCoversCandidate(in b8 sameCell, in f32 alignment, in f32
 extern const f32 s_TestSurfelGatherFullCoverageWeight;
 [cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_UPSAMPLE_NORMAL_GATE")]
 extern const f32 s_TestSurfelUpsampleNormalGate;
+
 type CommandQueueEnum = CommandQueue;
 type TransparentShadowSamplingEnum = TransparentShadowSampling;
 type ShadowReceiverResolutionEnum = ShadowReceiverResolution;
 type SurfelGiResolveResolutionEnum = SurfelGiResolveResolution;
 type ShadowSceneLightSpan = Span<SceneLightGpuData>;
 const usize s_ShadowInstanceGpuDataBytes = size_of<InstanceGpuData>();
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [ordered]
 class SoftShadowDispatchContext{
@@ -98,39 +103,6 @@ class TaskTimingFeedbackContext{
         }
         return Optional<GpuTaskTimingHistory>();
     }
-}
-
-GpuTaskId MakeGpuTaskId(in u32 generation, in u32 index){
-    GpuTaskId task;
-    task.generation = generation;
-    task.index = index;
-    return task;
-}
-RayTracingSceneContentStamp MakeRtSceneStamp(in u64 geometry, in u64 material, in b8 trusted){ return RayTracingSceneContentStamp(geometry, material, trusted); }
-QueueSubmissionToken MakeQueueToken(in u64 value, in u16 physicalQueueIndex, in u16 deviceGeneration, in CommandQueue queue){
-    QueueSubmissionToken token;
-    token.value = value;
-    token.physicalQueueIndex = physicalQueueIndex;
-    token.deviceGeneration = deviceGeneration;
-    token.queue = queue;
-    return token;
-}
-GpuTaskTimingFeedbackPolicy MakeFeedbackPolicy(
-    in f64 minimumAbsoluteBenefitSeconds,
-    in f64 minimumRelativeBenefit,
-    in u32 minimumFramesBetweenSwitches,
-    in u32 minimumSampleCount,
-    in u32 calibrationIntervalFrames,
-    in b8 enabled
-){
-    GpuTaskTimingFeedbackPolicy policy;
-    policy.minimumAbsoluteBenefitSeconds = minimumAbsoluteBenefitSeconds;
-    policy.minimumRelativeBenefit = minimumRelativeBenefit;
-    policy.minimumFramesBetweenSwitches = minimumFramesBetweenSwitches;
-    policy.minimumSampleCount = minimumSampleCount;
-    policy.calibrationIntervalFrames = calibrationIntervalFrames;
-    policy.enabled = enabled;
-    return policy;
 }
 
 [ordered]
@@ -225,6 +197,46 @@ class SurfelFieldRecord{
     }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+GpuTaskId MakeGpuTaskId(in u32 generation, in u32 index){
+    GpuTaskId task;
+    task.generation = generation;
+    task.index = index;
+    return task;
+}
+
+RayTracingSceneContentStamp MakeRtSceneStamp(in u64 geometry, in u64 material, in b8 trusted){ return RayTracingSceneContentStamp(geometry, material, trusted); }
+
+QueueSubmissionToken MakeQueueToken(in u64 value, in u16 physicalQueueIndex, in u16 deviceGeneration, in CommandQueue queue){
+    QueueSubmissionToken token;
+    token.value = value;
+    token.physicalQueueIndex = physicalQueueIndex;
+    token.deviceGeneration = deviceGeneration;
+    token.queue = queue;
+    return token;
+}
+
+GpuTaskTimingFeedbackPolicy MakeFeedbackPolicy(
+    in f64 minimumAbsoluteBenefitSeconds,
+    in f64 minimumRelativeBenefit,
+    in u32 minimumFramesBetweenSwitches,
+    in u32 minimumSampleCount,
+    in u32 calibrationIntervalFrames,
+    in b8 enabled
+){
+    GpuTaskTimingFeedbackPolicy policy;
+    policy.minimumAbsoluteBenefitSeconds = minimumAbsoluteBenefitSeconds;
+    policy.minimumRelativeBenefit = minimumRelativeBenefit;
+    policy.minimumFramesBetweenSwitches = minimumFramesBetweenSwitches;
+    policy.minimumSampleCount = minimumSampleCount;
+    policy.calibrationIntervalFrames = calibrationIntervalFrames;
+    policy.enabled = enabled;
+    return policy;
+}
+
 f32 GatherBoundaryValue(in f32x3u position, in b8 validateCell){
     const f32x3u biasedPosition(position.x, position.y, position.z + 0.05f);
     const SurfelHashInt3 baseCell = nwbSurfelCellCoord(biasedPosition, s_ShaderSurfelCellSize);
@@ -252,10 +264,6 @@ f32 GatherBoundaryValue(in f32x3u position, in b8 validateCell){
     }
     return irradiance / totalWeight;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyShadowMaterialContext_TypedByteCountPreservesAlignmentAndWrapping(){
     const usize maximum = usize.max;
@@ -1271,60 +1279,106 @@ void VerifyRendererTaskTimingFeedbackState_DeviceGenerationChangeDropsEntryBefor
     EXPECT_EQ(lateDrain.retiredSampleCount, 0u);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST(ShadowMaterialContext, TypedByteCountPreservesAlignmentAndWrapping, VerifyShadowMaterialContext_TypedByteCountPreservesAlignmentAndWrapping)
+
 NWB_ADHD_GTEST(ShadowMaterialContext, RetainedPayloadUsesActualInstanceStrideAndRejectsTruncation, VerifyShadowMaterialContext_RetainedPayloadUsesActualInstanceStrideAndRejectsTruncation)
+
 NWB_ADHD_GTEST(ShadowQualitySettings, WrappingReceiverExtentPreservesOverflowAndZeroGroupBehavior, VerifyShadowQualitySettings_WrappingReceiverExtentPreservesOverflowAndZeroGroupBehavior)
+
 NWB_ADHD_GTEST(ShadowQualitySettings, UnknownModesAreRejectedAndCannotRemoveAllSamples, VerifyShadowQualitySettings_UnknownModesAreRejectedAndCannotRemoveAllSamples)
+
 NWB_ADHD_GTEST(ShadowQualitySettings, RejectsUnknownReceiverResolution, VerifyShadowQualitySettings_RejectsUnknownReceiverResolution)
+
 NWB_ADHD_GTEST(ShadowQualitySettings, RgbHistoryRequiresAcceptedWritesForEveryRequestedSlot, VerifyShadowQualitySettings_RgbHistoryRequiresAcceptedWritesForEveryRequestedSlot)
+
 NWB_ADHD_GTEST(ShadowQualitySettings, OpaqueOnlyAcceptedFramesInvalidateRgbQualification, VerifyShadowQualitySettings_OpaqueOnlyAcceptedFramesInvalidateRgbQualification)
+
 NWB_ADHD_GTEST(ShadowQualitySettings, FailedSubmissionsRetainAcceptedFrontButCannotPublishPendingWrites, VerifyShadowQualitySettings_FailedSubmissionsRetainAcceptedFrontButCannotPublishPendingWrites)
+
 NWB_ADHD_GTEST(ShadowVisibilityMergeValidator, CombinedTemporalSelectsOpaqueEvenWhenUpsampleIsCombined, VerifyShadowVisibilityMergeValidator_CombinedTemporalSelectsOpaqueEvenWhenUpsampleIsCombined)
+
 NWB_ADHD_GTEST(ShadowVisibilityMergeValidator, FusionOmitsOnlyOpaqueUpsampleAndKeepsOptionalTemporalMerge, VerifyShadowVisibilityMergeValidator_FusionOmitsOnlyOpaqueUpsampleAndKeepsOptionalTemporalMerge)
+
 NWB_ADHD_GTEST(ShadowVisibilityMergeValidator, SeparateRouteRequiresItsOpaqueUpsample, VerifyShadowVisibilityMergeValidator_SeparateRouteRequiresItsOpaqueUpsample)
+
 NWB_ADHD_GTEST(ShadowVisibilityMergeValidator, MissingStagesAndForeignGraphIdentitiesCannotProveOneAcceptancePacket, VerifyShadowVisibilityMergeValidator_MissingStagesAndForeignGraphIdentitiesCannotProveOneAcceptancePacket)
+
 NWB_ADHD_GTEST(ShadowVisibilityMergeValidator, EverySeparateSubmissionBoundaryRejectsThePreparedChain, VerifyShadowVisibilityMergeValidator_EverySeparateSubmissionBoundaryRejectsThePreparedChain)
+
 NWB_ADHD_GTEST(ShadowVisibilityMergeValidator, TrailingDiagnosticsCannotExportScratchStateFromAnotherAcceptancePacket, VerifyShadowVisibilityMergeValidator_TrailingDiagnosticsCannotExportScratchStateFromAnotherAcceptancePacket)
+
 NWB_ADHD_GTEST(ShadowVisibilityMergeValidator, CombinedWaveletRequiresBothTemporalPhasesAndCombinedTerminal, VerifyShadowVisibilityMergeValidator_CombinedWaveletRequiresBothTemporalPhasesAndCombinedTerminal)
+
 NWB_ADHD_GTEST(ShadowVisibilityMergeValidator, CombinedWaveletRejectsEveryProducerOrTerminalPacketSplit, VerifyShadowVisibilityMergeValidator_CombinedWaveletRejectsEveryProducerOrTerminalPacketSplit)
+
 NWB_ADHD_GTEST(ShadowVisibilityMergeValidator, CombinedTemporalOmitsOnlyTheIndependentOpaqueMerge, VerifyShadowVisibilityMergeValidator_CombinedTemporalOmitsOnlyTheIndependentOpaqueMerge)
+
 NWB_ADHD_GTEST(ShadowVisibilityMergeValidator, CombinedTemporalRejectsEveryRemainingPacketSplit, VerifyShadowVisibilityMergeValidator_CombinedTemporalRejectsEveryRemainingPacketSplit)
+
 NWB_ADHD_GTEST(SoftShadowResolveDispatchBuilder, AlternatingHistoryUsesTheNewMomentsAndGraphOwnedBoundaries, VerifySoftShadowResolveDispatchBuilder_AlternatingHistoryUsesTheNewMomentsAndGraphOwnedBoundaries)
+
 NWB_ADHD_GTEST(SoftShadowWavelet, IndependentFreshTemporalInputsPermitExactlyOneWaveletPerChannel, VerifySoftShadowWavelet_IndependentFreshTemporalInputsPermitExactlyOneWaveletPerChannel)
+
 NWB_ADHD_GTEST(SoftShadowWavelet, EveryUnpreparedRouteRetainsSeparateWavelets, VerifySoftShadowWavelet_EveryUnpreparedRouteRetainsSeparateWavelets)
+
 NWB_ADHD_GTEST(SoftwareTransparentSampling, OnlyAcceptedCompleteStaticScenePermitsLocalBudgetSelection, VerifySoftwareTransparentSampling_OnlyAcceptedCompleteStaticScenePermitsLocalBudgetSelection)
+
 NWB_ADHD_GTEST(SoftwareTransparentSampling, MovingCasterWithStationaryReceiverCannotReuseTheReducedBudget, VerifySoftwareTransparentSampling_MovingCasterWithStationaryReceiverCannotReuseTheReducedBudget)
+
 NWB_ADHD_GTEST(SoftwareTransparentSampling, EveryLightInputAndSlotOrderInvalidatesTrust, VerifySoftwareTransparentSampling_EveryLightInputAndSlotOrderInvalidatesTrust)
+
 NWB_ADHD_GTEST(SurfelCoverage, EmptyAndSaturatedGatherCoverageStayWithinEndpoints, VerifySurfelCoverage_EmptyAndSaturatedGatherCoverageStayWithinEndpoints)
+
 NWB_ADHD_GTEST(SurfelCoverage, UpsampleRejectsIncompatibleNormalsAndDistantGeometry, VerifySurfelCoverage_UpsampleRejectsIncompatibleNormalsAndDistantGeometry)
+
 NWB_ADHD_GTEST(SurfelCoverage, MissingAndPartialTapsRetainFractionalAlpha, VerifySurfelCoverage_MissingAndPartialTapsRetainFractionalAlpha)
+
 NWB_ADHD_GTEST(SurfelCoverage, EmptyUpsampleWeightRemainsFiniteAndZero, VerifySurfelCoverage_EmptyUpsampleWeightRemainsFiniteAndZero)
+
 NWB_ADHD_GTEST(SurfelGiQualitySettings, ReadbackTokenRequiresMatchingPhysicalQueueIdentity, VerifySurfelGiQualitySettings_ReadbackTokenRequiresMatchingPhysicalQueueIdentity)
+
 NWB_ADHD_GTEST(SurfelGiQualitySettings, SpawnGroupsHandleOddZeroAndMaximumExtents, VerifySurfelGiQualitySettings_SpawnGroupsHandleOddZeroAndMaximumExtents)
+
 NWB_ADHD_GTEST(SurfelGiQualitySettings, StorageCountsAndResolveExtentsRejectEitherEmptyDimension, VerifySurfelGiQualitySettings_StorageCountsAndResolveExtentsRejectEitherEmptyDimension)
+
 NWB_ADHD_GTEST(SurfelGiQualitySettings, BufferByteSizeKeepsWideMultiplicationAndWrapping, VerifySurfelGiQualitySettings_BufferByteSizeKeepsWideMultiplicationAndWrapping)
+
 NWB_ADHD_GTEST(SurfelGiQualitySettings, ResolveFactorDoesNotTruncateToTheEnumWidth, VerifySurfelGiQualitySettings_ResolveFactorDoesNotTruncateToTheEnumWidth)
+
 NWB_ADHD_GTEST(SurfelGiQualitySettings, RejectsUnsupportedResolveScales, VerifySurfelGiQualitySettings_RejectsUnsupportedResolveScales)
+
 NWB_ADHD_GTEST(SurfelGiQualitySettings, OddResizeKeepsEveryFullPixelInsideTheGatherGrid, VerifySurfelGiQualitySettings_OddResizeKeepsEveryFullPixelInsideTheGatherGrid)
+
 NWB_ADHD_GTEST(SurfelGiQualitySettings, EmptyAndLargestExtentsDoNotWrapTheReducedSize, VerifySurfelGiQualitySettings_EmptyAndLargestExtentsDoNotWrapTheReducedSize)
+
 NWB_ADHD_GTEST(SurfelHash, SymmetricHashCollisionAdmitsEachResidentCellOnce, VerifySurfelHash_SymmetricHashCollisionAdmitsEachResidentCellOnce)
+
 NWB_ADHD_GTEST(SurfelHash, NeighborCellBoundaryPreservesTheNormalizedField, VerifySurfelHash_NeighborCellBoundaryPreservesTheNormalizedField)
+
 NWB_ADHD_GTEST(SurfelHash, CollidingDistantCellsRetainUpperCoordinateBits, VerifySurfelHash_CollidingDistantCellsRetainUpperCoordinateBits)
+
 NWB_ADHD_GTEST(SurfelSpawnPolicy, PerpendicularSurfaceInTheSameCellNeedsItsOwnSurfel, VerifySurfelSpawnPolicy_PerpendicularSurfaceInTheSameCellNeedsItsOwnSurfel)
+
 NWB_ADHD_GTEST(SurfelSpawnPolicy, DifferentCellsSharingAHashBucketDoNotDeduplicate, VerifySurfelSpawnPolicy_DifferentCellsSharingAHashBucketDoNotDeduplicate)
+
 NWB_ADHD_GTEST(SurfelSpawnPolicy, DistantOrOffsetParallelSurfaceNeedsItsOwnSurfel, VerifySurfelSpawnPolicy_DistantOrOffsetParallelSurfaceNeedsItsOwnSurfel)
+
 NWB_ADHD_GTEST(RendererTaskTimingFeedbackState, PublishedSampleBeforeAcceptanceDrainsAssignmentAndDurationWithoutAllocation, VerifyRendererTaskTimingFeedbackState_PublishedSampleBeforeAcceptanceDrainsAssignmentAndDurationWithoutAllocation)
+
 NWB_ADHD_GTEST(RendererTaskTimingFeedbackState, FailedCollectionEnableAndDisablePreserveEntireAcceptedPolicy, VerifyRendererTaskTimingFeedbackState_FailedCollectionEnableAndDisablePreserveEntireAcceptedPolicy)
+
 NWB_ADHD_GTEST(RendererTaskTimingFeedbackState, RejectedAndDiscardedCallbacksDoNotAllocate, VerifyRendererTaskTimingFeedbackState_RejectedAndDiscardedCallbacksDoNotAllocate)
+
 NWB_ADHD_GTEST(RendererTaskTimingFeedbackState, AcceptancePublishesAssignmentBeforeLateDurationWithoutDoubleCommit, VerifyRendererTaskTimingFeedbackState_AcceptancePublishesAssignmentBeforeLateDurationWithoutDoubleCommit)
+
 NWB_ADHD_GTEST(RendererTaskTimingFeedbackState, UnpublishedSamplesRetireInEitherRaceOrderWithoutLosingAssignments, VerifyRendererTaskTimingFeedbackState_UnpublishedSamplesRetireInEitherRaceOrderWithoutLosingAssignments)
+
 NWB_ADHD_GTEST(RendererTaskTimingFeedbackState, InvalidPublishedMetadataIsTerminalButKeepsAcceptedAssignment, VerifyRendererTaskTimingFeedbackState_InvalidPublishedMetadataIsTerminalButKeepsAcceptedAssignment)
+
 NWB_ADHD_GTEST(RendererTaskTimingFeedbackState, NonFiniteDurationIsTerminalButKeepsAcceptedAssignment, VerifyRendererTaskTimingFeedbackState_NonFiniteDurationIsTerminalButKeepsAcceptedAssignment)
+
 NWB_ADHD_GTEST(RendererTaskTimingFeedbackState, DeviceGenerationChangeDropsAcceptedEntryAwaitingOldSample, VerifyRendererTaskTimingFeedbackState_DeviceGenerationChangeDropsAcceptedEntryAwaitingOldSample)
+
 NWB_ADHD_GTEST(RendererTaskTimingFeedbackState, DeviceGenerationChangeDropsEntryBeforeSubmissionResolution, VerifyRendererTaskTimingFeedbackState_DeviceGenerationChangeDropsEntryBeforeSubmissionResolution)
 
 

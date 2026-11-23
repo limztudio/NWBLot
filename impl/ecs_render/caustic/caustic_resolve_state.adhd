@@ -16,16 +16,6 @@ const TextureSubresourceSet s_CausticAccumulatorSubresources = TextureSubresourc
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Name CausticResolveActivityBufferName(in u32 index){
-    if(index == 0u)
-        return s_CausticResolveActivityBufferAName;
-    return s_CausticResolveActivityBufferBName;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class CausticResolveActivitySnapshot{
     public Array<BufferHandle, s_CausticResolveActivityBufferCount> buffers;
     public Array<GpuDescriptorHandle, s_CausticResolveActivityBufferCount> descriptors;
@@ -67,6 +57,16 @@ class CausticResolveState{
     public b8 m_failed = false;
 
     public CausticResolveState(){}
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Name CausticResolveActivityBufferName(in u32 index){
+    if(index == 0u)
+        return s_CausticResolveActivityBufferAName;
+    return s_CausticResolveActivityBufferBName;
 }
 
 

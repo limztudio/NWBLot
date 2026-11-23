@@ -10,23 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 IsGpuPendingFrameReadyToDeclare(in b8 hasPending, in b8 framePrepared, in b8 readyToDeclare){
-    return hasPending && framePrepared && readyToDeclare;
-}
-
-b8 CanReuseDeclaredGpuOutputLayer(
-    in b8 claimed,
-    in b8 sameGraph,
-    in u64 declaredGraphGeneration,
-    in u64 currentGraphGeneration
-){
-    return claimed && sameGraph && declaredGraphGeneration == currentGraphGeneration;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class GpuFrameTimingEndTask{
     private mut GpuTimingFrameTransaction m_transaction;
 
@@ -44,6 +27,23 @@ class GpuFrameTimingEndTask{
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
         return this.m_transaction.recordEnd(commands);
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsGpuPendingFrameReadyToDeclare(in b8 hasPending, in b8 framePrepared, in b8 readyToDeclare){
+    return hasPending && framePrepared && readyToDeclare;
+}
+
+b8 CanReuseDeclaredGpuOutputLayer(
+    in b8 claimed,
+    in b8 sameGraph,
+    in u64 declaredGraphGeneration,
+    in u64 currentGraphGeneration
+){
+    return claimed && sameGraph && declaredGraphGeneration == currentGraphGeneration;
 }
 
 GpuTaskResourceUse GpuLayerResourceUse(in GpuGraphResourceId resource, in ResourceStates required, in GpuTaskResourceAccess access){
@@ -380,10 +380,6 @@ Expected<GpuTaskId> GpuRendererState::declareStandalone(mut GpuTaskGraph graph, 
         return MakeUnexpected(Failure());
     return terminalResult.value();
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void GpuRendererState::acceptOutputLayer(in u64 frameGeneration, in QueueSubmissionToken submissionToken){
     GpuFrame frame = this.m_pending;

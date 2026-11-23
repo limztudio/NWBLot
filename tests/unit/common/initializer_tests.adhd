@@ -219,7 +219,9 @@ NWB_ADHD_GTEST(CommonInitializerLifetime, GuardUnwindFinalizesAllItemsBeforeTheT
 i32 RunInitializerTests(in InitializerTestArguments arguments){
     return InvokeTerminalEntry<InitializerFailure>(
         lambda[in arguments]() -> i32{
-            TestProcessValue<InitializerProbes>();
+            mut InitializerProbes probes = TestProcessValue<InitializerProbes>();
+            if(!SameAddress(probes, TestProcessValue<InitializerProbes>()))
+                return -1;
             arguments.initialize();
             return arguments.run();
         },

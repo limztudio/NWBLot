@@ -166,6 +166,13 @@ class MeshShape{
     }
 }
 
+class MeshEdgeAdjacency{
+    public Array<u32, 2u> triIdx;
+    public Array<u8, 2u> edgeIdx;
+    public Array<u8, 2u> forward;
+    public u32 count = 0u;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -538,13 +545,6 @@ u32 BuildMeshBvhRecursive(mut MeshShape mesh, in Span<Aabb3D> triAabbs, mut Vect
     const u32 rightIdx = BuildMeshBvhRecursive(mesh, triAabbs, triOrder, midIdx, endIdx);
     mesh.nodes[nodeIdx].setChildren(leftIdx, rightIdx, false);
     return nodeIdx;
-}
-
-class MeshEdgeAdjacency{
-    public Array<u32, 2u> triIdx;
-    public Array<u8, 2u> edgeIdx;
-    public Array<u8, 2u> forward;
-    public u32 count = 0u;
 }
 
 Expected<MeshShape> MakeMeshShape(in Span<f32x4> vertices, in Span<u32> indices, in f32 radius){

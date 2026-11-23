@@ -384,11 +384,10 @@ String BuildMaterialBindAccessorName(in StringView segment0, in StringView segme
 b8 RegisterGeneratedMaterialBindSymbol(in StringView includePath, in StringView symbol, mut HashSet<String> inOutSymbols){
     String ownedSymbol = "";
     ownedSymbol.append(symbol);
-    if(inOutSymbols.contains(ownedSymbol)){
+    if(!inOutSymbols.insert(ownedSymbol).second){
         error("Material bind include '{}': generated symbol '{}' is ambiguous", includePath, symbol);
         return false;
     }
-    inOutSymbols.insert(ownedSymbol);
     return true;
 }
 

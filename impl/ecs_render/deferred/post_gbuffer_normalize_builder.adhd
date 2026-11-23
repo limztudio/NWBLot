@@ -11,12 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize ComputePostGbufferNormalizeUseCapacity(in usize baseCapacity, in b8 geometrySetGraphOwned, in usize geometryResourceCount){
-    if(geometrySetGraphOwned)
-        return baseCapacity;
-    return baseCapacity + geometryResourceCount;
-}
-
 class PostGbufferNormalizeInputs{
     public in DeferredGraphResourceImportResult resources;
     public Span<GpuGraphResourceId> shadowTraceGeometryResources;
@@ -89,6 +83,16 @@ class PostGbufferNormalizeBuilder : NoCopy{
             warning("RendererSystem: could not declare post-G-buffer normalization task");
         return added;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+usize ComputePostGbufferNormalizeUseCapacity(in usize baseCapacity, in b8 geometrySetGraphOwned, in usize geometryResourceCount){
+    if(geometrySetGraphOwned)
+        return baseCapacity;
+    return baseCapacity + geometryResourceCount;
 }
 
 

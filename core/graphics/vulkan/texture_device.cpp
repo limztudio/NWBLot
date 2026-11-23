@@ -187,7 +187,7 @@ b8 Device::isTextureReadyForGpuUse(Texture* textureResource, const VkImageUsageF
     if(texture.m_managed && !texture.m_creationDesc.isVirtual)
         return texture.m_gpuReady.load(MemoryOrder::acquire);
 
-    ScopedLock resourceLock(texture.m_memoryBindingMutex);
+    NothrowScopedLock resourceLock(texture.m_memoryBindingMutex);
     if(texture.m_image == VK_NULL_HANDLE)
         return false;
     if(!texture.m_nativeIdentityRegistered.load(MemoryOrder::acquire))
@@ -199,7 +199,7 @@ b8 Device::isTextureReadyForGpuUse(Texture* textureResource, const VkImageUsageF
         return false;
 
     Heap& heap = *texture.m_boundHeap.get();
-    ScopedLock heapLock(heap.m_bindingMutex);
+    NothrowScopedLock heapLock(heap.m_bindingMutex);
     return &heap.m_context == &m_context && &heap.m_allocator == &m_allocator && heap.m_allocation != nullptr && heap.m_memory != VK_NULL_HANDLE;
 }
 

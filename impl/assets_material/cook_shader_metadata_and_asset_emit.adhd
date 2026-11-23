@@ -235,14 +235,12 @@ b8 ReadMaterialVariant(in Path file, in MetascriptValue asset, mut String result
     assignments.reserve(CountVariantAssignmentReserve(signature));
     usize cursor = 0u;
     while(cursor < signature.size()){
-        StringView segment = "";
-        ShaderVariantAssignment assignment;
-        VariantSignatureSegmentError parseError = VariantSignatureSegmentError::None;
-        if(!TryParseVariantSignatureSegment(signature, cursor, segment, assignment.key, assignment.value, parseError)){
+        const Expected<ShaderVariantAssignment, ShaderVariantSegmentFailure> assignment = TryParseVariantSignatureSegment(signature, cursor);
+        if(!assignment.has_value()){
             error("Material meta '{}': field '{}' has invalid variant signature '{}'", file, s_MaterialMetaShaderVariantField, signature);
             return false;
         }
-        assignments.push_back(assignment);
+        assignments.push_back(assignment.value());
     }
     if(!BuildSortedShaderVariantName(assignments, result)){
         error("Material meta '{}': field '{}' has invalid variant signature '{}'", file, s_MaterialMetaShaderVariantField, signature);
@@ -437,13 +435,18 @@ Expected<Material> BuildMaterialAsset(in MaterialCookEntry entry){
     asset.setMaterialInterface(interfaceName.value().value());
     asset.setShadingModelId(entry.shadingModelId);
     asset.setSurfaceDispatchId(entry.surfaceDispatchId);
-    AssetRef<PixelShader> accumulate;
-    AssetRef<PixelShader> occupancy;
-    AssetRef<PixelShader> extinction;
-    if(!TryResolveOptionalMaterialAvboitPixelShader(entry.virtualPath, entry.avboitAccumulatePixelShaderName, s_MaterialAvboitAccumulatePassLabel, accumulate)
-        || !TryResolveOptionalMaterialAvboitPixelShader(entry.virtualPath, entry.avboitOccupancyPixelShaderName, s_MaterialAvboitOccupancyPassLabel, occupancy)
-        || !TryResolveOptionalMaterialAvboitPixelShader(entry.virtualPath, entry.avboitExtinctionPixelShaderName, s_MaterialAvboitExtinctionPassLabel, extinction))
-        return MakeUnexpected(Failure());
+    const Expected<AssetRef<PixelShader>> accumulateResult = TryResolveOptionalMaterialAvboitPixelShader(entry.virtualPath, entry.avboitAccumulatePixelShaderName, s_MaterialAvboitAccumulatePassLabel);
+    if(!accumulateResult.has_value())
+        return MakeUnexpected(accumulateResult.error());
+    const AssetRef<PixelShader> accumulate = accumulateResult.value();
+    const Expected<AssetRef<PixelShader>> occupancyResult = TryResolveOptionalMaterialAvboitPixelShader(entry.virtualPath, entry.avboitOccupancyPixelShaderName, s_MaterialAvboitOccupancyPassLabel);
+    if(!occupancyResult.has_value())
+        return MakeUnexpected(occupancyResult.error());
+    const AssetRef<PixelShader> occupancy = occupancyResult.value();
+    const Expected<AssetRef<PixelShader>> extinctionResult = TryResolveOptionalMaterialAvboitPixelShader(entry.virtualPath, entry.avboitExtinctionPixelShaderName, s_MaterialAvboitExtinctionPassLabel);
+    if(!extinctionResult.has_value())
+        return MakeUnexpected(extinctionResult.error());
+    const AssetRef<PixelShader> extinction = extinctionResult.value();
     asset.setAvboitAccumulatePixelShader(accumulate);
     asset.setAvboitOccupancyPixelShader(occupancy);
     asset.setAvboitExtinctionPixelShader(extinction);
@@ -548,6 +551,7 @@ Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface<PathRang
     return result;
 }
 
+[cpp_unwind]
 b8 ValidateMaterialCookInterfaces(in Span<MaterialBindEntry> entries, mut Span<MaterialCookEntry> materials){
     const Expected<MaterialBindInterfaceLookup> lookup = BuildMaterialBindInterfaceLookup(entries);
     if(!lookup.has_value())

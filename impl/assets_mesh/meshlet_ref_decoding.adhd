@@ -212,35 +212,28 @@ Expected<MeshletAttributeStreamRef> TryDecodeMeshletAttributeRef(in Span<u8> byt
     return TryDecodeMeshletAttributeRefWithLayout(bytes, meshlet, layout.value(), localAttributeIndex);
 }
 
-b8 TryDecodeMeshletTriangleCornerPosition(
-    in Span<u8> positionRefDeltas,
-    in MeshletDesc meshlet,
-    in MeshletLocalVertexRef localRef,
-    in usize positionCount,
-    mut u32 outValue
-){
+Expected<u32> TryDecodeMeshletTriangleCornerPosition(in Span<u8> positionRefDeltas, in MeshletDesc meshlet, in MeshletLocalVertexRef localRef, in usize positionCount){
     const b8 skinRequired = meshlet.skinBase != s_MeshMissingStreamIndex;
     const Expected<MeshletPositionStreamRef> positionRef = TryDecodeMeshletPositionRef(positionRefDeltas, meshlet, cast<u32>(localRef.localDeformedPosition), skinRequired);
     if(!positionRef.has_value() || cast<usize>(positionRef.value().position) >= positionCount)
-        return false;
-    outValue = positionRef.value().position;
-    return true;
+        return MakeUnexpected(Failure());
+    return positionRef.value().position;
 }
 
-b8 TryDecodeMeshletTriangleCornerAttribute(
+Expected<AttribGpu> TryDecodeMeshletTriangleCornerAttribute(
     in Span<u8> attributeRefDeltas,
     in MeshletDesc meshlet,
     in MeshletLocalVertexRef localRef,
     in Span<f16x4u> normalStream,
-    in Span<f32x2u> uv0Stream,
-    mut AttribGpu outAttribute
+    in Span<f32x2u> uv0Stream
 ){
     const Expected<MeshletAttributeStreamRef> attributeRef = TryDecodeMeshletAttributeRef(attributeRefDeltas, meshlet, cast<u32>(localRef.localAttribute));
     if(!attributeRef.has_value() || cast<usize>(attributeRef.value().normal) >= normalStream.size() || cast<usize>(attributeRef.value().uv0) >= uv0Stream.size())
-        return false;
-    outAttribute.normal = normalStream[cast<usize>(attributeRef.value().normal)];
-    outAttribute.uv0 = uv0Stream[cast<usize>(attributeRef.value().uv0)];
-    return true;
+        return MakeUnexpected(Failure());
+    AttribGpu attribute;
+    attribute.normal = normalStream[cast<usize>(attributeRef.value().normal)];
+    attribute.uv0 = uv0Stream[cast<usize>(attributeRef.value().uv0)];
+    return attribute;
 }
 
 static_assert(s_MeshMaxMeshletVertices <= 128u);

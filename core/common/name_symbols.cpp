@@ -78,12 +78,12 @@ public:
     }
 
     void clear()noexcept{
-        ScopedLock lock(m_mutex);
+        NothrowScopedLock lock(m_mutex);
         m_symbols.clear();
     }
 
     [[nodiscard]] usize size()const noexcept{
-        ScopedLock lock(m_mutex);
+        NothrowScopedLock lock(m_mutex);
         return m_symbols.size();
     }
 

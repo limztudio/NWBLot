@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[move_only]
 class EditHistoryRecord{
     public String before;
     public String after;
@@ -23,7 +24,7 @@ class EditHistoryRules{
         outHistoryBytes = 0u;
     }
 
-    public void record(
+    [cpp_unwind] public b8 prepareRecord(
         in StringView before,
         in usize beforeAnchor,
         in usize beforeCaret,
@@ -32,38 +33,70 @@ class EditHistoryRules{
         in usize afterCaret,
         in usize maxHistoryRecords,
         in usize maxHistoryBytes,
+        in usize historyCursor,
+        in usize historyBytes,
+        mut EditHistoryRecord inOutStaged,
+        mut Vector<EditHistoryRecord> inOutHistory
+    ){
+        const usize cost = before.size() + after.size();
+        if(!this.canRecord(maxHistoryRecords, maxHistoryBytes, cost))
+            return false;
+        const usize boundedCursor = Min(historyCursor, inOutHistory.size());
+        usize evictCount = 0u;
+        usize keptBytes = historyBytes;
+        for(usize redoIndex = boundedCursor; redoIndex < inOutHistory.size(); ++redoIndex)
+            keptBytes -= inOutHistory[redoIndex].before.size() + inOutHistory[redoIndex].after.size();
+        while(boundedCursor > evictCount && (boundedCursor - evictCount >= maxHistoryRecords || keptBytes > maxHistoryBytes - cost)){
+            keptBytes -= inOutHistory[evictCount].before.size() + inOutHistory[evictCount].after.size();
+            ++evictCount;
+        }
+        const usize finalCount = (boundedCursor - evictCount) + 1u;
+        inOutHistory.reserve(finalCount);
+        if(before.empty())
+            inOutStaged.before.clear();
+        else
+            inOutStaged.before.assign(before);
+        if(after.empty())
+            inOutStaged.after.clear();
+        else
+            inOutStaged.after.assign(after);
+        inOutStaged.beforeAnchor = beforeAnchor;
+        inOutStaged.beforeCaret = beforeCaret;
+        inOutStaged.afterAnchor = afterAnchor;
+        inOutStaged.afterCaret = afterCaret;
+        return true;
+    }
+
+    public void commitPrepared(
+        in usize maxHistoryRecords,
+        in usize maxHistoryBytes,
+        mut EditHistoryRecord staged,
         mut Vector<EditHistoryRecord> inOutHistory,
         mut usize inOutHistoryCursor,
         mut usize inOutHistoryBytes
     ){
-        const usize cost = before.size() + after.size();
-        if(!this.canRecord(maxHistoryRecords, maxHistoryBytes, cost)){
-            this.clear(inOutHistory, inOutHistoryCursor, inOutHistoryBytes);
-            return;
-        }
-        EditHistoryRecord candidate;
-        if(!before.empty())
-            candidate.before.assign(before);
-        if(!after.empty())
-            candidate.after.assign(after);
-        candidate.beforeAnchor = beforeAnchor;
-        candidate.beforeCaret = beforeCaret;
-        candidate.afterAnchor = afterAnchor;
-        candidate.afterCaret = afterCaret;
+        const usize cost = staged.before.size() + staged.after.size();
+        if(inOutHistoryCursor > inOutHistory.size())
+            inOutHistoryCursor = inOutHistory.size();
         while(inOutHistory.size() > inOutHistoryCursor){
-            const EditHistoryRecord discarded = inOutHistory.back();
-            inOutHistoryBytes -= discarded.before.size() + discarded.after.size();
+            inOutHistoryBytes -= inOutHistory.back().before.size() + inOutHistory.back().after.size();
             inOutHistory.pop_back();
         }
-        while(!inOutHistory.empty() && (inOutHistory.size() >= maxHistoryRecords || inOutHistoryBytes > maxHistoryBytes - cost)){
-            const EditHistoryRecord discarded = inOutHistory.front();
-            inOutHistoryBytes -= discarded.before.size() + discarded.after.size();
-            for(usize moveIndex = 1u; moveIndex < inOutHistory.size(); ++moveIndex)
-                inOutHistory[moveIndex - 1u] = inOutHistory[moveIndex];
-            inOutHistory.pop_back();
-            --inOutHistoryCursor;
+        usize evictCount = 0u;
+        while(inOutHistoryCursor > evictCount && (inOutHistoryCursor - evictCount >= maxHistoryRecords || inOutHistoryBytes > maxHistoryBytes - cost)){
+            inOutHistoryBytes -= inOutHistory[evictCount].before.size() + inOutHistory[evictCount].after.size();
+            ++evictCount;
         }
-        inOutHistory.push_back(candidate);
+        if(evictCount > 0u){
+            const usize keepCount = inOutHistory.size() - evictCount;
+            for(usize i = 0u; i < keepCount; ++i)
+                MoveInto<EditHistoryRecord>(inOutHistory[i], inOutHistory[i + evictCount]);
+            for(usize i = 0u; i < evictCount; ++i)
+                inOutHistory.pop_back();
+            inOutHistoryCursor -= evictCount;
+        }
+        inOutHistory.emplace_back();
+        MoveInto<EditHistoryRecord>(inOutHistory[inOutHistory.size() - 1u], staged);
         inOutHistoryBytes += cost;
         inOutHistoryCursor = inOutHistory.size();
     }

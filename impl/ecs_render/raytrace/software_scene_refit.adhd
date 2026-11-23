@@ -16,28 +16,19 @@
 
 [cpp_header("<impl/assets/graphics/bvh/scene_refit_constants.h>"), cpp_name("NWB_SCENE_BVH_REFIT_PUSH_BYTES")]
 extern const u32 s_ShaderSceneBvhRefitPushBytes;
-
 [cpp_header("<impl/assets/graphics/bvh/scene_refit_constants.h>"), cpp_name("NWB_SCENE_BVH_REFIT_INSTANCE_BYTES")]
 extern const u32 s_ShaderSceneBvhRefitInstanceBytes;
-
 [cpp_header("<impl/assets/graphics/bvh/scene_refit_constants.h>"), cpp_name("NWB_SCENE_BVH_REFIT_MESH_SLOT_OFFSET")]
 extern const u32 s_ShaderSceneBvhRefitMeshSlotOffset;
-
 [cpp_header("<impl/assets/graphics/bvh/scene_refit_constants.h>"), cpp_name("NWB_SCENE_BVH_REFIT_GROUP_SIZE")]
 extern const u32 s_ShaderSceneBvhRefitGroupSize;
-
 [cpp_header("<impl/assets/graphics/bvh/scene_refit_constants.h>"), cpp_name("NWB_SCENE_BVH_REFIT_MODE_INIT_PARENTS")]
 extern const u32 s_ShaderSceneBvhRefitModeInitParents;
-
 [cpp_header("<impl/assets/graphics/bvh/scene_refit_constants.h>"), cpp_name("NWB_SCENE_BVH_REFIT_MODE_REFIT")]
 extern const u32 s_ShaderSceneBvhRefitModeRefit;
 
-static_assert(align_of<SoftwareSceneRefitInstanceGpu>() >= 16u);
-static_assert(size_of<SoftwareSceneRefitInstanceGpu>() == s_ShaderSceneBvhRefitInstanceBytes);
-static_assert(offset_of<SoftwareSceneRefitInstanceGpu>(meshNodeSlot) == s_ShaderSceneBvhRefitMeshSlotOffset);
-static_assert(size_of<SoftwareSceneRefitPushConstants>() == s_ShaderSceneBvhRefitPushBytes);
-
 const usize s_SoftwareSceneRefitInstanceGpuByteSize = 64u;
+type SoftwareSceneRefitHandle = Shared<SoftwareSceneRefitSnapshot>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -84,12 +75,6 @@ class SoftwareSceneBvhValidationPolicy{
     }
 }
 
-static_assert(size_of<SoftwareSceneRefitInstanceGpu>() == s_SoftwareSceneRefitInstanceGpuByteSize);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class SoftwareSceneRefitSnapshot{
     public BufferHandle inputBuffer;
     public BufferHandle sceneNodes;
@@ -108,8 +93,6 @@ class SoftwareSceneRefitSnapshot{
 
     public SoftwareSceneRefitSnapshot(mut GraphicsRuntime graphics){ this.graphics = graphics; }
 }
-
-type SoftwareSceneRefitHandle = Shared<SoftwareSceneRefitSnapshot>;
 
 class SoftwareSceneRefitResources : NoCopy{
     private SharedPool m_versions = SharedPool();
@@ -275,22 +258,6 @@ class SoftwareSceneRefitResources : NoCopy{
     }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-SoftwareSceneRefitPushConstants MakeSoftwareSceneBvhRefitPushConstantsWrapper(in SoftwareSceneRefitSnapshot snapshot, in u32 passMode){
-    return MakeSoftwareSceneRefitPushConstants(
-        snapshot.nodeCount,
-        snapshot.sceneDescriptor.slot(),
-        snapshot.inputDescriptor.slot(),
-        cast<u32>(snapshot.inputs.size()),
-        snapshot.parentDescriptor.slot(),
-        snapshot.visitCounterDescriptor.slot(),
-        passMode
-    );
-}
-
 class SoftwareSceneRefitTask{
     private SoftwareSceneRefitHandle m_snapshot;
 
@@ -336,6 +303,28 @@ class SoftwareSceneRefitTask{
         commandList.dispatch(groupCount, 1u, 1u);
         return true;
     }
+}
+
+static_assert(align_of<SoftwareSceneRefitInstanceGpu>() >= 16u);
+static_assert(size_of<SoftwareSceneRefitInstanceGpu>() == s_ShaderSceneBvhRefitInstanceBytes);
+static_assert(offset_of<SoftwareSceneRefitInstanceGpu>(meshNodeSlot) == s_ShaderSceneBvhRefitMeshSlotOffset);
+static_assert(size_of<SoftwareSceneRefitPushConstants>() == s_ShaderSceneBvhRefitPushBytes);
+static_assert(size_of<SoftwareSceneRefitInstanceGpu>() == s_SoftwareSceneRefitInstanceGpuByteSize);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+SoftwareSceneRefitPushConstants MakeSoftwareSceneBvhRefitPushConstantsWrapper(in SoftwareSceneRefitSnapshot snapshot, in u32 passMode){
+    return MakeSoftwareSceneRefitPushConstants(
+        snapshot.nodeCount,
+        snapshot.sceneDescriptor.slot(),
+        snapshot.inputDescriptor.slot(),
+        cast<u32>(snapshot.inputs.size()),
+        snapshot.parentDescriptor.slot(),
+        snapshot.visitCounterDescriptor.slot(),
+        passMode
+    );
 }
 
 [cpp_unwind]

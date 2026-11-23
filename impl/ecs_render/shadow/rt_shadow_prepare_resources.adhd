@@ -8,22 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ShouldUseInlinePreparedBlasNameScan(in usize buildCount){
-    return buildCount <= s_SmallInlineIndexCapacity;
-}
-
-b8 CanMatchResolvedShadowPrepareRequest(in b8 resourceValid, in u64 resourceGeneration, in u64 graphGeneration){
-    return resourceValid && resourceGeneration == graphGeneration;
-}
-
-b8 CanAppendShadowPrepareBuildInput(in b8 hasRequest, in b8 resourceValid, in b8 listedForTrace){
-    return hasRequest && resourceValid && listedForTrace;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class ShadowPrepareBufferRequest{
     public BufferHandle buffer;
     public GpuGraphResourceId resource;
@@ -210,6 +194,22 @@ class ShadowPrepareGeometryResources : NoCopy{
         }
         return this.m_names.contains(meshName);
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ShouldUseInlinePreparedBlasNameScan(in usize buildCount){
+    return buildCount <= s_SmallInlineIndexCapacity;
+}
+
+b8 CanMatchResolvedShadowPrepareRequest(in b8 resourceValid, in u64 resourceGeneration, in u64 graphGeneration){
+    return resourceValid && resourceGeneration == graphGeneration;
+}
+
+b8 CanAppendShadowPrepareBuildInput(in b8 hasRequest, in b8 resourceValid, in b8 listedForTrace){
+    return hasRequest && resourceValid && listedForTrace;
 }
 
 ResourceStates ShadowPrepareBlasInitialState(in b8 fresh){

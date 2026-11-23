@@ -31,6 +31,22 @@ const u32 s_TextureAlphaInfoReservedMask = 0xFFFF0000u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class TextureMipPitch{
+    public usize rowPitch = 0u;
+    public usize sliceByteCount = 0u;
+}
+
+class TextureMipUploadLayout{
+    public usize rowPitch = 0u;
+    public usize sliceByteCount = 0u;
+    public usize totalByteCount = 0u;
+}
+
+class HdrUastcOutputLayout{
+    public u32 elementCount = 0u;
+    public u32 rowBlocksOrPixels = 0u;
+}
+
 [reflect]
 class TextureMipLevel{
     public u64 offsetBytes = 0u;
@@ -117,26 +133,27 @@ b8 IsUastcSliceRangeWithinPrimaryPayload(
     ;
 }
 
-b8 TryComputeTextureMipUploadPitchAndSliceBytes(
+Expected<TextureMipPitch> TryComputeTextureMipUploadPitchAndSliceBytes(
     in u32 rowUnits,
     in u64 bytesPerUnit,
-    in u32 rowCount,
-    mut usize outRowPitch,
-    mut usize outSliceByteCount
+    in u32 rowCount
 ){
+    if(rowUnits != 0u && bytesPerUnit > u64.max / cast<u64>(rowUnits))
+        return MakeUnexpected(Failure());
     const u64 rowPitch64 = cast<u64>(rowUnits) * bytesPerUnit;
     if(rowPitch64 > cast<u64>(usize.max))
-        return false;
+        return MakeUnexpected(Failure());
     if(rowCount != 0u && rowPitch64 > u64.max / cast<u64>(rowCount))
-        return false;
+        return MakeUnexpected(Failure());
 
     const u64 sliceByteCount64 = rowPitch64 * cast<u64>(rowCount);
     if(sliceByteCount64 > cast<u64>(usize.max))
-        return false;
+        return MakeUnexpected(Failure());
 
-    outRowPitch = cast<usize>(rowPitch64);
-    outSliceByteCount = cast<usize>(sliceByteCount64);
-    return true;
+    TextureMipPitch result = TextureMipPitch();
+    result.rowPitch = cast<usize>(rowPitch64);
+    result.sliceByteCount = cast<usize>(sliceByteCount64);
+    return result;
 }
 
 Expected<usize> TryComputeTextureMipUploadTotalBytes(
@@ -214,42 +231,35 @@ Expected<Span<u8>> TryGetSeparateAlphaUastcSlice(
     return payloadBytes.subspan(cast<usize>(primaryPayloadByteCount + alphaSliceOffsetBytes.value()), cast<usize>(layout.value().byteCount));
 }
 
-b8 ValidateAndComputeLdrMipUploadLayout(
-    in TextureMipLevel mip,
-    in b8 isRgba8Format,
-    mut usize outRowPitch,
-    mut usize outSliceUploadByteCount,
-    mut usize outTotalUploadByteCount
-){
+Expected<TextureMipUploadLayout> ValidateAndComputeLdrMipUploadLayout(in TextureMipLevel mip, in b8 isRgba8Format){
+    Expected<TextureMipPitch> pitch = MakeUnexpected(Failure());
     if(!isRgba8Format){
-        if(!TryComputeTextureMipUploadPitchAndSliceBytes(mip.blockCountX, s_TextureUastcBytesPerBlock, mip.blockCountY, outRowPitch, outSliceUploadByteCount)){
+        pitch = TryComputeTextureMipUploadPitchAndSliceBytes(mip.blockCountX, s_TextureUastcBytesPerBlock, mip.blockCountY);
+        if(!pitch.has_value()){
             error("TextureAssetLoader: compressed LDR mip row pitch exceeds addressable memory");
-            return false;
+            return MakeUnexpected(Failure());
         }
     }
     else{
-        if(!TryComputeTextureMipUploadPitchAndSliceBytes(mip.width, cast<u64>(s_TextureRgbaBytesPerTexel), mip.height, outRowPitch, outSliceUploadByteCount)){
+        pitch = TryComputeTextureMipUploadPitchAndSliceBytes(mip.width, cast<u64>(s_TextureRgbaBytesPerTexel), mip.height);
+        if(!pitch.has_value()){
             error("TextureAssetLoader: RGBA8 mip row pitch exceeds addressable memory");
-            return false;
+            return MakeUnexpected(Failure());
         }
     }
-
-    const Expected<usize> totalUploadByteCount = TryComputeTextureMipUploadTotalBytes(outSliceUploadByteCount, mip.sliceCount);
-    if(!totalUploadByteCount.has_value()){
+    const Expected<usize> total = TryComputeTextureMipUploadTotalBytes(pitch.value().sliceByteCount, mip.sliceCount);
+    if(!total.has_value()){
         error("TextureAssetLoader: texture mip upload size exceeds addressable memory");
-        return false;
+        return MakeUnexpected(Failure());
     }
-    outTotalUploadByteCount = totalUploadByteCount.value();
-    return true;
+    TextureMipUploadLayout result = TextureMipUploadLayout();
+    result.rowPitch = pitch.value().rowPitch;
+    result.sliceByteCount = pitch.value().sliceByteCount;
+    result.totalByteCount = total.value();
+    return result;
 }
 
-b8 ValidateAndComputeHdrMipUploadLayout(
-    in TextureMipLevel mip,
-    in b8 compressedOutput,
-    mut usize outRowPitch,
-    mut usize outSliceUploadByteCount,
-    mut usize outTotalUploadByteCount
-){
+Expected<TextureMipUploadLayout> ValidateAndComputeHdrMipUploadLayout(in TextureMipLevel mip, in b8 compressedOutput){
     u32 rowUnits = mip.width;
     u64 bytesPerUnit = cast<u64>(s_TextureRgba16FloatBytesPerTexel);
     u32 rowCount = mip.height;
@@ -258,26 +268,28 @@ b8 ValidateAndComputeHdrMipUploadLayout(
         bytesPerUnit = s_TextureUastcBytesPerBlock;
         rowCount = mip.blockCountY;
     }
-    if(!TryComputeTextureMipUploadPitchAndSliceBytes(rowUnits, bytesPerUnit, rowCount, outRowPitch, outSliceUploadByteCount)){
+    const Expected<TextureMipPitch> pitch = TryComputeTextureMipUploadPitchAndSliceBytes(rowUnits, bytesPerUnit, rowCount);
+    if(!pitch.has_value()){
         error("TextureAssetLoader: HDR mip row pitch exceeds addressable memory");
-        return false;
+        return MakeUnexpected(Failure());
     }
-    const Expected<usize> totalUploadByteCount = TryComputeTextureMipUploadTotalBytes(outSliceUploadByteCount, mip.sliceCount);
-    if(!totalUploadByteCount.has_value()){
+    const Expected<usize> total = TryComputeTextureMipUploadTotalBytes(pitch.value().sliceByteCount, mip.sliceCount);
+    if(!total.has_value()){
         error("TextureAssetLoader: HDR mip upload size exceeds addressable memory");
-        return false;
+        return MakeUnexpected(Failure());
     }
-    outTotalUploadByteCount = totalUploadByteCount.value();
-    return true;
+    TextureMipUploadLayout result = TextureMipUploadLayout();
+    result.rowPitch = pitch.value().rowPitch;
+    result.sliceByteCount = pitch.value().sliceByteCount;
+    result.totalByteCount = total.value();
+    return result;
 }
 
-b8 ValidateHdrUastcTranscodeLayout(
+Expected<HdrUastcOutputLayout> ValidateHdrUastcTranscodeLayout(
     in TextureMipLevel mip,
     in PrimaryUastcSlice source,
     in b8 compressedOutput,
-    in usize outUploadByteSize,
-    mut u32 outOutputElementCount,
-    mut u32 outOutputRowBlocksOrPixels
+    in usize outUploadByteSize
 ){
     const u64 texelCount = cast<u64>(mip.width) * cast<u64>(mip.height);
     u64 outputElementCount = texelCount;
@@ -294,11 +306,12 @@ b8 ValidateHdrUastcTranscodeLayout(
         || outputElementCount * bytesPerElement != cast<u64>(outUploadByteSize)
     ){
         error("TextureAssetLoader: HDR UASTC slice exceeds Basis transcoder limits");
-        return false;
+        return MakeUnexpected(Failure());
     }
-    outOutputElementCount = cast<u32>(outputElementCount);
-    outOutputRowBlocksOrPixels = rowBlocksOrPixels;
-    return true;
+    HdrUastcOutputLayout result = HdrUastcOutputLayout();
+    result.elementCount = cast<u32>(outputElementCount);
+    result.rowBlocksOrPixels = rowBlocksOrPixels;
+    return result;
 }
 
 b8 ValidateBc7UastcTranscodeLayout(in PrimaryUastcSlice source, in usize outUploadByteSize){
@@ -313,10 +326,9 @@ b8 ValidateBc7UastcTranscodeLayout(in PrimaryUastcSlice source, in usize outUplo
     return true;
 }
 
-b8 ValidateHdrRgba16FloatAlphaMergeLayout(
+Expected<usize> ValidateHdrRgba16FloatAlphaMergeLayout(
     in TextureMipLevel mip,
-    in usize outRgba16FloatByteSize,
-    mut usize outTexelCount
+    in usize outRgba16FloatByteSize
 ){
     const u64 texelCount = cast<u64>(mip.width) * cast<u64>(mip.height);
     if(
@@ -324,10 +336,9 @@ b8 ValidateHdrRgba16FloatAlphaMergeLayout(
         || texelCount * cast<u64>(s_TextureRgba16FloatBytesPerTexel) != cast<u64>(outRgba16FloatByteSize)
     ){
         error("TextureAssetLoader: HDR RGBA16_FLOAT alpha merge layout is invalid");
-        return false;
+        return MakeUnexpected(Failure());
     }
-    outTexelCount = cast<usize>(texelCount);
-    return true;
+    return cast<usize>(texelCount);
 }
 
 

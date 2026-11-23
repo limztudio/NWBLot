@@ -25,9 +25,7 @@ extern class FreeTypeProbe{
 
 const usize s_FontBinaryHeaderSize = size_of<FontBinaryHeader>();
 const usize s_PreparedGroupSize = size_of<PreparedFontImageGroup>();
-
 const u32 s_CollectionSignature = 0x74746366u;
-
 const usize s_SfntTableCountHighByte = 4u;
 const usize s_SfntTableCountLowByte = 5u;
 const usize s_SfntTableRecordBytes = 16u;
@@ -38,10 +36,8 @@ const usize s_FirstRecordOffsetField = s_FontSfntHeaderBytes + s_SfntRecordOffse
 const usize s_FirstRecordLengthField = s_FontSfntHeaderBytes + s_SfntRecordLengthField;
 const usize s_SecondRecordOffsetField = s_OneTableDirectoryBytes + s_SfntRecordOffsetField;
 const usize s_SecondRecordLengthField = s_OneTableDirectoryBytes + s_SfntRecordLengthField;
-
 const usize s_HeadUnitsPerEmOffset = 18u;
 const usize s_HeadUnitsPerEmEnd = 20u;
-
 const usize s_HeaderBytes = 56u;
 const usize s_GroupHeaderBytes = 48u;
 const usize s_GroupCount = 4u;
@@ -53,11 +49,14 @@ const usize s_GroupChannelsField = 8u;
 const usize s_GroupImageBytesField = 12u;
 const u32 s_MaxImageSide = 2048u;
 const u32 s_MaxChannelCount = 4u;
-
 const StringView s_ErrSourceSizeRange = "source size must be 1..33554432 bytes";
 const StringView s_ErrFtNewMemoryFace = "native_operation=FT_New_Memory_Face native_domain=FreeType";
 const StringView s_ErrImageHashDiffers = "image content hash differs";
 const StringView s_ErrSfntHashDiffers = "SFNT content hash differs";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class SourceFixture : NoCopy{
     public Vector<PreparedFontImageGroup> groups;
@@ -112,6 +111,17 @@ class CutCase{
     }
 }
 
+class PreparedFontReader{
+    [owner_result]
+    public Expected<PreparedFontSource, StringView> read(in Path path, in b8 includePixels){
+        return ReadPreparedFontSource(path, includePixels);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void WriteBigU32At(mut Vector<u8> bytes, in usize offset, in u32 value){
     bytes[offset] = cast<u8>(value >> 24u);
     bytes[offset + 1u] = cast<u8>(value >> 16u);
@@ -148,18 +158,17 @@ b8 SpanDataOffsetMatches(in Span<u8> tableBytes, in Vector<u8> source, in usize 
     return tableBytes.data() == sourceView.subspan(offset).data();
 }
 
-b8 LoadLatin(mut Font outFont){
+Expected<Font> LoadLatin(){
     const Path path = BundledFontFixtureDirectory(s_CookTestRepoRoot) / "latin.font";
     Expected<Vector<u8>, StringView> sourceResult = ReadBundledFontBytes(path);
     if(!sourceResult.has_value())
-        return false;
+        return MakeUnexpected(Failure());
     Font candidate(Name(s_FontCaseEngineUiFontsDefaultLatinFace));
     Vector<u8> source = sourceResult.value();
     candidate.setFontBytes(source);
     if(!candidate.validatePayload())
-        return false;
-    outFont = candidate;
-    return true;
+        return MakeUnexpected(Failure());
+    return candidate;
 }
 
 Vector<u8> MakeBinary(in FontBinaryHeader header, in Vector<u8> source){
@@ -175,27 +184,11 @@ b8 SerializeFixtureSource(in SourceFixture fixture, mut Vector<u8> outBinary){
     return WritePreparedFontSource(TestByteView(fixture.sfnt, fixture.sfnt.size(), true), 0u, fixture.views, outBinary).has_value();
 }
 
-b8 WriteCase(in StringView filename, in Vector<u8> binary, mut Path outPath){
+Expected<Path> WriteCase(in StringView filename, in Vector<u8> binary){
     const Path candidate = Path(s_CookTestRepoRoot) / "__artifacts" / "font_source_tests" / filename;
     if(!EnsureDirectories(candidate.parentPath()).has_value() || !WriteBinaryFile(candidate, binary))
-        return false;
-    outPath = candidate;
-    return true;
-}
-
-b8 ReadPreparedInto(in Path path, in b8 includePixels, mut PreparedFontSource outSource){
-    Expected<PreparedFontSource, StringView> result = ReadPreparedFontSource(path, includePixels);
-    if(!result.has_value())
-        return false;
-    outSource = result.value();
-    return true;
-}
-
-class PreparedFontReader{
-    [owner_result]
-    public Expected<PreparedFontSource, StringView> read(in Path path, in b8 includePixels){
-        return ReadPreparedFontSource(path, includePixels);
-    }
+        return MakeUnexpected(Failure());
+    return candidate;
 }
 
 b8 CanReadPrepared(in Path path, in b8 includePixels, mut HeapStorage storage){
@@ -345,8 +338,9 @@ void VerifyAssetsFont_PreparedAtlasPixelsAreExcludedFromCookedFontsAndRejectedBy
 void VerifyAssetsFont_MalformedBinaryPreservesThePreviouslyLoadedFont(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
-    Font font(s_FontCaseEngineUiFontsDefaultLatinFace);
-    ASSERT_TRUE(LoadLatin(font));
+    const Expected<Font> loaded = LoadLatin();
+    ASSERT_TRUE(loaded.has_value());
+    Font font = loaded.value();
     const Vector<u8> original = CopyFontFixtureBytes(font.fontBytes());
     FontBinaryHeader validHeader = FontBinaryHeader();
     validHeader.byteCount = original.size();
@@ -400,8 +394,9 @@ void VerifyAssetsFont_OversizedCountIsRejectedBeforeSourceAllocation(){
 void VerifyAssetsFont_RejectsCollectionsCompressedFontsAndVariableTables(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
-    Font font(s_FontCaseEngineUiFontsDefaultLatinFace);
-    ASSERT_TRUE(LoadLatin(font));
+    const Expected<Font> loaded = LoadLatin();
+    ASSERT_TRUE(loaded.has_value());
+    in Font font = loaded.value();
     Array<u32, 4u> unsupportedSignatures = Array<u32, 4u>();
     unsupportedSignatures[0u] = 0x74746366u;
     unsupportedSignatures[1u] = 0x774f4646u;
@@ -426,8 +421,9 @@ void VerifyAssetsFont_RejectsCollectionsCompressedFontsAndVariableTables(){
 void VerifyAssetsFont_RejectsMalformedDirectoriesAndNativeFaceMetrics(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
-    Font font(s_FontCaseEngineUiFontsDefaultLatinFace);
-    ASSERT_TRUE(LoadLatin(font));
+    const Expected<Font> loaded = LoadLatin();
+    ASSERT_TRUE(loaded.has_value());
+    in Font font = loaded.value();
     for(u32 variant = 0u; variant < 7u; ++variant){
         const ScopedTestTrace trace(variant);
         Vector<u8> bytes = CopyFontFixtureBytes(font.fontBytes());
@@ -476,7 +472,9 @@ void VerifyAssetsFont_NativeFaceFailurePreservesErrorCodeAndReclaimsValidationAl
     HeapStorage testArena;
     TestValueSlot<Font> fontSlot;
     mut Font font = fontSlot.constructIn(testArena, s_FontCaseEngineUiFontsDefaultLatinFace);
-    ASSERT_TRUE(LoadLatin(font));
+    const Expected<Font> loaded = LoadLatin();
+    ASSERT_TRUE(loaded.has_value());
+    font = loaded.value();
     TestValueSlot<Vector<u8>> bytesSlot;
     mut Vector<u8> bytes = bytesSlot.constructIn(testArena);
     bytes = font.fontBytes();
@@ -512,10 +510,12 @@ void VerifyPreparedFontSource_ImageCorruptionRejectsFullReadWhileFontOnlySkipsCo
     Vector<u8> binary;
     ASSERT_TRUE(SerializeFixtureSource(fixture, binary));
     ASSERT_EQ(binary.size(), s_PixelOffset + 150u);
-    Path path = Path();
-    ASSERT_TRUE(WriteCase("image_integrity_control.font", binary, path));
-    PreparedFontSource original;
-    ASSERT_TRUE(ReadPreparedInto(path, true, original));
+    const Expected<Path> pathResult = WriteCase("image_integrity_control.font", binary);
+    ASSERT_TRUE(pathResult.has_value());
+    const Path path = pathResult.value();
+    const Expected<PreparedFontSource, StringView> originalResult = ReadPreparedFontSource(path, true);
+    ASSERT_TRUE(originalResult.has_value());
+    in PreparedFontSource original = originalResult.value();
     ASSERT_EQ(original.groups.size(), s_GroupCount);
 
     Array<StringView, 5u> corruptImageFilenames = Array<StringView, 5u>();
@@ -533,10 +533,13 @@ void VerifyPreparedFontSource_ImageCorruptionRejectsFullReadWhileFontOnlySkipsCo
         if(index < s_GroupCount)
             corruptionOffset = imageOffset;
         corrupted[corruptionOffset] ^= 0x80u;
-        ASSERT_TRUE(WriteCase(corruptImageFilenames[index], corrupted, path));
-        EXPECT_FALSE(CanReadPrepared(path, true));
-        PreparedFontSource fontOnly;
-        ASSERT_TRUE(ReadPreparedInto(path, false, fontOnly));
+        const Expected<Path> corruptedPathResult = WriteCase(corruptImageFilenames[index], corrupted);
+        ASSERT_TRUE(corruptedPathResult.has_value());
+        in Path corruptedPath = corruptedPathResult.value();
+        EXPECT_FALSE(CanReadPrepared(corruptedPath, true));
+        const Expected<PreparedFontSource, StringView> fontOnlyResult = ReadPreparedFontSource(corruptedPath, false);
+        ASSERT_TRUE(fontOnlyResult.has_value());
+        in PreparedFontSource fontOnly = fontOnlyResult.value();
         EXPECT_EQ(fontOnly.fontBytes, original.fontBytes);
         EXPECT_TRUE(fontOnly.fontSha256 == original.fontSha256);
         ASSERT_EQ(fontOnly.groups.size(), s_GroupCount);
@@ -559,9 +562,9 @@ void VerifyPreparedFontSource_SfntByteAndDigestCorruptionRejectBothReadModes(){
     SourceFixture fixture;
     Vector<u8> binary;
     ASSERT_TRUE(SerializeFixtureSource(fixture, binary));
-    Path path = Path();
-    ASSERT_TRUE(WriteCase("font_integrity_control.font", binary, path));
-    ASSERT_TRUE(CanReadPrepared(path, true));
+    const Expected<Path> controlPathResult = WriteCase("font_integrity_control.font", binary);
+    ASSERT_TRUE(controlPathResult.has_value());
+    ASSERT_TRUE(CanReadPrepared(controlPathResult.value(), true));
     Array<StringView, 2u> corruptSfntFilenames = Array<StringView, 2u>();
     corruptSfntFilenames[0u] = "font_corrupt_bytes.font";
     corruptSfntFilenames[1u] = "font_corrupt_hash.font";
@@ -571,9 +574,11 @@ void VerifyPreparedFontSource_SfntByteAndDigestCorruptionRejectBothReadModes(){
             offset = 24u;
         Vector<u8> corrupted = CopyFontFixtureBytes(binary);
         corrupted[offset] ^= 0x40u;
-        ASSERT_TRUE(WriteCase(corruptSfntFilenames[index], corrupted, path));
-        EXPECT_FALSE(CanReadPrepared(path, false));
-        EXPECT_FALSE(CanReadPrepared(path, true));
+        const Expected<Path> corruptedPathResult = WriteCase(corruptSfntFilenames[index], corrupted);
+        ASSERT_TRUE(corruptedPathResult.has_value());
+        in Path corruptedPath = corruptedPathResult.value();
+        EXPECT_FALSE(CanReadPrepared(corruptedPath, false));
+        EXPECT_FALSE(CanReadPrepared(corruptedPath, true));
     }
     EXPECT_EQ(logger.errorCount(), 4u);
     EXPECT_TRUE(SawCapturedError(logger, s_ErrSfntHashDiffers));
@@ -583,8 +588,9 @@ void CheckMalformedPreparedField(in MalformedField field, in Vector<u8> binary, 
     const ScopedTestTrace trace(field.m_filename);
     Vector<u8> malformed = CopyFontFixtureBytes(binary);
     WriteLittleU32At(malformed, field.m_offset, field.m_value);
-    Path path = Path();
-    ASSERT_TRUE(WriteCase(field.m_filename, malformed, path));
+    const Expected<Path> pathResult = WriteCase(field.m_filename, malformed);
+    ASSERT_TRUE(pathResult.has_value());
+    in Path path = pathResult.value();
     for(u32 mode = 0u; mode < 2u; ++mode){
         const b8 includePixels = mode == 1u;
         const ArenaMemoryStats before = outputArena.memoryStats();
@@ -604,9 +610,9 @@ void VerifyPreparedFontSource_MalformedDirectoryCountsAndOverflowRejectBeforePay
     SourceFixture fixture;
     Vector<u8> binary;
     ASSERT_TRUE(SerializeFixtureSource(fixture, binary));
-    Path path = Path();
-    ASSERT_TRUE(WriteCase("directory_control.font", binary, path));
-    ASSERT_TRUE(CanReadPrepared(path, true, outputArena));
+    const Expected<Path> controlPathResult = WriteCase("directory_control.font", binary);
+    ASSERT_TRUE(controlPathResult.has_value());
+    ASSERT_TRUE(CanReadPrepared(controlPathResult.value(), true, outputArena));
 
     Vector<MalformedField> fields = Vector<MalformedField>();
     fields.reserve(27u);
@@ -646,11 +652,13 @@ void VerifyPreparedFontSource_MalformedDirectoryCountsAndOverflowRejectBeforePay
     WriteLittleU32At(oversized, s_HeaderBytes + s_GroupHeightField, s_MaxImageSide);
     WriteLittleU32At(oversized, s_HeaderBytes + s_GroupChannelsField, s_MaxChannelCount);
     WriteLittleU32At(oversized, s_HeaderBytes + s_GroupImageBytesField, s_MaxImageSide * s_MaxImageSide * s_MaxChannelCount);
-    ASSERT_TRUE(WriteCase("missing_large_image.font", oversized, path));
+    const Expected<Path> oversizedPathResult = WriteCase("missing_large_image.font", oversized);
+    ASSERT_TRUE(oversizedPathResult.has_value());
+    in Path oversizedPath = oversizedPathResult.value();
     for(u32 mode = 0u; mode < 2u; ++mode){
         const b8 includePixels = mode == 1u;
         const ArenaMemoryStats before = outputArena.memoryStats();
-        EXPECT_FALSE(CanReadPrepared(path, includePixels, outputArena));
+        EXPECT_FALSE(CanReadPrepared(oversizedPath, includePixels, outputArena));
         EXPECT_LE(outputArena.memoryStats().peakUsedBytes, before.usedBytes + 8u * s_PreparedGroupSize);
     }
     EXPECT_EQ(logger.errorCount(), 2u * (fields.size() + 1u));
@@ -662,9 +670,9 @@ void VerifyPreparedFontSource_TruncatedSectionsAndTrailingBytesRejectBothReadMod
     SourceFixture fixture;
     Vector<u8> binary;
     ASSERT_TRUE(SerializeFixtureSource(fixture, binary));
-    Path path = Path();
-    ASSERT_TRUE(WriteCase("length_control.font", binary, path));
-    ASSERT_TRUE(CanReadPrepared(path, true));
+    const Expected<Path> controlPathResult = WriteCase("length_control.font", binary);
+    ASSERT_TRUE(controlPathResult.has_value());
+    ASSERT_TRUE(CanReadPrepared(controlPathResult.value(), true));
 
     Vector<CutCase> cuts = Vector<CutCase>();
     cuts.reserve(7u);
@@ -680,9 +688,11 @@ void VerifyPreparedFontSource_TruncatedSectionsAndTrailingBytesRejectBothReadMod
         const ScopedTestTrace trace(cuts[index].m_filename);
         Vector<u8> malformed = CopyFontFixtureBytes(binary);
         malformed.resize(cuts[index].m_byteCount);
-        ASSERT_TRUE(WriteCase(cuts[index].m_filename, malformed, path));
-        EXPECT_FALSE(CanReadPrepared(path, false));
-        EXPECT_FALSE(CanReadPrepared(path, true));
+        const Expected<Path> cutPathResult = WriteCase(cuts[index].m_filename, malformed);
+        ASSERT_TRUE(cutPathResult.has_value());
+        in Path cutPath = cutPathResult.value();
+        EXPECT_FALSE(CanReadPrepared(cutPath, false));
+        EXPECT_FALSE(CanReadPrepared(cutPath, true));
     }
     EXPECT_EQ(logger.errorCount(), 2u * cuts.size());
 }
@@ -739,18 +749,31 @@ void VerifyPreparedFontSource_InvalidSerializationInputsRejectWithoutAllocating(
 }
 
 NWB_ADHD_GTEST(AssetsFont, SfntDirectoryRejectsTruncatedRecordsAndUnsupportedTableCounts, VerifyAssetsFont_SfntDirectoryRejectsTruncatedRecordsAndUnsupportedTableCounts)
+
 NWB_ADHD_GTEST(AssetsFont, SfntTableViewsCheckBoundsWithoutCopyingOrScanningOtherRecords, VerifyAssetsFont_SfntTableViewsCheckBoundsWithoutCopyingOrScanningOtherRecords)
+
 NWB_ADHD_GTEST(AssetsFont, SfntTableBoundsHandleOverflowAndEmptyEndSpansWithoutAddingFontPolicy, VerifyAssetsFont_SfntTableBoundsHandleOverflowAndEmptyEndSpansWithoutAddingFontPolicy)
+
 NWB_ADHD_GTEST(AssetsFont, PreparedAtlasPixelsAreExcludedFromCookedFontsAndRejectedByRuntimeImport, VerifyAssetsFont_PreparedAtlasPixelsAreExcludedFromCookedFontsAndRejectedByRuntimeImport)
+
 NWB_ADHD_GTEST(AssetsFont, MalformedBinaryPreservesThePreviouslyLoadedFont, VerifyAssetsFont_MalformedBinaryPreservesThePreviouslyLoadedFont)
+
 NWB_ADHD_GTEST(AssetsFont, OversizedCountIsRejectedBeforeSourceAllocation, VerifyAssetsFont_OversizedCountIsRejectedBeforeSourceAllocation)
+
 NWB_ADHD_GTEST(AssetsFont, RejectsCollectionsCompressedFontsAndVariableTables, VerifyAssetsFont_RejectsCollectionsCompressedFontsAndVariableTables)
+
 NWB_ADHD_GTEST(AssetsFont, RejectsMalformedDirectoriesAndNativeFaceMetrics, VerifyAssetsFont_RejectsMalformedDirectoriesAndNativeFaceMetrics)
+
 NWB_ADHD_GTEST(AssetsFont, NativeFaceFailurePreservesErrorCodeAndReclaimsValidationAllocations, VerifyAssetsFont_NativeFaceFailurePreservesErrorCodeAndReclaimsValidationAllocations)
+
 NWB_ADHD_GTEST(PreparedFontSource, ImageCorruptionRejectsFullReadWhileFontOnlySkipsCompactPlanes, VerifyPreparedFontSource_ImageCorruptionRejectsFullReadWhileFontOnlySkipsCompactPlanes)
+
 NWB_ADHD_GTEST(PreparedFontSource, SfntByteAndDigestCorruptionRejectBothReadModes, VerifyPreparedFontSource_SfntByteAndDigestCorruptionRejectBothReadModes)
+
 NWB_ADHD_GTEST(PreparedFontSource, MalformedDirectoryCountsAndOverflowRejectBeforePayloadAllocation, VerifyPreparedFontSource_MalformedDirectoryCountsAndOverflowRejectBeforePayloadAllocation)
+
 NWB_ADHD_GTEST(PreparedFontSource, TruncatedSectionsAndTrailingBytesRejectBothReadModes, VerifyPreparedFontSource_TruncatedSectionsAndTrailingBytesRejectBothReadModes)
+
 NWB_ADHD_GTEST(PreparedFontSource, InvalidSerializationInputsRejectWithoutAllocating, VerifyPreparedFontSource_InvalidSerializationInputsRejectWithoutAllocating)
 
 

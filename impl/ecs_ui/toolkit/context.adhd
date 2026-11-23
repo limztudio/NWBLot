@@ -12,34 +12,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 MatchesContextTargetPopup(in HitTarget target, in PopupToken currentPopup){
-    return target.popup == currentPopup;
-}
-
-b8 MatchesContextPartTargetOwner(in HitTarget target, in PopupToken currentPopup, in WidgetId ownerId){
-    return target.popup == currentPopup && target.owner == ownerId;
-}
-
-b8 CanCommitContextFrameGeneration(in u64 generation, in u64 readyGeneration){
-    return generation != 0u && generation == readyGeneration;
-}
-
-b8 CanDeclareNextContextWidget(in usize declarationCount){
-    return declarationCount < s_WidgetMaxStates;
-}
-
-b8 ShouldInvalidateContextWidgetKind(in WidgetKind previousKind, in WidgetKind nextKind){
-    return previousKind != nextKind;
-}
-
-b8 ShouldRetireUnseenWidgetState(in WidgetState state, in u64 frameGeneration){
-    return state.lastSeenFrame != frameGeneration;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class Context : NoCopy{
     private InputRouter m_input;
     private WidgetStateStore m_states;
@@ -240,19 +212,30 @@ class Context : NoCopy{
     }
     [cpp_unwind]
     public b8 registerPopupScope(in WidgetState state, in PopupScope scope){
-        PopupToken fenceToken;
-        if(this.m_failed || !this.currentDeclaration(state) || !TryRegisterContextPopupScope(state, this.m_currentPopup, scope, this.m_popups, fenceToken)){
+        if(this.m_failed || !this.currentDeclaration(state)){
             this.fail();
             return false;
         }
-        this.m_input.fencePopup(fenceToken);
+        const Expected<PopupToken> fenceToken = TryRegisterContextPopupScope(state, this.m_currentPopup, scope, this.m_popups);
+        if(!fenceToken.has_value()){
+            this.fail();
+            return false;
+        }
+        this.m_input.fencePopup(fenceToken.value());
         return true;
     }
     public b8 activatePopupScope(in PopupToken token){
-        if(this.m_failed || !this.m_rootActive || !TryActivateContextPopupScope(token, this.m_root, this.m_currentPopup, this.m_popups, this.m_popupStack, this.m_popupDepth, this.m_currentPopup, this.m_popupLayer)){
+        if(this.m_failed || !this.m_rootActive){
             this.fail();
             return false;
         }
+        const Expected<u32> layer = TryActivateContextPopupScope(token, this.m_root, this.m_currentPopup, this.m_popups, this.m_popupStack, this.m_popupDepth);
+        if(!layer.has_value()){
+            this.fail();
+            return false;
+        }
+        this.m_currentPopup = token;
+        this.m_popupLayer = layer.value();
         return true;
     }
     public b8 updatePopupScope(in PopupToken token, in PopupScope scope){
@@ -265,22 +248,23 @@ class Context : NoCopy{
     [cpp_unwind]
     public b8 beginPopupScope(in WidgetState state, in PopupScope scope){ return this.registerPopupScope(state, scope) && this.activatePopupScope(scope.token); }
     public b8 endPopupScope(in b8 visible){
-        PopupToken ended;
-        if(!TryEndContextPopupScope(this.m_popups, this.m_popupStack, this.m_popupDepth, this.m_currentPopup, this.m_popupLayer, ended)){
+        const Expected<PopupEndResult> ended = TryEndContextPopupScope(this.m_popups, this.m_popupStack, this.m_popupDepth, this.m_currentPopup);
+        if(!ended.has_value()){
             this.fail();
             return false;
         }
+        this.m_popupLayer = ended.value().layer;
         if(!visible)
-            this.discardPopupScope(ended);
+            this.discardPopupScope(ended.value().ended);
         return !this.m_failed;
     }
     public void discardPopupScope(in PopupToken token){
-        b8 removedAny = false;
-        if(!DiscardContextPopupScope(token, this.m_popupStack, this.m_popupDepth, this.m_targets, this.m_targetRoots, this.m_popups, removedAny)){
+        const Expected<b8> removedAny = DiscardContextPopupScope(token, this.m_popupStack, this.m_popupDepth, this.m_targets, this.m_targetRoots, this.m_popups);
+        if(!removedAny.has_value()){
             this.fail();
             return;
         }
-        if(removedAny)
+        if(removedAny.value())
             this.m_input.closePopup(token);
     }
     public b8 hasPopupScope(in PopupToken token)const{ return this.popupLayer(token) != 0u; }
@@ -404,6 +388,34 @@ class Context : NoCopy{
             this.m_states.finishRetirement();
         }
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 MatchesContextTargetPopup(in HitTarget target, in PopupToken currentPopup){
+    return target.popup == currentPopup;
+}
+
+b8 MatchesContextPartTargetOwner(in HitTarget target, in PopupToken currentPopup, in WidgetId ownerId){
+    return target.popup == currentPopup && target.owner == ownerId;
+}
+
+b8 CanCommitContextFrameGeneration(in u64 generation, in u64 readyGeneration){
+    return generation != 0u && generation == readyGeneration;
+}
+
+b8 CanDeclareNextContextWidget(in usize declarationCount){
+    return declarationCount < s_WidgetMaxStates;
+}
+
+b8 ShouldInvalidateContextWidgetKind(in WidgetKind previousKind, in WidgetKind nextKind){
+    return previousKind != nextKind;
+}
+
+b8 ShouldRetireUnseenWidgetState(in WidgetState state, in u64 frameGeneration){
+    return state.lastSeenFrame != frameGeneration;
 }
 
 

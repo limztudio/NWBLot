@@ -8,8 +8,22 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class TextureBinaryFlags{
+    public u8 dimension = 0u;
+    public u8 payloadFormat = 0u;
+    public u8 alphaMode = 0u;
+    public u8 alphaConstantUnorm8 = 0u;
+}
+
+class TextureBinaryMetadata{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 depth = 0u;
+    public TextureBinaryFlags flags = TextureBinaryFlags();
+}
+
 class TextureBinaryCodec{
-    private b8 readMipLevelsAndPayloadBytes(
+    private Expected<TextureBinaryFlags> readMipLevelsAndPayloadBytes(
         in Span<u8> binary,
         in u32 headerVersion,
         in u32 headerDimension,
@@ -19,20 +33,16 @@ class TextureBinaryCodec{
         in u32 headerPayloadFormat,
         in u64 headerPayloadByteCount,
         mut usize inOutCursor,
-        mut u8 outDimension,
-        mut u8 outPayloadFormat,
-        mut u8 outAlphaMode,
-        mut u8 outAlphaConstantUnorm8,
         mut Vector<TextureMipLevel> outMipLevels,
         mut Vector<u8> outPayloadBytes
     )const{
         if(headerVersion != s_TextureBinaryVersion){
             error("Texture::loadBinary failed: unsupported texture payload version; recook required");
-            return false;
+            return MakeUnexpected(Failure());
         }
         if((headerAlphaInfo & s_TextureAlphaInfoReservedMask) != 0u || headerPayloadFormat > cast<u32>(u8.max)){
             error("Texture::loadBinary failed: invalid texture payload flags");
-            return false;
+            return MakeUnexpected(Failure());
         }
 
         const u8 payloadFormat = cast<u8>(headerPayloadFormat);
@@ -46,32 +56,32 @@ class TextureBinaryCodec{
             || headerDepth == 0u
         ){
             error("Texture::loadBinary failed: invalid texture payload dimensions");
-            return false;
+            return MakeUnexpected(Failure());
         }
         if(headerMipCount == 0u || headerPayloadByteCount > cast<u64>(usize.max)){
             error("Texture::loadBinary failed: texture payload counts exceed runtime limits");
-            return false;
+            return MakeUnexpected(Failure());
         }
 
         if(cast<u64>(headerMipCount) > cast<u64>(usize.max / s_TextureMipLevelBinaryBytes)){
             error("Texture::loadBinary failed: mip payload byte size overflows");
-            return false;
+            return MakeUnexpected(Failure());
         }
         const usize mipByteCount = cast<usize>(headerMipCount) * s_TextureMipLevelBinaryBytes;
         if(!CanReadBytes(binary, inOutCursor, mipByteCount)){
             error("Texture::loadBinary failed: malformed mip levels payload");
-            return false;
+            return MakeUnexpected(Failure());
         }
 
         const usize payloadByteCount = cast<usize>(headerPayloadByteCount);
         if(!CanReadBytes(binary, inOutCursor + mipByteCount, payloadByteCount)){
             error("Texture::loadBinary failed: texture payload is truncated");
-            return false;
+            return MakeUnexpected(Failure());
         }
 
         if(!CanStoreValueCount(outMipLevels, cast<usize>(headerMipCount))){
             error("Texture::loadBinary failed: mip count exceeds runtime container limits");
-            return false;
+            return MakeUnexpected(Failure());
         }
         outMipLevels.clear();
         outMipLevels.reserve(cast<usize>(headerMipCount));
@@ -95,11 +105,11 @@ class TextureBinaryCodec{
                 || !mipSizeBytes.has_value()
             ){
                 error("Texture::loadBinary failed: malformed mip level {}", mipIndex);
-                return false;
+                return MakeUnexpected(Failure());
             }
             if(mipReserved.value() != 0u){
                 error("Texture::loadBinary failed: invalid texture mip payload flags");
-                return false;
+                return MakeUnexpected(Failure());
             }
 
             TextureMipLevel level;
@@ -115,14 +125,15 @@ class TextureBinaryCodec{
 
         if(!ReadBinaryVectorPayload(binary, payloadByteCount, inOutCursor, outPayloadBytes).has_value()){
             error("Texture::loadBinary failed: texture payload is truncated");
-            return false;
+            return MakeUnexpected(Failure());
         }
 
-        outDimension = cast<u8>(headerDimension);
-        outPayloadFormat = payloadFormat;
-        outAlphaMode = alphaMode;
-        outAlphaConstantUnorm8 = alphaConstantUnorm8;
-        return true;
+        TextureBinaryFlags flags = TextureBinaryFlags();
+        flags.dimension = cast<u8>(headerDimension);
+        flags.payloadFormat = payloadFormat;
+        flags.alphaMode = alphaMode;
+        flags.alphaConstantUnorm8 = alphaConstantUnorm8;
+        return flags;
     }
 
     public b8 serialize(
@@ -181,22 +192,15 @@ class TextureBinaryCodec{
         return true;
     }
 
-    public b8 deserialize(
+    public Expected<TextureBinaryMetadata> deserialize(
         in Span<u8> binary,
-        mut u32 outWidth,
-        mut u32 outHeight,
-        mut u32 outDepth,
-        mut u8 outDimension,
-        mut u8 outPayloadFormat,
-        mut u8 outAlphaMode,
-        mut u8 outAlphaConstantUnorm8,
         mut Vector<TextureMipLevel> outMipLevels,
         mut Vector<u8> outPayloadBytes
     )const{
         usize cursor = 0u;
         if(!CanReadBytes(binary, cursor, s_TextureHeaderBinaryBytes)){
             error("Texture::loadBinary failed: malformed header");
-            return false;
+            return MakeUnexpected(Failure());
         }
         const Expected<u32> magic = ReadPOD<u32>(binary, cursor);
         const Expected<u32> version = ReadPOD<u32>(binary, cursor);
@@ -221,13 +225,13 @@ class TextureBinaryCodec{
             || !payloadByteCount.has_value()
         ){
             error("Texture::loadBinary failed: malformed header");
-            return false;
+            return MakeUnexpected(Failure());
         }
         if(magic.value() != s_TextureBinaryMagic){
             error("Texture::loadBinary failed: invalid texture asset format; recook required");
-            return false;
+            return MakeUnexpected(Failure());
         }
-        if(!this.readMipLevelsAndPayloadBytes(
+        const Expected<TextureBinaryFlags> flags = this.readMipLevelsAndPayloadBytes(
             binary,
             version.value(),
             dimension.value(),
@@ -237,22 +241,21 @@ class TextureBinaryCodec{
             payloadFormat.value(),
             payloadByteCount.value(),
             cursor,
-            outDimension,
-            outPayloadFormat,
-            outAlphaMode,
-            outAlphaConstantUnorm8,
             outMipLevels,
             outPayloadBytes
-        ))
-            return false;
+        );
+        if(!flags.has_value())
+            return MakeUnexpected(Failure());
         if(cursor != binary.size()){
             error("Texture::loadBinary failed: trailing bytes detected");
-            return false;
+            return MakeUnexpected(Failure());
         }
-        outWidth = width.value();
-        outHeight = height.value();
-        outDepth = depth.value();
-        return true;
+        TextureBinaryMetadata metadata = TextureBinaryMetadata();
+        metadata.width = width.value();
+        metadata.height = height.value();
+        metadata.depth = depth.value();
+        metadata.flags = flags.value();
+        return metadata;
     }
 }
 

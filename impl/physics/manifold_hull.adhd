@@ -15,6 +15,10 @@ enum<u8> SeparatingFeatureKind{
     kCount
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class SeparatingAxisResult{
     public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
     public f32 separation = -s_MaxF32;
@@ -31,6 +35,21 @@ class ClipVertex{
 
     public ClipVertex(){
         this.position = f32x3u(0.0f, 0.0f, 0.0f);
+    }
+}
+
+class MeshContactCandidate{
+    public f32x4 pointSep;
+    public f32x4 anchorA;
+    public f32x4 anchorB;
+    public f32x4 normal;
+    public u32 featureId = 0u;
+
+    public MeshContactCandidate(){
+        this.pointSep = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        this.anchorA = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        this.anchorB = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        this.normal = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
     }
 }
 
@@ -1114,21 +1133,6 @@ Manifold CollideHulls(in HullShape hullA, in Transform3D xfA, in HullShape hullB
     if(best.kind == SeparatingFeatureKind::FaceAxisA)
         return CollideHullFaces(hullA, xfA, best.indexA, hullB, xfB, xfA, xfB, true, maxDistance);
     return CollideHullFaces(hullB, xfB, best.indexB, hullA, xfA, xfA, xfB, false, maxDistance);
-}
-
-class MeshContactCandidate{
-    public f32x4 pointSep;
-    public f32x4 anchorA;
-    public f32x4 anchorB;
-    public f32x4 normal;
-    public u32 featureId = 0u;
-
-    public MeshContactCandidate(){
-        this.pointSep = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-        this.anchorA = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-        this.anchorB = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-        this.normal = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
-    }
 }
 
 void ReduceMeshCandidatesAndWriteManifold(

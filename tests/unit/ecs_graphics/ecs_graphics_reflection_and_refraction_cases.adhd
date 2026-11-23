@@ -31,56 +31,9 @@ type RenderableMeshStatusResult = Expected<RenderableMeshDesc, RenderableMeshRes
 type SceneLightSpan = Span<SceneLightGpuData>;
 type PruneMeshAssetRef = AssetRef<Mesh>;
 
-ReflectionSceneContentStamp Stamp(){ return ReflectionSceneContentStamp(1u, 2u, 3u, 4u, true); }
-QueueSubmissionToken Token(in u64 value){
-    QueueSubmissionToken token;
-    token.value = value;
-    token.physicalQueueIndex = 0u;
-    token.deviceGeneration = 1u;
-    token.queue = CommandQueue::Graphics;
-    return token;
-}
-QueueSubmissionToken Token(){ return Token(20u); }
 
-ReflectionCounterArray MakeSampleReflectionCounters(){
-    return ReflectionCounterArray(100u, 64u, 30u, 80u, 20u, 50u, 90u, 20u, 98u, 42u, 12u, 2u, 1u, 3u, 4u, 5u, 123u, 25u, 70u, 2u, 17u, 3u, 6u, 19u, 31u);
-}
-RefractionCounterArray MakeSampleRefractionCounters(){
-    return RefractionCounterArray(23u, 41u, 2u, 3u, 5u, 7u, 11u, 43u, 13u, 17u, 19u, 29u, 31u, 47u, 37u, 53u,
-        59u, 61u, 67u, 71u, 73u, 79u, 83u, 89u, 97u, 101u, 103u, 107u, 1u);
-}
-static_assert(size_of<ReflectionCounterArray>() == s_ReflectionReadbackCounterBytes);
-void ExpectRefractionDiagnosticCountersMatch(in RefractionStatistics statistics, in RefractionCounterArray counters){
-    EXPECT_EQ(statistics.hardwarePixels, counters[0u]);
-    EXPECT_EQ(statistics.entryQueries, counters[1u]);
-    EXPECT_EQ(statistics.entryAssociationMisses, counters[2u]);
-    EXPECT_EQ(statistics.entryWrongEntities, counters[3u]);
-    EXPECT_EQ(statistics.entryFailures, counters[4u]);
-    EXPECT_EQ(statistics.associatedEntries, counters[5u]);
-    EXPECT_EQ(statistics.invalidEntryDirections, counters[6u]);
-    EXPECT_EQ(statistics.exitQueries, counters[7u]);
-    EXPECT_EQ(statistics.exitMisses, counters[8u]);
-    EXPECT_EQ(statistics.exitFailures, counters[9u]);
-    EXPECT_EQ(statistics.tirEvents, counters[10u]);
-    EXPECT_EQ(statistics.tirCappedPixels, counters[11u]);
-    EXPECT_EQ(statistics.volumeExits, counters[12u]);
-    EXPECT_EQ(statistics.backgroundQueries, counters[13u]);
-    EXPECT_EQ(statistics.backgroundMisses, counters[14u]);
-    EXPECT_EQ(statistics.backgroundFailures, counters[15u]);
-    EXPECT_EQ(statistics.secondaryGlassPixels, counters[16u]);
-    EXPECT_EQ(statistics.transparentHits, counters[17u]);
-    EXPECT_EQ(statistics.backgroundLayerCapPixels, counters[18u]);
-    EXPECT_EQ(statistics.cachedOpaqueReturns, counters[19u]);
-    EXPECT_EQ(statistics.shadedOpaqueReturns, counters[20u]);
-    EXPECT_EQ(statistics.exitScreenBackgroundReturns, counters[21u]);
-    EXPECT_EQ(statistics.exitStraightFallbackPixels, counters[22u]);
-    EXPECT_EQ(statistics.materialShadeCalls, counters[23u]);
-    EXPECT_EQ(statistics.cachedHitAttempts, counters[24u]);
-    EXPECT_EQ(statistics.cachedHitMisses, counters[25u]);
-    EXPECT_EQ(statistics.physicalQueries, counters[26u]);
-    EXPECT_EQ(statistics.queryBudgetUnits, counters[27u]);
-    EXPECT_EQ(statistics.overflowFlags, counters[28u]);
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [ordered]
 class StatisticsTestControl<TState>{
@@ -104,16 +57,19 @@ class ReflectionStatisticsLeaseTask{
     public ReflectionStatisticsLeaseTask(in ReflectionStatisticsControlHandle control, in ReflectionStatistics metadata){ this.reservation = StatisticsReservation<ReflectionStatistics, ReflectionStatisticsOutcome>(control, metadata); }
     public void discarded(){ this.reservation.discard(); }
 }
+
 class ReflectionFeedbackLeaseTask{
     public ReflectionFeedbackReservation reservation;
     public ReflectionFeedbackLeaseTask(in ReflectionFeedbackControlHandle control, in ReflectionFeedbackPlan metadata){ this.reservation = ReflectionFeedbackReservation(control, metadata); }
     public void discarded(){ this.reservation.discard(); }
 }
+
 class ReflectionHistoryLeaseTask{
     public ReflectionHistoryReservation reservation;
     public ReflectionHistoryLeaseTask(in ReflectionHistoryControlHandle control, in ReflectionHistoryPlan metadata){ this.reservation = ReflectionHistoryReservation(control, metadata); }
     public void discarded(){ this.reservation.discard(); }
 }
+
 class ReflectionStatsDestructorLeaseTask{ public ReflectionStatisticsReservation reservation;
     public ReflectionStatsDestructorLeaseTask(in ReflectionStatisticsControlHandle control, in ReflectionStatistics metadata){ this.reservation = StatisticsReservation<ReflectionStatistics, ReflectionStatisticsOutcome>(control, metadata); } }
 
@@ -158,23 +114,83 @@ class PruneContext{
     }
 }
 
-Name MakeVariantPruningName(in usize index){
-    const Name base = "tests/runtime_mesh_pruning/full_identity";
-    NameHash hash = base.hash();
-    hash.qwords[s_NameHashLaneCount - 1u] ^= index + 1u;
-    return Name(hash);
-}
-
 [ordered]
 class RuntimeMeshPruningContext{
     public ScratchStorage scratch;
     public RuntimeMeshRequestSet requests;
+    [cpp_unwind]
     public RuntimeMeshPruningContext(in usize capacityHint){
         this.scratch = ScratchStorage(s_EcsGraphicsCaseTestsRuntimeMeshPruningRequestScratch);
         this.requests = this.scratch.makeValue<RuntimeMeshRequestSet>(capacityHint);
     }
 }
 
+static_assert(size_of<ReflectionCounterArray>() == s_ReflectionReadbackCounterBytes);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ReflectionSceneContentStamp Stamp(){ return ReflectionSceneContentStamp(1u, 2u, 3u, 4u, true); }
+
+QueueSubmissionToken Token(in u64 value){
+    QueueSubmissionToken token;
+    token.value = value;
+    token.physicalQueueIndex = 0u;
+    token.deviceGeneration = 1u;
+    token.queue = CommandQueue::Graphics;
+    return token;
+}
+
+QueueSubmissionToken Token(){ return Token(20u); }
+
+ReflectionCounterArray MakeSampleReflectionCounters(){
+    return ReflectionCounterArray(100u, 64u, 30u, 80u, 20u, 50u, 90u, 20u, 98u, 42u, 12u, 2u, 1u, 3u, 4u, 5u, 123u, 25u, 70u, 2u, 17u, 3u, 6u, 19u, 31u);
+}
+
+RefractionCounterArray MakeSampleRefractionCounters(){
+    return RefractionCounterArray(23u, 41u, 2u, 3u, 5u, 7u, 11u, 43u, 13u, 17u, 19u, 29u, 31u, 47u, 37u, 53u,
+        59u, 61u, 67u, 71u, 73u, 79u, 83u, 89u, 97u, 101u, 103u, 107u, 1u);
+}
+
+void ExpectRefractionDiagnosticCountersMatch(in RefractionStatistics statistics, in RefractionCounterArray counters){
+    EXPECT_EQ(statistics.hardwarePixels, counters[0u]);
+    EXPECT_EQ(statistics.entryQueries, counters[1u]);
+    EXPECT_EQ(statistics.entryAssociationMisses, counters[2u]);
+    EXPECT_EQ(statistics.entryWrongEntities, counters[3u]);
+    EXPECT_EQ(statistics.entryFailures, counters[4u]);
+    EXPECT_EQ(statistics.associatedEntries, counters[5u]);
+    EXPECT_EQ(statistics.invalidEntryDirections, counters[6u]);
+    EXPECT_EQ(statistics.exitQueries, counters[7u]);
+    EXPECT_EQ(statistics.exitMisses, counters[8u]);
+    EXPECT_EQ(statistics.exitFailures, counters[9u]);
+    EXPECT_EQ(statistics.tirEvents, counters[10u]);
+    EXPECT_EQ(statistics.tirCappedPixels, counters[11u]);
+    EXPECT_EQ(statistics.volumeExits, counters[12u]);
+    EXPECT_EQ(statistics.backgroundQueries, counters[13u]);
+    EXPECT_EQ(statistics.backgroundMisses, counters[14u]);
+    EXPECT_EQ(statistics.backgroundFailures, counters[15u]);
+    EXPECT_EQ(statistics.secondaryGlassPixels, counters[16u]);
+    EXPECT_EQ(statistics.transparentHits, counters[17u]);
+    EXPECT_EQ(statistics.backgroundLayerCapPixels, counters[18u]);
+    EXPECT_EQ(statistics.cachedOpaqueReturns, counters[19u]);
+    EXPECT_EQ(statistics.shadedOpaqueReturns, counters[20u]);
+    EXPECT_EQ(statistics.exitScreenBackgroundReturns, counters[21u]);
+    EXPECT_EQ(statistics.exitStraightFallbackPixels, counters[22u]);
+    EXPECT_EQ(statistics.materialShadeCalls, counters[23u]);
+    EXPECT_EQ(statistics.cachedHitAttempts, counters[24u]);
+    EXPECT_EQ(statistics.cachedHitMisses, counters[25u]);
+    EXPECT_EQ(statistics.physicalQueries, counters[26u]);
+    EXPECT_EQ(statistics.queryBudgetUnits, counters[27u]);
+    EXPECT_EQ(statistics.overflowFlags, counters[28u]);
+}
+
+Name MakeVariantPruningName(in usize index){
+    const Name base = "tests/runtime_mesh_pruning/full_identity";
+    NameHash hash = base.hash();
+    hash.qwords[s_NameHashLaneCount - 1u] ^= index + 1u;
+    return Name(hash);
+}
 
 void ReflectionFeedback_AcceptWithHardware(in ReflectionFeedbackPlan plan, mut ReflectionFeedbackState state, in b8 hardwareReady){
     ASSERT_TRUE(state.reserve(plan));
@@ -1390,64 +1406,114 @@ void VerifyShadowMaterialContextPolicy_RejectedAndCrossRouteUploadsDoNotAdmitSta
     EXPECT_TRUE(policy.softwareSnapshotAccepted(false, true, true, 22u, 22u, 2u, 2u));
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST(ReflectionFeedback, ExtentAccountsForTwoSurfaceClassesAndPartialTiles, VerifyReflectionFeedback_ExtentAccountsForTwoSurfaceClassesAndPartialTiles)
+
 NWB_ADHD_GTEST(ReflectionFeedback, SpeculativePlansAndRejectedWriterDoNotAdvanceCadence, VerifyReflectionFeedback_SpeculativePlansAndRejectedWriterDoNotAdvanceCadence)
+
 NWB_ADHD_GTEST(ReflectionFeedback, EveryTrustedContentDomainInvalidatesPreviousTileState, VerifyReflectionFeedback_EveryTrustedContentDomainInvalidatesPreviousTileState)
+
 NWB_ADHD_GTEST(ReflectionFeedback, ScreenRangeBudgetAndSeedChangesInvalidateFeedback, VerifyReflectionFeedback_ScreenRangeBudgetAndSeedChangesInvalidateFeedback)
+
 NWB_ADHD_GTEST(ReflectionFeedback, OnlyTrustedEnabledHybridWithAvailableHardwareCanUseFeedback, VerifyReflectionFeedback_OnlyTrustedEnabledHybridWithAvailableHardwareCanUseFeedback)
+
 NWB_ADHD_GTEST(ReflectionFeedback, RejectedDisablePreservesAcceptedBankButAcceptedDisableInvalidatesReuse, VerifyReflectionFeedback_RejectedDisablePreservesAcceptedBankButAcceptedDisableInvalidatesReuse)
+
 NWB_ADHD_GTEST(ReflectionFeedback, RejectedUntrustedPrefixPreservesAcceptedFeedback, VerifyReflectionFeedback_RejectedUntrustedPrefixPreservesAcceptedFeedback)
+
 NWB_ADHD_GTEST(ReflectionFeedback, LateHardwareFailureDisablesBypassAndRecoveryRestartsObservation, VerifyReflectionFeedback_LateHardwareFailureDisablesBypassAndRecoveryRestartsObservation)
+
 NWB_ADHD_GTEST(ReflectionFeedback, InvalidAcceptedTokensQuarantineBankReuseUntilJoinedOwnerReset, VerifyReflectionFeedback_InvalidAcceptedTokensQuarantineBankReuseUntilJoinedOwnerReset)
+
 NWB_ADHD_GTEST(ReflectionFeedback, StalePlanCannotReserveAfterAnIndependentPlanAccepts, VerifyReflectionFeedback_StalePlanCannotReserveAfterAnIndependentPlanAccepts)
+
 NWB_ADHD_GTEST(ReflectionFeedback, ResourceGenerationBlocksOldCallbacksWithoutDiscardingTheNewLease, VerifyReflectionFeedback_ResourceGenerationBlocksOldCallbacksWithoutDiscardingTheNewLease)
+
 NWB_ADHD_GTEST(ReflectionFeedback, RejectedGraphAndResetReleaseTheMoveOnlyReservation, VerifyReflectionFeedback_RejectedGraphAndResetReleaseTheMoveOnlyReservation)
+
 NWB_ADHD_GTEST(ReflectionFeedback, MovedLeasePublishesOnceAndInvalidAcceptanceRetainsQuarantineAfterDestruction, VerifyReflectionFeedback_MovedLeasePublishesOnceAndInvalidAcceptanceRetainsQuarantineAfterDestruction)
+
 NWB_ADHD_GTEST(ReflectionHistory, AcceptedSampleCountCapsWhileSamplingIndexContinues, VerifyReflectionHistory_AcceptedSampleCountCapsWhileSamplingIndexContinues)
+
 NWB_ADHD_GTEST(ReflectionHistory, SingleSampleLimitStillPublishesBanksAndAdvancesAcceptedSampling, VerifyReflectionHistory_SingleSampleLimitStillPublishesBanksAndAdvancesAcceptedSampling)
+
 NWB_ADHD_GTEST(ReflectionHistory, DiscardedLateHardwareResetKeepsHistoryUntilAnAcceptedRetry, VerifyReflectionHistory_DiscardedLateHardwareResetKeepsHistoryUntilAnAcceptedRetry)
+
 NWB_ADHD_GTEST(ReflectionHistory, EverySceneDomainAndViewChangeResetsOnce, VerifyReflectionHistory_EverySceneDomainAndViewChangeResetsOnce)
+
 NWB_ADHD_GTEST(ReflectionHistory, SeedAndBudgetChangesRestartTheSamplingSequence, VerifyReflectionHistory_SeedAndBudgetChangesRestartTheSamplingSequence)
+
 NWB_ADHD_GTEST(ReflectionHistory, SpatialAndDiagnosticSettingsDoNotResetUnfilteredHistory, VerifyReflectionHistory_SpatialAndDiagnosticSettingsDoNotResetUnfilteredHistory)
+
 NWB_ADHD_GTEST(ReflectionHistory, RejectedDisabledTransitionCannotOverwriteAcceptedHistoryBank, VerifyReflectionHistory_RejectedDisabledTransitionCannotOverwriteAcceptedHistoryBank)
+
 NWB_ADHD_GTEST(ReflectionHistory, RejectedUntrustedTransitionCannotOverwriteAcceptedHistoryBank, VerifyReflectionHistory_RejectedUntrustedTransitionCannotOverwriteAcceptedHistoryBank)
+
 NWB_ADHD_GTEST(ReflectionHistory, StableUntrustedSceneNeverAccumulatesButDoesAdvanceAcceptedSampling, VerifyReflectionHistory_StableUntrustedSceneNeverAccumulatesButDoesAdvanceAcceptedSampling)
+
 NWB_ADHD_GTEST(ReflectionHistory, StalePlanCannotReserveAfterAnotherFrameAccepts, VerifyReflectionHistory_StalePlanCannotReserveAfterAnotherFrameAccepts)
+
 NWB_ADHD_GTEST(ReflectionHistory, ResourceGenerationRejectsOldAcceptanceAndResetsEpoch, VerifyReflectionHistory_ResourceGenerationRejectsOldAcceptanceAndResetsEpoch)
+
 NWB_ADHD_GTEST(ReflectionHistory, GraphRejectionAndResetReleaseUnacceptedLease, VerifyReflectionHistory_GraphRejectionAndResetReleaseUnacceptedLease)
+
 NWB_ADHD_GTEST(ReflectionSettings, AcceptsZeroHardwareBudgetWithScreenFeedback, VerifyReflectionSettings_AcceptsZeroHardwareBudgetWithScreenFeedback)
+
 NWB_ADHD_GTEST(ReflectionSettings, BoundsAllSceneQueriesPerAdmittedPath, VerifyReflectionSettings_BoundsAllSceneQueriesPerAdmittedPath)
+
 NWB_ADHD_GTEST(ReflectionSettings, BoundsTemporalReferenceCountAndSpatialRadius, VerifyReflectionSettings_BoundsTemporalReferenceCountAndSpatialRadius)
+
 NWB_ADHD_GTEST(ReflectionSettings, RejectsNonFiniteAndUnorderedDistanceControls, VerifyReflectionSettings_RejectsNonFiniteAndUnorderedDistanceControls)
+
 NWB_ADHD_GTEST(ReflectionSettings, BoundsScreenTraversalAndFiniteConfidenceInputs, VerifyReflectionSettings_BoundsScreenTraversalAndFiniteConfidenceInputs)
+
 NWB_ADHD_GTEST(ReflectionSettings, RejectsInvalidMaterialThresholdsModesAndEnvironmentRadiance, VerifyReflectionSettings_RejectsInvalidMaterialThresholdsModesAndEnvironmentRadiance)
+
 NWB_ADHD_GTEST(ReflectionSettings, ReflectionHardwareWorkRequiresAnEnabledRouteAndPositiveRayBudget, VerifyReflectionSettings_ReflectionHardwareWorkRequiresAnEnabledRouteAndPositiveRayBudget)
+
 NWB_ADHD_GTEST(ReflectionStatistics, RingSkipsWhenThreeReservationsAreOutstanding, VerifyReflectionStatistics_RingSkipsWhenThreeReservationsAreOutstanding)
+
 NWB_ADHD_GTEST(ReflectionStatistics, DiscardedReservationCanBeReusedWithoutStaleCallbackMutation, VerifyReflectionStatistics_DiscardedReservationCanBeReusedWithoutStaleCallbackMutation)
+
 NWB_ADHD_GTEST(ReflectionStatistics, PublishesFrozenMetadataAndNonzeroCountersOnlyAtCompletion, VerifyReflectionStatistics_PublishesFrozenMetadataAndNonzeroCountersOnlyAtCompletion)
+
 NWB_ADHD_GTEST(ReflectionStatistics, FeedbackEpochSurvivesAcceptedInputMutation, VerifyReflectionStatistics_FeedbackEpochSurvivesAcceptedInputMutation)
+
 NWB_ADHD_GTEST(ReflectionStatistics, OlderCompletionsCannotReplaceNewerPublishedWork, VerifyReflectionStatistics_OlderCompletionsCannotReplaceNewerPublishedWork)
+
 NWB_ADHD_GTEST(ReflectionStatistics, CompletionRequiresExactAcceptedPhysicalToken, VerifyReflectionStatistics_CompletionRequiresExactAcceptedPhysicalToken)
+
 NWB_ADHD_GTEST(ReflectionStatistics, ResetRejectsOldCallbacksAndClearsPublication, VerifyReflectionStatistics_ResetRejectsOldCallbacksAndClearsPublication)
+
 NWB_ADHD_GTEST(ReflectionStatistics, FailedMappingRetiresSlotWithoutPublishingZeros, VerifyReflectionStatistics_FailedMappingRetiresSlotWithoutPublishingZeros)
+
 NWB_ADHD_GTEST(ReflectionStatistics, InvalidAcceptedTokenQuarantinesSlotUntilReset, VerifyReflectionStatistics_InvalidAcceptedTokenQuarantinesSlotUntilReset)
+
 NWB_ADHD_GTEST(ReflectionStatistics, MovingLeaseTransfersOwnershipAndReclaimsAssignmentDestination, VerifyReflectionStatistics_MovingLeaseTransfersOwnershipAndReclaimsAssignmentDestination)
+
 NWB_ADHD_GTEST(ReflectionStatistics, AcceptedLeaseRemainsInFlightAfterPayloadDestruction, VerifyReflectionStatistics_AcceptedLeaseRemainsInFlightAfterPayloadDestruction)
+
 NWB_ADHD_GTEST(ReflectionStatistics, RejectedGraphRegistrationAndGraphResetReleaseUnacceptedLeases, VerifyReflectionStatistics_RejectedGraphRegistrationAndGraphResetReleaseUnacceptedLeases)
+
 NWB_ADHD_GTEST(ReflectionStatistics, PayloadDestructionReclaimsLeaseWithoutDiscardCallback, VerifyReflectionStatistics_PayloadDestructionReclaimsLeaseWithoutDiscardCallback)
+
 NWB_ADHD_GTEST(RefractionStatistics, RingSaturationDoesNotRecycleOutstandingGpuWork, VerifyRefractionStatistics_RingSaturationDoesNotRecycleOutstandingGpuWork)
+
 NWB_ADHD_GTEST(RefractionStatistics, CompletionRequiresExactAcceptedPhysicalToken, VerifyRefractionStatistics_CompletionRequiresExactAcceptedPhysicalToken)
+
 NWB_ADHD_GTEST(RefractionStatistics, OlderCompletionsCannotReplaceFrozenNewerPublication, VerifyRefractionStatistics_OlderCompletionsCannotReplaceFrozenNewerPublication)
+
 NWB_ADHD_GTEST(RefractionStatistics, DeviceResetRejectsStaleAcceptanceAndCompletion, VerifyRefractionStatistics_DeviceResetRejectsStaleAcceptanceAndCompletion)
+
 NWB_ADHD_GTEST(RefractionStatistics, FailedMappingRetiresSlotWithoutReplacingPublication, VerifyRefractionStatistics_FailedMappingRetiresSlotWithoutReplacingPublication)
+
 NWB_ADHD_GTEST(RenderableMeshResolution, StaticAttachmentWithoutAssetIsUnavailable, VerifyRenderableMeshResolution_StaticAttachmentWithoutAssetIsUnavailable)
+
 NWB_ADHD_GTEST(RenderableMeshResolution, SkinnedAttachmentWithoutProviderIsUnavailable, VerifyRenderableMeshResolution_SkinnedAttachmentWithoutProviderIsUnavailable)
+
 NWB_ADHD_GTEST(RuntimeMeshPruning, RequestedIdentitiesKeepFullNameAndVersionAcrossHintedAndGrowingIndices, VerifyRuntimeMeshPruning_RequestedIdentitiesKeepFullNameAndVersionAcrossHintedAndGrowingIndices)
+
 NWB_ADHD_GTEST(SceneShadingUploads, EmptyLightTransitionInvalidatesThePreviousLightMirror, VerifySceneShadingUploads_EmptyLightTransitionInvalidatesThePreviousLightMirror)
+
 NWB_ADHD_GTEST(ShadowMaterialContextPolicy, RejectedAndCrossRouteUploadsDoNotAdmitStaleCache, VerifyShadowMaterialContextPolicy_RejectedAndCrossRouteUploadsDoNotAdmitStaleCache)
 
 

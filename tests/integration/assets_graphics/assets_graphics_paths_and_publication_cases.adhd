@@ -37,6 +37,66 @@ class RelativeAssetPathCase{
     }
 }
 
+class NamedRegistryAsset : IAsset{
+    [cpp_base(IAsset, type, path)]
+    public NamedRegistryAsset(in borrow Name type, in borrow Name path){}
+}
+
+class LeafProbe : IAssetCodec{
+    [cpp_base(IAssetCodec, type)]
+    public LeafProbe(in borrow Name type){}
+
+    public Expected<UniquePtr<IAsset>> deserialize(in Name path, in Span<u8> bytes, mut GlobalAllocator storage)const override{
+        UniquePtr<IAsset> result = MakeUnique<NamedRegistryAsset>(ProbeAssetType(this), path);
+        return result;
+    }
+    public b8 serialize(in IAsset asset, mut AssetByteBuffer bytes)const override{ return true; }
+}
+
+class BlockingProbe : IAssetCodec{
+    private in AssetRegistry registry;
+    private Name leafType;
+    private mut TestAtomic<b8> entered;
+    private mut TestAtomic<b8> release;
+    private mut TestAtomic<b8> destroyedWhileActive;
+    private mut TestAtomic<b8> inFlight;
+
+    [cpp_base(IAssetCodec, type)]
+    public BlockingProbe(in borrow Name type, in AssetRegistry registry, in Name leafType, mut TestAtomic<b8> entered, mut TestAtomic<b8> release, mut TestAtomic<b8> destroyedWhileActive, mut TestAtomic<b8> inFlight){
+        this.registry = registry;
+        this.leafType = leafType;
+        this.entered = entered;
+        this.release = release;
+        this.destroyedWhileActive = destroyedWhileActive;
+        this.inFlight = inFlight;
+    }
+
+    public Expected<UniquePtr<IAsset>> deserialize(in Name path, in Span<u8> bytes, mut GlobalAllocator storage)const override{
+        this.inFlight.store(true, MemoryOrder::seq_cst);
+        const auto nested = this.registry.deserializeAsset(this.leafType, s_AssetCaseProjectProbeLeaf, bytes);
+        if(!nested.has_value()){
+            this.inFlight.store(false, MemoryOrder::seq_cst);
+            return MakeUnexpected(Failure());
+        }
+        this.entered.store(true, MemoryOrder::seq_cst);
+        while(!this.release.load(MemoryOrder::seq_cst))
+            YieldThread();
+        this.inFlight.store(false, MemoryOrder::seq_cst);
+        UniquePtr<IAsset> result = MakeUnique<NamedRegistryAsset>(ProbeAssetType(this), path);
+        return result;
+    }
+
+    public ~BlockingProbe(){
+        if(this.inFlight.load(MemoryOrder::seq_cst))
+            this.destroyedWhileActive.store(true, MemoryOrder::seq_cst);
+    }
+    public b8 serialize(in IAsset asset, mut AssetByteBuffer bytes)const override{ return true; }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 DeserializeNullAllocatedCodec(in Name virtualPath, in AssetBytes bytes, mut TestArena testArena){
     NullAllocatedCodec codec = NullAllocatedCodec();
     return DeserializeTestCodec(codec, virtualPath, bytes, testArena).has_value();
@@ -86,11 +146,11 @@ void VerifyAssetConstructorContracts_ImplicitNameBindingCanThrowDespiteNothrowEx
     EXPECT_TRUE(ThrowsException<u32>(lambda[]() -> void{ NameProbeAssetCodec codec = NameProbeAssetCodec(); }));
     EXPECT_TRUE(ThrowsException<u32>(lambda[mut arena]() -> void{
         TestValueSlot<NameProbeShaderAsset> shader;
-        shader.constructIn(arena);
+        EXPECT_NE(TestValueAddress(shader.constructIn(arena)), 0u);
     }));
     EXPECT_TRUE(ThrowsException<u32>(lambda[mut arena]() -> void{
         TestValueSlot<NameProbeShaderAsset> shader;
-        shader.constructIn(arena, s_AssetInputNameProjectTestsShaderNameConversion);
+        EXPECT_NE(TestValueAddress(shader.constructIn(arena, s_AssetInputNameProjectTestsShaderNameConversion)), 0u);
     }));
     EXPECT_TRUE(ThrowsException<u32>(lambda[]() -> void{ NameProbeShaderCodec codec = NameProbeShaderCodec(); }));
 }
@@ -382,7 +442,7 @@ void VerifyAssetsGraphics_DeferredWriteOwnsScratchBytesBeforeCallerMutation(){
 
     if(prepared){
         VolumeMountDesc mount(testArena.arena);
-        mount.volumeName.assign("scratch_test");
+        ASSERT_TRUE(mount.volumeName.assign("scratch_test"));
         mount.segmentSize = 64ul * 1024ul;
         mount.metadataSize = 4ul * 1024ul;
         mount.mountDirectory = root / "volume";
@@ -530,63 +590,7 @@ void VerifyAssetsGraphics_FailedReorderedSharedPayloadBuildPreservesPublishedVir
     EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
 }
 
-class NamedRegistryAsset : IAsset{
-    [cpp_base(IAsset, type, path)]
-    public NamedRegistryAsset(in borrow Name type, in borrow Name path){}
-}
-
 Name ProbeAssetType(in IAssetCodec codec){ return codec.assetType(); }
-
-class LeafProbe : IAssetCodec{
-    [cpp_base(IAssetCodec, type)]
-    public LeafProbe(in borrow Name type){}
-
-    public Expected<UniquePtr<IAsset>> deserialize(in Name path, in Span<u8> bytes, mut GlobalAllocator storage)const override{
-        UniquePtr<IAsset> result = MakeUnique<NamedRegistryAsset>(ProbeAssetType(this), path);
-        return result;
-    }
-    public b8 serialize(in IAsset asset, mut AssetByteBuffer bytes)const override{ return true; }
-}
-
-class BlockingProbe : IAssetCodec{
-    private in AssetRegistry registry;
-    private Name leafType;
-    private mut TestAtomic<b8> entered;
-    private mut TestAtomic<b8> release;
-    private mut TestAtomic<b8> destroyedWhileActive;
-    private mut TestAtomic<b8> inFlight;
-
-    [cpp_base(IAssetCodec, type)]
-    public BlockingProbe(in borrow Name type, in AssetRegistry registry, in Name leafType, mut TestAtomic<b8> entered, mut TestAtomic<b8> release, mut TestAtomic<b8> destroyedWhileActive, mut TestAtomic<b8> inFlight){
-        this.registry = registry;
-        this.leafType = leafType;
-        this.entered = entered;
-        this.release = release;
-        this.destroyedWhileActive = destroyedWhileActive;
-        this.inFlight = inFlight;
-    }
-
-    public Expected<UniquePtr<IAsset>> deserialize(in Name path, in Span<u8> bytes, mut GlobalAllocator storage)const override{
-        this.inFlight.store(true, MemoryOrder::seq_cst);
-        const auto nested = this.registry.deserializeAsset(this.leafType, s_AssetCaseProjectProbeLeaf, bytes);
-        if(!nested.has_value()){
-            this.inFlight.store(false, MemoryOrder::seq_cst);
-            return MakeUnexpected(Failure());
-        }
-        this.entered.store(true, MemoryOrder::seq_cst);
-        while(!this.release.load(MemoryOrder::seq_cst))
-            YieldThread();
-        this.inFlight.store(false, MemoryOrder::seq_cst);
-        UniquePtr<IAsset> result = MakeUnique<NamedRegistryAsset>(ProbeAssetType(this), path);
-        return result;
-    }
-
-    public ~BlockingProbe(){
-        if(this.inFlight.load(MemoryOrder::seq_cst))
-            this.destroyedWhileActive.store(true, MemoryOrder::seq_cst);
-    }
-    public b8 serialize(in IAsset asset, mut AssetByteBuffer bytes)const override{ return true; }
-}
 
 void VerifyAssetsGraphics_AssetRegistrySupportsReentrantDeserializeAndDrainsBeforeUnregister(){
     HeapStorage arena;
@@ -627,7 +631,6 @@ void VerifyAssetsGraphics_AssetRegistrySupportsReentrantDeserializeAndDrainsBefo
     EXPECT_FALSE(destroyedWhileActive.load(MemoryOrder::seq_cst));
 }
 
-
 void VerifyAssetsGraphics_NativePathViewReclaimsScratchAfterUnicodeConversion(){
     ScratchStorage scratch(s_CodecScratchArena, 65536u);
     const usize baseline = scratch.memoryStats().usedBytes;
@@ -658,28 +661,42 @@ void VerifyAssetsGraphics_NativePathViewReclaimsScratchAfterUnicodeConversion(){
     }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST(AssetsGraphics, NativePathViewReclaimsScratchAfterUnicodeConversion, VerifyAssetsGraphics_NativePathViewReclaimsScratchAfterUnicodeConversion)
+
 NWB_ADHD_GTEST(AssetCodecAdmission, NullClassAllocationDoesNotCallAssetLoad, VerifyAssetCodecAdmission_NullClassAllocationDoesNotCallAssetLoad)
+
 NWB_ADHD_GTEST(AssetConstructorContracts, ImplicitNameBindingCanThrowDespiteNothrowExplicitConversion, VerifyAssetConstructorContracts_ImplicitNameBindingCanThrowDespiteNothrowExplicitConversion)
+
 NWB_ADHD_GTEST(AssetConstructorContracts, CastIncludesTheCompleteContextualComparisonConversion, VerifyAssetConstructorContracts_CastIncludesTheCompleteContextualComparisonConversion)
+
 NWB_ADHD_GTEST(AssetPaths, MetadataAssetDeclarationUsesTheCookerNameRegardlessOfDeclarationOrder, VerifyAssetPaths_MetadataAssetDeclarationUsesTheCookerNameRegardlessOfDeclarationOrder)
+
 NWB_ADHD_GTEST(AssetPaths, RelativeComponentsPreserveDotsAndCanonicalizeOnlyAsciiText, VerifyAssetPaths_RelativeComponentsPreserveDotsAndCanonicalizeOnlyAsciiText)
+
 NWB_ADHD_GTEST(AssetPaths, RelativeBackslashesFollowHostComponentRulesBeforeCanonicalization, VerifyAssetPaths_RelativeBackslashesFollowHostComponentRulesBeforeCanonicalization)
+
 NWB_ADHD_GTEST(AssetPaths, DerivedPathRemovesOnlyFinalExtensionAndPreservesVirtualRootText, VerifyAssetPaths_DerivedPathRemovesOnlyFinalExtensionAndPreservesVirtualRootText)
+
 NWB_ADHD_GTEST(AssetPaths, DerivedOwningTextOutlivesBorrowedScratchSourcePath, VerifyAssetPaths_DerivedOwningTextOutlivesBorrowedScratchSourcePath)
+
 NWB_ADHD_GTEST(AssetPaths, DerivedPathRejectsOutsideAndEmptyLogicalPaths, VerifyAssetPaths_DerivedPathRejectsOutsideAndEmptyLogicalPaths)
+
 NWB_ADHD_GTEST(AssetPaths, LongAsciiAndUnicodePathsRemainCorrectAcrossRepeatedCallerArenaUse, VerifyAssetPaths_LongAsciiAndUnicodePathsRemainCorrectAcrossRepeatedCallerArenaUse)
+
 NWB_ADHD_GTEST(AssetPaths, RejectedUnicodeParentPreservesItsFullPrefixAndRetiresOutputStorage, VerifyAssetPaths_RejectedUnicodeParentPreservesItsFullPrefixAndRetiresOutputStorage)
+
 NWB_ADHD_GTEST(AssetPaths, StemAndExtensionPreserveTrailingSeparatorsDotsAndRoots, VerifyAssetPaths_StemAndExtensionPreserveTrailingSeparatorsDotsAndRoots)
+
 NWB_ADHD_GTEST(AssetPaths, ConvertedPathByteCountingRejectsOverflowWithoutWrapping, VerifyAssetPaths_ConvertedPathByteCountingRejectsOverflowWithoutWrapping)
+
 NWB_ADHD_GTEST(AssetsGraphics, ConcurrentImmutablePublicationPreservesTheWinner, VerifyAssetsGraphics_ConcurrentImmutablePublicationPreservesTheWinner)
+
 NWB_ADHD_GTEST(AssetsGraphics, DeferredWriteOwnsScratchBytesBeforeCallerMutation, VerifyAssetsGraphics_DeferredWriteOwnsScratchBytesBeforeCallerMutation)
+
 NWB_ADHD_GTEST(AssetsGraphics, SharedCodecPayloadsKeepDistinctVirtualPathsUnderLongBuildDirectories, VerifyAssetsGraphics_SharedCodecPayloadsKeepDistinctVirtualPathsUnderLongBuildDirectories)
+
 NWB_ADHD_GTEST(AssetsGraphics, FailedReorderedSharedPayloadBuildPreservesPublishedVirtualPaths, VerifyAssetsGraphics_FailedReorderedSharedPayloadBuildPreservesPublishedVirtualPaths)
+
 NWB_ADHD_GTEST(AssetsGraphics, AssetRegistrySupportsReentrantDeserializeAndDrainsBeforeUnregister, VerifyAssetsGraphics_AssetRegistrySupportsReentrantDeserializeAndDrainsBeforeUnregister)
 
 

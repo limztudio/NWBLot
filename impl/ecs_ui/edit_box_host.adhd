@@ -31,17 +31,21 @@ class UiEditBoxHost : IEditBoxHost{
 
     public ~UiEditBoxHost(){ this.cancelTransfers(); }
 
+    [cpp_unwind]
     public EditBoxResult edit(in WidgetState widget, in EditBoxOptions options, mut EditModel model)override{
         return this.editBorrowed(widget, options, this.m_context.popupToken(), model, Optional<mut IEditActionSink>(), Optional<mut UiEditNavigationBorrow>());
     }
 
+    [cpp_unwind]
     public EditBoxResult editInPopup(in WidgetState widget, in EditBoxOptions options, in PopupToken popup, mut EditModel model)override{
         return this.editBorrowed(widget, options, popup, model, Optional<mut IEditActionSink>(), Optional<mut UiEditNavigationBorrow>());
     }
 
+    [cpp_unwind]
     public EditBoxResult editActions(in WidgetState widget, in EditBoxOptions options, in PopupToken popup, mut EditModel model, mut IEditActionSink actions)override{
         return this.editBorrowed(widget, options, popup, model, Optional<mut IEditActionSink>(actions), Optional<mut UiEditNavigationBorrow>());
     }
+    [cpp_unwind]
     public EditBoxResult editNavigated(
         in WidgetState widget,
         in EditBoxOptions options,
@@ -51,6 +55,7 @@ class UiEditBoxHost : IEditBoxHost{
         mut IEditNavigationResolver resolver,
         mut IEditActionSink actions
     )override;
+    [cpp_unwind]
     public b8 publish(in WidgetState widget, in EditBoxView view, in EditBoxPlacement placement, in EditBoxOptions options)override;
     [cpp_unwind]
     public void beginFrame(in u64 generation, in DisplayMetrics display);
@@ -99,6 +104,8 @@ class UiEditBoxHost : IEditBoxHost{
     private void synchronizeSession(in EditBoxOptions options, in b8 inputMethod, mut UiEditBoxEntry entry, mut EditModel model);
     [owner_result]
     private UiEditBoxEvent makeEvent()const{ return UiEditBoxEvent(); }
+    [owner_result]
+    private EditModelSnapshot makeSnapshot()const{ return EditModelSnapshot(); }
 
     private TextInputRect nativeCaret(in UiEditBoxGeometry geometry)const{
         return MakeUiEditNativeCaretRect(geometry, this.m_display);

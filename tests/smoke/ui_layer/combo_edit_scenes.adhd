@@ -21,6 +21,10 @@ const StringView s_UiInteractiveSmokeIncrease = "increase";
 const StringView s_UiInteractiveSmokeEnabled = "enabled";
 const StringView s_UiInteractiveSmokeReset = "reset";
 const StringView s_UiListSmokeTag = "UiListSmoke";
+const Array<StringView, 16u> s_UiImageSmokeRectNames(
+    "before", "after", "natural_sprite", "natural_slice", "fixed_sprite", "fixed_slice", "stretch", "tinted", "transparent", "frozen", "external", "external_clip",
+    "parent_image", "child_image", "parent", "child"
+);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -140,12 +144,6 @@ class UiListSmokeScene : IUiSmokeInputScene{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const Array<StringView, 16u> s_UiImageSmokeRectNames(
-    "before", "after", "natural_sprite", "natural_slice", "fixed_sprite", "fixed_slice", "stretch", "tinted", "transparent", "frozen", "external", "external_clip",
-    "parent_image", "child_image", "parent", "child"
-);
 
 
 b8 UiComboSmokeScene::paint(mut UiPaintContext context){

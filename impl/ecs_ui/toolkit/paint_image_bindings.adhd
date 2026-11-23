@@ -10,26 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 WithinPaintImageSpanLimits(in usize glyphCount, in usize sdfCount, in usize textureCount){
-    return glyphCount <= s_PaintMaxImages && sdfCount <= s_PaintMaxImages && textureCount <= s_PaintMaxImages;
-}
-
-b8 CompatibleGlyphPageDimensions<TFont>(in GlyphPageBindingRecord<TFont> candidate, in GlyphPageBindingRecord<TFont> existing){
-    return candidate.width == existing.width && candidate.height == existing.height;
-}
-
-b8 ShouldUpgradeBoundGlyphPage<TFont>(in GlyphPageBindingRecord<TFont> existing, in GlyphPageBindingRecord<TFont> candidate){
-    return existing.generation < candidate.generation;
-}
-
-b8 CompatibleSdfPageBinding<TFont>(in SdfAtlasPageBindingRecord<TFont> candidate, in SdfAtlasPageBindingRecord<TFont> existing){
-    return candidate == existing;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 interface IPaintBindingPolicy<T>{
     b8 same(in T a, in T b)const;
     b8 compatible(in T a, in T b)const;
@@ -52,6 +32,97 @@ class TextureBindingPolicy : IPaintBindingPolicy<ImageSource>{
     public b8 same(in ImageSource a, in ImageSource b)const override{ return SameTextureImageKey(a, b); }
     public b8 compatible(in ImageSource a, in ImageSource b)const override{ return true; }
     public b8 upgrade(in ImageSource a, in ImageSource b)const override{ return false; }
+}
+
+[move_only, friend(DrawSnapshotFaultFixture)]
+class PaintImageBindings{
+    private Vector<SharedGlyphPage> m_glyphPages;
+    private Vector<SharedSdfAtlasPage> m_sdfPages;
+    private Vector<SharedImageSource> m_textureImages;
+
+    public void clear(){
+        this.m_glyphPages.clear();
+        this.m_sdfPages.clear();
+        this.m_textureImages.clear();
+    }
+    public in Vector<SharedGlyphPage> glyphPages()const{ return this.m_glyphPages; }
+    public in Vector<SharedSdfAtlasPage> sdfPages()const{ return this.m_sdfPages; }
+    public in Vector<SharedImageSource> textureImages()const{ return this.m_textureImages; }
+
+    private usize count()const{ return this.m_glyphPages.size() + this.m_sdfPages.size() + this.m_textureImages.size(); }
+
+    public Expected<u32> resolveGlyph(in SharedGlyphPage page){
+        return ResolvePaintBinding<GlyphPage, CoverageBindingPolicy>(page, this.m_glyphPages, this.count(), CoverageBindingPolicy());
+    }
+    public Expected<u32> resolveSdf(in SharedSdfAtlasPage page){
+        return ResolvePaintBinding<SdfAtlasPage, SdfBindingPolicy>(page, this.m_sdfPages, this.count(), SdfBindingPolicy());
+    }
+    public Expected<u32> resolveTexture(in SharedImageSource image){
+        return ResolvePaintBinding<ImageSource, TextureBindingPolicy>(image, this.m_textureImages, this.count(), TextureBindingPolicy());
+    }
+
+    public b8 prepare(in Span<SharedGlyphPage> glyphs, in Span<SharedSdfAtlasPage> sdf, in Span<SharedImageSource> textures){
+        if(!WithinPaintImageSpanLimits(glyphs.size(), sdf.size(), textures.size()))
+            return false;
+        const Expected<usize> addedGlyphs = CountNewPaintBindings<GlyphPage, CoverageBindingPolicy>(glyphs, this.m_glyphPages, CoverageBindingPolicy());
+        if(!addedGlyphs.has_value())
+            return false;
+        const Expected<usize> addedSdf = CountNewPaintBindings<SdfAtlasPage, SdfBindingPolicy>(sdf, this.m_sdfPages, SdfBindingPolicy());
+        if(!addedSdf.has_value())
+            return false;
+        const Expected<usize> addedTextures = CountNewPaintBindings<ImageSource, TextureBindingPolicy>(textures, this.m_textureImages, TextureBindingPolicy());
+        if(!addedTextures.has_value() || !CanAdmitPaintImageBindingCounts(this.m_glyphPages.size(), this.m_sdfPages.size(), this.m_textureImages.size(), addedGlyphs.value(), addedSdf.value(), addedTextures.value()))
+            return false;
+        this.m_glyphPages.reserve(this.m_glyphPages.size() + addedGlyphs.value());
+        this.m_sdfPages.reserve(this.m_sdfPages.size() + addedSdf.value());
+        this.m_textureImages.reserve(this.m_textureImages.size() + addedTextures.value());
+        PublishPaintBindings<GlyphPage, CoverageBindingPolicy>(glyphs, this.m_glyphPages, CoverageBindingPolicy());
+        PublishPaintBindings<SdfAtlasPage, SdfBindingPolicy>(sdf, this.m_sdfPages, SdfBindingPolicy());
+        PublishPaintBindings<ImageSource, TextureBindingPolicy>(textures, this.m_textureImages, TextureBindingPolicy());
+        return true;
+    }
+
+    [cpp_unwind]
+    public b8 prepareAndResolveGlyphs(
+        in Span<SharedGlyphPage> glyphs,
+        in Span<SharedSdfAtlasPage> sdf,
+        mut Vector<u32> outGlyphIndices,
+        mut Vector<u32> outSdfIndices
+    ){
+        if(!WithinPaintImageSpanLimits(glyphs.size(), sdf.size(), 0u))
+            return false;
+        const Expected<usize> addedGlyphs = CountNewPaintBindings<GlyphPage, CoverageBindingPolicy>(glyphs, this.m_glyphPages, CoverageBindingPolicy());
+        if(!addedGlyphs.has_value())
+            return false;
+        const Expected<usize> addedSdf = CountNewPaintBindings<SdfAtlasPage, SdfBindingPolicy>(sdf, this.m_sdfPages, SdfBindingPolicy());
+        if(!addedSdf.has_value() || !CanAdmitPaintImageBindingCounts(this.m_glyphPages.size(), this.m_sdfPages.size(), this.m_textureImages.size(), addedGlyphs.value(), addedSdf.value(), 0u))
+            return false;
+        this.m_glyphPages.reserve(this.m_glyphPages.size() + addedGlyphs.value());
+        this.m_sdfPages.reserve(this.m_sdfPages.size() + addedSdf.value());
+        PublishAndResolvePaintBindings<GlyphPage, CoverageBindingPolicy>(glyphs, this.m_glyphPages, CoverageBindingPolicy(), outGlyphIndices);
+        PublishAndResolvePaintBindings<SdfAtlasPage, SdfBindingPolicy>(sdf, this.m_sdfPages, SdfBindingPolicy(), outSdfIndices);
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 WithinPaintImageSpanLimits(in usize glyphCount, in usize sdfCount, in usize textureCount){
+    return glyphCount <= s_PaintMaxImages && sdfCount <= s_PaintMaxImages && textureCount <= s_PaintMaxImages;
+}
+
+b8 CompatibleGlyphPageDimensions<TFont>(in GlyphPageBindingRecord<TFont> candidate, in GlyphPageBindingRecord<TFont> existing){
+    return candidate.width == existing.width && candidate.height == existing.height;
+}
+
+b8 ShouldUpgradeBoundGlyphPage<TFont>(in GlyphPageBindingRecord<TFont> existing, in GlyphPageBindingRecord<TFont> candidate){
+    return existing.generation < candidate.generation;
+}
+
+b8 CompatibleSdfPageBinding<TFont>(in SdfAtlasPageBindingRecord<TFont> candidate, in SdfAtlasPageBindingRecord<TFont> existing){
+    return candidate == existing;
 }
 
 Expected<usize> CountNewPaintBindings<T, TPolicy : IPaintBindingPolicy<T>>(in Span<Shared<T>> batch, in Vector<Shared<T>> bound, in TPolicy policy){
@@ -150,81 +221,6 @@ Expected<u32> ResolvePaintBinding<T, TPolicy : IPaintBindingPolicy<T>>(in Shared
     const u32 index = cast<u32>(bound.size());
     bound.push_back(candidate);
     return index;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[move_only, friend(DrawSnapshotFaultFixture)]
-class PaintImageBindings{
-    private Vector<SharedGlyphPage> m_glyphPages;
-    private Vector<SharedSdfAtlasPage> m_sdfPages;
-    private Vector<SharedImageSource> m_textureImages;
-
-    public void clear(){
-        this.m_glyphPages.clear();
-        this.m_sdfPages.clear();
-        this.m_textureImages.clear();
-    }
-    public in Vector<SharedGlyphPage> glyphPages()const{ return this.m_glyphPages; }
-    public in Vector<SharedSdfAtlasPage> sdfPages()const{ return this.m_sdfPages; }
-    public in Vector<SharedImageSource> textureImages()const{ return this.m_textureImages; }
-
-    private usize count()const{ return this.m_glyphPages.size() + this.m_sdfPages.size() + this.m_textureImages.size(); }
-
-    public Expected<u32> resolveGlyph(in SharedGlyphPage page){
-        return ResolvePaintBinding<GlyphPage, CoverageBindingPolicy>(page, this.m_glyphPages, this.count(), CoverageBindingPolicy());
-    }
-    public Expected<u32> resolveSdf(in SharedSdfAtlasPage page){
-        return ResolvePaintBinding<SdfAtlasPage, SdfBindingPolicy>(page, this.m_sdfPages, this.count(), SdfBindingPolicy());
-    }
-    public Expected<u32> resolveTexture(in SharedImageSource image){
-        return ResolvePaintBinding<ImageSource, TextureBindingPolicy>(image, this.m_textureImages, this.count(), TextureBindingPolicy());
-    }
-
-    public b8 prepare(in Span<SharedGlyphPage> glyphs, in Span<SharedSdfAtlasPage> sdf, in Span<SharedImageSource> textures){
-        if(!WithinPaintImageSpanLimits(glyphs.size(), sdf.size(), textures.size()))
-            return false;
-        const Expected<usize> addedGlyphs = CountNewPaintBindings<GlyphPage, CoverageBindingPolicy>(glyphs, this.m_glyphPages, CoverageBindingPolicy());
-        if(!addedGlyphs.has_value())
-            return false;
-        const Expected<usize> addedSdf = CountNewPaintBindings<SdfAtlasPage, SdfBindingPolicy>(sdf, this.m_sdfPages, SdfBindingPolicy());
-        if(!addedSdf.has_value())
-            return false;
-        const Expected<usize> addedTextures = CountNewPaintBindings<ImageSource, TextureBindingPolicy>(textures, this.m_textureImages, TextureBindingPolicy());
-        if(!addedTextures.has_value() || !CanAdmitPaintImageBindingCounts(this.m_glyphPages.size(), this.m_sdfPages.size(), this.m_textureImages.size(), addedGlyphs.value(), addedSdf.value(), addedTextures.value()))
-            return false;
-        this.m_glyphPages.reserve(this.m_glyphPages.size() + addedGlyphs.value());
-        this.m_sdfPages.reserve(this.m_sdfPages.size() + addedSdf.value());
-        this.m_textureImages.reserve(this.m_textureImages.size() + addedTextures.value());
-        PublishPaintBindings<GlyphPage, CoverageBindingPolicy>(glyphs, this.m_glyphPages, CoverageBindingPolicy());
-        PublishPaintBindings<SdfAtlasPage, SdfBindingPolicy>(sdf, this.m_sdfPages, SdfBindingPolicy());
-        PublishPaintBindings<ImageSource, TextureBindingPolicy>(textures, this.m_textureImages, TextureBindingPolicy());
-        return true;
-    }
-
-    [cpp_unwind]
-    public b8 prepareAndResolveGlyphs(
-        in Span<SharedGlyphPage> glyphs,
-        in Span<SharedSdfAtlasPage> sdf,
-        mut Vector<u32> outGlyphIndices,
-        mut Vector<u32> outSdfIndices
-    ){
-        if(!WithinPaintImageSpanLimits(glyphs.size(), sdf.size(), 0u))
-            return false;
-        const Expected<usize> addedGlyphs = CountNewPaintBindings<GlyphPage, CoverageBindingPolicy>(glyphs, this.m_glyphPages, CoverageBindingPolicy());
-        if(!addedGlyphs.has_value())
-            return false;
-        const Expected<usize> addedSdf = CountNewPaintBindings<SdfAtlasPage, SdfBindingPolicy>(sdf, this.m_sdfPages, SdfBindingPolicy());
-        if(!addedSdf.has_value() || !CanAdmitPaintImageBindingCounts(this.m_glyphPages.size(), this.m_sdfPages.size(), this.m_textureImages.size(), addedGlyphs.value(), addedSdf.value(), 0u))
-            return false;
-        this.m_glyphPages.reserve(this.m_glyphPages.size() + addedGlyphs.value());
-        this.m_sdfPages.reserve(this.m_sdfPages.size() + addedSdf.value());
-        PublishAndResolvePaintBindings<GlyphPage, CoverageBindingPolicy>(glyphs, this.m_glyphPages, CoverageBindingPolicy(), outGlyphIndices);
-        PublishAndResolvePaintBindings<SdfAtlasPage, SdfBindingPolicy>(sdf, this.m_sdfPages, SdfBindingPolicy(), outSdfIndices);
-        return true;
-    }
 }
 
 

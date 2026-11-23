@@ -12,6 +12,9 @@ type MaterialTypedConstantRangeMap = HashMap<MaterialTypedByteRangeKey, Material
 type MaterialTypedInstanceRangeVector = Vector<MaterialTypedInstanceRanges>;
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class MaterialTypedByteBucket{
     public u64 byteHash;
     public usize byteCount;
@@ -23,43 +26,6 @@ class MaterialTypedByteBucket{
     public b8 operator==(in MaterialTypedByteBucket other)const{
         return this.byteHash == other.byteHash && this.byteCount == other.byteCount;
     }
-}
-
-u64 HashMaterialTypedBytesFast(in Span<u8> bytes){
-    const usize count = bytes.size();
-    u64 hash = 0x9e3779b97f4a7c15u ^ cast<u64>(count);
-    usize offset = 0u;
-    while(offset + 8u <= count){
-        const u64 word =
-            cast<u64>(bytes[offset + 0u])
-            | (cast<u64>(bytes[offset + 1u]) << 8u)
-            | (cast<u64>(bytes[offset + 2u]) << 16u)
-            | (cast<u64>(bytes[offset + 3u]) << 24u)
-            | (cast<u64>(bytes[offset + 4u]) << 32u)
-            | (cast<u64>(bytes[offset + 5u]) << 40u)
-            | (cast<u64>(bytes[offset + 6u]) << 48u)
-            | (cast<u64>(bytes[offset + 7u]) << 56u);
-        hash ^= word * 0xbf58476d1ce4e5b9u;
-        hash = ((hash << 27u) | (hash >> 37u)) * 0x94d049bb133111ebu;
-        offset += 8u;
-    }
-    if(offset < count){
-        u64 tail = 0u;
-        u32 shift = 0u;
-        while(offset < count){
-            tail |= cast<u64>(bytes[offset]) << shift;
-            shift += 8u;
-            ++offset;
-        }
-        hash ^= tail * 0xbf58476d1ce4e5b9u;
-        hash = ((hash << 27u) | (hash >> 37u)) * 0x94d049bb133111ebu;
-    }
-    hash ^= hash >> 30u;
-    hash *= 0xbf58476d1ce4e5b9u;
-    hash ^= hash >> 27u;
-    hash *= 0x94d049bb133111ebu;
-    hash ^= hash >> 31u;
-    return hash;
 }
 
 class MaterialTypedByteEntry{
@@ -187,6 +153,47 @@ class MaterialTypedByteContentRangeMap : NoCopy{
         pending.commit();
         return range;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u64 HashMaterialTypedBytesFast(in Span<u8> bytes){
+    const usize count = bytes.size();
+    u64 hash = 0x9e3779b97f4a7c15u ^ cast<u64>(count);
+    usize offset = 0u;
+    while(offset + 8u <= count){
+        const u64 word =
+            cast<u64>(bytes[offset + 0u])
+            | (cast<u64>(bytes[offset + 1u]) << 8u)
+            | (cast<u64>(bytes[offset + 2u]) << 16u)
+            | (cast<u64>(bytes[offset + 3u]) << 24u)
+            | (cast<u64>(bytes[offset + 4u]) << 32u)
+            | (cast<u64>(bytes[offset + 5u]) << 40u)
+            | (cast<u64>(bytes[offset + 6u]) << 48u)
+            | (cast<u64>(bytes[offset + 7u]) << 56u);
+        hash ^= word * 0xbf58476d1ce4e5b9u;
+        hash = ((hash << 27u) | (hash >> 37u)) * 0x94d049bb133111ebu;
+        offset += 8u;
+    }
+    if(offset < count){
+        u64 tail = 0u;
+        u32 shift = 0u;
+        while(offset < count){
+            tail |= cast<u64>(bytes[offset]) << shift;
+            shift += 8u;
+            ++offset;
+        }
+        hash ^= tail * 0xbf58476d1ce4e5b9u;
+        hash = ((hash << 27u) | (hash >> 37u)) * 0x94d049bb133111ebu;
+    }
+    hash ^= hash >> 30u;
+    hash *= 0xbf58476d1ce4e5b9u;
+    hash ^= hash >> 27u;
+    hash *= 0x94d049bb133111ebu;
+    hash ^= hash >> 31u;
+    return hash;
 }
 
 [cpp_unwind]

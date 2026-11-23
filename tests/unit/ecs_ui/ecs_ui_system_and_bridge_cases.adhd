@@ -21,10 +21,35 @@
 #include <tests/common/ecs_test_world.adhd>
 #include <tests/common/value_storage.adhd>
 
+
+const AssetRef<UiSkin> s_DefaultUiSkinRef = AssetRef<UiSkin>("engine/ui/skins/default/atlas");
+const AssetRef<UiSkin> s_MissingUiSkinRef = AssetRef<UiSkin>("project/ui/skins/missing/atlas");
+const AssetRef<UiSkin> s_CustomUiSkinRef = AssetRef<UiSkin>("project/ui/skins/custom/atlas");
+const TextInputRect s_SelectionDeletionCaret = TextInputRect(30, 40, 1, 18);
+const TextInputRect s_OwnedTestCaret = TextInputRect(10, 20, 1, 18);
+const TextInputRect s_SessionTestCaret = TextInputRect(100, 32, 1, 18);
+type TextInputPollResultEnum = TextInputPollResult;
+type TextInputAdmissionEnum = TextInputAdmission;
+
 static_assert(is_cpp_type_alias<GpuRenderer, ShaderArchivePathResolver>(ShaderPathResolveCallback));
 static_assert(has_nothrow_rvalue_member<GpuRenderer, b8, DrawSnapshot>(submit));
 static_assert(!has_nothrow_rvalue_member<GpuRenderer, void, DrawSnapshot>(submit));
 static_assert(!is_cpp_type_alias<GpuRenderer, DrawSnapshot>(ShaderPathResolveCallback));
+
+[cpp_header("<tests/unit/ecs_ui/ecs_ui_unwind_probe.h>"), cpp_name("::NWB::Tests::EcsUiUnwind::TriggerProbeOom")]
+extern void TriggerProbeOom();
+
+[cpp_header("<tests/unit/ecs_ui/ecs_ui_unwind_probe.h>"), cpp_name("::NWB::Tests::EcsUiUnwind::ExecuteSchedulerExpectingOom")]
+extern b8 ExecuteSchedulerExpectingOom(mut SystemScheduler scheduler, mut World world);
+
+[cpp_header("<tests/unit/ecs_ui/ecs_ui_unwind_probe.h>"), cpp_name("::NWB::Tests::EcsUiUnwind::VerifyUiEditBoxHostEditOom")]
+extern b8 VerifyUiEditBoxHostEditOom(mut ITextInputService textInput, mut IClipboardService clipboard);
+
+[cpp_header("<tests/unit/ecs_ui/ecs_ui_unwind_probe.h>"), cpp_name("::NWB::Tests::EcsUiUnwind::VerifyUiTextEditSessionOom")]
+extern b8 VerifyUiTextEditSessionOom(mut ITextInputService textInput);
+
+[cpp_header("<tests/unit/ecs_ui/ecs_ui_unwind_probe.h>"), cpp_name("::NWB::Tests::EcsUiUnwind::VerifyUiEditClipboardControllerOom")]
+extern b8 VerifyUiEditClipboardControllerOom(mut IClipboardService clipboard);
 
 [ordered]
 class PaintSlotFixture{
@@ -46,13 +71,51 @@ class PaintSlotFixture{
     }
 }
 
-const AssetRef<UiSkin> s_DefaultUiSkinRef = AssetRef<UiSkin>("engine/ui/skins/default/atlas");
-const AssetRef<UiSkin> s_MissingUiSkinRef = AssetRef<UiSkin>("project/ui/skins/missing/atlas");
-const AssetRef<UiSkin> s_CustomUiSkinRef = AssetRef<UiSkin>("project/ui/skins/custom/atlas");
+[arena, system("ui_unwind_probe")]
+class UiUnwindProbeSystem{
+    public b8 failUpdate;
+    public u32 updates = 0u;
 
-const TextInputRect s_SelectionDeletionCaret = TextInputRect(30, 40, 1, 18);
-const TextInputRect s_OwnedTestCaret = TextInputRect(10, 20, 1, 18);
-const TextInputRect s_SessionTestCaret = TextInputRect(100, 32, 1, 18);
+    public UiUnwindProbeSystem(in b8 failUpdate){
+        this.failUpdate = failUpdate;
+        this.writeAccess<UiPaintComponent>();
+    }
+
+    public CpuTaskOptions taskOptions()const override{
+        CpuTaskOptions options = CpuTaskOptions();
+        options.target = CpuTaskTarget::MainThread;
+        return options;
+    }
+
+    [cpp_unwind] public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override{
+        ++this.updates;
+        if(this.failUpdate){
+            TriggerProbeOom();
+        }
+        return Expected<void, CpuTaskAdmissionError>();
+    }
+}
+
+[arena, system("ui_unwind_dependent")]
+class UiUnwindDependentSystem{
+    public u32 updates = 0u;
+
+    public UiUnwindDependentSystem(){
+        this.writeAccess<UiPaintComponent>();
+    }
+
+    public CpuTaskOptions taskOptions()const override{
+        CpuTaskOptions options = CpuTaskOptions();
+        options.target = CpuTaskTarget::MainThread;
+        return options;
+    }
+
+    public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override{
+        ++this.updates;
+        return Expected<void, CpuTaskAdmissionError>();
+    }
+}
+
 
 UiTextEditOwner MakeSessionTestOwner(in u64 widget, in u64 declaration, in u64 model){
     UiTextEditOwner owner();
@@ -65,9 +128,6 @@ UiTextEditOwner MakeSessionTestOwner(in u64 widget, in u64 declaration, in u64 m
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-type TextInputPollResultEnum = TextInputPollResult;
-type TextInputAdmissionEnum = TextInputAdmission;
 
 UiTextEditOwner MakeSelectionDeletionOwner(in u64 modelGeneration){
     UiTextEditOwner owner = UiTextEditOwner();
@@ -468,6 +528,31 @@ void VerifyUiTextEditOwned_OwnedCollectionAdoptionAndCancellationRejectAnotherTh
     EXPECT_FALSE(cancelled);
     EXPECT_TRUE(session.token().valid());
     EXPECT_TRUE(session.cancel());
+}
+
+void VerifyEcsUiUnwind_SystemUpdateAllocationFailureUnwindsAndDrainsCleanly(){
+    EcsTestWorld ecs = EcsTestWorld();
+    UiUnwindProbeSystem probe = UiUnwindProbeSystem(true);
+    UiUnwindDependentSystem dependent = UiUnwindDependentSystem();
+    SystemScheduler scheduler(ecs.arena);
+    scheduler.addSystem(probe);
+    scheduler.addSystem(dependent);
+    EXPECT_TRUE(ExecuteSchedulerExpectingOom(scheduler, ecs.world));
+    EXPECT_EQ(probe.updates, 1u);
+    EXPECT_EQ(dependent.updates, 0u);
+    EXPECT_EQ(ecs.taskScheduler.statistics().outstandingTasks, 0u);
+    const auto postDrain = scheduler.execute(ecs.world, 0.016f);
+    ASSERT_FALSE(postDrain.has_value());
+    EXPECT_EQ(postDrain.error(), CpuTaskAdmissionError::Aborting);
+}
+
+void VerifyEcsUiUnwind_HostSessionAndClipboardAllocationFailurePreserveState(){
+    PaintSlotFixture fixture = PaintSlotFixture();
+    ASSERT_TRUE(fixture.textInput.setFocused(true));
+    fixture.clipboard.delayed = true;
+    EXPECT_TRUE(VerifyUiEditBoxHostEditOom(fixture.textInput, fixture.clipboard));
+    EXPECT_TRUE(VerifyUiTextEditSessionOom(fixture.textInput));
+    EXPECT_TRUE(VerifyUiEditClipboardControllerOom(fixture.clipboard));
 }
 
 

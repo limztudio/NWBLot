@@ -9,6 +9,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const u32 s_SelectionChangeTimeoutMS = 3000u;
+const u32 s_ClipboardCompletionTimeoutMS = 6000u;
+const u32 s_PollIntervalMS = 1u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class OwnedPipe{
     public i32 readFd = -1;
     public i32 writeFd = -1;
@@ -65,9 +73,6 @@ class ClipboardPipeContext{
     }
 }
 
-const u32 s_SelectionChangeTimeoutMS = 3000u;
-const u32 s_ClipboardCompletionTimeoutMS = 6000u;
-const u32 s_PollIntervalMS = 1u;
 
 [ordered]
 class X11ClipboardFixture{
@@ -107,7 +112,8 @@ class X11ClipboardFixture{
                     return false;
                 if(event.type == s_OsSelectionRequest)
                     this.m_sawSelectionRequest = true;
-                DispatchOsX11ClipboardEvent(this.services[index].deref(), event);
+                if(!DispatchOsX11ClipboardEvent(this.services[index].deref(), event) && event.type == s_OsSelectionRequest)
+                    return false;
                 ++dispatched;
             }
         }

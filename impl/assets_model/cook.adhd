@@ -49,15 +49,6 @@ b8 ValidateModelObjectNameResolved(in b8 hasName, in StringView objectKind, in S
     return false;
 }
 
-b8 SerializeModelBinaryPayload(
-    in Span<ModelSkeletonObject> skeletonObjects,
-    in Span<ModelStaticMeshObject> staticMeshObjects,
-    in Span<ModelSkinnedMeshObject> skinnedMeshObjects,
-    mut Vector<u8> outBinary
-){
-    ModelBinaryCodec codec;
-    return codec.serialize(skeletonObjects, staticMeshObjects, skinnedMeshObjects, outBinary);
-}
 
 Expected<Model> BuildModelAssetFromObjects(
     in Name virtualPath,
@@ -320,7 +311,7 @@ b8 SerializeModelAsset(in Model model, mut Vector<u8> outBinary){
     if(!model.validatePayload())
         return false;
 
-    return SerializeModelBinaryPayload(model.skeletonObjects(), model.staticMeshObjects(), model.skinnedMeshObjects(), outBinary);
+    return ModelBinaryCodec().serialize(model.skeletonObjects(), model.staticMeshObjects(), model.skinnedMeshObjects(), outBinary);
 }
 
 

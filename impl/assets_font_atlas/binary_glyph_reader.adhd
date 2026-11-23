@@ -25,6 +25,19 @@ class FontAtlasBinaryDecodedHeader{
 }
 
 
+class FontAtlasBinaryGroupHeader{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 channelCount = 0u;
+    public u32 byteCount = 0u;
+}
+
+class FontAtlasBinaryTableHeader{
+    public u32 tag = 0u;
+    public u32 byteCount = 0u;
+}
+
+
 b8 IsValidFontAtlasBinaryPreamble(in u32 magic, in u32 version, in u32 encoding, in u32 reserved){
     return magic == s_FontAtlasBinaryMagic
         && version == s_FontAtlasBinaryVersion
@@ -117,6 +130,7 @@ Expected<FontAtlasGlyph> TryReadFontAtlasGlyph(in Span<u8> bytes, mut usize curs
     return glyph;
 }
 
+[cpp_unwind]
 b8 TryReadFontAtlasGlyphs(
     in Span<u8> bytes,
     in u32 glyphCount,
@@ -134,6 +148,7 @@ b8 TryReadFontAtlasGlyphs(
     return true;
 }
 
+[cpp_unwind]
 void AppendFontAtlasGlyphBinary(in FontAtlasGlyph glyph, mut Vector<u8> outBinary){
     AppendU32LittleEndian(outBinary, glyph.glyphId);
     AppendU32LittleEndian(outBinary, glyph.group);
@@ -150,6 +165,7 @@ void AppendFontAtlasGlyphBinary(in FontAtlasGlyph glyph, mut Vector<u8> outBinar
     AppendU32LittleEndian(outBinary, glyph.drawable);
 }
 
+[cpp_unwind]
 void AppendFontAtlasGlyphsBinary(in Span<FontAtlasGlyph> glyphs, mut Vector<u8> outBinary){
     for(in FontAtlasGlyph glyph : glyphs)
         AppendFontAtlasGlyphBinary(glyph, outBinary);
@@ -170,35 +186,35 @@ b8 ValidateFontAtlasGlyphGroupRect(
     return false;
 }
 
-b8 TryReadFontAtlasBinaryPreambleAndIdentity(
+Expected<Array<u64, s_FontAtlasIdentityLaneCount>> TryReadFontAtlasBinaryPreambleAndIdentity(
     in Span<u8> bytes,
-    mut usize cursor,
-    mut Array<u64, s_FontAtlasIdentityLaneCount> outIdentityQwords
+    mut usize cursor
 ){
+    Array<u64, s_FontAtlasIdentityLaneCount> identityQwords(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
     const Expected<u32> magic = ReadU32LittleEndian(bytes, cursor);
     if(!magic.has_value())
-        return false;
+        return MakeUnexpected(Failure());
     const Expected<u32> version = ReadU32LittleEndian(bytes, cursor);
     if(!version.has_value())
-        return false;
+        return MakeUnexpected(Failure());
     const Expected<u32> encoding = ReadU32LittleEndian(bytes, cursor);
     if(!encoding.has_value())
-        return false;
+        return MakeUnexpected(Failure());
     const Expected<u32> reserved = ReadU32LittleEndian(bytes, cursor);
     if(!reserved.has_value())
-        return false;
+        return MakeUnexpected(Failure());
     if(!IsValidFontAtlasBinaryPreamble(magic.value(), version.value(), encoding.value(), reserved.value()))
-        return false;
+        return MakeUnexpected(Failure());
     for(usize lane = 0u; lane < s_FontAtlasIdentityLaneCount; ++lane){
         const Expected<u32> low = ReadU32LittleEndian(bytes, cursor);
         if(!low.has_value())
-            return false;
+            return MakeUnexpected(Failure());
         const Expected<u32> high = ReadU32LittleEndian(bytes, cursor);
         if(!high.has_value())
-            return false;
-        outIdentityQwords[lane] = PackFontAtlasQword(low.value(), high.value());
+            return MakeUnexpected(Failure());
+        identityQwords[lane] = PackFontAtlasQword(low.value(), high.value());
     }
-    return true;
+    return identityQwords;
 }
 
 Expected<FontAtlasBinaryDecodedHeader> TryReadFontAtlasBinaryHeaderTail(
@@ -293,6 +309,7 @@ b8 ValidateFontAtlasBinaryTableChunk(
         && cast<usize>(byteCount) <= totalBytes - cursor;
 }
 
+[cpp_unwind]
 void AppendFontAtlasBinaryPreambleAndIdentity(
     in Array<u64, s_FontAtlasIdentityLaneCount> fontIdentityQwords,
     mut Vector<u8> outBinary
@@ -307,6 +324,7 @@ void AppendFontAtlasBinaryPreambleAndIdentity(
     }
 }
 
+[cpp_unwind]
 void AppendFontAtlasBinaryHeaderTail(
     in u32 faceIndex,
     in u32 unitsPerEm,
@@ -338,6 +356,7 @@ void AppendFontAtlasBinaryHeaderTail(
     AppendU32LittleEndian(outBinary, tableCount);
 }
 
+[cpp_unwind]
 void AppendFontAtlasGroupChunk(
     in u32 width,
     in u32 height,
@@ -356,6 +375,7 @@ void AppendFontAtlasGroupChunk(
         return;
 }
 
+[cpp_unwind]
 void AppendFontAtlasTableChunk(
     in u32 tag,
     in Span<u8> sha256Bytes,
@@ -370,50 +390,41 @@ void AppendFontAtlasTableChunk(
         return;
 }
 
-b8 TryReadFontAtlasGroupHeader(
-    in Span<u8> bytes,
-    mut usize cursor,
-    mut u32 outWidth,
-    mut u32 outHeight,
-    mut u32 outChannelCount,
-    mut u32 outByteCount
-){
+Expected<FontAtlasBinaryGroupHeader> TryReadFontAtlasGroupHeader(in Span<u8> bytes, mut usize cursor){
     const Expected<u32> width = ReadU32LittleEndian(bytes, cursor);
     if(!width.has_value())
-        return false;
+        return MakeUnexpected(Failure());
     const Expected<u32> height = ReadU32LittleEndian(bytes, cursor);
     if(!height.has_value())
-        return false;
+        return MakeUnexpected(Failure());
     const Expected<u32> channelCount = ReadU32LittleEndian(bytes, cursor);
     if(!channelCount.has_value())
-        return false;
+        return MakeUnexpected(Failure());
     const Expected<u32> byteCount = ReadU32LittleEndian(bytes, cursor);
     if(!byteCount.has_value())
-        return false;
-    outWidth = width.value();
-    outHeight = height.value();
-    outChannelCount = channelCount.value();
-    outByteCount = byteCount.value();
-    return true;
+        return MakeUnexpected(Failure());
+    FontAtlasBinaryGroupHeader header = FontAtlasBinaryGroupHeader();
+    header.width = width.value();
+    header.height = height.value();
+    header.channelCount = channelCount.value();
+    header.byteCount = byteCount.value();
+    return header;
 }
 
-b8 TryReadFontAtlasTableHeader(
-    in Span<u8> bytes,
-    mut usize cursor,
-    mut u32 outTag,
-    mut u32 outByteCount
-){
+Expected<FontAtlasBinaryTableHeader> TryReadFontAtlasTableHeader(in Span<u8> bytes, mut usize cursor){
     const Expected<u32> tag = ReadU32LittleEndian(bytes, cursor);
     if(!tag.has_value())
-        return false;
+        return MakeUnexpected(Failure());
     const Expected<u32> byteCount = ReadU32LittleEndian(bytes, cursor);
     if(!byteCount.has_value())
-        return false;
-    outTag = tag.value();
-    outByteCount = byteCount.value();
-    return true;
+        return MakeUnexpected(Failure());
+    FontAtlasBinaryTableHeader header = FontAtlasBinaryTableHeader();
+    header.tag = tag.value();
+    header.byteCount = byteCount.value();
+    return header;
 }
 
+[cpp_unwind]
 b8 ReadFontAtlasBytesInto(
     in Span<u8> bytes,
     in u32 byteCount,

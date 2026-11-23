@@ -13,6 +13,9 @@
 #include <tests/unit/ui/native_input.adhd>
 #include <tests/common/value_storage.adhd>
 
+
+const StringView s_UiContextActionKey = "action";
+
 class UiContextMenuInputTests : RouterTestFixture{
     public void focus(){
         EXPECT_TRUE(this.send(Key(Key::Tab)).commandConsumed);
@@ -106,9 +109,6 @@ class UiContextTests : ContextTestFixture{
         return this.m_context.input().process();
     }
 }
-
-
-const StringView s_UiContextActionKey = "action";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

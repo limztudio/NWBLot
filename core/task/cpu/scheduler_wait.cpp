@@ -147,7 +147,7 @@ void CpuTaskScheduler::wait(){
 
 void CpuTaskScheduler::drain()noexcept{
     {
-        ScopedLock lock(m_mutex);
+        NothrowScopedLock lock(m_mutex);
         m_aborting = true;
         m_abortingAtomic.store(true, MemoryOrder::release);
     }
@@ -157,7 +157,7 @@ void CpuTaskScheduler::drain()noexcept{
 
 void CpuTaskScheduler::drainTask(const TaskHandle handle)noexcept{
     {
-        ScopedLock lock(m_mutex);
+        NothrowScopedLock lock(m_mutex);
         m_aborting = true;
         m_abortingAtomic.store(true, MemoryOrder::release);
     }

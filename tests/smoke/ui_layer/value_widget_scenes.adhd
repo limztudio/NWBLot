@@ -17,6 +17,21 @@ const StringView s_UiSearchComboSmokeTag = "UiSearchComboSmoke";
 const StringView s_UiSliderSmokeTag = "UiSliderSmoke";
 const StringView s_UiSliderTitleKey = "title";
 const StringView s_UiSliderValueKey = "value";
+const Array<StringView, 15u> s_UiProgressSmokeRectNames(
+    "before", "after", "zero", "quarter", "full", "below", "above", "tiny", "frozen", "external", "external_clip", "parent_progress", "child_progress", "parent",
+    "child"
+);
+const Array<StringView, 41u> s_UiRadioGroupSmokeRectNames(
+    "before", "group", "after", "open", "disabled_group", "parent", "popup_group", "popup_close", "row10", "indicator10", "mark10", "row20", "indicator20",
+    "mark20", "row30", "indicator30", "mark30", "row40", "indicator40", "mark40", "row50", "indicator50", "mark50", "disabled_row30", "disabled_indicator30",
+    "disabled_mark30", "popup_row10", "popup_indicator10", "popup_mark10", "popup_row20", "popup_indicator20", "popup_mark20", "popup_row30", "popup_indicator30",
+    "popup_mark30", "popup_row40", "popup_indicator40", "popup_mark40", "popup_row50", "popup_indicator50", "popup_mark50"
+);
+const Array<StringView, 29u> s_UiSliderSmokeRectNames(
+    "before", "after", "open", "parent", "popup_close", "main_bounds", "main_clip", "main_travel", "main_track", "main_center", "main_thumb", "disabled_bounds",
+    "disabled_clip", "disabled_travel", "disabled_track", "disabled_center", "disabled_thumb", "constant_bounds", "constant_clip", "constant_travel",
+    "constant_track", "constant_center", "constant_thumb", "popup_bounds", "popup_clip", "popup_travel", "popup_track", "popup_center", "popup_thumb"
+);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -168,23 +183,6 @@ f64 UiProgressSmokeFraction(in usize index){
     }
 }
 
-const Array<StringView, 15u> s_UiProgressSmokeRectNames(
-    "before", "after", "zero", "quarter", "full", "below", "above", "tiny", "frozen", "external", "external_clip", "parent_progress", "child_progress", "parent",
-    "child"
-);
-
-const Array<StringView, 41u> s_UiRadioGroupSmokeRectNames(
-    "before", "group", "after", "open", "disabled_group", "parent", "popup_group", "popup_close", "row10", "indicator10", "mark10", "row20", "indicator20",
-    "mark20", "row30", "indicator30", "mark30", "row40", "indicator40", "mark40", "row50", "indicator50", "mark50", "disabled_row30", "disabled_indicator30",
-    "disabled_mark30", "popup_row10", "popup_indicator10", "popup_mark10", "popup_row20", "popup_indicator20", "popup_mark20", "popup_row30", "popup_indicator30",
-    "popup_mark30", "popup_row40", "popup_indicator40", "popup_mark40", "popup_row50", "popup_indicator50", "popup_mark50"
-);
-
-const Array<StringView, 29u> s_UiSliderSmokeRectNames(
-    "before", "after", "open", "parent", "popup_close", "main_bounds", "main_clip", "main_travel", "main_track", "main_center", "main_thumb", "disabled_bounds",
-    "disabled_clip", "disabled_travel", "disabled_track", "disabled_center", "disabled_thumb", "constant_bounds", "constant_clip", "constant_travel",
-    "constant_track", "constant_center", "constant_thumb", "popup_bounds", "popup_clip", "popup_travel", "popup_track", "popup_center", "popup_thumb"
-);
 
 void CopySmokeRadioGroupChoices(mut UiRadioGroupSnapshot snapshot, in RadioGroupPlacement placement, in u32 offset){
     for(u32 index = 0u; index < placement.count; ++index){

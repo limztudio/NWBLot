@@ -62,10 +62,10 @@ void GpuInferredDependencyCollector::reserve(const usize expectedEdgeCount, cons
 }
 
 void GpuInferredDependencyCollector::appendRaw(const GpuTaskDependencyEdge& edge){
-    (void)appendRawEdge(edge);
+    ensureRawEdge(edge);
 }
 
-u32 GpuInferredDependencyCollector::appendRawEdge(const GpuTaskDependencyEdge& edge){
+void GpuInferredDependencyCollector::ensureRawEdge(const GpuTaskDependencyEdge& edge, u32* const outRawEdgeIndex){
     const u32 consumer = edge.consumer.index;
     const u32 producer = edge.producer.index;
 
@@ -78,7 +78,9 @@ u32 GpuInferredDependencyCollector::appendRawEdge(const GpuTaskDependencyEdge& e
                 existing = edge;
                 ++m_explicitEdgeCount;
             }
-            return edgeIndex;
+            if(outRawEdgeIndex)
+                *outRawEdgeIndex = edgeIndex;
+            return;
         }
 
         FOUNDATION_FATAL_ASSERT_MSG(m_edges.size() < s_IndexedInferredEdges, "GpuInferredDependencyCollector raw edge index overflow");
@@ -92,7 +94,9 @@ u32 GpuInferredDependencyCollector::appendRawEdge(const GpuTaskDependencyEdge& e
             m_rawEdgeMeta.push_back(RawEdgeMeta{ .nextRawEdge = m_firstRawEdgeByConsumer[consumer], .firstInferred = s_InvalidEdgeIndex, .producerIndex = producer });
             m_firstRawEdgeByConsumer[consumer] = newEdgeIndex;
             ++count;
-            return newEdgeIndex;
+            if(outRawEdgeIndex)
+                *outRawEdgeIndex = newEdgeIndex;
+            return;
         }
 
         if(m_dependencyPairs.empty())
@@ -105,7 +109,9 @@ u32 GpuInferredDependencyCollector::appendRawEdge(const GpuTaskDependencyEdge& e
         m_dependencyPairs.emplace(newKey, newEdgeIndex);
         m_rawEdgeMeta.push_back(RawEdgeMeta{ .producerIndex = producer });
         count = s_PromotedConsumerMarker;
-        return newEdgeIndex;
+        if(outRawEdgeIndex)
+            *outRawEdgeIndex = newEdgeIndex;
+        return;
     }
 
     const u64 pairKey = PackGpuTaskDependencyPairKey(producer, consumer);
@@ -119,7 +125,9 @@ u32 GpuInferredDependencyCollector::appendRawEdge(const GpuTaskDependencyEdge& e
         if(edge.hazard == GpuTaskHazardType::Explicit)
             ++m_explicitEdgeCount;
         m_rawEdgeMeta.push_back(RawEdgeMeta{ .producerIndex = producer });
-        return candidateIndex;
+        if(outRawEdgeIndex)
+            *outRawEdgeIndex = candidateIndex;
+        return;
     }
 
     const u32 rawIndex = pair.value();
@@ -128,13 +136,15 @@ u32 GpuInferredDependencyCollector::appendRawEdge(const GpuTaskDependencyEdge& e
         existing = edge;
         ++m_explicitEdgeCount;
     }
-    return rawIndex;
+    if(outRawEdgeIndex)
+        *outRawEdgeIndex = rawIndex;
 }
 
 void GpuInferredDependencyCollector::appendInferred(const GpuTaskDependencyEdge& edge){
     FOUNDATION_ASSERT(edge.hazard != GpuTaskHazardType::Explicit);
 
-    const u32 rawEdgeIndex = appendRawEdge(edge);
+    u32 rawEdgeIndex = 0u;
+    ensureRawEdge(edge, &rawEdgeIndex);
     RawEdgeMeta& pair = m_rawEdgeMeta[rawEdgeIndex];
     b8 indexed = pair.firstInferred == s_IndexedInferredEdges;
     if(!indexed){

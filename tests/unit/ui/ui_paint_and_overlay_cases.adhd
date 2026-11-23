@@ -11,13 +11,22 @@
 
 
 type UiPaintOverlayTests = PaintTextFixture;
+const StringView s_UiPaintOverlayDefaultImagePath = "tests/ui/image";
+const StringView s_UiPaintOverlayVersionedImagePath = "tests/ui/versioned_image";
+const StringView s_UiPaintOverlaySameImagePath = "tests/ui/same_image";
+const StringView s_UiPaintOverlayReplacementImagePath = "tests/ui/replacement";
+const u64 s_UiPaintOverlayDefaultAtlasIdentity = 11u;
+const Name s_UiPaintOverlayTextureName = "tests/ui/texture";
+const Name s_UiPaintOverlayPanelRegionName = "panel";
 
 class UiPaintScopedHeldFenv : NoCopy{
     private Expected<FloatingPointEnvironment> m_held = HoldFloatingPointExceptions();
     public b8 valid()const{ return this.m_held.has_value(); }
     public ~UiPaintScopedHeldFenv(){
-        if(this.m_held.has_value())
-            SetFloatingPointEnvironment(this.m_held.value());
+        if(this.m_held.has_value() && !SetFloatingPointEnvironment(this.m_held.value()).has_value()){
+            assert(false, "Failed to restore floating-point environment");
+            TerminateInvariant();
+        }
     }
 }
 
@@ -155,19 +164,6 @@ u32 UiPaintOverlayImageWidth(in SharedImageSource image){ return image.deref().t
 u32 UiPaintOverlayImageHeight(in SharedImageSource image){ return image.deref().texture().height(); }
 usize UiPaintOverlayImageMipCount(in SharedImageSource image){ return image.deref().texture().mipLevels().size(); }
 usize UiPaintOverlayVerticesAddress(in DrawSnapshot snapshot){ return TestDataAddress(snapshot.vertices()); }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const StringView s_UiPaintOverlayDefaultImagePath = "tests/ui/image";
-const StringView s_UiPaintOverlayVersionedImagePath = "tests/ui/versioned_image";
-const StringView s_UiPaintOverlaySameImagePath = "tests/ui/same_image";
-const StringView s_UiPaintOverlayReplacementImagePath = "tests/ui/replacement";
-const u64 s_UiPaintOverlayDefaultAtlasIdentity = 11u;
-
-const Name s_UiPaintOverlayTextureName = "tests/ui/texture";
-const Name s_UiPaintOverlayPanelRegionName = "panel";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

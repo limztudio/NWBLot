@@ -48,22 +48,6 @@ class SceneSwBvhMeshReadinessPolicy{
     }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 CanCertifySingleRefractiveInstanceEntry(in b8 staticScene, in b8 boundsCompleteExceptRuntime, in b8 hasCsg, in b8 allInstanceBoundsValid, in u32 refractiveInstanceCount, in u32 singleRefractiveInstanceIndex, in usize instanceCount){
-    return staticScene && boundsCompleteExceptRuntime && !hasCsg && allInstanceBoundsValid && refractiveInstanceCount == 1u && cast<usize>(singleRefractiveInstanceIndex) < instanceCount;
-}
-
-b8 CanReuseStaticSceneTlas(in b8 staticScene, in b8 hashValid, in u64 cachedHash, in u64 currentHash, in b8 hasTlas, in usize tlasMaxInstances, in usize instanceCount, in b8 hasTlasHeapHandle){
-    return staticScene && hashValid && cachedHash == currentHash && hasTlas && tlasMaxInstances >= instanceCount && hasTlasHeapHandle;
-}
-
-b8 CanReuseStaticSceneSwBvh(in b8 staticScene, in b8 hashValid, in u64 cachedHash, in u64 currentHash, in u32 cachedInstanceCount, in u32 currentInstanceCount, in b8 hasPreparedBuffers){
-    return staticScene && hashValid && cachedHash == currentHash && cachedInstanceCount == currentInstanceCount && hasPreparedBuffers;
-}
-
 class SceneWorldBoundsAccumulator{
     public f32x4 minimum = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 maximum = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -119,6 +103,18 @@ class SceneWorldBoundsAccumulator{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+b8 CanCertifySingleRefractiveInstanceEntry(in b8 staticScene, in b8 boundsCompleteExceptRuntime, in b8 hasCsg, in b8 allInstanceBoundsValid, in u32 refractiveInstanceCount, in u32 singleRefractiveInstanceIndex, in usize instanceCount){
+    return staticScene && boundsCompleteExceptRuntime && !hasCsg && allInstanceBoundsValid && refractiveInstanceCount == 1u && cast<usize>(singleRefractiveInstanceIndex) < instanceCount;
+}
+
+b8 CanReuseStaticSceneTlas(in b8 staticScene, in b8 hashValid, in u64 cachedHash, in u64 currentHash, in b8 hasTlas, in usize tlasMaxInstances, in usize instanceCount, in b8 hasTlasHeapHandle){
+    return staticScene && hashValid && cachedHash == currentHash && hasTlas && tlasMaxInstances >= instanceCount && hasTlasHeapHandle;
+}
+
+b8 CanReuseStaticSceneSwBvh(in b8 staticScene, in b8 hashValid, in u64 cachedHash, in u64 currentHash, in u32 cachedInstanceCount, in u32 currentInstanceCount, in b8 hasPreparedBuffers){
+    return staticScene && hashValid && cachedHash == currentHash && cachedInstanceCount == currentInstanceCount && hasPreparedBuffers;
+}
 
 [cpp_unwind]
 b8 RendererRayTracingSystem::prepareSceneTlasResources(){
@@ -391,11 +387,13 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
 
     if(!IsDescriptorClass(this.m_rayTracingState.sceneBvh.m_tlasHeapHandle, GpuDescriptorClass::AccelStruct)){
         RetireDescriptor(heap, this.m_rayTracingState.sceneBvh.m_tlasHeapHandle);
-        if(!AssignDescriptor(heap, GpuDescriptorClass::AccelStruct, DescriptorWriteItemRayTracingAccelStruct(0u, this.m_rayTracingState.sceneBvh.m_tlas.deref()), this.m_rayTracingState.sceneBvh.m_tlasHeapHandle)){
+        const Expected<GpuDescriptorHandle> descriptor = RegisterDescriptor(heap, GpuDescriptorClass::AccelStruct, DescriptorWriteItemRayTracingAccelStruct(0u, this.m_rayTracingState.sceneBvh.m_tlas.deref()));
+        if(!descriptor.has_value()){
             this.m_sceneGatherScratch.clearHandles();
             error("RendererSystem: failed to register scene TLAS in the descriptor-buffer heap");
             return false;
         }
+        this.m_rayTracingState.sceneBvh.m_tlasHeapHandle = descriptor.value();
     }
 
     ShadowMaterialContextPreparer materialContextPreparer(this);

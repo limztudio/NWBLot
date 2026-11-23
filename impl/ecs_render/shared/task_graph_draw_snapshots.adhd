@@ -9,13 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
-void CaptureGraphDrawItems(in MaterialPassDrawItemsView source, mut MaterialPassDrawItems retained){
-    AssignVector(retained.meshDrawItems, source.meshDrawItems);
-    AssignVector(retained.indexedDrawItems, source.indexedDrawItems);
-    AssignVector(retained.computeDrawItems, source.computeDrawItems);
-}
-
 class TransparentMaterialPassGraphSnapshot{
     public MaterialPassDrawItems regular;
     public MaterialPassDrawItems csg;
@@ -117,6 +110,17 @@ class OpaqueCsgIntervalFrameSnapshot{
     public CsgFrameGpuDataView csgFrameDataView()const{
         return CsgFrameGpuDataView(this.m_receiverRanges, this.m_cutters, this.m_workRegion);
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_unwind]
+void CaptureGraphDrawItems(in MaterialPassDrawItemsView source, mut MaterialPassDrawItems retained){
+    AssignVector(retained.meshDrawItems, source.meshDrawItems);
+    AssignVector(retained.indexedDrawItems, source.indexedDrawItems);
+    AssignVector(retained.computeDrawItems, source.computeDrawItems);
 }
 
 

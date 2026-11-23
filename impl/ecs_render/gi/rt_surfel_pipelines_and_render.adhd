@@ -19,6 +19,40 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_LINEAR_GROUP_SIZE")]
+extern const u32 s_ShaderSurfelLinearGroupSize;
+
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_GROUP_SIZE")]
+extern const u32 s_ShaderSurfelGroupSize;
+
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_TRACE_BUILD_ARGS_DISPATCH_GROUP_COUNT_X")]
+extern const u32 s_ShaderSurfelTraceBuildArgsDispatchGroupCountX;
+
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_TRACE_BUILD_ARGS_DISPATCH_GROUP_COUNT_Y")]
+extern const u32 s_ShaderSurfelTraceBuildArgsDispatchGroupCountY;
+
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_TRACE_BUILD_ARGS_DISPATCH_GROUP_COUNT_Z")]
+extern const u32 s_ShaderSurfelTraceBuildArgsDispatchGroupCountZ;
+
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_RESOLVE_GROUP_SIZE")]
+extern const u32 s_ShaderSurfelResolveGroupSize;
+
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_UPSAMPLE_GROUP_SIZE")]
+extern const u32 s_ShaderSurfelUpsampleGroupSize;
+
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_COUNTER_BUMP_TOP")]
+extern const u32 s_ShaderSurfelCounterBumpTop;
+
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_COUNTER_FREE_TOP")]
+extern const u32 s_ShaderSurfelCounterFreeTop;
+
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_COUNTER_TRACE_GEOMETRY_FAILURE")]
+extern const u32 s_ShaderSurfelCounterTraceGeometryFailure;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const Name s_SurfelSpawnShaderDebugName = "ECSRender_SurfelSpawn";
 const Name s_SurfelAgeFreeShaderDebugName = "ECSRender_SurfelAgeFree";
 const Name s_SurfelHashBuildShaderDebugName = "ECSRender_SurfelHashBuild";
@@ -192,11 +226,14 @@ b8 EnsureSurfelComputePipeline(
         inOutFailed = true;
         return false;
     }
-    if(!CreateHeapComputePipeline(device, inOutShader, inOutLayout, includeAccelStruct, inOutPipeline)){
+    const Expected<ComputePipelineHandle> pipeline = CreateHeapComputePipeline(device, inOutShader, inOutLayout, includeAccelStruct);
+    if(!pipeline.has_value()){
+        inOutPipeline.reset();
         LogSurfelPipelineCreateFailed(passLabel);
         inOutFailed = true;
         return false;
     }
+    inOutPipeline = pipeline.value();
     LogSurfelPipelineCreated(passLabel);
     return true;
 }
@@ -366,40 +403,6 @@ b8 SurfelGiPipelineSet::ensureSurfelTraceBuildArgsPipeline(){
         this.m_rayTracingState.m_surfelTraceBuildArgsPipelineFailed
     );
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_LINEAR_GROUP_SIZE")]
-extern const u32 s_ShaderSurfelLinearGroupSize;
-
-[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_GROUP_SIZE")]
-extern const u32 s_ShaderSurfelGroupSize;
-
-[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_TRACE_BUILD_ARGS_DISPATCH_GROUP_COUNT_X")]
-extern const u32 s_ShaderSurfelTraceBuildArgsDispatchGroupCountX;
-
-[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_TRACE_BUILD_ARGS_DISPATCH_GROUP_COUNT_Y")]
-extern const u32 s_ShaderSurfelTraceBuildArgsDispatchGroupCountY;
-
-[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_TRACE_BUILD_ARGS_DISPATCH_GROUP_COUNT_Z")]
-extern const u32 s_ShaderSurfelTraceBuildArgsDispatchGroupCountZ;
-
-[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_RESOLVE_GROUP_SIZE")]
-extern const u32 s_ShaderSurfelResolveGroupSize;
-
-[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_UPSAMPLE_GROUP_SIZE")]
-extern const u32 s_ShaderSurfelUpsampleGroupSize;
-
-[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_COUNTER_BUMP_TOP")]
-extern const u32 s_ShaderSurfelCounterBumpTop;
-
-[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_COUNTER_FREE_TOP")]
-extern const u32 s_ShaderSurfelCounterFreeTop;
-
-[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_COUNTER_TRACE_GEOMETRY_FAILURE")]
-extern const u32 s_ShaderSurfelCounterTraceGeometryFailure;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

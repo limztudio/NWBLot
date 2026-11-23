@@ -18,7 +18,7 @@ interface ISearchableListDataSource : IListDataSource{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 FilterSearchCombo(mut SearchComboState state, mut ISearchableListDataSource source){
+[cpp_unwind] b8 FilterSearchCombo(mut SearchComboState state, mut ISearchableListDataSource source){
     SearchComboFilterRules rules;
     const TextAreaModelStamp query = state.m_query.stamp();
     const u64 comboGeneration = state.m_combo.inputGeneration();

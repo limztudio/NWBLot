@@ -9,24 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Name, ErrorCode> BuildReflectionCsgHardwareSliceIdentity(in u32 slice){
-    const Expected<NameHash> derivedHash = BeginDerivedNameHash(s_ReflectionCsgHardwareSliceFamily);
-    if(!derivedHash.has_value())
-        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
-    NameHash hash = derivedHash.value();
-    if(!UpdateDerivedNameHashDecimal(hash, slice))
-        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
-    const Expected<Name> identity = FinishDerivedNameHash(hash);
-    if(!identity.has_value())
-        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
-    return identity.value();
-}
-
-Expected<Name, ErrorCode> ReflectionCsgHardwareSliceIdentity(in u32 slice){
-    return BuildReflectionCsgHardwareSliceIdentity(slice);
-}
-
-
 class ReflectionGraphInputs{
     public mut RendererRayTracingSystem raytracingSystem;
     public GpuGraphResourceId opaqueDepth;
@@ -49,6 +31,27 @@ class ReflectionGraphInputs{
         this.hardwareDispatchLogged = hardwareDispatchLogged;
         this.fallbackDispatchLogged = fallbackDispatchLogged;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<Name, ErrorCode> BuildReflectionCsgHardwareSliceIdentity(in u32 slice){
+    const Expected<NameHash> derivedHash = BeginDerivedNameHash(s_ReflectionCsgHardwareSliceFamily);
+    if(!derivedHash.has_value())
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
+    NameHash hash = derivedHash.value();
+    if(!UpdateDerivedNameHashDecimal(hash, slice))
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
+    const Expected<Name> identity = FinishDerivedNameHash(hash);
+    if(!identity.has_value())
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
+    return identity.value();
+}
+
+Expected<Name, ErrorCode> ReflectionCsgHardwareSliceIdentity(in u32 slice){
+    return BuildReflectionCsgHardwareSliceIdentity(slice);
 }
 
 

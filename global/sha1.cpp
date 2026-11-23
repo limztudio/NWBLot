@@ -350,11 +350,14 @@ namespace __hidden_sha1{
         e0 = abcd;
         msg1 = _mm_sha1msg2_epu32(msg1, msg0);
         abcd = _mm_sha1rnds4_epu32(abcd, e1, 3);
+        msg3 = _mm_sha1msg1_epu32(msg3, msg0);
+        msg2 = _mm_xor_si128(msg2, msg0);
 
         e1 = _mm_sha1nexte_epu32(e0, msg1);
         e0 = abcd;
         msg2 = _mm_sha1msg2_epu32(msg2, msg1);
         abcd = _mm_sha1rnds4_epu32(abcd, e1, 3);
+        msg3 = _mm_xor_si128(msg3, msg1);
 
         e1 = _mm_sha1nexte_epu32(e0, msg2);
         e0 = abcd;

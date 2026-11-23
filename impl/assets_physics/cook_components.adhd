@@ -6,6 +6,7 @@
 #include <impl/assets_physics/components.adhd>
 #include <impl/assets_physics/physics_component_binary_codec.adhd>
 #include <impl/assets_scene/cook.adhd>
+#include <impl/assets_scene/cook_component_metadata.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -66,15 +67,6 @@ b8 ReadPhysicsOptionalU32Field(
     return true;
 }
 
-b8 ReadPhysicsOptionalFloat3Field(
-    in Path file,
-    in MetascriptValue value,
-    in StringView prefix,
-    in StringView field,
-    mut VectorSingle inOutVec
-){
-    return ReadOptionalSceneFloat3Field(file, value, prefix, field, inOutVec);
-}
 
 b8 ReadPhysicsOptionalRotationField(
     in Path file,
@@ -302,8 +294,8 @@ Expected<RigidBodyComponentCookEntry> ParseRigidBodyComponentCookMetadata(in Nam
     VectorSingle customCom = VectorSingle(c.customCenterOfMass);
     VectorSingle customInertiaD = VectorSingle(c.customInertiaDiag);
     VectorSingle customInertiaO = VectorSingle(c.customInertiaOffDiag);
-    if(!ReadPhysicsOptionalFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "linear_velocity", linVel)
-        || !ReadPhysicsOptionalFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "angular_velocity", angVel)
+    if(!ReadOptionalSceneFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "linear_velocity", linVel)
+        || !ReadOptionalSceneFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "angular_velocity", angVel)
         || !ReadOptionalFiniteF32Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "linear_damping", c.linearDamping)
         || !ReadOptionalFiniteF32Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "angular_damping", c.angularDamping)
         || !ReadOptionalFiniteF32Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "gravity_scale", c.gravityScale)
@@ -313,9 +305,9 @@ Expected<RigidBodyComponentCookEntry> ParseRigidBodyComponentCookMetadata(in Nam
         || !ReadPhysicsOptionalNameField(file, value, s_RigidBodyComponentDiagnosticPrefix, "entity_tag", c.entityTag)
         || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "use_custom_mass", c.useCustomMass)
         || !ReadOptionalFiniteF32Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "custom_mass", c.customMass)
-        || !ReadPhysicsOptionalFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "custom_center_of_mass", customCom)
-        || !ReadPhysicsOptionalFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "custom_inertia_diag", customInertiaD)
-        || !ReadPhysicsOptionalFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "custom_inertia_off_diag", customInertiaO)
+        || !ReadOptionalSceneFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "custom_center_of_mass", customCom)
+        || !ReadOptionalSceneFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "custom_inertia_diag", customInertiaD)
+        || !ReadOptionalSceneFloat3Field(file, value, s_RigidBodyComponentDiagnosticPrefix, "custom_inertia_off_diag", customInertiaO)
         || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "enable_sleep", c.enableSleep)
         || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "is_awake", c.isAwake)
         || !ReadOptionalMetadataBoolField(file, value, s_RigidBodyComponentDiagnosticPrefix, "is_bullet", c.isBullet)
@@ -352,23 +344,24 @@ b8 IsAllowedColliderShapeMetadataField(in StringView key, in b8 allowExtraShapes
     ;
 }
 
-b8 ParseColliderShapeEntryMap(in Path file, in MetascriptValue mapVal, in b8 allowExtraShapes, mut ColliderShapeEntry outEntry){
+Expected<ColliderShapeEntry> ParseColliderShapeEntryMap(in Path file, in MetascriptValue mapVal, in b8 allowExtraShapes){
+    ColliderShapeEntry outEntry;
     if(!ValidateMetadataAssetFields(file, mapVal, s_ColliderComponentDiagnosticPrefix, lambda[in allowExtraShapes](in StringView k) -> b8{
         return IsAllowedColliderShapeMetadataField(k, allowExtraShapes);
     }))
-        return false;
+        return MakeUnexpected(Failure());
 
     if(mapVal.hasField("shape_type")){
         const Expected<MetadataStringField> f = ReadMetadataStringField(file, mapVal, s_ColliderComponentDiagnosticPrefix, "shape_type", true);
         if(!f.has_value())
-            return false;
+            return MakeUnexpected(Failure());
         if(f.value().text == "sphere") outEntry.shapeType = ShapeType::Sphere;
         else if(f.value().text == "capsule") outEntry.shapeType = ShapeType::Capsule;
         else if(f.value().text == "hull") outEntry.shapeType = ShapeType::Hull;
         else if(f.value().text == "mesh") outEntry.shapeType = ShapeType::Mesh;
         else{
             error("{} '{}': field 'shape_type' must be 'sphere', 'capsule', 'hull', or 'mesh'", s_ColliderComponentDiagnosticPrefix, file);
-            return false;
+            return MakeUnexpected(Failure());
         }
     }
 
@@ -376,9 +369,9 @@ b8 ParseColliderShapeEntryMap(in Path file, in MetascriptValue mapVal, in b8 all
     VectorSingle center2 = VectorSingle(outEntry.center2);
     VectorSingle halfExtents = VectorSingle(outEntry.halfExtents);
     VectorSingle localRotation = VectorSingle(outEntry.localRotation);
-    if(!ReadPhysicsOptionalFloat3Field(file, mapVal, s_ColliderComponentDiagnosticPrefix, "center", center)
-        || !ReadPhysicsOptionalFloat3Field(file, mapVal, s_ColliderComponentDiagnosticPrefix, "center2", center2)
-        || !ReadPhysicsOptionalFloat3Field(file, mapVal, s_ColliderComponentDiagnosticPrefix, "half_extents", halfExtents)
+    if(!ReadOptionalSceneFloat3Field(file, mapVal, s_ColliderComponentDiagnosticPrefix, "center", center)
+        || !ReadOptionalSceneFloat3Field(file, mapVal, s_ColliderComponentDiagnosticPrefix, "center2", center2)
+        || !ReadOptionalSceneFloat3Field(file, mapVal, s_ColliderComponentDiagnosticPrefix, "half_extents", halfExtents)
         || !ReadPhysicsOptionalRotationField(file, mapVal, s_ColliderComponentDiagnosticPrefix, "local_rotation", "local_rotation_euler", "local_rotation_euler_degrees", localRotation)
         || !ReadOptionalFiniteF32Field(file, mapVal, s_ColliderComponentDiagnosticPrefix, "radius", outEntry.radius)
         || !ReadOptionalFiniteF32Field(file, mapVal, s_ColliderComponentDiagnosticPrefix, "skin_radius", outEntry.skinRadius)
@@ -401,7 +394,7 @@ b8 ParseColliderShapeEntryMap(in Path file, in MetascriptValue mapVal, in b8 all
         || !ReadPhysicsFloat3ArrayField(file, mapVal, s_ColliderComponentDiagnosticPrefix, "hull_points", outEntry.hullPoints)
         || !ReadPhysicsFloat3ArrayField(file, mapVal, s_ColliderComponentDiagnosticPrefix, "mesh_vertices", outEntry.meshVertices)
         || !ReadPhysicsU32ArrayField(file, mapVal, s_ColliderComponentDiagnosticPrefix, "mesh_indices", outEntry.meshIndices))
-        return false;
+        return MakeUnexpected(Failure());
     outEntry.center = f32x4(center, 0.0f);
     outEntry.center2 = f32x4(center2, 0.0f);
     outEntry.halfExtents = f32x4(halfExtents, 0.0f);
@@ -410,13 +403,13 @@ b8 ParseColliderShapeEntryMap(in Path file, in MetascriptValue mapVal, in b8 all
     if(mapVal.hasField("mesh_asset")){
         const Expected<MetadataStringField> meshText = ReadMetadataStringField(file, mapVal, s_ColliderComponentDiagnosticPrefix, "mesh_asset", true);
         if(!meshText.has_value())
-            return false;
+            return MakeUnexpected(Failure());
         const Expected<AssetRef<Mesh>> meshRef = ParseReservedAssetRefText<Mesh>(file, s_ColliderComponentDiagnosticPrefix, "mesh_asset", meshText.value().text);
         if(!meshRef.has_value())
-            return false;
+            return MakeUnexpected(Failure());
         outEntry.meshAsset = meshRef.value();
     }
-    return true;
+    return outEntry;
 }
 
 Expected<ColliderComponentCookEntry> ParseColliderComponentCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
@@ -425,9 +418,10 @@ Expected<ColliderComponentCookEntry> ParseColliderComponentCookMetadata(in Name 
         || !AssignCookEntryVirtualPath(virtualPath, file, s_ColliderComponentDiagnosticPrefix, entry))
         return MakeUnexpected(Failure());
 
-    ColliderShapeEntry primary;
-    if(!ParseColliderShapeEntryMap(file, value, true, primary))
+    const Expected<ColliderShapeEntry> primaryResult = ParseColliderShapeEntryMap(file, value, true);
+    if(!primaryResult.has_value())
         return MakeUnexpected(Failure());
+    in ColliderShapeEntry primary = primaryResult.value();
 
     ColliderComponent c;
     c.shapeType = primary.shapeType;
@@ -481,12 +475,12 @@ Expected<ColliderComponentCookEntry> ParseColliderComponentCookMetadata(in Name 
                         extrasOk = false;
                         return;
                     }
-                    ColliderShapeEntry extra;
-                    if(!ParseColliderShapeEntryMap(file, item, false, extra)){
+                    const Expected<ColliderShapeEntry> extra = ParseColliderShapeEntryMap(file, item, false);
+                    if(!extra.has_value()){
                         extrasOk = false;
                         return;
                     }
-                    c.extraShapes.push_back(extra);
+                    c.extraShapes.push_back(extra.value());
                 }
             }
         );
@@ -548,13 +542,13 @@ Expected<JointComponentCookEntry> ParseJointComponentCookMetadata(in Name virtua
     VectorSingle axisB = VectorSingle(j.localAxisB);
     VectorSingle refRot = VectorSingle(j.referenceRotation);
     VectorSingle linOff = VectorSingle(j.linearOffset);
-    if(!ReadPhysicsOptionalFloat3Field(file, value, s_JointComponentDiagnosticPrefix, "local_anchor_a", anchorA)
-        || !ReadPhysicsOptionalFloat3Field(file, value, s_JointComponentDiagnosticPrefix, "local_anchor_b", anchorB)
-        || !ReadPhysicsOptionalFloat3Field(file, value, s_JointComponentDiagnosticPrefix, "local_axis_a", axisA)
-        || !ReadPhysicsOptionalFloat3Field(file, value, s_JointComponentDiagnosticPrefix, "local_axis_b", axisB)
+    if(!ReadOptionalSceneFloat3Field(file, value, s_JointComponentDiagnosticPrefix, "local_anchor_a", anchorA)
+        || !ReadOptionalSceneFloat3Field(file, value, s_JointComponentDiagnosticPrefix, "local_anchor_b", anchorB)
+        || !ReadOptionalSceneFloat3Field(file, value, s_JointComponentDiagnosticPrefix, "local_axis_a", axisA)
+        || !ReadOptionalSceneFloat3Field(file, value, s_JointComponentDiagnosticPrefix, "local_axis_b", axisB)
         || !ReadPhysicsOptionalRotationField(file, value, s_JointComponentDiagnosticPrefix, "reference_rotation", "reference_rotation_euler", "reference_rotation_euler_degrees", refRot)
         || !ReadOptionalMetadataBoolField(file, value, s_JointComponentDiagnosticPrefix, "use_reference_rotation", j.useReferenceRotation)
-        || !ReadPhysicsOptionalFloat3Field(file, value, s_JointComponentDiagnosticPrefix, "linear_offset", linOff)
+        || !ReadOptionalSceneFloat3Field(file, value, s_JointComponentDiagnosticPrefix, "linear_offset", linOff)
         || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "length", j.length)
         || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "min_length", j.minLength)
         || !ReadOptionalFiniteF32Field(file, value, s_JointComponentDiagnosticPrefix, "max_length", j.maxLength)
@@ -625,7 +619,7 @@ Expected<PhysicsWorldConfigComponentCookEntry> ParsePhysicsWorldConfigComponentC
     }
 
     VectorSingle grav = VectorSingle(w.gravity);
-    if(!ReadPhysicsOptionalFloat3Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "gravity", grav)
+    if(!ReadOptionalSceneFloat3Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "gravity", grav)
         || !ReadOptionalFiniteF32Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "restitution_threshold", w.restitutionThreshold)
         || !ReadOptionalFiniteF32Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "hit_event_threshold", w.hitEventThreshold)
         || !ReadOptionalFiniteF32Field(file, value, s_PhysicsWorldConfigComponentDiagnosticPrefix, "contact_hertz", w.contactHertz)

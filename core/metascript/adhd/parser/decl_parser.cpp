@@ -189,10 +189,10 @@ b8 DeclParser::tryParseExternAttribute(const ParsedAttribute& attr, MStringView&
         const MStringView rawHdr = attr.arguments[0].text;
         b8 hadAngles = false;
         b8 hadQuotes = false;
-        (void)StripHeaderDelimiters(rawHdr, &hadAngles, &hadQuotes);
+        const MStringView strippedHdr = StripHeaderDelimiters(rawHdr, &hadAngles, &hadQuotes);
         outRequiredHeader = (hadAngles || hadQuotes)
             ? rawHdr
-            : InternAngleBracketHeader(m_cursor.arena(), rawHdr);
+            : InternAngleBracketHeader(m_cursor.arena(), strippedHdr);
     }
 
     outMatched = true;
@@ -605,7 +605,8 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const Span<const Pars
         }
         else{
             sizeTypeName = BuiltinTypeSemantics::UInt32ScalarTypeName();
-            (void)BuiltinTypeSemantics::ResolveFixedWidthIntScalar(sizeTypeName, underlyingSize, underlyingAlign);
+            if(!BuiltinTypeSemantics::ResolveFixedWidthIntScalar(sizeTypeName, underlyingSize, underlyingAlign))
+                return nullptr;
         }
     }
     else{

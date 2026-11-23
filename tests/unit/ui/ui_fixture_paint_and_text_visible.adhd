@@ -14,52 +14,9 @@ const StringView s_PaintTextFontPath = "tests/ui/font";
 const StringView s_DefaultImagePath = "tests/ui/image";
 const u64 s_DefaultAtlasIdentity = 11u;
 
-Expected<SharedGlyphPage> MakeTestGlyphPage(in SharedPool pool, in u64 identity, in u64 generation, in u32 index){
-    GlyphPagePixels pixels;
-    pixels.resize(64u, 0u);
-    pixels[0u] = 64u;
-    if(generation > 1u)
-        pixels[32u] = 192u;
-    GlyphPageBinding binding;
-    binding.font = MakeUiFixtureAssetRef<Font>(s_PaintTextFontPath);
-    binding.fontGeneration = 9u;
-    binding.atlasIdentity = identity;
-    binding.generation = generation;
-    binding.index = index;
-    binding.width = 8u;
-    binding.height = 8u;
-    return CreateGlyphPage(pool, binding, pixels);
-}
 
-Expected<SharedSdfAtlasPage> MakeTestSdfAtlasPage(in SharedPool pool, in u64 identity, in u64 generation, in u32 index, in u8 interior){
-    SdfAtlasPixels pixels;
-    pixels.resize(8u * 8u * 4u, 0u);
-    pixels[0u] = 32u;
-    pixels[1u] = 128u;
-    pixels[2u] = interior;
-    pixels[3u] = 192u;
-    SdfAtlasPageBinding binding;
-    binding.font = MakeUiFixtureAssetRef<Font>(s_PaintTextFontPath);
-    binding.fontGeneration = 9u;
-    binding.atlasIdentity = identity;
-    binding.generation = generation;
-    binding.index = index;
-    binding.width = 8u;
-    binding.height = 8u;
-    binding.spreadPixels = 8u;
-    return CreateSdfAtlasPage(pool, binding, pixels);
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void ConfigurePaintFixtureSkin(mut UiSkin skin, in AssetRef<Texture> texture){
-    UiSkinRegion sprite;
-    sprite.name = s_UiCaseSprite;
-    sprite.rectangle.width = 8u;
-    sprite.rectangle.height = 8u;
-    sprite.drawMode = UiSkinDrawMode::Sprite;
-    Vector<UiSkinRegion> regions;
-    regions.push_back(sprite);
-    skin.setAtlas(texture, 16u, 16u, 1.0f, regions);
-}
 
 [extensible]
 class PaintTextFixture{
@@ -189,6 +146,56 @@ class TextVisibleFixture{
     }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<SharedGlyphPage> MakeTestGlyphPage(in SharedPool pool, in u64 identity, in u64 generation, in u32 index){
+    GlyphPagePixels pixels;
+    pixels.resize(64u, 0u);
+    pixels[0u] = 64u;
+    if(generation > 1u)
+        pixels[32u] = 192u;
+    GlyphPageBinding binding;
+    binding.font = MakeUiFixtureAssetRef<Font>(s_PaintTextFontPath);
+    binding.fontGeneration = 9u;
+    binding.atlasIdentity = identity;
+    binding.generation = generation;
+    binding.index = index;
+    binding.width = 8u;
+    binding.height = 8u;
+    return CreateGlyphPage(pool, binding, pixels);
+}
+
+Expected<SharedSdfAtlasPage> MakeTestSdfAtlasPage(in SharedPool pool, in u64 identity, in u64 generation, in u32 index, in u8 interior){
+    SdfAtlasPixels pixels;
+    pixels.resize(8u * 8u * 4u, 0u);
+    pixels[0u] = 32u;
+    pixels[1u] = 128u;
+    pixels[2u] = interior;
+    pixels[3u] = 192u;
+    SdfAtlasPageBinding binding;
+    binding.font = MakeUiFixtureAssetRef<Font>(s_PaintTextFontPath);
+    binding.fontGeneration = 9u;
+    binding.atlasIdentity = identity;
+    binding.generation = generation;
+    binding.index = index;
+    binding.width = 8u;
+    binding.height = 8u;
+    binding.spreadPixels = 8u;
+    return CreateSdfAtlasPage(pool, binding, pixels);
+}
+
+void ConfigurePaintFixtureSkin(mut UiSkin skin, in AssetRef<Texture> texture){
+    UiSkinRegion sprite;
+    sprite.name = s_UiCaseSprite;
+    sprite.rectangle.width = 8u;
+    sprite.rectangle.height = 8u;
+    sprite.drawMode = UiSkinDrawMode::Sprite;
+    Vector<UiSkinRegion> regions;
+    regions.push_back(sprite);
+    skin.setAtlas(texture, 16u, 16u, 1.0f, regions);
+}
 
 void ExpectClippedPaintTextQuad(in DrawSnapshot snapshot){
     ASSERT_EQ(snapshot.vertices().size(), 4u);

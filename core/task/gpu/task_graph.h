@@ -505,7 +505,7 @@ private:
             }
         };
         constexpr GpuTaskPayloadDestroyThunk s_DestroyThunk = s_UsePool
-            ? (std::is_trivially_destructible_v<Payload> ? nullptr : &DestroyPooledTaskPayload<Payload>)
+            ? (IsTriviallyDestructible_V<Payload> ? nullptr : &DestroyPooledTaskPayload<Payload>)
             : &DestroyTaskPayload<Payload>;
         UnappendedStorageGuard guard{ m_arena, rawStorage, nullptr, s_DestroyThunk, s_UsePool };
         payloadObject = constructAt(rawStorage);

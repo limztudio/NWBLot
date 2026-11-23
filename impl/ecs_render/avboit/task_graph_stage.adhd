@@ -10,16 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AvboitGraphTaskId SelectAvboitTransparencyCompletionTask(in AvboitGraphTaskId accumulationFinalizeTask, in AvboitGraphTaskId occupancyTask){
-    if(accumulationFinalizeTask.valid())
-        return accumulationFinalizeTask;
-    return occupancyTask;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class RendererAvboitTaskGraphStageState{
     public AvboitGraphTaskId m_clearFirstTask = AvboitGraphTaskId();
     public AvboitGraphTaskId m_clearTask = AvboitGraphTaskId();
@@ -119,6 +109,12 @@ class RendererAvboitTaskGraphValidation{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+AvboitGraphTaskId SelectAvboitTransparencyCompletionTask(in AvboitGraphTaskId accumulationFinalizeTask, in AvboitGraphTaskId occupancyTask){
+    if(accumulationFinalizeTask.valid())
+        return accumulationFinalizeTask;
+    return occupancyTask;
+}
 
 b8 IsAvboitTransparentTaskShapeValid(
     in b8 hasTransparentRenderers,

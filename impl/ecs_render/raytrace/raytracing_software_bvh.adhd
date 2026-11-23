@@ -17,8 +17,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/bvh/binding_slots.h>"), cpp_name("NWB_BVH_BUILD_GROUP_SIZE")]
+extern const u32 s_ShaderBvhBuildGroupSize;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const usize s_MaxBvhBitonicSortSteps = 160u;
 const u32 s_BvhBuildGroupSize = 256u;
+static_assert(s_BvhBuildGroupSize == cast<u32>(s_ShaderBvhBuildGroupSize));
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -79,14 +87,6 @@ u32 BuildBvhBitonicSortSteps(in u32 elementCount, in u32 paddedCount, in u32 key
     }
     return groupCount;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_header("<impl/assets/graphics/bvh/binding_slots.h>"), cpp_name("NWB_BVH_BUILD_GROUP_SIZE")]
-extern const u32 s_ShaderBvhBuildGroupSize;
-static_assert(s_BvhBuildGroupSize == cast<u32>(s_ShaderBvhBuildGroupSize));
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -177,11 +177,14 @@ b8 SoftwareBvhBuilder::ensureBvhSortPipeline(){
         return false;
     }
 
-    if(!CreateHeapComputePipeline(device, this.m_state.m_bvhSortShader, this.m_state.m_bvhSortBindingLayout, false, this.m_state.m_bvhSortPipeline)){
+    const Expected<ComputePipelineHandle> pipeline = CreateHeapComputePipeline(device, this.m_state.m_bvhSortShader, this.m_state.m_bvhSortBindingLayout, false);
+    if(!pipeline.has_value()){
+        this.m_state.m_bvhSortPipeline.reset();
         error("RendererSystem: failed to create BVH sort compute pipeline");
         this.m_state.m_bvhSortPipelineFailed = true;
         return false;
     }
+    this.m_state.m_bvhSortPipeline = pipeline.value();
     return true;
 }
 

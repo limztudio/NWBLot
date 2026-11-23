@@ -16,6 +16,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/caustic/resolve_binding_slots.h>"), cpp_name("NWB_CAUSTIC_RESOLVE_PASS_COUNT")]
+extern const u32 s_ShaderCausticResolvePassCount;
+[cpp_header("<impl/assets/graphics/caustic/resolve_binding_slots.h>"), cpp_name("NWB_CAUSTIC_RESOLVE_GROUP_SIZE")]
+extern const u32 s_ShaderCausticResolveGroupSize;
+
+static_assert(s_CausticResolvePassCount == s_ShaderCausticResolvePassCount);
+static_assert(s_CausticResolveGroupThreadCount == s_ShaderCausticResolveGroupSize);
+static_assert(s_CausticResolveGroupThreadCount * s_CausticResolveGroupThreadCount == s_CausticResolveGroupLaneCount);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const Name s_CausticSwPhotonShaderDebugName = "ECSRender_SwCausticPhotons";
 const Name s_CausticResolveShaderDebugName = "ECSRender_CausticResolve";
 const Name s_CausticGeometryDownsampleShaderDebugName = "ECSRender_CausticGeometryDownsample";
@@ -91,13 +104,17 @@ b8 EnsureCausticResolveStagePipeline(
 ){
     if(stage.m_pipeline.valid())
         return true;
-    if(
-        !shaderSystem.loadShader<ComputeShader, RefractiveSubsystem>(lambda[](in RefractiveSubsystem s) -> AssetRef<ComputeShader>{ return s.causticResolveCs; }, variant, s_CausticResolveShaderDebugName, stage.m_shader)
-        || !CreateHeapComputePipeline(device, stage.m_shader, bindingLayout, false, stage.m_pipeline)
-    ){
+    if(!shaderSystem.loadShader<ComputeShader, RefractiveSubsystem>(lambda[](in RefractiveSubsystem s) -> AssetRef<ComputeShader>{ return s.causticResolveCs; }, variant, s_CausticResolveShaderDebugName, stage.m_shader)){
         error("RendererSystem: failed to create specialized caustic resolve pipeline");
         return false;
     }
+    const Expected<ComputePipelineHandle> pipeline = CreateHeapComputePipeline(device, stage.m_shader, bindingLayout, false);
+    if(!pipeline.has_value()){
+        stage.m_pipeline.reset();
+        error("RendererSystem: failed to create specialized caustic resolve pipeline");
+        return false;
+    }
+    stage.m_pipeline = pipeline.value();
     return true;
 }
 
@@ -170,7 +187,7 @@ b8 EnsureHwCausticScratchBuffer(
     }
     if(IsDescriptorClass(inOutHeapHandle, GpuDescriptorClass::StorageBuffer))
         return true;
-    return AssignDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemRawBufferUav(0u, inOutBuffer.deref()), inOutHeapHandle);
+    return ReplaceDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemRawBufferUav(0u, inOutBuffer.deref()), inOutHeapHandle);
 }
 
 void EnsureHwCausticDeferredScratch(mut GraphicsRuntime graphics, mut RtCausticState caustics, in u32 requiredCapacity){
@@ -322,10 +339,12 @@ b8 CausticActivityResources::prepareCausticResolveActivity(in u32 halfWidth, in 
             return false;
         }
         this.m_activity.buffers[index] = bufferResult.value();
-        if(!AssignDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemRawBufferUav(0u, this.m_activity.buffers[index].deref()), this.m_activity.descriptors[index])){
+        const Expected<GpuDescriptorHandle> descriptor = RegisterDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemRawBufferUav(0u, this.m_activity.buffers[index].deref()));
+        if(!descriptor.has_value()){
             this.releaseCausticResolveActivity();
             return false;
         }
+        this.m_activity.descriptors[index] = descriptor.value();
     }
     this.m_activity.halfWidth = halfWidth;
     this.m_activity.halfHeight = halfHeight;
@@ -346,15 +365,6 @@ void CausticActivityResources::releaseCausticResolveActivity(){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[cpp_header("<impl/assets/graphics/caustic/resolve_binding_slots.h>"), cpp_name("NWB_CAUSTIC_RESOLVE_PASS_COUNT")]
-extern const u32 s_ShaderCausticResolvePassCount;
-[cpp_header("<impl/assets/graphics/caustic/resolve_binding_slots.h>"), cpp_name("NWB_CAUSTIC_RESOLVE_GROUP_SIZE")]
-extern const u32 s_ShaderCausticResolveGroupSize;
-
-static_assert(s_CausticResolvePassCount == s_ShaderCausticResolvePassCount);
-static_assert(s_CausticResolveGroupThreadCount == s_ShaderCausticResolveGroupSize);
-static_assert(s_CausticResolveGroupThreadCount * s_CausticResolveGroupThreadCount == s_CausticResolveGroupLaneCount);
 
 [cpp_unwind]
 void RendererRayTracingSystem::releaseCausticEmissionTargetHeapHandle(){

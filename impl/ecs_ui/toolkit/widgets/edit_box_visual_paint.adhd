@@ -16,13 +16,16 @@ Expected<UiSkinRegion> TryResolveEditBoxBackgroundRegion(in UiSkin skin, in Edit
     if(skin.regions().empty())
         return MakeUnexpected(Failure());
     const Name preferred = ResolvePreferredEditBoxBackgroundName(style, flags);
-    UiSkinRegion outRegion;
-    if(skin.tryFindRegion(preferred, outRegion))
-        return outRegion;
-    if(style.normal != preferred && skin.tryFindRegion(style.normal, outRegion))
-        return outRegion;
-    if(style.fallback != preferred && style.fallback != style.normal && skin.tryFindRegion(style.fallback, outRegion))
-        return outRegion;
+    const Expected<UiSkinRegion> preferredRegion = skin.tryFindRegion(preferred);
+    if(preferredRegion.has_value())
+        return preferredRegion.value();
+    if(style.normal != preferred){
+        const Expected<UiSkinRegion> normalRegion = skin.tryFindRegion(style.normal);
+        if(normalRegion.has_value())
+            return normalRegion.value();
+    }
+    if(style.fallback != preferred && style.fallback != style.normal)
+        return skin.tryFindRegion(style.fallback);
     return MakeUnexpected(Failure());
 }
 
@@ -140,20 +143,15 @@ TextLayoutStatus PrepareEditBoxShapeRequest(
     return ValidateTextRequest(inOutRequest, textMode == EditTextMode::Multiline);
 }
 
-b8 MeasureEditBoxViewVisual(
+Expected<Rect> MeasureEditBoxViewVisual(
     in b8 ready,
     in TextLayout layout,
     in DisplayMetrics display,
-    mut TextService text,
-    mut Rect outVisualBounds
+    mut TextService text
 ){
     if(!ready)
-        return false;
-    const Expected<Rect> measured = text.measure(layout, display);
-    if(!measured.has_value())
-        return false;
-    outVisualBounds = measured.value();
-    return true;
+        return MakeUnexpected(Failure());
+    return text.measure(layout, display);
 }
 
 

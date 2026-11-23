@@ -30,7 +30,6 @@ const SmokeMaterialRef s_SoftShadowTransparentMaterial = "project/smoke/transpar
 const SmokeMaterialRef s_SoftShadowTimingOpaqueMaterial = "project/smoke/soft_shadow/materials/timing_opaque";
 const SmokeMaterialRef s_SoftShadowTimingTransparentMaterial = "project/smoke/soft_shadow/materials/timing_transparent";
 const SmokeMeshRef s_SoftShadowGroundMesh = "project/meshes/shadow_plane";
-
 const StringView s_SoftShadowProjectName = "SoftShadowTestSmokeProject";
 const f32 s_SoftShadowDefaultAngularRadius = 0.03f;
 const f32 s_SoftShadowDefaultSourceRadius = 0.15f;
@@ -157,24 +156,6 @@ class SoftShadowScene{
     private EntityID m_groundEntity = s_InvalidEntityId;
 }
 
-f32 ConfiguredAngularRadius(){
-    const Expected<f32> parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_ANGLE");
-    if(!parsed.has_value())
-        return s_SoftShadowDefaultAngularRadius;
-    if(parsed.value() > 0.0f)
-        return Min(0.2f, parsed.value());
-    return 0.0f;
-}
-
-f32 ConfiguredSourceRadius(){
-    const Expected<f32> parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS");
-    if(!parsed.has_value())
-        return s_SoftShadowDefaultSourceRadius;
-    if(parsed.value() > 0.0f)
-        return Min(1.0f, parsed.value());
-    return 0.0f;
-}
-
 [arena]
 class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
 
@@ -288,6 +269,24 @@ class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+f32 ConfiguredAngularRadius(){
+    const Expected<f32> parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_ANGLE");
+    if(!parsed.has_value())
+        return s_SoftShadowDefaultAngularRadius;
+    if(parsed.value() > 0.0f)
+        return Min(0.2f, parsed.value());
+    return 0.0f;
+}
+
+f32 ConfiguredSourceRadius(){
+    const Expected<f32> parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS");
+    if(!parsed.has_value())
+        return s_SoftShadowDefaultSourceRadius;
+    if(parsed.value() > 0.0f)
+        return Min(1.0f, parsed.value());
+    return 0.0f;
+}
 
 ProjectFrameClientSize GetProjectFrameClientSize(){
     return ProjectFrameClientSize(1280, 900);

@@ -119,26 +119,25 @@ class SceneAssetBinaryCodec{
         return true;
     }
 
-    public b8 deserializeProject(in Span<u8> binary, mut Name outStartScene)const{
+    public Expected<NameHash> deserializeProject(in Span<u8> binary)const{
         usize cursor = 0u;
         const Expected<ProjectHeaderBinary> headerResult = ReadPOD<ProjectHeaderBinary>(binary, cursor);
         if(!headerResult.has_value()){
             error("ProjectAsset::loadBinary failed: malformed header");
-            return false;
+            return MakeUnexpected(Failure());
         }
         const ProjectHeaderBinary header = headerResult.value();
         if(header.magic != s_ProjectMagic){
             error("ProjectAsset::loadBinary failed: invalid project asset format; recook required");
-            return false;
+            return MakeUnexpected(Failure());
         }
         if(!this.validateProjectHeader(header))
-            return false;
+            return MakeUnexpected(Failure());
         if(cursor != binary.size()){
             error("ProjectAsset::loadBinary failed: trailing bytes detected");
-            return false;
+            return MakeUnexpected(Failure());
         }
-        outStartScene = Name(header.startSceneHash);
-        return true;
+        return header.startSceneHash;
     }
 
     private b8 readNameHashes(

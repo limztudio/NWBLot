@@ -14,6 +14,7 @@ b8 IsSkinnedAssetBunch(in b8 hasSkinName, in b8 hasSkeletonName, in b8 hasSkinIn
     return hasSkinName && hasSkeletonName && hasSkinInfluences;
 }
 
+[cpp_unwind]
 String BuildMeshAssetDocumentText(
     in Span<Vec3> positions,
     in Span<Vec3> normals,
@@ -30,6 +31,7 @@ String BuildMeshAssetDocumentText(
     return out;
 }
 
+[cpp_unwind]
 String BuildModelAssetDocumentText(
     in StringView meshName,
     in b8 hasSkeletonAndSkin,
@@ -53,6 +55,7 @@ String BuildModelAssetDocumentText(
     return out;
 }
 
+[cpp_unwind]
 void AppendAssetBunchModelAndFooterText(in b8 skinnedBunch, mut String out){
     out.append(s_AssetSectionSeparatorText);
     out.append("model model;\n\n");

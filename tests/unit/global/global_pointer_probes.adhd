@@ -2,64 +2,64 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::__hidden_pointer_failure_tests::UniqueComparisonOwner")]
+[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::PointerFailureTests::UniqueComparisonOwner")]
 extern class UniqueComparisonOwner;
 
-[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::__hidden_pointer_failure_tests::RefCountTarget")]
+[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::PointerFailureTests::RefCountTarget")]
 extern class RefCountTarget;
 
-[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::__hidden_pointer_failure_tests::ReferenceComparisonOwner")]
+[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::PointerFailureTests::ReferenceComparisonOwner")]
 extern class ReferenceComparisonOwner;
 
-[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::__hidden_pointer_failure_tests::FancyOwner")]
+[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::PointerFailureTests::FancyOwner")]
 extern class FancyOwner;
 
-[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::__hidden_pointer_failure_tests::ObservedUnique")]
+[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::PointerFailureTests::ObservedUnique")]
 extern class ObservedUnique;
 
-[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::__hidden_pointer_failure_tests::ObservedShared")]
+[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::PointerFailureTests::ObservedShared")]
 extern class ObservedShared;
 
-[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::__hidden_pointer_failure_tests::PlainUnique")]
+[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::PointerFailureTests::PlainUnique")]
 extern class PlainUnique;
 
-[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::__hidden_pointer_failure_tests::PlainReference")]
+[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::PointerFailureTests::PlainReference")]
 extern class PlainReference;
 
-[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::__hidden_pointer_failure_tests::NullOwner")]
+[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::PointerFailureTests::NullOwner")]
 extern class NullOwner;
 
-[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::__hidden_pointer_failure_tests::s_NullOwner")]
+[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::PointerFailureTests::s_NullOwner")]
 extern const NullOwner s_NullOwner;
 
-[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::__hidden_pointer_failure_tests::BorrowFancy")]
+[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::PointerFailureTests::BorrowFancy")]
 extern FancyOwner BorrowFancy(mut RefCountTarget target);
 
-[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::__hidden_pointer_failure_tests::BorrowObservedUnique")]
+[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::PointerFailureTests::BorrowObservedUnique")]
 extern ObservedUnique BorrowObservedUnique(mut RefCountTarget target);
 
-[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::__hidden_pointer_failure_tests::BorrowObservedShared")]
+[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::PointerFailureTests::BorrowObservedShared")]
 extern ObservedShared BorrowObservedShared(mut RefCountTarget target);
 
-[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::__hidden_pointer_failure_tests::PointsAt")]
+[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::PointerFailureTests::PointsAt")]
 extern b8 PointsAt(in auto owner, mut RefCountTarget target);
 
-[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::__hidden_pointer_failure_tests::ArrowPointsAt")]
+[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::PointerFailureTests::ArrowPointsAt")]
 extern b8 ArrowPointsAt(in auto owner, mut RefCountTarget target);
 
-[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::__hidden_pointer_failure_tests::Dereference")]
+[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::PointerFailureTests::Dereference")]
 extern mut RefCountTarget DereferenceOwner(in auto owner);
 
-[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::__hidden_pointer_failure_tests::AssignRaw")]
+[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::PointerFailureTests::AssignRaw")]
 extern void AssignRaw(mut FancyOwner owner, mut RefCountTarget target);
 
-[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::__hidden_pointer_failure_tests::FailObserverCopy")]
+[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::PointerFailureTests::FailObserverCopy")]
 extern void FailObserverCopy(in b8 enable);
 
-[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::__hidden_pointer_failure_tests::FailsObserverCopy")]
+[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::PointerFailureTests::FailsObserverCopy")]
 extern b8 FailsObserverCopy();
 
-[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::__hidden_pointer_failure_tests::HasOwner")]
+[cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("::PointerFailureTests::HasOwner")]
 extern b8 HasOwner(in auto owner);
 
 [cpp_header("<tests/unit/global/global_pointer_probes.h>"), cpp_name("NWB_TEST_LESS")]

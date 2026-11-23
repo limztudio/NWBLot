@@ -13,6 +13,10 @@
 
 type MaterialStageShaderMap = HashMap<ShaderType, AssetRef<IShader>>;
 type MaterialParameterMap = HashMap<CompactString, CompactString>;
+type MaterialBindInterfaceLookup = HashMap<Name, usize>;
+type MaterialBindParameterMap = MaterialParameterMap;
+type MaterialBindTypedLayoutBlockLookup = HashMap<Name, MaterialBindTypedLayoutBlockLookupEntry>;
+type MaterialBindTypedLayoutParameterLookup = HashMap<CompactString, MaterialBindTypedLayoutParameterLookupEntry>;
 
 class MaterialCookEntry{
     public String virtualPath;
@@ -62,32 +66,6 @@ class MaterialBindEntry{
     }
 }
 
-type MaterialBindInterfaceLookup = HashMap<Name, usize>;
-
-Expected<Name> ReadMaterialCookName(in StringView text){
-    const Expected<Optional<Name>, NameTextError> name = ToName(text);
-    if(!name.has_value())
-        return MakeUnexpected(Failure());
-    if(name.value().has_value())
-        return name.value().value();
-    return s_NameNone;
-}
-
-Expected<MaterialBindInterfaceLookup> BuildMaterialBindInterfaceLookup(in Span<MaterialBindEntry> entries){
-    MaterialBindInterfaceLookup lookup;
-    lookup.reserve(entries.size());
-    for(usize index = 0u; index < entries.size(); ++index){
-        const Expected<Name> name = ReadMaterialCookName(entries[index].virtualPath);
-        if(!name.has_value())
-            return MakeUnexpected(Failure());
-        if(!lookup.emplace(name.value(), index).second){
-            error("Material bind interface '{}' is duplicated", entries[index].virtualPath);
-            return MakeUnexpected(Failure());
-        }
-    }
-    return lookup;
-}
-
 class GeneratedMaterialPixelShader{
     public String name;
     public String source;
@@ -99,10 +77,6 @@ class MaterialBindDependency{
     public Name interfaceName = s_NameNone;
     public b8 dependsOnMaterialBind = false;
 }
-
-type MaterialBindParameterMap = MaterialParameterMap;
-type MaterialBindTypedLayoutBlockLookup = HashMap<Name, MaterialBindTypedLayoutBlockLookupEntry>;
-type MaterialBindTypedLayoutParameterLookup = HashMap<CompactString, MaterialBindTypedLayoutParameterLookupEntry>;
 
 class MaterialBindTypedLayout{
     public String interfacePath = "<unknown>";
@@ -118,12 +92,65 @@ class MaterialBindTypedLayoutCache{
     public Vector<MaterialBindTypedLayout> entries;
     public HashMap<Name, usize> lookup;
 
+    [cpp_unwind]
     public void reserve(in usize count){
         this.entries.reserve(count);
         this.lookup.reserve(count);
     }
 }
 
+class MaterialBindTypedLayoutEntryGuard : NoCopy{
+    private mut Vector<MaterialBindTypedLayout> m_entries;
+    private usize m_previousSize;
+    private b8 m_armed;
+
+    public MaterialBindTypedLayoutEntryGuard(mut Vector<MaterialBindTypedLayout> entries, in usize previousSize){
+        this.m_entries = entries;
+        this.m_previousSize = previousSize;
+        this.m_armed = false;
+    }
+
+    public ~MaterialBindTypedLayoutEntryGuard(){
+        if(this.m_armed){
+            while(this.m_entries.size() > this.m_previousSize)
+                this.m_entries.pop_back();
+        }
+    }
+
+    public void arm(){ this.m_armed = true; }
+    public void release(){ this.m_armed = false; }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<Name> ReadMaterialCookName(in StringView text){
+    const Expected<Optional<Name>, NameTextError> name = ToName(text);
+    if(!name.has_value())
+        return MakeUnexpected(Failure());
+    if(name.value().has_value())
+        return name.value().value();
+    return s_NameNone;
+}
+
+[cpp_unwind]
+Expected<MaterialBindInterfaceLookup> BuildMaterialBindInterfaceLookup(in Span<MaterialBindEntry> entries){
+    MaterialBindInterfaceLookup lookup;
+    lookup.reserve(entries.size());
+    for(usize index = 0u; index < entries.size(); ++index){
+        const Expected<Name> name = ReadMaterialCookName(entries[index].virtualPath);
+        if(!name.has_value())
+            return MakeUnexpected(Failure());
+        if(!lookup.emplace(name.value(), index).second){
+            error("Material bind interface '{}' is duplicated", entries[index].virtualPath);
+            return MakeUnexpected(Failure());
+        }
+    }
+    return lookup;
+}
+
+[cpp_unwind]
 Expected<usize> FindOrBuildMaterialBindTypedLayout(in Name materialInterface, in MaterialBindEntry bindEntry, mut MaterialBindTypedLayoutCache cache){
     if(cache.lookup.contains(materialInterface)){
         const usize index = cache.lookup.at(materialInterface);
@@ -131,18 +158,24 @@ Expected<usize> FindOrBuildMaterialBindTypedLayout(in Name materialInterface, in
         return index;
     }
     const usize index = cache.entries.size();
+    cache.entries.reserve(index + 1u);
+    MaterialBindTypedLayoutEntryGuard entryGuard(cache.entries, index);
+    entryGuard.arm();
     AppendArenaElement<MaterialBindTypedLayout>(cache.entries);
     mut MaterialBindTypedLayout layout = cache.entries[index];
     layout.interfacePath.assign(bindEntry.virtualPath);
-    if(!BuildMaterialBindTypedLayoutData(bindEntry.virtualPath, materialInterface, bindEntry.structs, bindEntry.instances,
-        layout.layoutHash, layout.typedLayoutBlocks, layout.typedLayoutFields, layout.typedBlockBytes, layout.blockLookup, layout.parameterLookup)
-        || !ValidateInsertedMaterialBindTypedLayoutCacheEntry(cache.lookup.emplace(materialInterface, index).second, materialInterface)){
-        cache.entries.pop_back();
+    const Expected<u64> layoutHash = BuildMaterialBindTypedLayoutData(bindEntry.virtualPath, materialInterface, bindEntry.structs, bindEntry.instances,
+        layout.typedLayoutBlocks, layout.typedLayoutFields, layout.typedBlockBytes, layout.blockLookup, layout.parameterLookup);
+    if(!layoutHash.has_value())
         return MakeUnexpected(Failure());
-    }
+    layout.layoutHash = layoutHash.value();
+    if(!ValidateInsertedMaterialBindTypedLayoutCacheEntry(cache.lookup.emplace(materialInterface, index).second, materialInterface))
+        return MakeUnexpected(Failure());
+    entryGuard.release();
     return index;
 }
 
+[cpp_unwind]
 void CopyMaterialBindTypedLayoutDefaults(
     in MaterialBindTypedLayout layout,
     mut u64 hash,
@@ -155,6 +188,7 @@ void CopyMaterialBindTypedLayoutDefaults(
         layout.typedBlockBytes, hash, blocks, fields, bytes);
 }
 
+[cpp_unwind]
 b8 ApplyMaterialBindTypedLayoutParameters(
     in MaterialBindTypedLayout layout,
     in Name name,

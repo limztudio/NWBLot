@@ -12,11 +12,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 EqualEmulationOutputIdentity(in Name left, in Name right){
-    return left == right;
-}
-
-
 class RendererMaterialResourceState : NoCopy{
     public HashMap<Name, UniquePtr<TextureGpuResource>> textureAssetCache;
     public HashMap<Name, UniquePtr<SamplerGpuResource>> samplerAssetCache;
@@ -132,6 +127,10 @@ class MaterialSampledTextureCollector : NoCopy{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+b8 EqualEmulationOutputIdentity(in Name left, in Name right){
+    return left == right;
+}
 
 [cpp_unwind]
 void AppendPreparedTextureResource(in TextureGpuResource resource, mut MaterialSampledTextureCollector collector){

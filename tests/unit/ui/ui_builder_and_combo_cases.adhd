@@ -11,6 +11,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const StringView s_UiBuilderPanelKey = "panel";
+const StringView s_UiBuilderCaptionKey = "caption";
+const StringView s_UiBuilderApplyKey = "apply";
+const StringView s_UiBuilderTextShapingJamo = "\xE1\x84\x92\xE1\x85\xA1\xE1\x86\xAB";
+const StringView s_UiComboBuilderPanelKey = "panel";
+const StringView s_UiComboBuilderKey = "combo";
+const StringView s_UiComboBuilderSecondKey = "other";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 enum<u8> UiComboBehaviorCallbackStage{ None, Generation, Revision, RowCount, Lookup, Key, Enabled }
 enum<u8> UiComboBehaviorCallbackMutation{ Select, Open, Close, Generation, Revision, RowCount }
 type UiComboBuilderTests = ComboFixture;
@@ -253,18 +265,6 @@ b8 EqualUiBuilderVertexBytes(in Span<Vertex> lhs, in Span<Vertex> rhs){
     }
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const StringView s_UiBuilderPanelKey = "panel";
-const StringView s_UiBuilderCaptionKey = "caption";
-const StringView s_UiBuilderApplyKey = "apply";
-const StringView s_UiBuilderTextShapingJamo = "\xE1\x84\x92\xE1\x85\xA1\xE1\x86\xAB";
-const StringView s_UiComboBuilderPanelKey = "panel";
-const StringView s_UiComboBuilderKey = "combo";
-const StringView s_UiComboBuilderSecondKey = "other";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

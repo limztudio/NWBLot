@@ -70,9 +70,10 @@ Expected<void> RunCsgRayRuntimeProbe(mut ProjectRuntimeContext context){
     mut GraphicsRuntime graphics = context.graphics;
     mut Device device = graphics.getDevice();
     mut GpuDescriptorHeap heap = device.getDescriptorHeap();
-    ComputePipelineHandle pipeline;
-    if(!LoadGpuProbePipeline(context, Name("project/shaders/csg_ray_probe_cs"), s_DefaultVariant, Name("tests/csg_ray/shader"), "CsgRayProbe", size_of<u32>(), pipeline))
+    const Expected<ComputePipelineHandle> pipelineResult = LoadGpuProbePipeline(context, Name("project/shaders/csg_ray_probe_cs"), s_DefaultVariant, Name("tests/csg_ray/shader"), "CsgRayProbe", size_of<u32>());
+    if(!pipelineResult.has_value())
         return MakeUnexpected(Failure());
+    const ComputePipelineHandle pipeline = pipelineResult.value();
     BufferDesc description;
     description.setDebugName(Name("tests/csg_ray/output")).setByteSize(s_CsgRayProbeWordCount * size_of<u32>()).setStructStride(size_of<u32>())
         .setCanHaveUAVs(true).enableAutomaticStateTracking(ResourceStates::CopyDest);

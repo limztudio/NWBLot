@@ -146,9 +146,10 @@ b8 HasCanonicalDraftChanged(in StringView formatted, in StringView currentDraft)
     return formatted != currentDraft;
 }
 
-Expected<b8, ErrorCode> FinalizeCanonicalNumericDraft(in StringView formattedText, in b8 changed, in b8 draftUpdated, mut String outAcceptedDraft){
+[cpp_unwind] Expected<b8, ErrorCode> FinalizeCanonicalNumericDraft(in StringView formattedText, in b8 changed, in b8 draftUpdated, mut String outAcceptedDraft){
     if(!draftUpdated)
         return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
+    outAcceptedDraft.reserve(formattedText.size());
     outAcceptedDraft.clear();
     outAcceptedDraft.append(formattedText);
     return changed;

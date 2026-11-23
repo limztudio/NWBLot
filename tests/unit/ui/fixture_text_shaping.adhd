@@ -8,6 +8,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class FixtureShaper : ITextShaper{
+    [cpp_unwind]
+    public Expected<ShapedRun, TextLayoutStatus> shape(in ShapeRequest request)override{
+        ShapedRun run;
+        if(!PopulateFixtureShapedRun(request, run))
+            return MakeUnexpected(TextLayoutStatus::MissingGlyph);
+        return run;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void AppendCodePointGlyphs(in StringView text, in Rect ink, mut ShapedRun run){
     usize begin = 0u;
     while(begin < text.size()){
@@ -47,17 +61,6 @@ b8 PopulateFixtureShapedRun(in ShapeRequest request, mut ShapedRun run){
     if(request.direction == TextDirection::RightToLeft)
         ReverseGlyphs(run);
     return true;
-}
-
-
-class FixtureShaper : ITextShaper{
-    [cpp_unwind]
-    public Expected<ShapedRun, TextLayoutStatus> shape(in ShapeRequest request)override{
-        ShapedRun run;
-        if(!PopulateFixtureShapedRun(request, run))
-            return MakeUnexpected(TextLayoutStatus::MissingGlyph);
-        return run;
-    }
 }
 
 

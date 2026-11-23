@@ -23,17 +23,16 @@ class MeshletAttributeSkinFailure{
     public u32 conflictingSkin = s_MeshMissingStreamIndex;
 }
 
-b8 ResolveMeshletAttributeSkins(
+[cpp_unwind]
+Expected<void, MeshletAttributeSkinFailure> ResolveMeshletAttributeSkins(
     in Span<MeshletDesc> meshlets,
     in Span<MeshletPositionStreamRef> positionRefs,
     in Span<MeshletLocalVertexRef> localVertexRefs,
     in usize attributeCount,
-    mut Vector<u32> outAttributeSkins,
-    mut MeshletAttributeSkinFailure outFailure
+    mut Vector<u32> outAttributeSkins
 ){
     outAttributeSkins.clear();
     outAttributeSkins.resize(attributeCount, s_MeshMissingStreamIndex);
-    outFailure = MeshletAttributeSkinFailure();
 
     usize meshletPositionBase = 0u;
     usize meshletAttributeBase = 0u;
@@ -41,7 +40,7 @@ b8 ResolveMeshletAttributeSkins(
         const MeshletDesc meshlet = meshlets[meshletIndex];
         const u32 vertexCount = MeshletVertexCount(meshlet);
         for(u32 localVertexIndex = 0u; localVertexIndex < vertexCount; ++localVertexIndex){
-            const MeshletLocalVertexRef localVertexRef = localVertexRefs[cast<usize>(meshlet.localVertexOffset + localVertexIndex)];
+            const MeshletLocalVertexRef localVertexRef = localVertexRefs[cast<usize>(meshlet.localVertexOffset) + cast<usize>(localVertexIndex)];
             const usize attributeIndex = meshletAttributeBase + cast<usize>(localVertexRef.localAttribute);
             const u32 skinIndex = positionRefs[meshletPositionBase + cast<usize>(localVertexRef.localDeformedPosition)].skin;
 
@@ -53,12 +52,13 @@ b8 ResolveMeshletAttributeSkins(
             if(attributeSkin == skinIndex)
                 continue;
 
-            outFailure.kind = MeshletAttributeSkinFailureKind::ConflictingSkin;
-            outFailure.meshletIndex = meshletIndex;
-            outFailure.attributeIndex = attributeIndex;
-            outFailure.existingSkin = attributeSkin;
-            outFailure.conflictingSkin = skinIndex;
-            return false;
+            MeshletAttributeSkinFailure failure;
+            failure.kind = MeshletAttributeSkinFailureKind::ConflictingSkin;
+            failure.meshletIndex = meshletIndex;
+            failure.attributeIndex = attributeIndex;
+            failure.existingSkin = attributeSkin;
+            failure.conflictingSkin = skinIndex;
+            return MakeUnexpected(failure);
         }
 
         meshletPositionBase += cast<usize>(MeshletPositionCount(meshlet));
@@ -69,12 +69,13 @@ b8 ResolveMeshletAttributeSkins(
         if(outAttributeSkins[attributeIndex] != s_MeshMissingStreamIndex)
             continue;
 
-        outFailure.kind = MeshletAttributeSkinFailureKind::UnreferencedAttribute;
-        outFailure.attributeIndex = attributeIndex;
-        return false;
+        MeshletAttributeSkinFailure failure;
+        failure.kind = MeshletAttributeSkinFailureKind::UnreferencedAttribute;
+        failure.attributeIndex = attributeIndex;
+        return MakeUnexpected(failure);
     }
 
-    return true;
+    return Expected<void, MeshletAttributeSkinFailure>();
 }
 
 

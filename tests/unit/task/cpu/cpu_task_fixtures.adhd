@@ -3,15 +3,33 @@
 
 
 #include <tests/common/gtest_macros.adhd>
+#include "scheduler_test_config.adhd"
+#include "cleanup_case_types.adhd"
+#include "cpu_task_sdk.adhd"
+#include <tests/common/threads.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "scheduler_test_config.adhd"
-#include "cleanup_case_types.adhd"
-#include "cpu_task_sdk.adhd"
-#include <tests/common/threads.adhd>
+type CpuTaskTargetEnum = CpuTaskTarget;
+type CpuTaskAdmissionErrorEnum = CpuTaskAdmissionError;
+type CpuTaskCostEnum = CpuTaskCost;
+type CpuTaskPriorityEnum = CpuTaskPriority;
+const u32 s_FanInGateTimeoutMS = 20000u;
+const u32 s_FanInTestTimeoutMS = 60000u;
+const u32 s_MpmcWatchdogTimeoutMS = 12000u;
+const u32 s_MpmcWorkerCount = 4u;
+const u32 s_MpmcExternalProducerCount = 4u;
+const u32 s_MpmcProducerCount = 1u + s_MpmcExternalProducerCount + s_MpmcWorkerCount;
+const u32 s_MpmcTasksPerProducer = 128u;
+const u32 s_MpmcVisitSlotCount = s_MpmcProducerCount * s_MpmcTasksPerProducer * 4u;
+const u32 s_MpmcExternalVisitSlotCount = s_MpmcExternalProducerCount * s_MpmcTasksPerProducer;
+const u32 s_MpmcGateTimeoutMS = 4000u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class DeadlineGuard{
     private JoiningThread watchdog;
@@ -36,30 +54,6 @@ class LifetimeProbe{
     public void retire(){ this.retirements.fetch_add(1u, MemoryOrder::release); }
 }
 
-CpuTaskOptions MainThreadOptions(){
-    CpuTaskOptions options;
-    options.target = CpuTaskTarget::MainThread;
-    return options;
-}
-
-type CpuTaskTargetEnum = CpuTaskTarget;
-type CpuTaskAdmissionErrorEnum = CpuTaskAdmissionError;
-type CpuTaskCostEnum = CpuTaskCost;
-type CpuTaskPriorityEnum = CpuTaskPriority;
-
-const u32 s_FanInGateTimeoutMS = 20000u;
-const u32 s_FanInTestTimeoutMS = 60000u;
-
-const u32 s_MpmcWatchdogTimeoutMS = 12000u;
-const u32 s_MpmcWorkerCount = 4u;
-const u32 s_MpmcExternalProducerCount = 4u;
-const u32 s_MpmcProducerCount = 1u + s_MpmcExternalProducerCount + s_MpmcWorkerCount;
-const u32 s_MpmcTasksPerProducer = 128u;
-const u32 s_MpmcVisitSlotCount = s_MpmcProducerCount * s_MpmcTasksPerProducer * 4u;
-const u32 s_MpmcExternalVisitSlotCount = s_MpmcExternalProducerCount * s_MpmcTasksPerProducer;
-const u32 s_MpmcGateTimeoutMS = 4000u;
-
-
 class ProducerState{
     public Array<Array<CpuTaskHandle, s_MpmcTasksPerProducer>, s_MpmcProducerCount> handles;
     public Array<Atomic<u32>, s_MpmcVisitSlotCount> visits;
@@ -73,6 +67,15 @@ class ProducerState{
     public Atomic<b8> invalidOrder = false;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+CpuTaskOptions MainThreadOptions(){
+    CpuTaskOptions options;
+    options.target = CpuTaskTarget::MainThread;
+    return options;
+}
 
 void VerifyFanIn(in usize uniqueDependencyCount, in usize repetitionCount){
     DeadlineGuard deadline(false, s_FanInTestTimeoutMS);

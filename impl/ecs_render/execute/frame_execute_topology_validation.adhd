@@ -112,7 +112,7 @@ GpuTaskId GraphicsPrefixTaskOrFallback(in GpuTaskId task, in GpuTaskId fallback)
     return fallback;
 }
 
-b8 DeferredFrameTopologyValidator::validate(
+Expected<DeferredFrameTopologyResult> DeferredFrameTopologyValidator::validate(
     in GpuCompiledGraphReadView deferredCompiledPlan,
     in GpuTaskGraphDeclarationReadView deferredTaskGraphView,
     mut FrameExecuteTimingState timing,
@@ -125,8 +125,7 @@ b8 DeferredFrameTopologyValidator::validate(
     in b8 clearAvboitTargets,
     in b8 laggedAsyncLightingSchedule,
     in b8 laggedLightingHistoryWriterWaitPending,
-    in b8 surfelCounterReadbackCompletionValid,
-    mut DeferredFrameTopologyResult outResult
+    in b8 surfelCounterReadbackCompletionValid
 )const{
     ShadowPreparePacketValidator shadowPreparePacketValidator(this.m_pipeline);
     ShadowPreparePacketValidationResult shadowPreparePacket;
@@ -360,15 +359,16 @@ b8 DeferredFrameTopologyValidator::validate(
             this.m_pipeline.m_deferredLightingTaskGraphDeclared,
             deferredGraphScheduled
         );
-        return false;
+        return MakeUnexpected(Failure());
     }
-    outResult.graphicsPrefixTimingTasks = graphicsPrefixTimingTasks;
-    outResult.graphicsPrefixUniquePacketCount = graphicsPrefixUniquePacketCount;
-    outResult.avboitValidation = avboitValidation;
-    outResult.terminalPresentationTask = terminalPresentationTask;
-    outResult.surfelGiCounterReadbackQueue = surfelGiCounterReadbackQueue;
-    outResult.laggedLightingHistoryQueue = deferredLaggedLightingHistoryQueue;
-    return true;
+    DeferredFrameTopologyResult result = DeferredFrameTopologyResult();
+    result.graphicsPrefixTimingTasks = graphicsPrefixTimingTasks;
+    result.graphicsPrefixUniquePacketCount = graphicsPrefixUniquePacketCount;
+    result.avboitValidation = avboitValidation;
+    result.terminalPresentationTask = terminalPresentationTask;
+    result.surfelGiCounterReadbackQueue = surfelGiCounterReadbackQueue;
+    result.laggedLightingHistoryQueue = deferredLaggedLightingHistoryQueue;
+    return result;
 }
 
 

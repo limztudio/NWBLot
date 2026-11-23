@@ -9,6 +9,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+type AlignedTripleRecord = DoubleStorageRecord<f64x3>;
+type AlignedPairRecord = DoubleStorageRecord<f64x2>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [ordered]
 class DoubleStorageRecord<T>{
     public T value;
@@ -27,40 +34,6 @@ class UnalignedMatrixRecord{
     public u32 prefix = 0u;
     public f32x3x3u value = f32x3x3u();
 }
-
-b8 RunDoubleStorePaddingStep<T, const usize Count, Source>(in Source source, in b8 stream, mut T stored){
-    DoubleStorageRecord<T> record;
-    const usize bytes = size_of<DoubleStorageRecord<T>>();
-    const usize logical = Count * size_of<f64>();
-    const usize pad = size_of<T>() - logical;
-    FillTestBytes(StorageBytes(record), 0xa5u, bytes);
-    const Array<u64, 3u> poison(0x7ff0000000000000u, 0x7ff8000000001234u, 0xfff0000000000000u);
-    CopyStorageBytes(GuardAddress(StorageBytes(record.value), logical), pad, ConstStorageBytes(poison), pad);
-    StorageSnapshot<DoubleStorageRecord<T>> original;
-    original.capture(record);
-    if(stream){
-        StreamDouble(source, record.value);
-        StreamDoubleFence();
-    }
-    else
-        StoreDoubleValue(source, record.value);
-    for(usize offset = logical; offset < bytes; ++offset){
-        if(LoadByte(ConstStorageBytes(record), offset) != original[offset])
-            return false;
-    }
-    stored = record.value;
-    return true;
-}
-
-void PoisonDoubleStoragePadding<T, const usize Count>(mut T lhs, mut T rhs){
-    const usize logical = Count * size_of<f64>();
-    const usize pad = size_of<T>() - logical;
-    FillTestBytes(GuardAddress(StorageBytes(lhs), logical), 0x7fu, pad);
-    FillTestBytes(GuardAddress(StorageBytes(rhs), logical), 0xffu, pad);
-}
-
-type AlignedTripleRecord = DoubleStorageRecord<f64x3>;
-type AlignedPairRecord = DoubleStorageRecord<f64x2>;
 
 class DoubleTransformStreamFixture{
     public Array<AlignedTripleRecord, 3u> aligned = Array<AlignedTripleRecord, 3u>();
@@ -133,6 +106,41 @@ class DoubleTransformStreamFixture{
 class ExpectedVectorStorage<T>{
     public u64 prefix = 0u;
     public Array<Expected<T>, 2u> values = Array<Expected<T>, 2u>();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 RunDoubleStorePaddingStep<T, const usize Count, Source>(in Source source, in b8 stream, mut T stored){
+    DoubleStorageRecord<T> record;
+    const usize bytes = size_of<DoubleStorageRecord<T>>();
+    const usize logical = Count * size_of<f64>();
+    const usize pad = size_of<T>() - logical;
+    FillTestBytes(StorageBytes(record), 0xa5u, bytes);
+    const Array<u64, 3u> poison(0x7ff0000000000000u, 0x7ff8000000001234u, 0xfff0000000000000u);
+    CopyStorageBytes(GuardAddress(StorageBytes(record.value), logical), pad, ConstStorageBytes(poison), pad);
+    StorageSnapshot<DoubleStorageRecord<T>> original;
+    original.capture(record);
+    if(stream){
+        StreamDouble(source, record.value);
+        StreamDoubleFence();
+    }
+    else
+        StoreDoubleValue(source, record.value);
+    for(usize offset = logical; offset < bytes; ++offset){
+        if(LoadByte(ConstStorageBytes(record), offset) != original[offset])
+            return false;
+    }
+    stored = record.value;
+    return true;
+}
+
+void PoisonDoubleStoragePadding<T, const usize Count>(mut T lhs, mut T rhs){
+    const usize logical = Count * size_of<f64>();
+    const usize pad = size_of<T>() - logical;
+    FillTestBytes(GuardAddress(StorageBytes(lhs), logical), 0x7fu, pad);
+    FillTestBytes(GuardAddress(StorageBytes(rhs), logical), 0xffu, pad);
 }
 
 

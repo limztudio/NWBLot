@@ -114,11 +114,10 @@ b8 UnpackSceneAssetEntriesBinary<TAsset>(
         ref.virtualPath = Name(entry.assetHash);
         if(!ValidateSceneAssetBinaryEntry(nickname, ref.valid(), i))
             return false;
-        if(outAssets.contains(nickname)){
+        if(!outAssets.try_emplace(nickname, ref).second){
             error("SceneAsset::loadBinary failed: duplicate asset nickname at index {}", i);
             return false;
         }
-        outAssets.try_emplace(nickname, ref);
     }
     return true;
 }

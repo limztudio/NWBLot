@@ -131,11 +131,10 @@ b8 AppendUnpackedSkeletonJointBinary(
     if(!ValidateSkeletonJointBinaryPadding(jointBinary))
         return false;
     const Name jointName(jointBinary.nameHash);
-    if(inOutJointIndices.contains(jointName)){
+    if(!inOutJointIndices.try_emplace(jointName, cast<u32>(inOutJoints.size())).second){
         error("Skeleton::loadBinary failed: duplicate joint '{}'", jointName.resolvedText());
         return false;
     }
-    inOutJointIndices.try_emplace(jointName, cast<u32>(inOutJoints.size()));
     inOutJoints.push_back(UnpackSkeletonJointBinary(jointBinary));
     return true;
 }

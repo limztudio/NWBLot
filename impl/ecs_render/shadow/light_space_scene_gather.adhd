@@ -14,25 +14,9 @@
 [cpp_header("<impl/assets/graphics/shadow/light_space_constants.h>"), cpp_name("NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK")]
 extern const u32 s_SharedLightSpaceEventInstanceMask;
 
-usize ResolveLightSpaceSceneBufferReserveCount(in usize capacity, in b8 csgGathering){
-    if(csgGathering)
-        return capacity * s_SceneBuffersPerCsgCandidate;
-    return capacity * s_SceneBuffersPerCandidate;
-}
 
-u32 ResolveLightSpaceMeshletSlot(in u32 meshletCount, in u32 heapSlot){
-    if(meshletCount != 0u)
-        return heapSlot;
-    return 0u;
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-b8 IsValidSoftwareLightSpaceCasterIndexBuffer(in u64 indexCount, in b8 hasIndexBuffer, in b8 isIndexBufferUsage, in u64 bufferByteSize){
-    return indexCount != 0u && indexCount <= cast<u64>(u32.max) && hasIndexBuffer && isIndexBufferUsage && bufferByteSize >= indexCount * 4ull;
-}
-
-b8 UsesLightSpaceCaptureReuseCadence(in SoftwareShadowCaptureCadence cadence){
-    return cadence == SoftwareShadowCaptureCadence::ReuseOneFrame || cadence == SoftwareShadowCaptureCadence::ReuseTwoFrames;
-}
 
 class LightSpaceShadowSceneGather : NoCopy{
     private mut LightSpaceShadowState m_state;
@@ -275,6 +259,30 @@ class LightSpaceShadowSceneGather : NoCopy{
         this.m_state.m_captureSceneIdentity = captureIdentity;
         this.m_state.m_captureSceneTrusted = staticScene && contentComplete;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+usize ResolveLightSpaceSceneBufferReserveCount(in usize capacity, in b8 csgGathering){
+    if(csgGathering)
+        return capacity * s_SceneBuffersPerCsgCandidate;
+    return capacity * s_SceneBuffersPerCandidate;
+}
+
+u32 ResolveLightSpaceMeshletSlot(in u32 meshletCount, in u32 heapSlot){
+    if(meshletCount != 0u)
+        return heapSlot;
+    return 0u;
+}
+
+b8 IsValidSoftwareLightSpaceCasterIndexBuffer(in u64 indexCount, in b8 hasIndexBuffer, in b8 isIndexBufferUsage, in u64 bufferByteSize){
+    return indexCount != 0u && indexCount <= cast<u64>(u32.max) && hasIndexBuffer && isIndexBufferUsage && bufferByteSize >= indexCount * 4ull;
+}
+
+b8 UsesLightSpaceCaptureReuseCadence(in SoftwareShadowCaptureCadence cadence){
+    return cadence == SoftwareShadowCaptureCadence::ReuseOneFrame || cadence == SoftwareShadowCaptureCadence::ReuseTwoFrames;
 }
 
 

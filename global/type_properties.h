@@ -108,6 +108,16 @@ constexpr T&& Forward(RemoveReference_T<T>&& v)noexcept{
 template<typename T>
 constexpr RemoveReference_T<T>&& Move(T&& v)noexcept{ return static_cast<RemoveReference_T<T>&&>(v); }
 
+template<typename T, typename... Args>
+constexpr T* ConstructAt(T* location, Args&&... args)noexcept(noexcept(std::construct_at(location, Forward<Args>(args)...))){
+    return std::construct_at(location, Forward<Args>(args)...);
+}
+
+template<typename T>
+constexpr void DestroyAt(T* location)noexcept(noexcept(std::destroy_at(location))){
+    std::destroy_at(location);
+}
+
 template<typename T>
 [[nodiscard]] constexpr T* AddressOf(T& value)noexcept{ return std::addressof(value); }
 template<typename T>

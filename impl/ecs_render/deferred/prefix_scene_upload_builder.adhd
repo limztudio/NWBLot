@@ -12,15 +12,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 HasValidPrefixSceneUploadInputs(
-    in b8 meshViewValid,
-    in b8 lightsValid,
-    in b8 sceneShadingValid,
-    in b8 shadowPrepareTaskValid
-){
-    return meshViewValid && lightsValid && sceneShadingValid && shadowPrepareTaskValid;
-}
-
 class PrefixSceneUploadInputs{
     public RayTracingLightingClassificationInput rayTracingLightingInput;
     public PreflightedSceneLightsView preflightedLights;
@@ -148,6 +139,19 @@ class PrefixSceneUploadBuilder : NoCopy{
         result.lightCount = uploads.lightCount;
         return result;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 HasValidPrefixSceneUploadInputs(
+    in b8 meshViewValid,
+    in b8 lightsValid,
+    in b8 sceneShadingValid,
+    in b8 shadowPrepareTaskValid
+){
+    return meshViewValid && lightsValid && sceneShadingValid && shadowPrepareTaskValid;
 }
 
 

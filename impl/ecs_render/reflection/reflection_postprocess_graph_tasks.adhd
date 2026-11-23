@@ -15,63 +15,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u32 ReflectionDepthPyramidSourceMipIndex(in u32 mipIndex){
-    if(mipIndex == 0u)
-        return 0u;
-    return mipIndex - 1u;
-}
-
-u32 ResolveReflectionDepthSourceSlot(in u32 mipIndex, in u32 pyramidSourceDepthSlot, in u32 previousMipSampledSlot){
-    if(mipIndex == 0u)
-        return pyramidSourceDepthSlot;
-    return previousMipSampledSlot;
-}
-
-b8 ShouldSkipReflectionTemporalDispatch(in b8 historyReused, in u32 temporalMaxSamples){
-    return !historyReused || temporalMaxSamples <= 1u;
-}
-
-u64 ResolveReflectionStatisticsFeedbackSequence(in b8 feedbackReserved, in u64 plannedSequence){
-    if(feedbackReserved)
-        return plannedSequence;
-    return 0u;
-}
-
-ReflectionFeedbackOutcome ResolvePublishedReflectionFeedbackOutcome(in ReflectionFeedbackPlan plan, in b8 hardwareReady, in b8 feedbackReserved){
-    ReflectionFeedbackOutcome outcome = ResolveReflectionFeedbackOutcome(plan, hardwareReady);
-    if(!feedbackReserved){
-        outcome.eligible = false;
-        outcome.reused = false;
-    }
-    return outcome;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_unwind]
-void DispatchReflectionPostprocess<T>(
-    mut CommandList commandList,
-    mut GraphicsRuntime graphics,
-    mut ComputePipeline pipeline,
-    in T parameters,
-    in GpuTimingScopeDefinition scope,
-    in u32 width,
-    in u32 height,
-    in u32 groupSize
-){
-    commandList.endRenderPass();
-    ComputeState state;
-    state.setPipeline(pipeline);
-    commandList.setComputeState(state);
-    graphics.getDevice().getDescriptorHeap().bindCompute(commandList, pipeline);
-    commandList.setPushConstants(parameters);
-    GpuTimingMeasure timing(graphics.gpuTiming(), scope, graphics.getDevice(), commandList);
-    commandList.dispatch(DivideUpWrapping(width, groupSize), DivideUpWrapping(height, groupSize), 1u);
-}
-
-
 class ReflectionDepthReduceTask{
     private mut GraphicsRuntime m_graphics;
     private ComputePipelineHandle m_pipeline;
@@ -95,7 +38,6 @@ class ReflectionDepthReduceTask{
     }
 }
 
-
 class ReflectionSpatialTask{
     private mut GraphicsRuntime m_graphics;
     private ComputePipelineHandle m_pipeline;
@@ -117,7 +59,6 @@ class ReflectionSpatialTask{
     }
 }
 
-
 class ReflectionFinalizeTask{
     public GpuTaskCommandRequirements commandRequirements()const{
         return GpuTaskCommandRequirements();
@@ -128,14 +69,6 @@ class ReflectionFinalizeTask{
         return true;
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(size_of<ReflectionTemporalPushConstants>() == s_ReflectionShaderTemporalPushBytes, "Temporal push constants must match the shader");
-static_assert(size_of<ReflectionSpatialPushConstants>() == s_ReflectionShaderSpatialPushBytes, "Spatial push constants must match the shader");
-static_assert(size_of<ReflectionDepthReducePushConstants>() == s_ReflectionShaderDepthPushBytes, "Depth-reduce push constants must match the shader");
 
 [move_only]
 class ReflectionTemporalTask{
@@ -224,6 +157,66 @@ class ReflectionStatisticsReadbackTask{
         this.reservation.acceptReservation(token, hardwareReady, ReflectionStatisticsOutcome(history, feedback));
     }
     public void discarded(){ this.reservation.discard(); }
+}
+
+static_assert(size_of<ReflectionTemporalPushConstants>() == s_ReflectionShaderTemporalPushBytes, "Temporal push constants must match the shader");
+static_assert(size_of<ReflectionSpatialPushConstants>() == s_ReflectionShaderSpatialPushBytes, "Spatial push constants must match the shader");
+static_assert(size_of<ReflectionDepthReducePushConstants>() == s_ReflectionShaderDepthPushBytes, "Depth-reduce push constants must match the shader");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u32 ReflectionDepthPyramidSourceMipIndex(in u32 mipIndex){
+    if(mipIndex == 0u)
+        return 0u;
+    return mipIndex - 1u;
+}
+
+u32 ResolveReflectionDepthSourceSlot(in u32 mipIndex, in u32 pyramidSourceDepthSlot, in u32 previousMipSampledSlot){
+    if(mipIndex == 0u)
+        return pyramidSourceDepthSlot;
+    return previousMipSampledSlot;
+}
+
+b8 ShouldSkipReflectionTemporalDispatch(in b8 historyReused, in u32 temporalMaxSamples){
+    return !historyReused || temporalMaxSamples <= 1u;
+}
+
+u64 ResolveReflectionStatisticsFeedbackSequence(in b8 feedbackReserved, in u64 plannedSequence){
+    if(feedbackReserved)
+        return plannedSequence;
+    return 0u;
+}
+
+ReflectionFeedbackOutcome ResolvePublishedReflectionFeedbackOutcome(in ReflectionFeedbackPlan plan, in b8 hardwareReady, in b8 feedbackReserved){
+    ReflectionFeedbackOutcome outcome = ResolveReflectionFeedbackOutcome(plan, hardwareReady);
+    if(!feedbackReserved){
+        outcome.eligible = false;
+        outcome.reused = false;
+    }
+    return outcome;
+}
+
+[cpp_unwind]
+void DispatchReflectionPostprocess<T>(
+    mut CommandList commandList,
+    mut GraphicsRuntime graphics,
+    mut ComputePipeline pipeline,
+    in T parameters,
+    in GpuTimingScopeDefinition scope,
+    in u32 width,
+    in u32 height,
+    in u32 groupSize
+){
+    commandList.endRenderPass();
+    ComputeState state;
+    state.setPipeline(pipeline);
+    commandList.setComputeState(state);
+    graphics.getDevice().getDescriptorHeap().bindCompute(commandList, pipeline);
+    commandList.setPushConstants(parameters);
+    GpuTimingMeasure timing(graphics.gpuTiming(), scope, graphics.getDevice(), commandList);
+    commandList.dispatch(DivideUpWrapping(width, groupSize), DivideUpWrapping(height, groupSize), 1u);
 }
 
 Expected<GpuTaskId> DeclareReflectionDepthPyramidTasks(

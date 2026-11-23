@@ -17,6 +17,7 @@ b8 CanSearchDisconnectedMeshletCandidatesParallel(in b8 isParallelEnabled, in us
     return isParallelEnabled && searchCount >= s_MeshletDisconnectedCandidateParallelThreshold;
 }
 
+[cpp_unwind]
 Expected<MeshletFrontierCandidate> FindBestDisconnectedMeshletCandidate(
     in Span<MeshletTriangleData> triangles,
     in Span<MeshletTriangleCalculation> triangleCalculations,

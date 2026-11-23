@@ -11,6 +11,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class LinuxForceAssertFalseForCrashObservation{}
+
+class CaptureRecoverableErrorForCrashObservation{}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void VerifyCrashReportComposerTests_TombstoneStackMovesBeforeDetailsWithoutBorrowingClearedText(){
     HeapStorage testArena = HeapStorage();
     CrashPackageSummary summary = CrashPackageSummary(testArena);
@@ -62,10 +70,6 @@ void VerifyCrashManifestTests_FindsExactKeysAtBoundaries(){
     ASSERT_TRUE(quoted.has_value());
     EXPECT_EQ(quoted.value(), 7u);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void ExerciseMessageProgressesWhileTelemetryBacklogRemains(mut ShutdownCaptureServer server, in u16 port){
     ProtocolClient client = ProtocolClient();
@@ -264,12 +268,6 @@ void VerifyLogClientShutdown_DrainsEveryQueuedMessageAfterStopBegins(){
     EXPECT_EQ(server.requestCount(), s_ShutdownMessageCount);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class LinuxForceAssertFalseForCrashObservation{}
-
 void VerifyLoggerServerCrash_LinuxAssertCrashProducesObservableLoggerReport(mut LoggerServerCrash self){
     if(!IsDesktopLinuxLoggerCrashPlatform())
         return;
@@ -328,8 +326,9 @@ void VerifyLoggerServerCrash_LinuxAssertCrashProducesObservableLoggerReport(mut 
     EXPECT_TRUE(result.accepted);
     EXPECT_EQ(result.type, LogType::Assert);
 
-    String report = "";
-    ASSERT_TRUE(ReadServerSymbolicationText(group, stem, report));
+    const Expected<String> reportResult = ReadServerSymbolicationText(group, stem);
+    ASSERT_TRUE(reportResult.has_value());
+    in String report = reportResult.value();
     EXPECT_TRUE(Contains(StringView(report), s_PlatformLinux));
     EXPECT_TRUE(Contains(StringView(report), "reason=manual_dump"));
     EXPECT_TRUE(Contains(StringView(report), s_Event));
@@ -344,8 +343,6 @@ void VerifyLoggerServerCrash_LinuxAssertCrashProducesObservableLoggerReport(mut 
     PreserveObservedReport(StringView(report), "linux_assert");
     RemoveTestArtifacts(group);
 }
-
-class CaptureRecoverableErrorForCrashObservation{}
 
 void VerifyLoggerServerCrash_RecoverableErrorDiagnosticProducesObservableLoggerReport(mut LoggerServerCrash self){
     if(!IsDesktopLoggerCrashPlatform())
@@ -405,8 +402,9 @@ void VerifyLoggerServerCrash_RecoverableErrorDiagnosticProducesObservableLoggerR
     EXPECT_TRUE(result.accepted);
     EXPECT_EQ(result.type, LogType::Error);
 
-    String report = "";
-    ASSERT_TRUE(ReadServerSymbolicationText(group, stem, report));
+    const Expected<String> reportResult = ReadServerSymbolicationText(group, stem);
+    ASSERT_TRUE(reportResult.has_value());
+    in String report = reportResult.value();
     EXPECT_TRUE(Contains(StringView(report), s_Event));
     EXPECT_TRUE(Contains(StringView(report), "event=error"));
     EXPECT_TRUE(Contains(StringView(report), errorMessage));
@@ -440,8 +438,9 @@ void VerifyLoggerServerCrash_LinuxCrashPackageReportsMissingProcMaps(mut LoggerS
     const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive));
     EXPECT_TRUE(result.accepted);
 
-    String report = "";
-    ASSERT_TRUE(ReadServerSymbolicationText(group, stem, report));
+    const Expected<String> reportResult = ReadServerSymbolicationText(group, stem);
+    ASSERT_TRUE(reportResult.has_value());
+    in String report = reportResult.value();
     EXPECT_TRUE(Contains(StringView(report), s_PlatformLinux));
     EXPECT_TRUE(Contains(StringView(report), "proc_maps=missing"));
     EXPECT_TRUE(Contains(StringView(report), "proc maps missing for module lookup"));
@@ -463,16 +462,15 @@ void VerifyLoggerServerCrash_LinuxCrashPackageReportsUnmappedInstructionPointer(
     const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive));
     EXPECT_TRUE(result.accepted);
 
-    String report = "";
-    ASSERT_TRUE(ReadServerSymbolicationText(group, stem, report));
+    const Expected<String> reportResult = ReadServerSymbolicationText(group, stem);
+    ASSERT_TRUE(reportResult.has_value());
+    in String report = reportResult.value();
     EXPECT_TRUE(Contains(StringView(report), s_PlatformLinux));
     EXPECT_TRUE(Contains(StringView(report), "proc_maps=present"));
     EXPECT_TRUE(Contains(StringView(report), "instruction pointer was not found in proc maps"));
 
     RemoveTestArtifacts(group);
 }
-
-
 
 void VerifyLoggerServerCrash_AndroidCrashPackageReportsTombstoneWithoutFrames(mut LoggerServerCrash self){
     HeapStorage testArena = HeapStorage();
@@ -487,8 +485,9 @@ void VerifyLoggerServerCrash_AndroidCrashPackageReportsTombstoneWithoutFrames(mu
     const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive));
     EXPECT_TRUE(result.accepted);
 
-    String report = "";
-    ASSERT_TRUE(ReadServerSymbolicationText(group, stem, report));
+    const Expected<String> reportResult = ReadServerSymbolicationText(group, stem);
+    ASSERT_TRUE(reportResult.has_value());
+    in String report = reportResult.value();
     EXPECT_TRUE(Contains(StringView(report), "platform=android"));
     EXPECT_TRUE(Contains(StringView(report), "status=not_decoded"));
     EXPECT_TRUE(Contains(StringView(report), "android_tombstone=present"));
@@ -509,8 +508,9 @@ void VerifyLoggerServerCrash_WindowsCrashPackageReportsMissingMinidump(mut Logge
     const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive));
     EXPECT_TRUE(result.accepted);
 
-    String report = "";
-    ASSERT_TRUE(ReadServerSymbolicationText(group, stem, report));
+    const Expected<String> reportResult = ReadServerSymbolicationText(group, stem);
+    ASSERT_TRUE(reportResult.has_value());
+    in String report = reportResult.value();
     EXPECT_TRUE(Contains(StringView(report), "platform=windows"));
     EXPECT_TRUE(Contains(StringView(report), s_Event));
     EXPECT_TRUE(Contains(StringView(report), "event=crash"));
@@ -539,8 +539,9 @@ void VerifyLoggerServerCrash_WindowsCrashPackageDecodesGpuDetectiveCaptureInProc
     const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive));
     EXPECT_TRUE(result.accepted);
 
-    String report = "";
-    ASSERT_TRUE(ReadServerSymbolicationText(group, stem, report));
+    const Expected<String> reportResult = ReadServerSymbolicationText(group, stem);
+    ASSERT_TRUE(reportResult.has_value());
+    in String report = reportResult.value();
     EXPECT_TRUE(Contains(StringView(report), "[gpu_detective]"));
     EXPECT_TRUE(Contains(StringView(report), "status=decode_failed"));
 
@@ -723,38 +724,58 @@ void VerifyLoggerServerCrash_CrashRetentionPrunesOldestInvalidUploads(mut Logger
     RemoveTestArtifacts(group);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST(CrashReportComposerTests, TombstoneStackMovesBeforeDetailsWithoutBorrowingClearedText, VerifyCrashReportComposerTests_TombstoneStackMovesBeforeDetailsWithoutBorrowingClearedText)
+
 NWB_ADHD_GTEST(CrashReportComposerTests, EmptyPrimaryStackTakesPrecedenceOverTombstone, VerifyCrashReportComposerTests_EmptyPrimaryStackTakesPrecedenceOverTombstone)
+
 NWB_ADHD_GTEST(CrashReportComposerTests, TrimsAcrossRemovedSection, VerifyCrashReportComposerTests_TrimsAcrossRemovedSection)
+
 NWB_ADHD_GTEST(CrashManifestTests, FindsExactKeysAtBoundaries, VerifyCrashManifestTests_FindsExactKeysAtBoundaries)
 
 NWB_ADHD_GTEST(LogClientShutdown, MessageProgressesWhileTelemetryBacklogRemains, VerifyLogClientShutdown_MessageProgressesWhileTelemetryBacklogRemains)
+
 NWB_ADHD_GTEST(LogClientShutdown, TelemetryProgressesWhileMessageBacklogRemains, VerifyLogClientShutdown_TelemetryProgressesWhileMessageBacklogRemains)
+
 NWB_ADHD_GTEST(LogClientShutdown, RetriesRejectedPayloadBeforeSendingNextMessage, VerifyLogClientShutdown_RetriesRejectedPayloadBeforeSendingNextMessage)
+
 NWB_ADHD_GTEST(LogClientShutdown, ShutdownInterruptsBackoffAfterRepeatedTemporaryFailures, VerifyLogClientShutdown_ShutdownInterruptsBackoffAfterRepeatedTemporaryFailures)
+
 NWB_ADHD_GTEST(LogClientShutdown, TransportFailureIsVisibleWithoutDiagnosticCallback, VerifyLogClientShutdown_TransportFailureIsVisibleWithoutDiagnosticCallback)
+
 NWB_ADHD_GTEST(LogClientShutdown, PermanentBadRequestDoesNotBlockLaterMessages, VerifyLogClientShutdown_PermanentBadRequestDoesNotBlockLaterMessages)
+
 NWB_ADHD_GTEST(LogClientShutdown, OversizedMessageDoesNotBlockLaterMessages, VerifyLogClientShutdown_OversizedMessageDoesNotBlockLaterMessages)
+
 NWB_ADHD_GTEST(LogClientShutdown, OversizedTelemetryIsRejectedBeforeReadingItsBuffer, VerifyLogClientShutdown_OversizedTelemetryIsRejectedBeforeReadingItsBuffer)
+
 NWB_ADHD_GTEST(LogClientShutdown, DrainsEveryQueuedMessageAfterStopBegins, VerifyLogClientShutdown_DrainsEveryQueuedMessageAfterStopBegins)
 
 NWB_ADHD_GTEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport, VerifyLoggerServerCrash_LinuxAssertCrashProducesObservableLoggerReport)
+
 NWB_ADHD_GTEST_F(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerReport, VerifyLoggerServerCrash_RecoverableErrorDiagnosticProducesObservableLoggerReport)
+
 NWB_ADHD_GTEST_F(LoggerServerCrash, LinuxCrashPackageReportsMissingProcMaps, VerifyLoggerServerCrash_LinuxCrashPackageReportsMissingProcMaps)
+
 NWB_ADHD_GTEST_F(LoggerServerCrash, LinuxCrashPackageReportsUnmappedInstructionPointer, VerifyLoggerServerCrash_LinuxCrashPackageReportsUnmappedInstructionPointer)
+
 NWB_ADHD_GTEST_F(LoggerServerCrash, AndroidCrashPackageReportsTombstoneWithoutFrames, VerifyLoggerServerCrash_AndroidCrashPackageReportsTombstoneWithoutFrames)
+
 NWB_ADHD_GTEST_F(LoggerServerCrash, WindowsCrashPackageReportsMissingMinidump, VerifyLoggerServerCrash_WindowsCrashPackageReportsMissingMinidump)
+
 NWB_ADHD_GTEST_F(LoggerServerCrash, WindowsCrashPackageDecodesGpuDetectiveCaptureInProcess, VerifyLoggerServerCrash_WindowsCrashPackageDecodesGpuDetectiveCaptureInProcess)
+
 NWB_ADHD_GTEST_F(LoggerServerCrash, InvalidCrashPackageIsRejected, VerifyLoggerServerCrash_InvalidCrashPackageIsRejected)
+
 NWB_ADHD_GTEST_F(LoggerServerCrash, UnsafeArchiveEntryCannotEscapePackageDirectory, VerifyLoggerServerCrash_UnsafeArchiveEntryCannotEscapePackageDirectory)
+
 NWB_ADHD_GTEST_F(LoggerServerCrash, CrashManifestWithoutEventIsRejected, VerifyLoggerServerCrash_CrashManifestWithoutEventIsRejected)
+
 NWB_ADHD_GTEST_F(LoggerServerCrash, InvalidManifestBooleanIsRejectedWhileFalseAndZeroRemainValid, VerifyLoggerServerCrash_InvalidManifestBooleanIsRejectedWhileFalseAndZeroRemainValid)
+
 NWB_ADHD_GTEST_F(LoggerServerCrash, CrashRetentionPrunesOldestAcceptedUploads, VerifyLoggerServerCrash_CrashRetentionPrunesOldestAcceptedUploads)
+
 NWB_ADHD_GTEST_F(LoggerServerCrash, AcceptedCrashWarnsWhenRawArchiveCannotBeRetained, VerifyLoggerServerCrash_AcceptedCrashWarnsWhenRawArchiveCannotBeRetained)
+
 NWB_ADHD_GTEST_F(LoggerServerCrash, CrashRetentionPrunesOldestInvalidUploads, VerifyLoggerServerCrash_CrashRetentionPrunesOldestInvalidUploads)
 
 

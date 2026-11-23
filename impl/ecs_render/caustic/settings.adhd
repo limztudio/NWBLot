@@ -9,6 +9,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const usize s_CausticEmissionTargetGpuBytes = 32u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 ValidateCausticQualitySettings(in CausticQualitySettings settings){
     return settings.photonGridDivisor == 1u || settings.photonGridDivisor == s_CausticHalfPhotonGridDivisor || settings.photonGridDivisor == s_CausticQuarterPhotonGridDivisor;
 }
@@ -198,8 +204,6 @@ CausticAccumulatorDecayPushConstants MakeCausticAccumulatorDecayPushConstants(
     push.accumulatorStorageSlot = accumulatorStorageSlot;
     return push;
 }
-
-const usize s_CausticEmissionTargetGpuBytes = 32u;
 
 void LogCausticProducerDispatchIfNeeded(
     in StringView routeLabel,

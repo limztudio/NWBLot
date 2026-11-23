@@ -13,9 +13,11 @@ extern class IRenderPass{
     void displayScaleChanged(...);
     mut GraphicsRuntime getGraphics(...)const;
     void invalidateResources();
-    b8 prepareResources(...);
+    [cpp_flags(unwind)]
+    b8 prepareResources(in FramebufferPtr framebuffer);
     void render(...);
     b8 shouldRenderUnfocused();
+    [cpp_flags(unwind)]
     b8 validateResources(in u32 width, in u32 height, in u32 samples);
 };
 

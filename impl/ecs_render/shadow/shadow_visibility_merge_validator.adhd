@@ -9,6 +9,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[modular]
+class ShadowVisibilityMergeValidator : NoCopy{
+    private in RendererFramePipeline m_pipeline;
+
+    public ShadowVisibilityMergeValidator(in RendererFramePipeline pipeline){
+        this.m_pipeline = pipeline;
+    }
+
+    public void validate(in GpuCompiledGraphReadView compiledPlan, mut ShadowVisibilityMergeValidationResult outResult)const;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 HasEmptyPreparedShadowVisibilityRoute(in PreparedShadowVisibilityTasks tasks){
     return !tasks.combinedUpsample && !tasks.combinedWavelet && !tasks.combinedTemporal && !tasks.diagnostics.valid();
 }
@@ -57,18 +72,6 @@ b8 PreparedShadowVisibilityTasksSharePacket(in GpuCompiledGraphReadView compiled
     if(tasks.diagnostics.valid() && !compiledPlan.tasksSharePacket(tasks.terminal, tasks.diagnostics))
         return false;
     return !tasks.transparentTemporalMerge.valid() || compiledPlan.tasksSharePacket(tasks.terminal, tasks.transparentTemporalMerge);
-}
-
-
-[modular]
-class ShadowVisibilityMergeValidator : NoCopy{
-    private in RendererFramePipeline m_pipeline;
-
-    public ShadowVisibilityMergeValidator(in RendererFramePipeline pipeline){
-        this.m_pipeline = pipeline;
-    }
-
-    public void validate(in GpuCompiledGraphReadView compiledPlan, mut ShadowVisibilityMergeValidationResult outResult)const;
 }
 
 

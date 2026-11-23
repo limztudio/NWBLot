@@ -10,80 +10,80 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_global_binary_shared_tests::ThrowingByteContainer")]
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::GlobalBinaryFailureTests::ThrowingByteContainer")]
 extern class ThrowingByteContainer;
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_global_binary_shared_tests::ThrowingLvalueByteContainer")]
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::GlobalBinaryFailureTests::ThrowingLvalueByteContainer")]
 extern class ThrowingLvalueByteContainer;
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_global_binary_shared_tests::ThrowingSizeByteContainer")]
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::GlobalBinaryFailureTests::ThrowingSizeByteContainer")]
 extern class ThrowingSizeByteContainer;
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_global_binary_shared_tests::CharSink")]
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::GlobalBinaryFailureTests::CharSink")]
 extern class CharSink{
     Array<NarrowChar, 40u> data;
     usize size;
 };
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_noexcept_failure_tests::HashProbe")]
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::NoexceptFailureTests::HashProbe")]
 extern class HashProbe;
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_noexcept_failure_tests::ThrowingPlacementCallable")]
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::NoexceptFailureTests::ThrowingPlacementCallable")]
 extern class ThrowingPlacementCallable;
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_noexcept_failure_tests::ThrowingByteSource")]
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::NoexceptFailureTests::ThrowingByteSource")]
 extern class ThrowingByteSource;
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_noexcept_failure_tests::ThrowingPodAddress")]
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::NoexceptFailureTests::ThrowingPodAddress")]
 extern class ThrowingPodAddress;
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_noexcept_failure_tests::ThrowingMutableByteSource")]
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::NoexceptFailureTests::ThrowingMutableByteSource")]
 extern class ThrowingMutableByteSource;
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_noexcept_failure_tests::ThrowingDiagnosticView")]
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::NoexceptFailureTests::ThrowingDiagnosticView")]
 extern class ThrowingDiagnosticView;
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_noexcept_failure_tests::ThrowingDiagnosticCleanup")]
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::NoexceptFailureTests::ThrowingDiagnosticCleanup")]
 extern class ThrowingDiagnosticCleanup;
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_noexcept_failure_tests::StatefulPlacementCallable")]
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::NoexceptFailureTests::StatefulPlacementCallable")]
 extern class StatefulPlacementCallable;
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_noexcept_failure_tests::FunctionStorage")]
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::NoexceptFailureTests::FunctionStorage")]
 extern class FunctionStorage;
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_noexcept_failure_tests::ResetPlacements")]
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::NoexceptFailureTests::ResetPlacements")]
 extern void ResetPlacements();
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_noexcept_failure_tests::Placements")]
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::NoexceptFailureTests::Placements")]
 extern u32 Placements();
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_hex_failure_tests::ThrowingHexCapacityString")]
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::HexFailureTests::ThrowingHexCapacityString")]
 extern class ThrowingHexCapacityString{
     CompactString text;
 };
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_hex_failure_tests::ThrowingHexAppendString")]
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::HexFailureTests::ThrowingHexAppendString")]
 extern class ThrowingHexAppendString{
     CompactString text;
 };
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_fixed_vector_failure_tests::FixedVectorCopyOnly")]
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::FixedVectorFailureTests::FixedVectorCopyOnly")]
 extern class FixedVectorCopyOnly;
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_fixed_vector_failure_tests::EmptyFixed")]
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::FixedVectorFailureTests::EmptyFixed")]
 extern class EmptyFixed{
     void clear();
     b8 empty()const;
 };
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_fixed_vector_failure_tests::FixedVectorNonAssignable")]
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::FixedVectorFailureTests::FixedVectorNonAssignable")]
 extern class FixedVectorNonAssignable;
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_fixed_vector_failure_tests::FixedVectorResource")]
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::FixedVectorFailureTests::FixedVectorResource")]
 extern class FixedVectorResource;
 
-[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::__hidden_fixed_vector_failure_tests::ThrowingFixedVectorAssignment")]
+[cpp_header("<tests/unit/global/global_failure_access.h>"), cpp_name("::FixedVectorFailureTests::ThrowingFixedVectorAssignment")]
 extern class ThrowingFixedVectorAssignment{
     u32 value;
 };

@@ -12,7 +12,7 @@ class FloatEditModel : NoCopy{
     private NumericEditDraft m_draft;
     private f64 m_value = s_DefaultFloatEditValue;
 
-    public FloatEditModel(){
+    [cpp_unwind] public FloatEditModel(){
         if(!this.canonicalize(this.m_value).has_value())
             TerminateInvariant();
     }
@@ -27,9 +27,9 @@ class FloatEditModel : NoCopy{
 
     public u64 revision()const{ return this.m_draft.revision(); }
 
-    public b8 setDraft(in StringView text){ return this.m_draft.setText(text); }
+    [cpp_unwind] public b8 setDraft(in StringView text){ return this.m_draft.setText(text); }
 
-    public b8 setValue(in f64 value){
+    [cpp_unwind] public b8 setValue(in f64 value){
         if(!IsFinite(value) || !this.canonicalize(value).has_value())
             return false;
         this.m_value = value;
@@ -41,19 +41,19 @@ class FloatEditModel : NoCopy{
 
     public NumericParseStatus status()const{ return this.status(FloatBounds()); }
 
-    public NumericEditResult submit(in FloatBounds bounds){ return this.commit(bounds, false); }
+    [cpp_unwind] public NumericEditResult submit(in FloatBounds bounds){ return this.commit(bounds, false); }
 
-    public NumericEditResult submit(){ return this.submit(FloatBounds()); }
+    [cpp_unwind] public NumericEditResult submit(){ return this.submit(FloatBounds()); }
 
-    public NumericEditResult blur(in FloatBounds bounds){ return this.commit(bounds, true); }
+    [cpp_unwind] public NumericEditResult blur(in FloatBounds bounds){ return this.commit(bounds, true); }
 
-    public NumericEditResult blur(){ return this.blur(FloatBounds()); }
+    [cpp_unwind] public NumericEditResult blur(){ return this.blur(FloatBounds()); }
 
-    public NumericEditResult cancel(){ return this.m_draft.restore(this.canonicalize(this.m_value), true); }
+    [cpp_unwind] public NumericEditResult cancel(){ return this.m_draft.restore(this.canonicalize(this.m_value), true); }
 
-    public NumericEditResult abandon(){ return this.m_draft.restore(this.canonicalize(this.m_value), false); }
+    [cpp_unwind] public NumericEditResult abandon(){ return this.m_draft.restore(this.canonicalize(this.m_value), false); }
 
-    private Expected<b8, ErrorCode> canonicalize(in f64 value){
+    [cpp_unwind] private Expected<b8, ErrorCode> canonicalize(in f64 value){
         CompactString text;
         const Expected<void, ErrorCode> formatted = FormatF64Into(value, text);
         if(!formatted.has_value())
@@ -61,7 +61,7 @@ class FloatEditModel : NoCopy{
         return this.m_draft.canonicalize(text.view());
     }
 
-    private NumericEditResult commit(in FloatBounds bounds, in b8 canonical){
+    [cpp_unwind] private NumericEditResult commit(in FloatBounds bounds, in b8 canonical){
         if(!ValidateFloatBounds(bounds))
             return NumericEditResult();
         const Expected<f64, NumericParseStatus> parsed = ParseFloatDraft(this.draft().text());

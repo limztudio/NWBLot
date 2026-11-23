@@ -9,6 +9,7 @@
 
 
 class MaterialBindStorage{
+    [cpp_unwind]
     public void copyMaterialBindTypedLayoutDefaults(
         in u64 layoutHash,
         in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
@@ -79,6 +80,7 @@ class MaterialBindStorage{
         return cast<u8>((word >> shift) & 0xffu);
     }
 
+    [cpp_unwind]
     public void appendMaterialTypedLayoutFieldBytes(in MaterialLayoutFieldType fieldType, in u32x4u value, mut Vector<u8> inOutBlockBytes){
         const u32 byteSize = MaterialLayoutFieldByteSize(fieldType);
         assert(byteSize != 0u && byteSize <= 16u);
@@ -88,6 +90,7 @@ class MaterialBindStorage{
             inOutBlockBytes[oldSize + cast<usize>(i)] = this.extractMaterialLayoutValueByte(value, i);
     }
 
+    [cpp_unwind]
     public void padMaterialTypedLayoutBytesTo(in usize targetByteSize, mut Vector<u8> inOutBlockBytes){
         assert(targetByteSize >= inOutBlockBytes.size());
         inOutBlockBytes.reserve(targetByteSize);

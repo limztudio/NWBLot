@@ -11,51 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RetainSkinningBuffer(in BufferHandle buffer, mut Vector<BufferHandle> buffers, mut HashSet<BufferHandle> index){
-    if(!buffer.valid())
-        return;
-    if(index.empty()){
-        for(in BufferHandle existing : buffers){
-            if(existing == buffer)
-                return;
-        }
-        if(buffers.size() < s_SkinningLiveStateInlineBufferCount){
-            buffers.push_back(buffer);
-            return;
-        }
-        index.reserve(s_SkinningLiveStateInlineBufferCount * s_SkinningPromotedIndexCapacityFactor);
-        for(in BufferHandle existing : buffers)
-            index.insert(existing);
-    }
-    if(index.insert(buffer).second)
-        buffers.push_back(buffer);
-}
-
-void CollectSkinningInstanceStateBuffers(in MeshSkinningRuntimeInstance instance, mut Vector<BufferHandle> buffers, mut HashSet<BufferHandle> index){
-    if(!instance.valid())
-        return;
-    for(in BufferHandle buffer : CaptureMeshSkinningResourceBuffers(instance))
-        RetainSkinningBuffer(buffer, buffers, index);
-}
-
-void CollectSkinningResourceStateBuffers(in MeshSkinningRuntimeInstance instance, in MeshSkinningRuntimeResources resources, mut Vector<BufferHandle> buffers, mut HashSet<BufferHandle> index){
-    if(!instance.valid() || resources.editRevision != instance.editRevision)
-        return;
-    RetainSkinningBuffer(resources.skinBuffer, buffers, index);
-    RetainSkinningBuffer(resources.jointPaletteBuffer, buffers, index);
-    RetainSkinningBuffer(resources.bindlessResourceSlotsBuffer, buffers, index);
-}
-
-void CollectSkinningStateBuffers(in MeshSkinningRuntimeInstance instance, in Optional<in MeshSkinningRuntimeResources> resources, mut Vector<BufferHandle> buffers, mut HashSet<BufferHandle> index){
-    CollectSkinningInstanceStateBuffers(instance, buffers, index);
-    if(resources.has_value())
-        CollectSkinningResourceStateBuffers(instance, resources.value(), buffers, index);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class SkinningPlansTask{
     private mut MeshSkinningSystem m_system;
     private mut GpuTimingSubmissionTicket m_ticket;
@@ -80,33 +35,6 @@ class SkinningPlansTask{
             return this.m_system.recordGraphOwnedSkinningDeformationBatch(this.m_plans, context, commands);
         return this.m_system.recordGraphOwnedSkinningPostDispatchBatch(this.m_plans, context, commands);
     }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ValidateFinalizedSkinningPlanStates(
-    in b8 hasActiveSkin,
-    in b8 copiedRestStreams,
-    in b8 skinnedStreamsReady,
-    in b8 updatesMeshletBounds,
-    in b8 boundsStreamsReady,
-    in b8 repacksNormals,
-    in b8 attributeStreamReady
-){
-    if((hasActiveSkin || copiedRestStreams) && !skinnedStreamsReady)
-        return false;
-    if(updatesMeshletBounds && !boundsStreamsReady)
-        return false;
-    if(repacksNormals && !attributeStreamReady)
-        return false;
-    return true;
-}
-
-b8 IsSkinningShaderResource(in GpuTaskRecordContext context, mut CommandList commands, in GpuGraphResourceId resource){
-    const Optional<mut Buffer> buffer = context.declarations.borrowBuffer(resource);
-    return buffer.has_value() && commands.getBufferState(buffer.value()) == ResourceStates::ShaderResource;
 }
 
 class SkinningFinalizerTask{
@@ -146,68 +74,6 @@ class SkinningFinalizerTask{
         }
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<Vector<u32>> TryBuildMeshSkinningTraceIndices(in MeshSkinningRuntimeInstance instance){
-    const usize indexCount = instance.meshletPrimitiveIndices.size();
-    const Expected<Vector<u32>> triangleIndices = BuildMeshletTriangleIndices(
-        instance.meshlets,
-        instance.meshletLocalVertexRefs,
-        instance.meshletPositionRefDeltas,
-        instance.meshletPrimitiveIndices,
-        instance.restPositions.size()
-    );
-    if(!triangleIndices.has_value()){
-        error("MeshSkinningRuntimeCache: failed to reconstruct ray tracing triangle indices for runtime mesh '{}'", instance.handle.value);
-        return MakeUnexpected(Failure());
-    }
-    if(!ValidateReconstructedRuntimeTriangleIndexCount(triangleIndices.value().size(), indexCount, instance.handle.value))
-        return MakeUnexpected(Failure());
-    return triangleIndices.value();
-}
-
-Expected<Vector<AttribGpu>> TryBuildMeshSkinningTraceAttributes(in MeshSkinningRuntimeInstance instance){
-    const Expected<Vector<AttribGpu>> triangleAttributes = BuildMeshletTriangleAttributes(
-        instance.meshlets,
-        instance.meshletLocalVertexRefs,
-        instance.meshletAttributeRefDeltas,
-        instance.meshletPrimitiveIndices,
-        instance.restNormals,
-        instance.uv0
-    );
-    if(!triangleAttributes.has_value()){
-        error("MeshSkinningRuntimeCache: failed to reconstruct shadow trace triangle attributes for runtime mesh '{}'", instance.handle.value);
-        return MakeUnexpected(Failure());
-    }
-    return triangleAttributes.value();
-}
-
-GpuTaskSchedulingHint MakeSkinningSerialMergeScheduling(in GpuTaskCostHint cost){
-    GpuTaskSchedulingHint scheduling = GpuTaskSchedulingHint();
-    scheduling.cost = cost;
-    scheduling.overlapPreferred = false;
-    scheduling.avoidQueueCrossing = true;
-    scheduling.forceSubmissionBoundary = false;
-    scheduling.allowPacketMerge = true;
-    scheduling.mergeWithPrevious = true;
-    scheduling.frontierScoredMergeDomain = s_SerialMergeDomain;
-    return scheduling;
-}
-
-GpuTaskSchedulingHint MakeJointPaletteUploadScheduling(){
-    return MakeSkinningSerialMergeScheduling(GpuTaskCostHint::Tiny);
-}
-
-GpuTaskSchedulingHint MakeSkinningDispatchScheduling(){
-    return MakeSkinningSerialMergeScheduling(GpuTaskCostHint::Small);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 class MeshSkinningFrameResourceImports : NoCopy{
     private mut MeshSkinningSystem m_system;
@@ -416,6 +282,134 @@ class MeshSkinningFramePlanBuilder : NoCopy{
     private b8 declareBindlessSlotsUpload(in MeshSkinningRuntimeInstance instance, in MeshSkinningRuntimeResources resources, mut MeshSkinningGraphDispatchPlan plan);
     private b8 declareRestToSkinnedCopy(in MeshSkinningRuntimeInstance instance, in MeshSkinningGraphDispatchPlan plan);
     private b8 declareJointPaletteUpload(in MeshSkinningRuntimeInstance instance, in Span<SkeletonJointMatrix> jointPaletteUpload, in MeshSkinningGraphDispatchPlan plan);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_unwind]
+void RetainSkinningBuffer(in BufferHandle buffer, mut Vector<BufferHandle> buffers, mut HashSet<BufferHandle> index){
+    if(!buffer.valid())
+        return;
+    if(index.empty()){
+        for(in BufferHandle existing : buffers){
+            if(existing == buffer)
+                return;
+        }
+        if(buffers.size() < s_SkinningLiveStateInlineBufferCount){
+            buffers.push_back(buffer);
+            return;
+        }
+        index.reserve(s_SkinningLiveStateInlineBufferCount * s_SkinningPromotedIndexCapacityFactor);
+        for(in BufferHandle existing : buffers)
+            index.insert(existing);
+    }
+    if(index.insert(buffer).second)
+        buffers.push_back(buffer);
+}
+
+[cpp_unwind]
+void CollectSkinningInstanceStateBuffers(in MeshSkinningRuntimeInstance instance, mut Vector<BufferHandle> buffers, mut HashSet<BufferHandle> index){
+    if(!instance.valid())
+        return;
+    for(in BufferHandle buffer : CaptureMeshSkinningResourceBuffers(instance))
+        RetainSkinningBuffer(buffer, buffers, index);
+}
+
+[cpp_unwind]
+void CollectSkinningResourceStateBuffers(in MeshSkinningRuntimeInstance instance, in MeshSkinningRuntimeResources resources, mut Vector<BufferHandle> buffers, mut HashSet<BufferHandle> index){
+    if(!instance.valid() || resources.editRevision != instance.editRevision)
+        return;
+    RetainSkinningBuffer(resources.skinBuffer, buffers, index);
+    RetainSkinningBuffer(resources.jointPaletteBuffer, buffers, index);
+    RetainSkinningBuffer(resources.bindlessResourceSlotsBuffer, buffers, index);
+}
+
+[cpp_unwind]
+void CollectSkinningStateBuffers(in MeshSkinningRuntimeInstance instance, in Optional<in MeshSkinningRuntimeResources> resources, mut Vector<BufferHandle> buffers, mut HashSet<BufferHandle> index){
+    CollectSkinningInstanceStateBuffers(instance, buffers, index);
+    if(resources.has_value())
+        CollectSkinningResourceStateBuffers(instance, resources.value(), buffers, index);
+}
+
+b8 ValidateFinalizedSkinningPlanStates(
+    in b8 hasActiveSkin,
+    in b8 copiedRestStreams,
+    in b8 skinnedStreamsReady,
+    in b8 updatesMeshletBounds,
+    in b8 boundsStreamsReady,
+    in b8 repacksNormals,
+    in b8 attributeStreamReady
+){
+    if((hasActiveSkin || copiedRestStreams) && !skinnedStreamsReady)
+        return false;
+    if(updatesMeshletBounds && !boundsStreamsReady)
+        return false;
+    if(repacksNormals && !attributeStreamReady)
+        return false;
+    return true;
+}
+
+b8 IsSkinningShaderResource(in GpuTaskRecordContext context, mut CommandList commands, in GpuGraphResourceId resource){
+    const Optional<mut Buffer> buffer = context.declarations.borrowBuffer(resource);
+    return buffer.has_value() && commands.getBufferState(buffer.value()) == ResourceStates::ShaderResource;
+}
+
+[cpp_unwind]
+Expected<Vector<u32>> TryBuildMeshSkinningTraceIndices(in MeshSkinningRuntimeInstance instance){
+    const usize indexCount = instance.meshletPrimitiveIndices.size();
+    const Expected<Vector<u32>> triangleIndices = BuildMeshletTriangleIndices(
+        instance.meshlets,
+        instance.meshletLocalVertexRefs,
+        instance.meshletPositionRefDeltas,
+        instance.meshletPrimitiveIndices,
+        instance.restPositions.size()
+    );
+    if(!triangleIndices.has_value()){
+        error("MeshSkinningRuntimeCache: failed to reconstruct ray tracing triangle indices for runtime mesh '{}'", instance.handle.value);
+        return MakeUnexpected(Failure());
+    }
+    if(!ValidateReconstructedRuntimeTriangleIndexCount(triangleIndices.value().size(), indexCount, instance.handle.value))
+        return MakeUnexpected(Failure());
+    return triangleIndices.value();
+}
+
+[cpp_unwind]
+Expected<Vector<AttribGpu>> TryBuildMeshSkinningTraceAttributes(in MeshSkinningRuntimeInstance instance){
+    const Expected<Vector<AttribGpu>> triangleAttributes = BuildMeshletTriangleAttributes(
+        instance.meshlets,
+        instance.meshletLocalVertexRefs,
+        instance.meshletAttributeRefDeltas,
+        instance.meshletPrimitiveIndices,
+        instance.restNormals,
+        instance.uv0
+    );
+    if(!triangleAttributes.has_value()){
+        error("MeshSkinningRuntimeCache: failed to reconstruct shadow trace triangle attributes for runtime mesh '{}'", instance.handle.value);
+        return MakeUnexpected(Failure());
+    }
+    return triangleAttributes.value();
+}
+
+GpuTaskSchedulingHint MakeSkinningSerialMergeScheduling(in GpuTaskCostHint cost){
+    GpuTaskSchedulingHint scheduling = GpuTaskSchedulingHint();
+    scheduling.cost = cost;
+    scheduling.overlapPreferred = false;
+    scheduling.avoidQueueCrossing = true;
+    scheduling.forceSubmissionBoundary = false;
+    scheduling.allowPacketMerge = true;
+    scheduling.mergeWithPrevious = true;
+    scheduling.frontierScoredMergeDomain = s_SerialMergeDomain;
+    return scheduling;
+}
+
+GpuTaskSchedulingHint MakeJointPaletteUploadScheduling(){
+    return MakeSkinningSerialMergeScheduling(GpuTaskCostHint::Tiny);
+}
+
+GpuTaskSchedulingHint MakeSkinningDispatchScheduling(){
+    return MakeSkinningSerialMergeScheduling(GpuTaskCostHint::Small);
 }
 
 

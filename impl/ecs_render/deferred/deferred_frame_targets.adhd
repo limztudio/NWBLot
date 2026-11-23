@@ -9,19 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ValidDeferredCsgTargetLayerCounts(
-    in u32 peelLayerCount,
-    in u32 receiverEventLayerCount,
-    in u32 receiverSpanLayerCount,
-    in u32 removedIntervalLayerCount
-){
-    return peelLayerCount > 0u && receiverEventLayerCount > 0u && receiverSpanLayerCount > 0u && removedIntervalLayerCount > 0u;
-}
-
-b8 ValidLaggedLightingHistoryState(in b8 hasTextures, in b8 hasSlotsBuffer, in b8 descriptorsValid, in u64 generation){
-    return hasTextures && hasSlotsBuffer && descriptorsValid && generation != 0u;
-}
-
 class DeferredLightingGraphResources{
     public BufferHandle sceneShadingBuffer;
     public BufferHandle lightBuffer;
@@ -332,6 +319,23 @@ class DeferredFrameTargets{
     }
 
     public b8 valid()const;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidDeferredCsgTargetLayerCounts(
+    in u32 peelLayerCount,
+    in u32 receiverEventLayerCount,
+    in u32 receiverSpanLayerCount,
+    in u32 removedIntervalLayerCount
+){
+    return peelLayerCount > 0u && receiverEventLayerCount > 0u && receiverSpanLayerCount > 0u && removedIntervalLayerCount > 0u;
+}
+
+b8 ValidLaggedLightingHistoryState(in b8 hasTextures, in b8 hasSlotsBuffer, in b8 descriptorsValid, in u64 generation){
+    return hasTextures && hasSlotsBuffer && descriptorsValid && generation != 0u;
 }
 
 void ResetCsgIntervalTargets(mut DeferredFrameTargets targets){

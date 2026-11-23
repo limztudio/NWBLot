@@ -3,6 +3,7 @@
 
 
 #include "suite.adhd"
+#include <impl/assets_texture/types.adhd>
 #include <tests/common/gtest_macros.adhd>
 
 
@@ -269,9 +270,9 @@ void VerifyAssetsGraphics_ShaderDependencyCollectionRetainsCaseDistinctPhysicalI
     ASSERT_TRUE(WriteGraphicsFixtureText(upperPath, upperExpected));
     ASSERT_TRUE(WriteGraphicsFixtureText(lowerPath, "static const uint lowerValue = 2;\n"));
 
-    b8 caseDistinct = false;
-    ASSERT_TRUE(ReadTextFileMatches(upperPath, upperExpected, scratch, caseDistinct));
-    if(!caseDistinct){
+    const Expected<b8, ErrorCode> caseDistinct = ReadTextFileMatches(upperPath, upperExpected, scratch);
+    ASSERT_TRUE(caseDistinct.has_value());
+    if(!caseDistinct.value()){
         EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
         SkipTest("Filesystem provider cannot store case-distinct shader inputs");
         return;
@@ -1001,6 +1002,27 @@ void VerifyAssetsGraphics_TextureCookerRejectsEveryTruncatedRawPayloadAndExtraBy
     EXPECT_TRUE(BuildTextureAsset(entry).has_value());
 }
 
+void VerifyAssetsGraphics_HdrAlphaMergeRejectsTruncatedOutput(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    TextureMipLevel mip = TextureMipLevel();
+    mip.width = 2u;
+    mip.height = 1u;
+    const Expected<usize> valid = ValidateHdrRgba16FloatAlphaMergeLayout(mip, 16u);
+    ASSERT_TRUE(valid.has_value());
+    EXPECT_EQ(valid.value(), 2u);
+    EXPECT_FALSE(ValidateHdrRgba16FloatAlphaMergeLayout(mip, 15u).has_value());
+    EXPECT_TRUE(SawCapturedError(logger, "alpha merge layout is invalid"));
+}
+
+void VerifyAssetsGraphics_TextureUploadPitchRejectsU64MultiplicationOverflow(){
+    EXPECT_FALSE(TryComputeTextureMipUploadPitchAndSliceBytes(2u, u64.max, 1u).has_value());
+    const Expected<TextureMipPitch> limit = TryComputeTextureMipUploadPitchAndSliceBytes(u32.max, 1u, 1u);
+    ASSERT_TRUE(limit.has_value());
+    EXPECT_EQ(limit.value().rowPitch, cast<usize>(u32.max));
+    EXPECT_EQ(limit.value().sliceByteCount, cast<usize>(u32.max));
+}
+
 void VerifyAssetsGraphics_TextureCookerRejectsOverflowingRawLayoutWithoutRetainingAllocations(){
     TestArena testArena = TestArena();
 
@@ -1051,6 +1073,7 @@ void VerifyAssetsGraphics_TextureCookerRejectsMissingImplicitSidecarInsteadOfSel
     EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
 }
 
+[cpp_unwind]
 void VerifyAssetsGraphics_TextureMipDecoderRejectsSrgbAndUnsupportedLdrUploadFormatsBeforeDecoding(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
@@ -1209,9 +1232,32 @@ NWB_ADHD_GTEST(AssetsGraphics, TextureCodecRejectsUnsupportedBinaryVersions, Ver
 NWB_ADHD_GTEST(AssetsGraphics, TexturePayloadRejectsAlphaTransportIncompatibleWithFormat, VerifyAssetsGraphics_TexturePayloadRejectsAlphaTransportIncompatibleWithFormat)
 NWB_ADHD_GTEST(AssetsGraphics, TextureCookerPreservesImplicitRawSidecarWithoutEncodingItAgain, VerifyAssetsGraphics_TextureCookerPreservesImplicitRawSidecarWithoutEncodingItAgain)
 NWB_ADHD_GTEST(AssetsGraphics, TextureCookerRejectsEveryTruncatedRawPayloadAndExtraBytes, VerifyAssetsGraphics_TextureCookerRejectsEveryTruncatedRawPayloadAndExtraBytes)
+NWB_ADHD_GTEST(AssetsGraphics, HdrAlphaMergeRejectsTruncatedOutput, VerifyAssetsGraphics_HdrAlphaMergeRejectsTruncatedOutput)
+NWB_ADHD_GTEST(AssetsGraphics, TextureUploadPitchRejectsU64MultiplicationOverflow, VerifyAssetsGraphics_TextureUploadPitchRejectsU64MultiplicationOverflow)
 NWB_ADHD_GTEST(AssetsGraphics, TextureCookerRejectsOverflowingRawLayoutWithoutRetainingAllocations, VerifyAssetsGraphics_TextureCookerRejectsOverflowingRawLayoutWithoutRetainingAllocations)
 NWB_ADHD_GTEST(AssetsGraphics, TextureCookerRejectsMissingImplicitSidecarInsteadOfSelectingAnotherFile, VerifyAssetsGraphics_TextureCookerRejectsMissingImplicitSidecarInsteadOfSelectingAnotherFile)
+[cpp_unwind]
+void VerifyAssetsGraphics_TextureMipDecoderClassifiesDecodeAndSubmitFailuresWithoutDevice(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
+    TestArena testArena = TestArena();
+    GraphicsScratchArena scratch = GraphicsScratchArena(s_CodecScratchArena);
+
+    const Expected<AssetBytes> prepared = MakeTestTextureRuntimeBinary(testArena);
+    ASSERT_TRUE(prepared.has_value());
+    TestValueSlot<TextureAsset> textureStorage;
+    mut TextureAsset texture = textureStorage.constructIn(testArena, Name(s_AssetCaseProjectTexturesLinearDecode));
+    ASSERT_TRUE(texture.loadBinary(prepared.value()));
+
+    EXPECT_TRUE(VerifyTextureUploadFailureDecodeVsSubmitAndZeroByteGuard(texture));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_GTEST(AssetsGraphics, TextureMipDecoderRejectsSrgbAndUnsupportedLdrUploadFormatsBeforeDecoding, VerifyAssetsGraphics_TextureMipDecoderRejectsSrgbAndUnsupportedLdrUploadFormatsBeforeDecoding)
+NWB_ADHD_GTEST(AssetsGraphics, TextureMipDecoderClassifiesDecodeAndSubmitFailuresWithoutDevice, VerifyAssetsGraphics_TextureMipDecoderClassifiesDecodeAndSubmitFailuresWithoutDevice)
 NWB_ADHD_GTEST(AssetsGraphics, TextureCookerRejectsObsoleteAndDerivedMetadata, VerifyAssetsGraphics_TextureCookerRejectsObsoleteAndDerivedMetadata)
 NWB_ADHD_GTEST(AssetsGraphics, TextureCookerRejectsMissingRequiredRawLayoutDescriptors, VerifyAssetsGraphics_TextureCookerRejectsMissingRequiredRawLayoutDescriptors)
 NWB_ADHD_GTEST(AssetsGraphics, TextureCookerRejectsInvalidRawLayoutDescriptorsBeforeReadingSidecar, VerifyAssetsGraphics_TextureCookerRejectsInvalidRawLayoutDescriptorsBeforeReadingSidecar)

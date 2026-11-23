@@ -20,16 +20,21 @@
 [cpp_header("<type_traits>"), cpp_name("::std::is_move_assignable")]
 extern b8 ImageFixtureMoveAssignable<T>();
 
-static_assert(!is_cpp_constructible<ImageSource>());
-static_assert(!is_cpp_constructible<ImageSource, mut GlobalAllocator, in Texture>());
-static_assert(!is_cpp_constructible<ImageSource, mut GlobalAllocator, in Texture, u64>());
-static_assert(!is_cpp_constructible<ImageSource, in ImageSource>());
-static_assert(!is_cpp_constructible<ImageSource, ImageSource>());
-static_assert(!ImageFixtureMoveAssignable<ImageSource>());
-
 type GpuTextureImageValidationFixture = PaintImageFixture;
 const Name s_ImageFixtureTexturePath = "tests/ui/image_loader/texture";
 const Name s_ImageFixtureTextureType = "texture";
+type TextureDimensionEnum = TexturePayloadDimension;
+type CoreKeyEnum = Key;
+const StringView s_UiGpuVersionedImagePath = "tests/ui/versioned_gpu_image";
+const StringView s_UiGpuOverflowImagePath = "tests/ui/overflow_gpu_image";
+const Name s_UiImageBuilderSpriteRegionName = "image.sprite";
+const StringView s_UiImageBuilderPanelKey = "panel";
+const StringView s_UiImageBuilderBeforeKey = "before";
+const Name s_UiImageSourceTempExpectedName = "tests/ui/image/temporary";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class MisdirectedImageCodec : IAssetCodec{
     private b8 m_wrongType;
@@ -48,34 +53,6 @@ class MisdirectedImageCodec : IAssetCodec{
     }
 }
 
-Vector<u8> MakeImageTextureBinary(in u8 seed){
-    Vector<u8> bytes;
-    bytes.reserve(s_TextureHeaderBinaryBytes + 2u * s_TextureMipLevelBinaryBytes + 32u);
-    AppendPOD(bytes, s_TextureBinaryMagic);
-    AppendPOD(bytes, s_TextureBinaryVersion);
-    AppendPOD(bytes, cast<u32>(TexturePayloadDimension::Texture2D));
-    AppendPOD(bytes, 2u);
-    AppendPOD(bytes, 1u);
-    AppendPOD(bytes, 1u);
-    AppendPOD(bytes, 2u);
-    AppendPOD(bytes, cast<u32>(TextureAlphaMode::EmbeddedLdr) | (255u << s_TextureAlphaInfoConstantShift));
-    AppendPOD(bytes, cast<u32>(TexturePayloadFormat::UastcLdr4x4));
-    AppendPOD(bytes, cast<u64>(32u));
-    for(u32 mip = 0u; mip < 2u; ++mip){
-        AppendPOD(bytes, 2u - mip);
-        AppendPOD(bytes, 1u);
-        AppendPOD(bytes, 1u);
-        AppendPOD(bytes, 1u);
-        AppendPOD(bytes, 1u);
-        AppendPOD(bytes, 0u);
-        AppendPOD(bytes, cast<u64>(16u * mip));
-        AppendPOD(bytes, cast<u64>(16u));
-    }
-    for(usize i = 0u; i < 32u; ++i)
-        bytes.push_back(cast<u8>(seed + i));
-    return bytes;
-}
-
 class MemoryImageBinarySource : IAssetBinarySource{
     public Vector<u8> m_binary;
     public Name m_path = s_ImageFixtureTexturePath;
@@ -91,102 +68,6 @@ class MemoryImageBinarySource : IAssetBinarySource{
             outBinary.push_back(byteValue);
         return true;
     }
-}
-
-b8 UiGpuValAllImageBindings(in DrawSnapshot snapshot){
-    return ValidateGpuGlyphPages(snapshot) && ValidateGpuSdfPages(snapshot) && ValidateGpuTextureImages(snapshot);
-}
-void UiGpuValSetCommandTextureIndex(mut DrawSnapshot snapshot, in usize commandIndex, in u32 imageIndex){
-    DrawSnapshotFaultFixture access;
-    access.command(snapshot, commandIndex).textureImageIndex = imageIndex;
-}
-void UiGpuValResetFirstTexture(mut DrawSnapshot snapshot){
-    DrawSnapshotFaultFixture access;
-    access.images(snapshot)[0u].reset();
-}
-void UiGpuValAppendTexture(mut DrawSnapshot snapshot, in SharedImageSource image){
-    DrawSnapshotFaultFixture access;
-    access.images(snapshot).push_back(image);
-}
-void UiGpuValSetCommand(mut DrawSnapshot snapshot, in usize index, in DrawCommand command){
-    DrawSnapshotFaultFixture access;
-    mut DrawCommand destination = access.command(snapshot, index);
-    destination = command;
-}
-void UiGpuValSetFirstCommandUnknownMaterial(mut DrawSnapshot snapshot){
-    DrawSnapshotFaultFixture access;
-    mut DrawCommand command = access.command(snapshot, 0u);
-    command.material = cast<PaintMaterial>(u8.max);
-    command.textureImageIndex = u32.max;
-}
-b8 UiGpuValBuildMaxBudgetSnapshot(mut PaintImageFixture self, in b8 extraImage, mut DrawSnapshot outSnapshot){
-    Vector<SharedGlyphPage> glyphs;
-    for(usize i = 0u; i < s_PaintMaxImages - 2u; ++i){
-        const auto result = self.makeGlyph(100u + i);
-        if(!result.has_value() || !result.value().valid())
-            return false;
-        glyphs.push_back(result.value());
-    }
-    const auto sdf = self.makeSdf();
-    const auto image = self.makeImage();
-    if(!sdf.has_value() || !sdf.value().valid() || !image.has_value() || !image.value().valid())
-        return false;
-    const Array<SharedSdfAtlasPage, 1u> pages(sdf.value());
-    const Array<SharedImageSource, 1u> images(image.value());
-    if(!self.m_builder.prepareImages(glyphs, pages, images))
-        return false;
-    const Rect rectangle(2.0f, 3.0f, 16.0f, 8.0f);
-    const Rect uv(0.0f, 0.0f, 1.0f, 1.0f);
-    if(!extraImage && (!self.m_builder.drawGlyph(glyphs[0u], rectangle, uv) || !self.m_builder.drawSdfGlyph(sdf.value(), 2u, rectangle, uv)))
-        return false;
-    if(!self.m_builder.drawImage(image.value(), rectangle))
-        return false;
-    outSnapshot = self.m_builder.freeze();
-    if(extraImage){
-        const auto addition = self.makeImage("tests/ui/overflow_gpu_image", 73u);
-        if(!addition.has_value() || !addition.value().valid())
-            return false;
-        UiGpuValAppendTexture(outSnapshot, addition.value());
-    }
-    return true;
-}
-b8 UiGpuValPrepareSingleGlyphSdfAndImage(mut PaintImageFixture self, mut SharedImageSource outImage){
-    const auto image = self.makeImage();
-    const auto glyph = self.makeGlyph();
-    const auto sdf = self.makeSdf();
-    if(!image.has_value() || !image.value().valid() || !glyph.has_value() || !glyph.value().valid() || !sdf.has_value() || !sdf.value().valid())
-        return false;
-    outImage = image.value();
-    const Array<SharedGlyphPage, 1u> glyphs(glyph.value());
-    const Array<SharedSdfAtlasPage, 1u> pages(sdf.value());
-    const Array<SharedImageSource, 1u> images(outImage);
-    return self.m_builder.prepareImages(glyphs, pages, images);
-}
-
-void UiImageLoaderExpectPayload(in SharedImageSource image, in u8 value){
-    in Texture texture = image.deref().texture();
-    ASSERT_EQ(texture.payloadBytes().size(), 32u);
-    for(usize i = 0u; i < texture.payloadBytes().size(); ++i)
-        EXPECT_EQ(texture.payloadBytes()[i], cast<u8>(value + i));
-}
-
-void UiImageSourceExpectCopy(in Texture original, in SharedImageSource source){
-    in Texture copied = source.deref().texture();
-    ASSERT_EQ(copied.mipLevels().size(), original.mipLevels().size());
-    ASSERT_EQ(copied.payloadBytes().size(), original.payloadBytes().size());
-    EXPECT_NE(TestDataAddress(copied.mipLevels()), TestDataAddress(original.mipLevels()));
-    EXPECT_NE(TestDataAddress(copied.payloadBytes()), TestDataAddress(original.payloadBytes()));
-    EXPECT_EQ(copied.payloadBytes(), original.payloadBytes());
-    EXPECT_TRUE(copied.validatePayload());
-}
-
-b8 UiSameTextureAddress(in SharedImageSource first, in SharedImageSource second){
-    return TestValueAddress<Texture>(first.deref().texture()) == TestValueAddress<Texture>(second.deref().texture());
-}
-
-b8 UiDistinctLoadedTextureStorage(in SharedImageSource first, in SharedImageSource second){
-    return TestDataAddress(first.deref().texture().payloadBytes()) != TestDataAddress(second.deref().texture().payloadBytes())
-        && TestDataAddress(first.deref().texture().mipLevels()) != TestDataAddress(second.deref().texture().mipLevels());
 }
 
 class UiImageBuilderTests : WidgetFixture{
@@ -215,7 +96,6 @@ class UiImageBuilderTests : WidgetFixture{
         this.m_builder.setSkin(this.m_skin);
     }
 }
-
 
 [ordered]
 class ImageLoaderTests{
@@ -269,7 +149,6 @@ class ImageLoaderTests{
     }
 }
 
-
 class UiImageSourceTextureDescription{
     public u32 width = 9u;
     public u32 height = 5u;
@@ -282,7 +161,6 @@ class UiImageSourceTextureDescription{
 
 
 }
-
 
 [ordered]
 class UiImageSourceTests{
@@ -408,23 +286,149 @@ class UiImageSourceTests{
     }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-type TextureDimensionEnum = TexturePayloadDimension;
-type CoreKeyEnum = Key;
-
-const StringView s_UiGpuVersionedImagePath = "tests/ui/versioned_gpu_image";
-const StringView s_UiGpuOverflowImagePath = "tests/ui/overflow_gpu_image";
-const Name s_UiImageBuilderSpriteRegionName = "image.sprite";
-const StringView s_UiImageBuilderPanelKey = "panel";
-const StringView s_UiImageBuilderBeforeKey = "before";
-const Name s_UiImageSourceTempExpectedName = "tests/ui/image/temporary";
+static_assert(!is_cpp_constructible<ImageSource>());
+static_assert(!is_cpp_constructible<ImageSource, mut GlobalAllocator, in Texture>());
+static_assert(!is_cpp_constructible<ImageSource, mut GlobalAllocator, in Texture, u64>());
+static_assert(!is_cpp_constructible<ImageSource, in ImageSource>());
+static_assert(!is_cpp_constructible<ImageSource, ImageSource>());
+static_assert(!ImageFixtureMoveAssignable<ImageSource>());
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+Vector<u8> MakeImageTextureBinary(in u8 seed){
+    Vector<u8> bytes;
+    bytes.reserve(s_TextureHeaderBinaryBytes + 2u * s_TextureMipLevelBinaryBytes + 32u);
+    AppendPOD(bytes, s_TextureBinaryMagic);
+    AppendPOD(bytes, s_TextureBinaryVersion);
+    AppendPOD(bytes, cast<u32>(TexturePayloadDimension::Texture2D));
+    AppendPOD(bytes, 2u);
+    AppendPOD(bytes, 1u);
+    AppendPOD(bytes, 1u);
+    AppendPOD(bytes, 2u);
+    AppendPOD(bytes, cast<u32>(TextureAlphaMode::EmbeddedLdr) | (255u << s_TextureAlphaInfoConstantShift));
+    AppendPOD(bytes, cast<u32>(TexturePayloadFormat::UastcLdr4x4));
+    AppendPOD(bytes, cast<u64>(32u));
+    for(u32 mip = 0u; mip < 2u; ++mip){
+        AppendPOD(bytes, 2u - mip);
+        AppendPOD(bytes, 1u);
+        AppendPOD(bytes, 1u);
+        AppendPOD(bytes, 1u);
+        AppendPOD(bytes, 1u);
+        AppendPOD(bytes, 0u);
+        AppendPOD(bytes, cast<u64>(16u * mip));
+        AppendPOD(bytes, cast<u64>(16u));
+    }
+    for(usize i = 0u; i < 32u; ++i)
+        bytes.push_back(cast<u8>(seed + i));
+    return bytes;
+}
+
+b8 UiGpuValAllImageBindings(in DrawSnapshot snapshot){
+    return ValidateGpuGlyphPages(snapshot) && ValidateGpuSdfPages(snapshot) && ValidateGpuTextureImages(snapshot);
+}
+
+void UiGpuValSetCommandTextureIndex(mut DrawSnapshot snapshot, in usize commandIndex, in u32 imageIndex){
+    DrawSnapshotFaultFixture access;
+    access.command(snapshot, commandIndex).textureImageIndex = imageIndex;
+}
+
+void UiGpuValResetFirstTexture(mut DrawSnapshot snapshot){
+    DrawSnapshotFaultFixture access;
+    access.images(snapshot)[0u].reset();
+}
+
+void UiGpuValAppendTexture(mut DrawSnapshot snapshot, in SharedImageSource image){
+    DrawSnapshotFaultFixture access;
+    access.images(snapshot).push_back(image);
+}
+
+void UiGpuValSetCommand(mut DrawSnapshot snapshot, in usize index, in DrawCommand command){
+    DrawSnapshotFaultFixture access;
+    mut DrawCommand destination = access.command(snapshot, index);
+    destination = command;
+}
+
+void UiGpuValSetFirstCommandUnknownMaterial(mut DrawSnapshot snapshot){
+    DrawSnapshotFaultFixture access;
+    mut DrawCommand command = access.command(snapshot, 0u);
+    command.material = cast<PaintMaterial>(u8.max);
+    command.textureImageIndex = u32.max;
+}
+
+Expected<DrawSnapshot> UiGpuValBuildMaxBudgetSnapshot(mut PaintImageFixture self, in b8 extraImage){
+    Vector<SharedGlyphPage> glyphs;
+    for(usize i = 0u; i < s_PaintMaxImages - 2u; ++i){
+        const auto result = self.makeGlyph(100u + i);
+        if(!result.has_value() || !result.value().valid())
+            return MakeUnexpected(Failure());
+        glyphs.push_back(result.value());
+    }
+    const auto sdf = self.makeSdf();
+    const auto image = self.makeImage();
+    if(!sdf.has_value() || !sdf.value().valid() || !image.has_value() || !image.value().valid())
+        return MakeUnexpected(Failure());
+    const Array<SharedSdfAtlasPage, 1u> pages(sdf.value());
+    const Array<SharedImageSource, 1u> images(image.value());
+    if(!self.m_builder.prepareImages(glyphs, pages, images))
+        return MakeUnexpected(Failure());
+    const Rect rectangle(2.0f, 3.0f, 16.0f, 8.0f);
+    const Rect uv(0.0f, 0.0f, 1.0f, 1.0f);
+    if(!extraImage && (!self.m_builder.drawGlyph(glyphs[0u], rectangle, uv) || !self.m_builder.drawSdfGlyph(sdf.value(), 2u, rectangle, uv)))
+        return MakeUnexpected(Failure());
+    if(!self.m_builder.drawImage(image.value(), rectangle))
+        return MakeUnexpected(Failure());
+    DrawSnapshot snapshot = self.m_builder.freeze();
+    if(extraImage){
+        const auto addition = self.makeImage("tests/ui/overflow_gpu_image", 73u);
+        if(!addition.has_value() || !addition.value().valid())
+            return MakeUnexpected(Failure());
+        UiGpuValAppendTexture(snapshot, addition.value());
+    }
+    return snapshot;
+}
+
+Expected<SharedImageSource> UiGpuValPrepareSingleGlyphSdfAndImage(mut PaintImageFixture self){
+    const auto image = self.makeImage();
+    const auto glyph = self.makeGlyph();
+    const auto sdf = self.makeSdf();
+    if(!image.has_value() || !image.value().valid() || !glyph.has_value() || !glyph.value().valid() || !sdf.has_value() || !sdf.value().valid())
+        return MakeUnexpected(Failure());
+    const SharedImageSource outImage = image.value();
+    const Array<SharedGlyphPage, 1u> glyphs(glyph.value());
+    const Array<SharedSdfAtlasPage, 1u> pages(sdf.value());
+    const Array<SharedImageSource, 1u> images(outImage);
+    if(!self.m_builder.prepareImages(glyphs, pages, images))
+        return MakeUnexpected(Failure());
+    return outImage;
+}
+
+void UiImageLoaderExpectPayload(in SharedImageSource image, in u8 value){
+    in Texture texture = image.deref().texture();
+    ASSERT_EQ(texture.payloadBytes().size(), 32u);
+    for(usize i = 0u; i < texture.payloadBytes().size(); ++i)
+        EXPECT_EQ(texture.payloadBytes()[i], cast<u8>(value + i));
+}
+
+void UiImageSourceExpectCopy(in Texture original, in SharedImageSource source){
+    in Texture copied = source.deref().texture();
+    ASSERT_EQ(copied.mipLevels().size(), original.mipLevels().size());
+    ASSERT_EQ(copied.payloadBytes().size(), original.payloadBytes().size());
+    EXPECT_NE(TestDataAddress(copied.mipLevels()), TestDataAddress(original.mipLevels()));
+    EXPECT_NE(TestDataAddress(copied.payloadBytes()), TestDataAddress(original.payloadBytes()));
+    EXPECT_EQ(copied.payloadBytes(), original.payloadBytes());
+    EXPECT_TRUE(copied.validatePayload());
+}
+
+b8 UiSameTextureAddress(in SharedImageSource first, in SharedImageSource second){
+    return TestValueAddress<Texture>(first.deref().texture()) == TestValueAddress<Texture>(second.deref().texture());
+}
+
+b8 UiDistinctLoadedTextureStorage(in SharedImageSource first, in SharedImageSource second){
+    return TestDataAddress(first.deref().texture().payloadBytes()) != TestDataAddress(second.deref().texture().payloadBytes())
+        && TestDataAddress(first.deref().texture().mipLevels()) != TestDataAddress(second.deref().texture().mipLevels());
+}
 
 UiSkinRegion MakeUiImageLayoutSprite(){
     UiSkinRegion region = UiSkinRegion();
@@ -440,10 +444,6 @@ void ExpectUiImageLayoutMetrics(in ImageMetrics actual, in f32 expectedWidth, in
     EXPECT_EQ(bit_cast<u32>(actual.contentSize.x), bit_cast<u32>(expectedWidth));
     EXPECT_EQ(bit_cast<u32>(actual.contentSize.y), bit_cast<u32>(expectedHeight));
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyGpuTextureImageValidationFixture_SameIdentityDistinctGenerationsRemainValidImageBindings(mut GpuTextureImageValidationFixture self){
     const Expected<SharedImageSource> firstResult = self.makeImage(s_UiGpuVersionedImagePath, 37u);
@@ -535,8 +535,9 @@ void VerifyGpuTextureImageValidationFixture_TextureBindingCountOverflowRejectsEv
 }
 
 void VerifyGpuTextureImageValidationFixture_SharedImageBudgetAcceptsMixedSourcesAtCapacity(mut GpuTextureImageValidationFixture self){
-    DrawSnapshot snapshot = DrawSnapshot();
-    ASSERT_TRUE(UiGpuValBuildMaxBudgetSnapshot(self, false, snapshot));
+    const Expected<DrawSnapshot> snapshotResult = UiGpuValBuildMaxBudgetSnapshot(self, false);
+    ASSERT_TRUE(snapshotResult.has_value());
+    in DrawSnapshot snapshot = snapshotResult.value();
     ASSERT_EQ(snapshot.glyphPages().size() + snapshot.sdfPages().size() + snapshot.textureImages().size(), s_PaintMaxImages);
     EXPECT_TRUE(ValidateGpuGlyphPages(snapshot));
     EXPECT_TRUE(ValidateGpuSdfPages(snapshot));
@@ -544,8 +545,9 @@ void VerifyGpuTextureImageValidationFixture_SharedImageBudgetAcceptsMixedSources
 }
 
 void VerifyGpuTextureImageValidationFixture_SharedImageBudgetOverflowIncludesEveryImageKind(mut GpuTextureImageValidationFixture self){
-    DrawSnapshot snapshot = DrawSnapshot();
-    ASSERT_TRUE(UiGpuValBuildMaxBudgetSnapshot(self, true, snapshot));
+    const Expected<DrawSnapshot> snapshotResult = UiGpuValBuildMaxBudgetSnapshot(self, true);
+    ASSERT_TRUE(snapshotResult.has_value());
+    in DrawSnapshot snapshot = snapshotResult.value();
     ASSERT_EQ(snapshot.glyphPages().size(), s_PaintMaxImages - 2u);
     ASSERT_EQ(snapshot.sdfPages().size(), 1u);
     ASSERT_EQ(snapshot.textureImages().size(), 2u);
@@ -590,8 +592,9 @@ void VerifyGpuTextureImageValidationFixture_NonImageCommandsCannotReferenceTextu
 }
 
 void VerifyGpuTextureImageValidationFixture_ImageCommandRejectsGlyphAndSdfMetadata(mut GpuTextureImageValidationFixture self){
-    SharedImageSource image = SharedImageSource();
-    ASSERT_TRUE(UiGpuValPrepareSingleGlyphSdfAndImage(self, image));
+    const Expected<SharedImageSource> imageResult = UiGpuValPrepareSingleGlyphSdfAndImage(self);
+    ASSERT_TRUE(imageResult.has_value());
+    in SharedImageSource image = imageResult.value();
     ASSERT_TRUE(self.m_builder.drawImage(image, Rect(2.0f, 3.0f, 16.0f, 8.0f)));
     DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.commands().size(), 1u);
@@ -624,10 +627,6 @@ void VerifyGpuTextureImageValidationFixture_UnknownMaterialRejectsCombinedImageV
     EXPECT_FALSE(ValidateGpuGlyphPages(snapshot));
     EXPECT_FALSE(UiGpuValAllImageBindings(snapshot));
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyHorizontalNavigationFixture_CapabilityRemovalRetiresHorizontalIntentionsWhileVerticalHoldSurvives(mut HorizontalNavigationFixture self){
     ASSERT_TRUE(self.publish());
@@ -1044,10 +1043,6 @@ void VerifyHorizontalNavigationFixture_OwnedPartsRejectHorizontalCapabilityWitho
     EXPECT_EQ(actionResult.value().kind, ControlActionKind::Right);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyUiImageBuilderTests_CallerMutationCannotChangeDeferredImageNameSizeOrStraightTint(mut UiImageBuilderTests self){
     ASSERT_TRUE(self.panel(1u));
     Name name = s_UiImageBuilderSpriteRegionName;
@@ -1138,10 +1133,6 @@ void VerifyUiImageBuilderTests_NonfiniteTintRejectsWithoutReplacingAcceptedTarge
     ASSERT_TRUE(retained.has_value());
     EXPECT_EQ(retained.value().declarationGeneration, accepted.value().declarationGeneration);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyUiImageLayoutTests_NineSliceMinimumsRemainLogicalAndCanExceedTheNaturalExtent(){
     UiSkinRegion region = MakeUiImageLayoutSprite();
@@ -1265,10 +1256,6 @@ void VerifyUiImageLayoutTests_InvalidAndCollapsedProspectiveEndpointsRejectPlace
     }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyImageLoaderTests_RealCodecLoadRetainsExactTextureAfterTemporaryAssetAndBinaryAreGone(mut ImageLoaderTests self){
     const Expected<SharedImageSource> imageResult = LoadImageSource(self.m_pool, self.assets(), self.m_identity);
     ASSERT_TRUE(imageResult.has_value());
@@ -1380,10 +1367,6 @@ void VerifyImageLoaderTests_FailedReplacementPreservesRetainedSourceAndLaterSucc
     UiImageLoaderExpectPayload(retained, 3u);
     EXPECT_EQ(self.m_source.m_readCount.value(), 3u);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyUiImageSourceTests_NonPowerOfTwoMipsKeepPaddedBlockAndPayloadBounds(mut UiImageSourceTests self){
     TestValueSlot<Texture> textureSlot;
@@ -1602,71 +1585,118 @@ void VerifyUiImageSourceTests_RejectedSamePathReplacementPreservesPreviouslyAcce
     EXPECT_EQ(ImageSourceTexture(accepted).payloadBytes()[0u], 37u);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST_F(GpuTextureImageValidationFixture, SameIdentityDistinctGenerationsRemainValidImageBindings, VerifyGpuTextureImageValidationFixture_SameIdentityDistinctGenerationsRemainValidImageBindings)
+
 NWB_ADHD_GTEST_F(GpuTextureImageValidationFixture, ImageIndexMustAddressAnOwnedTextureSource, VerifyGpuTextureImageValidationFixture_ImageIndexMustAddressAnOwnedTextureSource)
+
 NWB_ADHD_GTEST_F(GpuTextureImageValidationFixture, NullTextureSourceRejectsTheSnapshot, VerifyGpuTextureImageValidationFixture_NullTextureSourceRejectsTheSnapshot)
+
 NWB_ADHD_GTEST_F(GpuTextureImageValidationFixture, DuplicateSourceGenerationRejectsTheSnapshot, VerifyGpuTextureImageValidationFixture_DuplicateSourceGenerationRejectsTheSnapshot)
+
 NWB_ADHD_GTEST_F(GpuTextureImageValidationFixture, TextureBindingCountOverflowRejectsEveryValidator, VerifyGpuTextureImageValidationFixture_TextureBindingCountOverflowRejectsEveryValidator)
+
 NWB_ADHD_GTEST_F(GpuTextureImageValidationFixture, SharedImageBudgetAcceptsMixedSourcesAtCapacity, VerifyGpuTextureImageValidationFixture_SharedImageBudgetAcceptsMixedSourcesAtCapacity)
+
 NWB_ADHD_GTEST_F(GpuTextureImageValidationFixture, SharedImageBudgetOverflowIncludesEveryImageKind, VerifyGpuTextureImageValidationFixture_SharedImageBudgetOverflowIncludesEveryImageKind)
+
 NWB_ADHD_GTEST_F(GpuTextureImageValidationFixture, NonImageCommandsCannotReferenceTextureBindings, VerifyGpuTextureImageValidationFixture_NonImageCommandsCannotReferenceTextureBindings)
+
 NWB_ADHD_GTEST_F(GpuTextureImageValidationFixture, ImageCommandRejectsGlyphAndSdfMetadata, VerifyGpuTextureImageValidationFixture_ImageCommandRejectsGlyphAndSdfMetadata)
+
 NWB_ADHD_GTEST_F(GpuTextureImageValidationFixture, UnknownMaterialRejectsCombinedImageValidation, VerifyGpuTextureImageValidationFixture_UnknownMaterialRejectsCombinedImageValidation)
 
 NWB_ADHD_GTEST_F(HorizontalNavigationFixture, CapabilityRemovalRetiresHorizontalIntentionsWhileVerticalHoldSurvives, VerifyHorizontalNavigationFixture_CapabilityRemovalRetiresHorizontalIntentionsWhileVerticalHoldSurvives)
+
 NWB_ADHD_GTEST_F(HorizontalNavigationFixture, EnablingCapabilityCannotAdoptAnAlreadyHeldLocalKey, VerifyHorizontalNavigationFixture_EnablingCapabilityCannotAdoptAnAlreadyHeldLocalKey)
+
 NWB_ADHD_GTEST_F(HorizontalNavigationFixture, FocusTransferCannotRedirectHeldHorizontalKeyToAnotherHost, VerifyHorizontalNavigationFixture_FocusTransferCannotRedirectHeldHorizontalKeyToAnotherHost)
+
 NWB_ADHD_GTEST_F(HorizontalNavigationFixture, RestoringOriginalControlTokenCannotReviveRetiredHorizontalHold, VerifyHorizontalNavigationFixture_RestoringOriginalControlTokenCannotReviveRetiredHorizontalHold)
+
 NWB_ADHD_GTEST_F(HorizontalNavigationFixture, RestoringOriginalDeclarationCannotReviveRetiredHorizontalHold, VerifyHorizontalNavigationFixture_RestoringOriginalDeclarationCannotReviveRetiredHorizontalHold)
+
 NWB_ADHD_GTEST_F(HorizontalNavigationFixture, DisabledClippedOrOmittedHostCannotResumeItsPreviousHorizontalHold, VerifyHorizontalNavigationFixture_DisabledClippedOrOmittedHostCannotResumeItsPreviousHorizontalHold)
+
 NWB_ADHD_GTEST_F(HorizontalNavigationFixture, ClosingAndReopeningPopupRequiresFreshHorizontalPress, VerifyHorizontalNavigationFixture_ClosingAndReopeningPopupRequiresFreshHorizontalPress)
+
 NWB_ADHD_GTEST_F(HorizontalNavigationFixture, PopupMaskCannotRedirectOrReviveLowerHostHorizontalHold, VerifyHorizontalNavigationFixture_PopupMaskCannotRedirectOrReviveLowerHostHorizontalHold)
+
 NWB_ADHD_GTEST_F(HorizontalNavigationFixture, PreservedTextFenceClearsHorizontalCapabilityAndRetainsMainCapture, VerifyHorizontalNavigationFixture_PreservedTextFenceClearsHorizontalCapabilityAndRetainsMainCapture)
+
 NWB_ADHD_GTEST_F(HorizontalNavigationFixture, HeldHorizontalNavigationRepeatsWhileSubmitIsOneShotInSequence, VerifyHorizontalNavigationFixture_HeldHorizontalNavigationRepeatsWhileSubmitIsOneShotInSequence)
+
 NWB_ADHD_GTEST_F(HorizontalNavigationFixture, VerticalOnlyNavigableHostKeepsHorizontalKeysLocalAndVerticalKeysActive, VerifyHorizontalNavigationFixture_VerticalOnlyNavigableHostKeepsHorizontalKeysLocalAndVerticalKeysActive)
+
 NWB_ADHD_GTEST_F(HorizontalNavigationFixture, CapabilityUsesAcceptedCopiedTargetsUntilSuccessfulPublication, VerifyHorizontalNavigationFixture_CapabilityUsesAcceptedCopiedTargetsUntilSuccessfulPublication)
+
 NWB_ADHD_GTEST_F(HorizontalNavigationFixture, DelegatedEditorKeepsCaretKeysLocalToAvoidMovingTheOwner, VerifyHorizontalNavigationFixture_DelegatedEditorKeepsCaretKeysLocalToAvoidMovingTheOwner)
+
 NWB_ADHD_GTEST_F(HorizontalNavigationFixture, InvalidHorizontalHostPublicationPreservesAcceptedFocusAndHeldAction, VerifyHorizontalNavigationFixture_InvalidHorizontalHostPublicationPreservesAcceptedFocusAndHeldAction)
+
 NWB_ADHD_GTEST_F(HorizontalNavigationFixture, OwnedPartsRejectHorizontalCapabilityWithoutReplacingAcceptedActions, VerifyHorizontalNavigationFixture_OwnedPartsRejectHorizontalCapabilityWithoutReplacingAcceptedActions)
 
 NWB_ADHD_GTEST_F(UiImageBuilderTests, CallerMutationCannotChangeDeferredImageNameSizeOrStraightTint, VerifyUiImageBuilderTests_CallerMutationCannotChangeDeferredImageNameSizeOrStraightTint)
+
 NWB_ADHD_GTEST_F(UiImageBuilderTests, ExternalClipUpdatesSpriteUvsAndRestoresThePaintStack, VerifyUiImageBuilderTests_ExternalClipUpdatesSpriteUvsAndRestoresThePaintStack)
+
 NWB_ADHD_GTEST_F(UiImageBuilderTests, FullyTransparentAndEmptyImagesRemainValidWithoutQuads, VerifyUiImageBuilderTests_FullyTransparentAndEmptyImagesRemainValidWithoutQuads)
+
 NWB_ADHD_GTEST_F(UiImageBuilderTests, UnknownRegionRejectsWithoutReplacingAcceptedTargets, VerifyUiImageBuilderTests_UnknownRegionRejectsWithoutReplacingAcceptedTargets)
+
 NWB_ADHD_GTEST_F(UiImageBuilderTests, NonfiniteTintRejectsWithoutReplacingAcceptedTargets, VerifyUiImageBuilderTests_NonfiniteTintRejectsWithoutReplacingAcceptedTargets)
 
 NWB_ADHD_GTEST(UiImageLayoutTests, NineSliceMinimumsRemainLogicalAndCanExceedTheNaturalExtent, VerifyUiImageLayoutTests_NineSliceMinimumsRemainLogicalAndCanExceedTheNaturalExtent)
+
 NWB_ADHD_GTEST(UiImageLayoutTests, EmptyAndDisjointClipsRemainValidAtFiniteNegativeOrigins, VerifyUiImageLayoutTests_EmptyAndDisjointClipsRemainValidAtFiniteNegativeOrigins)
+
 NWB_ADHD_GTEST(UiImageLayoutTests, SubnormalPositiveBoundsAndExtremeFiniteEndpointsRemainValid, VerifyUiImageLayoutTests_SubnormalPositiveBoundsAndExtremeFiniteEndpointsRemainValid)
+
 NWB_ADHD_GTEST(UiImageLayoutTests, InvalidLayoutSizesTintsAndDensityRejectMeasurement, VerifyUiImageLayoutTests_InvalidLayoutSizesTintsAndDensityRejectMeasurement)
+
 NWB_ADHD_GTEST(UiImageLayoutTests, InvalidRegionExtentMinimumsAndSliceMetadataRejectMeasurement, VerifyUiImageLayoutTests_InvalidRegionExtentMinimumsAndSliceMetadataRejectMeasurement)
+
 NWB_ADHD_GTEST(UiImageLayoutTests, UnrepresentableNaturalExtentRejectsMeasurement, VerifyUiImageLayoutTests_UnrepresentableNaturalExtentRejectsMeasurement)
+
 NWB_ADHD_GTEST(UiImageLayoutTests, InvalidAndCollapsedProspectiveEndpointsRejectPlacement, VerifyUiImageLayoutTests_InvalidAndCollapsedProspectiveEndpointsRejectPlacement)
 
 NWB_ADHD_GTEST_F(ImageLoaderTests, RealCodecLoadRetainsExactTextureAfterTemporaryAssetAndBinaryAreGone, VerifyImageLoaderTests_RealCodecLoadRetainsExactTextureAfterTemporaryAssetAndBinaryAreGone)
+
 NWB_ADHD_GTEST_F(ImageLoaderTests, EmptyReferenceFailsBeforeReadingTheBinarySource, VerifyImageLoaderTests_EmptyReferenceFailsBeforeReadingTheBinarySource)
+
 NWB_ADHD_GTEST_F(ImageLoaderTests, MissingPathAndFailedBinaryReadReturnNoSource, VerifyImageLoaderTests_MissingPathAndFailedBinaryReadReturnNoSource)
+
 NWB_ADHD_GTEST_F(ImageLoaderTests, MissingTextureCodecFailsAfterReadingAValidBinary, VerifyImageLoaderTests_MissingTextureCodecFailsAfterReadingAValidBinary)
+
 NWB_ADHD_GTEST_F(ImageLoaderTests, RealTextureCodecRejectsWrongMagicTruncationAndTrailingBytes, VerifyImageLoaderTests_RealTextureCodecRejectsWrongMagicTruncationAndTrailingBytes)
+
 NWB_ADHD_GTEST_F(ImageLoaderTests, CodecReturningARealDifferentAssetTypeIsRejectedByTheTypedManager, VerifyImageLoaderTests_CodecReturningARealDifferentAssetTypeIsRejectedByTheTypedManager)
+
 NWB_ADHD_GTEST_F(ImageLoaderTests, CodecReturningAValidTextureAtAnotherIdentityIsRejected, VerifyImageLoaderTests_CodecReturningAValidTextureAtAnotherIdentityIsRejected)
+
 NWB_ADHD_GTEST_F(ImageLoaderTests, RepeatedLoadsOfIdenticalBytesOwnDistinctFreshVersions, VerifyImageLoaderTests_RepeatedLoadsOfIdenticalBytesOwnDistinctFreshVersions)
+
 NWB_ADHD_GTEST_F(ImageLoaderTests, FailedReplacementPreservesRetainedSourceAndLaterSuccessPublishesAFreshVersion, VerifyImageLoaderTests_FailedReplacementPreservesRetainedSourceAndLaterSuccessPublishesAFreshVersion)
 
 NWB_ADHD_GTEST_F(UiImageSourceTests, NonPowerOfTwoMipsKeepPaddedBlockAndPayloadBounds, VerifyUiImageSourceTests_NonPowerOfTwoMipsKeepPaddedBlockAndPayloadBounds)
+
 NWB_ADHD_GTEST_F(UiImageSourceTests, RetainedSourceOutlivesCallerReplacementTextureAndItsArena, VerifyUiImageSourceTests_RetainedSourceOutlivesCallerReplacementTextureAndItsArena)
+
 NWB_ADHD_GTEST_F(UiImageSourceTests, IdenticalLoadsAndSamePathReplacementReceiveFreshGenerations, VerifyUiImageSourceTests_IdenticalLoadsAndSamePathReplacementReceiveFreshGenerations)
+
 NWB_ADHD_GTEST_F(UiImageSourceTests, CopiedSharedHandleRetainsTheSameImmutableVersionAfterOriginalRelease, VerifyUiImageSourceTests_CopiedSharedHandleRetainsTheSameImmutableVersionAfterOriginalRelease)
+
 NWB_ADHD_GTEST_F(UiImageSourceTests, SeparateHdrAlphaOwnsTheCompleteTrailingPayloadStream, VerifyUiImageSourceTests_SeparateHdrAlphaOwnsTheCompleteTrailingPayloadStream)
+
 NWB_ADHD_GTEST_F(UiImageSourceTests, RejectsValidCubeAndVolumeAssetsRatherThanFlatteningTheirSlices, VerifyUiImageSourceTests_RejectsValidCubeAndVolumeAssetsRatherThanFlatteningTheirSlices)
+
 NWB_ADHD_GTEST_F(UiImageSourceTests, RejectsMissingAssetIdentityAndEmptyTexturePayload, VerifyUiImageSourceTests_RejectsMissingAssetIdentityAndEmptyTexturePayload)
+
 NWB_ADHD_GTEST_F(UiImageSourceTests, RejectsInvalidShapeAndUnknownMetadataWithoutMintingUsableVersions, VerifyUiImageSourceTests_RejectsInvalidShapeAndUnknownMetadataWithoutMintingUsableVersions)
+
 NWB_ADHD_GTEST_F(UiImageSourceTests, RejectsIncompleteDiscontiguousOrMalformedMipMetadata, VerifyUiImageSourceTests_RejectsIncompleteDiscontiguousOrMalformedMipMetadata)
+
 NWB_ADHD_GTEST_F(UiImageSourceTests, RejectsPayloadLengthAndAlphaTransportMismatches, VerifyUiImageSourceTests_RejectsPayloadLengthAndAlphaTransportMismatches)
+
 NWB_ADHD_GTEST_F(UiImageSourceTests, RejectedSamePathReplacementPreservesPreviouslyAcceptedOwnedVersion, VerifyUiImageSourceTests_RejectedSamePathReplacementPreservesPreviouslyAcceptedOwnedVersion)
 
 

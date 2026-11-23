@@ -12,6 +12,36 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+type MemorySourceEnum = MemorySource;
+type LogTypeEnum = LogType;
+type EventKindEnum = EventKind;
+type CaptureFlagMask = TelemetryCaptureFlag;
+type PerfTimingSourceEnum = PerfTimingSource;
+type FrameGraphNodeKindEnum = FrameGraphNodeKind;
+type FrameGraphEdgeKindEnum = FrameGraphEdgeKind;
+type FrameGraphQueueClassEnum = FrameGraphQueueClass;
+type FrameGraphQueueAssignmentReasonEnum = FrameGraphQueueAssignmentReason;
+type FrameGraphQueueAssignmentModifierMask = FrameGraphQueueAssignmentModifier;
+type FrameGraphQueueAssignmentAcceptanceEnum = FrameGraphQueueAssignmentAcceptance;
+type FrameGraphTaskPacketizationDecisionEnum = FrameGraphTaskPacketizationDecision;
+type TelemetryRecorder = Recorder;
+type CaptureFlag = TelemetryCaptureFlag;
+type PerfSession = Session;
+type PerfSessionReport = SessionReport;
+type TelemetryCaptureSession = CaptureSession;
+const StringView s_SuiteArenaSourceRecord = "\"source\": \"arena\"";
+const StringView s_SuiteHeapBackingSourceRecord = "\"source\": \"heapBacking\"";
+const StringView s_SuiteReservedBytesField = "reservedBytes";
+const StringView s_SuiteUsedBytesField = "usedBytes";
+const StringView s_SuitePeakUsedBytesField = "peakUsedBytes";
+const StringView s_SuiteAllocationCountField = "allocationCount";
+const StringView s_SuiteReallocationCountField = "reallocationCount";
+const StringView s_SuiteDeallocationCountField = "deallocationCount";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class TelemetryTestArena{
     public HeapStorage arena;
     public ScratchStorage scratchArena = ScratchStorage(s_TelemetryScratch);
@@ -47,20 +77,6 @@ class OwnedAllocation : NoCopy{
         }
     }
 }
-type MemorySourceEnum = MemorySource;
-type LogTypeEnum = LogType;
-type EventKindEnum = EventKind;
-type CaptureFlagMask = TelemetryCaptureFlag;
-type PerfTimingSourceEnum = PerfTimingSource;
-type FrameGraphNodeKindEnum = FrameGraphNodeKind;
-type FrameGraphEdgeKindEnum = FrameGraphEdgeKind;
-type FrameGraphQueueClassEnum = FrameGraphQueueClass;
-type FrameGraphQueueAssignmentReasonEnum = FrameGraphQueueAssignmentReason;
-type FrameGraphQueueAssignmentModifierMask = FrameGraphQueueAssignmentModifier;
-type FrameGraphQueueAssignmentAcceptanceEnum = FrameGraphQueueAssignmentAcceptance;
-type FrameGraphTaskPacketizationDecisionEnum = FrameGraphTaskPacketizationDecision;
-type TelemetryRecorder = Recorder;
-type CaptureFlag = TelemetryCaptureFlag;
 
 void ReadTelemetryPod<T>(in TelemetryBytes payload, in usize byteOffset, mut T outValue){
     usize offset = byteOffset;
@@ -170,20 +186,6 @@ Expected<DecodedEvent, DecodeResult> DecodeTestEventBytes(mut HeapStorage arena,
 Expected<usize, DecodeResult> DecodeTestEventStreamBytes(in TelemetryBytes bytes, mut HeapStorage arena, mut TelemetryRecorder recorder){
     return DecodeEventStreamSpan(bytes, bytes.size(), arena, recorder);
 }
-
-type PerfSession = Session;
-type PerfSessionReport = SessionReport;
-type TelemetryCaptureSession = CaptureSession;
-
-
-const StringView s_SuiteArenaSourceRecord = "\"source\": \"arena\"";
-const StringView s_SuiteHeapBackingSourceRecord = "\"source\": \"heapBacking\"";
-const StringView s_SuiteReservedBytesField = "reservedBytes";
-const StringView s_SuiteUsedBytesField = "usedBytes";
-const StringView s_SuitePeakUsedBytesField = "peakUsedBytes";
-const StringView s_SuiteAllocationCountField = "allocationCount";
-const StringView s_SuiteReallocationCountField = "reallocationCount";
-const StringView s_SuiteDeallocationCountField = "deallocationCount";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

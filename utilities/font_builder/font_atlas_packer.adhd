@@ -17,6 +17,11 @@ class Shelf{
     public u32 height = 0u;
 }
 
+class ShelfPosition{
+    public u32 x = 0u;
+    public u32 y = 0u;
+}
+
 class ShelfPlacement{
     public u32 page = 0u;
     public u32 group = 0u;
@@ -30,7 +35,7 @@ class ShelfPlacement{
 
 
 class FontAtlasPacker{
-    private b8 placeOnShelf(in u32 width, in u32 height, in u32 extent, mut Shelf inOutShelf, mut u32 outX, mut u32 outY)const{
+    private Expected<ShelfPosition> placeOnShelf(in u32 width, in u32 height, in u32 extent, mut Shelf inOutShelf)const{
         Shelf next = inOutShelf;
         if(next.x + width > extent){
             next.x = 0u;
@@ -38,14 +43,15 @@ class FontAtlasPacker{
             next.height = 0u;
         }
         if(next.y + height > extent)
-            return false;
-        outX = next.x + 1u;
-        outY = next.y + 1u;
+            return MakeUnexpected(Failure());
+        ShelfPosition position;
+        position.x = next.x + 1u;
+        position.y = next.y + 1u;
         next.x += width;
         if(height > next.height)
             next.height = height;
         inOutShelf = next;
-        return true;
+        return position;
     }
 
     public b8 packOrderBefore(in FontAtlasGlyph lhs, in FontAtlasGlyph rhs)const{
@@ -65,16 +71,15 @@ class FontAtlasPacker{
     )const{
         const u32 pageCount = maxGroups * s_FontAtlasMaxChannelCount;
         for(u32 page = 0u; page < pageCount; ++page){
-            u32 placedX = 0u;
-            u32 placedY = 0u;
-            if(!this.placeOnShelf(width, height, extent, inOutShelves[cast<usize>(page)], placedX, placedY))
+            const Expected<ShelfPosition> position = this.placeOnShelf(width, height, extent, inOutShelves[cast<usize>(page)]);
+            if(!position.has_value())
                 continue;
             ShelfPlacement placement;
             placement.page = page;
             placement.group = page / s_FontAtlasMaxChannelCount;
             placement.channel = page % s_FontAtlasMaxChannelCount;
-            placement.x = placedX;
-            placement.y = placedY;
+            placement.x = position.value().x;
+            placement.y = position.value().y;
             return placement;
         }
         return MakeUnexpected(Failure());

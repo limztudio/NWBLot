@@ -10,6 +10,7 @@
 
 
 class GpuPacketResetDiscardFailure{}
+
 class GpuPacketResetOriginalFailure{}
 
 class GpuPacketThrowingResetTask : NoCopy{
@@ -60,6 +61,28 @@ class GpuPacketBorrowedPayloadLifetimeTask : NoCopy{
     }
 }
 
+class GpuResetOnUnwind : NoCopy{
+    private mut GpuTaskGraph m_graph;
+    public GpuResetOnUnwind(mut GpuTaskGraph graph){ this.m_graph = graph; }
+    public ~GpuResetOnUnwind(){ this.m_graph.reset(); }
+}
+
+class DiscardOnlyTaskPayload{
+    private mut u32 m_discardedCount;
+    private Vector<u32> m_counts;
+    public DiscardOnlyTaskPayload(mut u32 discardedCount){
+        this.m_discardedCount = discardedCount;
+        this.m_counts.push_back(1u);
+    }
+    public void discarded(){
+        this.m_discardedCount += this.m_counts[0u];
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 GpuTaskExternalStateSource MakeGpuPacketExternalStateSource(in borrow CommandListResourceStateHandoff state){
     GpuTaskExternalStateSource source;
     source.setState(state);
@@ -78,12 +101,6 @@ Expected<GpuTaskId> AddBorrowedPayloadLifetimeTask(mut GpuTaskGraph graph, in Gp
         lambda[mut alive, mut destructions, mut discards, mut lateUses, in throwOnDiscard]() -> GpuPacketBorrowedPayloadLifetimeTask{
             return GpuPacketBorrowedPayloadLifetimeTask(alive, destructions, discards, lateUses, throwOnDiscard);
         });
-}
-
-class GpuResetOnUnwind : NoCopy{
-    private mut GpuTaskGraph m_graph;
-    public GpuResetOnUnwind(mut GpuTaskGraph graph){ this.m_graph = graph; }
-    public ~GpuResetOnUnwind(){ this.m_graph.reset(); }
 }
 
 [cpp_unwind]
@@ -185,10 +202,6 @@ GpuCopyBufferTaskDesc MakeCopyBufferDescWithRegions(in Span<GpuCopyBufferTaskReg
     desc.setRegions(regions);
     return desc;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void GpuPacketExpectMissingTask(
     in GpuTaskGraphQueueAssignments assignments,
@@ -1116,23 +1129,10 @@ void VerifyGpuPacket_OperationPayloadRetirementDuringUnwindPreservesOriginalFail
     EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
 }
 
-class DiscardOnlyTaskPayload{
-    private mut u32 m_discardedCount;
-    private Vector<u32> m_counts;
-    public DiscardOnlyTaskPayload(mut u32 discardedCount){
-        this.m_discardedCount = discardedCount;
-        this.m_counts.push_back(1u);
-    }
-    public void discarded(){
-        this.m_discardedCount += this.m_counts[0u];
-    }
-}
-
 Expected<GpuTaskId> AddDiscardOnlyTaskFromScratch(mut GpuTaskGraph graph, in GpuTaskDesc desc, mut u32 discardedCount){
     DiscardOnlyTaskPayload payload(discardedCount);
     return graph.addPreparedPayloadTask(desc, payload);
 }
-
 
 void VerifyGpuPacket_DiscardsTypedPayloadWhenDeclarationIsRejected(){
     TestArena testArena = TestArena();
@@ -2009,37 +2009,60 @@ void VerifyGpuPacket_RejectsInvalidAndIncompatibleQueueTopologiesDeterministical
     EXPECT_EQ(assignments.diagnostic().status, GpuTaskGraphQueueAssignmentStatus::InvalidQueueTopology);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST(GpuTaskGraph, ClampsReadyFrontierWorkerUtilization, VerifyGpuPacket_ClampsReadyFrontierWorkerUtilization)
+
 NWB_ADHD_GTEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile, VerifyGpuPacket_RecreatesPacketRecordingStateAfterRecompile)
+
 NWB_ADHD_GTEST(GpuTaskGraph, InvalidatesPacketRuntimeAndCaptureForSameGraphRecompile, VerifyGpuPacket_InvalidatesPacketRuntimeAndCaptureForSameGraphRecompile)
+
 NWB_ADHD_GTEST(GpuTaskGraph, CompiledTaskLookupRejectsOutOfRangeStaleAndUncompiledHandles, VerifyGpuPacket_CompiledTaskLookupRejectsOutOfRangeStaleAndUncompiledHandles)
+
 NWB_ADHD_GTEST(GpuTaskGraph, RejectsRecoverySubmissionWithoutAcceptedQueueFrontierRole, VerifyGpuPacket_RejectsRecoverySubmissionWithoutAcceptedQueueFrontierRole)
+
 NWB_ADHD_GTEST(GpuTaskGraph, RejectsAcceptedQueueFrontierTasksWithPrerequisites, VerifyGpuPacket_RejectsAcceptedQueueFrontierTasksWithPrerequisites)
+
 NWB_ADHD_GTEST(GpuTaskGraph, RejectsAcceptedQueueFrontierTasksWithConcreteResources, VerifyGpuPacket_RejectsAcceptedQueueFrontierTasksWithConcreteResources)
+
 NWB_ADHD_GTEST(GpuTaskGraph, RejectsNonRecordableTasksDuringNativeCompilation, VerifyGpuPacket_RejectsNonRecordableTasksDuringNativeCompilation)
+
 NWB_ADHD_GTEST(GpuTaskGraph, RegistersOnlyExactTypedPayloadLifecycleSignatures, VerifyGpuPacket_RegistersOnlyExactTypedPayloadLifecycleSignatures)
+
 NWB_ADHD_GTEST(GpuTaskGraph, DiscardsTypedPayloadLifecycleOnlyOnceWhenGraphIsAbandoned, VerifyGpuPacket_DiscardsTypedPayloadLifecycleOnlyOnceWhenGraphIsAbandoned)
+
 NWB_ADHD_GTEST(GpuTaskGraph, ResetRetiresPayloadsAndPublishesReusableStateWhenDiscardObserverThrows, VerifyGpuPacket_ResetRetiresPayloadsAndPublishesReusableStateWhenDiscardObserverThrows)
+
 NWB_ADHD_GTEST(GpuTaskGraph, ResetDuringUnwindPreservesOriginalFailureWithoutCallingDiscardObserver, VerifyGpuPacket_ResetDuringUnwindPreservesOriginalFailureWithoutCallingDiscardObserver)
+
 NWB_ADHD_GTEST(GpuTaskGraph, RetiresOperationPayloadsBeforeBorrowedStateExpiresAndPreservesDeclarations, VerifyGpuPacket_RetiresOperationPayloadsBeforeBorrowedStateExpiresAndPreservesDeclarations)
+
 NWB_ADHD_GTEST(GpuTaskGraph, OperationPayloadRetirementPreservesObserverFailureAndFinishesAllDestruction, VerifyGpuPacket_OperationPayloadRetirementPreservesObserverFailureAndFinishesAllDestruction)
+
 NWB_ADHD_GTEST(GpuTaskGraph, OperationPayloadRetirementDuringUnwindPreservesOriginalFailureWithoutObservers, VerifyGpuPacket_OperationPayloadRetirementDuringUnwindPreservesOriginalFailureWithoutObservers)
+
 NWB_ADHD_GTEST(GpuTaskGraph, DiscardsTypedPayloadWhenDeclarationIsRejected, VerifyGpuPacket_DiscardsTypedPayloadWhenDeclarationIsRejected)
+
 NWB_ADHD_GTEST(GpuTaskGraph, ClearsPrimitiveAcceptedTokensWhenDeclarationFails, VerifyGpuPacket_ClearsPrimitiveAcceptedTokensWhenDeclarationFails)
+
 NWB_ADHD_GTEST(GpuTaskGraph, NormalExecutionPreludeGatesIndependentBranchesWithoutOrderingThem, VerifyGpuPacket_NormalExecutionPreludeGatesIndependentBranchesWithoutOrderingThem)
+
 NWB_ADHD_GTEST(GpuTaskGraph, NormalExecutionPreludeRejectsInvalidRegistrationAndClearsOnReset, VerifyGpuPacket_NormalExecutionPreludeRejectsInvalidRegistrationAndClearsOnReset)
+
 NWB_ADHD_GTEST(GpuTaskGraph, NormalExecutionPreludeRejectsNonPrimaryAndDependentRoots, VerifyGpuPacket_NormalExecutionPreludeRejectsNonPrimaryAndDependentRoots)
+
 NWB_ADHD_GTEST(GpuTaskGraph, CopyBufferTaskRequiresTypedBufferImports, VerifyGpuPacket_CopyBufferTaskRequiresTypedBufferImports)
+
 NWB_ADHD_GTEST(GpuTaskGraph, AutomaticallyUsesTheOnlyQueueSupportingAllCommandKinds, VerifyGpuPacket_AutomaticallyUsesTheOnlyQueueSupportingAllCommandKinds)
+
 NWB_ADHD_GTEST(GpuTaskGraph, KeepsTaskOwnedPrimaryGraphicsRestrictionDuringAutomaticPlacement, VerifyGpuPacket_KeepsTaskOwnedPrimaryGraphicsRestrictionDuringAutomaticPlacement)
+
 NWB_ADHD_GTEST(GpuTaskGraph, ConditionalRecoveryDoesNotCreateOverlapForSerialNormalWork, VerifyGpuPacket_ConditionalRecoveryDoesNotCreateOverlapForSerialNormalWork)
+
 NWB_ADHD_GTEST(GpuTaskGraph, ChoosesAutomaticPlacementDeterministicallyAcrossTopologyOrder, VerifyGpuPacket_ChoosesAutomaticPlacementDeterministicallyAcrossTopologyOrder)
+
 NWB_ADHD_GTEST(GpuTaskGraph, QueueScoreUsesOnlyReducedOutgoingDependencies, VerifyGpuPacket_QueueScoreUsesOnlyReducedOutgoingDependencies)
+
 NWB_ADHD_GTEST(GpuTaskGraph, DeduplicatesRawOwnershipScoreAndIgnoresSameFamilyQueueCrossings, VerifyGpuPacket_DeduplicatesRawOwnershipScoreAndIgnoresSameFamilyQueueCrossings)
+
 NWB_ADHD_GTEST(GpuTaskGraph, RejectsInvalidAndIncompatibleQueueTopologiesDeterministically, VerifyGpuPacket_RejectsInvalidAndIncompatibleQueueTopologiesDeterministically)
 
 

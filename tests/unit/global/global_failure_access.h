@@ -24,7 +24,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_global_binary_shared_tests{
+namespace GlobalBinaryFailureTests{
 
 struct ThrowingByteSize{};
 struct ThrowingByteSizeComparison{
@@ -63,7 +63,7 @@ struct CharSink{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_noexcept_failure_tests{
+namespace NoexceptFailureTests{
 
 inline constexpr u32 s_PlacementFailure = 0xE201u;
 inline constexpr u32 s_ReadFailure = 0xE202u;
@@ -177,8 +177,8 @@ inline void ResetPlacements(){ StatefulPlacementCallable::s_Allocations = 0u; }
 namespace std{
 
 template<>
-struct hash<__hidden_noexcept_failure_tests::HashProbe>{
-    [[nodiscard]] __hidden_noexcept_failure_tests::ThrowingHashValue operator()(const __hidden_noexcept_failure_tests::HashProbe&)const noexcept{
+struct hash<NoexceptFailureTests::HashProbe>{
+    [[nodiscard]] NoexceptFailureTests::ThrowingHashValue operator()(const NoexceptFailureTests::HashProbe&)const noexcept{
         return {};
     }
 };
@@ -189,7 +189,7 @@ struct hash<__hidden_noexcept_failure_tests::HashProbe>{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_hex_failure_tests{
+namespace HexFailureTests{
 
 struct ThrowingHexCapacityPredicate{
 public:
@@ -253,7 +253,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_fixed_vector_failure_tests{
+namespace FixedVectorFailureTests{
 
 struct ThrowingFixedVectorAssignment{
 public:
@@ -362,7 +362,7 @@ template<typename Container, typename Callback>
 }
 
 using CaseIndexSet = ::HierarchicalIndexSet<NWB::Core::Alloc::ScratchArena>;
-inline void CallStoredFunction(__hidden_noexcept_failure_tests::FunctionStorage& value){ value(); }
+inline void CallStoredFunction(NoexceptFailureTests::FunctionStorage& value){ value(); }
 [[noreturn]] inline void ThrowTestRuntime(const char* text){ throw RuntimeException(text); }
 
 static_assert(s_BitsPerU64 == 64u);

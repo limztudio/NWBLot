@@ -78,37 +78,20 @@ b8 Texture::loadBinary(in Span<u8> binary){
     if(!this.checkVirtualPath(s_TextureLoadBinaryContext))
         return false;
 
-    MipLevelVector mipLevels;
-    Vector<u8> payloadBytes;
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 depth = 1u;
-    u8 dimensionValue = 0u;
-    u8 payloadFormatValue = 0u;
-    u8 alphaModeValue = 0u;
-    u8 alphaConstantUnorm8 = 0u;
-    if(!TextureBinaryCodec().deserialize(
-        binary,
-        width,
-        height,
-        depth,
-        dimensionValue,
-        payloadFormatValue,
-        alphaModeValue,
-        alphaConstantUnorm8,
-        mipLevels,
-        payloadBytes
-    ))
+    MipLevelVector mipLevels = MipLevelVector();
+    Vector<u8> payloadBytes = Vector<u8>();
+    const Expected<TextureBinaryMetadata> metadata = TextureBinaryCodec().deserialize(binary, mipLevels, payloadBytes);
+    if(!metadata.has_value())
         return false;
 
     Texture candidate(this.virtualPath());
-    candidate.m_width = width;
-    candidate.m_height = height;
-    candidate.m_dimension = cast<TexturePayloadDimension>(dimensionValue);
-    candidate.m_depth = depth;
-    candidate.m_payloadFormat = cast<TexturePayloadFormat>(payloadFormatValue);
-    candidate.m_alphaMode = cast<TextureAlphaMode>(alphaModeValue);
-    candidate.m_alphaConstantUnorm8 = alphaConstantUnorm8;
+    candidate.m_width = metadata.value().width;
+    candidate.m_height = metadata.value().height;
+    candidate.m_dimension = cast<TexturePayloadDimension>(metadata.value().flags.dimension);
+    candidate.m_depth = metadata.value().depth;
+    candidate.m_payloadFormat = cast<TexturePayloadFormat>(metadata.value().flags.payloadFormat);
+    candidate.m_alphaMode = cast<TextureAlphaMode>(metadata.value().flags.alphaMode);
+    candidate.m_alphaConstantUnorm8 = metadata.value().flags.alphaConstantUnorm8;
     candidate.m_mipLevels = mipLevels;
     candidate.m_payloadBytes = payloadBytes;
     if(!candidate.validatePayload())

@@ -9,6 +9,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const u32 s_UiSliderQuietNaNF32Bits = 0x7fc00000u;
+const u32 s_UiSliderPosInfF32Bits = 0x7f800000u;
+const u64 s_UiSliderQuietNaNF64Bits = 0x7ff8000000000000u;
+const u64 s_UiSliderPosInfF64Bits = 0x7ff0000000000000u;
+const u64 s_UiSliderNegInfF64Bits = 0xfff0000000000000u;
+const u64 s_UiSliderNegZeroF64Bits = 0x8000000000000000u;
+const AStringView s_UiSliderPanelKey = "panel";
+const AStringView s_UiSliderKey = "slider";
+const AStringView s_UiSliderChildPopupKey = "child";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class UiSliderBehaviorTests{
     public SliderState m_state;
     public SliderOptions m_options;
@@ -39,19 +53,16 @@ class UiSliderBehaviorTests{
 class UiSliderBuilderTests : SliderFixture{
 
 
-
 }
 
 
 class UiSliderInputTests : SliderFixture{
 
 
-
 }
 
 
 class UiSliderLifetimeTests : SliderFixture{
-
 
 
 }
@@ -164,16 +175,6 @@ b8 FinishUiSliderPopupParent(mut UiSliderPopupTests self){
 b8 AcceptUiSliderPopupFamily(mut UiSliderPopupTests self, in u64 generation){
     return DeclareUiSliderPopupFamily(self, generation) && FinishUiSliderPopupParent(self) && self.m_context.commitFrame(generation);
 }
-
-const u32 s_UiSliderQuietNaNF32Bits = 0x7fc00000u;
-const u32 s_UiSliderPosInfF32Bits = 0x7f800000u;
-const u64 s_UiSliderQuietNaNF64Bits = 0x7ff8000000000000u;
-const u64 s_UiSliderPosInfF64Bits = 0x7ff0000000000000u;
-const u64 s_UiSliderNegInfF64Bits = 0xfff0000000000000u;
-const u64 s_UiSliderNegZeroF64Bits = 0x8000000000000000u;
-const AStringView s_UiSliderPanelKey = "panel";
-const AStringView s_UiSliderKey = "slider";
-const AStringView s_UiSliderChildPopupKey = "child";
 
 
 void ExpectUiSliderResult(in SliderResult actual, in SliderResult expected){

@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/avboit/avboit_stage_graph_tasks.adhd>
 #include <impl/ecs_render/deferred/opaque_gbuffer_resource_uses.adhd>
 #include <impl/ecs_render/mesh/renderer_mesh_types.adhd>
 #include <tests/common/gtest_macros.adhd>
@@ -64,6 +65,10 @@ type PreparedMeshSwBvhGraphResourceVectorResult = Expected<PreparedMeshSwBvhGrap
 type PresentationToneMapEnum = PresentationToneMap;
 const usize s_OpticalRuntimeInputGpuBytes = size_of<RayTracingOpticalRuntimeInputGpu>();
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [ordered]
 class OpticalSceneContext{
     public HeapStorage arena = HeapStorage(s_EcsCaseTestsOpticalSceneUpload);
@@ -92,32 +97,6 @@ class OpaqueCsgClearContext{
         this.graph = GpuTaskGraph(this.testArena);
     }
 }
-Expected<OpaqueCsgIntervalClearResult> DeclareOpaqueCsgIntervalClear(
-    mut GpuTaskGraph graph,
-    mut DeferredFrameTargets targets,
-    in GpuTaskId dependency,
-    mut GraphClearTimingRecordState clearTimingState
-){
-    OpaqueCsgIntervalClearInputs inputs;
-    inputs.width = targets.width;
-    inputs.height = targets.height;
-    inputs.dependencyTask = dependency;
-    OpaqueCsgIntervalClearBuilder builder(graph);
-    return builder.declare(inputs, clearTimingState);
-}
-u32 ReadCopiedU32(in Span<u8> bytes, in usize offset){
-    Array<u8, 4> word;
-    for(usize i = 0u; i < word.size(); ++i)
-        word[i] = bytes[offset + i];
-    return bit_cast<u32>(word);
-}
-void AcceptNullOutputLayer(in u64 frameGeneration, in QueueSubmissionToken token){
-    AcceptDeferredOutputLayer(Optional<mut IGpuTaskGraphOutputLayerContributor>(), frameGeneration, token);
-}
-void AcceptRecordingOutputLayer(mut RecordingLayerContributor contributor, in u64 frameGeneration, in QueueSubmissionToken token){
-    mut IGpuTaskGraphOutputLayerContributor base = contributor;
-    AcceptDeferredOutputLayer(Optional<mut IGpuTaskGraphOutputLayerContributor>(base), frameGeneration, token);
-}
 
 class EcsGraphReadScope{
     [owner_result]
@@ -130,6 +109,7 @@ class EcsGraphReadScope{
         return ResolvePreparedSoftwareBvhGraphResources(graph, builds);
     }
 }
+
 [ordered]
 class SwBvhBuildContext{
     public HeapStorage testArena;
@@ -142,6 +122,7 @@ class SwBvhBuildContext{
         this.scope = this.scratch.makeValue<EcsGraphReadScope>();
     }
 }
+
 [ordered]
 class RaySceneGraphReadsContext{
     public HeapStorage testArena;
@@ -155,17 +136,50 @@ class RaySceneGraphReadsContext{
     }
     public ArenaMemoryStats scratchMemoryStats()const{ return this.scratch.memoryStats(); }
 }
-PreparedMeshSwBvhGraphResourceVectorResult ResolveSwBvhGraphResources(mut SwBvhBuildContext context, in PreparedMeshSwBvhBuildSpan builds){
-    return context.scope.readBuilds(builds, context.graph);
-}
-b8 TryImportRaySceneGraphReads(in RayTracingSceneGraphResources resources, mut RaySceneGraphReadsContext context){
-    return context.scope.read(resources, context.graph).has_value();
-}
-f32x3x4u ZeroOpticalAffineMatrix(){ return f32x3x4u(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+Expected<OpaqueCsgIntervalClearResult> DeclareOpaqueCsgIntervalClear(
+    mut GpuTaskGraph graph,
+    mut DeferredFrameTargets targets,
+    in GpuTaskId dependency,
+    mut GraphClearTimingRecordState clearTimingState
+){
+    OpaqueCsgIntervalClearInputs inputs;
+    inputs.width = targets.width;
+    inputs.height = targets.height;
+    inputs.dependencyTask = dependency;
+    OpaqueCsgIntervalClearBuilder builder(graph);
+    return builder.declare(inputs, clearTimingState);
+}
+
+u32 ReadCopiedU32(in Span<u8> bytes, in usize offset){
+    Array<u8, 4> word;
+    for(usize i = 0u; i < word.size(); ++i)
+        word[i] = bytes[offset + i];
+    return bit_cast<u32>(word);
+}
+
+void AcceptNullOutputLayer(in u64 frameGeneration, in QueueSubmissionToken token){
+    AcceptDeferredOutputLayer(Optional<mut IGpuTaskGraphOutputLayerContributor>(), frameGeneration, token);
+}
+
+void AcceptRecordingOutputLayer(mut RecordingLayerContributor contributor, in u64 frameGeneration, in QueueSubmissionToken token){
+    mut IGpuTaskGraphOutputLayerContributor base = contributor;
+    AcceptDeferredOutputLayer(Optional<mut IGpuTaskGraphOutputLayerContributor>(base), frameGeneration, token);
+}
+
+PreparedMeshSwBvhGraphResourceVectorResult ResolveSwBvhGraphResources(mut SwBvhBuildContext context, in PreparedMeshSwBvhBuildSpan builds){
+    return context.scope.readBuilds(builds, context.graph);
+}
+
+b8 TryImportRaySceneGraphReads(in RayTracingSceneGraphResources resources, mut RaySceneGraphReadsContext context){
+    return context.scope.read(resources, context.graph).has_value();
+}
+
+f32x3x4u ZeroOpticalAffineMatrix(){ return f32x3x4u(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f); }
 
 void OutputLayerColor_ExpectColorNear(in ShaderFloat3 actual, in ShaderFloat3 expected, in f64 tolerance){
     EXPECT_NEAR(actual.x, expected.x, tolerance);
@@ -369,6 +383,36 @@ void VerifyOpaqueCsgIntervalClearBuilder_NoOpaqueWorkDoesNotPublishDependencyAsC
     ASSERT_EQ(declarations.taskCount(), initialTaskCount);
     EXPECT_TRUE(declarations.validTask(dependency));
     EXPECT_EQ(declarations.taskAt(0u).id, dependency);
+}
+
+void VerifyAvboitClearChain_FailedDeclarationResetsStageAndLeavesGraphClean(){
+    OpaqueCsgClearContext context = OpaqueCsgClearContext();
+    GpuTaskDesc uploadDesc = GpuTaskDesc();
+    uploadDesc.setIdentity(Name(s_EcsCaseTestsOpaqueCsgIntervalClearDependency)).setMarkerLabel("AVBOIT Clear Upload");
+    const Expected<GpuTaskId> uploadResult = context.graph.addTask(uploadDesc);
+    ASSERT_TRUE(uploadResult.has_value());
+    const GpuTaskId uploadTask = uploadResult.value();
+    ASSERT_TRUE(uploadTask.valid());
+
+    const GpuGraphResourceId resource = MakeGraphResourceId(1u, 1u);
+    AvboitClearChainInputs inputs(
+        resource, resource, resource, resource, resource, resource,
+        resource, resource, resource, resource, resource,
+        uploadTask, true
+    );
+    RendererAvboitTaskGraphStageState stageState = RendererAvboitTaskGraphStageState();
+    stageState.m_clearFirstTask = uploadTask;
+    stageState.m_clearTask = uploadTask;
+    GraphClearTimingRecordState clearTimingState = GraphClearTimingRecordState();
+
+    const Expected<AvboitClearChainResult> clearResult = DeclareAvboitClearChain(context.graph, stageState, inputs, clearTimingState);
+    EXPECT_FALSE(clearResult.has_value());
+    EXPECT_FALSE(stageState.m_clearFirstTask.valid());
+    EXPECT_FALSE(stageState.m_clearTask.valid());
+
+    const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(context.graph);
+    ASSERT_EQ(declarations.taskCount(), 1u);
+    EXPECT_EQ(declarations.taskAt(0u).id, uploadTask);
 }
 
 GpuGraphResourceId MakeGraphResourceId(in u32 generation, in u32 index){
@@ -939,55 +983,98 @@ void VerifyRefractiveBoundsIsolation_TouchingTheCertifiedMarginIsNotIsolated(){
     EXPECT_TRUE(policy.isIsolated(bounds, 0u));
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST(MeshAccelerationUpdateTests, UnknownRuntimeContentsNeverReuseAcceptedMeshAcceleration, VerifyMeshAccelerationUpdateTests_UnknownRuntimeContentsNeverReuseAcceptedMeshAcceleration)
+
 NWB_ADHD_GTEST(MeshAccelerationUpdateTests, EachBackendTracksItsOwnAcceptedContentRevision, VerifyMeshAccelerationUpdateTests_EachBackendTracksItsOwnAcceptedContentRevision)
+
 NWB_ADHD_GTEST(MeshAccelerationUpdateTests, DirtyStorageAndMissingTopologyOverrideMatchingContents, VerifyMeshAccelerationUpdateTests_DirtyStorageAndMissingTopologyOverrideMatchingContents)
+
 NWB_ADHD_GTEST(MeshAccelerationUpdateTests, ImmutableStaticGeometryNeedsAcceptanceButNoRuntimeRevision, VerifyMeshAccelerationUpdateTests_ImmutableStaticGeometryNeedsAcceptanceButNoRuntimeRevision)
+
 NWB_ADHD_GTEST(MeshRayTracingSnapshotPolicyTests, MissingMeshletBoundsDoNotPublishPartialSnapshot, VerifyMeshRayTracingSnapshotPolicyTests_MissingMeshletBoundsDoNotPublishPartialSnapshot)
+
 NWB_ADHD_GTEST(MeshRayTracingSnapshotPolicyTests, IdentityIgnoresBuildStateButTracksGeometryRevision, VerifyMeshRayTracingSnapshotPolicyTests_IdentityIgnoresBuildStateButTracksGeometryRevision)
+
 NWB_ADHD_GTEST(MeshViewStatePolicyTests, MissingTruncatedAndChangedSnapshotsRequireUpload, VerifyMeshViewStatePolicyTests_MissingTruncatedAndChangedSnapshotsRequireUpload)
+
 NWB_ADHD_GTEST(ObjectGeometryCacheTests, LayoutKeepsSentinelVerticesAndPersistentIndicesInDisjointRegions, VerifyObjectGeometryCacheTests_LayoutKeepsSentinelVerticesAndPersistentIndicesInDisjointRegions)
+
 NWB_ADHD_GTEST(ObjectGeometryCacheTests, LayoutRejectsEmptyMisalignedAndOverflowingInputs, VerifyObjectGeometryCacheTests_LayoutRejectsEmptyMisalignedAndOverflowingInputs)
+
 NWB_ADHD_GTEST(ObjectGeometryCacheTests, LayoutChecksFinalStructuredPaddingWithinUintByteAddressing, VerifyObjectGeometryCacheTests_LayoutChecksFinalStructuredPaddingWithinUintByteAddressing)
+
 NWB_ADHD_GTEST(ObjectGeometryCacheTests, RuntimeReuseRequiresAcceptedNonzeroCurrentContent, VerifyObjectGeometryCacheTests_RuntimeReuseRequiresAcceptedNonzeroCurrentContent)
+
 NWB_ADHD_GTEST(ObjectGeometryCacheTests, ImmutableStaticContentReusesZeroRevisionOnlyAfterAcceptance, VerifyObjectGeometryCacheTests_ImmutableStaticContentReusesZeroRevisionOnlyAfterAcceptance)
+
 NWB_ADHD_GTEST(OpaqueCsgIntervalClearBuilder, NoOpaqueWorkDoesNotPublishDependencyAsClear, VerifyOpaqueCsgIntervalClearBuilder_NoOpaqueWorkDoesNotPublishDependencyAsClear)
+
+NWB_ADHD_GTEST(AvboitClearChain, FailedDeclarationResetsStageAndLeavesGraphClean, VerifyAvboitClearChain_FailedDeclarationResetsStageAndLeavesGraphClean)
+
 NWB_ADHD_GTEST(OpaqueGbufferResourceUses, CsgSparseValidityKeepsReadWriteRangesWithoutOpaqueDraws, VerifyOpaqueGbufferResourceUses_CsgSparseValidityKeepsReadWriteRangesWithoutOpaqueDraws)
+
 NWB_ADHD_GTEST(OpticalRuntimeBounds, UploadByteSizeRejectsEmptyMisalignedAndOutOfCapacity, VerifyOpticalRuntimeBounds_UploadByteSizeRejectsEmptyMisalignedAndOutOfCapacity)
+
 NWB_ADHD_GTEST(OpticalRuntimeBounds, FinalizeCountsRespectShaderAddressLimits, VerifyOpticalRuntimeBounds_FinalizeCountsRespectShaderAddressLimits)
+
 NWB_ADHD_GTEST(OpticalRuntimeBounds, GraphBufferRequiresResourceAndAcceptedUploadOrReuse, VerifyOpticalRuntimeBounds_GraphBufferRequiresResourceAndAcceptedUploadOrReuse)
+
 NWB_ADHD_GTEST(OpticalRuntimeBounds, MissingRuntimeBoundsPoisonsUnionWithoutDroppingInstance, VerifyOpticalRuntimeBounds_MissingRuntimeBoundsPoisonsUnionWithoutDroppingInstance)
+
 NWB_ADHD_GTEST(OpticalRuntimeBounds, RejectedUploadControlDoesNotAllocateOrPublish, VerifyOpticalRuntimeBounds_RejectedUploadControlDoesNotAllocateOrPublish)
+
 NWB_ADHD_GTEST(OpticalScene, OnlyEmittedTransparentPoliciesRequireClosedMedia, VerifyOpticalScene_OnlyEmittedTransparentPoliciesRequireClosedMedia)
+
 NWB_ADHD_GTEST(OpticalScene, ClosedAndUnknownTransparentPoliciesRequireGeneralTransport, VerifyOpticalScene_ClosedAndUnknownTransparentPoliciesRequireGeneralTransport)
+
 NWB_ADHD_GTEST(OpticalScene, IncompleteBoundsRemainRejectedWithUnspecifiedPolicySpecialization, VerifyOpticalScene_IncompleteBoundsRemainRejectedWithUnspecifiedPolicySpecialization)
+
 NWB_ADHD_GTEST(OpticalScene, OpaqueInstancesPreserveOrderWithoutExpandingOpticalBounds, VerifyOpticalScene_OpaqueInstancesPreserveOrderWithoutExpandingOpticalBounds)
+
 NWB_ADHD_GTEST(OpticalScene, UntrustedTransparentBoundsCannotBecomeAnAirShortcut, VerifyOpticalScene_UntrustedTransparentBoundsCannotBecomeAnAirShortcut)
+
 NWB_ADHD_GTEST(OpticalScene, NonfiniteAndInvertedBoundsRejectTheProof, VerifyOpticalScene_NonfiniteAndInvertedBoundsRejectTheProof)
+
 NWB_ADHD_GTEST(OpticalScene, MissingGeometryInvalidatesEvenAnOtherwiseEmptyScene, VerifyOpticalScene_MissingGeometryInvalidatesEvenAnOtherwiseEmptyScene)
+
 NWB_ADHD_GTEST(OpticalScene, IncompleteBoundsHaveDistinctContentIdentity, VerifyOpticalScene_IncompleteBoundsHaveDistinctContentIdentity)
+
 NWB_ADHD_GTEST(OpticalScene, FrozenUploadOwnsBytesAfterGatherChanges, VerifyOpticalScene_FrozenUploadOwnsBytesAfterGatherChanges)
+
 NWB_ADHD_GTEST(OpticalScene, AffineBoundsEncloseMirroringNonuniformScaleAndLargeTranslation, VerifyOpticalScene_AffineBoundsEncloseMirroringNonuniformScaleAndLargeTranslation)
+
 NWB_ADHD_GTEST(OpticalScene, CancellationRetainsOrderedAffineEnclosure, VerifyOpticalScene_CancellationRetainsOrderedAffineEnclosure)
+
 NWB_ADHD_GTEST(OpticalScene, InactiveSignalingNaNLanesPreserveAffineEnclosureAndExceptionFlags, VerifyOpticalScene_InactiveSignalingNaNLanesPreserveAffineEnclosureAndExceptionFlags)
+
 NWB_ADHD_GTEST(OpticalScene, NonfiniteAffineBoundsNeverPublishAPartialResult, VerifyOpticalScene_NonfiniteAffineBoundsNeverPublishAPartialResult)
+
 NWB_ADHD_GTEST(OutputLayerColor, TransparentHdrLayerPreservesSceneAndOpaqueUiIgnoresSceneExposure, VerifyOutputLayerColor_TransparentHdrLayerPreservesSceneAndOpaqueUiIgnoresSceneExposure)
+
 NWB_ADHD_GTEST(OutputLayerColor, HdrBlendsInLinearNitsBeforeOnePqEncoding, VerifyOutputLayerColor_HdrBlendsInLinearNitsBeforeOnePqEncoding)
+
 NWB_ADHD_GTEST(OutputLayerColor, NegativeUiRadianceClampsAndHighlightsRemainBelowTheOutputBound, VerifyOutputLayerColor_NegativeUiRadianceClampsAndHighlightsRemainBelowTheOutputBound)
+
 NWB_ADHD_GTEST(OutputLayer, MissingContributorInvalidTokenAndZeroGenerationCannotPublishAcceptance, VerifyOutputLayer_MissingContributorInvalidTokenAndZeroGenerationCannotPublishAcceptance)
+
 NWB_ADHD_GTEST(PreparedSoftwareBvhGraphResources, MissingImportedBuildBuffersCannotPublishResources, VerifyPreparedSoftwareBvhGraphResources_MissingImportedBuildBuffersCannotPublishResources)
+
 NWB_ADHD_GTEST(PresentationSettings, AcceptsZeroExposureAtTheLowerBoundary, VerifyPresentationSettings_AcceptsZeroExposureAtTheLowerBoundary)
+
 NWB_ADHD_GTEST(PresentationSettings, RejectsNonFiniteOrNegativeExposure, VerifyPresentationSettings_RejectsNonFiniteOrNegativeExposure)
+
 NWB_ADHD_GTEST(PresentationSettings, RejectsInvalidToneMapAndNonPositiveOrNonFiniteShoulder, VerifyPresentationSettings_RejectsInvalidToneMapAndNonPositiveOrNonFiniteShoulder)
+
 NWB_ADHD_GTEST(EcsGraphics, RaySceneSnapshotDoesNotTreatMissingResourcesAsHardwareAvailability, VerifyEcsGraphics_RaySceneSnapshotDoesNotTreatMissingResourcesAsHardwareAvailability)
+
 NWB_ADHD_GTEST(EcsGraphics, RaySceneGraphReadsMissingResourcesRetainScratchArena, VerifyEcsGraphics_RaySceneGraphReadsMissingResourcesRetainScratchArena)
+
 NWB_ADHD_GTEST(RayTracingSceneIdentityTests, UntrustedScenesNeverPublishTrustedContentAndAbsentCsgIsIgnored, VerifyRayTracingSceneIdentityTests_UntrustedScenesNeverPublishTrustedContentAndAbsentCsgIsIgnored)
+
 NWB_ADHD_GTEST(SceneBvhUploadPolicy, StaleReuseAndUnacceptedUploadCannotPublishCacheIdentity, VerifySceneBvhUploadPolicy_StaleReuseAndUnacceptedUploadCannotPublishCacheIdentity)
+
 NWB_ADHD_GTEST(RayTracingBuildPolicy, StaleTlasCompletionCannotPublishTheOldSceneOrClearFreshBacking, VerifyRayTracingBuildPolicy_StaleTlasCompletionCannotPublishTheOldSceneOrClearFreshBacking)
+
 NWB_ADHD_GTEST(RefractiveBoundsIsolation, TouchingTheCertifiedMarginIsNotIsolated, VerifyRefractiveBoundsIsolation_TouchingTheCertifiedMarginIsNotIsolated)
 
 

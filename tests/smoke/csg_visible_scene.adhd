@@ -10,17 +10,76 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static_assert(cast<usize>(CsgVisibleShapeSlot::kCount) == s_CsgVisibleShapeCount);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const f32 s_ReceiverScale = s_CsgVisibleReceiverScale;
 const f32 s_CutterScale = s_CsgVisibleCutterScale;
 const SmokeMeshRef s_CsgVisibleCubeMesh = "project/meshes/cube_hard_edges";
 const f32 s_OverlappingReceiverDepthOffset = s_CsgVisibleOverlappingReceiverDepthOffset;
 const f32 s_CsgVisiblePhaseStep = 0.18f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CsgVisibleScene{
+    public void create(in SmokeMaterialRef material, in b8 overlapping, in EntityID camera, in EntityID light, mut World world){
+        const VectorSingle receiverScale = VectorSingle(s_ReceiverScale, s_ReceiverScale, s_ReceiverScale, 0.0f);
+        for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot){
+            const VectorSingle receiverPositionVector = CsgVisibleShapePosition(shapeSlot);
+            const VectorSingle cutterLocalOffset = CsgVisibleCutterLocalOffset(shapeSlot);
+            const VectorSingle cutterSum = receiverPositionVector + cutterLocalOffset;
+            const VectorSingle cutterPosition = VectorSingle(cutterSum.x, cutterSum.y, cutterSum.z, 0.0f);
+            const Name receiverGroup = CsgVisibleReceiverGroup(shapeSlot);
+            const VectorSingle shapeColor = VectorSingle(CsgVisibleShapeColor(shapeSlot));
+            this.m_receivers[shapeSlot] = CreateCsgVisibleSolidCubeEntity(receiverGroup, shapeColor, receiverPositionVector, receiverScale, true, material, world);
+            this.m_cutters[shapeSlot] = CreateCsgVisibleCutter(shapeSlot, receiverGroup, cutterPosition, world);
+            this.m_receiverCenters[shapeSlot] = f32x4(receiverPositionVector);
+        }
+
+        b8 allEntitiesValid = camera.valid() && light.valid();
+        if(overlapping){
+            const usize planeSlot = cast<usize>(CsgVisibleShapeSlot::Plane);
+            const VectorSingle planePosition = CsgVisibleShapePosition(planeSlot);
+            const VectorSingle overlappingPosition = VectorSingle(planePosition.x, planePosition.y, planePosition.z + s_OverlappingReceiverDepthOffset, planePosition.w);
+            const EntityID receiver = CreateCsgVisibleSolidCubeEntity(
+                CsgVisibleReceiverGroup(planeSlot),
+                VectorSingle(CsgVisibleShapeColor(planeSlot)),
+                overlappingPosition,
+                receiverScale,
+                true,
+                material,
+                world
+            );
+            allEntitiesValid = allEntitiesValid && receiver.valid();
+            [essential] info("CsgVisibleSmokeProject: overlapping plane receiver created z_offset=0.125");
+        }
+        for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot)
+            allEntitiesValid = allEntitiesValid && this.m_receivers[shapeSlot].valid() && this.m_cutters[shapeSlot].valid();
+        [essential] assert(allEntitiesValid, "CsgVisibleSmokeProject failed to create all scene entities");
+    }
+
+    public void update(in f32 animationTime, mut World world){
+        for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot){
+            const f32 rotationPhase = cast<f32>(shapeSlot) * s_CsgVisiblePhaseStep;
+            const VectorSingle rotation = BuildCsgVisibleCubeRotation(animationTime, rotationPhase);
+            ApplyCsgVisibleCubeRotation(this.m_receivers[shapeSlot], rotation, world);
+            ApplyCsgVisibleCutterTransform(this.m_cutters[shapeSlot], VectorSingle(this.m_receiverCenters[shapeSlot]), rotation, CsgVisibleCutterLocalOffset(shapeSlot), world);
+        }
+    }
+
+    public EntityID receiverEntity(in usize shapeSlot)const{
+        return this.m_receivers[shapeSlot];
+    }
+
+    public EntityID cutterEntity(in usize shapeSlot)const{
+        return this.m_cutters[shapeSlot];
+    }
+
+    private Array<f32x4, s_CsgVisibleShapeCount> m_receiverCenters;
+    private Array<EntityID, s_CsgVisibleShapeCount> m_receivers;
+    private Array<EntityID, s_CsgVisibleShapeCount> m_cutters;
+}
+
+static_assert(cast<usize>(CsgVisibleShapeSlot::kCount) == s_CsgVisibleShapeCount);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -81,65 +140,6 @@ EntityID CreateCsgVisibleCutter(in usize shapeSlot, in Name receiverGroup, in Ve
     cutter.active = false;
     AssignCsgCutterTransform(center, identityRotation, cutter);
     return cutterEntity.id();
-}
-
-class CsgVisibleScene{
-    public void create(in SmokeMaterialRef material, in b8 overlapping, in EntityID camera, in EntityID light, mut World world){
-        const VectorSingle receiverScale = VectorSingle(s_ReceiverScale, s_ReceiverScale, s_ReceiverScale, 0.0f);
-        for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot){
-            const VectorSingle receiverPositionVector = CsgVisibleShapePosition(shapeSlot);
-            const VectorSingle cutterLocalOffset = CsgVisibleCutterLocalOffset(shapeSlot);
-            const VectorSingle cutterSum = receiverPositionVector + cutterLocalOffset;
-            const VectorSingle cutterPosition = VectorSingle(cutterSum.x, cutterSum.y, cutterSum.z, 0.0f);
-            const Name receiverGroup = CsgVisibleReceiverGroup(shapeSlot);
-            const VectorSingle shapeColor = VectorSingle(CsgVisibleShapeColor(shapeSlot));
-            this.m_receivers[shapeSlot] = CreateCsgVisibleSolidCubeEntity(receiverGroup, shapeColor, receiverPositionVector, receiverScale, true, material, world);
-            this.m_cutters[shapeSlot] = CreateCsgVisibleCutter(shapeSlot, receiverGroup, cutterPosition, world);
-            this.m_receiverCenters[shapeSlot] = f32x4(receiverPositionVector);
-        }
-
-        b8 allEntitiesValid = camera.valid() && light.valid();
-        if(overlapping){
-            const usize planeSlot = cast<usize>(CsgVisibleShapeSlot::Plane);
-            const VectorSingle planePosition = CsgVisibleShapePosition(planeSlot);
-            const VectorSingle overlappingPosition = VectorSingle(planePosition.x, planePosition.y, planePosition.z + s_OverlappingReceiverDepthOffset, planePosition.w);
-            const EntityID receiver = CreateCsgVisibleSolidCubeEntity(
-                CsgVisibleReceiverGroup(planeSlot),
-                VectorSingle(CsgVisibleShapeColor(planeSlot)),
-                overlappingPosition,
-                receiverScale,
-                true,
-                material,
-                world
-            );
-            allEntitiesValid = allEntitiesValid && receiver.valid();
-            [essential] info("CsgVisibleSmokeProject: overlapping plane receiver created z_offset=0.125");
-        }
-        for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot)
-            allEntitiesValid = allEntitiesValid && this.m_receivers[shapeSlot].valid() && this.m_cutters[shapeSlot].valid();
-        [essential] assert(allEntitiesValid, "CsgVisibleSmokeProject failed to create all scene entities");
-    }
-
-    public void update(in f32 animationTime, mut World world){
-        for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot){
-            const f32 rotationPhase = cast<f32>(shapeSlot) * s_CsgVisiblePhaseStep;
-            const VectorSingle rotation = BuildCsgVisibleCubeRotation(animationTime, rotationPhase);
-            ApplyCsgVisibleCubeRotation(this.m_receivers[shapeSlot], rotation, world);
-            ApplyCsgVisibleCutterTransform(this.m_cutters[shapeSlot], VectorSingle(this.m_receiverCenters[shapeSlot]), rotation, CsgVisibleCutterLocalOffset(shapeSlot), world);
-        }
-    }
-
-    public EntityID receiverEntity(in usize shapeSlot)const{
-        return this.m_receivers[shapeSlot];
-    }
-
-    public EntityID cutterEntity(in usize shapeSlot)const{
-        return this.m_cutters[shapeSlot];
-    }
-
-    private Array<f32x4, s_CsgVisibleShapeCount> m_receiverCenters;
-    private Array<EntityID, s_CsgVisibleShapeCount> m_receivers;
-    private Array<EntityID, s_CsgVisibleShapeCount> m_cutters;
 }
 
 

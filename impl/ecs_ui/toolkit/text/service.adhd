@@ -18,57 +18,6 @@ const usize s_TextLayoutCacheMaxTextBytes = 512u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Rect MakeCachedCoverageGlyphBounds(in i32 bearingX, in i32 bearingY, in Rect pixels){
-    return Rect(cast<f32>(bearingX), -cast<f32>(bearingY), pixels.width, pixels.height);
-}
-
-b8 IsValidTextPaintOriginAndColor(in Point topLeft, in Color color){
-    return IsFinite(topLeft.x) && IsFinite(topLeft.y) && IsValidPaintColor(color);
-}
-
-Point MakeDisplayPixelScalePoint(in DisplayMetrics metrics){
-    return Point(metrics.pixelScaleX, metrics.pixelScaleY);
-}
-
-b8 HasPositivePreparedGlyphExtent(in Rect rectangle){
-    return rectangle.width > 0.0f && rectangle.height > 0.0f;
-}
-
-usize ComputeTextLayoutCacheHash(in ShapeRequest request){
-    usize seed = HashValue(request.text);
-    seed = HashCombineValue(seed, request.language);
-    seed = HashCombineValue(seed, bit_cast<u32>(request.fontSize));
-    seed = HashCombineValue(seed, request.scriptTag);
-    return HashCombineValue(seed, cast<u8>(request.direction));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<VectorDouble> LoadSdfSupport(in PlacedGlyph placed, in BakedFontAtlas atlas, in f32 fontSize, in DisplayMetrics display){
-    const Expected<VectorDouble> plane = LoadAtlasRectangle(placed, atlas, fontSize, Point());
-    if(!plane.has_value())
-        return MakeUnexpected(Failure());
-    const VectorDouble rectangle = plane.value();
-    if(rectangle.z <= 0.0 || rectangle.w <= 0.0)
-        return plane;
-    in FontAtlasGlyph glyph = atlas.glyph(placed.glyphId);
-    in SdfAtlasPage page = atlas.page(glyph.group).deref();
-    in SdfAtlasPageBindingRecord<Font> binding = page.binding();
-    return TryLoadSdfGlyphSupport(rectangle, glyph, binding.width, binding.height, binding.channelCount, binding.spreadPixels, Span<u8>(page.pixels()), display);
-}
-
-u32 InternPreparedPage<TPage>(mut Vector<Shared<TPage>> pages, in Shared<TPage> page){
-    for(usize index = 0u; index < pages.size(); ++index){
-        if(pages[index] == page)
-            return cast<u32>(index);
-    }
-    const u32 index = cast<u32>(pages.size());
-    pages.push_back(page);
-    return index;
-}
-
 class SdfSupportCacheKey{
     public u64 atlasIdentity;
     public u32 glyphId;
@@ -130,10 +79,6 @@ class CachedTextLayout{
             && StringView(this.text) == request.text;
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 class TextService : NoCopy{
     private SharedPool m_layoutPool = SharedPool();
@@ -513,6 +458,57 @@ class TextService : NoCopy{
         }
         return true;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Rect MakeCachedCoverageGlyphBounds(in i32 bearingX, in i32 bearingY, in Rect pixels){
+    return Rect(cast<f32>(bearingX), -cast<f32>(bearingY), pixels.width, pixels.height);
+}
+
+b8 IsValidTextPaintOriginAndColor(in Point topLeft, in Color color){
+    return IsFinite(topLeft.x) && IsFinite(topLeft.y) && IsValidPaintColor(color);
+}
+
+Point MakeDisplayPixelScalePoint(in DisplayMetrics metrics){
+    return Point(metrics.pixelScaleX, metrics.pixelScaleY);
+}
+
+b8 HasPositivePreparedGlyphExtent(in Rect rectangle){
+    return rectangle.width > 0.0f && rectangle.height > 0.0f;
+}
+
+usize ComputeTextLayoutCacheHash(in ShapeRequest request){
+    usize seed = HashValue(request.text);
+    seed = HashCombineValue(seed, request.language);
+    seed = HashCombineValue(seed, bit_cast<u32>(request.fontSize));
+    seed = HashCombineValue(seed, request.scriptTag);
+    return HashCombineValue(seed, cast<u8>(request.direction));
+}
+
+Expected<VectorDouble> LoadSdfSupport(in PlacedGlyph placed, in BakedFontAtlas atlas, in f32 fontSize, in DisplayMetrics display){
+    const Expected<VectorDouble> plane = LoadAtlasRectangle(placed, atlas, fontSize, Point());
+    if(!plane.has_value())
+        return MakeUnexpected(Failure());
+    const VectorDouble rectangle = plane.value();
+    if(rectangle.z <= 0.0 || rectangle.w <= 0.0)
+        return plane;
+    in FontAtlasGlyph glyph = atlas.glyph(placed.glyphId);
+    in SdfAtlasPage page = atlas.page(glyph.group).deref();
+    in SdfAtlasPageBindingRecord<Font> binding = page.binding();
+    return TryLoadSdfGlyphSupport(rectangle, glyph, binding.width, binding.height, binding.channelCount, binding.spreadPixels, Span<u8>(page.pixels()), display);
+}
+
+u32 InternPreparedPage<TPage>(mut Vector<Shared<TPage>> pages, in Shared<TPage> page){
+    for(usize index = 0u; index < pages.size(); ++index){
+        if(pages[index] == page)
+            return cast<u32>(index);
+    }
+    const u32 index = cast<u32>(pages.size());
+    pages.push_back(page);
+    return index;
 }
 
 

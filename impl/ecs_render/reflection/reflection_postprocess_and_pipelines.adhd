@@ -58,7 +58,13 @@ b8 PrepareReflectionPipeline(
 ){
     if(pipeline.valid())
         return true;
-    return shaders.loadShader<ComputeShader, ReflectionSubsystem>(selector, variant, debugName, shader) && CreateHeapComputePipeline(device, shader, layout, hardware, pipeline);
+    if(!shaders.loadShader<ComputeShader, ReflectionSubsystem>(selector, variant, debugName, shader))
+        return false;
+    const Expected<ComputePipelineHandle> result = CreateHeapComputePipeline(device, shader, layout, hardware);
+    if(!result.has_value())
+        return false;
+    pipeline = result.value();
+    return true;
 }
 
 [cpp_unwind]

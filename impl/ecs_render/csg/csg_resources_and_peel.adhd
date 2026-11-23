@@ -130,7 +130,7 @@ b8 CreateIntervalCapFillPipeline(
     return false;
 }
 
-b8 CreateCsgTargetTexture(
+Expected<TextureHandle> CreateCsgTargetTexture(
     in u32 width,
     in u32 height,
     in Format format,
@@ -138,8 +138,7 @@ b8 CreateCsgTargetTexture(
     in u32 layerCount,
     in b8 renderTarget,
     in StringView errorMessage,
-    mut GraphicsRuntime graphics,
-    mut TextureHandle outTexture
+    mut GraphicsRuntime graphics
 ){
     TextureDesc desc;
     desc.setWidth(width).setHeight(height).setArraySize(layerCount).setFormat(format).setDimension(TextureDimension::Texture2DArray).setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute);
@@ -148,12 +147,10 @@ b8 CreateCsgTargetTexture(
     desc.setIsUAV(true).setName(name);
     const Expected<TextureHandle> result = graphics.createTexture(desc);
     if(!result.has_value()){
-        outTexture.reset();
         error("{}", errorMessage);
-        return false;
+        return MakeUnexpected(Failure());
     }
-    outTexture = result.value();
-    return true;
+    return result.value();
 }
 
 void DispatchCsgIntervalCompute(
@@ -221,19 +218,40 @@ b8 RendererCsgSystem::createCsgPeelTargets(mut DeferredFrameTargets targets){
     assert(targets.csgReceiverSpanLayerCount == s_CsgReceiverSpanLayerCount);
     assert(targets.csgRemovedIntervalLayerCount == s_CsgRemovedIntervalLayerCount);
 
-    return
-        CreateCsgTargetTexture(targets.width, targets.height, targets.csgCapNormalFormat, s_RenderNameEngineDeferredCsgCapBackNormal, targets.csgPeelLayerCount, true, "RendererSystem: failed to create deferred CSG cap back-normal peel target", this.m_graphics, targets.csgCapBackNormal)
-        && CreateCsgTargetTexture(targets.width, targets.height, targets.csgIntervalDepthFormat, s_RenderNameEngineDeferredCsgIntervalDepth, targets.csgPeelLayerCount, true, "RendererSystem: failed to create deferred CSG interval depth peel target", this.m_graphics, targets.csgIntervalDepth)
-        && CreateCsgTargetTexture(targets.width, targets.height, targets.csgIntervalIdFormat, s_RenderNameEngineDeferredCsgIntervalId, targets.csgPeelLayerCount, true, "RendererSystem: failed to create deferred CSG interval id peel target", this.m_graphics, targets.csgIntervalId)
-        && CreateCsgTargetTexture(targets.width, targets.height, targets.csgReceiverEventDataFormat, s_RenderNameEngineDeferredCsgReceiverEventData, targets.csgReceiverEventLayerCount, false, "RendererSystem: failed to create deferred CSG receiver event data target", this.m_graphics, targets.csgReceiverEventData)
-        && CreateCsgTargetTexture(targets.width, targets.height, targets.csgReceiverEventCountFormat, s_RenderNameEngineDeferredCsgReceiverEventCount, 1u, false, "RendererSystem: failed to create deferred CSG receiver event count target", this.m_graphics, targets.csgReceiverEventCount)
-        && CreateCsgTargetTexture(targets.width, targets.height, targets.csgReceiverSpanDataFormat, s_RenderNameEngineDeferredCsgReceiverSpanData, targets.csgReceiverSpanLayerCount, false, "RendererSystem: failed to create deferred CSG receiver span data target", this.m_graphics, targets.csgReceiverSpanData)
-        && CreateCsgTargetTexture(targets.width, targets.height, targets.csgReceiverSpanCountFormat, s_RenderNameEngineDeferredCsgReceiverSpanCount, 1u, false, "RendererSystem: failed to create deferred CSG receiver span count target", this.m_graphics, targets.csgReceiverSpanCount)
-        && CreateCsgTargetTexture(targets.width, targets.height, targets.csgRemovedIntervalDepthFormat, s_RenderNameEngineDeferredCsgRemovedIntervalDepth, targets.csgRemovedIntervalLayerCount, false, "RendererSystem: failed to create deferred CSG removed interval depth target", this.m_graphics, targets.csgRemovedIntervalDepth)
-        && CreateCsgTargetTexture(targets.width, targets.height, targets.csgRemovedIntervalCapNormalFormat, s_RenderNameEngineDeferredCsgRemovedIntervalCapNormal, targets.csgRemovedIntervalLayerCount, false, "RendererSystem: failed to create deferred CSG removed interval cap-normal target", this.m_graphics, targets.csgRemovedIntervalCapNormal)
-        && CreateCsgTargetTexture(targets.width, targets.height, targets.csgRemovedIntervalDataFormat, s_RenderNameEngineDeferredCsgRemovedIntervalData, targets.csgRemovedIntervalLayerCount, false, "RendererSystem: failed to create deferred CSG removed interval data target", this.m_graphics, targets.csgRemovedIntervalData)
-        && CreateCsgTargetTexture(targets.width, targets.height, targets.csgRemovedIntervalCountFormat, s_RenderNameEngineDeferredCsgRemovedIntervalCount, 1u, false, "RendererSystem: failed to create deferred CSG removed interval count target", this.m_graphics, targets.csgRemovedIntervalCount)
-    ;
+    const Expected<TextureHandle> capBackNormal = CreateCsgTargetTexture(targets.width, targets.height, targets.csgCapNormalFormat, s_RenderNameEngineDeferredCsgCapBackNormal, targets.csgPeelLayerCount, true, "RendererSystem: failed to create deferred CSG cap back-normal peel target", this.m_graphics);
+    if(!capBackNormal.has_value()){ ResetCsgIntervalTargets(targets); return false; }
+    targets.csgCapBackNormal = capBackNormal.value();
+    const Expected<TextureHandle> intervalDepth = CreateCsgTargetTexture(targets.width, targets.height, targets.csgIntervalDepthFormat, s_RenderNameEngineDeferredCsgIntervalDepth, targets.csgPeelLayerCount, true, "RendererSystem: failed to create deferred CSG interval depth peel target", this.m_graphics);
+    if(!intervalDepth.has_value()){ ResetCsgIntervalTargets(targets); return false; }
+    targets.csgIntervalDepth = intervalDepth.value();
+    const Expected<TextureHandle> intervalId = CreateCsgTargetTexture(targets.width, targets.height, targets.csgIntervalIdFormat, s_RenderNameEngineDeferredCsgIntervalId, targets.csgPeelLayerCount, true, "RendererSystem: failed to create deferred CSG interval id peel target", this.m_graphics);
+    if(!intervalId.has_value()){ ResetCsgIntervalTargets(targets); return false; }
+    targets.csgIntervalId = intervalId.value();
+    const Expected<TextureHandle> receiverEventData = CreateCsgTargetTexture(targets.width, targets.height, targets.csgReceiverEventDataFormat, s_RenderNameEngineDeferredCsgReceiverEventData, targets.csgReceiverEventLayerCount, false, "RendererSystem: failed to create deferred CSG receiver event data target", this.m_graphics);
+    if(!receiverEventData.has_value()){ ResetCsgIntervalTargets(targets); return false; }
+    targets.csgReceiverEventData = receiverEventData.value();
+    const Expected<TextureHandle> receiverEventCount = CreateCsgTargetTexture(targets.width, targets.height, targets.csgReceiverEventCountFormat, s_RenderNameEngineDeferredCsgReceiverEventCount, 1u, false, "RendererSystem: failed to create deferred CSG receiver event count target", this.m_graphics);
+    if(!receiverEventCount.has_value()){ ResetCsgIntervalTargets(targets); return false; }
+    targets.csgReceiverEventCount = receiverEventCount.value();
+    const Expected<TextureHandle> receiverSpanData = CreateCsgTargetTexture(targets.width, targets.height, targets.csgReceiverSpanDataFormat, s_RenderNameEngineDeferredCsgReceiverSpanData, targets.csgReceiverSpanLayerCount, false, "RendererSystem: failed to create deferred CSG receiver span data target", this.m_graphics);
+    if(!receiverSpanData.has_value()){ ResetCsgIntervalTargets(targets); return false; }
+    targets.csgReceiverSpanData = receiverSpanData.value();
+    const Expected<TextureHandle> receiverSpanCount = CreateCsgTargetTexture(targets.width, targets.height, targets.csgReceiverSpanCountFormat, s_RenderNameEngineDeferredCsgReceiverSpanCount, 1u, false, "RendererSystem: failed to create deferred CSG receiver span count target", this.m_graphics);
+    if(!receiverSpanCount.has_value()){ ResetCsgIntervalTargets(targets); return false; }
+    targets.csgReceiverSpanCount = receiverSpanCount.value();
+    const Expected<TextureHandle> removedIntervalDepth = CreateCsgTargetTexture(targets.width, targets.height, targets.csgRemovedIntervalDepthFormat, s_RenderNameEngineDeferredCsgRemovedIntervalDepth, targets.csgRemovedIntervalLayerCount, false, "RendererSystem: failed to create deferred CSG removed interval depth target", this.m_graphics);
+    if(!removedIntervalDepth.has_value()){ ResetCsgIntervalTargets(targets); return false; }
+    targets.csgRemovedIntervalDepth = removedIntervalDepth.value();
+    const Expected<TextureHandle> removedIntervalCapNormal = CreateCsgTargetTexture(targets.width, targets.height, targets.csgRemovedIntervalCapNormalFormat, s_RenderNameEngineDeferredCsgRemovedIntervalCapNormal, targets.csgRemovedIntervalLayerCount, false, "RendererSystem: failed to create deferred CSG removed interval cap-normal target", this.m_graphics);
+    if(!removedIntervalCapNormal.has_value()){ ResetCsgIntervalTargets(targets); return false; }
+    targets.csgRemovedIntervalCapNormal = removedIntervalCapNormal.value();
+    const Expected<TextureHandle> removedIntervalData = CreateCsgTargetTexture(targets.width, targets.height, targets.csgRemovedIntervalDataFormat, s_RenderNameEngineDeferredCsgRemovedIntervalData, targets.csgRemovedIntervalLayerCount, false, "RendererSystem: failed to create deferred CSG removed interval data target", this.m_graphics);
+    if(!removedIntervalData.has_value()){ ResetCsgIntervalTargets(targets); return false; }
+    targets.csgRemovedIntervalData = removedIntervalData.value();
+    const Expected<TextureHandle> removedIntervalCount = CreateCsgTargetTexture(targets.width, targets.height, targets.csgRemovedIntervalCountFormat, s_RenderNameEngineDeferredCsgRemovedIntervalCount, 1u, false, "RendererSystem: failed to create deferred CSG removed interval count target", this.m_graphics);
+    if(!removedIntervalCount.has_value()){ ResetCsgIntervalTargets(targets); return false; }
+    targets.csgRemovedIntervalCount = removedIntervalCount.value();
+    return true;
 }
 
 b8 RendererCsgSystem::createCsgIntervalPeelResources(mut DeferredFrameTargets targets, in b8 capFillRequired){
@@ -315,19 +333,31 @@ b8 RendererCsgSystem::createCsgIntervalPeelResources(mut DeferredFrameTargets ta
         }
     }
 
-    if(!this.m_csgState.m_intervalPeelPipeline.valid() && !CreateHeapComputePipeline(device, this.m_csgState.m_intervalPeelComputeShader, this.m_csgState.m_intervalPeelBindingLayout, false, this.m_csgState.m_intervalPeelPipeline)){
-        error("RendererSystem: failed to create CSG interval peel pipeline");
-        return false;
+    if(!this.m_csgState.m_intervalPeelPipeline.valid()){
+        const Expected<ComputePipelineHandle> pipeline = CreateHeapComputePipeline(device, this.m_csgState.m_intervalPeelComputeShader, this.m_csgState.m_intervalPeelBindingLayout, false);
+        if(!pipeline.has_value()){
+            error("RendererSystem: failed to create CSG interval peel pipeline");
+            return false;
+        }
+        this.m_csgState.m_intervalPeelPipeline = pipeline.value();
     }
 
-    if(!this.m_csgState.m_receiverSpanBuildPipeline.valid() && !CreateHeapComputePipeline(device, this.m_csgState.m_receiverSpanBuildComputeShader, this.m_csgState.m_receiverSpanBuildBindingLayout, false, this.m_csgState.m_receiverSpanBuildPipeline)){
-        error("RendererSystem: failed to create CSG receiver span build pipeline");
-        return false;
+    if(!this.m_csgState.m_receiverSpanBuildPipeline.valid()){
+        const Expected<ComputePipelineHandle> pipeline = CreateHeapComputePipeline(device, this.m_csgState.m_receiverSpanBuildComputeShader, this.m_csgState.m_receiverSpanBuildBindingLayout, false);
+        if(!pipeline.has_value()){
+            error("RendererSystem: failed to create CSG receiver span build pipeline");
+            return false;
+        }
+        this.m_csgState.m_receiverSpanBuildPipeline = pipeline.value();
     }
 
-    if(!this.m_csgState.m_intervalCombinePipeline.valid() && !CreateHeapComputePipeline(device, this.m_csgState.m_intervalCombineComputeShader, this.m_csgState.m_intervalCombineBindingLayout, false, this.m_csgState.m_intervalCombinePipeline)){
-        error("RendererSystem: failed to create CSG interval combine pipeline");
-        return false;
+    if(!this.m_csgState.m_intervalCombinePipeline.valid()){
+        const Expected<ComputePipelineHandle> pipeline = CreateHeapComputePipeline(device, this.m_csgState.m_intervalCombineComputeShader, this.m_csgState.m_intervalCombineBindingLayout, false);
+        if(!pipeline.has_value()){
+            error("RendererSystem: failed to create CSG interval combine pipeline");
+            return false;
+        }
+        this.m_csgState.m_intervalCombinePipeline = pipeline.value();
     }
 
     if(capFillRequired && !CreateIntervalCapFillPipeline(

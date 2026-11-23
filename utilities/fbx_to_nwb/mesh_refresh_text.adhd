@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_unwind]
 String FormatMeshRefreshList<Value>(in Span<Value> values, in usize bytesPerRow){
     String out;
     out.reserve(16u + values.size() * bytesPerRow);
@@ -17,6 +18,7 @@ String FormatMeshRefreshList<Value>(in Span<Value> values, in usize bytesPerRow)
     return out;
 }
 
+[cpp_unwind]
 String FormatMeshRefreshIndexList(in Span<u32> indices){
     String out;
     out.reserve(16u + indices.size() * 10u);

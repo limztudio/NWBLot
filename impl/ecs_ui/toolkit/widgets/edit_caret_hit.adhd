@@ -8,6 +8,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class EditCaretHit{
+    public u32 lineIndex = 0u;
+    public usize committedByte = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 f32 ComputeEditScalarFraction(in StringView text, in usize begin, in usize end, in usize position){
     usize total = 0u;
     usize before = 0u;
@@ -76,21 +85,19 @@ Expected<usize> TryFindNearestEditCaretStop(in Span<EditCaretLine> lines, in Spa
     return result;
 }
 
-b8 TryHitEditCaretLineAndStop(in Span<EditCaretLine> lines, in Span<EditBoxCaretStop> stops, in Point localPoint, mut u32 outLineIndex, mut usize outCommittedByte){
-    outLineIndex = 0u;
-    outCommittedByte = 0u;
+Expected<EditCaretHit> TryHitEditCaretLineAndStop(in Span<EditCaretLine> lines, in Span<EditBoxCaretStop> stops, in Point localPoint){
     if(lines.empty() || lines.size() > cast<usize>(0xffffffffu) || stops.empty() || !IsFinite(localPoint.x) || !IsFinite(localPoint.y))
-        return false;
+        return MakeUnexpected(Failure());
     usize low = 0u;
     usize high = lines.size();
     while(low < high){
         const usize mid = low + (high - low) / 2u;
         const EditCaretLine line = lines[mid];
         if(!IsFinite(line.top) || !IsFinite(line.height) || line.height <= 0.0f)
-            return false;
+            return MakeUnexpected(Failure());
         const f32 bottom = line.top + line.height;
         if(!IsFinite(bottom))
-            return false;
+            return MakeUnexpected(Failure());
         if(localPoint.y < bottom)
             high = mid;
         else
@@ -101,28 +108,29 @@ b8 TryHitEditCaretLineAndStop(in Span<EditCaretLine> lines, in Span<EditBoxCaret
         lineIndex = cast<u32>(low);
     const EditCaretLine selected = lines[lineIndex];
     if(!IsFinite(selected.top) || !IsFinite(selected.height) || selected.height <= 0.0f || !IsFinite(selected.top + selected.height))
-        return false;
+        return MakeUnexpected(Failure());
     const Expected<usize> committedByte = TryFindNearestEditCaretStop(lines, stops, lineIndex, localPoint);
     if(!committedByte.has_value())
-        return false;
-    outCommittedByte = committedByte.value();
-    outLineIndex = lineIndex;
-    return true;
+        return MakeUnexpected(Failure());
+    EditCaretHit hit;
+    hit.committedByte = committedByte.value();
+    hit.lineIndex = lineIndex;
+    return hit;
 }
 
 Expected<usize> HitEditCaretGeometry(in Span<EditCaretLine> lines, in Span<EditBoxCaretStop> stops, in Point localPoint){
-    u32 lineIndex = 0u;
-    usize committedByte = 0u;
-    if(!TryHitEditCaretLineAndStop(lines, stops, localPoint, lineIndex, committedByte))
-        return MakeUnexpected(Failure());
-    return committedByte;
+    const Expected<EditCaretHit> hit = TryHitEditCaretLineAndStop(lines, stops, localPoint);
+    if(!hit.has_value())
+        return MakeUnexpected(hit.error());
+    return hit.value().committedByte;
 }
 
 Expected<usize> TryHitEditWordCaretGeometry(in Span<EditCaretLine> lines, in Span<EditBoxCaretStop> stops, in Point localPoint){
-    u32 lineIndex = 0u;
-    usize byte = 0u;
-    if(!TryHitEditCaretLineAndStop(lines, stops, localPoint, lineIndex, byte))
-        return MakeUnexpected(Failure());
+    const Expected<EditCaretHit> hit = TryHitEditCaretLineAndStop(lines, stops, localPoint);
+    if(!hit.has_value())
+        return MakeUnexpected(hit.error());
+    const u32 lineIndex = hit.value().lineIndex;
+    const usize byte = hit.value().committedByte;
     const EditCaretLine line = lines[lineIndex];
     if(line.stopCount < s_UiEditMinInterpolatedStops)
         return byte;

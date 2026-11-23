@@ -72,7 +72,7 @@ class GlobalTextLock final : NoCopy{
 public:
     explicit GlobalTextLock(const HGLOBAL memory)noexcept
         : m_memory(memory), m_text(static_cast<const tchar*>(GlobalLock(memory))), m_capacity(GlobalSize(memory) / sizeof(tchar)){}
-    ~GlobalTextLock()noexcept{ if(m_text) (void)unlock(); }
+    ~GlobalTextLock()noexcept{ if(m_text && !unlock()) m_text = nullptr; }
     [[nodiscard]] b8 valid()const noexcept{ return m_text != nullptr; }
     [[nodiscard]] TStringView view(const usize count)const noexcept{ return m_text && count <= m_capacity ? TStringView(m_text, count) : TStringView(); }
     [[nodiscard]] u32 character(const usize index)const noexcept{ return m_text && index < m_capacity ? static_cast<u32>(m_text[index]) : Limit<u32>::s_Max; }

@@ -8,6 +8,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class RayCastSlabData{
+    public f32x4 origin(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 invDir(0.0f, 0.0f, 0.0f, 0.0f);
+    public u32 parallelMask = 0u;
+}
+
 f32x3_u32 PackVec3U32(in VectorSingle v, in u32 w){
     return f32x3_u32(v.x, v.y, v.z, w);
 }
@@ -366,12 +372,6 @@ Aabb3D FattenAabb(in Aabb3D box, in f32 margin){
     return Aabb3D(VectorSingle(box.lowerBound) - m, VectorSingle(box.upperBound) + m);
 }
 
-class RayCastSlabData{
-    public f32x4 origin(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 invDir(0.0f, 0.0f, 0.0f, 0.0f);
-    public u32 parallelMask = 0u;
-}
-
 RayCastSlabData MakeRayCastSlabData(in VectorSingle origin, in VectorSingle translation){
     Array<f32, 3u> invAxes;
     u32 mask = 0u;
@@ -439,7 +439,6 @@ b8 AabbRayCastFast(in Aabb3D box, in RayCastSlabData ray, in f32 maxFraction, mu
         }
     }
 
-    outMinFraction = tMin;
     return true;
 }
 
@@ -483,6 +482,11 @@ void PushRayCastChildrenOrdered(
 b8 AabbRayCast(in Aabb3D box, in VectorSingle origin, in VectorSingle translation, in f32 maxFraction, mut f32 outMinFraction){
     const RayCastSlabData ray = MakeRayCastSlabData(origin, translation);
     return AabbRayCastFast(box, ray, maxFraction, outMinFraction);
+}
+
+b8 AabbRayCast(in Aabb3D box, in VectorSingle origin, in VectorSingle translation, in f32 maxFraction){
+    f32 unusedMinFraction = 0.0f;
+    return AabbRayCast(box, origin, translation, maxFraction, unusedMinFraction);
 }
 
 VectorSingle ApplyLinearLocks(in VectorSingle v, in u32 flags){

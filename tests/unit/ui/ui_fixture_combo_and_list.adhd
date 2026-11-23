@@ -13,7 +13,9 @@ const StringView s_ComboPanelKey = "panel";
 const StringView s_ComboKey = "combo";
 const StringView s_SecondComboKey = "other";
 
-Rect ComboPanelBounds(){ return Rect(10.0f, 10.0f, 320.0f, 240.0f); }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 interface IComboCallbackObserver{
     void observeCallback()const;
@@ -272,6 +274,12 @@ class UiListBuilderTests : WidgetFixture{
         return PrepareUiListFixtureTwoPopups(this, generation, lowerPopup, lowerState, upperPopup, upperState);
     }
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Rect ComboPanelBounds(){ return Rect(10.0f, 10.0f, 320.0f, 240.0f); }
 
 DisplayMetrics UiListFixtureDisplay(){
     DisplayMetrics display;

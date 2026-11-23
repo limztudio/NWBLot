@@ -13,26 +13,14 @@
 [cpp_header("<tests/unit/task/gpu/fixture_callback_access.h>"), cpp_name("::NWB::Tests::TaskGraphTestUtils::CallbackUsesObserver")]
 extern b8 HookUsesObserver(in QueueSubmissionPreSubmitHook hook, in borrow auto observer);
 
-
 type GpuSubmissionTimingBindingVector = HeapStorageVector<GpuTaskGraphTaskTimingTicket>;
 type GpuSubmissionHookBindingVector = HeapStorageVector<GpuTaskGraphTaskSubmissionHook>;
+const StringView s_GpuSubmissionCompletionLabel = "Storage Completion";
+const usize s_GpuSubmissionNoUse = usize.max;
 
-Expected<GpuUploadBlobId> CopyGpuSubmissionUploadU64Pair(mut GpuTaskGraph graph, in u64 first, in u64 second){
-    const Array<u64, 2> words(first, second);
-    return graph.copyUploadElements<u64>(Span<u64>(words));
-}
 
-b8 CopyGpuSubmissionNullUpload(mut GpuTaskGraph graph, in usize byteCount, in usize alignment){
-    BinaryByteView bytes;
-    bytes.byteCount = byteCount;
-    return graph.copyAlignedUploadBytes(bytes, alignment).has_value();
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-b8 MatchesGpuSubmissionUploadU64Pair(in GpuTaskGraphDeclarationReadView declarations, in GpuUploadBlobId uploadId, in u64 first, in u64 second){
-    const auto storedBytes = declarations.uploadBlobData(uploadId);
-    const Array<u64, 2> words(first, second);
-    return storedBytes.has_value() && BytesMatch(storedBytes.value().span(), PodArrayBytes<u64>(Span<u64>(words)));
-}
 
 class GpuSubmissionHookObserver{
     public u32 invocations = 0u;
@@ -117,18 +105,6 @@ class GpuSubmissionBindingFixture{
     }
 }
 
-Optional<QueueSubmissionPreSubmitHook> CollectSubmissionPacketHook(in GpuSubmissionBindings bindings, in GpuSubmissionPacketId packet, mut GpuSubmissionPacketTickets tickets){
-    const Optional<in QueueSubmissionPreSubmitHook> hook = BorrowSubmissionPacketHook(bindings, packet, tickets);
-    if(!hook.has_value())
-        return Optional<QueueSubmissionPreSubmitHook>();
-    in QueueSubmissionPreSubmitHook value = hook.value();
-    return value;
-}
-
-b8 TokensBytewiseEqual(in Span<QueueSubmissionToken> lhs, in Span<QueueSubmissionToken> rhs){
-    return BytesMatch(PodArrayBytes<QueueSubmissionToken>(lhs), PodArrayBytes<QueueSubmissionToken>(rhs));
-}
-
 [ordered]
 class GpuSubmissionUseIndexScope{
     public ScratchStorage scratchArena;
@@ -139,6 +115,39 @@ class GpuSubmissionUseIndexScope{
         this.index = GpuSubmissionUseIndex(resourceCount, generation, useCapacity, this.scratchArena);
         this.ranges = ScratchStorageVector<GpuTaskResourceRange>(this.scratchArena);
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<GpuUploadBlobId> CopyGpuSubmissionUploadU64Pair(mut GpuTaskGraph graph, in u64 first, in u64 second){
+    const Array<u64, 2> words(first, second);
+    return graph.copyUploadElements<u64>(Span<u64>(words));
+}
+
+b8 CopyGpuSubmissionNullUpload(mut GpuTaskGraph graph, in usize byteCount, in usize alignment){
+    BinaryByteView bytes;
+    bytes.byteCount = byteCount;
+    return graph.copyAlignedUploadBytes(bytes, alignment).has_value();
+}
+
+b8 MatchesGpuSubmissionUploadU64Pair(in GpuTaskGraphDeclarationReadView declarations, in GpuUploadBlobId uploadId, in u64 first, in u64 second){
+    const auto storedBytes = declarations.uploadBlobData(uploadId);
+    const Array<u64, 2> words(first, second);
+    return storedBytes.has_value() && BytesMatch(storedBytes.value().span(), PodArrayBytes<u64>(Span<u64>(words)));
+}
+
+Optional<QueueSubmissionPreSubmitHook> CollectSubmissionPacketHook(in GpuSubmissionBindings bindings, in GpuSubmissionPacketId packet, mut GpuSubmissionPacketTickets tickets){
+    const Optional<in QueueSubmissionPreSubmitHook> hook = BorrowSubmissionPacketHook(bindings, packet, tickets);
+    if(!hook.has_value())
+        return Optional<QueueSubmissionPreSubmitHook>();
+    in QueueSubmissionPreSubmitHook value = hook.value();
+    return value;
+}
+
+b8 TokensBytewiseEqual(in Span<QueueSubmissionToken> lhs, in Span<QueueSubmissionToken> rhs){
+    return BytesMatch(PodArrayBytes<QueueSubmissionToken>(lhs), PodArrayBytes<QueueSubmissionToken>(rhs));
 }
 
 GpuTaskGraphTaskView MakeGpuSubmissionTaskView(in Span<GpuTaskResourceUse> uses, in u64 generation, in u32 taskIndex){
@@ -158,10 +167,6 @@ void SetGpuSubmissionTaskViewUses(mut GpuTaskGraphTaskView view, in Span<GpuTask
 void ClearGpuSubmissionTaskViewUses(mut GpuTaskGraphTaskView view){
     SetGpuSubmissionTaskViewUses(view, Span<GpuTaskResourceUse>());
 }
-
-
-const StringView s_GpuSubmissionCompletionLabel = "Storage Completion";
-const usize s_GpuSubmissionNoUse = usize.max;
 
 void GpuSubmissionRecompileAfterMutation(
     in GpuTaskGraph graph,
@@ -1903,31 +1908,48 @@ void VerifyGpuSubmission_RepeatedAccelerationStructureUsesKeepOneInitialTransiti
     EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST(GpuTaskGraph, DeclarationStorageMutationsInvalidateCompilerSnapshots, VerifyGpuSubmission_DeclarationStorageMutationsInvalidateCompilerSnapshots)
+
 NWB_ADHD_GTEST(GpuTaskGraph, FailedAndIdempotentDeclarationsPreserveCompilerSnapshots, VerifyGpuSubmission_FailedAndIdempotentDeclarationsPreserveCompilerSnapshots)
+
 NWB_ADHD_GTEST(GpuTaskGraph, ExternalFinalResourceDeclarationInvalidatesPriorCompiledPlan, VerifyGpuSubmission_ExternalFinalResourceDeclarationInvalidatesPriorCompiledPlan)
+
 NWB_ADHD_GTEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics, VerifyGpuSubmission_ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics)
+
 NWB_ADHD_GTEST(GpuTaskGraph, SchedulingAdjacencyRejectsStaleIdsAndClearsOnReset, VerifyGpuSubmission_SchedulingAdjacencyRejectsStaleIdsAndClearsOnReset)
+
 NWB_ADHD_GTEST(GpuTaskGraph, PackedSchedulingReachabilityPreservesStrictClosureAcrossWordBoundaries, VerifyGpuSubmission_PackedSchedulingReachabilityPreservesStrictClosureAcrossWordBoundaries)
+
 NWB_ADHD_GTEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer, VerifyGpuSubmission_FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer)
+
 NWB_ADHD_GTEST(GpuTaskGraphStorage, LargeTaskChainPreservesDeclarationsAndReusesStorage, VerifyGpuSubmission_LargeTaskChainPreservesDeclarationsAndReusesStorage)
+
 NWB_ADHD_GTEST(GpuTaskGraphStorage, MixedDeclarationsAndUploadBytesSurviveStorageGrowth, VerifyGpuSubmission_MixedDeclarationsAndUploadBytesSurviveStorageGrowth)
+
 NWB_ADHD_GTEST(GpuTaskSubmissionBindings, PreservesMergedAliasesAndReversedBindingOrderWithoutInvokingHooks, VerifyGpuSubmission_PreservesMergedAliasesAndReversedBindingOrderWithoutInvokingHooks)
+
 NWB_ADHD_GTEST(GpuTaskSubmissionBindings, RejectsLateDuplicateAnchorsCrossPacketTicketsAndMergedHookCollisions, VerifyGpuSubmission_RejectsLateDuplicateAnchorsCrossPacketTicketsAndMergedHookCollisions)
+
 NWB_ADHD_GTEST(GpuTaskSubmissionBindings, RejectsStaleMissingAndOutOfRangeAnchorsAndMalformedBindings, VerifyGpuSubmission_RejectsStaleMissingAndOutOfRangeAnchorsAndMalformedBindings)
+
 NWB_ADHD_GTEST(GpuTaskGraphSubmissionValidation, CountsDistinctPhysicalQueueGenerationsWithoutChangingWaitTokens, VerifyGpuSubmission_CountsDistinctPhysicalQueueGenerationsWithoutChangingWaitTokens)
+
 NWB_ADHD_GTEST(GpuTaskUseIndex, RebuildResetsOnlyThePreviousTaskAndRejectsDetachedViews, VerifyGpuSubmission_RebuildResetsOnlyThePreviousTaskAndRejectsDetachedViews)
+
 NWB_ADHD_GTEST(GpuTaskUseIndex, InvalidGenerationIdentityAndCapacityNeverPublishAUsableIndex, VerifyGpuSubmission_InvalidGenerationIdentityAndCapacityNeverPublishAUsableIndex)
+
 NWB_ADHD_GTEST(GpuTaskUseIndex, FirstOccurrenceReturnsNormalizedRangeAndStillRejectsEmptyRequest, VerifyGpuSubmission_FirstOccurrenceReturnsNormalizedRangeAndStillRejectsEmptyRequest)
+
 NWB_ADHD_GTEST(GpuTaskUseIndex, PartialAndDisjointEarlierUsesRetainSubtractionOrderAndUnknownStateCoverage, VerifyGpuSubmission_PartialAndDisjointEarlierUsesRetainSubtractionOrderAndUnknownStateCoverage)
+
 NWB_ADHD_GTEST(GpuTaskUseIndex, CompleteCoverageStopsBeforeLaterInvalidRangeButSelectedInvalidPrefixStillFails, VerifyGpuSubmission_CompleteCoverageStopsBeforeLaterInvalidRangeButSelectedInvalidPrefixStillFails)
+
 NWB_ADHD_GTEST(GpuTaskUseIndex, SymbolicBufferTailSurvivesFinitePreviousUse, VerifyGpuSubmission_SymbolicBufferTailSurvivesFinitePreviousUse)
+
 NWB_ADHD_GTEST(GpuTaskUseIndex, TextureRectangleKeepsMipThenSliceRemainderOrder, VerifyGpuSubmission_TextureRectangleKeepsMipThenSliceRemainderOrder)
+
 NWB_ADHD_GTEST(GpuTaskUseIndex, CompiledResourceSetExpansionPreservesEveryInitialByteRange, VerifyGpuSubmission_CompiledResourceSetExpansionPreservesEveryInitialByteRange)
+
 NWB_ADHD_GTEST(GpuTaskUseIndex, RepeatedAccelerationStructureUsesKeepOneInitialTransitionAndLastStateExport, VerifyGpuSubmission_RepeatedAccelerationStructureUsesKeepOneInitialTransitionAndLastStateExport)
 
 

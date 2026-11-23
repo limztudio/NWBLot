@@ -16,7 +16,6 @@
 
 
 const StringView s_CsgSkinnedProjectName = "CsgSkinnedVisibleSmokeProject";
-
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
 const SmokeMaterialRef s_CsgSkinnedReceiverMaterial = "project/smoke/transparent_multi/materials/shared";
 #else
@@ -48,49 +47,11 @@ const f32 s_CsgSkinnedSphereCutterRadius = 0.0f;
 const f32 s_CsgSkinnedCapsuleCutterRadius = 0.105f;
 const f32 s_CsgSkinnedCapsuleCutterHalfHeight = 0.27f;
 #endif
-
-StringView CsgSkinnedVisibleFpsLabel(){
-#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-    return "CsgSkinnedTransparentSphereVisibleSmokeProject";
-#elif defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
-    return "CsgSkinnedTransparentVisibleSmokeProject";
-#elif defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-    return "CsgSkinnedSphereVisibleSmokeProject";
-#else
-    return s_CsgSkinnedProjectName;
-#endif
-}
-
-f32 CsgSkinnedReceiverAlpha(){
-#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
-    return s_CsgSkinnedTransparentReceiverAlpha;
-#else
-    return 1.0f;
-#endif
-}
-
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
 const b8 s_CsgSkinnedTransparentReceiver = true;
 #else
 const b8 s_CsgSkinnedTransparentReceiver = false;
 #endif
-
-PlatformStringView CsgSkinnedStartupSummary(){
-#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-    return PlatformTextLiteral("CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with sphere cutter and non-CSG control created");
-#elif defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
-    return PlatformTextLiteral("CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with non-CSG control created");
-#elif defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-    return PlatformTextLiteral("CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with sphere cutter and non-CSG control created");
-#else
-    return PlatformTextLiteral("CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with non-CSG control created");
-#endif
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const SmokeModelRef s_CsgSkinnedModel = "project/characters/body/model";
 const Name s_CsgSkinnedReceiverGroup = s_SmokeNameProjectSmokeCsgSkinnedVisibleFemaleReceiver;
 const Name s_CsgSkinnedCutterAnchorBoneName = s_SmokeNameHip;
@@ -99,32 +60,6 @@ const u16 s_CsgSkinnedFrameClientHeight = 900u;
 const f32x4 s_CsgSkinnedPlainReceiverTint(0.86f, 0.88f, 0.90f, 1.0f);
 const f32x4 s_CsgSkinnedCsgReceiverTint(0.85f, 0.72f, 1.0f, 1.0f);
 const f32x4 s_CsgSkinnedWarmDirectionalLightColor(1.0f, 0.96f, 0.88f, 0.0f);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-VectorSingle BuildCsgSkinnedReceiverRotation(in f32 animationTime){
-    return QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, animationTime, 0.0f, 0.0f) * s_CsgSkinnedReceiverYawSpeed);
-}
-
-VectorSingle BuildCsgSkinnedReceiverPosition(){
-    return VectorSingle(s_CsgSkinnedReceiverOffsetX, 0.0f, 0.0f, 0.0f);
-}
-
-VectorSingle BuildCsgSkinnedCutterLocalRotation(in f32 animationTime){
-    const VectorSingle horizontalCapsule = QuaternionRotationRollPitchYawFromVector(VectorSingle(s_PIDIV2, s_PIDIV2, 0.0f, 0.0f));
-    const VectorSingle gentleRoll = QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, animationTime, 0.0f, 0.0f) * s_CsgSkinnedCutterGentleRollSpeed);
-    return QuaternionNormalize(QuaternionMultiply(horizontalCapsule, gentleRoll));
-}
-
-VectorSingle BuildCsgSkinnedCutterWorldCenter(in VectorSingle cutterLocalCenter, in VectorSingle receiverRotation){
-    return BuildCsgSkinnedReceiverPosition() + Vector3Rotate(cutterLocalCenter, receiverRotation);
-}
-
-VectorSingle BuildCsgSkinnedCutterWorldRotation(in f32 animationTime, in VectorSingle receiverRotation){
-    return QuaternionNormalize(QuaternionMultiply(receiverRotation, BuildCsgSkinnedCutterLocalRotation(animationTime)));
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -330,6 +265,60 @@ class CsgSkinnedVisibleSmokeProject : IProjectEntryCallbacks{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+StringView CsgSkinnedVisibleFpsLabel(){
+#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
+    return "CsgSkinnedTransparentSphereVisibleSmokeProject";
+#elif defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
+    return "CsgSkinnedTransparentVisibleSmokeProject";
+#elif defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
+    return "CsgSkinnedSphereVisibleSmokeProject";
+#else
+    return s_CsgSkinnedProjectName;
+#endif
+}
+
+f32 CsgSkinnedReceiverAlpha(){
+#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
+    return s_CsgSkinnedTransparentReceiverAlpha;
+#else
+    return 1.0f;
+#endif
+}
+
+PlatformStringView CsgSkinnedStartupSummary(){
+#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
+    return PlatformTextLiteral("CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with sphere cutter and non-CSG control created");
+#elif defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
+    return PlatformTextLiteral("CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with non-CSG control created");
+#elif defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
+    return PlatformTextLiteral("CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with sphere cutter and non-CSG control created");
+#else
+    return PlatformTextLiteral("CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with non-CSG control created");
+#endif
+}
+
+VectorSingle BuildCsgSkinnedReceiverRotation(in f32 animationTime){
+    return QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, animationTime, 0.0f, 0.0f) * s_CsgSkinnedReceiverYawSpeed);
+}
+
+VectorSingle BuildCsgSkinnedReceiverPosition(){
+    return VectorSingle(s_CsgSkinnedReceiverOffsetX, 0.0f, 0.0f, 0.0f);
+}
+
+VectorSingle BuildCsgSkinnedCutterLocalRotation(in f32 animationTime){
+    const VectorSingle horizontalCapsule = QuaternionRotationRollPitchYawFromVector(VectorSingle(s_PIDIV2, s_PIDIV2, 0.0f, 0.0f));
+    const VectorSingle gentleRoll = QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, animationTime, 0.0f, 0.0f) * s_CsgSkinnedCutterGentleRollSpeed);
+    return QuaternionNormalize(QuaternionMultiply(horizontalCapsule, gentleRoll));
+}
+
+VectorSingle BuildCsgSkinnedCutterWorldCenter(in VectorSingle cutterLocalCenter, in VectorSingle receiverRotation){
+    return BuildCsgSkinnedReceiverPosition() + Vector3Rotate(cutterLocalCenter, receiverRotation);
+}
+
+VectorSingle BuildCsgSkinnedCutterWorldRotation(in f32 animationTime, in VectorSingle receiverRotation){
+    return QuaternionNormalize(QuaternionMultiply(receiverRotation, BuildCsgSkinnedCutterLocalRotation(animationTime)));
+}
 
 ProjectFrameClientSize GetProjectFrameClientSize(){
     return ProjectFrameClientSize(s_CsgSkinnedFrameClientWidth, s_CsgSkinnedFrameClientHeight);

@@ -10,27 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<f64x2u> TryResolveListCursorScrollSpan(in u64 cursorIndex, in f32 rowHeight){
-    const f64 start = cast<f64>(cursorIndex) * cast<f64>(rowHeight);
-    const f64 end = start + cast<f64>(rowHeight);
-    if(!IsFinite(start) || !IsFinite(end) || end <= start)
-        return MakeUnexpected(Failure());
-    return f64x2u(start, end);
-}
-
-usize ListRowInsertionIndex(in Vector<BuilderListRow> rows, in u64 index){
-    usize begin = 0u;
-    usize end = rows.size();
-    while(begin < end){
-        const usize middle = begin + (end - begin) / 2u;
-        if(rows[middle].index < index)
-            begin = middle + 1u;
-        else
-            end = middle;
-    }
-    return begin;
-}
-
 class ListLayoutPreparer{
     private in BuilderScopeFrame m_scope;
     private in Context m_context;
@@ -158,6 +137,31 @@ class ListLayoutPreparer{
             frame.rowHeight = height;
         }
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<f64x2u> TryResolveListCursorScrollSpan(in u64 cursorIndex, in f32 rowHeight){
+    const f64 start = cast<f64>(cursorIndex) * cast<f64>(rowHeight);
+    const f64 end = start + cast<f64>(rowHeight);
+    if(!IsFinite(start) || !IsFinite(end) || end <= start)
+        return MakeUnexpected(Failure());
+    return f64x2u(start, end);
+}
+
+usize ListRowInsertionIndex(in Vector<BuilderListRow> rows, in u64 index){
+    usize begin = 0u;
+    usize end = rows.size();
+    while(begin < end){
+        const usize middle = begin + (end - begin) / 2u;
+        if(rows[middle].index < index)
+            begin = middle + 1u;
+        else
+            end = middle;
+    }
+    return begin;
 }
 
 

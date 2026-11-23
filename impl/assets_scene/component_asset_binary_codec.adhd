@@ -8,19 +8,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<ComponentHeaderBinary> ReadComponentBinaryHeader(in Span<u8> binary, mut usize cursor){
-    const Expected<ComponentHeaderBinary> headerResult = ReadPOD<ComponentHeaderBinary>(binary, cursor);
-    if(!headerResult.has_value()){
-        error("IComponent::loadBinary failed: malformed header");
-        return MakeUnexpected(Failure());
-    }
-    const ComponentHeaderBinary header = headerResult.value();
-    if(header.magic != s_ComponentMagic){
-        error("IComponent::loadBinary failed: invalid component asset format; recook required");
-        return MakeUnexpected(Failure());
-    }
-    return header;
-}
+type ComponentAssetCodec = FamilyAssetCodec<IComponent, ComponentAssetPolicy>;
+type ComponentTypeAutoRegistrar = AssetFamilyTypes<IComponent>;
+type TypedComponentAssetCodec<T> = FamilyMemberAssetCodec<IComponent, T, ComponentAssetPolicy>;
+type TypedComponentAutoRegistrar<T> = TypedAssetRegistration<IComponent, T, TypedComponentAssetCodec<T>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,24 +50,7 @@ class ComponentAssetBinaryCodec{
     public Expected<Span<u8>> unpackEnvelope(
         in Span<u8> binary,
         in Name assetType
-    )const{
-        usize cursor = 0u;
-        const Expected<ComponentHeaderBinary> parsed = ReadComponentBinaryHeader(binary, cursor);
-        if(!parsed.has_value())
-            return MakeUnexpected(Failure());
-        const ComponentHeaderBinary header = parsed.value();
-        if(!this.validateHeader(header, assetType, binary.size() - cursor))
-            return MakeUnexpected(Failure());
-
-        const usize payloadByteCount = cast<usize>(header.payloadByteCount);
-        const Span<u8> payload = binary.subspan(cursor, payloadByteCount);
-        cursor += payloadByteCount;
-        if(cursor != binary.size()){
-            error("IComponent::loadBinary failed: trailing bytes detected");
-            return MakeUnexpected(Failure());
-        }
-        return payload;
-    }
+    )const;
 
     public b8 loadBinary(in Span<u8> binary, mut IComponent outComponent)const{
         const Expected<Span<u8>> payload = this.unpackEnvelope(binary, outComponent.assetType());
@@ -95,15 +69,14 @@ class ComponentAssetBinaryCodec{
         return true;
     }
 
-    public b8 deserializeTransform(in Span<u8> payload, mut TransformComponent outComponent)const{
+    public Expected<TransformComponent> deserializeTransform(in Span<u8> payload)const{
         usize cursor = 0u;
         const Expected<TransformComponentPayloadBinary> binaryPayload = ReadPOD<TransformComponentPayloadBinary>(payload, cursor);
         if(!binaryPayload.has_value() || cursor != payload.size()){
             error("TransformComponentAsset::loadComponentPayload failed: invalid payload size");
-            return false;
+            return MakeUnexpected(Failure());
         }
-        outComponent = UnpackTransformComponentPayloadBinary(binaryPayload.value());
-        return true;
+        return UnpackTransformComponentPayloadBinary(binaryPayload.value());
     }
 
     public b8 serializeCamera(in CameraComponent component, mut Vector<u8> outPayload)const{
@@ -114,15 +87,14 @@ class ComponentAssetBinaryCodec{
         return true;
     }
 
-    public b8 deserializeCamera(in Span<u8> payload, mut CameraComponent outComponent)const{
+    public Expected<CameraComponent> deserializeCamera(in Span<u8> payload)const{
         usize cursor = 0u;
         const Expected<CameraComponentPayloadBinary> binaryPayload = ReadPOD<CameraComponentPayloadBinary>(payload, cursor);
         if(!binaryPayload.has_value() || cursor != payload.size()){
             error("CameraComponentAsset::loadComponentPayload failed: invalid payload size");
-            return false;
+            return MakeUnexpected(Failure());
         }
-        outComponent = UnpackCameraComponentPayloadBinary(binaryPayload.value());
-        return true;
+        return UnpackCameraComponentPayloadBinary(binaryPayload.value());
     }
 
     public b8 serializeLight(in LightComponent component, mut Vector<u8> outPayload)const{
@@ -133,26 +105,70 @@ class ComponentAssetBinaryCodec{
         return true;
     }
 
-    public b8 deserializeLight(in Span<u8> payload, mut LightComponent outComponent)const{
+    public Expected<LightComponent> deserializeLight(in Span<u8> payload)const{
         usize cursor = 0u;
         const Expected<LightComponentPayloadBinary> binaryPayload = ReadPOD<LightComponentPayloadBinary>(payload, cursor);
         if(!binaryPayload.has_value() || cursor != payload.size()){
             error("LightComponentAsset::loadComponentPayload failed: invalid payload size");
-            return false;
+            return MakeUnexpected(Failure());
         }
         const Expected<LightComponent> unpacked = UnpackLightComponentPayloadBinary(binaryPayload.value());
         if(!unpacked.has_value()){
             error("LightComponentAsset::loadComponentPayload failed: invalid light flags");
-            return false;
+            return MakeUnexpected(Failure());
         }
-        outComponent = unpacked.value();
-        return true;
+        return unpacked.value();
     }
+}
+
+class ComponentAssetPolicy{
+    public StringView deserializeContext()const{ return "ComponentAssetCodec::deserialize"; }
+    public StringView serializeContext()const{ return "ComponentAssetCodec::serialize"; }
+    public StringView memberSerializeContext()const{ return "TypedComponentAssetCodec::serialize"; }
+
+    public Expected<NameHash> readType(in Span<u8> binary)const;
+    public b8 write(in IComponent component, mut Vector<u8> outBinary)const;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+Expected<ComponentHeaderBinary> ReadComponentBinaryHeader(in Span<u8> binary, mut usize cursor){
+    const Expected<ComponentHeaderBinary> headerResult = ReadPOD<ComponentHeaderBinary>(binary, cursor);
+    if(!headerResult.has_value()){
+        error("IComponent::loadBinary failed: malformed header");
+        return MakeUnexpected(Failure());
+    }
+    const ComponentHeaderBinary header = headerResult.value();
+    if(header.magic != s_ComponentMagic){
+        error("IComponent::loadBinary failed: invalid component asset format; recook required");
+        return MakeUnexpected(Failure());
+    }
+    return header;
+}
+
+Expected<Span<u8>> ComponentAssetBinaryCodec::unpackEnvelope(
+    in Span<u8> binary,
+    in Name assetType
+)const{
+    usize cursor = 0u;
+    const Expected<ComponentHeaderBinary> parsed = ReadComponentBinaryHeader(binary, cursor);
+    if(!parsed.has_value())
+        return MakeUnexpected(Failure());
+    const ComponentHeaderBinary header = parsed.value();
+    if(!this.validateHeader(header, assetType, binary.size() - cursor))
+        return MakeUnexpected(Failure());
+
+    const usize payloadByteCount = cast<usize>(header.payloadByteCount);
+    const Span<u8> payload = binary.subspan(cursor, payloadByteCount);
+    cursor += payloadByteCount;
+    if(cursor != binary.size()){
+        error("IComponent::loadBinary failed: trailing bytes detected");
+        return MakeUnexpected(Failure());
+    }
+    return payload;
+}
 
 b8 SerializeComponentAsset(in IComponent component, mut Vector<u8> outBinary){
     if(!component.validatePayload())
@@ -164,28 +180,17 @@ b8 SerializeComponentAsset(in IComponent component, mut Vector<u8> outBinary){
     return true;
 }
 
-class ComponentAssetPolicy{
-    public StringView deserializeContext()const{ return "ComponentAssetCodec::deserialize"; }
-    public StringView serializeContext()const{ return "ComponentAssetCodec::serialize"; }
-    public StringView memberSerializeContext()const{ return "TypedComponentAssetCodec::serialize"; }
-
-    public Expected<NameHash> readType(in Span<u8> binary)const{
-        usize cursor = 0u;
-        const Expected<ComponentHeaderBinary> header = ReadComponentBinaryHeader(binary, cursor);
-        if(!header.has_value())
-            return MakeUnexpected(Failure());
-        return header.value().componentTypeHash;
-    }
-
-    public b8 write(in IComponent component, mut Vector<u8> outBinary)const{
-        return SerializeComponentAsset(component, outBinary);
-    }
+Expected<NameHash> ComponentAssetPolicy::readType(in Span<u8> binary)const{
+    usize cursor = 0u;
+    const Expected<ComponentHeaderBinary> header = ReadComponentBinaryHeader(binary, cursor);
+    if(!header.has_value())
+        return MakeUnexpected(Failure());
+    return header.value().componentTypeHash;
 }
 
-type ComponentAssetCodec = FamilyAssetCodec<IComponent, ComponentAssetPolicy>;
-type ComponentTypeAutoRegistrar = AssetFamilyTypes<IComponent>;
-type TypedComponentAssetCodec<T> = FamilyMemberAssetCodec<IComponent, T, ComponentAssetPolicy>;
-type TypedComponentAutoRegistrar<T> = TypedAssetRegistration<IComponent, T, TypedComponentAssetCodec<T>>;
+b8 ComponentAssetPolicy::write(in IComponent component, mut Vector<u8> outBinary)const{
+    return SerializeComponentAsset(component, outBinary);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

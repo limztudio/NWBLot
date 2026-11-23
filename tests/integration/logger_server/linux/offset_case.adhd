@@ -21,8 +21,9 @@ void VerifyLoggerServerCrash_LinuxCrashPackageDoesNotWrapSymbolOffset(mut Logger
     const CrashIngestResult result = ProcessCrashArchive(testArena, group, stem, StringView(archive));
     ASSERT_TRUE(result.accepted);
 
-    String report = "";
-    ASSERT_TRUE(ReadServerSymbolicationText(group, stem, report));
+    const Expected<String> reportResult = ReadServerSymbolicationText(group, stem);
+    ASSERT_TRUE(reportResult.has_value());
+    in String report = reportResult.value();
     EXPECT_TRUE(Contains(StringView(report), "instruction_pointer_module=/tmp/overflow"));
     EXPECT_TRUE(Contains(StringView(report), "symbolication_relative_ip=unavailable"));
     RemoveTestArtifacts(group);

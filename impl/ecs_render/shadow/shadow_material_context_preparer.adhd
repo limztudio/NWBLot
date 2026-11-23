@@ -12,10 +12,6 @@
 
 const usize s_MinimumShadowMaterialTypedByteCount = 4u;
 
-b8 IsValidPreparedShadowMaterialContextRoute(in PreparedShadowMaterialContextRoute route){
-    return route == PreparedShadowMaterialContextRoute::Hardware || route == PreparedShadowMaterialContextRoute::Software;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -67,6 +63,14 @@ class ShadowMaterialContextPreparer : NoCopy{
         in Span<u8> shadowMaterialTypedBytes,
         in u64 materialTypedHash
     );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidPreparedShadowMaterialContextRoute(in PreparedShadowMaterialContextRoute route){
+    return route == PreparedShadowMaterialContextRoute::Hardware || route == PreparedShadowMaterialContextRoute::Software;
 }
 
 

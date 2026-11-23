@@ -8,6 +8,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class SubsystemBinaryCounts{
+    public usize cursor = 0u;
+    public usize subsystemCount = 0u;
+    public usize fieldCount = 0u;
+    public usize assetCount = 0u;
+}
+
 class SubsystemBinaryCodec{
     private SubsystemHeaderBinary makeHeader(
         in NameHash subsystemTypeHash,
@@ -106,66 +113,63 @@ class SubsystemBinaryCodec{
         return true;
     }
 
-    public b8 readCounts(
+    public Expected<SubsystemBinaryCounts> readCounts(
         in Span<u8> binary,
         in Name assetType,
-        in usize expectedFieldCount,
-        mut usize outCursor,
-        mut usize outSubsystemCount,
-        mut usize outFieldCount,
-        mut usize outAssetCount
+        in usize expectedFieldCount
     )const{
         usize cursor = 0u;
         const Expected<SubsystemHeaderBinary> headerResult = ReadPOD<SubsystemHeaderBinary>(binary, cursor);
         if(!headerResult.has_value()){
             error("ISubsystem::loadBinary failed: malformed header");
-            return false;
+            return MakeUnexpected(Failure());
         }
         const SubsystemHeaderBinary header = headerResult.value();
         if(header.magic != s_SubsystemMagic){
             error("ISubsystem::loadBinary failed: invalid subsystem asset format; recook required");
-            return false;
+            return MakeUnexpected(Failure());
         }
         if(!this.validateHeader(header, assetType, expectedFieldCount))
-            return false;
+            return MakeUnexpected(Failure());
 
         if(header.subsystemCount > cast<u64>(usize.max / s_SubsystemNameHashBinaryBytes)){
             error("ISubsystem::loadBinary failed: 'subsystems' payload byte size overflows");
-            return false;
+            return MakeUnexpected(Failure());
         }
         const usize subsystemCount = cast<usize>(header.subsystemCount);
         if(!CanReadBytes(binary, cursor, subsystemCount * s_SubsystemNameHashBinaryBytes)){
             error("ISubsystem::loadBinary failed: malformed 'subsystems' payload");
-            return false;
+            return MakeUnexpected(Failure());
         }
         const usize afterSubsystems = cursor + subsystemCount * s_SubsystemNameHashBinaryBytes;
 
         if(header.fieldCount > cast<u64>(usize.max / s_SubsystemFieldCountBinaryBytes)){
             error("ISubsystem::loadBinary failed: 'field counts' payload byte size overflows");
-            return false;
+            return MakeUnexpected(Failure());
         }
         const usize fieldCount = cast<usize>(header.fieldCount);
         if(!CanReadBytes(binary, afterSubsystems, fieldCount * s_SubsystemFieldCountBinaryBytes)){
             error("ISubsystem::loadBinary failed: malformed 'field counts' payload");
-            return false;
+            return MakeUnexpected(Failure());
         }
         const usize afterFieldCounts = afterSubsystems + fieldCount * s_SubsystemFieldCountBinaryBytes;
 
         if(header.assetCount > cast<u64>(usize.max / s_SubsystemNameHashBinaryBytes)){
             error("ISubsystem::loadBinary failed: 'assets' payload byte size overflows");
-            return false;
+            return MakeUnexpected(Failure());
         }
         const usize assetCount = cast<usize>(header.assetCount);
         if(!CanReadBytes(binary, afterFieldCounts, assetCount * s_SubsystemNameHashBinaryBytes)){
             error("ISubsystem::loadBinary failed: malformed 'assets' payload");
-            return false;
+            return MakeUnexpected(Failure());
         }
 
-        outCursor = cursor;
-        outSubsystemCount = subsystemCount;
-        outFieldCount = fieldCount;
-        outAssetCount = assetCount;
-        return true;
+        SubsystemBinaryCounts counts = SubsystemBinaryCounts();
+        counts.cursor = cursor;
+        counts.subsystemCount = subsystemCount;
+        counts.fieldCount = fieldCount;
+        counts.assetCount = assetCount;
+        return counts;
     }
 
     public b8 readPayloads(

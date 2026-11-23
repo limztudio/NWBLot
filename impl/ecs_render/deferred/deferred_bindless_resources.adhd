@@ -34,71 +34,7 @@ void LogDeferredBindlessSlotBufferRegisterFailed(){
     error("RendererSystem: failed to register deferred bindless slot buffer in the descriptor heap");
 }
 
-b8 AssignDeferredSampled2D(
-    mut GpuDescriptorHeap heap,
-    in TextureHandle texture,
-    in Format format,
-    mut GpuDescriptorHandle outHandle
-){
-    return AssignSampledTexture(
-        heap,
-        GpuDescriptorClass::SampledImage,
-        texture,
-        format,
-        s_FramebufferSubresources,
-        TextureDimension::Texture2D,
-        outHandle
-    );
-}
 
-b8 AssignDeferredStorage2D(
-    mut GpuDescriptorHeap heap,
-    in TextureHandle texture,
-    in Format format,
-    mut GpuDescriptorHandle outHandle
-){
-    return AssignStorageTexture(heap, texture, format, TextureDimension::Texture2D, outHandle);
-}
-
-b8 AssignDeferredSampledAndStorage2D(
-    mut GpuDescriptorHeap heap,
-    in TextureHandle texture,
-    in Format format,
-    mut GpuDescriptorHandle outSampledHandle,
-    mut GpuDescriptorHandle outStorageHandle
-){
-    return AssignDeferredSampled2D(heap, texture, format, outSampledHandle) && AssignDeferredStorage2D(heap, texture, format, outStorageHandle);
-}
-
-b8 AssignDeferredStorage2DArray(
-    mut GpuDescriptorHeap heap,
-    in TextureHandle texture,
-    in Format format,
-    mut GpuDescriptorHandle outHandle
-){
-    return AssignStorageTexture(heap, texture, format, TextureDimension::Texture2DArray, outHandle);
-}
-
-b8 AssignDeferredSampledAndStorageShadowArray(
-    mut GpuDescriptorHeap heap,
-    in TextureHandle texture,
-    in Format format,
-    mut GpuDescriptorHandle outSampledHandle,
-    mut GpuDescriptorHandle outStorageHandle
-){
-    return
-        AssignSampledTexture(
-            heap,
-            GpuDescriptorClass::SampledImage2DArray,
-            texture,
-            format,
-            s_ShadowVisibilitySubresources,
-            TextureDimension::Texture2DArray,
-            outSampledHandle
-        )
-        && AssignDeferredStorage2DArray(heap, texture, format, outStorageHandle)
-    ;
-}
 
 Expected<void> DeferredBindlessDescriptorRegistrar::registerAll(){
     if(
@@ -114,119 +50,352 @@ Expected<void> DeferredBindlessDescriptorRegistrar::registerAll(){
 }
 
 Expected<void> DeferredBindlessDescriptorRegistrar::registerLightingTargets(){
-    if(
-        !AssignDeferredSampled2D(this.m_heap, this.m_targets.albedo, this.m_targets.albedoFormat, this.m_targets.bindless.gbufferBaseColor)
-        || !AssignDeferredSampled2D(this.m_heap, this.m_targets.normal, this.m_targets.normalFormat, this.m_targets.bindless.gbufferNormal)
-        || !AssignDeferredSampled2D(this.m_heap, this.m_targets.worldPosition, this.m_targets.worldPositionFormat, this.m_targets.bindless.gbufferWorldPosition)
-        || !AssignDeferredSampled2D(this.m_heap, this.m_targets.specularRoughness, this.m_targets.specularRoughnessFormat, this.m_targets.bindless.gbufferSpecularRoughness)
-        || !AssignDeferredSampled2D(this.m_heap, this.m_targets.depth, this.m_targets.depthFormat, this.m_targets.bindless.gbufferDepth)
-        || !AssignDeferredSampledAndStorageShadowArray(this.m_heap, this.m_targets.shadowVisibility, this.m_targets.shadowVisibilityFormat, this.m_targets.bindless.shadowVisibility, this.m_targets.bindless.shadowVisibilityStorage)
-        || !AssignDeferredSampledAndStorage2D(this.m_heap, this.m_targets.causticIrradiance, this.m_targets.causticIrradianceFormat, this.m_targets.bindless.causticIrradiance, this.m_targets.bindless.causticIrradianceStorage)
-        || !AssignDeferredSampledAndStorage2D(this.m_heap, this.m_targets.surfelIrradiance, this.m_targets.surfelIrradianceFormat, this.m_targets.bindless.surfelIrradiance, this.m_targets.bindless.surfelIrradianceStorage)
-        || !AssignDeferredSampledAndStorage2D(this.m_heap, this.m_targets.surfelIrradianceHalf, this.m_targets.surfelIrradianceFormat, this.m_targets.bindless.surfelIrradianceHalf, this.m_targets.bindless.surfelIrradianceHalfStorage)
-        || !AssignSampler(this.m_heap, this.m_sources.sampler, this.m_targets.bindless.sampler)
-        || !AssignDeferredSampledAndStorage2D(this.m_heap, this.m_targets.opaqueColor, this.m_targets.opaqueColorFormat, this.m_targets.bindless.opaqueColor, this.m_targets.bindless.opaqueColorStorage)
-        || !AssignDeferredSampledAndStorage2D(this.m_heap, this.m_targets.compositeColor, this.m_targets.compositeColorFormat, this.m_targets.bindless.compositeColor, this.m_targets.bindless.compositeColorStorage)
-    )
-        return MakeUnexpected(Failure());
+    Expected<GpuDescriptorHandle> descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.albedo, this.m_targets.albedoFormat, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.gbufferBaseColor = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.normal, this.m_targets.normalFormat, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.gbufferNormal = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.worldPosition, this.m_targets.worldPositionFormat, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.gbufferWorldPosition = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.specularRoughness, this.m_targets.specularRoughnessFormat, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.gbufferSpecularRoughness = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.depth, this.m_targets.depthFormat, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.gbufferDepth = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage2DArray, this.m_targets.shadowVisibility, this.m_targets.shadowVisibilityFormat, s_ShadowVisibilitySubresources, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.shadowVisibility = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.shadowVisibility, this.m_targets.shadowVisibilityFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.shadowVisibilityStorage = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.causticIrradiance, this.m_targets.causticIrradianceFormat, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.causticIrradiance = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.causticIrradiance, this.m_targets.causticIrradianceFormat, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.causticIrradianceStorage = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.surfelIrradiance, this.m_targets.surfelIrradianceFormat, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.surfelIrradiance = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.surfelIrradiance, this.m_targets.surfelIrradianceFormat, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.surfelIrradianceStorage = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.surfelIrradianceHalf, this.m_targets.surfelIrradianceFormat, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.surfelIrradianceHalf = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.surfelIrradianceHalf, this.m_targets.surfelIrradianceFormat, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.surfelIrradianceHalfStorage = descriptor.value();
+    descriptor = RegisterSampler(this.m_heap, this.m_sources.sampler);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.sampler = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.opaqueColor, this.m_targets.opaqueColorFormat, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.opaqueColor = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.opaqueColor, this.m_targets.opaqueColorFormat, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.opaqueColorStorage = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.compositeColor, this.m_targets.compositeColorFormat, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.compositeColor = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.compositeColor, this.m_targets.compositeColorFormat, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.compositeColorStorage = descriptor.value();
     return Expected<void>();
 }
+
 
 Expected<void> DeferredBindlessDescriptorRegistrar::registerTransparencyTargets(){
-    if(
-        !AssignDeferredSampled2D(this.m_heap, this.m_targets.avboit.accumColor, this.m_targets.avboit.accumColorFormat, this.m_targets.bindless.avboitAccumColor)
-        || !AssignDeferredSampled2D(this.m_heap, this.m_targets.avboit.accumExtinction, this.m_targets.avboit.accumExtinctionFormat, this.m_targets.bindless.avboitAccumExtinction)
-        || !AssignDeferredSampled2D(this.m_heap, this.m_targets.avboit.refractionDepth, this.m_targets.depthFormat, this.m_targets.bindless.refractionDepth)
-        || !AssignDeferredSampled2D(this.m_heap, this.m_targets.avboit.refractionNormalIor, Format::RGBA16_FLOAT, this.m_targets.bindless.refractionNormalIor)
-        || !AssignDeferredSampled2D(this.m_heap, this.m_targets.avboit.refractionTintCoverage, Format::RGBA16_FLOAT, this.m_targets.bindless.refractionTintCoverage)
-        || !AssignDeferredSampled2D(this.m_heap, this.m_targets.avboit.refractionInstance, Format::RG32_FLOAT, this.m_targets.bindless.refractionInstance)
-        || !AssignDeferredSampled2D(this.m_heap, this.m_targets.avboit.refractionSpecularRoughness, Format::RGBA16_FLOAT, this.m_targets.bindless.refractionSpecularRoughness)
-        || !AssignDeferredSampled2D(this.m_heap, this.m_targets.avboit.refractionResolve, Format::RGBA16_FLOAT, this.m_targets.bindless.refractionResolve)
-        || !AssignDeferredSampled2D(this.m_heap, this.m_targets.avboit.foregroundAccumColor, this.m_targets.avboit.accumColorFormat, this.m_targets.bindless.avboitForegroundColor)
-        || !AssignDeferredSampled2D(this.m_heap, this.m_targets.avboit.foregroundAccumExtinction, this.m_targets.avboit.accumExtinctionFormat, this.m_targets.bindless.avboitForegroundExtinction)
-        || !AssignDeferredStorage2D(this.m_heap, this.m_targets.avboit.refractionResolve, Format::RGBA16_FLOAT, this.m_targets.bindless.refractionResolveStorage)
-        || !AssignSampledTexture(
-            this.m_heap,
-            GpuDescriptorClass::SampledImage3D,
-            this.m_targets.avboit.transmittanceTexture,
-            this.m_targets.avboit.transmittanceFormat,
-            s_FramebufferSubresources,
-            TextureDimension::Texture3D,
-            this.m_targets.bindless.avboitTransmittance
-        )
-        || !AssignSampler(this.m_heap, this.m_sources.avboitLinearSampler, this.m_targets.bindless.avboitLinearSampler)
-    )
-        return MakeUnexpected(Failure());
+    Expected<GpuDescriptorHandle> descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.avboit.accumColor, this.m_targets.avboit.accumColorFormat, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.avboitAccumColor = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.avboit.accumExtinction, this.m_targets.avboit.accumExtinctionFormat, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.avboitAccumExtinction = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.avboit.refractionDepth, this.m_targets.depthFormat, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.refractionDepth = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.avboit.refractionNormalIor, Format::RGBA16_FLOAT, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.refractionNormalIor = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.avboit.refractionTintCoverage, Format::RGBA16_FLOAT, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.refractionTintCoverage = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.avboit.refractionInstance, Format::RG32_FLOAT, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.refractionInstance = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.avboit.refractionSpecularRoughness, Format::RGBA16_FLOAT, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.refractionSpecularRoughness = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.avboit.refractionResolve, Format::RGBA16_FLOAT, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.refractionResolve = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.avboit.foregroundAccumColor, this.m_targets.avboit.accumColorFormat, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.avboitForegroundColor = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.avboit.foregroundAccumExtinction, this.m_targets.avboit.accumExtinctionFormat, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.avboitForegroundExtinction = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.avboit.refractionResolve, Format::RGBA16_FLOAT, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.refractionResolveStorage = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage3D, this.m_targets.avboit.transmittanceTexture, this.m_targets.avboit.transmittanceFormat, s_FramebufferSubresources, TextureDimension::Texture3D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.avboitTransmittance = descriptor.value();
+    descriptor = RegisterSampler(this.m_heap, this.m_sources.avboitLinearSampler);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.avboitLinearSampler = descriptor.value();
     return Expected<void>();
 }
 
+
 Expected<void> DeferredBindlessDescriptorRegistrar::registerSceneBuffers(){
-    if(
-        !AssignConstantBuffer(this.m_heap, this.m_sources.sceneShadingBuffer, this.m_targets.bindless.sceneShading)
-        || !AssignStructuredBuffer(this.m_heap, this.m_sources.lightBuffer, this.m_targets.bindless.lightList)
-    )
-        return MakeUnexpected(Failure());
+    const Expected<GpuDescriptorHandle> sceneShading = RegisterConstantBuffer(this.m_heap, this.m_sources.sceneShadingBuffer);
+    if(!sceneShading.has_value())
+        return MakeUnexpected(sceneShading.error());
+    this.m_targets.bindless.sceneShading = sceneShading.value();
+    const Expected<GpuDescriptorHandle> lightList = RegisterStructuredBuffer(this.m_heap, this.m_sources.lightBuffer);
+    if(!lightList.has_value())
+        return MakeUnexpected(lightList.error());
+    this.m_targets.bindless.lightList = lightList.value();
     return Expected<void>();
 }
 
 Expected<void> DeferredBindlessDescriptorRegistrar::registerCsgIntervalTargets(){
-    if(
-        !AssignDeferredStorage2DArray(this.m_heap, this.m_targets.csgCapBackNormal, this.m_targets.csgCapNormalFormat, this.m_targets.bindless.csgCapBackNormal)
-        || !AssignDeferredStorage2DArray(this.m_heap, this.m_targets.csgIntervalDepth, this.m_targets.csgIntervalDepthFormat, this.m_targets.bindless.csgIntervalDepth)
-        || !AssignDeferredStorage2DArray(this.m_heap, this.m_targets.csgIntervalId, this.m_targets.csgIntervalIdFormat, this.m_targets.bindless.csgIntervalId)
-        || !AssignDeferredStorage2DArray(this.m_heap, this.m_targets.csgReceiverEventData, this.m_targets.csgReceiverEventDataFormat, this.m_targets.bindless.csgReceiverEventData)
-        || !AssignDeferredStorage2DArray(this.m_heap, this.m_targets.csgReceiverEventCount, this.m_targets.csgReceiverEventCountFormat, this.m_targets.bindless.csgReceiverEventCount)
-        || !AssignDeferredStorage2DArray(this.m_heap, this.m_targets.csgReceiverSpanData, this.m_targets.csgReceiverSpanDataFormat, this.m_targets.bindless.csgReceiverSpanData)
-        || !AssignDeferredStorage2DArray(this.m_heap, this.m_targets.csgReceiverSpanCount, this.m_targets.csgReceiverSpanCountFormat, this.m_targets.bindless.csgReceiverSpanCount)
-        || !AssignDeferredStorage2DArray(this.m_heap, this.m_targets.csgRemovedIntervalDepth, this.m_targets.csgRemovedIntervalDepthFormat, this.m_targets.bindless.csgRemovedIntervalDepth)
-        || !AssignDeferredStorage2DArray(this.m_heap, this.m_targets.csgRemovedIntervalCapNormal, this.m_targets.csgRemovedIntervalCapNormalFormat, this.m_targets.bindless.csgRemovedIntervalCapNormal)
-        || !AssignDeferredStorage2DArray(this.m_heap, this.m_targets.csgRemovedIntervalData, this.m_targets.csgRemovedIntervalDataFormat, this.m_targets.bindless.csgRemovedIntervalData)
-        || !AssignDeferredStorage2DArray(this.m_heap, this.m_targets.csgRemovedIntervalCount, this.m_targets.csgRemovedIntervalCountFormat, this.m_targets.bindless.csgRemovedIntervalCount)
-    )
-        return MakeUnexpected(Failure());
+    Expected<GpuDescriptorHandle> descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.csgCapBackNormal, this.m_targets.csgCapNormalFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.csgCapBackNormal = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.csgIntervalDepth, this.m_targets.csgIntervalDepthFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.csgIntervalDepth = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.csgIntervalId, this.m_targets.csgIntervalIdFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.csgIntervalId = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.csgReceiverEventData, this.m_targets.csgReceiverEventDataFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.csgReceiverEventData = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.csgReceiverEventCount, this.m_targets.csgReceiverEventCountFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.csgReceiverEventCount = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.csgReceiverSpanData, this.m_targets.csgReceiverSpanDataFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.csgReceiverSpanData = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.csgReceiverSpanCount, this.m_targets.csgReceiverSpanCountFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.csgReceiverSpanCount = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.csgRemovedIntervalDepth, this.m_targets.csgRemovedIntervalDepthFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.csgRemovedIntervalDepth = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.csgRemovedIntervalCapNormal, this.m_targets.csgRemovedIntervalCapNormalFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.csgRemovedIntervalCapNormal = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.csgRemovedIntervalData, this.m_targets.csgRemovedIntervalDataFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.csgRemovedIntervalData = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.csgRemovedIntervalCount, this.m_targets.csgRemovedIntervalCountFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.csgRemovedIntervalCount = descriptor.value();
     return Expected<void>();
 }
+
 
 Expected<void> DeferredBindlessDescriptorRegistrar::registerCausticResolveTargets(){
-    if(
-        !AssignSampledTexture(
-            this.m_heap,
-            GpuDescriptorClass::SampledImage2DArrayUint,
-            this.m_targets.causticAccumulator,
-            this.m_targets.causticAccumulatorFormat,
-            s_CausticAccumulatorSubresources,
-            TextureDimension::Texture2DArray,
-            this.m_targets.bindless.causticAccumulator
-        )
-        || !AssignDeferredStorage2DArray(this.m_heap, this.m_targets.causticAccumulator, this.m_targets.causticAccumulatorFormat, this.m_targets.bindless.causticAccumulatorStorage)
-        || !AssignDeferredSampledAndStorage2D(this.m_heap, this.m_targets.causticHistory, this.m_targets.causticHistoryFormat, this.m_targets.bindless.causticHistory, this.m_targets.bindless.causticHistoryStorage)
-        || !AssignDeferredSampledAndStorage2D(this.m_heap, this.m_targets.causticResolveHalf, this.m_targets.causticHistoryFormat, this.m_targets.bindless.causticResolveHalf, this.m_targets.bindless.causticResolveHalfStorage)
-        || !AssignDeferredSampledAndStorage2D(this.m_heap, this.m_targets.causticResolveGeometry, this.m_targets.causticHistoryFormat, this.m_targets.bindless.causticResolveGeometry, this.m_targets.bindless.causticResolveGeometryStorage)
-    )
-        return MakeUnexpected(Failure());
+    Expected<GpuDescriptorHandle> descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage2DArrayUint, this.m_targets.causticAccumulator, this.m_targets.causticAccumulatorFormat, s_CausticAccumulatorSubresources, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.causticAccumulator = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.causticAccumulator, this.m_targets.causticAccumulatorFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.causticAccumulatorStorage = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.causticHistory, this.m_targets.causticHistoryFormat, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.causticHistory = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.causticHistory, this.m_targets.causticHistoryFormat, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.causticHistoryStorage = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.causticResolveHalf, this.m_targets.causticHistoryFormat, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.causticResolveHalf = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.causticResolveHalf, this.m_targets.causticHistoryFormat, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.causticResolveHalfStorage = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.causticResolveGeometry, this.m_targets.causticHistoryFormat, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.causticResolveGeometry = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.causticResolveGeometry, this.m_targets.causticHistoryFormat, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.causticResolveGeometryStorage = descriptor.value();
     return Expected<void>();
 }
 
+
 Expected<void> DeferredBindlessDescriptorRegistrar::registerSoftShadowTargets(){
-    if(
-        !AssignDeferredStorage2DArray(this.m_heap, this.m_targets.shadowCoarseTransmittance, this.m_targets.shadowCoarseTransmittanceFormat, this.m_targets.bindless.shadowCoarseTransmittanceStorage)
-        || !AssignDeferredSampledAndStorage2D(this.m_heap, this.m_targets.shadowSoftGeometry, this.m_targets.shadowSoftGeometryFormat, this.m_targets.bindless.shadowSoftGeometry, this.m_targets.bindless.shadowSoftGeometryStorage)
-        || !AssignDeferredSampledAndStorage2D(this.m_heap, this.m_targets.shadowSoftGeometryPrev, this.m_targets.shadowSoftGeometryFormat, this.m_targets.bindless.shadowSoftGeometryPrev, this.m_targets.bindless.shadowSoftGeometryPrevStorage)
-        || !AssignDeferredSampledAndStorageShadowArray(this.m_heap, this.m_targets.shadowSoftHalfA, this.m_targets.shadowSoftFormat, this.m_targets.bindless.shadowSoftHalfA, this.m_targets.bindless.shadowSoftHalfAStorage)
-        || !AssignDeferredSampledAndStorageShadowArray(this.m_heap, this.m_targets.shadowSoftHalfB, this.m_targets.shadowSoftFormat, this.m_targets.bindless.shadowSoftHalfB, this.m_targets.bindless.shadowSoftHalfBStorage)
-        || !AssignDeferredSampledAndStorageShadowArray(this.m_heap, this.m_targets.shadowHistA, this.m_targets.shadowSoftFormat, this.m_targets.bindless.shadowHistA, this.m_targets.bindless.shadowHistAStorage)
-        || !AssignDeferredSampledAndStorageShadowArray(this.m_heap, this.m_targets.shadowHistB, this.m_targets.shadowSoftFormat, this.m_targets.bindless.shadowHistB, this.m_targets.bindless.shadowHistBStorage)
-        || !AssignDeferredSampledAndStorageShadowArray(this.m_heap, this.m_targets.shadowMomentsA, this.m_targets.shadowSoftFormat, this.m_targets.bindless.shadowMomentsA, this.m_targets.bindless.shadowMomentsAStorage)
-        || !AssignDeferredSampledAndStorageShadowArray(this.m_heap, this.m_targets.shadowMomentsB, this.m_targets.shadowSoftFormat, this.m_targets.bindless.shadowMomentsB, this.m_targets.bindless.shadowMomentsBStorage)
-        || !AssignDeferredSampledAndStorageShadowArray(this.m_heap, this.m_targets.transparentSoftHalf, this.m_targets.shadowSoftFormat, this.m_targets.bindless.transparentSoftHalf, this.m_targets.bindless.transparentSoftHalfStorage)
-        || !AssignDeferredSampledAndStorageShadowArray(this.m_heap, this.m_targets.transparentHistA, this.m_targets.shadowSoftFormat, this.m_targets.bindless.transparentHistA, this.m_targets.bindless.transparentHistAStorage)
-        || !AssignDeferredSampledAndStorageShadowArray(this.m_heap, this.m_targets.transparentHistB, this.m_targets.shadowSoftFormat, this.m_targets.bindless.transparentHistB, this.m_targets.bindless.transparentHistBStorage)
-        || !AssignDeferredSampledAndStorageShadowArray(this.m_heap, this.m_targets.transparentMomentsA, this.m_targets.shadowSoftFormat, this.m_targets.bindless.transparentMomentsA, this.m_targets.bindless.transparentMomentsAStorage)
-        || !AssignDeferredSampledAndStorageShadowArray(this.m_heap, this.m_targets.transparentMomentsB, this.m_targets.shadowSoftFormat, this.m_targets.bindless.transparentMomentsB, this.m_targets.bindless.transparentMomentsBStorage)
-    )
-        return MakeUnexpected(Failure());
+    Expected<GpuDescriptorHandle> descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.shadowCoarseTransmittance, this.m_targets.shadowCoarseTransmittanceFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.shadowCoarseTransmittanceStorage = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.shadowSoftGeometry, this.m_targets.shadowSoftGeometryFormat, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.shadowSoftGeometry = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.shadowSoftGeometry, this.m_targets.shadowSoftGeometryFormat, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.shadowSoftGeometryStorage = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage, this.m_targets.shadowSoftGeometryPrev, this.m_targets.shadowSoftGeometryFormat, s_FramebufferSubresources, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.shadowSoftGeometryPrev = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.shadowSoftGeometryPrev, this.m_targets.shadowSoftGeometryFormat, TextureDimension::Texture2D);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.shadowSoftGeometryPrevStorage = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage2DArray, this.m_targets.shadowSoftHalfA, this.m_targets.shadowSoftFormat, s_ShadowVisibilitySubresources, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.shadowSoftHalfA = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.shadowSoftHalfA, this.m_targets.shadowSoftFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.shadowSoftHalfAStorage = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage2DArray, this.m_targets.shadowSoftHalfB, this.m_targets.shadowSoftFormat, s_ShadowVisibilitySubresources, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.shadowSoftHalfB = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.shadowSoftHalfB, this.m_targets.shadowSoftFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.shadowSoftHalfBStorage = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage2DArray, this.m_targets.shadowHistA, this.m_targets.shadowSoftFormat, s_ShadowVisibilitySubresources, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.shadowHistA = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.shadowHistA, this.m_targets.shadowSoftFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.shadowHistAStorage = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage2DArray, this.m_targets.shadowHistB, this.m_targets.shadowSoftFormat, s_ShadowVisibilitySubresources, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.shadowHistB = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.shadowHistB, this.m_targets.shadowSoftFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.shadowHistBStorage = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage2DArray, this.m_targets.shadowMomentsA, this.m_targets.shadowSoftFormat, s_ShadowVisibilitySubresources, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.shadowMomentsA = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.shadowMomentsA, this.m_targets.shadowSoftFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.shadowMomentsAStorage = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage2DArray, this.m_targets.shadowMomentsB, this.m_targets.shadowSoftFormat, s_ShadowVisibilitySubresources, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.shadowMomentsB = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.shadowMomentsB, this.m_targets.shadowSoftFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.shadowMomentsBStorage = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage2DArray, this.m_targets.transparentSoftHalf, this.m_targets.shadowSoftFormat, s_ShadowVisibilitySubresources, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.transparentSoftHalf = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.transparentSoftHalf, this.m_targets.shadowSoftFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.transparentSoftHalfStorage = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage2DArray, this.m_targets.transparentHistA, this.m_targets.shadowSoftFormat, s_ShadowVisibilitySubresources, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.transparentHistA = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.transparentHistA, this.m_targets.shadowSoftFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.transparentHistAStorage = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage2DArray, this.m_targets.transparentHistB, this.m_targets.shadowSoftFormat, s_ShadowVisibilitySubresources, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.transparentHistB = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.transparentHistB, this.m_targets.shadowSoftFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.transparentHistBStorage = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage2DArray, this.m_targets.transparentMomentsA, this.m_targets.shadowSoftFormat, s_ShadowVisibilitySubresources, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.transparentMomentsA = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.transparentMomentsA, this.m_targets.shadowSoftFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.transparentMomentsAStorage = descriptor.value();
+    descriptor = RegisterSampledTexture(this.m_heap, GpuDescriptorClass::SampledImage2DArray, this.m_targets.transparentMomentsB, this.m_targets.shadowSoftFormat, s_ShadowVisibilitySubresources, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.transparentMomentsB = descriptor.value();
+    descriptor = RegisterStorageTexture(this.m_heap, this.m_targets.transparentMomentsB, this.m_targets.shadowSoftFormat, TextureDimension::Texture2DArray);
+    if(!descriptor.has_value())
+        return MakeUnexpected(descriptor.error());
+    this.m_targets.bindless.transparentMomentsBStorage = descriptor.value();
     return Expected<void>();
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void RendererDeferredSystem::resetDeferredBindlessFrameResources(mut DeferredFrameTargets targets){
     mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
@@ -410,11 +579,13 @@ b8 RendererDeferredSystem::createDeferredBindlessFrameResources(mut DeferredFram
     }
     bindless.slotsBuffer = slotsBufferResult.value();
 
-    if(!TryAdoptDescriptor(RegisterConstantBuffer(heap, bindless.slotsBuffer), bindless.slotsBufferDescriptor)){
+    const Expected<GpuDescriptorHandle> slotsDescriptor = RegisterConstantBuffer(heap, bindless.slotsBuffer);
+    if(!slotsDescriptor.has_value()){
         LogDeferredBindlessSlotBufferRegisterFailed();
         this.resetDeferredBindlessFrameResources(targets);
         return false;
     }
+    bindless.slotsBufferDescriptor = slotsDescriptor.value();
 
     return true;
 }

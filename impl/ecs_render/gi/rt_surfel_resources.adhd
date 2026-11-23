@@ -21,6 +21,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL")]
+extern const u32 s_ShaderSurfelGuideFloat4SPerSurfel;
+
+[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_TRACE_INDIRECT_ARGS_WORD_COUNT")]
+extern const u32 s_ShaderSurfelTraceIndirectArgsWordCount;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const StringView s_SurfelIrradianceHalfGraphLabel = "Surfel Irradiance Half";
 const StringView s_SurfelPoolGraphLabel = "Surfel Pool";
 const StringView s_SurfelGuidePoolGraphLabel = "Surfel Guide Pool";
@@ -120,16 +130,6 @@ b8 ShouldCaptureSurfelCountReadbackState(
 ){
     return hasSurfelWork && hasCounterBuffer && hasCounterReadbackBuffer && !hasPendingReadbackToken && IsSurfelCountReadbackDue(frameIndex);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL")]
-extern const u32 s_ShaderSurfelGuideFloat4SPerSurfel;
-
-[cpp_header("<impl/assets/graphics/gi/surfel/surfel_binding_slots.h>"), cpp_name("NWB_SURFEL_TRACE_INDIRECT_ARGS_WORD_COUNT")]
-extern const u32 s_ShaderSurfelTraceIndirectArgsWordCount;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -480,7 +480,10 @@ void RendererRayTracingSystem::releaseSurfelGiHeapHandles(){
 }
 
 b8 RendererRayTracingSystem::recordSurfelResourceInitializationLifecycle(){
-    return BeginSurfelResourceInitializationLifecycle(this.m_rayTracingState.surfelGi.m_surfelResourcesNeedClear, this.m_rayTracingState.surfelGi.m_surfelResourcesClearPending);
+    if(!BeginSurfelResourceInitializationLifecycle(this.m_rayTracingState.surfelGi.m_surfelResourcesNeedClear))
+        return false;
+    this.m_rayTracingState.surfelGi.m_surfelResourcesClearPending = true;
+    return true;
 }
 
 void RendererRayTracingSystem::finalizeSurfelResourceInitialization(){

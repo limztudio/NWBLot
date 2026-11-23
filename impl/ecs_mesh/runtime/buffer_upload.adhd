@@ -69,6 +69,7 @@ Expected<BufferHandle, BufferSetupFailure> SetupRequiredBuffer<T>(mut GraphicsRu
     return SetupBuffer<T>(graphics, debugName, payload, flags);
 }
 
+[cpp_unwind]
 Expected<BufferHandle, BufferSetupFailure> SetupRequiredPaddedRawByteBuffer(mut GraphicsRuntime graphics, in Name debugName, in Span<u8> payload, in BufferFlags flags){
     if(payload.empty())
         return MakeUnexpected(BufferSetupFailure::EmptyPayload);

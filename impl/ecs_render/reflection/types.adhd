@@ -20,7 +20,6 @@ const Name s_RenderNameECSRenderReflectionCsgBuildArgs = "ECSRender_ReflectionCs
 const Name s_RenderNameECSRenderReflectionCsgOpticalHardware = "ECSRender_ReflectionCsgOpticalHardware";
 const Name s_RenderNameECSRenderReflectionCsgHardware = "ECSRender_ReflectionCsgHardware";
 const Name s_RenderNameECSRenderReflectionCsgUnspecifiedOpticalHardware = "ECSRender_ReflectionCsgUnspecifiedOpticalHardware";
-
 const u32 s_ReflectionDefaultTemporalMaxSamples = 16u;
 const u32 s_ReflectionDefaultSpatialRadius = 2u;
 const f32 s_ReflectionDefaultMaxRayDistance = 100.0f;
@@ -113,10 +112,6 @@ const StringView s_ReflectionBuildArgsTaskLabel = "Reflection Build Arguments";
 const StringView s_ReflectionHardwareFastTaskLabel = "Reflection Hardware Fast Resolve";
 const StringView s_ReflectionBuildOpticalArgsTaskLabel = "Reflection Build Optical Arguments";
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [reflect]
 enum<u32> ReflectionDescriptorIndex{
     OpaqueSampled,
@@ -137,6 +132,10 @@ enum<u8> ReflectionDispatchStage{
     BuildOpticalArgs,
     Hardware
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class ReflectionSampleBase{
     public u32 x = 0u;
@@ -187,6 +186,58 @@ class ReflectionDepthPyramidMip{
     public u32 width = 0u;
     public u32 height = 0u;
 }
+
+class ReflectionRadianceBinding{
+    public ReflectionRadianceBinding(){
+        this.sampledSlot = 0u;
+        this.storageSlot = 0u;
+    }
+
+    public ReflectionRadianceBinding(in TextureHandle inTexture, in u32 inSampledSlot, in u32 inStorageSlot){
+        this.texture = inTexture;
+        this.sampledSlot = inSampledSlot;
+        this.storageSlot = inStorageSlot;
+    }
+
+    public TextureHandle texture;
+    public u32 sampledSlot;
+    public u32 storageSlot;
+}
+
+class ReflectionFeedbackBinding{
+    public ReflectionFeedbackBinding(){
+        this.descriptor = GpuDescriptorHandleInvalid();
+    }
+
+    public ReflectionFeedbackBinding(in BufferHandle inBuffer, in GpuDescriptorHandle inDescriptor){
+        this.buffer = inBuffer;
+        this.descriptor = inDescriptor;
+    }
+
+    public b8 valid()const{
+        return this.buffer.valid() && this.descriptor.valid();
+    }
+
+    public BufferHandle buffer;
+    public GpuDescriptorHandle descriptor;
+}
+
+class ReflectionDepthPyramidSnapshot{
+    public b8 valid()const{
+        return this.texture.valid() && this.pipeline.valid() && this.mipCount > 0u && this.mipCount <= s_ReflectionMaxDepthMips;
+    }
+
+    public TextureHandle texture;
+    public ComputePipelineHandle pipeline;
+    public Array<ReflectionDepthPyramidMip, s_ReflectionMaxDepthMips> mips;
+    public u32 mipCount = 0u;
+    public u32 sampledSlot = 0u;
+    public u32 sourceDepthSlot = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 Name ResolveReflectionDepthReduceTaskName(in u32 mipIndex){
     switch(mipIndex){
@@ -247,54 +298,6 @@ u32 BuildReflectionDepthPyramidMips(
         mipHeight = Max(mipHeight / 2u, 1u);
     }
     return mipCount;
-}
-
-class ReflectionRadianceBinding{
-    public ReflectionRadianceBinding(){
-        this.sampledSlot = 0u;
-        this.storageSlot = 0u;
-    }
-
-    public ReflectionRadianceBinding(in TextureHandle inTexture, in u32 inSampledSlot, in u32 inStorageSlot){
-        this.texture = inTexture;
-        this.sampledSlot = inSampledSlot;
-        this.storageSlot = inStorageSlot;
-    }
-
-    public TextureHandle texture;
-    public u32 sampledSlot;
-    public u32 storageSlot;
-}
-
-class ReflectionFeedbackBinding{
-    public ReflectionFeedbackBinding(){
-        this.descriptor = GpuDescriptorHandleInvalid();
-    }
-
-    public ReflectionFeedbackBinding(in BufferHandle inBuffer, in GpuDescriptorHandle inDescriptor){
-        this.buffer = inBuffer;
-        this.descriptor = inDescriptor;
-    }
-
-    public b8 valid()const{
-        return this.buffer.valid() && this.descriptor.valid();
-    }
-
-    public BufferHandle buffer;
-    public GpuDescriptorHandle descriptor;
-}
-
-class ReflectionDepthPyramidSnapshot{
-    public b8 valid()const{
-        return this.texture.valid() && this.pipeline.valid() && this.mipCount > 0u && this.mipCount <= s_ReflectionMaxDepthMips;
-    }
-
-    public TextureHandle texture;
-    public ComputePipelineHandle pipeline;
-    public Array<ReflectionDepthPyramidMip, s_ReflectionMaxDepthMips> mips;
-    public u32 mipCount = 0u;
-    public u32 sampledSlot = 0u;
-    public u32 sourceDepthSlot = 0u;
 }
 
 

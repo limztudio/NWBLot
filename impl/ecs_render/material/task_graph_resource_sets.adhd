@@ -15,17 +15,8 @@ const StringView s_PreparedMaterialSampledTextureLabel = "Prepared Material Samp
 const StringView s_PreparedMaterialGeometryLabel = "Prepared Material Geometry";
 
 
-Expected<usize> AccumulateMaterialGeometrySourceDrawCount(
-    in usize currentCount,
-    in usize meshDrawCount,
-    in usize computeDrawCount,
-    in usize maxDrawItemCount
-){
-    Expected<usize> afterMesh = TryAccumulateMaterialDrawCount(currentCount, meshDrawCount, maxDrawItemCount);
-    if(!afterMesh.has_value())
-        return MakeUnexpected(Failure());
-    return TryAccumulateMaterialDrawCount(afterMesh.value(), computeDrawCount, maxDrawItemCount);
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class MaterialGeometrySourceKey{
     public in MaterialPassMeshResourceSnapshot mesh;
@@ -58,6 +49,22 @@ class MaterialGeometryBufferKey{
     public b8 operator==(in MaterialGeometryBufferKey other)const{
         return this.buffer == other.buffer;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<usize> AccumulateMaterialGeometrySourceDrawCount(
+    in usize currentCount,
+    in usize meshDrawCount,
+    in usize computeDrawCount,
+    in usize maxDrawItemCount
+){
+    Expected<usize> afterMesh = TryAccumulateMaterialDrawCount(currentCount, meshDrawCount, maxDrawItemCount);
+    if(!afterMesh.has_value())
+        return MakeUnexpected(Failure());
+    return TryAccumulateMaterialDrawCount(afterMesh.value(), computeDrawCount, maxDrawItemCount);
 }
 
 [cpp_unwind]
@@ -205,10 +212,6 @@ Expected<Vector<GpuGraphResourceId>, SampledTextureImportFailure> ImportMaterial
     }
     return resources;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [cpp_unwind]
 Expected<GpuGraphResourceSetId> GatherPreparedMaterialSampledTextureResourceSet(

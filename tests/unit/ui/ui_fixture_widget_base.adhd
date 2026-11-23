@@ -4,11 +4,6 @@
 
 #include <tests/common/gtest_macros.adhd>
 #include "ui_fixture_common_types.adhd"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #include <tests/common/font_fixture.adhd>
 #include <tests/common/value_storage.adhd>
 #include <tests/unit/ui/arithmetic_fixture_rows.adhd>
@@ -16,6 +11,10 @@
 #include <tests/unit/ui/native_input.adhd>
 #include <impl/assets_texture/validation.adhd>
 #include <impl/ecs_ui/toolkit/text/harfbuzz_sdk.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [cpp_header("<global/containers.h>"), cpp_name("NWB_TEST_FONT_DIRECTORY")]
 extern const StringView s_UiTestFontDirectory;
@@ -26,160 +25,9 @@ const StringView s_TestKoreanFontPath = "tests/ui/fonts/korean";
 const StringView s_ParentPopupKey = "parent";
 const StringView s_ChildPopupKey = "child";
 
-void PopulateBakedFontTables(in Span<u8> bytes, mut FontAtlasPayload payload){
-    HarfBuzzFont face;
-    ASSERT_TRUE(face.open(bytes, 0u));
-    payload.unitsPerEm = face.unitsPerEm();
-    payload.sourceGlyphCount = face.glyphCount();
-    const Array<u32, 3u> tags(s_FontAtlasGdefTag, s_FontAtlasGposTag, s_FontAtlasKernTag);
-    for(in u32 tag : tags){
-        const u32 size = face.tableLength(tag);
-        if(size == 0u)
-            continue;
-        FontAtlasPositioningTable table;
-        table.tag = tag;
-        table.bytes.resize(size);
-        ASSERT_TRUE(face.copyTable(tag, table.bytes));
-        table.sha256 = ComputeSha256(table.bytes);
-        payload.positioningTables.push_back(table);
-    }
-}
 
-Expected<SharedImageSource> MakeSeededImage(in StringView path, in u8 seed, in u32 width, in u32 height, in SharedPool pool){
-    const auto count = TryComputeCompleteTextureMipCount(cast<u8>(TexturePayloadDimension::Texture2D), width, height, 1u);
-    if(!count.has_value())
-        return MakeUnexpected(count.error());
-    Vector<TextureMipLevel> mips;
-    mips.reserve(count.value());
-    u32 mipWidth = width;
-    u32 mipHeight = height;
-    u64 offset = 0u;
-    for(u32 index = 0u; index < count.value(); ++index){
-        const auto plane = TryComputeTextureMipPlaneBlockLayout(cast<u8>(TexturePayloadFormat::UastcLdr4x4), mipWidth, mipHeight);
-        if(!plane.has_value())
-            return MakeUnexpected(plane.error());
-        TextureMipLevel mip;
-        mip.offsetBytes = offset;
-        mip.sizeBytes = plane.value().planeByteCount;
-        mip.width = mipWidth;
-        mip.height = mipHeight;
-        mip.blockCountX = plane.value().blocksX;
-        mip.blockCountY = plane.value().blocksY;
-        mip.sliceCount = 1u;
-        mips.push_back(mip);
-        offset += mip.sizeBytes;
-        mipWidth = NextTextureMipExtent(mipWidth);
-        mipHeight = NextTextureMipExtent(mipHeight);
-    }
-    if(offset > usize.max)
-        return MakeUnexpected(Failure());
-    Vector<u8> bytes;
-    bytes.resize(cast<usize>(offset));
-    for(usize index = 0u; index < bytes.size(); ++index)
-        bytes[index] = cast<u8>(cast<u32>(seed) + index * 17u);
-    const auto textureName = ParseName(path);
-    if(!textureName.has_value())
-        return MakeUnexpected(Failure());
-    Texture texture(textureName.value());
-    texture.setPayload(width, height, mips, bytes, TexturePayloadDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::EmbeddedLdr, s_OpaqueAlphaUnorm8);
-    return MakeImageSource(pool, texture);
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-in AssetRef<Texture> ImageSourceIdentity(in SharedImageSource source){ return source.deref().identity(); }
-u64 ImageSourceGeneration(in SharedImageSource source){ return source.deref().generation(); }
-in Texture ImageSourceTexture(in SharedImageSource source){ return source.deref().texture(); }
-in GlyphPageBinding GlyphPageBindingOf(in SharedGlyphPage page){ return page.deref().binding(); }
-Span<u8> GlyphPagePixelsOf(in SharedGlyphPage page){ return page.deref().pixels(); }
-in SdfAtlasPageBinding SdfPageBindingOf(in SharedSdfAtlasPage page){ return page.deref().binding(); }
-Span<u8> SdfPagePixelsOf(in SharedSdfAtlasPage page){ return page.deref().pixels(); }
-Name FontFaceIdentityName(in SharedFontFace face){ return face.deref().identity().name(); }
-u64 FontFaceGeneration(in SharedFontFace face){ return face.deref().generation(); }
-b8 FontFaceValid(in SharedFontFace face){ return face.deref().valid(); }
-b8 FontFaceCoverageInkReliable(in SharedFontFace face){ return face.deref().coverageInkReliable(); }
-b8 FontFaceHasBakedAtlas(in SharedFontFace face){ return cast<b8>(face.deref().bakedAtlas()); }
-in SharedBakedFontAtlas FontFaceBakedAtlas(in SharedFontFace face){ return face.deref().bakedAtlas(); }
-u32 FontFaceBakedUnitsPerEm(in SharedFontFace face){ return face.deref().bakedAtlas().deref().unitsPerEm(); }
-FontAtlasGlyph FontFaceBakedGlyph(in SharedFontFace face, in u32 glyph){ return face.deref().bakedAtlas().deref().glyph(glyph); }
-in SharedSdfAtlasPage FontFaceBakedPage(in SharedFontFace face, in u32 group){ return face.deref().bakedAtlas().deref().page(group); }
-b8 FontFaceRasterize(in SharedFontFace face, in u32 glyph, in u32 size, mut GlyphBitmap bitmap){ return face.deref().rasterize(glyph, size, bitmap); }
-Expected<Rect> FontFaceRasterBounds(in SharedFontFace face, in u32 glyph, in u32 size){ return face.deref().rasterBounds(glyph, size); }
-b8 HasAtlasGlyph(in GlyphAtlas atlas, in SharedFontFace face, in u32 glyph, in u32 size){ return atlas.find(face, glyph, size).has_value(); }
-usize AtlasGlyphSlotId(in GlyphAtlas atlas, in SharedFontFace face, in u32 glyph, in u32 size){
-    const auto slot = atlas.find(face, glyph, size);
-    if(slot.has_value())
-        return TestValueAddress<AtlasGlyph>(slot.value());
-    return 0u;
-}
-Expected<AtlasGlyph> TryFindAtlasGlyph(in GlyphAtlas atlas, in SharedFontFace face, in u32 glyph, in u32 size){
-    const auto slot = atlas.find(face, glyph, size);
-    if(slot.has_value())
-        return slot.value();
-    return MakeUnexpected(Failure());
-}
-
-UiFixtureAcceptedInputState<Capacity> CaptureAcceptedInput<const usize Capacity>(in InputRouter input){
-    UiFixtureAcceptedInputState<Capacity> saved;
-    saved.count = input.targets().size();
-    saved.popupCount = input.popupCount();
-    saved.layoutGeneration = input.layoutGeneration();
-    saved.focus = input.focus();
-    saved.capture = input.capture();
-    for(usize index = 0u; index < Min(saved.count, saved.targets.size()); ++index)
-        saved.targets[index] = input.targets()[index];
-    return saved;
-}
-
-void ExpectAcceptedTargets(in InputRouter input, in Span<HitTarget> targets, in usize count, in b8 checkOwnerDeclaration){
-    ASSERT_EQ(input.targets().size(), count);
-    ASSERT_LE(count, targets.size());
-    for(usize index = 0u; index < count; ++index)
-        ExpectUiAcceptedTarget(input.targets()[index], targets[index], checkOwnerDeclaration);
-}
-
-void ExpectAcceptedInput<const usize Capacity>(
-    in InputRouter input,
-    in UiFixtureAcceptedInputState<Capacity> saved,
-    in b8 checkOwner,
-    in b8 checkFocus,
-    in b8 checkPopups,
-    in b8 checkCapture
-){
-    EXPECT_EQ(input.layoutGeneration(), saved.layoutGeneration);
-    if(checkPopups)
-        EXPECT_EQ(input.popupCount(), saved.popupCount);
-    if(checkFocus)
-        EXPECT_EQ(input.focus(), saved.focus);
-    if(checkCapture)
-        EXPECT_EQ(input.capture(), saved.capture);
-    ExpectAcceptedTargets(input, saved.targets, saved.count, checkOwner);
-}
-
-void CopyGlyphVertices(in DrawSnapshot snapshot, mut Vector<Vertex> vertices){
-    vertices.reserve(snapshot.indices().size());
-    for(in DrawCommand command : snapshot.commands()){
-        if(command.material != PaintMaterial::Glyph && command.material != PaintMaterial::SdfGlyph)
-            continue;
-        for(u32 index = command.firstIndex; index < command.firstIndex + command.indexCount; ++index)
-            vertices.push_back(snapshot.vertices()[snapshot.indices()[index]]);
-    }
-}
-
-b8 LoadBundledFixtureFont(in StringView filename, mut Font font){ return LoadBundledFont(font, Path(s_UiTestFontDirectory), filename); }
-b8 InstallLatinFixtureFont(mut Font font, mut TextService text){
-    if(!LoadBundledFixtureFont("latin.font", font))
-        return false;
-    const Array<FontSource, 1u> sources(FontSource(AssetRef<Font>(font.virtualPath()), font, 1u));
-    return text.setFonts(sources);
-}
-
-UiSkinInsets MakeFixtureSkinInsets(in f32 left, in f32 top, in f32 right, in f32 bottom){
-    UiSkinInsets result;
-    result.left = left;
-    result.top = top;
-    result.right = right;
-    result.bottom = bottom;
-    return result;
-}
 
 [ordered, extensible]
 class WidgetFixture{
@@ -277,10 +125,10 @@ class WidgetFixture{
     public void press(in KeyEnum value, in b8 repeat){ this.press(value, repeat, false); }
     public void press(in KeyEnum value, in b8 repeat, in b8 shift){ PressWidgetFixtureKey(this, value, repeat, shift); }
     public Expected<UiFixtureSkinPaintSample> sampleSkinPaint(in DrawSnapshot snapshot, in Name name)const{
-        UiSkinRegion region;
-        if(!this.m_skin.tryFindRegion(name, region))
-            return MakeUnexpected(Failure());
-        return SampleUiSkinRegionPaint(region, this.m_skin.atlasWidth(), this.m_skin.atlasHeight(), snapshot);
+        const Expected<UiSkinRegion> region = this.m_skin.tryFindRegion(name);
+        if(!region.has_value())
+            return MakeUnexpected(region.error());
+        return SampleUiSkinRegionPaint(region.value(), this.m_skin.atlasWidth(), this.m_skin.atlasHeight(), snapshot);
     }
     public b8 installKoreanFallback(){
         Font korean(Name("tests/ui/fonts/korean"));
@@ -295,6 +143,185 @@ class WidgetFixture{
     }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void PopulateBakedFontTables(in Span<u8> bytes, mut FontAtlasPayload payload){
+    HarfBuzzFont face;
+    ASSERT_TRUE(face.open(bytes, 0u));
+    payload.unitsPerEm = face.unitsPerEm();
+    payload.sourceGlyphCount = face.glyphCount();
+    const Array<u32, 3u> tags(s_FontAtlasGdefTag, s_FontAtlasGposTag, s_FontAtlasKernTag);
+    for(in u32 tag : tags){
+        const u32 size = face.tableLength(tag);
+        if(size == 0u)
+            continue;
+        FontAtlasPositioningTable table;
+        table.tag = tag;
+        table.bytes.resize(size);
+        ASSERT_TRUE(face.copyTable(tag, table.bytes));
+        table.sha256 = ComputeSha256(table.bytes);
+        payload.positioningTables.push_back(table);
+    }
+}
+
+Expected<SharedImageSource> MakeSeededImage(in StringView path, in u8 seed, in u32 width, in u32 height, in SharedPool pool){
+    const auto count = TryComputeCompleteTextureMipCount(cast<u8>(TexturePayloadDimension::Texture2D), width, height, 1u);
+    if(!count.has_value())
+        return MakeUnexpected(count.error());
+    Vector<TextureMipLevel> mips;
+    mips.reserve(count.value());
+    u32 mipWidth = width;
+    u32 mipHeight = height;
+    u64 offset = 0u;
+    for(u32 index = 0u; index < count.value(); ++index){
+        const auto plane = TryComputeTextureMipPlaneBlockLayout(cast<u8>(TexturePayloadFormat::UastcLdr4x4), mipWidth, mipHeight);
+        if(!plane.has_value())
+            return MakeUnexpected(plane.error());
+        TextureMipLevel mip;
+        mip.offsetBytes = offset;
+        mip.sizeBytes = plane.value().planeByteCount;
+        mip.width = mipWidth;
+        mip.height = mipHeight;
+        mip.blockCountX = plane.value().blocksX;
+        mip.blockCountY = plane.value().blocksY;
+        mip.sliceCount = 1u;
+        mips.push_back(mip);
+        offset += mip.sizeBytes;
+        mipWidth = NextTextureMipExtent(mipWidth);
+        mipHeight = NextTextureMipExtent(mipHeight);
+    }
+    if(offset > usize.max)
+        return MakeUnexpected(Failure());
+    Vector<u8> bytes;
+    bytes.resize(cast<usize>(offset));
+    for(usize index = 0u; index < bytes.size(); ++index)
+        bytes[index] = cast<u8>(cast<u32>(seed) + index * 17u);
+    const auto textureName = ParseName(path);
+    if(!textureName.has_value())
+        return MakeUnexpected(Failure());
+    Texture texture(textureName.value());
+    texture.setPayload(width, height, mips, bytes, TexturePayloadDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::EmbeddedLdr, s_OpaqueAlphaUnorm8);
+    return MakeImageSource(pool, texture);
+}
+
+in AssetRef<Texture> ImageSourceIdentity(in SharedImageSource source){ return source.deref().identity(); }
+
+u64 ImageSourceGeneration(in SharedImageSource source){ return source.deref().generation(); }
+
+in Texture ImageSourceTexture(in SharedImageSource source){ return source.deref().texture(); }
+
+in GlyphPageBinding GlyphPageBindingOf(in SharedGlyphPage page){ return page.deref().binding(); }
+
+Span<u8> GlyphPagePixelsOf(in SharedGlyphPage page){ return page.deref().pixels(); }
+
+in SdfAtlasPageBinding SdfPageBindingOf(in SharedSdfAtlasPage page){ return page.deref().binding(); }
+
+Span<u8> SdfPagePixelsOf(in SharedSdfAtlasPage page){ return page.deref().pixels(); }
+
+Name FontFaceIdentityName(in SharedFontFace face){ return face.deref().identity().name(); }
+
+u64 FontFaceGeneration(in SharedFontFace face){ return face.deref().generation(); }
+
+b8 FontFaceValid(in SharedFontFace face){ return face.deref().valid(); }
+
+b8 FontFaceCoverageInkReliable(in SharedFontFace face){ return face.deref().coverageInkReliable(); }
+
+b8 FontFaceHasBakedAtlas(in SharedFontFace face){ return cast<b8>(face.deref().bakedAtlas()); }
+
+in SharedBakedFontAtlas FontFaceBakedAtlas(in SharedFontFace face){ return face.deref().bakedAtlas(); }
+
+u32 FontFaceBakedUnitsPerEm(in SharedFontFace face){ return face.deref().bakedAtlas().deref().unitsPerEm(); }
+
+FontAtlasGlyph FontFaceBakedGlyph(in SharedFontFace face, in u32 glyph){ return face.deref().bakedAtlas().deref().glyph(glyph); }
+
+in SharedSdfAtlasPage FontFaceBakedPage(in SharedFontFace face, in u32 group){ return face.deref().bakedAtlas().deref().page(group); }
+
+b8 FontFaceRasterize(in SharedFontFace face, in u32 glyph, in u32 size, mut GlyphBitmap bitmap){ return face.deref().rasterize(glyph, size, bitmap); }
+
+Expected<Rect> FontFaceRasterBounds(in SharedFontFace face, in u32 glyph, in u32 size){ return face.deref().rasterBounds(glyph, size); }
+
+b8 HasAtlasGlyph(in GlyphAtlas atlas, in SharedFontFace face, in u32 glyph, in u32 size){ return atlas.find(face, glyph, size).has_value(); }
+
+usize AtlasGlyphSlotId(in GlyphAtlas atlas, in SharedFontFace face, in u32 glyph, in u32 size){
+    const auto slot = atlas.find(face, glyph, size);
+    if(slot.has_value())
+        return TestValueAddress<AtlasGlyph>(slot.value());
+    return 0u;
+}
+
+Expected<AtlasGlyph> TryFindAtlasGlyph(in GlyphAtlas atlas, in SharedFontFace face, in u32 glyph, in u32 size){
+    const auto slot = atlas.find(face, glyph, size);
+    if(slot.has_value())
+        return slot.value();
+    return MakeUnexpected(Failure());
+}
+
+UiFixtureAcceptedInputState<Capacity> CaptureAcceptedInput<const usize Capacity>(in InputRouter input){
+    UiFixtureAcceptedInputState<Capacity> saved;
+    saved.count = input.targets().size();
+    saved.popupCount = input.popupCount();
+    saved.layoutGeneration = input.layoutGeneration();
+    saved.focus = input.focus();
+    saved.capture = input.capture();
+    for(usize index = 0u; index < Min(saved.count, saved.targets.size()); ++index)
+        saved.targets[index] = input.targets()[index];
+    return saved;
+}
+
+void ExpectAcceptedTargets(in InputRouter input, in Span<HitTarget> targets, in usize count, in b8 checkOwnerDeclaration){
+    ASSERT_EQ(input.targets().size(), count);
+    ASSERT_LE(count, targets.size());
+    for(usize index = 0u; index < count; ++index)
+        ExpectUiAcceptedTarget(input.targets()[index], targets[index], checkOwnerDeclaration);
+}
+
+void ExpectAcceptedInput<const usize Capacity>(
+    in InputRouter input,
+    in UiFixtureAcceptedInputState<Capacity> saved,
+    in b8 checkOwner,
+    in b8 checkFocus,
+    in b8 checkPopups,
+    in b8 checkCapture
+){
+    EXPECT_EQ(input.layoutGeneration(), saved.layoutGeneration);
+    if(checkPopups)
+        EXPECT_EQ(input.popupCount(), saved.popupCount);
+    if(checkFocus)
+        EXPECT_EQ(input.focus(), saved.focus);
+    if(checkCapture)
+        EXPECT_EQ(input.capture(), saved.capture);
+    ExpectAcceptedTargets(input, saved.targets, saved.count, checkOwner);
+}
+
+void CopyGlyphVertices(in DrawSnapshot snapshot, mut Vector<Vertex> vertices){
+    vertices.reserve(snapshot.indices().size());
+    for(in DrawCommand command : snapshot.commands()){
+        if(command.material != PaintMaterial::Glyph && command.material != PaintMaterial::SdfGlyph)
+            continue;
+        for(u32 index = command.firstIndex; index < command.firstIndex + command.indexCount; ++index)
+            vertices.push_back(snapshot.vertices()[snapshot.indices()[index]]);
+    }
+}
+
+b8 LoadBundledFixtureFont(in StringView filename, mut Font font){ return LoadBundledFont(font, Path(s_UiTestFontDirectory), filename); }
+
+b8 InstallLatinFixtureFont(mut Font font, mut TextService text){
+    if(!LoadBundledFixtureFont("latin.font", font))
+        return false;
+    const Array<FontSource, 1u> sources(FontSource(AssetRef<Font>(font.virtualPath()), font, 1u));
+    return text.setFonts(sources);
+}
+
+UiSkinInsets MakeFixtureSkinInsets(in f32 left, in f32 top, in f32 right, in f32 bottom){
+    UiSkinInsets result;
+    result.left = left;
+    result.top = top;
+    result.right = right;
+    result.bottom = bottom;
+    return result;
+}
 
 void ExpectUiSamePaintSnapshots(in DrawSnapshot actual, in DrawSnapshot expected){
     ASSERT_EQ(actual.glyphPages().size(), expected.glyphPages().size());

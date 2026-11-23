@@ -168,13 +168,10 @@ struct ArenaMemoryOwnerSnapshot{
 
 [[nodiscard]] const ArenaMemoryOwnerRecord* FirstArenaMemoryOwnerRecord()noexcept;
 [[nodiscard]] const ArenaMemoryOwnerRecord* ReadArenaMemoryOwnerIdentity(const ArenaMemoryOwnerRecord& record, ArenaMemoryOwnerIdentity& outIdentity)noexcept;
+[[nodiscard]] Name ReadArenaMemoryOwnerName(const ArenaMemoryOwnerRecord& record)noexcept;
 
 FOUNDATION_INLINE Name ArenaMemoryTracker::ownerName()const noexcept{
-    if(!m_owner)
-        return s_NameNone;
-    ArenaMemoryOwnerIdentity identity;
-    (void)ReadArenaMemoryOwnerIdentity(*m_owner, identity);
-    return identity.ownerName;
+    return m_owner ? ReadArenaMemoryOwnerName(*m_owner) : s_NameNone;
 }
 [[nodiscard]] const ArenaMemoryOwnerRecord* ReadArenaMemoryOwnerRecord(const ArenaMemoryOwnerRecord& record, ArenaMemoryOwnerSnapshot& outSnapshot)noexcept;
 

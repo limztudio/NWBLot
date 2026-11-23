@@ -213,8 +213,8 @@ b8 BorrowLifetimeAnalyzer::borrowsLocalStringOwner(const ClassDecl* ownerClass, 
             return false;
         if(local->borrowsLocalStringOwner){
             usize ownerIdx = localIdx;
-            if(!local->borrowedLocalOwnerName.empty())
-                (void)TypeChecker::FindScopedVar(scope, local->borrowedLocalOwnerName, &ownerIdx);
+            if(!local->borrowedLocalOwnerName.empty() && !TypeChecker::FindScopedVar(scope, local->borrowedLocalOwnerName, &ownerIdx))
+                ownerIdx = localIdx;
             if(outOwnerName)
                 *outOwnerName = local->borrowedLocalOwnerName;
             if(outOwnerScopeIndex)

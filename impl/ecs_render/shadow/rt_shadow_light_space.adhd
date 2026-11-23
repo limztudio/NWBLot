@@ -295,7 +295,7 @@ void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
     in DeferredFrameTargets targets = this.m_shadowVisibilityPreparedTargets.value();
     const u32 halfWidth = DivideUp(targets.width, targets.shadowReceiverFactor);
     const u32 halfHeight = DivideUp(targets.height, targets.shadowReceiverFactor);
-    const u64 fallbackPixels = Max(cast<u64>(halfWidth) * cast<u64>(halfHeight), 1ull);
+    const u64 fallbackPixels = Max(cast<u64>(halfWidth) * cast<u64>(halfHeight), cast<u64>(1u));
     state.m_resourcesPrepared = resources.ensureLightSpaceShadowPipelines() && resources.ensureLightSpaceShadowStorage(plan, fallbackPixels);
 }
 
@@ -537,8 +537,10 @@ b8 LightSpaceResourceSet::ensureLightSpaceShadowPipelines(){
         if(output.valid())
             continue;
         const b8 includeAccelStruct = IsLightSpaceCsgResolvePipelineIndex(index, hardwareCsg);
-        if(!CreateHeapComputePipeline(device, state.m_shaders[index], snapshot.layout, includeAccelStruct, output))
+        const Expected<ComputePipelineHandle> pipeline = CreateHeapComputePipeline(device, state.m_shaders[index], snapshot.layout, includeAccelStruct);
+        if(!pipeline.has_value())
             return false;
+        output = pipeline.value();
     }
     for(u32 transparent = 0u; transparent < s_LightSpaceCapturePipelineKindCount; ++transparent){
         GraphicsPipelineHandle output = snapshot.opaqueCapture;
@@ -761,16 +763,17 @@ b8 LightSpaceResourceSet::ensureLightSpaceShadowStorage(in LightSpacePlan plan, 
     if(!depthResult.has_value())
         return false;
     TextureHandle depth = depthResult.value();
-    if(!AssignSampledTexture(
+    const Expected<GpuDescriptorHandle> depthDescriptor = RegisterSampledTexture(
         heap,
         GpuDescriptorClass::SampledImage2DArray,
         depth.get(),
         Format::D32,
         TextureSubresourceSet(0u, 1u, 0u, plan.viewCount),
-        TextureDimension::Texture2DArray,
-        descriptors[s_LightSpaceDepthDescriptorIndex]
-    ))
+        TextureDimension::Texture2DArray
+    );
+    if(!depthDescriptor.has_value())
         return false;
+    descriptors[s_LightSpaceDepthDescriptorIndex] = depthDescriptor.value();
     Array<FramebufferHandle, s_LightSpaceFramebufferCount> opaque;
     Array<FramebufferHandle, s_LightSpaceFramebufferCount> transparent;
     for(u32 view = 0u; view < plan.viewCount; ++view){

@@ -8,74 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-f32 SetBuilderFontSize(mut Builder ui, in f32 fontSize){
-    const f32 previous = ui.style().fontSize;
-    ui.style().fontSize = fontSize;
-    return previous;
-}
-
-void RestoreBuilderFontSize(mut Builder ui, in f32 previousFontSize){
-    ui.style().fontSize = previousFontSize;
-}
-
-f32 SetBuilderGap(mut Builder ui, in f32 gap){
-    const f32 previous = ui.style().gap;
-    ui.style().gap = gap;
-    return previous;
-}
-
-void RestoreBuilderGap(mut Builder ui, in f32 previousGap){
-    ui.style().gap = previousGap;
-}
-
-b8 DrawOffsetSkinRegion(mut PaintBuilder paint, in Name region, in VectorSingle origin, in VectorSingle offset, in f32 width, in f32 height){
-    const VectorSingle position = origin + offset;
-    return paint.drawRegion(region, Rect(position.x, position.y, width, height));
-}
-
-b8 DrawSkinGallery(mut PaintBuilder paint, in f32 originX, in f32 originY, in f32 captionHeight){
-    const VectorSingle origin(originX, originY, originX, originY);
-    const VectorSingle columnsAndButtons = origin + VectorSingle(s_LeftColumnX, s_ButtonTopY, s_RightColumnX, s_ButtonBottomY);
-    return
-        paint.drawRegion(s_Panel, Rect(originX, originY, s_OrdinaryGalleryWidth, s_PanelBaseHeight + captionHeight))
-        && paint.drawRegion(s_ButtonNormal, Rect(columnsAndButtons.x, columnsAndButtons.y, s_ButtonWidth, s_ButtonHeight))
-        && paint.drawRegion(s_ButtonHover, Rect(columnsAndButtons.z, columnsAndButtons.y, s_ButtonWidth, s_ButtonHeight))
-        && paint.drawRegion(s_ButtonPressed, Rect(columnsAndButtons.x, columnsAndButtons.w, s_ButtonWidth, s_ButtonHeight))
-        && paint.drawRegion(s_ButtonDisabled, Rect(columnsAndButtons.z, columnsAndButtons.w, s_ButtonWidth, s_ButtonHeight))
-        && paint.drawRegion(s_EditFocused, Rect(columnsAndButtons.x, originY + s_EditFocusedY, s_EditFocusedWidth, s_EditFocusedHeight))
-        && DrawOffsetSkinRegion(paint, s_ComboArrow, origin, VectorSingle(s_ComboArrowX, s_ComboArrowY, s_ComboArrowX, s_ComboArrowY), s_ComboArrowSize, s_ComboArrowSize)
-        && DrawOffsetSkinRegion(paint, s_Checkbox, origin, VectorSingle(s_CheckboxX, s_CheckboxY, s_CheckboxX, s_CheckboxY), s_CheckboxSize, s_CheckboxSize)
-        && DrawOffsetSkinRegion(paint, s_CheckboxMark, origin, VectorSingle(s_CheckboxMarkX, s_CheckboxMarkY, s_CheckboxMarkX, s_CheckboxMarkY), s_CheckboxMarkSize, s_CheckboxMarkSize)
-        && paint.drawRegion(s_ProgressTrack, Rect(columnsAndButtons.x, originY + s_ProgressTrackY, s_ProgressTrackWidth, s_ProgressTrackHeight))
-        && DrawOffsetSkinRegion(paint, s_ProgressFill, origin, VectorSingle(s_ProgressFillX, s_ProgressFillY, s_ProgressFillX, s_ProgressFillY), s_ProgressFillWidth, s_ProgressFillHeight)
-        && paint.drawRegion(s_EditNormal, Rect(columnsAndButtons.x, originY + s_EditNormalY, s_EditNormalWidth, captionHeight))
-    ;
-}
-
-b8 ConfigureLabelWithSize(in StringView text, in f32 size, mut Label outLabel){
-    ShapeRequest request = ShapeRequest();
-    request.text = text;
-    request.fontSize = size;
-    return outLabel.setText(request) == TextLayoutStatus::Success;
-}
-
-b8 ConfigureLabel(in StringView text, mut Label outLabel){
-    return ConfigureLabelWithSize(text, s_LabelFontSize, outLabel);
-}
-
-b8 ConfigureKoreanLabel(mut Label outLabel){
-    ShapeRequest request = ShapeRequest();
-    request.text = s_KoreanText;
-    request.language = "ko";
-    request.fontSize = s_LabelFontSize;
-    request.scriptTag = PackFourCharTag(72u, 97u, 110u, 103u);
-    return outLabel.setText(request) == TextLayoutStatus::Success;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [ordered]
 class UiListSource : IListDataSource, NoCopy{
     private CompactString m_buffer;
@@ -754,6 +686,74 @@ class UiSkinPreview{
     private Label m_caption;
     private Label m_korean;
     private UiWidgetGallery m_widgets;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+f32 SetBuilderFontSize(mut Builder ui, in f32 fontSize){
+    const f32 previous = ui.style().fontSize;
+    ui.style().fontSize = fontSize;
+    return previous;
+}
+
+void RestoreBuilderFontSize(mut Builder ui, in f32 previousFontSize){
+    ui.style().fontSize = previousFontSize;
+}
+
+f32 SetBuilderGap(mut Builder ui, in f32 gap){
+    const f32 previous = ui.style().gap;
+    ui.style().gap = gap;
+    return previous;
+}
+
+void RestoreBuilderGap(mut Builder ui, in f32 previousGap){
+    ui.style().gap = previousGap;
+}
+
+b8 DrawOffsetSkinRegion(mut PaintBuilder paint, in Name region, in VectorSingle origin, in VectorSingle offset, in f32 width, in f32 height){
+    const VectorSingle position = origin + offset;
+    return paint.drawRegion(region, Rect(position.x, position.y, width, height));
+}
+
+b8 DrawSkinGallery(mut PaintBuilder paint, in f32 originX, in f32 originY, in f32 captionHeight){
+    const VectorSingle origin(originX, originY, originX, originY);
+    const VectorSingle columnsAndButtons = origin + VectorSingle(s_LeftColumnX, s_ButtonTopY, s_RightColumnX, s_ButtonBottomY);
+    return
+        paint.drawRegion(s_Panel, Rect(originX, originY, s_OrdinaryGalleryWidth, s_PanelBaseHeight + captionHeight))
+        && paint.drawRegion(s_ButtonNormal, Rect(columnsAndButtons.x, columnsAndButtons.y, s_ButtonWidth, s_ButtonHeight))
+        && paint.drawRegion(s_ButtonHover, Rect(columnsAndButtons.z, columnsAndButtons.y, s_ButtonWidth, s_ButtonHeight))
+        && paint.drawRegion(s_ButtonPressed, Rect(columnsAndButtons.x, columnsAndButtons.w, s_ButtonWidth, s_ButtonHeight))
+        && paint.drawRegion(s_ButtonDisabled, Rect(columnsAndButtons.z, columnsAndButtons.w, s_ButtonWidth, s_ButtonHeight))
+        && paint.drawRegion(s_EditFocused, Rect(columnsAndButtons.x, originY + s_EditFocusedY, s_EditFocusedWidth, s_EditFocusedHeight))
+        && DrawOffsetSkinRegion(paint, s_ComboArrow, origin, VectorSingle(s_ComboArrowX, s_ComboArrowY, s_ComboArrowX, s_ComboArrowY), s_ComboArrowSize, s_ComboArrowSize)
+        && DrawOffsetSkinRegion(paint, s_Checkbox, origin, VectorSingle(s_CheckboxX, s_CheckboxY, s_CheckboxX, s_CheckboxY), s_CheckboxSize, s_CheckboxSize)
+        && DrawOffsetSkinRegion(paint, s_CheckboxMark, origin, VectorSingle(s_CheckboxMarkX, s_CheckboxMarkY, s_CheckboxMarkX, s_CheckboxMarkY), s_CheckboxMarkSize, s_CheckboxMarkSize)
+        && paint.drawRegion(s_ProgressTrack, Rect(columnsAndButtons.x, originY + s_ProgressTrackY, s_ProgressTrackWidth, s_ProgressTrackHeight))
+        && DrawOffsetSkinRegion(paint, s_ProgressFill, origin, VectorSingle(s_ProgressFillX, s_ProgressFillY, s_ProgressFillX, s_ProgressFillY), s_ProgressFillWidth, s_ProgressFillHeight)
+        && paint.drawRegion(s_EditNormal, Rect(columnsAndButtons.x, originY + s_EditNormalY, s_EditNormalWidth, captionHeight))
+    ;
+}
+
+b8 ConfigureLabelWithSize(in StringView text, in f32 size, mut Label outLabel){
+    ShapeRequest request = ShapeRequest();
+    request.text = text;
+    request.fontSize = size;
+    return outLabel.setText(request) == TextLayoutStatus::Success;
+}
+
+b8 ConfigureLabel(in StringView text, mut Label outLabel){
+    return ConfigureLabelWithSize(text, s_LabelFontSize, outLabel);
+}
+
+b8 ConfigureKoreanLabel(mut Label outLabel){
+    ShapeRequest request = ShapeRequest();
+    request.text = s_KoreanText;
+    request.language = "ko";
+    request.fontSize = s_LabelFontSize;
+    request.scriptTag = PackFourCharTag(72u, 97u, 110u, 103u);
+    return outLabel.setText(request) == TextLayoutStatus::Success;
 }
 
 

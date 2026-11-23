@@ -12,19 +12,8 @@
 
 [cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::s_UsesSsePairs")]
 extern const b8 s_BenchmarkUsesSsePairs;
-
 [cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::ConsumeChecksum")]
 extern void ConsumeBenchmarkChecksum(in u64 value);
-
-void WriteBenchmarkStdout(in StringView text){ ConsoleWrite(text); }
-void WriteBenchmarkStderr(in StringView text){ ConsoleWriteError(text); }
-u64 SimdGetDoubleLaneBits(in VectorDouble value, in usize lane){ return VectorDoubleGetIntByIndex(value, lane); }
-u32 SimdGetSingleLaneBits(in VectorSingle value, in usize lane){ return VectorGetIntByIndex(value, lane); }
-f32 SimdGetSingleLane(in VectorSingle value, in usize lane){ return VectorGetByIndex(value, lane); }
-i32 SimdRoundingModeByIndex(in usize index){
-    const Array<i32, 4> modes(FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO);
-    return modes[index];
-}
 
 const usize s_DataCount = 64u;
 const u64 s_InitialSeed = 0x8923409102431291ull;
@@ -55,10 +44,6 @@ interface IRoundingModeVerifier{
 interface IDoubleWorkloadRunner{
     VectorDouble run()const;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 class Dataset{
     public Array<f64x4, s_DataCount> left;
@@ -99,6 +84,21 @@ class MeasureOptions{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+void WriteBenchmarkStdout(in StringView text){ ConsoleWrite(text); }
+
+void WriteBenchmarkStderr(in StringView text){ ConsoleWriteError(text); }
+
+u64 SimdGetDoubleLaneBits(in VectorDouble value, in usize lane){ return VectorDoubleGetIntByIndex(value, lane); }
+
+u32 SimdGetSingleLaneBits(in VectorSingle value, in usize lane){ return VectorGetIntByIndex(value, lane); }
+
+f32 SimdGetSingleLane(in VectorSingle value, in usize lane){ return VectorGetByIndex(value, lane); }
+
+i32 SimdRoundingModeByIndex(in usize index){
+    const Array<i32, 4> modes(FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO);
+    return modes[index];
+}
 
 u64 NextSeed(mut u64 seed){
     seed ^= seed << 13u;
@@ -350,10 +350,6 @@ Expected<MeasureOptions> ParseMeasureOptions(
     options.iterations = cast<usize>(parsedIterations.value());
     return options;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 VectorDouble ThroughputWorkload<const usize Lanes, Reducer : IDoubleBinaryEvaluator>(in Dataset data, in usize dataCount, in usize iterations, in Reducer reduce){
     Array<f64x4, 8> accumulators;

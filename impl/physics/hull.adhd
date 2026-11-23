@@ -15,14 +15,14 @@ class QuickhullFace{
     public b8 alive = true;
 }
 
-b8 ComputeTrianglePlane(in VectorSingle a, in VectorSingle b, in VectorSingle c, mut VectorSingle outNormal, mut f32 outOffset){
+Expected<Plane3D> ComputeTrianglePlane(in VectorSingle a, in VectorSingle b, in VectorSingle c){
     const VectorSingle raw = Cross(VectorSingle(b - a, 0.0f), VectorSingle(c - a, 0.0f));
     const f32 lenSq = Vector3LengthSq(raw).x;
     if(!IsFinite(lenSq) || lenSq <= 1.0e-12f)
-        return false;
-    outNormal = VectorSingle(raw * Rsqrt(VectorSingle(lenSq)), 0.0f);
-    outOffset = Vector3Dot(outNormal, VectorSingle(a, 0.0f)).x;
-    return true;
+        return MakeUnexpected(Failure());
+    const VectorSingle normal = VectorSingle(raw * Rsqrt(VectorSingle(lenSq)), 0.0f);
+    const f32 offset = Vector3Dot(normal, VectorSingle(a, 0.0f)).x;
+    return Plane3D(normal, offset);
 }
 
 QuickhullFace MakeTriangleFace(in Span<f32x4> points, in u32 i0, in u32 i1, in u32 i2, in VectorSingle interior){
@@ -30,12 +30,13 @@ QuickhullFace MakeTriangleFace(in Span<f32x4> points, in u32 i0, in u32 i1, in u
     f.vertices.push_back(i0);
     f.vertices.push_back(i1);
     f.vertices.push_back(i2);
-    VectorSingle n(0.0f, 1.0f, 0.0f, 0.0f);
-    f32 d = 0.0f;
-    if(!ComputeTrianglePlane(VectorSingle(points[i0]), VectorSingle(points[i1]), VectorSingle(points[i2]), n, d)){
+    const Expected<Plane3D> plane = ComputeTrianglePlane(VectorSingle(points[i0]), VectorSingle(points[i1]), VectorSingle(points[i2]));
+    if(!plane.has_value()){
         f.alive = false;
         return f;
     }
+    VectorSingle n(plane.value().normalOffset, 0.0f);
+    f32 d = plane.value().normalOffset.w;
     if(Vector3Dot(n, VectorSingle(interior, 0.0f)).x - d > 0.0f){
         const u32 tmp = f.vertices[1u];
         f.vertices[1u] = f.vertices[2u];
@@ -313,10 +314,11 @@ Expected<HullShape> BuildConvexHull(in Span<f32x4> inputPoints, in f32 radius){
         return MakeUnexpected(Failure());
 
     const VectorSingle p2 = VectorSingle(uniquePts[thirdIdx]);
-    VectorSingle triN(0.0f, 1.0f, 0.0f, 0.0f);
-    f32 triD = 0.0f;
-    if(!ComputeTrianglePlane(p0, p1, p2, triN, triD))
+    const Expected<Plane3D> triPlane = ComputeTrianglePlane(p0, p1, p2);
+    if(!triPlane.has_value())
         return MakeUnexpected(Failure());
+    const VectorSingle triN(triPlane.value().normalOffset, 0.0f);
+    const f32 triD = triPlane.value().normalOffset.w;
 
     usize fourthIdx = s_NullIndex;
     f32 bestPlaneDist = 1.0e-4f;

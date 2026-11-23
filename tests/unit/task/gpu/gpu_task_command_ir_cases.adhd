@@ -9,16 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class GpuCmdIrOwnerReleaseProbe : NoCopy{
-    private mut u32 m_releases;
-
-    public GpuCmdIrOwnerReleaseProbe(mut u32 releases){
-        this.m_releases = releases;
-    }
-
-    public ~GpuCmdIrOwnerReleaseProbe(){ ++this.m_releases; }
-}
-
 const usize s_GpuCmdIrStreamHeaderBytes = size_of<GpuCommandIrStreamHeader>();
 const usize s_GpuCmdIrRecordHeaderBytes = size_of<GpuCommandIrHeader>();
 const usize s_GpuCmdIrCopyBufferRecordBytes = size_of<GpuCommandIrCopyBufferRecord>();
@@ -50,15 +40,27 @@ const usize s_GpuCmdIrClearTexFlagsOffset = offset_of<GpuCommandIrClearTextureRe
 const usize s_GpuCmdIrClearTexReservedOffset = offset_of<GpuCommandIrClearTextureRecord>(reserved);
 const usize s_GpuCmdIrUploadTexBlobOffsetOffset = offset_of<GpuCommandIrUploadTextureRecord>(blobOffsetBytes);
 const usize s_GpuCmdIrUploadTexBlobSizeOffset = offset_of<GpuCommandIrUploadTextureRecord>(blobSizeBytes);
+type GpuCmdIrReplayErrorEnum = GpuCommandIrReplayError;
+const usize s_GpuCmdIrTextureByteCount = 96u;
+const usize s_GpuCmdIrLargeBlobBytes = 70u * 1024u + 4u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-type GpuCmdIrReplayErrorEnum = GpuCommandIrReplayError;
+class GpuCmdIrOwnerReleaseProbe : NoCopy{
+    private mut u32 m_releases;
 
-const usize s_GpuCmdIrTextureByteCount = 96u;
-const usize s_GpuCmdIrLargeBlobBytes = 70u * 1024u + 4u;
+    public GpuCmdIrOwnerReleaseProbe(mut u32 releases){
+        this.m_releases = releases;
+    }
+
+    public ~GpuCmdIrOwnerReleaseProbe(){ ++this.m_releases; }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 GpuSubmissionPacketId GpuCmdIr_MakePacketId(in u64 generation, in u32 index){
     GpuSubmissionPacketId id = GpuSubmissionPacketId();

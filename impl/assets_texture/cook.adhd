@@ -18,6 +18,21 @@ const StringView s_TextureUnsupportedDimensionHint = "has unsupported texture di
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class TextureCookMetadataHeader{
+    public Name virtualPath = s_NameNone;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 depth = 1u;
+    public TexturePayloadDimension dimension = TexturePayloadDimension::Texture2D;
+    public TexturePayloadFormat payloadFormat = TexturePayloadFormat::UastcLdr4x4;
+    public TextureAlphaMode alphaMode = TextureAlphaMode::Opaque;
+    public u8 alphaConstantUnorm8 = s_OpaqueAlphaUnorm8;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 IsValidTextureUnsignedFieldValue(in i64 rawValue, in u32 minimum, in u32 maximum){
     if(rawValue < 0)
         return false;
@@ -269,17 +284,6 @@ Expected<Texture> BuildTextureAssetFromCookData(
     if(!asset.validatePayload())
         return MakeUnexpected(Failure());
     return asset;
-}
-
-class TextureCookMetadataHeader{
-    public Name virtualPath = s_NameNone;
-    public u32 width = 0u;
-    public u32 height = 0u;
-    public u32 depth = 1u;
-    public TexturePayloadDimension dimension = TexturePayloadDimension::Texture2D;
-    public TexturePayloadFormat payloadFormat = TexturePayloadFormat::UastcLdr4x4;
-    public TextureAlphaMode alphaMode = TextureAlphaMode::Opaque;
-    public u8 alphaConstantUnorm8 = s_OpaqueAlphaUnorm8;
 }
 
 Expected<TextureCookMetadataHeader> ParseTextureCookMetadataHeader(in Name virtualPath, in Path nwbFilePath, in MetascriptValue asset){

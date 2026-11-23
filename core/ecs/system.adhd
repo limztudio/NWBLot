@@ -26,7 +26,8 @@ extern class ISystem{
     void registerAccess(...);
     Name systemType(...)const;
     CpuTaskOptions taskOptions(...)const;
-    Expected<void, CpuTaskAdmissionError> update(...);
+    [cpp_flags(unwind)]
+    Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta);
     void writeAccess(...);
 };
 

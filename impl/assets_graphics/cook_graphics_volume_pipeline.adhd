@@ -26,6 +26,47 @@ const StringView s_IncludeNonStandaloneKindLabel = "include";
 const StringView s_ShaderNonStandaloneKindLabel = "shader";
 const StringView s_ShaderFirstTokenSuffixLabel = "_shader";
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GraphicsVolumeMetadata{
+    public IncludeMetadataMap includeMetadata;
+    public ShaderEntryVector shaderEntries;
+    public Vector<MaterialBindEntry> materialBindEntries;
+    public Vector<CsgShapeCookEntry> csgShapeEntries;
+    public PreparedShaderPlan preparedPlan;
+    public HashSet<ShaderStageKey> seenShaderIdentityKeys;
+
+    [owner_result]
+    private Expected<PreparedShaderPlan> buildPlan(in CookResolvedPaths paths, in Path bindRoot, in Path csgRoot, in Path bxdfRoot, in Path shadowRoot, in Span<MaterialCookEntry> materials){
+        return PrepareShaderEntriesForCook(paths, bindRoot, csgRoot, bxdfRoot, shadowRoot, this.includeMetadata, this.materialBindEntries, materials, this.shaderEntries);
+    }
+
+    public b8 prepareShaders(in CookResolvedPaths paths, in Path bindRoot, in Path csgRoot, in Path bxdfRoot, in Path shadowRoot, in Span<MaterialCookEntry> materials){
+        Expected<PreparedShaderPlan> plan = this.buildPlan(paths, bindRoot, csgRoot, bxdfRoot, shadowRoot, materials);
+        if(!plan.has_value())
+            return false;
+        this.preparedPlan.preparedEntries.swap(plan.value().preparedEntries);
+        this.preparedPlan.plannedFileCount = plan.value().plannedFileCount;
+        this.shaderEntries.clear();
+        return true;
+    }
+}
+
+class GraphicsVolumeWriter{
+    private Vector<u8> bytecode;
+    private Vector<u8> payload;
+    private Vector<Record> records;
+
+    private b8 appendVariant(in PreparedShaderEntry prepared, in Name shader, in Name stage, in ShaderDefineCombo defines, in u64 fingerprint, mut CookVolumeWriteContext context);
+    public b8 write(in GraphicsVolumeMetadata metadata, mut CookVolumeWriteContext context);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 ValidateCanonicalPreparedShaderIdentity(
     in Name shaderName,
     in Name stageName,
@@ -94,34 +135,6 @@ ShaderVariantCacheReadStatus ReadCachedShaderVariantBytecode(
 
     outBytecode.clear();
     return ShaderVariantCacheReadStatus::Miss;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GraphicsVolumeMetadata{
-    public IncludeMetadataMap includeMetadata;
-    public ShaderEntryVector shaderEntries;
-    public Vector<MaterialBindEntry> materialBindEntries;
-    public Vector<CsgShapeCookEntry> csgShapeEntries;
-    public PreparedShaderPlan preparedPlan;
-    public HashSet<ShaderStageKey> seenShaderIdentityKeys;
-
-    [owner_result]
-    private Expected<PreparedShaderPlan> buildPlan(in CookResolvedPaths paths, in Path bindRoot, in Path csgRoot, in Path bxdfRoot, in Path shadowRoot, in Span<MaterialCookEntry> materials){
-        return PrepareShaderEntriesForCook(paths, bindRoot, csgRoot, bxdfRoot, shadowRoot, this.includeMetadata, this.materialBindEntries, materials, this.shaderEntries);
-    }
-
-    public b8 prepareShaders(in CookResolvedPaths paths, in Path bindRoot, in Path csgRoot, in Path bxdfRoot, in Path shadowRoot, in Span<MaterialCookEntry> materials){
-        Expected<PreparedShaderPlan> plan = this.buildPlan(paths, bindRoot, csgRoot, bxdfRoot, shadowRoot, materials);
-        if(!plan.has_value())
-            return false;
-        this.preparedPlan.preparedEntries.swap(plan.value().preparedEntries);
-        this.preparedPlan.plannedFileCount = plan.value().plannedFileCount;
-        this.shaderEntries.clear();
-        return true;
-    }
 }
 
 b8 AppendUniqueShaderEntry(in Path file, mut ShaderCookEntry entry, mut GraphicsVolumeMetadata metadata){
@@ -252,112 +265,106 @@ b8 ReadOrCompileShaderVariant(in PreparedShaderEntry prepared, in StringView var
     return CompileSlangShaderVariant(request, bytecode);
 }
 
-class GraphicsVolumeWriter{
-    private Vector<u8> bytecode;
-    private Vector<u8> payload;
-    private Vector<Record> records;
-
-    private b8 appendVariant(in PreparedShaderEntry prepared, in Name shader, in Name stage, in ShaderDefineCombo defines, in u64 fingerprint, mut CookVolumeWriteContext context){
-        in ShaderCookEntry entry = prepared.entry;
-        const String variant = BuildCanonicalShaderVariantName(defines);
-        const u64 sourceChecksum = ComputeShaderSourceChecksum(entry, variant, prepared.dependencyChecksum, fingerprint);
-        String hex;
-        AppendHexU64(sourceChecksum, hex);
-        const Path cache = BuildShaderVariantBytecodeCachePath(context.preparation.resolvedPaths.cacheDirectory, context.preparation.configurationSafeName, hex);
-        if(!ReadOrCompileShaderVariant(prepared, variant, defines, cache, this.bytecode))
-            return false;
-        const Expected<Name> path = BuildVirtualPathName(shader, variant, stage);
-        if(!path.has_value()){
-            error("Shader cook failed to build virtual path for '{}' stage '{}' variant '{}'", entry.name, entry.archiveStage, variant);
-            return false;
-        }
-        if(!context.claim(path.value())){
-            error("Shader cook produced duplicate virtual path '{}' (entry='{}', variant='{}')", path.value().resolvedText(), entry.name, variant);
-            return false;
-        }
-        const u64 bytecodeChecksum = UpdateFnv64(s_Fnv64OffsetBasis, Span<u8>(this.bytecode));
-        const u64 cookKey = BuildShaderVariantCookKeyHash(path.value().hash(), sourceChecksum, bytecodeChecksum);
-        const AssetPayloadEncodeFailure failure = EncodeAssetPayload(entry.entryPoint, this.bytecode, this.payload);
-        if(failure != AssetPayloadEncodeFailure::None){
-            error("Failed to package shader payload '{}' (failure {})", path.value().resolvedText(), cast<u32>(failure));
-            return false;
-        }
-        if(!context.appendPayload(path.value(), this.payload, cookKey)){
-            error("Failed to append shader payload '{}' to manifest", path.value().resolvedText());
-            return false;
-        }
-        mut Record record = AppendCookRecord<Record>(context, this.records);
-        record.shaderName = shader;
-        record.variantName.assign(StringView(variant));
-        record.stage = stage;
-        record.sourceChecksum = sourceChecksum;
-        record.bytecodeChecksum = bytecodeChecksum;
-        record.virtualPathHash = path.value().hash();
-        return true;
+b8 GraphicsVolumeWriter::appendVariant(in PreparedShaderEntry prepared, in Name shader, in Name stage, in ShaderDefineCombo defines, in u64 fingerprint, mut CookVolumeWriteContext context){
+    in ShaderCookEntry entry = prepared.entry;
+    const String variant = BuildCanonicalShaderVariantName(defines);
+    const u64 sourceChecksum = ComputeShaderSourceChecksum(entry, variant, prepared.dependencyChecksum, fingerprint);
+    String hex;
+    AppendHexU64(sourceChecksum, hex);
+    const Path cache = BuildShaderVariantBytecodeCachePath(context.preparation.resolvedPaths.cacheDirectory, context.preparation.configurationSafeName, hex);
+    if(!ReadOrCompileShaderVariant(prepared, variant, defines, cache, this.bytecode))
+        return false;
+    const Expected<Name> path = BuildVirtualPathName(shader, variant, stage);
+    if(!path.has_value()){
+        error("Shader cook failed to build virtual path for '{}' stage '{}' variant '{}'", entry.name, entry.archiveStage, variant);
+        return false;
     }
+    if(!context.claim(path.value())){
+        error("Shader cook produced duplicate virtual path '{}' (entry='{}', variant='{}')", path.value().resolvedText(), entry.name, variant);
+        return false;
+    }
+    const u64 bytecodeChecksum = UpdateFnv64(s_Fnv64OffsetBasis, Span<u8>(this.bytecode));
+    const u64 cookKey = BuildShaderVariantCookKeyHash(path.value().hash(), sourceChecksum, bytecodeChecksum);
+    const AssetPayloadEncodeFailure failure = EncodeAssetPayload(entry.entryPoint, this.bytecode, this.payload);
+    if(failure != AssetPayloadEncodeFailure::None){
+        error("Failed to package shader payload '{}' (failure {})", path.value().resolvedText(), cast<u32>(failure));
+        return false;
+    }
+    if(!context.appendPayload(path.value(), this.payload, cookKey)){
+        error("Failed to append shader payload '{}' to manifest", path.value().resolvedText());
+        return false;
+    }
+    mut Record record = AppendCookRecord<Record>(context, this.records);
+    record.shaderName = shader;
+    record.variantName.assign(StringView(variant));
+    record.stage = stage;
+    record.sourceChecksum = sourceChecksum;
+    record.bytecodeChecksum = bytecodeChecksum;
+    record.virtualPathHash = path.value().hash();
+    return true;
+}
 
-    public b8 write(in GraphicsVolumeMetadata metadata, mut CookVolumeWriteContext context){
-        u64 count = 0u;
-        for(in PreparedShaderEntry prepared : metadata.preparedPlan.preparedEntries){
-            if(!TryAccumulatePreparedShaderRecordCount(prepared.variantCount, count))
-                return false;
-        }
-        usize capacity = 0u;
-        if(!ValidatePreparedShaderRecordCountFitsCapacity(count, capacity))
+b8 GraphicsVolumeWriter::write(in GraphicsVolumeMetadata metadata, mut CookVolumeWriteContext context){
+    u64 count = 0u;
+    for(in PreparedShaderEntry prepared : metadata.preparedPlan.preparedEntries){
+        if(!TryAccumulatePreparedShaderRecordCount(prepared.variantCount, count))
             return false;
-        this.records.reserve(capacity);
-        u64 fingerprint = 0u;
-        if(!metadata.preparedPlan.preparedEntries.empty()){
-            const Expected<u64> result = ComputeSlangCompilerFingerprint(context.preparation.resolvedPaths.cacheDirectory);
-            if(!result.has_value())
-                return false;
-            fingerprint = result.value();
+    }
+    const Expected<usize> capacity = ValidatePreparedShaderRecordCountFitsCapacity(count);
+    if(!capacity.has_value())
+        return false;
+    this.records.reserve(capacity.value());
+    u64 fingerprint = 0u;
+    if(!metadata.preparedPlan.preparedEntries.empty()){
+        const Expected<u64> result = ComputeSlangCompilerFingerprint(context.preparation.resolvedPaths.cacheDirectory);
+        if(!result.has_value())
+            return false;
+        fingerprint = result.value();
+    }
+    for(in PreparedShaderEntry prepared : metadata.preparedPlan.preparedEntries){
+        const Expected<Optional<Name>, NameTextError> shader = ToName(prepared.entry.name);
+        const Expected<Optional<Name>, NameTextError> stage = ToName(prepared.entry.archiveStage);
+        Name shaderName = s_NameNone;
+        Name stageName = s_NameNone;
+        if(shader.has_value())
+            shaderName = shader.value().value_or(s_NameNone);
+        if(stage.has_value())
+            stageName = stage.value().value_or(s_NameNone);
+        if(!ValidateCanonicalPreparedShaderIdentity(shaderName, stageName, prepared.entry.name, prepared.entry.archiveStage, prepared.entry.entryPoint))
+            return false;
+        Expected<Vector<ShaderDefineCombo>> variants = ExpandShaderDefineCombinations(prepared.entry.defineValues);
+        if(!variants.has_value()){
+            error("GraphicsCook: variant combination count exceeds runtime limits for entry '{}'", prepared.entry.name);
+            return false;
         }
-        for(in PreparedShaderEntry prepared : metadata.preparedPlan.preparedEntries){
-            const Expected<Optional<Name>, NameTextError> shader = ToName(prepared.entry.name);
-            const Expected<Optional<Name>, NameTextError> stage = ToName(prepared.entry.archiveStage);
-            Name shaderName = s_NameNone;
-            Name stageName = s_NameNone;
-            if(shader.has_value())
-                shaderName = shader.value().value_or(s_NameNone);
-            if(stage.has_value())
-                stageName = stage.value().value_or(s_NameNone);
-            if(!ValidateCanonicalPreparedShaderIdentity(shaderName, stageName, prepared.entry.name, prepared.entry.archiveStage, prepared.entry.entryPoint))
+        if(variants.value().empty())
+            AppendArenaElement<ShaderDefineCombo>(variants.value());
+        for(in ShaderDefineCombo combo : variants.value()){
+            if(!this.appendVariant(prepared, shaderName, stageName, combo, fingerprint, context))
                 return false;
-            Expected<Vector<ShaderDefineCombo>> variants = ExpandShaderDefineCombinations(prepared.entry.defineValues);
-            if(!variants.has_value()){
-                error("GraphicsCook: variant combination count exceeds runtime limits for entry '{}'", prepared.entry.name);
-                return false;
-            }
-            if(variants.value().empty())
-                AppendArenaElement<ShaderDefineCombo>(variants.value());
-            for(in ShaderDefineCombo combo : variants.value()){
-                if(!this.appendVariant(prepared, shaderName, stageName, combo, fingerprint, context))
+            if(prepared.supportsCsgClipVariant || prepared.supportsAvboitCsgClipVariant){
+                const Expected<ShaderDefineCombo> clip = BuildClipDefineCombo(prepared.entry.name, combo);
+                if(!clip.has_value() || !this.appendVariant(prepared, shaderName, stageName, clip.value(), fingerprint, context))
                     return false;
-                if(prepared.supportsCsgClipVariant || prepared.supportsAvboitCsgClipVariant){
-                    const Expected<ShaderDefineCombo> clip = BuildClipDefineCombo(prepared.entry.name, combo);
-                    if(!clip.has_value() || !this.appendVariant(prepared, shaderName, stageName, clip.value(), fingerprint, context))
-                        return false;
-                }
             }
         }
-        assert(this.records.size() == capacity);
-        if(!context.claim(s_IndexVirtualPathName)){
-            error("GraphicsCook: duplicate shader archive index virtual path '{}'", s_IndexVirtualPathName.resolvedText());
-            return false;
-        }
-        in Vector<Record> records = this.records;
-        if(!context.appendEncodedPayload(s_IndexVirtualPathName, lambda[in records](mut BinaryUpdateContext binary) -> b8{
-            if(WriteShaderArchiveIndex(binary, Span<Record>(records)))
-                return true;
-            error("GraphicsCook: failed to serialize shader index");
-            return false;
-        })){
-            error("GraphicsCook: failed to append shader index to manifest");
-            return false;
-        }
-        return true;
     }
+    assert(this.records.size() == capacity);
+    if(!context.claim(s_IndexVirtualPathName)){
+        error("GraphicsCook: duplicate shader archive index virtual path '{}'", s_IndexVirtualPathName.resolvedText());
+        return false;
+    }
+    in Vector<Record> records = this.records;
+    if(!context.appendEncodedPayload(s_IndexVirtualPathName, lambda[in records](mut BinaryUpdateContext binary) -> b8{
+        if(WriteShaderArchiveIndex(binary, Span<Record>(records)))
+            return true;
+        error("GraphicsCook: failed to serialize shader index");
+        return false;
+    })){
+        error("GraphicsCook: failed to append shader index to manifest");
+        return false;
+    }
+    return true;
 }
 
 b8 ResolveGraphicsIncludeSource(in CookResolvedPaths paths, in StringView ownerKind, in StringView owner, in StringView label, mut String source){
@@ -392,6 +399,7 @@ b8 AppendGeneratedShaderEntries(in Vector<GeneratedMaterialPixelShader> list, mu
     return true;
 }
 
+[cpp_unwind]
 b8 PrepareGraphicsMaterials(mut CookVolumePrepareContext context, mut GraphicsVolumeMetadata metadata, mut Span<MaterialCookEntry> materials){
     if(!ValidateMaterialCookRequiresShaderEntries(metadata.shaderEntries.size(), materials.size()) || !ValidateMaterialCookInterfaces(metadata.materialBindEntries, materials))
         return false;
@@ -437,11 +445,11 @@ b8 PrepareGraphicsMaterials(mut CookVolumePrepareContext context, mut GraphicsVo
     const Expected<Vector<GeneratedMaterialPixelShader>> extinction = EmitMaterialPassPixelShaders(context.resolvedPaths.cacheDirectory, context.configurationSafeName, s_NameNone, MaterialPixelPass::Extinction, materials);
     if(!extinction.has_value())
         return false;
-    usize count = 0u;
-    if(!TryAccumulateGeneratedShaderEntryCapacity(metadata.shaderEntries.size(), surface.value().size(), accumulate.value().size(), occupancy.value().size(), extinction.value().size(), count))
+    const Expected<usize> count = TryAccumulateGeneratedShaderEntryCapacity(metadata.shaderEntries.size(), surface.value().size(), accumulate.value().size(), occupancy.value().size(), extinction.value().size());
+    if(!count.has_value())
         return false;
-    metadata.shaderEntries.reserve(count);
-    metadata.seenShaderIdentityKeys.reserve(count);
+    metadata.shaderEntries.reserve(count.value());
+    metadata.seenShaderIdentityKeys.reserve(count.value());
     if(!AppendGeneratedShaderEntries(surface.value(), metadata) || !AppendGeneratedShaderEntries(accumulate.value(), metadata) || !AppendGeneratedShaderEntries(occupancy.value(), metadata) || !AppendGeneratedShaderEntries(extinction.value(), metadata))
         return false;
     if(!metadata.prepareShaders(context.resolvedPaths, bindRoot.value(), csgRoot.value(), bxdfRoot.value(), shadowRoot.value(), materials))

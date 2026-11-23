@@ -3,6 +3,15 @@
 
 
 #include <impl/ecs_render/avboit/avboit_stage_internal_types.adhd>
+#include <impl/ecs_render/avboit/avboit_refraction_capture_tasks.adhd>
+#include <impl/ecs_render/avboit/avboit_stage_record_and_tasks.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_OVERFLOW_INVALID")]
+extern const u32 s_AvboitOverflowInvalid;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,12 +74,6 @@ b8 AreAllAvboitClearResourcesValid(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/avboit/avboit_refraction_capture_tasks.adhd>
-#include <impl/ecs_render/avboit/avboit_stage_record_and_tasks.adhd>
-
-[cpp_header("<impl/assets/graphics/avboit/constants.h>"), cpp_name("NWB_AVBOIT_OVERFLOW_INVALID")]
-extern const u32 s_AvboitOverflowInvalid;
-
 Expected<GpuTaskId> FrameGraphAvboitStage::declare(in FrameGraphAvboitStageInputs inputs, in FrameGraphAvboitStageTiming timing, mut ObjectGeometryCacheGraph objectGeometry){
 
     AvboitPreGraphTaskPayload avboitPrePayload(this.m_avboitSystem, inputs.targets, timing.preTimingTicket, timing.transparentCsgIntervalsTiming);
@@ -93,6 +96,7 @@ Expected<GpuTaskId> FrameGraphAvboitStage::declare(in FrameGraphAvboitStageInput
         timing.transparentCsgIntervalClearTimingState
     );
     if(!transparentCsgIntervalResult.has_value()){
+        this.m_avboitSystem.taskGraphStage().reset();
         warning("RendererSystem: could not declare transparent CSG interval producer");
         return MakeUnexpected(Failure());
     }
@@ -105,6 +109,7 @@ Expected<GpuTaskId> FrameGraphAvboitStage::declare(in FrameGraphAvboitStageInput
         avboitCsgIntervalCombinePayload
     );
     if(!transparentCsgTaskResult.has_value()){
+        this.m_avboitSystem.taskGraphStage().reset();
         warning("RendererSystem: could not declare transparent CSG interval graph tasks");
         return MakeUnexpected(Failure());
     }
@@ -126,8 +131,10 @@ Expected<GpuTaskId> FrameGraphAvboitStage::declare(in FrameGraphAvboitStageInput
         inputs.refractionCaptureEnabled,
         inputs.targets, objectGeometry, generatedGeometry, uploadedStreams
     );
-    if(!refractionCaptureTaskResult.has_value())
+    if(!refractionCaptureTaskResult.has_value()){
+        this.m_avboitSystem.taskGraphStage().reset();
         return MakeUnexpected(Failure());
+    }
     const GpuTaskId refractionCaptureTask = refractionCaptureTaskResult.value();
     FrameGraphAvboitPassUploadChain occupancyUploadChain(this.m_graph, this.m_materialSystem, this.m_csgSystem);
     const auto occupancyUploadChainResult = occupancyUploadChain.declare(
@@ -139,11 +146,12 @@ Expected<GpuTaskId> FrameGraphAvboitStage::declare(in FrameGraphAvboitStageInput
         uploadedStreams
     );
     if(!occupancyUploadChainResult.has_value()){
+        this.m_avboitSystem.taskGraphStage().reset();
         warning("RendererSystem: could not declare AVBOIT occupancy upload chain");
         return MakeUnexpected(Failure());
     }
 
-    const auto avboitClearChainResult = DeclareAvboitClearChain(this.m_graph, this.m_avboitSystem,
+    const auto avboitClearChainResult = DeclareAvboitClearChain(this.m_graph, this.m_avboitSystem.taskGraphStage(),
         AvboitClearChainInputs(
             inputs.resources.avboitLowRaster,
             inputs.resources.avboitAccumColor,
@@ -162,12 +170,14 @@ Expected<GpuTaskId> FrameGraphAvboitStage::declare(in FrameGraphAvboitStageInput
         timing.clearTimingState
     );
     if(!avboitClearChainResult.has_value()){
+        this.m_avboitSystem.taskGraphStage().reset();
         warning("RendererSystem: could not declare graph-owned AVBOIT clear chain");
         return MakeUnexpected(Failure());
     }
 
     AvboitRasterRecordInputs occupancyRecord(inputs.targets, inputs.resources, occupancyUploadChainResult.value(), timing.preTimingTicket, timing.occupancyComputeEmulationTiming, avboitClearChainResult.value().clearTask);
     if(!DeclareAvboitOccupancyRecord(this.m_graph, this.m_graphics, this.m_materialSystem, this.m_avboitSystem, inputs.frameBindings, objectGeometry, occupancyRecord, avboitOccupancyPayload, avboitOccupancyComputeEmulationPayload)){
+        this.m_avboitSystem.taskGraphStage().reset();
         warning("RendererSystem: could not declare deferred AVBOIT occupancy graph task");
         return MakeUnexpected(Failure());
     }
@@ -175,8 +185,10 @@ Expected<GpuTaskId> FrameGraphAvboitStage::declare(in FrameGraphAvboitStageInput
         const GpuTaskId producer = this.m_avboitSystem.taskGraphStage().m_occupancyComputeEmulationTask;
         if(!producer.valid())
             generatedGeometry.reset();
-        else if(!generatedGeometry.publishProducer(producer))
+        else if(!generatedGeometry.publishProducer(producer)){
+            this.m_avboitSystem.taskGraphStage().reset();
             return MakeUnexpected(Failure());
+        }
     }
 
     AvboitComputeEffectChainBuilder avboitComputeEffectChainBuilder(this.m_graph, this.m_avboitSystem);
@@ -193,16 +205,21 @@ Expected<GpuTaskId> FrameGraphAvboitStage::declare(in FrameGraphAvboitStageInput
     );
     const auto avboitDepthWarpStageResult = avboitComputeEffectChainBuilder.declareDepthWarp(depthWarpInputs);
     if(!avboitDepthWarpStageResult.has_value()){
+        this.m_avboitSystem.taskGraphStage().reset();
         warning("RendererSystem: could not declare deferred AVBOIT depth-warp graph task");
         return MakeUnexpected(Failure());
     }
     const GpuTaskId avboitDepthWarpCompletionTask = avboitDepthWarpStageResult.value().completionTask;
 
     if(inputs.hasTransparentRenderers){
-        if(!this.declareExtinction(inputs, timing, avboitDepthWarpCompletionTask, avboitIntervalOutputsGraphOwned, objectGeometry, generatedGeometry, uploadedStreams, avboitComputeEffectChainBuilder))
+        if(!this.declareExtinction(inputs, timing, avboitDepthWarpCompletionTask, avboitIntervalOutputsGraphOwned, objectGeometry, generatedGeometry, uploadedStreams, avboitComputeEffectChainBuilder)){
+            this.m_avboitSystem.taskGraphStage().reset();
             return MakeUnexpected(Failure());
-        if(!this.declareAccumulation(inputs, timing, avboitIntervalOutputsGraphOwned, objectGeometry, generatedGeometry, uploadedStreams))
+        }
+        if(!this.declareAccumulation(inputs, timing, avboitIntervalOutputsGraphOwned, objectGeometry, generatedGeometry, uploadedStreams)){
+            this.m_avboitSystem.taskGraphStage().reset();
             return MakeUnexpected(Failure());
+        }
         return this.m_avboitSystem.taskGraphStage().m_accumulationFinalizeTask;
     }
     return this.m_avboitSystem.taskGraphStage().m_occupancyTask;
@@ -329,10 +346,13 @@ GpuTaskDesc AvboitClearTaskDesc(in GpuTaskSchedulingHint scheduling, in Name ide
 }
 
 [cpp_unwind]
-Expected<AvboitClearChainResult> DeclareAvboitClearChain(mut GpuTaskGraph graph, mut RendererAvboitSystem avboitSystem, in AvboitClearChainInputs inputs, mut GraphClearTimingRecordState clearTimingState){
+Expected<AvboitClearChainResult> DeclareAvboitClearChain(mut GpuTaskGraph graph, mut RendererAvboitTaskGraphStageState stageState, in AvboitClearChainInputs inputs, mut GraphClearTimingRecordState clearTimingState){
     AvboitClearChainResult result;
-    if(!inputs.uploadTask.valid())
+    if(!inputs.uploadTask.valid()){
+        stageState.m_clearFirstTask = GpuTaskId();
+        stageState.m_clearTask = GpuTaskId();
         return MakeUnexpected(Failure());
+    }
 
     GpuTaskId avboitClearTask = inputs.uploadTask;
     if(inputs.clearTargets){
@@ -348,8 +368,11 @@ Expected<AvboitClearChainResult> DeclareAvboitClearChain(mut GpuTaskGraph graph,
             inputs.control.valid(),
             inputs.extinction.valid(),
             inputs.extinctionOverflow.valid()
-        ))
+        )){
+            stageState.m_clearFirstTask = GpuTaskId();
+            stageState.m_clearTask = GpuTaskId();
             return MakeUnexpected(Failure());
+        }
 
         const AvboitClearTargetIdentityPolicy identityPolicy();
         GpuTaskSchedulingHint avboitClearScheduling;
@@ -377,15 +400,17 @@ Expected<AvboitClearChainResult> DeclareAvboitClearChain(mut GpuTaskGraph graph,
             makeAvboitFloatClearDesc(inputs.lowRaster, transparentBlack, avboitClearBeginHooks)
         );
         if(!avboitClearTaskResult.has_value()){
-            avboitClearTask = GpuTaskId();
+            stageState.m_clearFirstTask = GpuTaskId();
+            stageState.m_clearTask = GpuTaskId();
             return MakeUnexpected(Failure());
         }
-        avboitClearTask = avboitClearTaskResult.value();
-        avboitSystem.taskGraphStage().m_clearFirstTask = avboitClearTask;
+        const GpuTaskId avboitClearFirstTask = avboitClearTaskResult.value();
+        avboitClearTask = avboitClearFirstTask;
         const auto avboitClearTaskResult2 = graph.addClearTextureTask(AvboitClearTaskDesc(avboitStatelessClearScheduling, s_AvboitClearAccumColorIdentity, s_AvboitClearAccumColorLabel, avboitClearTask),
             makeAvboitFloatClearDesc(inputs.accumColor, transparentBlack, GpuClearTextureTaskRecordHooks()));
         if(!avboitClearTaskResult2.has_value()){
-            avboitClearTask = GpuTaskId();
+            stageState.m_clearFirstTask = GpuTaskId();
+            stageState.m_clearTask = GpuTaskId();
             return MakeUnexpected(Failure());
         }
         avboitClearTask = avboitClearTaskResult2.value();
@@ -394,7 +419,8 @@ Expected<AvboitClearChainResult> DeclareAvboitClearChain(mut GpuTaskGraph graph,
             makeAvboitFloatClearDesc(inputs.accumExtinction, transparentBlack, GpuClearTextureTaskRecordHooks())
         );
         if(!avboitClearTaskResult3.has_value()){
-            avboitClearTask = GpuTaskId();
+            stageState.m_clearFirstTask = GpuTaskId();
+            stageState.m_clearTask = GpuTaskId();
             return MakeUnexpected(Failure());
         }
         avboitClearTask = avboitClearTaskResult3.value();
@@ -405,7 +431,8 @@ Expected<AvboitClearChainResult> DeclareAvboitClearChain(mut GpuTaskGraph graph,
                 makeAvboitFloatClearDesc(target, transparentBlack, GpuClearTextureTaskRecordHooks())
             );
             if(!avboitClearTaskResult4.has_value()){
-                avboitClearTask = GpuTaskId();
+                stageState.m_clearFirstTask = GpuTaskId();
+                stageState.m_clearTask = GpuTaskId();
                 return MakeUnexpected(Failure());
             }
             avboitClearTask = avboitClearTaskResult4.value();
@@ -428,18 +455,23 @@ Expected<AvboitClearChainResult> DeclareAvboitClearChain(mut GpuTaskGraph graph,
             || !appendAvboitBufferClear(s_AvboitClearControlIdentity, s_AvboitClearControlLabel, inputs.control, 0u)
             || !appendAvboitBufferClear(s_AvboitClearExtinctionIdentity, s_AvboitClearExtinctionLabel, inputs.extinction, 0u)
             || !appendAvboitBufferClear(s_AvboitClearExtinctionOverflowIdentity, s_AvboitClearExtinctionOverflowLabel, inputs.extinctionOverflow, s_AvboitOverflowInvalid)
-        )
+        ){
+            stageState.m_clearFirstTask = GpuTaskId();
+            stageState.m_clearTask = GpuTaskId();
             return MakeUnexpected(Failure());
+        }
         const auto avboitClearTaskResult5 = graph.addClearTextureTask(
             AvboitClearTaskDesc(avboitClearScheduling, s_AvboitClearTransmittanceIdentity, s_AvboitClearTransmittanceLabel, avboitClearTask),
             makeAvboitFloatClearDesc(inputs.transmittance, Color(1.0f, 1.0f, 1.0f, 1.0f), avboitClearEndHooks)
         );
         if(!avboitClearTaskResult5.has_value()){
-            avboitClearTask = GpuTaskId();
+            stageState.m_clearFirstTask = GpuTaskId();
+            stageState.m_clearTask = GpuTaskId();
             return MakeUnexpected(Failure());
         }
         avboitClearTask = avboitClearTaskResult5.value();
-        avboitSystem.taskGraphStage().m_clearTask = avboitClearTask;
+        stageState.m_clearFirstTask = avboitClearFirstTask;
+        stageState.m_clearTask = avboitClearTask;
     }
     result.clearTask = avboitClearTask;
     return result;

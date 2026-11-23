@@ -10,6 +10,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+type NavigationHook = Func<128u, void()>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class NavigationCall{
     public String text;
     public EditNavigationSnapshot navigation;
@@ -18,8 +24,6 @@ class NavigationCall{
     public usize caret = 0u;
     public f32 viewportHeight = 0.0f;
 }
-
-type NavigationHook = Func<128u, void()>;
 
 class RecordingNavigationResolver : IEditNavigationResolver{
     public Vector<NavigationCall> records;
@@ -52,8 +56,6 @@ class AcceptingNavigationActions : IEditActionSink{
     public b8 apply(mut EditModel model, in EditAction action, in b8 readOnly)override{ return ApplyEcsUiAcceptingNavigationAction(this, model, action); }
     public usize count(in EditAction action)const{ return CountEcsUiNavigationActions(this, action); }
 }
-
-Rect DefaultNavigationBounds(){ return MakeEcsUiRect(10.0f, 20.0f, 180.0f, 48.0f); }
 
 [ordered]
 class UiEditNavigationHostTests{
@@ -96,6 +98,8 @@ class UiEditNavigationHostTests{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+Rect DefaultNavigationBounds(){ return MakeEcsUiRect(10.0f, 20.0f, 180.0f, 48.0f); }
 
 Expected<EditNavigationResult> ResolveEcsUiEditViewNavigation(mut RecordingNavigationResolver self, in EditModel model, in EditNavigationDirection direction, in EditNavigationSnapshot navigation, in f32 viewportHeight){
     NavigationCall record = NavigationCall();
@@ -168,9 +172,11 @@ b8 PrepareEcsUiNavigationModel(mut UiEditNavigationHostTests self, mut EditModel
     if(!self.core.m_result.valid || !PublishEcsUiEditBox(self.core, model, options, bounds, previousScroll)){
         return false;
     }
-    if(!DeclareEcsUiWidget(self.core.m_context, "other", WidgetKind::Button, self.core.m_otherWidget)){
+    const auto declaredOther = self.core.m_context.declare("other", WidgetKind::Button);
+    if(!declaredOther.has_value()){
         return false;
     }
+    self.core.m_otherWidget = declaredOther.value();
     HitTarget other = HitTarget();
     other.rectangle = MakeEcsUiRect(230.0f, 20.0f, 100.0f, 30.0f);
     other.clip = MakeEcsUiRect(0.0f, 0.0f, s_EcsUiViewportWidth, s_EcsUiViewportHeight);
@@ -412,42 +418,67 @@ void VerifyUiTextEditSession_DestructionReleasesServiceWithoutBorrowingTheDestro
     EXPECT_FALSE(service.activeSession().valid());
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST(PaintSlot, ClearAndRemoveReaddDoNotRestoreTheRunningCallback, VerifyPaintSlot_ClearAndRemoveReaddDoNotRestoreTheRunningCallback)
+
 NWB_ADHD_GTEST(PaintSlot, ReplacementAndRelocationKeepTheCurrentOwner, VerifyPaintSlot_ReplacementAndRelocationKeepTheCurrentOwner)
+
 NWB_ADHD_GTEST(PaintSlot, VectorGrowthAndExplicitMovePreserveMutableCaptures, VerifyPaintSlot_VectorGrowthAndExplicitMovePreserveMutableCaptures)
+
 NWB_ADHD_GTEST(PaintSlot, ExceptionRestoresCallbackWhenItStillHasAnOwner, VerifyPaintSlot_ExceptionRestoresCallbackWhenItStillHasAnOwner)
+
 NWB_ADHD_GTEST(PaintSlot, NestedReplacementAndExceptionDoNotRestoreTheDisplacedCallback, VerifyPaintSlot_NestedReplacementAndExceptionDoNotRestoreTheDisplacedCallback)
+
 NWB_ADHD_GTEST(PaintSlot, RunningCallbackRemainsVisibleUntilCleared, VerifyPaintSlot_RunningCallbackRemainsVisibleUntilCleared)
+
 NWB_ADHD_GTEST(PaintSlot, MoveConstructionTransfersTheActiveLease, VerifyPaintSlot_MoveConstructionTransfersTheActiveLease)
 
 NWB_ADHD_GTEST(UiSkinSelectionTests, FailedCustomFallsBackToDefaultAndRevalidatesOnlyDefault, VerifyUiSkinSelectionTests_FailedCustomFallsBackToDefaultAndRevalidatesOnlyDefault)
+
 NWB_ADHD_GTEST(UiSkinSelectionTests, FailedDefaultLeavesSelectionUncommittedForRetry, VerifyUiSkinSelectionTests_FailedDefaultLeavesSelectionUncommittedForRetry)
+
 NWB_ADHD_GTEST(UiSkinSelectionTests, FailedRevalidationPreservesPreviouslySelectedCustom, VerifyUiSkinSelectionTests_FailedRevalidationPreservesPreviouslySelectedCustom)
 
 NWB_ADHD_GTEST(UiTextEditOwned, PollCopiesEventsWithoutApplyingAndOwnedCommitSurvivesNativeCancellation, VerifyUiTextEditOwned_PollCopiesEventsWithoutApplyingAndOwnedCommitSurvivesNativeCancellation)
+
 NWB_ADHD_GTEST(UiTextEditOwned, TrustedLocalAdoptionRecoversAfterStrictRefreshRejectsChangedModel, VerifyUiTextEditOwned_TrustedLocalAdoptionRecoversAfterStrictRefreshRejectsChangedModel)
+
 NWB_ADHD_GTEST(UiTextEditOwned, CancelWithoutModelLeavesTransientCompositionForTheNextSynchronousLend, VerifyUiTextEditOwned_CancelWithoutModelLeavesTransientCompositionForTheNextSynchronousLend)
+
 NWB_ADHD_GTEST(UiTextEditOwned, CopiedSurroundingDeletionRequiresPublishedRevisionAndGraphemeAlignedRange, VerifyUiTextEditOwned_CopiedSurroundingDeletionRequiresPublishedRevisionAndGraphemeAlignedRange)
+
 NWB_ADHD_GTEST(UiTextEditOwned, MalformedCopiedEventsAndRejectedPreeditPreserveCommittedState, VerifyUiTextEditOwned_MalformedCopiedEventsAndRejectedPreeditPreserveCommittedState)
+
 NWB_ADHD_GTEST(UiTextEditOwned, IdenticalExternalResetFencesOldEventsAndPublishedDeletionContext, VerifyUiTextEditOwned_IdenticalExternalResetFencesOldEventsAndPublishedDeletionContext)
+
 NWB_ADHD_GTEST(UiTextEditOwned, OwnedCollectionAdoptionAndCancellationRejectAnotherThread, VerifyUiTextEditOwned_OwnedCollectionAdoptionAndCancellationRejectAnotherThread)
 
 NWB_ADHD_GTEST(UiTextEditSession, TrailingPreeditClearPreservesCommittedSelectedReplacementAndSingleUndo, VerifyUiTextEditSession_TrailingPreeditClearPreservesCommittedSelectedReplacementAndSingleUndo)
+
 NWB_ADHD_GTEST(UiTextEditSession, EmptyPreeditCancelsWithoutChangingCommittedText, VerifyUiTextEditSession_EmptyPreeditCancelsWithoutChangingCommittedText)
+
 NWB_ADHD_GTEST(UiTextEditSession, FocusLossDiscardsQueuedCommitAndClearsOnlyTransientPreedit, VerifyUiTextEditSession_FocusLossDiscardsQueuedCommitAndClearsOnlyTransientPreedit)
+
 NWB_ADHD_GTEST(UiTextEditSession, ReplacedOwnerCannotReceiveOldQueuedCommit, VerifyUiTextEditSession_ReplacedOwnerCannotReceiveOldQueuedCommit)
+
 NWB_ADHD_GTEST(UiTextEditSession, ExternalTextAndSelectionChangesFenceOldNativeEvents, VerifyUiTextEditSession_ExternalTextAndSelectionChangesFenceOldNativeEvents)
+
 NWB_ADHD_GTEST(UiTextEditSession, DeleteAddressesPublishedUtf8BytesThenCommitUsesUpdatedSelection, VerifyUiTextEditSession_DeleteAddressesPublishedUtf8BytesThenCommitUsesUpdatedSelection)
+
 NWB_ADHD_GTEST(UiTextEditSession, PreeditClearBeforeCommitPreservesTheOriginalReplacementSelection, VerifyUiTextEditSession_PreeditClearBeforeCommitPreservesTheOriginalReplacementSelection)
+
 NWB_ADHD_GTEST(UiTextEditSession, DeleteAfterUnpublishedCommitCannotDeleteDifferentText, VerifyUiTextEditSession_DeleteAfterUnpublishedCommitCannotDeleteDifferentText)
+
 NWB_ADHD_GTEST(UiTextEditSession, NativeByteDeleteCannotSplitAGrapheme, VerifyUiTextEditSession_NativeByteDeleteCannotSplitAGrapheme)
+
 NWB_ADHD_GTEST(UiTextEditSession, RejectedCommitPreservesCommittedTextAndCancelsNativeSession, VerifyUiTextEditSession_RejectedCommitPreservesCommittedTextAndCancelsNativeSession)
+
 NWB_ADHD_GTEST(UiTextEditSession, ExplicitEndClearsCompositionAndInvalidatesOldToken, VerifyUiTextEditSession_ExplicitEndClearsCompositionAndInvalidatesOldToken)
+
 NWB_ADHD_GTEST(UiTextEditSession, DestructionReleasesServiceWithoutBorrowingTheDestroyedModel, VerifyUiTextEditSession_DestructionReleasesServiceWithoutBorrowingTheDestroyedModel)
+
+NWB_ADHD_GTEST(EcsUiUnwind, SystemUpdateAllocationFailureUnwindsAndDrainsCleanly, VerifyEcsUiUnwind_SystemUpdateAllocationFailureUnwindsAndDrainsCleanly)
+
+NWB_ADHD_GTEST(EcsUiUnwind, HostSessionAndClipboardAllocationFailurePreserveState, VerifyEcsUiUnwind_HostSessionAndClipboardAllocationFailurePreserveState)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

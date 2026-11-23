@@ -182,9 +182,9 @@ class RadioGroupFixture : WidgetFixture{
         ExpectAcceptedInput<128u>(this.m_context.input(), saved, false, focus, popupScopes, true);
     }
     public usize regionQuads(in DrawSnapshot snapshot, in Name name)const{
-        UiSkinRegion region;
-        if(this.m_skin.tryFindRegion(name, region))
-            return CountUiSkinRegionQuads(region, this.m_skin.atlasWidth(), snapshot);
+        const Expected<UiSkinRegion> region = this.m_skin.tryFindRegion(name);
+        if(region.has_value())
+            return CountUiSkinRegionQuads(region.value(), this.m_skin.atlasWidth(), snapshot);
         return 0u;
     }
 }

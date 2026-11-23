@@ -11,6 +11,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+type TriangleCornerIndices = Array<u32, s_MeshletTriangleIndexCount>;
+type PositionNormalMap = HashMap<PositionKey, PositionNormalRecord>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 ShouldTransformBakedDirection(in b8 bakeTransforms, in b8 wantsSkinning, in b8 skinnedIsLocal){
     return bakeTransforms && (wantsSkinning || skinnedIsLocal);
 }
@@ -18,8 +25,6 @@ b8 ShouldTransformBakedDirection(in b8 bakeTransforms, in b8 wantsSkinning, in b
 b8 ShouldImportMeshTangents(in NormalMode normalMode, in b8 hasVertexTangent){
     return normalMode == NormalMode::Imported && hasVertexTangent;
 }
-
-type TriangleCornerIndices = Array<u32, s_MeshletTriangleIndexCount>;
 
 [cpp_unwind]
 b8 VisitTriangulatedMeshTriangles<Visitor>(in UfbxMesh mesh, in b8 flipWinding, mut forward Visitor visitTriangle, mut Vector<u32> inOutTriangleIndices){
@@ -113,8 +118,6 @@ Expected<VectorSingle> LoadCornerOutputTangentVector(in UfbxMesh mesh, in UfbxMa
 
     return ResolveImportedFbxTangent(normal, outputTangent.value(), hasBitangent, outputBitangentVec);
 }
-
-type PositionNormalMap = HashMap<PositionKey, PositionNormalRecord>;
 
 [cpp_unwind]
 Expected<PositionNormalMap> BuildSmoothPositionNormals(in UfbxMesh mesh, in UfbxNode node, in ImportOptions options, in b8 wantsSkinning, mut Vector<u32> inOutTriangleIndices){

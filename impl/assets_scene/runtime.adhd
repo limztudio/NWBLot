@@ -102,11 +102,16 @@ b8 ProjectAsset::validatePayload()const{
 }
 
 b8 ProjectAsset::loadBinary(in Span<u8> binary){
-    Name startScenePath;
-    if(!SceneAssetBinaryCodec().deserializeProject(binary, startScenePath))
+    const Expected<NameHash> startSceneHash = SceneAssetBinaryCodec().deserializeProject(binary);
+    if(!startSceneHash.has_value())
         return false;
-    this.m_startScene = SceneRef(startScenePath);
-    return this.validatePayload();
+    const SceneRef startScene(Name(startSceneHash.value()));
+    ProjectAsset candidate(this.virtualPath());
+    candidate.setStartScene(startScene);
+    if(!candidate.validatePayload())
+        return false;
+    this.m_startScene = startScene;
+    return true;
 }
 
 b8 SceneAsset::validatePayload()const{
@@ -135,11 +140,19 @@ b8 SceneAsset::loadBinary(in Span<u8> binary){
 }
 
 b8 TransformComponentAsset::loadBinary(in Span<u8> binary){
-    return ComponentAssetBinaryCodec().loadBinary(binary, this);
+    TransformComponentAsset candidate(this.virtualPath());
+    if(!ComponentAssetBinaryCodec().loadBinary(binary, candidate))
+        return false;
+    this.component = candidate.component;
+    return true;
 }
 
 b8 TransformComponentAsset::loadComponentPayload(in Span<u8> payload){
-    return ComponentAssetBinaryCodec().deserializeTransform(payload, this.component);
+    const Expected<TransformComponent> component = ComponentAssetBinaryCodec().deserializeTransform(payload);
+    if(!component.has_value())
+        return false;
+    this.component = component.value();
+    return true;
 }
 
 b8 TransformComponentAsset::validatePayload()const{
@@ -153,11 +166,19 @@ b8 TransformComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)
 }
 
 b8 CameraComponentAsset::loadBinary(in Span<u8> binary){
-    return ComponentAssetBinaryCodec().loadBinary(binary, this);
+    CameraComponentAsset candidate(this.virtualPath());
+    if(!ComponentAssetBinaryCodec().loadBinary(binary, candidate))
+        return false;
+    this.component = candidate.component;
+    return true;
 }
 
 b8 CameraComponentAsset::loadComponentPayload(in Span<u8> payload){
-    return ComponentAssetBinaryCodec().deserializeCamera(payload, this.component);
+    const Expected<CameraComponent> component = ComponentAssetBinaryCodec().deserializeCamera(payload);
+    if(!component.has_value())
+        return false;
+    this.component = component.value();
+    return true;
 }
 
 b8 CameraComponentAsset::validatePayload()const{
@@ -171,11 +192,19 @@ b8 CameraComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)con
 }
 
 b8 LightComponentAsset::loadBinary(in Span<u8> binary){
-    return ComponentAssetBinaryCodec().loadBinary(binary, this);
+    LightComponentAsset candidate(this.virtualPath());
+    if(!ComponentAssetBinaryCodec().loadBinary(binary, candidate))
+        return false;
+    this.component = candidate.component;
+    return true;
 }
 
 b8 LightComponentAsset::loadComponentPayload(in Span<u8> payload){
-    return ComponentAssetBinaryCodec().deserializeLight(payload, this.component);
+    const Expected<LightComponent> component = ComponentAssetBinaryCodec().deserializeLight(payload);
+    if(!component.has_value())
+        return false;
+    this.component = component.value();
+    return true;
 }
 
 b8 LightComponentAsset::validatePayload()const{

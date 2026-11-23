@@ -27,6 +27,7 @@ StringView TableTag(in u32 tag){
     return "";
 }
 
+[cpp_unwind]
 b8 WriteAtlasHeaderBinary(in Path directory, in FontAtlasPayload payload){
     if(!EnsureDirectories(directory).has_value())
         return false;
@@ -34,16 +35,19 @@ b8 WriteAtlasHeaderBinary(in Path directory, in FontAtlasPayload payload){
     return binary.has_value() && WriteBinaryFile(directory / "atlas.bin", binary.value());
 }
 
+[cpp_unwind]
 b8 WriteGroupPixelsFile(in Path directory, in usize index, in Span<u8> pixels){
     const String name = StringFormat("group_{}.pixels", index);
     return WriteBinaryFile(directory / name, pixels);
 }
 
+[cpp_unwind]
 b8 WritePositioningTableFile(in Path directory, in StringView tag, in Span<u8> bytes){
     const String name = StringFormat("table_{}.bin", tag);
     return WriteBinaryFile(directory / name, bytes);
 }
 
+[cpp_unwind]
 b8 ExportPayload(in Path directory, in FontAtlasPayload payload){
     if(!WriteAtlasHeaderBinary(directory, payload))
         return false;
@@ -61,6 +65,7 @@ b8 ExportPayload(in Path directory, in FontAtlasPayload payload){
     return true;
 }
 
+[cpp_unwind]
 b8 DecodePackage(in StringView source, in StringView destination){
     const Path sourcePath = Path(source);
     const Path destinationPath = Path(destination);

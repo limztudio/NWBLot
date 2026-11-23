@@ -9,14 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Optional<in HitTarget> FindHitTarget(in Span<HitTarget> targets, in WidgetId widget){
-    for(in HitTarget target : targets){
-        if(target.id == widget)
-            return Optional<in HitTarget>(target);
-    }
-    return Optional<in HitTarget>();
-}
-
 [extensible]
 class InputTestFixtureBase{
     private Optional<mut InputRouter> m_input;
@@ -58,17 +50,37 @@ class ContextTestFixture : InputTestFixtureBase{
     }
 }
 
-InputEvent Pointer(in InputEventType type){ return Pointer(type, Point(15.0f, 15.0f)); }
-PointerInput Pointer(in PointerPhase phase, in InputSource source){ return Pointer(phase, source, Point(20.0f, 20.0f)); }
-PointerInput Pointer(in PointerPhase phase, in InputSource source, in Point position){ return Pointer(phase, source, position, false); }
-PointerInput Pointer(in PointerPhase phase, in InputSource source, in Point position, in b8 hoverCapable){ return Pointer(phase, source, position, hoverCapable, PointerIntent::Activate); }
-InputEvent Key(in InputEventType type, in Key key){ return Key(type, key, false, false); }
-InputEvent Key(in InputEventType type, in Key key, in b8 repeat){ return Key(type, key, repeat, false); }
-InputEvent Key(in Key key){ return Key(key, false, false, false, false); }
-InputEvent Key(in Key key, in b8 shift){ return Key(key, shift, false, false, false); }
-InputEvent Key(in Key key, in b8 shift, in b8 control){ return Key(key, shift, control, false, false); }
-InputEvent Key(in Key key, in b8 shift, in b8 control, in b8 alt){ return Key(key, shift, control, alt, false); }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Optional<in HitTarget> FindHitTarget(in Span<HitTarget> targets, in WidgetId widget){
+    for(in HitTarget target : targets){
+        if(target.id == widget)
+            return Optional<in HitTarget>(target);
+    }
+    return Optional<in HitTarget>();
+}
+
+InputEvent Pointer(in InputEventType type){ return Pointer(type, Point(15.0f, 15.0f)); }
+
+PointerInput Pointer(in PointerPhase phase, in InputSource source){ return Pointer(phase, source, Point(20.0f, 20.0f)); }
+
+PointerInput Pointer(in PointerPhase phase, in InputSource source, in Point position){ return Pointer(phase, source, position, false); }
+
+PointerInput Pointer(in PointerPhase phase, in InputSource source, in Point position, in b8 hoverCapable){ return Pointer(phase, source, position, hoverCapable, PointerIntent::Activate); }
+
+InputEvent Key(in InputEventType type, in Key key){ return Key(type, key, false, false); }
+
+InputEvent Key(in InputEventType type, in Key key, in b8 repeat){ return Key(type, key, repeat, false); }
+
+InputEvent Key(in Key key){ return Key(key, false, false, false, false); }
+
+InputEvent Key(in Key key, in b8 shift){ return Key(key, shift, false, false, false); }
+
+InputEvent Key(in Key key, in b8 shift, in b8 control){ return Key(key, shift, control, false, false); }
+
+InputEvent Key(in Key key, in b8 shift, in b8 control, in b8 alt){ return Key(key, shift, control, alt, false); }
 
 InputEvent NativeInput(in InputEvent event){
     InputEvent resolved = event;

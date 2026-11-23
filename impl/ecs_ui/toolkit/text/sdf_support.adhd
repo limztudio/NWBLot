@@ -8,6 +8,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class SdfGlyphSupportOffset{
+    public f64 minX = 0.0;
+    public f64 minY = 0.0;
+    public f64 maxX = 0.0;
+    public f64 maxY = 0.0;
+    public b8 visible = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Expected<VectorDouble> TryTranslateTextInk(in Point position, in Rect ink){
     const VectorDouble origin = VectorDouble(cast<f64>(position.x), cast<f64>(position.y), 0.0, 0.0) + VectorDouble(cast<f64>(ink.x), cast<f64>(ink.y), 0.0, 0.0);
     const VectorDouble end = origin + VectorDouble(cast<f64>(ink.width), cast<f64>(ink.height), 0.0, 0.0);
@@ -41,14 +53,6 @@ b8 TryIncludeTextInk(in VectorDouble ink, mut VectorDouble inoutBounds, mut b8 i
         return false;
     inoutBounds = VectorDouble(rounded);
     return true;
-}
-
-class SdfGlyphSupportOffset{
-    public f64 minX = 0.0;
-    public f64 minY = 0.0;
-    public f64 maxX = 0.0;
-    public f64 maxY = 0.0;
-    public b8 visible = false;
 }
 
 Expected<SdfGlyphSupportOffset> TryComputeSdfGlyphSupportOffset(

@@ -57,6 +57,7 @@ Expected<void, CpuTaskAdmissionError> RendererSystem::update(mut World world, in
     return Expected<void, CpuTaskAdmissionError>();
 }
 
+[cpp_unwind]
 b8 RendererSystem::prepareResources(in FramebufferPtr framebuffer){
     return this.m_pipeline.prepareResources(framebuffer);
 }

@@ -20,6 +20,7 @@ class TextAreaNavigationResolver : IEditNavigationResolver{
     private f32 m_fontSize = 0.0f;
     private u32 m_scriptTag = 0u;
 
+    [cpp_unwind]
     public TextAreaNavigationResolver(mut TextService text, in Context context, in TextAreaState state, in f32 fontSize){
         this.m_text = text;
         this.m_context = context;
@@ -27,6 +28,7 @@ class TextAreaNavigationResolver : IEditNavigationResolver{
         this.capture(fontSize, s_TextDefaultScriptTag, s_TextDefaultLanguage);
     }
 
+    [cpp_unwind]
     public TextAreaNavigationResolver(mut TextService text, in Context context, in TextAreaState state, in f32 fontSize, in u32 scriptTag){
         this.m_text = text;
         this.m_context = context;
@@ -34,6 +36,7 @@ class TextAreaNavigationResolver : IEditNavigationResolver{
         this.capture(fontSize, scriptTag, s_TextDefaultLanguage);
     }
 
+    [cpp_unwind]
     public TextAreaNavigationResolver(mut TextService text, in Context context, in TextAreaState state, in f32 fontSize, in u32 scriptTag, in StringView language){
         this.m_text = text;
         this.m_context = context;
@@ -41,6 +44,7 @@ class TextAreaNavigationResolver : IEditNavigationResolver{
         this.capture(fontSize, scriptTag, language);
     }
 
+    [cpp_unwind]
     private void capture(in f32 fontSize, in u32 scriptTag, in StringView language){
         this.m_instanceGeneration = this.m_state.instanceGeneration();
         this.m_revision = this.m_state.revision();
@@ -52,6 +56,7 @@ class TextAreaNavigationResolver : IEditNavigationResolver{
         return !this.m_context.failed() && this.m_state.instanceGeneration() == this.m_instanceGeneration && this.m_state.revision() == this.m_revision;
     }
 
+    [cpp_unwind]
     public Expected<EditNavigationResult> resolve(in EditModel model, in EditNavigationDirection direction, in EditNavigationSnapshot preferred, in f32 viewportHeight)override{
         const Expected<b8> page = ValidateTextAreaNavigationInputs(model.textMode(), model.composition().active, direction, this.m_fontSize, viewportHeight, preferred);
         if(!this.current() || !page.has_value() || !this.m_state.navigation().matches(preferred))

@@ -19,6 +19,10 @@ const Name s_ComboFocusedRegionName = "combo.focused";
 const Name s_ComboDisabledRegionName = "combo.disabled";
 const Name s_ComboArrowRegionName = "combo.arrow";
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class ComboStyle{
     public Name normal = s_ComboNormalRegionName;
     public Name hover = s_ComboHoverRegionName;
@@ -62,6 +66,69 @@ class SearchComboResult{
     public b8 queryChanged = false;
 }
 
+class ComboState : NoCopy{
+    public ListState m_list;
+    public PopupState m_popup;
+    public Rect m_bounds;
+    public WidgetId m_owner;
+    public u64 m_ownerDeclaration = 0u;
+    public u64 m_inputGeneration = AllocateServiceIdentity();
+    public u64 m_selectedKey = 0u;
+    public u64 m_sourceGeneration = 0u;
+    public u64 m_sourceRevision = 0u;
+
+    public u64 inputGeneration()const{
+        return this.m_inputGeneration;
+    }
+
+    public u64 selectedKey()const{
+        return this.m_selectedKey;
+    }
+
+    public b8 isOpen()const{
+        return this.m_popup.isOpen();
+    }
+
+    public in PopupPlacement placement()const{
+        return this.m_popup.placement();
+    }
+
+    public in Rect bounds()const{
+        return this.m_bounds;
+    }
+
+    public in ListState listState()const{
+        return this.m_list;
+    }
+
+    public mut ListState listState(){
+        return this.m_list;
+    }
+
+    public void select(in u64 key){
+        this.m_inputGeneration = AllocateServiceIdentity();
+        this.m_selectedKey = key;
+        this.m_list.select(this.m_selectedKey);
+        this.m_popup.close();
+    }
+
+    public void open(){
+        this.m_inputGeneration = AllocateServiceIdentity();
+        this.m_list.select(this.m_selectedKey);
+        this.m_popup.close();
+        this.m_popup.open();
+    }
+
+    public void close(){
+        this.m_inputGeneration = AllocateServiceIdentity();
+        this.m_list.select(this.m_selectedKey);
+        this.m_popup.close();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 Expected<b8> TryBindComboOwner(in WidgetId owner, in u64 declarationGeneration, mut WidgetId inOutOwner, mut u64 inOutOwnerDeclaration){
     if(!owner.valid() || declarationGeneration == 0u)
@@ -71,7 +138,6 @@ Expected<b8> TryBindComboOwner(in WidgetId owner, in u64 declarationGeneration, 
     inOutOwnerDeclaration = declarationGeneration;
     return shouldClose;
 }
-
 
 Name ResolveComboFieldRegionName(in ComboStyle style, in b8 enabled, in b8 open, in b8 focused, in b8 hovered){
     if(!enabled)
@@ -156,70 +222,6 @@ b8 MatchesComboFrameStateValues(
         && popupOpenGeneration == expectedPopupOpenGeneration
         && popupParent == expectedParentToken
         && queryMatches;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ComboState : NoCopy{
-    public ListState m_list;
-    public PopupState m_popup;
-    public Rect m_bounds;
-    public WidgetId m_owner;
-    public u64 m_ownerDeclaration = 0u;
-    public u64 m_inputGeneration = AllocateServiceIdentity();
-    public u64 m_selectedKey = 0u;
-    public u64 m_sourceGeneration = 0u;
-    public u64 m_sourceRevision = 0u;
-
-    public u64 inputGeneration()const{
-        return this.m_inputGeneration;
-    }
-
-    public u64 selectedKey()const{
-        return this.m_selectedKey;
-    }
-
-    public b8 isOpen()const{
-        return this.m_popup.isOpen();
-    }
-
-    public in PopupPlacement placement()const{
-        return this.m_popup.placement();
-    }
-
-    public in Rect bounds()const{
-        return this.m_bounds;
-    }
-
-    public in ListState listState()const{
-        return this.m_list;
-    }
-
-    public mut ListState listState(){
-        return this.m_list;
-    }
-
-    public void select(in u64 key){
-        this.m_inputGeneration = AllocateServiceIdentity();
-        this.m_selectedKey = key;
-        this.m_list.select(this.m_selectedKey);
-        this.m_popup.close();
-    }
-
-    public void open(){
-        this.m_inputGeneration = AllocateServiceIdentity();
-        this.m_list.select(this.m_selectedKey);
-        this.m_popup.close();
-        this.m_popup.open();
-    }
-
-    public void close(){
-        this.m_inputGeneration = AllocateServiceIdentity();
-        this.m_list.select(this.m_selectedKey);
-        this.m_popup.close();
-    }
 }
 
 void OpenComboState(mut ComboState state){

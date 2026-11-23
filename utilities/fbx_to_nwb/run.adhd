@@ -337,18 +337,5 @@ i32 RunFbxCommand(in ConsoleArguments arguments, mut b8 prompted){
 }
 
 
-[cpp_unwind]
-i32 Run(in ConsoleArguments arguments, mut b8 prompted){
-    Func<64u, i32(in ConsoleArguments)> command = lambda[mut prompted](in ConsoleArguments args) -> i32{
-        return RunFbxCommand(args, prompted);
-    };
-    const auto result = TryConsoleCommand(arguments, command);
-    if(result.has_value())
-        return result.value();
-    error("FBX conversion terminated with an unexpected exception");
-    return s_FbxToNwbEntryFailure;
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

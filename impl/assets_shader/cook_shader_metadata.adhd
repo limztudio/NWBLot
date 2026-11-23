@@ -11,12 +11,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+type ShaderDefineMap = HashMap<String, ShaderDefineEntry>;
+type ShaderDefineCombo = HashMap<StringView, StringView>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class ShaderDefineEntry{
     public Vector<String> values;
 }
-
-type ShaderDefineMap = HashMap<String, ShaderDefineEntry>;
-type ShaderDefineCombo = HashMap<StringView, StringView>;
 
 class ShaderIncludeEntry{
     public String source;

@@ -2009,15 +2009,69 @@ void VerifyPhysicsEdgeCases_ParallelComponentSolverAndEcsSystem(){
     camXf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
     const Expected<CameraProjection> projRes = TryBuildCameraProjection(s_PI / 3.0f, 0.1f, 100.0f, 16.0f / 9.0f, 16.0f / 9.0f);
     ASSERT_TRUE(projRes.has_value());
-    VectorSingle screenSeg(0.0f);
-    EXPECT_FALSE(ProjectPhysicsWorldSegmentToScreen(camXf, projRes.value(), 1280.0f, 720.0f, VectorSingle(0.0f, 0.0f, -10.0f, 0.0f), VectorSingle(1.0f, 0.0f, -8.0f, 0.0f), screenSeg));
-    EXPECT_TRUE(ProjectPhysicsWorldSegmentToScreen(camXf, projRes.value(), 1280.0f, 720.0f, VectorSingle(0.0f, 0.0f, -5.05f, 0.0f), VectorSingle(0.0f, 0.0f, 2.0f, 0.0f), screenSeg));
+    EXPECT_FALSE(ProjectPhysicsWorldSegmentToScreen(camXf, projRes.value(), 1280.0f, 720.0f, VectorSingle(0.0f, 0.0f, -10.0f, 0.0f), VectorSingle(1.0f, 0.0f, -8.0f, 0.0f)).has_value());
+    EXPECT_TRUE(ProjectPhysicsWorldSegmentToScreen(camXf, projRes.value(), 1280.0f, 720.0f, VectorSingle(0.0f, 0.0f, -5.05f, 0.0f), VectorSingle(0.0f, 0.0f, 2.0f, 0.0f)).has_value());
 
     const BodyId oldBody = tw.world.getComponent<RigidBodyComponent>(dropEnt.id()).runtimeBodyId;
     tw.world.destroyEntity(dropEnt.id());
     EXPECT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
     EXPECT_EQ(physSys.entityForBody(oldBody), s_InvalidEntityId);
     EXPECT_EQ(physSys.entityForShape(dropShapeId), s_InvalidEntityId);
+}
+
+b8 BuildPhysicsComponentTestEnvelope(in IComponent source, mut Vector<u8> binary){
+    Vector<u8> payload = Vector<u8>();
+    if(!source.serializeComponentPayload(payload))
+        return false;
+    ComponentAssetBinaryCodec().packEnvelope(source.assetType().hash(), payload, binary);
+    return true;
+}
+
+void VerifyPhysicsEdgeCases_InvalidAssetPathPreservesPhysicsComponentsOnReload(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    Vector<u8> binary = Vector<u8>();
+
+    RigidBodyComponentAsset rigidSource(Name("physics/source_rigid"));
+    rigidSource.component.type = BodyType::Kinematic;
+    ASSERT_TRUE(BuildPhysicsComponentTestEnvelope(rigidSource, binary));
+    RigidBodyComponentAsset rigidTarget(s_NameNone);
+    rigidTarget.component.type = BodyType::Static;
+    EXPECT_FALSE(rigidTarget.loadBinary(binary));
+    EXPECT_EQ(cast<u8>(rigidTarget.component.type), cast<u8>(BodyType::Static));
+
+    ColliderComponentAsset colliderSource(Name("physics/source_collider"));
+    colliderSource.component.density = 2.0f;
+    ASSERT_TRUE(BuildPhysicsComponentTestEnvelope(colliderSource, binary));
+    ColliderComponentAsset colliderTarget(s_NameNone);
+    colliderTarget.component.density = 3.0f;
+    EXPECT_FALSE(colliderTarget.loadBinary(binary));
+    EXPECT_EQ(colliderTarget.component.density, 3.0f);
+
+    JointComponentAsset jointSource(Name("physics/source_joint"));
+    jointSource.component.type = JointType::Wheel;
+    jointSource.component.suspensionHertz = 6.0f;
+    ASSERT_TRUE(BuildPhysicsComponentTestEnvelope(jointSource, binary));
+    JointComponentAsset jointTarget(s_NameNone);
+    jointTarget.component.suspensionHertz = 7.0f;
+    EXPECT_FALSE(jointTarget.loadBinary(binary));
+    EXPECT_EQ(jointTarget.component.suspensionHertz, 7.0f);
+
+    PhysicsWorldConfigComponentAsset configSource(Name("physics/source_config"));
+    configSource.component.subStepCount = 6u;
+    ASSERT_TRUE(BuildPhysicsComponentTestEnvelope(configSource, binary));
+    PhysicsWorldConfigComponentAsset configTarget(s_NameNone);
+    configTarget.component.subStepCount = 3u;
+    EXPECT_FALSE(configTarget.loadBinary(binary));
+    EXPECT_EQ(configTarget.component.subStepCount, 3u);
+
+    PhysicsParentComponentAsset parentSource(Name("physics/source_parent"));
+    parentSource.component.inheritScale = false;
+    ASSERT_TRUE(BuildPhysicsComponentTestEnvelope(parentSource, binary));
+    PhysicsParentComponentAsset parentTarget(s_NameNone);
+    parentTarget.component.inheritScale = true;
+    EXPECT_FALSE(parentTarget.loadBinary(binary));
+    EXPECT_TRUE(parentTarget.component.inheritScale);
 }
 
 void VerifyPhysicsEdgeCases_ComponentAssetsBinaryRoundTripAndValidation(){
@@ -3247,6 +3301,7 @@ NWB_ADHD_GTEST(PhysicsEdgeCases, HybridCpuGpuSolverPartitionAndEquivalence, Veri
 NWB_ADHD_GTEST(PhysicsEdgeCases, SphericalConeImpulseAndBreakTorque, VerifyPhysicsEdgeCases_SphericalConeImpulseAndBreakTorque)
 NWB_ADHD_GTEST(PhysicsEdgeCases, KinematicTargetSensorToggleAndJointMutators, VerifyPhysicsEdgeCases_KinematicTargetSensorToggleAndJointMutators)
 NWB_ADHD_GTEST(PhysicsEdgeCases, ParallelComponentSolverAndEcsSystem, VerifyPhysicsEdgeCases_ParallelComponentSolverAndEcsSystem)
+NWB_ADHD_GTEST(PhysicsEdgeCases, InvalidAssetPathPreservesPhysicsComponentsOnReload, VerifyPhysicsEdgeCases_InvalidAssetPathPreservesPhysicsComponentsOnReload)
 NWB_ADHD_GTEST(PhysicsEdgeCases, ComponentAssetsBinaryRoundTripAndValidation, VerifyPhysicsEdgeCases_ComponentAssetsBinaryRoundTripAndValidation)
 NWB_ADHD_GTEST(PhysicsEdgeCases, MeshInternalEdgesClosedVolumeAndDualMesh, VerifyPhysicsEdgeCases_MeshInternalEdgesClosedVolumeAndDualMesh)
 NWB_ADHD_GTEST(PhysicsEdgeCases, WakeupsEventsGettersPreSolveAndHullMerge, VerifyPhysicsEdgeCases_WakeupsEventsGettersPreSolveAndHullMerge)

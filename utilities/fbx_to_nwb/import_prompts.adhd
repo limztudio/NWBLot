@@ -27,6 +27,7 @@ Expected<b8> ParseFbxConfirmText(in StringView rawText){
     return MakeUnexpected(Failure());
 }
 
+[cpp_unwind]
 String FormatAssetTypePromptLabel(){
     String prompt;
     prompt.reserve(80u);
@@ -36,6 +37,7 @@ String FormatAssetTypePromptLabel(){
     return prompt;
 }
 
+[cpp_unwind]
 String FormatNormalModePromptLabel(){
     String prompt;
     prompt.reserve(64u);

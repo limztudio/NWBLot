@@ -157,12 +157,15 @@ class GpuSampledTextureNameTable{
     }
 };
 
+class GpuPageUploadResult{
+    public TextureHandle texture;
+    public QueueSubmissionToken readinessToken;
+};
+
 class GpuSampledTextures{
-    public b8 createAndUploadPage(
+    public Expected<GpuPageUploadResult> createAndUploadPage(
         mut GraphicsRuntime graphics,
-        in GpuPageTextureUploadDesc desc,
-        mut TextureHandle outTexture,
-        mut QueueSubmissionToken outReadinessToken
+        in GpuPageTextureUploadDesc desc
     ){
         TextureDesc description;
         description.setName(desc.name);
@@ -174,19 +177,21 @@ class GpuSampledTextures{
         description.setQueueSharing(ResourceQueueSharing::GraphicsAsyncComputeAndTransfer);
 
         const Expected<TextureHandle> created = graphics.getDevice().createTexture(description);
-        if(!created.has_value()){
-            outTexture.reset();
-            return false;
-        }
-        outTexture = created.value();
+        if(!created.has_value())
+            return MakeUnexpected(Failure());
 
         Array<StandaloneTextureUploadRegion, 1u> regions;
         regions[0u].setBytes(desc.pixels);
         regions[0u].rowPitch = desc.rowPitch;
         regions[0u].depthPitch = desc.pixels.size();
-        if(!graphics.standaloneGraph().uploadTextureBatch(outTexture, Span<StandaloneTextureUploadRegion>(regions), ResourceStates::ShaderResource, ResourceStates::Unknown, outReadinessToken))
-            return false;
-        return IsValidGpuUploadedReadinessToken(outReadinessToken.valid(), outReadinessToken.hasPhysicalQueueIdentity());
+        const Expected<QueueSubmissionToken> readiness = graphics.standaloneGraph().uploadTextureBatch(created.value(), Span<StandaloneTextureUploadRegion>(regions), ResourceStates::ShaderResource, ResourceStates::Unknown);
+        if(!readiness.has_value() || !IsValidGpuUploadedReadinessToken(readiness.value().valid(), readiness.value().hasPhysicalQueueIdentity()))
+            return MakeUnexpected(Failure());
+
+        GpuPageUploadResult result;
+        result.texture = created.value();
+        result.readinessToken = readiness.value();
+        return result;
     }
 };
 

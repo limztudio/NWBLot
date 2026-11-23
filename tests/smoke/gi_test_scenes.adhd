@@ -31,7 +31,6 @@ const f32 s_GiDirectionalLightIntensity = 2.0f;
 const f32 s_GiComplexLightPitch = 1.45f;
 const f32 s_GiComplexMinLiveWarmupSeconds = 30.0f;
 const u64 s_GiComplexCaptureWarmupPresentations = 360u;
-
 const SmokeMeshRef s_GiCubeMesh = "project/meshes/cube_hard_edges";
 const SmokeMeshRef s_GiMixedMesh = "project/meshes/gi_csg_mixed";
 const SmokeMeshRef s_GiOpenQuadMesh = "project/meshes/gi_csg_open_quad";
@@ -40,14 +39,12 @@ const SmokeMaterialRef s_GiIndirectMaterial = "project/smoke/gi/materials/indire
 const SmokeMaterialRef s_GiCoverageProbeMaterial = "project/smoke/gi/materials/coverage_probe";
 const SmokeMaterialRef s_GiCsgCapMaterial = "project/smoke/gi/materials/csg_cap";
 const SmokeMaterialRef s_GiCsgMixedMaterial = "project/smoke/gi/materials/csg_mixed";
-
 const f32x4 s_GiNeutralPanelTint = f32x4(0.76f, 0.76f, 0.76f, 1.0f);
 const f32x4 s_GiWhiteReceiverTint = f32x4(0.92f, 0.92f, 0.92f, 1.0f);
 const f32x4 s_GiRedBounceTint = f32x4(0.84f, 0.10f, 0.08f, 1.0f);
 const f32x4 s_GiBlueBounceTint = f32x4(0.08f, 0.14f, 0.86f, 1.0f);
 const f32x4 s_GiBlackEnclosureTint = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
 const f32x4 s_GiWhiteTint = f32x4(1.0f, 1.0f, 1.0f, 1.0f);
-
 const StringView s_GiCsgReferenceArm = "reference";
 const StringView s_GiCsgCutArm = "cut";
 const StringView s_GiCsgUncutArm = "uncut";
@@ -91,6 +88,157 @@ class ComplexSceneBox{
         this.indirectOnly = false;
     }
 }
+
+class CsgGiScene : ISmokeCapturePredicate{
+    public CsgGiScene(mut ProjectRuntimeContext context){
+        this.m_context = context;
+    }
+
+    public b8 shouldCapture()const{
+        return this.m_liveWarmupComplete && this.m_context.graphics.getSuccessfulPresentationCount() >= this.m_requiredPresentations;
+    }
+
+    public b8 shouldCaptureFrame(in u64 frame)const override{
+        return this.shouldCapture();
+    }
+
+    public Expected<b8> start(mut World world){
+        const Expected<String> configuredArm = ReadSmokeEnvironmentString("NWB_GI_CSG_ARM");
+        if(!configuredArm.has_value())
+            return false;
+        const StringView arm = StringView(configuredArm.value());
+        if(arm != s_GiCsgReferenceArm && arm != s_GiCsgCutArm && arm != s_GiCsgUncutArm){
+            error("GiTestSmokeProject: invalid NWB_GI_CSG_ARM");
+            return MakeUnexpected(Failure());
+        }
+        const Expected<String> frameCountValue = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT");
+        if(frameCountValue.has_value()){
+            const Expected<u64> count = ParseU64(StringView(frameCountValue.value()));
+            if(!count.has_value() || count.value() < s_GiCsgDefaultCaptureFrameCount || count.value() > s_GiCsgMaxCaptureFrameCount){
+                error("GiTestSmokeProject: CSG GI warmup requires at least 360 successful presentations");
+                return MakeUnexpected(Failure());
+            }
+            this.m_requiredPresentations = count.value();
+        }
+
+        if(ReadSmokeEnvironmentFlag("NWB_GI_CSG_LAGGED_LIGHTING"))
+            SmokeRendererSystemRef(world).setFrameLaggedAsyncLightingEnabled(true);
+        ReflectionSettings reflection = ReflectionSettings();
+        reflection.traceMode = ReflectionTraceMode::Disabled;
+        PresentationSettings presentation = PresentationSettings();
+        presentation.toneMap = PresentationToneMap::LinearClamp;
+        if(!SmokeRendererSystemRef(world).setReflectionSettings(reflection) || !SmokeRendererSystemRef(world).setPresentationSettings(presentation))
+            return MakeUnexpected(Failure());
+        SmokeRendererSystemRef(world).setRefractionEnabled(false);
+        const EntityID camera = CreateSmokeCamera(1.3f, 5.5f, 0.0f, world);
+        const EntityID light = CreateSmokePointLight(
+            VectorSingle(0.0f, 1.3f, -3.0f, 0.0f),
+            VectorSingle(1.0f, 1.0f, 1.0f, 1.0f),
+            20.0f,
+            15.0f,
+            0.0f,
+            false,
+            world
+        );
+        if(!camera.valid() || !light.valid())
+            return MakeUnexpected(Failure());
+
+        if(!CreateGiCsgBox(SmokeBoxBounds(f32x3u(-5.0f, -1.0f, -6.6f), f32x3u(5.0f, 5.0f, -6.5f)), s_GiDiffuseMaterial, VectorSingle(0.02f, 0.02f, 1.0f, 1.0f), world).valid())
+            return MakeUnexpected(Failure());
+        for(u32 slot = 0u; slot < 2u; ++slot){
+            f32 x = 1.3f;
+            f32 cutterMaxZ = 0.4f;
+            if(slot == 0u){
+                x = -1.3f;
+                cutterMaxZ = 1.0f;
+            }
+            const SmokeBoxBounds receiver = SmokeBoxBounds(f32x3u(x - 0.9f, 0.3f, -0.8f), f32x3u(x + 0.9f, 2.3f, 0.8f));
+            const SmokeBoxBounds cutter = SmokeBoxBounds(f32x3u(x - 0.65f, 0.55f, -1.0f), f32x3u(x + 0.65f, 2.05f, cutterMaxZ));
+            if(!CreateGiCsgSubtraction(receiver, cutter, slot, arm, world))
+                return MakeUnexpected(Failure());
+        }
+        if(!CreateGiCsgMixedSubtraction(arm, world))
+            return MakeUnexpected(Failure());
+
+        const VectorSingle white = VectorSingle(s_GiWhiteTint);
+        const EntityID passage = CreateGiCsgBox(SmokeBoxBounds(f32x3u(-1.9f, 0.65f, 1.0f), f32x3u(-0.7f, 1.95f, 1.08f)), s_GiIndirectMaterial, white, world);
+        const EntityID cavity = CreateGiCsgBox(SmokeBoxBounds(f32x3u(0.85f, 0.56f, -0.72f), f32x3u(1.75f, 0.61f, 0.06f)), s_GiIndirectMaterial, white, world);
+        const EntityID control = CreateGiCsgBox(SmokeBoxBounds(f32x3u(-0.35f, 2.7f, 0.0f), f32x3u(0.35f, 3.15f, 0.06f)), s_GiIndirectMaterial, white, world);
+        if(!passage.valid() || !cavity.valid() || !control.valid())
+            return MakeUnexpected(Failure());
+        const EntityID mixedPassage = CreateGiCsgBox(SmokeBoxBounds(f32x3u(-0.2f, -0.7f, 1.0f), f32x3u(0.2f, -0.4f, 1.08f)), s_GiIndirectMaterial, white, world);
+        const EntityID mixedFloor = CreateGiCsgBox(SmokeBoxBounds(f32x3u(-1.3f, -0.82f, -1.85f), f32x3u(-0.75f, -0.77f, -1.08f)), s_GiIndirectMaterial, white, world);
+        if(!mixedPassage.valid() || !mixedFloor.valid())
+            return MakeUnexpected(Failure());
+
+        const FramebufferCaptureOptions options = MakeSmokeCaptureOptions(this, 1280u, 900u, true);
+        if(!ConfigureSmokeFramebufferCapture(this.m_context, "GiTestSmokeProject", s_GiCsgDefaultCaptureFrameCount, options, this.m_capture))
+            return MakeUnexpected(Failure());
+        this.m_active = true;
+        [essential] info("GiTestSmokeProject: CSG GI arm={} overlapping_box_cutters=2 accepted_presentations={}", arm, this.m_requiredPresentations);
+        [essential] info("GiTestSmokeProject: mixed CSG receiver has 12 closed and 2 open triangles");
+        return true;
+    }
+
+    public void stop(){
+        StopAndResetSmokeFramebufferCapture(this.m_capture);
+        this.m_active = false;
+    }
+
+    public void update(){
+        if(!SmokeFramebufferCaptureValid(this.m_capture))
+            return;
+
+        const u64 presentations = this.m_context.graphics.getSuccessfulPresentationCount();
+        if(presentations >= this.m_requiredPresentations && !this.m_liveWarmupComplete){
+            const Timer now = TimerNow();
+            const u64 frameIndex = this.m_context.graphics.getFrameIndex();
+            if(!this.m_liveWarmupStarted){
+                this.m_liveWarmupStartTime = now;
+                this.m_liveWarmupStartPresentations = presentations;
+                this.m_liveWarmupStarted = true;
+                [essential] info(
+                    "GiTestSmokeProject: CSG GI live warmup start source_frame={} presentations={} required_presentations={} required_seconds={}"
+                    , frameIndex
+                    , presentations
+                    , this.m_requiredPresentations
+                    , s_GiCsgLiveWarmupSeconds
+                );
+            }
+            else{
+                const f64 elapsedSeconds = DurationInSeconds<f64>(now, this.m_liveWarmupStartTime);
+                if(elapsedSeconds >= s_GiCsgLiveWarmupSeconds && presentations > this.m_liveWarmupStartPresentations){
+                    this.m_liveWarmupComplete = true;
+                    [essential] info("GiTestSmokeProject: CSG GI live warmup end source_frame={} presentations={} elapsed_seconds={:.6f}", frameIndex, presentations, elapsedSeconds);
+                }
+            }
+        }
+
+        UpdateSmokeFramebufferCapture(this.m_capture);
+        if(SmokeFramebufferCaptureReady(this.m_capture) && !this.m_captureReceiptLogged){
+            this.m_captureReceiptLogged = true;
+            [essential] info("GiTestSmokeProject: CSG GI capture source_frame={}", SmokeFramebufferCapturedFrameIndex(this.m_capture));
+        }
+    }
+
+    public b8 active()const{
+        return this.m_active;
+    }
+
+    private UniquePtr<FramebufferCapture> m_capture = UniquePtr<FramebufferCapture>();
+    private mut ProjectRuntimeContext m_context;
+    private Timer m_liveWarmupStartTime = Timer();
+    private u64 m_requiredPresentations = 360u;
+    private u64 m_liveWarmupStartPresentations = 0u;
+    private b8 m_liveWarmupStarted = false;
+    private b8 m_liveWarmupComplete = false;
+    private b8 m_captureReceiptLogged = false;
+    private b8 m_active = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void BuildComplexSceneBoxes(mut Array<ComplexSceneBox, 28u> outBoxes){
     const VectorSingle neutral = VectorSingle(s_GiNeutralPanelTint);
@@ -305,10 +453,6 @@ b8 CreateComplexGiScene(mut World world, in b8 coverageViewEnabled){
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Name GiCsgGroupName(in u32 slot){
     if(slot == 0u)
         return s_SmokeSceneNameSmokeGiPassage;
@@ -422,153 +566,6 @@ b8 CreateGiCsgMixedSubtraction(in StringView arm, mut World world){
         world
     );
     return true;
-}
-
-class CsgGiScene : ISmokeCapturePredicate{
-    public CsgGiScene(mut ProjectRuntimeContext context){
-        this.m_context = context;
-    }
-
-    public b8 shouldCapture()const{
-        return this.m_liveWarmupComplete && this.m_context.graphics.getSuccessfulPresentationCount() >= this.m_requiredPresentations;
-    }
-
-    public b8 shouldCaptureFrame(in u64 frame)const override{
-        return this.shouldCapture();
-    }
-
-    public Expected<b8> start(mut World world){
-        const Expected<String> configuredArm = ReadSmokeEnvironmentString("NWB_GI_CSG_ARM");
-        if(!configuredArm.has_value())
-            return false;
-        const StringView arm = StringView(configuredArm.value());
-        if(arm != s_GiCsgReferenceArm && arm != s_GiCsgCutArm && arm != s_GiCsgUncutArm){
-            error("GiTestSmokeProject: invalid NWB_GI_CSG_ARM");
-            return MakeUnexpected(Failure());
-        }
-        const Expected<String> frameCountValue = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT");
-        if(frameCountValue.has_value()){
-            const Expected<u64> count = ParseU64(StringView(frameCountValue.value()));
-            if(!count.has_value() || count.value() < s_GiCsgDefaultCaptureFrameCount || count.value() > s_GiCsgMaxCaptureFrameCount){
-                error("GiTestSmokeProject: CSG GI warmup requires at least 360 successful presentations");
-                return MakeUnexpected(Failure());
-            }
-            this.m_requiredPresentations = count.value();
-        }
-
-        if(ReadSmokeEnvironmentFlag("NWB_GI_CSG_LAGGED_LIGHTING"))
-            SmokeRendererSystemRef(world).setFrameLaggedAsyncLightingEnabled(true);
-        ReflectionSettings reflection = ReflectionSettings();
-        reflection.traceMode = ReflectionTraceMode::Disabled;
-        PresentationSettings presentation = PresentationSettings();
-        presentation.toneMap = PresentationToneMap::LinearClamp;
-        if(!SmokeRendererSystemRef(world).setReflectionSettings(reflection) || !SmokeRendererSystemRef(world).setPresentationSettings(presentation))
-            return MakeUnexpected(Failure());
-        SmokeRendererSystemRef(world).setRefractionEnabled(false);
-        const EntityID camera = CreateSmokeCamera(1.3f, 5.5f, 0.0f, world);
-        const EntityID light = CreateSmokePointLight(
-            VectorSingle(0.0f, 1.3f, -3.0f, 0.0f),
-            VectorSingle(1.0f, 1.0f, 1.0f, 1.0f),
-            20.0f,
-            15.0f,
-            0.0f,
-            false,
-            world
-        );
-        if(!camera.valid() || !light.valid())
-            return MakeUnexpected(Failure());
-
-        if(!CreateGiCsgBox(SmokeBoxBounds(f32x3u(-5.0f, -1.0f, -6.6f), f32x3u(5.0f, 5.0f, -6.5f)), s_GiDiffuseMaterial, VectorSingle(0.02f, 0.02f, 1.0f, 1.0f), world).valid())
-            return MakeUnexpected(Failure());
-        for(u32 slot = 0u; slot < 2u; ++slot){
-            f32 x = 1.3f;
-            f32 cutterMaxZ = 0.4f;
-            if(slot == 0u){
-                x = -1.3f;
-                cutterMaxZ = 1.0f;
-            }
-            const SmokeBoxBounds receiver = SmokeBoxBounds(f32x3u(x - 0.9f, 0.3f, -0.8f), f32x3u(x + 0.9f, 2.3f, 0.8f));
-            const SmokeBoxBounds cutter = SmokeBoxBounds(f32x3u(x - 0.65f, 0.55f, -1.0f), f32x3u(x + 0.65f, 2.05f, cutterMaxZ));
-            if(!CreateGiCsgSubtraction(receiver, cutter, slot, arm, world))
-                return MakeUnexpected(Failure());
-        }
-        if(!CreateGiCsgMixedSubtraction(arm, world))
-            return MakeUnexpected(Failure());
-
-        const VectorSingle white = VectorSingle(s_GiWhiteTint);
-        const EntityID passage = CreateGiCsgBox(SmokeBoxBounds(f32x3u(-1.9f, 0.65f, 1.0f), f32x3u(-0.7f, 1.95f, 1.08f)), s_GiIndirectMaterial, white, world);
-        const EntityID cavity = CreateGiCsgBox(SmokeBoxBounds(f32x3u(0.85f, 0.56f, -0.72f), f32x3u(1.75f, 0.61f, 0.06f)), s_GiIndirectMaterial, white, world);
-        const EntityID control = CreateGiCsgBox(SmokeBoxBounds(f32x3u(-0.35f, 2.7f, 0.0f), f32x3u(0.35f, 3.15f, 0.06f)), s_GiIndirectMaterial, white, world);
-        if(!passage.valid() || !cavity.valid() || !control.valid())
-            return MakeUnexpected(Failure());
-        const EntityID mixedPassage = CreateGiCsgBox(SmokeBoxBounds(f32x3u(-0.2f, -0.7f, 1.0f), f32x3u(0.2f, -0.4f, 1.08f)), s_GiIndirectMaterial, white, world);
-        const EntityID mixedFloor = CreateGiCsgBox(SmokeBoxBounds(f32x3u(-1.3f, -0.82f, -1.85f), f32x3u(-0.75f, -0.77f, -1.08f)), s_GiIndirectMaterial, white, world);
-        if(!mixedPassage.valid() || !mixedFloor.valid())
-            return MakeUnexpected(Failure());
-
-        const FramebufferCaptureOptions options = MakeSmokeCaptureOptions(this, 1280u, 900u, true);
-        if(!ConfigureSmokeFramebufferCapture(this.m_context, "GiTestSmokeProject", s_GiCsgDefaultCaptureFrameCount, options, this.m_capture))
-            return MakeUnexpected(Failure());
-        this.m_active = true;
-        [essential] info("GiTestSmokeProject: CSG GI arm={} overlapping_box_cutters=2 accepted_presentations={}", arm, this.m_requiredPresentations);
-        [essential] info("GiTestSmokeProject: mixed CSG receiver has 12 closed and 2 open triangles");
-        return true;
-    }
-
-    public void stop(){
-        StopAndResetSmokeFramebufferCapture(this.m_capture);
-        this.m_active = false;
-    }
-
-    public void update(){
-        if(!SmokeFramebufferCaptureValid(this.m_capture))
-            return;
-
-        const u64 presentations = this.m_context.graphics.getSuccessfulPresentationCount();
-        if(presentations >= this.m_requiredPresentations && !this.m_liveWarmupComplete){
-            const Timer now = TimerNow();
-            const u64 frameIndex = this.m_context.graphics.getFrameIndex();
-            if(!this.m_liveWarmupStarted){
-                this.m_liveWarmupStartTime = now;
-                this.m_liveWarmupStartPresentations = presentations;
-                this.m_liveWarmupStarted = true;
-                [essential] info(
-                    "GiTestSmokeProject: CSG GI live warmup start source_frame={} presentations={} required_presentations={} required_seconds={}"
-                    , frameIndex
-                    , presentations
-                    , this.m_requiredPresentations
-                    , s_GiCsgLiveWarmupSeconds
-                );
-            }
-            else{
-                const f64 elapsedSeconds = DurationInSeconds<f64>(now, this.m_liveWarmupStartTime);
-                if(elapsedSeconds >= s_GiCsgLiveWarmupSeconds && presentations > this.m_liveWarmupStartPresentations){
-                    this.m_liveWarmupComplete = true;
-                    [essential] info("GiTestSmokeProject: CSG GI live warmup end source_frame={} presentations={} elapsed_seconds={:.6f}", frameIndex, presentations, elapsedSeconds);
-                }
-            }
-        }
-
-        UpdateSmokeFramebufferCapture(this.m_capture);
-        if(SmokeFramebufferCaptureReady(this.m_capture) && !this.m_captureReceiptLogged){
-            this.m_captureReceiptLogged = true;
-            [essential] info("GiTestSmokeProject: CSG GI capture source_frame={}", SmokeFramebufferCapturedFrameIndex(this.m_capture));
-        }
-    }
-
-    public b8 active()const{
-        return this.m_active;
-    }
-
-    private UniquePtr<FramebufferCapture> m_capture = UniquePtr<FramebufferCapture>();
-    private mut ProjectRuntimeContext m_context;
-    private Timer m_liveWarmupStartTime = Timer();
-    private u64 m_requiredPresentations = 360u;
-    private u64 m_liveWarmupStartPresentations = 0u;
-    private b8 m_liveWarmupStarted = false;
-    private b8 m_liveWarmupComplete = false;
-    private b8 m_captureReceiptLogged = false;
-    private b8 m_active = false;
 }
 
 

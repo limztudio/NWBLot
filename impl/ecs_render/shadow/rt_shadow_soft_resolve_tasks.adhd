@@ -10,46 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SoftShadowOpaqueResolvePhase ResolveSoftShadowOpaqueFirstWaveletPhase(in b8 deferWavelet){
-    if(deferWavelet)
-        return SoftShadowOpaqueResolvePhase::TemporalOnly;
-    return SoftShadowOpaqueResolvePhase::TemporalAndWavelet;
-}
-
-b8 ShouldPublishDeferredOpaqueFallbackUpsample(in b8 combinedUpsample, in b8 transparentTraceProduced){
-    return combinedUpsample && !transparentTraceProduced;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void RecoverOpaqueSoftShadowAllLit(
-    mut RendererRayTracingSystem raytracingSystem,
-    mut DeferredFrameTargets targets,
-    mut b8 opaqueProduced,
-    mut Optional<GpuTimingMeasure> asyncTiming,
-    mut Optional<GpuTimingMeasure> shadowVisibilityTiming,
-    mut Optional<GpuTimingMeasure> opaqueResolveTiming,
-    mut CommandList commandList
-){
-    raytracingSystem.clearShadowVisibility(commandList, targets);
-    commandList.setTextureState(targets.shadowVisibility.deref(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
-    commandList.commitBarriers();
-    opaqueProduced = false;
-    if(asyncTiming.has_value()){
-        asyncTiming.value().discardTiming();
-        asyncTiming.reset();
-    }
-    if(shadowVisibilityTiming.has_value()){
-        shadowVisibilityTiming.value().discardTiming();
-        shadowVisibilityTiming.reset();
-    }
-    opaqueResolveTiming.value().discardTiming();
-    opaqueResolveTiming.reset();
-}
-
-
 class ShadowVisibilityOpaqueGraphTask{
     private mut RendererRayTracingSystem raytracingSystem;
     private mut GraphicsRuntime graphics;
@@ -170,7 +130,6 @@ class ShadowVisibilityOpaqueGraphTask{
     }
 }
 
-
 class ShadowVisibilityOpaqueFirstWaveletGraphTask{
     private mut RendererRayTracingSystem raytracingSystem;
     private mut GraphicsRuntime graphics;
@@ -264,7 +223,6 @@ class ShadowVisibilityOpaqueFirstWaveletGraphTask{
     }
 }
 
-
 class ShadowVisibilityOpaqueResolveTailGraphTask{
     private mut RendererRayTracingSystem raytracingSystem;
     private mut DeferredFrameTargets targets;
@@ -332,7 +290,6 @@ class ShadowVisibilityOpaqueResolveTailGraphTask{
     }
 }
 
-
 class ShadowTransparentSoftTraceGraphTask{
     private mut RendererRayTracingSystem raytracingSystem;
     private mut DeferredFrameTargets targets;
@@ -391,7 +348,6 @@ class ShadowTransparentSoftTraceGraphTask{
 
     }
 }
-
 
 class ShadowTransparentSoftTemporalMergeGraphTask{
     private mut RendererRayTracingSystem raytracingSystem;
@@ -478,7 +434,6 @@ class ShadowTransparentSoftTemporalMergeGraphTask{
         DiscardGpuTimingMeasure(this.transparentResolveTiming);
     }
 }
-
 
 class ShadowTransparentSoftFirstWaveletGraphTask{
     private mut RendererRayTracingSystem raytracingSystem;
@@ -577,7 +532,6 @@ class ShadowTransparentSoftFirstWaveletGraphTask{
         DiscardGpuTimingMeasure(this.transparentResolveTiming);
     }
 }
-
 
 class ShadowTransparentSoftFoldGraphTask{
     private mut RendererRayTracingSystem raytracingSystem;
@@ -683,7 +637,6 @@ class ShadowTransparentSoftFoldGraphTask{
     }
 }
 
-
 class ShadowVisibilityGraphTask{
     private mut RendererRayTracingSystem raytracingSystem;
     private mut GraphicsRuntime graphics;
@@ -757,6 +710,44 @@ class ShadowVisibilityGraphTask{
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+SoftShadowOpaqueResolvePhase ResolveSoftShadowOpaqueFirstWaveletPhase(in b8 deferWavelet){
+    if(deferWavelet)
+        return SoftShadowOpaqueResolvePhase::TemporalOnly;
+    return SoftShadowOpaqueResolvePhase::TemporalAndWavelet;
+}
+
+b8 ShouldPublishDeferredOpaqueFallbackUpsample(in b8 combinedUpsample, in b8 transparentTraceProduced){
+    return combinedUpsample && !transparentTraceProduced;
+}
+
+void RecoverOpaqueSoftShadowAllLit(
+    mut RendererRayTracingSystem raytracingSystem,
+    mut DeferredFrameTargets targets,
+    mut b8 opaqueProduced,
+    mut Optional<GpuTimingMeasure> asyncTiming,
+    mut Optional<GpuTimingMeasure> shadowVisibilityTiming,
+    mut Optional<GpuTimingMeasure> opaqueResolveTiming,
+    mut CommandList commandList
+){
+    raytracingSystem.clearShadowVisibility(commandList, targets);
+    commandList.setTextureState(targets.shadowVisibility.deref(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
+    commandList.commitBarriers();
+    opaqueProduced = false;
+    if(asyncTiming.has_value()){
+        asyncTiming.value().discardTiming();
+        asyncTiming.reset();
+    }
+    if(shadowVisibilityTiming.has_value()){
+        shadowVisibilityTiming.value().discardTiming();
+        shadowVisibilityTiming.reset();
+    }
+    opaqueResolveTiming.value().discardTiming();
+    opaqueResolveTiming.reset();
+}
+
 Expected<GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityTask(
     mut GpuTaskGraph graph,
     in GpuTaskDesc desc,
@@ -778,7 +769,6 @@ Expected<GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityTask(
         hardwareShadowSupported
     ));
 }
-
 
 Expected<GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqueTask(
     mut GpuTaskGraph graph,
@@ -811,7 +801,6 @@ Expected<GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqueTask(
         opaqueFrameIndex
     ));
 }
-
 
 Expected<GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqueFirstWaveletTask(
     mut GpuTaskGraph graph,
@@ -847,7 +836,6 @@ Expected<GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqueFirst
     ));
 }
 
-
 Expected<GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqueResolveTailTask(
     mut GpuTaskGraph graph,
     in GpuTaskDesc desc,
@@ -874,7 +862,6 @@ Expected<GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqueResol
         hardwareShadowSupported
     ));
 }
-
 
 Expected<GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftTemporalMergeTask(
     mut GpuTaskGraph graph,
@@ -906,7 +893,6 @@ Expected<GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftTempor
     ));
 }
 
-
 Expected<GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftFirstWaveletTask(
     mut GpuTaskGraph graph,
     in GpuTaskDesc desc,
@@ -937,7 +923,6 @@ Expected<GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftFirstW
     ));
 }
 
-
 Expected<GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftFoldTask(
     mut GpuTaskGraph graph,
     in GpuTaskDesc desc,
@@ -966,7 +951,6 @@ Expected<GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftFoldTa
         combinedUpsample
     ));
 }
-
 
 Expected<GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftTraceTask(
     mut GpuTaskGraph graph,

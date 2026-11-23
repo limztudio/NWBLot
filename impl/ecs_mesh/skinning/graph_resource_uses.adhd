@@ -68,6 +68,7 @@ class SkinningResourceUseCollector<const usize Capacity>{
             this.m_index.value().clear();
     }
 
+    [cpp_unwind]
     public b8 add(in GpuGraphResourceId resource, in ResourceStates state, in GpuTaskResourceAccess access){
         if(!resource.valid())
             return false;
@@ -101,6 +102,7 @@ class SkinningResourceUseCollector<const usize Capacity>{
         return MergeSkinningResourceUse(state, access, inserted.first.value());
     }
 
+    [cpp_unwind]
     public void writeTo(mut Vector<GpuTaskResourceUse> uses)const{
         uses.resize(this.m_count);
         if(this.m_index.has_value()){
@@ -116,6 +118,7 @@ class SkinningResourceUseCollector<const usize Capacity>{
         }
     }
 
+    [cpp_unwind]
     private b8 promoteIndex(){
         this.m_index = Optional<SkinningResourceUseIndex>(SkinningResourceUseIndex());
         this.m_index.value().reserve(ComputePromotedSkinningResourceUseCapacity(Capacity, s_SkinningPromotedIndexCapacityFactor));

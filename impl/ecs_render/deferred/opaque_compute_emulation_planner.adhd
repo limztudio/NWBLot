@@ -12,42 +12,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 CanCaptureOpaqueRegularComputeEmulationPlan(
-    in b8 materialFrameStatesGraphOwned,
-    in b8 materialGeometryStatesGraphOwned,
-    in b8 gbufferMaterialSampledTexturesCollected
-){
-    return materialFrameStatesGraphOwned && materialGeometryStatesGraphOwned && gbufferMaterialSampledTexturesCollected;
-}
-
-b8 CanCaptureOpaqueSharedComputeEmulationPlan(
-    in b8 hasOpaqueCsgFrameWork,
-    in b8 regularOutputOwned,
-    in b8 materialFrameStatesGraphOwned,
-    in b8 materialGeometryStatesGraphOwned,
-    in b8 gbufferMaterialSampledTexturesCollected
-){
-    return !hasOpaqueCsgFrameWork
-        && !regularOutputOwned
-        && materialFrameStatesGraphOwned
-        && materialGeometryStatesGraphOwned
-        && gbufferMaterialSampledTexturesCollected;
-}
-
-b8 CanCaptureOpaqueCsgReceiverComputeEmulationPlan(
-    in b8 hasOpaqueCsgFrameWork,
-    in b8 hasCsgFrameGpuWork,
-    in b8 materialFrameStatesGraphOwned,
-    in b8 materialGeometryStatesGraphOwned,
-    in b8 gbufferMaterialSampledTexturesCollected
-){
-    return hasOpaqueCsgFrameWork
-        && hasCsgFrameGpuWork
-        && materialFrameStatesGraphOwned
-        && materialGeometryStatesGraphOwned
-        && gbufferMaterialSampledTexturesCollected;
-}
-
 class OpaqueComputeEmulationPlanner : NoCopy{
     private OpaqueRegularComputeEmulationGraphTaskPayload m_regularPayload;
     private OpaqueCsgReceiverComputeEmulationGraphTaskPayload m_csgPayload;
@@ -167,6 +131,46 @@ class OpaqueComputeEmulationPlanner : NoCopy{
     public b8 regularOutputOwned()const{ return this.m_regularOutputOwned; }
     public b8 sharedOutputOwned()const{ return this.m_sharedOutputOwned; }
     public b8 csgOutputOwned()const{ return this.m_csgOutputOwned; }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 CanCaptureOpaqueRegularComputeEmulationPlan(
+    in b8 materialFrameStatesGraphOwned,
+    in b8 materialGeometryStatesGraphOwned,
+    in b8 gbufferMaterialSampledTexturesCollected
+){
+    return materialFrameStatesGraphOwned && materialGeometryStatesGraphOwned && gbufferMaterialSampledTexturesCollected;
+}
+
+b8 CanCaptureOpaqueSharedComputeEmulationPlan(
+    in b8 hasOpaqueCsgFrameWork,
+    in b8 regularOutputOwned,
+    in b8 materialFrameStatesGraphOwned,
+    in b8 materialGeometryStatesGraphOwned,
+    in b8 gbufferMaterialSampledTexturesCollected
+){
+    return !hasOpaqueCsgFrameWork
+        && !regularOutputOwned
+        && materialFrameStatesGraphOwned
+        && materialGeometryStatesGraphOwned
+        && gbufferMaterialSampledTexturesCollected;
+}
+
+b8 CanCaptureOpaqueCsgReceiverComputeEmulationPlan(
+    in b8 hasOpaqueCsgFrameWork,
+    in b8 hasCsgFrameGpuWork,
+    in b8 materialFrameStatesGraphOwned,
+    in b8 materialGeometryStatesGraphOwned,
+    in b8 gbufferMaterialSampledTexturesCollected
+){
+    return hasOpaqueCsgFrameWork
+        && hasCsgFrameGpuWork
+        && materialFrameStatesGraphOwned
+        && materialGeometryStatesGraphOwned
+        && gbufferMaterialSampledTexturesCollected;
 }
 
 

@@ -8,15 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 CanPrepareMaterialPassTargets(in b8 hasFramebuffer, in MaterialPipelinePass pass, in b8 avboitTargetsValid){
-    if(!hasFramebuffer)
-        return false;
-    if(MaterialPipelinePassUsesRendererAvboit(pass) && !avboitTargetsValid)
-        return false;
-    return true;
-}
-
-
 [modular]
 class MaterialPassDrawRecorder : NoCopy{
     private mut GraphicsRuntime m_graphics;
@@ -107,6 +98,18 @@ class MaterialPassDrawRecorder : NoCopy{
         mut u32 lastIndexByteOffset,
         mut b8 lastIndexed
     );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 CanPrepareMaterialPassTargets(in b8 hasFramebuffer, in MaterialPipelinePass pass, in b8 avboitTargetsValid){
+    if(!hasFramebuffer)
+        return false;
+    if(MaterialPipelinePassUsesRendererAvboit(pass) && !avboitTargetsValid)
+        return false;
+    return true;
 }
 
 

@@ -368,6 +368,11 @@ void VerifyAssetsGraphics_ShaderPlanningCapacityBoundaries(){
     EXPECT_EQ(includeCapacity.value(), maxSize);
     EXPECT_FALSE(TryComputeShaderIncludeRootCapacity("edge", maxSize, 1u).has_value());
 
+    const Expected<usize> generatedCapacity = TryAccumulateGeneratedShaderEntryCapacity(maxSize - 4u, 1u, 1u, 1u, 1u);
+    ASSERT_TRUE(generatedCapacity.has_value());
+    EXPECT_EQ(generatedCapacity.value(), maxSize);
+    EXPECT_FALSE(TryAccumulateGeneratedShaderEntryCapacity(maxSize - 4u, 1u, 1u, 1u, 2u).has_value());
+
     const Expected<usize> preparedCapacity = TryComputePreparedShaderEntryCapacity(maxSize / preparedFactor);
     ASSERT_TRUE(preparedCapacity.has_value());
     EXPECT_EQ(preparedCapacity.value(), (maxSize / preparedFactor) * preparedFactor);

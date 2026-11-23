@@ -10,50 +10,22 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const GpuTaskId s_CommandIrTask = GpuTaskId(17u, 4u);
-const GpuSubmissionPacketId s_CommandIrPacket = GpuSubmissionPacketId(19u, 2u);
 [cpp_header("<tests/unit/task/gpu/fixture_callback_access.h>"), cpp_name("::NWB::Tests::TaskGraphTestUtils::ClearCallbackInvocation")]
 extern void ClearCallbackInvocation<T>(mut T callback);
 
+const GpuTaskId s_CommandIrTask = GpuTaskId(17u, 4u);
+const GpuSubmissionPacketId s_CommandIrPacket = GpuSubmissionPacketId(19u, 2u);
 const GpuPhysicalQueueId s_CommandIrQueue = GpuPhysicalQueueId(1u, 3u);
 const GpuGraphResourceId s_CommandIrSource = GpuGraphResourceId(17u, 5u);
 const GpuGraphResourceId s_CommandIrDestination = GpuGraphResourceId(17u, 6u);
-
 const usize s_CommandIrCopyBufferOffset = size_of<GpuCommandIrStreamHeader>();
 const usize s_CommandIrCopyTextureOffset = s_CommandIrCopyBufferOffset + size_of<GpuCommandIrCopyBufferRecord>();
 const usize s_CommandIrClearBufferOffset = s_CommandIrCopyTextureOffset + size_of<GpuCommandIrCopyTextureRecord>();
 const usize s_CommandIrClearTextureOffset = s_CommandIrClearBufferOffset + size_of<GpuCommandIrClearBufferRecord>();
 
-BinaryByteView MakeBinaryByteView(in Span<u8> bytes){ return BinaryViewFromBytes(bytes); }
-BinaryByteView MakeGraphicsByteView(in GraphicsBytes bytes){ return BinaryViewFromBytes(Span<u8>(bytes)); }
-BinaryByteView MakeNullBinaryByteView(in usize size){
-    BinaryByteView missing;
-    missing.byteCount = size;
-    return missing;
-}
 
-BinaryByteView SubBinaryByteView(in BinaryByteView source, in usize offset, in usize count){
-    return BinaryViewFromBytes(source.span().subspan(offset, count));
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-Span<u8> ByteViewSpan(in BinaryByteView source){
-    if(source.hasData())
-        return source.span();
-    return Span<u8>();
-}
-
-Optional<PodT> ReadCommandIrPodAt<PodT>(in BinaryByteView bytes, in usize offset){
-    usize cursor = offset;
-    const auto parsed = ReadPOD<PodT>(bytes, cursor);
-    if(parsed.has_value())
-        return parsed.value();
-    return Optional<PodT>();
-}
-
-void WriteCommandIrWord<T>(in usize offset, in T value, mut Span<u8> bytes){
-    if(!OverwritePOD<T>(offset, value, bytes))
-        assert(false, "Command IR word exceeds the test buffer");
-}
 
 class RecordProbeTask{
     private mut u32 m_records;
@@ -113,29 +85,65 @@ class MalformedLifecycleTask{
     public void discarded()const{ ++this.m_discards; }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+BinaryByteView MakeBinaryByteView(in Span<u8> bytes){ return BinaryViewFromBytes(bytes); }
+
+BinaryByteView MakeGraphicsByteView(in GraphicsBytes bytes){ return BinaryViewFromBytes(Span<u8>(bytes)); }
+
+BinaryByteView MakeNullBinaryByteView(in usize size){
+    BinaryByteView missing;
+    missing.byteCount = size;
+    return missing;
+}
+
+BinaryByteView SubBinaryByteView(in BinaryByteView source, in usize offset, in usize count){
+    return BinaryViewFromBytes(source.span().subspan(offset, count));
+}
+
+Span<u8> ByteViewSpan(in BinaryByteView source){
+    if(source.hasData())
+        return source.span();
+    return Span<u8>();
+}
+
+Optional<PodT> ReadCommandIrPodAt<PodT>(in BinaryByteView bytes, in usize offset){
+    usize cursor = offset;
+    const auto parsed = ReadPOD<PodT>(bytes, cursor);
+    if(parsed.has_value())
+        return parsed.value();
+    return Optional<PodT>();
+}
+
+void WriteCommandIrWord<T>(in usize offset, in T value, mut Span<u8> bytes){
+    if(!OverwritePOD<T>(offset, value, bytes))
+        assert(false, "Command IR word exceeds the test buffer");
+}
+
 Expected<GpuTaskId> AddNativeRecordProbeTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, mut u32 records){
     RecordProbeTask payload(records);
     return graph.addPayloadTask(desc, payload);
 }
+
 Expected<GpuTaskId> AddPacketLifecycleTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, in GpuQueueCapability requiredCapabilities){
     PacketLifecycleTask payload;
     payload.requiredCapabilities = requiredCapabilities;
     return graph.addPayloadTask(desc, payload);
 }
+
 Expected<GpuTaskId> AddPacketLifecycleTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, mut u32 accepts, mut u32 discards){
     PacketLifecycleTask payload;
     payload.acceptedCount = Optional<mut u32>(accepts);
     payload.discardedCount = Optional<mut u32>(discards);
     return graph.addPayloadTask(desc, payload);
 }
+
 Expected<GpuTaskId> AddMalformedLifecycleTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, mut u32 records, mut u32 accepts, mut u32 discards){
     MalformedLifecycleTask payload(records, accepts, discards);
     return graph.addPayloadTask(desc, payload);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void CopyCommandIrBytes(in BinaryByteView source, mut GraphicsBytes outBytes){
     const Span<u8> bytes = ByteViewSpan(source);

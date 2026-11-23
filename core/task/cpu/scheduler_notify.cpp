@@ -173,7 +173,7 @@ void CpuTaskScheduler::notifyProgress()noexcept{
     WorkerWakePlan wakePlan;
     b8 wakeJoiners = false;
     {
-        ScopedLock lock(m_mutex);
+        NothrowScopedLock lock(m_mutex);
         takeWorkerWakePlanLocked(wakePlan);
         wakeJoiners = publishJoinWakeLocked(true);
     }

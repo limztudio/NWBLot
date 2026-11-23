@@ -16,7 +16,6 @@ class UiLayerResizeRenderPass : IRenderPass{
     }
 }
 
-
 class UiLayerSmokeModeFlags{
     public b8 windowSmoke = false;
     public b8 popupSmoke = false;
@@ -37,7 +36,6 @@ class UiLayerSmokeModeFlags{
     public b8 alternateSkin = false;
 }
 
-
 class UiDefaultSmokeScene : IUiSmokeScene{
     private UiTextSmokeSamples m_textSamples;
     private u32 m_paintFrame = 0u;
@@ -45,6 +43,29 @@ class UiDefaultSmokeScene : IUiSmokeScene{
     public UiDefaultSmokeScene();
 
     public b8 paint(mut UiPaintContext paintContext)override;
+}
+
+class UiSmokeInputSubscription<T : IUiSmokeInputScene> : IInputEventHandler, IUiSmokeScene{
+    private mut InputDispatcher m_input;
+    public Shared<T> scene;
+
+    public UiSmokeInputSubscription(mut InputDispatcher input, in Shared<T> scene){
+        this.m_input = input;
+        this.scene = scene;
+        input.addHandlerToBack(this);
+    }
+
+    public ~UiSmokeInputSubscription(){
+        this.m_input.removeHandler(this);
+    }
+
+    public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override{
+        return this.scene.deref().keyboardUpdate(key, scancode, action, mods);
+    }
+
+    public b8 paint(mut UiPaintContext context)override{
+        return this.scene.deref().paint(context);
+    }
 }
 
 
@@ -67,10 +88,6 @@ b8 UiDefaultSmokeScene::paint(mut UiPaintContext paintContext){
         error("UiLayerSmokeProject: text or glyph coverage painting failed");
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 UiLayerSmokeModeFlags ResolveUiLayerSmokeModes(){
     UiLayerSmokeModeFlags modes();
@@ -242,29 +259,6 @@ void SpawnManySmokeRootsIfEnabled(mut World world){
     lastPaint.paint.setCallback(last);
 }
 
-class UiSmokeInputSubscription<T : IUiSmokeInputScene> : IInputEventHandler, IUiSmokeScene{
-    private mut InputDispatcher m_input;
-    public Shared<T> scene;
-
-    public UiSmokeInputSubscription(mut InputDispatcher input, in Shared<T> scene){
-        this.m_input = input;
-        this.scene = scene;
-        input.addHandlerToBack(this);
-    }
-
-    public ~UiSmokeInputSubscription(){
-        this.m_input.removeHandler(this);
-    }
-
-    public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override{
-        return this.scene.deref().keyboardUpdate(key, scancode, action, mods);
-    }
-
-    public b8 paint(mut UiPaintContext context)override{
-        return this.scene.deref().paint(context);
-    }
-}
-
 b8 InstallUiSmokePaint<T : IUiSmokeScene>(mut UiPaintSlot slot, in Expected<Shared<T>> created, in StringView message){
     if(!created.has_value())
         return false;
@@ -342,6 +336,8 @@ b8 AttachUiLayerSmokeScene(mut ProjectRuntimeContext context, mut World world, i
         if(!subscribed.has_value())
             return false;
         const Shared<UiSmokeInputSubscription<UiPopupSmokeScene>> popup = subscribed.value();
+        if(!InstallUiSmokePaint<UiSmokeInputSubscription<UiPopupSmokeScene>>(paint.paint, subscribed, "popup UI paint failed"))
+            return false;
         auto laterEntity = world.createEntity();
         mut UiPaintComponent laterPaint = laterEntity.addComponent<UiPaintComponent>();
         laterPaint.order = 100;
@@ -350,7 +346,7 @@ b8 AttachUiLayerSmokeScene(mut ProjectRuntimeContext context, mut World world, i
                 error("UiLayerSmokeProject: later popup root paint failed");
         };
         laterPaint.paint.setCallback(later);
-        return InstallUiSmokePaint<UiSmokeInputSubscription<UiPopupSmokeScene>>(paint.paint, subscribed, "popup UI paint failed");
+        return true;
     }
     if(modes.editSmoke){
         const auto subscribed = SubscribeUiSmokeInput<UiEditSmokeScene>(pool, context.input, pool.make<UiEditSmokeScene>());
@@ -362,7 +358,6 @@ b8 AttachUiLayerSmokeScene(mut ProjectRuntimeContext context, mut World world, i
         return InstallUiSmokePaint<UiInteractiveSmokeScene>(paint.paint, pool.make<UiInteractiveSmokeScene>(), "interactive UI paint failed");
     return InstallUiSmokePaint<UiDefaultSmokeScene>(paint.paint, pool.make<UiDefaultSmokeScene>(), "default UI paint failed");
 }
-
 
 b8 InitUiLayerSmokeSystem(mut ProjectRuntimeContext context, mut World world, in b8 alternateSkin){
     AssetRef<UiSkin> skin();

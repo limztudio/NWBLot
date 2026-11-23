@@ -14,12 +14,8 @@
 
 [cpp_header("<tests/unit/ui/numeric_format_buffer.h>"), cpp_name("::NWB::Tests::UiCases::FormatF64Bytes")]
 extern Expected<usize, ErrorCode> FormatF64Bytes(in f64 value, mut Span<u8> buffer);
-
 [cpp_header("<tests/unit/ui/numeric_format_buffer.h>"), cpp_name("::NWB::Tests::UiCases::FormatI64Bytes")]
 extern Expected<usize, ErrorCode> FormatI64Bytes(in i64 value, mut Span<u8> buffer);
-
-
-enum<u8> UiNumericSelectionEpochMutation{ SelectionRoundTrip, SameSelection, CompositionRoundTrip }
 
 type NumericLifetimeIntegerModel = IntegerEditModel;
 type NumericLifetimeFloatModel = FloatEditModel;
@@ -28,6 +24,17 @@ type NumericLifetimeFloatFixture = NumericModelFixture<FloatEditModel>;
 type IntegerLifetimeTests = NumericLifetimeIntegerFixture;
 type FloatLifetimeTests = NumericLifetimeFloatFixture;
 type UiNumericSelectionEpochTests = NumericFixture;
+type UiNumericLifetimeDraftSnapshot = MultilineSnapshot;
+const StringView s_UiNumericEditPanelKey = "panel";
+const StringView s_UiNumericEditIntegerKey = "integer";
+const StringView s_UiNumericEditDecimalKey = "decimal";
+const u64 s_UiPaintGlyphDefaultAtlasIdentity = 11u;
+
+enum<u8> UiNumericSelectionEpochMutation{ SelectionRoundTrip, SameSelection, CompositionRoundTrip }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class UiNumericFormatBuffer{
     public Array<u8, s_NumericEditMaxBytes> storage;
@@ -43,18 +50,6 @@ class UiNumericFormatBuffer{
             return this.result.error();
         return ErrorCode();
     }
-}
-
-UiNumericFormatBuffer FormatUiNumericI64(in i64 value){
-    UiNumericFormatBuffer out;
-    out.result = FormatI64Bytes(value, out.storage);
-    return out;
-}
-
-UiNumericFormatBuffer FormatUiNumericF64(in f64 value){
-    UiNumericFormatBuffer out;
-    out.result = FormatF64Bytes(value, out.storage);
-    return out;
 }
 
 [ordered]
@@ -83,7 +78,6 @@ class UiNumericEditBuilderPlainHost : IEditBoxHost{
     public b8 publish(in WidgetState arg0, in EditBoxView arg1, in EditBoxPlacement arg2, in EditBoxOptions arg3)override{ return true; }
 }
 
-
 class UiNumericEditBuilderTests : NumericFixture{
 
 
@@ -97,7 +91,6 @@ class UiNumericEditBuilderTests : NumericFixture{
         this.m_host.resetBuilder = Optional<mut Builder>(this.m_builder);
     }
 }
-
 
 class UiNumericEditLoanMutationSource : ComboSource{
     public TestObserved<Optional<mut IntegerEditModel>> onText;
@@ -137,7 +130,6 @@ class UiNumericEditLoanMutationSource : ComboSource{
     }
 }
 
-
 class UiNumericEditLoanTests : NumericFixture{
 
 
@@ -148,7 +140,6 @@ class UiNumericEditLoanTests : NumericFixture{
         this.m_host.onPublishFloat = Optional<mut FloatEditModel>(this.m_float);
     }
 }
-
 
 class UiNumericSelectionEpochSource : ComboSource{
     public TestObserved<Optional<mut EditModel>> onText;
@@ -189,49 +180,11 @@ class UiNumericSelectionEpochSource : ComboSource{
     }
 }
 
-
 class UiPaintGlyphTests : PaintTextFixture{
 
 
     public b8 prepareSingleGlyphPage(in SharedGlyphPage page){ return this.m_builder.prepareGlyphPages(Array<SharedGlyphPage, 1u>(page)); }
 }
-
-
-usize UiPaintGlyphPageAddress(in SharedGlyphPage page){
-    if(page.valid())
-        return TestValueAddress<GlyphPage>(page.deref());
-    return 0u;
-}
-u64 UiPaintGlyphPageGeneration(in SharedGlyphPage page){ return page.deref().binding().generation; }
-u8 UiPaintGlyphPagePixel(in SharedGlyphPage page, in usize index){ return page.deref().pixels()[index]; }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 MutateUiNumericSelectionEpochDraft(in UiNumericSelectionEpochMutation mutation, mut EditModel draft){
-    const usize anchor = draft.anchor();
-    const usize caret = draft.caret();
-    if(mutation == UiNumericSelectionEpochMutation::SelectionRoundTrip)
-        return draft.setSelection(0u, 0u) && draft.setSelection(anchor, caret);
-    if(mutation == UiNumericSelectionEpochMutation::SameSelection)
-        return draft.setSelection(anchor, caret);
-    if(!draft.beginComposition() || !draft.updateComposition("IME", 0u, 3u))
-        return false;
-    draft.cancelComposition();
-    return true;
-}
-
-type UiNumericLifetimeDraftSnapshot = MultilineSnapshot;
-
-const StringView s_UiNumericEditPanelKey = "panel";
-const StringView s_UiNumericEditIntegerKey = "integer";
-const StringView s_UiNumericEditDecimalKey = "decimal";
-const u64 s_UiPaintGlyphDefaultAtlasIdentity = 11u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 class UiNumericParseExpectationCase{
     public StringView text;
@@ -287,6 +240,41 @@ class UiNumericParseFloatCompleteCase{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+UiNumericFormatBuffer FormatUiNumericI64(in i64 value){
+    UiNumericFormatBuffer out;
+    out.result = FormatI64Bytes(value, out.storage);
+    return out;
+}
+
+UiNumericFormatBuffer FormatUiNumericF64(in f64 value){
+    UiNumericFormatBuffer out;
+    out.result = FormatF64Bytes(value, out.storage);
+    return out;
+}
+
+usize UiPaintGlyphPageAddress(in SharedGlyphPage page){
+    if(page.valid())
+        return TestValueAddress<GlyphPage>(page.deref());
+    return 0u;
+}
+
+u64 UiPaintGlyphPageGeneration(in SharedGlyphPage page){ return page.deref().binding().generation; }
+
+u8 UiPaintGlyphPagePixel(in SharedGlyphPage page, in usize index){ return page.deref().pixels()[index]; }
+
+b8 MutateUiNumericSelectionEpochDraft(in UiNumericSelectionEpochMutation mutation, mut EditModel draft){
+    const usize anchor = draft.anchor();
+    const usize caret = draft.caret();
+    if(mutation == UiNumericSelectionEpochMutation::SelectionRoundTrip)
+        return draft.setSelection(0u, 0u) && draft.setSelection(anchor, caret);
+    if(mutation == UiNumericSelectionEpochMutation::SameSelection)
+        return draft.setSelection(anchor, caret);
+    if(!draft.beginComposition() || !draft.updateComposition("IME", 0u, 3u))
+        return false;
+    draft.cancelComposition();
+    return true;
+}
+
 void ExpectUiNumericAtomicBadIntegerBounds(in IntegerBounds bounds, mut IntegerEditModel model){
     ASSERT_TRUE(model.setValue(7));
     ASSERT_TRUE(model.lendDraft().replaceSelection("8"));
@@ -322,10 +310,6 @@ void ExpectUiNumericAtomicBadFloatBounds(in FloatBounds bounds, mut FloatEditMod
     EXPECT_TRUE(model.dirty());
     before.expectUnchanged(model.draft());
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyUiNumericEditBuilderTests_AHostWithoutOrderedActionsRejectsTypedEditors(mut UiNumericEditBuilderTests self){
     UiNumericEditBuilderPlainHost host = UiNumericEditBuilderPlainHost();
@@ -587,10 +571,6 @@ void VerifyUiNumericEditBuilderTests_InvalidBoundsRejectBeforeBorrowingTheHost(m
     EXPECT_TRUE(self.m_context.failed());
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyUiNumericEditLoanTests_SameValueExternalReplacementRetiresThePreparedLoan(mut UiNumericEditLoanTests self){
     ASSERT_TRUE(self.m_integer.setValue(12));
     ASSERT_TRUE(self.beginNumeric(1u));
@@ -824,10 +804,6 @@ void VerifyUiNumericEditLoanTests_SuccessfulEndReleasesNumericLoansBeforeApplica
     EXPECT_EQ(StringView(self.m_host.displayed.data(), self.m_host.displayed.size()), "99");
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyUiNumericFormatTests_IntegerCanonicalTextRoundtripsExtremaWithoutFloatingPointConversion(){
     Array<i64, 4u> values = Array<i64, 4u>();
     values[0u] = 9007199254740993ll;
@@ -899,10 +875,6 @@ void VerifyUiNumericFormatTests_NonfiniteFloatFormattingIsRejected(){
         EXPECT_EQ(formatted.error(), MakeErrorCode(ErrorCondition::invalid_argument));
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyNumericLifetimeTests_SameValueExternalReplacementFencesHistorySelectionAndComposition(mut NumericLifetimeIntegerFixture self){
     ASSERT_TRUE(self.m_model.setValue(7));
@@ -1174,10 +1146,6 @@ void VerifyFloatLifetimeTests_ReversedNonfiniteAndUnknownFloatBoundsAreAtomic(mu
     ExpectUiNumericAtomicBadFloatBounds(MakeUiFloatBounds(-10.0, 10.0, unknown), self.m_model);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyUiNumericParseTests_IntegerPrefixesAndMalformedSyntaxRetainErrorClassification(){
     Array<UiNumericParseExpectationCase, 23u> cases = Array<UiNumericParseExpectationCase, 23u>();
     cases[0u] = UiNumericParseExpectationCase("", NumericParseStatus::Incomplete);
@@ -1322,10 +1290,6 @@ void VerifyUiNumericParseTests_BoundsValidationRejectsReversalNonfiniteEndpoints
     EXPECT_FALSE(ValidateIntegerBounds(MakeUiIntegerBounds(-1, 1, unknown)));
     EXPECT_FALSE(ValidateFloatBounds(MakeUiFloatBounds(-1.0, 1.0, unknown)));
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyUiNumericSelectionEpochTests_LaterSourceRejectsIntegerSelectionRoundTripWithUnchangedDraftAndTypedValue(mut UiNumericSelectionEpochTests self){
     self.useHost();
@@ -1512,10 +1476,6 @@ void VerifyUiNumericSelectionEpochTests_FinalSourceValidationRejectsTheParentSel
     EXPECT_EQ(self.m_integer.draft().caret(), 2u);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyUiPaintGlyphTests_ClipTrimsGlyphGeometryAndUv(mut UiPaintGlyphTests self){
     auto pageCreationResult = self.makeGlyphPage();
     ASSERT_TRUE(pageCreationResult.has_value());
@@ -1695,87 +1655,130 @@ void VerifyUiPaintGlyphTests_RejectedPageAdmissionAtCapacityPreservesBindingsAnd
     EXPECT_FLOAT_EQ(snapshot.vertices()[2u].texCoord.y, 0.75f);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST_F(UiNumericEditBuilderTests, AHostWithoutOrderedActionsRejectsTypedEditors, VerifyUiNumericEditBuilderTests_AHostWithoutOrderedActionsRejectsTypedEditors)
+
 NWB_ADHD_GTEST_F(UiNumericEditBuilderTests, SubmitCommitsAtItsPositionBeforeLaterText, VerifyUiNumericEditBuilderTests_SubmitCommitsAtItsPositionBeforeLaterText)
+
 NWB_ADHD_GTEST_F(UiNumericEditBuilderTests, SubmitThenCancelAggregatesActionsAndDropsRetiredText, VerifyUiNumericEditBuilderTests_SubmitThenCancelAggregatesActionsAndDropsRetiredText)
+
 NWB_ADHD_GTEST_F(UiNumericEditBuilderTests, IncompleteSubmitRetainsDraftAndReportsRejection, VerifyUiNumericEditBuilderTests_IncompleteSubmitRetainsDraftAndReportsRejection)
+
 NWB_ADHD_GTEST_F(UiNumericEditBuilderTests, InvalidBlurRestoresCurrentCommittedValueBeforeSnapshot, VerifyUiNumericEditBuilderTests_InvalidBlurRestoresCurrentCommittedValueBeforeSnapshot)
+
 NWB_ADHD_GTEST_F(UiNumericEditBuilderTests, FloatClampUsesTheBoundsOfTheOrderedAction, VerifyUiNumericEditBuilderTests_FloatClampUsesTheBoundsOfTheOrderedAction)
+
 NWB_ADHD_GTEST_F(UiNumericEditBuilderTests, BoundsPolicyChangePreservesDraftUntilTheNextAction, VerifyUiNumericEditBuilderTests_BoundsPolicyChangePreservesDraftUntilTheNextAction)
+
 NWB_ADHD_GTEST_F(UiNumericEditBuilderTests, ReadOnlySubmitDoesNotCommitOrAdvanceNumericRevision, VerifyUiNumericEditBuilderTests_ReadOnlySubmitDoesNotCommitOrAdvanceNumericRevision)
+
 NWB_ADHD_GTEST_F(UiNumericEditBuilderTests, ReadOnlyBlurRestoresWithoutACommitOrUserCancel, VerifyUiNumericEditBuilderTests_ReadOnlyBlurRestoresWithoutACommitOrUserCancel)
+
 NWB_ADHD_GTEST_F(UiNumericEditBuilderTests, DisabledAbandonRestoresBeforeIgnoredInput, VerifyUiNumericEditBuilderTests_DisabledAbandonRestoresBeforeIgnoredInput)
+
 NWB_ADHD_GTEST_F(UiNumericEditBuilderTests, PreeditOwnsEnterAndTheFirstEscape, VerifyUiNumericEditBuilderTests_PreeditOwnsEnterAndTheFirstEscape)
+
 NWB_ADHD_GTEST_F(UiNumericEditBuilderTests, NumericSetterDuringTheHostLoanPreservesApplicationMutationAndRejects, VerifyUiNumericEditBuilderTests_NumericSetterDuringTheHostLoanPreservesApplicationMutationAndRejects)
+
 NWB_ADHD_GTEST_F(UiNumericEditBuilderTests, BuilderResetReentryDuringTheHostLoanRejects, VerifyUiNumericEditBuilderTests_BuilderResetReentryDuringTheHostLoanRejects)
+
 NWB_ADHD_GTEST_F(UiNumericEditBuilderTests, SharedTypedModelIsRejectedBeforeTheSecondHostLoan, VerifyUiNumericEditBuilderTests_SharedTypedModelIsRejectedBeforeTheSecondHostLoan)
+
 NWB_ADHD_GTEST_F(UiNumericEditBuilderTests, SharedEditorStateIsRejectedBeforeTheSecondHostLoan, VerifyUiNumericEditBuilderTests_SharedEditorStateIsRejectedBeforeTheSecondHostLoan)
+
 NWB_ADHD_GTEST_F(UiNumericEditBuilderTests, InvalidBoundsRejectBeforeBorrowingTheHost, VerifyUiNumericEditBuilderTests_InvalidBoundsRejectBeforeBorrowingTheHost)
 
 NWB_ADHD_GTEST_F(UiNumericEditLoanTests, SameValueExternalReplacementRetiresThePreparedLoan, VerifyUiNumericEditLoanTests_SameValueExternalReplacementRetiresThePreparedLoan)
+
 NWB_ADHD_GTEST_F(UiNumericEditLoanTests, SameBytesExternalDraftReplacementRetiresThePreparedLoan, VerifyUiNumericEditLoanTests_SameBytesExternalDraftReplacementRetiresThePreparedLoan)
+
 NWB_ADHD_GTEST_F(UiNumericEditLoanTests, DirectDraftReplacementIsFencedWithoutANumericAction, VerifyUiNumericEditLoanTests_DirectDraftReplacementIsFencedWithoutANumericAction)
+
 NWB_ADHD_GTEST_F(UiNumericEditLoanTests, SelectionChangeWithoutADraftRevisionRetiresThePreparedLoan, VerifyUiNumericEditLoanTests_SelectionChangeWithoutADraftRevisionRetiresThePreparedLoan)
+
 NWB_ADHD_GTEST_F(UiNumericEditLoanTests, BeginAndCancelCompositionStillRetireThePreparedLoan, VerifyUiNumericEditLoanTests_BeginAndCancelCompositionStillRetireThePreparedLoan)
+
 NWB_ADHD_GTEST_F(UiNumericEditLoanTests, PublishMutationRejectsAndStopsLaterEditorPublication, VerifyUiNumericEditLoanTests_PublishMutationRejectsAndStopsLaterEditorPublication)
+
 NWB_ADHD_GTEST_F(UiNumericEditLoanTests, FloatPublishMutationRejectsAndPreservesTheNewTypedValue, VerifyUiNumericEditLoanTests_FloatPublishMutationRejectsAndPreservesTheNewTypedValue)
+
 NWB_ADHD_GTEST_F(UiNumericEditLoanTests, LaterVirtualListCallbackRejectsAnAlreadyPaintedNumericEditor, VerifyUiNumericEditLoanTests_LaterVirtualListCallbackRejectsAnAlreadyPaintedNumericEditor)
+
 NWB_ADHD_GTEST_F(UiNumericEditLoanTests, NumericLoanRemainsLiveAfterItsChildPopupEnds, VerifyUiNumericEditLoanTests_NumericLoanRemainsLiveAfterItsChildPopupEnds)
+
 NWB_ADHD_GTEST_F(UiNumericEditLoanTests, ChildSourceCallbackRejectsAnAlreadyPaintedParentNumericEditor, VerifyUiNumericEditLoanTests_ChildSourceCallbackRejectsAnAlreadyPaintedParentNumericEditor)
+
 NWB_ADHD_GTEST_F(UiNumericEditLoanTests, ParentSourceCallbackRejectsTheEndedChildNumericLoanBeforePublication, VerifyUiNumericEditLoanTests_ParentSourceCallbackRejectsTheEndedChildNumericLoanBeforePublication)
+
 NWB_ADHD_GTEST_F(UiNumericEditLoanTests, FinalSourceValidationCannotMutateAParentNumericLoanAfterChildPaint, VerifyUiNumericEditLoanTests_FinalSourceValidationCannotMutateAParentNumericLoanAfterChildPaint)
+
 NWB_ADHD_GTEST_F(UiNumericEditLoanTests, LaterSiblingSourceRejectsAnAlreadyPaintedEndedChildNumericLoan, VerifyUiNumericEditLoanTests_LaterSiblingSourceRejectsAnAlreadyPaintedEndedChildNumericLoan)
+
 NWB_ADHD_GTEST_F(UiNumericEditLoanTests, ClosedAncestorSuppressesNumericPublicationAndHiddenSources, VerifyUiNumericEditLoanTests_ClosedAncestorSuppressesNumericPublicationAndHiddenSources)
+
 NWB_ADHD_GTEST_F(UiNumericEditLoanTests, SuccessfulEndReleasesNumericLoansBeforeApplicationMutation, VerifyUiNumericEditLoanTests_SuccessfulEndReleasesNumericLoansBeforeApplicationMutation)
 
 NWB_ADHD_GTEST(UiNumericFormatTests, IntegerCanonicalTextRoundtripsExtremaWithoutFloatingPointConversion, VerifyUiNumericFormatTests_IntegerCanonicalTextRoundtripsExtremaWithoutFloatingPointConversion)
+
 NWB_ADHD_GTEST(UiNumericFormatTests, ExtremeSubnormalSignedZeroAndAdjacentUlpValuesRoundtripWithExactBits, VerifyUiNumericFormatTests_ExtremeSubnormalSignedZeroAndAdjacentUlpValuesRoundtripWithExactBits)
+
 NWB_ADHD_GTEST(UiNumericFormatTests, InsufficientCallerStorageReportsSizeErrorWithoutWritingOutsideTheBuffer, VerifyUiNumericFormatTests_InsufficientCallerStorageReportsSizeErrorWithoutWritingOutsideTheBuffer)
+
 NWB_ADHD_GTEST(UiNumericFormatTests, NonfiniteFloatFormattingIsRejected, VerifyUiNumericFormatTests_NonfiniteFloatFormattingIsRejected)
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 registration GoogleTestTypedPair(NumericLifetimeTests, NumericModelFixture, NumericLifetimeIntegerModel, NumericLifetimeFloatModel);
+
 registration GoogleTestTypedCase(NumericLifetimeTests, SameValueExternalReplacementFencesHistorySelectionAndComposition, VerifyNumericLifetimeTests_SameValueExternalReplacementFencesHistorySelectionAndComposition);
+
 registration GoogleTestTypedCase(NumericLifetimeTests, SameTextDraftReplacementFencesWithoutChangingTheCommittedValue, VerifyNumericLifetimeTests_SameTextDraftReplacementFencesWithoutChangingTheCommittedValue);
+
 registration GoogleTestTypedCase(NumericLifetimeTests, RejectedIncompleteSubmitStillRetiresLoanEpoch, VerifyNumericLifetimeTests_RejectedIncompleteSubmitStillRetiresLoanEpoch);
+
 registration GoogleTestTypedCase(NumericLifetimeTests, RestorationDropsPreeditAndUndoWhileUsingCanonicalCommittedValue, VerifyNumericLifetimeTests_RestorationDropsPreeditAndUndoWhileUsingCanonicalCommittedValue);
+
 registration GoogleTestTypedCase(NumericLifetimeTests, ExternalReplacementControlsLaterAbandonRestoration, VerifyNumericLifetimeTests_ExternalReplacementControlsLaterAbandonRestoration);
+
 registration GoogleTestTypedCase(NumericLifetimeTests, CapacityAndInvalidUtf8FailuresPreserveEveryDraftField, VerifyNumericLifetimeTests_CapacityAndInvalidUtf8FailuresPreserveEveryDraftField);
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST_F(IntegerLifetimeTests, ReversedAndUnknownIntegerBoundsAreAtomic, VerifyIntegerLifetimeTests_ReversedAndUnknownIntegerBoundsAreAtomic)
+
 NWB_ADHD_GTEST_F(FloatLifetimeTests, ReversedNonfiniteAndUnknownFloatBoundsAreAtomic, VerifyFloatLifetimeTests_ReversedNonfiniteAndUnknownFloatBoundsAreAtomic)
 
 NWB_ADHD_GTEST(UiNumericParseTests, IntegerPrefixesAndMalformedSyntaxRetainErrorClassification, VerifyUiNumericParseTests_IntegerPrefixesAndMalformedSyntaxRetainErrorClassification)
+
 NWB_ADHD_GTEST(UiNumericParseTests, IntegerConversionPreservesSignedBoundsAndLargeExactValues, VerifyUiNumericParseTests_IntegerConversionPreservesSignedBoundsAndLargeExactValues)
+
 NWB_ADHD_GTEST(UiNumericParseTests, FloatPrefixesAndMalformedSyntaxAreClassifiedBeforeConversion, VerifyUiNumericParseTests_FloatPrefixesAndMalformedSyntaxAreClassifiedBeforeConversion)
+
 NWB_ADHD_GTEST(UiNumericParseTests, SignedZeroDraftSpellingsPreserveTheSignBit, VerifyUiNumericParseTests_SignedZeroDraftSpellingsPreserveTheSignBit)
+
 NWB_ADHD_GTEST(UiNumericParseTests, EveryAsciiEdgeWhitespaceIsAcceptedButInteriorWhitespaceIsInvalid, VerifyUiNumericParseTests_EveryAsciiEdgeWhitespaceIsAcceptedButInteriorWhitespaceIsInvalid)
+
 NWB_ADHD_GTEST(UiNumericParseTests, BoundsValidationRejectsReversalNonfiniteEndpointsAndUnknownPolicy, VerifyUiNumericParseTests_BoundsValidationRejectsReversalNonfiniteEndpointsAndUnknownPolicy)
 
 NWB_ADHD_GTEST_F(UiNumericSelectionEpochTests, LaterSourceRejectsIntegerSelectionRoundTripWithUnchangedDraftAndTypedValue, VerifyUiNumericSelectionEpochTests_LaterSourceRejectsIntegerSelectionRoundTripWithUnchangedDraftAndTypedValue)
+
 NWB_ADHD_GTEST_F(UiNumericSelectionEpochTests, LaterSourceRejectsFloatSelectionRoundTripWithUnchangedDraftAndTypedValue, VerifyUiNumericSelectionEpochTests_LaterSourceRejectsFloatSelectionRoundTripWithUnchangedDraftAndTypedValue)
+
 NWB_ADHD_GTEST_F(UiNumericSelectionEpochTests, LaterSourceRejectsAcceptedIdenticalSelection, VerifyUiNumericSelectionEpochTests_LaterSourceRejectsAcceptedIdenticalSelection)
+
 NWB_ADHD_GTEST_F(UiNumericSelectionEpochTests, LaterSourceRejectsCompositionRoundTripWithNoActivePreedit, VerifyUiNumericSelectionEpochTests_LaterSourceRejectsCompositionRoundTripWithNoActivePreedit)
+
 NWB_ADHD_GTEST_F(UiNumericSelectionEpochTests, ChildSourceRejectsAnAlreadyPaintedParentSelectionRoundTrip, VerifyUiNumericSelectionEpochTests_ChildSourceRejectsAnAlreadyPaintedParentSelectionRoundTrip)
+
 NWB_ADHD_GTEST_F(UiNumericSelectionEpochTests, ParentSourceRejectsTheEndedChildSelectionRoundTripBeforePublication, VerifyUiNumericSelectionEpochTests_ParentSourceRejectsTheEndedChildSelectionRoundTripBeforePublication)
+
 NWB_ADHD_GTEST_F(UiNumericSelectionEpochTests, LaterSiblingSourceRejectsAnAlreadyPaintedFloatSelectionRoundTrip, VerifyUiNumericSelectionEpochTests_LaterSiblingSourceRejectsAnAlreadyPaintedFloatSelectionRoundTrip)
+
 NWB_ADHD_GTEST_F(UiNumericSelectionEpochTests, FinalSourceValidationRejectsTheParentSelectionRoundTripAfterChildPaint, VerifyUiNumericSelectionEpochTests_FinalSourceValidationRejectsTheParentSelectionRoundTripAfterChildPaint)
 
 NWB_ADHD_GTEST_F(UiPaintGlyphTests, ClipTrimsGlyphGeometryAndUv, VerifyUiPaintGlyphTests_ClipTrimsGlyphGeometryAndUv)
+
 NWB_ADHD_GTEST_F(UiPaintGlyphTests, BatchesOnlyAdjacentGlyphsWithMatchingPageMaterialAndClip, VerifyUiPaintGlyphTests_BatchesOnlyAdjacentGlyphsWithMatchingPageMaterialAndClip)
+
 NWB_ADHD_GTEST_F(UiPaintGlyphTests, NewerAppendOnlyPageUpgradesBindingWithoutMovingEarlierGlyphUvs, VerifyUiPaintGlyphTests_NewerAppendOnlyPageUpgradesBindingWithoutMovingEarlierGlyphUvs)
+
 NWB_ADHD_GTEST_F(UiPaintGlyphTests, FrozenSnapshotRetainsOldCoverageAfterBuilderReuseAndPageRelease, VerifyUiPaintGlyphTests_FrozenSnapshotRetainsOldCoverageAfterBuilderReuseAndPageRelease)
+
 NWB_ADHD_GTEST_F(UiPaintGlyphTests, RejectedPageAdmissionAtCapacityPreservesBindingsAndGeometry, VerifyUiPaintGlyphTests_RejectedPageAdmissionAtCapacityPreservesBindingsAndGeometry)
 
 

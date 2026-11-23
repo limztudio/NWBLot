@@ -25,92 +25,8 @@ const AStringView s_UiTextVisibleSampleGlyphText = "A";
 const AStringView s_UiTextVisibleWideGlyphText = "W";
 
 
-Expected<f64> UiTextRegionGlyphCoverageArea(in DrawSnapshot snapshot){
-    f64 area = 0.0;
-    for(in DrawCommand command : snapshot.commands()){
-        if(command.material == PaintMaterial::SdfGlyph)
-            return MakeUnexpected(Failure());
-        if(command.material != PaintMaterial::Glyph)
-            continue;
-        if(command.glyphPageIndex >= snapshot.glyphPages().size() || command.indexCount % 6u != 0u || cast<usize>(command.firstIndex) + command.indexCount > snapshot.indices().size())
-            return MakeUnexpected(Failure());
-        in GlyphPage page = snapshot.glyphPages()[command.glyphPageIndex].deref();
-        in GlyphPageBinding binding = page.binding();
-        if(page.pixels().size() != cast<usize>(binding.width) * binding.height)
-            return MakeUnexpected(Failure());
-        const VectorDouble textureSize = VectorDouble(cast<f64>(binding.width), cast<f64>(binding.height), cast<f64>(binding.width), cast<f64>(binding.height));
-        for(u32 index = command.firstIndex; index < command.firstIndex + command.indexCount; index += 6u){
-            if(snapshot.indices()[index] >= snapshot.vertices().size() || snapshot.indices()[index + 2u] >= snapshot.vertices().size())
-                return MakeUnexpected(Failure());
-            in Vertex first = snapshot.vertices()[snapshot.indices()[index]];
-            in Vertex last = snapshot.vertices()[snapshot.indices()[index + 2u]];
-            const VectorDouble texel = VectorDouble(first.texCoord.x, first.texCoord.y, last.texCoord.x, last.texCoord.y) * textureSize;
-            const f64 left = texel.x;
-            const f64 top = texel.y;
-            const f64 right = texel.z;
-            const f64 bottom = texel.w;
-            if(!IsFinite(left) || !IsFinite(top) || !IsFinite(right) || !IsFinite(bottom) || left < 0.0 || top < 0.0 || right > binding.width || bottom > binding.height || right <= left || bottom <= top)
-                return MakeUnexpected(Failure());
-            const f64 width = cast<f64>(last.position.x) - cast<f64>(first.position.x);
-            const f64 height = cast<f64>(last.position.y) - cast<f64>(first.position.y);
-            if(!IsFinite(width) || !IsFinite(height) || width <= 0.0 || height <= 0.0)
-                return MakeUnexpected(Failure());
-            const f64 texelArea = (width / (right - left)) * (height / (bottom - top));
-            const u32 endX = cast<u32>(Ceil(texel.z));
-            const u32 endY = cast<u32>(Ceil(texel.w));
-            for(u32 y = cast<u32>(Floor(texel.y)); y < endY; ++y){
-                const f64 row = cast<f64>(y);
-                const f64 visibleHeight = Min(bottom, row + 1.0) - Max(top, row);
-                for(u32 x = cast<u32>(Floor(texel.x)); x < endX; ++x){
-                    const u8 coverage = page.pixels()[cast<usize>(y) * binding.width + x];
-                    if(coverage == 0u)
-                        continue;
-                    const f64 column = cast<f64>(x);
-                    const f64 visibleWidth = Min(right, column + 1.0) - Max(left, column);
-                    area += (cast<f64>(coverage) / 255.0) * visibleWidth * visibleHeight * texelArea;
-                }
-            }
-        }
-    }
-    return area;
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-f32 SampleUiSdfChannel(in SdfAtlasPage page, in u32 channel, in i32 column, in i32 row){
-    in SdfAtlasPageBinding binding = page.binding();
-    const u32 x = cast<u32>(Clamp(column, 0, cast<i32>(binding.width) - 1));
-    const u32 y = cast<u32>(Clamp(row, 0, cast<i32>(binding.height) - 1));
-    return cast<f32>(page.pixels()[(cast<usize>(y) * binding.width + x) * binding.channelCount + channel]);
-}
-
-f32 SampleUiMeasuredSdfDistance(in SharedSdfAtlasPage handle, in u32 channel, in VectorSingle texel){
-    in SdfAtlasPage page = handle.deref();
-    const VectorSingle position = texel - VectorSingle(0.5f);
-    const i32 x = cast<i32>(Floor(position.x));
-    const i32 y = cast<i32>(Floor(position.y));
-    const VectorSingle fraction = position - VectorSingle(cast<f32>(x), cast<f32>(y), 0.0f, 0.0f);
-    const VectorSingle remainder = VectorSingle(1.0f) - fraction;
-    const VectorSingle samples = VectorSingle(SampleUiSdfChannel(page, channel, x, y), SampleUiSdfChannel(page, channel, x, y + 1),
-        SampleUiSdfChannel(page, channel, x + 1, y), SampleUiSdfChannel(page, channel, x + 1, y + 1)) / VectorSingle(255.0f);
-    const VectorSingle rows = samples * VectorSingle(remainder.x) + samples.zwzw * VectorSingle(fraction.x);
-    const f32 encoded = rows.x * remainder.y + rows.y * fraction.y;
-    return ((encoded * 255.0f - 128.0f) * cast<f32>(page.binding().spreadPixels)) / 128.0f;
-}
-
-Expected<Rect> UiTextVisibleAtlasRect(in PlacedGlyph glyph, in SharedBakedFontAtlas atlas, in f32 size, in Point origin){
-    return AtlasRectangle(glyph, atlas.deref(), size, origin);
-}
-
-void SortUiGlyphIds(mut Vector<u32> ids){
-    for(usize i = 1u; i < ids.size(); ++i){
-        const u32 id = ids[i];
-        usize pos = i;
-        while(pos > 0u && ids[pos - 1u] > id){
-            ids[pos] = ids[pos - 1u];
-            --pos;
-        }
-        ids[pos] = id;
-    }
-}
 
 class UiTextRegionIntrinsicRowSource : ComboSource{
     public StringView ordinaryText = s_UiTextRegionOrdinaryRowText;
@@ -124,7 +40,6 @@ class UiTextRegionIntrinsicRowSource : ComboSource{
         return this.ordinaryText;
     }
 }
-
 
 class UiTextRegionTests : WidgetFixture{
 
@@ -368,7 +283,6 @@ class UiTextRegionTests : WidgetFixture{
     }
 }
 
-
 class TextVisibleBakedTests : TextVisibleFixture{
     public FontAtlas m_baked = FontAtlas(Name(s_UiCaseTestsUiFontsVisibleAtlas));
 
@@ -438,7 +352,6 @@ class TextVisibleBakedTests : TextVisibleFixture{
     }
 }
 
-
 class TextVisibleCoverageTests : TextVisibleFixture{
     public GlyphBitmap m_bitmap;
     public FontAtlas m_measuredBaked = FontAtlas(Name(s_UiCaseTestsUiFontsMeasuredSdf));
@@ -499,6 +412,93 @@ class TextVisibleCoverageTests : TextVisibleFixture{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+Expected<f64> UiTextRegionGlyphCoverageArea(in DrawSnapshot snapshot){
+    f64 area = 0.0;
+    for(in DrawCommand command : snapshot.commands()){
+        if(command.material == PaintMaterial::SdfGlyph)
+            return MakeUnexpected(Failure());
+        if(command.material != PaintMaterial::Glyph)
+            continue;
+        if(command.glyphPageIndex >= snapshot.glyphPages().size() || command.indexCount % 6u != 0u || cast<usize>(command.firstIndex) + command.indexCount > snapshot.indices().size())
+            return MakeUnexpected(Failure());
+        in GlyphPage page = snapshot.glyphPages()[command.glyphPageIndex].deref();
+        in GlyphPageBinding binding = page.binding();
+        if(page.pixels().size() != cast<usize>(binding.width) * binding.height)
+            return MakeUnexpected(Failure());
+        const VectorDouble textureSize = VectorDouble(cast<f64>(binding.width), cast<f64>(binding.height), cast<f64>(binding.width), cast<f64>(binding.height));
+        for(u32 index = command.firstIndex; index < command.firstIndex + command.indexCount; index += 6u){
+            if(snapshot.indices()[index] >= snapshot.vertices().size() || snapshot.indices()[index + 2u] >= snapshot.vertices().size())
+                return MakeUnexpected(Failure());
+            in Vertex first = snapshot.vertices()[snapshot.indices()[index]];
+            in Vertex last = snapshot.vertices()[snapshot.indices()[index + 2u]];
+            const VectorDouble texel = VectorDouble(first.texCoord.x, first.texCoord.y, last.texCoord.x, last.texCoord.y) * textureSize;
+            const f64 left = texel.x;
+            const f64 top = texel.y;
+            const f64 right = texel.z;
+            const f64 bottom = texel.w;
+            if(!IsFinite(left) || !IsFinite(top) || !IsFinite(right) || !IsFinite(bottom) || left < 0.0 || top < 0.0 || right > binding.width || bottom > binding.height || right <= left || bottom <= top)
+                return MakeUnexpected(Failure());
+            const f64 width = cast<f64>(last.position.x) - cast<f64>(first.position.x);
+            const f64 height = cast<f64>(last.position.y) - cast<f64>(first.position.y);
+            if(!IsFinite(width) || !IsFinite(height) || width <= 0.0 || height <= 0.0)
+                return MakeUnexpected(Failure());
+            const f64 texelArea = (width / (right - left)) * (height / (bottom - top));
+            const u32 endX = cast<u32>(Ceil(texel.z));
+            const u32 endY = cast<u32>(Ceil(texel.w));
+            for(u32 y = cast<u32>(Floor(texel.y)); y < endY; ++y){
+                const f64 row = cast<f64>(y);
+                const f64 visibleHeight = Min(bottom, row + 1.0) - Max(top, row);
+                for(u32 x = cast<u32>(Floor(texel.x)); x < endX; ++x){
+                    const u8 coverage = page.pixels()[cast<usize>(y) * binding.width + x];
+                    if(coverage == 0u)
+                        continue;
+                    const f64 column = cast<f64>(x);
+                    const f64 visibleWidth = Min(right, column + 1.0) - Max(left, column);
+                    area += (cast<f64>(coverage) / 255.0) * visibleWidth * visibleHeight * texelArea;
+                }
+            }
+        }
+    }
+    return area;
+}
+
+f32 SampleUiSdfChannel(in SdfAtlasPage page, in u32 channel, in i32 column, in i32 row){
+    in SdfAtlasPageBinding binding = page.binding();
+    const u32 x = cast<u32>(Clamp(column, 0, cast<i32>(binding.width) - 1));
+    const u32 y = cast<u32>(Clamp(row, 0, cast<i32>(binding.height) - 1));
+    return cast<f32>(page.pixels()[(cast<usize>(y) * binding.width + x) * binding.channelCount + channel]);
+}
+
+f32 SampleUiMeasuredSdfDistance(in SharedSdfAtlasPage handle, in u32 channel, in VectorSingle texel){
+    in SdfAtlasPage page = handle.deref();
+    const VectorSingle position = texel - VectorSingle(0.5f);
+    const i32 x = cast<i32>(Floor(position.x));
+    const i32 y = cast<i32>(Floor(position.y));
+    const VectorSingle fraction = position - VectorSingle(cast<f32>(x), cast<f32>(y), 0.0f, 0.0f);
+    const VectorSingle remainder = VectorSingle(1.0f) - fraction;
+    const VectorSingle samples = VectorSingle(SampleUiSdfChannel(page, channel, x, y), SampleUiSdfChannel(page, channel, x, y + 1),
+        SampleUiSdfChannel(page, channel, x + 1, y), SampleUiSdfChannel(page, channel, x + 1, y + 1)) / VectorSingle(255.0f);
+    const VectorSingle rows = samples * VectorSingle(remainder.x) + samples.zwzw * VectorSingle(fraction.x);
+    const f32 encoded = rows.x * remainder.y + rows.y * fraction.y;
+    return ((encoded * 255.0f - 128.0f) * cast<f32>(page.binding().spreadPixels)) / 128.0f;
+}
+
+Expected<Rect> UiTextVisibleAtlasRect(in PlacedGlyph glyph, in SharedBakedFontAtlas atlas, in f32 size, in Point origin){
+    return AtlasRectangle(glyph, atlas.deref(), size, origin);
+}
+
+void SortUiGlyphIds(mut Vector<u32> ids){
+    for(usize i = 1u; i < ids.size(); ++i){
+        const u32 id = ids[i];
+        usize pos = i;
+        while(pos > 0u && ids[pos - 1u] > id){
+            ids[pos] = ids[pos - 1u];
+            --pos;
+        }
+        ids[pos] = id;
+    }
+}
 
 usize CountUiTextRegionGlyphIndices(in DrawSnapshot snapshot){
     usize count = 0u;
@@ -602,10 +602,6 @@ Rect ComputeUiTextVisibleRasterFringe(in Rect raster, in Rect outline){
     }
     return Rect();
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyUiTextRegionTests_StandaloneMultilineLabelClipsNestedBoundsAfterResizeAcrossDisplayScales(mut UiTextRegionTests self){
     Label label = Label();
@@ -1313,10 +1309,6 @@ void VerifyTextVisibleBakedTests_VisibleMixedCapacityFailurePreservesPriorPageVe
     EXPECT_TRUE(upgraded.sdfPages().empty());
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyTextVisibleCoverageTests_MoreThan4096DistinctHiddenHangulDoNotExhaustTheVisiblePrefixCache(mut TextVisibleCoverageTests self){
     const usize hiddenCount = s_GlyphAtlasMaxGlyphs + 1u;
     String text = "A\n";
@@ -1720,42 +1712,66 @@ void VerifyTextVisibleCoverageTests_NaturalSdfMeasurementExcludesTransparentSpre
     EXPECT_GT(visibleSamples, 100u);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST_F(UiTextRegionTests, StandaloneMultilineLabelClipsNestedBoundsAfterResizeAcrossDisplayScales, VerifyUiTextRegionTests_StandaloneMultilineLabelClipsNestedBoundsAfterResizeAcrossDisplayScales)
+
 NWB_ADHD_GTEST_F(UiTextRegionTests, EmptyAndFailedStandaloneLabelRegionsRestoreClipBeforePaintingASibling, VerifyUiTextRegionTests_EmptyAndFailedStandaloneLabelRegionsRestoreClipBeforePaintingASibling)
+
 NWB_ADHD_GTEST_F(UiTextRegionTests, OversizedButtonTextKeepsAsymmetricPaddingWithoutShrinkingItsSkinOrHitTarget, VerifyUiTextRegionTests_OversizedButtonTextKeepsAsymmetricPaddingWithoutShrinkingItsSkinOrHitTarget)
+
 NWB_ADHD_GTEST_F(UiTextRegionTests, EmptyControlTextRegionsDoNotLeakIntoPaddingOrClipTheFollowingSibling, VerifyUiTextRegionTests_EmptyControlTextRegionsDoNotLeakIntoPaddingOrClipTheFollowingSibling)
+
 NWB_ADHD_GTEST_F(UiTextRegionTests, CheckboxGlyphOverhangCannotEnterIndicatorReservationOrEscapeAncestorClip, VerifyUiTextRegionTests_CheckboxGlyphOverhangCannotEnterIndicatorReservationOrEscapeAncestorClip)
+
 NWB_ADHD_GTEST_F(UiTextRegionTests, OversizedSelectableTextKeepsAllFourPaddingEdgesAndFullRowHitBounds, VerifyUiTextRegionTests_OversizedSelectableTextKeepsAllFourPaddingEdgesAndFullRowHitBounds)
+
 NWB_ADHD_GTEST_F(UiTextRegionTests, SelectableCentersWithinAsymmetricVerticalPaddingInsteadOfTheWholeRow, VerifyUiTextRegionTests_SelectableCentersWithinAsymmetricVerticalPaddingInsteadOfTheWholeRow)
+
 NWB_ADHD_GTEST_F(UiTextRegionTests, WindowTitleInkKeepsPaddingAndCollapseReservationWhenViewportShrinks, VerifyUiTextRegionTests_WindowTitleInkKeepsPaddingAndCollapseReservationWhenViewportShrinks)
+
 NWB_ADHD_GTEST_F(UiTextRegionTests, ContentNavigationHeightPreservesCoverageThatFixed32PixelRowsCut, VerifyUiTextRegionTests_ContentNavigationHeightPreservesCoverageThatFixed32PixelRowsCut)
+
 NWB_ADHD_GTEST_F(UiTextRegionTests, ContentRowsPreserveDescendersStackedAccentsMultilineAndKoreanFallbackCoverage, VerifyUiTextRegionTests_ContentRowsPreserveDescendersStackedAccentsMultilineAndKoreanFallbackCoverage)
+
 NWB_ADHD_GTEST_F(UiTextRegionTests, NaturalEditHeightKeepsCombiningAndFallbackInkOutsideLogicalLineMetrics, VerifyUiTextRegionTests_NaturalEditHeightKeepsCombiningAndFallbackInkOutsideLogicalLineMetrics)
+
 NWB_ADHD_GTEST_F(UiTextRegionTests, IntrinsicListAndComboRowsPreserveActualMarksFallbackAndMultilineCoverage, VerifyUiTextRegionTests_IntrinsicListAndComboRowsPreserveActualMarksFallbackAndMultilineCoverage)
+
 NWB_ADHD_GTEST_F(UiTextRegionTests, IntrinsicRowsShrinkAfterSourceFontSizeAndResolvedStyleChanges, VerifyUiTextRegionTests_IntrinsicRowsShrinkAfterSourceFontSizeAndResolvedStyleChanges)
+
 NWB_ADHD_GTEST_F(UiTextRegionTests, SelectableMetricsUseEveryStatePaddingAndMinimumWithoutHoverMovement, VerifyUiTextRegionTests_SelectableMetricsUseEveryStatePaddingAndMinimumWithoutHoverMovement)
 
 NWB_ADHD_GTEST_F(TextVisibleBakedTests, PaddedSdfPlaneIntersectingClipSurvivesWhenShapingOutlineIsOutside, VerifyTextVisibleBakedTests_PaddedSdfPlaneIntersectingClipSurvivesWhenShapingOutlineIsOutside)
+
 NWB_ADHD_GTEST_F(TextVisibleBakedTests, EmptyClipAndZeroAlphaAdmitNoBakedImagesOrGeometry, VerifyTextVisibleBakedTests_EmptyClipAndZeroAlphaAdmitNoBakedImagesOrGeometry)
+
 NWB_ADHD_GTEST_F(TextVisibleBakedTests, SixtyThreePriorImagesLeaveOneSlotForOnlyTheVisibleBakedGroup, VerifyTextVisibleBakedTests_SixtyThreePriorImagesLeaveOneSlotForOnlyTheVisibleBakedGroup)
+
 NWB_ADHD_GTEST_F(TextVisibleBakedTests, FullyOutsideBakedGroupsRemainAbsentUntilALaterVisiblePaint, VerifyTextVisibleBakedTests_FullyOutsideBakedGroupsRemainAbsentUntilALaterVisiblePaint)
+
 NWB_ADHD_GTEST_F(TextVisibleBakedTests, VisibleMixedCapacityFailurePreservesPriorPageVersionBindingsAndGeometry, VerifyTextVisibleBakedTests_VisibleMixedCapacityFailurePreservesPriorPageVersionBindingsAndGeometry)
 
 NWB_ADHD_GTEST_F(TextVisibleCoverageTests, MoreThan4096DistinctHiddenHangulDoNotExhaustTheVisiblePrefixCache, VerifyTextVisibleCoverageTests_MoreThan4096DistinctHiddenHangulDoNotExhaustTheVisiblePrefixCache)
+
 NWB_ADHD_GTEST_F(TextVisibleCoverageTests, HiddenGlyphKeepsTheWarmPageExactUntilItIsRevealed, VerifyTextVisibleCoverageTests_HiddenGlyphKeepsTheWarmPageExactUntilItIsRevealed)
+
 NWB_ADHD_GTEST_F(TextVisibleCoverageTests, HiddenOversizedGlyphCannotRejectOrUpgradePriorVisibleCoverage, VerifyTextVisibleCoverageTests_HiddenOversizedGlyphCannotRejectOrUpgradePriorVisibleCoverage)
+
 NWB_ADHD_GTEST_F(TextVisibleCoverageTests, EmptyIntersectedClipAndZeroAlphaNeverPrepareOversizedCoverage, VerifyTextVisibleCoverageTests_EmptyIntersectedClipAndZeroAlphaNeverPrepareOversizedCoverage)
+
 NWB_ADHD_GTEST_F(TextVisibleCoverageTests, FractionalUnequalDpiKeepsAHintedRasterSliverOutsideTheShapedOutline, VerifyTextVisibleCoverageTests_FractionalUnequalDpiKeepsAHintedRasterSliverOutsideTheShapedOutline)
+
 NWB_ADHD_GTEST_F(TextVisibleCoverageTests, FractionalOriginPlacesNativeCoverageOnThePhysicalPixelGrid, VerifyTextVisibleCoverageTests_FractionalOriginPlacesNativeCoverageOnThePhysicalPixelGrid)
+
 NWB_ADHD_GTEST_F(TextVisibleCoverageTests, NegativeBearingRemainsVisibleToTheLeftOfTheGlyphOrigin, VerifyTextVisibleCoverageTests_NegativeBearingRemainsVisibleToTheLeftOfTheGlyphOrigin)
+
 NWB_ADHD_GTEST_F(TextVisibleCoverageTests, CombiningMarkOnlyClipKeepsItsOffsetGlyphAndExcludesTheBaseQuad, VerifyTextVisibleCoverageTests_CombiningMarkOnlyClipKeepsItsOffsetGlyphAndExcludesTheBaseQuad)
+
 NWB_ADHD_GTEST_F(TextVisibleCoverageTests, SixtyThreePriorImagesLeaveRoomForOnlyTheVisibleCoverageFace, VerifyTextVisibleCoverageTests_SixtyThreePriorImagesLeaveRoomForOnlyTheVisibleCoverageFace)
+
 NWB_ADHD_GTEST_F(TextVisibleCoverageTests, OversizedMeasurementDoesNotAdmitAtlasCoverage, VerifyTextVisibleCoverageTests_OversizedMeasurementDoesNotAdmitAtlasCoverage)
+
 NWB_ADHD_GTEST_F(TextVisibleCoverageTests, NaturalMeasurementContainsNativeMarksFallbackAndEveryTestedPixelPhase, VerifyTextVisibleCoverageTests_NaturalMeasurementContainsNativeMarksFallbackAndEveryTestedPixelPhase)
+
 NWB_ADHD_GTEST_F(TextVisibleCoverageTests, NaturalSdfMeasurementExcludesTransparentSpreadAndContainsShaderCoverage, VerifyTextVisibleCoverageTests_NaturalSdfMeasurementExcludesTransparentSpreadAndContainsShaderCoverage)
 
 

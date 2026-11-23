@@ -12,6 +12,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/shadow/sw_binding_slots.h>"), cpp_name("NWB_SW_SHADOW_GROUP_SIZE")]
+extern const u32 s_ShaderSwShadowGroupSize;
+[cpp_header("<impl/assets/graphics/shadow/sw_binding_slots.h>"), cpp_name("NWB_SW_SHADOW_TRACE_GROUP")]
+extern const u32 s_ShaderSwShadowTraceGroup;
+[cpp_header("<impl/assets/graphics/shadow/sw_binding_slots.h>"), cpp_name("NWB_SW_SHADOW_COARSE_FACTOR")]
+extern const u32 s_ShaderSwShadowCoarseFactor;
+[cpp_header("<impl/assets/graphics/shadow/sw_binding_slots.h>"), cpp_name("NWB_SW_SHADOW_EDGE_RECORD_WORDS")]
+extern const u32 s_ShaderSwShadowEdgeRecordWords;
+
 const Name s_ShadowVisibilityTargetName = "engine/shadow/visibility";
 const Name s_ShadowCoarseTransmittanceTargetName = "engine/shadow/coarse_transmittance";
 const Name s_ShadowSoftHalfATargetName = "engine/shadow/soft_half_a";
@@ -46,133 +55,6 @@ class SoftwareAdaptiveShadowGrid{
     public u32 coarseHeight = 0u;
     public u32 coarseGroupsX = 0u;
     public u32 coarseGroupsY = 0u;
-}
-
-
-b8 IsSupportedShadowReceiverFactor(in u32 receiverFactor){
-    return receiverFactor == s_ShadowReceiverFactorHalf || receiverFactor == s_ShadowReceiverFactorQuarter;
-}
-
-ShadowTargetGridExtents ResolveShadowTargetGridExtents(in u32 width, in u32 height, in u32 coarseFactor, in u32 receiverFactor){
-    ShadowTargetGridExtents extents;
-    extents.coarseWidth = DivideUpWrappingU32(width, coarseFactor);
-    extents.coarseHeight = DivideUpWrappingU32(height, coarseFactor);
-    extents.softHalfWidth = DivideUpWrappingU32(width, receiverFactor);
-    extents.softHalfHeight = DivideUpWrappingU32(height, receiverFactor);
-    return extents;
-}
-
-SoftwareAdaptiveShadowGrid ResolveSoftwareAdaptiveShadowGrid(in u32 width, in u32 height, in u32 coarseFactor, in u32 groupSize){
-    SoftwareAdaptiveShadowGrid grid;
-    grid.fullGroupsX = DivideUp(width, groupSize);
-    grid.fullGroupsY = DivideUp(height, groupSize);
-    grid.coarseWidth = DivideUpWrappingU32(width, coarseFactor);
-    grid.coarseHeight = DivideUpWrappingU32(height, coarseFactor);
-    grid.coarseGroupsX = DivideUp(grid.coarseWidth, groupSize);
-    grid.coarseGroupsY = DivideUp(grid.coarseHeight, groupSize);
-    return grid;
-}
-
-
-void PopulateSwShadowViewportPush(
-    in u32 width,
-    in u32 height,
-    in u32 coarseWidth,
-    in u32 coarseHeight,
-    mut SwShadowHeapPushConstants outPush
-){
-    outPush.width = width;
-    outPush.height = height;
-    outPush.coarseWidth = coarseWidth;
-    outPush.coarseHeight = coarseHeight;
-}
-
-void PopulateSwShadowClassifyPush(
-    in u32 width,
-    in u32 height,
-    in u32 coarseWidth,
-    in u32 coarseHeight,
-    in u32 edgeCapacity,
-    mut SwShadowHeapPushConstants outPush
-){
-    PopulateSwShadowViewportPush(width, height, coarseWidth, coarseHeight, outPush);
-    outPush.edgeCapacity = edgeCapacity;
-}
-
-void PopulateSwShadowBuildArgsPush(in u32 traceGroupSize, in u32 edgeCapacity, mut SwShadowHeapPushConstants outPush){
-    outPush.traceGroupSize = traceGroupSize;
-    outPush.edgeCapacity = edgeCapacity;
-}
-
-void PopulateSwShadowIndirectTracePush(in u32 width, in u32 height, in u32 traceGroupSize, mut SwShadowHeapPushConstants outPush){
-    outPush.width = width;
-    outPush.height = height;
-    outPush.traceGroupSize = traceGroupSize;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[cpp_header("<impl/assets/graphics/shadow/sw_binding_slots.h>"), cpp_name("NWB_SW_SHADOW_GROUP_SIZE")]
-extern const u32 s_ShaderSwShadowGroupSize;
-
-[cpp_header("<impl/assets/graphics/shadow/sw_binding_slots.h>"), cpp_name("NWB_SW_SHADOW_TRACE_GROUP")]
-extern const u32 s_ShaderSwShadowTraceGroup;
-
-[cpp_header("<impl/assets/graphics/shadow/sw_binding_slots.h>"), cpp_name("NWB_SW_SHADOW_COARSE_FACTOR")]
-extern const u32 s_ShaderSwShadowCoarseFactor;
-
-[cpp_header("<impl/assets/graphics/shadow/sw_binding_slots.h>"), cpp_name("NWB_SW_SHADOW_EDGE_RECORD_WORDS")]
-extern const u32 s_ShaderSwShadowEdgeRecordWords;
-
-u32 EncodeShadowHistoryValidFlag(in b8 historyReadable){
-    if(historyReadable)
-        return 1u;
-    return 0u;
-}
-
-b8 CanUseSoftwareTransparentSamplingHistory(
-    in SoftwareTransparentShadowTraceInputs inputs,
-    in b8 softTransparentTemporalReady,
-    in b8 samplingHistoryUsable
-){
-    return inputs.temporalHistoryReadable && softTransparentTemporalReady && samplingHistoryUsable;
-}
-
-usize SelectSoftwareTransparentSamplingPipelineIndex(in b8 samplingHistoryUsable){
-    if(samplingHistoryUsable)
-        return 1u;
-    return 0u;
-}
-
-b8 CreateShadowVisibilityTarget(mut GraphicsRuntime graphics, in TextureDesc sourceDesc, in Name name, in StringView message, mut TextureHandle texture){
-    TextureDesc desc = sourceDesc;
-    desc.setName(name);
-    const Expected<TextureHandle> result = graphics.createTexture(desc);
-    if(!result.has_value()){
-        texture.reset();
-        error("{}", message);
-        return false;
-    }
-    texture = result.value();
-    return true;
-}
-
-SwShadowHeapPushConstants MakeSoftwareShadowFramePush(in RendererRayTracingState state, in DeferredFrameTargets targets){
-    return MakeSwShadowHeapPushConstants(
-        state.sceneBvh.m_sceneBvhInstanceCount,
-        targets.bindless.slotsBufferDescriptor.slot(),
-        state.sceneBvh.m_rayTraceMaterialContextSlotsHeapHandle.slot(),
-        targets.bindless.shadowVisibilityStorage.slot(),
-        targets.bindless.shadowCoarseTransmittanceStorage.slot(),
-        targets.bindless.shadowSoftHalfAStorage.slot(),
-        targets.bindless.transparentSoftHalfStorage.slot(),
-        state.shadow.m_swShadowEdgeCounterHeapHandle.slot(),
-        state.shadow.m_swShadowEdgeListHeapHandle.slot(),
-        state.shadow.m_swShadowIndirectArgsHeapHandle.slot(),
-        targets.shadowReceiverFactor
-    );
 }
 
 class ShadowReprojectMergeHeapResources{
@@ -250,6 +132,119 @@ class SoftShadowTemporalMergeRecorder : NoCopy{
     }
 
     public void record(in ShadowReprojectMergeHeapResources resources, in b8 graphOwnsSoftTraceInputState, in b8 graphOwnsMergeCurrentGeometryEntryState, in b8 graphOwnsMergeStaticReadEntryStates, in b8 graphOwnsMergeTemporalEntryStates)const;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsSupportedShadowReceiverFactor(in u32 receiverFactor){
+    return receiverFactor == s_ShadowReceiverFactorHalf || receiverFactor == s_ShadowReceiverFactorQuarter;
+}
+
+ShadowTargetGridExtents ResolveShadowTargetGridExtents(in u32 width, in u32 height, in u32 coarseFactor, in u32 receiverFactor){
+    ShadowTargetGridExtents extents;
+    extents.coarseWidth = DivideUpWrappingU32(width, coarseFactor);
+    extents.coarseHeight = DivideUpWrappingU32(height, coarseFactor);
+    extents.softHalfWidth = DivideUpWrappingU32(width, receiverFactor);
+    extents.softHalfHeight = DivideUpWrappingU32(height, receiverFactor);
+    return extents;
+}
+
+SoftwareAdaptiveShadowGrid ResolveSoftwareAdaptiveShadowGrid(in u32 width, in u32 height, in u32 coarseFactor, in u32 groupSize){
+    SoftwareAdaptiveShadowGrid grid;
+    grid.fullGroupsX = DivideUp(width, groupSize);
+    grid.fullGroupsY = DivideUp(height, groupSize);
+    grid.coarseWidth = DivideUpWrappingU32(width, coarseFactor);
+    grid.coarseHeight = DivideUpWrappingU32(height, coarseFactor);
+    grid.coarseGroupsX = DivideUp(grid.coarseWidth, groupSize);
+    grid.coarseGroupsY = DivideUp(grid.coarseHeight, groupSize);
+    return grid;
+}
+
+void PopulateSwShadowViewportPush(
+    in u32 width,
+    in u32 height,
+    in u32 coarseWidth,
+    in u32 coarseHeight,
+    mut SwShadowHeapPushConstants outPush
+){
+    outPush.width = width;
+    outPush.height = height;
+    outPush.coarseWidth = coarseWidth;
+    outPush.coarseHeight = coarseHeight;
+}
+
+void PopulateSwShadowClassifyPush(
+    in u32 width,
+    in u32 height,
+    in u32 coarseWidth,
+    in u32 coarseHeight,
+    in u32 edgeCapacity,
+    mut SwShadowHeapPushConstants outPush
+){
+    PopulateSwShadowViewportPush(width, height, coarseWidth, coarseHeight, outPush);
+    outPush.edgeCapacity = edgeCapacity;
+}
+
+void PopulateSwShadowBuildArgsPush(in u32 traceGroupSize, in u32 edgeCapacity, mut SwShadowHeapPushConstants outPush){
+    outPush.traceGroupSize = traceGroupSize;
+    outPush.edgeCapacity = edgeCapacity;
+}
+
+void PopulateSwShadowIndirectTracePush(in u32 width, in u32 height, in u32 traceGroupSize, mut SwShadowHeapPushConstants outPush){
+    outPush.width = width;
+    outPush.height = height;
+    outPush.traceGroupSize = traceGroupSize;
+}
+
+u32 EncodeShadowHistoryValidFlag(in b8 historyReadable){
+    if(historyReadable)
+        return 1u;
+    return 0u;
+}
+
+b8 CanUseSoftwareTransparentSamplingHistory(
+    in SoftwareTransparentShadowTraceInputs inputs,
+    in b8 softTransparentTemporalReady,
+    in b8 samplingHistoryUsable
+){
+    return inputs.temporalHistoryReadable && softTransparentTemporalReady && samplingHistoryUsable;
+}
+
+usize SelectSoftwareTransparentSamplingPipelineIndex(in b8 samplingHistoryUsable){
+    if(samplingHistoryUsable)
+        return 1u;
+    return 0u;
+}
+
+b8 CreateShadowVisibilityTarget(mut GraphicsRuntime graphics, in TextureDesc sourceDesc, in Name name, in StringView message, mut TextureHandle texture){
+    TextureDesc desc = sourceDesc;
+    desc.setName(name);
+    const Expected<TextureHandle> result = graphics.createTexture(desc);
+    if(!result.has_value()){
+        texture.reset();
+        error("{}", message);
+        return false;
+    }
+    texture = result.value();
+    return true;
+}
+
+SwShadowHeapPushConstants MakeSoftwareShadowFramePush(in RendererRayTracingState state, in DeferredFrameTargets targets){
+    return MakeSwShadowHeapPushConstants(
+        state.sceneBvh.m_sceneBvhInstanceCount,
+        targets.bindless.slotsBufferDescriptor.slot(),
+        state.sceneBvh.m_rayTraceMaterialContextSlotsHeapHandle.slot(),
+        targets.bindless.shadowVisibilityStorage.slot(),
+        targets.bindless.shadowCoarseTransmittanceStorage.slot(),
+        targets.bindless.shadowSoftHalfAStorage.slot(),
+        targets.bindless.transparentSoftHalfStorage.slot(),
+        state.shadow.m_swShadowEdgeCounterHeapHandle.slot(),
+        state.shadow.m_swShadowEdgeListHeapHandle.slot(),
+        state.shadow.m_swShadowIndirectArgsHeapHandle.slot(),
+        targets.shadowReceiverFactor
+    );
 }
 
 b8 ShadowVisibilityTargetBuilder::build(mut DeferredFrameTargets targets){
@@ -403,10 +398,6 @@ b8 ShadowVisibilityTargetBuilder::build(mut DeferredFrameTargets targets){
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void SoftShadowTemporalMergeRecorder::record(
     in ShadowReprojectMergeHeapResources resources,
     in b8 graphOwnsSoftTraceInputState,
@@ -461,10 +452,6 @@ void SoftShadowTemporalMergeRecorder::record(
     this.m_commandList.setPushConstants(push);
     this.m_commandList.dispatch(this.m_groupsX, this.m_groupsY, 1u);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void RecordSoftwareAdaptiveShadow(in Optional<in GraphOwnedAdaptiveShadowPlan> plan, in RendererRayTracingState state, mut CommandList commandList, mut DeferredFrameTargets targets, mut GpuDescriptorHeap heap){
 
@@ -558,10 +545,6 @@ void RecordSoftwareAdaptiveShadow(in Optional<in GraphOwnedAdaptiveShadowPlan> p
         commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void RecordSoftwareTransparentShadowTrace(in SoftwareTransparentShadowTraceInputs inputs, in RendererRayTracingState state, mut CommandList commandList, mut DeferredFrameTargets targets, mut GpuDescriptorHeap heap){
     if(!inputs.graphOwnsOpaqueToTransparentBoundary){

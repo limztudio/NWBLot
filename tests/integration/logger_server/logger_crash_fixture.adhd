@@ -17,7 +17,6 @@
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/test_context.adhd>
 #include <tests/integration/crash/crash_test_paths.adhd>
-
 #include <tests/integration/logger_server/name_cases.adhd>
 
 
@@ -29,42 +28,14 @@ extern class CrashIngestConfig{
     Path storageDirectory;
     CrashRetentionConfig retention;
 };
-
 [cpp_header("<logger/server/crash_ingest.h>"), cpp_name("::NWB::Log::CrashIngestResult")]
 extern class CrashIngestResult{
     PlatformOwnedString message;
     LogType type;
     b8 accepted;
 };
-
 [cpp_header("<logger/server/crash_ingest.h>"), cpp_name("::NWB::Log::ProcessCrashUpload")]
 extern CrashIngestResult ProcessCrashUpload(mut HeapStorage storage, in Path archive, in CrashIngestConfig config);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-enum<u8> ManifestEventField{
-    Include,
-    Omit
-}
-
-class ManifestTriggerFields{
-    public StringView category = "";
-    public StringView expression = "";
-    public StringView message = "";
-    public StringView file = "";
-    public u64 line = 0u;
-}
-
-b8 CrashIngestMessageContains(in CrashIngestResult result, in StringView needle){
-    const auto nativeText = AppendPlatformText(PlatformTextLiteral(""), needle);
-    return Contains(result.message, nativeText);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 const u32 s_ShutdownMessageCount = 32u;
 const StringView s_TestSourceFilename = "suite.adhd.cpp";
@@ -81,10 +52,28 @@ const StringView s_Signal = "signal";
 const StringView s_ManualDump = "manual_dump";
 const StringView s_Windows = "windows";
 const StringView s_InvalidArchiveHeader = "NWBCRASHPKG 0\n";
-
 const Name s_ArchiveScratch = s_LoggerCrashTestNameTestsIntegrationLoggerServerArchiveScratch;
 const Name s_AssertChildInstallArena = s_LoggerCrashTestNameTestsIntegrationLoggerServerAssertChildInstall;
 const Name s_RecoverableErrorInstallArena = s_LoggerCrashTestNameTestsIntegrationLoggerServerRecoverableErrorInstall;
+type LoggerProtocolTests = LoggerServerCrash;
+type LoggerTelemetryPublication = LoggerServerCrash;
+
+enum<u8> ManifestEventField{
+    Include,
+    Omit
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ManifestTriggerFields{
+    public StringView category = "";
+    public StringView expression = "";
+    public StringView message = "";
+    public StringView file = "";
+    public u64 line = 0u;
+}
 
 [arena, ordered]
 class LoggerServerCrash{
@@ -92,15 +81,20 @@ class LoggerServerCrash{
     private LoggerRegistrationGuard m_registration = LoggerRegistrationGuard(this.m_logger);
 }
 
-type LoggerProtocolTests = LoggerServerCrash;
-type LoggerTelemetryPublication = LoggerServerCrash;
-
 [arena, ordered]
 class LoggerProducerContracts{
     private CapturingLogger m_logger;
     private LoggerRegistrationGuard m_registration = LoggerRegistrationGuard(this.m_logger, LoggerBreakPolicy::ReportOnly);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 CrashIngestMessageContains(in CrashIngestResult result, in StringView needle){
+    const auto nativeText = AppendPlatformText(PlatformTextLiteral(""), needle);
+    return Contains(result.message, nativeText);
+}
 
 b8 IsWindowsLoggerCrashPlatform(){
     return s_IsWindowsLoggerPlatform;
@@ -229,8 +223,12 @@ CrashIngestResult ProcessCrashArchive(mut HeapStorage testArena, in StringView t
     return ProcessCrashArchive(testArena, testGroup, stem, archive, config);
 }
 
-b8 ReadServerSymbolicationText(in StringView testGroup, in StringView stem, mut String outReport){
-    return ReadTextFile(ExtractedPackageDirectory(testGroup, stem) / s_ServerSymbolicationFileName, outReport).has_value();
+Expected<String> ReadServerSymbolicationText(in StringView testGroup, in StringView stem){
+    String report = "";
+    const Expected<void, ErrorCode> read = ReadTextFile(ExtractedPackageDirectory(testGroup, stem) / s_ServerSymbolicationFileName, report);
+    if(!read.has_value())
+        return MakeUnexpected(Failure());
+    return report;
 }
 
 

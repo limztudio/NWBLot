@@ -40,15 +40,17 @@ b8 EncodeBuiltAssetBytes(
         return false;
 
     usize reserveBytes = sizeof(BuiltAssetFileHeader);
-    if(AddBinaryStringReserveBytes(reserveBytes, sourcePathText)){
-        for(const BuiltAssetEncodeEntry& entry : entries){
-            const AStringView virtualPathText = entry.virtualPath.resolvedText();
-            usize entryBytes = sizeof(u32) + sizeof(NameHash) * 2u + sizeof(u64) * 2u + entry.payloadBytes.size();
-            if(AddBinaryStringReserveBytes(entryBytes, virtualPathText))
-                (void)AddBinaryReserveBytes(reserveBytes, entryBytes);
-        }
-        outBytes.reserve(reserveBytes);
+    b8 canReserve = AddBinaryStringReserveBytes(reserveBytes, sourcePathText);
+    for(const BuiltAssetEncodeEntry& entry : entries){
+        if(!canReserve)
+            break;
+        const AStringView virtualPathText = entry.virtualPath.resolvedText();
+        usize entryBytes = sizeof(u32) + sizeof(NameHash) * 2u + sizeof(u64) * 2u + entry.payloadBytes.size();
+        if(!AddBinaryStringReserveBytes(entryBytes, virtualPathText) || !AddBinaryReserveBytes(reserveBytes, entryBytes))
+            canReserve = false;
     }
+    if(canReserve)
+        outBytes.reserve(reserveBytes);
 
     const BuiltAssetFileHeader placeholderHeader{};
     AppendPOD(outBytes, placeholderHeader);

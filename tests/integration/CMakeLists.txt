@@ -103,7 +103,7 @@ endif()
 if(TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
     add_test(NAME nwb_pipeline_cli_integration COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/pipeline_cli_tests.py" --dependency-computer "$<TARGET_FILE:nwb_dependency_computer>" --asset-builder "$<TARGET_FILE:nwb_asset_builder>"
             --asset-gatherer "$<TARGET_FILE:nwb_asset_gatherer>" --pipeline-launcher "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --repo-root "${PROJECT_SOURCE_DIR}")
-    set_tests_properties(nwb_pipeline_cli_integration PROPERTIES TIMEOUT ${_nwb_cli_integration_timeout_seconds})
+    set_tests_properties(nwb_pipeline_cli_integration PROPERTIES TIMEOUT "$<IF:$<CONFIG:dbg>,600,${_nwb_cli_integration_timeout_seconds}>")
 endif()
 
 if(Python3_Interpreter_FOUND)

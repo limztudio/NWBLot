@@ -11,10 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-StringView GiTestProjectName(){
-    return "GiTestSmokeProject";
-}
-
 const SmokeMeshRef s_GiGroundMesh = "project/meshes/shadow_plane";
 const SmokeMaterialRef s_GiGroundOpaqueMaterial = "project/smoke/transparent_multi/materials/ground";
 
@@ -323,6 +319,10 @@ class GiTestSmokeProjectImpl : IProjectEntryCallbacks, ISmokeCapturePredicate{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+StringView GiTestProjectName(){
+    return "GiTestSmokeProject";
+}
 
 ProjectFrameClientSize GetProjectFrameClientSize(){
     return ProjectFrameClientSize(1280, 900);

@@ -237,8 +237,8 @@ public:
         if(m_hasOverflow.load(MemoryOrder::acquire)){
             NothrowScopedLock lock(m_channelsMutex);
             for(IMessageChannel* const channel : m_overflowChannels){
-                if(channel)
-                    (void)channel->swapBuffers();
+                if(channel && channel->swapBuffers())
+                    continue;
             }
         }
     }

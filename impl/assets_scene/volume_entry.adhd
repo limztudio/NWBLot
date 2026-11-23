@@ -8,6 +8,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+type TransformComponentCodec = TypedComponentAssetCodec<TransformComponentAsset>;
+type CameraComponentCodec = TypedComponentAssetCodec<CameraComponentAsset>;
+type LightComponentCodec = TypedComponentAssetCodec<LightComponentAsset>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class SortedSceneAssetDependencyEntry{
     public Name nickname = s_NameNone;
     public Name assetName = s_NameNone;
@@ -57,8 +65,6 @@ register_asset SceneAsset using CompositeRootRegistration<SceneAsset>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-type TransformComponentCodec = TypedComponentAssetCodec<TransformComponentAsset>;
-
 [cook_entry("component", s_TransformDiagnosticPrefix, ParseTransformComponentCookMetadata, document_and_value, log_failure, TransformComponentCodec)]
 Expected<TransformComponentAsset> CookTransformVolumeEntry(in TransformComponentCookEntry entry){
     return BuildComponentAssetFromEntry<TransformComponentAsset, TransformComponentCookEntry>(entry);
@@ -68,8 +74,6 @@ b8 ExtractTransformComponentDependencies(in CookDependencyItemContext context, m
     return ReadCookDependencyEntry<TransformComponentCookEntry>(context, s_TransformDiagnosticPrefix, ParseTransformComponentCookMetadata).has_value();
 }
 
-type CameraComponentCodec = TypedComponentAssetCodec<CameraComponentAsset>;
-
 [cook_entry("component", s_CameraDiagnosticPrefix, ParseCameraComponentCookMetadata, document_and_value, log_failure, CameraComponentCodec)]
 Expected<CameraComponentAsset> CookCameraVolumeEntry(in CameraComponentCookEntry entry){
     return BuildComponentAssetFromEntry<CameraComponentAsset, CameraComponentCookEntry>(entry);
@@ -78,8 +82,6 @@ Expected<CameraComponentAsset> CookCameraVolumeEntry(in CameraComponentCookEntry
 b8 ExtractCameraComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
     return ReadCookDependencyEntry<CameraComponentCookEntry>(context, s_CameraDiagnosticPrefix, ParseCameraComponentCookMetadata).has_value();
 }
-
-type LightComponentCodec = TypedComponentAssetCodec<LightComponentAsset>;
 
 [cook_entry("component", s_LightDiagnosticPrefix, ParseLightComponentCookMetadata, document_and_value, log_failure, LightComponentCodec)]
 Expected<LightComponentAsset> CookLightVolumeEntry(in LightComponentCookEntry entry){

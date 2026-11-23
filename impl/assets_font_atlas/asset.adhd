@@ -13,9 +13,9 @@ class FontAtlas{
     private FontAtlasPayload m_payload;
     private b8 m_payloadValidated = false;
 
-    public b8 loadBinary(in Span<u8> binary);
-    public b8 validatePayload()const;
-    public void setPayload(in FontAtlasPayload payload){
+    [cpp_unwind] public b8 loadBinary(in Span<u8> binary);
+    [cpp_unwind] public b8 validatePayload()const;
+    [cpp_unwind] public void setPayload(in FontAtlasPayload payload){
         this.m_payload = payload;
         this.m_payloadValidated = false;
     }
@@ -24,11 +24,10 @@ class FontAtlas{
 
     public in FontAtlasPayload payload()const{ return this.m_payload; }
 
-    public b8 tryGlyph(in u32 glyphId, mut FontAtlasGlyph outGlyph)const{
+    public Optional<FontAtlasGlyph> tryGlyph(in u32 glyphId)const{
         if(cast<usize>(glyphId) >= this.m_payload.glyphs.size())
-            return false;
-        outGlyph = this.m_payload.glyphs[glyphId];
-        return true;
+            return Optional<FontAtlasGlyph>();
+        return this.m_payload.glyphs[glyphId];
     }
 }
 

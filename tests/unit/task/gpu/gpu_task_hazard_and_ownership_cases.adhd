@@ -49,6 +49,17 @@ class GpuHazardOwnerImportContext{
     }
 }
 
+class GpuHazardOwnerExpectedHazard{
+    public usize producer = 0u;
+    public usize consumer = 0u;
+    public GpuTaskHazardTypeEnum hazard = GpuTaskHazardType::Explicit;
+}
+
+class GpuHazardOwnerIndexPair{
+    public usize first = 0u;
+    public usize second = 0u;
+}
+
 GpuGraphInitialOwnerHandoffSourceDesc MakeHandoffSourceWithState(
     in GpuTaskResourceRange range,
     in GpuPhysicalQueueId sourceQueue,
@@ -70,17 +81,6 @@ GpuGraphInitialOwnerHandoffSourceDesc MakeHandoffSourceWithState(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-class GpuHazardOwnerExpectedHazard{
-    public usize producer = 0u;
-    public usize consumer = 0u;
-    public GpuTaskHazardTypeEnum hazard = GpuTaskHazardType::Explicit;
-}
-
-class GpuHazardOwnerIndexPair{
-    public usize first = 0u;
-    public usize second = 0u;
-}
 
 GpuHazardOwnerExpectedHazard GpuHazardOwner_MakeExpectedHazard(in usize p, in usize c, in GpuTaskHazardTypeEnum h){
     GpuHazardOwnerExpectedHazard out = GpuHazardOwnerExpectedHazard();

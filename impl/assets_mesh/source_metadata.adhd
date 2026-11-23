@@ -9,6 +9,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const Array<StringView, s_VertexRefComponentCount> s_MeshVertexRefComponentNames(
+    s_VertexRefPositionName, s_VertexRefNormalName, s_VertexRefTangentName, s_VertexRefUvName, s_VertexRefColorName
+);
+
 class MeshMetadataStreams{
     public Vector<f32x3u> positions;
     public Vector<f32x3u> normals;
@@ -18,10 +22,6 @@ class MeshMetadataStreams{
     public Vector<MeshVertexRef> vertexRefs;
     public Vector<u32> indices;
 }
-
-const Array<StringView, s_VertexRefComponentCount> s_MeshVertexRefComponentNames(
-    s_VertexRefPositionName, s_VertexRefNormalName, s_VertexRefTangentName, s_VertexRefUvName, s_VertexRefColorName
-);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

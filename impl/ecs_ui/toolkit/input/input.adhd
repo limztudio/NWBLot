@@ -399,9 +399,9 @@ Optional<InputPopupRetirement> RetireRouterTargetTablePopup(
     mut Vector<TargetLookup> lookup,
     mut TargetSpatialIndex outSpatialIndex
 ){
-    InputPopupRetirement retirement;
-    if(!TryRetireRouterPopupSubtree(id, popups, targets, dismissals, retirement.top, retirement.restore))
-        return Optional<InputPopupRetirement>();
+    const Optional<InputPopupRetirement> retirement = TryRetireRouterPopupSubtree(id, popups, targets, dismissals);
+    if(!retirement.has_value())
+        return retirement;
     RebuildRouterTargetLookup(targets, lookup);
     MarkTargetSpatialIndexDirty(outSpatialIndex);
     return Optional<InputPopupRetirement>(retirement);

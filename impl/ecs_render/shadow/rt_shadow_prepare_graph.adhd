@@ -15,69 +15,6 @@ const StringView s_ShadowPrepareSwBvhCounterClearSuffix = ":shadow_prepare_sw_bv
 const StringView s_ShadowPrepareSwBvhBuildSuffix = ":shadow_prepare_sw_bvh_build";
 const usize s_ShadowPrepareSwBvhBuildResourceUseCount = 7u;
 
-Expected<Name> DeriveShadowPrepareSwBvhKeysClearIdentity(in Name meshName){
-    return DeriveName(meshName, s_ShadowPrepareSwBvhKeysClearSuffix);
-}
-
-Expected<Name> DeriveShadowPrepareSwBvhParentClearIdentity(in Name meshName){
-    return DeriveName(meshName, s_ShadowPrepareSwBvhParentClearSuffix);
-}
-
-Expected<Name> DeriveShadowPrepareSwBvhCounterClearIdentity(in Name meshName){
-    return DeriveName(meshName, s_ShadowPrepareSwBvhCounterClearSuffix);
-}
-
-Expected<Name> DeriveShadowPrepareSwBvhBuildIdentity(in Name meshName){
-    return DeriveName(meshName, s_ShadowPrepareSwBvhBuildSuffix);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ValidateShadowPreparePlanOwnership(
-    in b8 sceneTlasBuildGraphOwned,
-    in b8 hasSceneTlas,
-    in b8 meshBlasBuildsGraphOwned,
-    in usize preparedMeshBlasBuildCount,
-    in b8 meshSwBvhBuildsGraphOwned,
-    in usize preparedMeshSwBvhBuildCount
-){
-    if(sceneTlasBuildGraphOwned && !hasSceneTlas){
-        warning("RendererSystem: frozen scene TLAS build has no imported acceleration structure");
-        return false;
-    }
-    if(meshBlasBuildsGraphOwned && preparedMeshBlasBuildCount == 0u){
-        warning("RendererSystem: frozen BLAS build plan has no operations");
-        return false;
-    }
-    if(meshBlasBuildsGraphOwned && !hasSceneTlas){
-        warning("RendererSystem: frozen BLAS build plan has no scene TLAS");
-        return false;
-    }
-    if(meshSwBvhBuildsGraphOwned && preparedMeshSwBvhBuildCount == 0u){
-        warning("RendererSystem: frozen software BVH build plan has no operations");
-        return false;
-    }
-    return true;
-}
-
-b8 ResolveMeshBlasGeometryBuildInputStatesGraphOwned(in b8 meshBlasBuildsGraphOwned, in b8 softwareTraceResourcesPrepared, in b8 meshSwBvhBuildsGraphOwned){
-    return meshBlasBuildsGraphOwned && !softwareTraceResourcesPrepared && !meshSwBvhBuildsGraphOwned;
-}
-
-b8 CanDeclareShadowPrepareSceneSwBvhRefit(in b8 buildPlanFrozen, in usize preparedMeshSwBvhBuildCount, in b8 pureSoftwareMeshSwBvhBuildsGraphOwned){
-    return buildPlanFrozen && (preparedMeshSwBvhBuildCount == 0u || pureSoftwareMeshSwBvhBuildsGraphOwned);
-}
-
-b8 ShouldMergeShadowPrepareAcrossConsumerFrontier(in b8 pureSoftwareMeshSwBvhBuildsGraphOwned, in b8 hasSceneRefitTask){
-    return pureSoftwareMeshSwBvhBuildsGraphOwned || hasSceneRefitTask;
-}
-
-b8 HasAccelStructBuildStatesGraphOwned(in b8 sceneTlasBuildGraphOwned, in b8 meshBlasBuildsGraphOwned){
-    return sceneTlasBuildGraphOwned || meshBlasBuildsGraphOwned;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -232,7 +169,6 @@ class ShadowPrepareGraphTask{
     }
 }
 
-
 class ShadowPrepareSoftwareBvhBuildGraphTask{
     private mut RendererRayTracingSystem raytracingSystem;
     private mut GpuTimingSubmissionTicket timingTicket;
@@ -258,6 +194,68 @@ class ShadowPrepareSoftwareBvhBuildGraphTask{
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<Name> DeriveShadowPrepareSwBvhKeysClearIdentity(in Name meshName){
+    return DeriveName(meshName, s_ShadowPrepareSwBvhKeysClearSuffix);
+}
+
+Expected<Name> DeriveShadowPrepareSwBvhParentClearIdentity(in Name meshName){
+    return DeriveName(meshName, s_ShadowPrepareSwBvhParentClearSuffix);
+}
+
+Expected<Name> DeriveShadowPrepareSwBvhCounterClearIdentity(in Name meshName){
+    return DeriveName(meshName, s_ShadowPrepareSwBvhCounterClearSuffix);
+}
+
+Expected<Name> DeriveShadowPrepareSwBvhBuildIdentity(in Name meshName){
+    return DeriveName(meshName, s_ShadowPrepareSwBvhBuildSuffix);
+}
+
+b8 ValidateShadowPreparePlanOwnership(
+    in b8 sceneTlasBuildGraphOwned,
+    in b8 hasSceneTlas,
+    in b8 meshBlasBuildsGraphOwned,
+    in usize preparedMeshBlasBuildCount,
+    in b8 meshSwBvhBuildsGraphOwned,
+    in usize preparedMeshSwBvhBuildCount
+){
+    if(sceneTlasBuildGraphOwned && !hasSceneTlas){
+        warning("RendererSystem: frozen scene TLAS build has no imported acceleration structure");
+        return false;
+    }
+    if(meshBlasBuildsGraphOwned && preparedMeshBlasBuildCount == 0u){
+        warning("RendererSystem: frozen BLAS build plan has no operations");
+        return false;
+    }
+    if(meshBlasBuildsGraphOwned && !hasSceneTlas){
+        warning("RendererSystem: frozen BLAS build plan has no scene TLAS");
+        return false;
+    }
+    if(meshSwBvhBuildsGraphOwned && preparedMeshSwBvhBuildCount == 0u){
+        warning("RendererSystem: frozen software BVH build plan has no operations");
+        return false;
+    }
+    return true;
+}
+
+b8 ResolveMeshBlasGeometryBuildInputStatesGraphOwned(in b8 meshBlasBuildsGraphOwned, in b8 softwareTraceResourcesPrepared, in b8 meshSwBvhBuildsGraphOwned){
+    return meshBlasBuildsGraphOwned && !softwareTraceResourcesPrepared && !meshSwBvhBuildsGraphOwned;
+}
+
+b8 CanDeclareShadowPrepareSceneSwBvhRefit(in b8 buildPlanFrozen, in usize preparedMeshSwBvhBuildCount, in b8 pureSoftwareMeshSwBvhBuildsGraphOwned){
+    return buildPlanFrozen && (preparedMeshSwBvhBuildCount == 0u || pureSoftwareMeshSwBvhBuildsGraphOwned);
+}
+
+b8 ShouldMergeShadowPrepareAcrossConsumerFrontier(in b8 pureSoftwareMeshSwBvhBuildsGraphOwned, in b8 hasSceneRefitTask){
+    return pureSoftwareMeshSwBvhBuildsGraphOwned || hasSceneRefitTask;
+}
+
+b8 HasAccelStructBuildStatesGraphOwned(in b8 sceneTlasBuildGraphOwned, in b8 meshBlasBuildsGraphOwned){
+    return sceneTlasBuildGraphOwned || meshBlasBuildsGraphOwned;
+}
+
 [cpp_unwind]
 b8 AppendShadowSoftwareBvhClear(mut GpuTaskGraph graph, in GpuTaskSchedulingHint scheduling, mut GpuTaskId firstTask, mut GpuTaskId dependency, in Expected<Name> identity, in StringView label, in GpuGraphResourceId destination, in u32 clearValue){
     if(!identity.has_value())
@@ -279,7 +277,6 @@ b8 AppendShadowSoftwareBvhClear(mut GpuTaskGraph graph, in GpuTaskSchedulingHint
     dependency = task.value();
     return true;
 }
-
 
 [cpp_unwind]
 b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
@@ -318,6 +315,8 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
         ),
         uploads
     );
+    if(!uploadsDeclared)
+        return false;
     this.m_deferredBindlessSlotsUploadTask = uploads.tasks.bindlessSlots;
     this.m_rayTraceMaterialContextSlotsUploadTask = uploads.tasks.rayTraceMaterialContextSlots;
     this.m_csgTraceContextUploadTask = uploads.tasks.csgTraceContext;
@@ -328,8 +327,6 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
     this.m_shadowMaterialTypedUploadTask = uploads.tasks.shadowMaterialTyped;
     this.m_sceneBvhNodesUploadTask = uploads.tasks.sceneBvhNodes;
     this.m_sceneBvhInstancesUploadTask = uploads.tasks.sceneBvhInstances;
-    if(!uploadsDeclared)
-        return false;
     GpuTaskId shadowPrepareDependency = uploads.completionTask;
 
     const b8 sceneTlasBuildGraphOwned = context.rayTracing.preparedSceneTlasBuildReady();
@@ -452,9 +449,10 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
     this.m_deferredShadowPrepareTask = deferredShadowPrepareTaskResult.value();
     if(HasAccelStructBuildStatesGraphOwned(sceneTlasBuildGraphOwned, meshBlasBuildsGraphOwned)){
         ShadowAccelerationFinalizeBuilder finalizeBuilder(context.graph);
-        if(!finalizeBuilder.declare(sceneTlasBuildGraphOwned, shadowResourcePlan.sceneTlas, preparedMeshBlasBuilds.size(), shadowResourcePlan.accelStructFinalizeResourceUses, this.m_deferredShadowPrepareTask,
-            this.m_deferredShadowPrepareAccelStructFinalizeTask))
+        const Expected<GpuTaskId> finalizeTask = finalizeBuilder.declare(sceneTlasBuildGraphOwned, shadowResourcePlan.sceneTlas, preparedMeshBlasBuilds.size(), shadowResourcePlan.accelStructFinalizeResourceUses, this.m_deferredShadowPrepareTask);
+        if(!finalizeTask.has_value())
             return false;
+        this.m_deferredShadowPrepareAccelStructFinalizeTask = finalizeTask.value();
     }
     return true;
 }
@@ -480,21 +478,16 @@ void ShadowPrepareGraphCoordinator::resetShadowPrepareTaskState(){
     this.resetShadowPrepareUploadTaskState();
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [cpp_unwind]
-b8 ShadowAccelerationFinalizeBuilder::declare(
+Expected<GpuTaskId> ShadowAccelerationFinalizeBuilder::declare(
     in b8 sceneTlasBuildGraphOwned,
     in GpuGraphResourceId sceneTlas,
     in usize preparedMeshBlasBuildCount,
     in Span<GpuTaskResourceUse> accelStructFinalizeResourceUses,
-    in borrow GpuTaskId prepareTask,
-    mut GpuTaskId outTask
+    in borrow GpuTaskId prepareTask
 ){
     if(!ValidateAccelStructFinalizeResourceUses(sceneTlasBuildGraphOwned, sceneTlas.valid(), preparedMeshBlasBuildCount, accelStructFinalizeResourceUses.size()))
-        return false;
+        return MakeUnexpected(Failure());
     GpuGraphResourceSetId accelStructFinalizeSet;
     if(!accelStructFinalizeResourceUses.empty()){
         Vector<GpuGraphResourceId> accelStructFinalizeResources;
@@ -534,17 +527,11 @@ b8 ShadowAccelerationFinalizeBuilder::declare(
         accelStructFinalizeDesc.setResourceUses(accelStructFinalizeResourceUses);
     const auto deferredShadowPrepareAccelStructFinalizeTaskResult = this.m_graph.addPayloadTask(accelStructFinalizeDesc, BarrierOnlyGraphTask());
     if(!deferredShadowPrepareAccelStructFinalizeTaskResult.has_value()){
-        outTask = GpuTaskId();
         warning("RendererSystem: could not declare acceleration-structure final-state task");
-        return false;
+        return MakeUnexpected(Failure());
     }
-    outTask = deferredShadowPrepareAccelStructFinalizeTaskResult.value();
-    return true;
+    return deferredShadowPrepareAccelStructFinalizeTaskResult.value();
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void ShadowPreparePacketValidator::validate(in GpuCompiledGraphReadView compiledPlan, mut ShadowPreparePacketValidationResult outResult)const{
     in RendererFramePipeline pipeline = this.m_pipeline;
@@ -578,10 +565,6 @@ void ShadowPreparePacketValidator::validate(in GpuCompiledGraphReadView compiled
             || (compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_sceneBvhNodesUploadTask) && compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_sceneBvhInstancesUploadTask)))
     ;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [cpp_unwind]
 b8 ShadowSoftwareBvhBuildChain::declare(

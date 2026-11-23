@@ -9,6 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_unwind]
 Expected<u32x4u> TryBuildMaterialTypedLayoutDefaultValue(
     in Name materialName,
     in StringView instanceName,
@@ -58,6 +59,7 @@ Expected<u32x4u> TryBuildMaterialTypedLayoutDefaultValue(
 
 
 
+[cpp_unwind]
 b8 TryAppendMaterialBindTypedLayoutField(
     in StringView interfacePath,
     in Name contextName,
@@ -141,6 +143,7 @@ b8 TryAppendMaterialBindTypedLayoutField(
     return true;
 }
 
+[cpp_unwind]
 b8 TryFinalizeMaterialBindTypedLayoutBlock(
     in StringView interfacePath,
     in Name contextName,
@@ -194,6 +197,7 @@ Expected<MaterialBlockClass> ParseMaterialBindBlockClass(in MaterialBindStruct b
     return MakeUnexpected(Failure());
 }
 
+[cpp_unwind]
 b8 BuildSortedMaterialBindInstanceIndices(
     in StringView interfaceVirtualPath,
     in Name contextName,
@@ -249,6 +253,7 @@ b8 AccumulateMaterialBindStructLayoutReserve(
     return true;
 }
 
+[cpp_unwind]
 b8 ReserveMaterialBindTypedLayoutStorage(
     in StringView interfaceVirtualPath,
     in Name contextName,
@@ -285,6 +290,7 @@ b8 ReserveMaterialBindTypedLayoutStorage(
 
 
 
+[cpp_unwind]
 b8 AppendMaterialBindInstanceTypedLayoutBlock(
     in StringView interfaceVirtualPath,
     in Name contextName,
@@ -360,19 +366,18 @@ b8 AppendMaterialBindInstanceTypedLayoutBlock(
     );
 }
 
-b8 BuildMaterialBindTypedLayoutData(
+[cpp_unwind]
+Expected<u64> BuildMaterialBindTypedLayoutData(
     in StringView interfaceVirtualPath,
     in Name contextName,
     in Span<MaterialBindStruct> structs,
     in Span<MaterialBindInstance> instances,
-    mut u64 outLayoutHash,
     mut Vector<MaterialTypedLayoutBlock> outBlocks,
     mut Vector<MaterialTypedLayoutField> outFields,
     mut Vector<u8> outBlockBytes,
     mut HashMap<Name, MaterialBindTypedLayoutBlockLookupEntry> outBlockLookup,
     mut HashMap<CompactString, MaterialBindTypedLayoutParameterLookupEntry> outParameterLookup
 ){
-    outLayoutHash = 0u;
     outBlocks.clear();
     outFields.clear();
     outBlockBytes.clear();
@@ -381,9 +386,9 @@ b8 BuildMaterialBindTypedLayoutData(
 
     Vector<usize> sortedInstanceIndices;
     if(!BuildSortedMaterialBindInstanceIndices(interfaceVirtualPath, contextName, instances, sortedInstanceIndices))
-        return false;
+        return MakeUnexpected(Failure());
     if(!ReserveMaterialBindTypedLayoutStorage(interfaceVirtualPath, contextName, structs, instances, sortedInstanceIndices, outBlocks, outFields, outBlockBytes))
-        return false;
+        return MakeUnexpected(Failure());
 
     u32 constantTypedByteSize = 0u;
     for(in usize instanceIndex : sortedInstanceIndices){
@@ -396,7 +401,7 @@ b8 BuildMaterialBindTypedLayoutData(
                 , instances[instanceIndex].type
                 , contextName.resolvedText()
             );
-            return false;
+            return MakeUnexpected(Failure());
         }
         if(!AppendMaterialBindInstanceTypedLayoutBlock(
             interfaceVirtualPath,
@@ -408,25 +413,25 @@ b8 BuildMaterialBindTypedLayoutData(
             outFields,
             outBlockBytes
         ))
-            return false;
+            return MakeUnexpected(Failure());
     }
 
-    outLayoutHash = ComputeMaterialTypedLayoutHash(outBlocks, outFields);
-    if(outLayoutHash == 0u){
+    const u64 layoutHash = ComputeMaterialTypedLayoutHash(outBlocks, outFields);
+    if(layoutHash == 0u){
         error("Material bind typed layout: interface '{}' produced an empty layout for '{}'", interfaceVirtualPath, contextName.resolvedText());
-        return false;
+        return MakeUnexpected(Failure());
     }
 
     const Expected<usize> expectedBlockByteSize = ComputeMaterialTypedBlockByteSize(outBlocks);
     if(!expectedBlockByteSize.has_value() || expectedBlockByteSize.value() != outBlockBytes.size()){
         error("Material bind typed layout: interface '{}' has inconsistent block storage for '{}'", interfaceVirtualPath, contextName.resolvedText());
-        return false;
+        return MakeUnexpected(Failure());
     }
 
     MaterialBindLayoutLookupBuilder lookupBuilder = MaterialBindLayoutLookupBuilder();
     if(!lookupBuilder.buildMaterialBindTypedLayoutBlockLookup(contextName.resolvedText(), outBlocks, outBlockLookup))
-        return false;
-    return lookupBuilder.buildMaterialBindTypedLayoutParameterLookup(
+        return MakeUnexpected(Failure());
+    if(!lookupBuilder.buildMaterialBindTypedLayoutParameterLookup(
         interfaceVirtualPath,
         contextName.resolvedText(),
         structs,
@@ -435,7 +440,9 @@ b8 BuildMaterialBindTypedLayoutData(
         outBlocks,
         outFields,
         outParameterLookup
-    );
+    ))
+        return MakeUnexpected(Failure());
+    return layoutHash;
 }
 
 

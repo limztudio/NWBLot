@@ -8,41 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 MatchesValidatedGpuRendererExtent(
-    in u32 currentWidth,
-    in u32 currentHeight,
-    in u32 requestedWidth,
-    in u32 requestedHeight,
-    in b8 hasSharedResources
-){
-    return currentWidth == requestedWidth && currentHeight == requestedHeight && hasSharedResources;
-}
-
-b8 CanAcceptGpuSkinInput(in b8 validIdentity, in u64 skinGeneration, in b8 hasSharedResources){
-    return validIdentity && skinGeneration != 0u && hasSharedResources;
-}
-
-b8 CanSubmitGpuSnapshotState(
-    in b8 hasPending,
-    in b8 hasSharedResources,
-    in b8 hasSkin,
-    in u64 snapshotGeneration
-){
-    return !hasPending && hasSharedResources && hasSkin && snapshotGeneration != 0u;
-}
-
-b8 IsExclusivelyRetainedGpuFrame(in b8 hasFrame, in u32 referenceCount){
-    return hasFrame && referenceCount == 1u;
-}
-
-b8 ShouldResetStaleRecycledGpuFrame(in b8 alreadyAssignedPending, in u64 frameGeneration){
-    return alreadyAssignedPending && frameGeneration != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [cpp_type_alias(ShaderPathResolveCallback, ShaderArchivePathResolver)]
 class GpuRenderer : IGpuTaskGraphOutputLayerContributor, NoCopy{
     private ArenaObjectSlot<GpuRendererState> m_state = ArenaObjectSlot<GpuRendererState>();
@@ -207,6 +172,41 @@ class GpuRenderer : IGpuTaskGraphOutputLayerContributor, NoCopy{
     public void acceptTaskGraphOutputLayer(in u64 frameGeneration, in QueueSubmissionToken submissionToken)override{
         this.m_state.value().acceptOutputLayer(frameGeneration, submissionToken);
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 MatchesValidatedGpuRendererExtent(
+    in u32 currentWidth,
+    in u32 currentHeight,
+    in u32 requestedWidth,
+    in u32 requestedHeight,
+    in b8 hasSharedResources
+){
+    return currentWidth == requestedWidth && currentHeight == requestedHeight && hasSharedResources;
+}
+
+b8 CanAcceptGpuSkinInput(in b8 validIdentity, in u64 skinGeneration, in b8 hasSharedResources){
+    return validIdentity && skinGeneration != 0u && hasSharedResources;
+}
+
+b8 CanSubmitGpuSnapshotState(
+    in b8 hasPending,
+    in b8 hasSharedResources,
+    in b8 hasSkin,
+    in u64 snapshotGeneration
+){
+    return !hasPending && hasSharedResources && hasSkin && snapshotGeneration != 0u;
+}
+
+b8 IsExclusivelyRetainedGpuFrame(in b8 hasFrame, in u32 referenceCount){
+    return hasFrame && referenceCount == 1u;
+}
+
+b8 ShouldResetStaleRecycledGpuFrame(in b8 alreadyAssignedPending, in u64 frameGeneration){
+    return alreadyAssignedPending && frameGeneration != 0u;
 }
 
 

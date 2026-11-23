@@ -65,10 +65,16 @@ b8 Builder::beginWindow(in StringView stableKey, in StringView title, mut Window
         return false;
     }
     const auto measuredTitle = this.m_text.layoutAndMeasureShared(request, this.m_paint.displayMetrics());
-    if(!measuredTitle.has_value() || !ControlStyleMetrics().windowMetrics(this.m_skin.value(), this.m_style, options, Point(measuredTitle.value().bounds.width, measuredTitle.value().bounds.height), this.m_scope.value().m_window.metrics)){
+    if(!measuredTitle.has_value()){
         this.m_context.fail();
         return false;
     }
+    const Expected<WindowMetrics> windowMetrics = ControlStyleMetrics().windowMetrics(this.m_skin.value(), this.m_style, options, Point(measuredTitle.value().bounds.width, measuredTitle.value().bounds.height));
+    if(!windowMetrics.has_value()){
+        this.m_context.fail();
+        return false;
+    }
+    this.m_scope.value().m_window.metrics = windowMetrics.value();
     this.m_scope.value().m_window.title = measuredTitle.value().layout;
     this.m_scope.value().m_window.titleBounds = measuredTitle.value().bounds;
     this.m_scope.value().m_panelState = window.value();
@@ -364,11 +370,18 @@ ComboResult Builder::declareCombo(
     item.styleIndex = this.currentItemStyleIndex();
     item.enabled = options.enabled;
     item.combo = cast<u32>(this.m_scope.value().m_combos.size());
-    Point minimumSize;
-    if(!this.m_skin.has_value() || !ControlStyleMetrics().comboMetrics(this.m_skin.value(), frame.style, minimumSize, item.padding, frame.arrowExtent)){
+    if(!this.m_skin.has_value()){
         this.m_context.fail();
         return ComboResult();
     }
+    const Expected<ComboResolvedMetrics> comboMetrics = ControlStyleMetrics().comboMetrics(this.m_skin.value(), frame.style);
+    if(!comboMetrics.has_value()){
+        this.m_context.fail();
+        return ComboResult();
+    }
+    const Point minimumSize = comboMetrics.value().minimumSize;
+    item.padding = comboMetrics.value().padding;
+    frame.arrowExtent = comboMetrics.value().arrowExtent;
     const b8 selected = state.selectedKey() != 0u;
     Expected<u64> index(0u);
     if(selected)

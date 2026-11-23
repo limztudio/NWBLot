@@ -9,14 +9,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+type CpuAffinityEnum = CpuAffinity;
+const u32 s_SubmissionWorkerException = 0xE102u;
+const u32 s_WaitWatchdogTimeoutMS = 10000u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class NonCallableTask{}
 static_assert(!TaskConstructible<ThrowingMoveTask>());
 static_assert(!TaskConstructible<NonCallableTask>());
-
-type CpuAffinityEnum = CpuAffinity;
-
-const u32 s_SubmissionWorkerException = 0xE102u;
-const u32 s_WaitWatchdogTimeoutMS = 10000u;
 
 
 void PumpUntil(mut CpuTaskScheduler scheduler, in Atomic<b8> done){
@@ -1609,6 +1612,10 @@ void VerifyCpuTaskWaitTests_StructuredParentCompletionStaysScopedUntilEveryChild
     EXPECT_EQ(unrelatedAfterAll, 1u);
 }
 
+void VerifyCpuTaskSubmissionTests_CheckedScopeHelpersDrainAcceptedWorkBeforePropagatingAdmissionFailure(){
+    EXPECT_TRUE(VerifyCheckedScopeDrainOnAdmissionFailure());
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1645,6 +1652,7 @@ NWB_ADHD_GTEST(CpuTaskSubmissionTests, CallableConstructionFailurePublishesNoSch
 NWB_ADHD_GTEST(CpuTaskSubmissionTests, ExpectedAdmissionErrorsPreservePublicationAndCancellationBoundaries, VerifyCpuTaskSubmissionTests_ExpectedAdmissionErrorsPreservePublicationAndCancellationBoundaries)
 NWB_ADHD_GTEST(CpuTaskSubmissionTests, WorkerCallbackFailureTerminatesWithoutDeferredCallerDelivery, VerifyCpuTaskSubmissionTests_WorkerCallbackFailureTerminatesWithoutDeferredCallerDelivery)
 NWB_ADHD_GTEST(CpuTaskSubmissionTests, ParallelRangeWorkerFailureTerminatesWithoutDeferredCallerDelivery, VerifyCpuTaskSubmissionTests_ParallelRangeWorkerFailureTerminatesWithoutDeferredCallerDelivery)
+NWB_ADHD_GTEST(CpuTaskSubmissionTests, CheckedScopeHelpersDrainAcceptedWorkBeforePropagatingAdmissionFailure, VerifyCpuTaskSubmissionTests_CheckedScopeHelpersDrainAcceptedWorkBeforePropagatingAdmissionFailure)
 
 NWB_ADHD_GTEST(CpuTaskWaitTests, ScopeRejectsAnIndependentTaskDependingOnTheCaller, VerifyCpuTaskWaitTests_ScopeRejectsAnIndependentTaskDependingOnTheCaller)
 NWB_ADHD_GTEST(CpuTaskWaitTests, ScopeRejectsTransitiveDependentsOfTheCallersAncestor, VerifyCpuTaskWaitTests_ScopeRejectsTransitiveDependentsOfTheCallersAncestor)

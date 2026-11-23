@@ -12,39 +12,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 IsPreparedShadowMaterialStorageReady(
-    in RendererRayTracingState state,
-    in usize instanceMaterialCount,
-    in usize instanceCount,
-    in usize materialTypedByteCount
-){
-    return state.shadow.m_shadowInstanceMaterialBuffer.valid()
-        && state.shadow.m_shadowInstanceBuffer.valid()
-        && state.shadow.m_shadowMaterialTypedBuffer.valid()
-        && state.shadow.m_shadowInstanceMaterialCapacity >= instanceMaterialCount
-        && state.shadow.m_shadowInstanceCapacity >= instanceCount
-        && state.shadow.m_shadowMaterialTypedCapacity >= materialTypedByteCount
-        && IsDescriptorClass(state.shadow.m_shadowInstanceMaterialHeapHandle, GpuDescriptorClass::StorageBuffer)
-        && IsDescriptorClass(state.shadow.m_shadowInstanceHeapHandle, GpuDescriptorClass::StorageBuffer)
-        && IsDescriptorClass(state.shadow.m_shadowMaterialTypedHeapHandle, GpuDescriptorClass::StorageBuffer)
-    ;
-}
-
-b8 HasPreparedShadowMaterialContextBuffers(
-    in RendererRayTracingState state,
-    in usize materialCount,
-    in usize instanceCount,
-    in usize materialTypedUploadBytes
-){
-    const usize wordByteSize = 4u;
-    const usize requiredMaterialTypedBytes = AlignUp(Max(materialTypedUploadBytes, wordByteSize), wordByteSize);
-    return IsPreparedShadowMaterialStorageReady(state, materialCount, instanceCount, requiredMaterialTypedBytes);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class PendingShadowTextureReset : NoCopy{
     private mut MaterialSampledTextureCollector m_collector;
 
@@ -83,10 +50,6 @@ class ShadowMaterialSampledTextureCollector : NoCopy{
         return true;
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [modular]
 class PreparedShadowMaterialContext : NoCopy{
@@ -200,6 +163,39 @@ class PreparedShadowMaterialContext : NoCopy{
         this.m_materialTypedCapacity = state.shadow.m_shadowMaterialTypedCapacity;
         this.m_hash = hash;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsPreparedShadowMaterialStorageReady(
+    in RendererRayTracingState state,
+    in usize instanceMaterialCount,
+    in usize instanceCount,
+    in usize materialTypedByteCount
+){
+    return state.shadow.m_shadowInstanceMaterialBuffer.valid()
+        && state.shadow.m_shadowInstanceBuffer.valid()
+        && state.shadow.m_shadowMaterialTypedBuffer.valid()
+        && state.shadow.m_shadowInstanceMaterialCapacity >= instanceMaterialCount
+        && state.shadow.m_shadowInstanceCapacity >= instanceCount
+        && state.shadow.m_shadowMaterialTypedCapacity >= materialTypedByteCount
+        && IsDescriptorClass(state.shadow.m_shadowInstanceMaterialHeapHandle, GpuDescriptorClass::StorageBuffer)
+        && IsDescriptorClass(state.shadow.m_shadowInstanceHeapHandle, GpuDescriptorClass::StorageBuffer)
+        && IsDescriptorClass(state.shadow.m_shadowMaterialTypedHeapHandle, GpuDescriptorClass::StorageBuffer)
+    ;
+}
+
+b8 HasPreparedShadowMaterialContextBuffers(
+    in RendererRayTracingState state,
+    in usize materialCount,
+    in usize instanceCount,
+    in usize materialTypedUploadBytes
+){
+    const usize wordByteSize = 4u;
+    const usize requiredMaterialTypedBytes = AlignUp(Max(materialTypedUploadBytes, wordByteSize), wordByteSize);
+    return IsPreparedShadowMaterialStorageReady(state, materialCount, instanceCount, requiredMaterialTypedBytes);
 }
 
 

@@ -67,13 +67,12 @@ class PhysicsDebugScreenProjector{
         this.m_halfHeight = 0.5f * viewportHeight;
     }
 
-    public b8 projectSegment(
+    public Expected<VectorSingle> projectSegment(
         in VectorSingle worldP0,
-        in VectorSingle worldP1,
-        mut VectorSingle outScreenSegment
+        in VectorSingle worldP1
     )const{
         if(!this.m_valid)
-            return false;
+            return MakeUnexpected(Failure());
 
         const VectorSingle camPos = VectorSingle(this.m_camPos);
         const VectorSingle right = VectorSingle(this.m_right);
@@ -85,19 +84,19 @@ class PhysicsDebugScreenProjector{
         VectorSingle v1(Vector3Dot(d1, right).x, Vector3Dot(d1, up).x, Vector3Dot(d1, forward).x, 0.0f);
 
         if(v0.z <= this.m_zMin && v1.z <= this.m_zMin)
-            return false;
+            return MakeUnexpected(Failure());
 
         if(v0.z < this.m_zMin){
             const f32 denom = v1.z - v0.z;
             if(Abs(denom) <= 1.0e-8f)
-                return false;
+                return MakeUnexpected(Failure());
             const f32 t = Clamp((this.m_zMin - v0.z) / denom, 0.0f, 1.0f);
             v0 = v0 + (v1 - v0) * t;
         }
         else if(v1.z < this.m_zMin){
             const f32 denom = v0.z - v1.z;
             if(Abs(denom) <= 1.0e-8f)
-                return false;
+                return MakeUnexpected(Failure());
             const f32 t = Clamp((this.m_zMin - v1.z) / denom, 0.0f, 1.0f);
             v1 = v1 + (v0 - v1) * t;
         }
@@ -109,19 +108,18 @@ class PhysicsDebugScreenProjector{
         const f32 ndcX1 = v1.x * this.m_projX * invZ1;
         const f32 ndcY1 = v1.y * this.m_projY * invZ1;
         if(!IsFinite(VectorSingle(ndcX0, ndcY0, ndcX1, ndcY1)))
-            return false;
+            return MakeUnexpected(Failure());
 
         if((ndcX0 < -1.5f && ndcX1 < -1.5f) || (ndcX0 > 1.5f && ndcX1 > 1.5f))
-            return false;
+            return MakeUnexpected(Failure());
         if((ndcY0 < -1.5f && ndcY1 < -1.5f) || (ndcY0 > 1.5f && ndcY1 > 1.5f))
-            return false;
+            return MakeUnexpected(Failure());
 
         const f32 sx0 = (1.0f + ndcX0) * this.m_halfWidth;
         const f32 sy0 = (1.0f - ndcY0) * this.m_halfHeight;
         const f32 sx1 = (1.0f + ndcX1) * this.m_halfWidth;
         const f32 sy1 = (1.0f - ndcY1) * this.m_halfHeight;
-        outScreenSegment = VectorSingle(sx0, sy0, sx1, sy1);
-        return true;
+        return VectorSingle(sx0, sy0, sx1, sy1);
     }
 }
 
@@ -576,17 +574,16 @@ void BuildPhysicsDebugLines(
     }
 }
 
-b8 ProjectPhysicsWorldSegmentToScreen(
+Expected<VectorSingle> ProjectPhysicsWorldSegmentToScreen(
     in TransformComponent cameraTransform,
     in CameraProjection projection,
     in f32 viewportWidth,
     in f32 viewportHeight,
     in VectorSingle worldP0,
-    in VectorSingle worldP1,
-    mut VectorSingle outScreenSegment
+    in VectorSingle worldP1
 ){
     const PhysicsDebugScreenProjector projector(cameraTransform, projection, viewportWidth, viewportHeight);
-    return projector.projectSegment(worldP0, worldP1, outScreenSegment);
+    return projector.projectSegment(worldP0, worldP1);
 }
 
 

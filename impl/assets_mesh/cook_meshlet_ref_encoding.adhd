@@ -19,6 +19,14 @@ const StringView s_VertexRefColorName = "color";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+enum<u8> EncodedMeshletRefDeltaStatus{
+    Valid,
+    InvalidWidth,
+    ByteCountMismatch,
+    PositionDecodeMismatch,
+    AttributeDecodeMismatch
+}
+
 [serialize]
 class MeshVertexRef{
     public u32 position = s_MeshMissingStreamIndex;
@@ -38,14 +46,6 @@ class MeshletAttributeRefEncodeRanges{
     public MeshletRefEncodeRange tangent;
     public MeshletRefEncodeRange uv0;
     public MeshletRefEncodeRange color;
-}
-
-enum<u8> EncodedMeshletRefDeltaStatus{
-    Valid,
-    InvalidWidth,
-    ByteCountMismatch,
-    PositionDecodeMismatch,
-    AttributeDecodeMismatch
 }
 
 class MeshletRefChannelWidths{

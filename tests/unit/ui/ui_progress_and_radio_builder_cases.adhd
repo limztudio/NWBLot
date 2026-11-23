@@ -16,6 +16,8 @@ const StringView s_ScrollbarTrackRegion = "scrollbar.track";
 const StringView s_ScrollbarThumbRegion = "scrollbar.thumb.normal";
 const StringView s_MissingTrackRegion = "missing.track";
 const StringView s_MissingFillRegion = "missing.fill";
+const StringView s_UiProgressCasePanelKey = "panel";
+const StringView s_UiRadioCasePanelKey = "panel";
 enum<u8> RadioCallbackPhase{ None, Generation, Revision, RowCount, Key, Lookup, Enabled }
 enum<u8> RadioSourceMutation{ SelectIdentical, SelectAba, Reset, Reconcile, Apply, SourceRevision, SourceGeneration, SourceCount, GuardFailure }
 
@@ -299,9 +301,6 @@ class UiRadioGroupBuilderTests : RadioGroupFixture{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-const StringView s_UiProgressCasePanelKey = "panel";
-const StringView s_UiRadioCasePanelKey = "panel";
 
 UiSkinRegion MakeUiProgressNineSliceRegion(){
     UiSkinRegion region = UiSkinRegion();

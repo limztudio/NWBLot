@@ -19,52 +19,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class BenchmarkTextInput : QueuedTextInputService{
-    [cpp_base(QueuedTextInputService, storage)]
-    public BenchmarkTextInput(mut HeapStorage storage){}
-
-    public TextInputCapabilities capabilities()const override{ return FullTestTextInputCapabilities(); }
-}
-
-class BenchmarkClipboard : QueuedClipboardService{
-    [cpp_base(QueuedClipboardService, storage)]
-    public BenchmarkClipboard(mut HeapStorage storage){}
-
-    public ClipboardCapabilities capabilities(in ClipboardChannel channel)const override{
-        return ClipboardCapabilities();
-    }
-
-    public void startNativeRequest(in ClipboardRequestToken token, in ClipboardOperation operation, in ClipboardChannel channel, in StringView text)override{
-        if(!this.completeNativeRequest(token, ClipboardStatus::Unsupported, ""))
-            TerminateInvariant();
-    }
-}
-
-b8 PrepareBenchmarkTextLayout(in usize characterCount, in u8 character, mut EditModel model, mut EditBoxView view, mut TextLayoutBuilder builder){
-    String text;
-    text.assign(characterCount, character);
-    if(!model.setText(text) || !model.setSelection(0u, 0u) || !view.snapshot(model))
-        return false;
-    ShapeRequest request;
-    request.text = view.displayText();
-    auto layout = builder.layout(request);
-    return layout.has_value() && view.adoptLayout(layout.value());
-}
-
-b8 TryDeclareEditBoxWidget(mut Context context, in StringView id, mut WidgetState outWidget){
-    const auto widget = context.declare(id, WidgetKind::EditBox);
-    if(!widget.has_value())
-        return false;
-    outWidget = widget.value();
-    return true;
-}
-
-b8 HasCommittedTargetWithWidth(in Context context, in WidgetId id, in u64 generation, in f32 width){
-    const auto target = context.input().findTarget(id, generation);
-    return target.has_value() && target.value().rectangle.width == width;
-}
-
-
 const StringView s_SkinPath = "tests/performance/ui_input/skin";
 const StringView s_TexturePath = "tests/performance/ui_input/texture";
 const usize s_BenchmarkSamples = 11u;
@@ -93,144 +47,26 @@ interface IUiBenchmarkCase{
     Expected<u64> checksum()const;
 }
 
+class BenchmarkTextInput : QueuedTextInputService{
+    [cpp_base(QueuedTextInputService, storage)]
+    public BenchmarkTextInput(mut HeapStorage storage){}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-u64 MixChecksum(in u64 hash, in u64 value){
-    return (hash ^ value) * 1099511628211u;
+    public TextInputCapabilities capabilities()const override{ return FullTestTextInputCapabilities(); }
 }
 
-u64 BoolToU64(in b8 value){
-    if(value)
-        return 1u;
-    return 0u;
-}
+class BenchmarkClipboard : QueuedClipboardService{
+    [cpp_base(QueuedClipboardService, storage)]
+    public BenchmarkClipboard(mut HeapStorage storage){}
 
-EditLimits MakeBenchmarkEditLimits(in usize maxBytes){
-    EditLimits limits = EditLimits();
-    limits.maxBytes = maxBytes;
-    limits.maxHistoryRecords = 0u;
-    limits.maxHistoryBytes = 0u;
-    return limits;
-}
-
-WidgetId MakeWidgetId(in u64 idValue){
-    WidgetId id = WidgetId();
-    id.value = idValue;
-    return id;
-}
-
-InputSource MakeInputSource(in u64 deviceId, in u64 sourceId){
-    InputSource source = InputSource();
-    source.device = deviceId;
-    source.control = sourceId;
-    return source;
-}
-
-DisplayMetrics MakeDisplayMetrics(in f32 width, in f32 height){
-    DisplayMetrics metrics = DisplayMetrics();
-    metrics.logicalWidth = width;
-    metrics.logicalHeight = height;
-    return metrics;
-}
-
-void ConfigureBenchmarkSkinAtlas(mut UiSkin skin){
-    RegionVector regions;
-    skin.setAtlas(AssetRef<Texture>(Name(s_TexturePath)), 8u, 8u, 1.0f, regions);
-}
-
-StringView ResolvePointerWorkloadName(in PointerWorkloadKind kind){
-    switch(kind){
-    case PointerWorkloadKind::CursorHover: return "cursor_hover";
-    case PointerWorkloadKind::TouchGesture: return "touch_gesture";
-    case PointerWorkloadKind::CursorGesture: return "cursor_gesture";
-    case PointerWorkloadKind::PressedSweep: return "pressed_sweep";
-    case PointerWorkloadKind::CompetingContacts: return "competing_contacts";
-    case PointerWorkloadKind::CommitTargets: return "commit_targets";
-    }
-    return "";
-}
-
-void SortBenchmarkSamples(mut Array<f64, s_BenchmarkSamples> values){
-    for(usize index = 1u; index < s_BenchmarkSamples; ++index){
-        const f64 current = values[index];
-        usize cursor = index;
-        while(cursor > 0u && values[cursor - 1u] > current){
-            values[cursor] = values[cursor - 1u];
-            --cursor;
-        }
-        values[cursor] = current;
-    }
-}
-
-Expected<f64> MeasureBatch<CaseT : IUiBenchmarkCase>(mut CaseT benchmark, in usize iterations, in u64 expectedChecksum){
-    const Timer begin = TimerNow();
-    for(usize iteration = 0u; iteration < iterations; ++iteration){
-        if(!benchmark.operation())
-            return MakeUnexpected(Failure());
-    }
-    const f64 elapsed = DurationInNS<f64>(TimerNow(), begin);
-    const Expected<u64> batchChecksum = benchmark.checksum();
-    if(!batchChecksum.has_value() || batchChecksum.value() != expectedChecksum)
-        return MakeUnexpected(Failure());
-    return elapsed;
-}
-
-b8 Measure<CaseT : IUiBenchmarkCase>(in StringView name, in u64 setupChecksum, mut CaseT benchmark){
-    for(usize warmup = 0u; warmup < s_BenchmarkWarmupIterations; ++warmup){
-        if(!benchmark.operation())
-            return false;
-    }
-    const Expected<u64> behaviorChecksum = benchmark.checksum();
-    if(!behaviorChecksum.has_value())
-        return false;
-    const u64 expectedChecksum = behaviorChecksum.value();
-
-    usize iterations = 1u;
-    while(true){
-        const Expected<f64> elapsed = MeasureBatch(benchmark, iterations, expectedChecksum);
-        if(!elapsed.has_value())
-            return false;
-        if(elapsed.value() >= s_BenchmarkMinSampleNS)
-            break;
-        if(iterations == s_BenchmarkMaxIterations)
-            return false;
-        iterations *= 2u;
+    public ClipboardCapabilities capabilities(in ClipboardChannel channel)const override{
+        return ClipboardCapabilities();
     }
 
-    Array<f64, s_BenchmarkSamples> samples;
-    for(usize sampleIndex = 0u; sampleIndex < s_BenchmarkSamples; ++sampleIndex){
-        const Expected<f64> elapsed = MeasureBatch(benchmark, iterations, expectedChecksum);
-        if(!elapsed.has_value())
-            return false;
-        samples[sampleIndex] = elapsed.value() / cast<f64>(iterations);
+    public void startNativeRequest(in ClipboardRequestToken token, in ClipboardOperation operation, in ClipboardChannel channel, in StringView text)override{
+        if(!this.completeNativeRequest(token, ClipboardStatus::Unsupported, ""))
+            TerminateInvariant();
     }
-
-    Array<f64, s_BenchmarkSamples> sorted = samples;
-    SortBenchmarkSamples(sorted);
-    const f64 medianSample = sorted[s_BenchmarkSamples / 2u];
-    String output = StringFormat(
-        "{{\"type\":\"ui_input_benchmark\",\"name\":\"{}\",\"iterationsPerSample\":{},\"setupChecksum\":{},\"behaviorChecksum\":{},\"medianNsPerOperation\":{:.17g},\"samplesNsPerOperation\":[",
-        name,
-        iterations,
-        setupChecksum,
-        expectedChecksum,
-        medianSample
-    );
-    for(usize index = 0u; index < samples.size(); ++index){
-        if(index != 0u)
-            output.push_back(',');
-        StringAppendFormat(output, "{:.17g}", samples[index]);
-    }
-    output.append("]}\n");
-    ConsoleWrite(output);
-    return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 class BenchmarkShaper : ITextShaper{
     public BenchmarkShaper(){
@@ -294,8 +130,12 @@ class PublicationCase : IUiBenchmarkCase{
         WidgetRoot root = WidgetRoot();
         root.value = 17u;
         root.generation = 1u;
-        if(!this.m_context.beginRoot(root) || !TryDeclareEditBoxWidget(this.m_context, "edit", this.m_widget))
+        if(!this.m_context.beginRoot(root))
             return false;
+        const auto declaredWidget = this.m_context.declare("edit", WidgetKind::EditBox);
+        if(!declaredWidget.has_value())
+            return false;
+        this.m_widget = declaredWidget.value();
 
         EditBoxOptions options = EditBoxOptions();
         options.readOnly = true;
@@ -617,9 +457,161 @@ class PointerWorkload : IUiBenchmarkCase{
     }
 }
 
+[arena]
+class PublicationContext{
+    public Context context = Context();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+b8 PrepareBenchmarkTextLayout(in usize characterCount, in u8 character, mut EditModel model, mut EditBoxView view, mut TextLayoutBuilder builder){
+    String text;
+    text.assign(characterCount, character);
+    if(!model.setText(text) || !model.setSelection(0u, 0u) || !view.snapshot(model))
+        return false;
+    ShapeRequest request;
+    request.text = view.displayText();
+    auto layout = builder.layout(request);
+    return layout.has_value() && view.adoptLayout(layout.value());
+}
+
+b8 HasCommittedTargetWithWidth(in Context context, in WidgetId id, in u64 generation, in f32 width){
+    const auto target = context.input().findTarget(id, generation);
+    return target.has_value() && target.value().rectangle.width == width;
+}
+
+u64 MixChecksum(in u64 hash, in u64 value){
+    return (hash ^ value) * 1099511628211u;
+}
+
+u64 BoolToU64(in b8 value){
+    if(value)
+        return 1u;
+    return 0u;
+}
+
+EditLimits MakeBenchmarkEditLimits(in usize maxBytes){
+    EditLimits limits = EditLimits();
+    limits.maxBytes = maxBytes;
+    limits.maxHistoryRecords = 0u;
+    limits.maxHistoryBytes = 0u;
+    return limits;
+}
+
+WidgetId MakeWidgetId(in u64 idValue){
+    WidgetId id = WidgetId();
+    id.value = idValue;
+    return id;
+}
+
+InputSource MakeInputSource(in u64 deviceId, in u64 sourceId){
+    InputSource source = InputSource();
+    source.device = deviceId;
+    source.control = sourceId;
+    return source;
+}
+
+DisplayMetrics MakeDisplayMetrics(in f32 width, in f32 height){
+    DisplayMetrics metrics = DisplayMetrics();
+    metrics.logicalWidth = width;
+    metrics.logicalHeight = height;
+    return metrics;
+}
+
+void ConfigureBenchmarkSkinAtlas(mut UiSkin skin){
+    RegionVector regions;
+    skin.setAtlas(AssetRef<Texture>(Name(s_TexturePath)), 8u, 8u, 1.0f, regions);
+}
+
+StringView ResolvePointerWorkloadName(in PointerWorkloadKind kind){
+    switch(kind){
+    case PointerWorkloadKind::CursorHover: return "cursor_hover";
+    case PointerWorkloadKind::TouchGesture: return "touch_gesture";
+    case PointerWorkloadKind::CursorGesture: return "cursor_gesture";
+    case PointerWorkloadKind::PressedSweep: return "pressed_sweep";
+    case PointerWorkloadKind::CompetingContacts: return "competing_contacts";
+    case PointerWorkloadKind::CommitTargets: return "commit_targets";
+    }
+    return "";
+}
+
+void SortBenchmarkSamples(mut Array<f64, s_BenchmarkSamples> values){
+    for(usize index = 1u; index < s_BenchmarkSamples; ++index){
+        const f64 current = values[index];
+        usize cursor = index;
+        while(cursor > 0u && values[cursor - 1u] > current){
+            values[cursor] = values[cursor - 1u];
+            --cursor;
+        }
+        values[cursor] = current;
+    }
+}
+
+Expected<f64> MeasureBatch<CaseT : IUiBenchmarkCase>(mut CaseT benchmark, in usize iterations, in u64 expectedChecksum){
+    const Timer begin = TimerNow();
+    for(usize iteration = 0u; iteration < iterations; ++iteration){
+        if(!benchmark.operation())
+            return MakeUnexpected(Failure());
+    }
+    const f64 elapsed = DurationInNS<f64>(TimerNow(), begin);
+    const Expected<u64> batchChecksum = benchmark.checksum();
+    if(!batchChecksum.has_value() || batchChecksum.value() != expectedChecksum)
+        return MakeUnexpected(Failure());
+    return elapsed;
+}
+
+b8 Measure<CaseT : IUiBenchmarkCase>(in StringView name, in u64 setupChecksum, mut CaseT benchmark){
+    for(usize warmup = 0u; warmup < s_BenchmarkWarmupIterations; ++warmup){
+        if(!benchmark.operation())
+            return false;
+    }
+    const Expected<u64> behaviorChecksum = benchmark.checksum();
+    if(!behaviorChecksum.has_value())
+        return false;
+    const u64 expectedChecksum = behaviorChecksum.value();
+
+    usize iterations = 1u;
+    while(true){
+        const Expected<f64> elapsed = MeasureBatch(benchmark, iterations, expectedChecksum);
+        if(!elapsed.has_value())
+            return false;
+        if(elapsed.value() >= s_BenchmarkMinSampleNS)
+            break;
+        if(iterations == s_BenchmarkMaxIterations)
+            return false;
+        iterations *= 2u;
+    }
+
+    Array<f64, s_BenchmarkSamples> samples;
+    for(usize sampleIndex = 0u; sampleIndex < s_BenchmarkSamples; ++sampleIndex){
+        const Expected<f64> elapsed = MeasureBatch(benchmark, iterations, expectedChecksum);
+        if(!elapsed.has_value())
+            return false;
+        samples[sampleIndex] = elapsed.value() / cast<f64>(iterations);
+    }
+
+    Array<f64, s_BenchmarkSamples> sorted = samples;
+    SortBenchmarkSamples(sorted);
+    const f64 medianSample = sorted[s_BenchmarkSamples / 2u];
+    String output = StringFormat(
+        "{{\"type\":\"ui_input_benchmark\",\"name\":\"{}\",\"iterationsPerSample\":{},\"setupChecksum\":{},\"behaviorChecksum\":{},\"medianNsPerOperation\":{:.17g},\"samplesNsPerOperation\":[",
+        name,
+        iterations,
+        setupChecksum,
+        expectedChecksum,
+        medianSample
+    );
+    for(usize index = 0u; index < samples.size(); ++index){
+        if(index != 0u)
+            output.push_back(',');
+        StringAppendFormat(output, "{:.17g}", samples[index]);
+    }
+    output.append("]}\n");
+    ConsoleWrite(output);
+    return true;
+}
 
 b8 MeasurePointerWorkload(mut PointerWorkload workload){
     if(!workload.initialize())
@@ -719,11 +711,6 @@ StringView ResolveSelectionBenchmarkName(in usize index){
     }
 }
 
-[arena]
-class PublicationContext{
-    public Context context = Context();
-}
-
 b8 RunPublicationCase(in usize stops, in StringView benchmarkName){
     HeapStorage storage(s_UiBenchmarkNameTestsPerformanceUiInputPublication);
     PublicationContext fixture();
@@ -767,10 +754,6 @@ b8 RunAllUiInputBenchmarks(){
         && RunPaintBenchmarks()
         && RunEditBenchmarks();
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [cpp_unwind]
 i32 RunUiInputBenchmark(){

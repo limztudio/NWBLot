@@ -43,6 +43,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_header("<impl/assets/graphics/csg/ray_constants.h>"), cpp_name("NWB_CSG_RAY_RECEIVER_ACTIVE")]
+extern const u32 s_SuiteCsgRayReceiverActive;
+[cpp_header("<impl/assets/graphics/csg/ray_constants.h>"), cpp_name("NWB_CSG_RAY_RECEIVER_UNSUPPORTED")]
+extern const u32 s_SuiteCsgRayReceiverUnsupported;
+[cpp_header("<impl/assets/graphics/csg/ray_constants.h>"), cpp_name("NWB_CSG_RAY_MAX_CUTTERS")]
+extern const u32 s_SuiteCsgRayMaxCutters;
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_BYTE_SIZE")]
+extern const u64 s_EmulationVertexByteSize;
+[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_FIRST_VERTEX_INDEX")]
+extern const u64 s_EmulationFirstVertexIndex;
+
 type SoftwareShadowCaptureCadenceEnum = SoftwareShadowCaptureCadence;
 type SuiteMeshAssetRef = AssetRef<Mesh>;
 type SuiteMaterialAssetRef = AssetRef<Material>;
@@ -50,10 +61,23 @@ type SuiteTaskGraphDeclarationReadView = GpuTaskGraphDeclarationReadView;
 type SuiteOptionalPhysicalQueueInfo = Optional<GpuPhysicalQueueInfo>;
 type SuiteSharedPhaseTaskArray = Array<GpuTaskId, s_SharedComputeEmulationMaximumPhaseCount>;
 type ComputeOutputTestArena = HeapStorage;
+type SuiteGpuGraphResourceSetId = GpuGraphResourceSetId;
+type SuiteGpuPhysicalQueueInfo = GpuPhysicalQueueInfo;
+type SuiteGpuTaskId = GpuTaskId;
 const Name s_CsgShadowReceiverGroup = s_EcsGraphicsNameTestsCsgShadowGroup;
 const Name s_CsgShadowOtherGroup = s_EcsGraphicsNameTestsCsgShadowOther;
 const Name s_CsgShadowCustomShape = s_EcsGraphicsNameTestsCsgShadowCustom;
 const Array<u32, 1> s_OpenTriangleWords(0u);
+const EntityID s_SuiteInvalidEntityId = s_InvalidEntityId;
+const usize s_SuiteSharedPhaseTaskCapacity = s_SharedComputeEmulationMaximumPhaseCount;
+const usize s_SuiteSupportedSharedPhaseCount = s_SharedComputeEmulationMinimumDrawCount * s_SharedComputeEmulationPhasesPerDraw;
+const usize s_MeshletLocalVertexRefBytes = size_of<MeshletLocalVertexRef>();
+const u32 s_SuiteRtMaterialFlagTransparent = cast<u32>(RtInstanceMaterialFlag::Transparent);
+const usize s_SuiteCsgRangeMembershipOffset = s_ShaderCsgRayContextBytes + offset_of<CsgShadowReceiverRangeGpu>(solidTriangleWordOffset);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [ordered]
 class CoincidentSelectionContext{
@@ -65,13 +89,6 @@ class CoincidentSelectionContext{
     public void select(in Span<CoincidentOpticalVolumeCandidate> candidates){ this.selection.select(candidates); }
     public void selectEmpty(){ this.selection.select(Span<CoincidentOpticalVolumeCandidate>()); }
     public void selectSingle(in CoincidentOpticalVolumeCandidate candidate){ this.selection.select(SpanOf<CoincidentOpticalVolumeCandidate>(candidate)); }
-}
-CoincidentOpticalVolumeCandidate MakeOpticalCandidate(in u32 entityIndex){
-    CoincidentOpticalVolumeCandidate candidate;
-    candidate.entity = EntityID(entityIndex, 0u);
-    candidate.mesh = SuiteMeshAssetRef("tests/coincident_optical_volumes/mesh");
-    candidate.material = SuiteMaterialAssetRef("tests/coincident_optical_volumes/glass");
-    return candidate;
 }
 
 [ordered]
@@ -86,6 +103,7 @@ class ComputeOutputContext{
         this.plan = this.planStorage.constructIn(this.testArena);
     }
 }
+
 [ordered]
 class AvboitValidatorContext{
     public HeapStorage testArena;
@@ -98,30 +116,12 @@ class AvboitValidatorContext{
     }
 }
 
-GpuPhysicalQueueInfo MakeSuiteGraphicsPhysicalQueueInfo(){
-    GpuPhysicalQueueInfo queueInfo;
-    queueInfo.queueClass = CommandQueue::Graphics;
-    return queueInfo;
-}
-GpuTaskId MakeSuiteGpuTaskId(in u32 generation, in u32 index){
-    GpuTaskId id;
-    id.generation = generation;
-    id.index = index;
-    return id;
-}
 class FrameCacheRuntimeProvider : IRuntimeMeshProvider{
     public EntityID receiver = s_InvalidEntityId;
     public b8 attached = false;
     public Expected<RuntimeMeshDesc> resolveRuntimeMesh(in EntityID entity)override{ return MakeUnexpected(Failure()); }
     public b8 hasRuntimeMeshBinding(in EntityID entity)const override{ return this.attached && entity == this.receiver; }
     public void markLiveRuntimeMeshes(mut RuntimeMeshRequestSet requests)override{}
-}
-void SetCsgCutterParameters(in VectorSingle parameter, mut CsgCutterComponent cutter){
-    const f32x4 stored(parameter);
-    const Span<u8> bytes = PodBytes(stored);
-    cutter.parameterBytes.resize(bytes.size());
-    for(usize i = 0u; i < bytes.size(); ++i)
-        cutter.parameterBytes[i] = bytes[i];
 }
 
 [ordered]
@@ -166,6 +166,40 @@ class CsgShadowSnapshotContext{
         SetCsgCutterParameters(parameter, this.testWorld.world.entity(id).getComponent<CsgCutterComponent>());
     }
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+CoincidentOpticalVolumeCandidate MakeOpticalCandidate(in u32 entityIndex){
+    CoincidentOpticalVolumeCandidate candidate;
+    candidate.entity = EntityID(entityIndex, 0u);
+    candidate.mesh = SuiteMeshAssetRef("tests/coincident_optical_volumes/mesh");
+    candidate.material = SuiteMaterialAssetRef("tests/coincident_optical_volumes/glass");
+    return candidate;
+}
+
+GpuPhysicalQueueInfo MakeSuiteGraphicsPhysicalQueueInfo(){
+    GpuPhysicalQueueInfo queueInfo;
+    queueInfo.queueClass = CommandQueue::Graphics;
+    return queueInfo;
+}
+
+GpuTaskId MakeSuiteGpuTaskId(in u32 generation, in u32 index){
+    GpuTaskId id;
+    id.generation = generation;
+    id.index = index;
+    return id;
+}
+
+void SetCsgCutterParameters(in VectorSingle parameter, mut CsgCutterComponent cutter){
+    const f32x4 stored(parameter);
+    const Span<u8> bytes = PodBytes(stored);
+    cutter.parameterBytes.resize(bytes.size());
+    for(usize i = 0u; i < bytes.size(); ++i)
+        cutter.parameterBytes[i] = bytes[i];
+}
+
 CsgShadowReceiverInput MakeCsgReceiverInput(in EntityID entity){
     CsgShadowReceiverInput input;
     input.entity = entity;
@@ -174,6 +208,7 @@ CsgShadowReceiverInput MakeCsgReceiverInput(in EntityID entity){
     input.boundsValid = true;
     return input;
 }
+
 b8 RegisterCustomCsgShape(mut CsgShadowSnapshotContext context, in Name name){
     CsgShapeTypeDesc desc;
     desc.name = name;
@@ -189,68 +224,58 @@ b8 RegisterCustomCsgShape(mut CsgShadowSnapshotContext context, in Name name){
     };
     return context.registry.registerShapeType(desc).has_value();
 }
+
 b8 RegisterCustomCsgShape(mut CsgShadowSnapshotContext context){ return RegisterCustomCsgShape(context, s_CsgShadowCustomShape); }
+
 void AppendIdentityLightSpaceCsgReceiver(mut LightSpaceCsgState state, in EntityID receiver, in MeshRayTracingResourceSnapshot mesh){
     AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), VectorSingle(mesh.csgLocalBounds.minBounds), VectorSingle(mesh.csgLocalBounds.maxBounds), mesh);
 }
+
 void AppendTranslatedXLightSpaceCsgReceiver(mut LightSpaceCsgState state, in EntityID receiver, in f32 x, in MeshRayTracingResourceSnapshot mesh){
     AppendLightSpaceCsgReceiver(state, receiver, false, MatrixTranslation(x, 0.0f, 0.0f), MatrixTranslation(-x, 0.0f, 0.0f),
         VectorSingle(mesh.csgLocalBounds.minBounds), VectorSingle(mesh.csgLocalBounds.maxBounds), mesh);
 }
+
 void SetSuiteInstancePitchAndX(in f32 x, mut InstanceGpuData instance){
     instance.translation.x = x;
     instance.rotation = f32x4u(QuaternionRotationRollPitchYaw(0.0f, x, 0.0f));
 }
+
 u64 BuildSuiteLightSpaceCsgCaptureIdentity(in LightSpaceCsgState state, in Span<NwbRtInstanceMaterialGpu> materials, in Span<InstanceGpuData> instances, in Span<u8> materialBytes){
     return BuildLightSpaceCsgCaptureIdentity(state, materials, instances, materialBytes, Span<TextureHandle>());
 }
+
 u64 BuildSuiteLightSpaceCsgCaptureIdentityEmptyBytes(in LightSpaceCsgState state, in Span<NwbRtInstanceMaterialGpu> materials, in Span<InstanceGpuData> instances){
     return BuildSuiteLightSpaceCsgCaptureIdentity(state, materials, instances, Span<u8>());
 }
+
 GpuDescriptorHandle MakeSuiteStorageBufferDescriptor(in u32 slot){ return GpuDescriptorHandleMake(GpuDescriptorClass::StorageBuffer, slot); }
+
 Span<u32> EmptySuiteU32Span(){ return Span<u32>(); }
-b8 ResolveSuiteCsgBoxWorkBounds(in CsgShapeRegistry registry, in CsgShapeTypeInfo shape, in MatrixSingle transform, in CsgBoxShapeParameters parameters, in CsgClipWorkBounds receiver, mut CsgClipWorkBounds work){
-    return ResolveCsgClipWorkBounds(registry, shape, transform, PodBytes(parameters), receiver, work);
+
+Expected<CsgClipWorkBounds> ResolveSuiteCsgBoxWorkBounds(in CsgShapeRegistry registry, in CsgShapeTypeInfo shape, in MatrixSingle transform, in CsgBoxShapeParameters parameters, in CsgClipWorkBounds receiver){
+    return ResolveCsgClipWorkBounds(registry, shape, transform, PodBytes(parameters), receiver);
 }
-b8 ResolveSuiteCsgTranslatedBoxWorkBounds(
+
+Expected<CsgClipWorkBounds> ResolveSuiteCsgTranslatedBoxWorkBounds(
     in CsgShapeRegistry registry,
     in CsgShapeTypeInfo shape,
     in f32 x,
     in f32 y,
     in f32 z,
     in CsgBoxShapeParameters parameters,
-    in CsgClipWorkBounds receiver,
-    mut CsgClipWorkBounds work
+    in CsgClipWorkBounds receiver
 ){
-    return ResolveSuiteCsgBoxWorkBounds(registry, shape, MatrixTranslation(x, y, z), parameters, receiver, work);
+    return ResolveSuiteCsgBoxWorkBounds(registry, shape, MatrixTranslation(x, y, z), parameters, receiver);
 }
+
 void ExpandSuitePerspectiveWorldBounds(mut CsgFrameWorkRegion region, in VectorSingle minimum, in VectorSingle maximum, in u32 width, in u32 height){
     region.expandWorldBounds(MatrixPerspectiveFovLH(s_PIDIV2, 1.0f, 0.1f, 100.0f), minimum, maximum, width, height);
 }
-b8 ResolveSuiteCsgEmptyWorkBounds(in CsgShapeRegistry registry, in CsgShapeTypeInfo shape, in MatrixSingle transform, in CsgClipWorkBounds receiver, mut CsgClipWorkBounds work){
-    return ResolveCsgClipWorkBounds(registry, shape, transform, Span<u8>(), receiver, work);
+
+Expected<CsgClipWorkBounds> ResolveSuiteCsgEmptyWorkBounds(in CsgShapeRegistry registry, in CsgShapeTypeInfo shape, in MatrixSingle transform, in CsgClipWorkBounds receiver){
+    return ResolveCsgClipWorkBounds(registry, shape, transform, Span<u8>(), receiver);
 }
-
-const EntityID s_SuiteInvalidEntityId = s_InvalidEntityId;
-const usize s_SuiteSharedPhaseTaskCapacity = s_SharedComputeEmulationMaximumPhaseCount;
-const usize s_SuiteSupportedSharedPhaseCount = s_SharedComputeEmulationMinimumDrawCount * s_SharedComputeEmulationPhasesPerDraw;
-const usize s_MeshletLocalVertexRefBytes = size_of<MeshletLocalVertexRef>();
-const u32 s_SuiteRtMaterialFlagTransparent = cast<u32>(RtInstanceMaterialFlag::Transparent);
-[cpp_header("<impl/assets/graphics/csg/ray_constants.h>"), cpp_name("NWB_CSG_RAY_RECEIVER_ACTIVE")]
-extern const u32 s_SuiteCsgRayReceiverActive;
-[cpp_header("<impl/assets/graphics/csg/ray_constants.h>"), cpp_name("NWB_CSG_RAY_RECEIVER_UNSUPPORTED")]
-extern const u32 s_SuiteCsgRayReceiverUnsupported;
-[cpp_header("<impl/assets/graphics/csg/ray_constants.h>"), cpp_name("NWB_CSG_RAY_MAX_CUTTERS")]
-extern const u32 s_SuiteCsgRayMaxCutters;
-[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_VERTEX_BYTE_SIZE")]
-extern const u64 s_EmulationVertexByteSize;
-[cpp_header("<impl/assets/graphics/mesh/runtime_constants.h>"), cpp_name("NWB_MESH_EMULATION_FIRST_VERTEX_INDEX")]
-extern const u64 s_EmulationFirstVertexIndex;
-const usize s_SuiteCsgRangeMembershipOffset = s_ShaderCsgRayContextBytes + offset_of<CsgShadowReceiverRangeGpu>(solidTriangleWordOffset);
-
-type SuiteGpuGraphResourceSetId = GpuGraphResourceSetId;
-type SuiteGpuPhysicalQueueInfo = GpuPhysicalQueueInfo;
-type SuiteGpuTaskId = GpuTaskId;
 
 void SuiteSelectOpticalVolumes(mut CoincidentSelectionContext context, in Span<CoincidentOpticalVolumeCandidate> candidates){
     context.select(candidates);
@@ -327,28 +352,26 @@ Span<u32> AsSuiteU32Span(in Span<u32> words){
     return words;
 }
 
-b8 SuiteResolveCsgBoxWorkBounds(
+Expected<CsgClipWorkBounds> SuiteResolveCsgBoxWorkBounds(
     in CsgShapeRegistry registry,
     in CsgShapeTypeInfo shape,
     in MatrixSingle shapeToWorld,
     in CsgBoxShapeParameters parameters,
-    in CsgClipWorkBounds receiver,
-    mut CsgClipWorkBounds outWork
+    in CsgClipWorkBounds receiver
 ){
-    return ResolveSuiteCsgBoxWorkBounds(registry, shape, shapeToWorld, parameters, receiver, outWork);
+    return ResolveSuiteCsgBoxWorkBounds(registry, shape, shapeToWorld, parameters, receiver);
 }
 
-b8 SuiteResolveCsgTranslatedBoxWorkBounds(
+Expected<CsgClipWorkBounds> SuiteResolveCsgTranslatedBoxWorkBounds(
     in CsgShapeRegistry registry,
     in CsgShapeTypeInfo shape,
     in f32 tx,
     in f32 ty,
     in f32 tz,
     in CsgBoxShapeParameters parameters,
-    in CsgClipWorkBounds receiver,
-    mut CsgClipWorkBounds outWork
+    in CsgClipWorkBounds receiver
 ){
-    return ResolveSuiteCsgTranslatedBoxWorkBounds(registry, shape, tx, ty, tz, parameters, receiver, outWork);
+    return ResolveSuiteCsgTranslatedBoxWorkBounds(registry, shape, tx, ty, tz, parameters, receiver);
 }
 
 void SuiteExpandPerspectiveCsgWorldBounds(
@@ -361,14 +384,13 @@ void SuiteExpandPerspectiveCsgWorldBounds(
     ExpandSuitePerspectiveWorldBounds(region, minBounds, maxBounds, width, height);
 }
 
-b8 SuiteResolveCsgEmptyWorkBounds(
+Expected<CsgClipWorkBounds> SuiteResolveCsgEmptyWorkBounds(
     in CsgShapeRegistry registry,
     in CsgShapeTypeInfo shape,
     in MatrixSingle shapeToWorld,
-    in CsgClipWorkBounds receiver,
-    mut CsgClipWorkBounds outWork
+    in CsgClipWorkBounds receiver
 ){
-    return ResolveSuiteCsgEmptyWorkBounds(registry, shape, shapeToWorld, receiver, outWork);
+    return ResolveSuiteCsgEmptyWorkBounds(registry, shape, shapeToWorld, receiver);
 }
 
 void SuiteExpandCsgWorldBounds(
@@ -1476,8 +1498,9 @@ void VerifyEcsGraphics_CsgCutterWorkBoundsIgnoreUntrustedReceiverAndKeepTrustedR
     CsgClipWorkBounds receiver = CsgClipWorkBounds();
     receiver.minBounds = f32x4(-20.0f, -20.0f, -20.0f, 0.0f);
     receiver.maxBounds = f32x4(-10.0f, -10.0f, -10.0f, 0.0f);
-    CsgClipWorkBounds work = CsgClipWorkBounds();
-    ASSERT_TRUE(SuiteResolveCsgTranslatedBoxWorkBounds(registry, shape, 0.5f, 0.25f, 2.0f, parameters, receiver, work));
+    Expected<CsgClipWorkBounds> workResult = SuiteResolveCsgTranslatedBoxWorkBounds(registry, shape, 0.5f, 0.25f, 2.0f, parameters, receiver);
+    ASSERT_TRUE(workResult.has_value());
+    CsgClipWorkBounds work = workResult.value();
     ASSERT_TRUE(work.valid);
     EXPECT_FLOAT_EQ(work.minBounds.x, 0.25f);
     EXPECT_FLOAT_EQ(work.minBounds.y, 0.125f);
@@ -1486,11 +1509,12 @@ void VerifyEcsGraphics_CsgCutterWorkBoundsIgnoreUntrustedReceiverAndKeepTrustedR
     EXPECT_FLOAT_EQ(work.maxBounds.y, 0.375f);
     EXPECT_FLOAT_EQ(work.maxBounds.z, 2.5f);
     receiver.valid = true;
-    EXPECT_FALSE(SuiteResolveCsgTranslatedBoxWorkBounds(registry, shape, 0.5f, 0.25f, 2.0f, parameters, receiver, work));
-    EXPECT_FALSE(work.valid);
+    EXPECT_FALSE(SuiteResolveCsgTranslatedBoxWorkBounds(registry, shape, 0.5f, 0.25f, 2.0f, parameters, receiver).has_value());
     receiver.minBounds = f32x4(0.5f, 0.25f, 1.75f, 0.0f);
     receiver.maxBounds = f32x4(1.0f, 1.0f, 3.0f, 0.0f);
-    ASSERT_TRUE(SuiteResolveCsgTranslatedBoxWorkBounds(registry, shape, 0.5f, 0.25f, 2.0f, parameters, receiver, work));
+    workResult = SuiteResolveCsgTranslatedBoxWorkBounds(registry, shape, 0.5f, 0.25f, 2.0f, parameters, receiver);
+    ASSERT_TRUE(workResult.has_value());
+    work = workResult.value();
     ASSERT_TRUE(work.valid);
     EXPECT_FLOAT_EQ(work.minBounds.x, 0.5f);
     EXPECT_FLOAT_EQ(work.minBounds.y, 0.25f);
@@ -1515,30 +1539,34 @@ void VerifyEcsGraphics_CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPr
     ASSERT_TRUE(foundShape2.has_value());
     CsgShapeTypeInfo shape = foundShape2.value();
     CsgClipWorkBounds receiver = CsgClipWorkBounds();
-    CsgClipWorkBounds work = CsgClipWorkBounds();
-    ASSERT_TRUE(SuiteResolveCsgEmptyWorkBounds(registry, shape, identityMat, receiver, work));
+    Expected<CsgClipWorkBounds> workResult = SuiteResolveCsgEmptyWorkBounds(registry, shape, identityMat, receiver);
+    ASSERT_TRUE(workResult.has_value());
+    CsgClipWorkBounds work = workResult.value();
     ASSERT_TRUE(work.valid);
 
     CsgBoxShapeParameters invalidParameters = CsgBoxShapeParameters();
     invalidParameters.halfExtents.x = 0.0f;
-    EXPECT_TRUE(SuiteResolveCsgBoxWorkBounds(registry, shape, identityMat, invalidParameters, receiver, work));
-    EXPECT_FALSE(work.valid);
+    workResult = SuiteResolveCsgBoxWorkBounds(registry, shape, identityMat, invalidParameters, receiver);
+    ASSERT_TRUE(workResult.has_value());
+    EXPECT_FALSE(workResult.value().valid);
     receiver.minBounds = f32x4(-2.0f, -2.0f, -2.0f, -2.0f);
     receiver.maxBounds = f32x4(2.0f, 2.0f, 2.0f, 2.0f);
     receiver.valid = true;
-    EXPECT_FALSE(SuiteResolveCsgBoxWorkBounds(registry, shape, identityMat, invalidParameters, receiver, work));
-    EXPECT_FALSE(work.valid);
+    EXPECT_FALSE(SuiteResolveCsgBoxWorkBounds(registry, shape, identityMat, invalidParameters, receiver).has_value());
 
     const Expected<CsgShapeTypeInfo> foundShape3 = registry.findShapeType(s_CsgPlaneShapeName);
     ASSERT_TRUE(foundShape3.has_value());
     shape = foundShape3.value();
-    ASSERT_TRUE(SuiteResolveCsgEmptyWorkBounds(registry, shape, identityMat, receiver, work));
+    workResult = SuiteResolveCsgEmptyWorkBounds(registry, shape, identityMat, receiver);
+    ASSERT_TRUE(workResult.has_value());
+    work = workResult.value();
     ASSERT_TRUE(work.valid);
     EXPECT_FLOAT_EQ(work.minBounds.x, -2.0f);
     EXPECT_FLOAT_EQ(work.maxBounds.x, 2.0f);
     receiver.valid = false;
-    EXPECT_TRUE(SuiteResolveCsgEmptyWorkBounds(registry, shape, identityMat, receiver, work));
-    EXPECT_FALSE(work.valid);
+    workResult = SuiteResolveCsgEmptyWorkBounds(registry, shape, identityMat, receiver);
+    ASSERT_TRUE(workResult.has_value());
+    EXPECT_FALSE(workResult.value().valid);
 
     const Expected<CsgShapeTypeInfo> foundShape4 = registry.findShapeType(s_CsgBoxShapeName);
     ASSERT_TRUE(foundShape4.has_value());
@@ -1552,10 +1580,13 @@ void VerifyEcsGraphics_CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPr
     const Expected<CsgShapeTypeInfo> foundShape5 = registry.findShapeType(customId.value());
     ASSERT_TRUE(foundShape5.has_value());
     shape = foundShape5.value();
-    EXPECT_TRUE(SuiteResolveCsgEmptyWorkBounds(registry, shape, identityMat, receiver, work));
-    EXPECT_FALSE(work.valid);
+    workResult = SuiteResolveCsgEmptyWorkBounds(registry, shape, identityMat, receiver);
+    ASSERT_TRUE(workResult.has_value());
+    EXPECT_FALSE(workResult.value().valid);
     receiver.valid = true;
-    ASSERT_TRUE(SuiteResolveCsgEmptyWorkBounds(registry, shape, identityMat, receiver, work));
+    workResult = SuiteResolveCsgEmptyWorkBounds(registry, shape, identityMat, receiver);
+    ASSERT_TRUE(workResult.has_value());
+    work = workResult.value();
     ASSERT_TRUE(work.valid);
     EXPECT_FLOAT_EQ(work.minBounds.x, -1.0f);
     EXPECT_FLOAT_EQ(work.maxBounds.x, 1.0f);
@@ -1597,10 +1628,6 @@ void VerifyEcsGraphics_CsgReceiverWorkRegionFallsBackConservativelyAndClampsLarg
     EXPECT_EQ(large.resolveRect(1000u, 600u).maxX, 1000);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyEcsGraphics_IndexedNamesPreserveMaximumIndices(){
     const usize index = usize.max;
     const auto draw = FormatRefractionCaptureDrawIdentity(index);
@@ -1623,53 +1650,92 @@ void VerifyEcsGraphics_IndexedNamesPreserveMaximumIndices(){
     EXPECT_EQ(idle.value().value(), Name("render.deferred_graph.queue_4294967295.internal_idle"));
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST(EcsGraphics, IndexedNamesPreserveMaximumIndices, VerifyEcsGraphics_IndexedNamesPreserveMaximumIndices)
+
 NWB_ADHD_GTEST(CausticEmissionTargetBuilderTests, SupportedVolumesDoNotRetireFirstUnsupportedIdentity, VerifyCausticEmissionTargetBuilderTests_SupportedVolumesDoNotRetireFirstUnsupportedIdentity)
+
 NWB_ADHD_GTEST(CausticLightSelectorTests, MissingInputsPreserveSlotsAndPointLightsCannotWin, VerifyCausticLightSelectorTests_MissingInputsPreserveSlotsAndPointLightsCannotWin)
+
 NWB_ADHD_GTEST(CausticQualitySettings, RejectsUnsupportedPhotonGridDivisors, VerifyCausticQualitySettings_RejectsUnsupportedPhotonGridDivisors)
+
 NWB_ADHD_GTEST(CausticResolveActivityTests, PartialTilesReserveOneWordForEveryDispatchGroup, VerifyCausticResolveActivityTests_PartialTilesReserveOneWordForEveryDispatchGroup)
+
 NWB_ADHD_GTEST(CausticResolveActivityTests, InvalidExtentsNeverPublishLayout, VerifyCausticResolveActivityTests_InvalidExtentsNeverPublishLayout)
+
 NWB_ADHD_GTEST(CausticResolveActivityTests, LastRawWordMayEndAtTheUintAddressBoundary, VerifyCausticResolveActivityTests_LastRawWordMayEndAtTheUintAddressBoundary)
+
 NWB_ADHD_GTEST(CoincidentOpticalVolumes, AutomaticSelectionComparesBytesFromSeparateAllocations, VerifyCoincidentOpticalVolumes_AutomaticSelectionComparesBytesFromSeparateAllocations)
+
 NWB_ADHD_GTEST(CoincidentOpticalVolumes, AutomaticSelectionKeepsDifferentByteValuesAndLengths, VerifyCoincidentOpticalVolumes_AutomaticSelectionKeepsDifferentByteValuesAndLengths)
+
 NWB_ADHD_GTEST(CoincidentOpticalVolumes, IdenticalMaterialGroupingKeepsDistinctMediumSemantics, VerifyCoincidentOpticalVolumes_IdenticalMaterialGroupingKeepsDistinctMediumSemantics)
+
 NWB_ADHD_GTEST(CoincidentOpticalVolumes, PriorityTiesUseFullEntityIdRegardlessOfInputPermutation, VerifyCoincidentOpticalVolumes_PriorityTiesUseFullEntityIdRegardlessOfInputPermutation)
+
 NWB_ADHD_GTEST(CoincidentOpticalVolumes, GroupsMeshAndMaterialRemainIndependentBoundaries, VerifyCoincidentOpticalVolumes_GroupsMeshAndMaterialRemainIndependentBoundaries)
+
 NWB_ADHD_GTEST(CoincidentOpticalVolumes, TinyTranslationDifferencesAreNotCoincidentEvenInExplicitGroup, VerifyCoincidentOpticalVolumes_TinyTranslationDifferencesAreNotCoincidentEvenInExplicitGroup)
+
 NWB_ADHD_GTEST(CoincidentOpticalVolumes, RotationAndScaleDifferencesPreserveDistinctBoundaries, VerifyCoincidentOpticalVolumes_RotationAndScaleDifferencesPreserveDistinctBoundaries)
+
 NWB_ADHD_GTEST(CoincidentOpticalVolumes, SignedZeroTransformLanesHaveTheSameIdentity, VerifyCoincidentOpticalVolumes_SignedZeroTransformLanesHaveTheSameIdentity)
+
 NWB_ADHD_GTEST(CoincidentOpticalVolumes, InvalidCandidatesCannotSuppressEachOtherOrValidGeometry, VerifyCoincidentOpticalVolumes_InvalidCandidatesCannotSuppressEachOtherOrValidGeometry)
+
 NWB_ADHD_GTEST(CoincidentOpticalVolumes, SelectionOwnsOnlyItsResultAfterBorrowedInputsChangeOrExpire, VerifyCoincidentOpticalVolumes_SelectionOwnsOnlyItsResultAfterBorrowedInputsChangeOrExpire)
+
 NWB_ADHD_GTEST(CoincidentOpticalVolumes, NextFrameReevaluatesSurfaceBytesPriorityAndRemovedRepresentatives, VerifyCoincidentOpticalVolumes_NextFrameReevaluatesSurfaceBytesPriorityAndRemovedRepresentatives)
+
 NWB_ADHD_GTEST(CoincidentOpticalVolumes, ResetEmptyAndSingleCandidateClearPriorSuppression, VerifyCoincidentOpticalVolumes_ResetEmptyAndSingleCandidateClearPriorSuppression)
+
 NWB_ADHD_GTEST(CoincidentOpticalVolumes, EmptyAndSingleCandidateFastPathsDoNotAllocate, VerifyCoincidentOpticalVolumes_EmptyAndSingleCandidateFastPathsDoNotAllocate)
+
 NWB_ADHD_GTEST(ComputeEmulationLayoutTests, TinyMeshReservesSentinelAndPadsTheUnifiedStructuredView, VerifyComputeEmulationLayoutTests_TinyMeshReservesSentinelAndPadsTheUnifiedStructuredView)
+
 NWB_ADHD_GTEST(ComputeEmulationLayoutTests, RejectsInvalidSourceSizes, VerifyComputeEmulationLayoutTests_RejectsInvalidSourceSizes)
+
 NWB_ADHD_GTEST(ComputeEmulationLayoutTests, LastIndexWordMayEndAtTheUintAddressBoundary, VerifyComputeEmulationLayoutTests_LastIndexWordMayEndAtTheUintAddressBoundary)
+
 NWB_ADHD_GTEST(ComputeEmulationOutputResourceSet, EmptyPlansFailWithoutImporting, VerifyComputeEmulationOutputResourceSet_EmptyPlansFailWithoutImporting)
+
 NWB_ADHD_GTEST(AvboitComputeEmulationValidator, RejectsStrayAndOversizedSharedPhases, VerifyAvboitComputeEmulationValidator_RejectsStrayAndOversizedSharedPhases)
+
 NWB_ADHD_GTEST(CsgShaderVariantBuilderTests, RejectsMalformedSegmentsAndEmptyAssignmentValues, VerifyCsgShaderVariantBuilderTests_RejectsMalformedSegmentsAndEmptyAssignmentValues)
+
 NWB_ADHD_GTEST(CsgShadowSnapshot, EmptyAndDisabledReceiversKeepTheZeroCsgPath, VerifyCsgShadowSnapshot_EmptyAndDisabledReceiversKeepTheZeroCsgPath)
+
 NWB_ADHD_GTEST(CsgShadowSnapshot, ResolvesGroupsAndMaterialPassesInShadowInstanceOrder, VerifyCsgShadowSnapshot_ResolvesGroupsAndMaterialPassesInShadowInstanceOrder)
+
 NWB_ADHD_GTEST(CsgShadowSnapshot, CullsOnlyFiniteOutsideCuttersWithTrustedReceiverBounds, VerifyCsgShadowSnapshot_CullsOnlyFiniteOutsideCuttersWithTrustedReceiverBounds)
+
 NWB_ADHD_GTEST(CsgShadowSnapshot, CustomEvaluatorUsesConservativeUncutFallbackOnlyWhenItCanOverlap, VerifyCsgShadowSnapshot_CustomEvaluatorUsesConservativeUncutFallbackOnlyWhenItCanOverlap)
+
 NWB_ADHD_GTEST(CsgShadowSnapshot, CutterLimitFallsBackForTheWholeReceiverWithoutPartialSubtraction, VerifyCsgShadowSnapshot_CutterLimitFallsBackForTheWholeReceiverWithoutPartialSubtraction)
+
 NWB_ADHD_GTEST(CsgShadowSnapshot, MalformedAndUnregisteredCuttersFollowRasterSkipSemantics, VerifyCsgShadowSnapshot_MalformedAndUnregisteredCuttersFollowRasterSkipSemantics)
+
 NWB_ADHD_GTEST(CsgShadowSnapshot, RepeatedSameSizeBuildsClearDisabledAndUnsupportedReceiverRanges, VerifyCsgShadowSnapshot_RepeatedSameSizeBuildsClearDisabledAndUnsupportedReceiverRanges)
+
 NWB_ADHD_GTEST(CsgShadowSnapshot, HardwareRootExclusionAndDisabledReceiversClearCapturedState, VerifyCsgShadowSnapshot_HardwareRootExclusionAndDisabledReceiversClearCapturedState)
+
 NWB_ADHD_GTEST(CsgShadowSnapshot, MissingSolidMembershipCannotPublishAnActiveRayContext, VerifyCsgShadowSnapshot_MissingSolidMembershipCannotPublishAnActiveRayContext)
+
 NWB_ADHD_GTEST(CsgShadowSnapshot, BoundedCaptureReuseAllowsOnlyTransformLagAndRefreshesWithinItsCadence, VerifyCsgShadowSnapshot_BoundedCaptureReuseAllowsOnlyTransformLagAndRefreshesWithinItsCadence)
+
 NWB_ADHD_GTEST(CsgShadowSnapshot, CaptureReuseRefreshesForContentTopologyMembershipAndBindingChanges, VerifyCsgShadowSnapshot_CaptureReuseRefreshesForContentTopologyMembershipAndBindingChanges)
+
 NWB_ADHD_GTEST(CsgShadowSnapshot, UnknownOrPendingRuntimePoseCannotReuseAnAcceptedCapture, VerifyCsgShadowSnapshot_UnknownOrPendingRuntimePoseCannotReuseAnAcceptedCapture)
+
 NWB_ADHD_GTEST(CsgShadowSnapshot, IdentityTracksEffectiveCutterEditsRegistryAndInstanceOrder, VerifyCsgShadowSnapshot_IdentityTracksEffectiveCutterEditsRegistryAndInstanceOrder)
+
 NWB_ADHD_GTEST(CsgShadowSnapshot, FrameCacheRejectsPendingRuntimeAttachmentWithUnchangedStaticInputs, VerifyCsgShadowSnapshot_FrameCacheRejectsPendingRuntimeAttachmentWithUnchangedStaticInputs)
+
 NWB_ADHD_GTEST(EcsGraphics, CsgNonFiniteReceiverBoundsDisableAabbCulling, VerifyEcsGraphics_CsgNonFiniteReceiverBoundsDisableAabbCulling)
+
 NWB_ADHD_GTEST(EcsGraphics, CsgCutterWorkBoundsIgnoreUntrustedReceiverAndKeepTrustedRejection, VerifyEcsGraphics_CsgCutterWorkBoundsIgnoreUntrustedReceiverAndKeepTrustedRejection)
+
 NWB_ADHD_GTEST(EcsGraphics, CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPreviousBounds, VerifyEcsGraphics_CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPreviousBounds)
+
 NWB_ADHD_GTEST(EcsGraphics, CsgReceiverWorkRegionFallsBackConservativelyAndClampsLargeProjections, VerifyEcsGraphics_CsgReceiverWorkRegionFallsBackConservativelyAndClampsLargeProjections)
 
 

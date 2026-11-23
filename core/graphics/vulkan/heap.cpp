@@ -164,7 +164,7 @@ Heap::Heap(const VulkanContext& context, VulkanAllocator& allocator)noexcept
 
 Heap::~Heap()noexcept{
     {
-        ScopedLock lock(m_bindingMutex);
+        NothrowScopedLock lock(m_bindingMutex);
         if(!m_bindingReservations.empty()){
             CaptureDiagnosticEvent(DiagnosticEventRecord{
                 .event = DiagnosticEventName::s_Error,

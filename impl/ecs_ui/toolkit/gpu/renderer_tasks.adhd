@@ -9,36 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 MatchesPreparedGpuSampledCounts(
-    in usize declaredGlyphs,
-    in usize preparedGlyphs,
-    in usize declaredSdfs,
-    in usize preparedSdfs,
-    in usize declaredTextures,
-    in usize preparedTextures
-){
-    return declaredGlyphs == preparedGlyphs && declaredSdfs == preparedSdfs && declaredTextures == preparedTextures;
-}
-
-b8 GpuTextureMatches(in GpuTaskGraphDeclarationReadView declarations, in GpuGraphResourceId id, in TextureHandle expected){
-    auto actual = declarations.borrowTexture(id);
-    return actual.has_value() == expected.valid() && (!actual.has_value() || SameAddress(actual.value(), expected.deref()));
-}
-
-b8 GpuBufferMatches(in GpuTaskGraphDeclarationReadView declarations, in GpuGraphResourceId id, in BufferHandle expected){
-    auto actual = declarations.borrowBuffer(id);
-    return actual.has_value() == expected.valid() && (!actual.has_value() || SameAddress(actual.value(), expected.deref()));
-}
-
-b8 GpuPipelineMatches(in GpuTaskGraphDeclarationReadView declarations, in GpuGraphPipelineId id, in GraphicsPipelineHandle expected){
-    auto actual = declarations.borrowGraphicsPipeline(id);
-    return actual.has_value() == expected.valid() && (!actual.has_value() || SameAddress(actual.value(), expected.deref()));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class GpuRasterTask{
     public GpuFrame frame;
     public GpuGraphResourceId color;
@@ -76,10 +46,6 @@ class GpuRasterTask{
     }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class GpuOutputTask{
     public GpuFrame frame;
     public GpuGraphResourceId backBuffer;
@@ -102,9 +68,46 @@ class GpuOutputTask{
     public void accepted(in QueueSubmissionToken token){ this.frame.deref().m_finalConsumer = token; }
 }
 
+class GpuCommandIrCaptureResetGuard : NoCopy{
+    private mut GpuCommandIrCapture m_capture;
+
+    public GpuCommandIrCaptureResetGuard(mut GpuCommandIrCapture capture){
+        this.m_capture = capture;
+    }
+    public ~GpuCommandIrCaptureResetGuard(){
+        this.m_capture.reset();
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+b8 MatchesPreparedGpuSampledCounts(
+    in usize declaredGlyphs,
+    in usize preparedGlyphs,
+    in usize declaredSdfs,
+    in usize preparedSdfs,
+    in usize declaredTextures,
+    in usize preparedTextures
+){
+    return declaredGlyphs == preparedGlyphs && declaredSdfs == preparedSdfs && declaredTextures == preparedTextures;
+}
+
+b8 GpuTextureMatches(in GpuTaskGraphDeclarationReadView declarations, in GpuGraphResourceId id, in TextureHandle expected){
+    auto actual = declarations.borrowTexture(id);
+    return actual.has_value() == expected.valid() && (!actual.has_value() || SameAddress(actual.value(), expected.deref()));
+}
+
+b8 GpuBufferMatches(in GpuTaskGraphDeclarationReadView declarations, in GpuGraphResourceId id, in BufferHandle expected){
+    auto actual = declarations.borrowBuffer(id);
+    return actual.has_value() == expected.valid() && (!actual.has_value() || SameAddress(actual.value(), expected.deref()));
+}
+
+b8 GpuPipelineMatches(in GpuTaskGraphDeclarationReadView declarations, in GpuGraphPipelineId id, in GraphicsPipelineHandle expected){
+    auto actual = declarations.borrowGraphicsPipeline(id);
+    return actual.has_value() == expected.valid() && (!actual.has_value() || SameAddress(actual.value(), expected.deref()));
+}
 
 [cpp_unwind]
 b8 ReplayCaptured(in GpuTaskRecordContext context, in GpuCommandIrCapture capture, mut CommandList commands){
@@ -132,21 +135,6 @@ b8 CaptureOutputState(
     if(!capture.captureSetGraphicsState(context.task, context.packet, context.queue, state))
         return false;
     return capture.captureBindGraphicsHeap(heap, context.task, context.packet, context.queue, payload.graphPipeline, payload.pipeline, descriptorOwner);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GpuCommandIrCaptureResetGuard : NoCopy{
-    private mut GpuCommandIrCapture m_capture;
-
-    public GpuCommandIrCaptureResetGuard(mut GpuCommandIrCapture capture){
-        this.m_capture = capture;
-    }
-    public ~GpuCommandIrCaptureResetGuard(){
-        this.m_capture.reset();
-    }
 }
 
 [cpp_unwind]
@@ -272,10 +260,6 @@ b8 RecordOutputCommandIr(in GpuOutputTask payload, in GpuTaskRecordContext conte
     return ReplayCaptured(context, capture, commands);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Optional<GpuScissorRect> ResolveGpuScissorRect(in GpuRasterGeometry geometry, in DrawCommand draw){
     const auto bounds = TryComputeGpuScissorBounds(geometry, draw);
     if(!bounds.has_value())
@@ -310,10 +294,6 @@ b8 ResolvePaintPushConstants(in GpuFrameData frame, in DrawCommand draw, mut Gpu
     AssignGpuPaintMaterialPushConstants(draw.material, textureSlot, draw.sdfChannel, sdfSpreadPixels, sdfDistanceEncoding, push);
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [cpp_unwind]
 b8 RecordGpuRaster(in GpuRasterTask payload, mut CommandList commands, in GpuTaskRecordContext context){
@@ -411,10 +391,6 @@ b8 RecordGpuRaster(in GpuRasterTask payload, mut CommandList commands, in GpuTas
         commands.endRenderPass();
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [cpp_unwind]
 b8 RecordGpuOutput(in GpuOutputTask payload, mut CommandList commands, in GpuTaskRecordContext context){

@@ -7,6 +7,26 @@
 #include <impl/ecs_render/kernel/timing_names.adhd>
 #include <impl/ecs_render/shared/frame_push_constants.adhd>
 #include <impl/ecs_render/shared/renderer_push_constants_private.adhd>
+#include <impl/ecs_render/material/material_system.adhd>
+#include <impl/ecs_render/kernel/compute_pipeline_utils.adhd>
+#include <impl/ecs_render/kernel/renderer_constants_private.adhd>
+#include <impl/assets_graphics/mesh_subsystem.adhd>
+#include <impl/ecs_render/shader/shader_system.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<impl/assets/graphics/mesh/object_geometry_constants.h>"), cpp_name("NWB_MESH_OBJECT_VERTEX_POSITION_BYTE_OFFSET")]
+extern const u32 s_ObjectVertexPositionOffset;
+[cpp_header("<impl/assets/graphics/mesh/object_geometry_constants.h>"), cpp_name("NWB_MESH_OBJECT_VERTEX_NORMAL_BYTE_OFFSET")]
+extern const u32 s_ObjectVertexNormalOffset;
+[cpp_header("<impl/assets/graphics/mesh/object_geometry_constants.h>"), cpp_name("NWB_MESH_OBJECT_VERTEX_TANGENT_BYTE_OFFSET")]
+extern const u32 s_ObjectVertexTangentOffset;
+[cpp_header("<impl/assets/graphics/mesh/object_geometry_constants.h>"), cpp_name("NWB_MESH_OBJECT_VERTEX_UV0_BYTE_OFFSET")]
+extern const u32 s_ObjectVertexUv0Offset;
+[cpp_header("<impl/assets/graphics/mesh/object_geometry_constants.h>"), cpp_name("NWB_MESH_OBJECT_VERTEX_COLOR_BYTE_OFFSET")]
+extern const u32 s_ObjectVertexColorOffset;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -579,23 +599,6 @@ b8 MaterialPassDrawRecorder::prepareMaterialPassResourceBindingsImpl(in Span<Mat
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/material/material_system.adhd>
-#include <impl/ecs_render/kernel/compute_pipeline_utils.adhd>
-#include <impl/ecs_render/kernel/renderer_constants_private.adhd>
-#include <impl/assets_graphics/mesh_subsystem.adhd>
-#include <impl/ecs_render/shader/shader_system.adhd>
-
-[cpp_header("<impl/assets/graphics/mesh/object_geometry_constants.h>"), cpp_name("NWB_MESH_OBJECT_VERTEX_POSITION_BYTE_OFFSET")]
-extern const u32 s_ObjectVertexPositionOffset;
-[cpp_header("<impl/assets/graphics/mesh/object_geometry_constants.h>"), cpp_name("NWB_MESH_OBJECT_VERTEX_NORMAL_BYTE_OFFSET")]
-extern const u32 s_ObjectVertexNormalOffset;
-[cpp_header("<impl/assets/graphics/mesh/object_geometry_constants.h>"), cpp_name("NWB_MESH_OBJECT_VERTEX_TANGENT_BYTE_OFFSET")]
-extern const u32 s_ObjectVertexTangentOffset;
-[cpp_header("<impl/assets/graphics/mesh/object_geometry_constants.h>"), cpp_name("NWB_MESH_OBJECT_VERTEX_UV0_BYTE_OFFSET")]
-extern const u32 s_ObjectVertexUv0Offset;
-[cpp_header("<impl/assets/graphics/mesh/object_geometry_constants.h>"), cpp_name("NWB_MESH_OBJECT_VERTEX_COLOR_BYTE_OFFSET")]
-extern const u32 s_ObjectVertexColorOffset;
-
 GpuTimingScopeDefinition MaterialPassGpuTimingScope(in MaterialPipelinePass pass){
     switch(pass){
     case MaterialPipelinePass::AvboitOccupancy: return s_TimingScopeAvboitOccupancy;
@@ -721,8 +724,12 @@ b8 RendererMaterialSystem::createObjectGeometryPipelineResources(mut MaterialPip
         if(!this.m_shaderSystem.loadShader<ComputeShader, MeshSubsystem>(lambda[](in MeshSubsystem s) -> AssetRef<ComputeShader>{ return s.objectDecodeCs; }, s_ShaderArchiveDefaultVariant,
             s_ObjectGeometryDecodeDebugName, this.m_materialState.m_objectGeometryDecodeShader))
             return false;
-        if(!CreateHeapComputePipeline(device, this.m_materialState.m_objectGeometryDecodeShader, this.m_materialState.m_computeBindingLayout, false, this.m_materialState.m_objectGeometryDecodePipeline))
+        const Expected<ComputePipelineHandle> pipeline = CreateHeapComputePipeline(device, this.m_materialState.m_objectGeometryDecodeShader, this.m_materialState.m_computeBindingLayout, false);
+        if(!pipeline.has_value()){
+            this.m_materialState.m_objectGeometryDecodePipeline.reset();
             return false;
+        }
+        this.m_materialState.m_objectGeometryDecodePipeline = pipeline.value();
     }
     if(!this.m_shaderSystem.loadShader<VertexShader, MeshSubsystem>(lambda[](in MeshSubsystem s) -> AssetRef<VertexShader>{ return s.objectVs; }, s_ShaderArchiveDefaultVariant, s_ObjectGeometryVsDebugName, resources.objectGeometryVertexShader))
         return false;

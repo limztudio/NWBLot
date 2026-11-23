@@ -472,55 +472,54 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 
     NwbBvhNode node = nwbHeapBvhNodesUniform(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[0u];
     float unusedRootEntry;
-    if(nwbBvhRayAabbIntervalFma(invDir, negOriginInvDir, tMin, closest.t, node.aabbMin, node.aabbMax, unusedRootEntry)){
-        uint stack[NWB_CAUSTIC_SW_SCENE_STACK_SIZE];
-        stack[0u] = 0u;
-        uint stackPointer = 0u;
+    const bool rootHit = nwbBvhRayAabbIntervalFma(invDir, negOriginInvDir, tMin, closest.t, node.aabbMin, node.aabbMax, unusedRootEntry);
+    uint stack[NWB_CAUSTIC_SW_SCENE_STACK_SIZE];
+    stack[0u] = 0u;
+    uint stackPointer = 0u;
 
-        bool sceneOverflow = false;
-        [loop] while(!sceneOverflow){
-            if(nwbBvhNodeIsLeaf(node)){
-                nwbCausticSwInstanceClosest(nwbBvhLeafPrimitive(node), origin, direction, tMin, closest);
-            }
-            else{
-                const NwbBvhNode leftNode = nwbHeapBvhNodesUniform(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[node.leftChild];
-                const uint right = nwbBvhNodeRightChildIndex(node);
-                const NwbBvhNode rightNode = nwbHeapBvhNodesUniform(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[right];
-                NwbBvhNode descendNode;
-                uint farChild;
-                float farEntryT;
-                bool bothHit;
-                if(nwbBvhPickNearChildFma(invDir, negOriginInvDir, tMin, closest.t, node, leftNode, right, rightNode, descendNode, farChild, farEntryT, bothHit)){
-                    if(bothHit){
-                        if(stackPointer == NWB_CAUSTIC_SW_SCENE_STACK_SIZE){
-                            sceneOverflow = true;
-                            break;
-                        }
-                        stack[stackPointer] = farChild;
-                        ++stackPointer;
+    bool sceneOverflow = false;
+    [loop] while(rootHit && !sceneOverflow){
+        if(nwbBvhNodeIsLeaf(node)){
+            nwbCausticSwInstanceClosest(nwbBvhLeafPrimitive(node), origin, direction, tMin, closest);
+        }
+        else{
+            const NwbBvhNode leftNode = nwbHeapBvhNodesUniform(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[node.leftChild];
+            const uint right = nwbBvhNodeRightChildIndex(node);
+            const NwbBvhNode rightNode = nwbHeapBvhNodesUniform(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[right];
+            NwbBvhNode descendNode;
+            uint farChild;
+            float farEntryT;
+            bool bothHit;
+            if(nwbBvhPickNearChildFma(invDir, negOriginInvDir, tMin, closest.t, node, leftNode, right, rightNode, descendNode, farChild, farEntryT, bothHit)){
+                if(bothHit){
+                    if(stackPointer == NWB_CAUSTIC_SW_SCENE_STACK_SIZE){
+                        sceneOverflow = true;
+                        break;
                     }
-                    node = descendNode;
-                    continue;
+                    stack[stackPointer] = farChild;
+                    ++stackPointer;
                 }
+                node = descendNode;
+                continue;
             }
-            bool popped = false;
-            while(stackPointer > 0u){
-                --stackPointer;
-                node = nwbHeapBvhNodesUniform(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[stack[stackPointer]];
-                float popEntryT;
-                if(nwbBvhRayAabbIntervalFma(invDir, negOriginInvDir, tMin, closest.t, node.aabbMin, node.aabbMax, popEntryT)){
-                    popped = true;
-                    break;
-                }
-            }
-            if(!popped)
+        }
+        bool popped = false;
+        while(stackPointer > 0u){
+            --stackPointer;
+            node = nwbHeapBvhNodesUniform(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[stack[stackPointer]];
+            float popEntryT;
+            if(nwbBvhRayAabbIntervalFma(invDir, negOriginInvDir, tMin, closest.t, node.aabbMin, node.aabbMax, popEntryT)){
+                popped = true;
                 break;
+            }
         }
+        if(!popped)
+            break;
+    }
 
-        if(sceneOverflow){
-            [loop] for(uint instance = 0u; instance < g_NwbCausticSwPushConstants.instanceCount; ++instance)
-                nwbCausticSwInstanceClosest(instance, origin, direction, tMin, closest);
-        }
+    if(sceneOverflow){
+        [loop] for(uint instance = 0u; instance < g_NwbCausticSwPushConstants.instanceCount; ++instance)
+            nwbCausticSwInstanceClosest(instance, origin, direction, tMin, closest);
     }
 
 #if NWB_RT_CSG_ENABLED

@@ -18,6 +18,22 @@ enum<u8> RayTraceReadTokenStatus{
     kCount
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CsgClipReceiverTransform{
+    public f32x4 position(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 rotation(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 scale(0.0f, 0.0f, 0.0f, 0.0f);
+    public b8 present = false;
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 ShouldAdvanceRayTraceReadToken(in b8 previousValid, in b8 matchesQueue, in u64 tokenValue, in u64 previousValue){
     return !previousValid || !matchesQueue || tokenValue > previousValue;
 }
@@ -33,18 +49,6 @@ RayTraceReadTokenStatus ClassifyRayTraceReadTokenStatus(
     if(hasCompletedValue && completedValue >= tokenValue)
         return RayTraceReadTokenStatus::Retired;
     return RayTraceReadTokenStatus::Pending;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class CsgClipReceiverTransform{
-    public f32x4 position(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 rotation(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 scale(0.0f, 0.0f, 0.0f, 0.0f);
-    public b8 present = false;
-
 }
 
 CsgClipReceiverTransform ReadCsgClipReceiverTransform(in Optional<in TransformComponent> transform){
@@ -98,9 +102,9 @@ b8 VisitReceiverClipCutters<Visitor>(
         const auto parameters = TryResolveCsgCutterParameterBytes(shape.value().desc.parameterByteSize, shape.value().desc.defaultParameterBytes, cutter.parameterBytes);
         if(!parameters.has_value())
             continue;
-        CsgClipWorkBounds work;
-        if(ResolveCsgClipWorkBounds(registry, shape.value(), MatrixSingle(cutter.shapeToWorld), parameters.value(), receiverBounds, work)){
-            if(!visit(shape.value().id, shape.value().desc.shaderModule, shape.value().desc.parameterByteSize, MatrixSingle(cutter.worldToShape), parameters.value(), work))
+        const Expected<CsgClipWorkBounds> work = ResolveCsgClipWorkBounds(registry, shape.value(), MatrixSingle(cutter.shapeToWorld), parameters.value(), receiverBounds);
+        if(work.has_value()){
+            if(!visit(shape.value().id, shape.value().desc.shaderModule, shape.value().desc.parameterByteSize, MatrixSingle(cutter.worldToShape), parameters.value(), work.value()))
                 return false;
         }
     }
@@ -185,10 +189,6 @@ Expected<CsgReceiverRangeGpuData> AppendCsgReceiverClipDataImpl(
     return range;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Expected<CsgReceiverClipDrawInfo> RendererCsgSystem::resolveCsgReceiverClipDrawInfo(
     in CsgFrameReceiverLookup receiverLookup,
     in CsgReceiverDrawState receiverDrawState,
@@ -255,10 +255,6 @@ Expected<CsgReceiverRangeGpuData> RendererCsgSystem::appendCsgReceiverClipData(
     return AppendCsgReceiverClipDataImpl(this.m_csgShapeRegistry, this.m_meshSystem, receiverLookup, receiverDrawState, receiverBounds, Optional<in TransformComponent>(transform), frameWidth, frameHeight,
         Optional<in MeshViewGpuData>(csgWorkRegionMeshViewState), csgFrameData);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [cpp_unwind]
 Expected<Optional<GpuUploadBlobId>> RendererRayTracingSystem::retainPreparedCsgTraceContextUpload(mut GpuTaskGraph graph, mut u64 outHash, mut usize outByteSize, mut usize outBufferIdentity)const{
@@ -382,19 +378,19 @@ b8 RendererRayTracingSystem::ensureCsgTraceContextResources(){
     const usize byteCount = this.m_lightSpaceShadow.m_csg.bytes.size();
     mut BufferHandle buffer = this.m_rayTracingState.sceneBvh.m_csgTraceContextBuffer;
     mut GpuDescriptorHandle handle = this.m_rayTracingState.sceneBvh.m_csgTraceContextHeapHandle;
-    u64 capacity = 0u;
     u64 currentBytes = 0u;
     if(buffer.valid())
         currentBytes = buffer.deref().getCreationDescription().byteSize;
-    if(!ResolveCsgTraceContextBufferCapacity(
+    const Expected<u64> capacityResult = ResolveCsgTraceContextBufferCapacity(
         heap.isInitialized(),
         byteCount,
         device.getMaxStorageBufferRange(),
         buffer.valid(),
-        currentBytes,
-        capacity
-    ))
+        currentBytes
+    );
+    if(!capacityResult.has_value())
         return false;
+    const u64 capacity = capacityResult.value();
     if(buffer.valid() && buffer.deref().getCreationDescription().byteSize >= byteCount)
         return EnsureHeapBuffer(GpuDescriptorClass::StorageBuffer, false, heap, buffer.deref(), handle);
     BufferDesc desc;

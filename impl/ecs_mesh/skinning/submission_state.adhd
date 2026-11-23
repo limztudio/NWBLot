@@ -101,6 +101,7 @@ b8 CanReuseMeshSkinningDeformationState(
     return EqualSkeletonJointMatrixSpan(joints, acceptedJoints);
 }
 
+[cpp_unwind]
 Expected<u64> TryStageMeshSkinningDeformationCandidate(
     in b8 hasResourceSlotsBuffer,
     in Span<SkeletonJointMatrix> joints,

@@ -159,14 +159,22 @@ b8 RendererAvboitSystem::createAvboitPipelines(){
         return false;
     }
 
-    if(!this.m_avboitState.m_depthWarpPipeline.valid() && !CreateHeapComputePipeline(device, this.m_avboitState.m_depthWarpComputeShader, materialPassBindingLayout.value(), false, this.m_avboitState.m_depthWarpPipeline)){
-        error("RendererSystem: failed to create AVBOIT depth-warp pipeline");
-        return false;
+    if(!this.m_avboitState.m_depthWarpPipeline.valid()){
+        const Expected<ComputePipelineHandle> pipeline = CreateHeapComputePipeline(device, this.m_avboitState.m_depthWarpComputeShader, materialPassBindingLayout.value(), false);
+        if(!pipeline.has_value()){
+            error("RendererSystem: failed to create AVBOIT depth-warp pipeline");
+            return false;
+        }
+        this.m_avboitState.m_depthWarpPipeline = pipeline.value();
     }
 
-    if(!this.m_avboitState.m_integratePipeline.valid() && !CreateHeapComputePipeline(device, this.m_avboitState.m_integrateComputeShader, materialPassBindingLayout.value(), false, this.m_avboitState.m_integratePipeline)){
-        error("RendererSystem: failed to create AVBOIT integration pipeline");
-        return false;
+    if(!this.m_avboitState.m_integratePipeline.valid()){
+        const Expected<ComputePipelineHandle> pipeline = CreateHeapComputePipeline(device, this.m_avboitState.m_integrateComputeShader, materialPassBindingLayout.value(), false);
+        if(!pipeline.has_value()){
+            error("RendererSystem: failed to create AVBOIT integration pipeline");
+            return false;
+        }
+        this.m_avboitState.m_integratePipeline = pipeline.value();
     }
 
     return true;
@@ -369,26 +377,51 @@ b8 RendererAvboitSystem::registerAvboitFrameTargetDescriptors(mut DeferredFrameT
     assert(!avboitTargets.refractionTileListDescriptor.valid());
     assert(!avboitTargets.refractionTileArgumentsDescriptor.valid());
 
-    const b8 targetResourcesRegistered =
-        AssignStructuredBufferUav(heap, avboitTargets.coverageBuffer.deref(), avboitTargets.coverageBufferDescriptor)
-        && AssignStructuredBufferUav(heap, avboitTargets.depthWarpBuffer.deref(), avboitTargets.depthWarpBufferDescriptor)
-        && AssignStructuredBufferUav(heap, avboitTargets.controlBuffer.deref(), avboitTargets.controlBufferDescriptor)
-        && AssignStructuredBufferUav(heap, avboitTargets.extinctionBuffer.deref(), avboitTargets.extinctionBufferDescriptor)
-        && AssignStructuredBufferUav(heap, avboitTargets.extinctionOverflowBuffer.deref(), avboitTargets.extinctionOverflowBufferDescriptor)
-        && AssignDescriptor(
-            heap,
-            GpuDescriptorClass::StorageImage,
-            DescriptorWriteItemTextureUav(0u, avboitTargets.transmittanceTexture.deref(), avboitTargets.transmittanceFormat, s_FramebufferSubresources, TextureDimension::Texture3D),
-            avboitTargets.transmittanceTextureStorageDescriptor
-        )
-        && AssignStructuredBufferUav(heap, avboitTargets.refractionTileList.deref(), avboitTargets.refractionTileListDescriptor)
-        && AssignStructuredBufferUav(heap, avboitTargets.refractionTileArguments.deref(), avboitTargets.refractionTileArgumentsDescriptor)
-    ;
-    if(!targetResourcesRegistered){
+    const auto registrationFailed = lambda[mut heap, mut avboitTargets]() -> b8{
         RetireAvboitTargetDescriptors(heap, avboitTargets);
         error("RendererSystem: failed to register AVBOIT work resources in the descriptor heap");
         return false;
-    }
+    };
+
+    const Expected<GpuDescriptorHandle> coverageBufferDescriptor = RegisterDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemStructuredBufferUav(0u, avboitTargets.coverageBuffer.deref()));
+    if(!coverageBufferDescriptor.has_value())
+        return registrationFailed();
+    avboitTargets.coverageBufferDescriptor = coverageBufferDescriptor.value();
+
+    const Expected<GpuDescriptorHandle> depthWarpBufferDescriptor = RegisterDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemStructuredBufferUav(0u, avboitTargets.depthWarpBuffer.deref()));
+    if(!depthWarpBufferDescriptor.has_value())
+        return registrationFailed();
+    avboitTargets.depthWarpBufferDescriptor = depthWarpBufferDescriptor.value();
+
+    const Expected<GpuDescriptorHandle> controlBufferDescriptor = RegisterDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemStructuredBufferUav(0u, avboitTargets.controlBuffer.deref()));
+    if(!controlBufferDescriptor.has_value())
+        return registrationFailed();
+    avboitTargets.controlBufferDescriptor = controlBufferDescriptor.value();
+
+    const Expected<GpuDescriptorHandle> extinctionBufferDescriptor = RegisterDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemStructuredBufferUav(0u, avboitTargets.extinctionBuffer.deref()));
+    if(!extinctionBufferDescriptor.has_value())
+        return registrationFailed();
+    avboitTargets.extinctionBufferDescriptor = extinctionBufferDescriptor.value();
+
+    const Expected<GpuDescriptorHandle> extinctionOverflowBufferDescriptor = RegisterDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemStructuredBufferUav(0u, avboitTargets.extinctionOverflowBuffer.deref()));
+    if(!extinctionOverflowBufferDescriptor.has_value())
+        return registrationFailed();
+    avboitTargets.extinctionOverflowBufferDescriptor = extinctionOverflowBufferDescriptor.value();
+
+    const Expected<GpuDescriptorHandle> transmittanceTextureStorageDescriptor = RegisterDescriptor(heap, GpuDescriptorClass::StorageImage, DescriptorWriteItemTextureUav(0u, avboitTargets.transmittanceTexture.deref(), avboitTargets.transmittanceFormat, s_FramebufferSubresources, TextureDimension::Texture3D));
+    if(!transmittanceTextureStorageDescriptor.has_value())
+        return registrationFailed();
+    avboitTargets.transmittanceTextureStorageDescriptor = transmittanceTextureStorageDescriptor.value();
+
+    const Expected<GpuDescriptorHandle> refractionTileListDescriptor = RegisterDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemStructuredBufferUav(0u, avboitTargets.refractionTileList.deref()));
+    if(!refractionTileListDescriptor.has_value())
+        return registrationFailed();
+    avboitTargets.refractionTileListDescriptor = refractionTileListDescriptor.value();
+
+    const Expected<GpuDescriptorHandle> refractionTileArgumentsDescriptor = RegisterDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemStructuredBufferUav(0u, avboitTargets.refractionTileArguments.deref()));
+    if(!refractionTileArgumentsDescriptor.has_value())
+        return registrationFailed();
+    avboitTargets.refractionTileArgumentsDescriptor = refractionTileArgumentsDescriptor.value();
 
     avboitTargets.deferredSlotsBufferDescriptor = createdTargets.bindless.slotsBufferDescriptor;
     createdTargets.bindless.slots.avboitCoverage = avboitTargets.coverageBufferDescriptor.slot();

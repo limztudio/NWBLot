@@ -11,68 +11,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-enum<u8> UiNestedPopupReentryKind{ Reset, Panel }
 const usize s_NestedRouterTargetCount = 1u + 3u * s_InputMaxPopups;
-HitTarget MakeUiNestedPopupRouterBaseHitTarget(){
-    HitTarget target;
-    target.id = WidgetId(1u);
-    target.rectangle = Rect(4.0f, 4.0f, 20.0f, 18.0f);
-    target.clip = Rect(0.0f, 0.0f, 400.0f, 300.0f);
-    target.focusable = true;
-    target.activatable = true;
-    return target;
-}
+const StringView s_UiNestedPopupRouterParentKey = "parent";
+const StringView s_UiNestedPopupRouterChildKey = "child";
+const StringView s_UiNestedPopupRouterListKey = "list";
+const StringView s_UiNestedPopupRouterComboKey = "combo";
+const StringView s_UiNestedPopupRouterAnchorKey = "anchor";
+const StringView s_UiNestedPopupRouterCallbackQuery = "callback";
 
-PopupScope MakeUiNestedPopupRouterScope(in u64 widget, in u32 layer){ return MakeUiNestedPopupRouterScope(widget, layer, PopupToken()); }
-PopupScope MakeUiNestedPopupRouterScope(in u64 widget, in u32 layer, in PopupToken parent){
-    PopupScope scope;
-    scope.token = PopupToken(WidgetId(widget), 10u, 20u, 1u);
-    if(widget == 100u)
-        scope.bounds = Rect(30.0f, 30.0f, 110.0f, 70.0f);
-    else if(widget == 200u)
-        scope.bounds = Rect(170.0f, 120.0f, 100.0f, 80.0f);
-    else if(widget == 300u)
-        scope.bounds = Rect(280.0f, 200.0f, 100.0f, 70.0f);
-    else
-        scope.bounds = Rect(250.0f, 30.0f, 120.0f, 70.0f);
-    scope.viewport = Rect(0.0f, 0.0f, 400.0f, 300.0f);
-    scope.layer = layer;
-    scope.parent = parent;
-    return scope;
-}
+enum<u8> UiNestedPopupReentryKind{ Reset, Panel }
 
-HitTarget MakeUiNestedPopupRouterBarrier(in PopupScope scope, in u32 order){
-    HitTarget target;
-    target.id = scope.token.widget;
-    target.declarationGeneration = scope.token.declarationGeneration;
-    target.rectangle = scope.bounds;
-    target.clip = scope.viewport;
-    target.paintOrder = order;
-    target.popup = scope.token;
-    target.layer = scope.layer;
-    return target;
-}
 
-HitTarget MakeUiNestedPopupRouterChild(in PopupScope scope, in u64 offset, in u32 order, in b8 navigation){
-    HitTarget target;
-    target.id = WidgetId(scope.token.widget.value + offset);
-    target.declarationGeneration = 10u;
-    const f32 insetX = scope.bounds.x + 4.0f;
-    const f32 insetY = scope.bounds.y + 4.0f;
-    target.rectangle = Rect(cast<f32>(offset - 1u) * 35.0f + insetX, insetY, 24.0f, 18.0f);
-    target.clip = scope.bounds;
-    target.paintOrder = order;
-    target.popup = scope.token;
-    target.layer = scope.layer;
-    target.focusable = true;
-    target.activatable = true;
-    if(navigation && offset == 1u){
-        target.navigable = true;
-        target.contextMenu = true;
-        target.control = ControlToken(600u, 700u, 800u);
-    }
-    return target;
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 class UiNestedPopupLoanMutationSource : ComboSource{
@@ -160,7 +110,6 @@ class UiNestedPopupLoanMutationSource : ComboSource{
     public b8 hasReopenPopupOnText()const{ return this.reopenPopupOnText.value().has_value(); }
 }
 
-
 class NestedSearchSource : ISearchableListDataSource{
     public UiNestedPopupLoanMutationSource full = UiNestedPopupLoanMutationSource(2201u);
     public UiNestedPopupLoanMutationSource view = UiNestedPopupLoanMutationSource(2202u);
@@ -192,7 +141,6 @@ class NestedSearchSource : ISearchableListDataSource{
     }
     public in IListDataSource filtered()const override{ ++this.filteredCalls.value(); return this.view; }
 }
-
 
 class UiNestedPopupLoanTests : WidgetFixture{
     public UiNestedPopupLoanMutationSource m_parentSource = UiNestedPopupLoanMutationSource(2101u);
@@ -277,7 +225,6 @@ class UiNestedPopupLoanTests : WidgetFixture{
         EXPECT_EQ(this.m_host.publications, 0u);
     }
 }
-
 
 class ReentrySource : ComboSource{
     public Optional<in ReentrySource> m_observer;
@@ -390,7 +337,6 @@ class ReentrySource : ComboSource{
     }
 }
 
-
 class UiNestedPopupReentryAcceptedFrame{
     public Array<HitTarget, 32u> targets;
     public usize count = 0u;
@@ -401,7 +347,6 @@ class UiNestedPopupReentryAcceptedFrame{
 
 
 }
-
 
 class UiNestedPopupReentryTests : WidgetFixture{
     public ReentrySource m_parentSource = ReentrySource(2401u);
@@ -492,7 +437,6 @@ class UiNestedPopupReentryTests : WidgetFixture{
     }
 }
 
-
 class UiNestedPopupRouterTests : RouterTestFixture{
 
 
@@ -537,7 +481,6 @@ class UiNestedPopupRouterTests : RouterTestFixture{
         ASSERT_EQ(this.m_router.focus().value, 1u);
     }
 }
-
 
 class UiNestedPopupTriggerTests : ComboFixture{
     public PopupState m_parent;
@@ -609,6 +552,71 @@ class UiNestedPopupTriggerTests : ComboFixture{
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+HitTarget MakeUiNestedPopupRouterBaseHitTarget(){
+    HitTarget target;
+    target.id = WidgetId(1u);
+    target.rectangle = Rect(4.0f, 4.0f, 20.0f, 18.0f);
+    target.clip = Rect(0.0f, 0.0f, 400.0f, 300.0f);
+    target.focusable = true;
+    target.activatable = true;
+    return target;
+}
+
+PopupScope MakeUiNestedPopupRouterScope(in u64 widget, in u32 layer){ return MakeUiNestedPopupRouterScope(widget, layer, PopupToken()); }
+
+PopupScope MakeUiNestedPopupRouterScope(in u64 widget, in u32 layer, in PopupToken parent){
+    PopupScope scope;
+    scope.token = PopupToken(WidgetId(widget), 10u, 20u, 1u);
+    if(widget == 100u)
+        scope.bounds = Rect(30.0f, 30.0f, 110.0f, 70.0f);
+    else if(widget == 200u)
+        scope.bounds = Rect(170.0f, 120.0f, 100.0f, 80.0f);
+    else if(widget == 300u)
+        scope.bounds = Rect(280.0f, 200.0f, 100.0f, 70.0f);
+    else
+        scope.bounds = Rect(250.0f, 30.0f, 120.0f, 70.0f);
+    scope.viewport = Rect(0.0f, 0.0f, 400.0f, 300.0f);
+    scope.layer = layer;
+    scope.parent = parent;
+    return scope;
+}
+
+HitTarget MakeUiNestedPopupRouterBarrier(in PopupScope scope, in u32 order){
+    HitTarget target;
+    target.id = scope.token.widget;
+    target.declarationGeneration = scope.token.declarationGeneration;
+    target.rectangle = scope.bounds;
+    target.clip = scope.viewport;
+    target.paintOrder = order;
+    target.popup = scope.token;
+    target.layer = scope.layer;
+    return target;
+}
+
+HitTarget MakeUiNestedPopupRouterChild(in PopupScope scope, in u64 offset, in u32 order, in b8 navigation){
+    HitTarget target;
+    target.id = WidgetId(scope.token.widget.value + offset);
+    target.declarationGeneration = 10u;
+    const f32 insetX = scope.bounds.x + 4.0f;
+    const f32 insetY = scope.bounds.y + 4.0f;
+    target.rectangle = Rect(cast<f32>(offset - 1u) * 35.0f + insetX, insetY, 24.0f, 18.0f);
+    target.clip = scope.bounds;
+    target.paintOrder = order;
+    target.popup = scope.token;
+    target.layer = scope.layer;
+    target.focusable = true;
+    target.activatable = true;
+    if(navigation && offset == 1u){
+        target.navigable = true;
+        target.contextMenu = true;
+        target.control = ControlToken(600u, 700u, 800u);
+    }
+    return target;
+}
+
 void ExpectNoNestedSourceCallbacks(in UiNestedPopupLoanMutationSource source){
     EXPECT_EQ(source.metadataCalls.value(), 0u);
     EXPECT_EQ(source.keyCalls.value(), 0u);
@@ -617,21 +625,6 @@ void ExpectNoNestedSourceCallbacks(in UiNestedPopupLoanMutationSource source){
     EXPECT_EQ(source.textCalls.value(), 0u);
     EXPECT_EQ(source.enabledCalls.value(), 0u);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const StringView s_UiNestedPopupRouterParentKey = "parent";
-const StringView s_UiNestedPopupRouterChildKey = "child";
-const StringView s_UiNestedPopupRouterListKey = "list";
-const StringView s_UiNestedPopupRouterComboKey = "combo";
-const StringView s_UiNestedPopupRouterAnchorKey = "anchor";
-const StringView s_UiNestedPopupRouterCallbackQuery = "callback";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 PopupToken MakeUiNestedPopupRouterToken(in u64 widgetValue, in u64 declarationGeneration, in u64 instanceGeneration, in u64 openGeneration){
     PopupToken token = PopupToken();
@@ -649,10 +642,6 @@ ControlToken MakeUiNestedPopupRouterControlToken(in u64 instanceGeneration, in u
     token.contentRevision = contentRevision;
     return token;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyUiNestedPopupLoanTests_ChildEndDefersVisibleRowCallbacksUntilTheOuterPopupEnds(mut UiNestedPopupLoanTests self){
     ASSERT_TRUE(self.beginParent(1u));
@@ -890,10 +879,6 @@ void VerifyUiNestedPopupLoanTests_ChildFirstRowReopeningItsAncestorRejectsBefore
     EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyUiNestedPopupReentryTests_ChildFirstRowResetRejectsWithoutClearingBorrowedFrames(mut UiNestedPopupReentryTests self){
     ASSERT_TRUE(self.acceptBase());
     const UiNestedPopupReentryAcceptedFrame frame = self.accepted();
@@ -1016,10 +1001,6 @@ void VerifyUiNestedPopupReentryTests_LateParentRevisionScopeReentryRejectsAfterA
     EXPECT_FALSE(self.m_context.commitFrame(2u));
     self.expectRejected(frame);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void VerifyUiNestedPopupRouterTests_ChildMayExtendOutsideParentWhileFocusAndPointerStayInAcceptedTopScope(mut UiNestedPopupRouterTests self){
     const PopupScope parent = MakeUiNestedPopupRouterScope(100u, 1u);
@@ -1439,10 +1420,6 @@ void VerifyUiNestedPopupRouterTests_NativeFocusLossDismissesWholeFamilyWithoutRe
     EXPECT_FALSE(self.m_router.hasPopup());
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyUiNestedPopupTriggerTests_NestedComboRejectsDisabledRowWithoutActivatingUserAncestors(mut UiNestedPopupTriggerTests self){
     ASSERT_TRUE(self.acceptChildCombo(1u));
     const Expected<HitTarget> fieldTarget = self.tryTarget(self.fieldId());
@@ -1503,46 +1480,72 @@ void VerifyUiNestedPopupTriggerTests_NestedMenuSkipsDisabledCommandsWithoutActiv
     self.expectUserParentsOpen();
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ChildEndDefersVisibleRowCallbacksUntilTheOuterPopupEnds, VerifyUiNestedPopupLoanTests_ChildEndDefersVisibleRowCallbacksUntilTheOuterPopupEnds)
+
 NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ExplicitChildListMutationAfterChildEndRejectsTheEnclosingLoan, VerifyUiNestedPopupLoanTests_ExplicitChildListMutationAfterChildEndRejectsTheEnclosingLoan)
+
 NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ChildVisibleRowCallbackCannotMutateThePaintedParentListLoan, VerifyUiNestedPopupLoanTests_ChildVisibleRowCallbackCannotMutateThePaintedParentListLoan)
+
 NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ParentVisibleRowCallbackCannotMutateTheEndedChildListLoan, VerifyUiNestedPopupLoanTests_ParentVisibleRowCallbackCannotMutateTheEndedChildListLoan)
+
 NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ParentMetadataCallbackArmedByChildPaintStillRejectsThePaintedChildMutation, VerifyUiNestedPopupLoanTests_ParentMetadataCallbackArmedByChildPaintStillRejectsThePaintedChildMutation)
+
 NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ChildSourceCallbackCannotMutateTheParentComboAfterItsFieldPaint, VerifyUiNestedPopupLoanTests_ChildSourceCallbackCannotMutateTheParentComboAfterItsFieldPaint)
+
 NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ParentSourceCallbackCannotMutateTheEndedChildSearchQueryLoan, VerifyUiNestedPopupLoanTests_ParentSourceCallbackCannotMutateTheEndedChildSearchQueryLoan)
+
 NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ChildSourceCallbackCannotCloseTheParentContextMenuAndPublishTheFrame, VerifyUiNestedPopupLoanTests_ChildSourceCallbackCannotCloseTheParentContextMenuAndPublishTheFrame)
+
 NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ClosingTheParentBeforeOuterEndSuppressesEveryDescendantSourceAndQueryPublication, VerifyUiNestedPopupLoanTests_ClosingTheParentBeforeOuterEndSuppressesEveryDescendantSourceAndQueryPublication)
+
 NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ReopeningTheParentBeforeOuterEndSuppressesItsOldDescendantLoans, VerifyUiNestedPopupLoanTests_ReopeningTheParentBeforeOuterEndSuppressesItsOldDescendantLoans)
+
 NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ClosingTheEndedChildSkipsItsCallbacksAndKeepsParentControlsPainted, VerifyUiNestedPopupLoanTests_ClosingTheEndedChildSkipsItsCallbacksAndKeepsParentControlsPainted)
+
 NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ReopeningTheEndedChildRetiresItsOldBodyBeforeSourceCallbacks, VerifyUiNestedPopupLoanTests_ReopeningTheEndedChildRetiresItsOldBodyBeforeSourceCallbacks)
+
 NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ParentFirstRowClosingItsPopupRejectsBeforeAnyDescendantTextCallback, VerifyUiNestedPopupLoanTests_ParentFirstRowClosingItsPopupRejectsBeforeAnyDescendantTextCallback)
+
 NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ChildFirstRowReopeningItsAncestorRejectsBeforeLaterRowsOrSiblingCallbacks, VerifyUiNestedPopupLoanTests_ChildFirstRowReopeningItsAncestorRejectsBeforeLaterRowsOrSiblingCallbacks)
 
 NWB_ADHD_GTEST_F(UiNestedPopupReentryTests, ChildFirstRowResetRejectsWithoutClearingBorrowedFrames, VerifyUiNestedPopupReentryTests_ChildFirstRowResetRejectsWithoutClearingBorrowedFrames)
+
 NWB_ADHD_GTEST_F(UiNestedPopupReentryTests, ChildFirstRowBalancedPanelReentryRejectsBeforeLaterSiblingCallbacks, VerifyUiNestedPopupReentryTests_ChildFirstRowBalancedPanelReentryRejectsBeforeLaterSiblingCallbacks)
+
 NWB_ADHD_GTEST_F(UiNestedPopupReentryTests, ParentComboAutomaticPopupRowResetRejectsBeforeChildSourceCallbacks, VerifyUiNestedPopupReentryTests_ParentComboAutomaticPopupRowResetRejectsBeforeChildSourceCallbacks)
+
 NWB_ADHD_GTEST_F(UiNestedPopupReentryTests, LateParentRevisionScopeReentryRejectsAfterAllRowsWerePainted, VerifyUiNestedPopupReentryTests_LateParentRevisionScopeReentryRejectsAfterAllRowsWerePainted)
 
 NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, ChildMayExtendOutsideParentWhileFocusAndPointerStayInAcceptedTopScope, VerifyUiNestedPopupRouterTests_ChildMayExtendOutsideParentWhileFocusAndPointerStayInAcceptedTopScope)
+
 NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, EscapeDismissesOnlyChildThenRestoresChosenParentFocusAfterAcceptance, VerifyUiNestedPopupRouterTests_EscapeDismissesOnlyChildThenRestoresChosenParentFocusAfterAcceptance)
+
 NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, OptedInChildTabLeavesItsParentOpenAndAdvancesParentFocus, VerifyUiNestedPopupRouterTests_OptedInChildTabLeavesItsParentOpenAndAdvancesParentFocus)
+
 NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, OutsideChildPressOverParentConsumesReleaseWithoutParentActivation, VerifyUiNestedPopupRouterTests_OutsideChildPressOverParentConsumesReleaseWithoutParentActivation)
+
 NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, OutsideSecondarySequenceCannotOpenTheNewlyExposedParentMenu, VerifyUiNestedPopupRouterTests_OutsideSecondarySequenceCannotOpenTheNewlyExposedParentMenu)
+
 NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, ClosingAncestorPreservesUnrelatedTopChainAndItsAcceptedAction, VerifyUiNestedPopupRouterTests_ClosingAncestorPreservesUnrelatedTopChainAndItsAcceptedAction)
+
 NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, RetiringAncestorCancelsDescendantIntentionsAcrossRemovalAndIdenticalReturn, VerifyUiNestedPopupRouterTests_RetiringAncestorCancelsDescendantIntentionsAcrossRemovalAndIdenticalReturn)
+
 NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, RetiringLowerFamilyPreservesUnrelatedTopCaptureAndFocus, VerifyUiNestedPopupRouterTests_RetiringLowerFamilyPreservesUnrelatedTopCaptureAndFocus)
+
 NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, ChangingAncestorRequiresRenewedChildTokenAndFencesOldCapture, VerifyUiNestedPopupRouterTests_ChangingAncestorRequiresRenewedChildTokenAndFencesOldCapture)
+
 NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, InvalidOrMissingAncestryRejectsAtomicallyAgainstAcceptedNestedGeometry, VerifyUiNestedPopupRouterTests_InvalidOrMissingAncestryRejectsAtomicallyAgainstAcceptedNestedGeometry)
+
 NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, NewDescendantsCannotRestoreInputBeneathAClosingAncestorLifetime, VerifyUiNestedPopupRouterTests_NewDescendantsCannotRestoreInputBeneathAClosingAncestorLifetime)
+
 NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, FencingAncestorImmediatelySuppressesAllDescendantActionsAndCapture, VerifyUiNestedPopupRouterTests_FencingAncestorImmediatelySuppressesAllDescendantActionsAndCapture)
+
 NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, RetiringAnAlreadyRemovedPopupOwnerPartStillRestoresUnderlyingFocus, VerifyUiNestedPopupRouterTests_RetiringAnAlreadyRemovedPopupOwnerPartStillRestoresUnderlyingFocus)
+
 NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, NativeFocusLossDismissesWholeFamilyWithoutRestoringUnderlyingFocus, VerifyUiNestedPopupRouterTests_NativeFocusLossDismissesWholeFamilyWithoutRestoringUnderlyingFocus)
 
 NWB_ADHD_GTEST_F(UiNestedPopupTriggerTests, NestedComboRejectsDisabledRowWithoutActivatingUserAncestors, VerifyUiNestedPopupTriggerTests_NestedComboRejectsDisabledRowWithoutActivatingUserAncestors)
+
 NWB_ADHD_GTEST_F(UiNestedPopupTriggerTests, NestedMenuSkipsDisabledCommandsWithoutActivatingUserAncestors, VerifyUiNestedPopupTriggerTests_NestedMenuSkipsDisabledCommandsWithoutActivatingUserAncestors)
 
 

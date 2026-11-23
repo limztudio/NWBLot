@@ -10,8 +10,10 @@
 
 #include <core/alloc/general.h>
 
+#include <global/allocation_size.h>
 #include <global/timer.h>
 #include <global/scope_exit.h>
+#include <global/exception.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -145,7 +147,7 @@ private:
 
             ::new(static_cast<void*>(m_storage.data)) FuncType(Forward<Func>(func));
 
-            if constexpr(std::is_trivially_move_constructible_v<FuncType> && std::is_trivially_destructible_v<FuncType>){
+            if constexpr(IsTriviallyMoveConstructible_V<FuncType> && IsTriviallyDestructible_V<FuncType>){
                 static constexpr Ops s_TrivialOps{
                     +[](Storage& storage){
                         FuncType& f = *reinterpret_cast<FuncType*>(storage.data);
@@ -265,7 +267,7 @@ private:
 
     public:
         explicit TaskSlab(Alloc::GlobalArena& arena)noexcept(noexcept(TaskPayload(arena)))
-            : TaskSlab(arena, std::make_index_sequence<s_SlabSize>{})
+            : TaskSlab(arena, MakeIndexSequence<s_SlabSize>{})
         {}
     };
 
@@ -358,7 +360,7 @@ private:
                 return;
             void* const memory = arena.allocate(alignof(WorkerWaitSlot), sizeof(WorkerWaitSlot) * slotCount);
             if(!memory)
-                throw std::bad_alloc();
+                throw AllocationException();
             WorkerWaitSlot* const array = static_cast<WorkerWaitSlot*>(memory);
             for(usize i = 0u; i < slotCount; ++i)
                 ::new(&array[i]) WorkerWaitSlot{};
@@ -711,6 +713,26 @@ class CpuTaskScope final : NoCopy{
 public:
     using TaskHandle = CpuTaskScheduler::TaskHandle;
 
+    class JoinGuard final : NoCopy{
+    public:
+        explicit JoinGuard(CpuTaskScope& scope)noexcept
+            : m_scope(scope)
+        {}
+        ~JoinGuard()noexcept(false){
+            if(UncaughtExceptionCount() > 0){
+                m_scope.drain();
+                return;
+            }
+            ScopeExit drainOnFailure([this]()noexcept{ m_scope.drain(); });
+            m_scope.wait();
+            drainOnFailure.release();
+        }
+
+
+    private:
+        CpuTaskScope& m_scope;
+    };
+
 
 public:
     explicit CpuTaskScope(CpuTaskScheduler& scheduler, CpuTaskProfileLabel label = {})noexcept
@@ -754,6 +776,34 @@ public:
                 outFn = CpuTaskScheduler::TaskFunction(fn);
             }
         );
+    }
+
+    template<typename Func>
+    [[nodiscard]] TaskHandle submitChecked(Func&& function, CpuTaskOptions options = {}){
+        auto admission = submit(Forward<Func>(function), options);
+        if(!admission.has_value())
+            throw RuntimeException("CpuTaskScope::submit admission failed");
+        return *admission;
+    }
+
+    template<typename Func>
+    [[nodiscard]] TaskHandle submitChecked(Func&& function, CpuTaskOptions options, const TaskHandle* dependencies, usize count){
+        auto admission = submit(Forward<Func>(function), options, dependencies, count);
+        if(!admission.has_value())
+            throw RuntimeException("CpuTaskScope::submit admission failed");
+        return *admission;
+    }
+
+    template<typename Func>
+    void submitDetachedChecked(Func&& function, CpuTaskOptions options = {}){
+        if(const auto admission = submit(Forward<Func>(function), options); !admission.has_value())
+            throw RuntimeException("CpuTaskScope::submit admission failed");
+    }
+
+    template<typename Func>
+    void submitDetachedChecked(Func&& function, CpuTaskOptions options, const TaskHandle* dependencies, usize count){
+        if(const auto admission = submit(Forward<Func>(function), options, dependencies, count); !admission.has_value())
+            throw RuntimeException("CpuTaskScope::submit admission failed");
     }
 
 
@@ -815,6 +865,12 @@ public:
             }),
             this
         );
+    }
+
+    template<typename Func>
+    void parallelForChecked(usize begin, usize end, usize grainSize, const Func& function, CpuTaskOptions options = {}){
+        if(const auto admission = parallelFor(begin, end, grainSize, function, options); !admission.has_value())
+            throw RuntimeException("CpuTaskScope::parallelFor admission failed");
     }
 
 

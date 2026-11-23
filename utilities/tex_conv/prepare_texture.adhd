@@ -49,9 +49,10 @@ Expected<PreparedTexture> PrepareTexture(in Span<Path> inputPaths, in TexturePay
         error("tex_conv: unsupported alpha source.");
         return MakeUnexpected(Failure());
     }
-    b8 hdr = false;
-    if(!ValidateTexConvInputPathsHdrConsistency(inputPaths, hdr))
-        return MakeUnexpected(Failure());
+    const Expected<b8> hdrResult = ValidateTexConvInputPathsHdrConsistency(inputPaths);
+    if(!hdrResult.has_value())
+        return MakeUnexpected(hdrResult.error());
+    const b8 hdr = hdrResult.value();
 
     BasisFloatImage mask;
     const b8 hasMask = alpha.mode == AlphaSourceMode::Image;

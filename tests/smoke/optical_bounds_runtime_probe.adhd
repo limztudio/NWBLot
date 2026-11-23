@@ -13,17 +13,18 @@
 
 [cpp_header("<impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>"), cpp_name("NWB_OPTICAL_BOUNDS_FINALIZE_GROUP_SIZE")]
 extern const u32 s_OpticalProbeGroupSize;
-
 [cpp_header("<impl/assets/graphics/mesh/runtime_bounds_constants.h>"), cpp_name("NWB_RUNTIME_MESH_BOUNDS_FLAGS_OFFSET")]
 extern const u32 s_OpticalProbeMeshFlagsOffset;
-
 [cpp_header("<impl/assets/graphics/mesh/runtime_bounds_constants.h>"), cpp_name("NWB_RUNTIME_MESH_BOUNDS_FLAG_VALID")]
 extern const u32 s_OpticalProbeMeshValid;
-
 
 const u32 s_OpticalProbeSentinel = 0xa5e0317bu;
 const u32 s_OpticalProbeScenarioCount = 8u;
 const u32 s_OpticalProbeGuardWords = 4u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [arena]
 class OpticalProbeScenario{
@@ -39,6 +40,60 @@ class OpticalProbeScenario{
     public u32 staticComplete = 1u;
     public u32 ordinal = 0u;
 }
+
+class OpticalProbeTask{
+    public in OpticalProbeScenario data;
+    public ComputePipelineHandle pipeline;
+    public mut GpuDescriptorHeap heap;
+
+    public OpticalProbeTask(in borrow OpticalProbeScenario data, in ComputePipelineHandle pipeline, mut GpuDescriptorHeap heap){
+        this.data = data;
+        this.pipeline = pipeline;
+        this.heap = heap;
+    }
+
+    public GpuTaskCommandRequirements commandRequirements()const{ return ComputeTransferProbeCommands(); }
+
+    [cpp_unwind]
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
+        in OpticalProbeScenario data = this.data;
+        const Array<Span<u32>, 4u> uploads(Span<u32>(data.source), Span<u32>(data.inputs), Span<u32>(data.local), Span<u32>(data.invalidLocal));
+        const Array<u32, 4u> buffers(0u, 1u, 4u, 5u);
+        for(u32 i = 0u; i < uploads.size(); ++i){
+            if(!commands.tryWriteBuffer(data.buffers[buffers[i]].deref(), uploads[i]))
+                return false;
+        }
+        for(in u32 buffer : buffers)
+            commands.setBufferState(data.buffers[buffer].deref(), ResourceStates::ShaderResource);
+        commands.setBufferState(data.buffers[2].deref(), ResourceStates::UnorderedAccess);
+        commands.commitBarriers();
+        commands.clearBufferUInt(data.buffers[2].deref(), s_OpticalProbeSentinel);
+        ComputeState state;
+        state.setPipeline(this.pipeline.deref());
+        commands.setComputeState(state);
+        this.heap.bindCompute(commands, this.pipeline.deref());
+        OpticalBoundsFinalizePushConstants push;
+        push.sourceSceneSlot = data.descriptors[0].slot();
+        push.runtimeInputsSlot = data.descriptors[1].slot();
+        push.outputSceneSlot = data.descriptors[2].slot();
+        push.instanceCount = data.instanceCount;
+        push.runtimeCount = data.runtimeCount;
+        push.staticBoundsComplete = data.staticComplete;
+        commands.setPushConstants(push);
+        commands.dispatch(1u, 1u, 1u);
+        commands.setBufferState(data.buffers[2].deref(), ResourceStates::CopySource);
+        commands.commitBarriers();
+        commands.copyBuffer(data.buffers[3].deref(), 0u, data.buffers[2].deref(), 0u, data.expected.size() * size_of<u32>());
+        for(in BufferHandle buffer : data.buffers)
+            commands.setBufferState(buffer.deref(), ResourceStates::CopyDest);
+        commands.commitBarriers();
+        return !commands.commandRecordingFailed();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 Expected<void> BuildOpticalProbeScenario(mut OpticalProbeScenario data){
     const u32 ordinal = data.ordinal;
@@ -144,56 +199,6 @@ Expected<void> BuildOpticalProbeScenario(mut OpticalProbeScenario data){
     return Expected<void>();
 }
 
-class OpticalProbeTask{
-    public in OpticalProbeScenario data;
-    public ComputePipelineHandle pipeline;
-    public mut GpuDescriptorHeap heap;
-
-    public OpticalProbeTask(in borrow OpticalProbeScenario data, in ComputePipelineHandle pipeline, mut GpuDescriptorHeap heap){
-        this.data = data;
-        this.pipeline = pipeline;
-        this.heap = heap;
-    }
-
-    public GpuTaskCommandRequirements commandRequirements()const{ return ComputeTransferProbeCommands(); }
-
-    [cpp_unwind]
-    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
-        in OpticalProbeScenario data = this.data;
-        const Array<Span<u32>, 4u> uploads(Span<u32>(data.source), Span<u32>(data.inputs), Span<u32>(data.local), Span<u32>(data.invalidLocal));
-        const Array<u32, 4u> buffers(0u, 1u, 4u, 5u);
-        for(u32 i = 0u; i < uploads.size(); ++i){
-            if(!commands.tryWriteBuffer(data.buffers[buffers[i]].deref(), uploads[i]))
-                return false;
-        }
-        for(in u32 buffer : buffers)
-            commands.setBufferState(data.buffers[buffer].deref(), ResourceStates::ShaderResource);
-        commands.setBufferState(data.buffers[2].deref(), ResourceStates::UnorderedAccess);
-        commands.commitBarriers();
-        commands.clearBufferUInt(data.buffers[2].deref(), s_OpticalProbeSentinel);
-        ComputeState state;
-        state.setPipeline(this.pipeline.deref());
-        commands.setComputeState(state);
-        this.heap.bindCompute(commands, this.pipeline.deref());
-        OpticalBoundsFinalizePushConstants push;
-        push.sourceSceneSlot = data.descriptors[0].slot();
-        push.runtimeInputsSlot = data.descriptors[1].slot();
-        push.outputSceneSlot = data.descriptors[2].slot();
-        push.instanceCount = data.instanceCount;
-        push.runtimeCount = data.runtimeCount;
-        push.staticBoundsComplete = data.staticComplete;
-        commands.setPushConstants(push);
-        commands.dispatch(1u, 1u, 1u);
-        commands.setBufferState(data.buffers[2].deref(), ResourceStates::CopySource);
-        commands.commitBarriers();
-        commands.copyBuffer(data.buffers[3].deref(), 0u, data.buffers[2].deref(), 0u, data.expected.size() * size_of<u32>());
-        for(in BufferHandle buffer : data.buffers)
-            commands.setBufferState(buffer.deref(), ResourceStates::CopyDest);
-        commands.commitBarriers();
-        return !commands.commandRecordingFailed();
-    }
-}
-
 [cpp_unwind]
 Expected<GpuTaskId> DeclareOpticalProbe(in OpticalProbeTask payload, mut GpuTaskGraph graph){
     Array<GpuTaskResourceUse, 6u> uses;
@@ -227,10 +232,11 @@ b8 RunOpticalBoundsProbe(in ActiveSceneSubsystems scene, mut ProjectRuntimeConte
         error("OpticalBoundsProbe: production shader is unavailable");
         return false;
     }
-    ComputePipelineHandle pipeline;
-    if(!LoadGpuProbePipeline(context, transparent.value().opticalBoundsFinalizeCs.name(), s_DefaultVariant, Name("tests/optical_bounds/shader"),
-        "OpticalBoundsProbe", size_of<OpticalBoundsFinalizePushConstants>(), pipeline))
+    const Expected<ComputePipelineHandle> pipelineResult = LoadGpuProbePipeline(context, transparent.value().opticalBoundsFinalizeCs.name(), s_DefaultVariant, Name("tests/optical_bounds/shader"),
+        "OpticalBoundsProbe", size_of<OpticalBoundsFinalizePushConstants>());
+    if(!pipelineResult.has_value())
         return false;
+    const ComputePipelineHandle pipeline = pipelineResult.value();
     for(u32 ordinal = 0u; ordinal < s_OpticalProbeScenarioCount; ++ordinal){
         OpticalProbeScenario data;
         data.ordinal = ordinal;

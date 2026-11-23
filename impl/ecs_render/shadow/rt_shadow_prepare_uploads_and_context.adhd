@@ -84,7 +84,7 @@ Expected<GpuGraphResourceId> ImportOptionalShadowPrepareExternalBuffer(mut GpuTa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 AppendChainedUploadBufferTask(
+Expected<GpuTaskId> AppendChainedUploadBufferTask(
     mut GpuTaskGraph graph,
     in Name identity,
     in StringView markerLabel,
@@ -93,8 +93,7 @@ b8 AppendChainedUploadBufferTask(
     in GpuGraphResourceId destination,
     in StringView warningMessage,
     mut Vector<GpuExternalCompletionId> pendingReadCompletions,
-    mut GpuTaskId inOutDependencyTask,
-    mut GpuTaskId outTask
+    mut GpuTaskId inOutDependencyTask
 ){
     GpuTaskSchedulingHint uploadScheduling;
     uploadScheduling.cost = cost;
@@ -116,13 +115,11 @@ b8 AppendChainedUploadBufferTask(
     uploadTaskResultUpload.finalState = ResourceStates::Common;
     const auto uploadTaskResult = graph.addUploadBufferTask(uploadDesc,uploadTaskResultUpload);
     if(!uploadTaskResult.has_value()){
-        outTask = GpuTaskId();
         warning("{}", warningMessage);
-        return false;
+        return MakeUnexpected(Failure());
     }
-    outTask = uploadTaskResult.value();
-    inOutDependencyTask = outTask;
-    return true;
+    inOutDependencyTask = uploadTaskResult.value();
+    return uploadTaskResult.value();
 }
 
 
@@ -314,9 +311,13 @@ b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(in ShadowPr
             warning("RendererSystem: caustic emission-target upload has no imported destination");
             return false;
         }
-        if(!AppendChainedUploadBufferTask(this.m_graph, s_ShadowRaytraceCausticEmissionTargetsUpload, "Caustic Emission Targets Upload", GpuTaskCostHint::Medium, causticEmissionTargetsBlob.value().value(),
-            chain.causticEmissionTargets, "RendererSystem: could not declare caustic emission-target upload", chain.pendingContextReadCompletions, chain.completionTask, chain.tasks.causticEmissionTargets))
+        const auto causticUploadTaskResult = AppendChainedUploadBufferTask(this.m_graph, s_ShadowRaytraceCausticEmissionTargetsUpload, "Caustic Emission Targets Upload", GpuTaskCostHint::Medium, causticEmissionTargetsBlob.value().value(),
+            chain.causticEmissionTargets, "RendererSystem: could not declare caustic emission-target upload", chain.pendingContextReadCompletions, chain.completionTask);
+        if(!causticUploadTaskResult.has_value()){
+            chain.tasks.causticEmissionTargets = GpuTaskId();
             return false;
+        }
+        chain.tasks.causticEmissionTargets = causticUploadTaskResult.value();
         chain.causticEmissionTargetsUploadPending = true;
     }
     return true;
@@ -340,9 +341,13 @@ b8 ShadowPrepareUploadChainBuilder::declareSurfelFrameConstantsUpload(in ShadowP
             warning("RendererSystem: surfel-frame constants upload has no imported destination");
             return false;
         }
-        if(!AppendChainedUploadBufferTask(this.m_graph, s_ShadowSurfelConstantsUpload, "Surfel Frame Constants Upload", GpuTaskCostHint::Tiny, surfelFrameConstantsBlob.value().value(), chain.surfelFrameConstants,
-            "RendererSystem: could not declare surfel-frame constants upload", chain.pendingContextReadCompletions, chain.completionTask, chain.tasks.surfelFrameConstants))
+        const auto surfelConstantsTaskResult = AppendChainedUploadBufferTask(this.m_graph, s_ShadowSurfelConstantsUpload, "Surfel Frame Constants Upload", GpuTaskCostHint::Tiny, surfelFrameConstantsBlob.value().value(), chain.surfelFrameConstants,
+            "RendererSystem: could not declare surfel-frame constants upload", chain.pendingContextReadCompletions, chain.completionTask);
+        if(!surfelConstantsTaskResult.has_value()){
+            chain.tasks.surfelFrameConstants = GpuTaskId();
             return false;
+        }
+        chain.tasks.surfelFrameConstants = surfelConstantsTaskResult.value();
     }
     return true;
 }
@@ -371,15 +376,29 @@ b8 ShadowPrepareUploadChainBuilder::declareShadowMaterialContextUploads(in Shado
     if(!ValidateShadowMaterialContextUploadBatch(shadowInstanceMaterialsBlob.valid(), shadowInstancesBlob.valid(), shadowMaterialTypedBlob.valid(), chain.shadowInstanceMaterials.valid(), chain.shadowInstances.valid(), chain.shadowMaterialTyped.valid()))
         return false;
     if(chain.shadowMaterialContextBatchGraphOwned){
-        if(
-            !AppendChainedUploadBufferTask(this.m_graph, s_ShadowDeferredEffectsInstanceMaterialUpload, "Shadow Instance Materials Upload", GpuTaskCostHint::Medium, shadowInstanceMaterialsBlob,
-                chain.shadowInstanceMaterials, "RendererSystem: could not declare shadow instance-material upload", chain.pendingContextReadCompletions, chain.completionTask, chain.tasks.shadowInstanceMaterial)
-            || !AppendChainedUploadBufferTask(this.m_graph, s_ShadowDeferredEffectsShadowInstancesUpload, "Shadow Instances Upload", GpuTaskCostHint::Medium, shadowInstancesBlob, chain.shadowInstances,
-                "RendererSystem: could not declare shadow instance upload", chain.pendingContextReadCompletions, chain.completionTask, chain.tasks.shadowInstance)
-            || !AppendChainedUploadBufferTask(this.m_graph, s_ShadowDeferredEffectsMaterialTypedUpload, "Shadow Typed Materials Upload", GpuTaskCostHint::Medium, shadowMaterialTypedBlob, chain.shadowMaterialTyped,
-                "RendererSystem: could not declare shadow typed-material upload", chain.pendingContextReadCompletions, chain.completionTask, chain.tasks.shadowMaterialTyped)
-        )
+        const auto shadowInstanceMaterialTaskResult = AppendChainedUploadBufferTask(this.m_graph, s_ShadowDeferredEffectsInstanceMaterialUpload, "Shadow Instance Materials Upload", GpuTaskCostHint::Medium, shadowInstanceMaterialsBlob,
+            chain.shadowInstanceMaterials, "RendererSystem: could not declare shadow instance-material upload", chain.pendingContextReadCompletions, chain.completionTask);
+        if(!shadowInstanceMaterialTaskResult.has_value()){
+            chain.tasks.shadowInstanceMaterial = GpuTaskId();
             return false;
+        }
+        chain.tasks.shadowInstanceMaterial = shadowInstanceMaterialTaskResult.value();
+
+        const auto shadowInstanceTaskResult = AppendChainedUploadBufferTask(this.m_graph, s_ShadowDeferredEffectsShadowInstancesUpload, "Shadow Instances Upload", GpuTaskCostHint::Medium, shadowInstancesBlob, chain.shadowInstances,
+            "RendererSystem: could not declare shadow instance upload", chain.pendingContextReadCompletions, chain.completionTask);
+        if(!shadowInstanceTaskResult.has_value()){
+            chain.tasks.shadowInstance = GpuTaskId();
+            return false;
+        }
+        chain.tasks.shadowInstance = shadowInstanceTaskResult.value();
+
+        const auto shadowMaterialTypedTaskResult = AppendChainedUploadBufferTask(this.m_graph, s_ShadowDeferredEffectsMaterialTypedUpload, "Shadow Typed Materials Upload", GpuTaskCostHint::Medium, shadowMaterialTypedBlob, chain.shadowMaterialTyped,
+            "RendererSystem: could not declare shadow typed-material upload", chain.pendingContextReadCompletions, chain.completionTask);
+        if(!shadowMaterialTypedTaskResult.has_value()){
+            chain.tasks.shadowMaterialTyped = GpuTaskId();
+            return false;
+        }
+        chain.tasks.shadowMaterialTyped = shadowMaterialTypedTaskResult.value();
     }
     return true;
 }
@@ -405,13 +424,21 @@ b8 ShadowPrepareUploadChainBuilder::declareSceneBvhUploads(in ShadowPrepareUploa
     if(!ValidateSceneBvhUploadBatch(sceneBvhNodesBlob.valid(), sceneBvhInstancesBlob.valid(), chain.sceneBvhNodes.valid(), chain.sceneBvhInstances.valid()))
         return false;
     if(chain.sceneBvhBatchGraphOwned){
-        if(
-            !AppendChainedUploadBufferTask(this.m_graph, s_ShadowPassSceneBvhNodesUpload, "Scene BVH Nodes Upload", GpuTaskCostHint::Medium, sceneBvhNodesBlob, chain.sceneBvhNodes,
-                "RendererSystem: could not declare software scene-BVH node upload", chain.pendingContextReadCompletions, chain.completionTask, chain.tasks.sceneBvhNodes)
-            || !AppendChainedUploadBufferTask(this.m_graph, s_ShadowPassSceneInstancesUpload, "Scene BVH Instances Upload", GpuTaskCostHint::Medium, sceneBvhInstancesBlob, chain.sceneBvhInstances,
-                "RendererSystem: could not declare software scene-BVH instance upload", chain.pendingContextReadCompletions, chain.completionTask, chain.tasks.sceneBvhInstances)
-        )
+        const auto sceneBvhNodesTaskResult = AppendChainedUploadBufferTask(this.m_graph, s_ShadowPassSceneBvhNodesUpload, "Scene BVH Nodes Upload", GpuTaskCostHint::Medium, sceneBvhNodesBlob, chain.sceneBvhNodes,
+            "RendererSystem: could not declare software scene-BVH node upload", chain.pendingContextReadCompletions, chain.completionTask);
+        if(!sceneBvhNodesTaskResult.has_value()){
+            chain.tasks.sceneBvhNodes = GpuTaskId();
             return false;
+        }
+        chain.tasks.sceneBvhNodes = sceneBvhNodesTaskResult.value();
+
+        const auto sceneBvhInstancesTaskResult = AppendChainedUploadBufferTask(this.m_graph, s_ShadowPassSceneInstancesUpload, "Scene BVH Instances Upload", GpuTaskCostHint::Medium, sceneBvhInstancesBlob, chain.sceneBvhInstances,
+            "RendererSystem: could not declare software scene-BVH instance upload", chain.pendingContextReadCompletions, chain.completionTask);
+        if(!sceneBvhInstancesTaskResult.has_value()){
+            chain.tasks.sceneBvhInstances = GpuTaskId();
+            return false;
+        }
+        chain.tasks.sceneBvhInstances = sceneBvhInstancesTaskResult.value();
     }
     return true;
 }

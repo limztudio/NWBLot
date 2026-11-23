@@ -11,15 +11,144 @@
 
 [cpp_header("<global/simdmath.h>"), cpp_name("::SIMDQuaternionDoubleDetail::s_DoubleQuaternionInterpolationEpsilon")]
 extern const f64 s_ReplicatedQuaternionEpsilon;
-
 [cpp_header("<global/simdmath.h>"), cpp_name("::SIMDVectorDoubleDetail::SinCosReplicated")]
 extern void ComputeReplicatedSinCos(mut VectorDouble sine, mut VectorDouble cosine, in VectorDouble value);
-
 [cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::s_HasSse2")]
 extern const b8 s_BenchmarkHasSse2;
-
 [cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::SseReplicatedReciprocalSqrt")]
 extern VectorDouble BenchmarkReplicatedReciprocalSqrt(in VectorDouble value);
+
+enum<u32> ReplicatedOperation{
+    Ln = 0u,
+    Exp = 1u,
+    Normals2 = 2u,
+    Normals3 = 3u,
+    Normals4 = 4u,
+    Vectors2 = 5u,
+    Vectors3 = 6u,
+    Vectors4 = 7u,
+    Slerp = 8u,
+    Length2 = 9u,
+    Length3 = 10u,
+    Length4 = 11u,
+    Reciprocal2 = 12u,
+    Reciprocal3 = 13u,
+    Reciprocal4 = 14u,
+    Normalize2 = 15u,
+    Normalize3 = 16u,
+    Normalize4 = 17u,
+    Clamp2 = 18u,
+    Clamp3 = 19u,
+    Clamp4 = 20u,
+    kCount = 21u
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ReplicatedKernelReducer<const u32 KindIndex, const b8 Candidate> : IDoubleBinaryEvaluator{
+    public VectorDouble evaluate(in VectorDouble lhs, in VectorDouble rhs)const override{ return ReplicatedKernelReduce<KindIndex, Candidate>(lhs, rhs); }
+}
+
+class ReplicatedEvaluator<const u32 KindIndex, const b8 Candidate> : IDoubleBinaryEvaluator{
+    public VectorDouble evaluate(in VectorDouble lhs, in VectorDouble rhs)const override{
+        return ReplicatedKernelEvaluate<KindIndex, Candidate>(lhs, rhs);
+    }
+}
+
+class ReplicatedProductionEvaluator<const u32 KindIndex, const b8 Estimate> : IDoubleBinaryEvaluator{
+    public VectorDouble evaluate(in VectorDouble lhs, in VectorDouble rhs)const override{
+        return ReplicatedKernelProduction<KindIndex, Estimate>(lhs, rhs);
+    }
+}
+
+class ReplicatedAdditionalCheck<const u32 KindIndex> : IAdditionalReductionCheck{
+    public b8 check(
+        in VectorDouble lhs,
+        in VectorDouble rhs,
+        in Observation expected,
+        in Observation actual,
+        in usize index,
+        mut u32 failures
+    )const override{
+        const Expected<Observation> production = ObserveBinary(ReplicatedProductionEvaluator<KindIndex, false>(), lhs, rhs);
+        if(!production.has_value())
+            return false;
+
+        b8 matches = false;
+        if(IsReplicatedProductionCandidate(KindIndex))
+            matches = EqualObservation(actual, production.value());
+        else
+            matches = EqualObservation(expected, production.value());
+
+        if(!matches){
+            ++failures;
+            if(failures <= 3u)
+                WriteBenchmarkStdout(StringFormat("production mismatch operation={} case={}\n", ReplicatedOperationName(KindIndex), index));
+        }
+
+        if(KindIndex >= 2u && KindIndex <= 4u){
+            const Expected<Observation> estimate = ObserveBinary(ReplicatedProductionEvaluator<KindIndex, true>(), lhs, rhs);
+            if(!estimate.has_value())
+                return false;
+            b8 estimateMatches = false;
+            if(IsReplicatedProductionCandidate(KindIndex))
+                estimateMatches = EqualObservation(actual, estimate.value());
+            else
+                estimateMatches = EqualObservation(expected, estimate.value());
+            if(!estimateMatches)
+                ++failures;
+        }
+        return true;
+    }
+}
+
+class ReplicatedWorkloadRunner<const u32 KindIndex, const b8 Candidate> : IDoubleWorkloadRunner{
+    private in Dataset m_data;
+    private usize m_iterations;
+
+    public ReplicatedWorkloadRunner(in Dataset data, in usize iterations){
+        this.m_data = data;
+        this.m_iterations = iterations;
+    }
+
+    public VectorDouble run()const override{
+        return ReplicatedKernelRunWorkload<KindIndex, Candidate>(this.m_data, s_DataCount, this.m_iterations);
+    }
+}
+
+class ReplicatedRoundingVerifier : IRoundingModeVerifier{
+    public u32 verify(mut u64 seed)const override{
+        u32 failures = 0u;
+        failures += VerifyReplicatedReduction<0u>(seed);
+        failures += VerifyReplicatedReduction<1u>(seed);
+        failures += VerifyReplicatedReduction<2u>(seed);
+        failures += VerifyReplicatedReduction<3u>(seed);
+        failures += VerifyReplicatedReduction<4u>(seed);
+        failures += VerifyReplicatedReduction<5u>(seed);
+        failures += VerifyReplicatedReduction<6u>(seed);
+        failures += VerifyReplicatedReduction<7u>(seed);
+        failures += VerifyReplicatedReduction<8u>(seed);
+        failures += VerifyReplicatedReduction<9u>(seed);
+        failures += VerifyReplicatedReduction<10u>(seed);
+        failures += VerifyReplicatedReduction<11u>(seed);
+        failures += VerifyReplicatedReduction<12u>(seed);
+        failures += VerifyReplicatedReduction<13u>(seed);
+        failures += VerifyReplicatedReduction<14u>(seed);
+        failures += VerifyReplicatedReduction<15u>(seed);
+        failures += VerifyReplicatedReduction<16u>(seed);
+        failures += VerifyReplicatedReduction<17u>(seed);
+        failures += VerifyReplicatedReduction<18u>(seed);
+        failures += VerifyReplicatedReduction<19u>(seed);
+        failures += VerifyReplicatedReduction<20u>(seed);
+        return failures;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 VectorDouble ReplicatedKernelReplicatedACos(in VectorDouble value){
     return VectorDoubleReplicate(ACos(VectorDoubleGetX(value)));
@@ -299,42 +428,9 @@ VectorDouble ReplicatedKernelEvaluate<const u32 KindIndex, const b8 Candidate>(i
     }, lhs, rhs);
 }
 
-class ReplicatedKernelReducer<const u32 KindIndex, const b8 Candidate> : IDoubleBinaryEvaluator{
-    public VectorDouble evaluate(in VectorDouble lhs, in VectorDouble rhs)const override{ return ReplicatedKernelReduce<KindIndex, Candidate>(lhs, rhs); }
-}
-
 VectorDouble ReplicatedKernelRunWorkload<const u32 KindIndex, const b8 Candidate>(in Dataset data, in usize dataCount, in usize iterations){
     return ThroughputWorkload<4u, ReplicatedKernelReducer<KindIndex, Candidate>>(data, dataCount, iterations, ReplicatedKernelReducer<KindIndex, Candidate>());
 }
-
-enum<u32> ReplicatedOperation{
-    Ln = 0u,
-    Exp = 1u,
-    Normals2 = 2u,
-    Normals3 = 3u,
-    Normals4 = 4u,
-    Vectors2 = 5u,
-    Vectors3 = 6u,
-    Vectors4 = 7u,
-    Slerp = 8u,
-    Length2 = 9u,
-    Length3 = 10u,
-    Length4 = 11u,
-    Reciprocal2 = 12u,
-    Reciprocal3 = 13u,
-    Reciprocal4 = 14u,
-    Normalize2 = 15u,
-    Normalize3 = 16u,
-    Normalize4 = 17u,
-    Clamp2 = 18u,
-    Clamp3 = 19u,
-    Clamp4 = 20u,
-    kCount = 21u
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 StringView ReplicatedOperationName(in u32 kindIndex){
     switch(kindIndex){
@@ -367,77 +463,6 @@ b8 IsReplicatedProductionCandidate(in u32 kindIndex){
     return kindIndex <= 8u || (kindIndex >= 12u && kindIndex <= 14u);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ReplicatedEvaluator<const u32 KindIndex, const b8 Candidate> : IDoubleBinaryEvaluator{
-    public VectorDouble evaluate(in VectorDouble lhs, in VectorDouble rhs)const override{
-        return ReplicatedKernelEvaluate<KindIndex, Candidate>(lhs, rhs);
-    }
-}
-
-class ReplicatedProductionEvaluator<const u32 KindIndex, const b8 Estimate> : IDoubleBinaryEvaluator{
-    public VectorDouble evaluate(in VectorDouble lhs, in VectorDouble rhs)const override{
-        return ReplicatedKernelProduction<KindIndex, Estimate>(lhs, rhs);
-    }
-}
-
-class ReplicatedAdditionalCheck<const u32 KindIndex> : IAdditionalReductionCheck{
-    public b8 check(
-        in VectorDouble lhs,
-        in VectorDouble rhs,
-        in Observation expected,
-        in Observation actual,
-        in usize index,
-        mut u32 failures
-    )const override{
-        const Expected<Observation> production = ObserveBinary(ReplicatedProductionEvaluator<KindIndex, false>(), lhs, rhs);
-        if(!production.has_value())
-            return false;
-
-        b8 matches = false;
-        if(IsReplicatedProductionCandidate(KindIndex))
-            matches = EqualObservation(actual, production.value());
-        else
-            matches = EqualObservation(expected, production.value());
-
-        if(!matches){
-            ++failures;
-            if(failures <= 3u)
-                WriteBenchmarkStdout(StringFormat("production mismatch operation={} case={}\n", ReplicatedOperationName(KindIndex), index));
-        }
-
-        if(KindIndex >= 2u && KindIndex <= 4u){
-            const Expected<Observation> estimate = ObserveBinary(ReplicatedProductionEvaluator<KindIndex, true>(), lhs, rhs);
-            if(!estimate.has_value())
-                return false;
-            b8 estimateMatches = false;
-            if(IsReplicatedProductionCandidate(KindIndex))
-                estimateMatches = EqualObservation(actual, estimate.value());
-            else
-                estimateMatches = EqualObservation(expected, estimate.value());
-            if(!estimateMatches)
-                ++failures;
-        }
-        return true;
-    }
-}
-
-class ReplicatedWorkloadRunner<const u32 KindIndex, const b8 Candidate> : IDoubleWorkloadRunner{
-    private in Dataset m_data;
-    private usize m_iterations;
-
-    public ReplicatedWorkloadRunner(in Dataset data, in usize iterations){
-        this.m_data = data;
-        this.m_iterations = iterations;
-    }
-
-    public VectorDouble run()const override{
-        return ReplicatedKernelRunWorkload<KindIndex, Candidate>(this.m_data, s_DataCount, this.m_iterations);
-    }
-}
-
 u32 VerifyReplicatedReduction<const u32 KindIndex>(mut u64 seed){
     return VerifyReductionCases(
         ReplicatedOperationName(KindIndex),
@@ -446,34 +471,6 @@ u32 VerifyReplicatedReduction<const u32 KindIndex>(mut u64 seed){
         ReplicatedAdditionalCheck<KindIndex>(),
         seed
     );
-}
-
-class ReplicatedRoundingVerifier : IRoundingModeVerifier{
-    public u32 verify(mut u64 seed)const override{
-        u32 failures = 0u;
-        failures += VerifyReplicatedReduction<0u>(seed);
-        failures += VerifyReplicatedReduction<1u>(seed);
-        failures += VerifyReplicatedReduction<2u>(seed);
-        failures += VerifyReplicatedReduction<3u>(seed);
-        failures += VerifyReplicatedReduction<4u>(seed);
-        failures += VerifyReplicatedReduction<5u>(seed);
-        failures += VerifyReplicatedReduction<6u>(seed);
-        failures += VerifyReplicatedReduction<7u>(seed);
-        failures += VerifyReplicatedReduction<8u>(seed);
-        failures += VerifyReplicatedReduction<9u>(seed);
-        failures += VerifyReplicatedReduction<10u>(seed);
-        failures += VerifyReplicatedReduction<11u>(seed);
-        failures += VerifyReplicatedReduction<12u>(seed);
-        failures += VerifyReplicatedReduction<13u>(seed);
-        failures += VerifyReplicatedReduction<14u>(seed);
-        failures += VerifyReplicatedReduction<15u>(seed);
-        failures += VerifyReplicatedReduction<16u>(seed);
-        failures += VerifyReplicatedReduction<17u>(seed);
-        failures += VerifyReplicatedReduction<18u>(seed);
-        failures += VerifyReplicatedReduction<19u>(seed);
-        failures += VerifyReplicatedReduction<20u>(seed);
-        return failures;
-    }
 }
 
 u32 VerifyReplicatedBenchmark(){

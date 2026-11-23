@@ -9,6 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_unwind]
 Expected<Vector<u32>> BuildMeshletTriangleIndices(
     in Span<MeshletDesc> meshlets,
     in Span<MeshletLocalVertexRef> localVertexRefs,
@@ -23,6 +24,7 @@ Expected<Vector<u32>> BuildMeshletTriangleIndices(
     return outIndices;
 }
 
+[cpp_unwind]
 Expected<Vector<u32>> BuildMeshletTriangleIndices(in Mesh payload){
     return BuildMeshletTriangleIndices(
         payload.meshlets(),

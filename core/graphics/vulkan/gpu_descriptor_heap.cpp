@@ -393,7 +393,7 @@ void GpuDescriptorHeap::shutdown(){
 }
 
 GpuDescriptorHeapLifecycleStatistics GpuDescriptorHeap::lifecycleStatistics()const noexcept{
-    ScopedLock lock(m_mutex);
+    NothrowScopedLock lock(m_mutex);
 
     GpuDescriptorHeapLifecycleStatistics statistics;
     statistics.initialized = m_initialized.load(MemoryOrder::relaxed);

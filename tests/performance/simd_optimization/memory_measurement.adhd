@@ -11,16 +11,15 @@
 
 [cpp_header("<tests/performance/simd_optimization/memory_measurement_abi.h>"), cpp_name("::SimdBenchmarkAbi::AccumulateMemoryChecksum")]
 extern void AccumulateMemoryChecksum(in u64 value);
-
 [cpp_header("<tests/performance/simd_optimization/memory_measurement_abi.h>"), cpp_name("::SimdBenchmarkAbi::InlineCandidateCopy")]
 extern void InvokeMeasuredCandidateCopy<const usize FixedCount>(in ReadAddress source, in usize count, in usize capacity, in ByteAddress destination);
-
-
 [cpp_header("<tests/performance/simd_optimization/memory_measurement_abi.h>"), cpp_name("::SimdBenchmarkAbi::RunMemoryBatch")]
 extern void RunCopyBatch(in auto batch, in ReadAddress source, in usize slots, in usize stride, in usize bytes, in usize iterations, in ByteAddress destination);
-
 [cpp_header("<tests/performance/simd_optimization/memory_measurement_abi.h>"), cpp_name("::SimdBenchmarkAbi::RunMemoryBatch")]
 extern u64 RunEqualityBatch(in auto batch, in ByteAddress lhs, in ByteAddress rhs, in usize slots, in usize stride, in usize iterations);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 class CopyBatch<const b8 Candidate, const usize FixedCount>{
@@ -68,26 +67,6 @@ class EqualityBatch<const b8 Candidate, const b8 FirstWord>{
     }
 }
 
-f64 TimeCopy<TBatch>(in TBatch batch, in ReadAddress source, in usize slots, in usize stride, in usize bytes, in usize iterations, in ByteAddress destination){
-    const Timer start = TimerNow();
-    RunCopyBatch(batch, source, slots, stride, bytes, iterations, destination);
-    const Timer end = TimerNow();
-    AccumulateMemoryChecksum(LoadByte(destination, ((iterations - 1u) % slots) * stride));
-    return DurationInNS<f64>(end, start) / cast<f64>(iterations);
-}
-
-f64 TimeEquality<TBatch>(in TBatch batch, in ByteAddress lhs, in ByteAddress rhs, in usize slots, in usize iterations){
-    const Timer start = TimerNow();
-    const u64 result = RunEqualityBatch(batch, lhs, rhs, slots, 8u, iterations);
-    const Timer end = TimerNow();
-    AccumulateMemoryChecksum(result);
-    return DurationInNS<f64>(end, start) / cast<f64>(iterations);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class MemoryCopyBenchmarkBuffers : NoCopy{
     private usize m_slots;
     private usize m_stride;
@@ -132,7 +111,6 @@ class MemoryCopyBenchmarkBuffers : NoCopy{
         return TimeCopy(CopyBatch<false, 0u>(), src, this.m_slots, this.m_stride, bytes, iterations, dst);
     }
 }
-
 
 class MemoryEqualityBenchmarkBuffers : NoCopy{
     private usize m_slots;
@@ -195,6 +173,26 @@ class MemoryEqualityBenchmarkBuffers : NoCopy{
             return TimeEquality(EqualityBatch<true, true>(), lhs, rhs, this.m_slots, iterations);
         return TimeEquality(EqualityBatch<true, false>(), lhs, rhs, this.m_slots, iterations);
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+f64 TimeCopy<TBatch>(in TBatch batch, in ReadAddress source, in usize slots, in usize stride, in usize bytes, in usize iterations, in ByteAddress destination){
+    const Timer start = TimerNow();
+    RunCopyBatch(batch, source, slots, stride, bytes, iterations, destination);
+    const Timer end = TimerNow();
+    AccumulateMemoryChecksum(LoadByte(destination, ((iterations - 1u) % slots) * stride));
+    return DurationInNS<f64>(end, start) / cast<f64>(iterations);
+}
+
+f64 TimeEquality<TBatch>(in TBatch batch, in ByteAddress lhs, in ByteAddress rhs, in usize slots, in usize iterations){
+    const Timer start = TimerNow();
+    const u64 result = RunEqualityBatch(batch, lhs, rhs, slots, 8u, iterations);
+    const Timer end = TimerNow();
+    AccumulateMemoryChecksum(result);
+    return DurationInNS<f64>(end, start) / cast<f64>(iterations);
 }
 
 

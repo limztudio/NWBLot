@@ -119,9 +119,19 @@ class ShadowPrepareUploadChainBuilder : NoCopy{
         this.m_raytracingSystem = raytracingSystem;
     }
 
+    [cpp_unwind]
     public b8 declare(in ShadowPrepareUploadInputs inputs, mut ShadowPrepareUploadChain chain){
-        return this.declareSelectorAndContextUploads(inputs, chain) && this.declareSurfelFrameConstantsUpload(inputs, chain)
-            && this.declareShadowMaterialContextUploads(inputs, chain) && this.declareSceneBvhUploads(inputs, chain);
+        chain = ShadowPrepareUploadChain();
+        if(
+            !this.declareSelectorAndContextUploads(inputs, chain)
+            || !this.declareSurfelFrameConstantsUpload(inputs, chain)
+            || !this.declareShadowMaterialContextUploads(inputs, chain)
+            || !this.declareSceneBvhUploads(inputs, chain)
+        ){
+            chain = ShadowPrepareUploadChain();
+            return false;
+        }
+        return true;
     }
 
     [cpp_unwind]
@@ -182,13 +192,12 @@ class ShadowAccelerationFinalizeBuilder : NoCopy{
     }
 
     [cpp_unwind]
-    public b8 declare(
+    public Expected<GpuTaskId> declare(
         in b8 sceneTlasBuildGraphOwned,
         in GpuGraphResourceId sceneTlas,
         in usize preparedMeshBlasBuildCount,
         in Span<GpuTaskResourceUse> accelStructFinalizeResourceUses,
-        in borrow GpuTaskId prepareTask,
-        mut GpuTaskId outTask
+        in borrow GpuTaskId prepareTask
     );
 }
 

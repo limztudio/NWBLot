@@ -245,17 +245,17 @@ class PhysicsComponentBinaryCodec{
         return true;
     }
 
-    public b8 deserializeRigidBody(in Span<u8> payload, mut RigidBodyComponent outComp)const{
+    public Expected<RigidBodyComponent> deserializeRigidBody(in Span<u8> payload)const{
         usize cursor = 0u;
         const Expected<RigidBodyComponentPayloadBinary> res = ReadPOD<RigidBodyComponentPayloadBinary>(payload, cursor);
         if(!res.has_value() || cursor != payload.size()){
             error("RigidBodyComponentAsset::loadComponentPayload failed: invalid payload size");
-            return false;
+            return MakeUnexpected(Failure());
         }
         in RigidBodyComponentPayloadBinary bin = res.value();
         if(bin.version != s_PhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || bin.reserved3 != 0u || bin.reserved4 != 0u){
             error("RigidBodyComponentAsset::loadComponentPayload failed: unsupported version or flags");
-            return false;
+            return MakeUnexpected(Failure());
         }
         RigidBodyComponent c;
         c.type = cast<BodyType>(bin.bodyType);
@@ -286,10 +286,9 @@ class PhysicsComponentBinaryCodec{
         c.dirty = true;
         if(!this.validRigidBodyData(c)){
             error("RigidBodyComponentAsset::loadComponentPayload failed: invalid rigid body fields");
-            return false;
+            return MakeUnexpected(Failure());
         }
-        outComp = c;
-        return true;
+        return c;
     }
 
     private b8 serializeColliderEntryFields(
@@ -556,22 +555,22 @@ class PhysicsComponentBinaryCodec{
         return true;
     }
 
-    public b8 deserializeCollider(in Span<u8> payload, mut ColliderComponent outComp)const{
+    public Expected<ColliderComponent> deserializeCollider(in Span<u8> payload)const{
         usize cursor = 0u;
         const Expected<ColliderComponentPayloadHeaderBinary> rootRes = ReadPOD<ColliderComponentPayloadHeaderBinary>(payload, cursor);
         if(!rootRes.has_value()){
             error("ColliderComponentAsset::loadComponentPayload failed: truncated header");
-            return false;
+            return MakeUnexpected(Failure());
         }
         in ColliderComponentPayloadHeaderBinary rootHdr = rootRes.value();
         if(rootHdr.version != s_PhysicsComponentBinaryVersion || rootHdr.reserved0 != 0u){
             error("ColliderComponentAsset::loadComponentPayload failed: invalid version");
-            return false;
+            return MakeUnexpected(Failure());
         }
         const u64 minExtraBytes = cast<u64>(rootHdr.extraShapeCount) * cast<u64>(size_of<ColliderShapeEntryHeaderBinary>());
         if(minExtraBytes > cast<u64>(payload.size() - cursor)){
             error("ColliderComponentAsset::loadComponentPayload failed: truncated extra shapes");
-            return false;
+            return MakeUnexpected(Failure());
         }
 
         ColliderComponent c;
@@ -581,7 +580,7 @@ class PhysicsComponentBinaryCodec{
         VectorSingle cLocalRot(0.0f);
         if(!this.deserializeColliderEntryFields(payload, cursor, c.shapeType, cCenter, cCenter2, cHalfExtents, cLocalRot, c.radius, c.skinRadius, c.density, c.friction, c.restitution, c.rollingResistance, c.tangentSpeed, c.groupIndex, c.categoryBits, c.maskBits, c.userData, c.isBox, c.isSensor, c.enableContactEvents, c.enableHitEvents, c.enableSensorEvents, c.enablePreSolveEvents, c.invokeContactCreation, c.hullPoints, c.meshVertices, c.meshIndices, c.meshAsset)){
             error("ColliderComponentAsset::loadComponentPayload failed: invalid primary shape");
-            return false;
+            return MakeUnexpected(Failure());
         }
         c.center = f32x4(cCenter);
         c.center2 = f32x4(cCenter2);
@@ -596,16 +595,15 @@ class PhysicsComponentBinaryCodec{
         for(u32 i = 0u; i < rootHdr.extraShapeCount; ++i){
             if(!this.deserializeColliderEntry(payload, cursor, c.extraShapes[i])){
                 error("ColliderComponentAsset::loadComponentPayload failed: invalid extra shape");
-                return false;
+                return MakeUnexpected(Failure());
             }
         }
         if(cursor != payload.size()){
             error("ColliderComponentAsset::loadComponentPayload failed: trailing bytes in payload");
-            return false;
+            return MakeUnexpected(Failure());
         }
         c.dirty = true;
-        outComp = c;
-        return true;
+        return c;
     }
 
     public b8 validateJoint(in JointComponent j, in Name virtualPath)const{
@@ -659,17 +657,17 @@ class PhysicsComponentBinaryCodec{
         return true;
     }
 
-    public b8 deserializeJoint(in Span<u8> payload, mut JointComponent outComp)const{
+    public Expected<JointComponent> deserializeJoint(in Span<u8> payload)const{
         usize cursor = 0u;
         const Expected<JointComponentPayloadBinary> res = ReadPOD<JointComponentPayloadBinary>(payload, cursor);
         if(!res.has_value() || cursor != payload.size()){
             error("JointComponentAsset::loadComponentPayload failed: invalid payload size");
-            return false;
+            return MakeUnexpected(Failure());
         }
         in JointComponentPayloadBinary bin = res.value();
         if(bin.version != s_PhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || (bin.flags & 0xe0u) != 0u){
             error("JointComponentAsset::loadComponentPayload failed: unsupported version or flags");
-            return false;
+            return MakeUnexpected(Failure());
         }
         JointComponent j;
         j.type = cast<JointType>(bin.jointType);
@@ -712,10 +710,9 @@ class PhysicsComponentBinaryCodec{
         j.dirty = true;
         if(!this.validJointData(j)){
             error("JointComponentAsset::loadComponentPayload failed: invalid joint parameters");
-            return false;
+            return MakeUnexpected(Failure());
         }
-        outComp = j;
-        return true;
+        return j;
     }
 
     public b8 validateWorldConfig(in PhysicsWorldConfigComponent w, in Name virtualPath)const{
@@ -755,17 +752,17 @@ class PhysicsComponentBinaryCodec{
         return true;
     }
 
-    public b8 deserializeWorldConfig(in Span<u8> payload, mut PhysicsWorldConfigComponent outComp)const{
+    public Expected<PhysicsWorldConfigComponent> deserializeWorldConfig(in Span<u8> payload)const{
         usize cursor = 0u;
         const Expected<PhysicsWorldConfigComponentPayloadBinary> res = ReadPOD<PhysicsWorldConfigComponentPayloadBinary>(payload, cursor);
         if(!res.has_value() || cursor != payload.size()){
             error("PhysicsWorldConfigComponentAsset::loadComponentPayload failed: invalid payload size");
-            return false;
+            return MakeUnexpected(Failure());
         }
         in PhysicsWorldConfigComponentPayloadBinary bin = res.value();
         if(bin.version != s_PhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || bin.reserved3 != 0u || (bin.flags & 0xe0u) != 0u){
             error("PhysicsWorldConfigComponentAsset::loadComponentPayload failed: unsupported version or flags");
-            return false;
+            return MakeUnexpected(Failure());
         }
         PhysicsWorldConfigComponent w;
         w.backendMode = cast<PhysicsBackendMode>(bin.backendMode);
@@ -788,10 +785,9 @@ class PhysicsComponentBinaryCodec{
         w.dirty = true;
         if(!this.validWorldConfigData(w)){
             error("PhysicsWorldConfigComponentAsset::loadComponentPayload failed: invalid world config values");
-            return false;
+            return MakeUnexpected(Failure());
         }
-        outComp = w;
-        return true;
+        return w;
     }
 
     public b8 validatePhysicsParent(in PhysicsParentComponent p, in Name virtualPath)const{
@@ -816,17 +812,17 @@ class PhysicsComponentBinaryCodec{
         return true;
     }
 
-    public b8 deserializePhysicsParent(in Span<u8> payload, mut PhysicsParentComponent outComp)const{
+    public Expected<PhysicsParentComponent> deserializePhysicsParent(in Span<u8> payload)const{
         usize cursor = 0u;
         const Expected<PhysicsParentComponentPayloadBinary> res = ReadPOD<PhysicsParentComponentPayloadBinary>(payload, cursor);
         if(!res.has_value() || cursor != payload.size()){
             error("PhysicsParentComponentAsset::loadComponentPayload failed: invalid payload size");
-            return false;
+            return MakeUnexpected(Failure());
         }
         in PhysicsParentComponentPayloadBinary bin = res.value();
         if(bin.version != s_PhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || (bin.flags & 0xfeu) != 0u){
             error("PhysicsParentComponentAsset::loadComponentPayload failed: unsupported version or flags");
-            return false;
+            return MakeUnexpected(Failure());
         }
         PhysicsParentComponent p;
         p.inheritScale = (bin.flags & s_PhysicsParentFlagInheritScale) != 0u;
@@ -836,10 +832,9 @@ class PhysicsComponentBinaryCodec{
             p.parentEntityName = Name(bin.parentEntityNameHash);
         if(!this.validPhysicsParentData(p)){
             error("PhysicsParentComponentAsset::loadComponentPayload failed: invalid parent component");
-            return false;
+            return MakeUnexpected(Failure());
         }
-        outComp = p;
-        return true;
+        return p;
     }
 }
 

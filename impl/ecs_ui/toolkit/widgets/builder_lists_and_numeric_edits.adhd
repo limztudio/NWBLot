@@ -20,27 +20,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 IsValidVirtualListWheelRows(in f32 wheelRows){
-    return IsFinite(wheelRows) && wheelRows > 0.0f;
-}
-
-b8 NeedsListScrollOffsetRescale(
-    in f32 scrollRowHeight,
-    in u64 scrollSourceGeneration,
-    in u64 measureSourceGeneration,
-    in f32 rowHeight
-){
-    return scrollRowHeight > 0.0f && scrollSourceGeneration == measureSourceGeneration && scrollRowHeight != rowHeight;
-}
-
-b8 IsListRowsFocused(in WidgetId focusId, in WidgetId listId, in WidgetId commandFocus){
-    return focusId == listId || (commandFocus.valid() && focusId == commandFocus);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class NumericEditActions : IEditActionSink{
     private in EditModel m_draft;
     private in Context m_context;
@@ -75,6 +54,7 @@ class NumericEditActions : IEditActionSink{
         return this.m_float.value().revision();
     }
 
+    [cpp_unwind]
     public b8 apply(mut EditModel draft, in EditAction action, in b8 readOnly)override{
         if(this.m_context.failed() || !SameAddress(draft, this.m_draft) || this.currentRevision() != this.m_revision){
             this.m_result.valid = false;
@@ -116,6 +96,23 @@ class NumericEditActions : IEditActionSink{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+b8 IsValidVirtualListWheelRows(in f32 wheelRows){
+    return IsFinite(wheelRows) && wheelRows > 0.0f;
+}
+
+b8 NeedsListScrollOffsetRescale(
+    in f32 scrollRowHeight,
+    in u64 scrollSourceGeneration,
+    in u64 measureSourceGeneration,
+    in f32 rowHeight
+){
+    return scrollRowHeight > 0.0f && scrollSourceGeneration == measureSourceGeneration && scrollRowHeight != rowHeight;
+}
+
+b8 IsListRowsFocused(in WidgetId focusId, in WidgetId listId, in WidgetId commandFocus){
+    return focusId == listId || (commandFocus.valid() && focusId == commandFocus);
+}
 
 Optional<in UiSkinRegion> Builder::prepareListFrame(in borrow IListDataSource source, mut ListState state, in ListOptions options, in ControlToken token, in u64 rowCount, in b8 focusOnCommit, in WidgetId commandFocus, mut BuilderListFrame outFrame){
     outFrame.source = Optional<in IListDataSource>(source);
@@ -384,10 +381,6 @@ b8 Builder::paintListRows(in BuilderItem item, in BuilderListFrame frame, in Scr
     }
     return this.listMatches(frame);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 NumericEditBoxResult Builder::integerEdit(in StringView stableKey, mut IntegerEditModel model, mut EditBoxState state, in IntegerEditOptions options){
     NumericEditBoxResult result;

@@ -654,6 +654,89 @@ void VerifySceneSubsystemAssets_ActiveCameraAssetAndInstantiatedNamedEntitiesEdg
     EXPECT_TRUE(instantiated.entities.empty());
 }
 
+void VerifySceneSubsystemAssets_UnloadDestroyRollbackAndDuplicateEntityName(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+
+    HeapStorage arena(Name("tests/scene/unload_destroy_rollback"));
+    HeapStorage globalArena(Name("tests/scene/unload_destroy_rollback_global"));
+    AssetRegistry registry(arena);
+    TestValueSlot<MapAssetBinarySource> sourceSlot;
+    mut MapAssetBinarySource source = sourceSlot.constructIn(arena);
+    AssetManager assets(arena, registry, source);
+
+    ASSERT_TRUE(RegisterTestCodec<SubsystemAssetCodec>(registry));
+    ASSERT_TRUE(RegisterTestCodec<ComponentAssetCodec>(registry));
+    ASSERT_TRUE(RegisterTestCodec<DeclaredAssetCodec<EntityAsset>>(registry));
+    ASSERT_TRUE(RegisterTestCodec<DeclaredAssetCodec<SceneAsset>>(registry));
+
+    TestValueSlot<RendererSubsystem> rendererSubsystemSlot;
+    mut RendererSubsystem rendererSubsystem = rendererSubsystemSlot.constructIn(arena, s_SceneAssetNameEngineSubsystemsRenderer);
+    PopulateRequiredSubsystemFields(rendererSubsystem);
+    source.setBinary(s_SceneAssetNameEngineSubsystemsRenderer, MakeSubsystemBinary(rendererSubsystem));
+
+    TransformComponentPayloadBinary xfPayload;
+    source.setBinary(Name("project/entities/dupe/transform"), MakeComponentBinary(TransformComponentAsset::AssetTypeName(), xfPayload));
+
+    Vector<ComponentRef> comps;
+    comps.push_back(ComponentRef(Name("project/entities/dupe/transform")));
+    Vector<u8> entityBin;
+    EntityHeaderBinary hdr;
+    hdr.componentCount = cast<u64>(comps.size());
+    hdr.entityNameHash = Name("dup_actor").hash();
+    AppendPOD(entityBin, hdr);
+    AppendPOD(entityBin, comps[0u].name().hash());
+    source.setBinary(Name("project/entities/dup_a"), entityBin);
+    source.setBinary(Name("project/entities/dup_b"), entityBin);
+
+    Vector<SubsystemRef> sceneSubsystems;
+    sceneSubsystems.push_back(SubsystemRef(s_SceneAssetNameEngineSubsystemsRenderer));
+    HashMap<Name, SceneAssetRef> sceneAssets;
+
+    Vector<EntityRef> okEntities;
+    okEntities.push_back(EntityRef(Name("project/entities/dup_a")));
+    source.setBinary(Name("project/scenes/ok_scene"), BuildTestSceneBinary(sceneSubsystems, sceneAssets, okEntities));
+
+    Vector<EntityRef> dupEntities;
+    dupEntities.push_back(EntityRef(Name("project/entities/dup_a")));
+    dupEntities.push_back(EntityRef(Name("project/entities/dup_b")));
+    source.setBinary(Name("project/scenes/dup_scene"), BuildTestSceneBinary(sceneSubsystems, sceneAssets, dupEntities));
+
+    TestValueSlot<ActiveSceneSubsystems> activeSlot;
+    mut ActiveSceneSubsystems active = activeSlot.constructIn(globalArena);
+    ASSERT_TRUE(active.loadScene(SceneRef(Name("project/scenes/ok_scene")), assets));
+    EXPECT_TRUE(active.valid());
+
+    EXPECT_FALSE(active.loadScene(SceneRef(Name("project/scenes/dup_scene")), assets));
+    EXPECT_TRUE(SawCapturedError(logger, "duplicate entity name"));
+    EXPECT_EQ(active.scene().name(), Name("project/scenes/ok_scene"));
+
+    EcsTestWorld tw;
+    InstantiatedSceneEntities firstInst;
+    ASSERT_TRUE(active.instantiateEntities(tw.world, firstInst));
+    ASSERT_EQ(firstInst.entities.size(), 1u);
+    EXPECT_TRUE(tw.world.alive(firstInst.entities[0u]));
+
+    in InstantiatedSceneEntities constRef = firstInst;
+    active.destroyEntities(tw.world, constRef);
+    EXPECT_FALSE(tw.world.alive(firstInst.entities[0u]));
+    EXPECT_EQ(firstInst.entities.size(), 1u);
+
+    InstantiatedSceneEntities secondInst;
+    ASSERT_TRUE(active.instantiateEntities(tw.world, secondInst));
+    const EntityID secondEnt = secondInst.entities[0u];
+    ASSERT_TRUE(tw.world.alive(secondEnt));
+    active.destroyEntities(tw.world, secondInst);
+    EXPECT_FALSE(tw.world.alive(secondEnt));
+    EXPECT_TRUE(secondInst.entities.empty());
+
+    active.unloadScene();
+    EXPECT_FALSE(active.valid());
+    EXPECT_FALSE(active.scene().valid());
+    EXPECT_EQ(active.subsystemCount(), 0u);
+    EXPECT_FALSE(active.instantiateEntities(tw.world));
+}
+
 NWB_ADHD_GTEST(SceneCameraSelection, ActiveGenerationAndMissingComponentsRecover, VerifySceneCameraSelection_ActiveGenerationAndMissingComponentsRecover)
 
 NWB_ADHD_GTEST(SceneCameraSelection, FirstSelectorRemainsAuthoritativeAcrossRemovalAndRebinding, VerifySceneCameraSelection_FirstSelectorRemainsAuthoritativeAcrossRemovalAndRebinding)
@@ -681,6 +764,8 @@ NWB_ADHD_GTEST(SceneSubsystemAssets, DeduplicatesSubsystemRefsAndPreservesPrevio
 NWB_ADHD_GTEST(SceneCameraProjection, NearlyPiFovRetainsScalarCosineAdmission, VerifySceneCameraProjection_NearlyPiFovRetainsScalarCosineAdmission)
 
 NWB_ADHD_GTEST(SceneSubsystemAssets, ActiveCameraAssetAndInstantiatedNamedEntitiesEdgeCases, VerifySceneSubsystemAssets_ActiveCameraAssetAndInstantiatedNamedEntitiesEdgeCases)
+
+NWB_ADHD_GTEST(SceneSubsystemAssets, UnloadDestroyRollbackAndDuplicateEntityName, VerifySceneSubsystemAssets_UnloadDestroyRollbackAndDuplicateEntityName)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

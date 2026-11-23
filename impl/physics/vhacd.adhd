@@ -358,8 +358,10 @@ Expected<VhacdResult> ComputeConvexDecomposition(
             }
         }
 
-        if(!foundSplit)
-            break;
+        if(!foundSplit){
+            partitions[bestIdx].depth = params.maxRecursionDepth;
+            continue;
+        }
 
         partitions[bestIdx].aabb = bestNeg.aabb;
         partitions[bestIdx].deepestPt = bestNeg.deepestPt;

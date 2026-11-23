@@ -4,6 +4,7 @@
 
 #include <impl/assets_physics/cook_components.adhd>
 #include <impl/assets_physics/cook_physics_assets.adhd>
+#include <impl/assets_physics/cook_subsystem_components.adhd>
 #include <impl/assets_physics/physics_subsystem.adhd>
 #include <impl/assets_scene/component_asset_binary_codec.adhd>
 #include <impl/assets_subsystem/cook.adhd>
@@ -80,7 +81,13 @@ Expected<PhysicsWorldConfigComponentAsset> CookPhysicsWorldConfigComponentVolume
 }
 
 b8 ExtractPhysicsWorldConfigComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
-    return ReadCookDependencyEntry<PhysicsWorldConfigComponentCookEntry>(context, s_PhysicsWorldConfigComponentDiagnosticPrefix, ParsePhysicsWorldConfigComponentCookMetadata).has_value();
+    const Expected<PhysicsWorldConfigComponentCookEntry> entry = ReadCookDependencyEntry<PhysicsWorldConfigComponentCookEntry>(context, s_PhysicsWorldConfigComponentDiagnosticPrefix, ParsePhysicsWorldConfigComponentCookMetadata);
+    if(!entry.has_value())
+        return false;
+    in AssetRef<CollisionLayerMatrixAsset> matrixAsset = entry.value().component.collisionLayerMatrixAsset;
+    if(matrixAsset.valid() && !collector.addAssetDependency(matrixAsset.name(), CollisionLayerMatrixAsset::AssetTypeName()))
+        return false;
+    return true;
 }
 
 [cook_entry("component", s_PhysicsParentComponentDiagnosticPrefix, ParsePhysicsParentComponentCookMetadata, document_and_value, log_failure, PhysicsParentComponentCodec)]
@@ -90,6 +97,78 @@ Expected<PhysicsParentComponentAsset> CookPhysicsParentComponentVolumeEntry(in P
 
 b8 ExtractPhysicsParentComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
     return ReadCookDependencyEntry<PhysicsParentComponentCookEntry>(context, s_PhysicsParentComponentDiagnosticPrefix, ParsePhysicsParentComponentCookMetadata).has_value();
+}
+
+[cook_entry("component", s_CharacterControllerComponentDiagnosticPrefix, ParseCharacterControllerComponentCookMetadata, document_and_value, log_failure, CharacterControllerComponentCodec)]
+Expected<CharacterControllerComponentAsset> CookCharacterControllerComponentVolumeEntry(in CharacterControllerComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<CharacterControllerComponentAsset, CharacterControllerComponentCookEntry>(entry);
+}
+
+b8 ExtractCharacterControllerComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<CharacterControllerComponentCookEntry>(context, s_CharacterControllerComponentDiagnosticPrefix, ParseCharacterControllerComponentCookMetadata).has_value();
+}
+
+[cook_entry("component", s_VehicleComponentDiagnosticPrefix, ParseVehicleComponentCookMetadata, document_and_value, log_failure, VehicleComponentCodec)]
+Expected<VehicleComponentAsset> CookVehicleComponentVolumeEntry(in VehicleComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<VehicleComponentAsset, VehicleComponentCookEntry>(entry);
+}
+
+b8 ExtractVehicleComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<VehicleComponentCookEntry>(context, s_VehicleComponentDiagnosticPrefix, ParseVehicleComponentCookMetadata).has_value();
+}
+
+[cook_entry("component", s_RagdollComponentDiagnosticPrefix, ParseRagdollComponentCookMetadata, document_and_value, log_failure, RagdollComponentCodec)]
+Expected<RagdollComponentAsset> CookRagdollComponentVolumeEntry(in RagdollComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<RagdollComponentAsset, RagdollComponentCookEntry>(entry);
+}
+
+b8 ExtractRagdollComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<RagdollComponentCookEntry>(context, s_RagdollComponentDiagnosticPrefix, ParseRagdollComponentCookMetadata).has_value();
+}
+
+[cook_entry("component", s_FluidVolumeComponentDiagnosticPrefix, ParseFluidVolumeComponentCookMetadata, document_and_value, log_failure, FluidVolumeComponentCodec)]
+Expected<FluidVolumeComponentAsset> CookFluidVolumeComponentVolumeEntry(in FluidVolumeComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<FluidVolumeComponentAsset, FluidVolumeComponentCookEntry>(entry);
+}
+
+b8 ExtractFluidVolumeComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<FluidVolumeComponentCookEntry>(context, s_FluidVolumeComponentDiagnosticPrefix, ParseFluidVolumeComponentCookMetadata).has_value();
+}
+
+[cook_entry("component", s_ForceFieldComponentDiagnosticPrefix, ParseForceFieldComponentCookMetadata, document_and_value, log_failure, ForceFieldComponentCodec)]
+Expected<ForceFieldComponentAsset> CookForceFieldComponentVolumeEntry(in ForceFieldComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<ForceFieldComponentAsset, ForceFieldComponentCookEntry>(entry);
+}
+
+b8 ExtractForceFieldComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<ForceFieldComponentCookEntry>(context, s_ForceFieldComponentDiagnosticPrefix, ParseForceFieldComponentCookMetadata).has_value();
+}
+
+[cook_entry("component", s_ArticulationComponentDiagnosticPrefix, ParseArticulationComponentCookMetadata, document_and_value, log_failure, ArticulationComponentCodec)]
+Expected<ArticulationComponentAsset> CookArticulationComponentVolumeEntry(in ArticulationComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<ArticulationComponentAsset, ArticulationComponentCookEntry>(entry);
+}
+
+b8 ExtractArticulationComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<ArticulationComponentCookEntry>(context, s_ArticulationComponentDiagnosticPrefix, ParseArticulationComponentCookMetadata).has_value();
+}
+
+[cook_entry("component", s_SoftBodyComponentDiagnosticPrefix, ParseSoftBodyComponentCookMetadata, document_and_value, log_failure, SoftBodyComponentCodec)]
+Expected<SoftBodyComponentAsset> CookSoftBodyComponentVolumeEntry(in SoftBodyComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<SoftBodyComponentAsset, SoftBodyComponentCookEntry>(entry);
+}
+
+b8 ExtractSoftBodyComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<SoftBodyComponentCookEntry>(context, s_SoftBodyComponentDiagnosticPrefix, ParseSoftBodyComponentCookMetadata).has_value();
+}
+
+[cook_entry("component", s_GpuRenderTransformExportComponentDiagnosticPrefix, ParseGpuRenderTransformExportComponentCookMetadata, document_and_value, log_failure, GpuRenderTransformExportComponentCodec)]
+Expected<GpuRenderTransformExportComponentAsset> CookGpuRenderTransformExportComponentVolumeEntry(in GpuRenderTransformExportComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<GpuRenderTransformExportComponentAsset, GpuRenderTransformExportComponentCookEntry>(entry);
+}
+
+b8 ExtractGpuRenderTransformExportComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<GpuRenderTransformExportComponentCookEntry>(context, s_GpuRenderTransformExportComponentDiagnosticPrefix, ParseGpuRenderTransformExportComponentCookMetadata).has_value();
 }
 
 [cook_entry("physics_material", s_PhysicsMaterialDiagnosticPrefix, ParsePhysicsMaterialCookMetadata, document_and_value, log_failure)]
@@ -135,6 +214,14 @@ b8 RegisterPhysicsComponentCookDependencies(mut CookDependencyRegistry registry)
         && registry.registerType(JointComponentAsset::AssetTypeName(), ExtractJointComponentDependencies, IComponent::AssetTypeName())
         && registry.registerType(PhysicsWorldConfigComponentAsset::AssetTypeName(), ExtractPhysicsWorldConfigComponentDependencies, IComponent::AssetTypeName())
         && registry.registerType(PhysicsParentComponentAsset::AssetTypeName(), ExtractPhysicsParentComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(CharacterControllerComponentAsset::AssetTypeName(), ExtractCharacterControllerComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(VehicleComponentAsset::AssetTypeName(), ExtractVehicleComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(RagdollComponentAsset::AssetTypeName(), ExtractRagdollComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(FluidVolumeComponentAsset::AssetTypeName(), ExtractFluidVolumeComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(ForceFieldComponentAsset::AssetTypeName(), ExtractForceFieldComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(ArticulationComponentAsset::AssetTypeName(), ExtractArticulationComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(SoftBodyComponentAsset::AssetTypeName(), ExtractSoftBodyComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(GpuRenderTransformExportComponentAsset::AssetTypeName(), ExtractGpuRenderTransformExportComponentDependencies, IComponent::AssetTypeName())
         && registry.registerType(PhysicsMaterialAsset::AssetTypeName(), ExtractPhysicsMaterialDependencies)
         && registry.registerType(CollisionLayerMatrixAsset::AssetTypeName(), ExtractCollisionLayerMatrixDependencies)
         && registry.registerType(ConvexHullAsset::AssetTypeName(), ExtractConvexHullDependencies)

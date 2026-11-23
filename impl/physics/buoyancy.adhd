@@ -93,40 +93,18 @@ class FluidSubmersionResult{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-f32 ComputeBodyCharacteristicVolume(in PhysicsWorld world, in u32 bodyIdx){
+b8 BodyMatchesFilter(in PhysicsWorld world, in u32 bodyIdx, in Filter filter){
     in Body body = world.m_bodies[bodyIdx];
-    in SolverSet set = world.m_solverSets[body.setIndex];
-    in BodySim sim = set.sims[body.localIndex];
-    f32 approxVol = 0.0f;
     u32 shapeIdx = body.headShapeId;
+    if(shapeIdx == s_NullIndex)
+        return ShouldCollideFilters(Filter(), filter);
     while(shapeIdx != s_NullIndex){
         in Shape shape = world.m_shapes[shapeIdx];
-        if(!shape.isSensor()){
-            const f32 rho = Max(0.01f, shape.density);
-            const VectorSingle diag = VectorSingle(
-                Max(0.05f, shape.aabb.upperBound.x - shape.aabb.lowerBound.x),
-                Max(0.05f, shape.aabb.upperBound.y - shape.aabb.lowerBound.y),
-                Max(0.05f, shape.aabb.upperBound.z - shape.aabb.lowerBound.z),
-                0.0f
-            );
-            if(shape.type == ShapeType::Sphere){
-                const f32 r = shape.sphereShape().radius();
-                approxVol += (4.0f / 3.0f) * s_PI * r * r * r;
-            }
-            else if(shape.type == ShapeType::Hull && shape.geometryIndex < world.m_hullShapes.size() && world.m_hullShapes[shape.geometryIndex].isBox()){
-                const VectorSingle he = world.m_hullShapes[shape.geometryIndex].halfExtents();
-                approxVol += 8.0f * he.x * he.y * he.z;
-            }
-            else if(body.mass > 0.0f)
-                approxVol += (body.mass / rho) / cast<f32>(Max(1u, body.shapeCount));
-            else
-                approxVol += 0.5f * diag.x * diag.y * diag.z;
-        }
+        if(shape.alive() && ShouldCollideFilters(shape.filter, filter))
+            return true;
         shapeIdx = shape.nextShapeId;
     }
-    if(approxVol <= 0.0f && sim.invMass() > 0.0f)
-        approxVol = 1.0f / (sim.invMass() * 1000.0f);
-    return Max(0.0f, approxVol);
+    return false;
 }
 
 FluidSubmersionResult ComputeBodySubmersionEstimateWithNormal(in PhysicsWorld world, in u32 bodyIdx, in FluidVolume fluid, in VectorSingle surfNorm){
@@ -146,7 +124,7 @@ FluidSubmersionResult ComputeBodySubmersionEstimateWithNormal(in PhysicsWorld wo
         shapeIdx = shape.nextShapeId;
         if(shape.isSensor())
             continue;
-        if((shape.filter.categoryBits & fluid.filter.maskBits) == 0u || (fluid.filter.categoryBits & shape.filter.maskBits) == 0u)
+        if(!ShouldCollideFilters(shape.filter, fluid.filter))
             continue;
 
         if(shape.type == ShapeType::Sphere && fluid.shape == FluidVolumeShape::HalfSpacePlane){
@@ -169,15 +147,30 @@ FluidSubmersionResult ComputeBodySubmersionEstimateWithNormal(in PhysicsWorld wo
             const VectorSingle bMin = VectorSingle(shape.aabb.lowerBound);
             const VectorSingle bMax = VectorSingle(shape.aabb.upperBound);
             const VectorSingle span = Max(bMax - bMin, VectorSingle(0.02f, 0.02f, 0.02f, 0.0f));
-            f32 shapeVol = span.x * span.y * span.z * 0.65f;
-            if(shape.type == ShapeType::Hull && shape.geometryIndex < world.m_hullShapes.size() && world.m_hullShapes[shape.geometryIndex].isBox()){
-                const VectorSingle he = world.m_hullShapes[shape.geometryIndex].halfExtents();
-                shapeVol = 8.0f * he.x * he.y * he.z;
-            }
-            else if(shape.type == ShapeType::Sphere){
+            f32 shapeVol = 0.0f;
+            if(shape.type == ShapeType::Sphere){
                 const f32 r = shape.sphereShape().radius();
                 shapeVol = (4.0f / 3.0f) * s_PI * r * r * r;
             }
+            else if(shape.type == ShapeType::Capsule)
+                shapeVol = ComputeCapsuleMass(shape.capsuleShape(), 1.0f).mass();
+            else if(shape.type == ShapeType::Cylinder)
+                shapeVol = ComputeCylinderMass(shape.cylinderShape(), 1.0f).mass();
+            else if(shape.type == ShapeType::Cone)
+                shapeVol = ComputeConeMass(shape.coneShape(), 1.0f).mass();
+            else if(shape.type == ShapeType::TaperedCapsule)
+                shapeVol = ComputeTaperedCapsuleMass(shape.taperedCapsuleShape(), 1.0f).mass();
+            else if(shape.type == ShapeType::Hull && shape.geometryIndex < world.m_hullShapes.size()){
+                in HullShape hull = world.m_hullShapes[shape.geometryIndex];
+                if(hull.isBox()){
+                    const VectorSingle he = hull.halfExtents();
+                    shapeVol = 8.0f * he.x * he.y * he.z;
+                }
+                else
+                    shapeVol = ComputeHullMass(hull, 1.0f).mass();
+            }
+            if(shapeVol <= 1.0e-7f)
+                shapeVol = span.x * span.y * span.z * 0.65f;
             totalVol += shapeVol;
 
             if(fluid.shape == FluidVolumeShape::BoxAabb){
@@ -256,15 +249,15 @@ FluidSubmersionResult ComputeBodySubmersionEstimate(in PhysicsWorld world, in u3
     return ComputeBodySubmersionEstimateWithNormal(world, bodyIdx, fluid, fluid.normalizedSurfaceNormal());
 }
 
-void GatherDynamicEnvironmentCandidates(
+void GatherDynamicEnvironmentCandidateBodyIds(
     mut PhysicsWorld world,
     in Aabb3D queryBox,
     in u32 queryMask,
     in u8 reqNodeFlags
 ){
     world.ensureCpuBroadphaseSynced();
-    mut Vector<u32> candLocalIndices = world.m_cpuScratch.envCandidateBodies;
-    candLocalIndices.clear();
+    mut Vector<u32> candBodyIds = world.m_cpuScratch.envCandidateBodies;
+    candBodyIds.clear();
     mut Vector<u32> visitStamps = world.m_cpuScratch.envBodyVisitStamps;
     const usize bodyCount = world.m_bodies.size();
     if(visitStamps.size() < bodyCount)
@@ -282,7 +275,7 @@ void GatherDynamicEnvironmentCandidates(
         queryBox,
         queryMask,
         reqNodeFlags,
-        lambda[in worldRef, in epoch, mut visitStamps, mut candLocalIndices](in u32 proxyId, in u32 shapeIdx) -> b8{
+        lambda[in worldRef, in epoch, mut visitStamps, mut candBodyIds](in u32 proxyId, in u32 shapeIdx) -> b8{
             if(shapeIdx >= worldRef.m_shapes.size() || !worldRef.m_shapes[shapeIdx].alive())
                 return true;
             in Shape shape = worldRef.m_shapes[shapeIdx];
@@ -291,11 +284,13 @@ void GatherDynamicEnvironmentCandidates(
                 return true;
             visitStamps[bodyIdx] = epoch;
             in Body body = worldRef.m_bodies[bodyIdx];
-            if(!body.alive || body.type != BodyType::Dynamic || body.setIndex != s_AwakeSetIndex)
+            if(!body.alive || body.type != BodyType::Dynamic)
                 return true;
-            if(worldRef.m_solverSets[s_AwakeSetIndex].sims[body.localIndex].invMass() <= 0.0f)
+            if(body.setIndex >= worldRef.m_solverSets.size())
                 return true;
-            candLocalIndices.push_back(body.localIndex);
+            if(worldRef.m_solverSets[body.setIndex].sims[body.localIndex].invMass() <= 0.0f)
+                return true;
+            candBodyIds.push_back(bodyIdx);
             return true;
         }
     );
@@ -303,8 +298,8 @@ void GatherDynamicEnvironmentCandidates(
 
 b8 ComputeFluidBodyWrench(
     in PhysicsWorld world,
-    in SolverSet awakeSet,
-    in usize awakeLocalIdx,
+    in SolverSet bodySet,
+    in usize bodyLocalIdx,
     in FluidVolume fluid,
     in VectorSingle surfNorm,
     in VectorSingle grav,
@@ -312,7 +307,7 @@ b8 ComputeFluidBodyWrench(
     mut VectorSingle outForce,
     mut VectorSingle outTorque
 ){
-    in BodySim sim = awakeSet.sims[awakeLocalIdx];
+    in BodySim sim = bodySet.sims[bodyLocalIdx];
     const u32 bodyIdx = sim.bodyId;
     if(bodyIdx >= world.m_bodies.size() || !world.m_bodies[bodyIdx].alive || world.m_bodies[bodyIdx].type != BodyType::Dynamic)
         return false;
@@ -324,7 +319,7 @@ b8 ComputeFluidBodyWrench(
         return false;
 
     const f32 displacedMass = fluid.density * sub.submergedVolume;
-    const VectorSingle buoyancyForce = -grav * displacedMass;
+    const VectorSingle buoyancyForce = (-grav) * (displacedMass * sim.gravityScale);
     const VectorSingle cob = VectorSingle(sub.centerOfBuoyancy);
     const VectorSingle simCenter = sim.center();
     const VectorSingle relCob(cob - simCenter, 0.0f);
@@ -332,8 +327,8 @@ b8 ComputeFluidBodyWrench(
     VectorSingle totalForce = VectorSingle(buoyancyForce, 0.0f);
     VectorSingle forceAtCob = totalForce;
 
-    const VectorSingle linV = VectorSingle(awakeSet.states[awakeLocalIdx].linearVelocity);
-    const VectorSingle angV = VectorSingle(awakeSet.states[awakeLocalIdx].angularVelocity);
+    const VectorSingle linV = VectorSingle(bodySet.states[bodyLocalIdx].linearVelocity);
+    const VectorSingle angV = VectorSingle(bodySet.states[bodyLocalIdx].angularVelocity);
     const VectorSingle relV = VectorSingle(fluid.flowVelocity) - (linV + Cross(angV, relCob));
     const f32 relSpeedSq = Vector3LengthSq(VectorSingle(relV, 0.0f)).x;
     if(relSpeedSq > 1.0e-10f){
@@ -349,7 +344,7 @@ b8 ComputeFluidBodyWrench(
         totalForce = totalForce + dragF;
         forceAtCob = forceAtCob + dragF;
 
-        if(fluid.liftCoeff != 0.0f && fluid.shape == FluidVolumeShape::HalfSpacePlane){
+        if(fluid.liftCoeff != 0.0f){
             const f32 liftMag = 0.5f * fluid.density * fluid.liftCoeff * sub.surfaceAreaEstimate * relSpeedSq * 0.01f;
             totalForce = totalForce + VectorSingle(surfNorm * liftMag, 0.0f);
         }
@@ -357,8 +352,19 @@ b8 ComputeFluidBodyWrench(
 
     VectorSingle totalTorque = Cross(relCob, forceAtCob);
     const f32 angSpeedSq = Vector3LengthSq(VectorSingle(angV, 0.0f)).x;
-    if(angSpeedSq > 1.0e-10f)
-        totalTorque = totalTorque + VectorSingle((-angV) * (fluid.angularDrag * sub.submergedFraction * Max(0.1f, sim.maxExtent())), 0.0f);
+    if(angSpeedSq > 1.0e-10f){
+        const f32 invAngSpeed = Rsqrt(angSpeedSq);
+        const f32 angSpeed = angSpeedSq * invAngSpeed;
+        const VectorSingle angDir = angV * invAngSpeed;
+        const f32 rawTorqueMag = fluid.angularDrag * sub.submergedFraction * Max(0.1f, sim.maxExtent()) * angSpeed;
+        f32 clampedTorqueMag = rawTorqueMag;
+        const f32 kInvI = Vector3Dot(angDir, MulSymMat3Vec(sim.invInertiaWorld, angDir)).x;
+        if(kInvI > 1.0e-10f){
+            const f32 maxSafeTorque = (1.0f / kInvI) * angSpeed * invDt * 0.9f;
+            clampedTorqueMag = Min(rawTorqueMag, maxSafeTorque);
+        }
+        totalTorque = totalTorque + VectorSingle((-angDir) * clampedTorqueMag, 0.0f);
+    }
 
     outForce = totalForce;
     outTorque = totalTorque;
@@ -367,18 +373,20 @@ b8 ComputeFluidBodyWrench(
 
 b8 ComputeForceFieldBodyForce(
     in PhysicsWorld world,
-    in SolverSet awakeSet,
-    in usize awakeLocalIdx,
+    in SolverSet bodySet,
+    in usize bodyLocalIdx,
     in ForceField field,
     in VectorSingle hoistedDir,
     in f32 timeSec,
     mut VectorSingle outForce
 ){
-    in BodySim sim = awakeSet.sims[awakeLocalIdx];
+    in BodySim sim = bodySet.sims[bodyLocalIdx];
     const u32 bodyIdx = sim.bodyId;
     if(bodyIdx >= world.m_bodies.size() || !world.m_bodies[bodyIdx].alive || world.m_bodies[bodyIdx].type != BodyType::Dynamic)
         return false;
     if(sim.invMass() <= 0.0f)
+        return false;
+    if(!BodyMatchesFilter(world, bodyIdx, field.filter))
         return false;
 
     const VectorSingle pos = sim.center();
@@ -399,41 +407,32 @@ b8 ComputeForceFieldBodyForce(
     else if(field.type == ForceFieldType::PointGravity){
         const VectorSingle diff = VectorSingle(field.originOrDirection) - pos;
         const f32 distSq = Vector3LengthSq(VectorSingle(diff, 0.0f)).x;
+        if(distSq <= 1.0e-12f)
+            return false;
         if(field.radius > 0.0f && distSq > field.radius * field.radius)
             return false;
-        const f32 minD = Max(0.05f, field.minDistance);
-        const f32 minDSq = minD * minD;
+        const f32 invDist = Rsqrt(distSq);
+        const VectorSingle dir = diff * invDist;
         f32 falloff = 1.0f;
-        VectorSingle dir(0.0f, 1.0f, 0.0f, 0.0f);
-        if(distSq > 1.0e-12f){
-            const f32 invDist = Rsqrt(distSq);
-            dir = diff * invDist;
-            if(field.falloffPower > 0.0f){
-                if(distSq <= minDSq){
-                    if(field.falloffPower == 2.0f)
-                        falloff = 1.0f / minDSq;
-                    else if(field.falloffPower == 1.0f)
-                        falloff = 1.0f / minD;
-                    else
-                        falloff = 1.0f / Pow(minD, field.falloffPower);
-                }
-                else{
-                    if(field.falloffPower == 2.0f)
-                        falloff = 1.0f / distSq;
-                    else if(field.falloffPower == 1.0f)
-                        falloff = invDist;
-                    else
-                        falloff = 1.0f / Pow(distSq * invDist, field.falloffPower);
-                }
+        if(field.falloffPower > 0.0f){
+            const f32 minD = Max(0.05f, field.minDistance);
+            const f32 minDSq = minD * minD;
+            if(distSq <= minDSq){
+                if(field.falloffPower == 2.0f)
+                    falloff = 1.0f / minDSq;
+                else if(field.falloffPower == 1.0f)
+                    falloff = 1.0f / minD;
+                else
+                    falloff = 1.0f / Pow(minD, field.falloffPower);
             }
-        }
-        else if(field.falloffPower > 0.0f){
-            if(field.falloffPower == 2.0f)
-                falloff = 1.0f / minDSq;
-            else if(field.falloffPower == 1.0f)
-                falloff = 1.0f / minD;
-            else
-                falloff = 1.0f / Pow(minD, field.falloffPower);
+            else{
+                if(field.falloffPower == 2.0f)
+                    falloff = 1.0f / distSq;
+                else if(field.falloffPower == 1.0f)
+                    falloff = invDist;
+                else
+                    falloff = 1.0f / Pow(distSq * invDist, field.falloffPower);
+            }
         }
         appliedForce = dir * (field.strength * bodyMass * falloff);
     }
@@ -444,7 +443,7 @@ b8 ComputeForceFieldBodyForce(
             const VectorSingle turb(Sin(phase), Cos(phase * 1.31f), Sin(phase * 0.79f + 1.1f), 0.0f);
             windVel = windVel + turb * field.turbulenceAmplitude;
         }
-        const VectorSingle relWind = windVel - VectorSingle(awakeSet.states[awakeLocalIdx].linearVelocity);
+        const VectorSingle relWind = windVel - VectorSingle(bodySet.states[bodyLocalIdx].linearVelocity);
         appliedForce = relWind * (Max(0.05f, sim.maxExtent() * sim.maxExtent()) * 2.0f);
     }
 
@@ -453,6 +452,115 @@ b8 ComputeForceFieldBodyForce(
 }
 
 const usize s_BuoyancyParallelThreshold = 64u;
+
+void PrepareFluidEnvironmentCandidates(
+    mut PhysicsWorld world,
+    in FluidVolume fluid,
+    in VectorSingle surfNorm,
+    in VectorSingle grav,
+    in f32 invDt,
+    in b8 useBroadphase,
+    mut usize outWorkCount
+){
+    outWorkCount = 0u;
+    Vector<u32> wakeQueue;
+    VectorSingle dummyF(0.0f);
+    VectorSingle dummyT(0.0f);
+
+    if(useBroadphase){
+        const u32 queryMask = world.broadPhaseQueryMask(fluid.filter);
+        if(queryMask == 0u)
+            return;
+        GatherDynamicEnvironmentCandidateBodyIds(world, fluid.bounds, queryMask, s_TreeNodeHasNonSensor);
+        const usize candCount = world.m_cpuScratch.envCandidateBodies.size();
+        for(usize ci = 0u; ci < candCount; ++ci){
+            const u32 bIdx = world.m_cpuScratch.envCandidateBodies[ci];
+            in Body b = world.m_bodies[bIdx];
+            if(b.setIndex > s_AwakeSetIndex){
+                if(ComputeFluidBodyWrench(world, world.m_solverSets[b.setIndex], b.localIndex, fluid, surfNorm, grav, invDt, dummyF, dummyT))
+                    wakeQueue.push_back(bIdx);
+            }
+        }
+        for(usize wi = 0u; wi < wakeQueue.size(); ++wi)
+            world.wakeBody(world.makeBodyId(wakeQueue[wi]));
+        usize awakeCount = 0u;
+        for(usize ci = 0u; ci < candCount; ++ci){
+            const u32 bIdx = world.m_cpuScratch.envCandidateBodies[ci];
+            if(bIdx < world.m_bodies.size() && world.m_bodies[bIdx].alive && world.m_bodies[bIdx].setIndex == s_AwakeSetIndex){
+                world.m_cpuScratch.envCandidateBodies[awakeCount] = world.m_bodies[bIdx].localIndex;
+                ++awakeCount;
+            }
+        }
+        world.m_cpuScratch.envCandidateBodies.resize(awakeCount);
+        outWorkCount = awakeCount;
+        return;
+    }
+
+    for(usize sIdx = cast<usize>(s_AwakeSetIndex) + 1u; sIdx < world.m_solverSets.size(); ++sIdx){
+        in SolverSet ss = world.m_solverSets[sIdx];
+        for(usize li = 0u; li < ss.sims.size(); ++li){
+            if(ComputeFluidBodyWrench(world, ss, li, fluid, surfNorm, grav, invDt, dummyF, dummyT))
+                wakeQueue.push_back(ss.sims[li].bodyId);
+        }
+    }
+    for(usize wi = 0u; wi < wakeQueue.size(); ++wi)
+        world.wakeBody(world.makeBodyId(wakeQueue[wi]));
+    outWorkCount = world.m_solverSets[s_AwakeSetIndex].sims.size();
+}
+
+void PrepareForceFieldEnvironmentCandidates(
+    mut PhysicsWorld world,
+    in ForceField field,
+    in VectorSingle hoistedDir,
+    in f32 timeSec,
+    in Aabb3D queryBox,
+    in b8 useBroadphase,
+    mut usize outWorkCount
+){
+    outWorkCount = 0u;
+    Vector<u32> wakeQueue;
+    VectorSingle dummyF(0.0f);
+
+    if(useBroadphase){
+        const u32 queryMask = world.broadPhaseQueryMask(field.filter);
+        if(queryMask == 0u)
+            return;
+        GatherDynamicEnvironmentCandidateBodyIds(world, queryBox, queryMask, 0u);
+        const usize candCount = world.m_cpuScratch.envCandidateBodies.size();
+        for(usize ci = 0u; ci < candCount; ++ci){
+            const u32 bIdx = world.m_cpuScratch.envCandidateBodies[ci];
+            in Body b = world.m_bodies[bIdx];
+            if(b.setIndex > s_AwakeSetIndex){
+                if(ComputeForceFieldBodyForce(world, world.m_solverSets[b.setIndex], b.localIndex, field, hoistedDir, timeSec, dummyF))
+                    wakeQueue.push_back(bIdx);
+            }
+        }
+        for(usize wi = 0u; wi < wakeQueue.size(); ++wi)
+            world.wakeBody(world.makeBodyId(wakeQueue[wi]));
+        usize awakeCount = 0u;
+        for(usize ci = 0u; ci < candCount; ++ci){
+            const u32 bIdx = world.m_cpuScratch.envCandidateBodies[ci];
+            if(bIdx < world.m_bodies.size() && world.m_bodies[bIdx].alive && world.m_bodies[bIdx].setIndex == s_AwakeSetIndex){
+                world.m_cpuScratch.envCandidateBodies[awakeCount] = world.m_bodies[bIdx].localIndex;
+                ++awakeCount;
+            }
+        }
+        world.m_cpuScratch.envCandidateBodies.resize(awakeCount);
+        outWorkCount = awakeCount;
+        return;
+    }
+
+    for(usize sIdx = cast<usize>(s_AwakeSetIndex) + 1u; sIdx < world.m_solverSets.size(); ++sIdx){
+        in SolverSet ss = world.m_solverSets[sIdx];
+        for(usize li = 0u; li < ss.sims.size(); ++li){
+            if(ComputeForceFieldBodyForce(world, ss, li, field, hoistedDir, timeSec, dummyF))
+                wakeQueue.push_back(ss.sims[li].bodyId);
+        }
+    }
+    for(usize wi = 0u; wi < wakeQueue.size(); ++wi)
+        world.wakeBody(world.makeBodyId(wakeQueue[wi]));
+    outWorkCount = world.m_solverSets[s_AwakeSetIndex].sims.size();
+}
 
 void ApplyFluidVolumeRange(
     mut PhysicsWorld world,
@@ -489,16 +597,7 @@ void ApplyFluidVolume(mut PhysicsWorld world, in FluidVolume fluid, in f32 dt){
 
     const b8 useBroadphase = (fluid.shape == FluidVolumeShape::BoxAabb);
     usize workCount = 0u;
-    if(useBroadphase){
-        const u32 queryMask = world.broadPhaseQueryMask(fluid.filter);
-        if(queryMask == 0u)
-            return;
-        GatherDynamicEnvironmentCandidates(world, fluid.bounds, queryMask, s_TreeNodeHasNonSensor);
-        workCount = world.m_cpuScratch.envCandidateBodies.size();
-    }
-    else{
-        workCount = world.m_solverSets[s_AwakeSetIndex].sims.size();
-    }
+    PrepareFluidEnvironmentCandidates(world, fluid, surfNorm, grav, invDt, useBroadphase, workCount);
     if(workCount == 0u)
         return;
 
@@ -520,16 +619,7 @@ void ApplyFluidVolumeWithScheduler(mut PhysicsWorld world, in FluidVolume fluid,
 
     const b8 useBroadphase = (fluid.shape == FluidVolumeShape::BoxAabb);
     usize workCount = 0u;
-    if(useBroadphase){
-        const u32 queryMask = world.broadPhaseQueryMask(fluid.filter);
-        if(queryMask == 0u)
-            return;
-        GatherDynamicEnvironmentCandidates(world, fluid.bounds, queryMask, s_TreeNodeHasNonSensor);
-        workCount = world.m_cpuScratch.envCandidateBodies.size();
-    }
-    else{
-        workCount = world.m_solverSets[s_AwakeSetIndex].sims.size();
-    }
+    PrepareFluidEnvironmentCandidates(world, fluid, surfNorm, grav, invDt, useBroadphase, workCount);
     if(workCount == 0u)
         return;
     if(workCount < s_BuoyancyParallelThreshold){
@@ -634,13 +724,7 @@ void ApplyForceField(mut PhysicsWorld world, in ForceField field, in f32 timeSec
     }
 
     usize workCount = 0u;
-    if(useBroadphase){
-        GatherDynamicEnvironmentCandidates(world, queryBox, 0xffffffffu, 0u);
-        workCount = world.m_cpuScratch.envCandidateBodies.size();
-    }
-    else{
-        workCount = world.m_solverSets[s_AwakeSetIndex].sims.size();
-    }
+    PrepareForceFieldEnvironmentCandidates(world, field, hoistedDir, timeSec, queryBox, useBroadphase, workCount);
     if(workCount == 0u)
         return;
 
@@ -676,13 +760,7 @@ void ApplyForceFieldWithScheduler(mut PhysicsWorld world, in ForceField field, i
     }
 
     usize workCount = 0u;
-    if(useBroadphase){
-        GatherDynamicEnvironmentCandidates(world, queryBox, 0xffffffffu, 0u);
-        workCount = world.m_cpuScratch.envCandidateBodies.size();
-    }
-    else{
-        workCount = world.m_solverSets[s_AwakeSetIndex].sims.size();
-    }
+    PrepareForceFieldEnvironmentCandidates(world, field, hoistedDir, timeSec, queryBox, useBroadphase, workCount);
     if(workCount == 0u)
         return;
     if(workCount < s_BuoyancyParallelThreshold){

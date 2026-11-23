@@ -890,7 +890,7 @@ class PhysicsCollisionTask{
         commands.setBufferState(this.buffers.counterReadback.deref(), ResourceStates::CopyDest);
         commands.commitBarriers();
 
-        commands.copyBuffer(this.buffers.counterReadback.deref(), 0u, this.buffers.counterBuffer.deref(), 0u, cast<u64>(3u) * cast<u64>(size_of<u32>()));
+        commands.copyBuffer(this.buffers.counterReadback.deref(), 0u, this.buffers.counterBuffer.deref(), 0u, cast<u64>(5u) * cast<u64>(size_of<u32>()));
         return !commands.commandRecordingFailed();
     }
 }
@@ -1331,7 +1331,7 @@ class PhysicsSolverTask{
         if(this.awakeCount == 0u || this.subStepCount == 0u || this.dt <= 0.0f)
             return false;
 
-        const u32 totalIslandCount = this.contactIslandCount + this.largeContactIslandCount + this.jointIslandCount;
+        const u32 totalIslandCount = this.contactIslandCount + this.largeContactIslandCount + this.jointIslandCount + this.jointOnlyIslandCount;
         const u32 colorBodyCount = this.awakeCount - this.colorBodyOffset;
 
         commands.setEnableUavBarriersForBuffer(this.buffers.bodySimBuffer.deref(), false);
@@ -1719,9 +1719,18 @@ class PhysicsBatchSpatialQueryTask{
     public BufferHandle lbvhNodeBuffer;
     public BufferHandle queryBuffer;
     public BufferHandle resultBuffer;
+    public BufferHandle hullVertexBuffer;
+    public BufferHandle meshNodeBuffer;
+    public BufferHandle meshTriBuffer;
     public Span<GpuPhysicsBodyPose> poses;
     public Span<GpuPhysicsShapeProxy> shapes;
     public Span<GpuPhysicsSpatialQuery> queries;
+    public Span<f32x4> hullVertices;
+    public Span<f32x4> meshNodes;
+    public Span<f32x4> meshTris;
+    public u32 hullUploadOffset;
+    public u32 meshNodeUploadOffset;
+    public u32 meshTriUploadOffset;
     public u32 bodyPoseSlot;
     public u32 shapeSlot;
     public u32 shapeAabbSlot;
@@ -1731,6 +1740,7 @@ class PhysicsBatchSpatialQueryTask{
     public u32 resultSlot;
     public u32 hullVertexSlot;
     public u32 meshNodeSlot;
+    public u32 meshTriSlot;
     public u32 shapeCount;
     public u32 queryCount;
     public b8 useLbvh;
@@ -1751,9 +1761,18 @@ class PhysicsBatchSpatialQueryTask{
         in BufferHandle nodeBuf,
         in BufferHandle qBuf,
         in BufferHandle resBuf,
+        in BufferHandle hullBuf,
+        in BufferHandle meshNodeBuf,
+        in BufferHandle meshTriBuf,
         in Span<GpuPhysicsBodyPose> pSpan,
         in Span<GpuPhysicsShapeProxy> sSpan,
         in Span<GpuPhysicsSpatialQuery> qSpan,
+        in Span<f32x4> hullSpan,
+        in Span<f32x4> meshNodeSpan,
+        in Span<f32x4> meshTriSpan,
+        in u32 hullUpOff,
+        in u32 nodeUpOff,
+        in u32 triUpOff,
         in u32 poseSl,
         in u32 shpSl,
         in u32 aabbSl,
@@ -1763,6 +1782,7 @@ class PhysicsBatchSpatialQueryTask{
         in u32 resSl,
         in u32 hullSl,
         in u32 mNodeSl,
+        in u32 mTriSl,
         in u32 numShapes,
         in u32 numQueries,
         in b8 buildLbvh,
@@ -1782,9 +1802,18 @@ class PhysicsBatchSpatialQueryTask{
         this.lbvhNodeBuffer = nodeBuf;
         this.queryBuffer = qBuf;
         this.resultBuffer = resBuf;
+        this.hullVertexBuffer = hullBuf;
+        this.meshNodeBuffer = meshNodeBuf;
+        this.meshTriBuffer = meshTriBuf;
         this.poses = pSpan;
         this.shapes = sSpan;
         this.queries = qSpan;
+        this.hullVertices = hullSpan;
+        this.meshNodes = meshNodeSpan;
+        this.meshTris = meshTriSpan;
+        this.hullUploadOffset = hullUpOff;
+        this.meshNodeUploadOffset = nodeUpOff;
+        this.meshTriUploadOffset = triUpOff;
         this.bodyPoseSlot = poseSl;
         this.shapeSlot = shpSl;
         this.shapeAabbSlot = aabbSl;
@@ -1794,6 +1823,7 @@ class PhysicsBatchSpatialQueryTask{
         this.resultSlot = resSl;
         this.hullVertexSlot = hullSl;
         this.meshNodeSlot = mNodeSl;
+        this.meshTriSlot = mTriSl;
         this.shapeCount = numShapes;
         this.queryCount = numQueries;
         this.useLbvh = buildLbvh;
@@ -1812,6 +1842,12 @@ class PhysicsBatchSpatialQueryTask{
             commands.setBufferState(this.bodyPoseBuffer.deref(), ResourceStates::CopyDest);
         if(this.rebuildSceneAccel && !this.shapes.empty())
             commands.setBufferState(this.shapeBuffer.deref(), ResourceStates::CopyDest);
+        if(!this.hullVertices.empty())
+            commands.setBufferState(this.hullVertexBuffer.deref(), ResourceStates::CopyDest);
+        if(!this.meshNodes.empty())
+            commands.setBufferState(this.meshNodeBuffer.deref(), ResourceStates::CopyDest);
+        if(!this.meshTris.empty())
+            commands.setBufferState(this.meshTriBuffer.deref(), ResourceStates::CopyDest);
         commands.setBufferState(this.queryBuffer.deref(), ResourceStates::CopyDest);
         commands.commitBarriers();
 
@@ -1823,6 +1859,18 @@ class PhysicsBatchSpatialQueryTask{
             if(!commands.tryWriteBuffer(this.shapeBuffer.deref(), this.shapes, 0u))
                 return false;
         }
+        if(!this.hullVertices.empty()){
+            if(!commands.tryWriteBuffer(this.hullVertexBuffer.deref(), this.hullVertices, cast<u64>(this.hullUploadOffset) * cast<u64>(size_of<f32x4>())))
+                return false;
+        }
+        if(!this.meshNodes.empty()){
+            if(!commands.tryWriteBuffer(this.meshNodeBuffer.deref(), this.meshNodes, cast<u64>(this.meshNodeUploadOffset) * cast<u64>(size_of<f32x4>())))
+                return false;
+        }
+        if(!this.meshTris.empty()){
+            if(!commands.tryWriteBuffer(this.meshTriBuffer.deref(), this.meshTris, cast<u64>(this.meshTriUploadOffset) * cast<u64>(size_of<f32x4>())))
+                return false;
+        }
         if(!commands.tryWriteBuffer(this.queryBuffer.deref(), this.queries, 0u))
             return false;
 
@@ -1830,6 +1878,12 @@ class PhysicsBatchSpatialQueryTask{
             commands.setBufferState(this.bodyPoseBuffer.deref(), ResourceStates::UnorderedAccess);
         if(this.rebuildSceneAccel && !this.shapes.empty())
             commands.setBufferState(this.shapeBuffer.deref(), ResourceStates::UnorderedAccess);
+        if(!this.hullVertices.empty())
+            commands.setBufferState(this.hullVertexBuffer.deref(), ResourceStates::UnorderedAccess);
+        if(!this.meshNodes.empty())
+            commands.setBufferState(this.meshNodeBuffer.deref(), ResourceStates::UnorderedAccess);
+        if(!this.meshTris.empty())
+            commands.setBufferState(this.meshTriBuffer.deref(), ResourceStates::UnorderedAccess);
         if(this.rebuildSceneAccel && this.shapeCount > 0u){
             commands.setBufferState(this.shapeAabbBuffer.deref(), ResourceStates::UnorderedAccess);
             if(this.useLbvh){
@@ -1900,6 +1954,7 @@ class PhysicsBatchSpatialQueryTask{
             pushQ.modeOrSecondaryCount = 1u;
         else
             pushQ.modeOrSecondaryCount = 0u;
+        pushQ.flags = this.meshTriSlot;
         pushQ.slots0 = u32x4(this.bodyPoseSlot, this.shapeAabbSlot, this.shapeSlot, this.lbvhNodeSlot);
         pushQ.slots1 = u32x4(this.querySlot, this.resultSlot, this.hullVertexSlot, this.meshNodeSlot);
         commands.setPushConstants(pushQ);
@@ -2232,6 +2287,7 @@ class PhysicsGpuDispatcher{
     private u64 m_cachedResidentWorldGen = 0u;
     private u64 m_cachedResidentTopologyVersion = 0u;
     private u64 m_cachedResidentAwakeVersion = 0u;
+    private u64 m_cachedResidentPoseVersion = 0u;
     private Vector<u32> m_residentBodyIdToSlotScratch;
     private Vector<GpuPhysicsRenderTransformBinding> m_exportResBindingsScratch;
     private Vector<GpuPhysicsRenderTransformBinding> m_exportPoseBindingsScratch;
@@ -2533,6 +2589,7 @@ class PhysicsGpuDispatcher{
         this.m_cachedResidentWorldGen = 0u;
         this.m_cachedResidentTopologyVersion = 0u;
         this.m_cachedResidentAwakeVersion = 0u;
+        this.m_cachedResidentPoseVersion = 0u;
         this.m_residentBodyIdToSlotScratch.clear();
         this.m_exportResBindingsScratch.clear();
         this.m_exportPoseBindingsScratch.clear();
@@ -2904,16 +2961,22 @@ class PhysicsGpuDispatcher{
         mut Device device,
         in QueueSubmissionToken token,
         in u32 maxPairs,
-        mut Vector<GpuPhysicsNarrowphaseManifold> outManifolds
+        mut Vector<GpuPhysicsNarrowphaseManifold> outManifolds,
+        mut b8 outLbvhStackOverflow
     ){
         outManifolds.clear();
+        outLbvhStackOverflow = false;
         if(!device.waitForSubmissionToken(token))
             return MakeUnexpected(Failure());
         this.m_lastComputeToken = QueueSubmissionToken();
 
-        Array<u32, 3u> counterWords;
+        Array<u32, 5u> counterWords;
         if(!device.readMappedBuffer(this.m_counterSlot.readback.deref(), counterWords))
             return MakeUnexpected(Failure());
+        if(counterWords[4u] != 0u){
+            outLbvhStackOverflow = true;
+            return 0u;
+        }
         const u32 rawPrim = counterWords[0u];
         const u32 rawComplex = counterWords[1u];
         if(rawPrim > maxPairs || rawComplex > maxPairs - rawPrim){
@@ -3895,14 +3958,6 @@ class PhysicsGpuDispatcher{
         world.consumePendingEndEvents(world.m_contactEndEvents, world.m_sensorEndEvents);
         world.consumePendingWakeEvents(world.m_bodyWakeEvents);
         world.m_jointBreakEvents.clear();
-        world.m_lastStats.broadphaseMs = 0.0f;
-        world.m_lastStats.narrowphaseMs = 0.0f;
-        world.m_lastStats.islandSplitMs = 0.0f;
-        world.m_lastStats.solveMs = 0.0f;
-        world.m_lastStats.ccdMs = 0.0f;
-        world.m_lastStats.gpuUploadMs = 0.0f;
-        world.m_lastStats.gpuDispatchMs = 0.0f;
-        world.m_lastStats.gpuReadbackMs = 0.0f;
     }
 
     [cpp_unwind]
@@ -3917,7 +3972,11 @@ class PhysicsGpuDispatcher{
         in b8 useGpuCollision,
         mut CpuTaskScheduler cpuScheduler
     ){
+        world.m_lastStats.solveMs = 0.0f;
+        world.m_lastStats.ccdMs = 0.0f;
+
         const u32 awakeCount = world.awakeBodyCount();
+        const Timer tSolveStart = TimerNow();
         mut Array<Vector<ContactConstraint>, s_GraphColorCount> colorConstraints = world.m_cpuScratch.colorConstraints;
         mut Array<Vector<ContactConstraintStepCache>, s_GraphColorCount> colorCaches = world.m_cpuScratch.colorConstraintCaches;
         if(PrepareColorContactConstraintsFromGraphWithCache(
@@ -3945,6 +4004,7 @@ class PhysicsGpuDispatcher{
                     world.destroyJointInternal(brokenJointIds[bi]);
             }
         }
+        world.m_lastStats.solveMs = DurationInMS<f32>(TimerNow(), tSolveStart);
 
         const Timer tCcdStart = TimerNow();
         if(useGpuCollision && this.solveBulletContinuousGpu(dt, world, cpuScheduler))
@@ -3954,6 +4014,14 @@ class PhysicsGpuDispatcher{
         world.m_lastStats.ccdMs = DurationInMS<f32>(TimerNow(), tCcdStart);
         FinalizeMovedBodiesBroadphaseAndEventsWithScheduler(world, dt, cpuScheduler, useGpuCollision);
         EvaluateSleepingIslands(world);
+        if(
+            this.m_gpuResidentValid
+            && (
+                world.m_solverSets[s_AwakeSetIndex].membershipVersion != this.m_cachedResidentAwakeVersion
+                || world.m_poseMutationVersion != this.m_cachedResidentPoseVersion
+            )
+        )
+            this.m_gpuResidentValid = false;
 
         ExecutionBackendUsed backend = ExecutionBackendUsed::Cpu;
         if(useGpuCollision)
@@ -3995,6 +4063,14 @@ class PhysicsGpuDispatcher{
 
         const b8 useGpuCollision = world.m_def.enableGpuCollision && (world.m_def.forceGpuCollision || world.m_gpuWorkloadFraction >= 1.0f);
         u32 pairCount = 0u;
+        world.m_lastStats.broadphaseMs = 0.0f;
+        world.m_lastStats.narrowphaseMs = 0.0f;
+        world.m_lastStats.islandSplitMs = 0.0f;
+        world.m_lastStats.solveMs = 0.0f;
+        world.m_lastStats.ccdMs = 0.0f;
+        world.m_lastStats.gpuUploadMs = 0.0f;
+        world.m_lastStats.gpuDispatchMs = 0.0f;
+        world.m_lastStats.gpuReadbackMs = 0.0f;
 
         if(!useGpuCollision){
             const Timer tBroadStart = TimerNow();
@@ -4013,6 +4089,7 @@ class PhysicsGpuDispatcher{
             world.m_lastStats.islandSplitMs = DurationInMS<f32>(TimerNow(), tIslandStart);
         }
         else{
+            const Timer tColPrepStart = TimerNow();
             if(!this.ensureStaticGeometry(world, graphics, heap))
                 return false;
 
@@ -4443,9 +4520,9 @@ class PhysicsGpuDispatcher{
                 this.m_sleepingBodyGpuValid = false;
             }
 
-            if(!EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, this.m_lastComputeToken, Name("physics/gpu/counters"), size_of<u32>(), 4u, false, false, this.m_counterSlot))
+            if(!EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, this.m_lastComputeToken, Name("physics/gpu/counters"), size_of<u32>(), 5u, false, false, this.m_counterSlot))
                 return false;
-            if(!EnsurePhysicsGpuComputeReadbackBuffer(graphics, device, this.m_lastComputeToken, Name("physics/gpu/counters_rb"), size_of<u32>(), 4u, this.m_counterSlot))
+            if(!EnsurePhysicsGpuComputeReadbackBuffer(graphics, device, this.m_lastComputeToken, Name("physics/gpu/counters_rb"), size_of<u32>(), 5u, this.m_counterSlot))
                 return false;
             if(!EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, this.m_lastComputeToken, Name("physics/gpu/indirect_args"), size_of<u32>(), 6u, true, false, this.m_indirectArgsSlot))
                 return false;
@@ -4650,6 +4727,7 @@ class PhysicsGpuDispatcher{
                 const u32 updateAabbCount = shapeCount - updateAabbOffset;
 
                 const Timer tColSubmitStart = TimerNow();
+                world.m_lastStats.gpuUploadMs += DurationInMS<f32>(tColSubmitStart, tColPrepStart);
                 const auto colToken = this.submitCollisionAsync(
                     device,
                     heap,
@@ -4701,18 +4779,14 @@ class PhysicsGpuDispatcher{
                 world.m_sensorStayEvents.clear();
                 world.m_bodyWakeEvents.clear();
                 world.m_jointBreakEvents.clear();
-                world.m_lastStats.broadphaseMs = 0.0f;
-                world.m_lastStats.narrowphaseMs = 0.0f;
-                world.m_lastStats.islandSplitMs = 0.0f;
-                world.m_lastStats.solveMs = 0.0f;
-                world.m_lastStats.ccdMs = 0.0f;
-                world.m_lastStats.gpuUploadMs = 0.0f;
-                world.m_lastStats.gpuDispatchMs = colDispatchMs;
-                world.m_lastStats.gpuReadbackMs = 0.0f;
+                world.m_lastStats.gpuDispatchMs += colDispatchMs;
                 this.m_gpuManifoldsScratch.clear();
+                b8 lbvhStackOverflow = false;
                 const Timer tColReadbackStart = TimerNow();
-                const Expected<u32> pairCountResult = this.readbackCollisionResults(device, colToken.value(), maxPairs, this.m_gpuManifoldsScratch);
-                world.m_lastStats.gpuReadbackMs += DurationInMS<f32>(TimerNow(), tColReadbackStart);
+                const Expected<u32> pairCountResult = this.readbackCollisionResults(device, colToken.value(), maxPairs, this.m_gpuManifoldsScratch, lbvhStackOverflow);
+                const f32 colReadbackMs = DurationInMS<f32>(TimerNow(), tColReadbackStart);
+                world.m_lastStats.gpuReadbackMs += colReadbackMs;
+                world.m_lastStats.broadphaseMs += colDispatchMs + colReadbackMs;
                 if(!pairCountResult.has_value())
                     return false;
                 u32 rawPairCount = pairCountResult.value();
@@ -4726,10 +4800,86 @@ class PhysicsGpuDispatcher{
                 this.m_sleepingShapeGpuValid = true;
                 this.m_awakeShapeGpuValid = true;
                 this.m_nonCollideGpuValid = true;
-                this.m_lastBroadphasePairCount = rawPairCount;
+
+                b8 effectiveUseLbvh = useLbvhBroadphase;
+                if(lbvhStackOverflow){
+                    effectiveUseLbvh = false;
+                    if(shapeCount > 64u){
+                        if(!EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, this.m_lastComputeToken, Name("physics/gpu/grid"), size_of<u32>(), gridTableSize * s_GpuGridBucketStride, false, false, this.m_gridSlot))
+                            return false;
+                        if(!EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, this.m_lastComputeToken, Name("physics/gpu/large_list"), size_of<u32>(), shapeCount * 2u + 2u, false, false, this.m_largeListSlot))
+                            return false;
+                        gridSlotDesc = this.m_gridSlot.descriptor.slot();
+                        largeListDesc = this.m_largeListSlot.descriptor.slot();
+                        colBufs.gridBuffer = this.m_gridSlot.buffer;
+                        colBufs.largeListBuffer = this.m_largeListSlot.buffer;
+                        colBufs.slots1 = u32x4(
+                            this.m_pairSlot.descriptor.slot(),
+                            this.m_counterSlot.descriptor.slot(),
+                            gridSlotDesc,
+                            largeListDesc
+                        );
+                    }
+                    const Timer tFbSubmitStart = TimerNow();
+                    const auto fallbackToken = this.submitCollisionAsync(
+                        device,
+                        heap,
+                        colBufs,
+                        Span<GpuPhysicsBodyPose>(),
+                        Span<GpuPhysicsBodyPose>(),
+                        Span<GpuPhysicsBodyPose>(),
+                        Span<GpuPhysicsShapeProxy>(),
+                        Span<GpuPhysicsShapeProxy>(),
+                        Span<GpuPhysicsShapeProxy>(),
+                        Span<f32x4>(),
+                        Span<f32x4>(),
+                        Span<f32x4>(),
+                        Span<u32>(),
+                        0u,
+                        0u,
+                        0u,
+                        staticBodyCount,
+                        awakeBodyOffset,
+                        staticShapeCount,
+                        awakeShapeOffset,
+                        awakeShapeCount,
+                        shapeCount,
+                        0u,
+                        0u,
+                        maxPairs,
+                        gridTableSize,
+                        invCellSize,
+                        false,
+                        lbvhPaddedCount,
+                        lbvhSceneMin,
+                        lbvhInvExtent,
+                        false,
+                        hasComplexShapes,
+                        false
+                    );
+                    if(!fallbackToken.has_value())
+                        return false;
+                    const f32 fbDispatchMs = DurationInMS<f32>(TimerNow(), tFbSubmitStart);
+                    world.m_lastStats.gpuDispatchMs += fbDispatchMs;
+                    b8 fallbackStackOverflow = false;
+                    const Timer tFbReadStart = TimerNow();
+                    const Expected<u32> fallbackPairCount = this.readbackCollisionResults(device, fallbackToken.value(), maxPairs, this.m_gpuManifoldsScratch, fallbackStackOverflow);
+                    const f32 fbReadMs = DurationInMS<f32>(TimerNow(), tFbReadStart);
+                    world.m_lastStats.gpuReadbackMs += fbReadMs;
+                    world.m_lastStats.broadphaseMs += fbDispatchMs + fbReadMs;
+                    if(!fallbackPairCount.has_value() || fallbackStackOverflow)
+                        return false;
+                    rawPairCount = fallbackPairCount.value();
+                }
 
                 if(rawPairCount > maxPairs){
-                    maxPairs = rawPairCount;
+                    u32 maxPossiblePairs = 0u;
+                    if(shapeCount > 1u)
+                        maxPossiblePairs = (shapeCount * (shapeCount - 1u)) / 2u;
+                    const u32 cappedMaxPairs = Min(rawPairCount, Max(maxPossiblePairs, maxPairs));
+                    if(cappedMaxPairs < rawPairCount)
+                        return false;
+                    maxPairs = cappedMaxPairs;
                     if(!EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, this.m_lastComputeToken, Name("physics/gpu/pairs"), s_GpuBroadphasePairBytes, maxPairs, false, false, this.m_pairSlot))
                         return false;
                     if(!EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, this.m_lastComputeToken, Name("physics/gpu/manifolds"), s_GpuNarrowphaseManifoldBytes, maxPairs, false, true, this.m_manifoldSlot))
@@ -4750,6 +4900,7 @@ class PhysicsGpuDispatcher{
                         s_GpuInvalidIndex
                     );
 
+                    const Timer tRetrySubmitStart = TimerNow();
                     const auto retryToken = this.submitCollisionAsync(
                         device,
                         heap,
@@ -4778,7 +4929,7 @@ class PhysicsGpuDispatcher{
                         maxPairs,
                         gridTableSize,
                         invCellSize,
-                        useLbvhBroadphase,
+                        effectiveUseLbvh,
                         lbvhPaddedCount,
                         lbvhSceneMin,
                         lbvhInvExtent,
@@ -4788,14 +4939,23 @@ class PhysicsGpuDispatcher{
                     );
                     if(!retryToken.has_value())
                         return false;
-                    const Expected<u32> retryPairCount = this.readbackCollisionResults(device, retryToken.value(), maxPairs, this.m_gpuManifoldsScratch);
-                    if(!retryPairCount.has_value())
+                    const f32 retryDispatchMs = DurationInMS<f32>(TimerNow(), tRetrySubmitStart);
+                    world.m_lastStats.gpuDispatchMs += retryDispatchMs;
+                    b8 retryStackOverflow = false;
+                    const Timer tRetryReadStart = TimerNow();
+                    const Expected<u32> retryPairCount = this.readbackCollisionResults(device, retryToken.value(), maxPairs, this.m_gpuManifoldsScratch, retryStackOverflow);
+                    const f32 retryReadMs = DurationInMS<f32>(TimerNow(), tRetryReadStart);
+                    world.m_lastStats.gpuReadbackMs += retryReadMs;
+                    world.m_lastStats.broadphaseMs += retryDispatchMs + retryReadMs;
+                    if(!retryPairCount.has_value() || retryStackOverflow)
                         return false;
                     rawPairCount = retryPairCount.value();
                     if(rawPairCount > maxPairs)
                         return false;
                 }
+                this.m_lastBroadphasePairCount = rawPairCount;
                 pairCount = rawPairCount;
+                const Timer tNarrowCpuStart = TimerNow();
                 world.m_inStep = true;
                 world.consumePendingEndEvents(world.m_contactEndEvents, world.m_sensorEndEvents);
                 world.consumePendingWakeEvents(world.m_bodyWakeEvents);
@@ -5203,13 +5363,16 @@ class PhysicsGpuDispatcher{
                     for(usize i = 0u; i < this.m_staleIdsScratch.size(); ++i)
                         world.destroyContactInternal(this.m_staleIdsScratch[i]);
                 }
+                world.m_lastStats.narrowphaseMs = DurationInMS<f32>(TimerNow(), tNarrowCpuStart);
             }
             else{
                 this.beginStepEvents(world);
             }
             if(!world.m_broadPhase.moveArray.empty())
                 world.m_broadPhase.clearMoves();
+            const Timer tColIslandStart = TimerNow();
             SplitDirtyAwakeIslands(world);
+            world.m_lastStats.islandSplitMs += DurationInMS<f32>(TimerNow(), tColIslandStart);
         }
 
         const f32 h = dt / cast<f32>(subStepCount);
@@ -5227,11 +5390,14 @@ class PhysicsGpuDispatcher{
             return true;
         }
 
+        const Timer tSplitStart = TimerNow();
         BuildSolverWorkPartition(world, world.m_gpuWorkloadFraction, true, this.m_partitionScratch);
+        world.m_lastStats.islandSplitMs += DurationInMS<f32>(TimerNow(), tSplitStart);
         world.m_cpuScratch.parAllAwakeDynamic = this.m_partitionScratch.allAwakeDynamic;
 
         if(this.m_partitionScratch.gpuOwnedBodyCount == 0u){
             this.m_gpuResidentValid = false;
+            const Timer tCpuSolveStart = TimerNow();
             b8 cpuOk = PrepareColorContactConstraintsWithCache(
                 world,
                 this.m_partitionScratch.cpuColorContactIds,
@@ -5261,11 +5427,14 @@ class PhysicsGpuDispatcher{
             }
             if(!cpuOk)
                 return this.finishStepLocallyOnCpu(world, dt, subStepCount, h, invH, jointDefaultHertz, pairCount, useGpuCollision, cpuScheduler);
+            world.m_lastStats.solveMs = DurationInMS<f32>(TimerNow(), tCpuSolveStart);
 
+            const Timer tCpuOnlyCcdStart = TimerNow();
             if(useGpuCollision && this.solveBulletContinuousGpu(dt, world, cpuScheduler))
                 EmitContinuousSensorPassThroughEvents(world);
             else
                 SolveBulletContinuousCpuWithScheduler(world, dt, cpuScheduler);
+            world.m_lastStats.ccdMs = DurationInMS<f32>(TimerNow(), tCpuOnlyCcdStart);
             FinalizeMovedBodiesBroadphaseAndEventsWithScheduler(world, dt, cpuScheduler, useGpuCollision);
             EvaluateSleepingIslands(world);
 
@@ -5277,6 +5446,7 @@ class PhysicsGpuDispatcher{
             return true;
         }
 
+        const Timer tSolveStart = TimerNow();
         const u32 gpuUploadCount = cast<u32>(this.m_partitionScratch.gpuAwakeIndices.size());
         in SolverSet latestAwake = world.m_solverSets[s_AwakeSetIndex];
         this.m_gpuSimsScratch.resize(gpuUploadCount);
@@ -5837,6 +6007,7 @@ class PhysicsGpuDispatcher{
 
         const b8 commitResidentStep = world.m_def.gpuResidentMode;
         const Timer tSolveSubmitStart = TimerNow();
+        world.m_lastStats.gpuUploadMs += DurationInMS<f32>(tSolveSubmitStart, tSolveStart);
         const auto solverToken = this.submitSolverAsync(
             device,
             heap,
@@ -6060,6 +6231,7 @@ class PhysicsGpuDispatcher{
                 this.m_cachedResidentWorldGen = world.m_worldGeneration;
                 this.m_cachedResidentTopologyVersion = world.m_topologyVersion;
                 this.m_cachedResidentAwakeVersion = world.m_solverSets[s_AwakeSetIndex].membershipVersion;
+                this.m_cachedResidentPoseVersion = world.m_poseMutationVersion;
                 this.m_residentBodyIdToSlotScratch.clear();
                 this.m_residentBodyIdToSlotScratch.resize(world.m_bodies.size(), s_GpuInvalidIndex);
                 for(u32 g = 0u; g < gpuUploadCount; ++g){
@@ -6199,6 +6371,7 @@ class PhysicsGpuDispatcher{
 
         for(usize bi = 0u; bi < this.m_brokenJointIdsScratch.size(); ++bi)
             world.destroyJointInternal(this.m_brokenJointIdsScratch[bi]);
+        world.m_lastStats.solveMs = DurationInMS<f32>(TimerNow(), tSolveStart);
 
         const Timer tCcdStart = TimerNow();
         if(useGpuCollision && this.solveBulletContinuousGpu(dt, world, cpuScheduler))
@@ -6208,6 +6381,14 @@ class PhysicsGpuDispatcher{
         world.m_lastStats.ccdMs = DurationInMS<f32>(TimerNow(), tCcdStart);
         FinalizeMovedBodiesBroadphaseAndEventsWithScheduler(world, dt, cpuScheduler, useGpuCollision);
         EvaluateSleepingIslands(world);
+        if(
+            this.m_gpuResidentValid
+            && (
+                world.m_solverSets[s_AwakeSetIndex].membershipVersion != this.m_cachedResidentAwakeVersion
+                || world.m_poseMutationVersion != this.m_cachedResidentPoseVersion
+            )
+        )
+            this.m_gpuResidentValid = false;
 
         ExecutionBackendUsed backend = ExecutionBackendUsed::Cpu;
         if(cpuSolvedBodies > 0u && gpuSolvedBodies > 0u)
@@ -6251,6 +6432,7 @@ class PhysicsGpuDispatcher{
             && this.m_cachedResidentWorldGen == world.m_worldGeneration
             && this.m_cachedResidentTopologyVersion == world.m_topologyVersion
             && this.m_cachedResidentAwakeVersion == awakeVersion
+            && this.m_cachedResidentPoseVersion == world.m_poseMutationVersion
             && this.m_gpuResidentBodyCount == awakeCount
             && this.m_solverBodySimSlot.hasValidUav()
             && this.m_bodyStateSlot.hasValidUav()
@@ -6327,6 +6509,7 @@ class PhysicsGpuDispatcher{
         this.m_cachedResidentWorldGen = world.m_worldGeneration;
         this.m_cachedResidentTopologyVersion = world.m_topologyVersion;
         this.m_cachedResidentAwakeVersion = awakeVersion;
+        this.m_cachedResidentPoseVersion = world.m_poseMutationVersion;
 
         if(readbackToWorld){
             this.m_outBodiesScratch.resize(awakeCount);
@@ -6337,7 +6520,11 @@ class PhysicsGpuDispatcher{
                 mut BodySim sim = awakeOut.sims[idx];
                 mut BodyState state = awakeOut.states[idx];
                 mut Body body = world.m_bodies[sim.bodyId];
-                ApplyGpuBodyOutToBody(this.m_outBodiesScratch[idx], body, sim, state);
+                u32 slot = s_NullIndex;
+                if(cast<usize>(sim.bodyId) < this.m_residentBodyIdToSlotScratch.size())
+                    slot = this.m_residentBodyIdToSlotScratch[sim.bodyId];
+                if(slot < this.m_outBodiesScratch.size())
+                    ApplyGpuBodyOutToBody(this.m_outBodiesScratch[slot], body, sim, state);
             }
         }
         return true;
@@ -6431,7 +6618,7 @@ class PhysicsGpuDispatcher{
                                 dataOffset = this.m_shapeDataOffset[sId];
                                 dataMeta = this.m_shapeDataMeta[sId];
                             }
-                            this.m_queryShapesScratch.push_back(PackGpuShapeProxyWithLocalBox(shape, body, world.m_hullShapes, world.m_meshShapes, localBox, gpuBodyIdx, sId, 0.0f, dataOffset, dataMeta));
+                            this.m_queryShapesScratch.push_back(PackGpuQueryShapeProxyWithLocalBox(shape, body, world.m_hullShapes, world.m_meshShapes, localBox, gpuBodyIdx, sId, 0.0f, dataOffset, dataMeta));
                         }
                         sId = nextSId;
                     }
@@ -6493,11 +6680,9 @@ class PhysicsGpuDispatcher{
                     return false;
                 lbvhMortonDesc = this.m_queryLbvhMortonSlot.descriptor.slot();
                 lbvhNodeDesc = this.m_queryLbvhNodeSlot.descriptor.slot();
-                ComputeSceneBoundsForLbvh(
-                    world,
+                ComputeQuerySceneBoundsForLbvh(
                     Span<GpuPhysicsBodyPose>(this.m_queryPosesScratch),
-                    Span<GpuPhysicsBodyPose>(),
-                    Span<GpuPhysicsBodyPose>(),
+                    Span<GpuPhysicsShapeProxy>(this.m_queryShapesScratch),
                     sceneMin,
                     invExtent
                 );
@@ -6515,6 +6700,19 @@ class PhysicsGpuDispatcher{
         if(!heapLease.valid())
             return false;
 
+        const u32 hullUpOff = this.m_hullUploadedCount;
+        const u32 nodeUpOff = this.m_meshNodeUploadedCount;
+        const u32 triUpOff = this.m_meshTriUploadedCount;
+        Span<f32x4> hullVertSpan;
+        if(this.m_cachedHullData.size() > cast<usize>(hullUpOff))
+            hullVertSpan = Span<f32x4>(this.m_cachedHullData.data() + cast<usize>(hullUpOff), this.m_cachedHullData.size() - cast<usize>(hullUpOff));
+        Span<f32x4> meshNodeSpan;
+        if(this.m_cachedMeshNodes.size() > cast<usize>(nodeUpOff))
+            meshNodeSpan = Span<f32x4>(this.m_cachedMeshNodes.data() + cast<usize>(nodeUpOff), this.m_cachedMeshNodes.size() - cast<usize>(nodeUpOff));
+        Span<f32x4> meshTriSpan;
+        if(this.m_cachedMeshTris.size() > cast<usize>(triUpOff))
+            meshTriSpan = Span<f32x4>(this.m_cachedMeshTris.data() + cast<usize>(triUpOff), this.m_cachedMeshTris.size() - cast<usize>(triUpOff));
+
         mut CommandList commands = this.m_computeCommandList.deref();
         commands.open();
         commands.setEnableAutomaticBarriers(false);
@@ -6530,9 +6728,18 @@ class PhysicsGpuDispatcher{
             this.m_queryLbvhNodeSlot.buffer,
             this.m_spatialQuerySlot.buffer,
             this.m_spatialQueryResultSlot.buffer,
+            this.m_hullVertexSlot.buffer,
+            this.m_meshNodeSlot.buffer,
+            this.m_meshTriSlot.buffer,
             uploadPosesSpan,
             uploadShapesSpan,
             queries,
+            hullVertSpan,
+            meshNodeSpan,
+            meshTriSpan,
+            hullUpOff,
+            nodeUpOff,
+            triUpOff,
             this.m_queryBodyPoseSlot.descriptor.slot(),
             this.m_queryShapeSlot.descriptor.slot(),
             this.m_queryShapeAabbSlot.descriptor.slot(),
@@ -6540,8 +6747,9 @@ class PhysicsGpuDispatcher{
             lbvhNodeDesc,
             this.m_spatialQuerySlot.descriptor.slot(),
             this.m_spatialQueryResultSlot.descriptor.slot(),
-            s_GpuInvalidIndex,
-            s_GpuInvalidIndex,
+            this.m_hullVertexSlot.descriptor.slot(),
+            this.m_meshNodeSlot.descriptor.slot(),
+            this.m_meshTriSlot.descriptor.slot(),
             shapeCount,
             queryCount,
             useLbvh,
@@ -6557,6 +6765,10 @@ class PhysicsGpuDispatcher{
         if(!device.waitForSubmissionToken(token.value()))
             return false;
         this.m_lastComputeToken = QueueSubmissionToken();
+        this.m_hullUploadedCount = cast<u32>(this.m_cachedHullData.size());
+        this.m_meshNodeUploadedCount = cast<u32>(this.m_cachedMeshNodes.size());
+        this.m_meshTriUploadedCount = cast<u32>(this.m_cachedMeshTris.size());
+        this.m_staticGeomDirtyUpload = false;
 
         if(!canReuseAccel){
             this.m_queryCacheValid = true;
@@ -6599,6 +6811,9 @@ class PhysicsGpuDispatcher{
             && this.m_gpuResidentBodyCount > 0u
             && this.m_cachedResidentWorldIndex == world.m_worldIndex
             && this.m_cachedResidentWorldGen == world.m_worldGeneration
+            && this.m_cachedResidentTopologyVersion == world.m_topologyVersion
+            && this.m_cachedResidentAwakeVersion == world.m_solverSets[s_AwakeSetIndex].membershipVersion
+            && this.m_cachedResidentPoseVersion == world.m_poseMutationVersion
             && this.m_bodyOutSlot.hasValidUav()
             && this.m_solverBodySimSlot.hasValidUav()
         ;
@@ -6656,7 +6871,7 @@ class PhysicsGpuDispatcher{
 
         if(!EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, this.m_lastComputeToken, Name("physics/gpu/render_bindings"), s_GpuRenderBindingBytes, totalActive, false, false, this.m_renderBindingSlot))
             return false;
-        if(!EnsurePhysicsGpuStorageBuffer(graphics, heap, Name("physics/gpu/render_transforms_out"), s_GpuRenderTransformBytes, maxDstCount, false, true, this.m_renderTransformOutSlot))
+        if(!EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, this.m_lastComputeToken, Name("physics/gpu/render_transforms_out"), s_GpuRenderTransformBytes, maxDstCount, false, true, this.m_renderTransformOutSlot))
             return false;
         if(!this.m_exportPosesScratch.empty()){
             if(!EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, this.m_lastComputeToken, Name("physics/gpu/export_poses"), s_GpuBodyPoseBytes, cast<u32>(this.m_exportPosesScratch.size()), false, false, this.m_exportPoseSlot))
@@ -6891,7 +7106,7 @@ GpuPhysicsBodySim PackGpuBodySim(in Body body, in BodySim sim){
     outSim.invInertiaWorld0 = f32x4(sim.invInertiaWorld.m00, sim.invInertiaWorld.m01, sim.invInertiaWorld.m02, sim.invInertiaWorld.m11);
     outSim.invInertiaWorld1 = f32x4(sim.invInertiaWorld.m12, sim.invInertiaWorld.m22, sim.gravityScale, body.sleepTime);
     outSim.invInertiaLocal0 = f32x4(sim.invInertiaLocal.m00, sim.invInertiaLocal.m01, sim.invInertiaLocal.m02, sim.invInertiaLocal.m11);
-    outSim.invInertiaLocal1 = f32x4(sim.invInertiaLocal.m12, sim.invInertiaLocal.m22, body.sleepThreshold, 0.0f);
+    outSim.invInertiaLocal1 = f32x4(sim.invInertiaLocal.m12, sim.invInertiaLocal.m22, body.sleepThreshold, body.maxAngularVelocity);
     return outSim;
 }
 
@@ -6918,7 +7133,7 @@ GpuPhysicsShapeProxy PackGpuShapeProxyWithLocalBox(
     in u32 extraShapeFlags
 ){
     GpuPhysicsShapeProxy outProxy;
-    const f32 margin = Max(s_MaxAabbMargin, sweepMargin);
+    const f32 margin = Max(0.0f, sweepMargin);
     u32 filterW = 0u;
     u32 metaW = 0u;
     u32 packedType = cast<u32>(shape.type);
@@ -7000,6 +7215,110 @@ GpuPhysicsShapeProxy PackGpuShapeProxyWithLocalBox(
     in u32 dataMeta
 ){
     return PackGpuShapeProxyWithLocalBox(shape, body, hullShapes, meshShapes, localBox, gpuBodyIdx, shapeId, sweepMargin, dataOffset, dataMeta, 0u);
+}
+
+GpuPhysicsShapeProxy PackGpuQueryShapeProxyWithLocalBox(
+    in Shape shape,
+    in Body body,
+    in Vector<HullShape> hullShapes,
+    in Vector<MeshShape> meshShapes,
+    in Aabb3D localBox,
+    in u32 gpuBodyIdx,
+    in u32 shapeId,
+    in f32 sweepMargin,
+    in u32 dataOffset,
+    in u32 dataMeta
+){
+    if(!shape.hasLocalTransform())
+        return PackGpuShapeProxyWithLocalBox(shape, body, hullShapes, meshShapes, localBox, gpuBodyIdx, shapeId, sweepMargin, dataOffset, dataMeta);
+
+    GpuPhysicsShapeProxy outProxy = PackGpuShapeProxyWithLocalBox(shape, body, hullShapes, meshShapes, localBox, gpuBodyIdx, shapeId, sweepMargin, dataOffset, dataMeta);
+    const f32 margin = Max(0.0f, sweepMargin);
+    u32 shapeFlags = outProxy.bodyIndexTypeShape.w;
+    if(shape.type == ShapeType::Sphere){
+        const VectorSingle c = TransformPoint(shape.localTransform, VectorSingle(shape.geom0));
+        outProxy.localCenterRadius = f32x4(c.x, c.y, c.z, shape.geom0.w);
+        outProxy.localExtentOrP1 = f32x4(0.0f, 0.0f, 0.0f, margin);
+        outProxy.localRotationOrMeta = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        outProxy.bodyIndexTypeShape.y = cast<u32>(ShapeType::Sphere);
+        outProxy.filterData.w = 0u;
+    }
+    else if(shape.type == ShapeType::Capsule){
+        const VectorSingle p0 = TransformPoint(shape.localTransform, VectorSingle(shape.geom0));
+        const VectorSingle p1 = TransformPoint(shape.localTransform, VectorSingle(shape.geom1));
+        outProxy.localCenterRadius = f32x4(p0.x, p0.y, p0.z, shape.geom0.w);
+        outProxy.localExtentOrP1 = f32x4(p1.x, p1.y, p1.z, margin);
+        outProxy.localRotationOrMeta = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        outProxy.bodyIndexTypeShape.y = cast<u32>(ShapeType::Capsule);
+        outProxy.filterData.w = 0u;
+    }
+    else if(shape.type == ShapeType::Hull){
+        in HullShape hull = hullShapes[shape.geometryIndex];
+        if(hull.halfExtentsFlags.w != 0u){
+            const VectorSingle c = TransformPoint(shape.localTransform, VectorSingle(hull.centroidRadius));
+            const VectorSingle boxQ = SafeNormalizeQuat(QuaternionMultiply(VectorSingle(shape.localTransform.rotation), VectorSingle(hull.boxRotation)));
+            outProxy.localCenterRadius = f32x4(c.x, c.y, c.z, hull.centroidRadius.w);
+            outProxy.localExtentOrP1 = f32x4(hull.halfExtentsFlags.x, hull.halfExtentsFlags.y, hull.halfExtentsFlags.z, margin);
+            outProxy.localRotationOrMeta = f32x4(boxQ);
+            outProxy.bodyIndexTypeShape.y = cast<u32>(ShapeType::Hull);
+            shapeFlags |= s_GpuShapeFlagIsBox;
+            outProxy.bodyIndexTypeShape.w = shapeFlags;
+            outProxy.filterData.w = 0u;
+        }
+    }
+    return outProxy;
+}
+
+void ComputeQuerySceneBoundsForLbvh(
+    in Span<GpuPhysicsBodyPose> poses,
+    in Span<GpuPhysicsShapeProxy> shapes,
+    mut VectorSingle outBoundsMin,
+    mut VectorSingle outInvExtent
+){
+    VectorSingle bMin(s_MaxF32);
+    VectorSingle bMax(-s_MaxF32);
+    b8 hasBounds = false;
+    for(usize si = 0u; si < shapes.size(); ++si){
+        in GpuPhysicsShapeProxy sp = shapes[si];
+        const u32 bodyIdx = sp.bodyIndexTypeShape.x;
+        if(cast<usize>(bodyIdx) >= poses.size())
+            continue;
+        in GpuPhysicsBodyPose pose = poses[bodyIdx];
+        const VectorSingle origin(pose.originPad);
+        const VectorSingle rot(pose.rotation);
+        const u32 sType = sp.bodyIndexTypeShape.y;
+        const VectorSingle centerW = origin + Vector3Rotate(VectorSingle(sp.localCenterRadius), rot);
+        VectorSingle sMin = centerW;
+        VectorSingle sMax = centerW;
+        if(sType == cast<u32>(ShapeType::Sphere)){
+            const VectorSingle r(sp.localCenterRadius.w);
+            sMin = centerW - r;
+            sMax = centerW + r;
+        }
+        else if(sType == cast<u32>(ShapeType::Capsule)){
+            const VectorSingle p1W = origin + Vector3Rotate(VectorSingle(sp.localExtentOrP1), rot);
+            const VectorSingle r(sp.localCenterRadius.w);
+            sMin = Min(centerW, p1W) - r;
+            sMax = Max(centerW, p1W) + r;
+        }
+        else{
+            const f32 r = Vector3Length(VectorSingle(sp.localExtentOrP1.x, sp.localExtentOrP1.y, sp.localExtentOrP1.z, 0.0f)).x + sp.localCenterRadius.w;
+            const VectorSingle pad(r);
+            sMin = centerW - pad;
+            sMax = centerW + pad;
+        }
+        bMin = Min(bMin, sMin);
+        bMax = Max(bMax, sMax);
+        hasBounds = true;
+    }
+    if(!hasBounds){
+        outBoundsMin = VectorSingle(0.0f);
+        outInvExtent = VectorSingle(1.0f);
+        return;
+    }
+    const VectorSingle span = Max(bMax - bMin, VectorSingle(1.0f));
+    outBoundsMin = bMin;
+    outInvExtent = VectorSingle(1.0f / span.x, 1.0f / span.y, 1.0f / span.z, 0.0f);
 }
 
 GpuPhysicsShapeProxy PackGpuShapeProxy(
@@ -7370,19 +7689,6 @@ b8 EnsurePhysicsGpuReadbackBufferImpl(
     slot.readback = rbResult.value();
     slot.readbackCapacity = newCap;
     return true;
-}
-
-[cpp_unwind]
-b8 EnsurePhysicsGpuReadbackBuffer(
-    mut GraphicsRuntime graphics,
-    in Name debugName,
-    in u32 stride,
-    in u32 requiredCount,
-    mut PhysicsGpuBufferSlot slot
-){
-    mut Device device = graphics.getDevice();
-    QueueSubmissionToken unusedToken;
-    return EnsurePhysicsGpuReadbackBufferImpl(graphics, device, unusedToken, false, debugName, stride, requiredCount, slot);
 }
 
 [cpp_unwind]

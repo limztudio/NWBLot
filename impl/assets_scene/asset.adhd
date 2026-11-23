@@ -154,9 +154,12 @@ class ActiveSceneSubsystems{
         return this.loadProjectStartScene(assetManager, ProjectRef(s_DefaultProjectVirtualPath));
     }
     public b8 loadScene(in SceneRef scene, in AssetManager assetManager);
+    public void unloadScene();
     public b8 instantiateEntities(mut World world)const;
     public b8 instantiateEntities(mut World world, mut InstantiatedSceneEntities outInstantiated)const;
     public Expected<InstantiatedSceneEntities> instantiateEntitiesWithResult(mut World world)const;
+    public void destroyEntities(mut World world, in InstantiatedSceneEntities instantiated)const;
+    public void destroyEntities(mut World world, mut InstantiatedSceneEntities instantiated)const;
 
     public b8 valid()const{ return this.m_contents.scene.valid() && !this.m_contents.subsystems.empty(); }
     public in SceneRef scene()const{ return this.m_contents.scene; }

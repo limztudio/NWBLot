@@ -40,6 +40,7 @@ class RigidBodyComponent{
     public f32 angularDamping = 0.01f;
     public f32 gravityScale = 1.0f;
     public f32 sleepThreshold = s_DefaultSleepThreshold;
+    public f32 maxAngularVelocity = 0.0f;
     public u32 motionLocks = 0u;
     public u64 userData = 0u;
     public b8 useCustomMass = false;
@@ -55,6 +56,7 @@ class RigidBodyComponent{
     public b8 isEnabled = true;
     public b8 allowFastRotation = false;
     public b8 enableGyroscopicTorque = false;
+    public b8 hasCustomMaxAngularVelocity = false;
     public b8 driveKinematicFromTransform = false;
     public b8 dirty = true;
     public BodyId runtimeBodyId;
@@ -94,6 +96,10 @@ class ColliderShapeEntry{
     public AssetRef<CollisionMeshAsset> collisionMeshAsset;
     public f32 staticFriction = -1.0f;
     public f32x4 anisotropicFriction(1.0f, 1.0f, 1.0f, 0.0f);
+    public f32x4 surfaceVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 frictionDirection(1.0f, 0.0f, 0.0f, 0.0f);
+    public MaterialCombineMode frictionCombineMode = MaterialCombineMode::GeometricMean;
+    public MaterialCombineMode restitutionCombineMode = MaterialCombineMode::Max;
     public b8 cullBackfaces = false;
     public b8 autoConvexDecompose = false;
     public u32 vhacdMaxHulls = 16u;
@@ -104,6 +110,13 @@ class ColliderShapeEntry{
     public u32 heightfieldRows = 0u;
     public u32 heightfieldCols = 0u;
     public f32x4 heightfieldScale(1.0f, 1.0f, 1.0f, 0.0f);
+    public f32 heightfieldThickness = 0.0f;
+    public Vector<SurfaceMaterial> heightfieldMaterials;
+    public Vector<u16> heightfieldCellMaterialIndices;
+    public b8 isChain = false;
+    public Vector<f32x4> chainPoints;
+    public b8 chainClosed = false;
+    public f32 chainRadius = 0.0f;
 }
 
 [arena, component("collider")]
@@ -142,6 +155,10 @@ class ColliderComponent{
     public AssetRef<CollisionMeshAsset> collisionMeshAsset;
     public f32 staticFriction = -1.0f;
     public f32x4 anisotropicFriction(1.0f, 1.0f, 1.0f, 0.0f);
+    public f32x4 surfaceVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 frictionDirection(1.0f, 0.0f, 0.0f, 0.0f);
+    public MaterialCombineMode frictionCombineMode = MaterialCombineMode::GeometricMean;
+    public MaterialCombineMode restitutionCombineMode = MaterialCombineMode::Max;
     public b8 cullBackfaces = false;
     public b8 autoConvexDecompose = false;
     public u32 vhacdMaxHulls = 16u;
@@ -152,6 +169,13 @@ class ColliderComponent{
     public u32 heightfieldRows = 0u;
     public u32 heightfieldCols = 0u;
     public f32x4 heightfieldScale(1.0f, 1.0f, 1.0f, 0.0f);
+    public f32 heightfieldThickness = 0.0f;
+    public Vector<SurfaceMaterial> heightfieldMaterials;
+    public Vector<u16> heightfieldCellMaterialIndices;
+    public b8 isChain = false;
+    public Vector<f32x4> chainPoints;
+    public b8 chainClosed = false;
+    public f32 chainRadius = 0.0f;
     public Vector<ColliderShapeEntry> extraShapes;
     public b8 dirty = true;
     public ShapeId runtimeShapeId;
@@ -299,12 +323,14 @@ class PhysicsWorldConfigComponent{
     public f32 contactHertz = s_MaxContactHertz;
     public f32 contactDampingRatio = s_DefaultContactDampingRatio;
     public f32 maxLinearVelocity = s_DefaultMaxLinearVelocity;
+    public f32 timeToSleep = s_TimeToSleep;
     public f32 fixedDeltaTime = 1.0f / 60.0f;
     public u32 subStepCount = 4u;
     public u32 maxSubStepsPerFrame = 4u;
     public PhysicsBackendMode backendMode = PhysicsBackendMode::Auto;
     public u32 gpuDispatchThreshold = s_DefaultGpuBodyThreshold;
     public f32 gpuWorkloadFraction = s_DefaultGpuWorkloadFraction;
+    public AssetRef<CollisionLayerMatrixAsset> collisionLayerMatrixAsset;
     public b8 enableSleep = true;
     public b8 enableContinuous = true;
     public b8 enableContactSoftening = false;

@@ -407,7 +407,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
         uint4 metaA = uint4(0u, 0u, 0u, 0u);
         uint4 filterA = uint4(0u, 0u, 0u, 0u);
 
-        uint stack[32];
+        uint stack[64];
         stack[0] = 0u;
         uint sp = 0u;
         if(active){
@@ -437,7 +437,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
                 if(leftIdx >= leafStart){
                     nwbPhysicsLbvhTestLeaf(idxA, asuint(lNode.minLeft.w), itemOffset, metaA, filterA, shapeSlot, pairSlot, counterSlot, maxPairs, nonCollideSlot, nonCollideMask);
                 }
-                else if(sp < 32u){
+                else if(sp < 64u){
                     stack[sp++] = leftIdx;
                 }
                 else{
@@ -448,7 +448,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
                 if(rightIdx >= leafStart){
                     nwbPhysicsLbvhTestLeaf(idxA, asuint(rNode.minLeft.w), itemOffset, metaA, filterA, shapeSlot, pairSlot, counterSlot, maxPairs, nonCollideSlot, nonCollideMask);
                 }
-                else if(sp < 32u){
+                else if(sp < 64u){
                     stack[sp++] = rightIdx;
                 }
                 else{
@@ -458,10 +458,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
             if(stackOverflow)
                 break;
         }
-        if(stackOverflow){
-            uint prevC = 0u;
-            InterlockedAdd(g_NwbPhysicsUintBuffers[counterSlot][0u], maxPairs + 1u, prevC);
-        }
+        if(stackOverflow)
+            InterlockedOr(g_NwbPhysicsUintBuffers[counterSlot][4u], 1u);
         return;
     }
 }

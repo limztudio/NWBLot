@@ -46,6 +46,16 @@ class RagdollInstance{
     public Vector<f32> motorDampings;
     private Vector<f32> m_boneMaxInertias;
 
+    public void reset(){
+        this.boneBodies.clear();
+        this.joints.clear();
+        this.parentIndices.clear();
+        this.maxMotorTorques.clear();
+        this.motorHertzes.clear();
+        this.motorDampings.clear();
+        this.m_boneMaxInertias.clear();
+    }
+
     public void refreshBoneInertias(in PhysicsWorld world){
         const usize n = this.boneBodies.size();
         this.m_boneMaxInertias.resize(n, 0.5f);
@@ -87,6 +97,7 @@ class RagdollInstance{
             else
                 shapeOk = world.createCapsuleShape(bodyId, bDef.shapeDef, bDef.capsule).has_value();
             if(!shapeOk){
+                world.destroyBody(bodyId);
                 this.destroy(world);
                 return false;
             }

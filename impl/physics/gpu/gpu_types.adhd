@@ -233,6 +233,9 @@ extern const u32 s_ShaderPhysicsBodyFlagDynamic;
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BODY_FLAG_GYROSCOPIC")]
 extern const u32 s_ShaderPhysicsBodyFlagGyroscopic;
 
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BODY_FLAG_HAS_CUSTOM_MAX_ANGULAR_VEL")]
+extern const u32 s_ShaderPhysicsBodyFlagHasCustomMaxAngularVel;
+
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_DENSE_COLOR_MASK")]
 extern const u32 s_GpuIslandDenseColorMask;
 
@@ -313,6 +316,12 @@ extern const u32 s_GpuQueryTypeSphereOverlap;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_QUERY_FLAG_INCLUDE_SENSORS")]
 extern const u32 s_GpuQueryFlagIncludeSensors;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_QUERY_FLAG_USE_GROUP_INDEX")]
+extern const u32 s_GpuQueryFlagUseGroupIndex;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_QUERY_FLAG_CULL_BACKFACES")]
+extern const u32 s_GpuQueryFlagCullBackfaces;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_SPATIAL_QUERY_BYTES")]
 extern const u32 s_GpuSpatialQueryBytes;
@@ -650,6 +659,7 @@ static_assert(cast<u32>(BodyFlags::IsSpeedCapped) == s_ShaderPhysicsBodyFlagIsSp
 static_assert(cast<u32>(BodyFlags::AllowFastRotation) == s_ShaderPhysicsBodyFlagAllowFastRotation, "BodyFlags::AllowFastRotation mismatch");
 static_assert(cast<u32>(BodyFlags::Dynamic) == s_ShaderPhysicsBodyFlagDynamic, "BodyFlags::Dynamic mismatch");
 static_assert(cast<u32>(BodyFlags::EnableGyroscopicTorque) == s_ShaderPhysicsBodyFlagGyroscopic, "BodyFlags::EnableGyroscopicTorque mismatch");
+static_assert(cast<u32>(BodyFlags::HasCustomMaxAngularVelocity) == s_ShaderPhysicsBodyFlagHasCustomMaxAngularVel, "BodyFlags::HasCustomMaxAngularVelocity mismatch");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

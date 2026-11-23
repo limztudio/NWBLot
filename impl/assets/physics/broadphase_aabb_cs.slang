@@ -33,10 +33,6 @@ bool nwbPhysicsShouldCollideFields(const uint4 metaA, const uint4 filterA, const
     return ((filterA.x & filterB.y) != 0u) && ((filterB.x & filterA.y) != 0u);
 }
 
-bool nwbPhysicsShouldCollide(const NwbPhysicsGpuShapeProxy a, const NwbPhysicsGpuShapeProxy b){
-    return nwbPhysicsShouldCollideFields(a.bodyIndexTypeShape, a.filterData, b.bodyIndexTypeShape, b.filterData);
-}
-
 bool nwbPhysicsAabbOverlaps(const float3 minA, const float3 maxA, const float3 minB, const float3 maxB){
     return all(minA <= maxB) && all(minB <= maxA);
 }
@@ -137,8 +133,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             const uint maxPairs = g_NwbPhysicsPushConstants.flags;
             const uint rawPrim = g_NwbPhysicsUintBuffers[counterSlot][0u];
             const uint rawComplex = g_NwbPhysicsUintBuffers[counterSlot][1u];
-            const bool overflow = (rawPrim > maxPairs) || (rawComplex > (maxPairs - rawPrim));
-            const uint clampedTotal = overflow ? maxPairs : (rawPrim + rawComplex);
+            const bool stackOverflow = g_NwbPhysicsUintBuffers[counterSlot][4u] != 0u;
+            const bool overflow = stackOverflow || (rawPrim > maxPairs) || (rawComplex > (maxPairs - rawPrim));
+            const uint clampedTotal = stackOverflow ? 0u : (overflow ? maxPairs : (rawPrim + rawComplex));
             const uint primGroups = (overflow || rawPrim == 0u) ? 0u : ((rawPrim + NWB_PHYSICS_WORKGROUP_SIZE - 1u) / NWB_PHYSICS_WORKGROUP_SIZE);
             const uint complexGroups = (overflow || rawComplex == 0u) ? 0u : ((rawComplex + NWB_PHYSICS_WORKGROUP_SIZE - 1u) / NWB_PHYSICS_WORKGROUP_SIZE);
             const uint indirectSlot = g_NwbPhysicsPushConstants.slots1.z;

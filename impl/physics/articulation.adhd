@@ -169,33 +169,6 @@ SpatialVec SpatialTransformForceC2P(in Transform3D relP2C, in SpatialVec fChild)
     return SpatialVecMake(tP, fP);
 }
 
-void SpatialMat6SetColumn(mut SpatialMat6 m, in u32 colIdx, in SpatialVec col){
-    if(colIdx == 0u){
-        m.tl.row0.x = col.ang.x; m.tl.row1.x = col.ang.y; m.tl.row2.x = col.ang.z;
-        m.bl.row0.x = col.lin.x; m.bl.row1.x = col.lin.y; m.bl.row2.x = col.lin.z;
-    }
-    else if(colIdx == 1u){
-        m.tl.row0.y = col.ang.x; m.tl.row1.y = col.ang.y; m.tl.row2.y = col.ang.z;
-        m.bl.row0.y = col.lin.x; m.bl.row1.y = col.lin.y; m.bl.row2.y = col.lin.z;
-    }
-    else if(colIdx == 2u){
-        m.tl.row0.z = col.ang.x; m.tl.row1.z = col.ang.y; m.tl.row2.z = col.ang.z;
-        m.bl.row0.z = col.lin.x; m.bl.row1.z = col.lin.y; m.bl.row2.z = col.lin.z;
-    }
-    else if(colIdx == 3u){
-        m.tr.row0.x = col.ang.x; m.tr.row1.x = col.ang.y; m.tr.row2.x = col.ang.z;
-        m.br.row0.x = col.lin.x; m.br.row1.x = col.lin.y; m.br.row2.x = col.lin.z;
-    }
-    else if(colIdx == 4u){
-        m.tr.row0.y = col.ang.x; m.tr.row1.y = col.ang.y; m.tr.row2.y = col.ang.z;
-        m.br.row0.y = col.lin.x; m.br.row1.y = col.lin.y; m.br.row2.y = col.lin.z;
-    }
-    else{
-        m.tr.row0.z = col.ang.x; m.tr.row1.z = col.ang.y; m.tr.row2.z = col.ang.z;
-        m.br.row0.z = col.lin.x; m.br.row1.z = col.lin.y; m.br.row2.z = col.lin.z;
-    }
-}
-
 SpatialMat6 SpatialTransformInertiaC2P(in Transform3D relP2C, in SpatialMat6 iaChild){
     const Mat3 rMat = Mat3FromQuaternion(VectorSingle(relP2C.rotation));
     const Mat3 rT = TransposeMat3(rMat);
@@ -346,6 +319,25 @@ class Articulation{
     private Vector<f32> m_dScalar;
     private Vector<f32> m_uTau;
     private Vector<SpatialVec> m_accel;
+
+    public void reset(){
+        this.linkDefs.clear();
+        this.linkStates.clear();
+        this.baseTransform = Transform3D();
+        this.baseVelocity = SpatialVec();
+        this.fixedBase = true;
+        this.subSteps = 4u;
+        this.m_linkSpatialInertia.clear();
+        this.m_linkJointSubspace.clear();
+        this.m_relP2C.clear();
+        this.m_biasC.clear();
+        this.m_iaList.clear();
+        this.m_pAList.clear();
+        this.m_uSubVec.clear();
+        this.m_dScalar.clear();
+        this.m_uTau.clear();
+        this.m_accel.clear();
+    }
 
     public b8 init(in Transform3D rootTransform, in b8 isFixedBase, in Span<ArticulationLinkDef> links){
         if(links.empty())
@@ -574,6 +566,37 @@ class Articulation{
         }
     }
 
+    public void computeLinkSpatialVelocities(){
+        const usize n = this.linkDefs.size();
+        if(n == 0u)
+            return;
+        if(this.m_linkJointSubspace.size() != n){
+            this.m_linkJointSubspace.resize(n);
+            for(usize i = 0u; i < n; ++i){
+                if(i == 0u)
+                    this.m_linkJointSubspace[i] = SpatialVec();
+                else
+                    this.m_linkJointSubspace[i] = this.computeJointSubspaceInChild(i);
+            }
+        }
+        for(usize i = 0u; i < n; ++i){
+            in ArticulationLinkDef d = this.linkDefs[i];
+            mut ArticulationLinkState s = this.linkStates[i];
+            if(i == 0u){
+                if(this.fixedBase)
+                    s.spatialVelocity = SpatialVec();
+                else
+                    s.spatialVelocity = this.baseVelocity;
+            }
+            else{
+                const Transform3D p2c = RelativeTransform(this.linkStates[d.parentIndex].worldTransform, s.worldTransform);
+                const SpatialVec vJ = SpatialScale(this.m_linkJointSubspace[i], s.qd);
+                const SpatialVec vPar = SpatialTransformMotionP2C(p2c, this.linkStates[d.parentIndex].spatialVelocity);
+                s.spatialVelocity = SpatialAdd(vPar, vJ);
+            }
+        }
+    }
+
     public void step(mut PhysicsWorld world, in f32 dt){
         if(dt <= 0.0f || this.linkDefs.empty())
             return;
@@ -603,21 +626,48 @@ class Articulation{
                 s.qd += s.qdd * subDt;
                 s.q += s.qd * subDt;
                 if(d.enableLimit && d.lowerLimit <= d.upperLimit){
+                    b8 hitLimit = false;
+                    const f32 oldQd = s.qd;
                     if(s.q < d.lowerLimit){
                         s.q = d.lowerLimit;
-                        if(s.qd < 0.0f)
+                        if(s.qd < 0.0f){
                             s.qd = 0.0f;
+                            hitLimit = true;
+                        }
                     }
                     else if(s.q > d.upperLimit){
                         s.q = d.upperLimit;
-                        if(s.qd > 0.0f)
+                        if(s.qd > 0.0f){
                             s.qd = 0.0f;
+                            hitLimit = true;
+                        }
+                    }
+                    if(hitLimit && i < this.m_relP2C.size() && i < this.m_uSubVec.size()){
+                        const f32 dqd = -oldQd;
+                        SpatialVec impCur = SpatialTransformForceC2P(this.m_relP2C[i], SpatialScale(this.m_uSubVec[i], -dqd));
+                        u32 cur = d.parentIndex;
+                        while(cur != s_NullIndex && cur < cast<u32>(n)){
+                            if(cur == 0u){
+                                if(!this.fixedBase)
+                                    this.baseVelocity = SpatialAdd(this.baseVelocity, SolveSpatial6x6(this.m_iaList[0u], impCur));
+                                break;
+                            }
+                            in ArticulationLinkDef cd = this.linkDefs[cur];
+                            if(cd.jointType != ArticulationJointType::Fixed && cur < this.m_dScalar.size() && this.m_dScalar[cur] > 1.0e-9f){
+                                const f32 dqdPar = SpatialDot(this.m_linkJointSubspace[cur], impCur) / this.m_dScalar[cur];
+                                this.linkStates[cur].qd += dqdPar;
+                                impCur = SpatialSub(impCur, SpatialScale(this.m_uSubVec[cur], dqdPar));
+                            }
+                            impCur = SpatialTransformForceC2P(this.m_relP2C[cur], impCur);
+                            cur = cd.parentIndex;
+                        }
                     }
                 }
             }
         }
 
         this.computeForwardKinematics();
+        this.computeLinkSpatialVelocities();
 
         for(usize i = 0u; i < this.linkDefs.size(); ++i){
             in ArticulationLinkDef d = this.linkDefs[i];
@@ -625,8 +675,10 @@ class Articulation{
             if(d.proxyBodyId.valid() && world.isValidBody(d.proxyBodyId)){
                 const Transform3D xf = s.worldTransform;
                 world.setBodyTransform(d.proxyBodyId, VectorSingle(xf.position), VectorSingle(xf.rotation));
-                const VectorSingle linW = Vector3Rotate(VectorSingle(s.spatialVelocity.lin), VectorSingle(xf.rotation));
-                const VectorSingle angW = Vector3Rotate(VectorSingle(s.spatialVelocity.ang), VectorSingle(xf.rotation));
+                const VectorSingle angLocal = VectorSingle(s.spatialVelocity.ang);
+                const VectorSingle linComLocal = VectorSingle(s.spatialVelocity.lin) + Cross(angLocal, VectorSingle(d.comLocal));
+                const VectorSingle linW = Vector3Rotate(linComLocal, VectorSingle(xf.rotation));
+                const VectorSingle angW = Vector3Rotate(angLocal, VectorSingle(xf.rotation));
                 world.setLinearVelocity(d.proxyBodyId, linW);
                 world.setAngularVelocity(d.proxyBodyId, angW);
             }

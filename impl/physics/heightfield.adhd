@@ -1107,6 +1107,7 @@ Manifold CollideConvexProxyAndHeightfield(
     const ShapeProxyView capViewInB = MakeSpanProxyView(Span<f32x3u>(capPtsInB), proxyA.radius);
 
     const VectorSingle shapeCenterB = TransformPoint(localXfA, ComputeProxyViewCenter(proxyA));
+    const f32 cullR = ComputeProxyViewBoundingRadius(proxyA, ComputeProxyViewCenter(proxyA)) + hfB.thickness;
     const VectorSingle worldUp = SafeNormalizeVec3(Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
     VectorSingle chosenNormal = -worldUp;
@@ -1166,7 +1167,7 @@ Manifold CollideConvexProxyAndHeightfield(
                 if(!AabbOverlaps(triBox, queryBox))
                     continue;
                 const VectorSingle triN = SafeNormalizeVec3(Cross(VectorSingle(tv1 - tv0, 0.0f), VectorSingle(tv2 - tv0, 0.0f)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-                if(Vector3Dot(triN, VectorSingle(shapeCenterB - tv0, 0.0f)).x < -totalR - s_LinearSlop)
+                if(Vector3Dot(triN, VectorSingle(shapeCenterB - tv0, 0.0f)).x < -cullR - s_LinearSlop)
                     continue;
 
                 if(isSphereA){

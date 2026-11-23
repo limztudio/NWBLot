@@ -1340,6 +1340,103 @@ bool nwbPhysicsRunGjkDistance(
     );
 }
 
+uint nwbPhysicsClosedMeshRayVote(
+    const uint nodeBase,
+    const uint triBase,
+    const uint meshNodeSlot,
+    const uint meshTriSlot,
+    const float3 localPoint,
+    const float3 rayDir,
+    out bool outOverflow
+){
+    outOverflow = false;
+    const float3 invDir = 1.0f / rayDir;
+    uint hitCount = 0u;
+    uint stack[32];
+    uint sp = 0u;
+    stack[sp++] = 0u;
+    while(sp > 0u){
+        const uint nodeRel = stack[--sp];
+        const float4 n0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + nodeRel) * 2u + 0u];
+        const float4 n1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + nodeRel) * 2u + 1u];
+        const float3 t0 = (n0.xyz - localPoint) * invDir;
+        const float3 t1 = (n1.xyz - localPoint) * invDir;
+        const float3 tSmall = min(t0, t1);
+        const float3 tLarge = max(t0, t1);
+        const float tEnter = max(0.0f, max(tSmall.x, max(tSmall.y, tSmall.z)));
+        const float tExit = min(tLarge.x, min(tLarge.y, tLarge.z));
+        if(tExit < tEnter)
+            continue;
+
+        const uint meta = asuint(n1.w);
+        if((meta & 0x80000000u) != 0u){
+            const uint firstTri = asuint(n0.w);
+            const uint triCount = meta & 0x7fffffffu;
+            for(uint ti = 0u; ti < triCount; ++ti){
+                const uint triIdx = triBase + firstTri + ti;
+                const float3 v0 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 0u].xyz;
+                const float3 v1 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 1u].xyz;
+                const float3 v2 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 2u].xyz;
+                const float3 e1 = v1 - v0;
+                const float3 e2 = v2 - v0;
+                const float3 pvec = cross(rayDir, e2);
+                const float det = dot(e1, pvec);
+                if(abs(det) <= 1.0e-8f)
+                    continue;
+                const float invDet = 1.0f / det;
+                const float3 tvec = localPoint - v0;
+                const float u = dot(tvec, pvec) * invDet;
+                if(u < -1.0e-5f || u > 1.0f + 1.0e-5f)
+                    continue;
+                const float3 qvec = cross(tvec, e1);
+                const float v = dot(rayDir, qvec) * invDet;
+                if(v < -1.0e-5f || u + v > 1.0f + 1.0e-5f)
+                    continue;
+                const float t = dot(e2, qvec) * invDet;
+                if(t > 1.0e-6f)
+                    ++hitCount;
+            }
+        }
+        else{
+            if(sp + 2u > 32u){
+                outOverflow = true;
+                return 0u;
+            }
+            stack[sp++] = asuint(n0.w);
+            stack[sp++] = meta & 0x7fffffffu;
+        }
+    }
+    return hitCount & 1u;
+}
+
+bool nwbPhysicsIsPointInsideClosedMesh(
+    const uint nodeBase,
+    const uint triBase,
+    const uint meshNodeSlot,
+    const uint meshTriSlot,
+    const float3 localPoint,
+    out bool outOverflow
+){
+    outOverflow = false;
+    const float4 rootN0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBase * 2u + 0u];
+    const float4 rootN1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBase * 2u + 1u];
+    if(any(localPoint < rootN0.xyz) || any(localPoint > rootN1.xyz))
+        return false;
+
+    const uint vote0 = nwbPhysicsClosedMeshRayVote(nodeBase, triBase, meshNodeSlot, meshTriSlot, localPoint, normalize(float3(1.0f, 0.37139067f, 0.21821789f)), outOverflow);
+    if(outOverflow)
+        return false;
+    const uint vote1 = nwbPhysicsClosedMeshRayVote(nodeBase, triBase, meshNodeSlot, meshTriSlot, localPoint, normalize(float3(-0.29317123f, 1.0f, 0.51791341f)), outOverflow);
+    if(outOverflow)
+        return false;
+    if(vote0 == vote1)
+        return vote0 != 0u;
+    const uint vote2 = nwbPhysicsClosedMeshRayVote(nodeBase, triBase, meshNodeSlot, meshTriSlot, localPoint, normalize(float3(0.43189211f, -0.61923417f, 1.0f)), outOverflow);
+    if(outOverflow)
+        return false;
+    return (vote0 + vote1 + vote2) >= 2u;
+}
+
 #if NWB_PHYSICS_NP_PROFILE == 1
 uint nwbPhysicsHullVertexCount(const NwbPhysicsGpuShapeProxy proxy){
     if((proxy.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u)
@@ -2289,103 +2386,6 @@ void nwbPhysicsFinalizeMeshCand(
 
     result.normalPad = float4(useNormal, 0.0f);
     result.pairInfo.z = outCount;
-}
-
-uint nwbPhysicsClosedMeshRayVote(
-    const uint nodeBase,
-    const uint triBase,
-    const uint meshNodeSlot,
-    const uint meshTriSlot,
-    const float3 localPoint,
-    const float3 rayDir,
-    out bool outOverflow
-){
-    outOverflow = false;
-    const float3 invDir = 1.0f / rayDir;
-    uint hitCount = 0u;
-    uint stack[32];
-    uint sp = 0u;
-    stack[sp++] = 0u;
-    while(sp > 0u){
-        const uint nodeRel = stack[--sp];
-        const float4 n0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + nodeRel) * 2u + 0u];
-        const float4 n1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + nodeRel) * 2u + 1u];
-        const float3 t0 = (n0.xyz - localPoint) * invDir;
-        const float3 t1 = (n1.xyz - localPoint) * invDir;
-        const float3 tSmall = min(t0, t1);
-        const float3 tLarge = max(t0, t1);
-        const float tEnter = max(0.0f, max(tSmall.x, max(tSmall.y, tSmall.z)));
-        const float tExit = min(tLarge.x, min(tLarge.y, tLarge.z));
-        if(tExit < tEnter)
-            continue;
-
-        const uint meta = asuint(n1.w);
-        if((meta & 0x80000000u) != 0u){
-            const uint firstTri = asuint(n0.w);
-            const uint triCount = meta & 0x7fffffffu;
-            for(uint ti = 0u; ti < triCount; ++ti){
-                const uint triIdx = triBase + firstTri + ti;
-                const float3 v0 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 0u].xyz;
-                const float3 v1 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 1u].xyz;
-                const float3 v2 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 2u].xyz;
-                const float3 e1 = v1 - v0;
-                const float3 e2 = v2 - v0;
-                const float3 pvec = cross(rayDir, e2);
-                const float det = dot(e1, pvec);
-                if(abs(det) <= 1.0e-8f)
-                    continue;
-                const float invDet = 1.0f / det;
-                const float3 tvec = localPoint - v0;
-                const float u = dot(tvec, pvec) * invDet;
-                if(u < -1.0e-5f || u > 1.0f + 1.0e-5f)
-                    continue;
-                const float3 qvec = cross(tvec, e1);
-                const float v = dot(rayDir, qvec) * invDet;
-                if(v < -1.0e-5f || u + v > 1.0f + 1.0e-5f)
-                    continue;
-                const float t = dot(e2, qvec) * invDet;
-                if(t > 1.0e-6f)
-                    ++hitCount;
-            }
-        }
-        else{
-            if(sp + 2u > 32u){
-                outOverflow = true;
-                return 0u;
-            }
-            stack[sp++] = asuint(n0.w);
-            stack[sp++] = meta & 0x7fffffffu;
-        }
-    }
-    return hitCount & 1u;
-}
-
-bool nwbPhysicsIsPointInsideClosedMesh(
-    const uint nodeBase,
-    const uint triBase,
-    const uint meshNodeSlot,
-    const uint meshTriSlot,
-    const float3 localPoint,
-    out bool outOverflow
-){
-    outOverflow = false;
-    const float4 rootN0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBase * 2u + 0u];
-    const float4 rootN1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBase * 2u + 1u];
-    if(any(localPoint < rootN0.xyz) || any(localPoint > rootN1.xyz))
-        return false;
-
-    const uint vote0 = nwbPhysicsClosedMeshRayVote(nodeBase, triBase, meshNodeSlot, meshTriSlot, localPoint, normalize(float3(1.0f, 0.37139067f, 0.21821789f)), outOverflow);
-    if(outOverflow)
-        return false;
-    const uint vote1 = nwbPhysicsClosedMeshRayVote(nodeBase, triBase, meshNodeSlot, meshTriSlot, localPoint, normalize(float3(-0.29317123f, 1.0f, 0.51791341f)), outOverflow);
-    if(outOverflow)
-        return false;
-    if(vote0 == vote1)
-        return vote0 != 0u;
-    const uint vote2 = nwbPhysicsClosedMeshRayVote(nodeBase, triBase, meshNodeSlot, meshTriSlot, localPoint, normalize(float3(0.43189211f, -0.61923417f, 1.0f)), outOverflow);
-    if(outOverflow)
-        return false;
-    return (vote0 + vote1 + vote2) >= 2u;
 }
 
 bool nwbPhysicsFindClosestPointOnClosedMesh(
@@ -3944,6 +3944,29 @@ void nwbPhysicsSolveBulletToi(
             g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][pairIdx] = result;
             return;
         }
+        const float4 firstTri1 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triBase * 3u + 1u];
+        if((asuint(firstTri1.w) & NWB_PHYSICS_MESH_FLAG_CLOSED) != 0u){
+            float3 oA0;
+            float4 rA0;
+            nwbPhysicsEvalBulletSweep(bodyA, 0.0f, oA0, rA0);
+            float3 oB0;
+            float4 rB0;
+            nwbPhysicsEvalBulletSweep(bodyB, 0.0f, oB0, rB0);
+            const float3 startCenterA = oA0 + nwbPhysicsQuatRotate(proxyA.localCenterRadius.xyz, rA0);
+            const float3 startCenterInB = nwbPhysicsQuatInvRotate(startCenterA - oB0, rB0);
+            bool insideOverflow = false;
+            const bool insideClosed = nwbPhysicsIsPointInsideClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, startCenterInB, insideOverflow);
+            if(insideOverflow){
+                result.pairInfo.w = 2u;
+                g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][pairIdx] = result;
+                return;
+            }
+            if(insideClosed){
+                result.pairInfo.w = 1u;
+                g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][pairIdx] = result;
+                return;
+            }
+        }
 
         float3 queryMin = float3(1.0e20f, 1.0e20f, 1.0e20f);
         float3 queryMax = float3(-1.0e20f, -1.0e20f, -1.0e20f);
@@ -4814,15 +4837,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][outIdx].anchorAFeature[k] = result.anchorAFeature[k];
                 g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][outIdx].anchorBSeparation[k] = result.anchorBSeparation[k];
             }
-        }
-    }
-    else if(keepManifold){
-        g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][idx].pairInfo = result.pairInfo;
-        g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][idx].normalPad = result.normalPad;
-        const uint emitCount = min(result.pairInfo.z, NWB_PHYSICS_MAX_MANIFOLD_POINTS);
-        for(uint k = 0u; k < emitCount; ++k){
-            g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][idx].anchorAFeature[k] = result.anchorAFeature[k];
-            g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][idx].anchorBSeparation[k] = result.anchorBSeparation[k];
         }
     }
 #endif

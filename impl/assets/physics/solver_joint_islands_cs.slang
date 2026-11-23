@@ -33,21 +33,23 @@ void nwbPhysicsIslandSolveJointsPass(
     const uint flags
 ){
     uint off = jointOffset;
-    [loop]
-    for(uint colorSlot = 0u; colorSlot < denseJointColors; ++colorSlot){
-        const uint packed = (colorSlot < 4u) ? jointCounts.x : jointCounts.y;
-        const uint cnt = (packed >> ((colorSlot & 3u) * 8u)) & 0xffu;
-        for(uint j = tid; j < cnt; j += NWB_PHYSICS_ISLAND_WORKGROUP_SIZE)
-            nwbPhysicsSolveSingleJoint(off + j, mode, bodySimSlot, bodyStateSlot, jointSlot, h, flags);
-        off += cnt;
-        GroupMemoryBarrierWithGroupSync();
-    }
     const uint overflowCnt = (jointCounts.y >> 24u) & 0xffu;
-    if(overflowCnt > 0u){
-        if(tid == 0u){
-            for(uint j = 0u; j < overflowCnt; ++j)
+    const uint totalSlots = denseJointColors + (overflowCnt > 0u ? 1u : 0u);
+    [loop]
+    for(uint colorSlot = 0u; colorSlot < totalSlots; ++colorSlot){
+        const bool isOverflow = (colorSlot == denseJointColors);
+        uint cnt = overflowCnt;
+        if(!isOverflow){
+            const uint packed = (colorSlot < 4u) ? jointCounts.x : jointCounts.y;
+            cnt = (packed >> ((colorSlot & 3u) * 8u)) & 0xffu;
+        }
+        if(!isOverflow || tid == 0u){
+            const uint startIdx = isOverflow ? 0u : tid;
+            const uint stepIdx = isOverflow ? 1u : NWB_PHYSICS_ISLAND_WORKGROUP_SIZE;
+            for(uint j = startIdx; j < cnt; j += stepIdx)
                 nwbPhysicsSolveSingleJoint(off + j, mode, bodySimSlot, bodyStateSlot, jointSlot, h, flags);
         }
+        off += cnt;
         GroupMemoryBarrierWithGroupSync();
     }
 }
@@ -156,7 +158,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
             nwbPhysicsIslandSolveJointsPass(tid, jointOffset, slice.contactColorCounts1.zw, denseJointColors, NWB_PHYSICS_SOLVER_MODE_SOLVE_BIAS, bodySimSlot, bodyStateSlot, jointSlot, h, 0u);
 
         if(tid < bodyCount)
-            nwbPhysicsIntegrateIslandBodyPosition(tid, h, maxAngSpeed);
+            nwbPhysicsIntegrateIslandBodyPosition(bodySimSlot, bodyOffset + tid, tid, h, maxAngSpeed);
         GroupMemoryBarrierWithGroupSync();
 
 #if NWB_PHYSICS_JOINT_ISLAND_MODE == 0

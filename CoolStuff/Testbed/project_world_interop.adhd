@@ -501,6 +501,15 @@ void SetPhysicsPaused(mut NotNullUniquePtr<World> worldHandle, in EntityID confi
     cfg.dirty = true;
 }
 
+void SetPhysicsInterpolateTransforms(mut NotNullUniquePtr<World> worldHandle, in EntityID configEntity, in b8 enabled){
+    mut World world = worldHandle.deref();
+    if(!configEntity.valid() || !world.alive(configEntity) || !world.hasComponent<PhysicsWorldConfigComponent>(configEntity))
+        return;
+    mut PhysicsWorldConfigComponent cfg = world.getComponent<PhysicsWorldConfigComponent>(configEntity);
+    cfg.interpolateTransforms = enabled;
+    cfg.dirty = true;
+}
+
 void ApplyPhysicsBackendChoice(mut NotNullUniquePtr<World> worldHandle, in EntityID configEntity, in TestbedPhysicsBackendChoice choice){
     mut World world = worldHandle.deref();
     if(!configEntity.valid() || !world.alive(configEntity) || !world.hasComponent<PhysicsWorldConfigComponent>(configEntity))
@@ -825,10 +834,6 @@ void ApplyFlyCameraInputToMainCamera(
     ApplyFlyCameraInputToWorld(worldHandle.deref(), moveAxes, boosted, mouseDelta, deltaSeconds);
 }
 
-b8 InstantiateSceneSubsystemsEntities(in ActiveSceneSubsystems sceneSubsystems, mut NotNullUniquePtr<World> worldHandle){
-    return sceneSubsystems.instantiateEntities(worldHandle.deref());
-}
-
 b8 InstantiateSceneSubsystemsEntities(
     in ActiveSceneSubsystems sceneSubsystems,
     mut NotNullUniquePtr<World> worldHandle,
@@ -854,7 +859,7 @@ Expected<SharedImageSource> LoadUiGallerySkinImageSource(in SharedPool pool, mut
     return LoadImageSource(pool, context.assetManager, textureRef);
 }
 
-void PaintPhysicsDebugOverlay(
+PhysicsDebugDrawStats PaintPhysicsDebugOverlay(
     in PhysicsDebugDrawOptions options,
     mut NotNullUniquePtr<World> worldHandle,
     mut UiPaintContext context,
@@ -863,30 +868,31 @@ void PaintPhysicsDebugOverlay(
     mut World world = worldHandle.deref();
     const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
     if(!physicsSystem.has_value())
-        return;
+        return PhysicsDebugDrawStats();
 
     const DisplayMetrics metrics = context.paint.displayMetrics();
     if(metrics.logicalWidth <= 0.0f || metrics.logicalHeight <= 0.0f)
-        return;
+        return PhysicsDebugDrawStats();
 
     const SceneCameraView cameraView = ResolveSceneCameraView(world, metrics.logicalWidth / Max(metrics.logicalHeight, 1.0f));
     if(!cameraView.valid())
-        return;
+        return PhysicsDebugDrawStats();
 
     in TransformComponent camXf = cameraView.components.value().transform;
     in CameraProjection camProj = cameraView.projection;
     const PhysicsDebugScreenProjector projector(camXf, camProj, metrics.logicalWidth, metrics.logicalHeight);
     if(!projector.valid())
-        return;
+        return PhysicsDebugDrawStats();
 
     TestbedProjectedDebugLineSink sink(projector, options.maxLines, screenLines);
-    BuildEcsPhysicsDebugLinesToSink(world, physicsSystem.value(), options, projector, sink);
+    const PhysicsDebugDrawStats stats = BuildEcsPhysicsDebugLinesToSink(world, physicsSystem.value(), options, projector, sink);
     if(!screenLines.empty()){
         f32 lineThickness = 1.5f;
         if(IsFinite(options.lineThickness) && options.lineThickness > 0.0f)
             lineThickness = options.lineThickness;
         context.paint.drawLineBatch(Span<PaintLineSegment>(screenLines.data(), screenLines.size()), lineThickness);
     }
+    return stats;
 }
 
 

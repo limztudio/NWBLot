@@ -64,8 +64,8 @@ class CharacterController{
     public Transform3D prevGroundTransform;
     public b8 hasPrevGroundTransform = false;
     public Vector<CharacterContactInfo> activeContacts;
-    private Vector<ShapeOverlapHit> m_scratchRawHits;
     private Vector<ShapeOverlapHit> m_scratchHits;
+    private Vector<CharacterContactInfo> m_scratchStepContacts;
     private f32 m_cachedSlopeAngleRad = -1.0f;
     private f32 m_minWalkableCos = 0.70710678f;
 
@@ -133,28 +133,15 @@ class CharacterController{
         return MakeCapsuleProxy(cap);
     }
 
-    private b8 shouldIgnoreShape(in PhysicsWorld world, in ShapeId shapeId)const{
-        if(!world.isValidShape(shapeId))
-            return true;
-        if(this.def.ignoreShapeId.valid() && shapeId == this.def.ignoreShapeId)
-            return true;
-        if(this.def.ignoreBodyId.valid()){
-            const Expected<BodyId> bRes = world.tryGetShapeBody(shapeId);
-            if(bRes.has_value() && bRes.value() == this.def.ignoreBodyId)
-                return true;
-        }
-        return false;
-    }
-
     private void gatherOverlapsAt(in PhysicsWorld world, in VectorSingle testPos, in f32 extraRadius){
         const ShapeProxy proxy = this.makeCapsuleProxy(extraRadius);
         const Transform3D xf(testPos, VectorSingle(this.rotation));
-        world.overlapShapeDetailed(proxy, xf, this.def.filter, this.def.hitSensors, this.m_scratchRawHits);
-        this.m_scratchHits.clear();
-        for(usize i = 0u; i < this.m_scratchRawHits.size(); ++i){
-            if(!this.shouldIgnoreShape(world, this.m_scratchRawHits[i].shapeId))
-                this.m_scratchHits.push_back(this.m_scratchRawHits[i]);
-        }
+        in PhysicsWorld worldRef = world;
+        const ShapeId igShapeId = this.def.ignoreShapeId;
+        const ShapeQueryFilterCallback cb = lambda[in worldRef, in igShapeId](in ShapeId sId) -> b8{
+            return worldRef.passesCustomFilter(igShapeId, sId);
+        };
+        world.overlapShapeDetailed(proxy, xf, this.def.filter, this.def.hitSensors, this.def.ignoreBodyId, this.def.ignoreShapeId, cb, this.m_scratchHits);
     }
 
     private ShapeCastHit castCapsule(in PhysicsWorld world, in VectorSingle fromPos, in VectorSingle delta)const{
@@ -172,13 +159,20 @@ class CharacterController{
         return world.shapeCastClosest(proxy, input);
     }
 
-    private void recordContact(in PhysicsWorld world, in ShapeId shapeId, in VectorSingle point, in VectorSingle outNormal, in f32 depth){
-        for(usize i = 0u; i < this.activeContacts.size(); ++i){
-            if(this.activeContacts[i].shapeId == shapeId){
-                this.activeContacts[i].point = f32x4(point, 0.0f);
-                this.activeContacts[i].normal = f32x4(outNormal, 0.0f);
-                this.activeContacts[i].penetrationDepth = Max(this.activeContacts[i].penetrationDepth, depth);
-                this.activeContacts[i].isWalkable = this.isWalkableNormal(outNormal);
+    private void recordContactTo(
+        in PhysicsWorld world,
+        in ShapeId shapeId,
+        in VectorSingle point,
+        in VectorSingle outNormal,
+        in f32 depth,
+        mut Vector<CharacterContactInfo> dstContacts
+    )const{
+        for(usize i = 0u; i < dstContacts.size(); ++i){
+            if(dstContacts[i].shapeId == shapeId){
+                dstContacts[i].point = f32x4(point, 0.0f);
+                dstContacts[i].normal = f32x4(outNormal, 0.0f);
+                dstContacts[i].penetrationDepth = Max(dstContacts[i].penetrationDepth, depth);
+                dstContacts[i].isWalkable = this.isWalkableNormal(outNormal);
                 return;
             }
         }
@@ -191,7 +185,7 @@ class CharacterController{
         hitInfo.normal = f32x4(outNormal, 0.0f);
         hitInfo.penetrationDepth = depth;
         hitInfo.isWalkable = this.isWalkableNormal(outNormal);
-        this.activeContacts.push_back(hitInfo);
+        dstContacts.push_back(hitInfo);
     }
 
     private void pushDynamicBody(mut PhysicsWorld world, in ShapeId shapeId, in VectorSingle hitPt, in VectorSingle outNormal, in VectorSingle approachVel, in f32 dt){
@@ -234,7 +228,7 @@ class CharacterController{
                 in ShapeOverlapHit ov = this.m_scratchHits[i];
                 const VectorSingle outN = SafeNormalizeVec3(-VectorSingle(ov.normal), this.upDirection());
                 const f32 depth = ov.penetrationDepth;
-                this.recordContact(world, ov.shapeId, VectorSingle(ov.pointB), outN, depth);
+                this.recordContactTo(world, ov.shapeId, VectorSingle(ov.pointB), outN, depth, this.activeContacts);
                 if(depth > maxPen)
                     maxPen = depth;
                 if(depth > 1.0e-5f)
@@ -253,6 +247,7 @@ class CharacterController{
         in VectorSingle initialDelta,
         in f32 dt,
         in b8 pushBodies,
+        mut Vector<CharacterContactInfo> dstContacts,
         mut b8 outHitObstacle,
         mut b8 outHitSteepWall,
         mut VectorSingle outEndNormal
@@ -262,6 +257,7 @@ class CharacterController{
         outEndNormal = this.upDirection();
         VectorSingle curPos = startPos;
         VectorSingle remDelta = initialDelta;
+        f32 remFrac = 1.0f;
         VectorSingle firstPlaneN(0.0f);
         b8 hasFirstPlane = false;
 
@@ -283,16 +279,18 @@ class CharacterController{
             if(!walkable)
                 outHitSteepWall = true;
 
+            const VectorSingle approachVel = remDelta / Max(dt * remFrac, 1.0e-4f);
             const f32 safeFrac = Max(0.0f, hit.fraction - 0.002f);
             f32 pushClear = 2.0e-4f;
             if(hit.fraction <= 1.0e-4f)
                 pushClear = Max(1.0e-3f, this.def.skinWidth * 0.25f);
             curPos = curPos + remDelta * safeFrac + n * pushClear;
             remDelta = remDelta * (1.0f - safeFrac);
+            remFrac = Max(1.0e-3f, remFrac * (1.0f - safeFrac));
 
             if(pushBodies)
-                this.pushDynamicBody(world, hit.shapeId, VectorSingle(hit.point), n, remDelta / Max(dt, 1.0e-4f), dt);
-            this.recordContact(world, hit.shapeId, VectorSingle(hit.point), n, 0.0f);
+                this.pushDynamicBody(world, hit.shapeId, VectorSingle(hit.point), n, approachVel, dt);
+            this.recordContactTo(world, hit.shapeId, VectorSingle(hit.point), n, 0.0f, dstContacts);
 
             const f32 intoN = Vector3Dot(remDelta, n).x;
             if(intoN < 0.0f)
@@ -338,11 +336,12 @@ class CharacterController{
         if(lifted <= this.def.skinWidth)
             return false;
 
+        this.m_scratchStepContacts.clear();
         const VectorSingle topPos = startPos + up * lifted;
         b8 hitObs = false;
         b8 hitSteep = false;
         VectorSingle unusedN(0.0f);
-        const VectorSingle movedTop = this.slideMoveFrom(world, topPos, horizDelta, dt, false, hitObs, hitSteep, unusedN);
+        const VectorSingle movedTop = this.slideMoveFrom(world, topPos, horizDelta, dt, false, this.m_scratchStepContacts, hitObs, hitSteep, unusedN);
 
         const VectorSingle downVec = up * (-(lifted + this.def.stepDownHeight));
         const ShapeCastHit downHit = this.castCapsule(world, movedTop, downVec);
@@ -366,6 +365,7 @@ class CharacterController{
                 return false;
         }
 
+        this.recordContactTo(world, downHit.shapeId, VectorSingle(downHit.point), landN, 0.0f, this.m_scratchStepContacts);
         outSteppedPos = candidate;
         return true;
     }
@@ -439,13 +439,42 @@ class CharacterController{
             this.groundNormal = f32x4(bestN, 0.0f);
             this.groundPoint = f32x4(bestPt, 0.0f);
             this.groundShapeId = bestShape;
-            if(foundWalkable)
+            if(foundWalkable){
                 this.groundState = CharacterGroundState::OnGround;
-            else
+                const Expected<BodyId> bodyRes = world.tryGetShapeBody(bestShape);
+                if(bodyRes.has_value()){
+                    this.groundBodyId = bodyRes.value();
+                    const Expected<Transform3D> xfRes = world.tryGetBodyTransform(this.groundBodyId);
+                    if(xfRes.has_value()){
+                        this.prevGroundTransform = xfRes.value();
+                        this.hasPrevGroundTransform = true;
+                    }
+                    else
+                        this.hasPrevGroundTransform = false;
+
+                    const Expected<f32x4> lvRes = world.tryGetLinearVelocity(this.groundBodyId);
+                    const Expected<f32x4> avRes = world.tryGetAngularVelocity(this.groundBodyId);
+                    VectorSingle gVel(0.0f);
+                    if(lvRes.has_value())
+                        gVel = VectorSingle(lvRes.value());
+                    if(avRes.has_value() && xfRes.has_value()){
+                        const VectorSingle arm = bestPt - VectorSingle(xfRes.value().position);
+                        gVel = gVel + Cross(VectorSingle(avRes.value()), arm);
+                    }
+                    this.groundVelocity = f32x4(gVel, 0.0f);
+                }
+                else{
+                    this.groundBodyId = BodyId();
+                    this.groundVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+                    this.hasPrevGroundTransform = false;
+                }
+            }
+            else{
                 this.groundState = CharacterGroundState::NotSupported;
-            this.groundBodyId = BodyId();
-            this.groundVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-            this.hasPrevGroundTransform = false;
+                this.groundBodyId = BodyId();
+                this.groundVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+                this.hasPrevGroundTransform = false;
+            }
         }
         else{
             this.groundState = CharacterGroundState::InAir;
@@ -490,7 +519,7 @@ class CharacterController{
         b8 hitObs = false;
         b8 hitSteep = false;
         VectorSingle endN = up;
-        VectorSingle flatEndPos = this.slideMoveFrom(world, curPos, fullDelta, dt, true, hitObs, hitSteep, endN);
+        VectorSingle flatEndPos = this.slideMoveFrom(world, curPos, fullDelta, dt, true, this.activeContacts, hitObs, hitSteep, endN);
 
         if(wasOnGround && hitSteep && Vector3LengthSq(VectorSingle(horizDelta, 0.0f)).x > 1.0e-8f){
             VectorSingle steppedPos(0.0f);
@@ -499,8 +528,13 @@ class CharacterController{
                 const VectorSingle hFlat = dFlat - up * Vector3Dot(dFlat, up).x;
                 const VectorSingle dStep = steppedPos - curPos;
                 const VectorSingle hStep = dStep - up * Vector3Dot(dStep, up).x;
-                if(Vector3LengthSq(VectorSingle(hStep, 0.0f)).x > Vector3LengthSq(VectorSingle(hFlat, 0.0f)).x + 1.0e-5f)
+                if(Vector3LengthSq(VectorSingle(hStep, 0.0f)).x > Vector3LengthSq(VectorSingle(hFlat, 0.0f)).x + 1.0e-5f){
                     flatEndPos = steppedPos;
+                    for(usize si = 0u; si < this.m_scratchStepContacts.size(); ++si){
+                        in CharacterContactInfo sc = this.m_scratchStepContacts[si];
+                        this.recordContactTo(world, sc.shapeId, VectorSingle(sc.point), VectorSingle(sc.normal), sc.penetrationDepth, this.activeContacts);
+                    }
+                }
             }
         }
 

@@ -68,6 +68,10 @@ class JointComponentAsset : IComponent{
         dst.boundExtraBodyIdBs.clear();
         dst.bodyEntityA = s_InvalidEntityId;
         dst.bodyEntityB = s_InvalidEntityId;
+        for(usize i = 0u; i < dst.extraJoints.size(); ++i){
+            dst.extraJoints[i].bodyEntityA = s_InvalidEntityId;
+            dst.extraJoints[i].bodyEntityB = s_InvalidEntityId;
+        }
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
@@ -101,6 +105,141 @@ class PhysicsWorldConfigComponentAsset : IComponent{
         mut PhysicsWorldConfigComponent dst = entity.addComponent<PhysicsWorldConfigComponent>();
         dst = this.component;
         dst.dirty = true;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("character_controller_component")]
+class CharacterControllerComponentAsset : IComponent{
+    public CharacterControllerComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        mut CharacterControllerComponent dst = entity.addComponent<CharacterControllerComponent>();
+        dst = this.component;
+        dst.dirty = true;
+        dst.initialized = false;
+        dst.syncFromTransform = false;
+        dst.hasPrevSnapshot = false;
+        dst.def.ignoreBodyId = BodyId();
+        dst.def.ignoreShapeId = ShapeId();
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("vehicle_component")]
+class VehicleComponentAsset : IComponent{
+    public VehicleComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        mut VehicleComponent dst = entity.addComponent<VehicleComponent>();
+        dst = this.component;
+        dst.dirty = true;
+        dst.initialized = false;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("ragdoll_component")]
+class RagdollComponentAsset : IComponent{
+    public RagdollComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        mut RagdollComponent dst = entity.addComponent<RagdollComponent>();
+        dst = this.component;
+        dst.dirty = true;
+        dst.initialized = false;
+        dst.syncedKinematic = false;
+        dst.instance.reset();
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("fluid_volume_component")]
+class FluidVolumeComponentAsset : IComponent{
+    public FluidVolumeComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        mut FluidVolumeComponent dst = entity.addComponent<FluidVolumeComponent>();
+        dst = this.component;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("force_field_component")]
+class ForceFieldComponentAsset : IComponent{
+    public ForceFieldComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        mut ForceFieldComponent dst = entity.addComponent<ForceFieldComponent>();
+        dst = this.component;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("articulation_component")]
+class ArticulationComponentAsset : IComponent{
+    public ArticulationComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        mut ArticulationComponent dst = entity.addComponent<ArticulationComponent>();
+        dst = this.component;
+        dst.dirty = true;
+        dst.initialized = false;
+        dst.articulation.reset();
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("soft_body_component")]
+class SoftBodyComponentAsset : IComponent{
+    public SoftBodyComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        mut SoftBodyComponent dst = entity.addComponent<SoftBodyComponent>();
+        dst = this.component;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
+    public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
+}
+
+[arena, asset("gpu_render_transform_export_component")]
+class GpuRenderTransformExportComponentAsset : IComponent{
+    public GpuRenderTransformExportComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        mut GpuRenderTransformExportComponent dst = entity.addComponent<GpuRenderTransformExportComponent>();
+        dst = this.component;
     }
     public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;

@@ -267,8 +267,10 @@ EntityID InstantiateSceneLoadedEntityWithResult(in Name entityName, in Span<Uniq
     if(!ValidateCreatedSceneEcsEntity(entity.id(), entityName))
         return s_InvalidEntityId;
     for(usize i = 0u; i < components.size(); ++i){
-        if(!components[i].valid())
+        if(!components[i].valid()){
+            world.destroyEntity(entity.id());
             return s_InvalidEntityId;
+        }
         components[i].deref().applyToEntity(entity);
     }
     return entity.id();
@@ -302,6 +304,13 @@ b8 ActiveSceneSubsystems::loadProjectStartScene(in AssetManager assetManager, in
     if(!loaded.has_value())
         return false;
     return this.loadScene(loaded.value().deref().startScene(), assetManager);
+}
+
+void ActiveSceneSubsystems::unloadScene(){
+    this.m_contents.scene = SceneRef();
+    this.m_contents.assets.clear();
+    this.m_contents.subsystems.clear();
+    this.m_contents.entities.clear();
 }
 
 b8 ActiveSceneSubsystems::loadScene(in SceneRef scene, in AssetManager assetManager){
@@ -344,12 +353,18 @@ b8 ActiveSceneSubsystems::loadScene(in SceneRef scene, in AssetManager assetMana
         next.subsystems.push_back(subsystem);
     }
 
+    HashSet<NameHash> seenEntityNames;
+    seenEntityNames.reserve(sceneAsset.entities().size());
     next.entities.reserve(sceneAsset.entities().size());
     for(in EntityRef ref : sceneAsset.entities()){
         const auto loadedEntity = LoadTypedAssetSync<EntityAsset>(assetManager, ref.name(), s_ActiveSceneSubsystemsDiagnosticOwner);
         if(!loadedEntity.has_value())
             return false;
         in EntityAsset entity = loadedEntity.value().deref();
+        if(entity.name() != s_NameNone && !seenEntityNames.insert(entity.name().hash()).second){
+            error("{}: duplicate entity name '{}' in scene '{}'", s_ActiveSceneSubsystemsDiagnosticOwner, entity.name().resolvedText(), scene.name().resolvedText());
+            return false;
+        }
         next.entities.push_back(LoadedSceneEntity());
         mut LoadedSceneEntity nextEntity = next.entities.back();
         nextEntity.name = entity.name();
@@ -394,6 +409,23 @@ EntityID InstantiatedSceneEntities::findByName(in Name name)const{
     return found.value();
 }
 
+void DestroyInstantiatedSceneEntities(mut World world, in InstantiatedSceneEntities instantiated){
+    for(isize i = cast<isize>(instantiated.entities.size()) - 1; i >= 0; --i){
+        const EntityID ent = instantiated.entities[cast<usize>(i)];
+        if(ent.valid() && world.alive(ent))
+            world.destroyEntity(ent);
+    }
+}
+
+void ActiveSceneSubsystems::destroyEntities(mut World world, in InstantiatedSceneEntities instantiated)const{
+    DestroyInstantiatedSceneEntities(world, instantiated);
+}
+
+void ActiveSceneSubsystems::destroyEntities(mut World world, mut InstantiatedSceneEntities instantiated)const{
+    DestroyInstantiatedSceneEntities(world, instantiated);
+    instantiated.clear();
+}
+
 b8 ActiveSceneSubsystems::instantiateEntities(mut World world, mut InstantiatedSceneEntities outInstantiated)const{
     outInstantiated.clear();
     if(!ValidateSceneEntityInstantiationReady(this.valid()))
@@ -403,8 +435,10 @@ b8 ActiveSceneSubsystems::instantiateEntities(mut World world, mut InstantiatedS
     outInstantiated.namedEntities.reserve(this.m_contents.entities.size());
     for(in LoadedSceneEntity entity : this.m_contents.entities){
         const EntityID createdId = InstantiateSceneLoadedEntityWithResult(entity.entity.name(), Span<UniquePtr<IComponent>>(entity.components), world);
-        if(!createdId.valid())
+        if(!createdId.valid()){
+            this.destroyEntities(world, outInstantiated);
             return false;
+        }
         outInstantiated.entities.push_back(createdId);
         outInstantiated.names.push_back(entity.name);
         if(entity.name != s_NameNone)
@@ -421,13 +455,8 @@ Expected<InstantiatedSceneEntities> ActiveSceneSubsystems::instantiateEntitiesWi
 }
 
 b8 ActiveSceneSubsystems::instantiateEntities(mut World world)const{
-    if(!ValidateSceneEntityInstantiationReady(this.valid()))
-        return false;
-    for(in LoadedSceneEntity entity : this.m_contents.entities){
-        if(!InstantiateSceneLoadedEntity(entity.entity.name(), Span<UniquePtr<IComponent>>(entity.components), world))
-            return false;
-    }
-    return true;
+    InstantiatedSceneEntities discarded;
+    return this.instantiateEntities(world, discarded);
 }
 
 

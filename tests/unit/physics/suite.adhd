@@ -5231,6 +5231,328 @@ void VerifyPhysicsEdgeCases_Wave6And7EcsAssetsAndDebugDrawEdgeCases(){
     }
 }
 
+void VerifyPhysicsEdgeCases_Wave5Through8EdgeCases(){
+    PhysicsComponentBinaryCodec codec;
+    SubsystemPhysicsComponentBinaryCodec subCodec;
+
+    {
+        Vector<u8> payload;
+        ASSERT_TRUE(codec.serializeRigidBody(RigidBodyComponent(), payload));
+        EXPECT_EQ(payload.size(), cast<usize>(208u));
+        EXPECT_EQ(size_of<ColliderShapeEntryHeaderBinary>(), cast<usize>(224u));
+        ASSERT_TRUE(codec.serializeCollider(ColliderComponent(), payload));
+        EXPECT_EQ(payload.size(), size_of<ColliderComponentPayloadHeaderBinary>() + size_of<ColliderShapeEntryHeaderBinary>());
+        ASSERT_TRUE(codec.serializeJoint(JointComponent(), payload));
+        EXPECT_EQ(payload.size(), cast<usize>(320u));
+        ASSERT_TRUE(codec.serializeWorldConfig(PhysicsWorldConfigComponent(), payload));
+        EXPECT_EQ(payload.size(), cast<usize>(80u));
+
+        ColliderComponent chainCol;
+        chainCol.shapeType = ShapeType::Segment;
+        chainCol.isChain = true;
+        chainCol.chainClosed = true;
+        chainCol.chainRadius = 0.05f;
+        chainCol.surfaceVelocity = f32x4(1.0f, 0.0f, -2.0f, 0.0f);
+        chainCol.frictionDirection = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        chainCol.frictionCombineMode = MaterialCombineMode::Max;
+        chainCol.restitutionCombineMode = MaterialCombineMode::Min;
+        chainCol.chainPoints.push_back(f32x4(-1.0f, 0.0f, 0.0f, 0.0f));
+        chainCol.chainPoints.push_back(f32x4( 1.0f, 0.0f, 0.0f, 0.0f));
+        chainCol.chainPoints.push_back(f32x4( 0.0f, 0.0f, 1.0f, 0.0f));
+        ASSERT_TRUE(codec.serializeCollider(chainCol, payload));
+        const Expected<ColliderComponent> decodedChain = codec.deserializeCollider(payload);
+        ASSERT_TRUE(decodedChain.has_value());
+        EXPECT_TRUE(decodedChain.value().isChain);
+        EXPECT_TRUE(decodedChain.value().chainClosed);
+        EXPECT_FLOAT_EQ(decodedChain.value().chainRadius, 0.05f);
+        EXPECT_FLOAT_EQ(decodedChain.value().surfaceVelocity.z, -2.0f);
+        EXPECT_EQ(decodedChain.value().frictionCombineMode, MaterialCombineMode::Max);
+        EXPECT_EQ(decodedChain.value().restitutionCombineMode, MaterialCombineMode::Min);
+        EXPECT_EQ(decodedChain.value().chainPoints.size(), cast<usize>(3u));
+
+        ColliderComponent hfCol;
+        hfCol.shapeType = ShapeType::Heightfield;
+        hfCol.heightfieldRows = 2u;
+        hfCol.heightfieldCols = 2u;
+        hfCol.heightfieldThickness = 0.75f;
+        hfCol.heightfieldHeights.push_back(0.0f);
+        hfCol.heightfieldHeights.push_back(bit_cast<f32>(0x7fc00000u));
+        hfCol.heightfieldHeights.push_back(0.25f);
+        hfCol.heightfieldHeights.push_back(0.5f);
+        SurfaceMaterial mat0;
+        mat0.friction = 0.2f;
+        SurfaceMaterial mat1;
+        mat1.friction = 0.9f;
+        hfCol.heightfieldMaterials.push_back(mat0);
+        hfCol.heightfieldMaterials.push_back(mat1);
+        hfCol.heightfieldCellMaterialIndices.push_back(0u);
+        hfCol.heightfieldCellMaterialIndices.push_back(1u);
+        hfCol.heightfieldCellMaterialIndices.push_back(1u);
+        hfCol.heightfieldCellMaterialIndices.push_back(0u);
+        ASSERT_TRUE(codec.serializeCollider(hfCol, payload));
+        const Expected<ColliderComponent> decodedHf = codec.deserializeCollider(payload);
+        ASSERT_TRUE(decodedHf.has_value());
+        EXPECT_FLOAT_EQ(decodedHf.value().heightfieldThickness, 0.75f);
+        ASSERT_EQ(decodedHf.value().heightfieldHeights.size(), cast<usize>(4u));
+        EXPECT_NE(decodedHf.value().heightfieldHeights[1u], decodedHf.value().heightfieldHeights[1u]);
+        EXPECT_EQ(decodedHf.value().heightfieldMaterials.size(), cast<usize>(2u));
+        EXPECT_FLOAT_EQ(decodedHf.value().heightfieldMaterials[1u].friction, 0.9f);
+        EXPECT_EQ(decodedHf.value().heightfieldCellMaterialIndices[1u], 1u);
+
+        PhysicsWorldConfigComponent wcV4;
+        wcV4.timeToSleep = 1.75f;
+        wcV4.collisionLayerMatrixAsset = AssetRef<CollisionLayerMatrixAsset>("tests/physics/layers");
+        ASSERT_TRUE(codec.serializeWorldConfig(wcV4, payload));
+        EXPECT_GT(payload.size(), cast<usize>(80u));
+        const Expected<PhysicsWorldConfigComponent> decodedWc = codec.deserializeWorldConfig(payload);
+        ASSERT_TRUE(decodedWc.has_value());
+        EXPECT_FLOAT_EQ(decodedWc.value().timeToSleep, 1.75f);
+        EXPECT_EQ(decodedWc.value().collisionLayerMatrixAsset.name(), Name("tests/physics/layers"));
+
+        CharacterControllerComponent ccIn;
+        ccIn.enabled = false;
+        ccIn.syncFromTransform = true;
+        ASSERT_TRUE(subCodec.serializeCharacterController(ccIn, payload));
+        const Expected<CharacterControllerComponent> ccOut = subCodec.deserializeCharacterController(payload);
+        ASSERT_TRUE(ccOut.has_value());
+        EXPECT_FALSE(ccOut.value().enabled);
+        EXPECT_TRUE(ccOut.value().syncFromTransform);
+
+        VehicleComponent vehIn;
+        vehIn.wheels.push_back(VehicleWheelDef());
+        vehIn.wheels.push_back(VehicleWheelDef());
+        vehIn.enabled = false;
+        ASSERT_TRUE(subCodec.serializeVehicle(vehIn, payload));
+        const Expected<VehicleComponent> vehOut = subCodec.deserializeVehicle(payload);
+        ASSERT_TRUE(vehOut.has_value());
+        EXPECT_EQ(vehOut.value().wheels.size(), cast<usize>(2u));
+        EXPECT_FALSE(vehOut.value().enabled);
+
+        RagdollComponent ragIn;
+        RagdollBoneDef ragBone;
+        ragBone.useBox = true;
+        ragBone.boxHalfExtents = f32x4(0.15f, 0.25f, 0.15f, 0.0f);
+        ragIn.bones.push_back(ragBone);
+        ragIn.targetPose.push_back(Transform3D(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), QuaternionIdentity()));
+        ASSERT_TRUE(subCodec.serializeRagdoll(ragIn, payload));
+        const Expected<RagdollComponent> ragOut = subCodec.deserializeRagdoll(payload);
+        ASSERT_TRUE(ragOut.has_value());
+        EXPECT_EQ(ragOut.value().bones.size(), cast<usize>(1u));
+        EXPECT_EQ(ragOut.value().targetPose.size(), cast<usize>(1u));
+
+        FluidVolumeComponent flIn;
+        flIn.volume.enabled = false;
+        flIn.enabled = false;
+        ASSERT_TRUE(subCodec.serializeFluidVolume(flIn, payload));
+        const Expected<FluidVolumeComponent> flOut = subCodec.deserializeFluidVolume(payload);
+        ASSERT_TRUE(flOut.has_value());
+        EXPECT_FALSE(flOut.value().volume.enabled);
+        EXPECT_FALSE(flOut.value().enabled);
+
+        ForceFieldComponent ffIn;
+        ffIn.field.type = ForceFieldType::BoxWind;
+        ffIn.field.originOrDirection = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+        ffIn.field.enabled = false;
+        ASSERT_TRUE(subCodec.serializeForceField(ffIn, payload));
+        EXPECT_EQ(payload.size(), cast<usize>(96u));
+        const Expected<ForceFieldComponent> ffOut = subCodec.deserializeForceField(payload);
+        ASSERT_TRUE(ffOut.has_value());
+        EXPECT_EQ(ffOut.value().field.type, ForceFieldType::BoxWind);
+        EXPECT_FALSE(ffOut.value().field.enabled);
+
+        ArticulationComponent artIn;
+        ArticulationLinkDef l0;
+        l0.parentIndex = s_NullIndex;
+        ArticulationLinkDef l1;
+        l1.parentIndex = 0u;
+        artIn.links.push_back(l0);
+        artIn.links.push_back(l1);
+        artIn.proxyEntityNames.push_back(Name("art_root"));
+        artIn.proxyEntityNames.push_back(Name("art_tip"));
+        ASSERT_TRUE(subCodec.serializeArticulation(artIn, payload));
+        const Expected<ArticulationComponent> artOut = subCodec.deserializeArticulation(payload);
+        ASSERT_TRUE(artOut.has_value());
+        EXPECT_EQ(artOut.value().links.size(), cast<usize>(2u));
+        EXPECT_EQ(artOut.value().proxyEntityNames.size(), cast<usize>(2u));
+
+        SoftBodyComponent sbIn;
+        SoftBodyParticle p0;
+        p0.position = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+        SoftBodyParticle p1;
+        p1.position = f32x4(1.0f, 1.0f, 0.0f, 0.0f);
+        SoftBodyParticle p2;
+        p2.position = f32x4(0.0f, 2.0f, 0.0f, 0.0f);
+        SoftBodyParticle p3;
+        p3.position = f32x4(0.0f, 1.0f, 1.0f, 0.0f);
+        sbIn.softBody.particles.push_back(p0);
+        sbIn.softBody.particles.push_back(p1);
+        sbIn.softBody.particles.push_back(p2);
+        sbIn.softBody.particles.push_back(p3);
+        SoftBodyDistanceConstraint dc;
+        dc.p0 = 0u; dc.p1 = 1u; dc.restLength = 1.0f;
+        sbIn.softBody.distanceConstraints.push_back(dc);
+        SoftBodyBendingConstraint bc;
+        bc.p0 = 1u; bc.p1 = 2u; bc.restLength = 1.414f;
+        sbIn.softBody.bendingConstraints.push_back(bc);
+        SoftBodyVolumeConstraint vc;
+        vc.p0 = 0u; vc.p1 = 1u; vc.p2 = 2u; vc.p3 = 3u; vc.restVolume = 0.16f;
+        sbIn.softBody.volumeConstraints.push_back(vc);
+        SoftBodyTriangle st;
+        st.p0 = 0u; st.p1 = 1u; st.p2 = 2u;
+        sbIn.softBody.surfaceTriangles.push_back(st);
+        SoftBodyAttachment sa;
+        sa.particleIndex = 0u;
+        sbIn.softBody.attachments.push_back(sa);
+        ASSERT_TRUE(subCodec.serializeSoftBody(sbIn, payload));
+        const Expected<SoftBodyComponent> sbOut = subCodec.deserializeSoftBody(payload);
+        ASSERT_TRUE(sbOut.has_value());
+        EXPECT_EQ(sbOut.value().softBody.bendingConstraints.size(), cast<usize>(1u));
+        EXPECT_EQ(sbOut.value().softBody.volumeConstraints.size(), cast<usize>(1u));
+        EXPECT_EQ(sbOut.value().softBody.surfaceTriangles.size(), cast<usize>(1u));
+        EXPECT_EQ(sbOut.value().softBody.attachments.size(), cast<usize>(1u));
+
+        GpuRenderTransformExportComponent gpuIn;
+        gpuIn.instanceIndex = 7u;
+        gpuIn.flags = 3u;
+        gpuIn.localScale = f32x4(2.0f, 3.0f, 4.0f, 0.0f);
+        ASSERT_TRUE(subCodec.serializeGpuRenderTransformExport(gpuIn, payload));
+        const Expected<GpuRenderTransformExportComponent> gpuOut = subCodec.deserializeGpuRenderTransformExport(payload);
+        ASSERT_TRUE(gpuOut.has_value());
+        EXPECT_EQ(gpuOut.value().instanceIndex, 7u);
+        EXPECT_FLOAT_EQ(gpuOut.value().localScale.y, 3.0f);
+    }
+
+    {
+        EcsTestWorld tw;
+        mut PhysicsSystem physSys = tw.world.addSystem<PhysicsSystem>(tw.world);
+
+        Entity cfgEnt = tw.world.createEntity();
+        mut PhysicsWorldConfigComponent cfg = cfgEnt.addComponent<PhysicsWorldConfigComponent>();
+        cfg.gravity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        cfg.subStepCount = 1u;
+
+        Entity dynEnt = tw.world.createEntity();
+        dynEnt.addComponent<TransformComponent>().position = f32x4(0.0f, 4.0f, 0.0f, 0.0f);
+        mut RigidBodyComponent rb = dynEnt.addComponent<RigidBodyComponent>();
+        rb.type = BodyType::Dynamic;
+        rb.hasCustomMaxAngularVelocity = true;
+        rb.maxAngularVelocity = 12.5f;
+        dynEnt.addComponent<ColliderComponent>().shapeType = ShapeType::Sphere;
+
+        ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
+        EXPECT_FLOAT_EQ(physSys.physicsWorld().bodyMaxAngularVelocity(rb.runtimeBodyId), 12.5f);
+        EXPECT_EQ(physSys.lastStepStats().bodyCount, 1u);
+
+        Vector<u8> snap;
+        ASSERT_TRUE(physSys.captureWorldSnapshot(snap));
+
+        rb.maxAngularVelocity = 6.25f;
+        rb.dirty = true;
+        ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
+        EXPECT_FLOAT_EQ(physSys.physicsWorld().bodyMaxAngularVelocity(rb.runtimeBodyId), 6.25f);
+
+        cfg.paused = true;
+        cfg.dirty = true;
+        Entity extraEnt = tw.world.createEntity();
+        extraEnt.addComponent<TransformComponent>().position = f32x4(4.0f, 4.0f, 0.0f, 0.0f);
+        extraEnt.addComponent<ColliderComponent>().shapeType = ShapeType::Sphere;
+        ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
+        EXPECT_EQ(physSys.lastStepStats().bodyCount, 2u);
+        EXPECT_EQ(physSys.lastStepStats().shapeCount, 2u);
+
+        ASSERT_TRUE(physSys.restoreWorldSnapshot(snap));
+        EXPECT_FLOAT_EQ(physSys.physicsWorld().bodyMaxAngularVelocity(rb.runtimeBodyId), 12.5f);
+
+        cfg.paused = false;
+        cfg.dirty = true;
+        Entity artEnt = tw.world.createEntity();
+        artEnt.addComponent<TransformComponent>().position = f32x4(-5.0f, 2.0f, 0.0f, 0.0f);
+        mut ArticulationComponent artComp = artEnt.addComponent<ArticulationComponent>();
+        ArticulationLinkDef rootL;
+        rootL.parentIndex = s_NullIndex;
+        ArticulationLinkDef childL;
+        childL.parentIndex = 0u;
+        childL.jointToChild = Transform3D(VectorSingle(0.0f, -1.0f, 0.0f, 0.0f), QuaternionIdentity());
+        artComp.links.push_back(rootL);
+        artComp.links.push_back(childL);
+        ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
+
+        PhysicsDebugDrawOptions subOpts;
+        subOpts.drawShapes = false;
+        subOpts.drawJoints = false;
+        subOpts.drawContacts = false;
+        subOpts.drawSubsystems = true;
+        Vector<PhysicsDebugLine> artLines;
+        PhysicsDebugWorldLineSink artSink(subOpts.maxLines, artLines);
+        const PhysicsDebugDrawStats artStats = BuildEcsPhysicsDebugLinesToSink(tw.world, physSys, subOpts, PhysicsDebugScreenProjector(), artSink);
+        EXPECT_FALSE(artStats.truncated);
+        EXPECT_GT(artStats.emittedLines, 0u);
+    }
+
+    {
+        PhysicsWorld triWorld;
+        BodyDef bd;
+        bd.type = BodyType::Static;
+        const BodyId tb = triWorld.createBody(bd).value();
+        Vector<f32x4> verts;
+        verts.push_back(f32x4(-1.0f, 0.0f, -1.0f, 0.0f));
+        verts.push_back(f32x4( 1.0f, 0.0f, -1.0f, 0.0f));
+        verts.push_back(f32x4( 0.0f, 0.0f,  1.0f, 0.0f));
+        Vector<u32> idx;
+        idx.push_back(0u); idx.push_back(1u); idx.push_back(2u);
+        ASSERT_TRUE(triWorld.createMeshShape(tb, ShapeDef(), MakeMeshShape(Span<f32x4>(verts), Span<u32>(idx), 0.0f).value()).has_value());
+
+        PhysicsDebugDrawOptions opts;
+        opts.drawJoints = false;
+        opts.drawContacts = false;
+        opts.deduplicateMeshEdges = false;
+        opts.maxLines = 3u;
+        Vector<PhysicsDebugLine> lines;
+        const PhysicsDebugDrawStats exactFit = BuildPhysicsDebugLines(triWorld, opts, lines);
+        EXPECT_FALSE(exactFit.truncated);
+        EXPECT_EQ(exactFit.emittedLines, 3u);
+        EXPECT_EQ(exactFit.droppedLines, 0u);
+
+        opts.maxLines = 2u;
+        const PhysicsDebugDrawStats overflowStats = BuildPhysicsDebugLines(triWorld, opts, lines);
+        EXPECT_TRUE(overflowStats.truncated);
+        EXPECT_EQ(overflowStats.emittedLines, 2u);
+        EXPECT_GE(overflowStats.droppedLines, 1u);
+
+        PhysicsDebugDrawOptions bvhOnlyOpts;
+        bvhOnlyOpts.drawShapes = false;
+        bvhOnlyOpts.drawMeshBvh = true;
+        bvhOnlyOpts.drawJoints = false;
+        bvhOnlyOpts.drawContacts = false;
+        const PhysicsDebugDrawStats bvhStats = BuildPhysicsDebugLines(triWorld, bvhOnlyOpts, lines);
+        EXPECT_GT(bvhStats.emittedLines, 0u);
+
+        PhysicsWorld sixWorld;
+        BodyDef dDef;
+        dDef.type = BodyType::Dynamic;
+        dDef.enableSleep = false;
+        const BodyId bA = sixWorld.createBody(dDef).value();
+        dDef.position = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+        const BodyId bB = sixWorld.createBody(dDef).value();
+        JointDef jd;
+        jd.type = JointType::SixDof;
+        jd.bodyIdA = bA;
+        jd.bodyIdB = bB;
+        jd.sixDofAxes[3u].motion = JointMotion::Free;
+        jd.sixDofAxes[4u].motion = JointMotion::Limited;
+        jd.sixDofAxes[4u].lowerLimit = -0.5f;
+        jd.sixDofAxes[4u].upperLimit = 0.5f;
+        ASSERT_TRUE(sixWorld.createJoint(jd).has_value());
+
+        PhysicsDebugDrawOptions jointOpts;
+        jointOpts.drawShapes = false;
+        jointOpts.drawContacts = false;
+        jointOpts.drawJoints = true;
+        const PhysicsDebugDrawStats sixStats = BuildPhysicsDebugLines(sixWorld, jointOpts, lines);
+        EXPECT_GT(sixStats.emittedLines, 0u);
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -5270,6 +5592,7 @@ NWB_ADHD_GTEST(PhysicsEdgeCases, AuditFixesAndParityEdgeCases, VerifyPhysicsEdge
 NWB_ADHD_GTEST(PhysicsEdgeCases, AuditV4ParityAndLifecycle, VerifyPhysicsEdgeCases_AuditV4ParityAndLifecycle)
 NWB_ADHD_GTEST(PhysicsEdgeCases, Wave4HighLevelSubsystemsAndSnapshot, VerifyPhysicsEdgeCases_Wave4HighLevelSubsystemsAndSnapshot)
 NWB_ADHD_GTEST(PhysicsEdgeCases, Wave6And7EcsAssetsAndDebugDrawEdgeCases, VerifyPhysicsEdgeCases_Wave6And7EcsAssetsAndDebugDrawEdgeCases)
+NWB_ADHD_GTEST(PhysicsEdgeCases, Wave5Through8EdgeCases, VerifyPhysicsEdgeCases_Wave5Through8EdgeCases)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

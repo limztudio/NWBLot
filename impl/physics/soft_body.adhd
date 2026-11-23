@@ -109,6 +109,7 @@ void CollideSoftBodyParticlesRange(
     in Vector<ShapeId> candShapes,
     in f32 particleRadius,
     in f32 fricScale,
+    in f32 restitution,
     in f32 invDtCol,
     in ShapeProxy pProxy,
     in SphereShape pSphere,
@@ -120,6 +121,7 @@ void CollideSoftBodyParticlesRange(
     mut Vector<SoftBodyColImpulse> outImpulses
 ){
     outImpulses.clear();
+    const f32 restCoeff = Clamp(restitution, 0.0f, 1.0f);
     const usize candCount = candShapes.size();
     const usize shapeCount = worldRef.m_shapes.size();
     for(usize pi = startIdx; pi < endIdx; ++pi){
@@ -160,9 +162,22 @@ void CollideSoftBodyParticlesRange(
                 continue;
             const VectorSingle outN = SafeNormalizeVec3(-VectorSingle(ov.normal), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
             const VectorSingle pushVec = outN * ov.penetrationDepth;
-            const VectorSingle tanDisp = disp - outN * Vector3Dot(disp, outN).x;
+            const f32 vn = Vector3Dot(disp, outN).x;
+            const VectorSingle tanDisp = disp - outN * vn;
             const VectorSingle fricDelta = tanDisp * (fricScale - 1.0f);
             pt.position = f32x4(VectorSingle(pt.position) + pushVec + fricDelta, 0.0f);
+
+            VectorSingle bounceImpulseVec(0.0f);
+            if(restCoeff > 0.0f && vn < -1.0e-4f){
+                const f32 curVn = Vector3Dot(VectorSingle(pt.position) - VectorSingle(pt.prevPosition), outN).x;
+                const f32 targetVn = -restCoeff * vn;
+                if(targetVn > curVn){
+                    const f32 addBounce = targetVn - curVn;
+                    const VectorSingle bouncePush = outN * addBounce;
+                    pt.prevPosition = f32x4(VectorSingle(pt.prevPosition) - bouncePush, 0.0f);
+                    bounceImpulseVec = -bouncePush;
+                }
+            }
 
             const u32 sIdx = ov.shapeId.index;
             if(sIdx < shapeCount && worldRef.m_shapes[sIdx].alive()){
@@ -170,7 +185,7 @@ void CollideSoftBodyParticlesRange(
                 if(bIdx < worldRef.m_bodies.size() && worldRef.m_bodies[bIdx].alive && worldRef.m_bodies[bIdx].type == BodyType::Dynamic){
                     SoftBodyColImpulse imp;
                     imp.shapeIndex = sIdx;
-                    imp.impulse = f32x4((-pushVec - fricDelta) * pMassInvH, 0.0f);
+                    imp.impulse = f32x4((-pushVec - fricDelta + bounceImpulseVec) * pMassInvH, 0.0f);
                     imp.point = ov.pointB;
                     outImpulses.push_back(imp);
                 }
@@ -198,7 +213,7 @@ class SoftBody{
     private Vector<ShapeId> m_scratchCandShapes;
     private Vector<ShapeOverlapHit> m_scratchOvHits;
     private Vector<f32x4> m_scratchAttAnchorW;
-    private Vector<f32x4> m_scratchAttAccumImp;
+    private Vector<f32x4> m_scratchAttLambda;
     private Vector<f32> m_scratchAttBodyInvM;
     private Vector<u8> m_scratchAttValid;
     private Vector<Vector<ShapeOverlapHit>> m_scratchWorkerOvHits;
@@ -300,18 +315,26 @@ class SoftBody{
     private void applyAeroDragAndPrepareAttachments(in PhysicsWorld world, in f32 h){
         if(this.aerodynamicDrag > 0.0f && !this.surfaceTriangles.empty()){
             const usize pCount = this.particles.size();
-            const f32 dragScale = -0.5f * this.aerodynamicDrag * h / 3.0f;
+            const f32 dragCoeff = this.aerodynamicDrag * h / 6.0f;
             for(usize ti = 0u; ti < this.surfaceTriangles.size(); ++ti){
                 in SoftBodyTriangle tri = this.surfaceTriangles[ti];
                 if(tri.p0 >= pCount || tri.p1 >= pCount || tri.p2 >= pCount)
                     continue;
+                in SoftBodyParticle p0 = this.particles[tri.p0];
+                in SoftBodyParticle p1 = this.particles[tri.p1];
+                in SoftBodyParticle p2 = this.particles[tri.p2];
+                const b8 m0 = (!p0.isFixed && p0.invMass > 0.0f);
+                const b8 m1 = (!p1.isFixed && p1.invMass > 0.0f);
+                const b8 m2 = (!p2.isFixed && p2.invMass > 0.0f);
+                if(!m0 && !m1 && !m2)
+                    continue;
                 const VectorSingle vAvg = (
-                    VectorSingle(this.particles[tri.p0].velocity)
-                    + VectorSingle(this.particles[tri.p1].velocity)
-                    + VectorSingle(this.particles[tri.p2].velocity)
+                    VectorSingle(p0.velocity)
+                    + VectorSingle(p1.velocity)
+                    + VectorSingle(p2.velocity)
                 ) * (1.0f / 3.0f);
-                const VectorSingle e1 = VectorSingle(this.particles[tri.p1].position) - VectorSingle(this.particles[tri.p0].position);
-                const VectorSingle e2 = VectorSingle(this.particles[tri.p2].position) - VectorSingle(this.particles[tri.p0].position);
+                const VectorSingle e1 = VectorSingle(p1.position) - VectorSingle(p0.position);
+                const VectorSingle e2 = VectorSingle(p2.position) - VectorSingle(p0.position);
                 const VectorSingle areaVec = Cross(e1, e2);
                 const f32 areaSq = Vector3LengthSq(VectorSingle(areaVec, 0.0f)).x;
                 if(areaSq > 1.0e-14f){
@@ -319,10 +342,19 @@ class SoftBody{
                     const f32 doubleArea = areaSq * invDoubleArea;
                     const VectorSingle triN = areaVec * invDoubleArea;
                     const f32 vn = Vector3Dot(vAvg, triN).x;
-                    const VectorSingle dragImpulse = triN * (vn * doubleArea * dragScale);
-                    this.particles[tri.p0].position = f32x4(VectorSingle(this.particles[tri.p0].position) + dragImpulse, 0.0f);
-                    this.particles[tri.p1].position = f32x4(VectorSingle(this.particles[tri.p1].position) + dragImpulse, 0.0f);
-                    this.particles[tri.p2].position = f32x4(VectorSingle(this.particles[tri.p2].position) + dragImpulse, 0.0f);
+                    const f32 baseCoeff = doubleArea * dragCoeff;
+                    if(m0){
+                        const f32 scale0 = Clamp(baseCoeff * p0.invMass, 0.0f, 0.9f);
+                        this.particles[tri.p0].position = f32x4(VectorSingle(this.particles[tri.p0].position) + triN * (-vn * h * scale0), 0.0f);
+                    }
+                    if(m1){
+                        const f32 scale1 = Clamp(baseCoeff * p1.invMass, 0.0f, 0.9f);
+                        this.particles[tri.p1].position = f32x4(VectorSingle(this.particles[tri.p1].position) + triN * (-vn * h * scale1), 0.0f);
+                    }
+                    if(m2){
+                        const f32 scale2 = Clamp(baseCoeff * p2.invMass, 0.0f, 0.9f);
+                        this.particles[tri.p2].position = f32x4(VectorSingle(this.particles[tri.p2].position) + triN * (-vn * h * scale2), 0.0f);
+                    }
                 }
             }
         }
@@ -339,14 +371,14 @@ class SoftBody{
             return;
         if(this.m_scratchAttAnchorW.size() < attCount){
             this.m_scratchAttAnchorW.resize(attCount);
-            this.m_scratchAttAccumImp.resize(attCount);
+            this.m_scratchAttLambda.resize(attCount);
             this.m_scratchAttBodyInvM.resize(attCount, 0.0f);
             this.m_scratchAttValid.resize(attCount, 0u);
         }
         const f32x4 zero4(0.0f, 0.0f, 0.0f, 0.0f);
         for(usize ai = 0u; ai < attCount; ++ai){
             in SoftBodyAttachment att = this.attachments[ai];
-            this.m_scratchAttAccumImp[ai] = zero4;
+            this.m_scratchAttLambda[ai] = zero4;
             this.m_scratchAttBodyInvM[ai] = 0.0f;
             if(att.particleIndex >= this.particles.size() || !att.bodyId.valid() || !world.isValidBody(att.bodyId)){
                 this.m_scratchAttValid[ai] = 0u;
@@ -399,24 +431,24 @@ class SoftBody{
                     continue;
                 }
                 const VectorSingle pCur = VectorSingle(pt.position);
-                const VectorSingle err = anchorW - pCur;
+                const VectorSingle prevLam = VectorSingle(this.m_scratchAttLambda[ai]);
                 const f32 bodyInvM = this.m_scratchAttBodyInvM[ai];
+                const VectorSingle anchorEff = anchorW - prevLam * bodyInvM;
+                const VectorSingle err = anchorEff - pCur;
                 const f32 wSum = pt.invMass + bodyInvM;
                 const f32 alphaTilde = att.compliance * invDt2;
                 const f32 gain = 1.0f / Max(1.0e-12f, wSum + alphaTilde);
-                const VectorSingle dPosP = err * (pt.invMass * gain);
-                pt.position = f32x4(pCur + dPosP, 0.0f);
-                if(bodyInvM > 0.0f){
-                    const VectorSingle reactionImp = (-err) * (gain * h);
-                    this.m_scratchAttAccumImp[ai] = f32x4(VectorSingle(this.m_scratchAttAccumImp[ai]) + reactionImp, 0.0f);
-                }
+                const VectorSingle dLambda = (err - prevLam * alphaTilde) * gain;
+                this.m_scratchAttLambda[ai] = f32x4(prevLam + dLambda, 0.0f);
+                pt.position = f32x4(pCur + dLambda * pt.invMass, 0.0f);
             }
         }
 
+        const f32 invHAtt = 1.0f / Max(h, 1.0e-5f);
         for(usize ai = 0u; ai < attCount; ++ai){
             if(this.m_scratchAttValid[ai] == 0u || this.m_scratchAttBodyInvM[ai] <= 0.0f)
                 continue;
-            const VectorSingle imp = VectorSingle(this.m_scratchAttAccumImp[ai]);
+            const VectorSingle imp = (-VectorSingle(this.m_scratchAttLambda[ai])) * invHAtt;
             if(Vector3LengthSq(VectorSingle(imp, 0.0f)).x > 0.0f)
                 world.applyLinearImpulseAtPoint(this.attachments[ai].bodyId, imp, VectorSingle(this.m_scratchAttAnchorW[ai]), true);
         }
@@ -436,6 +468,9 @@ class SoftBody{
         if(dt <= 0.0f || this.particles.empty())
             return;
 
+        if(this.collideWithWorld)
+            world.ensureCpuBroadphaseSynced();
+
         const u32 subCount = Max(1u, this.subSteps);
         const u32 iterCount = Max(1u, this.solverIterations);
         const f32 h = dt / cast<f32>(subCount);
@@ -444,6 +479,7 @@ class SoftBody{
         const f32 invH = 1.0f / Max(1.0e-5f, h);
         const f32 invDtCol = 1.0f / Max(h, 1.0e-4f);
         const f32 fricScale = Clamp(1.0f - this.friction, 0.0f, 1.0f);
+        const f32 restCoeff = Clamp(this.restitution, 0.0f, 1.0f);
         const VectorSingle gravityW = world.gravity();
         const usize pCount = this.particles.size();
         const ShapeProxy pProxy = MakePointProxy(VectorSingle(0.0f), this.particleRadius);
@@ -469,6 +505,7 @@ class SoftBody{
                         this.m_scratchCandShapes,
                         this.particleRadius,
                         fricScale,
+                        restCoeff,
                         invDtCol,
                         pProxy,
                         pSphere,
@@ -496,6 +533,9 @@ class SoftBody{
             return;
         }
 
+        if(this.collideWithWorld)
+            world.ensureCpuBroadphaseSynced();
+
         const u32 subCount = Max(1u, this.subSteps);
         const u32 iterCount = Max(1u, this.solverIterations);
         const f32 h = dt / cast<f32>(subCount);
@@ -504,6 +544,7 @@ class SoftBody{
         const f32 invH = 1.0f / Max(1.0e-5f, h);
         const f32 invDtCol = 1.0f / Max(h, 1.0e-4f);
         const f32 fricScale = Clamp(1.0f - this.friction, 0.0f, 1.0f);
+        const f32 restCoeff = Clamp(this.restitution, 0.0f, 1.0f);
         const f32 pRadius = this.particleRadius;
         const VectorSingle gravityW = world.gravity();
         const ShapeProxy pProxy = MakePointProxy(VectorSingle(0.0f), this.particleRadius);
@@ -555,7 +596,7 @@ class SoftBody{
                         0u,
                         chunkCount,
                         1u,
-                        lambda[in worldRef, in candRef, in pCount, in chunkSize, in pRadius, in fricScale, in invDtCol, in pProxy, in pSphere, in identRot, mut partsMut, mut workerHits, mut workerImpulses](in usize chunkIdx) -> void{
+                        lambda[in worldRef, in candRef, in pCount, in chunkSize, in pRadius, in fricScale, in restCoeff, in invDtCol, in pProxy, in pSphere, in identRot, mut partsMut, mut workerHits, mut workerImpulses](in usize chunkIdx) -> void{
                             const usize startIdx = chunkIdx * chunkSize;
                             const usize endIdx = Min(startIdx + chunkSize, pCount);
                             if(startIdx < endIdx){
@@ -564,6 +605,7 @@ class SoftBody{
                                     candRef,
                                     pRadius,
                                     fricScale,
+                                    restCoeff,
                                     invDtCol,
                                     pProxy,
                                     pSphere,
@@ -591,6 +633,7 @@ class SoftBody{
                             this.m_scratchCandShapes,
                             this.particleRadius,
                             fricScale,
+                            restCoeff,
                             invDtCol,
                             pProxy,
                             pSphere,

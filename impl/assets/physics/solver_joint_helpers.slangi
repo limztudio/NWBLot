@@ -293,6 +293,54 @@ void nwbPhysicsSolve3DAngularLockRow(
         wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
 }
 
+float nwbPhysicsStepJointLimitScalar(
+    const bool active,
+    const float err,
+    const float relVel,
+    const float effMass,
+    const float3 soft,
+    const bool useBias,
+    const float maxBias,
+    const bool clampUpperOnly,
+    inout float imp
+){
+    const float oldImp = imp;
+    if(active){
+        const float mScale = useBias ? soft.y : 1.0f;
+        const float iScale = useBias ? soft.z : 0.0f;
+        const float limBias = useBias ? clamp(soft.x * err, -maxBias, maxBias) : 0.0f;
+        const float cand = oldImp - effMass * mScale * (relVel + limBias) - iScale * oldImp;
+        imp = clampUpperOnly ? min(cand, 0.0f) : max(cand, 0.0f);
+        return imp - oldImp;
+    }
+    if(useBias && oldImp != 0.0f){
+        imp = 0.0f;
+        return -oldImp;
+    }
+    return 0.0f;
+}
+
+void nwbPhysicsApplyAngularImpulsePair(
+    const float3 invIA0,
+    const float3 invIA1,
+    const float3 invIA2,
+    const float3 invIB0,
+    const float3 invIB1,
+    const float3 invIB2,
+    const float3 impulse,
+    const uint flagsA,
+    const uint flagsB,
+    inout float3 wA,
+    inout float3 wB
+){
+    wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, impulse);
+    if((flagsA & 0x38u) != 0u)
+        wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
+    wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, impulse);
+    if((flagsB & 0x38u) != 0u)
+        wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -600,37 +648,17 @@ void nwbPhysicsSolveSingleJoint(
 
         if(enableLimit && params3.y <= params3.z){
             writeLim = true;
-            const float angBiasRate = useBias ? g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].angularSoftnessSwingLimit.x : 0.0f;
-            if(dist < params3.y){
-                const float3 dv = (vB + cross(wB, rB)) - (vA + cross(wA, rA));
-                const float bias = useBias ? clamp(angBiasRate * (dist - params3.y), -maxBias, maxBias) : 0.0f;
-                const float newImp = max(limitImpulses.x - effMass * (dot(dv, u) + bias), 0.0f);
-                const float applied = newImp - limitImpulses.x;
-                limitImpulses.x = newImp;
-                nwbPhysicsApplyLinearImpulsePair(invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, rA, rB, u * applied, flagsA, flagsB, vA, wA, vB, wB);
-            }
-            else{
-                const float oldImp = limitImpulses.x;
-                if(oldImp != 0.0f){
-                    limitImpulses.x = 0.0f;
-                    nwbPhysicsApplyLinearImpulsePair(invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, rA, rB, u * (-oldImp), flagsA, flagsB, vA, wA, vB, wB);
-                }
-            }
-            if(dist > params3.z){
-                const float3 dv = (vB + cross(wB, rB)) - (vA + cross(wA, rA));
-                const float bias = useBias ? clamp(angBiasRate * (dist - params3.z), -maxBias, maxBias) : 0.0f;
-                const float newImp = min(limitImpulses.y - effMass * (dot(dv, u) + bias), 0.0f);
-                const float applied = newImp - limitImpulses.y;
-                limitImpulses.y = newImp;
-                nwbPhysicsApplyLinearImpulsePair(invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, rA, rB, u * applied, flagsA, flagsB, vA, wA, vB, wB);
-            }
-            else{
-                const float oldImp = limitImpulses.y;
-                if(oldImp != 0.0f){
-                    limitImpulses.y = 0.0f;
-                    nwbPhysicsApplyLinearImpulsePair(invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, rA, rB, u * (-oldImp), flagsA, flagsB, vA, wA, vB, wB);
-                }
-            }
+            const float3 angSoft = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].angularSoftnessSwingLimit.xyz;
+            const bool lowActive = dist < params3.y;
+            const float relLow = lowActive ? dot((vB + cross(wB, rB)) - (vA + cross(wA, rA)), u) : 0.0f;
+            const float appliedLow = nwbPhysicsStepJointLimitScalar(lowActive, dist - params3.y, relLow, effMass, angSoft, useBias, maxBias, false, limitImpulses.x);
+            if(appliedLow != 0.0f)
+                nwbPhysicsApplyLinearImpulsePair(invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, rA, rB, u * appliedLow, flagsA, flagsB, vA, wA, vB, wB);
+            const bool highActive = dist > params3.z;
+            const float relHigh = highActive ? dot((vB + cross(wB, rB)) - (vA + cross(wA, rA)), u) : 0.0f;
+            const float appliedHigh = nwbPhysicsStepJointLimitScalar(highActive, dist - params3.z, relHigh, effMass, angSoft, useBias, maxBias, true, limitImpulses.y);
+            if(appliedHigh != 0.0f)
+                nwbPhysicsApplyLinearImpulsePair(invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, rA, rB, u * appliedHigh, flagsA, flagsB, vA, wA, vB, wB);
         }
     }
     else if(jType == NWB_PHYSICS_JOINT_TYPE_SPHERICAL){
@@ -678,35 +706,18 @@ void nwbPhysicsSolveSingleJoint(
                 nwbPhysicsComputeTangentBasis(axisA, fU1, fU2);
                 const float3 swingAxis = nwbPhysicsSafeNormal(cross(axisA, axisB), fU1);
                 const float swingAngle = acos(clamp(dot(axisA, axisB), -1.0f, 1.0f));
+                float appliedCone = 0.0f;
                 if(swingAngle > swingLimit){
                     const float kSwing = dot(swingAxis, nwbPhysicsMulMat3Rows(sInv0, sInv1, sInv2, swingAxis));
                     const float swingMass = kSwing > 1.0e-12f ? (1.0f / kSwing) : 0.0f;
                     const float wSwing = dot(wB - wA, swingAxis);
-                    const float limBias = useBias ? clamp(angSoftSwing.x * (swingAngle - swingLimit), -maxBias, maxBias) : 0.0f;
-                    const float newCone = min(limitImpulses.w - swingMass * (wSwing + limBias), 0.0f);
-                    const float appliedCone = newCone - limitImpulses.w;
-                    limitImpulses.w = newCone;
-                    const float3 coneP = swingAxis * appliedCone;
-                    wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, coneP);
-                    if((flagsA & 0x38u) != 0u)
-                        wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
-                    wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, coneP);
-                    if((flagsB & 0x38u) != 0u)
-                        wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
+                    appliedCone = nwbPhysicsStepJointLimitScalar(true, swingAngle - swingLimit, wSwing, swingMass, angSoftSwing.xyz, useBias, maxBias, true, limitImpulses.w);
                 }
                 else{
-                    const float oldCone = limitImpulses.w;
-                    if(oldCone != 0.0f){
-                        limitImpulses.w = 0.0f;
-                        const float3 coneP = swingAxis * (-oldCone);
-                        wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, coneP);
-                        if((flagsA & 0x38u) != 0u)
-                            wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
-                        wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, coneP);
-                        if((flagsB & 0x38u) != 0u)
-                            wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
-                    }
+                    appliedCone = nwbPhysicsStepJointLimitScalar(false, 0.0f, 0.0f, 0.0f, angSoftSwing.xyz, useBias, maxBias, true, limitImpulses.w);
                 }
+                if(appliedCone != 0.0f)
+                    nwbPhysicsApplyAngularImpulsePair(invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, swingAxis * appliedCone, flagsA, flagsB, wA, wB);
             }
             const float lowLim = localAxisLower.w;
             const float highLim = localAxisUpper.w;
@@ -721,58 +732,12 @@ void nwbPhysicsSolveSingleJoint(
                 const float twistAngle = 2.0f * atan2(dot(qTwist.xyz, axisB), qTwist.w);
                 const float kTwist = dot(axisB, nwbPhysicsMulMat3Rows(sInv0, sInv1, sInv2, axisB));
                 const float twistMass = kTwist > 1.0e-12f ? (1.0f / kTwist) : 0.0f;
-                if(twistAngle < lowLim){
-                    const float limBias = useBias ? clamp(angSoftSwing.x * (twistAngle - lowLim), -maxBias, maxBias) : 0.0f;
-                    const float newLow = max(limitImpulses.x - twistMass * (dot(wB - wA, axisB) + limBias), 0.0f);
-                    const float appliedLow = newLow - limitImpulses.x;
-                    limitImpulses.x = newLow;
-                    const float3 limP = axisB * appliedLow;
-                    wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP);
-                    if((flagsA & 0x38u) != 0u)
-                        wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
-                    wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP);
-                    if((flagsB & 0x38u) != 0u)
-                        wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
-                }
-                else{
-                    const float oldLow = limitImpulses.x;
-                    if(oldLow != 0.0f){
-                        limitImpulses.x = 0.0f;
-                        const float3 limP = axisB * (-oldLow);
-                        wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP);
-                        if((flagsA & 0x38u) != 0u)
-                            wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
-                        wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP);
-                        if((flagsB & 0x38u) != 0u)
-                            wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
-                    }
-                }
-                if(twistAngle > highLim){
-                    const float limBias = useBias ? clamp(angSoftSwing.x * (twistAngle - highLim), -maxBias, maxBias) : 0.0f;
-                    const float newHigh = min(limitImpulses.y - twistMass * (dot(wB - wA, axisB) + limBias), 0.0f);
-                    const float appliedHigh = newHigh - limitImpulses.y;
-                    limitImpulses.y = newHigh;
-                    const float3 limP = axisB * appliedHigh;
-                    wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP);
-                    if((flagsA & 0x38u) != 0u)
-                        wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
-                    wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP);
-                    if((flagsB & 0x38u) != 0u)
-                        wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
-                }
-                else{
-                    const float oldHigh = limitImpulses.y;
-                    if(oldHigh != 0.0f){
-                        limitImpulses.y = 0.0f;
-                        const float3 limP = axisB * (-oldHigh);
-                        wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP);
-                        if((flagsA & 0x38u) != 0u)
-                            wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
-                        wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP);
-                        if((flagsB & 0x38u) != 0u)
-                            wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
-                    }
-                }
+                const float appliedLow = nwbPhysicsStepJointLimitScalar(twistAngle < lowLim, twistAngle - lowLim, dot(wB - wA, axisB), twistMass, angSoftSwing.xyz, useBias, maxBias, false, limitImpulses.x);
+                if(appliedLow != 0.0f)
+                    nwbPhysicsApplyAngularImpulsePair(invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, axisB * appliedLow, flagsA, flagsB, wA, wB);
+                const float appliedHigh = nwbPhysicsStepJointLimitScalar(twistAngle > highLim, twistAngle - highLim, dot(wB - wA, axisB), twistMass, angSoftSwing.xyz, useBias, maxBias, true, limitImpulses.y);
+                if(appliedHigh != 0.0f)
+                    nwbPhysicsApplyAngularImpulsePair(invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, axisB * appliedHigh, flagsA, flagsB, wA, wB);
             }
         }
     }
@@ -948,58 +913,12 @@ void nwbPhysicsSolveSingleJoint(
                     wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
             }
             if(enableLimit && lowLim <= highLim && axialMass > 0.0f){
-                if(angle < lowLim){
-                    const float limBias = useBias ? clamp(angSoft.x * (angle - lowLim), -maxBias, maxBias) : 0.0f;
-                    const float newLow = max(limitImpulses.x - axialMass * (dot(wB - wA, axisA) + limBias), 0.0f);
-                    const float appliedLow = newLow - limitImpulses.x;
-                    limitImpulses.x = newLow;
-                    const float3 limP = axisA * appliedLow;
-                    wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP);
-                    if((flagsA & 0x38u) != 0u)
-                        wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
-                    wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP);
-                    if((flagsB & 0x38u) != 0u)
-                        wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
-                }
-                else{
-                    const float oldLow = limitImpulses.x;
-                    if(oldLow != 0.0f){
-                        limitImpulses.x = 0.0f;
-                        const float3 limP = axisA * (-oldLow);
-                        wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP);
-                        if((flagsA & 0x38u) != 0u)
-                            wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
-                        wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP);
-                        if((flagsB & 0x38u) != 0u)
-                            wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
-                    }
-                }
-                if(angle > highLim){
-                    const float limBias = useBias ? clamp(angSoft.x * (angle - highLim), -maxBias, maxBias) : 0.0f;
-                    const float newHigh = min(limitImpulses.y - axialMass * (dot(wB - wA, axisA) + limBias), 0.0f);
-                    const float appliedHigh = newHigh - limitImpulses.y;
-                    limitImpulses.y = newHigh;
-                    const float3 limP = axisA * appliedHigh;
-                    wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP);
-                    if((flagsA & 0x38u) != 0u)
-                        wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
-                    wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP);
-                    if((flagsB & 0x38u) != 0u)
-                        wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
-                }
-                else{
-                    const float oldHigh = limitImpulses.y;
-                    if(oldHigh != 0.0f){
-                        limitImpulses.y = 0.0f;
-                        const float3 limP = axisA * (-oldHigh);
-                        wA -= nwbPhysicsMulMat3Rows(invIA0, invIA1, invIA2, limP);
-                        if((flagsA & 0x38u) != 0u)
-                            wA = nwbPhysicsApplyAngularLocks(wA, flagsA);
-                        wB += nwbPhysicsMulMat3Rows(invIB0, invIB1, invIB2, limP);
-                        if((flagsB & 0x38u) != 0u)
-                            wB = nwbPhysicsApplyAngularLocks(wB, flagsB);
-                    }
-                }
+                const float appliedLow = nwbPhysicsStepJointLimitScalar(angle < lowLim, angle - lowLim, dot(wB - wA, axisA), axialMass, angSoft, useBias, maxBias, false, limitImpulses.x);
+                if(appliedLow != 0.0f)
+                    nwbPhysicsApplyAngularImpulsePair(invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, axisA * appliedLow, flagsA, flagsB, wA, wB);
+                const float appliedHigh = nwbPhysicsStepJointLimitScalar(angle > highLim, angle - highLim, dot(wB - wA, axisA), axialMass, angSoft, useBias, maxBias, true, limitImpulses.y);
+                if(appliedHigh != 0.0f)
+                    nwbPhysicsApplyAngularImpulsePair(invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, axisA * appliedHigh, flagsA, flagsB, wA, wB);
             }
         }
     }
@@ -1072,36 +991,16 @@ void nwbPhysicsSolveSingleJoint(
             }
 
             if(enableLimit && lowLim <= highLim && axialMass > 0.0f){
-                if(trans < lowLim){
-                    const float3 dv = (vB + cross(wB, rB)) - (vA + cross(wA, rAEff));
-                    const float limBias = useBias ? clamp(linSoftMotor.x * (trans - lowLim), -maxBias, maxBias) : 0.0f;
-                    const float newLow = max(limitImpulses.x - axialMass * (dot(dv, axisA) + limBias), 0.0f);
-                    const float appliedLow = newLow - limitImpulses.x;
-                    limitImpulses.x = newLow;
+                const bool lowActive = trans < lowLim;
+                const float relLow = lowActive ? dot((vB + cross(wB, rB)) - (vA + cross(wA, rAEff)), axisA) : 0.0f;
+                const float appliedLow = nwbPhysicsStepJointLimitScalar(lowActive, trans - lowLim, relLow, axialMass, angSoft, useBias, maxBias, false, limitImpulses.x);
+                if(appliedLow != 0.0f)
                     nwbPhysicsApplyLinearImpulsePair(invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, rAEff, rB, axisA * appliedLow, flagsA, flagsB, vA, wA, vB, wB);
-                }
-                else{
-                    const float oldLow = limitImpulses.x;
-                    if(oldLow != 0.0f){
-                        limitImpulses.x = 0.0f;
-                        nwbPhysicsApplyLinearImpulsePair(invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, rAEff, rB, axisA * (-oldLow), flagsA, flagsB, vA, wA, vB, wB);
-                    }
-                }
-                if(trans > highLim){
-                    const float3 dv = (vB + cross(wB, rB)) - (vA + cross(wA, rAEff));
-                    const float limBias = useBias ? clamp(linSoftMotor.x * (trans - highLim), -maxBias, maxBias) : 0.0f;
-                    const float newHigh = min(limitImpulses.y - axialMass * (dot(dv, axisA) + limBias), 0.0f);
-                    const float appliedHigh = newHigh - limitImpulses.y;
-                    limitImpulses.y = newHigh;
+                const bool highActive = trans > highLim;
+                const float relHigh = highActive ? dot((vB + cross(wB, rB)) - (vA + cross(wA, rAEff)), axisA) : 0.0f;
+                const float appliedHigh = nwbPhysicsStepJointLimitScalar(highActive, trans - highLim, relHigh, axialMass, angSoft, useBias, maxBias, true, limitImpulses.y);
+                if(appliedHigh != 0.0f)
                     nwbPhysicsApplyLinearImpulsePair(invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, rAEff, rB, axisA * appliedHigh, flagsA, flagsB, vA, wA, vB, wB);
-                }
-                else{
-                    const float oldHigh = limitImpulses.y;
-                    if(oldHigh != 0.0f){
-                        limitImpulses.y = 0.0f;
-                        nwbPhysicsApplyLinearImpulsePair(invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, rAEff, rB, axisA * (-oldHigh), flagsA, flagsB, vA, wA, vB, wB);
-                    }
-                }
             }
         }
     }
@@ -1215,36 +1114,16 @@ void nwbPhysicsSolveSingleJoint(
         const float highLim = localAxisUpper.w;
         if(enableLimit && lowLim <= highLim && suspMass > 0.0f){
             const float trans = dot(d, suspAxis);
-            if(trans < lowLim){
-                const float3 dv = (vB + cross(wB, rB)) - (vA + cross(wA, rAEff));
-                const float limBias = useBias ? clamp(linSoftMotor.x * (trans - lowLim), -maxBias, maxBias) : 0.0f;
-                const float newLow = max(limitImpulses.x - suspMass * (dot(dv, suspAxis) + limBias), 0.0f);
-                const float appliedLow = newLow - limitImpulses.x;
-                limitImpulses.x = newLow;
+            const bool lowActive = trans < lowLim;
+            const float relLow = lowActive ? dot((vB + cross(wB, rB)) - (vA + cross(wA, rAEff)), suspAxis) : 0.0f;
+            const float appliedLow = nwbPhysicsStepJointLimitScalar(lowActive, trans - lowLim, relLow, suspMass, angSoft, useBias, maxBias, false, limitImpulses.x);
+            if(appliedLow != 0.0f)
                 nwbPhysicsApplyLinearImpulsePair(invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, rAEff, rB, suspAxis * appliedLow, flagsA, flagsB, vA, wA, vB, wB);
-            }
-            else{
-                const float oldLow = limitImpulses.x;
-                if(oldLow != 0.0f){
-                    limitImpulses.x = 0.0f;
-                    nwbPhysicsApplyLinearImpulsePair(invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, rAEff, rB, suspAxis * (-oldLow), flagsA, flagsB, vA, wA, vB, wB);
-                }
-            }
-            if(trans > highLim){
-                const float3 dv = (vB + cross(wB, rB)) - (vA + cross(wA, rAEff));
-                const float limBias = useBias ? clamp(linSoftMotor.x * (trans - highLim), -maxBias, maxBias) : 0.0f;
-                const float newHigh = min(limitImpulses.y - suspMass * (dot(dv, suspAxis) + limBias), 0.0f);
-                const float appliedHigh = newHigh - limitImpulses.y;
-                limitImpulses.y = newHigh;
+            const bool highActive = trans > highLim;
+            const float relHigh = highActive ? dot((vB + cross(wB, rB)) - (vA + cross(wA, rAEff)), suspAxis) : 0.0f;
+            const float appliedHigh = nwbPhysicsStepJointLimitScalar(highActive, trans - highLim, relHigh, suspMass, angSoft, useBias, maxBias, true, limitImpulses.y);
+            if(appliedHigh != 0.0f)
                 nwbPhysicsApplyLinearImpulsePair(invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, rAEff, rB, suspAxis * appliedHigh, flagsA, flagsB, vA, wA, vB, wB);
-            }
-            else{
-                const float oldHigh = limitImpulses.y;
-                if(oldHigh != 0.0f){
-                    limitImpulses.y = 0.0f;
-                    nwbPhysicsApplyLinearImpulsePair(invMassA, invMassB, invIA0, invIA1, invIA2, invIB0, invIB1, invIB2, rAEff, rB, suspAxis * (-oldHigh), flagsA, flagsB, vA, wA, vB, wB);
-                }
-            }
         }
 
         const float4 qTarget = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(qA, refRot));

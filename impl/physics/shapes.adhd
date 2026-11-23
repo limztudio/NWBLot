@@ -1301,7 +1301,33 @@ MassData ComputeTaperedCapsuleMass(in TaperedCapsuleShape tc, in f32 density){
 }
 
 MassData ComputePlaneMass(in PlaneShape plane, in f32 density){
-    return MassData();
+    MassData outMass;
+    if(!plane.isFiniteExtent() || !IsFinite(density) || density <= 0.0f)
+        return outMass;
+    const f32 hx = plane.halfExtent.x;
+    const f32 hz = plane.halfExtent.z;
+    const f32 hy = 0.01f;
+    if(hx <= 0.0f || hz <= 0.0f)
+        return outMass;
+    const f32 sx = 2.0f * hx;
+    const f32 sy = 2.0f * hy;
+    const f32 sz = 2.0f * hz;
+    const f32 mass = density * sx * sy * sz;
+    const f32 c = mass / 12.0f;
+    const f32 ix = c * (sy * sy + sz * sz);
+    const f32 iy = c * (sx * sx + sz * sz);
+    const f32 iz = c * (sx * sx + sy * sy);
+    const VectorSingle n = SafeNormalizeVec3(plane.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    VectorSingle t1(0.0f);
+    VectorSingle t2(0.0f);
+    ComputeTangentBasisFromUnitNormal(n, t1, t2);
+    outMass.setCenterMass(n * plane.offset(), mass);
+    outMass.inertia = Mat3(
+        t1 * (ix * t1.x) + n * (iy * n.x) + t2 * (iz * t2.x),
+        t1 * (ix * t1.y) + n * (iy * n.y) + t2 * (iz * t2.y),
+        t1 * (ix * t1.z) + n * (iy * n.z) + t2 * (iz * t2.z)
+    );
+    return outMass;
 }
 
 MassData ComputeSegmentMass(in SegmentShape seg, in f32 density){

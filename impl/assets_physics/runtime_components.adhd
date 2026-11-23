@@ -4,6 +4,7 @@
 
 #include <impl/assets_physics/components.adhd>
 #include <impl/assets_physics/physics_component_binary_codec.adhd>
+#include <impl/assets_physics/subsystem_component_codec.adhd>
 #include <impl/assets_scene/component_asset_binary_codec.adhd>
 
 
@@ -11,7 +12,7 @@
 
 
 b8 RigidBodyComponentAsset::loadBinary(in Span<u8> binary){
-    if(!this.checkVirtualPath("RigidBodyComponentAsset::validatePayload"))
+    if(!this.checkVirtualPath("RigidBodyComponentAsset::loadBinary"))
         return false;
     const Expected<Span<u8>> payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, this.assetType());
     if(!payload.has_value())
@@ -42,7 +43,7 @@ b8 RigidBodyComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBi
 }
 
 b8 ColliderComponentAsset::loadBinary(in Span<u8> binary){
-    if(!this.checkVirtualPath("ColliderComponentAsset::validatePayload"))
+    if(!this.checkVirtualPath("ColliderComponentAsset::loadBinary"))
         return false;
     const Expected<Span<u8>> payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, this.assetType());
     if(!payload.has_value())
@@ -73,7 +74,7 @@ b8 ColliderComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBin
 }
 
 b8 JointComponentAsset::loadBinary(in Span<u8> binary){
-    if(!this.checkVirtualPath("JointComponentAsset::validatePayload"))
+    if(!this.checkVirtualPath("JointComponentAsset::loadBinary"))
         return false;
     const Expected<Span<u8>> payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, this.assetType());
     if(!payload.has_value())
@@ -104,7 +105,7 @@ b8 JointComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary
 }
 
 b8 PhysicsWorldConfigComponentAsset::loadBinary(in Span<u8> binary){
-    if(!this.checkVirtualPath("PhysicsWorldConfigComponentAsset::validatePayload"))
+    if(!this.checkVirtualPath("PhysicsWorldConfigComponentAsset::loadBinary"))
         return false;
     const Expected<Span<u8>> payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, this.assetType());
     if(!payload.has_value())
@@ -135,7 +136,7 @@ b8 PhysicsWorldConfigComponentAsset::appendValidatedComponentPayload(mut Vector<
 }
 
 b8 PhysicsParentComponentAsset::loadBinary(in Span<u8> binary){
-    if(!this.checkVirtualPath("PhysicsParentComponentAsset::validatePayload"))
+    if(!this.checkVirtualPath("PhysicsParentComponentAsset::loadBinary"))
         return false;
     const Expected<Span<u8>> payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, this.assetType());
     if(!payload.has_value())
@@ -165,6 +166,254 @@ b8 PhysicsParentComponentAsset::appendValidatedComponentPayload(mut Vector<u8> o
     return PhysicsComponentBinaryCodec().appendPhysicsParentValidated(this.component, outBinary);
 }
 
+b8 CharacterControllerComponentAsset::loadBinary(in Span<u8> binary){
+    if(!this.checkVirtualPath("CharacterControllerComponentAsset::loadBinary"))
+        return false;
+    const Expected<Span<u8>> payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, this.assetType());
+    if(!payload.has_value())
+        return false;
+    return this.loadComponentPayload(payload.value());
+}
+
+b8 CharacterControllerComponentAsset::loadComponentPayload(in Span<u8> payload){
+    Expected<CharacterControllerComponent> result = SubsystemPhysicsComponentBinaryCodec().deserializeCharacterController(payload);
+    if(!result.has_value())
+        return false;
+    this.component = result.value();
+    return true;
+}
+
+b8 CharacterControllerComponentAsset::validatePayload()const{
+    if(!this.checkVirtualPath("CharacterControllerComponentAsset::validatePayload"))
+        return false;
+    return SubsystemPhysicsComponentBinaryCodec().validateCharacterController(this.component, this.virtualPath());
+}
+
+b8 CharacterControllerComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return SubsystemPhysicsComponentBinaryCodec().serializeCharacterController(this.component, outPayload);
+}
+
+b8 CharacterControllerComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return SubsystemPhysicsComponentBinaryCodec().appendCharacterControllerValidated(this.component, outBinary);
+}
+
+b8 VehicleComponentAsset::loadBinary(in Span<u8> binary){
+    if(!this.checkVirtualPath("VehicleComponentAsset::loadBinary"))
+        return false;
+    const Expected<Span<u8>> payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, this.assetType());
+    if(!payload.has_value())
+        return false;
+    return this.loadComponentPayload(payload.value());
+}
+
+b8 VehicleComponentAsset::loadComponentPayload(in Span<u8> payload){
+    Expected<VehicleComponent> result = SubsystemPhysicsComponentBinaryCodec().deserializeVehicle(payload);
+    if(!result.has_value())
+        return false;
+    this.component = result.value();
+    return true;
+}
+
+b8 VehicleComponentAsset::validatePayload()const{
+    if(!this.checkVirtualPath("VehicleComponentAsset::validatePayload"))
+        return false;
+    return SubsystemPhysicsComponentBinaryCodec().validateVehicle(this.component, this.virtualPath());
+}
+
+b8 VehicleComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return SubsystemPhysicsComponentBinaryCodec().serializeVehicle(this.component, outPayload);
+}
+
+b8 VehicleComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return SubsystemPhysicsComponentBinaryCodec().appendVehicleValidated(this.component, outBinary);
+}
+
+b8 RagdollComponentAsset::loadBinary(in Span<u8> binary){
+    if(!this.checkVirtualPath("RagdollComponentAsset::loadBinary"))
+        return false;
+    const Expected<Span<u8>> payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, this.assetType());
+    if(!payload.has_value())
+        return false;
+    return this.loadComponentPayload(payload.value());
+}
+
+b8 RagdollComponentAsset::loadComponentPayload(in Span<u8> payload){
+    Expected<RagdollComponent> result = SubsystemPhysicsComponentBinaryCodec().deserializeRagdoll(payload);
+    if(!result.has_value())
+        return false;
+    this.component = result.value();
+    return true;
+}
+
+b8 RagdollComponentAsset::validatePayload()const{
+    if(!this.checkVirtualPath("RagdollComponentAsset::validatePayload"))
+        return false;
+    return SubsystemPhysicsComponentBinaryCodec().validateRagdoll(this.component, this.virtualPath());
+}
+
+b8 RagdollComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return SubsystemPhysicsComponentBinaryCodec().serializeRagdoll(this.component, outPayload);
+}
+
+b8 RagdollComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return SubsystemPhysicsComponentBinaryCodec().appendRagdollValidated(this.component, outBinary);
+}
+
+b8 FluidVolumeComponentAsset::loadBinary(in Span<u8> binary){
+    if(!this.checkVirtualPath("FluidVolumeComponentAsset::loadBinary"))
+        return false;
+    const Expected<Span<u8>> payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, this.assetType());
+    if(!payload.has_value())
+        return false;
+    return this.loadComponentPayload(payload.value());
+}
+
+b8 FluidVolumeComponentAsset::loadComponentPayload(in Span<u8> payload){
+    Expected<FluidVolumeComponent> result = SubsystemPhysicsComponentBinaryCodec().deserializeFluidVolume(payload);
+    if(!result.has_value())
+        return false;
+    this.component = result.value();
+    return true;
+}
+
+b8 FluidVolumeComponentAsset::validatePayload()const{
+    if(!this.checkVirtualPath("FluidVolumeComponentAsset::validatePayload"))
+        return false;
+    return SubsystemPhysicsComponentBinaryCodec().validateFluidVolume(this.component, this.virtualPath());
+}
+
+b8 FluidVolumeComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return SubsystemPhysicsComponentBinaryCodec().serializeFluidVolume(this.component, outPayload);
+}
+
+b8 FluidVolumeComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return SubsystemPhysicsComponentBinaryCodec().appendFluidVolumeValidated(this.component, outBinary);
+}
+
+b8 ForceFieldComponentAsset::loadBinary(in Span<u8> binary){
+    if(!this.checkVirtualPath("ForceFieldComponentAsset::loadBinary"))
+        return false;
+    const Expected<Span<u8>> payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, this.assetType());
+    if(!payload.has_value())
+        return false;
+    return this.loadComponentPayload(payload.value());
+}
+
+b8 ForceFieldComponentAsset::loadComponentPayload(in Span<u8> payload){
+    Expected<ForceFieldComponent> result = SubsystemPhysicsComponentBinaryCodec().deserializeForceField(payload);
+    if(!result.has_value())
+        return false;
+    this.component = result.value();
+    return true;
+}
+
+b8 ForceFieldComponentAsset::validatePayload()const{
+    if(!this.checkVirtualPath("ForceFieldComponentAsset::validatePayload"))
+        return false;
+    return SubsystemPhysicsComponentBinaryCodec().validateForceField(this.component, this.virtualPath());
+}
+
+b8 ForceFieldComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return SubsystemPhysicsComponentBinaryCodec().serializeForceField(this.component, outPayload);
+}
+
+b8 ForceFieldComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return SubsystemPhysicsComponentBinaryCodec().appendForceFieldValidated(this.component, outBinary);
+}
+
+b8 ArticulationComponentAsset::loadBinary(in Span<u8> binary){
+    if(!this.checkVirtualPath("ArticulationComponentAsset::loadBinary"))
+        return false;
+    const Expected<Span<u8>> payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, this.assetType());
+    if(!payload.has_value())
+        return false;
+    return this.loadComponentPayload(payload.value());
+}
+
+b8 ArticulationComponentAsset::loadComponentPayload(in Span<u8> payload){
+    Expected<ArticulationComponent> result = SubsystemPhysicsComponentBinaryCodec().deserializeArticulation(payload);
+    if(!result.has_value())
+        return false;
+    this.component = result.value();
+    return true;
+}
+
+b8 ArticulationComponentAsset::validatePayload()const{
+    if(!this.checkVirtualPath("ArticulationComponentAsset::validatePayload"))
+        return false;
+    return SubsystemPhysicsComponentBinaryCodec().validateArticulation(this.component, this.virtualPath());
+}
+
+b8 ArticulationComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return SubsystemPhysicsComponentBinaryCodec().serializeArticulation(this.component, outPayload);
+}
+
+b8 ArticulationComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return SubsystemPhysicsComponentBinaryCodec().appendArticulationValidated(this.component, outBinary);
+}
+
+b8 SoftBodyComponentAsset::loadBinary(in Span<u8> binary){
+    if(!this.checkVirtualPath("SoftBodyComponentAsset::loadBinary"))
+        return false;
+    const Expected<Span<u8>> payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, this.assetType());
+    if(!payload.has_value())
+        return false;
+    return this.loadComponentPayload(payload.value());
+}
+
+b8 SoftBodyComponentAsset::loadComponentPayload(in Span<u8> payload){
+    Expected<SoftBodyComponent> result = SubsystemPhysicsComponentBinaryCodec().deserializeSoftBody(payload);
+    if(!result.has_value())
+        return false;
+    this.component = result.value();
+    return true;
+}
+
+b8 SoftBodyComponentAsset::validatePayload()const{
+    if(!this.checkVirtualPath("SoftBodyComponentAsset::validatePayload"))
+        return false;
+    return SubsystemPhysicsComponentBinaryCodec().validateSoftBody(this.component, this.virtualPath());
+}
+
+b8 SoftBodyComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return SubsystemPhysicsComponentBinaryCodec().serializeSoftBody(this.component, outPayload);
+}
+
+b8 SoftBodyComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return SubsystemPhysicsComponentBinaryCodec().appendSoftBodyValidated(this.component, outBinary);
+}
+
+b8 GpuRenderTransformExportComponentAsset::loadBinary(in Span<u8> binary){
+    if(!this.checkVirtualPath("GpuRenderTransformExportComponentAsset::loadBinary"))
+        return false;
+    const Expected<Span<u8>> payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, this.assetType());
+    if(!payload.has_value())
+        return false;
+    return this.loadComponentPayload(payload.value());
+}
+
+b8 GpuRenderTransformExportComponentAsset::loadComponentPayload(in Span<u8> payload){
+    Expected<GpuRenderTransformExportComponent> result = SubsystemPhysicsComponentBinaryCodec().deserializeGpuRenderTransformExport(payload);
+    if(!result.has_value())
+        return false;
+    this.component = result.value();
+    return true;
+}
+
+b8 GpuRenderTransformExportComponentAsset::validatePayload()const{
+    if(!this.checkVirtualPath("GpuRenderTransformExportComponentAsset::validatePayload"))
+        return false;
+    return SubsystemPhysicsComponentBinaryCodec().validateGpuRenderTransformExport(this.component, this.virtualPath());
+}
+
+b8 GpuRenderTransformExportComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return SubsystemPhysicsComponentBinaryCodec().serializeGpuRenderTransformExport(this.component, outPayload);
+}
+
+b8 GpuRenderTransformExportComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return SubsystemPhysicsComponentBinaryCodec().appendGpuRenderTransformExportValidated(this.component, outBinary);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -174,6 +423,14 @@ register_asset ColliderComponentAsset using TypedComponentAutoRegistrar<Collider
 register_asset JointComponentAsset using TypedComponentAutoRegistrar<JointComponentAsset>;
 register_asset PhysicsWorldConfigComponentAsset using TypedComponentAutoRegistrar<PhysicsWorldConfigComponentAsset>;
 register_asset PhysicsParentComponentAsset using TypedComponentAutoRegistrar<PhysicsParentComponentAsset>;
+register_asset CharacterControllerComponentAsset using TypedComponentAutoRegistrar<CharacterControllerComponentAsset>;
+register_asset VehicleComponentAsset using TypedComponentAutoRegistrar<VehicleComponentAsset>;
+register_asset RagdollComponentAsset using TypedComponentAutoRegistrar<RagdollComponentAsset>;
+register_asset FluidVolumeComponentAsset using TypedComponentAutoRegistrar<FluidVolumeComponentAsset>;
+register_asset ForceFieldComponentAsset using TypedComponentAutoRegistrar<ForceFieldComponentAsset>;
+register_asset ArticulationComponentAsset using TypedComponentAutoRegistrar<ArticulationComponentAsset>;
+register_asset SoftBodyComponentAsset using TypedComponentAutoRegistrar<SoftBodyComponentAsset>;
+register_asset GpuRenderTransformExportComponentAsset using TypedComponentAutoRegistrar<GpuRenderTransformExportComponentAsset>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

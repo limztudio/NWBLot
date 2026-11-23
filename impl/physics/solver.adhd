@@ -1020,13 +1020,27 @@ b8 SweepMeshVsMeshDirected(
     const VectorSingle rOutVec(rOut, rOut, rOut, 0.0f);
     const VectorSingle wCenter = (VectorSingle(innerRelBox.lowerBound) + VectorSingle(innerRelBox.upperBound)) * 0.5f;
     const VectorSingle wHalf = (VectorSingle(innerRelBox.upperBound) - VectorSingle(innerRelBox.lowerBound)) * 0.5f;
-    const VectorSingle rotOut = VectorSingle(effOuter0.rotation);
-    const VectorSingle localCenter = InverseTransformPoint(effOuter0, wCenter);
-    const VectorSingle lAx0 = Vector3InverseRotate(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), rotOut);
-    const VectorSingle lAx1 = Vector3InverseRotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), rotOut);
-    const VectorSingle lAx2 = Vector3InverseRotate(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), rotOut);
+    const VectorSingle rotOut0 = SafeNormalizeQuat(VectorSingle(effSweepOuter.q0));
+    const VectorSingle rotOut1 = SafeNormalizeQuat(VectorSingle(effSweepOuter.q1));
+    const Transform3D outerStartXf(VectorSingle(effOuter0.position), rotOut0);
+    const VectorSingle localCenter0 = InverseTransformPoint(outerStartXf, wCenter);
+    const VectorSingle lAx0 = Vector3InverseRotate(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), rotOut0);
+    const VectorSingle lAx1 = Vector3InverseRotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), rotOut0);
+    const VectorSingle lAx2 = Vector3InverseRotate(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), rotOut0);
     const VectorSingle localHalf = Abs(lAx0) * wHalf.x + Abs(lAx1) * wHalf.y + Abs(lAx2) * wHalf.z;
-    const Aabb3D localRelBox(localCenter - localHalf - rOutVec, localCenter + localHalf + rOutVec);
+    Aabb3D localRelBox(localCenter0 - localHalf - rOutVec, localCenter0 + localHalf + rOutVec);
+    if(Vector4LengthSq(VectorSingle(rotOut1 - rotOut0)).x > 1.0e-12f){
+        const Transform3D outerEndXf(VectorSingle(effOuter0.position), rotOut1);
+        const VectorSingle localCenter1 = InverseTransformPoint(outerEndXf, wCenter);
+        const VectorSingle lBx0 = Vector3InverseRotate(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), rotOut1);
+        const VectorSingle lBx1 = Vector3InverseRotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), rotOut1);
+        const VectorSingle lBx2 = Vector3InverseRotate(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), rotOut1);
+        const VectorSingle localHalf1 = Abs(lBx0) * wHalf.x + Abs(lBx1) * wHalf.y + Abs(lBx2) * wHalf.z;
+        const f32 qDot = Abs(rotOut0.x * rotOut1.x + rotOut0.y * rotOut1.y + rotOut0.z * rotOut1.z + rotOut0.w * rotOut1.w);
+        const f32 arcSagitta = Max(0.0f, 1.0f - Min(qDot, 1.0f)) * (Vector3Length(localCenter0).x + Vector3Length(wHalf).x);
+        const Aabb3D endBox(localCenter1 - localHalf1 - rOutVec, localCenter1 + localHalf1 + rOutVec);
+        localRelBox = FattenAabb(AabbUnion(localRelBox, endBox), arcSagitta);
+    }
 
     if(outerMesh.nodes.empty()){
         for(usize ti = 0u; ti < outerMesh.triangles.size(); ++ti){
@@ -1199,8 +1213,17 @@ Manifold SweepContactPairAfterMiss(
             const f32 sd1 = Vector3Dot(VectorSingle(supW + relConvDisp - planeOrigin, 0.0f), worldN).x;
             if(sd1 < sd0 && sd1 <= s_SpeculativeDistance){
                 const f32 tPlane = Clamp(sd0 / Max(sd0 - sd1, 1.0e-8f), 0.0f, 1.0f);
-                castHit.pointFraction = f32x4(0.0f, 0.0f, 0.0f, tPlane);
-                castHit.normalHit = f32x3_u32(0.0f, 1.0f, 0.0f, 1u);
+                const VectorSingle supHit = supW + dispConvex * tPlane;
+                const Transform3D xfPlaneHit(VectorSingle(effPlane.position) + dispPlane * tPlane, VectorSingle(effPlane.rotation));
+                const VectorSingle planeOriginHit = TransformPoint(xfPlaneHit, pl.normal() * pl.offset());
+                const VectorSingle projPt = supHit - worldN * Vector3Dot(VectorSingle(supHit - planeOriginHit, 0.0f), worldN).x;
+                if(IsPointWithinPlaneExtent(pl, xfPlaneHit, projPt)){
+                    castHit.pointFraction = f32x4(0.0f, 0.0f, 0.0f, tPlane);
+                    castHit.normalHit = f32x3_u32(0.0f, 1.0f, 0.0f, 1u);
+                }
+                else{
+                    return initialManifold;
+                }
             }
             else{
                 return initialManifold;
@@ -1535,6 +1558,7 @@ void ApplyContactManifoldAndEvents(mut PhysicsWorld world, in u32 cId, in Manifo
         c.manifold.materialTriangleB = newM.materialTriangleB;
         if(
             triMatChanged
+            || (c.flags & (cast<u32>(ContactFlags::HasSurfaceVelocity) | cast<u32>(ContactFlags::HasAnisotropicFriction))) != 0u
             || sA.enablePreSolveEvents()
             || sB.enablePreSolveEvents()
             || sA.material.surfaceVelocity.w != 0.0f
@@ -1730,6 +1754,7 @@ u8 CollideSingleContactNoPreSolveTx(
     if(!isSensor){
         if(
             triMatChanged
+            || (c.flags & (cast<u32>(ContactFlags::HasSurfaceVelocity) | cast<u32>(ContactFlags::HasAnisotropicFriction))) != 0u
             || sA.material.surfaceVelocity.w != 0.0f
             || sB.material.surfaceVelocity.w != 0.0f
             || sA.material.anisotropicFriction.w != 0.0f
@@ -2621,7 +2646,7 @@ b8 EvalBulletContinuousCandidateShapeB(
     u32 shapeIdxA = bodyInit.headShapeId;
     while(shapeIdxA != s_NullIndex){
         in Shape sA = worldAlias.m_shapes[shapeIdxA];
-        if(sA.alive() && !sA.isSensor() && sA.type != ShapeType::Mesh && sA.type != ShapeType::Heightfield && sA.type != ShapeType::Plane && ShouldCollideFilters(sA.filter, sB.filter)){
+        if(sA.alive() && !sA.isSensor() && sA.type != ShapeType::Mesh && sA.type != ShapeType::Heightfield && (sA.type != ShapeType::Plane || sA.planeShape().isFiniteExtent()) && ShouldCollideFilters(sA.filter, sB.filter)){
             b8 customAllow = true;
             if(worldAlias.m_customFilterCallback.has_value()){
                 u32 ordA = shapeIdxA;
@@ -2704,7 +2729,21 @@ b8 EvalBulletContinuousCandidateShapeB(
                     if(sB.hasLocalTransform())
                         effSweepB = ComposeSweepWithLocalTransform(sweepB, sB.localTransform);
 
-                    if(sB.type == ShapeType::Plane){
+                    if(sA.type == ShapeType::Plane){
+                        if(sB.type != ShapeType::Mesh && sB.type != ShapeType::Heightfield && sB.type != ShapeType::Plane && sA.planeShape().isFiniteExtent()){
+                            Array<f32x3u, 2u> inlinePtsB;
+                            const ShapeProxyView proxyB = MakeShapeProxyViewFromShape(sB, worldAlias.m_hullShapes, worldAlias.m_meshShapes, inlinePtsB);
+                            const TimeOfImpactOutput toi = ComputePlaneTimeOfImpactViews(proxyB, effSweepB, sA.planeShape(), effSweepA, bestT);
+                            const f32 hitFrac = toi.fraction();
+                            if(toi.hit() && !toi.initialOverlap() && hitFrac > 1.0e-5f && hitFrac < bestT){
+                                candidateHit = true;
+                                candidateFrac = hitFrac;
+                                candidateN = SafeNormalizeVec3(-toi.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                                candidatePt = toi.point();
+                            }
+                        }
+                    }
+                    else if(sB.type == ShapeType::Plane){
                         const TimeOfImpactOutput toi = ComputePlaneTimeOfImpactViews(proxyA, effSweepA, sB.planeShape(), effSweepB, bestT);
                         const f32 hitFrac = toi.fraction();
                         if(toi.hit() && !toi.initialOverlap() && hitFrac > 1.0e-5f && hitFrac < bestT){
@@ -3771,9 +3810,11 @@ void ResolveSortedBulletToiResultsForStep(mut PhysicsWorld world, in Span<Bullet
             activeAwakeIndices.push_back(bouncedAwakeIndices[bi]);
     }
 
+    b8 mutatedPose = false;
     for(usize ai = 0u; ai < awakeCount; ++ai){
         if(hadAnyToi[ai] == 0u)
             continue;
+        mutatedPose = true;
         mut BodySim s = world.m_solverSets[s_AwakeSetIndex].sims[ai];
         mut BodyState st = world.m_solverSets[s_AwakeSetIndex].states[ai];
         mut Body b = world.m_bodies[s.bodyId];
@@ -3781,6 +3822,8 @@ void ResolveSortedBulletToiResultsForStep(mut PhysicsWorld world, in Span<Bullet
         st.setFlags(st.flags() | toiBit);
         b.flags |= toiBit;
     }
+    if(mutatedPose)
+        ++world.m_poseMutationVersion;
 }
 
 void ResolveSortedBulletToiResults(mut PhysicsWorld world, in Span<BulletToiQueryResult> results){
@@ -4200,6 +4243,9 @@ void EvaluateSleepingIslands(mut PhysicsWorld world){
             islandsToSleep.push_back(islandId);
     }
 
+    if(!islandsToSleep.empty())
+        ++world.m_poseMutationVersion;
+
     for(usize i = 0u; i < islandsToSleep.size(); ++i){
         const u32 islandId = islandsToSleep[i];
         in Island island = world.m_islands[islandId];
@@ -4265,7 +4311,7 @@ void WakeJointConnectedIslands(mut PhysicsWorld world){
             const u32 edgeIdx = DecodeJointKeyEdge(jKey);
             in Joint joint = world.m_joints[jId];
             jKey = joint.edges[edgeIdx].nextKey;
-            if(!joint.alive())
+            if(!joint.alive() || !joint.enabled())
                 continue;
             const u32 otherBody = joint.edges[edgeIdx ^ 1u].bodyId;
             if(otherBody < world.m_bodies.size() && world.m_bodies[otherBody].alive && world.m_bodies[otherBody].setIndex >= 3u)
@@ -4769,23 +4815,34 @@ void PackComponentsIntoIslandBins(
     binJoints.clear();
     binOverflow.clear();
 
-    usize minOpenBin = 0u;
+    usize minOpenBodyBin = 0u;
+    usize minOpenConBin = 0u;
     for(usize ii = 0u; ii < sortedComps.size(); ++ii){
         const u32 ci = cast<u32>(sortedComps[ii]);
         in SolverComponentInfo cInfo = components[ci];
-        while(minOpenBin < binBodies.size()){
+        while(minOpenBodyBin < binBodies.size()){
+            if(binOverflow[minOpenBodyBin] == 0u && binBodies[minOpenBodyBin] < maxBodies)
+                break;
+            ++minOpenBodyBin;
+        }
+        if(minOpenConBin < minOpenBodyBin)
+            minOpenConBin = minOpenBodyBin;
+        while(minOpenConBin < binBodies.size()){
             if(
-                binOverflow[minOpenBin] == 0u
-                && binBodies[minOpenBin] < maxBodies
-                && binContacts[minOpenBin] < maxContacts
-                && (maxJoints == 0u || binJoints[minOpenBin] < maxJoints)
+                binOverflow[minOpenConBin] == 0u
+                && binBodies[minOpenConBin] < maxBodies
+                && binContacts[minOpenConBin] < maxContacts
+                && (maxJoints == 0u || binJoints[minOpenConBin] < maxJoints)
             )
                 break;
-            ++minOpenBin;
+            ++minOpenConBin;
         }
+        usize scanStart = minOpenConBin;
+        if(cInfo.contactCount == 0u && (maxJoints == 0u || cInfo.jointCount == 0u))
+            scanStart = minOpenBodyBin;
         u32 targetBin = s_NullIndex;
         if(!cInfo.hasOverflowContact){
-            for(usize bi = minOpenBin; bi < binBodies.size(); ++bi){
+            for(usize bi = scanStart; bi < binBodies.size(); ++bi){
                 if(binOverflow[bi] != 0u)
                     continue;
                 if(binBodies[bi] + cInfo.bodyCount <= maxBodies && binContacts[bi] + cInfo.contactCount <= maxContacts && (maxJoints == 0u || binJoints[bi] + cInfo.jointCount <= maxJoints)){
@@ -6842,7 +6899,7 @@ b8 TrySolveIslandsFusedCpu(
                     if(visitStamps[jId] == jointStamp)
                         continue;
                     visitStamps[jId] = jointStamp;
-                    if(!joint.alive())
+                    if(!joint.alive() || !joint.enabled())
                         continue;
                     in Body bA = world.m_bodies[joint.edges[0u].bodyId];
                     in Body bB = world.m_bodies[joint.edges[1u].bodyId];

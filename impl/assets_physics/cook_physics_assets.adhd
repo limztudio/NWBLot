@@ -18,89 +18,6 @@ const StringView s_CollisionMeshDiagnosticPrefix = "CollisionMesh meta";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MaterialCombineMode> ParseMaterialCombineModeValue(
-    in Path file,
-    in MetascriptValue fieldVal,
-    in StringView prefix,
-    in StringView field
-){
-    const Expected<StringView> textRes = ReadPhysicsStringValue(file, fieldVal, prefix, field);
-    if(!textRes.has_value())
-        return MakeUnexpected(Failure());
-    const StringView text = textRes.value();
-    if(text == "average") return MaterialCombineMode::Average;
-    if(text == "min") return MaterialCombineMode::Min;
-    if(text == "multiply") return MaterialCombineMode::Multiply;
-    if(text == "max") return MaterialCombineMode::Max;
-    if(text == "geometric_mean") return MaterialCombineMode::GeometricMean;
-    error("{} '{}': field '{}' must be 'average', 'min', 'multiply', 'max', or 'geometric_mean'", prefix, PathToString(file), field);
-    return MakeUnexpected(Failure());
-}
-
-b8 ParseSurfaceMaterialMap(
-    in Path file,
-    in MetascriptValue mapVal,
-    in StringView prefix,
-    mut SurfaceMaterial outMaterial
-){
-    SurfaceMaterial mat;
-    if(!mapVal.forEachMapEntry(lambda[in file, in prefix, mut mat](in StringView key, in MetascriptValue fieldVal) -> b8{
-        if(key == "friction") return ReadPhysicsF32Value(file, fieldVal, prefix, key, mat.friction);
-        if(key == "static_friction") return ReadPhysicsF32Value(file, fieldVal, prefix, key, mat.staticFriction);
-        if(key == "restitution") return ReadPhysicsF32Value(file, fieldVal, prefix, key, mat.restitution);
-        if(key == "rolling_resistance") return ReadPhysicsF32Value(file, fieldVal, prefix, key, mat.rollingResistance);
-        if(key == "tangent_speed") return ReadPhysicsF32Value(file, fieldVal, prefix, key, mat.tangentSpeed);
-        if(key == "surface_velocity"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, prefix, key);
-            if(!v.has_value())
-                return false;
-            mat.setSurfaceVelocity(v.value());
-            return true;
-        }
-        if(key == "anisotropic_friction"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, prefix, key);
-            if(!v.has_value())
-                return false;
-            mat.anisotropicFriction = f32x4(v.value(), 1.0f);
-            return true;
-        }
-        if(key == "friction_direction"){
-            const Expected<VectorSingle> v = DecodePhysicsFloat3Value(file, fieldVal, prefix, key);
-            if(!v.has_value())
-                return false;
-            mat.frictionDirection = f32x4(v.value(), 0.0f);
-            return true;
-        }
-        if(key == "friction_combine_mode"){
-            const Expected<MaterialCombineMode> mode = ParseMaterialCombineModeValue(file, fieldVal, prefix, key);
-            if(!mode.has_value())
-                return false;
-            mat.frictionCombineMode = mode.value();
-            return true;
-        }
-        if(key == "restitution_combine_mode"){
-            const Expected<MaterialCombineMode> mode = ParseMaterialCombineModeValue(file, fieldVal, prefix, key);
-            if(!mode.has_value())
-                return false;
-            mat.restitutionCombineMode = mode.value();
-            return true;
-        }
-        error("{} '{}': unsupported asset field '{}'", prefix, PathToString(file), key);
-        return false;
-    }))
-        return false;
-    if(!PhysicsAssetBinaryCodec().validSurfaceMaterial(mat)){
-        error("{} '{}': invalid surface material parameters", prefix, PathToString(file));
-        return false;
-    }
-    outMaterial = mat;
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class PhysicsMaterialCookEntry{
     public Name virtualPath = s_NameNone;
     public SurfaceMaterial material;
@@ -215,6 +132,18 @@ Expected<CollisionLayerMatrixCookEntry> ParseCollisionLayerMatrixCookMetadata(in
         return MakeUnexpected(Failure());
 
     if(value.isMap()){
+        const Optional<in MetascriptValue> defaultCollideOpt = value.borrowField("default_collide");
+        if(defaultCollideOpt.has_value()){
+            b8 defaultCollide = true;
+            if(!ReadPhysicsBoolValue(file, defaultCollideOpt.value(), s_CollisionLayerMatrixDiagnosticPrefix, "default_collide", defaultCollide))
+                return MakeUnexpected(Failure());
+            u32 fillMask = u32.max;
+            if(!defaultCollide)
+                fillMask = 0u;
+            for(u32 i = 0u; i < s_MaxCollisionLayers; ++i)
+                entry.matrix.layerMasks[i] = fillMask;
+        }
+
         const Optional<in MetascriptValue> layersOpt = value.borrowField("layers");
         if(layersOpt.has_value()){
             in MetascriptValue layersVal = layersOpt.value();
@@ -228,6 +157,10 @@ Expected<CollisionLayerMatrixCookEntry> ParseCollisionLayerMatrixCookMetadata(in
                 return MakeUnexpected(Failure());
             }
             for(usize i = 0u; i < items.size(); ++i){
+                if(items[i].isString() && items[i].asString().empty()){
+                    entry.matrix.layerNames[i] = s_NameNone;
+                    continue;
+                }
                 Name layerName = s_NameNone;
                 if(!ReadPhysicsNameValue(file, items[i], s_CollisionLayerMatrixDiagnosticPrefix, "layers", layerName))
                     return MakeUnexpected(Failure());
@@ -236,7 +169,7 @@ Expected<CollisionLayerMatrixCookEntry> ParseCollisionLayerMatrixCookMetadata(in
         }
 
         if(!value.forEachMapEntry(lambda[in file, mut entry](in StringView key, in MetascriptValue fieldVal) -> b8{
-            if(key == "layers")
+            if(key == "layers" || key == "default_collide")
                 return true;
             if(key == "disable_pairs" || key == "enable_pairs"){
                 const b8 collideVal = (key == "enable_pairs");

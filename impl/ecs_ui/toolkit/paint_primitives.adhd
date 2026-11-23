@@ -156,6 +156,8 @@ type SkinBinding = SkinBindingRecord<UiSkin, Texture>;
 
 class PaintOverlayFrame{
     public usize clipDepth = 0u;
+    public usize transformBase = 0u;
+    public usize transformDepth = 0u;
     public u32 layer = 0u;
 }
 

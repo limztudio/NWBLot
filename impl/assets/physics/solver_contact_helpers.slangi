@@ -839,31 +839,33 @@ void nwbPhysicsIslandSolveContactsPass(
     const uint flags
 ){
     uint off = contactOffset;
+    const uint totalSlots = denseColorCount + (overflowContactCount > 0u ? 1u : 0u);
     [loop]
-    for(uint colorSlot = 0u; colorSlot < denseColorCount; ++colorSlot){
-        const uint wordIdx = colorSlot >> 2u;
-        uint packed = counts0.x;
-        if(wordIdx == 1u)
-            packed = counts0.y;
-        else if(wordIdx == 2u)
-            packed = counts0.z;
-        else if(wordIdx == 3u)
-            packed = counts0.w;
-        else if(wordIdx == 4u)
-            packed = counts1.x;
-        else if(wordIdx == 5u)
-            packed = counts1.y;
-        const uint cnt = (packed >> ((colorSlot & 3u) * 8u)) & 0xffu;
-        for(uint k = tid; k < cnt; k += NWB_PHYSICS_ISLAND_ACTIVE_WG_SIZE)
-            nwbPhysicsSolveSingleContact(off + k, mode, bodySimSlot, bodyStateSlot, constraintSlot, invH, flags);
-        off += cnt;
-        GroupMemoryBarrierWithGroupSync();
-    }
-    if(overflowContactCount > 0u){
-        if(tid == 0u){
-            for(uint k = 0u; k < overflowContactCount; ++k)
+    for(uint colorSlot = 0u; colorSlot < totalSlots; ++colorSlot){
+        const bool isOverflow = (colorSlot == denseColorCount);
+        uint cnt = overflowContactCount;
+        if(!isOverflow){
+            const uint wordIdx = colorSlot >> 2u;
+            uint packed = counts0.x;
+            if(wordIdx == 1u)
+                packed = counts0.y;
+            else if(wordIdx == 2u)
+                packed = counts0.z;
+            else if(wordIdx == 3u)
+                packed = counts0.w;
+            else if(wordIdx == 4u)
+                packed = counts1.x;
+            else if(wordIdx == 5u)
+                packed = counts1.y;
+            cnt = (packed >> ((colorSlot & 3u) * 8u)) & 0xffu;
+        }
+        if(!isOverflow || tid == 0u){
+            const uint startIdx = isOverflow ? 0u : tid;
+            const uint stepIdx = isOverflow ? 1u : NWB_PHYSICS_ISLAND_ACTIVE_WG_SIZE;
+            for(uint k = startIdx; k < cnt; k += stepIdx)
                 nwbPhysicsSolveSingleContact(off + k, mode, bodySimSlot, bodyStateSlot, constraintSlot, invH, flags);
         }
+        off += cnt;
         GroupMemoryBarrierWithGroupSync();
     }
 }

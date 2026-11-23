@@ -14,6 +14,7 @@ nwb_target_adhd_sources(nwb_assets_physics_types
         "${CMAKE_CURRENT_LIST_DIR}/physics_subsystem.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/components.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/physics_component_binary_codec.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/subsystem_component_codec.adhd"
 )
 target_link_libraries(nwb_assets_physics_types PUBLIC nwb_assets nwb_ecs nwb_ecs_scene nwb_assets_subsystem_types nwb_assets_shader_types nwb_assets_scene_types nwb_assets_physics_data_types nwb_ecs_physics_components)
 
@@ -36,6 +37,7 @@ if(NWB_BUILD_PIPELINE)
             "${CMAKE_CURRENT_LIST_DIR}/runtime_components.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/cook_physics_assets.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/cook_components.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/cook_subsystem_components.adhd"
     )
     target_link_libraries(nwb_assets_physics_cook PUBLIC nwb_assets nwb_assets_subsystem_cook nwb_assets_scene_cook nwb_assets_mesh_cook nwb_ecs_physics_components nwb_assets_physics_types)
     target_compile_definitions(nwb_assets_physics_cook PRIVATE NWB_COOK=1)

@@ -368,6 +368,14 @@ void nwbPhysicsIntegrateBodyVelocityValues(
     }
 }
 
+float nwbPhysicsResolveBodyMaxAngSpeed(const uint flags, const float customMaxAngSpeed, const float defaultMaxAngSpeed){
+    if((flags & NWB_PHYSICS_BODY_FLAG_HAS_CUSTOM_MAX_ANGULAR_VEL) != 0u)
+        return customMaxAngSpeed;
+    if((flags & NWB_PHYSICS_BODY_FLAG_ALLOW_FAST_ROTATION) == 0u)
+        return defaultMaxAngSpeed;
+    return -1.0f;
+}
+
 void nwbPhysicsIntegrateBodyPositionWithMaxAng(
     const float3 v,
     const float3 w,
@@ -379,7 +387,7 @@ void nwbPhysicsIntegrateBodyPositionWithMaxAng(
 ){
     const float3 maskedV = nwbPhysicsApplyLinearLocks(v, flags);
     float3 maskedW = nwbPhysicsApplyAngularLocks(w, flags);
-    if((flags & NWB_PHYSICS_BODY_FLAG_ALLOW_FAST_ROTATION) == 0u && maxAngSpeed > 0.0f){
+    if(maxAngSpeed > 0.0f){
         const float wLenSq = dot(maskedW, maskedW);
         if(wLenSq > maxAngSpeed * maxAngSpeed && wLenSq > 1.0e-12f)
             maskedW *= maxAngSpeed * rsqrt(wLenSq);
@@ -394,10 +402,10 @@ void nwbPhysicsIntegrateBodyPositionValues(
     const float3 w,
     const uint flags,
     const float h,
+    const float maxAngSpeed,
     inout float3 deltaPos,
     inout float4 deltaRot
 ){
-    const float maxAngSpeed = h > 0.0f ? (NWB_PHYSICS_MAX_ROTATION / h) : 0.0f;
     nwbPhysicsIntegrateBodyPositionWithMaxAng(v, w, flags, h, maxAngSpeed, deltaPos, deltaRot);
 }
 
@@ -489,14 +497,20 @@ void nwbPhysicsIntegrateBodyVelocity(
     nwbPhysicsIntegrateBodyVelocityFromSim(g_NwbPhysicsBodySimBuffers[bodySimSlot][idx], bodyStateSlot, idx, h, maxLinearVelocity, gravity);
 }
 
-void nwbPhysicsIntegrateBodyPosition(const uint bodyStateSlot, const uint idx, const float h){
+void nwbPhysicsIntegrateBodyPosition(const uint bodySimSlot, const uint bodyStateSlot, const uint idx, const float h){
     const NwbPhysicsGpuBodyState state = nwbPhysicsReadBodyState(bodyStateSlot, idx);
     const float3 v = state.linearVelocityPad.xyz;
     const float3 w = state.angularVelocityPad.xyz;
     const uint flags = asuint(state.deltaPositionFlags.w);
     float3 deltaPos = state.deltaPositionFlags.xyz;
     float4 deltaRot = state.deltaRotation;
-    nwbPhysicsIntegrateBodyPositionValues(v, w, flags, h, deltaPos, deltaRot);
+    const float customMaxAng = ((flags & NWB_PHYSICS_BODY_FLAG_HAS_CUSTOM_MAX_ANGULAR_VEL) != 0u)
+        ? g_NwbPhysicsBodySimBuffers[bodySimSlot][idx].invInertiaLocal1.w
+        : 0.0f
+    ;
+    const float defaultMaxAng = h > 0.0f ? (NWB_PHYSICS_MAX_ROTATION / h) : 0.0f;
+    const float maxAngSpeed = nwbPhysicsResolveBodyMaxAngSpeed(flags, customMaxAng, defaultMaxAng);
+    nwbPhysicsIntegrateBodyPositionValues(v, w, flags, h, maxAngSpeed, deltaPos, deltaRot);
     nwbPhysicsWriteBodyDeltaPose(bodyStateSlot, idx, deltaPos, deltaRot);
 }
 
@@ -617,13 +631,17 @@ void nwbPhysicsIntegrateIslandBodyVelocity(
     g_NwbPhysicsLdsAngVel[tid] = w;
 }
 
-void nwbPhysicsIntegrateIslandBodyPosition(const uint tid, const float h, const float maxAngSpeed){
+void nwbPhysicsIntegrateIslandBodyPosition(const uint bodySimSlot, const uint globalBodyIdx, const uint tid, const float h, const float defaultMaxAngSpeed){
+    const uint flags = g_NwbPhysicsLdsFlags[tid];
+    float maxAngSpeed = ((flags & NWB_PHYSICS_BODY_FLAG_ALLOW_FAST_ROTATION) == 0u) ? defaultMaxAngSpeed : -1.0f;
+    if((flags & NWB_PHYSICS_BODY_FLAG_HAS_CUSTOM_MAX_ANGULAR_VEL) != 0u)
+        maxAngSpeed = g_NwbPhysicsBodySimBuffers[bodySimSlot][globalBodyIdx].invInertiaLocal1.w;
     float3 deltaPos = g_NwbPhysicsLdsDeltaPos[tid];
     float4 deltaRot = g_NwbPhysicsLdsDeltaRot[tid];
     nwbPhysicsIntegrateBodyPositionWithMaxAng(
         g_NwbPhysicsLdsLinVel[tid],
         g_NwbPhysicsLdsAngVel[tid],
-        g_NwbPhysicsLdsFlags[tid],
+        flags,
         h,
         maxAngSpeed,
         deltaPos,
@@ -684,7 +702,8 @@ NwbPhysicsGpuBodyOut nwbPhysicsSolveFreeBodyAndReturnOut(
     const float3 torque = outSim.torqueAngularDamping.xyz;
     const float3 dwStep = any(torque != float3(0.0f, 0.0f, 0.0f)) ? (h * nwbPhysicsMulSymmetric3(outSim.invInertiaWorld0, outSim.invInertiaWorld1, torque)) : float3(0.0f, 0.0f, 0.0f);
     const float angDampScale = 1.0f / (1.0f + h * outSim.torqueAngularDamping.w);
-    const float maxAngSpeed = h > 0.0f ? (NWB_PHYSICS_MAX_ROTATION * (float(subStepCount) / dt)) : 0.0f;
+    const float defaultMaxAngSpeed = h > 0.0f ? (NWB_PHYSICS_MAX_ROTATION * (float(subStepCount) / dt)) : 0.0f;
+    const float maxAngSpeed = nwbPhysicsResolveBodyMaxAngSpeed(outFlags, outSim.invInertiaLocal1.w, defaultMaxAngSpeed);
 
     for(uint subStep = 0u; subStep < subStepCount; ++subStep){
         if((outFlags & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && invMassPositive){

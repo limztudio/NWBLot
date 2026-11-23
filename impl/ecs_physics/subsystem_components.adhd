@@ -91,6 +91,11 @@ class CharacterControllerComponent{
     public b8 initialized = false;
     public b8 syncFromTransform = false;
     public b8 dirty = true;
+    public f32x4 prevPosition(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 prevRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 currPosition(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 currRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public b8 hasPrevSnapshot = false;
 }
 
 [arena, component("vehicle")]
@@ -110,6 +115,9 @@ class RagdollComponent{
     public RagdollInstance instance;
     public b8 enabled = true;
     public b8 kinematic = false;
+    public b8 driveToPose = false;
+    public f32 driveStrengthMultiplier = 1.0f;
+    public Vector<Transform3D> targetPose;
     public b8 initialized = false;
     public b8 syncedKinematic = false;
     public b8 dirty = true;
@@ -130,6 +138,7 @@ class ForceFieldComponent{
 [arena, component("articulation")]
 class ArticulationComponent{
     public Vector<ArticulationLinkDef> links;
+    public Vector<Name> proxyEntityNames;
     public b8 isFixedBase = true;
     public Articulation articulation;
     public b8 enabled = true;
@@ -153,3 +162,4 @@ class GpuRenderTransformExportComponent{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

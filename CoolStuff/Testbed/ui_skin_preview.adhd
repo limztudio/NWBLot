@@ -644,13 +644,6 @@ class UiSkinPreview{
         return layout;
     }
 
-    public Expected<Rect> galleryBounds(mut UiPaintContext context){
-        const UiSkinPreviewGalleryLayout layout = this.measureGalleryLayout(context);
-        if(!layout.valid)
-            return MakeUnexpected(Failure());
-        return layout.gallery;
-    }
-
     public void paintWithLayout(mut UiPaintContext context, in UiSkinPreviewGalleryLayout layout){
         const f32 originX = ResolveSkinGalleryOriginX(context.display.logicalWidth);
         const f32 originY = s_GalleryMargin;
@@ -694,11 +687,6 @@ class UiSkinPreview{
             || !this.m_edit.paint(context.text, context.paint, Rect(textCoords.z, editY, s_EditTextWidth, edit.value().height), s_LabelTextColor)
         )
             error("Testbed: custom UI label shaping or rasterization failed");
-    }
-
-    public void paint(mut UiPaintContext context){
-        const UiSkinPreviewGalleryLayout layout = this.measureGalleryLayout(context);
-        this.paintWithLayout(context, layout);
     }
 
     private Label m_normal;

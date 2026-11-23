@@ -2168,6 +2168,22 @@ void BuildProxyPlanarPatchWorld(
             OrderPlanarVerticesCcw(nOut, outPoly);
             return;
         }
+        const f32 horizSq = localN.x * localN.x + localN.z * localN.z;
+        if(horizSq > 1.0e-8f){
+            const VectorSingle radDir = SafeNormalizeVec3(VectorSingle(localN.x, 0.0f, localN.z, 0.0f), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+            const VectorSingle gen = SafeNormalizeVec3(VectorSingle(-radDir.x * r, 2.0f * hh, -radDir.z * r, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            if(Abs(Vector3Dot(localN, gen).x) < 0.08f){
+                ClipVertex c0;
+                c0.position = PackVec3U(TransformPoint(xf, c + radDir * r - VectorSingle(0.0f, hh, 0.0f, 0.0f)) + pad);
+                c0.id0 = 0u;
+                ClipVertex c1;
+                c1.position = PackVec3U(TransformPoint(xf, c + VectorSingle(0.0f, hh, 0.0f, 0.0f)) + pad);
+                c1.id0 = 1u;
+                outPoly.push_back(c0);
+                outPoly.push_back(c1);
+                return;
+            }
+        }
         u8 supIdx = 0xffu;
         ClipVertex cv;
         cv.position = PackVec3U(TransformPoint(xf, ComputeProxyViewSupport(proxy, localN, supIdx)) + pad);
@@ -2177,6 +2193,27 @@ void BuildProxyPlanarPatchWorld(
     }
 
     if(proxy.kind == ProxyKind::TaperedCapsule){
+        const VectorSingle p1 = VectorSingle(proxy.param0, 0.0f);
+        const f32 r1 = proxy.radius + proxy.param0.w;
+        const VectorSingle p2 = VectorSingle(proxy.param1, 0.0f);
+        const f32 r2 = proxy.radius + proxy.param1.w;
+        const VectorSingle dAxis = VectorSingle(p2 - p1, 0.0f);
+        const f32 len = Vector3Length(dAxis).x;
+        if(len > Abs(r1 - r2) + 1.0e-4f){
+            const VectorSingle u = dAxis * (1.0f / len);
+            const f32 targetDot = (r1 - r2) / len;
+            if(Abs(Vector3Dot(localN, u).x - targetDot) < 0.08f){
+                ClipVertex c0;
+                c0.position = PackVec3U(TransformPoint(xf, p1 + localN * r1));
+                c0.id0 = 0u;
+                ClipVertex c1;
+                c1.position = PackVec3U(TransformPoint(xf, p2 + localN * r2));
+                c1.id0 = 1u;
+                outPoly.push_back(c0);
+                outPoly.push_back(c1);
+                return;
+            }
+        }
         u8 supIdx = 0xffu;
         ClipVertex cv;
         cv.position = PackVec3U(TransformPoint(xf, ComputeProxyViewSupport(proxy, localN, supIdx)) + pad);
@@ -2438,11 +2475,126 @@ Manifold CollideConvexProxyVsPlane(
     FixedVector<ClipVertex, s_MaxClipPoints> patchA;
     BuildProxyPlanarPatchWorld(proxyA, xfA, nAtoB, patchA);
 
+    if(isFinitePlane && patchA.size() >= 3u){
+        Array<f32x4, 4u> clipPlanes;
+        clipPlanes[0u] = f32x4(-wt1, Vector3Dot(-wt1, worldPlanePt).x + planeB.halfExtent.x + s_LinearSlop);
+        clipPlanes[1u] = f32x4(wt1, Vector3Dot(wt1, worldPlanePt).x + planeB.halfExtent.x + s_LinearSlop);
+        clipPlanes[2u] = f32x4(-wt2, Vector3Dot(-wt2, worldPlanePt).x + planeB.halfExtent.z + s_LinearSlop);
+        clipPlanes[3u] = f32x4(wt2, Vector3Dot(wt2, worldPlanePt).x + planeB.halfExtent.z + s_LinearSlop);
+        FixedVector<ClipVertex, s_MaxClipPoints> scratch;
+        for(u32 pi = 0u; pi < 4u; ++pi){
+            const VectorSingle pN(clipPlanes[pi], 0.0f);
+            const f32 pOff = clipPlanes[pi].w;
+            if((pi & 1u) == 0u){
+                if(ClipPolygonAgainstPlane(patchA, pN, pOff, cast<u8>(pi), scratch) == 0u){
+                    patchA.clear();
+                    break;
+                }
+            }
+            else{
+                if(ClipPolygonAgainstPlane(scratch, pN, pOff, cast<u8>(pi), patchA) == 0u){
+                    patchA.clear();
+                    break;
+                }
+            }
+        }
+    }
+    else if(isFinitePlane && patchA.size() == 2u){
+        const VectorSingle p0 = Vec3FromU(patchA[0u].position);
+        const VectorSingle p1 = Vec3FromU(patchA[1u].position);
+        const VectorSingle r0 = VectorSingle(p0 - worldPlanePt, 0.0f);
+        const VectorSingle r1 = VectorSingle(p1 - worldPlanePt, 0.0f);
+        const f32 u0 = Vector3Dot(r0, wt1).x;
+        const f32 u1 = Vector3Dot(r1, wt1).x;
+        const f32 v0 = Vector3Dot(r0, wt2).x;
+        const f32 v1 = Vector3Dot(r1, wt2).x;
+        const f32 hx = planeB.halfExtent.x + s_LinearSlop;
+        const f32 hz = planeB.halfExtent.z + s_LinearSlop;
+        f32 tMin = 0.0f;
+        f32 tMax = 1.0f;
+        b8 segInside = true;
+        const f32 du = u1 - u0;
+        if(Abs(du) <= 1.0e-8f){
+            if(u0 < -hx || u0 > hx)
+                segInside = false;
+        }
+        else{
+            const f32 invDu = 1.0f / du;
+            f32 ta = (-hx - u0) * invDu;
+            f32 tb = (hx - u0) * invDu;
+            if(ta > tb){
+                const f32 tmp = ta;
+                ta = tb;
+                tb = tmp;
+            }
+            tMin = Max(tMin, ta);
+            tMax = Min(tMax, tb);
+            if(tMin > tMax)
+                segInside = false;
+        }
+        if(segInside){
+            const f32 dv = v1 - v0;
+            if(Abs(dv) <= 1.0e-8f){
+                if(v0 < -hz || v0 > hz)
+                    segInside = false;
+            }
+            else{
+                const f32 invDv = 1.0f / dv;
+                f32 ta = (-hz - v0) * invDv;
+                f32 tb = (hz - v0) * invDv;
+                if(ta > tb){
+                    const f32 tmp = ta;
+                    ta = tb;
+                    tb = tmp;
+                }
+                tMin = Max(tMin, ta);
+                tMax = Min(tMax, tb);
+                if(tMin > tMax)
+                    segInside = false;
+            }
+        }
+        if(segInside){
+            const VectorSingle dSeg = VectorSingle(p1 - p0, 0.0f);
+            patchA[0u].position = PackVec3U(p0 + dSeg * tMin);
+            patchA[1u].position = PackVec3U(p0 + dSeg * tMax);
+        }
+        else{
+            patchA.clear();
+        }
+    }
+
     FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
+    if(isFinitePlane && proxyA.kind == ProxyKind::PointCloud && proxyA.points.size() == 1u){
+        const VectorSingle wCenter = TransformPoint(xfA, Vec3FromU(proxyA.points[0u]));
+        const VectorSingle relC = VectorSingle(wCenter - worldPlanePt, 0.0f);
+        const f32 cu = Vector3Dot(relC, wt1).x;
+        const f32 cv = Vector3Dot(relC, wt2).x;
+        if(Abs(cu) > planeB.halfExtent.x || Abs(cv) > planeB.halfExtent.z){
+            const f32 clU = Clamp(cu, -planeB.halfExtent.x, planeB.halfExtent.x);
+            const f32 clV = Clamp(cv, -planeB.halfExtent.z, planeB.halfExtent.z);
+            const VectorSingle closestOnRect = worldPlanePt + wt1 * clU + wt2 * clV;
+            const VectorSingle toCenter = VectorSingle(wCenter - closestOnRect, 0.0f);
+            const f32 distSq = Vector3LengthSq(toCenter).x;
+            const f32 maxR = proxyA.radius + maxDistance;
+            if(Vector3Dot(relC, worldPlaneN).x >= -proxyA.radius && distSq <= maxR * maxR){
+                const f32 dist = SqrtFast(distSq);
+                const VectorSingle outN = SafeNormalizeVec3(toCenter, worldPlaneN);
+                const VectorSingle edgeNAtoB = -outN;
+                const VectorSingle wA = wCenter - outN * proxyA.radius;
+                const f32 sep = dist - proxyA.radius;
+                if(sep <= maxDistance){
+                    PushMeshCandidate((wA + closestOnRect) * 0.5f, wA - VectorSingle(xfA.position), closestOnRect - VectorSingle(xfB.position), edgeNAtoB, sep, MakeFeatureId(5u, 0u, 6u, 0u), candidates);
+                    ReduceMeshCandidatesAndWriteManifold(edgeNAtoB, candidates, m);
+                }
+            }
+            return m;
+        }
+    }
+
     for(usize i = 0u; i < patchA.size(); ++i){
         const VectorSingle wA = Vec3FromU(patchA[i].position);
         const VectorSingle rel = VectorSingle(wA - worldPlanePt, 0.0f);
-        if(isFinitePlane){
+        if(isFinitePlane && patchA.size() == 1u){
             if(Abs(Vector3Dot(rel, wt1).x) > planeB.halfExtent.x + s_LinearSlop || Abs(Vector3Dot(rel, wt2).x) > planeB.halfExtent.z + s_LinearSlop)
                 continue;
         }
@@ -2488,6 +2640,7 @@ Manifold CollideConvexProxyAndMesh(
     }
     const f32 meshR = meshB.radius();
     const f32 totalR = proxyA.radius + meshR;
+    const f32 cullR = ComputeProxyViewBoundingRadius(proxyA, ComputeProxyViewCenter(proxyA)) + meshR;
     const Aabb3D queryBox = FattenAabb(Aabb3D(boxMinB, boxMaxB), totalR + maxDistance);
     const VectorSingle shapeCenterB = TransformPoint(localXfA, ComputeProxyViewCenter(proxyA));
     const b8 cullBackFaces = (meshB.isClosed() || meshB.sidedness() == MeshSidedness::SingleSided);
@@ -2518,7 +2671,7 @@ Manifold CollideConvexProxyAndMesh(
                 if(!AabbOverlaps(triAabb, queryBox))
                     continue;
                 const VectorSingle triN = Vec3FromU(tri.normal);
-                if(cullBackFaces && Vector3Dot(triN, VectorSingle(shapeCenterB - tv0, 0.0f)).x < -totalR - s_LinearSlop)
+                if(cullBackFaces && Vector3Dot(triN, VectorSingle(shapeCenterB - tv0, 0.0f)).x < -cullR - s_LinearSlop)
                     continue;
 
                 Array<f32x3u, 3u> triPts;
@@ -2529,21 +2682,43 @@ Manifold CollideConvexProxyAndMesh(
                 const Manifold triM = CollideConvexProxyViews(proxyA, xfA, triView, xfB, maxDistance);
                 if(triM.pointCount() == 0u)
                     continue;
-                VectorSingle nAtoB = triM.normal();
+                const VectorSingle nAtoB = triM.normal();
                 const VectorSingle triWorldN = SafeNormalizeVec3(Vector3Rotate(triN, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-                if(cullBackFaces && Vector3Dot(nAtoB, triWorldN).x >= 0.0f)
-                    continue;
+                const u8 edgeFlags = meshB.triangleEdgeFlag(ti);
                 for(u32 pi = 0u; pi < triM.pointCount(); ++pi){
-                    const f32 sep = triM.points[pi].separation();
+                    VectorSingle candN = nAtoB;
+                    VectorSingle candPt = triM.points[pi].point();
+                    VectorSingle candAncA = triM.points[pi].anchorA();
+                    VectorSingle candAncB = triM.points[pi].anchorB();
+                    f32 sep = triM.points[pi].separation();
+                    if(edgeFlags != 0u){
+                        const VectorSingle worldPtA = VectorSingle(xfA.position) + candAncA;
+                        const VectorSingle worldPtB = VectorSingle(xfB.position) + candAncB;
+                        const VectorSingle localPtB = InverseTransformPoint(xfB, worldPtB);
+                        const VectorSingle rawMeshToA = Vector3InverseRotate(-nAtoB, VectorSingle(xfB.rotation));
+                        VectorSingle smoothedMeshToA = rawMeshToA;
+                        if(SmoothMeshContactNormal(tri, edgeFlags, localPtB, rawMeshToA, smoothedMeshToA)){
+                            const VectorSingle localPtA = InverseTransformPoint(xfB, worldPtA);
+                            const f32 signedPlane = Vector3Dot(triN, VectorSingle(localPtA - tv0, 0.0f)).x - meshR;
+                            if(signedPlane > maxDistance)
+                                continue;
+                            sep = signedPlane;
+                            candN = SafeNormalizeVec3(Vector3Rotate(-smoothedMeshToA, VectorSingle(xfB.rotation)), nAtoB);
+                            candAncB = (worldPtA + candN * sep) - VectorSingle(xfB.position);
+                            candPt = (worldPtA + VectorSingle(xfB.position) + candAncB) * 0.5f;
+                        }
+                    }
+                    if(cullBackFaces && Vector3Dot(candN, triWorldN).x >= 0.0f)
+                        continue;
                     if(sep < deepestSep){
                         deepestSep = sep;
-                        chosenNormal = nAtoB;
+                        chosenNormal = candN;
                     }
                     PushMeshCandidateWithTris(
-                        triM.points[pi].point(),
-                        triM.points[pi].anchorA(),
-                        triM.points[pi].anchorB(),
-                        nAtoB,
+                        candPt,
+                        candAncA,
+                        candAncB,
+                        candN,
                         sep,
                         MakeFeatureId(5u, cast<u8>(pi), 3u, cast<u8>(ti & 0xffu)),
                         s_NullIndex,
@@ -2562,6 +2737,34 @@ Manifold CollideConvexProxyAndMesh(
                 stack[stackCount] = node.rightOrCount();
                 ++stackCount;
             }
+        }
+    }
+
+    if(candidates.empty() && meshB.isClosed() && IsPointInsideClosedMesh(meshB, shapeCenterB)){
+        VectorSingle closePt(0.0f);
+        VectorSingle closeN(0.0f, 1.0f, 0.0f, 0.0f);
+        u32 closeTri = s_NullIndex;
+        if(FindClosestPointOnClosedMesh(meshB, shapeCenterB, closePt, closeN, closeTri)){
+            const VectorSingle worldCenter = TransformPoint(xfB, shapeCenterB);
+            const VectorSingle worldSurf = TransformPoint(xfB, closePt);
+            const VectorSingle worldOutN = SafeNormalizeVec3(Vector3Rotate(closeN, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            const VectorSingle nAtoBFallback = -worldOutN;
+            const f32 centerDist = Vector3Length(VectorSingle(worldSurf - worldCenter, 0.0f)).x;
+            const VectorSingle candAncA = (worldCenter - worldOutN * proxyA.radius) - VectorSingle(xfA.position);
+            const VectorSingle candAncB = (worldSurf + worldOutN * meshR) - VectorSingle(xfB.position);
+            const f32 sep = -(centerDist + totalR);
+            chosenNormal = nAtoBFallback;
+            PushMeshCandidateWithTris(
+                (worldCenter + worldSurf) * 0.5f,
+                candAncA,
+                candAncB,
+                nAtoBFallback,
+                sep,
+                MakeFeatureId(5u, 0u, 3u, cast<u8>(closeTri & 0xffu)),
+                s_NullIndex,
+                closeTri,
+                candidates
+            );
         }
     }
 

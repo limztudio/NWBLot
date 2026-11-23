@@ -65,15 +65,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     nextState.deltaPositionFlags = float4(0.0f, 0.0f, 0.0f, bo.linearVelocityFlags.w);
     nextState.deltaRotation = float4(0.0f, 0.0f, 0.0f, 1.0f);
     g_NwbPhysicsBodyStateBuffers[bodyStateSlot][idx] = nextState;
-
-    if(bodyPoseSlot != NWB_PHYSICS_INVALID_INDEX){
-        NwbPhysicsGpuBodyPose pose;
-        const float3 origin = bo.positionSleepTime.xyz - nwbPhysicsQuatRotate(sim.localCenterMinExtent.xyz, bo.rotation);
-        pose.originPad = float4(origin, 0.0f);
-        pose.rotation = bo.rotation;
-        pose.sweepDispFlags = float4(0.0f, 0.0f, 0.0f, 0.0f);
-        g_NwbPhysicsBodyPoseBuffers[bodyPoseSlot][poseOffset + idx] = pose;
-    }
 }
 
 

@@ -1,0 +1,1737 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_physics/components.adhd>
+#include <impl/assets_physics/physics_asset_binary_codec.adhd>
+#include <impl/assets_physics/physics_component_binary_codec.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_SubsystemPhysicsComponentBinaryVersion = 1u;
+
+const u8 s_CharCtrlFlagHitSensors = 0x01u;
+const u8 s_CharCtrlFlagStickToFloor = 0x02u;
+const u8 s_CharCtrlFlagPushDynamicBodies = 0x04u;
+const u8 s_CharCtrlFlagEnabled = 0x08u;
+const u8 s_CharCtrlFlagSyncFromTransform = 0x10u;
+
+const u8 s_VehicleFlagUseAckerman = 0x01u;
+const u8 s_VehicleFlagAutomatic = 0x02u;
+const u8 s_VehicleFlagEnabled = 0x04u;
+
+const u8 s_VehicleWheelFlagSteerable = 0x01u;
+const u8 s_VehicleWheelFlagDriven = 0x02u;
+const u8 s_VehicleWheelFlagHandbrakeAffected = 0x04u;
+const u8 s_VehicleWheelFlagUseSweptCast = 0x08u;
+
+const u8 s_RagdollFlagEnabled = 0x01u;
+const u8 s_RagdollFlagKinematic = 0x02u;
+const u8 s_RagdollFlagDriveToPose = 0x04u;
+
+const u8 s_RagdollShapeFlagUseBox = 0x01u;
+const u8 s_RagdollShapeFlagIsSensor = 0x02u;
+const u8 s_RagdollShapeFlagContactEvents = 0x04u;
+const u8 s_RagdollShapeFlagHitEvents = 0x08u;
+const u8 s_RagdollShapeFlagSensorEvents = 0x10u;
+const u8 s_RagdollShapeFlagPreSolveEvents = 0x20u;
+const u8 s_RagdollShapeFlagInvokeCreation = 0x40u;
+const u8 s_RagdollShapeFlagUpdateBodyMass = 0x80u;
+
+const u8 s_RagdollBoneExtraFlagUseSixDof = 0x01u;
+
+const u8 s_FluidFlagVolumeEnabled = 0x01u;
+const u8 s_FluidFlagComponentEnabled = 0x02u;
+
+const u8 s_ForceFieldFlagUseBounds = 0x01u;
+const u8 s_ForceFieldFlagFieldEnabled = 0x02u;
+const u8 s_ForceFieldFlagComponentEnabled = 0x04u;
+
+const u8 s_ArticulationFlagIsFixedBase = 0x01u;
+const u8 s_ArticulationFlagEnabled = 0x02u;
+
+const u8 s_ArticulationLinkFlagEnableLimit = 0x01u;
+const u8 s_ArticulationLinkFlagEnableDrive = 0x02u;
+
+const u8 s_SoftBodyFlagCollideWithWorld = 0x01u;
+const u8 s_SoftBodyFlagEnabled = 0x02u;
+
+const u8 s_GpuExportFlagEnabled = 0x01u;
+
+[serialize]
+class CharacterControllerComponentBinary{
+    public f32x4 up(0.0f, 1.0f, 0.0f, 0.0f);
+    public u32 version = 1u;
+    public f32 radius = 0.35f;
+    public f32 halfHeight = 0.55f;
+    public f32 skinWidth = 0.02f;
+    public f32 maxSlopeAngleRad = 0.78539816f;
+    public f32 stepUpHeight = 0.4f;
+    public f32 stepDownHeight = 0.35f;
+    public f32 maxStrength = 100.0f;
+    public f32 mass = 75.0f;
+    public f32 predictiveContactDistance = 0.08f;
+    public u32 maxCollisionIterations = 4u;
+    public u32 maxConstraintIterations = 4u;
+    public u32 filterCategoryBits = 1u;
+    public u32 filterMaskBits = u32.max;
+    public i32 filterGroupIndex = 0;
+    public u8 flags = 0u;
+    public u8 reserved0 = 0u;
+    public u16 reserved1 = 0u;
+}
+
+[serialize]
+class VehicleComponentBinary{
+    public u32 version = 1u;
+    public u32 wheelCount = 0u;
+    public u32 gearCount = 5u;
+    public i32 requestedGear = 1;
+    public f32 maxTorque = 450.0f;
+    public f32 idleRpm = 900.0f;
+    public f32 maxRpm = 7000.0f;
+    public f32 shiftUpRpm = 6200.0f;
+    public f32 shiftDownRpm = 2200.0f;
+    public f32 finalDriveRatio = 3.73f;
+    public f32 reverseRatio = -3.4f;
+    public f32 differentialBias = 0.5f;
+    public f32 dragCoeff = 0.35f;
+    public f32 downforceCoeff = 0.25f;
+    public f32 trackWidth = 1.6f;
+    public f32 wheelbase = 2.6f;
+    public Array<f32, 6u> forwardGearRatios;
+    public f32 throttle = 0.0f;
+    public f32 brake = 0.0f;
+    public f32 steer = 0.0f;
+    public f32 handbrake = 0.0f;
+    public u8 flags = 0u;
+    public u8 reserved0 = 0u;
+    public u16 reserved1 = 0u;
+    public u32 reserved2 = 0u;
+}
+
+[serialize]
+class VehicleWheelBinary{
+    public f32x4 attachmentPoint(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 suspensionDirection(0.0f, -1.0f, 0.0f, 0.0f);
+    public f32x4 axleAxis(1.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 forwardAxis(0.0f, 0.0f, 1.0f, 0.0f);
+    public f32 suspensionRestLength = 0.4f;
+    public f32 suspensionMaxTravel = 0.25f;
+    public f32 suspensionStiffness = 35000.0f;
+    public f32 suspensionDamping = 4500.0f;
+    public f32 wheelRadius = 0.35f;
+    public f32 wheelWidth = 0.22f;
+    public f32 wheelInertia = 1.5f;
+    public f32 maxSteerAngleRad = 0.55f;
+    public f32 driveFraction = 0.5f;
+    public f32 maxBrakeTorque = 2500.0f;
+    public f32 maxHandbrakeTorque = 4000.0f;
+    public f32 frictionMultiplier = 1.0f;
+    public f32 rollingResistanceCoeff = 0.015f;
+    public f32 longitudinalStiffness = 12.0f;
+    public f32 lateralStiffness = 10.0f;
+    public f32 antiRollStiffness = 8000.0f;
+    public i32 antiRollPairIndex = -1;
+    public u8 flags = 0u;
+    public u8 reserved0 = 0u;
+    public u16 reserved1 = 0u;
+    public u64 reserved2 = 0u;
+}
+
+[serialize]
+class RagdollComponentBinary{
+    public u32 version = 1u;
+    public u32 boneCount = 0u;
+    public u32 targetPoseCount = 0u;
+    public f32 driveStrengthMultiplier = 1.0f;
+    public u8 flags = 0u;
+    public u8 reserved0 = 0u;
+    public u16 reserved1 = 0u;
+    public u32 reserved2 = 0u;
+}
+
+[serialize]
+class RagdollBoneBinary{
+    public f32x4 position(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 rotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 linearVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 angularVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 capsuleCenter1Radius(0.0f, -0.5f, 0.0f, 0.25f);
+    public f32x4 capsuleCenter2(0.0f, 0.5f, 0.0f, 0.0f);
+    public f32x4 boxHalfExtents(0.1f, 0.2f, 0.1f, 0.0f);
+    public f32x4 shapeLocalPosition(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 shapeLocalRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 jointAnchorWorld(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 jointAxisWorld(0.0f, 1.0f, 0.0f, 0.0f);
+    public PhysicsSurfaceMaterialBinary shapeMaterial;
+    public u64 bodyUserData = 0u;
+    public u64 shapeUserData = 0u;
+    public u32 parentIndex = s_NullIndex;
+    public u32 bodyMotionLocks = 0u;
+    public u32 filterCategoryBits = 1u;
+    public u32 filterMaskBits = u32.max;
+    public i32 filterGroupIndex = 0;
+    public f32 linearDamping = 0.0f;
+    public f32 angularDamping = 0.01f;
+    public f32 gravityScale = 1.0f;
+    public f32 sleepThreshold = s_DefaultSleepThreshold;
+    public f32 maxAngularVelocity = 0.0f;
+    public f32 shapeDensity = 1.0f;
+    public f32 swingLimitY = 0.7f;
+    public f32 swingLimitZ = 0.7f;
+    public f32 twistMin = -0.5f;
+    public f32 twistMax = 0.5f;
+    public f32 motorMaxTorque = 0.0f;
+    public f32 motorHertz = 8.0f;
+    public f32 motorDamping = 1.0f;
+    public u8 bodyType = cast<u8>(BodyType::Dynamic);
+    public u8 bodyFlags = 0u;
+    public u8 shapeFlags = 0u;
+    public u8 extraFlags = 0u;
+    public Array<u8, 8u> sixDofMotions;
+    public Array<u8, 8u> sixDofFlags;
+    public Array<f32, 42u> sixDofParams;
+    public u64 reserved0 = 0u;
+}
+
+[serialize]
+class PhysicsTransformBinary{
+    public f32x4 position(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 rotation(0.0f, 0.0f, 0.0f, 1.0f);
+}
+
+[serialize]
+class FluidVolumeComponentBinary{
+    public f32x4 surfaceNormalOffset(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32x4 boundsLower(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 boundsUpper(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 flowVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public u32 version = 1u;
+    public u8 shape = 0u;
+    public u8 flags = 0u;
+    public u16 reserved0 = 0u;
+    public f32 density = 1000.0f;
+    public f32 linearDrag = 0.6f;
+    public f32 angularDrag = 0.5f;
+    public f32 quadraticDrag = 0.2f;
+    public f32 liftCoeff = 0.0f;
+    public u32 filterCategoryBits = 1u;
+    public u32 filterMaskBits = u32.max;
+    public i32 filterGroupIndex = 0;
+    public u32 reserved1 = 0u;
+    public u32 reserved2 = 0u;
+}
+
+[serialize]
+class ForceFieldComponentBinary{
+    public f32x4 boundsLower(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 boundsUpper(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 originOrDirection(0.0f, 0.0f, 0.0f, 0.0f);
+    public u32 version = 1u;
+    public u8 fieldType = 1u;
+    public u8 flags = 0u;
+    public u16 reserved0 = 0u;
+    public f32 strength = 100.0f;
+    public f32 minDistance = 0.5f;
+    public f32 radius = 20.0f;
+    public f32 falloffPower = 2.0f;
+    public f32 turbulenceAmplitude = 0.0f;
+    public f32 turbulenceFrequency = 1.0f;
+    public u32 filterCategoryBits = 1u;
+    public u32 filterMaskBits = u32.max;
+    public i32 filterGroupIndex = 0;
+    public u32 reserved1 = 0u;
+}
+
+[serialize]
+class ArticulationComponentBinary{
+    public u32 version = 1u;
+    public u32 linkCount = 0u;
+    public u32 proxyNameCount = 0u;
+    public u8 flags = 0u;
+    public u8 reserved0 = 0u;
+    public u16 reserved1 = 0u;
+}
+
+[serialize]
+class ArticulationLinkBinary{
+    public f32x4 parentToJointPos(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 parentToJointRot(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 jointToChildPos(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 jointToChildRot(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 jointAxisLocal(0.0f, 0.0f, 1.0f, 0.0f);
+    public f32x4 comLocal(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 inertiaDiag(0.1f, 0.1f, 0.1f, 0.0f);
+    public u32 parentIndex = s_NullIndex;
+    public f32 mass = 1.0f;
+    public f32 lowerLimit = -s_PI;
+    public f32 upperLimit = s_PI;
+    public f32 driveTargetPos = 0.0f;
+    public f32 driveTargetVel = 0.0f;
+    public f32 driveStiffness = 0.0f;
+    public f32 driveDamping = 0.0f;
+    public f32 driveMaxForce = 1.0e6f;
+    public f32 jointDamping = 0.0f;
+    public f32 jointFriction = 0.0f;
+    public u8 jointType = 1u;
+    public u8 flags = 0u;
+    public u16 reserved0 = 0u;
+}
+
+[serialize]
+class SoftBodyComponentBinary{
+    public u32 version = 1u;
+    public u32 particleCount = 0u;
+    public u32 distCount = 0u;
+    public u32 bendCount = 0u;
+    public u32 volCount = 0u;
+    public u32 triCount = 0u;
+    public u32 attachCount = 0u;
+    public f32 particleRadius = 0.03f;
+    public f32 damping = 0.02f;
+    public f32 aerodynamicDrag = 0.02f;
+    public f32 friction = 0.4f;
+    public f32 restitution = 0.0f;
+    public u32 subSteps = 4u;
+    public u32 solverIterations = 4u;
+    public u32 filterCategoryBits = 1u;
+    public u32 filterMaskBits = u32.max;
+    public i32 filterGroupIndex = 0;
+    public u8 flags = 0u;
+    public u8 reserved0 = 0u;
+    public u16 reserved1 = 0u;
+}
+
+[serialize]
+class SoftBodyParticleBinary{
+    public f32x4 position(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 prevPosition(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 velocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 externalForce(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32 invMass = 1.0f;
+    public u8 isFixed = 0u;
+    public u8 reserved0 = 0u;
+    public u16 reserved1 = 0u;
+    public u64 reserved2 = 0u;
+}
+
+[serialize]
+class SoftBodyPairConstraintBinary{
+    public u32 p0 = 0u;
+    public u32 p1 = 0u;
+    public f32 restLength = 0.0f;
+    public f32 compliance = 0.0f;
+    public f32 lambda = 0.0f;
+    public u32 reserved0 = 0u;
+}
+
+[serialize]
+class SoftBodyVolumeConstraintBinary{
+    public u32 p0 = 0u;
+    public u32 p1 = 0u;
+    public u32 p2 = 0u;
+    public u32 p3 = 0u;
+    public f32 restVolume = 0.0f;
+    public f32 compliance = 0.0f;
+    public f32 lambda = 0.0f;
+    public u32 reserved0 = 0u;
+}
+
+[serialize]
+class SoftBodyTriangleBinary{
+    public u32 p0 = 0u;
+    public u32 p1 = 0u;
+    public u32 p2 = 0u;
+}
+
+[serialize]
+class SoftBodyAttachmentBinary{
+    public f32x4 localAnchor(0.0f, 0.0f, 0.0f, 0.0f);
+    public u32 particleIndex = 0u;
+    public f32 compliance = 0.0f;
+    public u64 reserved0 = 0u;
+}
+
+[serialize]
+class GpuRenderTransformExportComponentBinary{
+    public f32x4 localScale(1.0f, 1.0f, 1.0f, 0.0f);
+    public u32 version = 1u;
+    public u32 instanceIndex = 0u;
+    public u32 flags = 0u;
+    public u8 enabledFlag = 1u;
+    public u8 reserved0 = 0u;
+    public u16 reserved1 = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SubsystemPhysicsComponentBinaryCodec{
+    private b8 validBodyDefData(in BodyDef b)const{
+        if(cast<u8>(b.type) > cast<u8>(BodyType::Dynamic))
+            return false;
+        if((b.motionLocks & ~0x3Fu) != 0u)
+            return false;
+        if(!IsValidPositionVec3(VectorSingle(b.position)) || !IsFinite(VectorSingle(b.rotation)) || LengthSq(VectorSingle(b.rotation)) <= s_NormalizeEpsilonSq)
+            return false;
+        if(!IsFinite(VectorSingle(b.linearVelocity)) || !IsFinite(VectorSingle(b.angularVelocity)))
+            return false;
+        if(!IsFinite(VectorSingle(b.linearDamping, b.angularDamping, b.gravityScale, b.sleepThreshold)) || !IsFinite(b.maxAngularVelocity))
+            return false;
+        return b.linearDamping >= 0.0f && b.angularDamping >= 0.0f && b.sleepThreshold >= 0.0f && b.maxAngularVelocity >= 0.0f;
+    }
+
+    public b8 validCharacterControllerData(in CharacterControllerComponent c)const{
+        in CharacterControllerDef d = c.def;
+        if(!IsFinite(VectorSingle(d.radius, d.halfHeight, d.skinWidth, d.maxSlopeAngleRad)))
+            return false;
+        if(!IsFinite(VectorSingle(d.stepUpHeight, d.stepDownHeight, d.maxStrength, d.mass)) || !IsFinite(d.predictiveContactDistance))
+            return false;
+        if(!IsFinite(VectorSingle(d.up)) || LengthSq(VectorSingle(d.up.x, d.up.y, d.up.z, 0.0f)) <= s_NormalizeEpsilonSq)
+            return false;
+        return d.radius > 0.0f
+            && d.halfHeight >= 0.0f
+            && d.skinWidth >= 0.0f
+            && d.maxSlopeAngleRad >= 0.0f
+            && d.maxSlopeAngleRad <= s_PI * 0.5f + 1.0e-4f
+            && d.stepUpHeight >= 0.0f
+            && d.stepDownHeight >= 0.0f
+            && d.maxStrength >= 0.0f
+            && d.mass > 0.0f
+            && d.predictiveContactDistance >= 0.0f
+            && d.maxCollisionIterations >= 1u
+            && d.maxConstraintIterations >= 1u;
+    }
+
+    public b8 validateCharacterController(in CharacterControllerComponent c, in Name virtualPath)const{
+        if(this.validCharacterControllerData(c))
+            return true;
+        error("CharacterControllerComponentAsset::validatePayload failed: invalid config for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 appendCharacterControllerValidated(in CharacterControllerComponent c, mut Vector<u8> outBinary)const{
+        static_assert(size_of<CharacterControllerComponentBinary>() == 80u);
+        if(!CanAppendBytes(outBinary, size_of<CharacterControllerComponentBinary>()))
+            return false;
+        in CharacterControllerDef d = c.def;
+        CharacterControllerComponentBinary bin;
+        bin.version = s_SubsystemPhysicsComponentBinaryVersion;
+        bin.up = d.up;
+        bin.radius = d.radius;
+        bin.halfHeight = d.halfHeight;
+        bin.skinWidth = d.skinWidth;
+        bin.maxSlopeAngleRad = d.maxSlopeAngleRad;
+        bin.stepUpHeight = d.stepUpHeight;
+        bin.stepDownHeight = d.stepDownHeight;
+        bin.maxStrength = d.maxStrength;
+        bin.mass = d.mass;
+        bin.predictiveContactDistance = d.predictiveContactDistance;
+        bin.maxCollisionIterations = d.maxCollisionIterations;
+        bin.maxConstraintIterations = d.maxConstraintIterations;
+        bin.filterCategoryBits = d.filter.categoryBits;
+        bin.filterMaskBits = d.filter.maskBits;
+        bin.filterGroupIndex = d.filter.groupIndex;
+        u8 flags = 0u;
+        if(d.hitSensors) flags |= s_CharCtrlFlagHitSensors;
+        if(d.stickToFloor) flags |= s_CharCtrlFlagStickToFloor;
+        if(d.pushDynamicBodies) flags |= s_CharCtrlFlagPushDynamicBodies;
+        if(c.enabled) flags |= s_CharCtrlFlagEnabled;
+        if(c.syncFromTransform) flags |= s_CharCtrlFlagSyncFromTransform;
+        bin.flags = flags;
+        outBinary.reserve(outBinary.size() + size_of<CharacterControllerComponentBinary>());
+        AppendPOD(outBinary, bin);
+        return true;
+    }
+
+    public b8 serializeCharacterController(in CharacterControllerComponent c, mut Vector<u8> outPayload)const{
+        if(!this.validCharacterControllerData(c))
+            return false;
+        outPayload.clear();
+        return this.appendCharacterControllerValidated(c, outPayload);
+    }
+
+    public Expected<CharacterControllerComponent> deserializeCharacterController(in Span<u8> payload)const{
+        usize cursor = 0u;
+        const Expected<CharacterControllerComponentBinary> res = ReadPOD<CharacterControllerComponentBinary>(payload, cursor);
+        if(!res.has_value() || cursor != payload.size()){
+            error("CharacterControllerComponentAsset::loadComponentPayload failed: invalid payload size");
+            return MakeUnexpected(Failure());
+        }
+        in CharacterControllerComponentBinary bin = res.value();
+        if(bin.version != s_SubsystemPhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || (bin.flags & 0xe0u) != 0u){
+            error("CharacterControllerComponentAsset::loadComponentPayload failed: unsupported version or flags");
+            return MakeUnexpected(Failure());
+        }
+        CharacterControllerComponent c;
+        c.def.up = bin.up;
+        c.def.radius = bin.radius;
+        c.def.halfHeight = bin.halfHeight;
+        c.def.skinWidth = bin.skinWidth;
+        c.def.maxSlopeAngleRad = bin.maxSlopeAngleRad;
+        c.def.stepUpHeight = bin.stepUpHeight;
+        c.def.stepDownHeight = bin.stepDownHeight;
+        c.def.maxStrength = bin.maxStrength;
+        c.def.mass = bin.mass;
+        c.def.predictiveContactDistance = bin.predictiveContactDistance;
+        c.def.maxCollisionIterations = bin.maxCollisionIterations;
+        c.def.maxConstraintIterations = bin.maxConstraintIterations;
+        c.def.filter.categoryBits = bin.filterCategoryBits;
+        c.def.filter.maskBits = bin.filterMaskBits;
+        c.def.filter.groupIndex = bin.filterGroupIndex;
+        c.def.hitSensors = (bin.flags & s_CharCtrlFlagHitSensors) != 0u;
+        c.def.stickToFloor = (bin.flags & s_CharCtrlFlagStickToFloor) != 0u;
+        c.def.pushDynamicBodies = (bin.flags & s_CharCtrlFlagPushDynamicBodies) != 0u;
+        c.enabled = (bin.flags & s_CharCtrlFlagEnabled) != 0u;
+        c.syncFromTransform = (bin.flags & s_CharCtrlFlagSyncFromTransform) != 0u;
+        c.dirty = true;
+        c.initialized = false;
+        if(!this.validCharacterControllerData(c)){
+            error("CharacterControllerComponentAsset::loadComponentPayload failed: invalid fields");
+            return MakeUnexpected(Failure());
+        }
+        return c;
+    }
+
+    public b8 validVehicleData(in VehicleComponent v)const{
+        in VehicleEngineDef eng = v.engine;
+        if(eng.gearCount < 1u || eng.gearCount > 6u)
+            return false;
+        if(!IsFinite(VectorSingle(eng.maxTorque, eng.idleRpm, eng.maxRpm, eng.shiftUpRpm))
+            || !IsFinite(VectorSingle(eng.shiftDownRpm, eng.finalDriveRatio, eng.reverseRatio, eng.differentialBias))
+            || !IsFinite(VectorSingle(eng.dragCoeff, eng.downforceCoeff, eng.trackWidth, eng.wheelbase)))
+            return false;
+        if(eng.maxTorque < 0.0f || eng.idleRpm < 0.0f || eng.maxRpm <= 0.0f || eng.differentialBias < 0.0f || eng.differentialBias > 1.0f || eng.trackWidth <= 0.0f || eng.wheelbase <= 0.0f)
+            return false;
+        for(u32 gi = 0u; gi < 6u; ++gi){
+            if(!IsFinite(eng.forwardGearRatios[gi]))
+                return false;
+        }
+        if(!IsFinite(VectorSingle(v.input.throttle, v.input.brake, v.input.steer, v.input.handbrake)))
+            return false;
+        if(v.wheels.size() > cast<usize>(u32.max))
+            return false;
+        const i32 wheelCountI = cast<i32>(v.wheels.size());
+        for(usize wi = 0u; wi < v.wheels.size(); ++wi){
+            in VehicleWheelDef w = v.wheels[wi];
+            if(!IsValidPositionVec3(VectorSingle(w.attachmentPoint))
+                || !IsFinite(VectorSingle(w.suspensionDirection))
+                || !IsFinite(VectorSingle(w.axleAxis))
+                || !IsFinite(VectorSingle(w.forwardAxis)))
+                return false;
+            if(LengthSq(VectorSingle(w.suspensionDirection)) <= s_NormalizeEpsilonSq
+                || LengthSq(VectorSingle(w.axleAxis)) <= s_NormalizeEpsilonSq
+                || LengthSq(VectorSingle(w.forwardAxis)) <= s_NormalizeEpsilonSq)
+                return false;
+            if(!IsFinite(VectorSingle(w.suspensionRestLength, w.suspensionMaxTravel, w.suspensionStiffness, w.suspensionDamping))
+                || !IsFinite(VectorSingle(w.wheelRadius, w.wheelWidth, w.wheelInertia, w.maxSteerAngleRad))
+                || !IsFinite(VectorSingle(w.driveFraction, w.maxBrakeTorque, w.maxHandbrakeTorque, w.frictionMultiplier))
+                || !IsFinite(VectorSingle(w.rollingResistanceCoeff, w.longitudinalStiffness, w.lateralStiffness, w.antiRollStiffness)))
+                return false;
+            if(w.suspensionRestLength < 0.0f || w.suspensionMaxTravel < 0.0f || w.suspensionStiffness < 0.0f || w.suspensionDamping < 0.0f || w.wheelRadius <= 0.0f || w.wheelWidth <= 0.0f || w.wheelInertia <= 0.0f || w.antiRollStiffness < 0.0f)
+                return false;
+            if(w.antiRollPairIndex < -1 || w.antiRollPairIndex >= wheelCountI)
+                return false;
+        }
+        return true;
+    }
+
+    public b8 validateVehicle(in VehicleComponent v, in Name virtualPath)const{
+        if(this.validVehicleData(v))
+            return true;
+        error("VehicleComponentAsset::validatePayload failed: invalid vehicle config for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 appendVehicleValidated(in VehicleComponent v, mut Vector<u8> outBinary)const{
+        static_assert(size_of<VehicleComponentBinary>() == 112u && size_of<VehicleWheelBinary>() == 144u);
+        if(v.wheels.size() > cast<usize>(u32.max))
+            return false;
+        const usize reqBytes = size_of<VehicleComponentBinary>() + v.wheels.size() * size_of<VehicleWheelBinary>();
+        if(!CanAppendBytes(outBinary, reqBytes))
+            return false;
+        in VehicleEngineDef eng = v.engine;
+        VehicleComponentBinary bin;
+        bin.version = s_SubsystemPhysicsComponentBinaryVersion;
+        bin.wheelCount = cast<u32>(v.wheels.size());
+        bin.gearCount = eng.gearCount;
+        bin.requestedGear = v.input.requestedGear;
+        bin.maxTorque = eng.maxTorque;
+        bin.idleRpm = eng.idleRpm;
+        bin.maxRpm = eng.maxRpm;
+        bin.shiftUpRpm = eng.shiftUpRpm;
+        bin.shiftDownRpm = eng.shiftDownRpm;
+        bin.finalDriveRatio = eng.finalDriveRatio;
+        bin.reverseRatio = eng.reverseRatio;
+        bin.differentialBias = eng.differentialBias;
+        bin.dragCoeff = eng.dragCoeff;
+        bin.downforceCoeff = eng.downforceCoeff;
+        bin.trackWidth = eng.trackWidth;
+        bin.wheelbase = eng.wheelbase;
+        for(u32 gi = 0u; gi < 6u; ++gi)
+            bin.forwardGearRatios[gi] = eng.forwardGearRatios[gi];
+        bin.throttle = v.input.throttle;
+        bin.brake = v.input.brake;
+        bin.steer = v.input.steer;
+        bin.handbrake = v.input.handbrake;
+        u8 flags = 0u;
+        if(eng.useAckermanSteering) flags |= s_VehicleFlagUseAckerman;
+        if(eng.automaticTransmission) flags |= s_VehicleFlagAutomatic;
+        if(v.enabled) flags |= s_VehicleFlagEnabled;
+        bin.flags = flags;
+        outBinary.reserve(outBinary.size() + reqBytes);
+        AppendPOD(outBinary, bin);
+        for(usize wi = 0u; wi < v.wheels.size(); ++wi){
+            in VehicleWheelDef w = v.wheels[wi];
+            VehicleWheelBinary wb;
+            wb.attachmentPoint = w.attachmentPoint;
+            wb.suspensionDirection = w.suspensionDirection;
+            wb.axleAxis = w.axleAxis;
+            wb.forwardAxis = w.forwardAxis;
+            wb.suspensionRestLength = w.suspensionRestLength;
+            wb.suspensionMaxTravel = w.suspensionMaxTravel;
+            wb.suspensionStiffness = w.suspensionStiffness;
+            wb.suspensionDamping = w.suspensionDamping;
+            wb.wheelRadius = w.wheelRadius;
+            wb.wheelWidth = w.wheelWidth;
+            wb.wheelInertia = w.wheelInertia;
+            wb.maxSteerAngleRad = w.maxSteerAngleRad;
+            wb.driveFraction = w.driveFraction;
+            wb.maxBrakeTorque = w.maxBrakeTorque;
+            wb.maxHandbrakeTorque = w.maxHandbrakeTorque;
+            wb.frictionMultiplier = w.frictionMultiplier;
+            wb.rollingResistanceCoeff = w.rollingResistanceCoeff;
+            wb.longitudinalStiffness = w.longitudinalStiffness;
+            wb.lateralStiffness = w.lateralStiffness;
+            wb.antiRollStiffness = w.antiRollStiffness;
+            wb.antiRollPairIndex = w.antiRollPairIndex;
+            u8 wFlags = 0u;
+            if(w.isSteerable) wFlags |= s_VehicleWheelFlagSteerable;
+            if(w.isDriven) wFlags |= s_VehicleWheelFlagDriven;
+            if(w.handbrakeAffected) wFlags |= s_VehicleWheelFlagHandbrakeAffected;
+            if(w.useSweptCast) wFlags |= s_VehicleWheelFlagUseSweptCast;
+            wb.flags = wFlags;
+            AppendPOD(outBinary, wb);
+        }
+        return true;
+    }
+
+    public b8 serializeVehicle(in VehicleComponent v, mut Vector<u8> outPayload)const{
+        if(!this.validVehicleData(v))
+            return false;
+        outPayload.clear();
+        return this.appendVehicleValidated(v, outPayload);
+    }
+
+    public Expected<VehicleComponent> deserializeVehicle(in Span<u8> payload)const{
+        usize cursor = 0u;
+        const Expected<VehicleComponentBinary> hdrRes = ReadPOD<VehicleComponentBinary>(payload, cursor);
+        if(!hdrRes.has_value()){
+            error("VehicleComponentAsset::loadComponentPayload failed: truncated header");
+            return MakeUnexpected(Failure());
+        }
+        in VehicleComponentBinary bin = hdrRes.value();
+        if(bin.version != s_SubsystemPhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || (bin.flags & 0xf8u) != 0u){
+            error("VehicleComponentAsset::loadComponentPayload failed: unsupported version or flags");
+            return MakeUnexpected(Failure());
+        }
+        const u64 wheelBytes = cast<u64>(bin.wheelCount) * cast<u64>(size_of<VehicleWheelBinary>());
+        if(wheelBytes != cast<u64>(payload.size() - cursor)){
+            error("VehicleComponentAsset::loadComponentPayload failed: invalid payload size");
+            return MakeUnexpected(Failure());
+        }
+        VehicleComponent v;
+        v.engine.gearCount = bin.gearCount;
+        v.input.requestedGear = bin.requestedGear;
+        v.engine.maxTorque = bin.maxTorque;
+        v.engine.idleRpm = bin.idleRpm;
+        v.engine.maxRpm = bin.maxRpm;
+        v.engine.shiftUpRpm = bin.shiftUpRpm;
+        v.engine.shiftDownRpm = bin.shiftDownRpm;
+        v.engine.finalDriveRatio = bin.finalDriveRatio;
+        v.engine.reverseRatio = bin.reverseRatio;
+        v.engine.differentialBias = bin.differentialBias;
+        v.engine.dragCoeff = bin.dragCoeff;
+        v.engine.downforceCoeff = bin.downforceCoeff;
+        v.engine.trackWidth = bin.trackWidth;
+        v.engine.wheelbase = bin.wheelbase;
+        for(u32 gi = 0u; gi < 6u; ++gi)
+            v.engine.forwardGearRatios[gi] = bin.forwardGearRatios[gi];
+        v.input.throttle = bin.throttle;
+        v.input.brake = bin.brake;
+        v.input.steer = bin.steer;
+        v.input.handbrake = bin.handbrake;
+        v.engine.useAckermanSteering = (bin.flags & s_VehicleFlagUseAckerman) != 0u;
+        v.engine.automaticTransmission = (bin.flags & s_VehicleFlagAutomatic) != 0u;
+        v.enabled = (bin.flags & s_VehicleFlagEnabled) != 0u;
+        v.wheels.resize(bin.wheelCount);
+        for(u32 wi = 0u; wi < bin.wheelCount; ++wi){
+            const Expected<VehicleWheelBinary> wbRes = ReadPOD<VehicleWheelBinary>(payload, cursor);
+            if(!wbRes.has_value())
+                return MakeUnexpected(Failure());
+            in VehicleWheelBinary wb = wbRes.value();
+            if(wb.reserved0 != 0u || wb.reserved1 != 0u || wb.reserved2 != 0u || (wb.flags & 0xf0u) != 0u){
+                error("VehicleComponentAsset::loadComponentPayload failed: unsupported wheel flags");
+                return MakeUnexpected(Failure());
+            }
+            mut VehicleWheelDef w = v.wheels[wi];
+            w.attachmentPoint = wb.attachmentPoint;
+            w.suspensionDirection = wb.suspensionDirection;
+            w.axleAxis = wb.axleAxis;
+            w.forwardAxis = wb.forwardAxis;
+            w.suspensionRestLength = wb.suspensionRestLength;
+            w.suspensionMaxTravel = wb.suspensionMaxTravel;
+            w.suspensionStiffness = wb.suspensionStiffness;
+            w.suspensionDamping = wb.suspensionDamping;
+            w.wheelRadius = wb.wheelRadius;
+            w.wheelWidth = wb.wheelWidth;
+            w.wheelInertia = wb.wheelInertia;
+            w.maxSteerAngleRad = wb.maxSteerAngleRad;
+            w.driveFraction = wb.driveFraction;
+            w.maxBrakeTorque = wb.maxBrakeTorque;
+            w.maxHandbrakeTorque = wb.maxHandbrakeTorque;
+            w.frictionMultiplier = wb.frictionMultiplier;
+            w.rollingResistanceCoeff = wb.rollingResistanceCoeff;
+            w.longitudinalStiffness = wb.longitudinalStiffness;
+            w.lateralStiffness = wb.lateralStiffness;
+            w.antiRollStiffness = wb.antiRollStiffness;
+            w.antiRollPairIndex = wb.antiRollPairIndex;
+            w.isSteerable = (wb.flags & s_VehicleWheelFlagSteerable) != 0u;
+            w.isDriven = (wb.flags & s_VehicleWheelFlagDriven) != 0u;
+            w.handbrakeAffected = (wb.flags & s_VehicleWheelFlagHandbrakeAffected) != 0u;
+            w.useSweptCast = (wb.flags & s_VehicleWheelFlagUseSweptCast) != 0u;
+        }
+        v.dirty = true;
+        v.initialized = false;
+        if(!this.validVehicleData(v)){
+            error("VehicleComponentAsset::loadComponentPayload failed: invalid vehicle fields");
+            return MakeUnexpected(Failure());
+        }
+        return v;
+    }
+
+    public b8 validRagdollData(in RagdollComponent r)const{
+        if(!IsFinite(r.driveStrengthMultiplier) || r.driveStrengthMultiplier < 0.0f)
+            return false;
+        if(r.bones.size() > cast<usize>(u32.max) || r.targetPose.size() > cast<usize>(u32.max))
+            return false;
+        PhysicsAssetBinaryCodec assetCodec;
+        const u32 boneCount = cast<u32>(r.bones.size());
+        for(usize bi = 0u; bi < r.bones.size(); ++bi){
+            in RagdollBoneDef b = r.bones[bi];
+            if(b.parentIndex != s_NullIndex && (b.parentIndex >= boneCount || b.parentIndex == cast<u32>(bi)))
+                return false;
+            if(!this.validBodyDefData(b.bodyDef))
+                return false;
+            if(b.useBox){
+                if(!IsFinite(VectorSingle(b.boxHalfExtents)) || b.boxHalfExtents.x <= 0.0f || b.boxHalfExtents.y <= 0.0f || b.boxHalfExtents.z <= 0.0f)
+                    return false;
+            }
+            else{
+                const VectorSingle c1 = b.capsule.center1();
+                const VectorSingle c2 = b.capsule.center2Vec();
+                if(!IsValidPositionVec3(c1) || !IsValidPositionVec3(c2) || !IsFinite(b.capsule.radius()) || b.capsule.radius() <= 0.0f)
+                    return false;
+                if(Vector3LengthSq(c2 - c1).x < s_MinCapsuleLength * s_MinCapsuleLength)
+                    return false;
+            }
+            if(!IsValidPositionVec3(VectorSingle(b.shapeDef.localTransform.position))
+                || !IsFinite(VectorSingle(b.shapeDef.localTransform.rotation))
+                || LengthSq(VectorSingle(b.shapeDef.localTransform.rotation)) <= s_NormalizeEpsilonSq)
+                return false;
+            if(!IsFinite(b.shapeDef.density) || b.shapeDef.density < 0.0f || !assetCodec.validSurfaceMaterial(b.shapeDef.material))
+                return false;
+            if(!IsValidPositionVec3(VectorSingle(b.jointAnchorWorld))
+                || !IsFinite(VectorSingle(b.jointAxisWorld))
+                || LengthSq(VectorSingle(b.jointAxisWorld)) <= s_NormalizeEpsilonSq)
+                return false;
+            if(!IsFinite(VectorSingle(b.swingLimitY, b.swingLimitZ, b.twistMin, b.twistMax))
+                || !IsFinite(VectorSingle(b.motorMaxTorque, b.motorHertz, b.motorDamping, 0.0f)))
+                return false;
+            if(b.swingLimitY < 0.0f || b.swingLimitZ < 0.0f || b.twistMin > b.twistMax || b.motorMaxTorque < 0.0f || b.motorHertz < 0.0f || b.motorDamping < 0.0f)
+                return false;
+            for(usize ai = 0u; ai < 6u; ++ai){
+                in SixDofAxisConfig ax = b.sixDofAxes[ai];
+                if(cast<u8>(ax.motion) > cast<u8>(JointMotion::Locked))
+                    return false;
+                if(!IsFinite(VectorSingle(ax.lowerLimit, ax.upperLimit, ax.motorTargetVelocity, ax.motorTargetPosition))
+                    || !IsFinite(VectorSingle(ax.maxMotorForce, ax.springHertz, ax.springDampingRatio, 0.0f)))
+                    return false;
+                if(ax.maxMotorForce < 0.0f || ax.springHertz < 0.0f || ax.springDampingRatio < 0.0f)
+                    return false;
+                if(ax.motion == JointMotion::Limited && ax.lowerLimit > ax.upperLimit)
+                    return false;
+            }
+        }
+        for(usize pi = 0u; pi < r.targetPose.size(); ++pi){
+            in Transform3D xf = r.targetPose[pi];
+            if(!IsValidPositionVec3(VectorSingle(xf.position)) || !IsFinite(VectorSingle(xf.rotation)) || LengthSq(VectorSingle(xf.rotation)) <= s_NormalizeEpsilonSq)
+                return false;
+        }
+        return true;
+    }
+
+    public b8 validateRagdoll(in RagdollComponent r, in Name virtualPath)const{
+        if(this.validRagdollData(r))
+            return true;
+        error("RagdollComponentAsset::validatePayload failed: invalid ragdoll config for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 appendRagdollValidated(in RagdollComponent r, mut Vector<u8> outBinary)const{
+        if(r.bones.size() > cast<usize>(u32.max) || r.targetPose.size() > cast<usize>(u32.max))
+            return false;
+        const usize reqBytes = size_of<RagdollComponentBinary>()
+            + r.bones.size() * size_of<RagdollBoneBinary>()
+            + r.targetPose.size() * size_of<PhysicsTransformBinary>();
+        if(!CanAppendBytes(outBinary, reqBytes))
+            return false;
+        RagdollComponentBinary hdr;
+        hdr.version = s_SubsystemPhysicsComponentBinaryVersion;
+        hdr.boneCount = cast<u32>(r.bones.size());
+        hdr.targetPoseCount = cast<u32>(r.targetPose.size());
+        hdr.driveStrengthMultiplier = r.driveStrengthMultiplier;
+        u8 flags = 0u;
+        if(r.enabled) flags |= s_RagdollFlagEnabled;
+        if(r.kinematic) flags |= s_RagdollFlagKinematic;
+        if(r.driveToPose) flags |= s_RagdollFlagDriveToPose;
+        hdr.flags = flags;
+        outBinary.reserve(outBinary.size() + reqBytes);
+        AppendPOD(outBinary, hdr);
+
+        PhysicsAssetBinaryCodec assetCodec;
+        for(usize bi = 0u; bi < r.bones.size(); ++bi){
+            in RagdollBoneDef b = r.bones[bi];
+            RagdollBoneBinary bb;
+            bb.position = b.bodyDef.position;
+            bb.rotation = b.bodyDef.rotation;
+            bb.linearVelocity = b.bodyDef.linearVelocity;
+            bb.angularVelocity = b.bodyDef.angularVelocity;
+            bb.capsuleCenter1Radius = b.capsule.center1Radius;
+            bb.capsuleCenter2 = b.capsule.center2;
+            bb.boxHalfExtents = b.boxHalfExtents;
+            bb.shapeLocalPosition = b.shapeDef.localTransform.position;
+            bb.shapeLocalRotation = b.shapeDef.localTransform.rotation;
+            bb.jointAnchorWorld = b.jointAnchorWorld;
+            bb.jointAxisWorld = b.jointAxisWorld;
+            bb.shapeMaterial = assetCodec.packSurfaceMaterialFields(b.shapeDef.material);
+            bb.bodyUserData = b.bodyDef.userData;
+            bb.shapeUserData = b.shapeDef.userData;
+            bb.parentIndex = b.parentIndex;
+            bb.bodyMotionLocks = b.bodyDef.motionLocks;
+            bb.filterCategoryBits = b.shapeDef.filter.categoryBits;
+            bb.filterMaskBits = b.shapeDef.filter.maskBits;
+            bb.filterGroupIndex = b.shapeDef.filter.groupIndex;
+            bb.linearDamping = b.bodyDef.linearDamping;
+            bb.angularDamping = b.bodyDef.angularDamping;
+            bb.gravityScale = b.bodyDef.gravityScale;
+            bb.sleepThreshold = b.bodyDef.sleepThreshold;
+            bb.maxAngularVelocity = b.bodyDef.maxAngularVelocity;
+            bb.shapeDensity = b.shapeDef.density;
+            bb.swingLimitY = b.swingLimitY;
+            bb.swingLimitZ = b.swingLimitZ;
+            bb.twistMin = b.twistMin;
+            bb.twistMax = b.twistMax;
+            bb.motorMaxTorque = b.motorMaxTorque;
+            bb.motorHertz = b.motorHertz;
+            bb.motorDamping = b.motorDamping;
+            bb.bodyType = cast<u8>(b.bodyDef.type);
+            u8 bFlags = 0u;
+            if(b.bodyDef.enableSleep) bFlags |= s_RigidBodyFlagEnableSleep;
+            if(b.bodyDef.isAwake) bFlags |= s_RigidBodyFlagIsAwake;
+            if(b.bodyDef.isBullet) bFlags |= s_RigidBodyFlagIsBullet;
+            if(b.bodyDef.isEnabled) bFlags |= s_RigidBodyFlagIsEnabled;
+            if(b.bodyDef.allowFastRotation) bFlags |= s_RigidBodyFlagAllowFastRotation;
+            if(b.bodyDef.enableGyroscopicTorque) bFlags |= s_RigidBodyFlagEnableGyroscopic;
+            bb.bodyFlags = bFlags;
+            u8 sFlags = 0u;
+            if(b.useBox) sFlags |= s_RagdollShapeFlagUseBox;
+            if(b.shapeDef.isSensor) sFlags |= s_RagdollShapeFlagIsSensor;
+            if(b.shapeDef.enableContactEvents) sFlags |= s_RagdollShapeFlagContactEvents;
+            if(b.shapeDef.enableHitEvents) sFlags |= s_RagdollShapeFlagHitEvents;
+            if(b.shapeDef.enableSensorEvents) sFlags |= s_RagdollShapeFlagSensorEvents;
+            if(b.shapeDef.enablePreSolveEvents) sFlags |= s_RagdollShapeFlagPreSolveEvents;
+            if(b.shapeDef.invokeContactCreation) sFlags |= s_RagdollShapeFlagInvokeCreation;
+            if(b.shapeDef.updateBodyMass) sFlags |= s_RagdollShapeFlagUpdateBodyMass;
+            bb.shapeFlags = sFlags;
+            if(b.useSixDof)
+                bb.extraFlags = s_RagdollBoneExtraFlagUseSixDof;
+            for(u32 ai = 0u; ai < 6u; ++ai){
+                in SixDofAxisConfig ax = b.sixDofAxes[ai];
+                bb.sixDofMotions[ai] = cast<u8>(ax.motion);
+                u8 aFlags = 0u;
+                if(ax.enableMotor) aFlags |= s_SixDofAxisFlagEnableMotor;
+                if(ax.enableSpring) aFlags |= s_SixDofAxisFlagEnableSpring;
+                bb.sixDofFlags[ai] = aFlags;
+                const u32 pBase = ai * 7u;
+                bb.sixDofParams[pBase + 0u] = ax.lowerLimit;
+                bb.sixDofParams[pBase + 1u] = ax.upperLimit;
+                bb.sixDofParams[pBase + 2u] = ax.motorTargetVelocity;
+                bb.sixDofParams[pBase + 3u] = ax.motorTargetPosition;
+                bb.sixDofParams[pBase + 4u] = ax.maxMotorForce;
+                bb.sixDofParams[pBase + 5u] = ax.springHertz;
+                bb.sixDofParams[pBase + 6u] = ax.springDampingRatio;
+            }
+            AppendPOD(outBinary, bb);
+        }
+        for(usize pi = 0u; pi < r.targetPose.size(); ++pi){
+            PhysicsTransformBinary tb;
+            tb.position = r.targetPose[pi].position;
+            tb.rotation = r.targetPose[pi].rotation;
+            AppendPOD(outBinary, tb);
+        }
+        return true;
+    }
+
+    public b8 serializeRagdoll(in RagdollComponent r, mut Vector<u8> outPayload)const{
+        if(!this.validRagdollData(r))
+            return false;
+        outPayload.clear();
+        return this.appendRagdollValidated(r, outPayload);
+    }
+
+    public Expected<RagdollComponent> deserializeRagdoll(in Span<u8> payload)const{
+        usize cursor = 0u;
+        const Expected<RagdollComponentBinary> hdrRes = ReadPOD<RagdollComponentBinary>(payload, cursor);
+        if(!hdrRes.has_value()){
+            error("RagdollComponentAsset::loadComponentPayload failed: truncated header");
+            return MakeUnexpected(Failure());
+        }
+        in RagdollComponentBinary hdr = hdrRes.value();
+        if(hdr.version != s_SubsystemPhysicsComponentBinaryVersion || hdr.reserved0 != 0u || hdr.reserved1 != 0u || hdr.reserved2 != 0u || (hdr.flags & 0xf8u) != 0u){
+            error("RagdollComponentAsset::loadComponentPayload failed: unsupported version or flags");
+            return MakeUnexpected(Failure());
+        }
+        const u64 expectedBytes = cast<u64>(hdr.boneCount) * cast<u64>(size_of<RagdollBoneBinary>())
+            + cast<u64>(hdr.targetPoseCount) * cast<u64>(size_of<PhysicsTransformBinary>());
+        if(expectedBytes != cast<u64>(payload.size() - cursor)){
+            error("RagdollComponentAsset::loadComponentPayload failed: invalid payload size");
+            return MakeUnexpected(Failure());
+        }
+        RagdollComponent r;
+        r.driveStrengthMultiplier = hdr.driveStrengthMultiplier;
+        r.enabled = (hdr.flags & s_RagdollFlagEnabled) != 0u;
+        r.kinematic = (hdr.flags & s_RagdollFlagKinematic) != 0u;
+        r.driveToPose = (hdr.flags & s_RagdollFlagDriveToPose) != 0u;
+        r.bones.resize(hdr.boneCount);
+        PhysicsAssetBinaryCodec assetCodec;
+        for(u32 bi = 0u; bi < hdr.boneCount; ++bi){
+            const Expected<RagdollBoneBinary> bbRes = ReadPOD<RagdollBoneBinary>(payload, cursor);
+            if(!bbRes.has_value())
+                return MakeUnexpected(Failure());
+            in RagdollBoneBinary bb = bbRes.value();
+            if(bb.reserved0 != 0u || (bb.bodyFlags & 0xc0u) != 0u || (bb.extraFlags & 0xfeu) != 0u || bb.sixDofMotions[6u] != 0u || bb.sixDofMotions[7u] != 0u || bb.sixDofFlags[6u] != 0u || bb.sixDofFlags[7u] != 0u){
+                error("RagdollComponentAsset::loadComponentPayload failed: unsupported bone flags");
+                return MakeUnexpected(Failure());
+            }
+            const Expected<SurfaceMaterial> matRes = assetCodec.unpackSurfaceMaterialFields(bb.shapeMaterial);
+            if(!matRes.has_value())
+                return MakeUnexpected(Failure());
+            mut RagdollBoneDef b = r.bones[bi];
+            b.parentIndex = bb.parentIndex;
+            b.bodyDef.type = cast<BodyType>(bb.bodyType);
+            b.bodyDef.position = bb.position;
+            b.bodyDef.rotation = bb.rotation;
+            b.bodyDef.linearVelocity = bb.linearVelocity;
+            b.bodyDef.angularVelocity = bb.angularVelocity;
+            b.bodyDef.linearDamping = bb.linearDamping;
+            b.bodyDef.angularDamping = bb.angularDamping;
+            b.bodyDef.gravityScale = bb.gravityScale;
+            b.bodyDef.sleepThreshold = bb.sleepThreshold;
+            b.bodyDef.maxAngularVelocity = bb.maxAngularVelocity;
+            b.bodyDef.motionLocks = bb.bodyMotionLocks;
+            b.bodyDef.enableSleep = (bb.bodyFlags & s_RigidBodyFlagEnableSleep) != 0u;
+            b.bodyDef.isAwake = (bb.bodyFlags & s_RigidBodyFlagIsAwake) != 0u;
+            b.bodyDef.isBullet = (bb.bodyFlags & s_RigidBodyFlagIsBullet) != 0u;
+            b.bodyDef.isEnabled = (bb.bodyFlags & s_RigidBodyFlagIsEnabled) != 0u;
+            b.bodyDef.allowFastRotation = (bb.bodyFlags & s_RigidBodyFlagAllowFastRotation) != 0u;
+            b.bodyDef.enableGyroscopicTorque = (bb.bodyFlags & s_RigidBodyFlagEnableGyroscopic) != 0u;
+            b.bodyDef.userData = bb.bodyUserData;
+            b.capsule.center1Radius = bb.capsuleCenter1Radius;
+            b.capsule.center2 = bb.capsuleCenter2;
+            b.boxHalfExtents = bb.boxHalfExtents;
+            b.useBox = (bb.shapeFlags & s_RagdollShapeFlagUseBox) != 0u;
+            b.shapeDef.localTransform = Transform3D(VectorSingle(bb.shapeLocalPosition), VectorSingle(bb.shapeLocalRotation));
+            b.shapeDef.material = matRes.value();
+            b.shapeDef.filter.categoryBits = bb.filterCategoryBits;
+            b.shapeDef.filter.maskBits = bb.filterMaskBits;
+            b.shapeDef.filter.groupIndex = bb.filterGroupIndex;
+            b.shapeDef.density = bb.shapeDensity;
+            b.shapeDef.isSensor = (bb.shapeFlags & s_RagdollShapeFlagIsSensor) != 0u;
+            b.shapeDef.enableContactEvents = (bb.shapeFlags & s_RagdollShapeFlagContactEvents) != 0u;
+            b.shapeDef.enableHitEvents = (bb.shapeFlags & s_RagdollShapeFlagHitEvents) != 0u;
+            b.shapeDef.enableSensorEvents = (bb.shapeFlags & s_RagdollShapeFlagSensorEvents) != 0u;
+            b.shapeDef.enablePreSolveEvents = (bb.shapeFlags & s_RagdollShapeFlagPreSolveEvents) != 0u;
+            b.shapeDef.invokeContactCreation = (bb.shapeFlags & s_RagdollShapeFlagInvokeCreation) != 0u;
+            b.shapeDef.updateBodyMass = (bb.shapeFlags & s_RagdollShapeFlagUpdateBodyMass) != 0u;
+            b.shapeDef.userData = bb.shapeUserData;
+            b.jointAnchorWorld = bb.jointAnchorWorld;
+            b.jointAxisWorld = bb.jointAxisWorld;
+            b.swingLimitY = bb.swingLimitY;
+            b.swingLimitZ = bb.swingLimitZ;
+            b.twistMin = bb.twistMin;
+            b.twistMax = bb.twistMax;
+            b.motorMaxTorque = bb.motorMaxTorque;
+            b.motorHertz = bb.motorHertz;
+            b.motorDamping = bb.motorDamping;
+            b.useSixDof = (bb.extraFlags & s_RagdollBoneExtraFlagUseSixDof) != 0u;
+            for(u32 ai = 0u; ai < 6u; ++ai){
+                if((bb.sixDofFlags[ai] & 0xfcu) != 0u)
+                    return MakeUnexpected(Failure());
+                mut SixDofAxisConfig ax = b.sixDofAxes[ai];
+                ax.motion = cast<JointMotion>(bb.sixDofMotions[ai]);
+                ax.enableMotor = (bb.sixDofFlags[ai] & s_SixDofAxisFlagEnableMotor) != 0u;
+                ax.enableSpring = (bb.sixDofFlags[ai] & s_SixDofAxisFlagEnableSpring) != 0u;
+                const u32 pBase = ai * 7u;
+                ax.lowerLimit = bb.sixDofParams[pBase + 0u];
+                ax.upperLimit = bb.sixDofParams[pBase + 1u];
+                ax.motorTargetVelocity = bb.sixDofParams[pBase + 2u];
+                ax.motorTargetPosition = bb.sixDofParams[pBase + 3u];
+                ax.maxMotorForce = bb.sixDofParams[pBase + 4u];
+                ax.springHertz = bb.sixDofParams[pBase + 5u];
+                ax.springDampingRatio = bb.sixDofParams[pBase + 6u];
+            }
+        }
+        r.targetPose.resize(hdr.targetPoseCount);
+        for(u32 pi = 0u; pi < hdr.targetPoseCount; ++pi){
+            const Expected<PhysicsTransformBinary> tbRes = ReadPOD<PhysicsTransformBinary>(payload, cursor);
+            if(!tbRes.has_value())
+                return MakeUnexpected(Failure());
+            r.targetPose[pi] = Transform3D(VectorSingle(tbRes.value().position), VectorSingle(tbRes.value().rotation));
+        }
+        r.dirty = true;
+        r.initialized = false;
+        r.syncedKinematic = false;
+        if(!this.validRagdollData(r)){
+            error("RagdollComponentAsset::loadComponentPayload failed: invalid ragdoll fields");
+            return MakeUnexpected(Failure());
+        }
+        return r;
+    }
+
+    public b8 validFluidVolumeData(in FluidVolumeComponent f)const{
+        in FluidVolume v = f.volume;
+        if(cast<u8>(v.shape) > cast<u8>(FluidVolumeShape::BoxAabb))
+            return false;
+        if(!IsFinite(VectorSingle(v.surfaceNormalOffset))
+            || !IsFinite(VectorSingle(v.bounds.lowerBound))
+            || !IsFinite(VectorSingle(v.bounds.upperBound))
+            || !IsFinite(VectorSingle(v.flowVelocity)))
+            return false;
+        if(!IsFinite(VectorSingle(v.density, v.linearDrag, v.angularDrag, v.quadraticDrag)) || !IsFinite(v.liftCoeff))
+            return false;
+        if(v.density < 0.0f || v.linearDrag < 0.0f || v.angularDrag < 0.0f || v.quadraticDrag < 0.0f)
+            return false;
+        if(v.shape == FluidVolumeShape::HalfSpacePlane && LengthSq(VectorSingle(v.surfaceNormalOffset.x, v.surfaceNormalOffset.y, v.surfaceNormalOffset.z, 0.0f)) <= s_NormalizeEpsilonSq)
+            return false;
+        if(v.shape == FluidVolumeShape::BoxAabb && (v.bounds.lowerBound.x > v.bounds.upperBound.x || v.bounds.lowerBound.y > v.bounds.upperBound.y || v.bounds.lowerBound.z > v.bounds.upperBound.z))
+            return false;
+        return true;
+    }
+
+    public b8 validateFluidVolume(in FluidVolumeComponent f, in Name virtualPath)const{
+        if(this.validFluidVolumeData(f))
+            return true;
+        error("FluidVolumeComponentAsset::validatePayload failed: invalid fluid volume config for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 appendFluidVolumeValidated(in FluidVolumeComponent f, mut Vector<u8> outBinary)const{
+        static_assert(size_of<FluidVolumeComponentBinary>() == 112u);
+        if(!CanAppendBytes(outBinary, size_of<FluidVolumeComponentBinary>()))
+            return false;
+        in FluidVolume v = f.volume;
+        FluidVolumeComponentBinary bin;
+        bin.version = s_SubsystemPhysicsComponentBinaryVersion;
+        bin.surfaceNormalOffset = v.surfaceNormalOffset;
+        bin.boundsLower = v.bounds.lowerBound;
+        bin.boundsUpper = v.bounds.upperBound;
+        bin.flowVelocity = v.flowVelocity;
+        bin.shape = cast<u8>(v.shape);
+        u8 flags = 0u;
+        if(v.enabled) flags |= s_FluidFlagVolumeEnabled;
+        if(f.enabled) flags |= s_FluidFlagComponentEnabled;
+        bin.flags = flags;
+        bin.density = v.density;
+        bin.linearDrag = v.linearDrag;
+        bin.angularDrag = v.angularDrag;
+        bin.quadraticDrag = v.quadraticDrag;
+        bin.liftCoeff = v.liftCoeff;
+        bin.filterCategoryBits = v.filter.categoryBits;
+        bin.filterMaskBits = v.filter.maskBits;
+        bin.filterGroupIndex = v.filter.groupIndex;
+        outBinary.reserve(outBinary.size() + size_of<FluidVolumeComponentBinary>());
+        AppendPOD(outBinary, bin);
+        return true;
+    }
+
+    public b8 serializeFluidVolume(in FluidVolumeComponent f, mut Vector<u8> outPayload)const{
+        if(!this.validFluidVolumeData(f))
+            return false;
+        outPayload.clear();
+        return this.appendFluidVolumeValidated(f, outPayload);
+    }
+
+    public Expected<FluidVolumeComponent> deserializeFluidVolume(in Span<u8> payload)const{
+        usize cursor = 0u;
+        const Expected<FluidVolumeComponentBinary> res = ReadPOD<FluidVolumeComponentBinary>(payload, cursor);
+        if(!res.has_value() || cursor != payload.size()){
+            error("FluidVolumeComponentAsset::loadComponentPayload failed: invalid payload size");
+            return MakeUnexpected(Failure());
+        }
+        in FluidVolumeComponentBinary bin = res.value();
+        if(bin.version != s_SubsystemPhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || bin.reserved2 != 0u || (bin.flags & 0xfcu) != 0u){
+            error("FluidVolumeComponentAsset::loadComponentPayload failed: unsupported version or flags");
+            return MakeUnexpected(Failure());
+        }
+        FluidVolumeComponent f;
+        f.volume.shape = cast<FluidVolumeShape>(bin.shape);
+        f.volume.surfaceNormalOffset = bin.surfaceNormalOffset;
+        f.volume.bounds = Aabb3D(VectorSingle(bin.boundsLower), VectorSingle(bin.boundsUpper));
+        f.volume.flowVelocity = bin.flowVelocity;
+        f.volume.enabled = (bin.flags & s_FluidFlagVolumeEnabled) != 0u;
+        f.enabled = (bin.flags & s_FluidFlagComponentEnabled) != 0u;
+        f.volume.density = bin.density;
+        f.volume.linearDrag = bin.linearDrag;
+        f.volume.angularDrag = bin.angularDrag;
+        f.volume.quadraticDrag = bin.quadraticDrag;
+        f.volume.liftCoeff = bin.liftCoeff;
+        f.volume.filter.categoryBits = bin.filterCategoryBits;
+        f.volume.filter.maskBits = bin.filterMaskBits;
+        f.volume.filter.groupIndex = bin.filterGroupIndex;
+        if(!this.validFluidVolumeData(f)){
+            error("FluidVolumeComponentAsset::loadComponentPayload failed: invalid fluid volume fields");
+            return MakeUnexpected(Failure());
+        }
+        return f;
+    }
+
+    public b8 validForceFieldData(in ForceFieldComponent ff)const{
+        in ForceField field = ff.field;
+        if(cast<u8>(field.type) > cast<u8>(ForceFieldType::BoxWind))
+            return false;
+        if(!IsFinite(VectorSingle(field.bounds.lowerBound))
+            || !IsFinite(VectorSingle(field.bounds.upperBound))
+            || !IsFinite(VectorSingle(field.originOrDirection)))
+            return false;
+        if(!IsFinite(VectorSingle(field.strength, field.minDistance, field.radius, field.falloffPower))
+            || !IsFinite(VectorSingle(field.turbulenceAmplitude, field.turbulenceFrequency, 0.0f, 0.0f)))
+            return false;
+        if(field.minDistance < 0.0f || field.radius < 0.0f || field.falloffPower < 0.0f || field.turbulenceAmplitude < 0.0f || field.turbulenceFrequency < 0.0f)
+            return false;
+        if(field.useBounds && (field.bounds.lowerBound.x > field.bounds.upperBound.x || field.bounds.lowerBound.y > field.bounds.upperBound.y || field.bounds.lowerBound.z > field.bounds.upperBound.z))
+            return false;
+        return true;
+    }
+
+    public b8 validateForceField(in ForceFieldComponent ff, in Name virtualPath)const{
+        if(this.validForceFieldData(ff))
+            return true;
+        error("ForceFieldComponentAsset::validatePayload failed: invalid force field config for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 appendForceFieldValidated(in ForceFieldComponent ff, mut Vector<u8> outBinary)const{
+        static_assert(size_of<ForceFieldComponentBinary>() == 96u);
+        if(!CanAppendBytes(outBinary, size_of<ForceFieldComponentBinary>()))
+            return false;
+        in ForceField field = ff.field;
+        ForceFieldComponentBinary bin;
+        bin.version = s_SubsystemPhysicsComponentBinaryVersion;
+        bin.boundsLower = field.bounds.lowerBound;
+        bin.boundsUpper = field.bounds.upperBound;
+        bin.originOrDirection = field.originOrDirection;
+        bin.fieldType = cast<u8>(field.type);
+        u8 flags = 0u;
+        if(field.useBounds) flags |= s_ForceFieldFlagUseBounds;
+        if(field.enabled) flags |= s_ForceFieldFlagFieldEnabled;
+        if(ff.enabled) flags |= s_ForceFieldFlagComponentEnabled;
+        bin.flags = flags;
+        bin.strength = field.strength;
+        bin.minDistance = field.minDistance;
+        bin.radius = field.radius;
+        bin.falloffPower = field.falloffPower;
+        bin.turbulenceAmplitude = field.turbulenceAmplitude;
+        bin.turbulenceFrequency = field.turbulenceFrequency;
+        bin.filterCategoryBits = field.filter.categoryBits;
+        bin.filterMaskBits = field.filter.maskBits;
+        bin.filterGroupIndex = field.filter.groupIndex;
+        outBinary.reserve(outBinary.size() + size_of<ForceFieldComponentBinary>());
+        AppendPOD(outBinary, bin);
+        return true;
+    }
+
+    public b8 serializeForceField(in ForceFieldComponent ff, mut Vector<u8> outPayload)const{
+        if(!this.validForceFieldData(ff))
+            return false;
+        outPayload.clear();
+        return this.appendForceFieldValidated(ff, outPayload);
+    }
+
+    public Expected<ForceFieldComponent> deserializeForceField(in Span<u8> payload)const{
+        usize cursor = 0u;
+        const Expected<ForceFieldComponentBinary> res = ReadPOD<ForceFieldComponentBinary>(payload, cursor);
+        if(!res.has_value() || cursor != payload.size()){
+            error("ForceFieldComponentAsset::loadComponentPayload failed: invalid payload size");
+            return MakeUnexpected(Failure());
+        }
+        in ForceFieldComponentBinary bin = res.value();
+        if(bin.version != s_SubsystemPhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || (bin.flags & 0xf8u) != 0u){
+            error("ForceFieldComponentAsset::loadComponentPayload failed: unsupported version or flags");
+            return MakeUnexpected(Failure());
+        }
+        ForceFieldComponent ff;
+        ff.field.type = cast<ForceFieldType>(bin.fieldType);
+        ff.field.bounds = Aabb3D(VectorSingle(bin.boundsLower), VectorSingle(bin.boundsUpper));
+        ff.field.originOrDirection = bin.originOrDirection;
+        ff.field.useBounds = (bin.flags & s_ForceFieldFlagUseBounds) != 0u;
+        ff.field.enabled = (bin.flags & s_ForceFieldFlagFieldEnabled) != 0u;
+        ff.enabled = (bin.flags & s_ForceFieldFlagComponentEnabled) != 0u;
+        ff.field.strength = bin.strength;
+        ff.field.minDistance = bin.minDistance;
+        ff.field.radius = bin.radius;
+        ff.field.falloffPower = bin.falloffPower;
+        ff.field.turbulenceAmplitude = bin.turbulenceAmplitude;
+        ff.field.turbulenceFrequency = bin.turbulenceFrequency;
+        ff.field.filter.categoryBits = bin.filterCategoryBits;
+        ff.field.filter.maskBits = bin.filterMaskBits;
+        ff.field.filter.groupIndex = bin.filterGroupIndex;
+        if(!this.validForceFieldData(ff)){
+            error("ForceFieldComponentAsset::loadComponentPayload failed: invalid force field fields");
+            return MakeUnexpected(Failure());
+        }
+        return ff;
+    }
+
+    public b8 validArticulationData(in ArticulationComponent a)const{
+        if(a.links.size() > cast<usize>(u32.max) || a.proxyEntityNames.size() > cast<usize>(u32.max))
+            return false;
+        const u32 linkCount = cast<u32>(a.links.size());
+        for(usize li = 0u; li < a.links.size(); ++li){
+            in ArticulationLinkDef l = a.links[li];
+            if(l.parentIndex != s_NullIndex && (l.parentIndex >= linkCount || l.parentIndex == cast<u32>(li)))
+                return false;
+            if(cast<u8>(l.jointType) > cast<u8>(ArticulationJointType::Prismatic))
+                return false;
+            if(!IsValidPositionVec3(VectorSingle(l.parentToJoint.position))
+                || !IsFinite(VectorSingle(l.parentToJoint.rotation))
+                || LengthSq(VectorSingle(l.parentToJoint.rotation)) <= s_NormalizeEpsilonSq
+                || !IsValidPositionVec3(VectorSingle(l.jointToChild.position))
+                || !IsFinite(VectorSingle(l.jointToChild.rotation))
+                || LengthSq(VectorSingle(l.jointToChild.rotation)) <= s_NormalizeEpsilonSq)
+                return false;
+            if(!IsFinite(VectorSingle(l.jointAxisLocal))
+                || LengthSq(VectorSingle(l.jointAxisLocal)) <= s_NormalizeEpsilonSq
+                || !IsValidPositionVec3(VectorSingle(l.comLocal))
+                || !IsFinite(VectorSingle(l.inertiaDiag)))
+                return false;
+            if(l.inertiaDiag.x <= 0.0f || l.inertiaDiag.y <= 0.0f || l.inertiaDiag.z <= 0.0f || !IsFinite(l.mass) || l.mass <= 0.0f)
+                return false;
+            if(!IsFinite(VectorSingle(l.lowerLimit, l.upperLimit, l.driveTargetPos, l.driveTargetVel))
+                || !IsFinite(VectorSingle(l.driveStiffness, l.driveDamping, l.driveMaxForce, l.jointDamping))
+                || !IsFinite(l.jointFriction))
+                return false;
+            if(l.driveStiffness < 0.0f || l.driveDamping < 0.0f || l.driveMaxForce < 0.0f || l.jointDamping < 0.0f || l.jointFriction < 0.0f)
+                return false;
+            if(l.enableLimit && l.lowerLimit > l.upperLimit)
+                return false;
+        }
+        return true;
+    }
+
+    public b8 validateArticulation(in ArticulationComponent a, in Name virtualPath)const{
+        if(this.validArticulationData(a))
+            return true;
+        error("ArticulationComponentAsset::validatePayload failed: invalid articulation config for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 appendArticulationValidated(in ArticulationComponent a, mut Vector<u8> outBinary)const{
+        static_assert(size_of<ArticulationComponentBinary>() == 16u && size_of<ArticulationLinkBinary>() == 160u);
+        if(a.links.size() > cast<usize>(u32.max) || a.proxyEntityNames.size() > cast<usize>(u32.max))
+            return false;
+        const usize reqBytes = size_of<ArticulationComponentBinary>()
+            + a.links.size() * size_of<ArticulationLinkBinary>()
+            + a.proxyEntityNames.size() * size_of<NameHash>();
+        if(!CanAppendBytes(outBinary, reqBytes))
+            return false;
+        ArticulationComponentBinary hdr;
+        hdr.version = s_SubsystemPhysicsComponentBinaryVersion;
+        hdr.linkCount = cast<u32>(a.links.size());
+        hdr.proxyNameCount = cast<u32>(a.proxyEntityNames.size());
+        u8 flags = 0u;
+        if(a.isFixedBase) flags |= s_ArticulationFlagIsFixedBase;
+        if(a.enabled) flags |= s_ArticulationFlagEnabled;
+        hdr.flags = flags;
+        outBinary.reserve(outBinary.size() + reqBytes);
+        AppendPOD(outBinary, hdr);
+
+        for(usize li = 0u; li < a.links.size(); ++li){
+            in ArticulationLinkDef l = a.links[li];
+            ArticulationLinkBinary lb;
+            lb.parentToJointPos = l.parentToJoint.position;
+            lb.parentToJointRot = l.parentToJoint.rotation;
+            lb.jointToChildPos = l.jointToChild.position;
+            lb.jointToChildRot = l.jointToChild.rotation;
+            lb.jointAxisLocal = l.jointAxisLocal;
+            lb.comLocal = l.comLocal;
+            lb.inertiaDiag = l.inertiaDiag;
+            lb.parentIndex = l.parentIndex;
+            lb.mass = l.mass;
+            lb.lowerLimit = l.lowerLimit;
+            lb.upperLimit = l.upperLimit;
+            lb.driveTargetPos = l.driveTargetPos;
+            lb.driveTargetVel = l.driveTargetVel;
+            lb.driveStiffness = l.driveStiffness;
+            lb.driveDamping = l.driveDamping;
+            lb.driveMaxForce = l.driveMaxForce;
+            lb.jointDamping = l.jointDamping;
+            lb.jointFriction = l.jointFriction;
+            lb.jointType = cast<u8>(l.jointType);
+            u8 lFlags = 0u;
+            if(l.enableLimit) lFlags |= s_ArticulationLinkFlagEnableLimit;
+            if(l.enableDrive) lFlags |= s_ArticulationLinkFlagEnableDrive;
+            lb.flags = lFlags;
+            AppendPOD(outBinary, lb);
+        }
+        for(usize pi = 0u; pi < a.proxyEntityNames.size(); ++pi)
+            AppendPOD(outBinary, a.proxyEntityNames[pi].hash());
+        return true;
+    }
+
+    public b8 serializeArticulation(in ArticulationComponent a, mut Vector<u8> outPayload)const{
+        if(!this.validArticulationData(a))
+            return false;
+        outPayload.clear();
+        return this.appendArticulationValidated(a, outPayload);
+    }
+
+    public Expected<ArticulationComponent> deserializeArticulation(in Span<u8> payload)const{
+        usize cursor = 0u;
+        const Expected<ArticulationComponentBinary> hdrRes = ReadPOD<ArticulationComponentBinary>(payload, cursor);
+        if(!hdrRes.has_value()){
+            error("ArticulationComponentAsset::loadComponentPayload failed: truncated header");
+            return MakeUnexpected(Failure());
+        }
+        in ArticulationComponentBinary hdr = hdrRes.value();
+        if(hdr.version != s_SubsystemPhysicsComponentBinaryVersion || hdr.reserved0 != 0u || hdr.reserved1 != 0u || (hdr.flags & 0xfcu) != 0u){
+            error("ArticulationComponentAsset::loadComponentPayload failed: unsupported version or flags");
+            return MakeUnexpected(Failure());
+        }
+        const u64 expectedBytes = cast<u64>(hdr.linkCount) * cast<u64>(size_of<ArticulationLinkBinary>())
+            + cast<u64>(hdr.proxyNameCount) * cast<u64>(size_of<NameHash>());
+        if(expectedBytes != cast<u64>(payload.size() - cursor)){
+            error("ArticulationComponentAsset::loadComponentPayload failed: invalid payload size");
+            return MakeUnexpected(Failure());
+        }
+        ArticulationComponent a;
+        a.isFixedBase = (hdr.flags & s_ArticulationFlagIsFixedBase) != 0u;
+        a.enabled = (hdr.flags & s_ArticulationFlagEnabled) != 0u;
+        a.links.resize(hdr.linkCount);
+        for(u32 li = 0u; li < hdr.linkCount; ++li){
+            const Expected<ArticulationLinkBinary> lbRes = ReadPOD<ArticulationLinkBinary>(payload, cursor);
+            if(!lbRes.has_value())
+                return MakeUnexpected(Failure());
+            in ArticulationLinkBinary lb = lbRes.value();
+            if(lb.reserved0 != 0u || (lb.flags & 0xfcu) != 0u){
+                error("ArticulationComponentAsset::loadComponentPayload failed: unsupported link flags");
+                return MakeUnexpected(Failure());
+            }
+            mut ArticulationLinkDef l = a.links[li];
+            l.parentIndex = lb.parentIndex;
+            l.jointType = cast<ArticulationJointType>(lb.jointType);
+            l.parentToJoint = Transform3D(VectorSingle(lb.parentToJointPos), VectorSingle(lb.parentToJointRot));
+            l.jointToChild = Transform3D(VectorSingle(lb.jointToChildPos), VectorSingle(lb.jointToChildRot));
+            l.jointAxisLocal = lb.jointAxisLocal;
+            l.mass = lb.mass;
+            l.comLocal = lb.comLocal;
+            l.inertiaDiag = lb.inertiaDiag;
+            l.enableLimit = (lb.flags & s_ArticulationLinkFlagEnableLimit) != 0u;
+            l.lowerLimit = lb.lowerLimit;
+            l.upperLimit = lb.upperLimit;
+            l.enableDrive = (lb.flags & s_ArticulationLinkFlagEnableDrive) != 0u;
+            l.driveTargetPos = lb.driveTargetPos;
+            l.driveTargetVel = lb.driveTargetVel;
+            l.driveStiffness = lb.driveStiffness;
+            l.driveDamping = lb.driveDamping;
+            l.driveMaxForce = lb.driveMaxForce;
+            l.jointDamping = lb.jointDamping;
+            l.jointFriction = lb.jointFriction;
+        }
+        a.proxyEntityNames.resize(hdr.proxyNameCount);
+        for(u32 pi = 0u; pi < hdr.proxyNameCount; ++pi){
+            const Expected<NameHash> hRes = ReadPOD<NameHash>(payload, cursor);
+            if(!hRes.has_value())
+                return MakeUnexpected(Failure());
+            if(hRes.value() == s_NameNone.hash())
+                a.proxyEntityNames[pi] = s_NameNone;
+            else
+                a.proxyEntityNames[pi] = Name(hRes.value());
+        }
+        a.dirty = true;
+        a.initialized = false;
+        if(!this.validArticulationData(a)){
+            error("ArticulationComponentAsset::loadComponentPayload failed: invalid articulation fields");
+            return MakeUnexpected(Failure());
+        }
+        return a;
+    }
+
+    public b8 validSoftBodyData(in SoftBodyComponent sb)const{
+        in SoftBody s = sb.softBody;
+        if(!IsFinite(VectorSingle(s.particleRadius, s.damping, s.aerodynamicDrag, s.friction)) || !IsFinite(s.restitution))
+            return false;
+        if(s.particleRadius <= 0.0f || s.damping < 0.0f || s.aerodynamicDrag < 0.0f || s.friction < 0.0f || s.restitution < 0.0f)
+            return false;
+        if(s.subSteps < 1u || s.solverIterations < 1u)
+            return false;
+        if(s.particles.size() > cast<usize>(u32.max)
+            || s.distanceConstraints.size() > cast<usize>(u32.max)
+            || s.bendingConstraints.size() > cast<usize>(u32.max)
+            || s.volumeConstraints.size() > cast<usize>(u32.max)
+            || s.surfaceTriangles.size() > cast<usize>(u32.max)
+            || s.attachments.size() > cast<usize>(u32.max))
+            return false;
+        const u32 pCount = cast<u32>(s.particles.size());
+        for(usize pi = 0u; pi < s.particles.size(); ++pi){
+            in SoftBodyParticle p = s.particles[pi];
+            if(!IsValidPositionVec3(VectorSingle(p.position))
+                || !IsValidPositionVec3(VectorSingle(p.prevPosition))
+                || !IsFinite(VectorSingle(p.velocity))
+                || !IsFinite(VectorSingle(p.externalForce))
+                || !IsFinite(p.invMass)
+                || p.invMass < 0.0f)
+                return false;
+        }
+        for(usize di = 0u; di < s.distanceConstraints.size(); ++di){
+            in SoftBodyDistanceConstraint d = s.distanceConstraints[di];
+            if(d.p0 >= pCount || d.p1 >= pCount || !IsFinite(VectorSingle(d.restLength, d.compliance, d.lambda, 0.0f)) || d.restLength < 0.0f || d.compliance < 0.0f)
+                return false;
+        }
+        for(usize bi = 0u; bi < s.bendingConstraints.size(); ++bi){
+            in SoftBodyBendingConstraint b = s.bendingConstraints[bi];
+            if(b.p0 >= pCount || b.p1 >= pCount || !IsFinite(VectorSingle(b.restLength, b.compliance, b.lambda, 0.0f)) || b.restLength < 0.0f || b.compliance < 0.0f)
+                return false;
+        }
+        for(usize vi = 0u; vi < s.volumeConstraints.size(); ++vi){
+            in SoftBodyVolumeConstraint v = s.volumeConstraints[vi];
+            if(v.p0 >= pCount || v.p1 >= pCount || v.p2 >= pCount || v.p3 >= pCount || !IsFinite(VectorSingle(v.restVolume, v.compliance, v.lambda, 0.0f)) || v.compliance < 0.0f)
+                return false;
+        }
+        for(usize ti = 0u; ti < s.surfaceTriangles.size(); ++ti){
+            in SoftBodyTriangle t = s.surfaceTriangles[ti];
+            if(t.p0 >= pCount || t.p1 >= pCount || t.p2 >= pCount)
+                return false;
+        }
+        for(usize ai = 0u; ai < s.attachments.size(); ++ai){
+            in SoftBodyAttachment a = s.attachments[ai];
+            if(a.particleIndex >= pCount || !IsFinite(VectorSingle(a.localAnchor)) || !IsFinite(a.compliance) || a.compliance < 0.0f)
+                return false;
+        }
+        return true;
+    }
+
+    public b8 validateSoftBody(in SoftBodyComponent sb, in Name virtualPath)const{
+        if(this.validSoftBodyData(sb))
+            return true;
+        error("SoftBodyComponentAsset::validatePayload failed: invalid soft body config for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 appendSoftBodyValidated(in SoftBodyComponent sb, mut Vector<u8> outBinary)const{
+        in SoftBody s = sb.softBody;
+        if(s.particles.size() > cast<usize>(u32.max)
+            || s.distanceConstraints.size() > cast<usize>(u32.max)
+            || s.bendingConstraints.size() > cast<usize>(u32.max)
+            || s.volumeConstraints.size() > cast<usize>(u32.max)
+            || s.surfaceTriangles.size() > cast<usize>(u32.max)
+            || s.attachments.size() > cast<usize>(u32.max))
+            return false;
+        const usize reqBytes = size_of<SoftBodyComponentBinary>()
+            + s.particles.size() * size_of<SoftBodyParticleBinary>()
+            + (s.distanceConstraints.size() + s.bendingConstraints.size()) * size_of<SoftBodyPairConstraintBinary>()
+            + s.volumeConstraints.size() * size_of<SoftBodyVolumeConstraintBinary>()
+            + s.surfaceTriangles.size() * size_of<SoftBodyTriangleBinary>()
+            + s.attachments.size() * size_of<SoftBodyAttachmentBinary>();
+        if(!CanAppendBytes(outBinary, reqBytes))
+            return false;
+        SoftBodyComponentBinary hdr;
+        hdr.version = s_SubsystemPhysicsComponentBinaryVersion;
+        hdr.particleCount = cast<u32>(s.particles.size());
+        hdr.distCount = cast<u32>(s.distanceConstraints.size());
+        hdr.bendCount = cast<u32>(s.bendingConstraints.size());
+        hdr.volCount = cast<u32>(s.volumeConstraints.size());
+        hdr.triCount = cast<u32>(s.surfaceTriangles.size());
+        hdr.attachCount = cast<u32>(s.attachments.size());
+        hdr.particleRadius = s.particleRadius;
+        hdr.damping = s.damping;
+        hdr.aerodynamicDrag = s.aerodynamicDrag;
+        hdr.friction = s.friction;
+        hdr.restitution = s.restitution;
+        hdr.subSteps = s.subSteps;
+        hdr.solverIterations = s.solverIterations;
+        hdr.filterCategoryBits = s.collisionFilter.categoryBits;
+        hdr.filterMaskBits = s.collisionFilter.maskBits;
+        hdr.filterGroupIndex = s.collisionFilter.groupIndex;
+        u8 flags = 0u;
+        if(s.collideWithWorld) flags |= s_SoftBodyFlagCollideWithWorld;
+        if(sb.enabled) flags |= s_SoftBodyFlagEnabled;
+        hdr.flags = flags;
+        outBinary.reserve(outBinary.size() + reqBytes);
+        AppendPOD(outBinary, hdr);
+
+        for(usize pi = 0u; pi < s.particles.size(); ++pi){
+            in SoftBodyParticle p = s.particles[pi];
+            SoftBodyParticleBinary pb;
+            pb.position = p.position;
+            pb.prevPosition = p.prevPosition;
+            pb.velocity = p.velocity;
+            pb.externalForce = p.externalForce;
+            pb.invMass = p.invMass;
+            if(p.isFixed)
+                pb.isFixed = 1u;
+            AppendPOD(outBinary, pb);
+        }
+        for(usize di = 0u; di < s.distanceConstraints.size(); ++di){
+            in SoftBodyDistanceConstraint d = s.distanceConstraints[di];
+            SoftBodyPairConstraintBinary db;
+            db.p0 = d.p0;
+            db.p1 = d.p1;
+            db.restLength = d.restLength;
+            db.compliance = d.compliance;
+            db.lambda = d.lambda;
+            AppendPOD(outBinary, db);
+        }
+        for(usize bi = 0u; bi < s.bendingConstraints.size(); ++bi){
+            in SoftBodyBendingConstraint b = s.bendingConstraints[bi];
+            SoftBodyPairConstraintBinary bb;
+            bb.p0 = b.p0;
+            bb.p1 = b.p1;
+            bb.restLength = b.restLength;
+            bb.compliance = b.compliance;
+            bb.lambda = b.lambda;
+            AppendPOD(outBinary, bb);
+        }
+        for(usize vi = 0u; vi < s.volumeConstraints.size(); ++vi){
+            in SoftBodyVolumeConstraint v = s.volumeConstraints[vi];
+            SoftBodyVolumeConstraintBinary vb;
+            vb.p0 = v.p0;
+            vb.p1 = v.p1;
+            vb.p2 = v.p2;
+            vb.p3 = v.p3;
+            vb.restVolume = v.restVolume;
+            vb.compliance = v.compliance;
+            vb.lambda = v.lambda;
+            AppendPOD(outBinary, vb);
+        }
+        for(usize ti = 0u; ti < s.surfaceTriangles.size(); ++ti){
+            in SoftBodyTriangle t = s.surfaceTriangles[ti];
+            SoftBodyTriangleBinary tb;
+            tb.p0 = t.p0;
+            tb.p1 = t.p1;
+            tb.p2 = t.p2;
+            AppendPOD(outBinary, tb);
+        }
+        for(usize ai = 0u; ai < s.attachments.size(); ++ai){
+            in SoftBodyAttachment a = s.attachments[ai];
+            SoftBodyAttachmentBinary ab;
+            ab.localAnchor = a.localAnchor;
+            ab.particleIndex = a.particleIndex;
+            ab.compliance = a.compliance;
+            AppendPOD(outBinary, ab);
+        }
+        return true;
+    }
+
+    public b8 serializeSoftBody(in SoftBodyComponent sb, mut Vector<u8> outPayload)const{
+        if(!this.validSoftBodyData(sb))
+            return false;
+        outPayload.clear();
+        return this.appendSoftBodyValidated(sb, outPayload);
+    }
+
+    public Expected<SoftBodyComponent> deserializeSoftBody(in Span<u8> payload)const{
+        usize cursor = 0u;
+        const Expected<SoftBodyComponentBinary> hdrRes = ReadPOD<SoftBodyComponentBinary>(payload, cursor);
+        if(!hdrRes.has_value()){
+            error("SoftBodyComponentAsset::loadComponentPayload failed: truncated header");
+            return MakeUnexpected(Failure());
+        }
+        in SoftBodyComponentBinary hdr = hdrRes.value();
+        if(hdr.version != s_SubsystemPhysicsComponentBinaryVersion || hdr.reserved0 != 0u || hdr.reserved1 != 0u || (hdr.flags & 0xfcu) != 0u){
+            error("SoftBodyComponentAsset::loadComponentPayload failed: unsupported version or flags");
+            return MakeUnexpected(Failure());
+        }
+        const u64 expectedBytes = cast<u64>(hdr.particleCount) * cast<u64>(size_of<SoftBodyParticleBinary>())
+            + (cast<u64>(hdr.distCount) + cast<u64>(hdr.bendCount)) * cast<u64>(size_of<SoftBodyPairConstraintBinary>())
+            + cast<u64>(hdr.volCount) * cast<u64>(size_of<SoftBodyVolumeConstraintBinary>())
+            + cast<u64>(hdr.triCount) * cast<u64>(size_of<SoftBodyTriangleBinary>())
+            + cast<u64>(hdr.attachCount) * cast<u64>(size_of<SoftBodyAttachmentBinary>());
+        if(expectedBytes != cast<u64>(payload.size() - cursor)){
+            error("SoftBodyComponentAsset::loadComponentPayload failed: invalid payload size");
+            return MakeUnexpected(Failure());
+        }
+        SoftBodyComponent sb;
+        mut SoftBody s = sb.softBody;
+        s.particleRadius = hdr.particleRadius;
+        s.damping = hdr.damping;
+        s.aerodynamicDrag = hdr.aerodynamicDrag;
+        s.friction = hdr.friction;
+        s.restitution = hdr.restitution;
+        s.subSteps = hdr.subSteps;
+        s.solverIterations = hdr.solverIterations;
+        s.collisionFilter.categoryBits = hdr.filterCategoryBits;
+        s.collisionFilter.maskBits = hdr.filterMaskBits;
+        s.collisionFilter.groupIndex = hdr.filterGroupIndex;
+        s.collideWithWorld = (hdr.flags & s_SoftBodyFlagCollideWithWorld) != 0u;
+        sb.enabled = (hdr.flags & s_SoftBodyFlagEnabled) != 0u;
+
+        s.particles.resize(hdr.particleCount);
+        for(u32 pi = 0u; pi < hdr.particleCount; ++pi){
+            const Expected<SoftBodyParticleBinary> pbRes = ReadPOD<SoftBodyParticleBinary>(payload, cursor);
+            if(!pbRes.has_value())
+                return MakeUnexpected(Failure());
+            in SoftBodyParticleBinary pb = pbRes.value();
+            if(pb.reserved0 != 0u || pb.reserved1 != 0u || pb.reserved2 != 0u || pb.isFixed > 1u)
+                return MakeUnexpected(Failure());
+            mut SoftBodyParticle p = s.particles[pi];
+            p.position = pb.position;
+            p.prevPosition = pb.prevPosition;
+            p.velocity = pb.velocity;
+            p.externalForce = pb.externalForce;
+            p.invMass = pb.invMass;
+            p.isFixed = pb.isFixed != 0u;
+        }
+        s.distanceConstraints.resize(hdr.distCount);
+        for(u32 di = 0u; di < hdr.distCount; ++di){
+            const Expected<SoftBodyPairConstraintBinary> dbRes = ReadPOD<SoftBodyPairConstraintBinary>(payload, cursor);
+            if(!dbRes.has_value() || dbRes.value().reserved0 != 0u)
+                return MakeUnexpected(Failure());
+            mut SoftBodyDistanceConstraint d = s.distanceConstraints[di];
+            d.p0 = dbRes.value().p0;
+            d.p1 = dbRes.value().p1;
+            d.restLength = dbRes.value().restLength;
+            d.compliance = dbRes.value().compliance;
+            d.lambda = dbRes.value().lambda;
+        }
+        s.bendingConstraints.resize(hdr.bendCount);
+        for(u32 bi = 0u; bi < hdr.bendCount; ++bi){
+            const Expected<SoftBodyPairConstraintBinary> bbRes = ReadPOD<SoftBodyPairConstraintBinary>(payload, cursor);
+            if(!bbRes.has_value() || bbRes.value().reserved0 != 0u)
+                return MakeUnexpected(Failure());
+            mut SoftBodyBendingConstraint b = s.bendingConstraints[bi];
+            b.p0 = bbRes.value().p0;
+            b.p1 = bbRes.value().p1;
+            b.restLength = bbRes.value().restLength;
+            b.compliance = bbRes.value().compliance;
+            b.lambda = bbRes.value().lambda;
+        }
+        s.volumeConstraints.resize(hdr.volCount);
+        for(u32 vi = 0u; vi < hdr.volCount; ++vi){
+            const Expected<SoftBodyVolumeConstraintBinary> vbRes = ReadPOD<SoftBodyVolumeConstraintBinary>(payload, cursor);
+            if(!vbRes.has_value() || vbRes.value().reserved0 != 0u)
+                return MakeUnexpected(Failure());
+            mut SoftBodyVolumeConstraint v = s.volumeConstraints[vi];
+            v.p0 = vbRes.value().p0;
+            v.p1 = vbRes.value().p1;
+            v.p2 = vbRes.value().p2;
+            v.p3 = vbRes.value().p3;
+            v.restVolume = vbRes.value().restVolume;
+            v.compliance = vbRes.value().compliance;
+            v.lambda = vbRes.value().lambda;
+        }
+        s.surfaceTriangles.resize(hdr.triCount);
+        for(u32 ti = 0u; ti < hdr.triCount; ++ti){
+            const Expected<SoftBodyTriangleBinary> tbRes = ReadPOD<SoftBodyTriangleBinary>(payload, cursor);
+            if(!tbRes.has_value())
+                return MakeUnexpected(Failure());
+            mut SoftBodyTriangle t = s.surfaceTriangles[ti];
+            t.p0 = tbRes.value().p0;
+            t.p1 = tbRes.value().p1;
+            t.p2 = tbRes.value().p2;
+        }
+        s.attachments.resize(hdr.attachCount);
+        for(u32 ai = 0u; ai < hdr.attachCount; ++ai){
+            const Expected<SoftBodyAttachmentBinary> abRes = ReadPOD<SoftBodyAttachmentBinary>(payload, cursor);
+            if(!abRes.has_value() || abRes.value().reserved0 != 0u)
+                return MakeUnexpected(Failure());
+            mut SoftBodyAttachment a = s.attachments[ai];
+            a.particleIndex = abRes.value().particleIndex;
+            a.localAnchor = abRes.value().localAnchor;
+            a.compliance = abRes.value().compliance;
+        }
+        if(!this.validSoftBodyData(sb)){
+            error("SoftBodyComponentAsset::loadComponentPayload failed: invalid soft body fields");
+            return MakeUnexpected(Failure());
+        }
+        return sb;
+    }
+
+    public b8 validGpuRenderTransformExportData(in GpuRenderTransformExportComponent g)const{
+        return IsFinite(VectorSingle(g.localScale));
+    }
+
+    public b8 validateGpuRenderTransformExport(in GpuRenderTransformExportComponent g, in Name virtualPath)const{
+        if(this.validGpuRenderTransformExportData(g))
+            return true;
+        error("GpuRenderTransformExportComponentAsset::validatePayload failed: invalid export config for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+
+    public b8 appendGpuRenderTransformExportValidated(in GpuRenderTransformExportComponent g, mut Vector<u8> outBinary)const{
+        static_assert(size_of<GpuRenderTransformExportComponentBinary>() == 32u);
+        if(!CanAppendBytes(outBinary, size_of<GpuRenderTransformExportComponentBinary>()))
+            return false;
+        GpuRenderTransformExportComponentBinary bin;
+        bin.version = s_SubsystemPhysicsComponentBinaryVersion;
+        bin.localScale = g.localScale;
+        bin.instanceIndex = g.instanceIndex;
+        bin.flags = g.flags;
+        if(g.enabled)
+            bin.enabledFlag = s_GpuExportFlagEnabled;
+        else
+            bin.enabledFlag = 0u;
+        outBinary.reserve(outBinary.size() + size_of<GpuRenderTransformExportComponentBinary>());
+        AppendPOD(outBinary, bin);
+        return true;
+    }
+
+    public b8 serializeGpuRenderTransformExport(in GpuRenderTransformExportComponent g, mut Vector<u8> outPayload)const{
+        if(!this.validGpuRenderTransformExportData(g))
+            return false;
+        outPayload.clear();
+        return this.appendGpuRenderTransformExportValidated(g, outPayload);
+    }
+
+    public Expected<GpuRenderTransformExportComponent> deserializeGpuRenderTransformExport(in Span<u8> payload)const{
+        usize cursor = 0u;
+        const Expected<GpuRenderTransformExportComponentBinary> res = ReadPOD<GpuRenderTransformExportComponentBinary>(payload, cursor);
+        if(!res.has_value() || cursor != payload.size()){
+            error("GpuRenderTransformExportComponentAsset::loadComponentPayload failed: invalid payload size");
+            return MakeUnexpected(Failure());
+        }
+        in GpuRenderTransformExportComponentBinary bin = res.value();
+        if(bin.version != s_SubsystemPhysicsComponentBinaryVersion || bin.reserved0 != 0u || bin.reserved1 != 0u || (bin.enabledFlag & 0xfeu) != 0u){
+            error("GpuRenderTransformExportComponentAsset::loadComponentPayload failed: unsupported version or flags");
+            return MakeUnexpected(Failure());
+        }
+        GpuRenderTransformExportComponent g;
+        g.localScale = bin.localScale;
+        g.instanceIndex = bin.instanceIndex;
+        g.flags = bin.flags;
+        g.enabled = (bin.enabledFlag & s_GpuExportFlagEnabled) != 0u;
+        if(!this.validGpuRenderTransformExportData(g)){
+            error("GpuRenderTransformExportComponentAsset::loadComponentPayload failed: invalid export fields");
+            return MakeUnexpected(Failure());
+        }
+        return g;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -15,7 +15,7 @@ b8 PhysicsMaterialAsset::validatePayload()const{
 }
 
 b8 PhysicsMaterialAsset::loadBinary(in Span<u8> binary){
-    if(!this.checkVirtualPath("PhysicsMaterialAsset::validatePayload"))
+    if(!this.checkVirtualPath("PhysicsMaterialAsset::loadBinary"))
         return false;
     Expected<SurfaceMaterial> decoded = PhysicsAssetBinaryCodec().deserializePhysicsMaterial(binary);
     if(!decoded.has_value())
@@ -31,7 +31,7 @@ b8 CollisionLayerMatrixAsset::validatePayload()const{
 }
 
 b8 CollisionLayerMatrixAsset::loadBinary(in Span<u8> binary){
-    if(!this.checkVirtualPath("CollisionLayerMatrixAsset::validatePayload"))
+    if(!this.checkVirtualPath("CollisionLayerMatrixAsset::loadBinary"))
         return false;
     Expected<CollisionLayerMatrix> decoded = PhysicsAssetBinaryCodec().deserializeCollisionLayerMatrix(binary);
     if(!decoded.has_value())
@@ -47,7 +47,7 @@ b8 ConvexHullAsset::validatePayload()const{
 }
 
 b8 ConvexHullAsset::loadBinary(in Span<u8> binary){
-    if(!this.checkVirtualPath("ConvexHullAsset::validatePayload"))
+    if(!this.checkVirtualPath("ConvexHullAsset::loadBinary"))
         return false;
     Expected<HullShape> decoded = PhysicsAssetBinaryCodec().deserializeConvexHull(binary);
     if(!decoded.has_value())
@@ -63,7 +63,7 @@ b8 CollisionMeshAsset::validatePayload()const{
 }
 
 b8 CollisionMeshAsset::loadBinary(in Span<u8> binary){
-    if(!this.checkVirtualPath("CollisionMeshAsset::validatePayload"))
+    if(!this.checkVirtualPath("CollisionMeshAsset::loadBinary"))
         return false;
     Expected<MeshShape> decoded = PhysicsAssetBinaryCodec().deserializeCollisionMesh(binary);
     if(!decoded.has_value())

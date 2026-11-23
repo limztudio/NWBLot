@@ -126,6 +126,25 @@ bool nwbPhysicsQueryRayCapsule(
     if(dLenSq <= 1.0e-10f)
         return nwbPhysicsQueryRaySphere(origin, dir, maxFrac, (p0 + p1) * 0.5f, radius, outT, outNormal);
 
+    const float tProj = clamp(dot(origin - p0, d) / dLenSq, 0.0f, 1.0f);
+    const float3 closestPt = p0 + d * tProj;
+    const float3 toOrig = origin - closestPt;
+    const float distSqStart = dot(toOrig, toOrig);
+    if(distSqStart <= radius * radius){
+        outT = 0.0f;
+        if(distSqStart > 1.0e-12f){
+            outNormal = toOrig * rsqrt(distSqStart);
+        }
+        else{
+            const float3 axis0 = d * rsqrt(dLenSq);
+            float3 radial = cross(axis0, float3(0.0f, 1.0f, 0.0f));
+            if(dot(radial, radial) < 1.0e-6f)
+                radial = cross(axis0, float3(1.0f, 0.0f, 0.0f));
+            outNormal = nwbPhysicsQuerySafeNormal(radial, float3(0.0f, 1.0f, 0.0f));
+        }
+        return true;
+    }
+
     bool anyHit = false;
     float bestT = maxFrac;
     float3 bestN = float3(0.0f, 1.0f, 0.0f);
@@ -185,12 +204,457 @@ float3 nwbPhysicsClosestPointOnSegment(const float3 p, const float3 a, const flo
     return a + ab * t;
 }
 
+float nwbPhysicsQueryAabbDistSq(const float3 p, const float3 bMin, const float3 bMax){
+    const float3 clamped = clamp(p, bMin, bMax);
+    const float3 d = p - clamped;
+    return dot(d, d);
+}
+
+bool nwbPhysicsQueryPassesFilter(const uint qCat, const uint qMask, const uint qFlags, const uint4 shapeFilter){
+    if((qFlags & NWB_PHYSICS_QUERY_FLAG_USE_GROUP_INDEX) != 0u){
+        const int qGroup = int(qFlags) >> 16;
+        const int sGroup = asint(shapeFilter.z);
+        if(qGroup != 0 && sGroup == qGroup)
+            return qGroup > 0;
+    }
+    return ((qCat & shapeFilter.y) != 0u) && ((shapeFilter.x & qMask) != 0u);
+}
+
+float3 nwbPhysicsQueryClosestPtTriangle(const float3 p, const float3 a, const float3 b, const float3 c){
+    const float3 ab = b - a;
+    const float3 ac = c - a;
+    const float3 ap = p - a;
+    const float d1 = dot(ab, ap);
+    const float d2 = dot(ac, ap);
+    if(d1 <= 0.0f && d2 <= 0.0f)
+        return a;
+
+    const float3 bp = p - b;
+    const float d3 = dot(ab, bp);
+    const float d4 = dot(ac, bp);
+    if(d3 >= 0.0f && d4 <= d3)
+        return b;
+
+    const float vc = d1 * d4 - d3 * d2;
+    if(vc <= 0.0f && d1 >= 0.0f && d3 <= 0.0f)
+        return a + ab * (d1 / (d1 - d3));
+
+    const float3 cp = p - c;
+    const float d5 = dot(ab, cp);
+    const float d6 = dot(ac, cp);
+    if(d6 >= 0.0f && d5 <= d6)
+        return c;
+
+    const float vb = d5 * d2 - d1 * d6;
+    if(vb <= 0.0f && d2 >= 0.0f && d6 <= 0.0f)
+        return a + ac * (d2 / (d2 - d6));
+
+    const float va = d3 * d6 - d5 * d4;
+    if(va <= 0.0f && (d4 - d3) >= 0.0f && (d5 - d6) >= 0.0f)
+        return b + (c - b) * ((d4 - d3) / ((d4 - d3) + (d5 - d6)));
+
+    const float denom = 1.0f / (va + vb + vc);
+    return a + ab * (vb * denom) + ac * (vc * denom);
+}
+
+bool nwbPhysicsQueryRayTriangle(
+    const float3 origin,
+    const float3 dir,
+    const float3 v0,
+    const float3 v1,
+    const float3 v2,
+    const bool cullBackfaces,
+    const float maxT,
+    out float outT,
+    out float3 outNormal
+){
+    outT = 0.0f;
+    outNormal = float3(0.0f, 1.0f, 0.0f);
+    const float3 e1 = v1 - v0;
+    const float3 e2 = v2 - v0;
+    const float3 faceCross = cross(e1, e2);
+    if(cullBackfaces && dot(faceCross, dir) > 0.0f)
+        return false;
+
+    const float3 h = cross(dir, e2);
+    const float det = dot(e1, h);
+    if(abs(det) <= 1.0e-12f)
+        return false;
+
+    const float invDet = 1.0f / det;
+    const float3 s = origin - v0;
+    const float u = invDet * dot(s, h);
+    if(u < -1.0e-5f || u > 1.00001f)
+        return false;
+
+    const float3 q = cross(s, e1);
+    const float v = invDet * dot(dir, q);
+    if(v < -1.0e-5f || (u + v) > 1.00001f)
+        return false;
+
+    const float t = invDet * dot(e2, q);
+    if(t < 0.0f || t > maxT)
+        return false;
+
+    float3 n = nwbPhysicsQuerySafeNormal(faceCross, float3(0.0f, 1.0f, 0.0f));
+    if(dot(n, dir) > 0.0f)
+        n = -n;
+    outT = t;
+    outNormal = n;
+    return true;
+}
+
+bool nwbPhysicsQueryRayHull(
+    const uint hullVertexSlot,
+    const NwbPhysicsGpuShapeProxy spProxy,
+    const float4 bodyRot,
+    const float3 localOrig,
+    const float3 localDir,
+    const float maxFrac,
+    out float outT,
+    out float3 outNormal
+){
+    outT = 0.0f;
+    outNormal = float3(0.0f, 1.0f, 0.0f);
+    const uint vOffset = spProxy.filterData.w;
+    if(hullVertexSlot == NWB_PHYSICS_INVALID_INDEX || vOffset == NWB_PHYSICS_INVALID_INDEX)
+        return false;
+
+    const uint metaPack = asuint(spProxy.localRotationOrMeta.x);
+    const uint vCount = metaPack & 0xffu;
+    const uint fCount = (metaPack >> 8u) & 0xffu;
+    if(vCount == 0u || fCount == 0u || fCount > NWB_PHYSICS_MAX_HULL_FACES)
+        return false;
+
+    const float skinR = max(spProxy.localCenterRadius.w, 0.0f);
+    float tLower = 0.0f;
+    float tUpper = maxFrac;
+    uint hitFace = NWB_PHYSICS_INVALID_INDEX;
+    float3 hitLocalN = float3(0.0f, 1.0f, 0.0f);
+    float maxSignedDist = -1.0e20f;
+    float3 shallowFaceN = float3(0.0f, 1.0f, 0.0f);
+
+    for(uint fi = 0u; fi < fCount; ++fi){
+        const float4 pl = g_NwbPhysicsFloat4Buffers[hullVertexSlot][vOffset + vCount + fi];
+        const float effOffset = pl.w + skinR;
+        const float signedDist = dot(pl.xyz, localOrig) - effOffset;
+        if(signedDist > maxSignedDist){
+            maxSignedDist = signedDist;
+            shallowFaceN = pl.xyz;
+        }
+        const float denom = dot(pl.xyz, localDir);
+        const float numer = effOffset - dot(pl.xyz, localOrig);
+        if(abs(denom) <= 1.0e-12f){
+            if(numer < 0.0f)
+                return false;
+        }
+        else{
+            const float ratio = numer / denom;
+            if(denom < 0.0f){
+                if(ratio > tLower){
+                    tLower = ratio;
+                    hitFace = fi;
+                    hitLocalN = pl.xyz;
+                }
+            }
+            else if(ratio < tUpper){
+                tUpper = ratio;
+            }
+            if(tLower > tUpper)
+                return false;
+        }
+    }
+
+    if(tLower < 0.0f || tLower > maxFrac)
+        return false;
+    if(hitFace == NWB_PHYSICS_INVALID_INDEX && maxSignedDist <= 0.0f){
+        outT = 0.0f;
+        outNormal = nwbPhysicsQuerySafeNormal(nwbPhysicsQuatRotate(shallowFaceN, bodyRot), float3(0.0f, 1.0f, 0.0f));
+        return true;
+    }
+    if(hitFace != NWB_PHYSICS_INVALID_INDEX){
+        outT = tLower;
+        outNormal = nwbPhysicsQuerySafeNormal(nwbPhysicsQuatRotate(hitLocalN, bodyRot), float3(0.0f, 1.0f, 0.0f));
+        return true;
+    }
+    return false;
+}
+
+bool nwbPhysicsQueryIsInsideClosedMesh(
+    const uint nodeBase,
+    const uint triBase,
+    const uint meshNodeSlot,
+    const uint meshTriSlot,
+    const float3 localPoint
+){
+    const float4 rootN0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBase * 2u + 0u];
+    const float4 rootN1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBase * 2u + 1u];
+    if(any(localPoint < rootN0.xyz) || any(localPoint > rootN1.xyz))
+        return false;
+
+    const float3 rayDir = float3(1.0f, 0.131f, 0.071f);
+    const float3 invDir = float3(1.0f, 1.0f / 0.131f, 1.0f / 0.071f);
+    uint stack[32];
+    stack[0] = 0u;
+    uint sp = 1u;
+    uint hitCount = 0u;
+
+    while(sp > 0u){
+        const uint ni = stack[--sp];
+        const float4 n0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + ni) * 2u + 0u];
+        const float4 n1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + ni) * 2u + 1u];
+        const float3 t0 = (n0.xyz - localPoint) * invDir;
+        const float3 t1 = (n1.xyz - localPoint) * invDir;
+        const float3 tMin = min(t0, t1);
+        const float3 tMax = max(t0, t1);
+        const float enterT = max(max(tMin.x, tMin.y), max(tMin.z, 0.0f));
+        const float exitT = min(min(tMax.x, tMax.y), tMax.z);
+        if(exitT < enterT)
+            continue;
+
+        const uint meta = asuint(n1.w);
+        if((meta & 0x80000000u) != 0u){
+            const uint firstTri = asuint(n0.w);
+            const uint triCount = meta & 0x7fffffffu;
+            for(uint ti = 0u; ti < triCount; ++ti){
+                const uint triIdx = triBase + firstTri + ti;
+                const float3 tv0 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 0u].xyz;
+                const float3 tv1 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 1u].xyz;
+                const float3 tv2 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 2u].xyz;
+                float hitT = 0.0f;
+                float3 hitN = float3(0.0f, 1.0f, 0.0f);
+                if(nwbPhysicsQueryRayTriangle(localPoint, rayDir, tv0, tv1, tv2, false, 1.0e20f, hitT, hitN))
+                    ++hitCount;
+            }
+        }
+        else if(sp + 2u <= 32u){
+            stack[sp++] = asuint(n0.w);
+            stack[sp++] = meta & 0x7fffffffu;
+        }
+    }
+    return (hitCount & 1u) != 0u;
+}
+
+bool nwbPhysicsQueryRayMesh(
+    const uint meshNodeSlot,
+    const uint meshTriSlot,
+    const NwbPhysicsGpuShapeProxy spProxy,
+    const float4 bodyRot,
+    const uint qFlags,
+    const float3 localOrig,
+    const float3 localDir,
+    const float maxFrac,
+    out float outT,
+    out float3 outNormal
+){
+    outT = maxFrac;
+    outNormal = float3(0.0f, 1.0f, 0.0f);
+    const uint nodeBase = spProxy.filterData.w;
+    const uint triBase = asuint(spProxy.localRotationOrMeta.x);
+    if(meshNodeSlot == NWB_PHYSICS_INVALID_INDEX || meshTriSlot == NWB_PHYSICS_INVALID_INDEX || nodeBase == NWB_PHYSICS_INVALID_INDEX || triBase == NWB_PHYSICS_INVALID_INDEX)
+        return false;
+
+    const float4 firstTri1 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triBase * 3u + 1u];
+    const uint meshFlags = asuint(firstTri1.w);
+    const bool closedMesh = (meshFlags & NWB_PHYSICS_MESH_FLAG_CLOSED) != 0u;
+    const bool cullBackfaces = ((meshFlags & NWB_PHYSICS_MESH_FLAG_CULL_BACKFACES) != 0u) || ((qFlags & NWB_PHYSICS_QUERY_FLAG_CULL_BACKFACES) != 0u);
+    if(closedMesh && nwbPhysicsQueryIsInsideClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, localOrig)){
+        outT = 0.0f;
+        const float3 worldDir = nwbPhysicsQuatRotate(localDir, bodyRot);
+        outNormal = nwbPhysicsQuerySafeNormal(-worldDir, float3(0.0f, 1.0f, 0.0f));
+        return true;
+    }
+
+    const float3 localInvDir = float3(
+        abs(localDir.x) > 1.0e-12f ? (1.0f / localDir.x) : 1.0e30f,
+        abs(localDir.y) > 1.0e-12f ? (1.0f / localDir.y) : 1.0e30f,
+        abs(localDir.z) > 1.0e-12f ? (1.0f / localDir.z) : 1.0e30f
+    );
+    uint stack[32];
+    stack[0] = 0u;
+    uint sp = 0u;
+    const float4 rootN0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBase * 2u + 0u];
+    const float4 rootN1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBase * 2u + 1u];
+    float rootT = 0.0f;
+    float3 unusedBoxN = float3(0.0f, 1.0f, 0.0f);
+    if(nwbPhysicsQueryRayAabb(localOrig, localInvDir, rootN0.xyz, rootN1.xyz, maxFrac, rootT, unusedBoxN)){
+        stack[sp] = 0u;
+        ++sp;
+    }
+
+    bool anyHit = false;
+    float bestT = maxFrac;
+    float3 bestLocalN = float3(0.0f, 1.0f, 0.0f);
+
+    while(sp > 0u){
+        --sp;
+        const uint ni = stack[sp];
+        const float4 n0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + ni) * 2u + 0u];
+        const float4 n1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + ni) * 2u + 1u];
+        const uint meta = asuint(n1.w);
+        if((meta & 0x80000000u) != 0u){
+            const uint firstTri = asuint(n0.w);
+            const uint triCount = meta & 0x7fffffffu;
+            for(uint ti = 0u; ti < triCount; ++ti){
+                const uint triIdx = triBase + firstTri + ti;
+                const float3 tv0 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 0u].xyz;
+                const float3 tv1 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 1u].xyz;
+                const float3 tv2 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 2u].xyz;
+                float tTri = 0.0f;
+                float3 nTri = float3(0.0f, 1.0f, 0.0f);
+                if(nwbPhysicsQueryRayTriangle(localOrig, localDir, tv0, tv1, tv2, cullBackfaces, bestT, tTri, nTri)){
+                    if(!anyHit || tTri < bestT){
+                        anyHit = true;
+                        bestT = tTri;
+                        bestLocalN = nTri;
+                    }
+                }
+            }
+        }
+        else{
+            const uint lIdx = asuint(n0.w);
+            const uint rIdx = meta & 0x7fffffffu;
+            const float4 ln0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + lIdx) * 2u + 0u];
+            const float4 ln1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + lIdx) * 2u + 1u];
+            const float4 rn0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + rIdx) * 2u + 0u];
+            const float4 rn1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + rIdx) * 2u + 1u];
+            float tL = 0.0f;
+            float tR = 0.0f;
+            const bool hitL = nwbPhysicsQueryRayAabb(localOrig, localInvDir, ln0.xyz, ln1.xyz, bestT, tL, unusedBoxN);
+            const bool hitR = nwbPhysicsQueryRayAabb(localOrig, localInvDir, rn0.xyz, rn1.xyz, bestT, tR, unusedBoxN);
+            if(hitL && hitR){
+                if(tL < tR){
+                    if(sp < 32u){ stack[sp] = rIdx; ++sp; }
+                    if(sp < 32u){ stack[sp] = lIdx; ++sp; }
+                }
+                else{
+                    if(sp < 32u){ stack[sp] = lIdx; ++sp; }
+                    if(sp < 32u){ stack[sp] = rIdx; ++sp; }
+                }
+            }
+            else if(hitL){
+                if(sp < 32u){ stack[sp] = lIdx; ++sp; }
+            }
+            else if(hitR){
+                if(sp < 32u){ stack[sp] = rIdx; ++sp; }
+            }
+        }
+    }
+
+    if(!anyHit)
+        return false;
+    outT = bestT;
+    outNormal = nwbPhysicsQuerySafeNormal(nwbPhysicsQuatRotate(bestLocalN, bodyRot), float3(0.0f, 1.0f, 0.0f));
+    return true;
+}
+
+float nwbPhysicsQueryMeshPointDistSq(
+    const uint meshNodeSlot,
+    const uint meshTriSlot,
+    const NwbPhysicsGpuShapeProxy spProxy,
+    const float4 bodyRot,
+    const float3 localPoint,
+    const float maxQueryDist,
+    out float3 outNormal
+){
+    outNormal = float3(0.0f, 1.0f, 0.0f);
+    const uint nodeBase = spProxy.filterData.w;
+    const uint triBase = asuint(spProxy.localRotationOrMeta.x);
+    if(meshNodeSlot == NWB_PHYSICS_INVALID_INDEX || meshTriSlot == NWB_PHYSICS_INVALID_INDEX || nodeBase == NWB_PHYSICS_INVALID_INDEX || triBase == NWB_PHYSICS_INVALID_INDEX)
+        return 1.0e30f;
+
+    const float skinR = max(spProxy.localCenterRadius.w, 0.0f);
+    const float4 firstTri1 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triBase * 3u + 1u];
+    const uint meshFlags = asuint(firstTri1.w);
+    const bool closedMesh = (meshFlags & NWB_PHYSICS_MESH_FLAG_CLOSED) != 0u;
+    const float initBound = maxQueryDist + skinR;
+    const float initBoundSq = initBound * initBound + 1.0e-4f;
+    float minDistSq = initBoundSq;
+    bool foundTri = false;
+    float3 bestLocalN = float3(0.0f, 1.0f, 0.0f);
+
+    uint stack[32];
+    stack[0] = 0u;
+    uint sp = 0u;
+    const float4 rootN0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBase * 2u + 0u];
+    const float4 rootN1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBase * 2u + 1u];
+    if(nwbPhysicsQueryAabbDistSq(localPoint, rootN0.xyz, rootN1.xyz) <= minDistSq)
+        sp = 1u;
+
+    while(sp > 0u){
+        --sp;
+        const uint ni = stack[sp];
+        const float4 n0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + ni) * 2u + 0u];
+        const float4 n1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + ni) * 2u + 1u];
+        const uint meta = asuint(n1.w);
+        if((meta & 0x80000000u) != 0u){
+            const uint firstTri = asuint(n0.w);
+            const uint triCount = meta & 0x7fffffffu;
+            for(uint ti = 0u; ti < triCount; ++ti){
+                const uint triIdx = triBase + firstTri + ti;
+                const float3 tv0 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 0u].xyz;
+                const float3 tv1 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 1u].xyz;
+                const float3 tv2 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 2u].xyz;
+                const float3 closePt = nwbPhysicsQueryClosestPtTriangle(localPoint, tv0, tv1, tv2);
+                const float3 diff = localPoint - closePt;
+                const float dSq = dot(diff, diff);
+                if(dSq <= minDistSq){
+                    minDistSq = dSq;
+                    foundTri = true;
+                    const float3 triN = cross(tv1 - tv0, tv2 - tv0);
+                    bestLocalN = nwbPhysicsQuerySafeNormal(diff, nwbPhysicsQuerySafeNormal(triN, float3(0.0f, 1.0f, 0.0f)));
+                }
+            }
+        }
+        else{
+            const uint lIdx = asuint(n0.w);
+            const uint rIdx = meta & 0x7fffffffu;
+            const float4 ln0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + lIdx) * 2u + 0u];
+            const float4 ln1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + lIdx) * 2u + 1u];
+            const float4 rn0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + rIdx) * 2u + 0u];
+            const float4 rn1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + rIdx) * 2u + 1u];
+            const float dL = nwbPhysicsQueryAabbDistSq(localPoint, ln0.xyz, ln1.xyz);
+            const float dR = nwbPhysicsQueryAabbDistSq(localPoint, rn0.xyz, rn1.xyz);
+            const bool keepL = dL <= minDistSq;
+            const bool keepR = dR <= minDistSq;
+            if(keepL && keepR){
+                if(dL < dR){
+                    if(sp < 32u){ stack[sp] = rIdx; ++sp; }
+                    if(sp < 32u){ stack[sp] = lIdx; ++sp; }
+                }
+                else{
+                    if(sp < 32u){ stack[sp] = lIdx; ++sp; }
+                    if(sp < 32u){ stack[sp] = rIdx; ++sp; }
+                }
+            }
+            else if(keepL){
+                if(sp < 32u){ stack[sp] = lIdx; ++sp; }
+            }
+            else if(keepR){
+                if(sp < 32u){ stack[sp] = rIdx; ++sp; }
+            }
+        }
+    }
+
+    outNormal = nwbPhysicsQuerySafeNormal(nwbPhysicsQuatRotate(bestLocalN, bodyRot), float3(0.0f, 1.0f, 0.0f));
+    if(closedMesh && nwbPhysicsQueryIsInsideClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, localPoint))
+        return 0.0f;
+    if(!foundTri)
+        return 1.0e30f;
+    const float d = max(sqrt(minDistSq) - skinR, 0.0f);
+    return d * d;
+}
+
 float nwbPhysicsShapePointDistSq(
     const float3 p,
     const NwbPhysicsGpuBodyPose pose,
     const NwbPhysicsGpuShapeProxy sp,
     const float3 aabbMin,
     const float3 aabbMax,
+    const uint hullVertexSlot,
+    const uint meshNodeSlot,
+    const uint meshTriSlot,
+    const float maxQueryDist,
     out float3 outNormal
 ){
     const uint shapeType = sp.bodyIndexTypeShape.y;
@@ -242,6 +706,60 @@ float nwbPhysicsShapePointDistSq(
         return dSq;
     }
 
+    if(shapeType == NWB_PHYSICS_SHAPE_TYPE_HULL){
+        const uint vOffset = sp.filterData.w;
+        const uint metaPack = asuint(sp.localRotationOrMeta.x);
+        const uint vCount = metaPack & 0xffu;
+        const uint fCount = (metaPack >> 8u) & 0xffu;
+        const float skinR = max(sp.localCenterRadius.w, 0.0f);
+        if(hullVertexSlot != NWB_PHYSICS_INVALID_INDEX && vOffset != NWB_PHYSICS_INVALID_INDEX && fCount > 0u){
+            const float3 localP = nwbPhysicsQuatInvRotate(p - origin, q);
+            float maxSd = -1.0e20f;
+            float3 bestFaceN = float3(0.0f, 1.0f, 0.0f);
+            for(uint fi = 0u; fi < fCount; ++fi){
+                const float4 pl = g_NwbPhysicsFloat4Buffers[hullVertexSlot][vOffset + vCount + fi];
+                const float sd = dot(pl.xyz, localP) - pl.w;
+                if(sd > maxSd){
+                    maxSd = sd;
+                    bestFaceN = pl.xyz;
+                }
+            }
+            if(maxSd <= skinR){
+                outNormal = nwbPhysicsQuerySafeNormal(nwbPhysicsQuatRotate(bestFaceN, q), float3(0.0f, 1.0f, 0.0f));
+                return 0.0f;
+            }
+            if(maxSd > skinR + maxQueryDist){
+                outNormal = nwbPhysicsQuerySafeNormal(nwbPhysicsQuatRotate(bestFaceN, q), float3(0.0f, 1.0f, 0.0f));
+                return 1.0e30f;
+            }
+            float3 proj = localP;
+            uint fi = 0u;
+            const uint totalSteps = fCount * 2u;
+            for(uint s = 0u; s < totalSteps; ++s){
+                const float4 pl = g_NwbPhysicsFloat4Buffers[hullVertexSlot][vOffset + vCount + fi];
+                const float dPl = dot(pl.xyz, proj) - pl.w;
+                if(dPl > 0.0f)
+                    proj -= pl.xyz * dPl;
+                fi = (fi + 1u < fCount) ? (fi + 1u) : 0u;
+            }
+            const float3 diff = localP - proj;
+            const float rawDist = length(diff);
+            const float dist = max(rawDist - skinR, 0.0f);
+            const float3 locN = (rawDist > 1.0e-5f) ? diff : bestFaceN;
+            outNormal = nwbPhysicsQuerySafeNormal(nwbPhysicsQuatRotate(locN, q), float3(0.0f, 1.0f, 0.0f));
+            return dist * dist;
+        }
+    }
+
+    if(shapeType == NWB_PHYSICS_SHAPE_TYPE_MESH){
+        const uint nodeBase = sp.filterData.w;
+        const uint triBase = asuint(sp.localRotationOrMeta.x);
+        if(meshNodeSlot != NWB_PHYSICS_INVALID_INDEX && meshTriSlot != NWB_PHYSICS_INVALID_INDEX && nodeBase != NWB_PHYSICS_INVALID_INDEX && triBase != NWB_PHYSICS_INVALID_INDEX){
+            const float3 localP = nwbPhysicsQuatInvRotate(p - origin, q);
+            return nwbPhysicsQueryMeshPointDistSq(meshNodeSlot, meshTriSlot, sp, q, localP, maxQueryDist, outNormal);
+        }
+    }
+
     const float3 clamped = clamp(p, aabbMin, aabbMax);
     const float3 d = p - clamped;
     outNormal = nwbPhysicsQuerySafeNormal(d, float3(0.0f, 1.0f, 0.0f));
@@ -255,6 +773,9 @@ float nwbPhysicsShapePointDistSq(
 void nwbPhysicsTestSpatialQueryShape(
     const uint shapeSlot,
     const uint bodyPoseSlot,
+    const uint hullVertexSlot,
+    const uint meshNodeSlot,
+    const uint meshTriSlot,
     const uint queryType,
     const uint qCat,
     const uint qMask,
@@ -280,7 +801,7 @@ void nwbPhysicsTestSpatialQueryShape(
     if((meta.w & NWB_PHYSICS_SHAPE_FLAG_SENSOR) != 0u && (qFlags & NWB_PHYSICS_QUERY_FLAG_INCLUDE_SENSORS) == 0u)
         return;
     const uint4 filter = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdx].filterData;
-    if((qCat & filter.y) == 0u || (filter.x & qMask) == 0u)
+    if(!nwbPhysicsQueryPassesFilter(qCat, qMask, qFlags, filter))
         return;
 
     if(queryType == NWB_PHYSICS_QUERY_TYPE_AABB_OVERLAP){
@@ -333,6 +854,16 @@ void nwbPhysicsTestSpatialQueryShape(
             if(hitShape)
                 nHit = nwbPhysicsQuerySafeNormal(nwbPhysicsQuatRotate(localN, worldQ), float3(0.0f, 1.0f, 0.0f));
         }
+        else if(shapeType == NWB_PHYSICS_SHAPE_TYPE_HULL && hullVertexSlot != NWB_PHYSICS_INVALID_INDEX && filter.w != NWB_PHYSICS_INVALID_INDEX){
+            const float3 localOrig = nwbPhysicsQuatInvRotate(rayOrig - pose.originPad.xyz, pose.rotation);
+            const float3 localDir = nwbPhysicsQuatInvRotate(rayDir, pose.rotation);
+            hitShape = nwbPhysicsQueryRayHull(hullVertexSlot, spProxy, pose.rotation, localOrig, localDir, bestMetric, tHit, nHit);
+        }
+        else if(shapeType == NWB_PHYSICS_SHAPE_TYPE_MESH && meshNodeSlot != NWB_PHYSICS_INVALID_INDEX && meshTriSlot != NWB_PHYSICS_INVALID_INDEX && filter.w != NWB_PHYSICS_INVALID_INDEX && asuint(spProxy.localRotationOrMeta.x) != NWB_PHYSICS_INVALID_INDEX){
+            const float3 localOrig = nwbPhysicsQuatInvRotate(rayOrig - pose.originPad.xyz, pose.rotation);
+            const float3 localDir = nwbPhysicsQuatInvRotate(rayDir, pose.rotation);
+            hitShape = nwbPhysicsQueryRayMesh(meshNodeSlot, meshTriSlot, spProxy, pose.rotation, qFlags, localOrig, localDir, bestMetric, tHit, nHit);
+        }
         else{
             hitShape = nwbPhysicsQueryRayAabb(rayOrig, rayInvDir, aMin, aMax, bestMetric, tHit, nHit);
         }
@@ -352,7 +883,7 @@ void nwbPhysicsTestSpatialQueryShape(
     }
 
     float3 nOut = float3(0.0f, 1.0f, 0.0f);
-    const float dSq = nwbPhysicsShapePointDistSq(sphereCenter, pose, spProxy, aMin, aMax, nOut);
+    const float dSq = nwbPhysicsShapePointDistSq(sphereCenter, pose, spProxy, aMin, aMax, hullVertexSlot, meshNodeSlot, meshTriSlot, sphereRadius, nOut);
     if(dSq <= sphereRadius * sphereRadius){
         ++hitCount;
         if(!hasHit || dSq < bestMetric){
@@ -385,6 +916,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint lbvhNodeSlot = g_NwbPhysicsPushConstants.slots0.w;
     const uint querySlot = g_NwbPhysicsPushConstants.slots1.x;
     const uint resultSlot = g_NwbPhysicsPushConstants.slots1.y;
+    const uint hullVertexSlot = g_NwbPhysicsPushConstants.slots1.z;
+    const uint meshNodeSlot = g_NwbPhysicsPushConstants.slots1.w;
+    const uint meshTriSlot = g_NwbPhysicsPushConstants.flags;
 
     const NwbPhysicsGpuSpatialQuery q = g_NwbPhysicsSpatialQueryBuffers[querySlot][tid];
     const uint queryType = q.params.x;
@@ -429,12 +963,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const bool traverseLbvh = useLbvh && (lbvhNodeSlot != NWB_PHYSICS_INVALID_INDEX);
     const uint leafStart = traverseLbvh ? (shapeCount - 1u) : 0u;
     if(shapeCount > 0u){
+        uint stack[64];
+        float stackT[64];
+        stack[0] = 0u;
+        stackT[0] = 0.0f;
+        uint sp = 0u;
+        uint bruteIdx = 0u;
         if(traverseLbvh){
-            uint stack[32];
-            float stackT[32];
-            stack[0] = 0u;
-            stackT[0] = 0.0f;
-            uint sp = 0u;
             const NwbPhysicsGpuLbvhNode root = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][0u];
             bool rootHit = nwbPhysicsQueryAabbOverlaps(qBoxMin, qBoxMax, root.minLeft.xyz, root.maxRight.xyz);
             float rootT = 0.0f;
@@ -443,85 +978,65 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 rootHit = nwbPhysicsQueryRayAabb(rayOrig, rayInvDir, root.minLeft.xyz, root.maxRight.xyz, bestMetric, rootT, nNode);
             }
             if(rootHit){
-                stack[sp] = 0u;
-                stackT[sp] = rootT;
-                ++sp;
+                stack[0] = 0u;
+                stackT[0] = rootT;
+                sp = 1u;
             }
+        }
 
-            while(sp > 0u){
+        while((traverseLbvh && sp > 0u) || (!traverseLbvh && bruteIdx < shapeCount)){
+            uint testShapeIdx = NWB_PHYSICS_INVALID_INDEX;
+            float3 testMin = float3(0.0f, 0.0f, 0.0f);
+            float3 testMax = float3(0.0f, 0.0f, 0.0f);
+            if(traverseLbvh){
                 --sp;
                 const uint nodeIdx = stack[sp];
                 if(queryType == NWB_PHYSICS_QUERY_TYPE_RAYCAST_CLOSEST && stackT[sp] > bestMetric)
                     continue;
                 const NwbPhysicsGpuLbvhNode node = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][nodeIdx];
-                const uint lIdx = asuint(node.minLeft.w);
-                const uint rIdx = asuint(node.maxRight.w);
-                const NwbPhysicsGpuLbvhNode lNode = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][lIdx];
-                const NwbPhysicsGpuLbvhNode rNode = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][rIdx];
-                bool hitL = nwbPhysicsQueryAabbOverlaps(qBoxMin, qBoxMax, lNode.minLeft.xyz, lNode.maxRight.xyz);
-                bool hitR = nwbPhysicsQueryAabbOverlaps(qBoxMin, qBoxMax, rNode.minLeft.xyz, rNode.maxRight.xyz);
-                float tL = 0.0f;
-                float tR = 0.0f;
-                if(hitL && queryType == NWB_PHYSICS_QUERY_TYPE_RAYCAST_CLOSEST){
-                    float3 nL = float3(0.0f, 1.0f, 0.0f);
-                    hitL = nwbPhysicsQueryRayAabb(rayOrig, rayInvDir, lNode.minLeft.xyz, lNode.maxRight.xyz, bestMetric, tL, nL);
+                if(nodeIdx >= leafStart){
+                    testShapeIdx = asuint(node.minLeft.w);
+                    testMin = node.minLeft.xyz;
+                    testMax = node.maxRight.xyz;
                 }
-                if(hitR && queryType == NWB_PHYSICS_QUERY_TYPE_RAYCAST_CLOSEST){
-                    float3 nR = float3(0.0f, 1.0f, 0.0f);
-                    hitR = nwbPhysicsQueryRayAabb(rayOrig, rayInvDir, rNode.minLeft.xyz, rNode.maxRight.xyz, bestMetric, tR, nR);
-                }
-                if(hitL && lIdx >= leafStart){
-                    nwbPhysicsTestSpatialQueryShape(shapeSlot, bodyPoseSlot, queryType, qCat, qMask, qFlags, rayOrig, rayDir, rayInvDir, sphereCenter, sphereRadius, qCenter, asuint(lNode.minLeft.w), lNode.minLeft.xyz, lNode.maxRight.xyz, bestMetric, bestPoint, bestNormal, bestShapeId, bestBodyIdx, hitCount, hasHit);
-                    hitL = false;
-                }
-                if(hitR && rIdx >= leafStart){
-                    nwbPhysicsTestSpatialQueryShape(shapeSlot, bodyPoseSlot, queryType, qCat, qMask, qFlags, rayOrig, rayDir, rayInvDir, sphereCenter, sphereRadius, qCenter, asuint(rNode.minLeft.w), rNode.minLeft.xyz, rNode.maxRight.xyz, bestMetric, bestPoint, bestNormal, bestShapeId, bestBodyIdx, hitCount, hasHit);
-                    hitR = false;
-                }
-                if(hitL && hitR){
-                    if(queryType == NWB_PHYSICS_QUERY_TYPE_RAYCAST_CLOSEST && tL < tR){
-                        if(sp < 32u){
-                            stack[sp] = rIdx;
-                            stackT[sp] = tR;
-                            ++sp;
+                else{
+                    const uint lIdx = asuint(node.minLeft.w);
+                    const uint rIdx = asuint(node.maxRight.w);
+                    const NwbPhysicsGpuLbvhNode lNode = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][lIdx];
+                    const NwbPhysicsGpuLbvhNode rNode = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][rIdx];
+                    bool hitL = nwbPhysicsQueryAabbOverlaps(qBoxMin, qBoxMax, lNode.minLeft.xyz, lNode.maxRight.xyz);
+                    bool hitR = nwbPhysicsQueryAabbOverlaps(qBoxMin, qBoxMax, rNode.minLeft.xyz, rNode.maxRight.xyz);
+                    float tL = 0.0f;
+                    float tR = 0.0f;
+                    if(hitL && queryType == NWB_PHYSICS_QUERY_TYPE_RAYCAST_CLOSEST){
+                        float3 nL = float3(0.0f, 1.0f, 0.0f);
+                        hitL = nwbPhysicsQueryRayAabb(rayOrig, rayInvDir, lNode.minLeft.xyz, lNode.maxRight.xyz, bestMetric, tL, nL);
+                    }
+                    if(hitR && queryType == NWB_PHYSICS_QUERY_TYPE_RAYCAST_CLOSEST){
+                        float3 nR = float3(0.0f, 1.0f, 0.0f);
+                        hitR = nwbPhysicsQueryRayAabb(rayOrig, rayInvDir, rNode.minLeft.xyz, rNode.maxRight.xyz, bestMetric, tR, nR);
+                    }
+                    if(hitL && hitR){
+                        if(queryType == NWB_PHYSICS_QUERY_TYPE_RAYCAST_CLOSEST && tL < tR){
+                            if(sp < 64u){ stack[sp] = rIdx; stackT[sp] = tR; ++sp; }
+                            if(sp < 64u){ stack[sp] = lIdx; stackT[sp] = tL; ++sp; }
                         }
-                        if(sp < 32u){
-                            stack[sp] = lIdx;
-                            stackT[sp] = tL;
-                            ++sp;
+                        else{
+                            if(sp < 64u){ stack[sp] = lIdx; stackT[sp] = tL; ++sp; }
+                            if(sp < 64u){ stack[sp] = rIdx; stackT[sp] = tR; ++sp; }
                         }
                     }
-                    else{
-                        if(sp < 32u){
-                            stack[sp] = lIdx;
-                            stackT[sp] = tL;
-                            ++sp;
-                        }
-                        if(sp < 32u){
-                            stack[sp] = rIdx;
-                            stackT[sp] = tR;
-                            ++sp;
-                        }
+                    else if(hitL){
+                        if(sp < 64u){ stack[sp] = lIdx; stackT[sp] = tL; ++sp; }
                     }
-                }
-                else if(hitL){
-                    if(sp < 32u){
-                        stack[sp] = lIdx;
-                        stackT[sp] = tL;
-                        ++sp;
+                    else if(hitR){
+                        if(sp < 64u){ stack[sp] = rIdx; stackT[sp] = tR; ++sp; }
                     }
-                }
-                else if(hitR){
-                    if(sp < 32u){
-                        stack[sp] = rIdx;
-                        stackT[sp] = tR;
-                        ++sp;
-                    }
+                    continue;
                 }
             }
-        }
-        else{
-            for(uint shapeIdx = 0u; shapeIdx < shapeCount; ++shapeIdx){
+            else{
+                const uint shapeIdx = bruteIdx++;
                 const float3 aMin = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][shapeIdx * 2u + 0u].xyz;
                 const float3 aMax = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][shapeIdx * 2u + 1u].xyz;
                 if(!nwbPhysicsQueryAabbOverlaps(qBoxMin, qBoxMax, aMin, aMax))
@@ -532,8 +1047,37 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                     if(!nwbPhysicsQueryRayAabb(rayOrig, rayInvDir, aMin, aMax, bestMetric, tAabb, nAabb))
                         continue;
                 }
-                nwbPhysicsTestSpatialQueryShape(shapeSlot, bodyPoseSlot, queryType, qCat, qMask, qFlags, rayOrig, rayDir, rayInvDir, sphereCenter, sphereRadius, qCenter, shapeIdx, aMin, aMax, bestMetric, bestPoint, bestNormal, bestShapeId, bestBodyIdx, hitCount, hasHit);
+                testShapeIdx = shapeIdx;
+                testMin = aMin;
+                testMax = aMax;
             }
+            nwbPhysicsTestSpatialQueryShape(
+                shapeSlot,
+                bodyPoseSlot,
+                hullVertexSlot,
+                meshNodeSlot,
+                meshTriSlot,
+                queryType,
+                qCat,
+                qMask,
+                qFlags,
+                rayOrig,
+                rayDir,
+                rayInvDir,
+                sphereCenter,
+                sphereRadius,
+                qCenter,
+                testShapeIdx,
+                testMin,
+                testMax,
+                bestMetric,
+                bestPoint,
+                bestNormal,
+                bestShapeId,
+                bestBodyIdx,
+                hitCount,
+                hasHit
+            );
         }
     }
 

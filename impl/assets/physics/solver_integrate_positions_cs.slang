@@ -16,6 +16,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     const uint idx = g_NwbPhysicsPushConstants.itemOffset + localIdx;
     nwbPhysicsIntegrateBodyPosition(
+        g_NwbPhysicsPushConstants.slots0.x,
         g_NwbPhysicsPushConstants.slots0.y,
         idx,
         g_NwbPhysicsPushConstants.deltaTime

@@ -159,26 +159,6 @@ Rect ResolveSkinRegionUv(in UiSkinRect pixels, in u32 atlasWidth, in u32 atlasHe
     return uv;
 }
 
-VectorSingle ResolveQuadTextureCoords(in Rect rectangle, in Rect visible, in Rect uv){
-    const VectorSingle visibleEnd = VectorSingle(visible.x, visible.y, visible.x, visible.y) + VectorSingle(visible.width, visible.height, visible.width, visible.height);
-    const VectorSingle coordinates(visible.x, visible.y, visibleEnd.x, visibleEnd.y);
-    const VectorSingle delta = coordinates - VectorSingle(rectangle.x, rectangle.y, rectangle.x, rectangle.y);
-    const VectorSingle fraction = delta / VectorSingle(rectangle.width, rectangle.height, rectangle.width, rectangle.height);
-    const VectorSingle textureScale(uv.width, uv.height, uv.width, uv.height);
-    const VectorSingle textureOrigin(uv.x, uv.y, uv.x, uv.y);
-    return fraction * textureScale + textureOrigin;
-}
-
-Color PremultiplyPaintColor(in Color color){
-    const VectorSingle rgb = VectorSingle(color.r, color.g, color.b, color.b) * color.a;
-    Color out;
-    out.r = rgb.x;
-    out.g = rgb.y;
-    out.b = rgb.z;
-    out.a = color.a;
-    return out;
-}
-
 void ResolveNineSliceCoordinates(
     in UiSkinRect pixels,
     in UiSkinSliceInsets borders,

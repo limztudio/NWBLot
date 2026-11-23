@@ -95,37 +95,6 @@ b8 ValidateSceneAssetBinaryEntry(in Name nickname, in b8 hasValidRef, in usize i
     return false;
 }
 
-void AssignAssetRefsFromHashes<TAsset>(in Span<NameHash> hashes, mut Vector<AssetRef<TAsset>> outRefs){
-    outRefs.clear();
-    outRefs.reserve(hashes.size());
-    for(in NameHash hash : hashes){
-        AssetRef<TAsset> ref;
-        ref.virtualPath = Name(hash);
-        outRefs.push_back(ref);
-    }
-}
-
-b8 UnpackSceneAssetEntriesBinary<TAsset>(
-    in Span<SceneAssetEntryBinary> assetEntries,
-    mut HashMap<Name, AssetRef<TAsset>> outAssets
-){
-    outAssets.clear();
-    outAssets.reserve(assetEntries.size());
-    for(usize i = 0u; i < assetEntries.size(); ++i){
-        const SceneAssetEntryBinary entry = assetEntries[i];
-        const Name nickname(entry.nicknameHash);
-        AssetRef<TAsset> ref;
-        ref.virtualPath = Name(entry.assetHash);
-        if(!ValidateSceneAssetBinaryEntry(nickname, ref.valid(), i))
-            return false;
-        if(!outAssets.try_emplace(nickname, ref).second){
-            error("SceneAsset::loadBinary failed: duplicate asset nickname at index {}", i);
-            return false;
-        }
-    }
-    return true;
-}
-
 b8 ValidateProjectAssetPayload(in b8 hasStartScene){
     if(hasStartScene)
         return true;

@@ -8,7 +8,55 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void EmitPaintNineSlice(
+void EmitPaintSkinQuadWithTransform(
+    in b8 recording,
+    in PaintClipEntry clip,
+    in Rect rectangle,
+    in Rect uv,
+    in Color tint,
+    in b8 hasTransform,
+    in PaintTransform2D xf,
+    in b8 axisAlignedPositive,
+    in u32 layer,
+    mut Vector<Vertex> vertices,
+    mut Vector<u32> indices,
+    mut Vector<DrawCommand> commands,
+    mut b8 inOutCommandsOrdered,
+    mut b8 inOutCommandsStrictlyDescending
+){
+    if(!hasTransform){
+        EmitPaintQuad(
+            recording, clip, rectangle, uv, tint, PaintMaterial::Skin, layer,
+            u32.max, u32.max, 0u, u32.max,
+            vertices, indices, commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
+        );
+        return;
+    }
+    if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f) || !IsFinite(rectangle.x + rectangle.width) || !IsFinite(rectangle.y + rectangle.height))
+        return;
+    if(axisAlignedPositive){
+        const Rect scaledRect(rectangle.x * xf.m00 + xf.tx, rectangle.y * xf.m11 + xf.ty, rectangle.width * xf.m00, rectangle.height * xf.m11);
+        EmitPaintQuad(
+            recording, clip, scaledRect, uv, tint, PaintMaterial::Skin, layer,
+            u32.max, u32.max, 0u, u32.max,
+            vertices, indices, commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
+        );
+        return;
+    }
+    const Point p00 = ApplyPaintTransform(xf, Point(rectangle.x, rectangle.y));
+    const Point ex(xf.m00 * rectangle.width, xf.m10 * rectangle.width);
+    const Point ey(xf.m01 * rectangle.height, xf.m11 * rectangle.height);
+    const Point p10(p00.x + ex.x, p00.y + ex.y);
+    const Point p01(p00.x + ey.x, p00.y + ey.y);
+    const Point p11(p10.x + ey.x, p10.y + ey.y);
+    EmitPaintTransformedQuad(
+        recording, clip, p00, p10, p11, p01, uv, tint, PaintMaterial::Skin, layer,
+        u32.max, u32.max, 0u, u32.max,
+        vertices, indices, commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
+    );
+}
+
+void EmitPaintNineSliceCore(
     in b8 recording,
     in PaintClipEntry clip,
     in UiSkinRegion region,
@@ -17,6 +65,9 @@ void EmitPaintNineSlice(
     in u32 atlasWidth,
     in u32 atlasHeight,
     in f32 referenceDensity,
+    in b8 hasTransform,
+    in PaintTransform2D xf,
+    in b8 axisAlignedPositive,
     in u32 layer,
     mut Vector<Vertex> vertices,
     mut Vector<u32> indices,
@@ -60,18 +111,16 @@ void EmitPaintNineSlice(
             const Rect target(x[colIdx], y[rowIdx], cellDeltas.x, cellDeltas.y);
             const VectorSingle uvVec = VectorSingle(u[colIdx], v[rowIdx], cellDeltas.z, cellDeltas.w) / atlasExtent;
             const Rect uv(uvVec.x, uvVec.y, uvVec.z, uvVec.w);
-            EmitPaintQuad(
+            EmitPaintSkinQuadWithTransform(
                 recording,
                 clip,
                 target,
                 uv,
                 tint,
-                PaintMaterial::Skin,
+                hasTransform,
+                xf,
+                axisAlignedPositive,
                 layer,
-                u32.max,
-                u32.max,
-                0u,
-                u32.max,
                 vertices,
                 indices,
                 commands,
@@ -79,6 +128,90 @@ void EmitPaintNineSlice(
                 inOutCommandsStrictlyDescending
             );
         }
+    }
+}
+
+void EmitPaintNineSlice(
+    in b8 recording,
+    in PaintClipEntry clip,
+    in UiSkinRegion region,
+    in Rect rectangle,
+    in Color tint,
+    in u32 atlasWidth,
+    in u32 atlasHeight,
+    in f32 referenceDensity,
+    in u32 layer,
+    mut Vector<Vertex> vertices,
+    mut Vector<u32> indices,
+    mut Vector<DrawCommand> commands,
+    mut b8 inOutCommandsOrdered,
+    mut b8 inOutCommandsStrictlyDescending
+){
+    EmitPaintNineSliceCore(
+        recording, clip, region, rectangle, tint, atlasWidth, atlasHeight, referenceDensity,
+        false, PaintTransformIdentity(), true,
+        layer, vertices, indices, commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
+    );
+}
+
+void EmitPaintSkinRegionCore(
+    in b8 recording,
+    in PaintClipEntry clip,
+    in UiSkinRegion region,
+    in Rect rectangle,
+    in Color tint,
+    in u32 atlasWidth,
+    in u32 atlasHeight,
+    in f32 referenceDensity,
+    in b8 hasTransform,
+    in PaintTransform2D xf,
+    in b8 axisAlignedPositive,
+    in u32 layer,
+    mut Vector<Vertex> vertices,
+    mut Vector<u32> indices,
+    mut Vector<DrawCommand> commands,
+    mut b8 inOutCommandsOrdered,
+    mut b8 inOutCommandsStrictlyDescending
+){
+    if(region.drawMode == UiSkinDrawMode::NineSlice){
+        EmitPaintNineSliceCore(
+            recording,
+            clip,
+            region,
+            rectangle,
+            tint,
+            atlasWidth,
+            atlasHeight,
+            referenceDensity,
+            hasTransform,
+            xf,
+            axisAlignedPositive,
+            layer,
+            vertices,
+            indices,
+            commands,
+            inOutCommandsOrdered,
+            inOutCommandsStrictlyDescending
+        );
+    }
+    else{
+        const Rect uv = ResolveSkinRegionUv(region.rectangle, atlasWidth, atlasHeight);
+        EmitPaintSkinQuadWithTransform(
+            recording,
+            clip,
+            rectangle,
+            uv,
+            tint,
+            hasTransform,
+            xf,
+            axisAlignedPositive,
+            layer,
+            vertices,
+            indices,
+            commands,
+            inOutCommandsOrdered,
+            inOutCommandsStrictlyDescending
+        );
     }
 }
 
@@ -98,45 +231,11 @@ void EmitPaintSkinRegion(
     mut b8 inOutCommandsOrdered,
     mut b8 inOutCommandsStrictlyDescending
 ){
-    if(region.drawMode == UiSkinDrawMode::NineSlice){
-        EmitPaintNineSlice(
-            recording,
-            clip,
-            region,
-            rectangle,
-            tint,
-            atlasWidth,
-            atlasHeight,
-            referenceDensity,
-            layer,
-            vertices,
-            indices,
-            commands,
-            inOutCommandsOrdered,
-            inOutCommandsStrictlyDescending
-        );
-    }
-    else{
-        const Rect uv = ResolveSkinRegionUv(region.rectangle, atlasWidth, atlasHeight);
-        EmitPaintQuad(
-            recording,
-            clip,
-            rectangle,
-            uv,
-            tint,
-            PaintMaterial::Skin,
-            layer,
-            u32.max,
-            u32.max,
-            0u,
-            u32.max,
-            vertices,
-            indices,
-            commands,
-            inOutCommandsOrdered,
-            inOutCommandsStrictlyDescending
-        );
-    }
+    EmitPaintSkinRegionCore(
+        recording, clip, region, rectangle, tint, atlasWidth, atlasHeight, referenceDensity,
+        false, PaintTransformIdentity(), true,
+        layer, vertices, indices, commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
+    );
 }
 
 b8 DrawPaintSkinRegion(
@@ -212,6 +311,52 @@ b8 DrawPaintSkinRegionIndexed(
         atlasWidth,
         atlasHeight,
         referenceDensity,
+        layer,
+        vertices,
+        indices,
+        commands,
+        inOutCommandsOrdered,
+        inOutCommandsStrictlyDescending
+    );
+    return true;
+}
+
+b8 DrawPaintSkinRegionIndexedTransformed(
+    in b8 recording,
+    in PaintClipEntry clip,
+    in Span<UiSkinRegion> regions,
+    in HashMap<Name, usize> regionLookup,
+    in Name regionName,
+    in Rect rectangle,
+    in Color tint,
+    in PaintTransform2D xf,
+    in b8 axisAlignedPositive,
+    in u32 atlasWidth,
+    in u32 atlasHeight,
+    in f32 referenceDensity,
+    in u32 layer,
+    mut Vector<Vertex> vertices,
+    mut Vector<u32> indices,
+    mut Vector<DrawCommand> commands,
+    mut b8 inOutCommandsOrdered,
+    mut b8 inOutCommandsStrictlyDescending
+){
+    assert(recording);
+    const auto found = regionLookup.find(regionName);
+    if(found == regionLookup.end())
+        return false;
+    EmitPaintSkinRegionCore(
+        recording,
+        clip,
+        regions[found.value()],
+        rectangle,
+        tint,
+        atlasWidth,
+        atlasHeight,
+        referenceDensity,
+        true,
+        xf,
+        axisAlignedPositive,
         layer,
         vertices,
         indices,
